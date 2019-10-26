@@ -79,7 +79,7 @@ class TestIOErrorCounter(AgentTestCase):
         self.assertEqual(1, counts.get("protocol"))
         self.assertEqual(2, counts.get("other"))
         self.assertEqual(
-           {"hostplugin":0, "protocol":0, "other":0},
+            {"hostplugin": 0, "protocol": 0, "other": 0},
             restutil.IOErrorCounter._counts)
 
 
@@ -131,45 +131,51 @@ class TestHttpOperations(AgentTestCase):
 
     def test_cleanup_sas_tokens_from_urls_containing_sas_tokens(self):
         # Contains pair of URLs (RawURL, RedactedURL)
-        urls_tuples = [("https://abc.def.xyz.123.net/functiontest/yokawasa.png?sig"
-                        "=sXBjML1Fpk9UnTBtajo05ZTFSk0LWFGvARZ6WlVcAog%3D&srt=o&ss=b&"
-                        "spr=https&sp=rl&sv=2016-05-31&se=2017-07-01T00%3A21%3A38Z&"
-                        "st=2017-07-01T23%3A16%3A38Z",
-                        "https://abc.def.xyz.123.net/functiontest/yokawasa.png?sig"
-                        "=" + restutil.REDACTED_TEXT +
-                        "&srt=o&ss=b&spr=https&sp=rl&sv=2016-05-31&se=2017-07-01T00"
-                        "%3A21%3A38Z&st=2017-07-01T23%3A16%3A38Z"),
-                       ("https://abc.def.xyz.123.net/?sv=2017-11-09&ss=b&srt=o&sp=r&se=2018-07"
-                        "-26T02:20:44Z&st=2018-07-25T18:20:44Z&spr=https,"
-                        "http&sig=DavQgRtl99DsEPv9Xeb63GnLXCuaLYw5ay%2BE1cFckQY%3D",
-                        "https://abc.def.xyz.123.net/?sv=2017-11-09&ss=b&srt=o&sp=r&se"
-                        "=2018-07-26T02:20:44Z&st=2018-07-25T18:20:44Z&spr=https,"
-                        "http&sig=" + restutil.REDACTED_TEXT),
-                       ("https://abc.def.xyz.123.net/?sv=2017-11-09&ss=b&srt=o&sp=r&se=2018-07"
-                        "-26T02:20:44Z&st=2018-07-25T18:20:44Z&spr=https,"
-                        "http&sig=ttSCKmyjiDEeIzT9q7HtYYgbCRIXuesFSOhNEab52NM%3D",
-                        "https://abc.def.xyz.123.net/?sv=2017-11-09&ss=b&srt=o&sp=r&se"
-                        "=2018-07-26T02:20:44Z&st=2018-07-25T18:20:44Z&spr=https,"
-                        "http&sig=" + restutil.REDACTED_TEXT),
-                       ("https://abc.def.xyz.123.net/?sv=2017-11-09&ss=b&srt=o&sp=r&se=2018-07"
-                        "-26T02:20:42Z&st=2018-07-25T18:20:44Z&spr=https,"
-                        "http&sig=X0imGmcj5KcBPFcqlfYjIZakzGrzONGbRv5JMOnGrwc%3D",
-                        "https://abc.def.xyz.123.net/?sv=2017-11-09&ss=b&srt=o&sp=r&se"
-                        "=2018-07-26T02:20:42Z&st=2018-07-25T18:20:44Z&spr=https,"
-                        "http&sig=" + restutil.REDACTED_TEXT),
-                       ("https://abc.def.xyz.123.net/?sv=2017-11-09&ss=b&srt=o&sp=r&se=2018-07"
-                        "-26T02:20:42Z&st=2018-07-25T18:20:44Z&spr=https,"
-                        "http&sig=9hfxYvaZzrMahtGO1OgMUiFGnDOtZXulZ3skkv1eVBg%3D",
-                        "https://abc.def.xyz.123.net/?sv=2017-11-09&ss=b&srt=o&sp=r&se"
-                        "=2018-07-26T02:20:42Z&st=2018-07-25T18:20:44Z&spr=https,"
-                        "http&sig=" + restutil.REDACTED_TEXT),
-                       ("https://abc.def.xyz.123.net/?sv=2017-11-09&ss=b&srt=o&sp=r&se=2018-07"
-                        "-26T02:20:42Z&st=2018-07-25T18:20:44Z&spr=https"
-                        "&sig=cmluQEHnOGsVK9NDm83ruuPdPWNQcerfjOAbkspNZXU%3D",
-                        "https://abc.def.xyz.123.net/?sv=2017-11-09&ss=b&srt=o&sp=r&se"
-                        "=2018-07-26T02:20:42Z&st=2018-07-25T18:20:44Z&spr=https&sig"
-                        "=" + restutil.REDACTED_TEXT)
-                       ]
+        urls_tuples = [
+            ("https://abc.def.xyz.123.net/functiontest/yokawasa.png?sig"
+             "=sXBjML1Fpk9UnTBtajo05ZTFSk0LWFGvARZ6WlVcAog%3D&srt=o&ss=b&"
+             "spr=https&sp=rl&sv=2016-05-31&se=2017-07-01T00%3A21%3A38Z&"
+             "st=2017-07-01T23%3A16%3A38Z",
+             "https://abc.def.xyz.123.net/functiontest/yokawasa.png?sig"
+             "=" +
+             restutil.REDACTED_TEXT +
+             "&srt=o&ss=b&spr=https&sp=rl&sv=2016-05-31&se=2017-07-01T00"
+             "%3A21%3A38Z&st=2017-07-01T23%3A16%3A38Z"),
+            ("https://abc.def.xyz.123.net/?sv=2017-11-09&ss=b&srt=o&sp=r&se=2018-07"
+             "-26T02:20:44Z&st=2018-07-25T18:20:44Z&spr=https,"
+             "http&sig=DavQgRtl99DsEPv9Xeb63GnLXCuaLYw5ay%2BE1cFckQY%3D",
+             "https://abc.def.xyz.123.net/?sv=2017-11-09&ss=b&srt=o&sp=r&se"
+             "=2018-07-26T02:20:44Z&st=2018-07-25T18:20:44Z&spr=https,"
+             "http&sig=" +
+             restutil.REDACTED_TEXT),
+            ("https://abc.def.xyz.123.net/?sv=2017-11-09&ss=b&srt=o&sp=r&se=2018-07"
+             "-26T02:20:44Z&st=2018-07-25T18:20:44Z&spr=https,"
+             "http&sig=ttSCKmyjiDEeIzT9q7HtYYgbCRIXuesFSOhNEab52NM%3D",
+             "https://abc.def.xyz.123.net/?sv=2017-11-09&ss=b&srt=o&sp=r&se"
+             "=2018-07-26T02:20:44Z&st=2018-07-25T18:20:44Z&spr=https,"
+             "http&sig=" +
+             restutil.REDACTED_TEXT),
+            ("https://abc.def.xyz.123.net/?sv=2017-11-09&ss=b&srt=o&sp=r&se=2018-07"
+             "-26T02:20:42Z&st=2018-07-25T18:20:44Z&spr=https,"
+             "http&sig=X0imGmcj5KcBPFcqlfYjIZakzGrzONGbRv5JMOnGrwc%3D",
+             "https://abc.def.xyz.123.net/?sv=2017-11-09&ss=b&srt=o&sp=r&se"
+             "=2018-07-26T02:20:42Z&st=2018-07-25T18:20:44Z&spr=https,"
+             "http&sig=" +
+             restutil.REDACTED_TEXT),
+            ("https://abc.def.xyz.123.net/?sv=2017-11-09&ss=b&srt=o&sp=r&se=2018-07"
+             "-26T02:20:42Z&st=2018-07-25T18:20:44Z&spr=https,"
+             "http&sig=9hfxYvaZzrMahtGO1OgMUiFGnDOtZXulZ3skkv1eVBg%3D",
+             "https://abc.def.xyz.123.net/?sv=2017-11-09&ss=b&srt=o&sp=r&se"
+             "=2018-07-26T02:20:42Z&st=2018-07-25T18:20:44Z&spr=https,"
+             "http&sig=" +
+             restutil.REDACTED_TEXT),
+            ("https://abc.def.xyz.123.net/?sv=2017-11-09&ss=b&srt=o&sp=r&se=2018-07"
+             "-26T02:20:42Z&st=2018-07-25T18:20:44Z&spr=https"
+             "&sig=cmluQEHnOGsVK9NDm83ruuPdPWNQcerfjOAbkspNZXU%3D",
+             "https://abc.def.xyz.123.net/?sv=2017-11-09&ss=b&srt=o&sp=r&se"
+             "=2018-07-26T02:20:42Z&st=2018-07-25T18:20:44Z&spr=https&sig"
+             "=" +
+             restutil.REDACTED_TEXT)]
 
         for x in urls_tuples:
             self.assertEquals(restutil.redact_sas_tokens_in_urls(x[0]), x[1])
@@ -185,7 +191,8 @@ class TestHttpOperations(AgentTestCase):
 
     @patch('azurelinuxagent.common.conf.get_httpproxy_port')
     @patch('azurelinuxagent.common.conf.get_httpproxy_host')
-    def test_get_http_proxy_configuration_overrides_env(self, mock_host, mock_port):
+    def test_get_http_proxy_configuration_overrides_env(
+            self, mock_host, mock_port):
         mock_host.return_value = "host"
         mock_port.return_value = None
         h, p = restutil._get_http_proxy()
@@ -196,7 +203,8 @@ class TestHttpOperations(AgentTestCase):
 
     @patch('azurelinuxagent.common.conf.get_httpproxy_port')
     @patch('azurelinuxagent.common.conf.get_httpproxy_host')
-    def test_get_http_proxy_configuration_requires_host(self, mock_host, mock_port):
+    def test_get_http_proxy_configuration_requires_host(
+            self, mock_host, mock_port):
         mock_host.return_value = None
         mock_port.return_value = None
         h, p = restutil._get_http_proxy()
@@ -209,9 +217,9 @@ class TestHttpOperations(AgentTestCase):
     def test_get_http_proxy_http_uses_httpproxy(self, mock_host):
         mock_host.return_value = None
         with patch.dict(os.environ, {
-                                    'http_proxy' : 'http://foo.com:80',
-                                    'https_proxy' : 'https://bar.com:443'
-                                }):
+            'http_proxy': 'http://foo.com:80',
+            'https_proxy': 'https://bar.com:443'
+        }):
             h, p = restutil._get_http_proxy()
             self.assertEqual("foo.com", h)
             self.assertEqual(80, p)
@@ -220,9 +228,9 @@ class TestHttpOperations(AgentTestCase):
     def test_get_http_proxy_https_uses_httpsproxy(self, mock_host):
         mock_host.return_value = None
         with patch.dict(os.environ, {
-                                    'http_proxy' : 'http://foo.com:80',
-                                    'https_proxy' : 'https://bar.com:443'
-                                }):
+            'http_proxy': 'http://foo.com:80',
+            'https_proxy': 'https://bar.com:443'
+        }):
             h, p = restutil._get_http_proxy(secure=True)
             self.assertEqual("bar.com", h)
             self.assertEqual(443, p)
@@ -231,8 +239,8 @@ class TestHttpOperations(AgentTestCase):
     def test_get_http_proxy_ignores_user_in_httpproxy(self, mock_host):
         mock_host.return_value = None
         with patch.dict(os.environ, {
-                                    'http_proxy' : 'http://user:pw@foo.com:80'
-                                }):
+            'http_proxy': 'http://user:pw@foo.com:80'
+        }):
             h, p = restutil._get_http_proxy()
             self.assertEqual("foo.com", h)
             self.assertEqual(80, p)
@@ -244,7 +252,9 @@ class TestHttpOperations(AgentTestCase):
         }):
             no_proxy_from_environment = restutil.get_no_proxy()
 
-            self.assertEquals(len(no_proxy_list), len(no_proxy_from_environment))
+            self.assertEquals(
+                len(no_proxy_list),
+                len(no_proxy_from_environment))
 
             for i, j in zip(no_proxy_from_environment, no_proxy_list):
                 self.assertEqual(i, j)
@@ -258,7 +268,9 @@ class TestHttpOperations(AgentTestCase):
         }):
             no_proxy_from_environment = restutil.get_no_proxy()
 
-            self.assertEquals(len(no_proxy_list_cleaned), len(no_proxy_from_environment))
+            self.assertEquals(
+                len(no_proxy_list_cleaned),
+                len(no_proxy_from_environment))
 
             for i, j in zip(no_proxy_from_environment, no_proxy_list_cleaned):
                 print(i, j)
@@ -266,15 +278,26 @@ class TestHttpOperations(AgentTestCase):
 
     def test_get_no_proxy_with_ip_addresses_set(self):
         no_proxy_var = "10.0.0.1,10.0.0.2,10.0.0.3,10.0.0.4,10.0.0.5,10.0.0.6,10.0.0.7,10.0.0.8,10.0.0.9,10.0.0.10,"
-        no_proxy_list = ['10.0.0.1', '10.0.0.2', '10.0.0.3', '10.0.0.4', '10.0.0.5',
-                         '10.0.0.6', '10.0.0.7', '10.0.0.8', '10.0.0.9', '10.0.0.10']
+        no_proxy_list = [
+            '10.0.0.1',
+            '10.0.0.2',
+            '10.0.0.3',
+            '10.0.0.4',
+            '10.0.0.5',
+            '10.0.0.6',
+            '10.0.0.7',
+            '10.0.0.8',
+            '10.0.0.9',
+            '10.0.0.10']
 
         with patch.dict(os.environ, {
             'no_proxy': no_proxy_var
         }):
             no_proxy_from_environment = restutil.get_no_proxy()
 
-            self.assertEquals(len(no_proxy_list), len(no_proxy_from_environment))
+            self.assertEquals(
+                len(no_proxy_list),
+                len(no_proxy_from_environment))
 
             for i, j in zip(no_proxy_from_environment, no_proxy_list):
                 self.assertEqual(i, j)
@@ -286,7 +309,8 @@ class TestHttpOperations(AgentTestCase):
     def test_is_ipv4_address(self):
         self.assertTrue(restutil.is_ipv4_address('8.8.8.8'))
         self.assertFalse(restutil.is_ipv4_address('localhost.localdomain'))
-        self.assertFalse(restutil.is_ipv4_address('2001:4860:4860::8888')) # ipv6 tests
+        self.assertFalse(restutil.is_ipv4_address(
+            '2001:4860:4860::8888'))  # ipv6 tests
 
     def test_is_valid_cidr(self):
         self.assertTrue(restutil.is_valid_cidr('192.168.1.0/24'))
@@ -297,8 +321,14 @@ class TestHttpOperations(AgentTestCase):
         self.assertFalse(restutil.is_valid_cidr('192.168.1.999/24'))
 
     def test_address_in_network(self):
-        self.assertTrue(restutil.address_in_network('192.168.1.1', '192.168.1.0/24'))
-        self.assertFalse(restutil.address_in_network('172.16.0.1', '192.168.1.0/24'))
+        self.assertTrue(
+            restutil.address_in_network(
+                '192.168.1.1',
+                '192.168.1.0/24'))
+        self.assertFalse(
+            restutil.address_in_network(
+                '172.16.0.1',
+                '192.168.1.0/24'))
 
     def test_dotted_netmask(self):
         self.assertEquals(restutil.dotted_netmask(0), '0.0.0.0')
@@ -309,7 +339,11 @@ class TestHttpOperations(AgentTestCase):
         self.assertRaises(ValueError, restutil.dotted_netmask, 33)
 
     def test_bypass_proxy(self):
-        no_proxy_list = ["foo.com", "www.google.com", "168.63.129.16", "Microsoft.com"]
+        no_proxy_list = [
+            "foo.com",
+            "www.google.com",
+            "168.63.129.16",
+            "Microsoft.com"]
         with patch.dict(os.environ, {
             'no_proxy': ",".join(no_proxy_list)
         }):
@@ -324,9 +358,11 @@ class TestHttpOperations(AgentTestCase):
     @patch("azurelinuxagent.common.future.httpclient.HTTPConnection")
     def test_http_request_direct(self, HTTPConnection, HTTPSConnection):
         mock_conn = \
-            MagicMock(getresponse=\
-                Mock(return_value=\
-                    Mock(read=Mock(return_value="TheResults"))))
+            MagicMock(
+                getresponse=Mock(
+                    return_value=Mock(
+                        read=Mock(
+                            return_value="TheResults"))))
 
         HTTPConnection.return_value = mock_conn
 
@@ -337,7 +373,13 @@ class TestHttpOperations(AgentTestCase):
         ])
         HTTPSConnection.assert_not_called()
         mock_conn.request.assert_has_calls([
-            call(method="GET", url="/bar", body=None, headers={'User-Agent': HTTP_USER_AGENT, 'Connection': 'close'})
+            call(
+                method="GET",
+                url="/bar",
+                body=None,
+                headers={
+                    'User-Agent': HTTP_USER_AGENT,
+                    'Connection': 'close'})
         ])
         self.assertEqual(1, mock_conn.getresponse.call_count)
         self.assertNotEquals(None, resp)
@@ -347,9 +389,11 @@ class TestHttpOperations(AgentTestCase):
     @patch("azurelinuxagent.common.future.httpclient.HTTPConnection")
     def test_http_request_direct_secure(self, HTTPConnection, HTTPSConnection):
         mock_conn = \
-            MagicMock(getresponse=\
-                Mock(return_value=\
-                    Mock(read=Mock(return_value="TheResults"))))
+            MagicMock(
+                getresponse=Mock(
+                    return_value=Mock(
+                        read=Mock(
+                            return_value="TheResults"))))
 
         HTTPSConnection.return_value = mock_conn
 
@@ -360,7 +404,13 @@ class TestHttpOperations(AgentTestCase):
             call("foo", 443, timeout=10)
         ])
         mock_conn.request.assert_has_calls([
-            call(method="GET", url="/bar", body=None, headers={'User-Agent': HTTP_USER_AGENT, 'Connection': 'close'})
+            call(
+                method="GET",
+                url="/bar",
+                body=None,
+                headers={
+                    'User-Agent': HTTP_USER_AGENT,
+                    'Connection': 'close'})
         ])
         self.assertEqual(1, mock_conn.getresponse.call_count)
         self.assertNotEquals(None, resp)
@@ -370,21 +420,29 @@ class TestHttpOperations(AgentTestCase):
     @patch("azurelinuxagent.common.future.httpclient.HTTPConnection")
     def test_http_request_proxy(self, HTTPConnection, HTTPSConnection):
         mock_conn = \
-            MagicMock(getresponse=\
-                Mock(return_value=\
-                    Mock(read=Mock(return_value="TheResults"))))
+            MagicMock(
+                getresponse=Mock(
+                    return_value=Mock(
+                        read=Mock(
+                            return_value="TheResults"))))
 
         HTTPConnection.return_value = mock_conn
 
         resp = restutil._http_request("GET", "foo", "/bar",
-                            proxy_host="foo.bar", proxy_port=23333)
+                                      proxy_host="foo.bar", proxy_port=23333)
 
         HTTPConnection.assert_has_calls([
             call("foo.bar", 23333, timeout=10)
         ])
         HTTPSConnection.assert_not_called()
         mock_conn.request.assert_has_calls([
-            call(method="GET", url="http://foo:80/bar", body=None, headers={'User-Agent': HTTP_USER_AGENT, 'Connection': 'close'})
+            call(
+                method="GET",
+                url="http://foo:80/bar",
+                body=None,
+                headers={
+                    'User-Agent': HTTP_USER_AGENT,
+                    'Connection': 'close'})
         ])
         self.assertEqual(1, mock_conn.getresponse.call_count)
         self.assertNotEquals(None, resp)
@@ -393,11 +451,12 @@ class TestHttpOperations(AgentTestCase):
     @patch("azurelinuxagent.common.utils.restutil._get_http_proxy")
     @patch("time.sleep")
     @patch("azurelinuxagent.common.utils.restutil._http_request")
-    def test_http_request_proxy_with_no_proxy_check(self, _http_request, sleep, mock_get_http_proxy):
+    def test_http_request_proxy_with_no_proxy_check(
+            self, _http_request, sleep, mock_get_http_proxy):
         mock_http_resp = MagicMock()
         mock_http_resp.read = Mock(return_value="hehe")
         _http_request.return_value = mock_http_resp
-        mock_get_http_proxy.return_value = "host", 1234 # Return a host/port combination
+        mock_get_http_proxy.return_value = "host", 1234  # Return a host/port combination
 
         no_proxy_list = ["foo.com", "www.google.com", "168.63.129.16"]
         with patch.dict(os.environ, {
@@ -423,32 +482,40 @@ class TestHttpOperations(AgentTestCase):
             'no_proxy': ",".join(no_proxy_list)
         }):
             host = "10.0.0.1"
-            self.assertEquals(should_use_proxy, use_proxy and not restutil.bypass_proxy(host))
+            self.assertEquals(should_use_proxy,
+                              use_proxy and not restutil.bypass_proxy(host))
 
             host = "foo.com"
-            self.assertEquals(should_not_use_proxy, use_proxy and not restutil.bypass_proxy(host))
+            self.assertEquals(should_not_use_proxy,
+                              use_proxy and not restutil.bypass_proxy(host))
 
             host = "www.google.com"
-            self.assertEquals(should_not_use_proxy, use_proxy and not restutil.bypass_proxy(host))
+            self.assertEquals(should_not_use_proxy,
+                              use_proxy and not restutil.bypass_proxy(host))
 
             host = "168.63.129.16"
-            self.assertEquals(should_not_use_proxy, use_proxy and not restutil.bypass_proxy(host))
+            self.assertEquals(should_not_use_proxy,
+                              use_proxy and not restutil.bypass_proxy(host))
 
             host = "www.bar.com"
-            self.assertEquals(should_use_proxy, use_proxy and not restutil.bypass_proxy(host))
+            self.assertEquals(should_use_proxy,
+                              use_proxy and not restutil.bypass_proxy(host))
 
         no_proxy_list = ["10.0.0.1/24"]
         with patch.dict(os.environ, {
             'no_proxy': ",".join(no_proxy_list)
         }):
             host = "www.bar.com"
-            self.assertEquals(should_use_proxy, use_proxy and not restutil.bypass_proxy(host))
+            self.assertEquals(should_use_proxy,
+                              use_proxy and not restutil.bypass_proxy(host))
 
             host = "10.0.0.1"
-            self.assertEquals(should_not_use_proxy, use_proxy and not restutil.bypass_proxy(host))
+            self.assertEquals(should_not_use_proxy,
+                              use_proxy and not restutil.bypass_proxy(host))
 
             host = "10.0.1.1"
-            self.assertEquals(should_use_proxy, use_proxy and not restutil.bypass_proxy(host))
+            self.assertEquals(should_use_proxy,
+                              use_proxy and not restutil.bypass_proxy(host))
 
         # When No_proxy is empty
         with patch.dict(os.environ, {
@@ -502,22 +569,30 @@ class TestHttpOperations(AgentTestCase):
     @patch("azurelinuxagent.common.future.httpclient.HTTPConnection")
     def test_http_request_proxy_secure(self, HTTPConnection, HTTPSConnection):
         mock_conn = \
-            MagicMock(getresponse=\
-                Mock(return_value=\
-                    Mock(read=Mock(return_value="TheResults"))))
+            MagicMock(
+                getresponse=Mock(
+                    return_value=Mock(
+                        read=Mock(
+                            return_value="TheResults"))))
 
         HTTPSConnection.return_value = mock_conn
 
         resp = restutil._http_request("GET", "foo", "/bar",
-                            proxy_host="foo.bar", proxy_port=23333,
-                            secure=True)
+                                      proxy_host="foo.bar", proxy_port=23333,
+                                      secure=True)
 
         HTTPConnection.assert_not_called()
         HTTPSConnection.assert_has_calls([
             call("foo.bar", 23333, timeout=10)
         ])
         mock_conn.request.assert_has_calls([
-            call(method="GET", url="https://foo:443/bar", body=None, headers={'User-Agent': HTTP_USER_AGENT, 'Connection': 'close'})
+            call(
+                method="GET",
+                url="https://foo:443/bar",
+                body=None,
+                headers={
+                    'User-Agent': HTTP_USER_AGENT,
+                    'Connection': 'close'})
         ])
         self.assertEqual(1, mock_conn.getresponse.call_count)
         self.assertNotEquals(None, resp)
@@ -562,7 +637,8 @@ class TestHttpOperations(AgentTestCase):
 
     @patch("time.sleep")
     @patch("azurelinuxagent.common.utils.restutil._http_request")
-    def test_http_request_retries_passed_status_codes(self, _http_request, _sleep):
+    def test_http_request_retries_passed_status_codes(
+            self, _http_request, _sleep):
         # Ensure the code is not part of the standard set
         self.assertFalse(httpclient.UNAUTHORIZED in restutil.RETRY_CODES)
 
@@ -571,47 +647,57 @@ class TestHttpOperations(AgentTestCase):
             Mock(status=httpclient.OK)
         ]
 
-        restutil.http_get("https://foo.bar", retry_codes=[httpclient.UNAUTHORIZED])
+        restutil.http_get(
+            "https://foo.bar",
+            retry_codes=[
+                httpclient.UNAUTHORIZED])
         self.assertEqual(2, _http_request.call_count)
         self.assertEqual(1, _sleep.call_count)
 
     @patch("time.sleep")
     @patch("azurelinuxagent.common.utils.restutil._http_request")
-    def test_http_request_retries_with_fibonacci_delay(self, _http_request, _sleep):
+    def test_http_request_retries_with_fibonacci_delay(
+            self, _http_request, _sleep):
         # Ensure the code is not a throttle code
         self.assertFalse(httpclient.BAD_GATEWAY in restutil.THROTTLE_CODES)
 
         _http_request.side_effect = [
-                Mock(status=httpclient.BAD_GATEWAY)
-                    for i in range(restutil.DEFAULT_RETRIES)
-            ] + [Mock(status=httpclient.OK)]
+            Mock(status=httpclient.BAD_GATEWAY)
+            for i in range(restutil.DEFAULT_RETRIES)
+        ] + [Mock(status=httpclient.OK)]
 
         restutil.http_get("https://foo.bar",
-                            max_retry=restutil.DEFAULT_RETRIES+1)
+                          max_retry=restutil.DEFAULT_RETRIES + 1)
 
-        self.assertEqual(restutil.DEFAULT_RETRIES+1, _http_request.call_count)
+        self.assertEqual(
+            restutil.DEFAULT_RETRIES + 1,
+            _http_request.call_count)
         self.assertEqual(restutil.DEFAULT_RETRIES, _sleep.call_count)
         self.assertEqual(
             [
-                call(restutil._compute_delay(i+1, restutil.DELAY_IN_SECONDS))
-                    for i in range(restutil.DEFAULT_RETRIES)],
+                call(restutil._compute_delay(i + 1, restutil.DELAY_IN_SECONDS))
+                for i in range(restutil.DEFAULT_RETRIES)],
             _sleep.call_args_list)
 
     @patch("time.sleep")
     @patch("azurelinuxagent.common.utils.restutil._http_request")
-    def test_http_request_retries_with_constant_delay_when_throttled(self, _http_request, _sleep):
+    def test_http_request_retries_with_constant_delay_when_throttled(
+            self, _http_request, _sleep):
         # Ensure the code is a throttle code
-        self.assertTrue(httpclient.SERVICE_UNAVAILABLE in restutil.THROTTLE_CODES)
+        self.assertTrue(
+            httpclient.SERVICE_UNAVAILABLE in restutil.THROTTLE_CODES)
 
         _http_request.side_effect = [
-                Mock(status=httpclient.SERVICE_UNAVAILABLE)
-                    for i in range(restutil.DEFAULT_RETRIES)
-            ] + [Mock(status=httpclient.OK)]
+            Mock(status=httpclient.SERVICE_UNAVAILABLE)
+            for i in range(restutil.DEFAULT_RETRIES)
+        ] + [Mock(status=httpclient.OK)]
 
         restutil.http_get("https://foo.bar",
-                            max_retry=restutil.DEFAULT_RETRIES+1)
+                          max_retry=restutil.DEFAULT_RETRIES + 1)
 
-        self.assertEqual(restutil.DEFAULT_RETRIES+1, _http_request.call_count)
+        self.assertEqual(
+            restutil.DEFAULT_RETRIES + 1,
+            _http_request.call_count)
         self.assertEqual(restutil.DEFAULT_RETRIES, _sleep.call_count)
         self.assertEqual(
             [call(1) for i in range(restutil.DEFAULT_RETRIES)],
@@ -619,50 +705,64 @@ class TestHttpOperations(AgentTestCase):
 
     @patch("time.sleep")
     @patch("azurelinuxagent.common.utils.restutil._http_request")
-    def test_http_request_retries_for_safe_minimum_number_when_throttled(self, _http_request, _sleep):
+    def test_http_request_retries_for_safe_minimum_number_when_throttled(
+            self, _http_request, _sleep):
         # Ensure the code is a throttle code
-        self.assertTrue(httpclient.SERVICE_UNAVAILABLE in restutil.THROTTLE_CODES)
+        self.assertTrue(
+            httpclient.SERVICE_UNAVAILABLE in restutil.THROTTLE_CODES)
 
         _http_request.side_effect = [
-                Mock(status=httpclient.SERVICE_UNAVAILABLE)
-                    for i in range(restutil.THROTTLE_RETRIES-1)
-            ] + [Mock(status=httpclient.OK)]
+            Mock(status=httpclient.SERVICE_UNAVAILABLE)
+            for i in range(restutil.THROTTLE_RETRIES - 1)
+        ] + [Mock(status=httpclient.OK)]
 
         restutil.http_get("https://foo.bar",
-                            max_retry=1)
+                          max_retry=1)
 
         self.assertEqual(restutil.THROTTLE_RETRIES, _http_request.call_count)
-        self.assertEqual(restutil.THROTTLE_RETRIES-1, _sleep.call_count)
+        self.assertEqual(restutil.THROTTLE_RETRIES - 1, _sleep.call_count)
         self.assertEqual(
-            [call(1) for i in range(restutil.THROTTLE_RETRIES-1)],
+            [call(1) for i in range(restutil.THROTTLE_RETRIES - 1)],
             _sleep.call_args_list)
 
     @patch("time.sleep")
     @patch("azurelinuxagent.common.utils.restutil._http_request")
-    def test_http_request_raises_for_resource_gone(self, _http_request, _sleep):
+    def test_http_request_raises_for_resource_gone(
+            self, _http_request, _sleep):
         _http_request.side_effect = [
             Mock(status=httpclient.GONE)
         ]
 
-        self.assertRaises(ResourceGoneError, restutil.http_get, "https://foo.bar")
+        self.assertRaises(
+            ResourceGoneError,
+            restutil.http_get,
+            "https://foo.bar")
         self.assertEqual(1, _http_request.call_count)
 
     @patch("time.sleep")
     @patch("azurelinuxagent.common.utils.restutil._http_request")
-    def test_http_request_raises_for_invalid_container_configuration(self, _http_request, _sleep):
+    def test_http_request_raises_for_invalid_container_configuration(
+            self, _http_request, _sleep):
         def read():
             return b'{ "errorCode": "InvalidContainerConfiguration", "message": "Invalid request." }'
 
         _http_request.side_effect = [
-            Mock(status=httpclient.BAD_REQUEST, reason='Bad Request', read=read)
+            Mock(
+                status=httpclient.BAD_REQUEST,
+                reason='Bad Request',
+                read=read)
         ]
 
-        self.assertRaises(InvalidContainerError, restutil.http_get, "https://foo.bar")
+        self.assertRaises(
+            InvalidContainerError,
+            restutil.http_get,
+            "https://foo.bar")
         self.assertEqual(1, _http_request.call_count)
 
     @patch("time.sleep")
     @patch("azurelinuxagent.common.utils.restutil._http_request")
-    def test_http_request_raises_for_invalid_role_configuration(self, _http_request, _sleep):
+    def test_http_request_raises_for_invalid_role_configuration(
+            self, _http_request, _sleep):
         def read():
             return b'{ "errorCode": "RequestRoleConfigFileNotFound", "message": "Invalid request." }'
 
@@ -670,7 +770,10 @@ class TestHttpOperations(AgentTestCase):
             Mock(status=httpclient.GONE, reason='Resource Gone', read=read)
         ]
 
-        self.assertRaises(ResourceGoneError, restutil.http_get, "https://foo.bar")
+        self.assertRaises(
+            ResourceGoneError,
+            restutil.http_get,
+            "https://foo.bar")
         self.assertEqual(1, _http_request.call_count)
 
     @patch("time.sleep")

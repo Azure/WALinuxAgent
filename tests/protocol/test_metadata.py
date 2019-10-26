@@ -31,7 +31,7 @@ class TestMetadataProtocolGetters(AgentTestCase):
         return json.loads(ustr(load_data(path)), encoding="utf-8")
 
     @patch("time.sleep")
-    def _test_getters(self, test_data ,_):
+    def _test_getters(self, test_data, _):
         with patch.object(restutil, 'http_get', test_data.mock_http_get):
             protocol = MetadataProtocol()
             protocol.detect()

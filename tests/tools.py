@@ -57,7 +57,7 @@ if os.environ.get('DEBUG') == '1':
 
 # Enable verbose logger to stdout
 if debug:
-    logger.add_logger_appender(logger.AppenderType.STDOUT, 
+    logger.add_logger_appender(logger.AppenderType.STDOUT,
                                logger.LogLevel.VERBOSE)
 
 _MAX_LENGTH = 120
@@ -133,7 +133,8 @@ def get_osutil_for_travis():
 def mock_get_osutil(*args):
     # It's a known issue that calling platform.linux_distribution() in Travis will result in the wrong info.
     # See https://github.com/travis-ci/travis-ci/issues/2755
-    # When running in Travis, use manual distro resolution that relies on environment variables.
+    # When running in Travis, use manual distro resolution that relies on
+    # environment variables.
     if running_under_travis():
         return get_osutil_for_travis()
     else:
@@ -144,7 +145,9 @@ def are_cgroups_enabled():
     # We use a function decorator to check if cgroups are enabled in multiple tests, which at some point calls
     # get_osutil. The global mock for that function doesn't get executed before the function decorators are imported,
     # so we need to specifically mock it beforehand.
-    mock__get_osutil = patch("azurelinuxagent.common.osutil.factory._get_osutil", mock_get_osutil)
+    mock__get_osutil = patch(
+        "azurelinuxagent.common.osutil.factory._get_osutil",
+        mock_get_osutil)
     mock__get_osutil.start()
     ret = CGroupConfigurator.get_instance().enabled
     mock__get_osutil.stop()
@@ -157,7 +160,7 @@ def is_trusty_in_travis():
     if not running_under_travis():
         return False
 
-    return type(get_osutil_for_travis()) == Ubuntu14OSUtil
+    return isinstance(get_osutil_for_travis(), Ubuntu14OSUtil)
 
 
 def is_systemd_present():
@@ -174,9 +177,11 @@ class AgentTestCase(unittest.TestCase):
         # Setup newer unittest assertions missing in prior versions of Python
 
         if not hasattr(cls, "assertRegex"):
-            cls.assertRegex = cls.assertRegexpMatches if hasattr(cls, "assertRegexpMatches") else cls.emulate_assertRegexpMatches
+            cls.assertRegex = cls.assertRegexpMatches if hasattr(
+                cls, "assertRegexpMatches") else cls.emulate_assertRegexpMatches
         if not hasattr(cls, "assertNotRegex"):
-            cls.assertNotRegex = cls.assertNotRegexpMatches if hasattr(cls, "assertNotRegexpMatches") else cls.emulate_assertNotRegexpMatches
+            cls.assertNotRegex = cls.assertNotRegexpMatches if hasattr(
+                cls, "assertNotRegexpMatches") else cls.emulate_assertNotRegexpMatches
         if not hasattr(cls, "assertIn"):
             cls.assertIn = cls.emulate_assertIn
         if not hasattr(cls, "assertNotIn"):
@@ -203,7 +208,8 @@ class AgentTestCase(unittest.TestCase):
             cls.assertIsInstance = cls.emulate_assertIsInstance
         if sys.version_info < (2, 7):
             # assertRaises does not implement a context manager in 2.6; override it with emulate_assertRaises but
-            # keep a pointer to the original implementation to use when a context manager is not requested.
+            # keep a pointer to the original implementation to use when a
+            # context manager is not requested.
             cls.original_assertRaises = unittest.TestCase.assertRaises
             cls.assertRaises = cls.emulate_assertRaises
 
@@ -223,12 +229,16 @@ class AgentTestCase(unittest.TestCase):
         ext_log_dir = os.path.join(self.tmp_dir, "azure")
         conf.get_ext_log_dir = Mock(return_value=ext_log_dir)
 
-        conf.get_agent_pid_file_path = Mock(return_value=os.path.join(self.tmp_dir, "waagent.pid"))
+        conf.get_agent_pid_file_path = Mock(
+            return_value=os.path.join(
+                self.tmp_dir, "waagent.pid"))
 
         event.init_event_status(self.tmp_dir)
         event.init_event_logger(self.tmp_dir)
 
-        self.mock__get_osutil = patch("azurelinuxagent.common.osutil.factory._get_osutil", mock_get_osutil)
+        self.mock__get_osutil = patch(
+            "azurelinuxagent.common.osutil.factory._get_osutil",
+            mock_get_osutil)
         self.mock__get_osutil.start()
 
     def tearDown(self):
@@ -239,54 +249,64 @@ class AgentTestCase(unittest.TestCase):
 
     def emulate_assertIn(self, a, b, msg=None):
         if a not in b:
-            msg = msg if msg is not None else "{0} not found in {1}".format(_safe_repr(a), _safe_repr(b))
+            msg = msg if msg is not None else "{0} not found in {1}".format(
+                _safe_repr(a), _safe_repr(b))
             self.fail(msg)
 
     def emulate_assertNotIn(self, a, b, msg=None):
         if a in b:
-            msg = msg if msg is not None else "{0} unexpectedly found in {1}".format(_safe_repr(a), _safe_repr(b))
+            msg = msg if msg is not None else "{0} unexpectedly found in {1}".format(
+                _safe_repr(a), _safe_repr(b))
             self.fail(msg)
 
     def emulate_assertGreater(self, a, b, msg=None):
         if not a > b:
-            msg = msg if msg is not None else '{0} not greater than {1}'.format(_safe_repr(a), _safe_repr(b))
+            msg = msg if msg is not None else '{0} not greater than {1}'.format(
+                _safe_repr(a), _safe_repr(b))
             self.fail(msg)
 
     def emulate_assertGreaterEqual(self, a, b, msg=None):
         if not a >= b:
-            msg = msg if msg is not None else '{0} not greater or equal to {1}'.format(_safe_repr(a), _safe_repr(b))
+            msg = msg if msg is not None else '{0} not greater or equal to {1}'.format(
+                _safe_repr(a), _safe_repr(b))
             self.fail(msg)
 
     def emulate_assertLess(self, a, b, msg=None):
         if not a < b:
-            msg = msg if msg is not None else '{0} not less than {1}'.format(_safe_repr(a), _safe_repr(b))
+            msg = msg if msg is not None else '{0} not less than {1}'.format(
+                _safe_repr(a), _safe_repr(b))
             self.fail(msg)
 
     def emulate_assertLessEqual(self, a, b, msg=None):
         if not a <= b:
-            msg = msg if msg is not None else '{0} not less or equal to {1}'.format(_safe_repr(a), _safe_repr(b))
+            msg = msg if msg is not None else '{0} not less or equal to {1}'.format(
+                _safe_repr(a), _safe_repr(b))
             self.fail(msg)
 
     def emulate_assertIsNone(self, x, msg=None):
         if x is not None:
-            msg = msg if msg is not None else '{0} is not None'.format(_safe_repr(x))
+            msg = msg if msg is not None else '{0} is not None'.format(
+                _safe_repr(x))
             self.fail(msg)
 
     def emulate_assertIsNotNone(self, x, msg=None):
         if x is None:
-            msg = msg if msg is not None else '{0} is None'.format(_safe_repr(x))
+            msg = msg if msg is not None else '{0} is None'.format(
+                _safe_repr(x))
             self.fail(msg)
 
     def emulate_assertRegexpMatches(self, text, regexp, msg=None):
         if re.search(regexp, text) is not None:
             return
-        msg = msg if msg is not None else "'{0}' does not match '{1}'.".format(text, regexp)
+        msg = msg if msg is not None else "'{0}' does not match '{1}'.".format(
+            text, regexp)
         self.fail(msg)
 
     def emulate_assertNotRegexpMatches(self, text, regexp, msg=None):
         if re.search(regexp, text, flags=1) is None:
             return
-        msg = msg if msg is not None else "'{0}' should not match '{1}'.".format(text, regexp)
+        msg = msg if msg is not None else "'{0}' should not match '{1}'.".format(
+            text, regexp)
         self.fail(msg)
 
     class _AssertRaisesContextManager(object):
@@ -303,35 +323,48 @@ class AgentTestCase(unittest.TestCase):
 
         def __exit__(self, exception_type, exception, *_):
             if exception_type is None:
-                expected = AgentTestCase._AssertRaisesContextManager._get_type_name(self._expected_exception_type)
-                self._test_case.fail("Did not raise an exception; expected '{0}'".format(expected))
+                expected = AgentTestCase._AssertRaisesContextManager._get_type_name(
+                    self._expected_exception_type)
+                self._test_case.fail(
+                    "Did not raise an exception; expected '{0}'".format(expected))
             if not issubclass(exception_type, self._expected_exception_type):
-                raised = AgentTestCase._AssertRaisesContextManager._get_type_name(exception_type)
-                expected = AgentTestCase._AssertRaisesContextManager._get_type_name(self._expected_exception_type)
-                self._test_case.fail("Raised '{0}', but expected '{1}'".format(raised, expected))
+                raised = AgentTestCase._AssertRaisesContextManager._get_type_name(
+                    exception_type)
+                expected = AgentTestCase._AssertRaisesContextManager._get_type_name(
+                    self._expected_exception_type)
+                self._test_case.fail(
+                    "Raised '{0}', but expected '{1}'".format(
+                        raised, expected))
 
             self.exception = exception
             return True
 
-    def emulate_assertRaises(self, exception_type, function=None, *args, **kwargs):
-        # return a context manager only when function is not provided; otherwise use the original assertRaises
+    def emulate_assertRaises(self, exception_type,
+                             function=None, *args, **kwargs):
+        # return a context manager only when function is not provided;
+        # otherwise use the original assertRaises
         if function is None:
-            return AgentTestCase._AssertRaisesContextManager(exception_type, self)
+            return AgentTestCase._AssertRaisesContextManager(
+                exception_type, self)
 
         self.original_assertRaises(exception_type, function, *args, **kwargs)
 
         return None
 
-    def emulate_raises_regex(self, exception_type, regex, function, *args, **kwargs):
+    def emulate_raises_regex(self, exception_type,
+                             regex, function, *args, **kwargs):
         try:
             function(*args, **kwargs)
         except Exception as e:
             if re.search(regex, str(e), flags=1) is not None:
                 return
             else:
-                self.fail("Expected exception {0} matching {1}.  Actual: {2}".format(
-                    exception_type, regex, str(e)))
-        self.fail("No exception was thrown.  Expected exception {0} matching {1}".format(exception_type, regex))
+                self.fail(
+                    "Expected exception {0} matching {1}.  Actual: {2}".format(
+                        exception_type, regex, str(e)))
+        self.fail(
+            "No exception was thrown.  Expected exception {0} matching {1}".format(
+                exception_type, regex))
 
     def emulate_assertListEqual(self, seq1, seq2, msg=None, seq_type=None):
         """An equality assertion for ordered sequences (like lists and tuples).
@@ -351,10 +384,10 @@ class AgentTestCase(unittest.TestCase):
             seq_type_name = seq_type.__name__
             if not isinstance(seq1, seq_type):
                 raise self.failureException('First sequence is not a %s: %s'
-                                        % (seq_type_name, safe_repr(seq1)))
+                                            % (seq_type_name, safe_repr(seq1)))
             if not isinstance(seq2, seq_type):
                 raise self.failureException('Second sequence is not a %s: %s'
-                                        % (seq_type_name, safe_repr(seq2)))
+                                            % (seq_type_name, safe_repr(seq2)))
         else:
             seq_type_name = "sequence"
 
@@ -363,14 +396,14 @@ class AgentTestCase(unittest.TestCase):
             len1 = len(seq1)
         except (TypeError, NotImplementedError):
             differing = 'First %s has no length.    Non-sequence?' % (
-                    seq_type_name)
+                seq_type_name)
 
         if differing is None:
             try:
                 len2 = len(seq2)
             except (TypeError, NotImplementedError):
                 differing = 'Second %s has no length.    Non-sequence?' % (
-                        seq_type_name)
+                    seq_type_name)
 
         if differing is None:
             if seq1 == seq2:
@@ -390,29 +423,29 @@ class AgentTestCase(unittest.TestCase):
                     item1 = seq1[i]
                 except (TypeError, IndexError, NotImplementedError):
                     differing += ('\nUnable to index element %d of first %s\n' %
-                                 (i, seq_type_name))
+                                  (i, seq_type_name))
                     break
 
                 try:
                     item2 = seq2[i]
                 except (TypeError, IndexError, NotImplementedError):
                     differing += ('\nUnable to index element %d of second %s\n' %
-                                 (i, seq_type_name))
+                                  (i, seq_type_name))
                     break
 
                 if item1 != item2:
                     differing += ('\nFirst differing element %d:\n%s\n%s\n' %
-                                 (i, safe_repr(item1), safe_repr(item2)))
+                                  (i, safe_repr(item1), safe_repr(item2)))
                     break
             else:
                 if (len1 == len2 and seq_type is None and
-                    type(seq1) != type(seq2)):
+                        not isinstance(seq1, type(seq2))):
                     # The sequences are the same, but have differing types.
                     return
 
             if len1 > len2:
                 differing += ('\nFirst %s contains %d additional '
-                             'elements.\n' % (seq_type_name, len1 - len2))
+                              'elements.\n' % (seq_type_name, len1 - len2))
                 try:
                     differing += ('First extra element %d:\n%s\n' %
                                   (len2, safe_repr(seq1[len2])))
@@ -421,7 +454,7 @@ class AgentTestCase(unittest.TestCase):
                                   'of first %s\n' % (len2, seq_type_name))
             elif len1 < len2:
                 differing += ('\nSecond %s contains %d additional '
-                             'elements.\n' % (seq_type_name, len2 - len1))
+                              'elements.\n' % (seq_type_name, len2 - len1))
                 try:
                     differing += ('First extra element %d:\n%s\n' %
                                   (len1, safe_repr(seq2[len1])))
@@ -438,8 +471,8 @@ class AgentTestCase(unittest.TestCase):
 
     def emulate_assertIsInstance(self, obj, object_type, msg=None):
         if not isinstance(obj, object_type):
-            msg = msg if msg is not None else '{0} is not an instance of {1}'.format(_safe_repr(obj),
-                                                                                     _safe_repr(object_type))
+            msg = msg if msg is not None else '{0} is not an instance of {1}'.format(
+                _safe_repr(obj), _safe_repr(object_type))
             self.fail(msg)
 
     @staticmethod
@@ -530,7 +563,7 @@ def distros(distro_name=".*", distro_version=".*", distro_full_name=".*"):
                    re.match(distro_version, distro[1]) and \
                    re.match(distro_full_name, distro[2]):
                     if debug:
-                        logger.info("Run {0} on {1}", test_method.__name__, 
+                        logger.info("Run {0} on {1}", test_method.__name__,
                                     distro)
                     new_args = []
                     new_args.extend(args)
@@ -542,5 +575,3 @@ def distros(distro_name=".*", distro_version=".*", distro_full_name=".*"):
                     self.setUp()
         return wrapper
     return decorator
-
-

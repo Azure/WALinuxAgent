@@ -4,6 +4,7 @@ import unittest
 
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
 
+
 class TestFlexibleVersion(unittest.TestCase):
 
     def setUp(self):
@@ -19,7 +20,7 @@ class TestFlexibleVersion(unittest.TestCase):
             t_escaped = re.escape(t)
             t_re = re.compile(t_escaped)
             self.assertEqual((t_escaped, t_re), self.v._compile_separator(t))
-        self.assertEqual(('', re.compile('')),  self.v._compile_separator(None))
+        self.assertEqual(('', re.compile('')), self.v._compile_separator(None))
         return
 
     def test_compile_pattern(self):
@@ -219,13 +220,15 @@ class TestFlexibleVersion(unittest.TestCase):
         v2 = FlexibleVersion('1-2-3', sep='-')
         try:
             v1 == v2
-            self.assertTrue(False, "Incompatible separators failed to raise an exception")
+            self.assertTrue(
+                False, "Incompatible separators failed to raise an exception")
         except ValueError:
             pass
         except Exception as e:
             t = e.__class__.__name__
-            self.assertTrue(False, "Incompatible separators raised an unexpected exception: {0}" \
-                .format(t))
+            self.assertTrue(
+                False,
+                "Incompatible separators raised an unexpected exception: {0}" .format(t))
         return
 
     def test_ensure_compatible_prerel(self):
@@ -233,13 +236,15 @@ class TestFlexibleVersion(unittest.TestCase):
         v2 = FlexibleVersion('1.2.3', prerel_tags=('a', 'b', 'c'))
         try:
             v1 == v2
-            self.assertTrue(False, "Incompatible prerel_tags failed to raise an exception")
+            self.assertTrue(
+                False, "Incompatible prerel_tags failed to raise an exception")
         except ValueError:
             pass
         except Exception as e:
             t = e.__class__.__name__
-            self.assertTrue(False, "Incompatible prerel_tags raised an unexpected exception: {0}" \
-                .format(t))
+            self.assertTrue(
+                False,
+                "Incompatible prerel_tags raised an unexpected exception: {0}" .format(t))
         return
 
     def test_ensure_compatible_prerel_length(self):
@@ -247,13 +252,15 @@ class TestFlexibleVersion(unittest.TestCase):
         v2 = FlexibleVersion('1.2.3', prerel_tags=('a', 'b'))
         try:
             v1 == v2
-            self.assertTrue(False, "Incompatible prerel_tags failed to raise an exception")
+            self.assertTrue(
+                False, "Incompatible prerel_tags failed to raise an exception")
         except ValueError:
             pass
         except Exception as e:
             t = e.__class__.__name__
-            self.assertTrue(False, "Incompatible prerel_tags raised an unexpected exception: {0}" \
-                .format(t))
+            self.assertTrue(
+                False,
+                "Incompatible prerel_tags raised an unexpected exception: {0}" .format(t))
         return
 
     def test_ensure_compatible_prerel_order(self):
@@ -261,21 +268,23 @@ class TestFlexibleVersion(unittest.TestCase):
         v2 = FlexibleVersion('1.2.3', prerel_tags=('b', 'a'))
         try:
             v1 == v2
-            self.assertTrue(False, "Incompatible prerel_tags failed to raise an exception")
+            self.assertTrue(
+                False, "Incompatible prerel_tags failed to raise an exception")
         except ValueError:
             pass
         except Exception as e:
             t = e.__class__.__name__
-            self.assertTrue(False, "Incompatible prerel_tags raised an unexpected exception: {0}" \
-                .format(t))
+            self.assertTrue(
+                False,
+                "Incompatible prerel_tags raised an unexpected exception: {0}" .format(t))
         return
 
     def test_major(self):
         tests = {
-            '1' : 1,
-            '1.2' : 1,
-            '1.2.3' : 1,
-            '1.2.3.4' : 1
+            '1': 1,
+            '1.2': 1,
+            '1.2.3': 1,
+            '1.2.3.4': 1
         }
         for test in iter(tests):
             expectation = tests[test]
@@ -286,10 +295,10 @@ class TestFlexibleVersion(unittest.TestCase):
 
     def test_minor(self):
         tests = {
-            '1' : 0,
-            '1.2' : 2,
-            '1.2.3' : 2,
-            '1.2.3.4' : 2
+            '1': 0,
+            '1.2': 2,
+            '1.2.3': 2,
+            '1.2.3.4': 2
         }
         for test in iter(tests):
             expectation = tests[test]
@@ -300,10 +309,10 @@ class TestFlexibleVersion(unittest.TestCase):
 
     def test_patch(self):
         tests = {
-            '1' : 0,
-            '1.2' : 0,
-            '1.2.3' : 3,
-            '1.2.3.4' : 3
+            '1': 0,
+            '1.2': 0,
+            '1.2.3': 3,
+            '1.2.3.4': 3
         }
         for test in iter(tests):
             expectation = tests[test]
@@ -328,7 +337,7 @@ class TestFlexibleVersion(unittest.TestCase):
     def test_decrement(self):
         src_v = FlexibleVersion('1.0.0.0.10')
         dst_v = FlexibleVersion(str(src_v))
-        for i in range(1,10):
+        for i in range(1, 10):
             dst_v -= 1
             self.assertEqual(i, src_v.version[-1] - dst_v.version[-1])
         return
@@ -341,13 +350,14 @@ class TestFlexibleVersion(unittest.TestCase):
             pass
         except Exception as e:
             t = e.__class__.__name__
-            self.assertTrue(False, "Decrement raised an unexpected exception: {0}".format(t))
+            self.assertTrue(
+                False, "Decrement raised an unexpected exception: {0}".format(t))
         return
 
     def test_increment(self):
         src_v = FlexibleVersion('1.0.0.0.0')
         dst_v = FlexibleVersion(str(src_v))
-        for i in range(1,10):
+        for i in range(1, 10):
             dst_v += 1
             self.assertEqual(i, dst_v.version[-1] - src_v.version[-1])
         return
@@ -467,7 +477,8 @@ class TestFlexibleVersion(unittest.TestCase):
     def test_order(self):
         test0 = ["1.7.0", "1.7.0rc0", "1.11.0"]
         expected0 = ['1.7.0rc0', '1.7.0', '1.11.0']
-        self.assertEqual(expected0, list(map(str, sorted([FlexibleVersion(v) for v in test0]))))
+        self.assertEqual(expected0, list(
+            map(str, sorted([FlexibleVersion(v) for v in test0]))))
 
         test1 = [
             '2.0.2rc2',
@@ -497,22 +508,27 @@ class TestFlexibleVersion(unittest.TestCase):
             '2.2.0',
             '3.0.1'
         ]
-        self.assertEqual(expected1, list(map(str, sorted([FlexibleVersion(v) for v in test1]))))
+        self.assertEqual(expected1, list(
+            map(str, sorted([FlexibleVersion(v) for v in test1]))))
 
-        self.assertEqual(FlexibleVersion("1.0.0.0.0.0.0.0"), FlexibleVersion("1"))
+        self.assertEqual(
+            FlexibleVersion("1.0.0.0.0.0.0.0"),
+            FlexibleVersion("1"))
 
         self.assertFalse(FlexibleVersion("1.0") > FlexibleVersion("1.0"))
         self.assertFalse(FlexibleVersion("1.0") < FlexibleVersion("1.0"))
-        
+
         self.assertTrue(FlexibleVersion("1.0") < FlexibleVersion("1.1"))
         self.assertTrue(FlexibleVersion("1.9") < FlexibleVersion("1.10"))
         self.assertTrue(FlexibleVersion("1.9.9") < FlexibleVersion("1.10.0"))
-        self.assertTrue(FlexibleVersion("1.0.0.0") < FlexibleVersion("1.2.0.0"))
+        self.assertTrue(FlexibleVersion("1.0.0.0") <
+                        FlexibleVersion("1.2.0.0"))
 
         self.assertTrue(FlexibleVersion("1.1") > FlexibleVersion("1.0"))
         self.assertTrue(FlexibleVersion("1.10") > FlexibleVersion("1.9"))
         self.assertTrue(FlexibleVersion("1.10.0") > FlexibleVersion("1.9.9"))
-        self.assertTrue(FlexibleVersion("1.2.0.0") > FlexibleVersion("1.0.0.0"))
+        self.assertTrue(FlexibleVersion("1.2.0.0") >
+                        FlexibleVersion("1.0.0.0"))
 
         self.assertTrue(FlexibleVersion("1.0") <= FlexibleVersion("1.1"))
         self.assertTrue(FlexibleVersion("1.1") > FlexibleVersion("1.0"))

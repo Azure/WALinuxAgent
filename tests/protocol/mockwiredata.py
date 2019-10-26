@@ -21,17 +21,17 @@ from azurelinuxagent.common.future import httpclient
 from azurelinuxagent.common.utils.cryptutil import CryptUtil
 
 DATA_FILE = {
-        "version_info": "wire/version_info.xml",
-        "goal_state": "wire/goal_state.xml",
-        "hosting_env": "wire/hosting_env.xml",
-        "shared_config": "wire/shared_config.xml",
-        "certs": "wire/certs.xml",
-        "ext_conf": "wire/ext_conf.xml",
-        "manifest": "wire/manifest.xml",
-        "ga_manifest" : "wire/ga_manifest.xml",
-        "trans_prv": "wire/trans_prv",
-        "trans_cert": "wire/trans_cert",
-        "test_ext": "ext/sample_ext-1.3.0.zip"
+    "version_info": "wire/version_info.xml",
+    "goal_state": "wire/goal_state.xml",
+    "hosting_env": "wire/hosting_env.xml",
+    "shared_config": "wire/shared_config.xml",
+    "certs": "wire/certs.xml",
+    "ext_conf": "wire/ext_conf.xml",
+    "manifest": "wire/manifest.xml",
+    "ga_manifest": "wire/ga_manifest.xml",
+    "trans_prv": "wire/trans_prv",
+    "trans_cert": "wire/trans_cert",
+    "test_ext": "ext/sample_ext-1.3.0.zip"
 }
 
 DATA_FILE_NO_EXT = DATA_FILE.copy()
@@ -73,21 +73,22 @@ DATA_FILE_NO_CERT_FORMAT["certs"] = "wire/certs_no_format_specified.xml"
 DATA_FILE_CERT_FORMAT_NOT_PFX = DATA_FILE.copy()
 DATA_FILE_CERT_FORMAT_NOT_PFX["certs"] = "wire/certs_format_not_pfx.xml"
 
+
 class WireProtocolData(object):
     def __init__(self, data_files=DATA_FILE):
         self.emulate_stale_goal_state = False
         self.call_counts = {
-            "comp=versions" : 0,
-            "/versions" : 0,
-            "goalstate" : 0,
-            "hostingenvuri" : 0,
-            "sharedconfiguri" : 0,
-            "certificatesuri" : 0,
-            "extensionsconfiguri" : 0,
-            "extensionArtifact" : 0,
-            "manifest.xml" : 0,
-            "manifest_of_ga.xml" : 0,
-            "ExampleHandlerLinux" : 0
+            "comp=versions": 0,
+            "/versions": 0,
+            "goalstate": 0,
+            "hostingenvuri": 0,
+            "sharedconfiguri": 0,
+            "certificatesuri": 0,
+            "extensionsconfiguri": 0,
+            "extensionArtifact": 0,
+            "manifest.xml": 0,
+            "manifest_of_ga.xml": 0,
+            "ExampleHandlerLinux": 0
         }
         self.version_info = load_data(data_files.get("version_info"))
         self.goal_state = load_data(data_files.get("goal_state"))
@@ -148,9 +149,9 @@ class WireProtocolData(object):
             if "extensionArtifact" in url:
                 self.call_counts["extensionArtifact"] += 1
                 if "headers" not in kwargs or \
-                    "x-ms-artifact-location" not in kwargs["headers"]:
+                        "x-ms-artifact-location" not in kwargs["headers"]:
                     raise Exception("Bad HEADERS passed to HostPlugin: {0}",
-                            kwargs)
+                                    kwargs)
                 url = kwargs["headers"]["x-ms-artifact-location"]
 
             if "manifest.xml" in url:
@@ -171,11 +172,12 @@ class WireProtocolData(object):
         return resp
 
     def mock_crypt_util(self, *args, **kw):
-        #Partially patch instance method of class CryptUtil
+        # Partially patch instance method of class CryptUtil
         cryptutil = CryptUtil(*args, **kw)
-        cryptutil.gen_transport_cert = Mock(side_effect=self.mock_gen_trans_cert)
+        cryptutil.gen_transport_cert = Mock(
+            side_effect=self.mock_gen_trans_cert)
         return cryptutil
-    
+
     def mock_gen_trans_cert(self, trans_prv_file, trans_cert_file):
         with open(trans_prv_file, 'w+') as prv_file:
             prv_file.write(self.trans_prv)

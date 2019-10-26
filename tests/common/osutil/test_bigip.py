@@ -141,7 +141,7 @@ class TestBigIpOSUtil_chpasswd(AgentTestCase):
 
 class TestBigIpOSUtil_get_dvd_device(AgentTestCase):
 
-    @patch.object(os, "listdir", return_value=['tty1','cdrom0'])
+    @patch.object(os, "listdir", return_value=['tty1', 'cdrom0'])
     def test_success(self, *args):
         result = osutil.BigIpOSUtil.get_dvd_device(
             osutil.BigIpOSUtil(), '/dev'

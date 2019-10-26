@@ -139,8 +139,10 @@ class MonitorHandler(object):
         self.sysinfo = []
         self.should_run = True
         self.heartbeat_id = str(uuid.uuid4()).upper()
-        self.host_plugin_errorstate = ErrorState(min_timedelta=MonitorHandler.HOST_PLUGIN_HEALTH_PERIOD)
-        self.imds_errorstate = ErrorState(min_timedelta=MonitorHandler.IMDS_HEALTH_PERIOD)
+        self.host_plugin_errorstate = ErrorState(
+            min_timedelta=MonitorHandler.HOST_PLUGIN_HEALTH_PERIOD)
+        self.imds_errorstate = ErrorState(
+            min_timedelta=MonitorHandler.IMDS_HEALTH_PERIOD)
 
     def run(self):
         self.init_protocols()
@@ -172,7 +174,10 @@ class MonitorHandler(object):
                                                  platform.release())
         self.sysinfo.append(TelemetryEventParam("OSVersion", osversion))
         self.sysinfo.append(TelemetryEventParam("GAVersion", CURRENT_AGENT))
-        self.sysinfo.append(TelemetryEventParam("ExecutionMode", AGENT_EXECUTION_MODE))
+        self.sysinfo.append(
+            TelemetryEventParam(
+                "ExecutionMode",
+                AGENT_EXECUTION_MODE))
 
         try:
             ram = self.osutil.get_total_mem()
@@ -227,9 +232,12 @@ class MonitorHandler(object):
 
     def collect_and_send_events(self):
         if self.last_event_collection is None:
-            self.last_event_collection = datetime.datetime.utcnow() - MonitorHandler.EVENT_COLLECTION_PERIOD
+            self.last_event_collection = datetime.datetime.utcnow(
+            ) - MonitorHandler.EVENT_COLLECTION_PERIOD
 
-        if datetime.datetime.utcnow() >= (self.last_event_collection + MonitorHandler.EVENT_COLLECTION_PERIOD):
+        if datetime.datetime.utcnow() >= (
+                self.last_event_collection +
+                MonitorHandler.EVENT_COLLECTION_PERIOD):
             try:
                 event_list = TelemetryEventList()
                 event_dir = os.path.join(conf.get_lib_dir(), "events")
@@ -249,7 +257,8 @@ class MonitorHandler(object):
                         self.add_sysinfo(event)
                         event_list.events.append(event)
                     except (ValueError, ProtocolError) as e:
-                        logger.warn("Failed to decode event file: {0}", ustr(e))
+                        logger.warn(
+                            "Failed to decode event file: {0}", ustr(e))
                         continue
 
                 if len(event_list.events) == 0:
@@ -317,9 +326,12 @@ class MonitorHandler(object):
         """
 
         if self.last_imds_heartbeat is None:
-            self.last_imds_heartbeat = datetime.datetime.utcnow() - MonitorHandler.IMDS_HEARTBEAT_PERIOD
+            self.last_imds_heartbeat = datetime.datetime.utcnow(
+            ) - MonitorHandler.IMDS_HEARTBEAT_PERIOD
 
-        if datetime.datetime.utcnow() >= (self.last_imds_heartbeat + MonitorHandler.IMDS_HEARTBEAT_PERIOD):
+        if datetime.datetime.utcnow() >= (
+                self.last_imds_heartbeat +
+                MonitorHandler.IMDS_HEARTBEAT_PERIOD):
             try:
                 is_currently_healthy, response = self.imds_client.validate()
 
@@ -351,10 +363,12 @@ class MonitorHandler(object):
         communicate with HostGAPlugin at least once in the last HOST_PLUGIN_HEALTH_PERIOD.
         """
         if self.last_host_plugin_heartbeat is None:
-            self.last_host_plugin_heartbeat = datetime.datetime.utcnow() - MonitorHandler.HOST_PLUGIN_HEARTBEAT_PERIOD
+            self.last_host_plugin_heartbeat = datetime.datetime.utcnow(
+            ) - MonitorHandler.HOST_PLUGIN_HEARTBEAT_PERIOD
 
         if datetime.datetime.utcnow() >= (
-                self.last_host_plugin_heartbeat + MonitorHandler.HOST_PLUGIN_HEARTBEAT_PERIOD):
+                self.last_host_plugin_heartbeat +
+                MonitorHandler.HOST_PLUGIN_HEARTBEAT_PERIOD):
             try:
                 host_plugin = self.protocol.client.get_host_plugin()
                 host_plugin.ensure_initialized()
@@ -376,11 +390,13 @@ class MonitorHandler(object):
                         version=CURRENT_VERSION,
                         op=WALAEventOperation.HostPluginHeartbeatExtended,
                         is_success=False,
-                        message='{0} since successful heartbeat'.format(self.host_plugin_errorstate.fail_time),
+                        message='{0} since successful heartbeat'.format(
+                            self.host_plugin_errorstate.fail_time),
                         log_event=False)
 
             except Exception as e:
-                msg = "Exception sending host plugin heartbeat: {0}".format(ustr(e))
+                msg = "Exception sending host plugin heartbeat: {0}".format(
+                    ustr(e))
                 add_event(
                     name=AGENT_NAME,
                     version=CURRENT_VERSION,
@@ -394,13 +410,18 @@ class MonitorHandler(object):
     def send_telemetry_heartbeat(self):
 
         if self.last_telemetry_heartbeat is None:
-            self.last_telemetry_heartbeat = datetime.datetime.utcnow() - MonitorHandler.TELEMETRY_HEARTBEAT_PERIOD
+            self.last_telemetry_heartbeat = datetime.datetime.utcnow(
+            ) - MonitorHandler.TELEMETRY_HEARTBEAT_PERIOD
 
-        if datetime.datetime.utcnow() >= (self.last_telemetry_heartbeat + MonitorHandler.TELEMETRY_HEARTBEAT_PERIOD):
+        if datetime.datetime.utcnow() >= (
+                self.last_telemetry_heartbeat +
+                MonitorHandler.TELEMETRY_HEARTBEAT_PERIOD):
             try:
                 incarnation = self.protocol.get_incarnation()
-                dropped_packets = self.osutil.get_firewall_dropped_packets(self.protocol.endpoint)
-                msg = "{0};{1};{2};{3}".format(incarnation, self.counter, self.heartbeat_id, dropped_packets)
+                dropped_packets = self.osutil.get_firewall_dropped_packets(
+                    self.protocol.endpoint)
+                msg = "{0};{1};{2};{3}".format(
+                    incarnation, self.counter, self.heartbeat_id, dropped_packets)
 
                 add_event(
                     name=AGENT_NAME,
@@ -418,9 +439,8 @@ class MonitorHandler(object):
                 other_errors = io_errors.get("other")
 
                 if hostplugin_errors > 0 or protocol_errors > 0 or other_errors > 0:
-                    msg = "hostplugin:{0};protocol:{1};other:{2}".format(hostplugin_errors,
-                                                                         protocol_errors,
-                                                                         other_errors)
+                    msg = "hostplugin:{0};protocol:{1};other:{2}".format(
+                        hostplugin_errors, protocol_errors, other_errors)
                     add_event(
                         name=AGENT_NAME,
                         version=CURRENT_VERSION,
@@ -449,13 +469,14 @@ class MonitorHandler(object):
         if not self.last_cgroup_report_telemetry:
             self.last_cgroup_report_telemetry = time_now
 
-        if time_now >= (self.last_cgroup_report_telemetry + MonitorHandler.CGROUP_TELEMETRY_REPORTING_PERIOD):
+        if time_now >= (self.last_cgroup_report_telemetry +
+                        MonitorHandler.CGROUP_TELEMETRY_REPORTING_PERIOD):
             performance_metrics = CGroupsTelemetry.report_all_tracked()
             self.last_cgroup_report_telemetry = time_now
 
             if performance_metrics:
-                message = generate_extension_metrics_telemetry_dictionary(schema_version=1.0,
-                                                                          performance_metrics=performance_metrics)
+                message = generate_extension_metrics_telemetry_dictionary(
+                    schema_version=1.0, performance_metrics=performance_metrics)
                 add_event(name=AGENT_NAME,
                           version=CURRENT_VERSION,
                           op=WALAEventOperation.ExtensionMetricsData,
@@ -472,10 +493,12 @@ class MonitorHandler(object):
         if digest != self.last_route_table_hash:
             self.last_route_table_hash = digest
             route_list = self.osutil.get_list_of_routes(raw_route_list)
-            logger.info("Route table: [{0}]".format(",".join(map(networkutil.RouteEntry.to_json, route_list))))
+            logger.info("Route table: [{0}]".format(
+                ",".join(map(networkutil.RouteEntry.to_json, route_list))))
 
         nic_state = self.osutil.get_nic_state()
         if nic_state != self.last_nic_state:
             description = "Initial" if self.last_nic_state == {} else "Updated"
-            logger.info("{0} NIC state: [{1}]".format(description, ", ".join(map(str, nic_state.values()))))
+            logger.info("{0} NIC state: [{1}]".format(
+                description, ", ".join(map(str, nic_state.values()))))
             self.last_nic_state = nic_state

@@ -21,6 +21,7 @@ import azurelinuxagent.common.logger as logger
 import azurelinuxagent.common.utils.shellutil as shellutil
 from azurelinuxagent.common.osutil.default import DefaultOSUtil
 
+
 class AlpineOSUtil(DefaultOSUtil):
 
     def __init__(self):
@@ -35,9 +36,10 @@ class AlpineOSUtil(DefaultOSUtil):
         return self._get_dhcp_pid(["pidof", "dhcpcd"])
 
     def restart_if(self, ifname):
-        logger.info('restarting {} (sort of, actually SIGHUPing dhcpcd)'.format(ifname))
+        logger.info(
+            'restarting {} (sort of, actually SIGHUPing dhcpcd)'.format(ifname))
         pid = self.get_dhcp_pid()
-        if pid != None:
+        if pid is not None:
             ret = shellutil.run_get_output('kill -HUP {}'.format(pid))
 
     def set_ssh_client_alive_interval(self):

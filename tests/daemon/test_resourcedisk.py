@@ -20,6 +20,7 @@ from azurelinuxagent.common.exception import *
 from azurelinuxagent.daemon import *
 from azurelinuxagent.daemon.resourcedisk.default import ResourceDiskHandler
 
+
 class TestResourceDisk(AgentTestCase):
     def test_mount_flags_empty(self):
         partition = '/dev/sdb1'
@@ -38,6 +39,7 @@ class TestResourceDisk(AgentTestCase):
         rdh = ResourceDiskHandler()
         mount_string = rdh.get_mount_string(options, partition, mountpoint)
         self.assertEqual(expected, mount_string)
+
 
 if __name__ == '__main__':
     unittest.main()

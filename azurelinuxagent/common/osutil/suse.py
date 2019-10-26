@@ -38,7 +38,7 @@ class SUSE11OSUtil(DefaultOSUtil):
     def __init__(self):
         super(SUSE11OSUtil, self).__init__()
         self.jit_enabled = True
-        self.dhclient_name='dhcpcd'
+        self.dhclient_name = 'dhcpcd'
 
     def set_hostname(self, hostname):
         fileutil.write_file('/etc/HOSTNAME', hostname)
@@ -58,23 +58,27 @@ class SUSE11OSUtil(DefaultOSUtil):
         cmd = "/sbin/service {0} start".format(self.dhclient_name)
         return shellutil.run(cmd, chk_err=False)
 
-    def start_network(self) :
+    def start_network(self):
         return shellutil.run("/sbin/service start network", chk_err=False)
 
     def restart_ssh_service(self):
         return shellutil.run("/sbin/service sshd restart", chk_err=False)
 
     def stop_agent_service(self):
-        return shellutil.run("/sbin/service {0} stop".format(self.service_name), chk_err=False)
+        return shellutil.run(
+            "/sbin/service {0} stop".format(self.service_name), chk_err=False)
 
     def start_agent_service(self):
-        return shellutil.run("/sbin/service {0} start".format(self.service_name), chk_err=False)
+        return shellutil.run(
+            "/sbin/service {0} start".format(self.service_name), chk_err=False)
 
     def register_agent_service(self):
-        return shellutil.run("/sbin/insserv {0}".format(self.service_name), chk_err=False)
+        return shellutil.run(
+            "/sbin/insserv {0}".format(self.service_name), chk_err=False)
 
     def unregister_agent_service(self):
-        return shellutil.run("/sbin/insserv -r {0}".format(self.service_name), chk_err=False)
+        return shellutil.run(
+            "/sbin/insserv -r {0}".format(self.service_name), chk_err=False)
 
 
 class SUSEOSUtil(SUSE11OSUtil):
@@ -90,20 +94,24 @@ class SUSEOSUtil(SUSE11OSUtil):
         cmd = "systemctl start {0}".format(self.dhclient_name)
         return shellutil.run(cmd, chk_err=False)
 
-    def start_network(self) :
+    def start_network(self):
         return shellutil.run("systemctl start network", chk_err=False)
 
     def restart_ssh_service(self):
         return shellutil.run("systemctl restart sshd", chk_err=False)
 
     def stop_agent_service(self):
-        return shellutil.run("systemctl stop {0}".format(self.service_name), chk_err=False)
+        return shellutil.run("systemctl stop {0}".format(
+            self.service_name), chk_err=False)
 
     def start_agent_service(self):
-        return shellutil.run("systemctl start {0}".format(self.service_name), chk_err=False)
+        return shellutil.run("systemctl start {0}".format(
+            self.service_name), chk_err=False)
 
     def register_agent_service(self):
-        return shellutil.run("systemctl enable {0}".format(self.service_name), chk_err=False)
+        return shellutil.run("systemctl enable {0}".format(
+            self.service_name), chk_err=False)
 
     def unregister_agent_service(self):
-        return shellutil.run("systemctl disable {0}".format(self.service_name), chk_err=False)
+        return shellutil.run("systemctl disable {0}".format(
+            self.service_name), chk_err=False)

@@ -16,7 +16,6 @@
 #
 # Requires Python 2.6+ and Openssl 1.0+
 
-import datetime
 import json
 import os
 import random
@@ -63,7 +62,8 @@ MANIFEST_FILE_NAME = "{0}.{1}.manifest.xml"
 AGENTS_MANIFEST_FILE_NAME = "{0}.{1}.agentsManifest"
 TRANSPORT_CERT_FILE_NAME = "TransportCert.pem"
 TRANSPORT_PRV_FILE_NAME = "TransportPrivate.pem"
-# Store the last retrieved container id as an environment variable to be shared between threads for telemetry purposes
+# Store the last retrieved container id as an environment variable to be
+# shared between threads for telemetry purposes
 CONTAINER_ID_ENV_VARIABLE = "AZURE_GUEST_AGENT_CONTAINER_ID"
 
 PROTOCOL_VERSION = "2012-11-30"
@@ -143,8 +143,10 @@ class WireProtocol(Protocol):
 
     def get_vmagent_pkgs(self, vmagent_manifest):
         goal_state = self.client.get_goal_state()
-        ga_manifest = self.client.get_gafamily_manifest(vmagent_manifest, goal_state)
-        valid_pkg_list = self.client.filter_package_list(vmagent_manifest.family, ga_manifest, goal_state)
+        ga_manifest = self.client.get_gafamily_manifest(
+            vmagent_manifest, goal_state)
+        valid_pkg_list = self.client.filter_package_list(
+            vmagent_manifest.family, ga_manifest, goal_state)
         return valid_pkg_list
 
     def get_ext_handlers(self):
@@ -169,17 +171,21 @@ class WireProtocol(Protocol):
     def download_ext_handler_pkg_through_host(self, uri, destination):
         host = self.client.get_host_plugin()
         uri, headers = host.get_artifact_request(uri, host.manifest_uri)
-        success = self.client.stream(uri, destination, headers=headers, use_proxy=False)
+        success = self.client.stream(
+            uri, destination, headers=headers, use_proxy=False)
         return success
 
-    def download_ext_handler_pkg(self, uri, destination, headers=None, use_proxy=True):
-        direct_func = lambda: self.client.stream(uri, destination, headers=None, use_proxy=True)
+    def download_ext_handler_pkg(
+            self, uri, destination, headers=None, use_proxy=True):
+        def direct_func(): return self.client.stream(
+            uri, destination, headers=None, use_proxy=True)
         # NOTE: the host_func may be called after refreshing the goal state, be careful about any goal state data
         # in the lambda.
-        host_func = lambda: self.download_ext_handler_pkg_through_host(uri, destination)
+        def host_func(): return self.download_ext_handler_pkg_through_host(uri, destination)
 
         try:
-            success = self.client.send_request_using_appropriate_channel(direct_func, host_func)
+            success = self.client.send_request_using_appropriate_channel(
+                direct_func, host_func)
         except Exception:
             success = False
 
@@ -414,7 +420,7 @@ class StatusBlob(object):
 
     def upload(self, url):
         try:
-            if not self.type in ["BlockBlob", "PageBlob"]:
+            if self.type not in ["BlockBlob", "PageBlob"]:
                 raise ProtocolError("Illegal blob type: {0}".format(self.type))
 
             if self.type == "BlockBlob":
@@ -439,7 +445,8 @@ class StatusBlob(object):
     def put_block_blob(self, url, data):
         logger.verbose("Put block blob")
         headers = self.get_block_blob_headers(len(data))
-        resp = self.client.call_storage_service(restutil.http_put, url, data, headers)
+        resp = self.client.call_storage_service(
+            restutil.http_put, url, data, headers)
         if resp.status != httpclient.CREATED:
             raise UploadError(
                 "Failed to upload block blob: {0}".format(resp.status))
@@ -470,7 +477,8 @@ class StatusBlob(object):
         page_blob_size = int((len(data) + 511) / 512) * 512
 
         headers = self.get_page_blob_create_headers(page_blob_size)
-        resp = self.client.call_storage_service(restutil.http_put, url, "", headers)
+        resp = self.client.call_storage_service(
+            restutil.http_put, url, "", headers)
         if resp.status != httpclient.CREATED:
             raise UploadError(
                 "Failed to clean up page blob: {0}".format(resp.status))
@@ -601,7 +609,7 @@ class WireClient(object):
     @staticmethod
     def call_storage_service(http_req, *args, **kwargs):
         # Default to use the configured HTTP proxy
-        if not 'use_proxy' in kwargs or kwargs['use_proxy'] is None:
+        if 'use_proxy' not in kwargs or kwargs['use_proxy'] is None:
             kwargs['use_proxy'] = True
 
         return http_req(*args, **kwargs)
@@ -624,26 +632,34 @@ class WireClient(object):
                 logger.verbose('The specified manifest URL is empty, ignored.')
                 continue
 
-            direct_func = lambda: self.fetch(version.uri)
+            def direct_func(): return self.fetch(version.uri)
             # NOTE: the host_func may be called after refreshing the goal state, be careful about any goal state data
             # in the lambda.
-            host_func = lambda: self.fetch_manifest_through_host(version.uri)
+            def host_func(): return self.fetch_manifest_through_host(version.uri)
 
             try:
-                response = self.send_request_using_appropriate_channel(direct_func, host_func)
+                response = self.send_request_using_appropriate_channel(
+                    direct_func, host_func)
 
                 if response:
                     host = self.get_host_plugin()
                     host.manifest_uri = version.uri
                     return response
             except Exception as e:
-                logger.warn("Exception when fetching manifest. Error: {0}".format(ustr(e)))
+                logger.warn(
+                    "Exception when fetching manifest. Error: {0}".format(
+                        ustr(e)))
 
-        raise ExtensionDownloadError("Failed to fetch manifest from all sources")
+        raise ExtensionDownloadError(
+            "Failed to fetch manifest from all sources")
 
     def stream(self, uri, destination, headers=None, use_proxy=None):
         success = False
-        logger.verbose("Fetch [{0}] with headers [{1}] to file [{2}]", uri, headers, destination)
+        logger.verbose(
+            "Fetch [{0}] with headers [{1}] to file [{2}]",
+            uri,
+            headers,
+            destination)
 
         response = self._fetch_response(uri, headers, use_proxy)
         if response is not None:
@@ -657,7 +673,9 @@ class WireClient(object):
                         complete = len(chunk) < chunk_size
                 success = True
             except Exception as e:
-                logger.error('Error streaming {0} to {1}: {2}'.format(uri, destination, ustr(e)))
+                logger.error(
+                    'Error streaming {0} to {1}: {2}'.format(
+                        uri, destination, ustr(e)))
 
         return success
 
@@ -667,7 +685,8 @@ class WireClient(object):
         response = self._fetch_response(uri, headers, use_proxy)
         if response is not None:
             response_content = response.read()
-            content = self.decode_config(response_content) if decode else response_content
+            content = self.decode_config(
+                response_content) if decode else response_content
         return content
 
     def _fetch_response(self, uri, headers=None, use_proxy=None):
@@ -681,21 +700,25 @@ class WireClient(object):
 
             if restutil.request_failed(resp):
                 error_response = restutil.read_response_error(resp)
-                msg = "Fetch failed from [{0}]: {1}".format(uri, error_response)
+                msg = "Fetch failed from [{0}]: {1}".format(
+                    uri, error_response)
                 logger.warn(msg)
                 if self.host_plugin is not None:
-                    self.host_plugin.report_fetch_health(uri,
-                                                         is_healthy=not restutil.request_failed_at_hostplugin(resp),
-                                                         source='WireClient',
-                                                         response=error_response)
+                    self.host_plugin.report_fetch_health(
+                        uri,
+                        is_healthy=not restutil.request_failed_at_hostplugin(resp),
+                        source='WireClient',
+                        response=error_response)
                 raise ProtocolError(msg)
             else:
                 if self.host_plugin is not None:
-                    self.host_plugin.report_fetch_health(uri, source='WireClient')
+                    self.host_plugin.report_fetch_health(
+                        uri, source='WireClient')
 
         except (HttpError, ProtocolError, IOError) as e:
             logger.verbose("Fetch failed from [{0}]: {1}", uri, e)
-            if isinstance(e, ResourceGoneError) or isinstance(e, InvalidContainerError):
+            if isinstance(e, ResourceGoneError) or isinstance(
+                    e, InvalidContainerError):
                 raise
         return resp
 
@@ -733,7 +756,10 @@ class WireClient(object):
         xml_text = self.fetch_config(goal_state.remote_access_uri,
                                      self.get_header_for_cert())
         self.remote_access = RemoteAccess(xml_text)
-        local_file = os.path.join(conf.get_lib_dir(), REMOTE_ACCESS_FILE_NAME.format(self.remote_access.incarnation))
+        local_file = os.path.join(
+            conf.get_lib_dir(),
+            REMOTE_ACCESS_FILE_NAME.format(
+                self.remote_access.incarnation))
         self.save_cache(local_file, xml_text)
 
     def get_remote_access(self):
@@ -763,7 +789,8 @@ class WireClient(object):
 
     def save_or_update_goal_state_file(self, incarnation, xml_text):
         # It should create a new file if the incarnation number is new.
-        # It should overwrite the existing file if the incarnation number is the same.
+        # It should overwrite the existing file if the incarnation number is
+        # the same.
         file_name = GOAL_STATE_FILE_NAME.format(incarnation)
         goal_state_file = os.path.join(conf.get_lib_dir(), file_name)
         self.save_cache(goal_state_file, xml_text)
@@ -774,7 +801,8 @@ class WireClient(object):
             self.host_plugin.role_config_name = role_config_name
 
     def update_goal_state(self, forced=False, max_retry=3):
-        incarnation_file = os.path.join(conf.get_lib_dir(), INCARNATION_FILE_NAME)
+        incarnation_file = os.path.join(
+            conf.get_lib_dir(), INCARNATION_FILE_NAME)
         uri = GOAL_STATE_URI.format(self.endpoint)
 
         current_goal_state_from_configuration = None
@@ -787,36 +815,46 @@ class WireClient(object):
                     if not forced:
                         last_incarnation = None
                         if os.path.isfile(incarnation_file):
-                            last_incarnation = fileutil.read_file(incarnation_file)
+                            last_incarnation = fileutil.read_file(
+                                incarnation_file)
                         new_incarnation = current_goal_state_from_configuration.incarnation
 
                         if last_incarnation is not None and last_incarnation == new_incarnation:
                             # Incarnation number is not updated, but role config file and container ID
                             # can change without the incarnation number changing. Ensure they are updated in
-                            # the goal state file on disk, as well as in the HostGA plugin instance.
+                            # the goal state file on disk, as well as in the
+                            # HostGA plugin instance.
                             self.goal_state = current_goal_state_from_configuration
-                            self.save_or_update_goal_state_file(new_incarnation, xml_text)
-                            self.update_host_plugin(current_goal_state_from_configuration.container_id,
-                                                    current_goal_state_from_configuration.role_config_name)
+                            self.save_or_update_goal_state_file(
+                                new_incarnation, xml_text)
+                            self.update_host_plugin(
+                                current_goal_state_from_configuration.container_id,
+                                current_goal_state_from_configuration.role_config_name)
 
                             return
                 self.goal_state_flusher.flush(datetime.utcnow())
 
                 self.goal_state = current_goal_state_from_configuration
-                self.save_or_update_goal_state_file(current_goal_state_from_configuration.incarnation, xml_text)
+                self.save_or_update_goal_state_file(
+                    current_goal_state_from_configuration.incarnation, xml_text)
                 self.update_hosting_env(current_goal_state_from_configuration)
                 self.update_shared_conf(current_goal_state_from_configuration)
                 self.update_certs(current_goal_state_from_configuration)
                 self.update_ext_conf(current_goal_state_from_configuration)
-                self.update_remote_access_conf(current_goal_state_from_configuration)
-                self.save_cache(incarnation_file, current_goal_state_from_configuration.incarnation)
-                self.update_host_plugin(current_goal_state_from_configuration.container_id,
-                                        current_goal_state_from_configuration.role_config_name)
+                self.update_remote_access_conf(
+                    current_goal_state_from_configuration)
+                self.save_cache(
+                    incarnation_file,
+                    current_goal_state_from_configuration.incarnation)
+                self.update_host_plugin(
+                    current_goal_state_from_configuration.container_id,
+                    current_goal_state_from_configuration.role_config_name)
 
                 return
 
             except IOError as e:
-                logger.warn("IOError processing goal state, retrying [{0}]", ustr(e))
+                logger.warn(
+                    "IOError processing goal state, retrying [{0}]", ustr(e))
 
             except ResourceGoneError:
                 logger.info("Goal state is stale, re-fetching")
@@ -824,15 +862,19 @@ class WireClient(object):
 
             except ProtocolError as e:
                 if retry < max_retry - 1:
-                    logger.verbose("ProtocolError processing goal state, retrying [{0}]", ustr(e))
+                    logger.verbose(
+                        "ProtocolError processing goal state, retrying [{0}]", ustr(e))
                 else:
-                    logger.error("ProtocolError processing goal state, giving up [{0}]", ustr(e))
+                    logger.error(
+                        "ProtocolError processing goal state, giving up [{0}]", ustr(e))
 
             except Exception as e:
                 if retry < max_retry - 1:
-                    logger.verbose("Exception processing goal state, retrying: [{0}]", ustr(e))
+                    logger.verbose(
+                        "Exception processing goal state, retrying: [{0}]", ustr(e))
                 else:
-                    logger.error("Exception processing goal state, giving up: [{0}]", ustr(e))
+                    logger.error(
+                        "Exception processing goal state, giving up: [{0}]", ustr(e))
 
         raise ProtocolError("Exceeded max retry updating goal state")
 
@@ -878,8 +920,11 @@ class WireClient(object):
         try:
             incarnation = self.fetch_cache(os.path.join(conf.get_lib_dir(),
                                                         INCARNATION_FILE_NAME))
-            ext_conf = ExtensionsConfig(self.fetch_cache(os.path.join(conf.get_lib_dir(),
-                                                                      EXT_CONF_FILE_NAME.format(incarnation))))
+            ext_conf = ExtensionsConfig(
+                self.fetch_cache(
+                    os.path.join(
+                        conf.get_lib_dir(),
+                        EXT_CONF_FILE_NAME.format(incarnation))))
             handler_list = ext_conf.ext_handlers.extHandlers
         except ProtocolError as pe:
             # cache file is missing, nothing to do
@@ -902,7 +947,8 @@ class WireClient(object):
         return self.ext_conf
 
     def get_ext_manifest(self, ext_handler, goal_state):
-        local_file = MANIFEST_FILE_NAME.format(ext_handler.name, goal_state.incarnation)
+        local_file = MANIFEST_FILE_NAME.format(
+            ext_handler.name, goal_state.incarnation)
         local_file = os.path.join(conf.get_lib_dir(), local_file)
 
         try:
@@ -910,7 +956,9 @@ class WireClient(object):
             self.save_cache(local_file, xml_text)
             return ExtensionManifest(xml_text)
         except Exception as e:
-            raise ExtensionDownloadError("Failed to retrieve extension manifest. Error: {0}".format(ustr(e)))
+            raise ExtensionDownloadError(
+                "Failed to retrieve extension manifest. Error: {0}".format(
+                    ustr(e)))
 
     def filter_package_list(self, family, ga_manifest, goal_state):
         complete_list = ga_manifest.pkg_list
@@ -948,17 +996,22 @@ class WireClient(object):
             return allowed_list
 
     def get_gafamily_manifest(self, vmagent_manifest, goal_state):
-        self._remove_stale_agent_manifest(vmagent_manifest.family, goal_state.incarnation)
+        self._remove_stale_agent_manifest(
+            vmagent_manifest.family, goal_state.incarnation)
 
-        local_file = MANIFEST_FILE_NAME.format(vmagent_manifest.family, goal_state.incarnation)
+        local_file = MANIFEST_FILE_NAME.format(
+            vmagent_manifest.family, goal_state.incarnation)
         local_file = os.path.join(conf.get_lib_dir(), local_file)
 
         try:
-            xml_text = self.fetch_manifest(vmagent_manifest.versionsManifestUris)
+            xml_text = self.fetch_manifest(
+                vmagent_manifest.versionsManifestUris)
             fileutil.write_file(local_file, xml_text)
             return ExtensionManifest(xml_text)
         except Exception as e:
-            raise ProtocolError("Failed to retrieve GAFamily manifest. Error: {0}".format(ustr(e)))
+            raise ProtocolError(
+                "Failed to retrieve GAFamily manifest. Error: {0}".format(
+                    ustr(e)))
 
     def _remove_stale_agent_manifest(self, family, incarnation):
         """
@@ -1001,7 +1054,8 @@ class WireClient(object):
         # also implement a retry mechanism.
 
         # By default, the direct channel is the default channel. If that is the case, try getting a response
-        # through that channel. On failure, fall back to the host plugin channel.
+        # through that channel. On failure, fall back to the host plugin
+        # channel.
 
         # When using the host plugin channel, regardless if it's set as default or not, try sending the request first.
         # On specific failures that indicate a stale goal state (such as resource gone or invalid container parameter),
@@ -1009,7 +1063,8 @@ class WireClient(object):
         # raise the exception.
 
         # NOTE: direct_func and host_func are passed as lambdas. Be careful about capturing goal state data in them as
-        # they will not be refreshed even if a goal state refresh is called before retrying the host_func.
+        # they will not be refreshed even if a goal state refresh is called
+        # before retrying the host_func.
 
         if not HostPluginProtocol.is_default_channel():
             ret = None
@@ -1019,16 +1074,23 @@ class WireClient(object):
                 # Different direct channel functions report failure in different ways: by returning None, False,
                 # or raising ResourceGone or InvalidContainer exceptions.
                 if not ret:
-                    logger.periodic_info(logger.EVERY_HOUR, "[PERIODIC] Request failed using the direct channel, "
-                                                            "switching to host plugin.")
+                    logger.periodic_info(
+                        logger.EVERY_HOUR,
+                        "[PERIODIC] Request failed using the direct channel, "
+                        "switching to host plugin.")
             except (ResourceGoneError, InvalidContainerError) as e:
-                logger.periodic_info(logger.EVERY_HOUR, "[PERIODIC] Request failed using the direct channel, "
-                                                        "switching to host plugin. Error: {0}".format(ustr(e)))
+                logger.periodic_info(
+                    logger.EVERY_HOUR,
+                    "[PERIODIC] Request failed using the direct channel, "
+                    "switching to host plugin. Error: {0}".format(
+                        ustr(e)))
 
             if ret:
                 return ret
         else:
-            logger.periodic_info(logger.EVERY_HALF_DAY, "[PERIODIC] Using host plugin as default channel.")
+            logger.periodic_info(
+                logger.EVERY_HALF_DAY,
+                "[PERIODIC] Using host plugin as default channel.")
 
         try:
             ret = host_func()
@@ -1038,7 +1100,8 @@ class WireClient(object):
 
             msg = "[PERIODIC] Request failed with the current host plugin configuration. " \
                   "ContainerId: {0}, role config file: {1}. Fetching new goal state and retrying the call." \
-                  "Error: {2}".format(old_container_id, old_role_config_name, ustr(e))
+                  "Error: {2}".format(
+                      old_container_id, old_role_config_name, ustr(e))
             logger.periodic_info(logger.EVERY_SIX_HOURS, msg)
 
             self.update_goal_state(forced=True)
@@ -1046,7 +1109,8 @@ class WireClient(object):
             new_container_id = self.host_plugin.container_id
             new_role_config_name = self.host_plugin.role_config_name
             msg = "[PERIODIC] Host plugin reconfigured with new parameters. " \
-                  "ContainerId: {0}, role config file: {1}.".format(new_container_id, new_role_config_name)
+                  "ContainerId: {0}, role config file: {1}.".format(
+                      new_container_id, new_role_config_name)
             logger.periodic_info(logger.EVERY_SIX_HOURS, msg)
 
             try:
@@ -1099,7 +1163,8 @@ class WireClient(object):
         blob_type = ext_conf.status_upload_blob_type
         if blob_type not in ["BlockBlob", "PageBlob"]:
             blob_type = "BlockBlob"
-            logger.verbose("Status Blob type is unspecified, assuming BlockBlob")
+            logger.verbose(
+                "Status Blob type is unspecified, assuming BlockBlob")
 
         try:
             self.status_blob.prepare(blob_type)
@@ -1117,10 +1182,14 @@ class WireClient(object):
         # wrong. This is why we try HostPlugin then direct.
         try:
             host = self.get_host_plugin()
-            host.put_vm_status(self.status_blob, ext_conf.status_upload_blob, ext_conf.status_upload_blob_type)
+            host.put_vm_status(
+                self.status_blob,
+                ext_conf.status_upload_blob,
+                ext_conf.status_upload_blob_type)
             return
         except ResourceGoneError:
-            # do not attempt direct, force goal state update and wait to try again
+            # do not attempt direct, force goal state update and wait to try
+            # again
             self.update_goal_state(forced=True)
             return
         except Exception as e:
@@ -1198,7 +1267,8 @@ class WireClient(object):
         try:
             header = self.get_header_for_xml_content()
             # NOTE: The call to wireserver requests utf-8 encoding in the headers, but the body should not
-            #       be encoded: some nodes in the telemetry pipeline do not support utf-8 encoding.
+            # be encoded: some nodes in the telemetry pipeline do not support
+            # utf-8 encoding.
             resp = self.call_wireserver(restutil.http_post, uri, data, header)
         except HttpError as e:
             raise ProtocolError("Failed to send events:{0}".format(e))
@@ -1216,11 +1286,22 @@ class WireClient(object):
                 buf[event.providerId] = ""
             event_str = event_to_v1(event)
             if len(event_str) >= MAX_EVENT_BUFFER_SIZE:
-                details_of_event = [ustr(x.name) + ":" + ustr(x.value) for x in event.parameters if x.name in
-                                    ["Name", "Version", "Operation", "OperationSuccess"]]
-                logger.periodic_warn(logger.EVERY_HALF_HOUR,
-                                     "Single event too large: {0}, with the length: {1} more than the limit({2})"
-                                     .format(str(details_of_event), len(event_str), MAX_EVENT_BUFFER_SIZE))
+                details_of_event = [
+                    ustr(
+                        x.name) +
+                    ":" +
+                    ustr(
+                        x.value) for x in event.parameters if x.name in [
+                        "Name",
+                        "Version",
+                        "Operation",
+                        "OperationSuccess"]]
+                logger.periodic_warn(
+                    logger.EVERY_HALF_HOUR,
+                    "Single event too large: {0}, with the length: {1} more than the limit({2})" .format(
+                        str(details_of_event),
+                        len(event_str),
+                        MAX_EVENT_BUFFER_SIZE))
                 continue
             if len(buf[event.providerId] + event_str) >= MAX_EVENT_BUFFER_SIZE:
                 self.send_event(event.providerId, buf[event.providerId])
@@ -1276,7 +1357,8 @@ class WireClient(object):
 
     def has_artifacts_profile_blob(self):
         return self.ext_conf and not \
-            textutil.is_str_none_or_whitespace(self.ext_conf.artifacts_profile_blob)
+            textutil.is_str_none_or_whitespace(
+                self.ext_conf.artifacts_profile_blob)
 
     def get_artifacts_profile_through_host(self, blob):
         host = self.get_host_plugin()
@@ -1289,17 +1371,20 @@ class WireClient(object):
 
         if self.has_artifacts_profile_blob():
             blob = self.ext_conf.artifacts_profile_blob
-            direct_func = lambda: self.fetch(blob)
+            def direct_func(): return self.fetch(blob)
             # NOTE: the host_func may be called after refreshing the goal state, be careful about any goal state data
             # in the lambda.
-            host_func = lambda: self.get_artifacts_profile_through_host(blob)
+            def host_func(): return self.get_artifacts_profile_through_host(blob)
 
             logger.verbose("Retrieving the artifacts profile")
 
             try:
-                profile = self.send_request_using_appropriate_channel(direct_func, host_func)
+                profile = self.send_request_using_appropriate_channel(
+                    direct_func, host_func)
             except Exception as e:
-                logger.warn("Exception retrieving artifacts profile: {0}".format(ustr(e)))
+                logger.warn(
+                    "Exception retrieving artifacts profile: {0}".format(
+                        ustr(e)))
                 return None
 
             if not textutil.is_str_empty(profile):
@@ -1494,7 +1579,8 @@ class RemoteAccess(object):
         name = findtext(user, "Name")
         encrypted_password = findtext(user, "Password")
         expiration = findtext(user, "Expiration")
-        remote_access_user = RemoteAccessUser(name, encrypted_password, expiration)
+        remote_access_user = RemoteAccessUser(
+            name, encrypted_password, expiration)
         return remote_access_user
 
 
@@ -1531,10 +1617,13 @@ class Certificates(object):
         if data is None:
             return
 
-        # if the certificates format is not Pkcs7BlobWithPfxContents do not parse it
+        # if the certificates format is not Pkcs7BlobWithPfxContents do not
+        # parse it
         certificateFormat = findtext(xml_doc, "Format")
         if certificateFormat and certificateFormat != "Pkcs7BlobWithPfxContents":
-            logger.warn("The Format is not Pkcs7BlobWithPfxContents. Format is " + certificateFormat)
+            logger.warn(
+                "The Format is not Pkcs7BlobWithPfxContents. Format is " +
+                certificateFormat)
             return
 
         cryptutil = CryptUtil(conf.get_openssl_cmd())
@@ -1602,16 +1691,18 @@ class Certificates(object):
                 tmp_file = prvs[pubkey]
                 prv = "{0}.prv".format(thumbprint)
                 os.rename(tmp_file, os.path.join(conf.get_lib_dir(), prv))
-                logger.info("Found private key matching thumbprint {0}".format(thumbprint))
+                logger.info(
+                    "Found private key matching thumbprint {0}".format(thumbprint))
             else:
                 # Since private key has *no* matching certificate,
                 # it will not be named correctly
-                logger.warn("Found NO matching cert/thumbprint for private key!")
+                logger.warn(
+                    "Found NO matching cert/thumbprint for private key!")
 
         # Log if any certificates were found without matching private keys
         # This can happen (rarely), and is useful to know for debugging
         for pubkey in thumbprints:
-            if not pubkey in prvs:
+            if pubkey not in prvs:
                 msg = "Certificate with thumbprint {0} has no matching private key."
                 logger.info(msg.format(thumbprints[pubkey]))
 
@@ -1674,7 +1765,8 @@ class ExtensionsConfig(object):
             self.parse_plugin_settings(ext_handler, plugin_settings)
 
         self.status_upload_blob = findtext(xml_doc, "StatusUploadBlob")
-        self.artifacts_profile_blob = findtext(xml_doc, "InVMArtifactsProfileBlob")
+        self.artifacts_profile_blob = findtext(
+            xml_doc, "InVMArtifactsProfileBlob")
 
         status_upload_node = find(xml_doc, "StatusUploadBlob")
         self.status_upload_blob_type = getattrib(status_upload_node,
@@ -1702,8 +1794,8 @@ class ExtensionsConfig(object):
 
         name = ext_handler.name
         version = ext_handler.properties.version
-        settings = [x for x in plugin_settings \
-                    if getattrib(x, "name") == name and \
+        settings = [x for x in plugin_settings
+                    if getattrib(x, "name") == name and
                     getattrib(x, "version") == version]
 
         if settings is None or len(settings) == 0:
@@ -1721,11 +1813,15 @@ class ExtensionsConfig(object):
 
         depends_on_level = 0
         depends_on_node = find(settings[0], "DependsOn")
-        if depends_on_node != None:
+        if depends_on_node is not None:
             try:
-                depends_on_level = int(getattrib(depends_on_node, "dependencyLevel"))
+                depends_on_level = int(
+                    getattrib(
+                        depends_on_node,
+                        "dependencyLevel"))
             except (ValueError, TypeError):
-                logger.warn("Could not parse dependencyLevel for handler {0}. Setting it to 0".format(name))
+                logger.warn(
+                    "Could not parse dependencyLevel for handler {0}. Setting it to 0".format(name))
                 depends_on_level = 0
 
         for plugin_settings_list in runtime_settings["runtimeSettings"]:

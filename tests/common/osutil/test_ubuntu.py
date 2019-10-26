@@ -27,7 +27,8 @@ class TestUbuntu12OSUtil(AgentTestCase):
         AgentTestCase.tearDown(self)
 
     def test_get_dhcp_pid_should_return_a_list_of_pids(self):
-        osutil_get_dhcp_pid_should_return_a_list_of_pids(self, Ubuntu12OSUtil())
+        osutil_get_dhcp_pid_should_return_a_list_of_pids(
+            self, Ubuntu12OSUtil())
 
 
 class TestUbuntu18OSUtil(AgentTestCase):
@@ -38,7 +39,8 @@ class TestUbuntu18OSUtil(AgentTestCase):
         AgentTestCase.tearDown(self)
 
     def test_get_dhcp_pid_should_return_a_list_of_pids(self):
-        osutil_get_dhcp_pid_should_return_a_list_of_pids(self, Ubuntu18OSUtil())
+        osutil_get_dhcp_pid_should_return_a_list_of_pids(
+            self, Ubuntu18OSUtil())
 
 
 if __name__ == '__main__':

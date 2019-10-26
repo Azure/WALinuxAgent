@@ -27,6 +27,7 @@ import azurelinuxagent.common.conf as conf
 from azurelinuxagent.common.exception import ResourceDiskError
 from azurelinuxagent.daemon.resourcedisk.default import ResourceDiskHandler
 
+
 class OpenWRTResourceDiskHandler(ResourceDiskHandler):
     def __init__(self):
         super(OpenWRTResourceDiskHandler, self).__init__()
@@ -35,7 +36,8 @@ class OpenWRTResourceDiskHandler(ResourceDiskHandler):
             self.fs = 'ffs'
 
     def reread_partition_table(self, device):
-        ret, output = shellutil.run_get_output("hdparm -z {0}".format(device), chk_err=False)
+        ret, output = shellutil.run_get_output(
+            "hdparm -z {0}".format(device), chk_err=False)
         if ret != 0:
             logger.warn("Failed refresh the partition table.")
 
@@ -70,15 +72,21 @@ class OpenWRTResourceDiskHandler(ResourceDiskHandler):
         force_option = 'F'
         if self.fs == 'xfs':
             force_option = 'f'
-        mkfs_string = "mkfs.{0} -{2} {1}".format(self.fs, partition, force_option)
+        mkfs_string = "mkfs.{0} -{2} {1}".format(
+            self.fs, partition, force_option)
 
-        # Compare to the Default mount_resource_disk, we don't check for GPT that is not supported on OpenWRT
-        ret = self.change_partition_type(suppress_message=True, option_str="{0} 1 -n".format(device))
+        # Compare to the Default mount_resource_disk, we don't check for GPT
+        # that is not supported on OpenWRT
+        ret = self.change_partition_type(
+            suppress_message=True,
+            option_str="{0} 1 -n".format(device))
         ptype = ret[1].strip()
         if ptype == "7" and self.fs != "ntfs":
             logger.info("The partition is formatted with ntfs, updating "
                         "partition type to 83")
-            self.change_partition_type(suppress_message=False, option_str="{0} 1 83".format(device))
+            self.change_partition_type(
+                suppress_message=False,
+                option_str="{0} 1 83".format(device))
             self.reread_partition_table(device)
             logger.info("Format partition [{0}]", mkfs_string)
             shellutil.run(mkfs_string)
@@ -98,7 +106,8 @@ class OpenWRTResourceDiskHandler(ResourceDiskHandler):
             attempts -= 1
 
         if not os.path.exists(partition):
-            raise ResourceDiskError("Partition was not created [{0}]".format(partition))
+            raise ResourceDiskError(
+                "Partition was not created [{0}]".format(partition))
 
         if os.path.ismount(mount_point):
             logger.warn("Disk is already mounted on {0}", mount_point)

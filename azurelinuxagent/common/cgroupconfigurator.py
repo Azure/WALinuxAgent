@@ -72,7 +72,8 @@ class CGroupConfigurator(object):
 
         def enable(self):
             if not self._cgroups_supported:
-                raise CGroupsException("cgroups are not supported on the current platform")
+                raise CGroupsException(
+                    "cgroups are not supported on the current platform")
 
             self._enabled = True
 
@@ -104,14 +105,17 @@ class CGroupConfigurator(object):
 
                 return cgroups
 
-            self._invoke_cgroup_operation(__impl, "Failed to create a cgroup for the VM Agent; resource usage for the Agent will not be tracked")
+            self._invoke_cgroup_operation(
+                __impl,
+                "Failed to create a cgroup for the VM Agent; resource usage for the Agent will not be tracked")
 
         def cleanup_old_cgroups(self):
             def __impl():
                 self._cgroups_api.cleanup_old_cgroups()
 
-            self._invoke_cgroup_operation(__impl, "Failed to update the tracking of the daemon; resource usage "
-                                                  "of the agent will not include the daemon process.")
+            self._invoke_cgroup_operation(
+                __impl, "Failed to update the tracking of the daemon; resource usage "
+                "of the agent will not include the daemon process.")
 
         def create_extension_cgroups_root(self):
             """
@@ -120,7 +124,9 @@ class CGroupConfigurator(object):
             def __impl():
                 self._cgroups_api.create_extension_cgroups_root()
 
-            self._invoke_cgroup_operation(__impl, "Failed to create a root cgroup for extensions; resource usage for extensions will not be tracked")
+            self._invoke_cgroup_operation(
+                __impl,
+                "Failed to create a root cgroup for extensions; resource usage for extensions will not be tracked")
 
         def create_extension_cgroups(self, name):
             """
@@ -129,7 +135,9 @@ class CGroupConfigurator(object):
             def __impl():
                 return self._cgroups_api.create_extension_cgroups(name)
 
-            return self._invoke_cgroup_operation(__impl, "Failed to create a cgroup for extension '{0}'; resource usage will not be tracked".format(name))
+            return self._invoke_cgroup_operation(
+                __impl,
+                "Failed to create a cgroup for extension '{0}'; resource usage will not be tracked".format(name))
 
         def remove_extension_cgroups(self, name):
             """
@@ -139,10 +147,20 @@ class CGroupConfigurator(object):
                 cgroups = self._cgroups_api.remove_extension_cgroups(name)
                 return cgroups
 
-            self._invoke_cgroup_operation(__impl, "Failed to delete cgroups for extension '{0}'.".format(name))
+            self._invoke_cgroup_operation(
+                __impl, "Failed to delete cgroups for extension '{0}'.".format(name))
 
-        def start_extension_command(self, extension_name, command, timeout, shell, cwd, env, stdout, stderr,
-                                    error_code=ExtensionErrorCodes.PluginUnknownFailure):
+        def start_extension_command(
+                self,
+                extension_name,
+                command,
+                timeout,
+                shell,
+                cwd,
+                env,
+                stdout,
+                stderr,
+                error_code=ExtensionErrorCodes.PluginUnknownFailure):
             """
             Starts a command (install/enable/etc) for an extension and adds the command's PID to the extension's cgroup
             :param extension_name: The extension executing the command
@@ -164,12 +182,13 @@ class CGroupConfigurator(object):
                                            stderr=stderr,
                                            preexec_fn=os.setsid)
 
-                process_output = handle_process_completion(process=process,
-                                                           command=command,
-                                                           timeout=timeout,
-                                                           stdout=stdout,
-                                                           stderr=stderr,
-                                                           error_code=error_code)
+                process_output = handle_process_completion(
+                    process=process,
+                    command=command,
+                    timeout=timeout,
+                    stdout=stdout,
+                    stderr=stderr,
+                    error_code=error_code)
             else:
                 extension_cgroups, process_output = self._cgroups_api.start_extension_command(extension_name,
                                                                                               command,
@@ -183,7 +202,8 @@ class CGroupConfigurator(object):
 
             return process_output
 
-    # unique instance for the singleton (TODO: find a better pattern for a singleton)
+    # unique instance for the singleton (TODO: find a better pattern for a
+    # singleton)
     _instance = None
 
     @staticmethod

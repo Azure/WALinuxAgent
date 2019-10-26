@@ -167,21 +167,25 @@ def enable_firewall(conf=__conf__):
 
 def enable_rdma(conf=__conf__):
     return conf.get_switch("OS.EnableRDMA", False) or \
-           conf.get_switch("OS.UpdateRdmaDriver", False) or \
-           conf.get_switch("OS.CheckRdmaDriver", False)
+        conf.get_switch("OS.UpdateRdmaDriver", False) or \
+        conf.get_switch("OS.CheckRdmaDriver", False)
 
 
 def enable_rdma_update(conf=__conf__):
     return conf.get_switch("OS.UpdateRdmaDriver", False)
 
+
 def enable_check_rdma_driver(conf=__conf__):
     return conf.get_switch("OS.CheckRdmaDriver", True)
+
 
 def get_logs_verbose(conf=__conf__):
     return conf.get_switch("Logs.Verbose", False)
 
+
 def get_logs_console(conf=__conf__):
     return conf.get_switch("Logs.Console", True)
+
 
 def get_lib_dir(conf=__conf__):
     return conf.get("Lib.Dir", "/var/lib/waagent")
@@ -240,13 +244,17 @@ def get_ssh_key_glob(conf=__conf__):
 
 
 def get_ssh_key_private_path(conf=__conf__):
-    return os.path.join(get_ssh_dir(conf),
-        'ssh_host_{0}_key'.format(get_ssh_host_keypair_type(conf)))
+    return os.path.join(
+        get_ssh_dir(conf),
+        'ssh_host_{0}_key'.format(
+            get_ssh_host_keypair_type(conf)))
 
 
 def get_ssh_key_public_path(conf=__conf__):
-    return os.path.join(get_ssh_dir(conf),
-        'ssh_host_{0}_key.pub'.format(get_ssh_host_keypair_type(conf)))
+    return os.path.join(
+        get_ssh_dir(conf),
+        'ssh_host_{0}_key.pub'.format(
+            get_ssh_host_keypair_type(conf)))
 
 
 def get_root_device_scsi_timeout(conf=__conf__):
@@ -330,9 +338,11 @@ def get_resourcedisk_format(conf=__conf__):
 
 def get_resourcedisk_enable_swap(conf=__conf__):
     return conf.get_switch("ResourceDisk.EnableSwap", False)
-    
+
+
 def get_resourcedisk_enable_swap_encryption(conf=__conf__):
     return conf.get_switch("ResourceDisk.EnableSwapEncryption", False)
+
 
 def get_resourcedisk_mountpoint(conf=__conf__):
     return conf.get("ResourceDisk.MountPoint", "/mnt/resource")
@@ -380,4 +390,5 @@ def get_cgroups_enforce_limits(conf=__conf__):
 
 def get_cgroups_excluded(conf=__conf__):
     excluded_value = conf.get("CGroups.Excluded", "customscript, runcommand")
-    return [s for s in [i.strip().lower() for i in excluded_value.split(',')] if len(s) > 0] if excluded_value else []
+    return [s for s in [i.strip().lower() for i in excluded_value.split(',')]
+            if len(s) > 0] if excluded_value else []

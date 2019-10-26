@@ -64,8 +64,10 @@ class HostPluginProtocol(object):
         self.role_config_name = role_config_name
         self.manifest_uri = None
         self.health_service = HealthService(endpoint)
-        self.fetch_error_state = ErrorState(min_timedelta=ERROR_STATE_HOST_PLUGIN_FAILURE)
-        self.status_error_state = ErrorState(min_timedelta=ERROR_STATE_HOST_PLUGIN_FAILURE)
+        self.fetch_error_state = ErrorState(
+            min_timedelta=ERROR_STATE_HOST_PLUGIN_FAILURE)
+        self.status_error_state = ErrorState(
+            min_timedelta=ERROR_STATE_HOST_PLUGIN_FAILURE)
         self.fetch_last_timestamp = None
         self.status_last_timestamp = None
 
@@ -112,24 +114,33 @@ class HostPluginProtocol(object):
 
             if restutil.request_failed(response):
                 error_response = restutil.read_response_error(response)
-                logger.error("HostGAPlugin: Failed Get API versions: {0}".format(error_response))
-                is_healthy = not restutil.request_failed_at_hostplugin(response)
+                logger.error(
+                    "HostGAPlugin: Failed Get API versions: {0}".format(error_response))
+                is_healthy = not restutil.request_failed_at_hostplugin(
+                    response)
             else:
-                return_val = ustr(remove_bom(response.read()), encoding='utf-8')
+                return_val = ustr(
+                    remove_bom(
+                        response.read()),
+                    encoding='utf-8')
                 is_healthy = True
         except HttpError as e:
-            logger.error("HostGAPlugin: Exception Get API versions: {0}".format(e))
+            logger.error(
+                "HostGAPlugin: Exception Get API versions: {0}".format(e))
 
-        self.health_service.report_host_plugin_versions(is_healthy=is_healthy, response=error_response)
+        self.health_service.report_host_plugin_versions(
+            is_healthy=is_healthy, response=error_response)
 
         return return_val
 
     def get_artifact_request(self, artifact_url, artifact_manifest_url=None):
         if not self.ensure_initialized():
-            raise ProtocolError("HostGAPlugin: Host plugin channel is not available")
+            raise ProtocolError(
+                "HostGAPlugin: Host plugin channel is not available")
 
         if textutil.is_str_none_or_whitespace(artifact_url):
-            raise ProtocolError("HostGAPlugin: No extension artifact url was provided")
+            raise ProtocolError(
+                "HostGAPlugin: No extension artifact url was provided")
 
         url = URI_FORMAT_GET_EXTENSION_ARTIFACT.format(self.endpoint,
                                                        HOST_PLUGIN_PORT)
@@ -143,9 +154,11 @@ class HostPluginProtocol(object):
 
         return url, headers
 
-    def report_fetch_health(self, uri, is_healthy=True, source='', response=''):
+    def report_fetch_health(self, uri, is_healthy=True,
+                            source='', response=''):
 
-        if uri != URI_FORMAT_GET_EXTENSION_ARTIFACT.format(self.endpoint, HOST_PLUGIN_PORT):
+        if uri != URI_FORMAT_GET_EXTENSION_ARTIFACT.format(
+                self.endpoint, HOST_PLUGIN_PORT):
             return
 
         if self.should_report(is_healthy,
@@ -154,9 +167,8 @@ class HostPluginProtocol(object):
                               HostPluginProtocol.FETCH_REPORTING_PERIOD):
             self.fetch_last_timestamp = datetime.datetime.utcnow()
             health_signal = self.fetch_error_state.is_triggered() is False
-            self.health_service.report_host_plugin_extension_artifact(is_healthy=health_signal,
-                                                                      source=source,
-                                                                      response=response)
+            self.health_service.report_host_plugin_extension_artifact(
+                is_healthy=health_signal, source=source, response=response)
 
     def report_status_health(self, is_healthy, response=''):
         if self.should_report(is_healthy,
@@ -165,8 +177,8 @@ class HostPluginProtocol(object):
                               HostPluginProtocol.STATUS_REPORTING_PERIOD):
             self.status_last_timestamp = datetime.datetime.utcnow()
             health_signal = self.status_error_state.is_triggered() is False
-            self.health_service.report_host_plugin_status(is_healthy=health_signal,
-                                                          response=response)
+            self.health_service.report_host_plugin_status(
+                is_healthy=health_signal, response=response)
 
     @staticmethod
     def should_report(is_healthy, error_state, last_timestamp, period):
@@ -222,14 +234,17 @@ class HostPluginProtocol(object):
         response = restutil.http_put(url,
                                      data=self._build_status_data(
                                          sas_url,
-                                         status_blob.get_block_blob_headers(len(status_blob.data)),
+                                         status_blob.get_block_blob_headers(
+                                             len(status_blob.data)),
                                          bytearray(status_blob.data, encoding='utf-8')),
                                      headers=self._build_status_headers())
 
         if restutil.request_failed(response):
             error_response = restutil.read_response_error(response)
             is_healthy = not restutil.request_failed_at_hostplugin(response)
-            self.report_status_health(is_healthy=is_healthy, response=error_response)
+            self.report_status_health(
+                is_healthy=is_healthy,
+                response=error_response)
             raise HttpError("HostGAPlugin: Put BlockBlob failed: {0}"
                             .format(error_response))
         else:
@@ -239,28 +254,34 @@ class HostPluginProtocol(object):
     def _put_page_blob_status(self, sas_url, status_blob):
         url = URI_FORMAT_PUT_VM_STATUS.format(self.endpoint, HOST_PLUGIN_PORT)
 
-        # Convert the status into a blank-padded string whose length is modulo 512
+        # Convert the status into a blank-padded string whose length is modulo
+        # 512
         status = bytearray(status_blob.data, encoding='utf-8')
         status_size = int((len(status) + 511) / 512) * 512
-        status = bytearray(status_blob.data.ljust(status_size), encoding='utf-8')
+        status = bytearray(
+            status_blob.data.ljust(status_size),
+            encoding='utf-8')
 
         # First, initialize an empty blob
-        response = restutil.http_put(url,
-                                     data=self._build_status_data(
-                                         sas_url,
-                                         status_blob.get_page_blob_create_headers(status_size)),
-                                     headers=self._build_status_headers())
+        response = restutil.http_put(
+            url,
+            data=self._build_status_data(
+                sas_url,
+                status_blob.get_page_blob_create_headers(status_size)),
+            headers=self._build_status_headers())
 
         if restutil.request_failed(response):
             error_response = restutil.read_response_error(response)
             is_healthy = not restutil.request_failed_at_hostplugin(response)
-            self.report_status_health(is_healthy=is_healthy, response=error_response)
+            self.report_status_health(
+                is_healthy=is_healthy,
+                response=error_response)
             raise HttpError("HostGAPlugin: Failed PageBlob clean-up: {0}"
                             .format(error_response))
         else:
             self.report_status_health(is_healthy=True)
             logger.verbose("HostGAPlugin: PageBlob clean-up succeeded")
-        
+
         # Then, upload the blob in pages
         if sas_url.count("?") <= 0:
             sas_url = "{0}?comp=page".format(sas_url)
@@ -277,24 +298,24 @@ class HostPluginProtocol(object):
             buf[0: end - start] = status[start: end]
 
             # Send the page
-            response = restutil.http_put(url,
-                                         data=self._build_status_data(
-                                             sas_url,
-                                             status_blob.get_page_blob_page_headers(start, end),
-                                             buf),
-                                         headers=self._build_status_headers())
+            response = restutil.http_put(
+                url, data=self._build_status_data(
+                    sas_url, status_blob.get_page_blob_page_headers(
+                        start, end), buf), headers=self._build_status_headers())
 
             if restutil.request_failed(response):
                 error_response = restutil.read_response_error(response)
-                is_healthy = not restutil.request_failed_at_hostplugin(response)
-                self.report_status_health(is_healthy=is_healthy, response=error_response)
+                is_healthy = not restutil.request_failed_at_hostplugin(
+                    response)
+                self.report_status_health(
+                    is_healthy=is_healthy, response=error_response)
                 raise HttpError(
                     "HostGAPlugin Error: Put PageBlob bytes "
                     "[{0},{1}]: {2}".format(start, end, error_response))
 
             # Advance to the next page (if any)
             start = end
-        
+
     def _build_status_data(self, sas_url, blob_headers, content=None):
         headers = []
         for name in iter(blob_headers.keys()):
@@ -307,10 +328,10 @@ class HostPluginProtocol(object):
             'requestUri': sas_url,
             'headers': headers
         }
-        if not content is None:
+        if content is not None:
             data['content'] = self._base64_encode(content)
         return json.dumps(data, sort_keys=True)
-    
+
     def _build_status_headers(self):
         return {
             HEADER_VERSION: API_VERSION,
@@ -318,7 +339,7 @@ class HostPluginProtocol(object):
             HEADER_CONTAINER_ID: self.container_id,
             HEADER_HOST_CONFIG_NAME: self.role_config_name
         }
-    
+
     def _base64_encode(self, data):
         s = base64.b64encode(bytes(data))
         if PY_VERSION_MAJOR > 2:

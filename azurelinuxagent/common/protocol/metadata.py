@@ -106,7 +106,8 @@ class MetadataProtocol(Protocol):
         except HttpError as e:
             raise ProtocolError(ustr(e))
 
-        # NOT_MODIFIED (304) response means the call was successful, so allow that to proceed.
+        # NOT_MODIFIED (304) response means the call was successful, so allow
+        # that to proceed.
         is_not_modified = restutil.request_not_modified(resp)
         if restutil.request_failed(resp) and not is_not_modified:
             raise ProtocolError("{0} - GET: {1}".format(resp.status, url))
@@ -181,7 +182,8 @@ class MetadataProtocol(Protocol):
     def get_certs(self):
         certlist = CertList()
         certificatedata = CertificateData()
-        headers = None if self.cert_etag is None else {IF_NONE_MATCH_HEADER: self.cert_etag}
+        headers = None if self.cert_etag is None else {
+            IF_NONE_MATCH_HEADER: self.cert_etag}
         data, etag = self._get_data(self.cert_uri, headers=headers)
 
         if self.cert_etag is None or self.cert_etag != etag:
@@ -197,7 +199,8 @@ class MetadataProtocol(Protocol):
 
             for cert_i in cert_list["certificates"]:
                 certificate_data_uri = cert_i['certificateDataUri']
-                data, etag = self._get_data(certificate_data_uri, headers=headers)
+                data, etag = self._get_data(
+                    certificate_data_uri, headers=headers)
                 set_properties("certificatedata", certificatedata, data)
                 json_certificate_data = get_properties(certificatedata)
 
@@ -215,7 +218,8 @@ class MetadataProtocol(Protocol):
     def get_vmagent_manifests(self):
         self.update_goal_state()
 
-        headers = None if self.agent_etag is None else {IF_NONE_MATCH_HEADER: self.agent_etag}
+        headers = None if self.agent_etag is None else {
+            IF_NONE_MATCH_HEADER: self.agent_etag}
 
         data, etag = self._get_data(self.vmagent_uri, headers=headers)
         if self.agent_etag is None or self.agent_etag != etag:
@@ -226,23 +230,23 @@ class MetadataProtocol(Protocol):
             self.agent_manifests = VMAgentManifestList()
 
             manifest = VMAgentManifest()
-            manifest.family = family=conf.get_autoupdate_gafamily()
-            
-            if not KEY_AGENT_VERSION_URIS in data:
+            manifest.family = family = conf.get_autoupdate_gafamily()
+
+            if KEY_AGENT_VERSION_URIS not in data:
                 raise ProtocolError(
                     "Agent versions missing '{0}': {1}".format(
                         KEY_AGENT_VERSION_URIS, data))
 
             for version in data[KEY_AGENT_VERSION_URIS]:
-                if not KEY_URI in version:
+                if KEY_URI not in version:
                     raise ProtocolError(
                         "Agent versions missing '{0': {1}".format(
                             KEY_URI, data))
                 manifest_uri = VMAgentManifestUri(uri=version[KEY_URI])
                 manifest.versionsManifestUris.append(manifest_uri)
-        
+
             self.agent_manifests.vmAgentManifests.append(manifest)
-        
+
         return self.agent_manifests, self.agent_etag
 
     def get_vmagent_pkgs(self, vmagent_manifest):
@@ -340,16 +344,20 @@ class MetadataProtocol(Protocol):
                 logger.verbose("Incarnation is out of date. Update goalstate.")
                 msg = u"Exception updating certs: {0}".format(ustr(e))
                 logger.warn(msg)
-                detailed_msg = '{0} {1}'.format(msg, traceback.extract_tb(get_traceback(e)))
+                detailed_msg = '{0} {1}'.format(
+                    msg, traceback.extract_tb(get_traceback(e)))
                 logger.verbose(detailed_msg)
         raise ProtocolError("Exceeded max retry updating goal state")
 
-    def download_ext_handler_pkg(self, uri, destination, headers=None, use_proxy=True):
+    def download_ext_handler_pkg(
+            self, uri, destination, headers=None, use_proxy=True):
         success = False
         try:
             resp = restutil.http_get(uri, headers=headers, use_proxy=use_proxy)
             if restutil.request_succeeded(resp):
-                fileutil.write_file(destination, bytearray(resp.read()), asbin=True)
+                fileutil.write_file(
+                    destination, bytearray(
+                        resp.read()), asbin=True)
                 success = True
         except Exception as e:
             logger.warn("Failed to download from: {0}".format(uri), e)
@@ -380,7 +388,7 @@ class Certificates(object):
 
         # Wrapping the certificate lines.
         # decode and save the result into p7b_file
-        fileutil.write_file(p7b_file, base64.b64decode(data), asbin=True) 
+        fileutil.write_file(p7b_file, base64.b64decode(data), asbin=True)
 
         ssl_cmd = "openssl pkcs7 -text -in {0} -inform der | grep -v '^-----' "
         ret, data = shellutil.run_get_output(ssl_cmd.format(p7b_file))

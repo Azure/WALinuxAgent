@@ -38,8 +38,8 @@ class TestDataContract(unittest.TestCase):
     def test_set_properties(self):
         obj = SampleDataContract()
         data = {
-                'foo' : 1, 
-                'baz': 'a'
+            'foo': 1,
+            'baz': 'a'
         }
         set_properties('sample', obj, data)
         self.assertFalse(hasattr(obj, 'baz'))

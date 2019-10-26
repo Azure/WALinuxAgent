@@ -46,11 +46,14 @@ def get_osutil(distro_name=DISTRO_NAME,
 
     # We are adding another layer of abstraction here since we want to be able to mock the final result of the
     # function call. Since the get_osutil function is imported in various places in our tests, we can't mock
-    # it globally. Instead, we add _get_osutil function and mock it in the test base class, AgentTestCase.
-    return _get_osutil(distro_name, distro_code_name, distro_version, distro_full_name)
+    # it globally. Instead, we add _get_osutil function and mock it in the
+    # test base class, AgentTestCase.
+    return _get_osutil(distro_name, distro_code_name,
+                       distro_version, distro_full_name)
 
 
-def _get_osutil(distro_name, distro_code_name, distro_version, distro_full_name):
+def _get_osutil(distro_name, distro_code_name,
+                distro_version, distro_full_name):
 
     if distro_name == "arch":
         return ArchUtil()

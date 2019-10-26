@@ -50,16 +50,20 @@ class Redhat6xOSUtil(DefaultOSUtil):
         return shellutil.run("/sbin/service sshd condrestart", chk_err=False)
 
     def stop_agent_service(self):
-        return shellutil.run("/sbin/service {0} stop".format(self.service_name), chk_err=False)
+        return shellutil.run(
+            "/sbin/service {0} stop".format(self.service_name), chk_err=False)
 
     def start_agent_service(self):
-        return shellutil.run("/sbin/service {0} start".format(self.service_name), chk_err=False)
+        return shellutil.run(
+            "/sbin/service {0} start".format(self.service_name), chk_err=False)
 
     def register_agent_service(self):
-        return shellutil.run("chkconfig --add {0}".format(self.service_name), chk_err=False)
+        return shellutil.run(
+            "chkconfig --add {0}".format(self.service_name), chk_err=False)
 
     def unregister_agent_service(self):
-        return shellutil.run("chkconfig --del {0}".format(self.service_name), chk_err=False)
+        return shellutil.run(
+            "chkconfig --del {0}".format(self.service_name), chk_err=False)
 
     def openssl_to_openssh(self, input_file, output_file):
         pubkey = fileutil.read_file(input_file)
@@ -91,7 +95,8 @@ class Redhat6xOSUtil(DefaultOSUtil):
                                   'DHCP_HOSTNAME={0}'.format(hostname))
 
     def get_dhcp_lease_endpoint(self):
-        return self.get_endpoint_from_leases_path('/var/lib/dhclient/dhclient-*.leases')
+        return self.get_endpoint_from_leases_path(
+            '/var/lib/dhclient/dhclient-*.leases')
 
 
 class RedhatOSUtil(Redhat6xOSUtil):
@@ -105,9 +110,11 @@ class RedhatOSUtil(Redhat6xOSUtil):
         Due to a bug in systemd in Centos-7.0, if this call fails, fallback
         to hostname.
         """
-        hostnamectl_cmd = "hostnamectl set-hostname {0} --static".format(hostname)
+        hostnamectl_cmd = "hostnamectl set-hostname {0} --static".format(
+            hostname)
         if shellutil.run(hostnamectl_cmd, chk_err=False) != 0:
-            logger.warn("[{0}] failed, attempting fallback".format(hostnamectl_cmd))
+            logger.warn(
+                "[{0}] failed, attempting fallback".format(hostnamectl_cmd))
             DefaultOSUtil.set_hostname(self, hostname)
 
     def publish_hostname(self, hostname):
@@ -118,20 +125,24 @@ class RedhatOSUtil(Redhat6xOSUtil):
         super(RedhatOSUtil, self).publish_hostname(hostname)
 
     def register_agent_service(self):
-        return shellutil.run("systemctl enable {0}".format(self.service_name), chk_err=False)
+        return shellutil.run("systemctl enable {0}".format(
+            self.service_name), chk_err=False)
 
     def unregister_agent_service(self):
-        return shellutil.run("systemctl disable {0}".format(self.service_name), chk_err=False)
+        return shellutil.run("systemctl disable {0}".format(
+            self.service_name), chk_err=False)
 
     def openssl_to_openssh(self, input_file, output_file):
         DefaultOSUtil.openssl_to_openssh(self, input_file, output_file)
 
     def get_dhcp_lease_endpoint(self):
         # dhclient
-        endpoint = self.get_endpoint_from_leases_path('/var/lib/dhclient/dhclient-*.lease')
+        endpoint = self.get_endpoint_from_leases_path(
+            '/var/lib/dhclient/dhclient-*.lease')
 
         if endpoint is None:
             # NetworkManager
-            endpoint = self.get_endpoint_from_leases_path('/var/lib/NetworkManager/dhclient-*.lease')
+            endpoint = self.get_endpoint_from_leases_path(
+                '/var/lib/NetworkManager/dhclient-*.lease')
 
         return endpoint

@@ -20,17 +20,18 @@ from azurelinuxagent.common.future import httpclient
 from azurelinuxagent.common.utils.cryptutil import CryptUtil
 
 DATA_FILE = {
-        "identity": "metadata/identity.json",
-        "certificates": "metadata/certificates.json",
-        "certificates_data": "metadata/certificates_data.json",
-        "ext_handlers": "metadata/ext_handlers.json",
-        "ext_handler_pkgs": "metadata/ext_handler_pkgs.json",
-        "trans_prv": "metadata/trans_prv",
-        "trans_cert": "metadata/trans_cert",        
+    "identity": "metadata/identity.json",
+    "certificates": "metadata/certificates.json",
+    "certificates_data": "metadata/certificates_data.json",
+    "ext_handlers": "metadata/ext_handlers.json",
+    "ext_handler_pkgs": "metadata/ext_handler_pkgs.json",
+    "trans_prv": "metadata/trans_prv",
+    "trans_cert": "metadata/trans_cert",
 }
 
 DATA_FILE_NO_EXT = DATA_FILE.copy()
 DATA_FILE_NO_EXT["ext_handlers"] = "metadata/ext_handlers_no_ext.json"
+
 
 class MetadataProtocolData(object):
     def __init__(self, data_files):
@@ -41,7 +42,7 @@ class MetadataProtocolData(object):
         self.ext_handler_pkgs = load_data(data_files.get("ext_handler_pkgs"))
         self.trans_prv = load_data(data_files.get("trans_prv"))
         self.trans_cert = load_data(data_files.get("trans_cert"))
-        
+
     def mock_http_get(self, url, *args, **kwargs):
         content = None
         if url.count(u"identity?") > 0:
@@ -63,4 +64,3 @@ class MetadataProtocolData(object):
         else:
             resp.read = Mock(return_value=content.encode("utf-8"))
         return resp
-

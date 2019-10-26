@@ -31,16 +31,19 @@ class TestNSBSDOSUtil(AgentTestCase):
         AgentTestCase.tearDown(self)
 
     def test_get_dhcp_pid_should_return_a_list_of_pids(self):
-        with patch.object(NSBSDOSUtil, "resolver"):  # instantiating NSBSDOSUtil requires a resolver
+        # instantiating NSBSDOSUtil requires a resolver
+        with patch.object(NSBSDOSUtil, "resolver"):
             original_isfile = path.isfile
 
             def mock_isfile(path):
-                return True if path == self.dhclient_pid_file else original_isfile(path)
+                return True if path == self.dhclient_pid_file else original_isfile(
+                    path)
 
             original_read_file = read_file
 
             def mock_read_file(file, *args, **kwargs):
-                return "123" if file == self.dhclient_pid_file else original_read_file(file, *args, **kwargs)
+                return "123" if file == self.dhclient_pid_file else original_read_file(
+                    file, *args, **kwargs)
 
             with patch("os.path.isfile", mock_isfile):
                 with patch("azurelinuxagent.common.osutil.nsbsd.fileutil.read_file", mock_read_file):
@@ -48,15 +51,18 @@ class TestNSBSDOSUtil(AgentTestCase):
 
             self.assertEquals(pid_list, [123])
 
-    def test_get_dhcp_pid_should_return_an_empty_list_when_the_dhcp_client_is_not_running(self):
-        with patch.object(NSBSDOSUtil, "resolver"):  # instantiating NSBSDOSUtil requires a resolver
+    def test_get_dhcp_pid_should_return_an_empty_list_when_the_dhcp_client_is_not_running(
+            self):
+        # instantiating NSBSDOSUtil requires a resolver
+        with patch.object(NSBSDOSUtil, "resolver"):
             #
             # PID file does not exist
             #
             original_isfile = path.isfile
 
             def mock_isfile(path):
-                return False if path == self.dhclient_pid_file else original_isfile(path)
+                return False if path == self.dhclient_pid_file else original_isfile(
+                    path)
 
             with patch("os.path.isfile", mock_isfile):
                 pid_list = NSBSDOSUtil().get_dhcp_pid()
@@ -69,12 +75,14 @@ class TestNSBSDOSUtil(AgentTestCase):
             original_isfile = path.isfile
 
             def mock_isfile(path):
-                return True if path == self.dhclient_pid_file else original_isfile(path)
+                return True if path == self.dhclient_pid_file else original_isfile(
+                    path)
 
             original_read_file = read_file
 
             def mock_read_file(file, *args, **kwargs):
-                return "" if file == self.dhclient_pid_file else original_read_file(file, *args, **kwargs)
+                return "" if file == self.dhclient_pid_file else original_read_file(
+                    file, *args, **kwargs)
 
             with patch("os.path.isfile", mock_isfile):
                 with patch("azurelinuxagent.common.osutil.nsbsd.fileutil.read_file", mock_read_file):

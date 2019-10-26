@@ -55,14 +55,17 @@ class TestImds(AgentTestCase):
         self.assertEqual(1, mock_http_get.call_count)
         positional_args, kw_args = mock_http_get.call_args
 
-        self.assertEqual('http://169.254.169.254/metadata/instance/compute?api-version=2018-02-01', positional_args[0])
+        self.assertEqual(
+            'http://169.254.169.254/metadata/instance/compute?api-version=2018-02-01',
+            positional_args[0])
         self.assertTrue('User-Agent' in kw_args['headers'])
         self.assertTrue('Metadata' in kw_args['headers'])
         self.assertEqual(True, kw_args['headers']['Metadata'])
 
     @patch("azurelinuxagent.ga.update.restutil.http_get")
     def test_get_bad_request(self, mock_http_get):
-        mock_http_get.return_value = ResponseMock(status=restutil.httpclient.BAD_REQUEST)
+        mock_http_get.return_value = ResponseMock(
+            status=restutil.httpclient.BAD_REQUEST)
 
         test_subject = imds.ImdsClient()
         self.assertRaises(HttpError, test_subject.get_compute)
@@ -108,132 +111,656 @@ class TestImds(AgentTestCase):
         self.assertEqual('0', compute_info.platformFaultDomain)
         self.assertEqual('0', compute_info.platformUpdateDomain)
         self.assertEqual('UnitPublisher', compute_info.publisher)
-        self.assertEqual('UnitResourceGroupName', compute_info.resourceGroupName)
+        self.assertEqual(
+            'UnitResourceGroupName',
+            compute_info.resourceGroupName)
         self.assertEqual('UnitSku', compute_info.sku)
-        self.assertEqual('e4402c6c-2804-4a0a-9dee-d61918fc4d28', compute_info.subscriptionId)
+        self.assertEqual(
+            'e4402c6c-2804-4a0a-9dee-d61918fc4d28',
+            compute_info.subscriptionId)
         self.assertEqual('Key1:Value1;Key2:Value2', compute_info.tags)
-        self.assertEqual('f62f23fb-69e2-4df0-a20b-cb5c201a3e7a', compute_info.vmId)
+        self.assertEqual(
+            'f62f23fb-69e2-4df0-a20b-cb5c201a3e7a',
+            compute_info.vmId)
         self.assertEqual('UnitVersion', compute_info.version)
         self.assertEqual('Standard_D1_v2', compute_info.vmSize)
         self.assertEqual('MyScaleSet', compute_info.vmScaleSetName)
         self.assertEqual('In', compute_info.zone)
 
-        self.assertEqual('UnitPublisher:UnitOffer:UnitSku:UnitVersion', compute_info.image_info)
+        self.assertEqual(
+            'UnitPublisher:UnitOffer:UnitSku:UnitVersion',
+            compute_info.image_info)
 
     def test_is_custom_image(self):
         image_origin = self._setup_image_origin_assert("", "", "", "")
         self.assertEqual(imds.IMDS_IMAGE_ORIGIN_CUSTOM, image_origin)
 
     def test_is_endorsed_CentOS(self):
-        self.assertEqual(imds.IMDS_IMAGE_ORIGIN_ENDORSED, self._setup_image_origin_assert("OpenLogic", "CentOS", "6.3", ""))
-        self.assertEqual(imds.IMDS_IMAGE_ORIGIN_ENDORSED, self._setup_image_origin_assert("OpenLogic", "CentOS", "6.4", ""))
-        self.assertEqual(imds.IMDS_IMAGE_ORIGIN_ENDORSED, self._setup_image_origin_assert("OpenLogic", "CentOS", "6.5", ""))
-        self.assertEqual(imds.IMDS_IMAGE_ORIGIN_ENDORSED, self._setup_image_origin_assert("OpenLogic", "CentOS", "6.6", ""))
-        self.assertEqual(imds.IMDS_IMAGE_ORIGIN_ENDORSED, self._setup_image_origin_assert("OpenLogic", "CentOS", "6.7", ""))
-        self.assertEqual(imds.IMDS_IMAGE_ORIGIN_ENDORSED, self._setup_image_origin_assert("OpenLogic", "CentOS", "6.8", ""))
-        self.assertEqual(imds.IMDS_IMAGE_ORIGIN_ENDORSED, self._setup_image_origin_assert("OpenLogic", "CentOS", "6.9", ""))
-        self.assertEqual(imds.IMDS_IMAGE_ORIGIN_ENDORSED, self._setup_image_origin_assert("OpenLogic", "CentOS", "7.0", ""))
-        self.assertEqual(imds.IMDS_IMAGE_ORIGIN_ENDORSED, self._setup_image_origin_assert("OpenLogic", "CentOS", "7.1", ""))
-        self.assertEqual(imds.IMDS_IMAGE_ORIGIN_ENDORSED, self._setup_image_origin_assert("OpenLogic", "CentOS", "7.2", ""))
-        self.assertEqual(imds.IMDS_IMAGE_ORIGIN_ENDORSED, self._setup_image_origin_assert("OpenLogic", "CentOS", "7.3", ""))
-        self.assertEqual(imds.IMDS_IMAGE_ORIGIN_ENDORSED, self._setup_image_origin_assert("OpenLogic", "CentOS", "7.4", ""))
-        self.assertEqual(imds.IMDS_IMAGE_ORIGIN_ENDORSED, self._setup_image_origin_assert("OpenLogic", "CentOS", "7-LVM", ""))
-        self.assertEqual(imds.IMDS_IMAGE_ORIGIN_ENDORSED, self._setup_image_origin_assert("OpenLogic", "CentOS", "7-RAW", ""))
+        self.assertEqual(
+            imds.IMDS_IMAGE_ORIGIN_ENDORSED,
+            self._setup_image_origin_assert(
+                "OpenLogic",
+                "CentOS",
+                "6.3",
+                ""))
+        self.assertEqual(
+            imds.IMDS_IMAGE_ORIGIN_ENDORSED,
+            self._setup_image_origin_assert(
+                "OpenLogic",
+                "CentOS",
+                "6.4",
+                ""))
+        self.assertEqual(
+            imds.IMDS_IMAGE_ORIGIN_ENDORSED,
+            self._setup_image_origin_assert(
+                "OpenLogic",
+                "CentOS",
+                "6.5",
+                ""))
+        self.assertEqual(
+            imds.IMDS_IMAGE_ORIGIN_ENDORSED,
+            self._setup_image_origin_assert(
+                "OpenLogic",
+                "CentOS",
+                "6.6",
+                ""))
+        self.assertEqual(
+            imds.IMDS_IMAGE_ORIGIN_ENDORSED,
+            self._setup_image_origin_assert(
+                "OpenLogic",
+                "CentOS",
+                "6.7",
+                ""))
+        self.assertEqual(
+            imds.IMDS_IMAGE_ORIGIN_ENDORSED,
+            self._setup_image_origin_assert(
+                "OpenLogic",
+                "CentOS",
+                "6.8",
+                ""))
+        self.assertEqual(
+            imds.IMDS_IMAGE_ORIGIN_ENDORSED,
+            self._setup_image_origin_assert(
+                "OpenLogic",
+                "CentOS",
+                "6.9",
+                ""))
+        self.assertEqual(
+            imds.IMDS_IMAGE_ORIGIN_ENDORSED,
+            self._setup_image_origin_assert(
+                "OpenLogic",
+                "CentOS",
+                "7.0",
+                ""))
+        self.assertEqual(
+            imds.IMDS_IMAGE_ORIGIN_ENDORSED,
+            self._setup_image_origin_assert(
+                "OpenLogic",
+                "CentOS",
+                "7.1",
+                ""))
+        self.assertEqual(
+            imds.IMDS_IMAGE_ORIGIN_ENDORSED,
+            self._setup_image_origin_assert(
+                "OpenLogic",
+                "CentOS",
+                "7.2",
+                ""))
+        self.assertEqual(
+            imds.IMDS_IMAGE_ORIGIN_ENDORSED,
+            self._setup_image_origin_assert(
+                "OpenLogic",
+                "CentOS",
+                "7.3",
+                ""))
+        self.assertEqual(
+            imds.IMDS_IMAGE_ORIGIN_ENDORSED,
+            self._setup_image_origin_assert(
+                "OpenLogic",
+                "CentOS",
+                "7.4",
+                ""))
+        self.assertEqual(
+            imds.IMDS_IMAGE_ORIGIN_ENDORSED,
+            self._setup_image_origin_assert(
+                "OpenLogic",
+                "CentOS",
+                "7-LVM",
+                ""))
+        self.assertEqual(
+            imds.IMDS_IMAGE_ORIGIN_ENDORSED,
+            self._setup_image_origin_assert(
+                "OpenLogic",
+                "CentOS",
+                "7-RAW",
+                ""))
 
-        self.assertEqual(imds.IMDS_IMAGE_ORIGIN_ENDORSED, self._setup_image_origin_assert("OpenLogic", "CentOS-HPC", "6.5", ""))
-        self.assertEqual(imds.IMDS_IMAGE_ORIGIN_ENDORSED, self._setup_image_origin_assert("OpenLogic", "CentOS-HPC", "6.8", ""))
-        self.assertEqual(imds.IMDS_IMAGE_ORIGIN_ENDORSED, self._setup_image_origin_assert("OpenLogic", "CentOS-HPC", "7.1", ""))
-        self.assertEqual(imds.IMDS_IMAGE_ORIGIN_ENDORSED, self._setup_image_origin_assert("OpenLogic", "CentOS-HPC", "7.3", ""))
-        self.assertEqual(imds.IMDS_IMAGE_ORIGIN_ENDORSED, self._setup_image_origin_assert("OpenLogic", "CentOS-HPC", "7.4", ""))
+        self.assertEqual(
+            imds.IMDS_IMAGE_ORIGIN_ENDORSED,
+            self._setup_image_origin_assert(
+                "OpenLogic",
+                "CentOS-HPC",
+                "6.5",
+                ""))
+        self.assertEqual(
+            imds.IMDS_IMAGE_ORIGIN_ENDORSED,
+            self._setup_image_origin_assert(
+                "OpenLogic",
+                "CentOS-HPC",
+                "6.8",
+                ""))
+        self.assertEqual(
+            imds.IMDS_IMAGE_ORIGIN_ENDORSED,
+            self._setup_image_origin_assert(
+                "OpenLogic",
+                "CentOS-HPC",
+                "7.1",
+                ""))
+        self.assertEqual(
+            imds.IMDS_IMAGE_ORIGIN_ENDORSED,
+            self._setup_image_origin_assert(
+                "OpenLogic",
+                "CentOS-HPC",
+                "7.3",
+                ""))
+        self.assertEqual(
+            imds.IMDS_IMAGE_ORIGIN_ENDORSED,
+            self._setup_image_origin_assert(
+                "OpenLogic",
+                "CentOS-HPC",
+                "7.4",
+                ""))
 
-        self.assertEqual(imds.IMDS_IMAGE_ORIGIN_PLATFORM, self._setup_image_origin_assert("OpenLogic", "CentOS", "6.2", ""))
-        self.assertEqual(imds.IMDS_IMAGE_ORIGIN_PLATFORM, self._setup_image_origin_assert("OpenLogic", "CentOS", "6.1", ""))
+        self.assertEqual(
+            imds.IMDS_IMAGE_ORIGIN_PLATFORM,
+            self._setup_image_origin_assert(
+                "OpenLogic",
+                "CentOS",
+                "6.2",
+                ""))
+        self.assertEqual(
+            imds.IMDS_IMAGE_ORIGIN_PLATFORM,
+            self._setup_image_origin_assert(
+                "OpenLogic",
+                "CentOS",
+                "6.1",
+                ""))
 
     def test_is_endorsed_CoreOS(self):
-        self.assertEqual(imds.IMDS_IMAGE_ORIGIN_ENDORSED, self._setup_image_origin_assert("CoreOS", "CoreOS", "stable", "494.4.0"))
-        self.assertEqual(imds.IMDS_IMAGE_ORIGIN_ENDORSED, self._setup_image_origin_assert("CoreOS", "CoreOS", "stable", "899.17.0"))
-        self.assertEqual(imds.IMDS_IMAGE_ORIGIN_ENDORSED, self._setup_image_origin_assert("CoreOS", "CoreOS", "stable", "1688.5.3"))
+        self.assertEqual(
+            imds.IMDS_IMAGE_ORIGIN_ENDORSED,
+            self._setup_image_origin_assert(
+                "CoreOS",
+                "CoreOS",
+                "stable",
+                "494.4.0"))
+        self.assertEqual(
+            imds.IMDS_IMAGE_ORIGIN_ENDORSED,
+            self._setup_image_origin_assert(
+                "CoreOS",
+                "CoreOS",
+                "stable",
+                "899.17.0"))
+        self.assertEqual(
+            imds.IMDS_IMAGE_ORIGIN_ENDORSED,
+            self._setup_image_origin_assert(
+                "CoreOS",
+                "CoreOS",
+                "stable",
+                "1688.5.3"))
 
-        self.assertEqual(imds.IMDS_IMAGE_ORIGIN_PLATFORM, self._setup_image_origin_assert("CoreOS", "CoreOS", "stable", "494.3.0"))
-        self.assertEqual(imds.IMDS_IMAGE_ORIGIN_PLATFORM, self._setup_image_origin_assert("CoreOS", "CoreOS", "alpha", ""))
-        self.assertEqual(imds.IMDS_IMAGE_ORIGIN_PLATFORM, self._setup_image_origin_assert("CoreOS", "CoreOS", "beta", ""))
+        self.assertEqual(
+            imds.IMDS_IMAGE_ORIGIN_PLATFORM,
+            self._setup_image_origin_assert(
+                "CoreOS",
+                "CoreOS",
+                "stable",
+                "494.3.0"))
+        self.assertEqual(
+            imds.IMDS_IMAGE_ORIGIN_PLATFORM,
+            self._setup_image_origin_assert(
+                "CoreOS",
+                "CoreOS",
+                "alpha",
+                ""))
+        self.assertEqual(
+            imds.IMDS_IMAGE_ORIGIN_PLATFORM,
+            self._setup_image_origin_assert(
+                "CoreOS",
+                "CoreOS",
+                "beta",
+                ""))
 
     def test_is_endorsed_Debian(self):
-        self.assertEqual(imds.IMDS_IMAGE_ORIGIN_ENDORSED, self._setup_image_origin_assert("credativ", "Debian", "7", ""))
-        self.assertEqual(imds.IMDS_IMAGE_ORIGIN_ENDORSED, self._setup_image_origin_assert("credativ", "Debian", "8", ""))
-        self.assertEqual(imds.IMDS_IMAGE_ORIGIN_ENDORSED, self._setup_image_origin_assert("credativ", "Debian", "9", ""))
+        self.assertEqual(
+            imds.IMDS_IMAGE_ORIGIN_ENDORSED,
+            self._setup_image_origin_assert(
+                "credativ",
+                "Debian",
+                "7",
+                ""))
+        self.assertEqual(
+            imds.IMDS_IMAGE_ORIGIN_ENDORSED,
+            self._setup_image_origin_assert(
+                "credativ",
+                "Debian",
+                "8",
+                ""))
+        self.assertEqual(
+            imds.IMDS_IMAGE_ORIGIN_ENDORSED,
+            self._setup_image_origin_assert(
+                "credativ",
+                "Debian",
+                "9",
+                ""))
 
-        self.assertEqual(imds.IMDS_IMAGE_ORIGIN_PLATFORM, self._setup_image_origin_assert("credativ", "Debian", "9-DAILY", ""))
-        self.assertEqual(imds.IMDS_IMAGE_ORIGIN_PLATFORM, self._setup_image_origin_assert("credativ", "Debian", "10-DAILY", ""))
+        self.assertEqual(
+            imds.IMDS_IMAGE_ORIGIN_PLATFORM,
+            self._setup_image_origin_assert(
+                "credativ",
+                "Debian",
+                "9-DAILY",
+                ""))
+        self.assertEqual(
+            imds.IMDS_IMAGE_ORIGIN_PLATFORM,
+            self._setup_image_origin_assert(
+                "credativ",
+                "Debian",
+                "10-DAILY",
+                ""))
 
     def test_is_endorsed_Rhel(self):
-        self.assertEqual(imds.IMDS_IMAGE_ORIGIN_ENDORSED, self._setup_image_origin_assert("RedHat", "RHEL", "6.7", ""))
-        self.assertEqual(imds.IMDS_IMAGE_ORIGIN_ENDORSED, self._setup_image_origin_assert("RedHat", "RHEL", "6.8", ""))
-        self.assertEqual(imds.IMDS_IMAGE_ORIGIN_ENDORSED, self._setup_image_origin_assert("RedHat", "RHEL", "6.9", ""))
-        self.assertEqual(imds.IMDS_IMAGE_ORIGIN_ENDORSED, self._setup_image_origin_assert("RedHat", "RHEL", "7.0", ""))
-        self.assertEqual(imds.IMDS_IMAGE_ORIGIN_ENDORSED, self._setup_image_origin_assert("RedHat", "RHEL", "7.1", ""))
-        self.assertEqual(imds.IMDS_IMAGE_ORIGIN_ENDORSED, self._setup_image_origin_assert("RedHat", "RHEL", "7.2", ""))
-        self.assertEqual(imds.IMDS_IMAGE_ORIGIN_ENDORSED, self._setup_image_origin_assert("RedHat", "RHEL", "7.3", ""))
-        self.assertEqual(imds.IMDS_IMAGE_ORIGIN_ENDORSED, self._setup_image_origin_assert("RedHat", "RHEL", "7.4", ""))
-        self.assertEqual(imds.IMDS_IMAGE_ORIGIN_ENDORSED, self._setup_image_origin_assert("RedHat", "RHEL", "7-LVM", ""))
-        self.assertEqual(imds.IMDS_IMAGE_ORIGIN_ENDORSED, self._setup_image_origin_assert("RedHat", "RHEL", "7-RAW", ""))
+        self.assertEqual(
+            imds.IMDS_IMAGE_ORIGIN_ENDORSED,
+            self._setup_image_origin_assert(
+                "RedHat",
+                "RHEL",
+                "6.7",
+                ""))
+        self.assertEqual(
+            imds.IMDS_IMAGE_ORIGIN_ENDORSED,
+            self._setup_image_origin_assert(
+                "RedHat",
+                "RHEL",
+                "6.8",
+                ""))
+        self.assertEqual(
+            imds.IMDS_IMAGE_ORIGIN_ENDORSED,
+            self._setup_image_origin_assert(
+                "RedHat",
+                "RHEL",
+                "6.9",
+                ""))
+        self.assertEqual(
+            imds.IMDS_IMAGE_ORIGIN_ENDORSED,
+            self._setup_image_origin_assert(
+                "RedHat",
+                "RHEL",
+                "7.0",
+                ""))
+        self.assertEqual(
+            imds.IMDS_IMAGE_ORIGIN_ENDORSED,
+            self._setup_image_origin_assert(
+                "RedHat",
+                "RHEL",
+                "7.1",
+                ""))
+        self.assertEqual(
+            imds.IMDS_IMAGE_ORIGIN_ENDORSED,
+            self._setup_image_origin_assert(
+                "RedHat",
+                "RHEL",
+                "7.2",
+                ""))
+        self.assertEqual(
+            imds.IMDS_IMAGE_ORIGIN_ENDORSED,
+            self._setup_image_origin_assert(
+                "RedHat",
+                "RHEL",
+                "7.3",
+                ""))
+        self.assertEqual(
+            imds.IMDS_IMAGE_ORIGIN_ENDORSED,
+            self._setup_image_origin_assert(
+                "RedHat",
+                "RHEL",
+                "7.4",
+                ""))
+        self.assertEqual(
+            imds.IMDS_IMAGE_ORIGIN_ENDORSED,
+            self._setup_image_origin_assert(
+                "RedHat",
+                "RHEL",
+                "7-LVM",
+                ""))
+        self.assertEqual(
+            imds.IMDS_IMAGE_ORIGIN_ENDORSED,
+            self._setup_image_origin_assert(
+                "RedHat",
+                "RHEL",
+                "7-RAW",
+                ""))
 
-        self.assertEqual(imds.IMDS_IMAGE_ORIGIN_ENDORSED, self._setup_image_origin_assert("RedHat", "RHEL-SAP-HANA", "7.2", ""))
-        self.assertEqual(imds.IMDS_IMAGE_ORIGIN_ENDORSED, self._setup_image_origin_assert("RedHat", "RHEL-SAP-HANA", "7.3", ""))
-        self.assertEqual(imds.IMDS_IMAGE_ORIGIN_ENDORSED, self._setup_image_origin_assert("RedHat", "RHEL-SAP-HANA", "7.4", ""))
+        self.assertEqual(
+            imds.IMDS_IMAGE_ORIGIN_ENDORSED,
+            self._setup_image_origin_assert(
+                "RedHat",
+                "RHEL-SAP-HANA",
+                "7.2",
+                ""))
+        self.assertEqual(
+            imds.IMDS_IMAGE_ORIGIN_ENDORSED,
+            self._setup_image_origin_assert(
+                "RedHat",
+                "RHEL-SAP-HANA",
+                "7.3",
+                ""))
+        self.assertEqual(
+            imds.IMDS_IMAGE_ORIGIN_ENDORSED,
+            self._setup_image_origin_assert(
+                "RedHat",
+                "RHEL-SAP-HANA",
+                "7.4",
+                ""))
 
-        self.assertEqual(imds.IMDS_IMAGE_ORIGIN_ENDORSED, self._setup_image_origin_assert("RedHat", "RHEL-SAP", "7.2", ""))
-        self.assertEqual(imds.IMDS_IMAGE_ORIGIN_ENDORSED, self._setup_image_origin_assert("RedHat", "RHEL-SAP", "7.3", ""))
-        self.assertEqual(imds.IMDS_IMAGE_ORIGIN_ENDORSED, self._setup_image_origin_assert("RedHat", "RHEL-SAP", "7.4", ""))
+        self.assertEqual(
+            imds.IMDS_IMAGE_ORIGIN_ENDORSED,
+            self._setup_image_origin_assert(
+                "RedHat",
+                "RHEL-SAP",
+                "7.2",
+                ""))
+        self.assertEqual(
+            imds.IMDS_IMAGE_ORIGIN_ENDORSED,
+            self._setup_image_origin_assert(
+                "RedHat",
+                "RHEL-SAP",
+                "7.3",
+                ""))
+        self.assertEqual(
+            imds.IMDS_IMAGE_ORIGIN_ENDORSED,
+            self._setup_image_origin_assert(
+                "RedHat",
+                "RHEL-SAP",
+                "7.4",
+                ""))
 
-        self.assertEqual(imds.IMDS_IMAGE_ORIGIN_ENDORSED, self._setup_image_origin_assert("RedHat", "RHEL-SAP-APPS", "7.2", ""))
-        self.assertEqual(imds.IMDS_IMAGE_ORIGIN_ENDORSED, self._setup_image_origin_assert("RedHat", "RHEL-SAP-APPS", "7.3", ""))
-        self.assertEqual(imds.IMDS_IMAGE_ORIGIN_ENDORSED, self._setup_image_origin_assert("RedHat", "RHEL-SAP-APPS", "7.4", ""))
+        self.assertEqual(
+            imds.IMDS_IMAGE_ORIGIN_ENDORSED,
+            self._setup_image_origin_assert(
+                "RedHat",
+                "RHEL-SAP-APPS",
+                "7.2",
+                ""))
+        self.assertEqual(
+            imds.IMDS_IMAGE_ORIGIN_ENDORSED,
+            self._setup_image_origin_assert(
+                "RedHat",
+                "RHEL-SAP-APPS",
+                "7.3",
+                ""))
+        self.assertEqual(
+            imds.IMDS_IMAGE_ORIGIN_ENDORSED,
+            self._setup_image_origin_assert(
+                "RedHat",
+                "RHEL-SAP-APPS",
+                "7.4",
+                ""))
 
-        self.assertEqual(imds.IMDS_IMAGE_ORIGIN_PLATFORM, self._setup_image_origin_assert("RedHat", "RHEL", "6.6", ""))
+        self.assertEqual(
+            imds.IMDS_IMAGE_ORIGIN_PLATFORM,
+            self._setup_image_origin_assert(
+                "RedHat",
+                "RHEL",
+                "6.6",
+                ""))
 
     def test_is_endorsed_SuSE(self):
-        self.assertEqual(imds.IMDS_IMAGE_ORIGIN_ENDORSED, self._setup_image_origin_assert("SuSE", "SLES", "11-SP4", ""))
-        self.assertEqual(imds.IMDS_IMAGE_ORIGIN_ENDORSED, self._setup_image_origin_assert("SuSE", "SLES-BYOS", "11-SP4", ""))
+        self.assertEqual(
+            imds.IMDS_IMAGE_ORIGIN_ENDORSED,
+            self._setup_image_origin_assert(
+                "SuSE",
+                "SLES",
+                "11-SP4",
+                ""))
+        self.assertEqual(
+            imds.IMDS_IMAGE_ORIGIN_ENDORSED,
+            self._setup_image_origin_assert(
+                "SuSE",
+                "SLES-BYOS",
+                "11-SP4",
+                ""))
 
-        self.assertEqual(imds.IMDS_IMAGE_ORIGIN_ENDORSED, self._setup_image_origin_assert("SuSE", "SLES", "12-SP1", ""))
-        self.assertEqual(imds.IMDS_IMAGE_ORIGIN_ENDORSED, self._setup_image_origin_assert("SuSE", "SLES", "12-SP2", ""))
-        self.assertEqual(imds.IMDS_IMAGE_ORIGIN_ENDORSED, self._setup_image_origin_assert("SuSE", "SLES", "12-SP3", ""))
-        self.assertEqual(imds.IMDS_IMAGE_ORIGIN_ENDORSED, self._setup_image_origin_assert("SuSE", "SLES", "12-SP4", ""))
-        self.assertEqual(imds.IMDS_IMAGE_ORIGIN_ENDORSED, self._setup_image_origin_assert("SuSE", "SLES", "12-SP5", ""))
+        self.assertEqual(
+            imds.IMDS_IMAGE_ORIGIN_ENDORSED,
+            self._setup_image_origin_assert(
+                "SuSE",
+                "SLES",
+                "12-SP1",
+                ""))
+        self.assertEqual(
+            imds.IMDS_IMAGE_ORIGIN_ENDORSED,
+            self._setup_image_origin_assert(
+                "SuSE",
+                "SLES",
+                "12-SP2",
+                ""))
+        self.assertEqual(
+            imds.IMDS_IMAGE_ORIGIN_ENDORSED,
+            self._setup_image_origin_assert(
+                "SuSE",
+                "SLES",
+                "12-SP3",
+                ""))
+        self.assertEqual(
+            imds.IMDS_IMAGE_ORIGIN_ENDORSED,
+            self._setup_image_origin_assert(
+                "SuSE",
+                "SLES",
+                "12-SP4",
+                ""))
+        self.assertEqual(
+            imds.IMDS_IMAGE_ORIGIN_ENDORSED,
+            self._setup_image_origin_assert(
+                "SuSE",
+                "SLES",
+                "12-SP5",
+                ""))
 
-        self.assertEqual(imds.IMDS_IMAGE_ORIGIN_ENDORSED, self._setup_image_origin_assert("SuSE", "SLES-BYOS", "12-SP1", ""))
-        self.assertEqual(imds.IMDS_IMAGE_ORIGIN_ENDORSED, self._setup_image_origin_assert("SuSE", "SLES-BYOS", "12-SP2", ""))
-        self.assertEqual(imds.IMDS_IMAGE_ORIGIN_ENDORSED, self._setup_image_origin_assert("SuSE", "SLES-BYOS", "12-SP3", ""))
-        self.assertEqual(imds.IMDS_IMAGE_ORIGIN_ENDORSED, self._setup_image_origin_assert("SuSE", "SLES-BYOS", "12-SP4", ""))
-        self.assertEqual(imds.IMDS_IMAGE_ORIGIN_ENDORSED, self._setup_image_origin_assert("SuSE", "SLES-BYOS", "12-SP5", ""))
+        self.assertEqual(
+            imds.IMDS_IMAGE_ORIGIN_ENDORSED,
+            self._setup_image_origin_assert(
+                "SuSE",
+                "SLES-BYOS",
+                "12-SP1",
+                ""))
+        self.assertEqual(
+            imds.IMDS_IMAGE_ORIGIN_ENDORSED,
+            self._setup_image_origin_assert(
+                "SuSE",
+                "SLES-BYOS",
+                "12-SP2",
+                ""))
+        self.assertEqual(
+            imds.IMDS_IMAGE_ORIGIN_ENDORSED,
+            self._setup_image_origin_assert(
+                "SuSE",
+                "SLES-BYOS",
+                "12-SP3",
+                ""))
+        self.assertEqual(
+            imds.IMDS_IMAGE_ORIGIN_ENDORSED,
+            self._setup_image_origin_assert(
+                "SuSE",
+                "SLES-BYOS",
+                "12-SP4",
+                ""))
+        self.assertEqual(
+            imds.IMDS_IMAGE_ORIGIN_ENDORSED,
+            self._setup_image_origin_assert(
+                "SuSE",
+                "SLES-BYOS",
+                "12-SP5",
+                ""))
 
-        self.assertEqual(imds.IMDS_IMAGE_ORIGIN_ENDORSED, self._setup_image_origin_assert("SuSE", "SLES-SAP", "12-SP1", ""))
-        self.assertEqual(imds.IMDS_IMAGE_ORIGIN_ENDORSED, self._setup_image_origin_assert("SuSE", "SLES-SAP", "12-SP2", ""))
-        self.assertEqual(imds.IMDS_IMAGE_ORIGIN_ENDORSED, self._setup_image_origin_assert("SuSE", "SLES-SAP", "12-SP3", ""))
-        self.assertEqual(imds.IMDS_IMAGE_ORIGIN_ENDORSED, self._setup_image_origin_assert("SuSE", "SLES-SAP", "12-SP4", ""))
-        self.assertEqual(imds.IMDS_IMAGE_ORIGIN_ENDORSED, self._setup_image_origin_assert("SuSE", "SLES-SAP", "12-SP5", ""))
+        self.assertEqual(
+            imds.IMDS_IMAGE_ORIGIN_ENDORSED,
+            self._setup_image_origin_assert(
+                "SuSE",
+                "SLES-SAP",
+                "12-SP1",
+                ""))
+        self.assertEqual(
+            imds.IMDS_IMAGE_ORIGIN_ENDORSED,
+            self._setup_image_origin_assert(
+                "SuSE",
+                "SLES-SAP",
+                "12-SP2",
+                ""))
+        self.assertEqual(
+            imds.IMDS_IMAGE_ORIGIN_ENDORSED,
+            self._setup_image_origin_assert(
+                "SuSE",
+                "SLES-SAP",
+                "12-SP3",
+                ""))
+        self.assertEqual(
+            imds.IMDS_IMAGE_ORIGIN_ENDORSED,
+            self._setup_image_origin_assert(
+                "SuSE",
+                "SLES-SAP",
+                "12-SP4",
+                ""))
+        self.assertEqual(
+            imds.IMDS_IMAGE_ORIGIN_ENDORSED,
+            self._setup_image_origin_assert(
+                "SuSE",
+                "SLES-SAP",
+                "12-SP5",
+                ""))
 
-        self.assertEqual(imds.IMDS_IMAGE_ORIGIN_PLATFORM, self._setup_image_origin_assert("SuSE", "SLES", "11-SP3", ""))
+        self.assertEqual(
+            imds.IMDS_IMAGE_ORIGIN_PLATFORM,
+            self._setup_image_origin_assert(
+                "SuSE",
+                "SLES",
+                "11-SP3",
+                ""))
 
     def test_is_endorsed_UbuntuServer(self):
-        self.assertEqual(imds.IMDS_IMAGE_ORIGIN_ENDORSED, self._setup_image_origin_assert("Canonical", "UbuntuServer", "14.04.0-LTS", ""))
-        self.assertEqual(imds.IMDS_IMAGE_ORIGIN_ENDORSED, self._setup_image_origin_assert("Canonical", "UbuntuServer", "14.04.1-LTS", ""))
-        self.assertEqual(imds.IMDS_IMAGE_ORIGIN_ENDORSED, self._setup_image_origin_assert("Canonical", "UbuntuServer", "14.04.2-LTS", ""))
-        self.assertEqual(imds.IMDS_IMAGE_ORIGIN_ENDORSED, self._setup_image_origin_assert("Canonical", "UbuntuServer", "14.04.3-LTS", ""))
-        self.assertEqual(imds.IMDS_IMAGE_ORIGIN_ENDORSED, self._setup_image_origin_assert("Canonical", "UbuntuServer", "14.04.4-LTS", ""))
-        self.assertEqual(imds.IMDS_IMAGE_ORIGIN_ENDORSED, self._setup_image_origin_assert("Canonical", "UbuntuServer", "14.04.5-LTS", ""))
-        self.assertEqual(imds.IMDS_IMAGE_ORIGIN_ENDORSED, self._setup_image_origin_assert("Canonical", "UbuntuServer", "14.04.6-LTS", ""))
-        self.assertEqual(imds.IMDS_IMAGE_ORIGIN_ENDORSED, self._setup_image_origin_assert("Canonical", "UbuntuServer", "14.04.7-LTS", ""))
-        self.assertEqual(imds.IMDS_IMAGE_ORIGIN_ENDORSED, self._setup_image_origin_assert("Canonical", "UbuntuServer", "14.04.8-LTS", ""))
-        self.assertEqual(imds.IMDS_IMAGE_ORIGIN_ENDORSED, self._setup_image_origin_assert("Canonical", "UbuntuServer", "16.04-LTS", ""))
-        self.assertEqual(imds.IMDS_IMAGE_ORIGIN_ENDORSED, self._setup_image_origin_assert("Canonical", "UbuntuServer", "18.04-LTS", ""))
-        self.assertEqual(imds.IMDS_IMAGE_ORIGIN_ENDORSED, self._setup_image_origin_assert("Canonical", "UbuntuServer", "20.04-LTS", ""))
-        self.assertEqual(imds.IMDS_IMAGE_ORIGIN_ENDORSED, self._setup_image_origin_assert("Canonical", "UbuntuServer", "22.04-LTS", ""))
+        self.assertEqual(
+            imds.IMDS_IMAGE_ORIGIN_ENDORSED,
+            self._setup_image_origin_assert(
+                "Canonical",
+                "UbuntuServer",
+                "14.04.0-LTS",
+                ""))
+        self.assertEqual(
+            imds.IMDS_IMAGE_ORIGIN_ENDORSED,
+            self._setup_image_origin_assert(
+                "Canonical",
+                "UbuntuServer",
+                "14.04.1-LTS",
+                ""))
+        self.assertEqual(
+            imds.IMDS_IMAGE_ORIGIN_ENDORSED,
+            self._setup_image_origin_assert(
+                "Canonical",
+                "UbuntuServer",
+                "14.04.2-LTS",
+                ""))
+        self.assertEqual(
+            imds.IMDS_IMAGE_ORIGIN_ENDORSED,
+            self._setup_image_origin_assert(
+                "Canonical",
+                "UbuntuServer",
+                "14.04.3-LTS",
+                ""))
+        self.assertEqual(
+            imds.IMDS_IMAGE_ORIGIN_ENDORSED,
+            self._setup_image_origin_assert(
+                "Canonical",
+                "UbuntuServer",
+                "14.04.4-LTS",
+                ""))
+        self.assertEqual(
+            imds.IMDS_IMAGE_ORIGIN_ENDORSED,
+            self._setup_image_origin_assert(
+                "Canonical",
+                "UbuntuServer",
+                "14.04.5-LTS",
+                ""))
+        self.assertEqual(
+            imds.IMDS_IMAGE_ORIGIN_ENDORSED,
+            self._setup_image_origin_assert(
+                "Canonical",
+                "UbuntuServer",
+                "14.04.6-LTS",
+                ""))
+        self.assertEqual(
+            imds.IMDS_IMAGE_ORIGIN_ENDORSED,
+            self._setup_image_origin_assert(
+                "Canonical",
+                "UbuntuServer",
+                "14.04.7-LTS",
+                ""))
+        self.assertEqual(
+            imds.IMDS_IMAGE_ORIGIN_ENDORSED,
+            self._setup_image_origin_assert(
+                "Canonical",
+                "UbuntuServer",
+                "14.04.8-LTS",
+                ""))
+        self.assertEqual(
+            imds.IMDS_IMAGE_ORIGIN_ENDORSED,
+            self._setup_image_origin_assert(
+                "Canonical",
+                "UbuntuServer",
+                "16.04-LTS",
+                ""))
+        self.assertEqual(
+            imds.IMDS_IMAGE_ORIGIN_ENDORSED,
+            self._setup_image_origin_assert(
+                "Canonical",
+                "UbuntuServer",
+                "18.04-LTS",
+                ""))
+        self.assertEqual(
+            imds.IMDS_IMAGE_ORIGIN_ENDORSED,
+            self._setup_image_origin_assert(
+                "Canonical",
+                "UbuntuServer",
+                "20.04-LTS",
+                ""))
+        self.assertEqual(
+            imds.IMDS_IMAGE_ORIGIN_ENDORSED,
+            self._setup_image_origin_assert(
+                "Canonical",
+                "UbuntuServer",
+                "22.04-LTS",
+                ""))
 
-        self.assertEqual(imds.IMDS_IMAGE_ORIGIN_PLATFORM, self._setup_image_origin_assert("Canonical", "UbuntuServer", "12.04-LTS", ""))
-        self.assertEqual(imds.IMDS_IMAGE_ORIGIN_PLATFORM, self._setup_image_origin_assert("Canonical", "UbuntuServer", "17.10", ""))
-        self.assertEqual(imds.IMDS_IMAGE_ORIGIN_PLATFORM, self._setup_image_origin_assert("Canonical", "UbuntuServer", "18.04-DAILY-LTS", ""))
+        self.assertEqual(
+            imds.IMDS_IMAGE_ORIGIN_PLATFORM,
+            self._setup_image_origin_assert(
+                "Canonical",
+                "UbuntuServer",
+                "12.04-LTS",
+                ""))
+        self.assertEqual(
+            imds.IMDS_IMAGE_ORIGIN_PLATFORM,
+            self._setup_image_origin_assert(
+                "Canonical",
+                "UbuntuServer",
+                "17.10",
+                ""))
+        self.assertEqual(
+            imds.IMDS_IMAGE_ORIGIN_PLATFORM,
+            self._setup_image_origin_assert(
+                "Canonical",
+                "UbuntuServer",
+                "18.04-DAILY-LTS",
+                ""))
 
     @staticmethod
     def _setup_image_origin_assert(publisher, offer, sku, version):
@@ -268,16 +795,18 @@ class TestImds(AgentTestCase):
                                 expected_response='JSON parsing failed')
 
         # 500 response
-        self._assert_validation(http_status_code=500,
-                                http_response='error response',
-                                expected_valid=False,
-                                expected_response='[HTTP Failed] [500: reason] error response')
+        self._assert_validation(
+            http_status_code=500,
+            http_response='error response',
+            expected_valid=False,
+            expected_response='[HTTP Failed] [500: reason] error response')
 
         # 429 response
-        self._assert_validation(http_status_code=429,
-                                http_response='server busy',
-                                expected_valid=False,
-                                expected_response='[HTTP Failed] [429: reason] server busy')
+        self._assert_validation(
+            http_status_code=429,
+            http_response='server busy',
+            expected_valid=False,
+            expected_response='[HTTP Failed] [429: reason] server busy')
 
         # valid json
         self._assert_validation(http_status_code=200,
@@ -293,7 +822,12 @@ class TestImds(AgentTestCase):
     def test_field_validation(self):
         # TODO: compute fields (#1249)
 
-        self._assert_field('network', 'interface', 'ipv4', 'ipAddress', 'privateIpAddress')
+        self._assert_field(
+            'network',
+            'interface',
+            'ipv4',
+            'ipAddress',
+            'privateIpAddress')
         self._assert_field('network', 'interface', 'ipv4', 'ipAddress')
         self._assert_field('network', 'interface', 'ipv4')
         self._assert_field('network', 'interface', 'macAddress')
@@ -338,7 +872,8 @@ class TestImds(AgentTestCase):
         with open(path, "rb") as fh:
             return fh.read()
 
-    def _assert_validation(self, http_status_code, http_response, expected_valid, expected_response):
+    def _assert_validation(self, http_status_code,
+                           http_response, expected_valid, expected_response):
         test_subject = imds.ImdsClient()
         with patch("azurelinuxagent.common.utils.restutil.http_get") as mock_http_get:
             mock_http_get.return_value = ResponseMock(status=http_status_code,
@@ -350,11 +885,14 @@ class TestImds(AgentTestCase):
         positional_args, kw_args = mock_http_get.call_args
 
         self.assertTrue('User-Agent' in kw_args['headers'])
-        self.assertEqual(restutil.HTTP_USER_AGENT_HEALTH, kw_args['headers']['User-Agent'])
+        self.assertEqual(
+            restutil.HTTP_USER_AGENT_HEALTH,
+            kw_args['headers']['User-Agent'])
         self.assertTrue('Metadata' in kw_args['headers'])
         self.assertEqual(True, kw_args['headers']['Metadata'])
-        self.assertEqual('http://169.254.169.254/metadata/instance?api-version=2018-02-01',
-                         positional_args[0])
+        self.assertEqual(
+            'http://169.254.169.254/metadata/instance?api-version=2018-02-01',
+            positional_args[0])
         self.assertEqual(expected_valid, validate_response[0])
         self.assertTrue(expected_response in validate_response[1],
                         "Expected: '{0}', Actual: '{1}'"
@@ -371,86 +909,139 @@ class TestImds(AgentTestCase):
         ProtocolUtil().get_wireserver_endpoint.return_value = "foo.bar"
 
         # ensure user-agent gets set correctly
-        for is_health, expected_useragent in [(False, restutil.HTTP_USER_AGENT), (True, restutil.HTTP_USER_AGENT_HEALTH)]:
-            # set a different resource path for health query to make debugging unit test easier
+        for is_health, expected_useragent in [
+                (False, restutil.HTTP_USER_AGENT), (True, restutil.HTTP_USER_AGENT_HEALTH)]:
+            # set a different resource path for health query to make debugging
+            # unit test easier
             resource_path = 'something/health' if is_health else 'something'
 
             # both endpoints unreachable
-            test_subject._http_get = Mock(side_effect=self._mock_http_get_unreachable_both)
-            conn_success, response = test_subject.get_metadata(resource_path=resource_path, is_health=is_health)
+            test_subject._http_get = Mock(
+                side_effect=self._mock_http_get_unreachable_both)
+            conn_success, response = test_subject.get_metadata(
+                resource_path=resource_path, is_health=is_health)
             self.assertFalse(conn_success)
-            self.assertEqual('IMDS error in /metadata/{0}: Unable to connect to endpoint'.format(resource_path), response)
+            self.assertEqual(
+                'IMDS error in /metadata/{0}: Unable to connect to endpoint'.format(
+                    resource_path),
+                response)
             self.assertEqual(2, test_subject._http_get.call_count)
             for _, kwargs in test_subject._http_get.call_args_list:
                 self.assertTrue('User-Agent' in kwargs['headers'])
-                self.assertEqual(expected_useragent, kwargs['headers']['User-Agent'])
+                self.assertEqual(
+                    expected_useragent,
+                    kwargs['headers']['User-Agent'])
 
-            # primary IMDS endpoint unreachable and success in secondary IMDS endpoint
-            test_subject._http_get = Mock(side_effect=self._mock_http_get_unreachable_primary_with_ok)
-            conn_success, response = test_subject.get_metadata(resource_path=resource_path, is_health=is_health)
+            # primary IMDS endpoint unreachable and success in secondary IMDS
+            # endpoint
+            test_subject._http_get = Mock(
+                side_effect=self._mock_http_get_unreachable_primary_with_ok)
+            conn_success, response = test_subject.get_metadata(
+                resource_path=resource_path, is_health=is_health)
             self.assertTrue(conn_success)
             self.assertEqual('Mock success response', response)
             self.assertEqual(2, test_subject._http_get.call_count)
             for _, kwargs in test_subject._http_get.call_args_list:
                 self.assertTrue('User-Agent' in kwargs['headers'])
-                self.assertEqual(expected_useragent, kwargs['headers']['User-Agent'])
+                self.assertEqual(
+                    expected_useragent,
+                    kwargs['headers']['User-Agent'])
 
-            # primary IMDS endpoint unreachable and http error in secondary IMDS endpoint
-            test_subject._http_get = Mock(side_effect=self._mock_http_get_unreachable_primary_with_fail)
-            conn_success, response = test_subject.get_metadata(resource_path=resource_path, is_health=is_health)
+            # primary IMDS endpoint unreachable and http error in secondary
+            # IMDS endpoint
+            test_subject._http_get = Mock(
+                side_effect=self._mock_http_get_unreachable_primary_with_fail)
+            conn_success, response = test_subject.get_metadata(
+                resource_path=resource_path, is_health=is_health)
             self.assertFalse(conn_success)
-            self.assertEqual('IMDS error in /metadata/{0}: [HTTP Failed] [404: reason] Mock not found'.format(resource_path), response)
+            self.assertEqual(
+                'IMDS error in /metadata/{0}: [HTTP Failed] [404: reason] Mock not found'.format(
+                    resource_path),
+                response)
             self.assertEqual(2, test_subject._http_get.call_count)
             for _, kwargs in test_subject._http_get.call_args_list:
                 self.assertTrue('User-Agent' in kwargs['headers'])
-                self.assertEqual(expected_useragent, kwargs['headers']['User-Agent'])
+                self.assertEqual(
+                    expected_useragent,
+                    kwargs['headers']['User-Agent'])
 
-            # primary IMDS endpoint unreachable and http error in secondary IMDS endpoint
-            test_subject._http_get = Mock(side_effect=self._mock_http_get_unreachable_primary_with_fail)
-            conn_success, response = test_subject.get_metadata(resource_path=resource_path, is_health=is_health)
+            # primary IMDS endpoint unreachable and http error in secondary
+            # IMDS endpoint
+            test_subject._http_get = Mock(
+                side_effect=self._mock_http_get_unreachable_primary_with_fail)
+            conn_success, response = test_subject.get_metadata(
+                resource_path=resource_path, is_health=is_health)
             self.assertFalse(conn_success)
-            self.assertEqual('IMDS error in /metadata/{0}: [HTTP Failed] [404: reason] Mock not found'.format(resource_path), response)
+            self.assertEqual(
+                'IMDS error in /metadata/{0}: [HTTP Failed] [404: reason] Mock not found'.format(
+                    resource_path),
+                response)
             self.assertEqual(2, test_subject._http_get.call_count)
             for _, kwargs in test_subject._http_get.call_args_list:
                 self.assertTrue('User-Agent' in kwargs['headers'])
-                self.assertEqual(expected_useragent, kwargs['headers']['User-Agent'])
+                self.assertEqual(
+                    expected_useragent,
+                    kwargs['headers']['User-Agent'])
 
             # primary IMDS endpoint with non-fallback HTTPError
-            test_subject._http_get = Mock(side_effect=self._mock_http_get_nonfallback_primary)
+            test_subject._http_get = Mock(
+                side_effect=self._mock_http_get_nonfallback_primary)
             try:
-                test_subject.get_metadata(resource_path=resource_path, is_health=is_health)
-                self.assertTrue(False, 'Expected HttpError but no except raised')
+                test_subject.get_metadata(
+                    resource_path=resource_path, is_health=is_health)
+                self.assertTrue(
+                    False, 'Expected HttpError but no except raised')
             except HttpError as e:
-                self.assertEqual('[HttpError] HTTP Failed. GET http://169.254.169.254/metadata/{0} -- IOError incomplete read -- 6 attempts made'.format(resource_path), str(e))
+                self.assertEqual(
+                    '[HttpError] HTTP Failed. GET http://169.254.169.254/metadata/{0} -- IOError incomplete read -- 6 attempts made'.format(resource_path),
+                    str(e))
                 self.assertEqual(1, test_subject._http_get.call_count)
                 for _, kwargs in test_subject._http_get.call_args_list:
                     self.assertTrue('User-Agent' in kwargs['headers'])
-                    self.assertEqual(expected_useragent, kwargs['headers']['User-Agent'])
+                    self.assertEqual(
+                        expected_useragent,
+                        kwargs['headers']['User-Agent'])
             except Exception as e:
-                self.assertTrue(False, 'Expected HttpError but got {0}'.format(str(e)))
+                self.assertTrue(
+                    False,
+                    'Expected HttpError but got {0}'.format(
+                        str(e)))
 
-            # primary IMDS endpoint unreachable and non-timeout HTTPError in secondary IMDS endpoint
-            test_subject._http_get = Mock(side_effect=self._mock_http_get_unreachable_primary_with_except)
+            # primary IMDS endpoint unreachable and non-timeout HTTPError in
+            # secondary IMDS endpoint
+            test_subject._http_get = Mock(
+                side_effect=self._mock_http_get_unreachable_primary_with_except)
             try:
-                test_subject.get_metadata(resource_path=resource_path, is_health=is_health)
-                self.assertTrue(False, 'Expected HttpError but no except raised')
+                test_subject.get_metadata(
+                    resource_path=resource_path, is_health=is_health)
+                self.assertTrue(
+                    False, 'Expected HttpError but no except raised')
             except HttpError as e:
-                self.assertEqual('[HttpError] HTTP Failed. GET http://foo.bar/metadata/{0} -- IOError incomplete read -- 6 attempts made'.format(resource_path), str(e))
+                self.assertEqual(
+                    '[HttpError] HTTP Failed. GET http://foo.bar/metadata/{0} -- IOError incomplete read -- 6 attempts made'.format(resource_path),
+                    str(e))
                 self.assertEqual(2, test_subject._http_get.call_count)
                 for _, kwargs in test_subject._http_get.call_args_list:
                     self.assertTrue('User-Agent' in kwargs['headers'])
-                    self.assertEqual(expected_useragent, kwargs['headers']['User-Agent'])
+                    self.assertEqual(
+                        expected_useragent,
+                        kwargs['headers']['User-Agent'])
             except Exception as e:
-                self.assertTrue(False, 'Expected HttpError but got {0}'.format(str(e)))
+                self.assertTrue(
+                    False,
+                    'Expected HttpError but got {0}'.format(
+                        str(e)))
 
     def _mock_http_get_unreachable_both(self, *_, **kwargs):
-        raise HttpError("HTTP Failed. GET http://{0}/metadata/{1} -- IOError timed out -- 6 attempts made"
-            .format(kwargs['endpoint'], kwargs['resource_path']))
+        raise HttpError(
+            "HTTP Failed. GET http://{0}/metadata/{1} -- IOError timed out -- 6 attempts made" .format(
+                kwargs['endpoint'], kwargs['resource_path']))
 
     def _mock_http_get_unreachable_primary_with_ok(self, *_, **kwargs):
         if "169.254.169.254" == kwargs['endpoint']:
-            raise HttpError("HTTP Failed. GET http://{0}/metadata/{1} -- IOError timed out -- 6 attempts made"
-                            .format(kwargs['endpoint'], kwargs['resource_path']))
+            raise HttpError(
+                "HTTP Failed. GET http://{0}/metadata/{1} -- IOError timed out -- 6 attempts made" .format(
+                    kwargs['endpoint'], kwargs['resource_path']))
         elif "foo.bar" == kwargs['endpoint']:
             resp = MagicMock()
             resp.status = httpclient.OK
@@ -460,8 +1051,9 @@ class TestImds(AgentTestCase):
 
     def _mock_http_get_unreachable_primary_with_fail(self, *_, **kwargs):
         if "169.254.169.254" == kwargs['endpoint']:
-            raise HttpError("HTTP Failed. GET http://{0}/metadata/{1} -- IOError timed out -- 6 attempts made"
-                            .format(kwargs['endpoint'], kwargs['resource_path']))
+            raise HttpError(
+                "HTTP Failed. GET http://{0}/metadata/{1} -- IOError timed out -- 6 attempts made" .format(
+                    kwargs['endpoint'], kwargs['resource_path']))
         elif "foo.bar" == kwargs['endpoint']:
             resp = MagicMock()
             resp.status = httpclient.NOT_FOUND
@@ -472,17 +1064,20 @@ class TestImds(AgentTestCase):
 
     def _mock_http_get_nonfallback_primary(self, *_, **kwargs):
         if "169.254.169.254" == kwargs['endpoint']:
-            raise HttpError("HTTP Failed. GET http://{0}/metadata/{1} -- IOError incomplete read -- 6 attempts made"
-                            .format(kwargs['endpoint'], kwargs['resource_path']))
+            raise HttpError(
+                "HTTP Failed. GET http://{0}/metadata/{1} -- IOError incomplete read -- 6 attempts made" .format(
+                    kwargs['endpoint'], kwargs['resource_path']))
         raise Exception("Unexpected endpoint called")
 
     def _mock_http_get_unreachable_primary_with_except(self, *_, **kwargs):
         if "169.254.169.254" == kwargs['endpoint']:
-            raise HttpError("HTTP Failed. GET http://{0}/metadata/{1} -- IOError timed out -- 6 attempts made"
-                            .format(kwargs['endpoint'], kwargs['resource_path']))
+            raise HttpError(
+                "HTTP Failed. GET http://{0}/metadata/{1} -- IOError timed out -- 6 attempts made" .format(
+                    kwargs['endpoint'], kwargs['resource_path']))
         elif "foo.bar" == kwargs['endpoint']:
-            raise HttpError("HTTP Failed. GET http://{0}/metadata/{1} -- IOError incomplete read -- 6 attempts made"
-                            .format(kwargs['endpoint'], kwargs['resource_path']))
+            raise HttpError(
+                "HTTP Failed. GET http://{0}/metadata/{1} -- IOError incomplete read -- 6 attempts made" .format(
+                    kwargs['endpoint'], kwargs['resource_path']))
         raise Exception("Unexpected endpoint called")
 
 

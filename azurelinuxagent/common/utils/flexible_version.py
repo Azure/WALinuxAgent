@@ -1,6 +1,7 @@
 from distutils import version
 import re
 
+
 class FlexibleVersion(version.Version):
     """
     A more flexible implementation of distutils.version.StrictVersion
@@ -20,8 +21,9 @@ class FlexibleVersion(version.Version):
         http://stackoverflow.com/questions/12255554/sort-versions-in-python
     """
 
-    def __init__(self, vstring=None, sep='.', prerel_tags=('alpha', 'beta', 'rc')):
-        version.Version.__init__(self) 
+    def __init__(self, vstring=None, sep='.',
+                 prerel_tags=('alpha', 'beta', 'rc')):
+        version.Version.__init__(self)
 
         if sep is None:
             sep = '.'
@@ -30,7 +32,8 @@ class FlexibleVersion(version.Version):
 
         self.sep = sep
         self.prerel_sep = ''
-        self.prerel_tags = tuple(prerel_tags) if prerel_tags is not None else ()
+        self.prerel_tags = tuple(
+            prerel_tags) if prerel_tags is not None else ()
 
         self._compile_pattern()
 
@@ -76,23 +79,34 @@ class FlexibleVersion(version.Version):
         if tag is not None and tag_num is not None:
             self.prerelease = (tag, int(tag_num) if len(tag_num) else None)
 
-        self.version = tuple(map(int, self.sep_re.split(m.group(self._nn_version))))
+        self.version = tuple(
+            map(int, self.sep_re.split(m.group(self._nn_version))))
         return
 
     def __add__(self, increment):
         version = list(self.version)
         version[-1] += increment
-        vstring = self._assemble(version, self.sep, self.prerel_sep, self.prerelease)
-        return FlexibleVersion(vstring=vstring, sep=self.sep, prerel_tags=self.prerel_tags)
+        vstring = self._assemble(
+            version,
+            self.sep,
+            self.prerel_sep,
+            self.prerelease)
+        return FlexibleVersion(
+            vstring=vstring, sep=self.sep, prerel_tags=self.prerel_tags)
 
     def __sub__(self, decrement):
         version = list(self.version)
         if version[-1] <= 0:
-            raise ArithmeticError("Cannot decrement final numeric component of {0} below zero" \
-                .format(self))
+            raise ArithmeticError(
+                "Cannot decrement final numeric component of {0} below zero" .format(self))
         version[-1] -= decrement
-        vstring = self._assemble(version, self.sep, self.prerel_sep, self.prerelease)
-        return FlexibleVersion(vstring=vstring, sep=self.sep, prerel_tags=self.prerel_tags)
+        vstring = self._assemble(
+            version,
+            self.sep,
+            self.prerel_sep,
+            self.prerelease)
+        return FlexibleVersion(
+            vstring=vstring, sep=self.sep, prerel_tags=self.prerel_tags)
 
     def __repr__(self):
         return "{cls} ('{vstring}', '{sep}', {prerel_tags})"\
@@ -103,7 +117,8 @@ class FlexibleVersion(version.Version):
                 prerel_tags=self.prerel_tags)
 
     def __str__(self):
-        return self._assemble(self.version, self.sep, self.prerel_sep, self.prerelease)
+        return self._assemble(self.version, self.sep,
+                              self.prerel_sep, self.prerelease)
 
     def __ge__(self, that):
         return not self.__lt__(that)
@@ -174,12 +189,13 @@ class FlexibleVersion(version.Version):
 
         if self.prerel_tags:
             tags = '|'.join(re.escape(tag) for tag in self.prerel_tags)
-            self.prerel_tags_set = dict(zip(self.prerel_tags, range(len(self.prerel_tags))))
+            self.prerel_tags_set = dict(
+                zip(self.prerel_tags, range(len(self.prerel_tags))))
             release_re = '(?:{prerel_sep}(?P<{tn}>{tags})(?P<{nn}>\d*))?'.format(
-                        prerel_sep=self._re_prerel_sep,
-                        tags=tags,
-                        tn=self._nn_prerel_tag,
-                        nn=self._nn_prerel_num)
+                prerel_sep=self._re_prerel_sep,
+                tags=tags,
+                tn=self._nn_prerel_tag,
+                nn=self._nn_prerel_num)
         else:
             release_re = ''
 
@@ -201,11 +217,14 @@ class FlexibleVersion(version.Version):
         version lists (so that x.y.0.0 is equivalent to x.y).
         """
         if self.prerel_tags != that.prerel_tags or self.sep != that.sep:
-            raise ValueError("Unable to compare: versions have different structures")
+            raise ValueError(
+                "Unable to compare: versions have different structures")
 
         this_version = list(self.version[:])
         that_version = list(that.version[:])
-        while len(this_version) < len(that_version): this_version.append(0)
-        while len(that_version) < len(this_version): that_version.append(0)
+        while len(this_version) < len(that_version):
+            this_version.append(0)
+        while len(that_version) < len(this_version):
+            that_version.append(0)
 
         return this_version, that_version

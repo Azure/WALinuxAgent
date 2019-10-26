@@ -31,8 +31,14 @@ class CGroupsTelemetry(object):
 
     @staticmethod
     def _get_metrics_list(metric):
-        return [metric.average(), metric.min(), metric.max(), metric.median(), metric.count(),
-                metric.first_poll_time(), metric.last_poll_time()]
+        return [
+            metric.average(),
+            metric.min(),
+            metric.max(),
+            metric.median(),
+            metric.count(),
+            metric.first_poll_time(),
+            metric.last_poll_time()]
 
     @staticmethod
     def _process_cgroup_metric(cgroup_metrics):
@@ -43,19 +49,24 @@ class CGroupsTelemetry(object):
         processed_extension = {}
 
         if cpu_usage.count() > 0:
-            processed_extension["cpu"] = {"cur_cpu": CGroupsTelemetry._get_metrics_list(cpu_usage)}
+            processed_extension["cpu"] = {
+                "cur_cpu": CGroupsTelemetry._get_metrics_list(cpu_usage)}
 
         if memory_usage.count() > 0:
             if "memory" in processed_extension:
-                processed_extension["memory"]["cur_mem"] = CGroupsTelemetry._get_metrics_list(memory_usage)
+                processed_extension["memory"]["cur_mem"] = CGroupsTelemetry._get_metrics_list(
+                    memory_usage)
             else:
-                processed_extension["memory"] = {"cur_mem": CGroupsTelemetry._get_metrics_list(memory_usage)}
+                processed_extension["memory"] = {
+                    "cur_mem": CGroupsTelemetry._get_metrics_list(memory_usage)}
 
         if max_memory_usage.count() > 0:
             if "memory" in processed_extension:
-                processed_extension["memory"]["max_mem"] = CGroupsTelemetry._get_metrics_list(max_memory_usage)
+                processed_extension["memory"]["max_mem"] = CGroupsTelemetry._get_metrics_list(
+                    max_memory_usage)
             else:
-                processed_extension["memory"] = {"max_mem": CGroupsTelemetry._get_metrics_list(max_memory_usage)}
+                processed_extension["memory"] = {
+                    "max_mem": CGroupsTelemetry._get_metrics_list(max_memory_usage)}
 
         return processed_extension
 
@@ -67,7 +78,9 @@ class CGroupsTelemetry(object):
         with CGroupsTelemetry._rlock:
             if not CGroupsTelemetry.is_tracked(cgroup.path):
                 CGroupsTelemetry._tracked.append(cgroup)
-                logger.info("Started tracking new cgroup: {0}, path: {1}".format(cgroup.name, cgroup.path))
+                logger.info(
+                    "Started tracking new cgroup: {0}, path: {1}".format(
+                        cgroup.name, cgroup.path))
 
     @staticmethod
     def is_tracked(path):
@@ -89,14 +102,17 @@ class CGroupsTelemetry(object):
         """
         with CGroupsTelemetry._rlock:
             CGroupsTelemetry._tracked.remove(cgroup)
-            logger.info("Stopped tracking cgroup: {0}, path: {1}".format(cgroup.name, cgroup.path))
+            logger.info(
+                "Stopped tracking cgroup: {0}, path: {1}".format(
+                    cgroup.name, cgroup.path))
 
     @staticmethod
     def report_all_tracked():
         collected_metrics = {}
 
         for name, cgroup_metrics in CGroupsTelemetry._cgroup_metrics.items():
-            perf_metric = CGroupsTelemetry._process_cgroup_metric(cgroup_metrics)
+            perf_metric = CGroupsTelemetry._process_cgroup_metric(
+                cgroup_metrics)
 
             if perf_metric:
                 collected_metrics[name] = perf_metric
@@ -116,9 +132,11 @@ class CGroupsTelemetry(object):
             for cgroup in CGroupsTelemetry._tracked[:]:
 
                 if cgroup.name not in CGroupsTelemetry._cgroup_metrics:
-                    CGroupsTelemetry._cgroup_metrics[cgroup.name] = CgroupMetrics()
+                    CGroupsTelemetry._cgroup_metrics[cgroup.name] = CgroupMetrics(
+                    )
 
-                CGroupsTelemetry._cgroup_metrics[cgroup.name].collect_data(cgroup)
+                CGroupsTelemetry._cgroup_metrics[cgroup.name].collect_data(
+                    cgroup)
 
                 if not cgroup.is_active():
                     CGroupsTelemetry.stop_tracking(cgroup)
@@ -154,10 +172,16 @@ class CgroupMetrics(object):
                 self._memory_usage.append(cgroup.get_memory_usage())
                 self._max_memory_usage.append(cgroup.get_max_memory_usage())
             else:
-                raise CGroupsException('CGroup controller {0} is not supported'.format(controller))
+                raise CGroupsException(
+                    'CGroup controller {0} is not supported'.format(controller))
         except Exception as e:
-            if not isinstance(e, (IOError, OSError)) or e.errno != errno.ENOENT:
-                logger.periodic_warn(logger.EVERY_HALF_HOUR, 'Could not collect metrics for cgroup {0}. Error : {1}'.format(cgroup.path, ustr(e)))
+            if not isinstance(e, (IOError, OSError)
+                              ) or e.errno != errno.ENOENT:
+                logger.periodic_warn(
+                    logger.EVERY_HALF_HOUR,
+                    'Could not collect metrics for cgroup {0}. Error : {1}'.format(
+                        cgroup.path,
+                        ustr(e)))
 
     def get_memory_usage(self):
         return self._memory_usage
@@ -194,7 +218,8 @@ class Metric(object):
         self._data *= 0
 
     def average(self):
-        return float(sum(self._data)) / float(len(self._data)) if self._data else None
+        return float(sum(self._data)) / \
+            float(len(self._data)) if self._data else None
 
     def max(self):
         return max(self._data) if self._data else None
@@ -208,7 +233,8 @@ class Metric(object):
         if l_len < 1:
             return None
         if l_len % 2 == 0:
-            return (data[int((l_len - 1) / 2)] + data[int((l_len + 1) / 2)]) / 2.0
+            return (data[int((l_len - 1) / 2)] +
+                    data[int((l_len + 1) / 2)]) / 2.0
         else:
             return data[int((l_len - 1) / 2)]
 

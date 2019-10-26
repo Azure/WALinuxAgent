@@ -25,15 +25,16 @@ import azurelinuxagent.common.utils.fileutil as fileutil
 from azurelinuxagent.common.osutil.default import DefaultOSUtil
 from azurelinuxagent.common.utils.networkutil import NetworkInterfaceCard
 
+
 class OpenWRTOSUtil(DefaultOSUtil):
 
     def __init__(self):
         super(OpenWRTOSUtil, self).__init__()
         self.agent_conf_file_path = '/etc/waagent.conf'
         self.dhclient_name = 'udhcpc'
-        self.ip_command_output = re.compile('^\d+:\s+(\w+):\s+(.*)$')
+        self.ip_command_output = re.compile(r'^\d+:\s+(\w+):\s+(.*)$')
         self.jit_enabled = True
-        
+
     def eject_dvd(self, chk_err=True):
         logger.warn('eject is not supported on OpenWRT')
 
@@ -47,10 +48,11 @@ class OpenWRTOSUtil(DefaultOSUtil):
             return
 
         if expiration is not None:
-            cmd = "useradd -m {0} -s /bin/ash -e {1}".format(username, expiration)
+            cmd = "useradd -m {0} -s /bin/ash -e {1}".format(
+                username, expiration)
         else:
             cmd = "useradd -m {0} -s /bin/ash".format(username)
-        
+
         if not os.path.exists("/home"):
             os.mkdir("/home")
 
@@ -73,10 +75,13 @@ class OpenWRTOSUtil(DefaultOSUtil):
         :rtype: dict(str,NetworkInformationCard)
         """
         state = {}
-        status, output = shellutil.run_get_output("ip -o link", chk_err=False, log_cmd=False)
+        status, output = shellutil.run_get_output(
+            "ip -o link", chk_err=False, log_cmd=False)
 
         if status != 0:
-            logger.verbose("Could not fetch NIC link info; status {0}, {1}".format(status, output))
+            logger.verbose(
+                "Could not fetch NIC link info; status {0}, {1}".format(
+                    status, output))
             return {}
 
         for entry in output.splitlines():
@@ -85,9 +90,16 @@ class OpenWRTOSUtil(DefaultOSUtil):
                 name = result.group(1)
                 state[name] = NetworkInterfaceCard(name, result.group(2))
 
-
-        self._update_nic_state(state, "ip -o -f inet address", NetworkInterfaceCard.add_ipv4, "an IPv4 address")
-        self._update_nic_state(state, "ip -o -f inet6 address", NetworkInterfaceCard.add_ipv6, "an IPv6 address")
+        self._update_nic_state(
+            state,
+            "ip -o -f inet address",
+            NetworkInterfaceCard.add_ipv4,
+            "an IPv4 address")
+        self._update_nic_state(
+            state,
+            "ip -o -f inet6 address",
+            NetworkInterfaceCard.add_ipv6,
+            "an IPv6 address")
 
         return state
 
@@ -111,7 +123,9 @@ class OpenWRTOSUtil(DefaultOSUtil):
                 if interface_name in state:
                     handler(state[interface_name], result.group(2))
                 else:
-                    logger.error("Interface {0} has {1} but no link state".format(interface_name, description))
+                    logger.error(
+                        "Interface {0} has {1} but no link state".format(
+                            interface_name, description))
 
     def is_dhcp_enabled(self):
         pass
@@ -122,31 +136,39 @@ class OpenWRTOSUtil(DefaultOSUtil):
     def stop_dhcp_service(self):
         pass
 
-    def start_network(self) :
+    def start_network(self):
         return shellutil.run("/etc/init.d/network start", chk_err=True)
 
     def restart_ssh_service(self):
-        # Since Dropbear is the default ssh server on OpenWRt, lets do a sanity check
+        # Since Dropbear is the default ssh server on OpenWRt, lets do a sanity
+        # check
         if os.path.exists("/etc/init.d/sshd"):
             return shellutil.run("/etc/init.d/sshd restart", chk_err=True)
         else:
             logger.warn("sshd service does not exists", username)
 
     def stop_agent_service(self):
-        return shellutil.run("/etc/init.d/{0} stop".format(self.service_name), chk_err=True)
+        return shellutil.run(
+            "/etc/init.d/{0} stop".format(self.service_name), chk_err=True)
 
     def start_agent_service(self):
-        return shellutil.run("/etc/init.d/{0} start".format(self.service_name), chk_err=True)
+        return shellutil.run(
+            "/etc/init.d/{0} start".format(self.service_name), chk_err=True)
 
     def register_agent_service(self):
-        return shellutil.run("/etc/init.d/{0} enable".format(self.service_name), chk_err=True)
+        return shellutil.run(
+            "/etc/init.d/{0} enable".format(self.service_name), chk_err=True)
 
     def unregister_agent_service(self):
-        return shellutil.run("/etc/init.d/{0} disable".format(self.service_name), chk_err=True)
+        return shellutil.run(
+            "/etc/init.d/{0} disable".format(self.service_name), chk_err=True)
 
     def set_hostname(self, hostname):
         fileutil.write_file('/etc/hostname', hostname)
-        shellutil.run("uci set system.@system[0].hostname='{0}' && uci commit system && /etc/init.d/system reload".format(hostname), chk_err=False)
+        shellutil.run(
+            "uci set system.@system[0].hostname='{0}' && uci commit system && /etc/init.d/system reload".format(
+                hostname),
+            chk_err=False)
 
     def remove_rules_files(self, rules_files=""):
         pass

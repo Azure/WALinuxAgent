@@ -46,12 +46,18 @@ class TestErrorState(unittest.TestCase):
         test_subject = ErrorState(timedelta(minutes=15))
 
         for x in range(1, 10):
-            mock_time.utcnow = Mock(return_value=datetime.utcnow() + timedelta(minutes=x))
+            mock_time.utcnow = Mock(
+                return_value=datetime.utcnow() +
+                timedelta(
+                    minutes=x))
 
             test_subject.incr()
             self.assertFalse(test_subject.is_triggered())
 
-        mock_time.utcnow = Mock(return_value=datetime.utcnow() + timedelta(minutes=30))
+        mock_time.utcnow = Mock(
+            return_value=datetime.utcnow() +
+            timedelta(
+                minutes=30))
         test_subject.incr()
         self.assertTrue(test_subject.is_triggered())
         self.assertEqual('29.0 min', test_subject.fail_time)

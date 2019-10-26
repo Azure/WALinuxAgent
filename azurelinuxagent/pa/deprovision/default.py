@@ -40,6 +40,7 @@ def read_input(message):
     else:
         return raw_input(message)
 
+
 class DeprovisionAction(object):
     def __init__(self, func, args=[], kwargs={}):
         self.func = func
@@ -48,6 +49,7 @@ class DeprovisionAction(object):
 
     def invoke(self):
         self.func(*self.args, **self.kwargs)
+
 
 class DeprovisionHandler(object):
     def __init__(self):
@@ -74,14 +76,13 @@ class DeprovisionHandler(object):
         username = ovfenv.username
         warnings.append(("WARNING! {0} account and entire home directory "
                          "will be deleted.").format(username))
-        actions.append(DeprovisionAction(self.osutil.del_account, 
+        actions.append(DeprovisionAction(self.osutil.del_account,
                                          [username]))
-
 
     def regen_ssh_host_key(self, warnings, actions):
         warnings.append("WARNING! All SSH host key pairs will be deleted.")
         actions.append(DeprovisionAction(fileutil.rm_files,
-                        [conf.get_ssh_key_glob()]))
+                                         [conf.get_ssh_key_glob()]))
 
     def stop_agent_service(self, warnings, actions):
         warnings.append("WARNING! The waagent service will be stopped.")
@@ -119,8 +120,10 @@ class DeprovisionHandler(object):
                                          ["/var/db/dhclient.leases.*"]))
 
         # For FreeBSD, NM controlled
-        actions.append(DeprovisionAction(fileutil.rm_files,
-                                         ["/var/lib/NetworkManager/dhclient-*.lease"]))
+        actions.append(
+            DeprovisionAction(
+                fileutil.rm_files,
+                ["/var/lib/NetworkManager/dhclient-*.lease"]))
 
     def del_ext_handler_files(self, warnings, actions):
         ext_dirs = [d for d in os.listdir(conf.get_lib_dir())
@@ -132,7 +135,8 @@ class DeprovisionHandler(object):
             ext_base = os.path.join(conf.get_lib_dir(), ext_dir)
             files = glob.glob(os.path.join(ext_base, 'status', '*.status'))
             files += glob.glob(os.path.join(ext_base, 'config', '*.settings'))
-            files += glob.glob(os.path.join(ext_base, 'config', 'HandlerStatus'))
+            files += glob.glob(os.path.join(ext_base,
+                                            'config', 'HandlerStatus'))
             files += glob.glob(os.path.join(ext_base, 'mrseq'))
 
             if len(files) > 0:
@@ -154,9 +158,9 @@ class DeprovisionHandler(object):
         ]
 
         lib_dir = conf.get_lib_dir()
-        files = [f for f in \
-                    [os.path.join(lib_dir, kf) for kf in known_files] \
-                        if os.path.isfile(f)]
+        files = [f for f in
+                 [os.path.join(lib_dir, kf) for kf in known_files]
+                 if os.path.isfile(f)]
         for p in known_files_glob:
             files += glob.glob(os.path.join(lib_dir, p))
 
@@ -165,9 +169,9 @@ class DeprovisionHandler(object):
 
     def reset_hostname(self, warnings, actions):
         localhost = ["localhost.localdomain"]
-        actions.append(DeprovisionAction(self.osutil.set_hostname, 
+        actions.append(DeprovisionAction(self.osutil.set_hostname,
                                          localhost))
-        actions.append(DeprovisionAction(self.osutil.set_dhcp_hostname, 
+        actions.append(DeprovisionAction(self.osutil.set_dhcp_hostname,
                                          localhost))
 
     def setup(self, deluser):
@@ -217,7 +221,7 @@ class DeprovisionHandler(object):
 
         While users *should* manually deprovision a VM, the files removed by
         this routine will help keep the agent from getting confused
-        (since incarnation and extension settings, among other items, will 
+        (since incarnation and extension settings, among other items, will
         no longer be monotonically increasing).
         '''
         warnings, actions = self.setup_changed_unique_id()
@@ -237,7 +241,7 @@ class DeprovisionHandler(object):
 
         confirm = read_input("Do you want to proceed (y/n)")
         return True if confirm.lower().startswith('y') else False
-    
+
     def do_warnings(self, warnings):
         for warning in warnings:
             print(warning)
@@ -247,5 +251,5 @@ class DeprovisionHandler(object):
             print("Deprovision is interrupted.")
             sys.exit(0)
 
-        print ('Deprovisioning may not be interrupted.')
+        print('Deprovisioning may not be interrupted.')
         return

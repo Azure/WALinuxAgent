@@ -48,5 +48,6 @@ class Ubuntu1804DeprovisionHandler(UbuntuDeprovisionHandler):
 
     def del_resolv(self, warnings, actions):
         # no changes will be made to /etc/resolv.conf
-        warnings.append("WARNING! /etc/resolv.conf will NOT be removed, this is a behavior change to earlier "
-                        "versions of Ubuntu.")
+        warnings.append(
+            "WARNING! /etc/resolv.conf will NOT be removed, this is a behavior change to earlier "
+            "versions of Ubuntu.")

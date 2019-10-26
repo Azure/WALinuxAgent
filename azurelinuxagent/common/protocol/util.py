@@ -29,14 +29,14 @@ import azurelinuxagent.common.logger as logger
 import azurelinuxagent.common.utils.fileutil as fileutil
 
 from azurelinuxagent.common.exception import ProtocolError, OSUtilError, \
-                                      ProtocolNotFoundError, DhcpError
+    ProtocolNotFoundError, DhcpError
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.osutil import get_osutil
 from azurelinuxagent.common.dhcp import get_dhcp_handler
 from azurelinuxagent.common.protocol.ovfenv import OvfEnv
 from azurelinuxagent.common.protocol.wire import WireProtocol
 from azurelinuxagent.common.protocol.metadata import MetadataProtocol, \
-                                                     METADATA_ENDPOINT
+    METADATA_ENDPOINT
 from azurelinuxagent.common.utils.restutil import IOErrorCounter
 
 OVF_FILE_NAME = "ovf-env.xml"
@@ -69,6 +69,7 @@ class ProtocolUtil(object):
     ProtocolUtil handles initialization for protocol instance. 2 protocol types
     are invoked, wire protocol and metadata protocols.
     """
+
     def __init__(self):
         self.lock = threading.Lock()
         self.protocol = None
@@ -172,9 +173,10 @@ class ProtocolUtil(object):
             '''
             Check if DHCP can be used to get the wire protocol endpoint
             '''
-            (dhcp_available, conf_endpoint) =  self.osutil.is_dhcp_available()
+            (dhcp_available, conf_endpoint) = self.osutil.is_dhcp_available()
             if dhcp_available:
-                logger.info("WireServer endpoint is not found. Rerun dhcp handler")
+                logger.info(
+                    "WireServer endpoint is not found. Rerun dhcp handler")
                 try:
                     self.dhcp_handler.run()
                 except DhcpError as e:
@@ -183,11 +185,13 @@ class ProtocolUtil(object):
             else:
                 logger.info("_detect_wire_protocol: DHCP not available")
                 endpoint = self.get_wireserver_endpoint()
-                if endpoint == None:
+                if endpoint is None:
                     endpoint = conf_endpoint
-                    logger.info("Using hardcoded WireServer endpoint {0}", endpoint)
+                    logger.info(
+                        "Using hardcoded WireServer endpoint {0}", endpoint)
                 else:
-                    logger.info("WireServer endpoint {0} read from file", endpoint)
+                    logger.info(
+                        "WireServer endpoint {0} read from file", endpoint)
 
         try:
             protocol = WireProtocol(endpoint)
@@ -215,8 +219,8 @@ class ProtocolUtil(object):
             for protocol_name in protocols:
                 try:
                     protocol = self._detect_wire_protocol() \
-                                if protocol_name == prots.WireProtocol \
-                                else self._detect_metadata_protocol()
+                        if protocol_name == prots.WireProtocol \
+                        else self._detect_metadata_protocol()
 
                     return (protocol_name, protocol)
 

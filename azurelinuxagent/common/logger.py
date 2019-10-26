@@ -34,6 +34,7 @@ class Logger(object):
     """
     Logger class
     """
+
     def __init__(self, logger=None, prefix=None):
         self.appenders = []
         self.logger = self if logger is None else logger
@@ -82,7 +83,7 @@ class Logger(object):
 
     def log(self, level, msg_format, *args):
         # if msg_format is not unicode convert it to unicode
-        if type(msg_format) is not ustr:
+        if not isinstance(msg_format, ustr):
             msg_format = ustr(msg_format, errors="backslashreplace")
         if len(args) > 0:
             msg = msg_format.format(*args)
@@ -91,12 +92,12 @@ class Logger(object):
         time = datetime.now().strftime(u'%Y/%m/%d %H:%M:%S.%f')
         level_str = LogLevel.STRINGS[level]
         if self.prefix is not None:
-            log_item = u"{0} {1} {2} {3}\n".format(time, level_str, self.prefix,
-                                                   msg)
+            log_item = u"{0} {1} {2} {3}\n".format(
+                time, level_str, self.prefix, msg)
         else:
             log_item = u"{0} {1} {2}\n".format(time, level_str, msg)
 
-        log_item = ustr(log_item.encode('ascii', "backslashreplace"), 
+        log_item = ustr(log_item.encode('ascii', "backslashreplace"),
                         encoding="ascii")
 
         for appender in self.appenders:
@@ -262,4 +263,3 @@ def _create_logger_appender(appender_type, level=LogLevel.INFO, path=None):
         return TelemetryAppender(level, path)
     else:
         raise ValueError("Unknown appender type")
-

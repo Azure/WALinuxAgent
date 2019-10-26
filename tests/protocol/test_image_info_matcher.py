@@ -38,10 +38,25 @@ class TestImageInfoMatcher(unittest.TestCase):
         }'''
 
         test_subject = ImageInfoMatcher(doc)
-        self.assertTrue(test_subject.is_match("Canonical", "UbuntuServer", "16.04-LTS", ""))
-        self.assertTrue(test_subject.is_match("Canonical", "UbuntuServer", "16.04-LTS", "16.04.201805090"))
+        self.assertTrue(
+            test_subject.is_match(
+                "Canonical",
+                "UbuntuServer",
+                "16.04-LTS",
+                ""))
+        self.assertTrue(
+            test_subject.is_match(
+                "Canonical",
+                "UbuntuServer",
+                "16.04-LTS",
+                "16.04.201805090"))
 
-        self.assertFalse(test_subject.is_match("Canonical", "UbuntuServer", "14.04.0-LTS", "16.04.201805090"))
+        self.assertFalse(
+            test_subject.is_match(
+                "Canonical",
+                "UbuntuServer",
+                "14.04.0-LTS",
+                "16.04.201805090"))
 
     def test_image_exists_by_version(self):
         doc = '''{
@@ -73,8 +88,8 @@ class TestImageInfoMatcher(unittest.TestCase):
         """
         doc = '''{
             "REDHAT": {
-                "RHEL": { 
-                    "Minimum": "6.3", 
+                "RHEL": {
+                    "Minimum": "6.3",
                     "7-LVM": { "Match": ".*" }
                 }
             }
@@ -95,8 +110,18 @@ class TestImageInfoMatcher(unittest.TestCase):
         }'''
 
         test_subject = ImageInfoMatcher(doc)
-        self.assertTrue(test_subject.is_match("canonical", "ubuntuserver", "16.04-lts", ""))
-        self.assertFalse(test_subject.is_match("canonical", "ubuntuserver", "14.04.0-lts", "16.04.201805090"))
+        self.assertTrue(
+            test_subject.is_match(
+                "canonical",
+                "ubuntuserver",
+                "16.04-lts",
+                ""))
+        self.assertFalse(
+            test_subject.is_match(
+                "canonical",
+                "ubuntuserver",
+                "14.04.0-lts",
+                "16.04.201805090"))
 
     def test_list_operator(self):
         doc = '''{
@@ -108,10 +133,25 @@ class TestImageInfoMatcher(unittest.TestCase):
         }'''
 
         test_subject = ImageInfoMatcher(doc)
-        self.assertTrue(test_subject.is_match("Canonical", "UbuntuServer", "14.04.0-LTS", ""))
-        self.assertTrue(test_subject.is_match("Canonical", "UbuntuServer", "14.04.1-LTS", ""))
+        self.assertTrue(
+            test_subject.is_match(
+                "Canonical",
+                "UbuntuServer",
+                "14.04.0-LTS",
+                ""))
+        self.assertTrue(
+            test_subject.is_match(
+                "Canonical",
+                "UbuntuServer",
+                "14.04.1-LTS",
+                ""))
 
-        self.assertFalse(test_subject.is_match("Canonical", "UbuntuServer", "22.04-LTS", ""))
+        self.assertFalse(
+            test_subject.is_match(
+                "Canonical",
+                "UbuntuServer",
+                "22.04-LTS",
+                ""))
 
     def test_invalid_version(self):
         doc = '''{
@@ -123,7 +163,12 @@ class TestImageInfoMatcher(unittest.TestCase):
         }'''
 
         test_subject = ImageInfoMatcher(doc)
-        self.assertFalse(test_subject.is_match("RedHat", "RHEL", "16.04-LTS", ""))
+        self.assertFalse(
+            test_subject.is_match(
+                "RedHat",
+                "RHEL",
+                "16.04-LTS",
+                ""))
 
         # This is *expected* behavior as opposed to desirable.  The specification is
         # controlled by the agent, so there is no reason to use these values, but if

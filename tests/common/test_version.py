@@ -62,7 +62,8 @@ class TestAgentVersion(AgentTestCase):
 
     @mock.patch('platform.system', side_effect=freebsd_system)
     @mock.patch('re.sub', side_effect=freebsd_system_release)
-    def test_distro_is_correct_format_when_freebsd(self, platform_system_name, mock_variable):
+    def test_distro_is_correct_format_when_freebsd(
+            self, platform_system_name, mock_variable):
         osinfo = get_distro()
         freebsd_list = ['freebsd', "10.0", '', 'freebsd']
         self.assertListEqual(freebsd_list, osinfo)
@@ -70,7 +71,8 @@ class TestAgentVersion(AgentTestCase):
 
     @mock.patch('platform.system', side_effect=openbsd_system)
     @mock.patch('re.sub', side_effect=openbsd_system_release)
-    def test_distro_is_correct_format_when_openbsd(self, platform_system_name, mock_variable):
+    def test_distro_is_correct_format_when_openbsd(
+            self, platform_system_name, mock_variable):
         osinfo = get_distro()
         openbsd_list = ['openbsd', "20.0", '', 'openbsd']
         self.assertListEqual(openbsd_list, osinfo)
@@ -78,7 +80,8 @@ class TestAgentVersion(AgentTestCase):
 
     @mock.patch('platform.system', side_effect=default_system)
     @mock.patch('platform.dist', side_effect=default_system_no_linux_distro)
-    def test_distro_is_correct_format_when_default_case(self, platform_system_name, default_system_no_linux):
+    def test_distro_is_correct_format_when_default_case(
+            self, platform_system_name, default_system_no_linux):
         osinfo = get_distro()
         default_list = ['', '', '', '']
         self.assertListEqual(default_list, osinfo)
@@ -86,7 +89,8 @@ class TestAgentVersion(AgentTestCase):
 
     @mock.patch('platform.system', side_effect=default_system)
     @mock.patch('platform.dist', side_effect=default_system_exception)
-    def test_distro_is_correct_for_exception_case(self, platform_system_name, default_system_no_linux):
+    def test_distro_is_correct_for_exception_case(
+            self, platform_system_name, default_system_no_linux):
         osinfo = get_distro()
         default_list = ['unknown', 'FFFF', '', '']
         self.assertListEqual(default_list, osinfo)

@@ -50,12 +50,12 @@ class CentOSRDMAHandler(RDMAHandler):
         """
 
         # Check and install the KVP deamon if it not running
-        time.sleep(10) # give some time for the hv_hvp_daemon to start up.
+        time.sleep(10)  # give some time for the hv_hvp_daemon to start up.
         kvpd_running = RDMAHandler.is_kvp_daemon_running()
         logger.info('RDMA: kvp daemon running: %s' % kvpd_running)
         if not kvpd_running:
             self.check_or_install_kvp_daemon()
-        time.sleep(10) # wait for post-install reboot or kvp to come up
+        time.sleep(10)  # wait for post-install reboot or kvp to come up
 
         # Find out RDMA firmware version and see if the existing package needs
         # updating or if the package is missing altogether (and install it)
@@ -82,7 +82,8 @@ class CentOSRDMAHandler(RDMAHandler):
         # Example match (pkg name, -, followed by 3 segments, fw_version and -):
         # - pkg=microsoft-hyper-v-rdma-4.1.0.142-20160323.x86_64
         # - fw_version=142
-        pattern = '{0}-(\d+\.){{3,}}({1})-'.format(self.rdma_user_mode_package_name, fw_version)
+        pattern = r'{0}-(\d+\.){{3,}}({1})-'.format(
+            self.rdma_user_mode_package_name, fw_version)
         return re.match(pattern, pkg)
 
     @staticmethod
@@ -155,7 +156,8 @@ class CentOSRDMAHandler(RDMAHandler):
 
         # Install kernel mode driver (kmod-microsoft-hyper-v-rdma-*)
         kmod_pkg = self.get_file_by_pattern(
-            pkgs, "%s-(\d+\.){3,}(%s)-\d{8}\.x86_64.rpm" % (self.rdma_kernel_mode_package_name, fw_version))
+            pkgs, r"%s-(\d+\.){3,}(%s)-\d{8}\.x86_64.rpm" %
+            (self.rdma_kernel_mode_package_name, fw_version))
         if not kmod_pkg:
             raise Exception("RDMA kernel mode package not found")
         kmod_pkg_path = os.path.join(pkg_dir, kmod_pkg)
@@ -164,7 +166,8 @@ class CentOSRDMAHandler(RDMAHandler):
 
         # Install user mode driver (microsoft-hyper-v-rdma-*)
         umod_pkg = self.get_file_by_pattern(
-            pkgs, "%s-(\d+\.){3,}(%s)-\d{8}\.x86_64.rpm" % (self.rdma_user_mode_package_name, fw_version))
+            pkgs, r"%s-(\d+\.){3,}(%s)-\d{8}\.x86_64.rpm" %
+            (self.rdma_user_mode_package_name, fw_version))
         if not umod_pkg:
             raise Exception("RDMA user mode package not found")
         umod_pkg_path = os.path.join(pkg_dir, umod_pkg)
@@ -215,7 +218,8 @@ class CentOSRDMAHandler(RDMAHandler):
                     "RDMA: kvp package %s does not exist, skipping" % kvp_pkg)
             else:
                 logger.info('RDMA: erasing kvp package "%s"' % kvp_pkg)
-                if shellutil.run("yum erase -q -y %s" % kvp_pkg, chk_err=False) == 0:
+                if shellutil.run("yum erase -q -y %s" %
+                                 kvp_pkg, chk_err=False) == 0:
                     logger.info("RDMA: successfully erased package")
                 else:
                     logger.error("RDMA: failed to erase package")
@@ -232,13 +236,23 @@ class CentOSRDMAHandler(RDMAHandler):
             logger.info("RDMA: Checking if package %s installed" % pkg)
             installed = self.is_package_installed(pkg)
             if installed:
-                raise Exception('RDMA: package %s is installed, but the kvp daemon is not running' % pkg)
+                raise Exception(
+                    'RDMA: package %s is installed, but the kvp daemon is not running' %
+                    pkg)
 
-        kvp_pkg_to_install=self.hyper_v_package_name
-        logger.info("RDMA: no kvp drivers installed, will install '%s'" % kvp_pkg_to_install)
-        logger.info("RDMA: trying to install kvp package '%s'" % kvp_pkg_to_install)
+        kvp_pkg_to_install = self.hyper_v_package_name
+        logger.info(
+            "RDMA: no kvp drivers installed, will install '%s'" %
+            kvp_pkg_to_install)
+        logger.info(
+            "RDMA: trying to install kvp package '%s'" %
+            kvp_pkg_to_install)
         if self.install_package(kvp_pkg_to_install) != 0:
-            raise Exception("RDMA: failed to install kvp daemon package '%s'" % kvp_pkg_to_install)
-        logger.info("RDMA: package '%s' successfully installed" % kvp_pkg_to_install)
+            raise Exception(
+                "RDMA: failed to install kvp daemon package '%s'" %
+                kvp_pkg_to_install)
+        logger.info(
+            "RDMA: package '%s' successfully installed" %
+            kvp_pkg_to_install)
         logger.info("RDMA: Machine will now be rebooted.")
         self.reboot_system()

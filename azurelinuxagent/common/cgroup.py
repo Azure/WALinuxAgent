@@ -36,7 +36,8 @@ class CGroup(object):
             return CpuCgroup(extension_name, cgroup_path)
         if controller == "memory":
             return MemoryCgroup(extension_name, cgroup_path)
-        raise CGroupsException('CGroup controller {0} is not supported'.format(controller))
+        raise CGroupsException(
+            'CGroup controller {0} is not supported'.format(controller))
 
     def __init__(self, name, cgroup_path, controller_type):
         """
@@ -85,13 +86,16 @@ class CGroup(object):
             result = values[0] if first_line_only else values
         except IndexError:
             parameter_filename = self._get_cgroup_file(parameter_name)
-            logger.error("File {0} is empty but should not be".format(parameter_filename))
-            raise CGroupsException("File {0} is empty but should not be".format(parameter_filename))
+            logger.error(
+                "File {0} is empty but should not be".format(parameter_filename))
+            raise CGroupsException(
+                "File {0} is empty but should not be".format(parameter_filename))
         except Exception as e:
             if isinstance(e, (IOError, OSError)) and e.errno == errno.ENOENT:
                 raise e
             parameter_filename = self._get_cgroup_file(parameter_name)
-            raise CGroupsException("Exception while attempting to read {0}".format(parameter_filename), e)
+            raise CGroupsException(
+                "Exception while attempting to read {0}".format(parameter_filename), e)
         return result
 
     def is_active(self):
@@ -104,13 +108,19 @@ class CGroup(object):
                 # only suppressing file not found exceptions.
                 pass
             else:
-                logger.periodic_warn(logger.EVERY_HALF_HOUR,
-                                     'Could not get list of tasks from "tasks" file in the cgroup: {0}.'
-                                     ' Internal error: {1}'.format(self.path, ustr(e)))
+                logger.periodic_warn(
+                    logger.EVERY_HALF_HOUR,
+                    'Could not get list of tasks from "tasks" file in the cgroup: {0}.'
+                    ' Internal error: {1}'.format(
+                        self.path,
+                        ustr(e)))
         except CGroupsException as e:
-            logger.periodic_warn(logger.EVERY_HALF_HOUR,
-                                 'Could not get list of tasks from "tasks" file in the cgroup: {0}.'
-                                 ' Internal error: {1}'.format(self.path, ustr(e)))
+            logger.periodic_warn(
+                logger.EVERY_HALF_HOUR,
+                'Could not get list of tasks from "tasks" file in the cgroup: {0}.'
+                ' Internal error: {1}'.format(
+                    self.path,
+                    ustr(e)))
             return False
 
         return False
@@ -149,7 +159,8 @@ class CpuCgroup(CGroup):
         except Exception as e:
             if isinstance(e, (IOError, OSError)) and e.errno == errno.ENOENT:
                 raise e
-            raise CGroupsException("Exception while attempting to read {0}".format("cpuacct.stat"), e)
+            raise CGroupsException(
+                "Exception while attempting to read {0}".format("cpuacct.stat"), e)
 
         if cpu_stat:
             m = re_user_system_times.match(cpu_stat)
@@ -176,9 +187,18 @@ class CpuCgroup(CGroup):
         :rtype: float
         """
         cpu_delta = self._current_cpu_total - self._previous_cpu_total
-        system_delta = max(1, self._current_system_cpu - self._previous_system_cpu)
+        system_delta = max(
+            1,
+            self._current_system_cpu -
+            self._previous_system_cpu)
 
-        return round(float(cpu_delta * self._osutil.get_processor_cores() * 100) / float(system_delta), 3)
+        return round(
+            float(
+                cpu_delta *
+                self._osutil.get_processor_cores() *
+                100) /
+            float(system_delta),
+            3)
 
     def get_cpu_usage(self):
         """
@@ -214,7 +234,8 @@ class MemoryCgroup(CGroup):
         usage = None
 
         try:
-            usage = self._get_parameters('memory.usage_in_bytes', first_line_only=True)
+            usage = self._get_parameters(
+                'memory.usage_in_bytes', first_line_only=True)
         except (IOError, OSError) as e:
             if e.errno == errno.ENOENT:
                 # only suppressing file not found exceptions.
@@ -235,7 +256,8 @@ class MemoryCgroup(CGroup):
         """
         usage = None
         try:
-            usage = self._get_parameters('memory.max_usage_in_bytes', first_line_only=True)
+            usage = self._get_parameters(
+                'memory.max_usage_in_bytes', first_line_only=True)
         except (IOError, OSError) as e:
             if e.errno == errno.ENOENT:
                 # only suppressing file not found exceptions.

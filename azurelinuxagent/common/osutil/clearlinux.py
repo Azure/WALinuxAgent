@@ -33,6 +33,7 @@ import azurelinuxagent.common.utils.shellutil as shellutil
 import azurelinuxagent.common.utils.textutil as textutil
 from azurelinuxagent.common.osutil.default import DefaultOSUtil
 
+
 class ClearLinuxUtil(DefaultOSUtil):
 
     def __init__(self):
@@ -43,7 +44,7 @@ class ClearLinuxUtil(DefaultOSUtil):
     def is_dhcp_enabled(self):
         return True
 
-    def start_network(self) :
+    def start_network(self):
         return shellutil.run("systemctl start systemd-networkd", chk_err=False)
 
     def restart_if(self, iface):
@@ -60,10 +61,12 @@ class ClearLinuxUtil(DefaultOSUtil):
         return shellutil.run("systemctl start systemd-networkd", chk_err=False)
 
     def start_agent_service(self):
-        return shellutil.run("systemctl start {0}".format(self.service_name), chk_err=False)
+        return shellutil.run("systemctl start {0}".format(
+            self.service_name), chk_err=False)
 
     def stop_agent_service(self):
-        return shellutil.run("systemctl stop {0}".format(self.service_name), chk_err=False)
+        return shellutil.run("systemctl stop {0}".format(
+            self.service_name), chk_err=False)
 
     def get_dhcp_pid(self):
         return self._get_dhcp_pid(["pidof", "systemd-networkd"])

@@ -39,10 +39,12 @@ class Ubuntu14OSUtil(DefaultOSUtil):
         return shellutil.run("service networking start", chk_err=False)
 
     def stop_agent_service(self):
-        return shellutil.run("service {0} stop".format(self.service_name), chk_err=False)
+        return shellutil.run("service {0} stop".format(
+            self.service_name), chk_err=False)
 
     def start_agent_service(self):
-        return shellutil.run("service {0} start".format(self.service_name), chk_err=False)
+        return shellutil.run("service {0} start".format(
+            self.service_name), chk_err=False)
 
     def remove_rules_files(self, rules_files=""):
         pass
@@ -51,7 +53,8 @@ class Ubuntu14OSUtil(DefaultOSUtil):
         pass
 
     def get_dhcp_lease_endpoint(self):
-        return self.get_endpoint_from_leases_path('/var/lib/dhcp/dhclient.*.leases')
+        return self.get_endpoint_from_leases_path(
+            '/var/lib/dhcp/dhclient.*.leases')
 
 
 class Ubuntu12OSUtil(Ubuntu14OSUtil):
@@ -70,15 +73,18 @@ class Ubuntu16OSUtil(Ubuntu14OSUtil):
     """
     Ubuntu 16.04, 16.10, and 17.04.
     """
+
     def __init__(self):
         super(Ubuntu16OSUtil, self).__init__()
         self.service_name = self.get_service_name()
 
     def register_agent_service(self):
-        return shellutil.run("systemctl unmask {0}".format(self.service_name), chk_err=False)
+        return shellutil.run("systemctl unmask {0}".format(
+            self.service_name), chk_err=False)
 
     def unregister_agent_service(self):
-        return shellutil.run("systemctl mask {0}".format(self.service_name), chk_err=False)
+        return shellutil.run("systemctl mask {0}".format(
+            self.service_name), chk_err=False)
 
     def mount_cgroups(self):
         """
@@ -91,6 +97,7 @@ class Ubuntu18OSUtil(Ubuntu16OSUtil):
     """
     Ubuntu 18.04
     """
+
     def __init__(self):
         super(Ubuntu18OSUtil, self).__init__()
         self.service_name = self.get_service_name()
@@ -111,10 +118,12 @@ class Ubuntu18OSUtil(Ubuntu16OSUtil):
         return self.stop_network()
 
     def start_agent_service(self):
-        return shellutil.run("systemctl start {0}".format(self.service_name), chk_err=False)
+        return shellutil.run("systemctl start {0}".format(
+            self.service_name), chk_err=False)
 
     def stop_agent_service(self):
-        return shellutil.run("systemctl stop {0}".format(self.service_name), chk_err=False)
+        return shellutil.run("systemctl stop {0}".format(
+            self.service_name), chk_err=False)
 
 
 class UbuntuOSUtil(Ubuntu16OSUtil):
@@ -126,12 +135,15 @@ class UbuntuOSUtil(Ubuntu16OSUtil):
         Restart an interface by bouncing the link. systemd-networkd observes
         this event, and forces a renew of DHCP.
         """
-        retry_limit=retries+1
+        retry_limit = retries + 1
         for attempt in range(1, retry_limit):
-            return_code=shellutil.run("ip link set {0} down && ip link set {0} up".format(ifname))
+            return_code = shellutil.run(
+                "ip link set {0} down && ip link set {0} up".format(ifname))
             if return_code == 0:
                 return
-            logger.warn("failed to restart {0}: return code {1}".format(ifname, return_code))
+            logger.warn(
+                "failed to restart {0}: return code {1}".format(
+                    ifname, return_code))
             if attempt < retry_limit:
                 logger.info("retrying in {0} seconds".format(wait))
                 time.sleep(wait)

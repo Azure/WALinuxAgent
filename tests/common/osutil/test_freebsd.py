@@ -21,6 +21,7 @@ import azurelinuxagent.common.utils.shellutil as shellutil
 from .test_default import osutil_get_dhcp_pid_should_return_a_list_of_pids
 from tests.tools import *
 
+
 class TestFreeBSDOSUtil(AgentTestCase):
     def setUp(self):
         AgentTestCase.setUp(self)
@@ -48,7 +49,8 @@ Destination        Gateway            Flags     Netif Expire
         with patch.object(shellutil, 'run_command', return_value=route_table):
             raw_route_list = FreeBSDOSUtil().read_route_table()
 
-        self.assertEqual(len(FreeBSDOSUtil().get_list_of_routes(raw_route_list)), 0)
+        self.assertEqual(
+            len(FreeBSDOSUtil().get_list_of_routes(raw_route_list)), 0)
 
     def test_bogus_proc_net_route(self):
         route_table = """Routing tables
@@ -60,19 +62,20 @@ Destination        Gateway            Flags     Netif Expire
 
         with patch.object(shellutil, 'run_command', return_value=route_table):
             raw_route_list = FreeBSDOSUtil().read_route_table()
-    
-        self.assertEqual(len(FreeBSDOSUtil().get_list_of_routes(raw_route_list)), 0)
+
+        self.assertEqual(
+            len(FreeBSDOSUtil().get_list_of_routes(raw_route_list)), 0)
 
     def test_valid_routes(self):
         route_table = """Routing tables
 
 Internet:
 Destination        Gateway            Flags     Netif Expire
-0.0.0.0            10.145.187.193     UGS         em0       
-10.145.187.192/26  0.0.0.0            US          em0       
-168.63.129.16      10.145.187.193     UH          em0       
-169.254.169.254    10.145.187.193     UHS         em0       
-192.168.43.0       0.0.0.0            US        vtbd0     
+0.0.0.0            10.145.187.193     UGS         em0
+10.145.187.192/26  0.0.0.0            US          em0
+168.63.129.16      10.145.187.193     UH          em0
+169.254.169.254    10.145.187.193     UHS         em0
+192.168.43.0       0.0.0.0            US        vtbd0
 """
 
         with patch.object(shellutil, 'run_command', return_value=route_table):
@@ -106,7 +109,7 @@ Destination        Gateway            Flags     Netif Expire
 
         with patch.object(freebsdosutil, '_get_net_info', return_value=('em0', '10.0.0.1', 'e5:f0:38:aa:da:52')):
             ifname, ipaddr = freebsdosutil.get_first_if()
-        
+
         self.assertEqual(ifname, 'em0')
         self.assertEqual(ipaddr, '10.0.0.1')
 
@@ -119,6 +122,7 @@ Destination        Gateway            Flags     Netif Expire
             except Exception as e:
                 print(traceback.format_exc())
                 exception = True
+
 
 if __name__ == '__main__':
     unittest.main()

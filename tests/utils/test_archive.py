@@ -65,7 +65,9 @@ class TestArchive(AgentTestCase):
 
         self.assertIsIso8601(timestamp_dirs[0])
         ts = self.parse_isoformat(timestamp_dirs[0])
-        self.assertDateTimeCloseTo(ts, datetime.utcnow(), timedelta(seconds=30))
+        self.assertDateTimeCloseTo(
+            ts, datetime.utcnow(), timedelta(
+                seconds=30))
 
         for f in temp_files:
             history_path = os.path.join(self.history_dir, timestamp_dirs[0], f)
@@ -103,7 +105,9 @@ class TestArchive(AgentTestCase):
 
         self.assertIsIso8601(ts_s)
         ts = self.parse_isoformat(ts_s)
-        self.assertDateTimeCloseTo(ts, datetime.utcnow(), timedelta(seconds=30))
+        self.assertDateTimeCloseTo(
+            ts, datetime.utcnow(), timedelta(
+                seconds=30))
 
         zip_full = os.path.join(self.history_dir, zip_fn)
         self.assertZipContains(zip_full, temp_files)
@@ -129,7 +133,10 @@ class TestArchive(AgentTestCase):
             timestamps.append(ts)
 
             if i % 2 == 0:
-                fn = os.path.join('history', ts.isoformat(), 'Prod.0.manifest.xml')
+                fn = os.path.join(
+                    'history',
+                    ts.isoformat(),
+                    'Prod.0.manifest.xml')
             else:
                 fn = os.path.join('history', "{0}.zip".format(ts.isoformat()))
 
@@ -151,7 +158,9 @@ class TestArchive(AgentTestCase):
                 fn = ts
             else:
                 fn = "{0}.zip".format(ts)
-            self.assertTrue(fn in archived_entries, "'{0}' is not in the list of unpurged entires".format(fn))
+            self.assertTrue(
+                fn in archived_entries,
+                "'{0}' is not in the list of unpurged entires".format(fn))
 
     def test_archive03(self):
         """
@@ -171,7 +180,8 @@ class TestArchive(AgentTestCase):
         def _check_history_files(timestamp_dir, files, content=None):
             for f in files:
                 history_path = os.path.join(self.history_dir, timestamp_dir, f)
-                msg = "expected the temp file {0} to exist".format(history_path)
+                msg = "expected the temp file {0} to exist".format(
+                    history_path)
                 self.assertTrue(os.path.exists(history_path), msg)
                 expected_content = f if content is None else content
                 actual_content = fileutil.read_file(history_path)
@@ -192,7 +202,9 @@ class TestArchive(AgentTestCase):
 
         self.assertIsIso8601(timestamp_dirs[0])
         ts = self.parse_isoformat(timestamp_dirs[0])
-        self.assertDateTimeCloseTo(ts, datetime.utcnow(), timedelta(seconds=30))
+        self.assertDateTimeCloseTo(
+            ts, datetime.utcnow(), timedelta(
+                seconds=30))
 
         # Ensure saved files contain the right content
         _check_history_files(timestamp_dirs[0], temp_files)
@@ -202,8 +214,12 @@ class TestArchive(AgentTestCase):
         _write_goal_state_files(temp_files, "--this-has-been-changed--")
         test_subject.flush(timestamp)
 
-        # The contents of the saved files were overwritten as a result of the flush.
-        _check_history_files(timestamp_dirs[0], temp_files, "--this-has-been-changed--")
+        # The contents of the saved files were overwritten as a result of the
+        # flush.
+        _check_history_files(
+            timestamp_dirs[0],
+            temp_files,
+            "--this-has-been-changed--")
 
     def test_archive04(self):
         """
@@ -211,7 +227,10 @@ class TestArchive(AgentTestCase):
 
         This failure was caught when .purge() was called before .archive().
         """
-        test_subject = StateArchiver(os.path.join(self.tmp_dir, 'does-not-exist'))
+        test_subject = StateArchiver(
+            os.path.join(
+                self.tmp_dir,
+                'does-not-exist'))
         test_subject.purge()
 
     def parse_isoformat(self, s):
@@ -220,29 +239,36 @@ class TestArchive(AgentTestCase):
     def assertIsIso8601(self, s):
         try:
             self.parse_isoformat(s)
-        except:
-            raise AssertionError("the value '{0}' is not an ISO8601 formatted timestamp".format(s))
+        except BaseException:
+            raise AssertionError(
+                "the value '{0}' is not an ISO8601 formatted timestamp".format(s))
 
     def _total_seconds(self, td):
         """
         Compute the total_seconds for a timedelta because 2.6 does not have total_seconds.
         """
-        return (0.0 + td.microseconds + (td.seconds + td.days * 24 * 60 * 60) * 10 ** 6) / 10 ** 6
+        return (0.0 + td.microseconds + (td.seconds +
+                                         td.days * 24 * 60 * 60) * 10 ** 6) / 10 ** 6
 
     def assertDateTimeCloseTo(self, t1, t2, within):
         if t1 <= t2:
-            diff = t2 -t1
+            diff = t2 - t1
         else:
             diff = t1 - t2
 
         secs = self._total_seconds(within - diff)
         if secs < 0:
-            self.fail("the timestamps are outside of the tolerance of by {0} seconds".format(secs))
+            self.fail(
+                "the timestamps are outside of the tolerance of by {0} seconds".format(secs))
 
     def assertZipContains(self, zip_fn, files):
         ziph = zipfile.ZipFile(zip_fn, 'r')
         zip_files = [x.filename for x in ziph.filelist]
         for f in files:
-            self.assertTrue(f in zip_files, "'{0}' was not found in {1}".format(f, zip_fn))
+            self.assertTrue(
+                f in zip_files,
+                "'{0}' was not found in {1}".format(
+                    f,
+                    zip_fn))
 
         ziph.close()

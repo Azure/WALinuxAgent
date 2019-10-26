@@ -44,5 +44,8 @@ def get_rdma_handler(
     if distro_full_name == 'Ubuntu':
         return UbuntuRDMAHandler()
 
-    logger.info("No RDMA handler exists for distro='{0}' version='{1}'", distro_full_name, distro_version)
+    logger.info(
+        "No RDMA handler exists for distro='{0}' version='{1}'",
+        distro_full_name,
+        distro_version)
     return RDMAHandler()

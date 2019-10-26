@@ -19,7 +19,8 @@
 
 import azurelinuxagent.common.utils.fileutil as fileutil
 from azurelinuxagent.pa.deprovision.default import DeprovisionHandler, \
-                                                   DeprovisionAction
+    DeprovisionAction
+
 
 class ArchDeprovisionHandler(DeprovisionHandler):
     def __init__(self):

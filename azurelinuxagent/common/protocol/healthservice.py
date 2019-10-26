@@ -90,8 +90,9 @@ class HealthService(object):
         Reports a signal for /health
         :param is_healthy: whether the call succeeded
         """
-        self._observe(name=HealthService.HOST_PLUGIN_HEARTBEAT_OBSERVATION_NAME,
-                      is_healthy=is_healthy)
+        self._observe(
+            name=HealthService.HOST_PLUGIN_HEARTBEAT_OBSERVATION_NAME,
+            is_healthy=is_healthy)
         self._report()
 
     def report_host_plugin_versions(self, is_healthy, response):
@@ -105,7 +106,8 @@ class HealthService(object):
                       value=response)
         self._report()
 
-    def report_host_plugin_extension_artifact(self, is_healthy, source, response):
+    def report_host_plugin_extension_artifact(
+            self, is_healthy, source, response):
         """
         Reports a signal for /extensionArtifact
         :param is_healthy: whether the api call succeeded
@@ -143,7 +145,7 @@ class HealthService(object):
     def _observe(self, name, is_healthy, value='', description=''):
         # ensure we keep the list size within bounds
         if len(self.observations) >= HealthService.MAX_OBSERVATIONS:
-            del self.observations[:HealthService.MAX_OBSERVATIONS-1]
+            del self.observations[:HealthService.MAX_OBSERVATIONS - 1]
         self.observations.append(Observation(name=name,
                                              is_healthy=is_healthy,
                                              value=value,
@@ -152,14 +154,22 @@ class HealthService(object):
     def _report(self):
         logger.verbose('HealthService: report observations')
         try:
-            restutil.http_post(self.endpoint, self.as_json, headers={'Content-Type': 'application/json'})
-            logger.verbose('HealthService: Reported observations to {0}: {1}', self.endpoint, self.as_json)
+            restutil.http_post(
+                self.endpoint, self.as_json, headers={
+                    'Content-Type': 'application/json'})
+            logger.verbose(
+                'HealthService: Reported observations to {0}: {1}',
+                self.endpoint,
+                self.as_json)
         except HttpError as e:
-            logger.warn("HealthService: could not report observations: {0}", ustr(e))
+            logger.warn(
+                "HealthService: could not report observations: {0}",
+                ustr(e))
         finally:
             # report any failures via telemetry
             self._report_failures()
-            # these signals are not timestamped, so there is no value in persisting data
+            # these signals are not timestamped, so there is no value in
+            # persisting data
             del self.observations[:]
 
     def _report_failures(self):
@@ -174,4 +184,6 @@ class HealthService(object):
                               is_success=False,
                               message=json.dumps(o.as_obj))
         except Exception as e:
-            logger.verbose("HealthService: could not report failures: {0}".format(ustr(e)))
+            logger.verbose(
+                "HealthService: could not report failures: {0}".format(
+                    ustr(e)))

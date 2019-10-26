@@ -57,17 +57,22 @@ class OpenBSDOSUtil(DefaultOSUtil):
         return shellutil.run('rcctl restart sshd', chk_err=False)
 
     def start_agent_service(self):
-        return shellutil.run('rcctl start {0}'.format(self.service_name), chk_err=False)
+        return shellutil.run('rcctl start {0}'.format(
+            self.service_name), chk_err=False)
 
     def stop_agent_service(self):
-        return shellutil.run('rcctl stop {0}'.format(self.service_name), chk_err=False)
+        return shellutil.run('rcctl stop {0}'.format(
+            self.service_name), chk_err=False)
 
     def register_agent_service(self):
-        shellutil.run('chmod 0555 /etc/rc.d/{0}'.format(self.service_name), chk_err=False)
-        return shellutil.run('rcctl enable {0}'.format(self.service_name), chk_err=False)
+        shellutil.run(
+            'chmod 0555 /etc/rc.d/{0}'.format(self.service_name), chk_err=False)
+        return shellutil.run('rcctl enable {0}'.format(
+            self.service_name), chk_err=False)
 
     def unregister_agent_service(self):
-        return shellutil.run('rcctl disable {0}'.format(self.service_name), chk_err=False)
+        return shellutil.run('rcctl disable {0}'.format(
+            self.service_name), chk_err=False)
 
     def del_account(self, username):
         if self.is_sys_user(username):
@@ -182,7 +187,7 @@ class OpenBSDOSUtil(DefaultOSUtil):
                         try:
                             ipaddr = line.split(" ")[-1].strip(";").split(":")
                             cached_endpoint = \
-                               ".".join(str(int(d, 16)) for d in ipaddr)
+                                ".".join(str(int(d, 16)) for d in ipaddr)
                             has_option_245 = True
                         except ValueError:
                             logger.error("could not parse '{0}'".format(line))
@@ -201,11 +206,13 @@ class OpenBSDOSUtil(DefaultOSUtil):
                                 logger.error("could not parse expiry token "
                                              "'{0}'".format(line))
                     elif FOOTER_LEASE in line:
-                        logger.info("dhcp entry:{0}, 245:{1}, expired: {2}"
-                                    .format(cached_endpoint, has_option_245, expired))
+                        logger.info(
+                            "dhcp entry:{0}, 245:{1}, expired: {2}" .format(
+                                cached_endpoint, has_option_245, expired))
                         if not expired and cached_endpoint is not None and has_option_245:
                             endpoint = cached_endpoint
-                            logger.info("found endpoint [{0}]".format(endpoint))
+                            logger.info(
+                                "found endpoint [{0}]".format(endpoint))
                             # we want to return the last valid entry, so
                             # keep searching
         if endpoint is not None:
@@ -250,9 +257,9 @@ class OpenBSDOSUtil(DefaultOSUtil):
 
         for retry in range(0, max_retry):
             retcode = self.mount(dvd_device,
-                                mount_point,
-                                option="-o ro -t udf",
-                                chk_err=False)
+                                 mount_point,
+                                 option="-o ro -t udf",
+                                 chk_err=False)
             if retcode == 0:
                 logger.info("Successfully mounted DVD")
                 return
@@ -283,7 +290,7 @@ class OpenBSDOSUtil(DefaultOSUtil):
         if ret:
             raise OSUtilError("Failed to get total memory: {0}".format(output))
         try:
-            return int(output)/1024/1024
+            return int(output) / 1024 / 1024
         except ValueError:
             raise OSUtilError("Failed to get total memory: {0}".format(output))
 

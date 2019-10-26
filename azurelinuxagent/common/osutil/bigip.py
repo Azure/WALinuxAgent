@@ -61,7 +61,9 @@ class BigIpOSUtil(DefaultOSUtil):
         for retries in range(1, 100):
             # Retry until mcpd completes startup:
             logger.info("Checking to see if mcpd is up")
-            rc = shellutil.run("/usr/bin/tmsh -a show sys mcp-state field-fmt 2>/dev/null | grep phase | grep running", chk_err=False)
+            rc = shellutil.run(
+                "/usr/bin/tmsh -a show sys mcp-state field-fmt 2>/dev/null | grep phase | grep running",
+                chk_err=False)
             if rc == 0:
                 logger.info("mcpd is up!")
                 break
@@ -85,16 +87,20 @@ class BigIpOSUtil(DefaultOSUtil):
         return shellutil.run("/usr/bin/bigstart restart sshd", chk_err=False)
 
     def stop_agent_service(self):
-        return shellutil.run("/sbin/service {0} stop".format(self.service_name), chk_err=False)
+        return shellutil.run(
+            "/sbin/service {0} stop".format(self.service_name), chk_err=False)
 
     def start_agent_service(self):
-        return shellutil.run("/sbin/service {0} start".format(self.service_name), chk_err=False)
+        return shellutil.run(
+            "/sbin/service {0} start".format(self.service_name), chk_err=False)
 
     def register_agent_service(self):
-        return shellutil.run("/sbin/chkconfig --add {0}".format(self.service_name), chk_err=False)
+        return shellutil.run(
+            "/sbin/chkconfig --add {0}".format(self.service_name), chk_err=False)
 
     def unregister_agent_service(self):
-        return shellutil.run("/sbin/chkconfig --del {0}".format(self.service_name), chk_err=False)
+        return shellutil.run(
+            "/sbin/chkconfig --del {0}".format(self.service_name), chk_err=False)
 
     def get_dhcp_pid(self):
         return self._get_dhcp_pid(["/sbin/pidof", "dhclient"])
@@ -149,12 +155,14 @@ class BigIpOSUtil(DefaultOSUtil):
             logger.info("User {0} already exists, skip useradd", username)
             return None
 
-        cmd = "/usr/bin/tmsh create auth user %s partition-access add { all-partitions { role admin } } shell bash" % (username)
-        retcode, out = shellutil.run_get_output(cmd, log_cmd=True, chk_err=True)
+        cmd = "/usr/bin/tmsh create auth user %s partition-access add { all-partitions { role admin } } shell bash" % (
+            username)
+        retcode, out = shellutil.run_get_output(
+            cmd, log_cmd=True, chk_err=True)
         if retcode != 0:
             raise OSUtilError(
-                "Failed to create user account:{0}, retcode:{1}, output:{2}".format(username, retcode, out)
-            )
+                "Failed to create user account:{0}, retcode:{1}, output:{2}".format(
+                    username, retcode, out))
         self._save_sys_config()
         return retcode
 
@@ -177,8 +185,10 @@ class BigIpOSUtil(DefaultOSUtil):
         """
 
         # Start by setting the password of the user provided account
-        cmd = "/usr/bin/tmsh modify auth user {0} password '{1}'".format(username, password)
-        ret, output = shellutil.run_get_output(cmd, log_cmd=False, chk_err=True)
+        cmd = "/usr/bin/tmsh modify auth user {0} password '{1}'".format(
+            username, password)
+        ret, output = shellutil.run_get_output(
+            cmd, log_cmd=False, chk_err=True)
         if ret != 0:
             raise OSUtilError(
                 "Failed to set password for {0}: {1}".format(username, output)
@@ -190,8 +200,10 @@ class BigIpOSUtil(DefaultOSUtil):
         if userentry is None:
             raise OSUtilError("The 'admin' user account was not found!")
 
-        cmd = "/usr/bin/tmsh modify auth user 'admin' password '{0}'".format(password)
-        ret, output = shellutil.run_get_output(cmd, log_cmd=False, chk_err=True)
+        cmd = "/usr/bin/tmsh modify auth user 'admin' password '{0}'".format(
+            password)
+        ret, output = shellutil.run_get_output(
+            cmd, log_cmd=False, chk_err=True)
         if ret != 0:
             raise OSUtilError(
                 "Failed to set password for 'admin': {0}".format(output)
@@ -282,7 +294,7 @@ class BigIpOSUtil(DefaultOSUtil):
                              socket.IPPROTO_UDP)
         buff = array.array('B', b'\0' * (expected * struct_size))
         param = struct.pack('iL',
-                            expected*struct_size,
+                            expected * struct_size,
                             buff.buffer_info()[0])
         ret = fcntl.ioctl(sock.fileno(), 0x8912, param)
         retsize = (struct.unpack('iL', ret)[0])
@@ -298,10 +310,10 @@ class BigIpOSUtil(DefaultOSUtil):
                 continue
             else:
                 break
-        return iface.decode('latin-1'), socket.inet_ntoa(sock[i+20:i+24])
+        return iface.decode('latin-1'), socket.inet_ntoa(sock[i + 20:i + 24])
 
     def _format_single_interface_name(self, sock, offset):
-        return sock[offset:offset+16].split(b'\0', 1)[0]
+        return sock[offset:offset + 16].split(b'\0', 1)[0]
 
     def route_add(self, net, mask, gateway):
         """Add specified route using tmsh.

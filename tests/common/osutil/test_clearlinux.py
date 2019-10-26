@@ -27,7 +27,8 @@ class TestClearLinuxUtil(AgentTestCase):
         AgentTestCase.tearDown(self)
 
     def test_get_dhcp_pid_should_return_a_list_of_pids(self):
-        osutil_get_dhcp_pid_should_return_a_list_of_pids(self, ClearLinuxUtil())
+        osutil_get_dhcp_pid_should_return_a_list_of_pids(
+            self, ClearLinuxUtil())
 
 
 if __name__ == '__main__':

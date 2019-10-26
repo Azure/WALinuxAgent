@@ -46,7 +46,9 @@ class CryptUtil(object):
                "-out {2}").format(self.openssl_cmd, prv_file, crt_file)
         rc = shellutil.run(cmd)
         if rc != 0:
-            logger.error("Failed to create {0} and {1} certificates".format(prv_file, crt_file))
+            logger.error(
+                "Failed to create {0} and {1} certificates".format(
+                    prv_file, crt_file))
 
     def get_pubkey_from_prv(self, file_name):
         if not os.path.exists(file_name):
@@ -60,7 +62,13 @@ class CryptUtil(object):
         if not os.path.exists(file_name):
             raise IOError(errno.ENOENT, "File not found", file_name)
         else:
-            cmd = [self.openssl_cmd, "x509", "-in", file_name, "-pubkey", "-noout"]
+            cmd = [
+                self.openssl_cmd,
+                "x509",
+                "-in",
+                file_name,
+                "-pubkey",
+                "-noout"]
             pub = shellutil.run_command(cmd, log_error=True)
             return pub
 
@@ -68,9 +76,16 @@ class CryptUtil(object):
         if not os.path.exists(file_name):
             raise IOError(errno.ENOENT, "File not found", file_name)
         else:
-            cmd = [self.openssl_cmd, "x509", "-in", file_name, "-fingerprint", "-noout"]
+            cmd = [
+                self.openssl_cmd,
+                "x509",
+                "-in",
+                file_name,
+                "-fingerprint",
+                "-noout"]
             thumbprint = shellutil.run_command(cmd)
-            thumbprint = thumbprint.rstrip().split('=')[1].replace(':', '').upper()
+            thumbprint = thumbprint.rstrip().split(
+                '=')[1].replace(':', '').upper()
             return thumbprint
 
     def decrypt_p7m(self, p7m_file, trans_prv_file, trans_cert_file, pem_file):
@@ -97,13 +112,13 @@ class CryptUtil(object):
         lines = [x for x in lines if not x.startswith("----")]
         base64_encoded = "".join(lines)
         try:
-            #TODO remove pyasn1 dependency
+            # TODO remove pyasn1 dependency
             from pyasn1.codec.der import decoder as der_decoder
             der_encoded = base64.b64decode(base64_encoded)
             der_encoded = der_decoder.decode(der_encoded)[0][1]
             key = der_decoder.decode(self.bits_to_bytes(der_encoded))[0]
-            n=key[0]
-            e=key[1]
+            n = key[0]
+            e = key[1]
             keydata = bytearray()
             keydata.extend(struct.pack('>I', len("ssh-rsa")))
             keydata.extend(b"ssh-rsa")
@@ -113,7 +128,7 @@ class CryptUtil(object):
             keydata.extend(b"\0")
             keydata.extend(self.num_to_bytes(n))
             keydata_base64 = base64.b64encode(bytebuffer(keydata))
-            return ustr(b"ssh-rsa " +  keydata_base64 + b"\n",
+            return ustr(b"ssh-rsa " + keydata_base64 + b"\n",
                         encoding='utf-8')
         except ImportError as e:
             raise CryptError("Failed to load pyasn1.codec.der")
@@ -148,13 +163,19 @@ class CryptUtil(object):
     def decrypt_secret(self, encrypted_password, private_key):
         try:
             decoded = base64.b64decode(encrypted_password)
-            args = DECRYPT_SECRET_CMD.format(self.openssl_cmd, private_key).split(' ')
-            p = subprocess.Popen(args, stdout=subprocess.PIPE, stdin=subprocess.PIPE, stderr=subprocess.STDOUT)
+            args = DECRYPT_SECRET_CMD.format(
+                self.openssl_cmd, private_key).split(' ')
+            p = subprocess.Popen(
+                args,
+                stdout=subprocess.PIPE,
+                stdin=subprocess.PIPE,
+                stderr=subprocess.STDOUT)
             p.stdin.write(decoded)
             output = p.communicate()[0]
             retcode = p.poll()
             if retcode:
-                raise subprocess.CalledProcessError(retcode, "openssl cms -decrypt", output=output)
+                raise subprocess.CalledProcessError(
+                    retcode, "openssl cms -decrypt", output=output)
             return output.decode('utf-16')
         except Exception as e:
             raise CryptError("Error decoding secret", e)

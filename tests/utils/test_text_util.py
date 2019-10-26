@@ -49,12 +49,12 @@ class TestTextUtil(AgentTestCase):
         self.assertEqual('', textutil.replace_non_ascii(None))
 
     def test_remove_bom(self):
-        #Test bom could be removed
+        # Test bom could be removed
         data = ustr(b'\xef\xbb\xbfhehe', encoding='utf-8')
         data = textutil.remove_bom(data)
         self.assertNotEquals(0xbb, data[0])
 
-        #bom is comprised of a sequence of three bytes and ff length of the input is shorter
+        # bom is comprised of a sequence of three bytes and ff length of the input is shorter
         # than three bytes, remove_bom should not do anything
         data = u"\xa7"
         data = textutil.remove_bom(data)
@@ -65,7 +65,7 @@ class TestTextUtil(AgentTestCase):
         self.assertEquals(u"\xa7", data[0])
         self.assertEquals(u"\xef", data[1])
 
-        #Test string without BOM is not affected
+        # Test string without BOM is not affected
         data = u"hehe"
         data = textutil.remove_bom(data)
         self.assertEquals(u"h", data[0])
@@ -101,7 +101,6 @@ class TestTextUtil(AgentTestCase):
                    "-----END CERTIFICATE----\n")
         base64_bytes = textutil.get_bytes_from_pem(content)
         self.assertEquals("certificate", base64_bytes)
-
 
         content = ("-----BEGIN PRIVATE KEY-----\n"
                    "private key\n"
@@ -142,11 +141,15 @@ class TestTextUtil(AgentTestCase):
 
     def test_compress(self):
         result = textutil.compress('[stdout]\nHello World\n\n[stderr]\n\n')
-        self.assertEqual('eJyLLi5JyS8tieXySM3JyVcIzy/KSeHiigaKphYVxXJxAQDAYQr2', result)
+        self.assertEqual(
+            'eJyLLi5JyS8tieXySM3JyVcIzy/KSeHiigaKphYVxXJxAQDAYQr2',
+            result)
 
     def test_hash_empty_list(self):
         result = textutil.hash_strings([])
-        self.assertEqual(b'\xda9\xa3\xee^kK\r2U\xbf\xef\x95`\x18\x90\xaf\xd8\x07\t', result)
+        self.assertEqual(
+            b'\xda9\xa3\xee^kK\r2U\xbf\xef\x95`\x18\x90\xaf\xd8\x07\t',
+            result)
 
     def test_hash_list(self):
         test_list = ["abc", "123"]
@@ -157,7 +160,9 @@ class TestTextUtil(AgentTestCase):
         hash_from_string.update(test_string.encode())
 
         self.assertEqual(result_from_list, hash_from_string.digest())
-        self.assertEqual(hash_from_string.hexdigest(), '6367c48dd193d56ea7b0baad25b19455e529f5ee')
+        self.assertEqual(
+            hash_from_string.hexdigest(),
+            '6367c48dd193d56ea7b0baad25b19455e529f5ee')
 
     def test_empty_strings(self):
         self.assertTrue(textutil.is_str_none_or_whitespace(None))
@@ -191,8 +196,12 @@ class TestTextUtil(AgentTestCase):
         self.assertTrue(textutil.is_str_empty(hex_null_1))
         self.assertTrue(textutil.is_str_empty(hex_null_2))
 
-        self.assertNotEqual(textutil.is_str_none_or_whitespace(hex_null_1), textutil.is_str_empty(hex_null_1))
-        self.assertNotEqual(textutil.is_str_none_or_whitespace(hex_null_2), textutil.is_str_empty(hex_null_2))
+        self.assertNotEqual(
+            textutil.is_str_none_or_whitespace(hex_null_1),
+            textutil.is_str_empty(hex_null_1))
+        self.assertNotEqual(
+            textutil.is_str_none_or_whitespace(hex_null_2),
+            textutil.is_str_empty(hex_null_2))
 
     def test_format_memory_value(self):
         """
@@ -200,11 +209,29 @@ class TestTextUtil(AgentTestCase):
         """
         self.assertEqual(2048, textutil.format_memory_value('kilobytes', 2))
         self.assertEqual(0, textutil.format_memory_value('kilobytes', 0))
-        self.assertEqual(2048000, textutil.format_memory_value('kilobytes', 2000))
-        self.assertEqual(2048 * 1024, textutil.format_memory_value('megabytes', 2))
-        self.assertEqual((1024 + 512) * 1024 * 1024, textutil.format_memory_value('gigabytes', 1.5))
-        self.assertRaises(ValueError, textutil.format_memory_value, 'KiloBytes', 1)
-        self.assertRaises(TypeError, textutil.format_memory_value, 'bytes', None)
+        self.assertEqual(
+            2048000, textutil.format_memory_value(
+                'kilobytes', 2000))
+        self.assertEqual(
+            2048 * 1024,
+            textutil.format_memory_value(
+                'megabytes',
+                2))
+        self.assertEqual(
+            (1024 + 512) * 1024 * 1024,
+            textutil.format_memory_value(
+                'gigabytes',
+                1.5))
+        self.assertRaises(
+            ValueError,
+            textutil.format_memory_value,
+            'KiloBytes',
+            1)
+        self.assertRaises(
+            TypeError,
+            textutil.format_memory_value,
+            'bytes',
+            None)
 
 
 if __name__ == '__main__':

@@ -19,13 +19,15 @@
 
 import azurelinuxagent.common.utils.fileutil as fileutil
 from azurelinuxagent.pa.deprovision.default import DeprovisionHandler, \
-                                                   DeprovisionAction
+    DeprovisionAction
+
 
 class ClearLinuxDeprovisionHandler(DeprovisionHandler):
     def __init__(self, distro):
         self.distro = distro
 
     def setup(self, deluser):
-        warnings, actions = super(ClearLinuxDeprovisionHandler, self).setup(deluser)
+        warnings, actions = super(
+            ClearLinuxDeprovisionHandler, self).setup(deluser)
         # Probably should just wipe /etc and /var here
         return warnings, actions

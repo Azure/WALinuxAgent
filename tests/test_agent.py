@@ -23,7 +23,7 @@ from azurelinuxagent.common.conf import *
 from tests.tools import *
 
 EXPECTED_CONFIGURATION = \
-"""AutoUpdate.Enabled = True
+    """AutoUpdate.Enabled = True
 AutoUpdate.GAFamily = Prod
 Autoupdate.Frequency = 3600
 CGroups.EnforceLimits = False
@@ -71,6 +71,7 @@ ResourceDisk.MountOptions = None
 ResourceDisk.MountPoint = /mnt/resource
 ResourceDisk.SwapSizeMB = 0""".split('\n')
 
+
 class TestAgent(AgentTestCase):
 
     def test_accepts_configuration_path(self):
@@ -81,14 +82,15 @@ class TestAgent(AgentTestCase):
     @patch("os.path.exists", return_value=True)
     def test_checks_configuration_path(self, mock_exists):
         conf_path = "/foo/bar-baz/something.conf"
-        c, f, v, d, cfp = parse_args(["-configuration-path:"+conf_path])
+        c, f, v, d, cfp = parse_args(["-configuration-path:" + conf_path])
         self.assertEqual(cfp, conf_path)
         self.assertEqual(mock_exists.call_count, 1)
 
     @patch("sys.stderr")
     @patch("os.path.exists", return_value=False)
     @patch("sys.exit", side_effect=Exception)
-    def test_rejects_missing_configuration_path(self, mock_exit, mock_exists, mock_stderr):
+    def test_rejects_missing_configuration_path(
+            self, mock_exit, mock_exists, mock_stderr):
         try:
             c, f, v, d, cfp = parse_args(["-configuration-path:/foo/bar.conf"])
             self.assertTrue(False)
@@ -101,7 +103,7 @@ class TestAgent(AgentTestCase):
 
     def test_agent_accepts_configuration_path(self):
         Agent(False,
-                conf_file_path=os.path.join(data_dir, "test_waagent.conf"))
+              conf_file_path=os.path.join(data_dir, "test_waagent.conf"))
         self.assertTrue(conf.get_fips_enabled())
 
     @patch("azurelinuxagent.common.conf.load_conf_from_file")
@@ -112,7 +114,7 @@ class TestAgent(AgentTestCase):
     @patch("azurelinuxagent.daemon.get_daemon_handler")
     @patch("azurelinuxagent.common.conf.load_conf_from_file")
     def test_agent_does_not_pass_configuration_path(self,
-                mock_load, mock_handler):
+                                                    mock_load, mock_handler):
 
         mock_daemon = Mock()
         mock_daemon.run = Mock()
@@ -135,7 +137,8 @@ class TestAgent(AgentTestCase):
         agent = Agent(False, conf_file_path="/foo/bar.conf")
         agent.daemon()
 
-        mock_daemon.run.assert_called_once_with(child_args="-configuration-path:/foo/bar.conf")
+        mock_daemon.run.assert_called_once_with(
+            child_args="-configuration-path:/foo/bar.conf")
         self.assertEqual(1, mock_load.call_count)
 
     @patch("azurelinuxagent.common.conf.get_ext_log_dir")
@@ -144,32 +147,41 @@ class TestAgent(AgentTestCase):
         mock_dir.return_value = ext_log_dir
 
         self.assertFalse(os.path.isdir(ext_log_dir))
-        agent = Agent(False,
-                    conf_file_path=os.path.join(data_dir, "test_waagent.conf"))
+        agent = Agent(
+            False, conf_file_path=os.path.join(
+                data_dir, "test_waagent.conf"))
         self.assertTrue(os.path.isdir(ext_log_dir))
 
     @patch("azurelinuxagent.common.logger.error")
     @patch("azurelinuxagent.common.conf.get_ext_log_dir")
-    def test_agent_logs_if_extension_log_directory_is_a_file(self, mock_dir, mock_log):
+    def test_agent_logs_if_extension_log_directory_is_a_file(
+            self, mock_dir, mock_log):
         ext_log_dir = os.path.join(self.tmp_dir, "FauxLogDir")
         mock_dir.return_value = ext_log_dir
         fileutil.write_file(ext_log_dir, "Foo")
 
         self.assertTrue(os.path.isfile(ext_log_dir))
         self.assertFalse(os.path.isdir(ext_log_dir))
-        agent = Agent(False,
-                    conf_file_path=os.path.join(data_dir, "test_waagent.conf"))
+        agent = Agent(
+            False, conf_file_path=os.path.join(
+                data_dir, "test_waagent.conf"))
         self.assertTrue(os.path.isfile(ext_log_dir))
         self.assertFalse(os.path.isdir(ext_log_dir))
         self.assertEqual(1, mock_log.call_count)
 
     def test_agent_get_configuration(self):
-        Agent(False, conf_file_path=os.path.join(data_dir, "test_waagent.conf"))
+        Agent(
+            False,
+            conf_file_path=os.path.join(
+                data_dir,
+                "test_waagent.conf"))
 
         actual_configuration = []
         configuration = conf.get_configuration()
         for k in sorted(configuration.keys()):
-            actual_configuration.append("{0} = {1}".format(k, configuration[k]))
+            actual_configuration.append(
+                "{0} = {1}".format(
+                    k, configuration[k]))
         self.assertEqual(EXPECTED_CONFIGURATION, actual_configuration)
 
     def test_agent_usage_message(self):

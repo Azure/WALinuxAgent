@@ -77,6 +77,7 @@ def get_linux_distribution_from_distro(get_full_name):
     osinfo.append(full_name)
     return osinfo
 
+
 def get_openwrt_platform():
     """
     Add this workaround for detecting OpenWRT products because

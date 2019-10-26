@@ -82,9 +82,13 @@ class DaemonHandler(object):
                 self.daemon(child_args)
             except Exception as e:
                 err_msg = traceback.format_exc()
-                add_event(name=AGENT_NAME, is_success=False, message=ustr(err_msg),
-                          op=WALAEventOperation.UnhandledError)
-                logger.warn("Daemon ended with exception -- Sleep 15 seconds and restart daemon")
+                add_event(
+                    name=AGENT_NAME,
+                    is_success=False,
+                    message=ustr(err_msg),
+                    op=WALAEventOperation.UnhandledError)
+                logger.warn(
+                    "Daemon ended with exception -- Sleep 15 seconds and restart daemon")
                 time.sleep(15)
 
     def check_pid(self):
@@ -152,7 +156,7 @@ class DaemonHandler(object):
                 #   current values.
                 protocol = self.protocol_util.get_protocol()
                 client = protocol.client
-                if client is None or type(client) is not WireClient:
+                if client is None or not isinstance(client, WireClient):
                     raise Exception("Attempt to setup RDMA without Wireserver")
                 client.update_goal_state(forced=True)
 

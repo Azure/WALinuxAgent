@@ -58,7 +58,13 @@ class TestCGroup(AgentTestCase):
         self.assertEqual(test_cgroup.name, "test_extension")
 
     def test_is_active(self):
-        test_cgroup = CGroup.create(os.path.join(data_dir, "cgroups", "cpu_mount"), "cpu", "test_extension")
+        test_cgroup = CGroup.create(
+            os.path.join(
+                data_dir,
+                "cgroups",
+                "cpu_mount"),
+            "cpu",
+            "test_extension")
         self.assertEqual(False, test_cgroup.is_active())
 
         with open(os.path.join(data_dir, "cgroups", "cpu_mount", "tasks"), mode="wb") as tasks:
@@ -66,7 +72,13 @@ class TestCGroup(AgentTestCase):
 
         self.assertEqual(True, test_cgroup.is_active())
 
-        test_cgroup = CGroup.create(os.path.join(data_dir, "cgroups", "memory_mount"), "memory", "test_extension")
+        test_cgroup = CGroup.create(
+            os.path.join(
+                data_dir,
+                "cgroups",
+                "memory_mount"),
+            "memory",
+            "test_extension")
         self.assertEqual(False, test_cgroup.is_active())
 
         with open(os.path.join(data_dir, "cgroups", "memory_mount", "tasks"), mode="wb") as tasks:
@@ -76,21 +88,47 @@ class TestCGroup(AgentTestCase):
 
     @patch("azurelinuxagent.common.logger.periodic_warn")
     def test_is_active_file_not_present(self, patch_periodic_warn):
-        test_cgroup = CGroup.create(os.path.join(data_dir, "cgroups", "not_cpu_mount"), "cpu", "test_extension")
+        test_cgroup = CGroup.create(
+            os.path.join(
+                data_dir,
+                "cgroups",
+                "not_cpu_mount"),
+            "cpu",
+            "test_extension")
         self.assertEqual(False, test_cgroup.is_active())
 
-        test_cgroup = CGroup.create(os.path.join(data_dir, "cgroups", "not_memory_mount"), "memory", "test_extension")
+        test_cgroup = CGroup.create(
+            os.path.join(
+                data_dir,
+                "cgroups",
+                "not_memory_mount"),
+            "memory",
+            "test_extension")
         self.assertEqual(False, test_cgroup.is_active())
 
         self.assertEqual(0, patch_periodic_warn.call_count)
 
     @patch("azurelinuxagent.common.logger.periodic_warn")
     def test_is_active_incorrect_file(self, patch_periodic_warn):
-        test_cgroup = CGroup.create(os.path.join(data_dir, "cgroups", "cpu_mount", "tasks"), "cpu", "test_extension")
+        test_cgroup = CGroup.create(
+            os.path.join(
+                data_dir,
+                "cgroups",
+                "cpu_mount",
+                "tasks"),
+            "cpu",
+            "test_extension")
         self.assertEqual(False, test_cgroup.is_active())
         self.assertEqual(1, patch_periodic_warn.call_count)
 
-        test_cgroup = CGroup.create(os.path.join(data_dir, "cgroups", "memory_mount", "tasks"), "memory", "test_extension")
+        test_cgroup = CGroup.create(
+            os.path.join(
+                data_dir,
+                "cgroups",
+                "memory_mount",
+                "tasks"),
+            "memory",
+            "test_extension")
         self.assertEqual(False, test_cgroup.is_active())
         self.assertEqual(2, patch_periodic_warn.call_count)
 
@@ -101,7 +139,8 @@ class TestCpuCgroup(AgentTestCase):
 
     @patch("azurelinuxagent.common.osutil.default.DefaultOSUtil._get_proc_stat")
     def test_cpu_cgroup_create(self, patch_get_proc_stat):
-        patch_get_proc_stat.return_value = fileutil.read_file(os.path.join(data_dir, "cgroups", "dummy_proc_stat"))
+        patch_get_proc_stat.return_value = fileutil.read_file(
+            os.path.join(data_dir, "cgroups", "dummy_proc_stat"))
         test_cpu_cg = CpuCgroup("test_extension", "dummy_path")
 
         self.assertEqual(398488, test_cpu_cg._current_system_cpu)
@@ -111,15 +150,20 @@ class TestCpuCgroup(AgentTestCase):
 
         self.assertEqual("cpu", test_cpu_cg.controller)
 
-    @patch("azurelinuxagent.common.osutil.default.DefaultOSUtil.get_processor_cores", return_value=1)
+    @patch(
+        "azurelinuxagent.common.osutil.default.DefaultOSUtil.get_processor_cores",
+        return_value=1)
     @patch("azurelinuxagent.common.osutil.default.DefaultOSUtil._get_proc_stat")
     def test_get_cpu_usage(self, patch_get_proc_stat, *args):
-        patch_get_proc_stat.return_value = fileutil.read_file(os.path.join(data_dir, "cgroups", "dummy_proc_stat"))
-        test_cpu_cg = CpuCgroup("test_extension", os.path.join(data_dir, "cgroups", "cpu_mount"))
+        patch_get_proc_stat.return_value = fileutil.read_file(
+            os.path.join(data_dir, "cgroups", "dummy_proc_stat"))
+        test_cpu_cg = CpuCgroup(
+            "test_extension", os.path.join(
+                data_dir, "cgroups", "cpu_mount"))
 
         # Mocking CPU consumption
-        patch_get_proc_stat.return_value = fileutil.read_file(os.path.join(data_dir, "cgroups",
-                                                                           "dummy_proc_stat_updated"))
+        patch_get_proc_stat.return_value = fileutil.read_file(
+            os.path.join(data_dir, "cgroups", "dummy_proc_stat_updated"))
 
         cpu_usage = test_cpu_cg.get_cpu_usage()
 
@@ -130,17 +174,27 @@ class TestCpuCgroup(AgentTestCase):
         self.assertRaises(IOError, test_cpu_cg._get_current_cpu_total)
 
         # Trying to raise ERRNO 20.
-        test_cpu_cg = CpuCgroup("test_extension", os.path.join(data_dir, "cgroups", "cpu_mount", "cpuacct.stat"))
+        test_cpu_cg = CpuCgroup(
+            "test_extension",
+            os.path.join(
+                data_dir,
+                "cgroups",
+                "cpu_mount",
+                "cpuacct.stat"))
         self.assertRaises(CGroupsException, test_cpu_cg._get_current_cpu_total)
 
 
 class TestMemoryCgroup(AgentTestCase):
     def test_memory_cgroup_create(self):
-        test_mem_cg = MemoryCgroup("test_extension", os.path.join(data_dir, "cgroups", "memory_mount"))
+        test_mem_cg = MemoryCgroup(
+            "test_extension", os.path.join(
+                data_dir, "cgroups", "memory_mount"))
         self.assertEqual("memory", test_mem_cg.controller)
 
     def test_get_metrics(self):
-        test_mem_cg = MemoryCgroup("test_extension", os.path.join(data_dir, "cgroups", "memory_mount"))
+        test_mem_cg = MemoryCgroup(
+            "test_extension", os.path.join(
+                data_dir, "cgroups", "memory_mount"))
 
         memory_usage = test_mem_cg.get_memory_usage()
         self.assertEqual(100000, memory_usage)
@@ -149,7 +203,9 @@ class TestMemoryCgroup(AgentTestCase):
         self.assertEqual(1000000, max_memory_usage)
 
     def test_get_metrics_when_files_not_present(self):
-        test_mem_cg = MemoryCgroup("test_extension", os.path.join(data_dir, "cgroups"))
+        test_mem_cg = MemoryCgroup(
+            "test_extension", os.path.join(
+                data_dir, "cgroups"))
 
         memory_usage = test_mem_cg.get_memory_usage()
         self.assertEqual(0, memory_usage)

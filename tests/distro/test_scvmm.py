@@ -25,6 +25,7 @@ import azurelinuxagent.daemon.scvmm as scvmm
 from azurelinuxagent.daemon.main import *
 from azurelinuxagent.common.osutil.default import DefaultOSUtil
 
+
 class TestSCVMM(AgentTestCase):
     def test_scvmm_detection_with_file(self):
         # setup
@@ -40,14 +41,13 @@ class TestSCVMM(AgentTestCase):
                     failed = False
                     try:
                         scvmm.get_scvmm_handler().run()
-                    except:
+                    except BaseException:
                         failed = True
                     # assert
                     self.assertTrue(failed)
                     self.assertTrue(po.call_count == 1)
                     # cleanup
                     os.remove(scvmm_file)
-
 
     def test_scvmm_detection_with_multiple_cdroms(self):
         # setup
@@ -63,7 +63,6 @@ class TestSCVMM(AgentTestCase):
                 assert patch_mount.call_args_list[0][1]['dvd_device'] == '/dev/sr0'
                 assert patch_mount.call_args_list[1][1]['dvd_device'] == '/dev/sr1'
                 assert patch_mount.call_args_list[2][1]['dvd_device'] == '/dev/sr2'
-
 
     def test_scvmm_detection_without_file(self):
         # setup

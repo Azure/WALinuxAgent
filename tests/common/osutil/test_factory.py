@@ -49,7 +49,7 @@ class TestOsUtilFactory(AgentTestCase):
                           distro_code_name="",
                           distro_version="",
                           distro_full_name="")
-        self.assertTrue(type(ret) == DefaultOSUtil)
+        self.assertTrue(isinstance(ret, DefaultOSUtil))
         self.assertEquals(patch_logger.call_count, 1)
         self.assertEquals(ret.get_service_name(), "waagent")
 
@@ -58,42 +58,42 @@ class TestOsUtilFactory(AgentTestCase):
                           distro_code_name="",
                           distro_version="10.04",
                           distro_full_name="")
-        self.assertTrue(type(ret) == UbuntuOSUtil)
+        self.assertTrue(isinstance(ret, UbuntuOSUtil))
         self.assertEquals(ret.get_service_name(), "walinuxagent")
 
         ret = _get_osutil(distro_name="ubuntu",
                           distro_code_name="",
                           distro_version="12.04",
                           distro_full_name="")
-        self.assertTrue(type(ret) == Ubuntu12OSUtil)
+        self.assertTrue(isinstance(ret, Ubuntu12OSUtil))
         self.assertEquals(ret.get_service_name(), "walinuxagent")
 
         ret = _get_osutil(distro_name="ubuntu",
                           distro_code_name="trusty",
                           distro_version="14.04",
                           distro_full_name="")
-        self.assertTrue(type(ret) == Ubuntu14OSUtil)
+        self.assertTrue(isinstance(ret, Ubuntu14OSUtil))
         self.assertEquals(ret.get_service_name(), "walinuxagent")
 
         ret = _get_osutil(distro_name="ubuntu",
                           distro_code_name="xenial",
                           distro_version="16.04",
                           distro_full_name="")
-        self.assertTrue(type(ret) == Ubuntu16OSUtil)
+        self.assertTrue(isinstance(ret, Ubuntu16OSUtil))
         self.assertEquals(ret.get_service_name(), "walinuxagent")
 
         ret = _get_osutil(distro_name="ubuntu",
                           distro_code_name="",
                           distro_version="18.04",
                           distro_full_name="")
-        self.assertTrue(type(ret) == Ubuntu18OSUtil)
+        self.assertTrue(isinstance(ret, Ubuntu18OSUtil))
         self.assertEquals(ret.get_service_name(), "walinuxagent")
 
         ret = _get_osutil(distro_name="ubuntu",
                           distro_code_name="",
                           distro_version="10.04",
                           distro_full_name="Snappy Ubuntu Core")
-        self.assertTrue(type(ret) == UbuntuSnappyOSUtil)
+        self.assertTrue(isinstance(ret, UbuntuSnappyOSUtil))
         self.assertEquals(ret.get_service_name(), "walinuxagent")
 
     def test_get_osutil_it_should_return_arch(self):
@@ -101,7 +101,7 @@ class TestOsUtilFactory(AgentTestCase):
                           distro_code_name="",
                           distro_version="",
                           distro_full_name="")
-        self.assertTrue(type(ret) == ArchUtil)
+        self.assertTrue(isinstance(ret, ArchUtil))
         self.assertEquals(ret.get_service_name(), "waagent")
 
     def test_get_osutil_it_should_return_clear_linux(self):
@@ -109,7 +109,7 @@ class TestOsUtilFactory(AgentTestCase):
                           distro_code_name="",
                           distro_version="",
                           distro_full_name="Clear Linux")
-        self.assertTrue(type(ret) == ClearLinuxUtil)
+        self.assertTrue(isinstance(ret, ClearLinuxUtil))
         self.assertEquals(ret.get_service_name(), "waagent")
 
     def test_get_osutil_it_should_return_alpine(self):
@@ -117,7 +117,7 @@ class TestOsUtilFactory(AgentTestCase):
                           distro_code_name="",
                           distro_version="",
                           distro_full_name="")
-        self.assertTrue(type(ret) == AlpineOSUtil)
+        self.assertTrue(isinstance(ret, AlpineOSUtil))
         self.assertEquals(ret.get_service_name(), "waagent")
 
     def test_get_osutil_it_should_return_kali(self):
@@ -125,7 +125,7 @@ class TestOsUtilFactory(AgentTestCase):
                           distro_code_name="",
                           distro_version="",
                           distro_full_name="")
-        self.assertTrue(type(ret) == DebianOSBaseUtil)
+        self.assertTrue(isinstance(ret, DebianOSBaseUtil))
         self.assertEquals(ret.get_service_name(), "waagent")
 
     def test_get_osutil_it_should_return_coreos(self):
@@ -133,7 +133,7 @@ class TestOsUtilFactory(AgentTestCase):
                           distro_code_name="",
                           distro_version="",
                           distro_full_name="")
-        self.assertTrue(type(ret) == CoreOSUtil)
+        self.assertTrue(isinstance(ret, CoreOSUtil))
         self.assertEquals(ret.get_service_name(), "waagent")
 
     def test_get_osutil_it_should_return_suse(self):
@@ -141,21 +141,21 @@ class TestOsUtilFactory(AgentTestCase):
                           distro_code_name="",
                           distro_version="10",
                           distro_full_name="")
-        self.assertTrue(type(ret) == SUSEOSUtil)
+        self.assertTrue(isinstance(ret, SUSEOSUtil))
         self.assertEquals(ret.get_service_name(), "waagent")
 
         ret = _get_osutil(distro_name="suse",
                           distro_code_name="",
                           distro_full_name="SUSE Linux Enterprise Server",
                           distro_version="11")
-        self.assertTrue(type(ret) == SUSE11OSUtil)
+        self.assertTrue(isinstance(ret, SUSE11OSUtil))
         self.assertEquals(ret.get_service_name(), "waagent")
 
         ret = _get_osutil(distro_name="suse",
                           distro_code_name="",
                           distro_full_name="openSUSE",
                           distro_version="12")
-        self.assertTrue(type(ret) == SUSE11OSUtil)
+        self.assertTrue(isinstance(ret, SUSE11OSUtil))
         self.assertEquals(ret.get_service_name(), "waagent")
 
     def test_get_osutil_it_should_return_debian(self):
@@ -163,14 +163,14 @@ class TestOsUtilFactory(AgentTestCase):
                           distro_code_name="",
                           distro_full_name="",
                           distro_version="7")
-        self.assertTrue(type(ret) == DebianOSBaseUtil)
+        self.assertTrue(isinstance(ret, DebianOSBaseUtil))
         self.assertEquals(ret.get_service_name(), "waagent")
 
         ret = _get_osutil(distro_name="debian",
                           distro_code_name="",
                           distro_full_name="",
                           distro_version="8")
-        self.assertTrue(type(ret) == DebianOSModernUtil)
+        self.assertTrue(isinstance(ret, DebianOSModernUtil))
         self.assertEquals(ret.get_service_name(), "walinuxagent")
 
     def test_get_osutil_it_should_return_redhat(self):
@@ -178,42 +178,42 @@ class TestOsUtilFactory(AgentTestCase):
                           distro_code_name="",
                           distro_full_name="",
                           distro_version="6")
-        self.assertTrue(type(ret) == Redhat6xOSUtil)
+        self.assertTrue(isinstance(ret, Redhat6xOSUtil))
         self.assertEquals(ret.get_service_name(), "waagent")
 
         ret = _get_osutil(distro_name="centos",
                           distro_code_name="",
                           distro_full_name="",
                           distro_version="6")
-        self.assertTrue(type(ret) == Redhat6xOSUtil)
+        self.assertTrue(isinstance(ret, Redhat6xOSUtil))
         self.assertEquals(ret.get_service_name(), "waagent")
 
         ret = _get_osutil(distro_name="oracle",
                           distro_code_name="",
                           distro_full_name="",
                           distro_version="6")
-        self.assertTrue(type(ret) == Redhat6xOSUtil)
+        self.assertTrue(isinstance(ret, Redhat6xOSUtil))
         self.assertEquals(ret.get_service_name(), "waagent")
 
         ret = _get_osutil(distro_name="redhat",
                           distro_code_name="",
                           distro_full_name="",
                           distro_version="7")
-        self.assertTrue(type(ret) == RedhatOSUtil)
+        self.assertTrue(isinstance(ret, RedhatOSUtil))
         self.assertEquals(ret.get_service_name(), "waagent")
 
         ret = _get_osutil(distro_name="centos",
                           distro_code_name="",
                           distro_full_name="",
                           distro_version="7")
-        self.assertTrue(type(ret) == RedhatOSUtil)
+        self.assertTrue(isinstance(ret, RedhatOSUtil))
         self.assertEquals(ret.get_service_name(), "waagent")
 
         ret = _get_osutil(distro_name="oracle",
                           distro_code_name="",
                           distro_full_name="",
                           distro_version="7")
-        self.assertTrue(type(ret) == RedhatOSUtil)
+        self.assertTrue(isinstance(ret, RedhatOSUtil))
         self.assertEquals(ret.get_service_name(), "waagent")
 
     def test_get_osutil_it_should_return_euleros(self):
@@ -221,7 +221,7 @@ class TestOsUtilFactory(AgentTestCase):
                           distro_code_name="",
                           distro_version="",
                           distro_full_name="")
-        self.assertTrue(type(ret) == RedhatOSUtil)
+        self.assertTrue(isinstance(ret, RedhatOSUtil))
         self.assertEquals(ret.get_service_name(), "waagent")
 
     def test_get_osutil_it_should_return_freebsd(self):
@@ -229,7 +229,7 @@ class TestOsUtilFactory(AgentTestCase):
                           distro_code_name="",
                           distro_version="",
                           distro_full_name="")
-        self.assertTrue(type(ret) == FreeBSDOSUtil)
+        self.assertTrue(isinstance(ret, FreeBSDOSUtil))
         self.assertEquals(ret.get_service_name(), "waagent")
 
     def test_get_osutil_it_should_return_openbsd(self):
@@ -237,7 +237,7 @@ class TestOsUtilFactory(AgentTestCase):
                           distro_code_name="",
                           distro_version="",
                           distro_full_name="")
-        self.assertTrue(type(ret) == OpenBSDOSUtil)
+        self.assertTrue(isinstance(ret, OpenBSDOSUtil))
         self.assertEquals(ret.get_service_name(), "waagent")
 
     def test_get_osutil_it_should_return_bigip(self):
@@ -245,7 +245,7 @@ class TestOsUtilFactory(AgentTestCase):
                           distro_code_name="",
                           distro_version="",
                           distro_full_name="")
-        self.assertTrue(type(ret) == BigIpOSUtil)
+        self.assertTrue(isinstance(ret, BigIpOSUtil))
         self.assertEquals(ret.get_service_name(), "waagent")
 
     def test_get_osutil_it_should_return_gaia(self):
@@ -253,7 +253,7 @@ class TestOsUtilFactory(AgentTestCase):
                           distro_code_name="",
                           distro_version="",
                           distro_full_name="")
-        self.assertTrue(type(ret) == GaiaOSUtil)
+        self.assertTrue(isinstance(ret, GaiaOSUtil))
         self.assertEquals(ret.get_service_name(), "waagent")
 
     def test_get_osutil_it_should_return_iosxe(self):
@@ -261,7 +261,7 @@ class TestOsUtilFactory(AgentTestCase):
                           distro_code_name="",
                           distro_version="",
                           distro_full_name="")
-        self.assertTrue(type(ret) == IosxeOSUtil)
+        self.assertTrue(isinstance(ret, IosxeOSUtil))
         self.assertEquals(ret.get_service_name(), "waagent")
 
     def test_get_osutil_it_should_return_openwrt(self):
@@ -269,5 +269,5 @@ class TestOsUtilFactory(AgentTestCase):
                           distro_code_name="",
                           distro_version="",
                           distro_full_name="")
-        self.assertTrue(type(ret) == OpenWRTOSUtil)
+        self.assertTrue(isinstance(ret, OpenWRTOSUtil))
         self.assertEquals(ret.get_service_name(), "waagent")

@@ -68,13 +68,16 @@ class CoreOSUtil(DefaultOSUtil):
         return shellutil.run("systemctl start systemd-networkd", chk_err=False)
 
     def start_agent_service(self):
-        return shellutil.run("systemctl start {0}".format(self.service_name), chk_err=False)
+        return shellutil.run("systemctl start {0}".format(
+            self.service_name), chk_err=False)
 
     def stop_agent_service(self):
-        return shellutil.run("systemctl stop {0}".format(self.service_name), chk_err=False)
+        return shellutil.run("systemctl stop {0}".format(
+            self.service_name), chk_err=False)
 
     def get_dhcp_pid(self):
-        return self._get_dhcp_pid(["systemctl", "show", "-p", "MainPID", "systemd-networkd"])
+        return self._get_dhcp_pid(
+            ["systemctl", "show", "-p", "MainPID", "systemd-networkd"])
 
     def conf_sshd(self, disable_password):
         # In CoreOS, /etc/sshd_config is mount readonly.  Skip the setting.

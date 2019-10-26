@@ -42,7 +42,8 @@ THROTTLE_RETRIES = 25
 THROTTLE_DELAY_IN_SECONDS = 1
 
 REDACTED_TEXT = "<SAS_SIGNATURE>"
-SAS_TOKEN_RETRIEVAL_REGEX = re.compile(r'^(https?://[a-zA-Z0-9.].*sig=)([a-zA-Z0-9%-]*)(.*)$')
+SAS_TOKEN_RETRIEVAL_REGEX = re.compile(
+    r'^(https?://[a-zA-Z0-9.].*sig=)([a-zA-Z0-9%-]*)(.*)$')
 
 RETRY_CODES = [
     httpclient.RESET_CONTENT,
@@ -78,7 +79,7 @@ HOSTPLUGIN_UPSTREAM_FAILURE_CODES = [
 THROTTLE_CODES = [
     httpclient.FORBIDDEN,
     httpclient.SERVICE_UNAVAILABLE,
-    429, # Request Rate Limit Exceeded
+    429,  # Request Rate Limit Exceeded
 ]
 
 RETRY_EXCEPTIONS = [
@@ -105,7 +106,7 @@ HOST_PLUGIN_PORT = 32526
 class IOErrorCounter(object):
     _lock = threading.RLock()
     _protocol_endpoint = DEFAULT_PROTOCOL_ENDPOINT
-    _counts = {"hostplugin":0, "protocol":0, "other":0}
+    _counts = {"hostplugin": 0, "protocol": 0, "other": 0}
 
     @staticmethod
     def increment(host=None, port=None):
@@ -128,7 +129,8 @@ class IOErrorCounter(object):
     @staticmethod
     def reset():
         with IOErrorCounter._lock:
-            IOErrorCounter._counts = {"hostplugin":0, "protocol":0, "other":0}
+            IOErrorCounter._counts = {
+                "hostplugin": 0, "protocol": 0, "other": 0}
 
     @staticmethod
     def set_protocol_endpoint(endpoint=DEFAULT_PROTOCOL_ENDPOINT):
@@ -138,8 +140,8 @@ class IOErrorCounter(object):
 def _compute_delay(retry_attempt=1, delay=DELAY_IN_SECONDS):
     fib = (1, 1)
     for n in range(retry_attempt):
-        fib = (fib[1], fib[0]+fib[1])
-    return delay*fib[1]
+        fib = (fib[1], fib[0] + fib[1])
+    return delay * fib[1]
 
 
 def _is_retry_status(status, retry_codes=RETRY_CODES):
@@ -211,7 +213,10 @@ def address_in_network(ip, net):
     """
     ipaddr = struct.unpack('=L', socket.inet_aton(ip))[0]
     netaddr, bits = net.split('/')
-    netmask = struct.unpack('=L', socket.inet_aton(dotted_netmask(int(bits))))[0]
+    netmask = struct.unpack(
+        '=L', socket.inet_aton(
+            dotted_netmask(
+                int(bits))))[0]
     network = struct.unpack('=L', socket.inet_aton(netaddr))[0] & netmask
     return (ipaddr & netmask) == (network & netmask)
 
@@ -228,10 +233,13 @@ def is_ipv4_address(string_ip):
 
 
 def get_no_proxy():
-    no_proxy = os.environ.get(NO_PROXY_ENV) or os.environ.get(NO_PROXY_ENV.upper())
+    no_proxy = os.environ.get(
+        NO_PROXY_ENV) or os.environ.get(NO_PROXY_ENV.upper())
 
     if no_proxy:
-        no_proxy = [host for host in no_proxy.replace(' ', '').split(',') if host]
+        no_proxy = [
+            host for host in no_proxy.replace(
+                ' ', '').split(',') if host]
 
     # no_proxy in the proxies argument takes precedence
     return no_proxy
@@ -265,7 +273,7 @@ def _get_http_proxy(secure=False):
     host = conf.get_httpproxy_host()
     port = None
 
-    if not host is None:
+    if host is not None:
         port = conf.get_httpproxy_port()
 
     else:
@@ -276,7 +284,7 @@ def _get_http_proxy(secure=False):
                 http_proxy_url = os.environ[v]
                 break
 
-        if not http_proxy_url is None:
+        if http_proxy_url is not None:
             host, port, _, _ = _parse_url(http_proxy_url)
 
     return host, port
@@ -330,11 +338,11 @@ def _http_request(method, host, rel_uri, port=None, data=None, secure=False,
 
 
 def http_request(method,
-                url, data, headers=None,
-                use_proxy=False,
-                max_retry=DEFAULT_RETRIES,
-                retry_codes=RETRY_CODES,
-                retry_delay=DELAY_IN_SECONDS):
+                 url, data, headers=None,
+                 use_proxy=False,
+                 max_retry=DEFAULT_RETRIES,
+                 retry_codes=RETRY_CODES,
+                 retry_delay=DELAY_IN_SECONDS):
 
     global SECURE_WARNING_EMITTED
 
@@ -362,9 +370,9 @@ def http_request(method,
     # If httplib module doesn't support HTTPS tunnelling,
     # fallback to HTTP if allowed
     if secure and \
-        proxy_host is not None and \
-        proxy_port is not None \
-        and not hasattr(httpclient.HTTPSConnection, "set_tunnel"):
+            proxy_host is not None and \
+            proxy_port is not None \
+            and not hasattr(httpclient.HTTPSConnection, "set_tunnel"):
 
         if not conf.get_allow_http():
             raise HttpError("HTTPS tunnelling is unavailable and required")
@@ -387,16 +395,16 @@ def http_request(method,
             # -- Otherwise, compute a delay that is the product of the next
             #    item in the Fibonacci series and the initial delay value
             delay = THROTTLE_DELAY_IN_SECONDS \
-                        if was_throttled \
-                        else _compute_delay(retry_attempt=attempt,
-                                            delay=retry_delay)
+                if was_throttled \
+                else _compute_delay(retry_attempt=attempt,
+                                    delay=retry_delay)
 
             logger.verbose("[HTTP Retry] "
-                        "Attempt {0} of {1} will delay {2} seconds: {3}",
-                        attempt+1,
-                        max_retry,
-                        delay,
-                        msg)
+                           "Attempt {0} of {1} will delay {2} seconds: {3}",
+                           attempt + 1,
+                           max_retry,
+                           delay,
+                           msg)
 
             time.sleep(delay)
 
@@ -416,7 +424,8 @@ def http_request(method,
 
             if request_failed(resp):
                 if _is_retry_status(resp.status, retry_codes=retry_codes):
-                    msg = '[HTTP Retry] {0} {1} -- Status Code {2}'.format(method, url, resp.status)
+                    msg = '[HTTP Retry] {0} {1} -- Status Code {2}'.format(
+                        method, url, resp.status)
                     # Note if throttled and ensure a safe, minimum number of
                     # retry attempts
                     if _is_throttle_status(resp.status):
@@ -431,7 +440,8 @@ def http_request(method,
                 raise ResourceGoneError(response_error)
 
             # If we got a 400 (bad request) because the container id is invalid, it could indicate a stale goal
-            # state. The caller will handle this exception by forcing a goal state refresh and retrying the call.
+            # state. The caller will handle this exception by forcing a goal
+            # state refresh and retrying the call.
             if resp.status == httpclient.BAD_REQUEST:
                 response_error = read_response_error(resp)
                 if INVALID_CONTAINER_CONFIGURATION in response_error:
@@ -441,7 +451,8 @@ def http_request(method,
 
         except httpclient.HTTPException as e:
             clean_url = redact_sas_tokens_in_urls(url)
-            msg = '[HTTP Failed] {0} {1} -- HttpException {2}'.format(method, clean_url, e)
+            msg = '[HTTP Failed] {0} {1} -- HttpException {2}'.format(
+                method, clean_url, e)
             if _is_retry_exception(e):
                 continue
             break
@@ -449,7 +460,8 @@ def http_request(method,
         except IOError as e:
             IOErrorCounter.increment(host=host, port=port)
             clean_url = redact_sas_tokens_in_urls(url)
-            msg = '[HTTP Failed] {0} {1} -- IOError {2}'.format(method, clean_url, e)
+            msg = '[HTTP Failed] {0} {1} -- IOError {2}'.format(
+                method, clean_url, e)
             continue
 
     raise HttpError("{0} -- {1} attempts made".format(msg, attempt))
@@ -544,7 +556,8 @@ def request_not_modified(resp):
     return resp is not None and resp.status in NOT_MODIFIED_CODES
 
 
-def request_failed_at_hostplugin(resp, upstream_failure_codes=HOSTPLUGIN_UPSTREAM_FAILURE_CODES):
+def request_failed_at_hostplugin(
+        resp, upstream_failure_codes=HOSTPLUGIN_UPSTREAM_FAILURE_CODES):
     """
     Host plugin will return 502 for any upstream issue, so a failure is any 5xx except 502
     """
@@ -556,9 +569,9 @@ def read_response_error(resp):
     if resp is not None:
         try:
             result = "[HTTP Failed] [{0}: {1}] {2}".format(
-                        resp.status,
-                        resp.reason,
-                        resp.read())
+                resp.status,
+                resp.reason,
+                resp.read())
 
             # this result string is passed upstream to several methods
             # which do a raise HttpError() or a format() of some kind;

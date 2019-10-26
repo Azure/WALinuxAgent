@@ -29,14 +29,17 @@ class TestProcessUtils(AgentTestCase):
         self.stdout = tempfile.TemporaryFile(dir=self.tmp_dir, mode="w+b")
         self.stderr = tempfile.TemporaryFile(dir=self.tmp_dir, mode="w+b")
 
-        self.stdout.write("The quick brown fox jumps over the lazy dog.".encode("utf-8"))
-        self.stderr.write("The five boxing wizards jump quickly.".encode("utf-8"))
+        self.stdout.write(
+            "The quick brown fox jumps over the lazy dog.".encode("utf-8"))
+        self.stderr.write(
+            "The five boxing wizards jump quickly.".encode("utf-8"))
 
     def tearDown(self):
         if self.tmp_dir is not None:
             shutil.rmtree(self.tmp_dir)
 
-    def test_wait_for_process_completion_or_timeout_should_terminate_cleanly(self):
+    def test_wait_for_process_completion_or_timeout_should_terminate_cleanly(
+            self):
         process = subprocess.Popen(
             "date",
             shell=True,
@@ -45,11 +48,13 @@ class TestProcessUtils(AgentTestCase):
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE)
 
-        timed_out, ret = wait_for_process_completion_or_timeout(process=process, timeout=5)
+        timed_out, ret = wait_for_process_completion_or_timeout(
+            process=process, timeout=5)
         self.assertEquals(timed_out, False)
         self.assertEquals(ret, 0)
 
-    def test_wait_for_process_completion_or_timeout_should_kill_process_on_timeout(self):
+    def test_wait_for_process_completion_or_timeout_should_kill_process_on_timeout(
+            self):
         timeout = 5
         process = subprocess.Popen(
             "sleep 1m",
@@ -60,20 +65,24 @@ class TestProcessUtils(AgentTestCase):
             stderr=subprocess.PIPE,
             preexec_fn=os.setsid)
 
-        # We don't actually mock the kill, just wrap it so we can assert its call count
+        # We don't actually mock the kill, just wrap it so we can assert its
+        # call count
         with patch('azurelinuxagent.common.utils.extensionprocessutil.os.killpg', wraps=os.killpg) as patch_kill:
             with patch('time.sleep') as mock_sleep:
-                timed_out, ret = wait_for_process_completion_or_timeout(process=process, timeout=timeout)
+                timed_out, ret = wait_for_process_completion_or_timeout(
+                    process=process, timeout=timeout)
 
                 # We're mocking sleep to avoid prolonging the test execution time, but we still want to make sure
-                # we're "waiting" the correct amount of time before killing the process
+                # we're "waiting" the correct amount of time before killing the
+                # process
                 self.assertEquals(mock_sleep.call_count, timeout)
 
                 self.assertEquals(patch_kill.call_count, 1)
                 self.assertEquals(timed_out, True)
                 self.assertEquals(ret, None)
 
-    def test_handle_process_completion_should_return_nonzero_when_process_fails(self):
+    def test_handle_process_completion_should_return_nonzero_when_process_fails(
+            self):
         process = subprocess.Popen(
             "ls folder_does_not_exist",
             shell=True,
@@ -82,7 +91,8 @@ class TestProcessUtils(AgentTestCase):
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE)
 
-        timed_out, ret = wait_for_process_completion_or_timeout(process=process, timeout=5)
+        timed_out, ret = wait_for_process_completion_or_timeout(
+            process=process, timeout=5)
         self.assertEquals(timed_out, False)
         self.assertEquals(ret, 2)
 
@@ -131,11 +141,16 @@ class TestProcessUtils(AgentTestCase):
                                                   error_code=42)
 
                     # We're mocking sleep to avoid prolonging the test execution time, but we still want to make sure
-                    # we're "waiting" the correct amount of time before killing the process and raising an exception
+                    # we're "waiting" the correct amount of time before killing
+                    # the process and raising an exception
                     self.assertEquals(mock_sleep.call_count, timeout)
 
-                    self.assertEquals(context_manager.exception.code, ExtensionErrorCodes.PluginHandlerScriptTimedout)
-                    self.assertIn("Timeout({0})".format(timeout), ustr(context_manager.exception))
+                    self.assertEquals(
+                        context_manager.exception.code,
+                        ExtensionErrorCodes.PluginHandlerScriptTimedout)
+                    self.assertIn(
+                        "Timeout({0})".format(timeout), ustr(
+                            context_manager.exception))
 
     def test_handle_process_completion_should_raise_on_nonzero_exit_code(self):
         command = "ls folder_does_not_exist"
@@ -159,7 +174,10 @@ class TestProcessUtils(AgentTestCase):
                                               error_code=error_code)
 
                 self.assertEquals(context_manager.exception.code, error_code)
-                self.assertIn("Non-zero exit code:", ustr(context_manager.exception))
+                self.assertIn(
+                    "Non-zero exit code:",
+                    ustr(
+                        context_manager.exception))
 
     def test_read_output_it_should_return_no_content(self):
         with patch('azurelinuxagent.common.utils.extensionprocessutil.TELEMETRY_MESSAGE_MAX_LEN', 0):

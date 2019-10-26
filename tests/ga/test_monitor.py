@@ -35,7 +35,8 @@ from tests.tools import *
 
 
 class ResponseMock(Mock):
-    def __init__(self, status=restutil.httpclient.OK, response=None, reason=None):
+    def __init__(self, status=restutil.httpclient.OK,
+                 response=None, reason=None):
         Mock.__init__(self)
         self.status = status
         self.reason = reason
@@ -45,7 +46,8 @@ class ResponseMock(Mock):
         return self.response
 
 
-def random_generator(size=6, chars=string.ascii_uppercase + string.digits + string.ascii_lowercase):
+def random_generator(size=6, chars=string.ascii_uppercase +
+                     string.digits + string.ascii_lowercase):
     return ''.join(random.choice(chars) for x in range(size))
 
 
@@ -65,18 +67,23 @@ def create_event_message(size=0,
                              is_success=is_success,
                              duration=duration,
                              version=version,
-                             message=random_generator(size) if size != 0 else message,
+                             message=random_generator(
+                                 size) if size != 0 else message,
                              evt_type=evt_type,
                              is_internal=is_internal)
 
 
-def get_event_message(duration, evt_type, is_internal, is_success, message, name, op, version, eventId=1):
+def get_event_message(duration, evt_type, is_internal,
+                      is_success, message, name, op, version, eventId=1):
     event = TelemetryEvent(eventId, "XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX")
     event.parameters.append(TelemetryEventParam('Name', name))
     event.parameters.append(TelemetryEventParam('Version', str(version)))
     event.parameters.append(TelemetryEventParam('IsInternal', is_internal))
     event.parameters.append(TelemetryEventParam('Operation', op))
-    event.parameters.append(TelemetryEventParam('OperationSuccess', is_success))
+    event.parameters.append(
+        TelemetryEventParam(
+            'OperationSuccess',
+            is_success))
     event.parameters.append(TelemetryEventParam('Message', message))
     event.parameters.append(TelemetryEventParam('Duration', duration))
     event.parameters.append(TelemetryEventParam('ExtensionType', evt_type))
@@ -167,7 +174,8 @@ class TestMonitor(AgentTestCase):
 
         MonitorHandler.TELEMETRY_HEARTBEAT_PERIOD = timedelta(milliseconds=100)
         MonitorHandler.EVENT_COLLECTION_PERIOD = timedelta(milliseconds=100)
-        MonitorHandler.HOST_PLUGIN_HEARTBEAT_PERIOD = timedelta(milliseconds=100)
+        MonitorHandler.HOST_PLUGIN_HEARTBEAT_PERIOD = timedelta(
+            milliseconds=100)
         MonitorHandler.IMDS_HEARTBEAT_PERIOD = timedelta(milliseconds=100)
 
         self.assertEqual(0, patch_hostplugin_heartbeat.call_count)
@@ -197,7 +205,8 @@ class TestMonitor(AgentTestCase):
 
         MonitorHandler.TELEMETRY_HEARTBEAT_PERIOD = timedelta(milliseconds=100)
         MonitorHandler.EVENT_COLLECTION_PERIOD = timedelta(milliseconds=100)
-        MonitorHandler.HOST_PLUGIN_HEARTBEAT_PERIOD = timedelta(milliseconds=100)
+        MonitorHandler.HOST_PLUGIN_HEARTBEAT_PERIOD = timedelta(
+            milliseconds=100)
         MonitorHandler.IMDS_HEARTBEAT_PERIOD = timedelta(milliseconds=100)
 
         self.assertEqual(None, monitor_handler.last_host_plugin_heartbeat)
@@ -221,10 +230,17 @@ class TestMonitor(AgentTestCase):
 
         time.sleep(0.5)
 
-        self.assertNotEqual(heartbeat_imds, monitor_handler.last_imds_heartbeat)
-        self.assertNotEqual(heartbeat_hostplugin, monitor_handler.last_host_plugin_heartbeat)
-        self.assertNotEqual(events_collection, monitor_handler.last_event_collection)
-        self.assertNotEqual(heartbeat_telemetry, monitor_handler.last_telemetry_heartbeat)
+        self.assertNotEqual(
+            heartbeat_imds,
+            monitor_handler.last_imds_heartbeat)
+        self.assertNotEqual(heartbeat_hostplugin,
+                            monitor_handler.last_host_plugin_heartbeat)
+        self.assertNotEqual(
+            events_collection,
+            monitor_handler.last_event_collection)
+        self.assertNotEqual(
+            heartbeat_telemetry,
+            monitor_handler.last_telemetry_heartbeat)
 
         monitor_handler.stop()
 
@@ -259,10 +275,14 @@ class TestMonitor(AgentTestCase):
 
         time.sleep(0.5)
 
-        self.assertEqual(heartbeat_hostplugin, monitor_handler.last_host_plugin_heartbeat)
+        self.assertEqual(heartbeat_hostplugin,
+                         monitor_handler.last_host_plugin_heartbeat)
         self.assertEqual(heartbeat_imds, monitor_handler.last_imds_heartbeat)
-        self.assertEqual(events_collection, monitor_handler.last_event_collection)
-        self.assertEqual(heartbeat_telemetry, monitor_handler.last_telemetry_heartbeat)
+        self.assertEqual(
+            events_collection,
+            monitor_handler.last_event_collection)
+        self.assertEqual(heartbeat_telemetry,
+                         monitor_handler.last_telemetry_heartbeat)
 
         monitor_handler.stop()
 
@@ -270,22 +290,28 @@ class TestMonitor(AgentTestCase):
     def test_heartbeat_creates_signal(self, patch_report_heartbeat, *args):
         monitor_handler = get_monitor_handler()
         monitor_handler.init_protocols()
-        monitor_handler.last_host_plugin_heartbeat = datetime.datetime.utcnow() - timedelta(hours=1)
+        monitor_handler.last_host_plugin_heartbeat = datetime.datetime.utcnow() - \
+            timedelta(hours=1)
         monitor_handler.send_host_plugin_heartbeat()
         self.assertEqual(1, patch_report_heartbeat.call_count)
         self.assertEqual(0, args[5].call_count)
         monitor_handler.stop()
 
-    @patch('azurelinuxagent.common.errorstate.ErrorState.is_triggered', return_value=True)
+    @patch('azurelinuxagent.common.errorstate.ErrorState.is_triggered',
+           return_value=True)
     @patch("azurelinuxagent.common.protocol.healthservice.HealthService.report_host_plugin_heartbeat")
-    def test_failed_heartbeat_creates_telemetry(self, patch_report_heartbeat, _, *args):
+    def test_failed_heartbeat_creates_telemetry(
+            self, patch_report_heartbeat, _, *args):
         monitor_handler = get_monitor_handler()
         monitor_handler.init_protocols()
-        monitor_handler.last_host_plugin_heartbeat = datetime.datetime.utcnow() - timedelta(hours=1)
+        monitor_handler.last_host_plugin_heartbeat = datetime.datetime.utcnow() - \
+            timedelta(hours=1)
         monitor_handler.send_host_plugin_heartbeat()
         self.assertEqual(1, patch_report_heartbeat.call_count)
         self.assertEqual(1, args[5].call_count)
-        self.assertEqual('HostPluginHeartbeatExtended', args[5].call_args[1]['op'])
+        self.assertEqual(
+            'HostPluginHeartbeatExtended',
+            args[5].call_args[1]['op'])
         self.assertEqual(False, args[5].call_args[1]['is_success'])
         monitor_handler.stop()
 
@@ -296,22 +322,31 @@ class TestMonitor(AgentTestCase):
             event_message = "Test {0}".format(i)
             logger.periodic_info(logger.EVERY_DAY, event_message)
 
-            self.assertIn(hash(event_message), logger.DEFAULT_LOGGER.periodic_messages)
-            self.assertEqual(i + 1, mock_info.call_count)  # range starts from 0.
+            self.assertIn(
+                hash(event_message),
+                logger.DEFAULT_LOGGER.periodic_messages)
+            # range starts from 0.
+            self.assertEqual(i + 1, mock_info.call_count)
 
         self.assertEqual(100, len(logger.DEFAULT_LOGGER.periodic_messages))
 
-        # Adding 1 message 100 times, but the same message. Mock Info should be called only once.
+        # Adding 1 message 100 times, but the same message. Mock Info should be
+        # called only once.
         for i in range(100):
             logger.periodic_info(logger.EVERY_DAY, "Test-Message")
 
-        self.assertIn(hash("Test-Message"), logger.DEFAULT_LOGGER.periodic_messages)
-        self.assertEqual(101, mock_info.call_count)  # 100 calls from the previous section. Adding only 1.
-        self.assertEqual(101, len(logger.DEFAULT_LOGGER.periodic_messages))  # One new message in the hash map.
+        self.assertIn(
+            hash("Test-Message"),
+            logger.DEFAULT_LOGGER.periodic_messages)
+        # 100 calls from the previous section. Adding only 1.
+        self.assertEqual(101, mock_info.call_count)
+        # One new message in the hash map.
+        self.assertEqual(101, len(logger.DEFAULT_LOGGER.periodic_messages))
 
         # Resetting the logger time states.
         monitor_handler = get_monitor_handler()
-        monitor_handler.last_reset_loggers_time = datetime.datetime.utcnow() - timedelta(hours=1)
+        monitor_handler.last_reset_loggers_time = datetime.datetime.utcnow() - \
+            timedelta(hours=1)
         MonitorHandler.RESET_LOGGERS_PERIOD = timedelta(milliseconds=100)
 
         monitor_handler.reset_loggers()
@@ -321,7 +356,8 @@ class TestMonitor(AgentTestCase):
 
         monitor_handler.stop()
 
-    @patch("azurelinuxagent.common.logger.reset_periodic", side_effect=Exception())
+    @patch("azurelinuxagent.common.logger.reset_periodic",
+           side_effect=Exception())
     def test_reset_loggers_ensuring_timestamp_gets_updated(self, *args):
         # Resetting the logger time states.
         monitor_handler = get_monitor_handler()
@@ -332,11 +368,13 @@ class TestMonitor(AgentTestCase):
         # noinspection PyBroadException
         try:
             monitor_handler.reset_loggers()
-        except:
+        except BaseException:
             pass
 
         # The hash map got cleaned up by the reset_loggers method
-        self.assertGreater(monitor_handler.last_reset_loggers_time, initial_time)
+        self.assertGreater(
+            monitor_handler.last_reset_loggers_time,
+            initial_time)
         monitor_handler.stop()
 
 
@@ -369,7 +407,8 @@ class TestEventMonitoring(AgentTestCase):
         protocol.report_ext_status = MagicMock()
         protocol.report_vm_status = MagicMock()
 
-        monitor_handler.protocol_util.get_protocol = Mock(return_value=protocol)
+        monitor_handler.protocol_util.get_protocol = Mock(
+            return_value=protocol)
         return monitor_handler, protocol
 
     @patch("azurelinuxagent.common.protocol.imds.ImdsClient.get_compute",
@@ -378,21 +417,35 @@ class TestEventMonitoring(AgentTestCase):
                                     vmId="DummyVmId",
                                     resourceGroupName="DummyRG",
                                     publisher=""))
-    @patch("azurelinuxagent.common.protocol.wire.WireProtocol.get_vminfo",
-           return_value=VMInfo(subscriptionId="DummySubId",
-                               vmName="DummyVMName",
-                               containerId="DummyContainerId",
-                               roleName="DummyRoleName",
-                               roleInstanceName="DummyRoleInstanceName", tenantName="DummyTenant"))
+    @patch(
+        "azurelinuxagent.common.protocol.wire.WireProtocol.get_vminfo",
+        return_value=VMInfo(
+            subscriptionId="DummySubId",
+            vmName="DummyVMName",
+            containerId="DummyContainerId",
+            roleName="DummyRoleName",
+            roleInstanceName="DummyRoleInstanceName",
+            tenantName="DummyTenant"))
     @patch("platform.release", return_value="platform-release")
     @patch("platform.system", return_value="Linux")
-    @patch("azurelinuxagent.common.osutil.default.DefaultOSUtil.get_processor_cores", return_value=4)
-    @patch("azurelinuxagent.common.osutil.default.DefaultOSUtil.get_total_mem", return_value=10000)
+    @patch(
+        "azurelinuxagent.common.osutil.default.DefaultOSUtil.get_processor_cores",
+        return_value=4)
+    @patch("azurelinuxagent.common.osutil.default.DefaultOSUtil.get_total_mem",
+           return_value=10000)
     @patch("azurelinuxagent.common.protocol.wire.WireClient.send_event")
     @patch("azurelinuxagent.common.conf.get_lib_dir")
-    def test_collect_and_send_events(self, mock_lib_dir, patch_send_event, patch_get_total_mem, patch_os_cores,
-                                     patch_platform_system, patch_platform_release, patch_get_vminfo, patch_get_compute,
-                                     *args):
+    def test_collect_and_send_events(
+            self,
+            mock_lib_dir,
+            patch_send_event,
+            patch_get_total_mem,
+            patch_os_cores,
+            patch_platform_system,
+            patch_platform_release,
+            patch_get_vminfo,
+            patch_get_compute,
+            *args):
         mock_lib_dir.return_value = self.lib_dir
 
         test_data = WireProtocolData(DATA_FILE)
@@ -411,7 +464,9 @@ class TestEventMonitoring(AgentTestCase):
                                                        "DISTRO_CODE_NAME",
                                                        platform.release())
 
-        self.event_logger.save_event(create_event_message(message="Message-Test"))
+        self.event_logger.save_event(
+            create_event_message(
+                message="Message-Test"))
         monitor_handler.collect_and_send_events()
 
         # Validating the crafted message by the collect_and_sent_event call.
@@ -447,7 +502,8 @@ class TestEventMonitoring(AgentTestCase):
 
     @patch("azurelinuxagent.common.protocol.wire.WireClient.send_event")
     @patch("azurelinuxagent.common.conf.get_lib_dir")
-    def test_collect_and_send_events_with_small_events(self, mock_lib_dir, patch_send_event, *args):
+    def test_collect_and_send_events_with_small_events(
+            self, mock_lib_dir, patch_send_event, *args):
         mock_lib_dir.return_value = self.lib_dir
 
         test_data = WireProtocolData(DATA_FILE)
@@ -461,13 +517,15 @@ class TestEventMonitoring(AgentTestCase):
             self.event_logger.save_event(create_event_message(size))
         monitor_handler.collect_and_send_events()
 
-        # The send_event call would be called each time, as we are filling up the buffer up to the brim for each call.
+        # The send_event call would be called each time, as we are filling up
+        # the buffer up to the brim for each call.
 
         self.assertEqual(4, patch_send_event.call_count)
 
     @patch("azurelinuxagent.common.protocol.wire.WireClient.send_event")
     @patch("azurelinuxagent.common.conf.get_lib_dir")
-    def test_collect_and_send_events_with_large_events(self, mock_lib_dir, patch_send_event, *args):
+    def test_collect_and_send_events_with_large_events(
+            self, mock_lib_dir, patch_send_event, *args):
         mock_lib_dir.return_value = self.lib_dir
 
         test_data = WireProtocolData(DATA_FILE)
@@ -484,14 +542,17 @@ class TestEventMonitoring(AgentTestCase):
             monitor_handler.collect_and_send_events()
             self.assertEqual(3, patch_periodic_warn.call_count)
 
-        # The send_event call should never be called as the events are larger than 2**16.
+        # The send_event call should never be called as the events are larger
+        # than 2**16.
         self.assertEqual(0, patch_send_event.call_count)
 
     @patch("azurelinuxagent.common.protocol.wire.WireClient.send_event")
     @patch("azurelinuxagent.common.conf.get_lib_dir")
-    def test_collect_and_send_events_with_invalid_events(self, mock_lib_dir, patch_send_event, *args):
+    def test_collect_and_send_events_with_invalid_events(
+            self, mock_lib_dir, patch_send_event, *args):
         mock_lib_dir.return_value = self.lib_dir
-        dummy_events_dir = os.path.join(data_dir, "events", "collect_and_send_events_invalid_data")
+        dummy_events_dir = os.path.join(
+            data_dir, "events", "collect_and_send_events_invalid_data")
         fileutil.mkdir(self.event_logger.event_dir)
 
         test_data = WireProtocolData(DATA_FILE)
@@ -499,7 +560,11 @@ class TestEventMonitoring(AgentTestCase):
         monitor_handler.init_protocols()
 
         for filename in os.listdir(dummy_events_dir):
-            shutil.copy(os.path.join(dummy_events_dir, filename), self.event_logger.event_dir)
+            shutil.copy(
+                os.path.join(
+                    dummy_events_dir,
+                    filename),
+                self.event_logger.event_dir)
 
         monitor_handler.collect_and_send_events()
 
@@ -508,9 +573,11 @@ class TestEventMonitoring(AgentTestCase):
 
     @patch("azurelinuxagent.common.protocol.wire.WireClient.send_event")
     @patch("azurelinuxagent.common.conf.get_lib_dir")
-    def test_collect_and_send_events_cannot_read_events(self, mock_lib_dir, patch_send_event, *args):
+    def test_collect_and_send_events_cannot_read_events(
+            self, mock_lib_dir, patch_send_event, *args):
         mock_lib_dir.return_value = self.lib_dir
-        dummy_events_dir = os.path.join(data_dir, "events", "collect_and_send_events_unreadable_data")
+        dummy_events_dir = os.path.join(
+            data_dir, "events", "collect_and_send_events_unreadable_data")
         fileutil.mkdir(self.event_logger.event_dir)
 
         test_data = WireProtocolData(DATA_FILE)
@@ -518,7 +585,11 @@ class TestEventMonitoring(AgentTestCase):
         monitor_handler.init_protocols()
 
         for filename in os.listdir(dummy_events_dir):
-            shutil.copy(os.path.join(dummy_events_dir, filename), self.event_logger.event_dir)
+            shutil.copy(
+                os.path.join(
+                    dummy_events_dir,
+                    filename),
+                self.event_logger.event_dir)
 
         def builtins_version():
             if sys.version_info[0] == 2:
@@ -534,7 +605,8 @@ class TestEventMonitoring(AgentTestCase):
             self.assertEqual(0, patch_send_event.call_count)
 
     @patch("azurelinuxagent.common.conf.get_lib_dir")
-    def test_collect_and_send_with_http_post_returning_503(self, mock_lib_dir, *args):
+    def test_collect_and_send_with_http_post_returning_503(
+            self, mock_lib_dir, *args):
         mock_lib_dir.return_value = self.lib_dir
         fileutil.mkdir(self.event_logger.event_dir)
 
@@ -555,13 +627,18 @@ class TestEventMonitoring(AgentTestCase):
                     response="")
                 monitor_handler.collect_and_send_events()
                 self.assertEqual(1, mock_error.call_count)
-                self.assertEqual("[ProtocolError] [Wireserver Exception] [ProtocolError] [Wireserver Failed] "
-                                 "URI http://foo.bar/machine?comp=telemetrydata  [HTTP Failed] Status Code 503",
-                                 mock_error.call_args[0][1])
-                self.assertEqual(0, len(os.listdir(self.event_logger.event_dir)))
+                self.assertEqual(
+                    "[ProtocolError] [Wireserver Exception] [ProtocolError] [Wireserver Failed] "
+                    "URI http://foo.bar/machine?comp=telemetrydata  [HTTP Failed] Status Code 503",
+                    mock_error.call_args[0][1])
+                self.assertEqual(
+                    0, len(
+                        os.listdir(
+                            self.event_logger.event_dir)))
 
     @patch("azurelinuxagent.common.conf.get_lib_dir")
-    def test_collect_and_send_with_send_event_generating_exception(self, mock_lib_dir, *args):
+    def test_collect_and_send_with_send_event_generating_exception(
+            self, mock_lib_dir, *args):
         mock_lib_dir.return_value = self.lib_dir
         fileutil.mkdir(self.event_logger.event_dir)
 
@@ -575,18 +652,24 @@ class TestEventMonitoring(AgentTestCase):
             size = 2 ** power * 1024
             self.event_logger.save_event(create_event_message(size))
 
-        monitor_handler.last_event_collection = datetime.datetime.utcnow() - timedelta(hours=1)
-        # This test validates that if we hit an issue while sending an event, we never send it again.
+        monitor_handler.last_event_collection = datetime.datetime.utcnow() - \
+            timedelta(hours=1)
+        # This test validates that if we hit an issue while sending an event,
+        # we never send it again.
         with patch("azurelinuxagent.common.logger.warn") as mock_warn:
             with patch("azurelinuxagent.common.protocol.wire.WireClient.send_event") as patch_send_event:
                 patch_send_event.side_effect = Exception()
                 monitor_handler.collect_and_send_events()
 
                 self.assertEqual(1, mock_warn.call_count)
-                self.assertEqual(0, len(os.listdir(self.event_logger.event_dir)))
+                self.assertEqual(
+                    0, len(
+                        os.listdir(
+                            self.event_logger.event_dir)))
 
     @patch("azurelinuxagent.common.conf.get_lib_dir")
-    def test_collect_and_send_with_call_wireserver_returns_http_error(self, mock_lib_dir, *args):
+    def test_collect_and_send_with_call_wireserver_returns_http_error(
+            self, mock_lib_dir, *args):
         mock_lib_dir.return_value = self.lib_dir
         fileutil.mkdir(self.event_logger.event_dir)
 
@@ -600,14 +683,18 @@ class TestEventMonitoring(AgentTestCase):
             size = 2 ** power * 1024
             self.event_logger.save_event(create_event_message(size))
 
-        monitor_handler.last_event_collection = datetime.datetime.utcnow() - timedelta(hours=1)
+        monitor_handler.last_event_collection = datetime.datetime.utcnow() - \
+            timedelta(hours=1)
         with patch("azurelinuxagent.common.logger.error") as mock_error:
             with patch("azurelinuxagent.common.protocol.wire.WireClient.call_wireserver") as patch_call_wireserver:
                 patch_call_wireserver.side_effect = HttpError
                 monitor_handler.collect_and_send_events()
 
                 self.assertEqual(1, mock_error.call_count)
-                self.assertEqual(0, len(os.listdir(self.event_logger.event_dir)))
+                self.assertEqual(
+                    0, len(
+                        os.listdir(
+                            self.event_logger.event_dir)))
 
 
 @patch('azurelinuxagent.common.osutil.get_osutil')
@@ -624,22 +711,32 @@ class TestExtensionMetricsDataTelemetry(AgentTestCase):
     @patch('azurelinuxagent.common.event.EventLogger.add_event')
     @patch("azurelinuxagent.common.cgroupstelemetry.CGroupsTelemetry.poll_all_tracked")
     @patch("azurelinuxagent.common.cgroupstelemetry.CGroupsTelemetry.report_all_tracked")
-    def test_send_extension_metrics_telemetry(self, patch_report_all_tracked, patch_poll_all_tracked, patch_add_event,
-                                              *args):
+    def test_send_extension_metrics_telemetry(
+            self,
+            patch_report_all_tracked,
+            patch_poll_all_tracked,
+            patch_add_event,
+            *args):
         patch_report_all_tracked.return_value = {
             "memory": {
-                "cur_mem": [1, 1, 1, 1, 1, str(datetime.datetime.utcnow()), str(datetime.datetime.utcnow())],
-                "max_mem": [1, 1, 1, 1, 1, str(datetime.datetime.utcnow()), str(datetime.datetime.utcnow())]
-            },
-            "cpu": {
-                "cur_cpu": [1, 1, 1, 1, 1, str(datetime.datetime.utcnow()), str(datetime.datetime.utcnow())]
-            }
-        }
+                "cur_mem": [
+                    1, 1, 1, 1, 1, str(
+                        datetime.datetime.utcnow()), str(
+                        datetime.datetime.utcnow())], "max_mem": [
+                    1, 1, 1, 1, 1, str(
+                        datetime.datetime.utcnow()), str(
+                        datetime.datetime.utcnow())]}, "cpu": {
+                "cur_cpu": [
+                    1, 1, 1, 1, 1, str(
+                        datetime.datetime.utcnow()), str(
+                        datetime.datetime.utcnow())]}}
 
         monitor_handler = get_monitor_handler()
         monitor_handler.init_protocols()
-        monitor_handler.last_cgroup_polling_telemetry = datetime.datetime.utcnow() - timedelta(hours=1)
-        monitor_handler.last_cgroup_report_telemetry = datetime.datetime.utcnow() - timedelta(hours=1)
+        monitor_handler.last_cgroup_polling_telemetry = datetime.datetime.utcnow() - \
+            timedelta(hours=1)
+        monitor_handler.last_cgroup_report_telemetry = datetime.datetime.utcnow() - \
+            timedelta(hours=1)
         monitor_handler.poll_telemetry_metrics()
         monitor_handler.send_telemetry_metrics()
         self.assertEqual(1, patch_poll_all_tracked.call_count)
@@ -649,15 +746,19 @@ class TestExtensionMetricsDataTelemetry(AgentTestCase):
 
     @patch('azurelinuxagent.common.event.EventLogger.add_event')
     @patch("azurelinuxagent.common.cgroupstelemetry.CGroupsTelemetry.poll_all_tracked")
-    @patch("azurelinuxagent.common.cgroupstelemetry.CGroupsTelemetry.report_all_tracked", return_value={})
-    def test_send_extension_metrics_telemetry_for_empty_cgroup(self, patch_report_all_tracked, patch_poll_all_tracked,
-                                                               patch_add_event, *args):
+    @patch(
+        "azurelinuxagent.common.cgroupstelemetry.CGroupsTelemetry.report_all_tracked",
+        return_value={})
+    def test_send_extension_metrics_telemetry_for_empty_cgroup(
+            self, patch_report_all_tracked, patch_poll_all_tracked, patch_add_event, *args):
         patch_report_all_tracked.return_value = {}
 
         monitor_handler = get_monitor_handler()
         monitor_handler.init_protocols()
-        monitor_handler.last_cgroup_polling_telemetry = datetime.datetime.utcnow() - timedelta(hours=1)
-        monitor_handler.last_cgroup_report_telemetry = datetime.datetime.utcnow() - timedelta(hours=1)
+        monitor_handler.last_cgroup_polling_telemetry = datetime.datetime.utcnow() - \
+            timedelta(hours=1)
+        monitor_handler.last_cgroup_report_telemetry = datetime.datetime.utcnow() - \
+            timedelta(hours=1)
         monitor_handler.poll_telemetry_metrics()
         monitor_handler.send_telemetry_metrics()
         self.assertEqual(1, patch_poll_all_tracked.call_count)
@@ -665,10 +766,12 @@ class TestExtensionMetricsDataTelemetry(AgentTestCase):
         self.assertEqual(0, patch_add_event.call_count)
         monitor_handler.stop()
 
-    @skip_if_predicate_false(are_cgroups_enabled, "Does not run when Cgroups are not enabled")
+    @skip_if_predicate_false(
+        are_cgroups_enabled, "Does not run when Cgroups are not enabled")
     @patch('azurelinuxagent.common.event.EventLogger.add_event')
     @attr('requires_sudo')
-    def test_send_extension_metrics_telemetry_with_actual_cgroup(self, patch_add_event, *args):
+    def test_send_extension_metrics_telemetry_with_actual_cgroup(
+            self, patch_add_event, *args):
         self.assertTrue(i_am_root(), "Test does not run when non-root")
 
         num_polls = 5
@@ -688,8 +791,10 @@ class TestExtensionMetricsDataTelemetry(AgentTestCase):
 
         monitor_handler = get_monitor_handler()
         monitor_handler.init_protocols()
-        monitor_handler.last_cgroup_polling_telemetry = datetime.datetime.utcnow() - timedelta(hours=1)
-        monitor_handler.last_cgroup_report_telemetry = datetime.datetime.utcnow() - timedelta(hours=1)
+        monitor_handler.last_cgroup_polling_telemetry = datetime.datetime.utcnow() - \
+            timedelta(hours=1)
+        monitor_handler.last_cgroup_report_telemetry = datetime.datetime.utcnow() - \
+            timedelta(hours=1)
         monitor_handler.poll_telemetry_metrics()
         monitor_handler.send_telemetry_metrics()
         self.assertEqual(1, patch_add_event.call_count)
@@ -715,15 +820,23 @@ class TestExtensionMetricsDataTelemetry(AgentTestCase):
         cpu_percent_values = [random.randint(0, 100) for _ in range(num_polls)]
 
         # only verifying calculations and not validity of the values.
-        memory_usage_values = [random.randint(0, 8 * 1024 ** 3) for _ in range(num_polls)]
-        max_memory_usage_values = [random.randint(0, 8 * 1024 ** 3) for _ in range(num_polls)]
+        memory_usage_values = [
+            random.randint(
+                0, 8 * 1024 ** 3) for _ in range(num_polls)]
+        max_memory_usage_values = [random.randint(
+            0, 8 * 1024 ** 3) for _ in range(num_polls)]
 
         for i in range(num_extensions):
-            dummy_cpu_cgroup = CGroup.create("dummy_cpu_path_{0}".format(i), "cpu", "dummy_extension_{0}".format(i))
+            dummy_cpu_cgroup = CGroup.create(
+                "dummy_cpu_path_{0}".format(i),
+                "cpu",
+                "dummy_extension_{0}".format(i))
             CGroupsTelemetry.track_cgroup(dummy_cpu_cgroup)
 
-            dummy_memory_cgroup = CGroup.create("dummy_memory_path_{0}".format(i), "memory",
-                                                "dummy_extension_{0}".format(i))
+            dummy_memory_cgroup = CGroup.create(
+                "dummy_memory_path_{0}".format(i),
+                "memory",
+                "dummy_extension_{0}".format(i))
             CGroupsTelemetry.track_cgroup(dummy_memory_cgroup)
 
         self.assertEqual(2 * num_extensions, len(CGroupsTelemetry._tracked))
@@ -736,18 +849,24 @@ class TestExtensionMetricsDataTelemetry(AgentTestCase):
                             for i in range(num_polls):
                                 patch_is_active.return_value = True
                                 patch_get_cpu_percent.return_value = cpu_percent_values[i]
-                                patch_get_memory_usage.return_value = memory_usage_values[i]  # example 200 MB
-                                patch_get_memory_max_usage.return_value = max_memory_usage_values[i]  # example 450 MB
+                                # example 200 MB
+                                patch_get_memory_usage.return_value = memory_usage_values[i]
+                                # example 450 MB
+                                patch_get_memory_max_usage.return_value = max_memory_usage_values[i]
                                 CGroupsTelemetry.poll_all_tracked()
 
         performance_metrics = CGroupsTelemetry.report_all_tracked()
 
-        message_json = generate_extension_metrics_telemetry_dictionary(schema_version=1.0,
-                                                                       performance_metrics=performance_metrics)
+        message_json = generate_extension_metrics_telemetry_dictionary(
+            schema_version=1.0, performance_metrics=performance_metrics)
 
         for i in range(num_extensions):
-            self.assertTrue(CGroupsTelemetry.is_tracked("dummy_cpu_path_{0}".format(i)))
-            self.assertTrue(CGroupsTelemetry.is_tracked("dummy_memory_path_{0}".format(i)))
+            self.assertTrue(
+                CGroupsTelemetry.is_tracked(
+                    "dummy_cpu_path_{0}".format(i)))
+            self.assertTrue(
+                CGroupsTelemetry.is_tracked(
+                    "dummy_memory_path_{0}".format(i)))
 
         self.assertIn("SchemaVersion", message_json)
         self.assertIn("PerfMetrics", message_json)
@@ -760,32 +879,41 @@ class TestExtensionMetricsDataTelemetry(AgentTestCase):
             self.assertIn("memory", collected_metrics[extn_name])
             self.assertIn("cur_mem", collected_metrics[extn_name]["memory"])
             self.assertIn("max_mem", collected_metrics[extn_name]["memory"])
-            self.assertEqual(len(collected_metrics[extn_name]["memory"]["cur_mem"]), num_summarization_values)
-            self.assertEqual(len(collected_metrics[extn_name]["memory"]["max_mem"]), num_summarization_values)
+            self.assertEqual(
+                len(collected_metrics[extn_name]["memory"]["cur_mem"]), num_summarization_values)
+            self.assertEqual(
+                len(collected_metrics[extn_name]["memory"]["max_mem"]), num_summarization_values)
 
-            self.assertIsInstance(collected_metrics[extn_name]["memory"]["cur_mem"][5], str)
-            self.assertIsInstance(collected_metrics[extn_name]["memory"]["cur_mem"][6], str)
-            self.assertIsInstance(collected_metrics[extn_name]["memory"]["max_mem"][5], str)
-            self.assertIsInstance(collected_metrics[extn_name]["memory"]["max_mem"][6], str)
+            self.assertIsInstance(
+                collected_metrics[extn_name]["memory"]["cur_mem"][5], str)
+            self.assertIsInstance(
+                collected_metrics[extn_name]["memory"]["cur_mem"][6], str)
+            self.assertIsInstance(
+                collected_metrics[extn_name]["memory"]["max_mem"][5], str)
+            self.assertIsInstance(
+                collected_metrics[extn_name]["memory"]["max_mem"][6], str)
 
             self.assertIn("cpu", collected_metrics[extn_name])
             self.assertIn("cur_cpu", collected_metrics[extn_name]["cpu"])
-            self.assertEqual(len(collected_metrics[extn_name]["cpu"]["cur_cpu"]), num_summarization_values)
+            self.assertEqual(
+                len(collected_metrics[extn_name]["cpu"]["cur_cpu"]), num_summarization_values)
 
-            self.assertIsInstance(collected_metrics[extn_name]["cpu"]["cur_cpu"][5], str)
-            self.assertIsInstance(collected_metrics[extn_name]["cpu"]["cur_cpu"][6], str)
+            self.assertIsInstance(
+                collected_metrics[extn_name]["cpu"]["cur_cpu"][5], str)
+            self.assertIsInstance(
+                collected_metrics[extn_name]["cpu"]["cur_cpu"][6], str)
 
-        message_json = generate_extension_metrics_telemetry_dictionary(schema_version=1.0,
-                                                                       performance_metrics=None)
+        message_json = generate_extension_metrics_telemetry_dictionary(
+            schema_version=1.0, performance_metrics=None)
         self.assertIn("SchemaVersion", message_json)
         self.assertNotIn("PerfMetrics", message_json)
 
-        message_json = generate_extension_metrics_telemetry_dictionary(schema_version=2.0,
-                                                                       performance_metrics=None)
+        message_json = generate_extension_metrics_telemetry_dictionary(
+            schema_version=2.0, performance_metrics=None)
         self.assertEqual(message_json, None)
 
-        message_json = generate_extension_metrics_telemetry_dictionary(schema_version="z",
-                                                                       performance_metrics=None)
+        message_json = generate_extension_metrics_telemetry_dictionary(
+            schema_version="z", performance_metrics=None)
         self.assertEqual(message_json, None)
 
 
@@ -793,17 +921,20 @@ class TestExtensionMetricsDataTelemetry(AgentTestCase):
 @patch("azurelinuxagent.common.utils.restutil.http_post")
 @patch("azurelinuxagent.common.utils.restutil.http_get")
 @patch('azurelinuxagent.common.protocol.wire.WireClient.get_goal_state')
-@patch('azurelinuxagent.common.protocol.util.ProtocolUtil.get_protocol', return_value=WireProtocol('endpoint'))
+@patch('azurelinuxagent.common.protocol.util.ProtocolUtil.get_protocol',
+       return_value=WireProtocol('endpoint'))
 class TestMonitorFailure(AgentTestCase):
 
     @patch("azurelinuxagent.common.protocol.healthservice.HealthService.report_host_plugin_heartbeat")
-    def test_error_heartbeat_creates_no_signal(self, patch_report_heartbeat, *args):
+    def test_error_heartbeat_creates_no_signal(
+            self, patch_report_heartbeat, *args):
         patch_http_get = args[2]
         patch_add_event = args[4]
 
         monitor_handler = get_monitor_handler()
         monitor_handler.init_protocols()
-        monitor_handler.last_host_plugin_heartbeat = datetime.datetime.utcnow() - timedelta(hours=1)
+        monitor_handler.last_host_plugin_heartbeat = datetime.datetime.utcnow() - \
+            timedelta(hours=1)
 
         patch_http_get.side_effect = IOError('client error')
         monitor_handler.send_host_plugin_heartbeat()
@@ -813,8 +944,11 @@ class TestMonitorFailure(AgentTestCase):
 
         # telemetry with failure details is sent
         self.assertEqual(1, patch_add_event.call_count)
-        self.assertEqual('HostPluginHeartbeat', patch_add_event.call_args[1]['op'])
-        self.assertTrue('client error' in patch_add_event.call_args[1]['message'])
+        self.assertEqual(
+            'HostPluginHeartbeat',
+            patch_add_event.call_args[1]['op'])
+        self.assertTrue(
+            'client error' in patch_add_event.call_args[1]['message'])
 
         self.assertEqual(False, patch_add_event.call_args[1]['is_success'])
         monitor_handler.stop()

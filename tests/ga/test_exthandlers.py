@@ -72,7 +72,9 @@ class TestExtHandlers(AgentTestCase):
 
         self.assertEqual('0', ext_status.code)
         self.assertEqual(None, ext_status.configurationAppliedTime)
-        self.assertEqual('Enable failed: Failed with error: commandToExecute is empty or invalid ...', ext_status.message)
+        self.assertEqual(
+            'Enable failed: Failed with error: commandToExecute is empty or invalid ...',
+            ext_status.message)
         self.assertEqual('Enable', ext_status.operation)
         self.assertEqual('error', ext_status.status)
         self.assertEqual(0, ext_status.sequenceNumber)
@@ -90,7 +92,7 @@ class TestExtHandlers(AgentTestCase):
               "code": "0",
               "name": "Microsoft.OSTCExtensions.CustomScriptForLinux"
             },
-            
+
             "version": "1.0",
             "timestampUTC": "2018-04-20T21:20:24Z"
           }
@@ -100,7 +102,11 @@ class TestExtHandlers(AgentTestCase):
 
         parse_ext_status(extension_status, json.loads(status))
 
-        self.assertTrue(isinstance(extension_status.substatusList, list), 'substatus was not parsed correctly')
+        self.assertTrue(
+            isinstance(
+                extension_status.substatusList,
+                list),
+            'substatus was not parsed correctly')
         self.assertEqual(0, len(extension_status.substatusList))
 
     def test_parse_ext_status_should_parse_null_substatus_as_empty(self):
@@ -126,7 +132,11 @@ class TestExtHandlers(AgentTestCase):
 
         parse_ext_status(extension_status, json.loads(status))
 
-        self.assertTrue(isinstance(extension_status.substatusList, list), 'substatus was not parsed correctly')
+        self.assertTrue(
+            isinstance(
+                extension_status.substatusList,
+                list),
+            'substatus was not parsed correctly')
         self.assertEqual(0, len(extension_status.substatusList))
 
     @patch('azurelinuxagent.common.event.EventLogger.add_event')
@@ -168,7 +178,9 @@ class TestExtHandlers(AgentTestCase):
 
         self.assertEqual(expected_sequence_number, seq)
         if seq > -1:
-            self.assertTrue(path.endswith('/foo-1.2.3/status/{0}.status'.format(expected_sequence_number)))
+            self.assertTrue(
+                path.endswith(
+                    '/foo-1.2.3/status/{0}.status'.format(expected_sequence_number)))
         else:
             self.assertIsNone(path)
 
@@ -177,13 +189,15 @@ class TestExtHandlers(AgentTestCase):
                                               disk_sequence_number=366,
                                               expected_sequence_number=12)
 
-        self.assert_extension_sequence_number(goal_state_sequence_number=" 12 ",
-                                              disk_sequence_number=366,
-                                              expected_sequence_number=12)
+        self.assert_extension_sequence_number(
+            goal_state_sequence_number=" 12 ",
+            disk_sequence_number=366,
+            expected_sequence_number=12)
 
-        self.assert_extension_sequence_number(goal_state_sequence_number=" foo",
-                                              disk_sequence_number=3,
-                                              expected_sequence_number=3)
+        self.assert_extension_sequence_number(
+            goal_state_sequence_number=" foo",
+            disk_sequence_number=3,
+            expected_sequence_number=3)
 
         self.assert_extension_sequence_number(goal_state_sequence_number="-1",
                                               disk_sequence_number=3,
@@ -192,22 +206,30 @@ class TestExtHandlers(AgentTestCase):
     @patch("azurelinuxagent.ga.exthandlers.add_event")
     @patch("azurelinuxagent.common.errorstate.ErrorState.is_triggered")
     @patch("azurelinuxagent.common.protocol.util.ProtocolUtil.get_protocol")
-    def test_it_should_report_an_error_if_the_wireserver_cannot_be_reached(self, patch_get_protocol, patch_is_triggered, patch_add_event):
+    def test_it_should_report_an_error_if_the_wireserver_cannot_be_reached(
+            self, patch_get_protocol, patch_is_triggered, patch_add_event):
         test_message = "TEST MESSAGE"
 
-        patch_get_protocol.side_effect = ProtocolError(test_message) # get_protocol will throw if the wire server cannot be reached
-        patch_is_triggered.return_value = True # protocol errors are reported only after a delay; force the error to be reported now
+        # get_protocol will throw if the wire server cannot be reached
+        patch_get_protocol.side_effect = ProtocolError(test_message)
+        # protocol errors are reported only after a delay; force the error to
+        # be reported now
+        patch_is_triggered.return_value = True
 
         get_exthandlers_handler().run()
 
         self.assertEquals(patch_add_event.call_count, 2)
 
         _, first_call_args = patch_add_event.call_args_list[0]
-        self.assertEquals(first_call_args['op'], WALAEventOperation.GetArtifactExtended)
+        self.assertEquals(
+            first_call_args['op'],
+            WALAEventOperation.GetArtifactExtended)
         self.assertEquals(first_call_args['is_success'], False)
 
         _, second_call_args = patch_add_event.call_args_list[1]
-        self.assertEquals(second_call_args['op'], WALAEventOperation.ExtensionProcessing)
+        self.assertEquals(
+            second_call_args['op'],
+            WALAEventOperation.ExtensionProcessing)
         self.assertEquals(second_call_args['is_success'], False)
         self.assertIn(test_message, second_call_args['message'])
 
@@ -224,13 +246,18 @@ class LaunchCommandTestCase(AgentTestCase):
         ext_handler_properties.version = "1.2.3"
         self.ext_handler = ExtHandler(name='foo')
         self.ext_handler.properties = ext_handler_properties
-        self.ext_handler_instance = ExtHandlerInstance(ext_handler=self.ext_handler, protocol=None)
+        self.ext_handler_instance = ExtHandlerInstance(
+            ext_handler=self.ext_handler, protocol=None)
 
-        self.mock_get_base_dir = patch("azurelinuxagent.ga.exthandlers.ExtHandlerInstance.get_base_dir", lambda *_: self.tmp_dir)
+        self.mock_get_base_dir = patch(
+            "azurelinuxagent.ga.exthandlers.ExtHandlerInstance.get_base_dir",
+            lambda *_: self.tmp_dir)
         self.mock_get_base_dir.start()
 
         self.log_dir = os.path.join(self.tmp_dir, "log")
-        self.mock_get_log_dir = patch("azurelinuxagent.ga.exthandlers.ExtHandlerInstance.get_log_dir", lambda *_: self.log_dir)
+        self.mock_get_log_dir = patch(
+            "azurelinuxagent.ga.exthandlers.ExtHandlerInstance.get_log_dir",
+            lambda *_: self.log_dir)
         self.mock_get_log_dir.start()
 
         self.mock_sleep = patch("time.sleep", lambda *_: mock_sleep(0.01))
@@ -281,7 +308,8 @@ sys.stderr.write("{1}")
 
         def list_directory():
             base_dir = self.ext_handler_instance.get_base_dir()
-            return [i for i in os.listdir(base_dir) if not i.endswith(".tld")] # ignore telemetry files
+            return [i for i in os.listdir(base_dir) if not i.endswith(
+                ".tld")]  # ignore telemetry files
 
         files_before = list_directory()
 
@@ -289,16 +317,22 @@ sys.stderr.write("{1}")
 
         files_after = list_directory()
 
-        self.assertRegex(output, LaunchCommandTestCase._output_regex(stdout, stderr))
+        self.assertRegex(
+            output, LaunchCommandTestCase._output_regex(
+                stdout, stderr))
 
-        self.assertListEqual(files_before, files_after, "Not all temporary files were deleted. File list: {0}".format(files_after))
+        self.assertListEqual(
+            files_before,
+            files_after,
+            "Not all temporary files were deleted. File list: {0}".format(files_after))
 
     def test_it_should_raise_an_exception_when_the_command_times_out(self):
         extension_error_code = ExtensionErrorCodes.PluginHandlerScriptTimedout
         stdout = "stdout" * 7
         stderr = "stderr" * 7
 
-        # the signal file is used by the test command to indicate it has produced output
+        # the signal file is used by the test command to indicate it has
+        # produced output
         signal_file = os.path.join(self.tmp_dir, "signal_file.txt")
 
         # the test command produces some output then goes into an infinite loop
@@ -319,7 +353,8 @@ with open("{2}", "w") as file:
 
 '''.format(stdout, stderr, signal_file))
 
-        # mock time.sleep to wait for the signal file (launch_command implements the time out using polling and sleep)
+        # mock time.sleep to wait for the signal file (launch_command
+        # implements the time out using polling and sleep)
         original_sleep = time.sleep
 
         def sleep(seconds):
@@ -333,23 +368,34 @@ with open("{2}", "w") as file:
         with patch("time.sleep", side_effect=sleep, autospec=True) as mock_sleep:
 
             with self.assertRaises(ExtensionError) as context_manager:
-                self.ext_handler_instance.launch_command(command, timeout=timeout, extension_error_code=extension_error_code)
+                self.ext_handler_instance.launch_command(
+                    command, timeout=timeout, extension_error_code=extension_error_code)
 
             # the command name and its output should be part of the message
             message = str(context_manager.exception)
-            command_full_path = os.path.join(self.tmp_dir, command.lstrip(os.path.sep))
-            self.assertRegex(message, r"Timeout\(\d+\):\s+{0}\s+{1}".format(command_full_path, LaunchCommandTestCase._output_regex(stdout, stderr)))
+            command_full_path = os.path.join(
+                self.tmp_dir, command.lstrip(os.path.sep))
+            self.assertRegex(message,
+                             r"Timeout\(\d+\):\s+{0}\s+{1}".format(command_full_path,
+                                                                   LaunchCommandTestCase._output_regex(stdout,
+                                                                                                       stderr)))
 
-            # the exception code should be as specified in the call to launch_command
-            self.assertEquals(context_manager.exception.code, extension_error_code)
+            # the exception code should be as specified in the call to
+            # launch_command
+            self.assertEquals(
+                context_manager.exception.code,
+                extension_error_code)
 
             # the timeout period should have elapsed
             self.assertGreaterEqual(mock_sleep.call_count, timeout)
 
             # the command should have been terminated
-            self.assertFalse(LaunchCommandTestCase._find_process(command), "The command was not terminated")
+            self.assertFalse(
+                LaunchCommandTestCase._find_process(command),
+                "The command was not terminated")
 
-        # as a check for the test itself, verify it completed in just a few seconds
+        # as a check for the test itself, verify it completed in just a few
+        # seconds
         self.assertLessEqual(time.time() - start_time, 5)
 
     def test_it_should_raise_an_exception_when_the_command_fails(self):
@@ -369,10 +415,15 @@ exit({2})
 
         # the output is captured as part of the exception message
         with self.assertRaises(ExtensionError) as context_manager:
-            self.ext_handler_instance.launch_command(command, extension_error_code=extension_error_code)
+            self.ext_handler_instance.launch_command(
+                command, extension_error_code=extension_error_code)
 
         message = str(context_manager.exception)
-        self.assertRegex(message, r"Non-zero exit code: {0}.+{1}\s+{2}".format(exit_code, command, LaunchCommandTestCase._output_regex(stdout, stderr)))
+        self.assertRegex(message,
+                         r"Non-zero exit code: {0}.+{1}\s+{2}".format(exit_code,
+                                                                      command,
+                                                                      LaunchCommandTestCase._output_regex(stdout,
+                                                                                                          stderr)))
 
         self.assertEquals(context_manager.exception.code, extension_error_code)
 
@@ -392,7 +443,7 @@ if pid == 0:
 else:
     sys.stdout.write("{0}")
     sys.stderr.write("{1}")
-    
+
 '''.format(stdout, stderr))
 
         start_time = time.time()
@@ -402,7 +453,9 @@ else:
         self.assertLessEqual(time.time() - start_time, 5)
 
         # Also check that we capture the parent's output
-        self.assertRegex(output, LaunchCommandTestCase._output_regex(stdout, stderr))
+        self.assertRegex(
+            output, LaunchCommandTestCase._output_regex(
+                stdout, stderr))
 
     def test_it_should_capture_the_output_of_child_process(self):
         parent_stdout = "PARENT STDOUT"
@@ -412,7 +465,8 @@ else:
         more_parent_stdout = "MORE PARENT STDOUT"
         more_parent_stderr = "MORE PARENT STDERR"
 
-        # the child process uses the signal file to indicate it has produced output
+        # the child process uses the signal file to indicate it has produced
+        # output
         signal_file = os.path.join(self.tmp_dir, "signal_file.txt")
 
         command = self.create_script("start_child_with_output.py", '''
@@ -428,15 +482,15 @@ pid = os.fork()
 if pid == 0:
     sys.stdout.write("{2}")
     sys.stderr.write("{3}")
-    
+
     open("{6}", "w").close()
 else:
     sys.stdout.write("{4}")
     sys.stderr.write("{5}")
-    
+
     while not os.path.exists("{6}"):
         time.sleep(0.5)
-    
+
 '''.format(parent_stdout, parent_stderr, child_stdout, child_stderr, more_parent_stdout, more_parent_stderr, signal_file))
 
         output = self.ext_handler_instance.launch_command(command)
@@ -450,7 +504,8 @@ else:
         self.assertIn(more_parent_stdout, output)
         self.assertIn(more_parent_stderr, output)
 
-    def test_it_should_capture_the_output_of_child_process_that_fails_to_start(self):
+    def test_it_should_capture_the_output_of_child_process_that_fails_to_start(
+            self):
         parent_stdout = "PARENT STDOUT"
         parent_stderr = "PARENT STDERR"
         child_stdout = "CHILD STDOUT"
@@ -495,13 +550,15 @@ open("{0}", "w").close()
         self.assertTrue(os.path.exists(signal_file))
         self.assertRegex(output, LaunchCommandTestCase._output_regex('', ''))
 
-    def test_it_should_not_capture_the_output_of_commands_that_do_their_own_redirection(self):
+    def test_it_should_not_capture_the_output_of_commands_that_do_their_own_redirection(
+            self):
         # the test script redirects its output to this file
         command_output_file = os.path.join(self.tmp_dir, "command_output.txt")
         stdout = "STDOUT"
         stderr = "STDERR"
 
-        # the test script mimics the redirection done by the Custom Script extension
+        # the test script mimics the redirection done by the Custom Script
+        # extension
         command = self.create_script("produce_output", '''
 exec &> {0}
 echo {1}
@@ -544,7 +601,8 @@ sys.stderr.write("E" * 5 * 1024 * 1024)
 
         # Mocking the call to file.read() is difficult, so instead we mock the call to format_stdout_stderr, which takes the
         # return value of the calls to file.read(). The intention of the test is to verify we never read (and load in memory)
-        # more than a few KB of data from the files used to capture stdout/stderr
+        # more than a few KB of data from the files used to capture
+        # stdout/stderr
         with patch('azurelinuxagent.common.utils.extensionprocessutil.format_stdout_stderr', side_effect=format_stdout_stderr) as mock_format:
             output = self.ext_handler_instance.launch_command(command)
 
@@ -584,9 +642,10 @@ sys.stderr.write("STDERR")
 
     def test_it_should_contain_all_helper_environment_variables(self):
 
-        helper_env_vars = {ExtCommandEnvVariable.ExtensionSeqNumber: self.ext_handler_instance.get_seq_no(),
-                           ExtCommandEnvVariable.ExtensionPath: self.tmp_dir,
-                           ExtCommandEnvVariable.ExtensionVersion: self.ext_handler_instance.ext_handler.properties.version}
+        helper_env_vars = {
+            ExtCommandEnvVariable.ExtensionSeqNumber: self.ext_handler_instance.get_seq_no(),
+            ExtCommandEnvVariable.ExtensionPath: self.tmp_dir,
+            ExtCommandEnvVariable.ExtensionVersion: self.ext_handler_instance.ext_handler.properties.version}
 
         command = """
             printenv | grep -E '(%s)'
@@ -598,11 +657,17 @@ sys.stderr.write("STDERR")
             output = self.ext_handler_instance.launch_command(test_file)
 
             args, kwagrs = patch_popen.call_args
-            without_os_env = dict((k, v) for (k, v) in kwagrs['env'].items() if k not in os.environ)
+            without_os_env = dict(
+                (k, v) for (
+                    k, v) in kwagrs['env'].items() if k not in os.environ)
 
-            # This check will fail if any helper environment variables are added/removed later on
+            # This check will fail if any helper environment variables are
+            # added/removed later on
             self.assertEqual(helper_env_vars, without_os_env)
 
-            # This check is checking if the expected values are set for the extension commands
+            # This check is checking if the expected values are set for the
+            # extension commands
             for helper_var in helper_env_vars:
-                self.assertIn("%s=%s" % (helper_var, helper_env_vars[helper_var]), output)
+                self.assertIn(
+                    "%s=%s" %
+                    (helper_var, helper_env_vars[helper_var]), output)

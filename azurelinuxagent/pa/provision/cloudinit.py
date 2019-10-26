@@ -64,12 +64,15 @@ class CloudInitProvisionHandler(ProvisionHandler):
             logger.info("Finished provisioning")
 
             self.report_ready(thumbprint)
-            self.report_event("Provisioning with cloud-init succeeded ({0}s)".format(self._get_uptime_seconds()),
+            self.report_event(
+                "Provisioning with cloud-init succeeded ({0}s)".format(
+                    self._get_uptime_seconds()),
                 is_success=True,
                 duration=elapsed_milliseconds(utc_start))
 
         except ProvisionError as e:
-            msg = "Provisioning with cloud-init failed: {0} ({1}s)".format(ustr(e), self._get_uptime_seconds())
+            msg = "Provisioning with cloud-init failed: {0} ({1}s)".format(
+                ustr(e), self._get_uptime_seconds())
             logger.error(msg)
             self.report_not_ready("ProvisioningFailed", ustr(e))
             self.report_event(msg)
@@ -84,7 +87,8 @@ class CloudInitProvisionHandler(ProvisionHandler):
             if os.path.isfile(ovf_file_path):
                 try:
                     ovf_env = OvfEnv(fileutil.read_file(ovf_file_path))
-                    self.handle_provision_guest_agent(ovf_env.provision_guest_agent)
+                    self.handle_provision_guest_agent(
+                        ovf_env.provision_guest_agent)
                     return
                 except ProtocolError as pe:
                     raise ProvisionError("OVF xml could not be parsed "
@@ -115,11 +119,13 @@ class CloudInitProvisionHandler(ProvisionHandler):
             if os.path.isfile(path):
                 logger.info("ssh host key found at: {0}".format(path))
                 try:
-                    thumbprint = self.get_ssh_host_key_thumbprint(chk_err=False)
+                    thumbprint = self.get_ssh_host_key_thumbprint(
+                        chk_err=False)
                     logger.info("Thumbprint obtained from : {0}".format(path))
                     return thumbprint
                 except ProvisionError:
-                    logger.warn("Could not get thumbprint from {0}".format(path))
+                    logger.warn(
+                        "Could not get thumbprint from {0}".format(path))
             if retry < max_retry - 1:
                 logger.info("Waiting for ssh host key be generated at {0} "
                             "[{1} attempts remaining, "

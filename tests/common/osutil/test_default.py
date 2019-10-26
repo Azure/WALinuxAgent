@@ -53,11 +53,14 @@ class TestOSUtil(AgentTestCase):
             run_patch.return_value = 1
 
             # execute
-            osutil.DefaultOSUtil.restart_if(osutil.DefaultOSUtil(), ifname=ifname, retries=retries, wait=0)
+            osutil.DefaultOSUtil.restart_if(
+                osutil.DefaultOSUtil(), ifname=ifname, retries=retries, wait=0)
 
             # assert
             self.assertEqual(run_patch.call_count, retries)
-            self.assertEqual(run_patch.call_args_list[0][0][0], 'ifdown {0} && ifup {0}'.format(ifname))
+            self.assertEqual(
+                run_patch.call_args_list[0][0][0],
+                'ifdown {0} && ifup {0}'.format(ifname))
 
     def test_get_dvd_device_success(self):
         with patch.object(os, 'listdir', return_value=['cpu', 'cdrom0']):
@@ -117,7 +120,8 @@ class TestOSUtil(AgentTestCase):
         with patch(open_patch(), mo):
             raw_route_list = osutil.DefaultOSUtil().read_route_table()
 
-        self.assertEqual(len(osutil.DefaultOSUtil().get_list_of_routes(raw_route_list)), 0)
+        self.assertEqual(
+            len(osutil.DefaultOSUtil().get_list_of_routes(raw_route_list)), 0)
 
     def test_bogus_proc_net_route(self):
         routing_table = 'Iface\tDestination\tGateway \tFlags\t\tUse\tMetric\t\neth0\t00000000\t00000000\t0001\t\t0\t0\n'
@@ -126,7 +130,8 @@ class TestOSUtil(AgentTestCase):
         with patch(open_patch(), mo):
             raw_route_list = osutil.DefaultOSUtil().read_route_table()
 
-        self.assertEqual(len(osutil.DefaultOSUtil().get_list_of_routes(raw_route_list)), 0)
+        self.assertEqual(
+            len(osutil.DefaultOSUtil().get_list_of_routes(raw_route_list)), 0)
 
     def test_valid_routes(self):
         routing_table = \
@@ -143,7 +148,9 @@ class TestOSUtil(AgentTestCase):
             raw_route_list = osutil.DefaultOSUtil().read_route_table()
 
         self.assertEqual(len(raw_route_list), 6)
-        self.assertEqual(textutil.hash_strings(raw_route_list), known_sha1_hash)
+        self.assertEqual(
+            textutil.hash_strings(raw_route_list),
+            known_sha1_hash)
 
         route_list = osutil.DefaultOSUtil().get_list_of_routes(raw_route_list)
 
@@ -160,10 +167,17 @@ class TestOSUtil(AgentTestCase):
         self.assertEqual(route_list[0].interface, 'eth0')
         self.assertEqual(route_list[4].interface, 'docker0')
 
-    @patch('azurelinuxagent.common.osutil.default.DefaultOSUtil.get_primary_interface', return_value='eth0')
-    @patch('azurelinuxagent.common.osutil.default.DefaultOSUtil._get_all_interfaces', return_value={'eth0':'10.0.0.1'})
-    @patch('azurelinuxagent.common.osutil.default.DefaultOSUtil.is_loopback', fake_is_loopback)
-    def test_get_first_if(self, get_all_interfaces_mock, get_primary_interface_mock):
+    @patch(
+        'azurelinuxagent.common.osutil.default.DefaultOSUtil.get_primary_interface',
+        return_value='eth0')
+    @patch(
+        'azurelinuxagent.common.osutil.default.DefaultOSUtil._get_all_interfaces',
+        return_value={
+            'eth0': '10.0.0.1'})
+    @patch('azurelinuxagent.common.osutil.default.DefaultOSUtil.is_loopback',
+           fake_is_loopback)
+    def test_get_first_if(self, get_all_interfaces_mock,
+                          get_primary_interface_mock):
         """
         Validate that the agent can find the first active non-loopback
         interface.
@@ -176,10 +190,18 @@ class TestOSUtil(AgentTestCase):
         self.assertEqual(ifname, 'eth0')
         self.assertEqual(ipaddr, '10.0.0.1')
 
-    @patch('azurelinuxagent.common.osutil.default.DefaultOSUtil.get_primary_interface', return_value='bogus0')
-    @patch('azurelinuxagent.common.osutil.default.DefaultOSUtil._get_all_interfaces', return_value={'eth0':'10.0.0.1', 'lo': '127.0.0.1'})
-    @patch('azurelinuxagent.common.osutil.default.DefaultOSUtil.is_loopback', fake_is_loopback)
-    def test_get_first_if_nosuchprimary(self, get_all_interfaces_mock, get_primary_interface_mock):
+    @patch(
+        'azurelinuxagent.common.osutil.default.DefaultOSUtil.get_primary_interface',
+        return_value='bogus0')
+    @patch(
+        'azurelinuxagent.common.osutil.default.DefaultOSUtil._get_all_interfaces',
+        return_value={
+            'eth0': '10.0.0.1',
+            'lo': '127.0.0.1'})
+    @patch('azurelinuxagent.common.osutil.default.DefaultOSUtil.is_loopback',
+           fake_is_loopback)
+    def test_get_first_if_nosuchprimary(
+            self, get_all_interfaces_mock, get_primary_interface_mock):
         ifname, ipaddr = osutil.DefaultOSUtil().get_first_if()
         self.assertTrue(ifname.startswith('eth'))
         self.assertTrue(ipaddr is not None)
@@ -189,10 +211,11 @@ class TestOSUtil(AgentTestCase):
             self.fail("not a valid ip address")
 
     def test_get_first_if_all_loopback(self):
-        fake_ifaces = {'lo':'127.0.0.1'}
+        fake_ifaces = {'lo': '127.0.0.1'}
         with patch.object(osutil.DefaultOSUtil, 'get_primary_interface', return_value='bogus0'):
             with patch.object(osutil.DefaultOSUtil, '_get_all_interfaces', return_value=fake_ifaces):
-                self.assertEqual(('', ''), osutil.DefaultOSUtil().get_first_if())
+                self.assertEqual(
+                    ('', ''), osutil.DefaultOSUtil().get_first_if())
 
     def test_get_all_interfaces(self):
         loopback_count = 0
@@ -204,8 +227,14 @@ class TestOSUtil(AgentTestCase):
             else:
                 non_loopback_count += 1
 
-        self.assertEqual(loopback_count, 1, 'Exactly 1 loopback network interface should exist')
-        self.assertGreater(loopback_count, 0, 'At least 1 non-loopback network interface should exist')
+        self.assertEqual(
+            loopback_count,
+            1,
+            'Exactly 1 loopback network interface should exist')
+        self.assertGreater(
+            loopback_count,
+            0,
+            'At least 1 non-loopback network interface should exist')
 
     def test_isloopback(self):
         for iface in osutil.DefaultOSUtil()._get_all_interfaces():
@@ -224,22 +253,24 @@ class TestOSUtil(AgentTestCase):
         mo = mock.mock_open(read_data=routing_table)
         with patch(open_patch(), mo):
             self.assertFalse(osutil.DefaultOSUtil().is_primary_interface('lo'))
-            self.assertTrue(osutil.DefaultOSUtil().is_primary_interface('eth0'))
+            self.assertTrue(
+                osutil.DefaultOSUtil().is_primary_interface('eth0'))
 
     def test_sriov(self):
         routing_table = "\
         Iface	Destination	Gateway 	Flags	RefCnt	Use	Metric	Mask		MTU	Window	IRTT \n" \
         "bond0	00000000	0100000A	0003	0	    0	0	00000000	0	0	0   \n" \
-        "bond0	0000000A	00000000	0001	0	    0	0	00000000	0	0	0   \n" \
-        "eth0	0000000A	00000000	0001	0	    0	0	00000000	0	0	0   \n" \
-        "bond0	10813FA8	0100000A	0007	0	    0	0	00000000	0	0	0   \n" \
-        "bond0	FEA9FEA9	0100000A	0007	0	    0	0	00000000	0	0	0   \n"
+            "bond0	0000000A	00000000	0001	0	    0	0	00000000	0	0	0   \n" \
+            "eth0	0000000A	00000000	0001	0	    0	0	00000000	0	0	0   \n" \
+            "bond0	10813FA8	0100000A	0007	0	    0	0	00000000	0	0	0   \n" \
+            "bond0	FEA9FEA9	0100000A	0007	0	    0	0	00000000	0	0	0   \n"
 
         mo = mock.mock_open(read_data=routing_table)
         with patch(open_patch(), mo):
-            self.assertFalse(osutil.DefaultOSUtil().is_primary_interface('eth0'))
-            self.assertTrue(osutil.DefaultOSUtil().is_primary_interface('bond0'))
-
+            self.assertFalse(
+                osutil.DefaultOSUtil().is_primary_interface('eth0'))
+            self.assertTrue(
+                osutil.DefaultOSUtil().is_primary_interface('bond0'))
 
     def test_multiple_default_routes(self):
         routing_table = "\
@@ -249,7 +280,8 @@ class TestOSUtil(AgentTestCase):
 
         mo = mock.mock_open(read_data=routing_table)
         with patch(open_patch(), mo):
-            self.assertTrue(osutil.DefaultOSUtil().is_primary_interface('low1'))
+            self.assertTrue(
+                osutil.DefaultOSUtil().is_primary_interface('low1'))
 
     def test_multiple_interfaces(self):
         routing_table = "\
@@ -259,7 +291,8 @@ class TestOSUtil(AgentTestCase):
 
         mo = mock.mock_open(read_data=routing_table)
         with patch(open_patch(), mo):
-            self.assertTrue(osutil.DefaultOSUtil().is_primary_interface('first'))
+            self.assertTrue(
+                osutil.DefaultOSUtil().is_primary_interface('first'))
 
     def test_interface_flags(self):
         routing_table = "\
@@ -269,7 +302,8 @@ class TestOSUtil(AgentTestCase):
 
         mo = mock.mock_open(read_data=routing_table)
         with patch(open_patch(), mo):
-            self.assertTrue(osutil.DefaultOSUtil().is_primary_interface('flgs'))
+            self.assertTrue(
+                osutil.DefaultOSUtil().is_primary_interface('flgs'))
 
     def test_no_interface(self):
         routing_table = "\
@@ -279,9 +313,12 @@ class TestOSUtil(AgentTestCase):
 
         mo = mock.mock_open(read_data=routing_table)
         with patch(open_patch(), mo):
-            self.assertFalse(osutil.DefaultOSUtil().is_primary_interface('ndst'))
-            self.assertFalse(osutil.DefaultOSUtil().is_primary_interface('nflg'))
-            self.assertFalse(osutil.DefaultOSUtil().is_primary_interface('invalid'))
+            self.assertFalse(
+                osutil.DefaultOSUtil().is_primary_interface('ndst'))
+            self.assertFalse(
+                osutil.DefaultOSUtil().is_primary_interface('nflg'))
+            self.assertFalse(
+                osutil.DefaultOSUtil().is_primary_interface('invalid'))
 
     def test_no_primary_does_not_throw(self):
         with patch.object(osutil.DefaultOSUtil, 'get_primary_interface') \
@@ -296,20 +333,27 @@ class TestOSUtil(AgentTestCase):
             self.assertFalse(exception)
 
     def test_dhcp_lease_default(self):
-        self.assertTrue(osutil.DefaultOSUtil().get_dhcp_lease_endpoint() is None)
+        self.assertTrue(
+            osutil.DefaultOSUtil().get_dhcp_lease_endpoint() is None)
 
     def test_dhcp_lease_ubuntu(self):
         with patch.object(glob, "glob", return_value=['/var/lib/dhcp/dhclient.eth0.leases']):
             with patch(open_patch(), mock.mock_open(read_data=load_data("dhcp.leases"))):
-                endpoint = get_osutil(distro_name='ubuntu', distro_version='12.04').get_dhcp_lease_endpoint()
+                endpoint = get_osutil(
+                    distro_name='ubuntu',
+                    distro_version='12.04').get_dhcp_lease_endpoint()
                 self.assertTrue(endpoint is not None)
                 self.assertEqual(endpoint, "168.63.129.16")
 
-                endpoint = get_osutil(distro_name='ubuntu', distro_version='12.04').get_dhcp_lease_endpoint()
+                endpoint = get_osutil(
+                    distro_name='ubuntu',
+                    distro_version='12.04').get_dhcp_lease_endpoint()
                 self.assertTrue(endpoint is not None)
                 self.assertEqual(endpoint, "168.63.129.16")
 
-                endpoint = get_osutil(distro_name='ubuntu', distro_version='14.04').get_dhcp_lease_endpoint()
+                endpoint = get_osutil(
+                    distro_name='ubuntu',
+                    distro_version='14.04').get_dhcp_lease_endpoint()
                 self.assertTrue(endpoint is not None)
                 self.assertEqual(endpoint, "168.63.129.16")
 
@@ -321,13 +365,17 @@ class TestOSUtil(AgentTestCase):
         """
         with patch.object(glob, "glob", return_value=['/var/lib/dhcp/dhclient.eth0.leases']):
             with patch(open_patch(), mock.mock_open(read_data=load_data("dhcp.leases.custom.dns"))):
-                endpoint = get_osutil(distro_name='ubuntu', distro_version='14.04').get_dhcp_lease_endpoint()
+                endpoint = get_osutil(
+                    distro_name='ubuntu',
+                    distro_version='14.04').get_dhcp_lease_endpoint()
                 self.assertEqual(endpoint, "168.63.129.16")
 
     def test_dhcp_lease_multi(self):
         with patch.object(glob, "glob", return_value=['/var/lib/dhcp/dhclient.eth0.leases']):
             with patch(open_patch(), mock.mock_open(read_data=load_data("dhcp.leases.multi"))):
-                endpoint = get_osutil(distro_name='ubuntu', distro_version='12.04').get_dhcp_lease_endpoint()
+                endpoint = get_osutil(
+                    distro_name='ubuntu',
+                    distro_version='12.04').get_dhcp_lease_endpoint()
                 self.assertTrue(endpoint is not None)
                 self.assertEqual(endpoint, "168.63.129.2")
 
@@ -351,7 +399,8 @@ class TestOSUtil(AgentTestCase):
         if ret[0] == 0:
             self.assertEqual(int(ret[1]), get_osutil().get_processor_cores())
         else:
-            self.fail("Cannot retrieve number of process cores using shell command.")
+            self.fail(
+                "Cannot retrieve number of process cores using shell command.")
 
     def test_conf_sshd(self):
         new_file = "\
@@ -517,7 +566,7 @@ Match host 192.168.1.2\n\
 
     @patch('os.path.isfile', return_value=True)
     @patch('azurelinuxagent.common.utils.fileutil.read_file',
-            return_value="33C2F3B9-1399-429F-8EB3-BA656DF32502")
+           return_value="33C2F3B9-1399-429F-8EB3-BA656DF32502")
     def test_get_instance_id_from_file(self, mock_read, mock_isfile):
         util = osutil.DefaultOSUtil()
         self.assertEqual(
@@ -526,7 +575,7 @@ Match host 192.168.1.2\n\
 
     @patch('os.path.isfile', return_value=True)
     @patch('azurelinuxagent.common.utils.fileutil.read_file',
-            return_value="")
+           return_value="")
     def test_get_instance_id_empty_from_file(self, mock_read, mock_isfile):
         util = osutil.DefaultOSUtil()
         self.assertEqual(
@@ -535,7 +584,7 @@ Match host 192.168.1.2\n\
 
     @patch('os.path.isfile', return_value=True)
     @patch('azurelinuxagent.common.utils.fileutil.read_file',
-            return_value="Value")
+           return_value="Value")
     def test_get_instance_id_malformed_from_file(self, mock_read, mock_isfile):
         util = osutil.DefaultOSUtil()
         self.assertEqual(
@@ -544,7 +593,7 @@ Match host 192.168.1.2\n\
 
     @patch('os.path.isfile', return_value=False)
     @patch('azurelinuxagent.common.utils.shellutil.run_get_output',
-            return_value=[0, '33C2F3B9-1399-429F-8EB3-BA656DF32502'])
+           return_value=[0, '33C2F3B9-1399-429F-8EB3-BA656DF32502'])
     def test_get_instance_id_from_dmidecode(self, mock_shell, mock_isfile):
         util = osutil.DefaultOSUtil()
         self.assertEqual(
@@ -553,14 +602,14 @@ Match host 192.168.1.2\n\
 
     @patch('os.path.isfile', return_value=False)
     @patch('azurelinuxagent.common.utils.shellutil.run_get_output',
-            return_value=[1, 'Error Value'])
+           return_value=[1, 'Error Value'])
     def test_get_instance_id_missing(self, mock_shell, mock_isfile):
         util = osutil.DefaultOSUtil()
         self.assertEqual("", util.get_instance_id())
 
     @patch('os.path.isfile', return_value=False)
     @patch('azurelinuxagent.common.utils.shellutil.run_get_output',
-            return_value=[0, 'Unexpected Value'])
+           return_value=[0, 'Unexpected Value'])
     def test_get_instance_id_unexpected(self, mock_shell, mock_isfile):
         util = osutil.DefaultOSUtil()
         self.assertEqual("", util.get_instance_id())
@@ -592,7 +641,8 @@ Match host 192.168.1.2\n\
 
     @patch('os.path.isfile', return_value=False)
     @patch('azurelinuxagent.common.utils.shellutil.run_get_output')
-    def test_is_current_instance_id_from_dmidecode(self, mock_shell, mock_isfile):
+    def test_is_current_instance_id_from_dmidecode(
+            self, mock_shell, mock_isfile):
         util = osutil.DefaultOSUtil()
 
         mock_shell.return_value = [0, 'B9F3C233-9913-9F42-8EB3-BA656DF32502']
@@ -629,14 +679,16 @@ Match host 192.168.1.2\n\
         print("WRITING TO {0}".format(waagent_sudoers))
         self.assertEqual(1, count)
 
-    def test_get_firewall_dropped_packets_returns_zero_if_firewall_disabled(self):
+    def test_get_firewall_dropped_packets_returns_zero_if_firewall_disabled(
+            self):
         osutil._enable_firewall = False
         util = osutil.DefaultOSUtil()
 
         self.assertEqual(0, util.get_firewall_dropped_packets("not used"))
 
     @patch('azurelinuxagent.common.utils.shellutil.run_get_output')
-    def test_get_firewall_dropped_packets_returns_negative_if_error(self, mock_output):
+    def test_get_firewall_dropped_packets_returns_negative_if_error(
+            self, mock_output):
         osutil._enable_firewall = True
         util = osutil.DefaultOSUtil()
 
@@ -646,7 +698,8 @@ Match host 192.168.1.2\n\
         self.assertEqual(-1, util.get_firewall_dropped_packets("not used"))
 
     @patch('azurelinuxagent.common.utils.shellutil.run_get_output')
-    def test_get_firewall_dropped_packets_returns_negative_if_exception(self, mock_output):
+    def test_get_firewall_dropped_packets_returns_negative_if_exception(
+            self, mock_output):
         osutil._enable_firewall = True
         util = osutil.DefaultOSUtil()
 
@@ -656,7 +709,8 @@ Match host 192.168.1.2\n\
         self.assertEqual(-1, util.get_firewall_dropped_packets("not used"))
 
     @patch('azurelinuxagent.common.utils.shellutil.run_get_output')
-    def test_get_firewall_dropped_packets_transient_error_ignored(self, mock_output):
+    def test_get_firewall_dropped_packets_transient_error_ignored(
+            self, mock_output):
         osutil._enable_firewall = True
         util = osutil.DefaultOSUtil()
 
@@ -673,7 +727,7 @@ Match host 192.168.1.2\n\
         mock_output.side_effect = [
             (0, "iptables v{0}".format(osutil.IPTABLES_LOCKING_VERSION)),
             (0,
-'''
+             '''
 
 Chain OUTPUT (policy ACCEPT 104 packets, 43628 bytes)
     pkts      bytes target     prot opt in     out     source               destination
@@ -721,7 +775,7 @@ Chain OUTPUT (policy ACCEPT 104 packets, 43628 bytes)
 
         dst = '1.2.3.4'
         uid = 42
-        version = "iptables v{0}".format(osutil.IPTABLES_LOCKING_VERSION-1)
+        version = "iptables v{0}".format(osutil.IPTABLES_LOCKING_VERSION - 1)
         wait = ""
 
         mock_run.side_effect = [1, 0, 0]
@@ -742,7 +796,8 @@ Chain OUTPUT (policy ACCEPT 104 packets, 43628 bytes)
     @patch('os.getuid', return_value=42)
     @patch('azurelinuxagent.common.utils.shellutil.run_get_output')
     @patch('azurelinuxagent.common.utils.shellutil.run')
-    def test_enable_firewall_skips_if_drop_exists(self, mock_run, mock_output, mock_uid):
+    def test_enable_firewall_skips_if_drop_exists(
+            self, mock_run, mock_output, mock_uid):
         osutil._enable_firewall = True
         util = osutil.DefaultOSUtil()
 
@@ -766,7 +821,8 @@ Chain OUTPUT (policy ACCEPT 104 packets, 43628 bytes)
     @patch('os.getuid', return_value=42)
     @patch('azurelinuxagent.common.utils.shellutil.run_get_output')
     @patch('azurelinuxagent.common.utils.shellutil.run')
-    def test_enable_firewall_ignores_exceptions(self, mock_run, mock_output, mock_uid):
+    def test_enable_firewall_ignores_exceptions(
+            self, mock_run, mock_output, mock_uid):
         osutil._enable_firewall = True
         util = osutil.DefaultOSUtil()
 
@@ -790,7 +846,8 @@ Chain OUTPUT (policy ACCEPT 104 packets, 43628 bytes)
 
     @patch('azurelinuxagent.common.utils.shellutil.run_get_output')
     @patch('azurelinuxagent.common.utils.shellutil.run')
-    def test_enable_firewall_checks_for_invalid_iptables_options(self, mock_run, mock_output):
+    def test_enable_firewall_checks_for_invalid_iptables_options(
+            self, mock_run, mock_output):
         osutil._enable_firewall = True
         util = osutil.DefaultOSUtil()
 
@@ -819,7 +876,8 @@ Chain OUTPUT (policy ACCEPT 104 packets, 43628 bytes)
     @patch('os.getuid', return_value=42)
     @patch('azurelinuxagent.common.utils.shellutil.run_get_output')
     @patch('azurelinuxagent.common.utils.shellutil.run')
-    def test_enable_firewall_skips_if_disabled(self, mock_run, mock_output, mock_uid):
+    def test_enable_firewall_skips_if_disabled(
+            self, mock_run, mock_output, mock_uid):
         osutil._enable_firewall = False
         util = osutil.DefaultOSUtil()
 
@@ -854,14 +912,26 @@ Chain OUTPUT (policy ACCEPT 104 packets, 43628 bytes)
 
         mock_run.assert_has_calls([
             # delete rules < 2.2.26
-            call(osutil.FIREWALL_DELETE_CONNTRACK_ACCEPT.format(wait, dst), chk_err=False),
-            call(osutil.FIREWALL_DELETE_CONNTRACK_ACCEPT.format(wait, dst), chk_err=False),
-            call(osutil.FIREWALL_DELETE_OWNER_ACCEPT.format(wait, dst, uid), chk_err=False),
-            call(osutil.FIREWALL_DELETE_OWNER_ACCEPT.format(wait, dst, uid), chk_err=False),
+            call(
+                osutil.FIREWALL_DELETE_CONNTRACK_ACCEPT.format(
+                    wait, dst), chk_err=False),
+            call(
+                osutil.FIREWALL_DELETE_CONNTRACK_ACCEPT.format(
+                    wait, dst), chk_err=False),
+            call(
+                osutil.FIREWALL_DELETE_OWNER_ACCEPT.format(
+                    wait, dst, uid), chk_err=False),
+            call(
+                osutil.FIREWALL_DELETE_OWNER_ACCEPT.format(
+                    wait, dst, uid), chk_err=False),
 
             # delete rules >= 2.2.26
-            call(osutil.FIREWALL_DELETE_CONNTRACK_DROP.format(wait, dst), chk_err=False),
-            call(osutil.FIREWALL_DELETE_CONNTRACK_DROP.format(wait, dst), chk_err=False),
+            call(
+                osutil.FIREWALL_DELETE_CONNTRACK_DROP.format(
+                    wait, dst), chk_err=False),
+            call(
+                osutil.FIREWALL_DELETE_CONNTRACK_DROP.format(
+                    wait, dst), chk_err=False),
         ])
         mock_output.assert_has_calls([
             call(osutil.IPTABLES_VERSION)
@@ -875,8 +945,8 @@ Chain OUTPUT (policy ACCEPT 104 packets, 43628 bytes)
         osutil._enable_firewall = True
         util = osutil.DefaultOSUtil()
 
-        dst_ip='1.2.3.4'
-        uid=42
+        dst_ip = '1.2.3.4'
+        uid = 42
         version = "iptables v{0}".format(osutil.IPTABLES_LOCKING_VERSION)
         wait = "-w"
 
@@ -885,7 +955,9 @@ Chain OUTPUT (policy ACCEPT 104 packets, 43628 bytes)
         self.assertFalse(util.remove_firewall(dst_ip, uid))
 
         mock_run.assert_has_calls([
-            call(osutil.FIREWALL_DELETE_CONNTRACK_ACCEPT.format(wait, dst_ip), chk_err=False),
+            call(
+                osutil.FIREWALL_DELETE_CONNTRACK_ACCEPT.format(
+                    wait, dst_ip), chk_err=False),
         ])
         mock_output.assert_has_calls([
             call(osutil.IPTABLES_VERSION)
@@ -901,7 +973,8 @@ Chain OUTPUT (policy ACCEPT 104 packets, 43628 bytes)
         self.assertTrue(mock_run.call_count == 1)
         self.assertTrue(mock_output.call_count == 1)
 
-    @skip_if_predicate_true(running_under_travis, "The ip command isn't available in Travis")
+    @skip_if_predicate_true(running_under_travis,
+                            "The ip command isn't available in Travis")
     def test_get_nic_state(self):
         state = osutil.DefaultOSUtil().get_nic_state()
         self.assertNotEqual(state, {})
@@ -913,9 +986,11 @@ Chain OUTPUT (policy ACCEPT 104 packets, 43628 bytes)
         self.assertNotEqual(state, another_state)
 
     def test_get_dhcp_pid_should_return_a_list_of_pids(self):
-        osutil_get_dhcp_pid_should_return_a_list_of_pids(self, osutil.DefaultOSUtil())
+        osutil_get_dhcp_pid_should_return_a_list_of_pids(
+            self, osutil.DefaultOSUtil())
 
-    def test_get_dhcp_pid_should_return_an_empty_list_when_the_dhcp_client_is_not_running(self):
+    def test_get_dhcp_pid_should_return_an_empty_list_when_the_dhcp_client_is_not_running(
+            self):
         original_run_command = shellutil.run_command
 
         def mock_run_command(cmd):
@@ -924,10 +999,14 @@ Chain OUTPUT (policy ACCEPT 104 packets, 43628 bytes)
         with patch("azurelinuxagent.common.utils.shellutil.run_command", side_effect=mock_run_command):
             pid_list = osutil.DefaultOSUtil().get_dhcp_pid()
 
-        self.assertTrue(len(pid_list) == 0, "the return value is not an empty list: {0}".format(pid_list))
+        self.assertTrue(
+            len(pid_list) == 0,
+            "the return value is not an empty list: {0}".format(pid_list))
 
-    @patch('os.walk', return_value=[('host3/target3:0:1/3:0:1:0/block', ['sdb'], [])])
-    @patch('azurelinuxagent.common.utils.fileutil.read_file', return_value='{00000000-0001-8899-0000-000000000000}')
+    @patch('os.walk', return_value=[
+           ('host3/target3:0:1/3:0:1:0/block', ['sdb'], [])])
+    @patch('azurelinuxagent.common.utils.fileutil.read_file',
+           return_value='{00000000-0001-8899-0000-000000000000}')
     @patch('os.listdir', return_value=['00000000-0001-8899-0000-000000000000'])
     @patch('os.path.exists', return_value=True)
     def test_device_for_ide_port_gen1_success(
@@ -937,10 +1016,15 @@ Chain OUTPUT (policy ACCEPT 104 packets, 43628 bytes)
             fileutil_read_file,
             os_walk):
         dev = osutil.DefaultOSUtil().device_for_ide_port(1)
-        self.assertEqual(dev, 'sdb', 'The returned device should be the resource disk')
+        self.assertEqual(
+            dev,
+            'sdb',
+            'The returned device should be the resource disk')
 
-    @patch('os.walk', return_value=[('host0/target0:0:0/0:0:0:1/block', ['sdb'], [])])
-    @patch('azurelinuxagent.common.utils.fileutil.read_file', return_value='{f8b3781a-1e82-4818-a1c3-63d806ec15bb}')
+    @patch('os.walk', return_value=[
+           ('host0/target0:0:0/0:0:0:1/block', ['sdb'], [])])
+    @patch('azurelinuxagent.common.utils.fileutil.read_file',
+           return_value='{f8b3781a-1e82-4818-a1c3-63d806ec15bb}')
     @patch('os.listdir', return_value=['f8b3781a-1e82-4818-a1c3-63d806ec15bb'])
     @patch('os.path.exists', return_value=True)
     def test_device_for_ide_port_gen2_success(
@@ -950,7 +1034,10 @@ Chain OUTPUT (policy ACCEPT 104 packets, 43628 bytes)
             fileutil_read_file,
             os_walk):
         dev = osutil.DefaultOSUtil().device_for_ide_port(1)
-        self.assertEqual(dev, 'sdb', 'The returned device should be the resource disk')
+        self.assertEqual(
+            dev,
+            'sdb',
+            'The returned device should be the resource disk')
 
     @patch('os.listdir', return_value=['00000000-0000-0000-0000-000000000000'])
     @patch('os.path.exists', return_value=True)
@@ -959,9 +1046,12 @@ Chain OUTPUT (policy ACCEPT 104 packets, 43628 bytes)
             os_path_exists,
             os_listdir):
         dev = osutil.DefaultOSUtil().device_for_ide_port(1)
-        self.assertIsNone(dev, 'None should be returned if no resource disk found')
+        self.assertIsNone(
+            dev, 'None should be returned if no resource disk found')
 
-def osutil_get_dhcp_pid_should_return_a_list_of_pids(test_instance, osutil_instance):
+
+def osutil_get_dhcp_pid_should_return_a_list_of_pids(
+        test_instance, osutil_instance):
     """
     This is a very basic test for osutil.get_dhcp_pid. It is simply meant to exercise the implementation of that method
     in case there are any basic errors, such as a typos, etc. The test does not verify that the implementation returns
@@ -978,7 +1068,9 @@ def osutil_get_dhcp_pid_should_return_a_list_of_pids(test_instance, osutil_insta
     with patch("azurelinuxagent.common.utils.shellutil.run_command", side_effect=mock_run_command):
         pid = osutil_instance.get_dhcp_pid()
 
-    test_instance.assertTrue(len(pid) != 0, "get_dhcp_pid did not return a PID")
+    test_instance.assertTrue(
+        len(pid) != 0,
+        "get_dhcp_pid did not return a PID")
 
 
 if __name__ == '__main__':

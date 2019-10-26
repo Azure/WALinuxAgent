@@ -72,7 +72,7 @@ class ProvisionHandler(object):
 
             if not self.validate_cloud_init(is_expected=False):
                 raise ProvisionError("cloud-init appears to be running, "
-                                        "this is not expected, cannot continue")
+                                     "this is not expected, cannot continue")
 
             logger.info("Copying ovf-env.xml")
             ovf_env = self.protocol_util.copy_ovf_env()
@@ -88,7 +88,9 @@ class ProvisionHandler(object):
 
             self.write_provisioned()
 
-            self.report_event("Provisioning succeeded ({0}s)".format(self._get_uptime_seconds()),
+            self.report_event(
+                "Provisioning succeeded ({0}s)".format(
+                    self._get_uptime_seconds()),
                 is_success=True,
                 duration=elapsed_milliseconds(utc_start))
 
@@ -98,7 +100,8 @@ class ProvisionHandler(object):
             logger.info("Provisioning complete")
 
         except (ProtocolError, ProvisionError) as e:
-            msg = "Provisioning failed: {0} ({1}s)".format(ustr(e), self._get_uptime_seconds())
+            msg = "Provisioning failed: {0} ({1}s)".format(
+                ustr(e), self._get_uptime_seconds())
             logger.error(msg)
             self.report_not_ready("ProvisioningFailed", ustr(e))
             self.report_event(msg, is_success=False)
@@ -117,8 +120,8 @@ class ProvisionHandler(object):
                     pname = fh.read()
                     if CLOUD_INIT_REGEX.match(pname):
                         is_running = True
-                        msg = "cloud-init is running [PID {0}, {1}]".format(pid,
-                                                                            pname)
+                        msg = "cloud-init is running [PID {0}, {1}]".format(
+                            pid, pname)
                         if is_expected:
                             logger.verbose(msg)
                         else:
@@ -134,7 +137,7 @@ class ProvisionHandler(object):
             with open('/proc/uptime') as fh:
                 uptime, _ = fh.readline().split()
                 return uptime
-        except:
+        except BaseException:
             return 0
 
     def reg_ssh_host_key(self):
@@ -276,9 +279,9 @@ class ProvisionHandler(object):
             os.chmod(customdata_file, 0o700)
             shellutil.run(customdata_file)
             add_event(name=AGENT_NAME,
-                        duration=int(time.time() - start),
-                        is_success=True,
-                        op=WALAEventOperation.CustomData)
+                      duration=int(time.time() - start),
+                      is_success=True,
+                      op=WALAEventOperation.CustomData)
 
     def deploy_ssh_pubkeys(self, ovfenv):
         for pubkey in ovfenv.ssh_pubkeys:
@@ -293,10 +296,10 @@ class ProvisionHandler(object):
     def report_event(self, message, is_success=False, duration=0,
                      operation=WALAEventOperation.Provision):
         add_event(name=AGENT_NAME,
-                    message=message,
-                    duration=duration,
-                    is_success=is_success,
-                    op=operation)
+                  message=message,
+                  duration=duration,
+                  is_success=is_success,
+                  op=operation)
 
     def report_not_ready(self, sub_status, description):
         status = ProvisionStatus(status="NotReady", subStatus=sub_status,

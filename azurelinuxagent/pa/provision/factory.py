@@ -18,17 +18,17 @@
 import azurelinuxagent.common.conf as conf
 
 from azurelinuxagent.common.version import DISTRO_NAME, DISTRO_VERSION, \
-                                     DISTRO_FULL_NAME
+    DISTRO_FULL_NAME
 
 from .default import ProvisionHandler
 from .cloudinit import CloudInitProvisionHandler
 
-def get_provision_handler(distro_name=DISTRO_NAME, 
-                            distro_version=DISTRO_VERSION,
-                            distro_full_name=DISTRO_FULL_NAME):
+
+def get_provision_handler(distro_name=DISTRO_NAME,
+                          distro_version=DISTRO_VERSION,
+                          distro_full_name=DISTRO_FULL_NAME):
 
     if conf.get_provision_cloudinit():
         return CloudInitProvisionHandler()
 
     return ProvisionHandler()
-

@@ -261,7 +261,8 @@ class Protocol(DataContract):
     def get_artifacts_profile(self):
         raise NotImplementedError()
 
-    def download_ext_handler_pkg(self, uri, destination, headers=None, use_proxy=True):
+    def download_ext_handler_pkg(
+            self, uri, destination, headers=None, use_proxy=True):
         raise NotImplementedError()
 
     def report_provision_status(self, provision_status):

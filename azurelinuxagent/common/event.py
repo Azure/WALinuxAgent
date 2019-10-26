@@ -36,8 +36,10 @@ from azurelinuxagent.common.version import CURRENT_VERSION
 _EVENT_MSG = "Event: name={0}, op={1}, message={2}, duration={3}"
 TELEMETRY_EVENT_PROVIDER_ID = "69B669B9-4AF8-4C50-BDC4-6006FA76E975"
 
-# Store the last retrieved container id as an environment variable to be shared between threads for telemetry purposes
+# Store the last retrieved container id as an environment variable to be
+# shared between threads for telemetry purposes
 CONTAINER_ID_ENV_VARIABLE = "AZURE_GUEST_AGENT_CONTAINER_ID"
+
 
 class WALAEventOperation:
     ActivateResourceDisk = "ActivateResourceDisk"
@@ -137,7 +139,8 @@ class EventStatus(object):
                 with open(self._path, 'r') as f:
                     self._status = json.load(f)
         except Exception as e:
-            logger.warn("Exception occurred loading event status: {0}".format(e))
+            logger.warn(
+                "Exception occurred loading event status: {0}".format(e))
             self._status = {}
 
     def _save(self):
@@ -145,14 +148,15 @@ class EventStatus(object):
             with open(self._path, 'w') as f:
                 json.dump(self._status, f)
         except Exception as e:
-            logger.warn("Exception occurred saving event status: {0}".format(e))
+            logger.warn(
+                "Exception occurred saving event status: {0}".format(e))
 
 
 __event_status__ = EventStatus()
 __event_status_operations__ = [
-        WALAEventOperation.AutoUpdate,
-        WALAEventOperation.ReportStatus
-    ]
+    WALAEventOperation.AutoUpdate,
+    WALAEventOperation.ReportStatus
+]
 
 
 def _encode_message(op, message):
@@ -186,7 +190,8 @@ def _encode_message(op, message):
         return textutil.compress(message)
     except Exception:
         # If the message could not be encoded a dummy message ('<>') is returned.
-        # The original message was still sent via telemetry, so all is not lost.
+        # The original message was still sent via telemetry, so all is not
+        # lost.
         return "<>"
 
 
@@ -207,20 +212,24 @@ class EventLogger(object):
 
     def save_event(self, data):
         if self.event_dir is None:
-            logger.warn("Cannot save event -- Event reporter is not initialized.")
+            logger.warn(
+                "Cannot save event -- Event reporter is not initialized.")
             return
 
         try:
             fileutil.mkdir(self.event_dir, mode=0o700)
         except (IOError, OSError) as e:
-            msg = "Failed to create events folder {0}. Error: {1}".format(self.event_dir, ustr(e))
+            msg = "Failed to create events folder {0}. Error: {1}".format(
+                self.event_dir, ustr(e))
             raise EventError(msg)
 
         existing_events = os.listdir(self.event_dir)
         if len(existing_events) >= 1000:
             existing_events.sort()
             oldest_files = existing_events[:-999]
-            logger.warn("Too many files under: {0}, removing oldest".format(self.event_dir))
+            logger.warn(
+                "Too many files under: {0}, removing oldest".format(
+                    self.event_dir))
             try:
                 for f in oldest_files:
                     os.remove(os.path.join(self.event_dir, f))
@@ -244,10 +253,19 @@ class EventLogger(object):
         return h not in self.periodic_events or \
             (self.periodic_events[h] + delta) <= datetime.now()
 
-    def add_periodic(self,
-                     delta, name, op=WALAEventOperation.Unknown, is_success=True, duration=0,
-                     version=CURRENT_VERSION, message="", evt_type="",
-                     is_internal=False, log_event=True, force=False):
+    def add_periodic(
+            self,
+            delta,
+            name,
+            op=WALAEventOperation.Unknown,
+            is_success=True,
+            duration=0,
+            version=CURRENT_VERSION,
+            message="",
+            evt_type="",
+            is_internal=False,
+            log_event=True,
+            force=False):
 
         h = hash(name + op + ustr(is_success) + message)
 
@@ -272,9 +290,19 @@ class EventLogger(object):
         if (not is_success) and log_event:
             _log_event(name, op, message, duration, is_success=is_success)
 
-        self._add_event(duration, evt_type, is_internal, is_success, message, name, op, version, event_id=1)
+        self._add_event(
+            duration,
+            evt_type,
+            is_internal,
+            is_success,
+            message,
+            name,
+            op,
+            version,
+            event_id=1)
 
-    def _add_event(self, duration, evt_type, is_internal, is_success, message, name, op, version, event_id):
+    def _add_event(self, duration, evt_type, is_internal,
+                   is_success, message, name, op, version, event_id):
         event = TelemetryEvent(event_id, TELEMETRY_EVENT_PROVIDER_ID)
         event.parameters.append(TelemetryEventParam('Name', name))
         event.parameters.append(TelemetryEventParam('Version', str(version)))
@@ -285,14 +313,21 @@ class EventLogger(object):
         event.parameters.append(TelemetryEventParam('Message', message))
         event.parameters.append(TelemetryEventParam('Duration', duration))
         event.parameters.append(TelemetryEventParam('ExtensionType', evt_type))
-        event.parameters.append(TelemetryEventParam('ContainerId',
-                                                    os.environ.get(CONTAINER_ID_ENV_VARIABLE, "UNINITIALIZED")))
+        event.parameters.append(
+            TelemetryEventParam(
+                'ContainerId',
+                os.environ.get(
+                    CONTAINER_ID_ENV_VARIABLE,
+                    "UNINITIALIZED")))
 
         data = get_properties(event)
         try:
             self.save_event(json.dumps(data))
         except EventError as e:
-            logger.periodic_error(logger.EVERY_FIFTEEN_MINUTES, "[PERIODIC] {0}".format(ustr(e)))
+            logger.periodic_error(
+                logger.EVERY_FIFTEEN_MINUTES,
+                "[PERIODIC] {0}".format(
+                    ustr(e)))
 
     def add_log_event(self, level, message):
         # By the time the message has gotten to this point it is formatted as
@@ -308,8 +343,14 @@ class EventLogger(object):
             else message
 
         event = TelemetryEvent(7, "FFF0196F-EE4C-4EAF-9AA5-776F622DEB4F")
-        event.parameters.append(TelemetryEventParam('EventName', WALAEventOperation.Log))
-        event.parameters.append(TelemetryEventParam('CapabilityUsed', logger.LogLevel.STRINGS[level]))
+        event.parameters.append(
+            TelemetryEventParam(
+                'EventName',
+                WALAEventOperation.Log))
+        event.parameters.append(
+            TelemetryEventParam(
+                'CapabilityUsed',
+                logger.LogLevel.STRINGS[level]))
         event.parameters.append(TelemetryEventParam('Context1', msg))
         event.parameters.append(TelemetryEventParam('Context2', ''))
         event.parameters.append(TelemetryEventParam('Context3', ''))
@@ -332,7 +373,8 @@ class EventLogger(object):
         """
         if log_event:
             from azurelinuxagent.common.version import AGENT_NAME
-            message = "Metric {0}/{1} [{2}] = {3}".format(category, counter, instance, value)
+            message = "Metric {0}/{1} [{2}] = {3}".format(
+                category, counter, instance, value)
             _log_event(AGENT_NAME, "METRIC", message, 0)
 
         event = TelemetryEvent(4, "69B669B9-4AF8-4C50-BDC4-6006FA76E975")
@@ -357,8 +399,8 @@ def elapsed_milliseconds(utc_start):
         return 0
 
     d = now - utc_start
-    return int(((d.days * 24 * 60 * 60 + d.seconds) * 1000) + \
-                    (d.microseconds / 1000.0))
+    return int(((d.days * 24 * 60 * 60 + d.seconds) * 1000) +
+               (d.microseconds / 1000.0))
 
 
 def report_event(op, is_success=True, message='', log_event=True):
@@ -374,13 +416,14 @@ def report_event(op, is_success=True, message='', log_event=True):
 def report_periodic(delta, op, is_success=True, message=''):
     from azurelinuxagent.common.version import AGENT_NAME, CURRENT_VERSION
     add_periodic(delta, AGENT_NAME,
-              version=CURRENT_VERSION,
-              is_success=is_success,
-              message=message,
-              op=op)
+                 version=CURRENT_VERSION,
+                 is_success=is_success,
+                 message=message,
+                 op=op)
 
 
-def report_metric(category, counter, instance, value, log_event=False, reporter=__event_logger__):
+def report_metric(category, counter, instance, value,
+                  log_event=False, reporter=__event_logger__):
     """
     Send a telemetry event reporting a single instance of a performance counter.
     :param str category: The category of the metric (cpu, memory, etc)
@@ -392,8 +435,10 @@ def report_metric(category, counter, instance, value, log_event=False, reporter=
     """
     if reporter.event_dir is None:
         from azurelinuxagent.common.version import AGENT_NAME
-        logger.warn("Cannot report metric event -- Event reporter is not initialized.")
-        message = "Metric {0}/{1} [{2}] = {3}".format(category, counter, instance, value)
+        logger.warn(
+            "Cannot report metric event -- Event reporter is not initialized.")
+        message = "Metric {0}/{1} [{2}] = {3}".format(
+            category, counter, instance, value)
         _log_event(AGENT_NAME, "METRIC", message, 0)
         return
     reporter.add_metric(category, counter, instance, value, log_event)
@@ -424,12 +469,21 @@ def add_log_event(level, message, reporter=__event_logger__):
 
 
 def add_periodic(
-    delta, name, op=WALAEventOperation.Unknown, is_success=True, duration=0,
-    version=CURRENT_VERSION,
-    message="", evt_type="", is_internal=False, log_event=True, force=False,
-    reporter=__event_logger__):
+        delta,
+        name,
+        op=WALAEventOperation.Unknown,
+        is_success=True,
+        duration=0,
+        version=CURRENT_VERSION,
+        message="",
+        evt_type="",
+        is_internal=False,
+        log_event=True,
+        force=False,
+        reporter=__event_logger__):
     if reporter.event_dir is None:
-        logger.warn("Cannot add periodic event -- Event reporter is not initialized.")
+        logger.warn(
+            "Cannot add periodic event -- Event reporter is not initialized.")
         _log_event(name, op, message, duration, is_success=is_success)
         return
 

@@ -49,7 +49,7 @@ ENDORSED_IMAGE_INFO_MATCHER_JSON = """{
                 "14.04.6-LTS",
                 "14.04.7-LTS",
                 "14.04.8-LTS",
-                
+
                 "16.04-LTS",
                 "16.04.0-LTS",
                 "18.04-LTS",
@@ -77,7 +77,7 @@ ENDORSED_IMAGE_INFO_MATCHER_JSON = """{
         "CENTOS-HPC": { "Minimum": "6.3" }
     },
     "REDHAT": {
-        "RHEL": { 
+        "RHEL": {
             "Minimum": "6.7",
             "List": [
                 "7-LVM",
@@ -154,13 +154,14 @@ class ImageInfoMatcher(object):
 
             if 'Minimum' in doci[key]:
                 try:
-                    return FlexibleVersion(keys[0]) >= FlexibleVersion(doci[key]['Minimum'])
+                    return FlexibleVersion(keys[0]) >= FlexibleVersion(
+                        doci[key]['Minimum'])
                 except ValueError:
                     pass
 
             return _is_match_walk(doci[key], keys)
 
-        return _is_match_walk(self.doc, [ publisher, offer, sku, version ])
+        return _is_match_walk(self.doc, [publisher, offer, sku, version])
 
 
 class ComputeInfo(DataContract):
@@ -202,10 +203,10 @@ class ComputeInfo(DataContract):
         self.vmScaleSetName = vmScaleSetName
         self.zone = zone
 
-
     @property
     def image_info(self):
-        return "{0}:{1}:{2}:{3}".format(self.publisher, self.offer, self.sku, self.version)
+        return "{0}:{1}:{2}:{3}".format(
+            self.publisher, self.offer, self.sku, self.version)
 
     @property
     def image_origin(self):
@@ -222,14 +223,17 @@ class ComputeInfo(DataContract):
             if self.publisher == "":
                 return IMDS_IMAGE_ORIGIN_CUSTOM
 
-            if ComputeInfo.__matcher.is_match(self.publisher, self.offer, self.sku, self.version):
+            if ComputeInfo.__matcher.is_match(
+                    self.publisher, self.offer, self.sku, self.version):
                 return IMDS_IMAGE_ORIGIN_ENDORSED
             else:
                 return IMDS_IMAGE_ORIGIN_PLATFORM
 
         except Exception as e:
-            logger.periodic_warn(logger.EVERY_FIFTEEN_MINUTES,
-                                 "[PERIODIC] Could not determine the image origin from IMDS: {0}".format(str(e)))
+            logger.periodic_warn(
+                logger.EVERY_FIFTEEN_MINUTES,
+                "[PERIODIC] Could not determine the image origin from IMDS: {0}".format(
+                    str(e)))
             return IMDS_IMAGE_ORIGIN_UNKNOWN
 
 
@@ -244,11 +248,13 @@ class ImdsClient(object):
             'User-Agent': restutil.HTTP_USER_AGENT_HEALTH,
             'Metadata': True,
         }
-        self._regex_imds_ioerror = re.compile(r".*HTTP Failed. GET http://[^ ]+ -- IOError timed out -- [0-9]+ attempts made")
+        self._regex_imds_ioerror = re.compile(
+            r".*HTTP Failed. GET http://[^ ]+ -- IOError timed out -- [0-9]+ attempts made")
         self._protocol_util = get_protocol_util()
 
     def _get_metadata_url(self, endpoint, resource_path):
-        return BASE_METADATA_URI.format(endpoint, resource_path, self._api_version)
+        return BASE_METADATA_URI.format(
+            endpoint, resource_path, self._api_version)
 
     def _http_get(self, endpoint, resource_path, headers):
         url = self._get_metadata_url(endpoint, resource_path)
@@ -267,21 +273,30 @@ class ImdsClient(object):
         headers = self._health_headers if is_health else self._headers
         endpoint = IMDS_ENDPOINT
         try:
-            resp = self._http_get(endpoint=endpoint, resource_path=resource_path, headers=headers)
+            resp = self._http_get(
+                endpoint=endpoint,
+                resource_path=resource_path,
+                headers=headers)
         except HttpError as e:
-            logger.periodic_warn(logger.EVERY_FIFTEEN_MINUTES,
-                                 "[PERIODIC] Unable to connect to primary IMDS endpoint {0}".format(endpoint))
+            logger.periodic_warn(
+                logger.EVERY_FIFTEEN_MINUTES,
+                "[PERIODIC] Unable to connect to primary IMDS endpoint {0}".format(endpoint))
             if not self._regex_imds_ioerror.match(str(e)):
                 raise
             endpoint = self._protocol_util.get_wireserver_endpoint()
             try:
-                resp = self._http_get(endpoint=endpoint, resource_path=resource_path, headers=headers)
+                resp = self._http_get(
+                    endpoint=endpoint,
+                    resource_path=resource_path,
+                    headers=headers)
             except HttpError as e:
-                logger.periodic_warn(logger.EVERY_FIFTEEN_MINUTES,
-                                     "[PERIODIC] Unable to connect to backup IMDS endpoint {0}".format(endpoint))
+                logger.periodic_warn(
+                    logger.EVERY_FIFTEEN_MINUTES,
+                    "[PERIODIC] Unable to connect to backup IMDS endpoint {0}".format(endpoint))
                 if not self._regex_imds_ioerror.match(str(e)):
                     raise
-                return False, "IMDS error in /metadata/{0}: Unable to connect to endpoint".format(resource_path)
+                return False, "IMDS error in /metadata/{0}: Unable to connect to endpoint".format(
+                    resource_path)
         if restutil.request_failed(resp):
             return False, "IMDS error in /metadata/{0}: {1}".format(
                 resource_path, restutil.read_response_error(resp))
@@ -330,14 +345,21 @@ class ImdsClient(object):
 
         # ensure all expected fields are present and have a value
         try:
-            # TODO: compute fields cannot be verified yet since we need to exclude rdfe vms (#1249)
+            # TODO: compute fields cannot be verified yet since we need to
+            # exclude rdfe vms (#1249)
 
             self.check_field(json_data, 'network')
             self.check_field(json_data['network'], 'interface')
-            self.check_field(json_data['network']['interface'][0], 'macAddress')
+            self.check_field(
+                json_data['network']['interface'][0],
+                'macAddress')
             self.check_field(json_data['network']['interface'][0], 'ipv4')
-            self.check_field(json_data['network']['interface'][0]['ipv4'], 'ipAddress')
-            self.check_field(json_data['network']['interface'][0]['ipv4']['ipAddress'][0], 'privateIpAddress')
+            self.check_field(
+                json_data['network']['interface'][0]['ipv4'],
+                'ipAddress')
+            self.check_field(
+                json_data['network']['interface'][0]['ipv4']['ipAddress'][0],
+                'privateIpAddress')
         except ValueError as v:
             return False, ustr(v)
 

@@ -33,11 +33,12 @@ import azurelinuxagent.common.logger as logger
 import azurelinuxagent.common.event as event
 import azurelinuxagent.common.conf as conf
 from azurelinuxagent.common.version import AGENT_NAME, AGENT_LONG_VERSION, \
-                                     DISTRO_NAME, DISTRO_VERSION, \
-                                     PY_VERSION_MAJOR, PY_VERSION_MINOR, \
-                                     PY_VERSION_MICRO, GOAL_STATE_AGENT_VERSION
+    DISTRO_NAME, DISTRO_VERSION, \
+    PY_VERSION_MAJOR, PY_VERSION_MINOR, \
+    PY_VERSION_MICRO, GOAL_STATE_AGENT_VERSION
 from azurelinuxagent.common.osutil import get_osutil
 from azurelinuxagent.common.utils import fileutil
+
 
 class Agent(object):
     def __init__(self, verbose, conf_file_path=None):
@@ -47,24 +48,24 @@ class Agent(object):
         self.conf_file_path = conf_file_path
         self.osutil = get_osutil()
 
-        #Init stdout log
+        # Init stdout log
         level = logger.LogLevel.VERBOSE if verbose else logger.LogLevel.INFO
         logger.add_logger_appender(logger.AppenderType.STDOUT, level)
 
-        #Init config
+        # Init config
         conf_file_path = self.conf_file_path \
-                if self.conf_file_path is not None \
-                    else self.osutil.get_agent_conf_file_path()
+            if self.conf_file_path is not None \
+            else self.osutil.get_agent_conf_file_path()
         conf.load_conf_from_file(conf_file_path)
 
-        #Init log
+        # Init log
         verbose = verbose or conf.get_logs_verbose()
         level = logger.LogLevel.VERBOSE if verbose else logger.LogLevel.INFO
         logger.add_logger_appender(logger.AppenderType.FILE, level,
-                                 path="/var/log/waagent.log")
+                                   path="/var/log/waagent.log")
         if conf.get_logs_console():
             logger.add_logger_appender(logger.AppenderType.CONSOLE, level,
-                    path="/dev/console")
+                                       path="/dev/console")
         # See issue #1035
         # logger.add_logger_appender(logger.AppenderType.TELEMETRY,
         #                            logger.LogLevel.WARNING,
@@ -81,7 +82,7 @@ class Agent(object):
                 "Exception occurred while creating extension "
                 "log directory {0}: {1}".format(ext_log_dir, e))
 
-        #Init event reporter
+        # Init event reporter
         event.init_event_status(conf.get_lib_dir())
         event_dir = os.path.join(conf.get_lib_dir(), "events")
         event.init_event_logger(event_dir)
@@ -94,7 +95,7 @@ class Agent(object):
         logger.set_prefix("Daemon")
         child_args = None \
             if self.conf_file_path is None \
-                else "-configuration-path:{0}".format(self.conf_file_path)
+            else "-configuration-path:{0}".format(self.conf_file_path)
 
         from azurelinuxagent.daemon import get_daemon_handler
         daemon_handler = get_daemon_handler()
@@ -141,6 +142,7 @@ class Agent(object):
         for k in sorted(configuration.keys()):
             print("{0} = {1}".format(k, configuration[k]))
 
+
 def main(args=[]):
     """
     Parse command line arguments, exit with usage() on error.
@@ -177,6 +179,7 @@ def main(args=[]):
                          command,
                          traceback.format_exc())
 
+
 def parse_args(sys_args):
     """
     Parse command line arguments
@@ -187,15 +190,15 @@ def parse_args(sys_args):
     debug = False
     conf_file_path = None
     for a in sys_args:
-        m = re.match("^(?:[-/]*)configuration-path:([\w/\.\-_]+)", a)
-        if not m is None:
+        m = re.match(r"^(?:[-/]*)configuration-path:([\w/\.\-_]+)", a)
+        if m is not None:
             conf_file_path = m.group(1)
             if not os.path.exists(conf_file_path):
                 print("Error: Configuration file {0} does not exist".format(
-                        conf_file_path), file=sys.stderr)
+                    conf_file_path), file=sys.stderr)
                 usage()
                 sys.exit(1)
-        
+
         elif re.match("^([-/]*)deprovision\\+user", a):
             cmd = "deprovision+user"
         elif re.match("^([-/]*)deprovision", a):
@@ -239,18 +242,20 @@ def version():
                                        PY_VERSION_MICRO))
     print("Goal state agent: {0}".format(GOAL_STATE_AGENT_VERSION))
 
+
 def usage():
     """
     Return agent usage message
     """
-    s  = "\n"
+    s = "\n"
     s += ("usage: {0} [-verbose] [-force] [-help] "
-           "-configuration-path:<path to configuration file>"
-           "-deprovision[+user]|-register-service|-version|-daemon|-start|"
-           "-run-exthandlers|-show-configuration]"
-           "").format(sys.argv[0])
+          "-configuration-path:<path to configuration file>"
+          "-deprovision[+user]|-register-service|-version|-daemon|-start|"
+          "-run-exthandlers|-show-configuration]"
+          "").format(sys.argv[0])
     s += "\n"
     return s
+
 
 def start(conf_file_path=None):
     """
@@ -263,5 +268,6 @@ def start(conf_file_path=None):
         args.append('-configuration-path:{0}'.format(conf_file_path))
     subprocess.Popen(args, stdout=devnull, stderr=devnull)
 
-if __name__ == '__main__' :
+
+if __name__ == '__main__':
     main()

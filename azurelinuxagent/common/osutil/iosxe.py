@@ -23,7 +23,7 @@ from azurelinuxagent.common.osutil.default import DefaultOSUtil
 from azurelinuxagent.common.osutil.redhat import Redhat6xOSUtil
 
 '''
-The IOSXE distribution is a variant of the Centos distribution, 
+The IOSXE distribution is a variant of the Centos distribution,
 version 7.1.
 The primary difference is that IOSXE makes some assumptions about
 the waagent environment:
@@ -31,6 +31,8 @@ the waagent environment:
  - no provisioning is performed
  - no DHCP-based services are available
 '''
+
+
 class IosxeOSUtil(DefaultOSUtil):
     def __init__(self):
         super(IosxeOSUtil, self).__init__()
@@ -41,9 +43,11 @@ class IosxeOSUtil(DefaultOSUtil):
         Due to a bug in systemd in Centos-7.0, if this call fails, fallback
         to hostname.
         """
-        hostnamectl_cmd = "hostnamectl set-hostname {0} --static".format(hostname)
+        hostnamectl_cmd = "hostnamectl set-hostname {0} --static".format(
+            hostname)
         if shellutil.run(hostnamectl_cmd, chk_err=False) != 0:
-            logger.warn("[{0}] failed, attempting fallback".format(hostnamectl_cmd))
+            logger.warn(
+                "[{0}] failed, attempting fallback".format(hostnamectl_cmd))
             DefaultOSUtil.set_hostname(self, hostname)
 
     def publish_hostname(self, hostname):

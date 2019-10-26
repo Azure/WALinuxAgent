@@ -40,7 +40,9 @@ class DebianOSBaseUtil(DefaultOSUtil):
         self.jit_enabled = True
 
     def restart_ssh_service(self):
-        return shellutil.run("systemctl --job-mode=ignore-dependencies try-reload-or-restart ssh", chk_err=False)
+        return shellutil.run(
+            "systemctl --job-mode=ignore-dependencies try-reload-or-restart ssh",
+            chk_err=False)
 
     def stop_agent_service(self):
         return shellutil.run("service azurelinuxagent stop", chk_err=False)
@@ -58,7 +60,8 @@ class DebianOSBaseUtil(DefaultOSUtil):
         pass
 
     def get_dhcp_lease_endpoint(self):
-        return self.get_endpoint_from_leases_path('/var/lib/dhcp/dhclient.*.leases')
+        return self.get_endpoint_from_leases_path(
+            '/var/lib/dhcp/dhclient.*.leases')
 
 
 class DebianOSModernUtil(DebianOSBaseUtil):
@@ -73,7 +76,9 @@ class DebianOSModernUtil(DebianOSBaseUtil):
         return "walinuxagent"
 
     def stop_agent_service(self):
-        return shellutil.run("systemctl stop {0}".format(self.service_name), chk_err=False)
+        return shellutil.run("systemctl stop {0}".format(
+            self.service_name), chk_err=False)
 
     def start_agent_service(self):
-        return shellutil.run("systemctl start {0}".format(self.service_name), chk_err=False)
+        return shellutil.run("systemctl start {0}".format(
+            self.service_name), chk_err=False)

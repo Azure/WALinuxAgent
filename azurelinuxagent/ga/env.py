@@ -36,9 +36,9 @@ from azurelinuxagent.common.utils.archive import StateArchiver
 from azurelinuxagent.common.version import AGENT_NAME, CURRENT_VERSION
 
 CACHE_PATTERNS = [
-    re.compile("^(.*)\.(\d+)\.(agentsManifest)$", re.IGNORECASE),
-    re.compile("^(.*)\.(\d+)\.(manifest\.xml)$", re.IGNORECASE),
-    re.compile("^(.*)\.(\d+)\.(xml)$", re.IGNORECASE)
+    re.compile(r"^(.*)\.(\d+)\.(agentsManifest)$", re.IGNORECASE),
+    re.compile(r"^(.*)\.(\d+)\.(manifest\.xml)$", re.IGNORECASE),
+    re.compile(r"^(.*)\.(\d+)\.(xml)$", re.IGNORECASE)
 ]
 
 MAXIMUM_CACHED_FILES = 50
@@ -58,6 +58,7 @@ class EnvHandler(object):
     Monitor scsi disk.
     If new scsi disk found, set timeout
     """
+
     def __init__(self):
         self.osutil = get_osutil()
         self.dhcp_handler = get_dhcp_handler()
@@ -109,10 +110,12 @@ class EnvHandler(object):
                 # to WireServer.  The previous rules allowed traffic.  Having both rules in
                 # place negated the fix in 2.2.26.
                 if not reset_firewall_fules:
-                    self.osutil.remove_firewall(dst_ip=protocol.endpoint, uid=os.getuid())
+                    self.osutil.remove_firewall(
+                        dst_ip=protocol.endpoint, uid=os.getuid())
                     reset_firewall_fules = True
 
-                success = self.osutil.enable_firewall(dst_ip=protocol.endpoint, uid=os.getuid())
+                success = self.osutil.enable_firewall(
+                    dst_ip=protocol.endpoint, uid=os.getuid())
 
                 add_periodic(
                     logger.EVERY_HOUR,
@@ -150,14 +153,17 @@ class EnvHandler(object):
 
         try:
             # return a sorted list since handle_dhclient_restart needs to compare the previous value with
-            # the new value and the comparison should not be affected by the order of the items in the list
+            # the new value and the comparison should not be affected by the
+            # order of the items in the list
             pid = sorted(self.osutil.get_dhcp_pid())
 
             if len(pid) == 0 and self.dhcp_warning_enabled:
                 logger.warn("Dhcp client is not running.")
         except Exception as exception:
             if self.dhcp_warning_enabled:
-                logger.error("Failed to get the PID of the DHCP client: {0}", ustr(exception))
+                logger.error(
+                    "Failed to get the PID of the DHCP client: {0}",
+                    ustr(exception))
 
         self.dhcp_warning_enabled = len(pid) != 0
 
@@ -173,7 +179,8 @@ class EnvHandler(object):
 
         new_pid = self.get_dhcp_client_pid()
         if len(new_pid) != 0 and new_pid != self.dhcp_id_list:
-            logger.info("EnvMonitor: Detected dhcp client restart. Restoring routing table.")
+            logger.info(
+                "EnvMonitor: Detected dhcp client restart. Restoring routing table.")
             self.dhcp_handler.conf_routes()
             self.dhcp_id_list = new_pid
 

@@ -36,7 +36,13 @@ class RunTestCase(AgentTestCase):
 
     def test_it_should_be_a_pass_thru_to_run_get_output(self):
         with patch.object(shellutil, "run_get_output", return_value=(0, "")) as mock_run_get_output:
-            shellutil.run("echo hello word!", chk_err=False, expected_errors=[1, 2, 3])
+            shellutil.run(
+                "echo hello word!",
+                chk_err=False,
+                expected_errors=[
+                    1,
+                    2,
+                    3])
 
         self.assertEquals(mock_run_get_output.call_count, 1)
 
@@ -54,7 +60,7 @@ class RunGetOutputTestCase(AgentTestCase):
 
         err = shellutil.run_get_output(u"ls /not-exists")
         self.assertNotEquals(0, err[0])
-            
+
         err = shellutil.run_get_output(u"ls 我")
         self.assertNotEquals(0, err[0])
 
@@ -81,7 +87,9 @@ class RunGetOutputTestCase(AgentTestCase):
 
         args, kwargs = mock_logger.error.call_args
 
-        message = args[0]  # message is similar to "Command: [exit 99], return code: [99], result: []"
+        # message is similar to "Command: [exit 99], return code: [99], result:
+        # []"
+        message = args[0]
         self.assertIn("[{0}]".format(command), message)
         self.assertIn("[{0}]".format(return_code), message)
 
@@ -94,13 +102,16 @@ class RunGetOutputTestCase(AgentTestCase):
         command = "exit {0}".format(return_code)
 
         with patch("azurelinuxagent.common.utils.shellutil.logger", autospec=True) as mock_logger:
-            shellutil.run_get_output(command, log_cmd=False, expected_errors=[return_code])
+            shellutil.run_get_output(
+                command, log_cmd=False, expected_errors=[return_code])
 
         self.assertEquals(mock_logger.info.call_count, 1)
 
         args, kwargs = mock_logger.info.call_args
 
-        message = args[0]  # message is similar to "Command: [exit 99], return code: [99], result: []"
+        # message is similar to "Command: [exit 99], return code: [99], result:
+        # []"
+        message = args[0]
         self.assertIn("[{0}]".format(command), message)
         self.assertIn("[{0}]".format(return_code), message)
 
@@ -113,13 +124,17 @@ class RunGetOutputTestCase(AgentTestCase):
         command = "exit {0}".format(return_code)
 
         with patch("azurelinuxagent.common.utils.shellutil.logger", autospec=True) as mock_logger:
-            shellutil.run_get_output(command, log_cmd=False, expected_errors=[return_code + 1])
+            shellutil.run_get_output(
+                command, log_cmd=False, expected_errors=[
+                    return_code + 1])
 
         self.assertEquals(mock_logger.error.call_count, 1)
 
         args, kwargs = mock_logger.error.call_args
 
-        message = args[0]  # message is similar to "Command: [exit 99], return code: [99], result: []"
+        # message is similar to "Command: [exit 99], return code: [99], result:
+        # []"
+        message = args[0]
         self.assertIn("[{0}]".format(command), message)
         self.assertIn("[{0}]".format(return_code), message)
 
@@ -134,7 +149,8 @@ class RunCommandTestCase(AgentTestCase):
         ret = shellutil.run_command(command)
         self.assertEquals(ret, "A TEST STRING")
 
-    def test_run_command_should_raise_an_exception_when_the_command_fails(self):
+    def test_run_command_should_raise_an_exception_when_the_command_fails(
+            self):
         command = ["ls", "-d", "/etc", "nonexistent_file"]
 
         with self.assertRaises(shellutil.CommandError) as context_manager:
@@ -146,7 +162,8 @@ class RunCommandTestCase(AgentTestCase):
         self.assertIn("No such file or directory", exception.stderr)
         self.assertEquals(exception.returncode, 2)
 
-    def test_run_command_should_raise_an_exception_when_it_cannot_execute_the_command(self):
+    def test_run_command_should_raise_an_exception_when_it_cannot_execute_the_command(
+            self):
         command = "nonexistent_command"
 
         with self.assertRaises(Exception) as context_manager:
@@ -160,7 +177,7 @@ class RunCommandTestCase(AgentTestCase):
         def assert_no_message_logged(command):
             try:
                 shellutil.run_command(command)
-            except:
+            except BaseException:
                 pass
 
             self.assertEquals(mock_logger.info.call_count, 0)
@@ -177,30 +194,37 @@ class RunCommandTestCase(AgentTestCase):
         with patch("azurelinuxagent.common.utils.shellutil.logger.error") as mock_log_error:
             try:
                 shellutil.run_command(command, log_error=True)
-            except:
+            except BaseException:
                 pass
 
             self.assertEquals(mock_log_error.call_count, 1)
 
             args, kwargs = mock_log_error.call_args
-            self.assertIn("ls -d /etc nonexistent_file", args, msg="The command was not logged")
-            self.assertIn(2, args, msg="The command's return code was not logged")
-            self.assertIn("/etc\n", args, msg="The command's stdout was not logged")
-            self.assertTrue(any("No such file or directory" in str(a) for a in args), msg="The command's stderr was not logged")
+            self.assertIn("ls -d /etc nonexistent_file", args,
+                          msg="The command was not logged")
+            self.assertIn(
+                2, args, msg="The command's return code was not logged")
+            self.assertIn(
+                "/etc\n",
+                args,
+                msg="The command's stdout was not logged")
+            self.assertTrue(any("No such file or directory" in str(a)
+                                for a in args), msg="The command's stderr was not logged")
 
         command = "nonexistent_command"
 
         with patch("azurelinuxagent.common.utils.shellutil.logger.error") as mock_log_error:
             try:
                 shellutil.run_command(command, log_error=True)
-            except:
+            except BaseException:
                 pass
 
             self.assertEquals(mock_log_error.call_count, 1)
 
             args, kwargs = mock_log_error.call_args
             self.assertIn(command, args, msg="The command was not logged")
-            self.assertTrue(any("No such file or directory" in str(a) for a in args), msg="The command's stderr was not logged")
+            self.assertTrue(any("No such file or directory" in str(a)
+                                for a in args), msg="The command's stderr was not logged")
 
 
 if __name__ == '__main__':

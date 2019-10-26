@@ -27,7 +27,8 @@ if not hasattr(subprocess, 'check_output'):
         if 'stdout' in kwargs:
             raise ValueError('stdout argument not allowed, '
                              'it will be overridden.')
-        process = subprocess.Popen(stdout=subprocess.PIPE, *popenargs, **kwargs)
+        process = subprocess.Popen(
+            stdout=subprocess.PIPE, *popenargs, **kwargs)
         output, unused_err = process.communicate()
         retcode = process.poll()
         if retcode:
@@ -37,8 +38,8 @@ if not hasattr(subprocess, 'check_output'):
             raise subprocess.CalledProcessError(retcode, cmd, output=output)
         return output
 
-
     # Exception classes used by this module.
+
     class CalledProcessError(Exception):
         def __init__(self, returncode, cmd, output=None):
             self.returncode = returncode
@@ -49,7 +50,6 @@ if not hasattr(subprocess, 'check_output'):
             return ("Command '{0}' returned non-zero exit status {1}"
                     "").format(self.cmd, self.returncode)
 
-
     subprocess.check_output = check_output
     subprocess.CalledProcessError = CalledProcessError
 
@@ -57,11 +57,13 @@ if not hasattr(subprocess, 'check_output'):
 Shell command util functions
 """
 
+
 def has_command(cmd):
     """
     Return True if the given command is on the path
     """
     return not run(cmd, False)
+
 
 def run(cmd, chk_err=True, expected_errors=[]):
     """
@@ -69,7 +71,8 @@ def run(cmd, chk_err=True, expected_errors=[]):
     If chk_err=True then errors will be reported in the log.
     If chk_err=False then errors will be suppressed from the log.
     """
-    retcode, out = run_get_output(cmd, chk_err=chk_err, expected_errors=expected_errors)
+    retcode, out = run_get_output(
+        cmd, chk_err=chk_err, expected_errors=expected_errors)
     return retcode
 
 
@@ -120,11 +123,17 @@ class CommandError(Exception):
     """
     @staticmethod
     def _get_message(command, returncode):
-        command_name = command[0] if isinstance(command, list) and len(command) > 0 else command
+        command_name = command[0] if isinstance(
+            command, list) and len(command) > 0 else command
         return "'{0}' failed: {1}".format(command_name, returncode)
 
     def __init__(self, command, returncode, stdout, stderr):
-        super(Exception, self).__init__(CommandError._get_message(command, returncode))
+        super(
+            Exception,
+            self).__init__(
+            CommandError._get_message(
+                command,
+                returncode))
         self.command = command
         self.returncode = returncode
         self.stdout = stdout
@@ -141,12 +150,19 @@ def run_command(command, log_error=False):
         return " ".join(cmd) if isinstance(cmd, list) else command
 
     try:
-        process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=False)
+        process = subprocess.Popen(
+            command,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            shell=False)
         stdout, stderr = process.communicate()
         returncode = process.returncode
     except Exception as e:
         if log_error:
-            logger.error(u"Command [{0}] raised unexpected exception: [{1}]", format_command(command), ustr(e))
+            logger.error(
+                u"Command [{0}] raised unexpected exception: [{1}]",
+                format_command(command),
+                ustr(e))
         raise
 
     if returncode != 0:
@@ -159,7 +175,11 @@ def run_command(command, log_error=False):
                 returncode,
                 encoded_stdout,
                 encoded_stderr)
-        raise CommandError(command=command, returncode=returncode, stdout=encoded_stdout, stderr=encoded_stderr)
+        raise CommandError(
+            command=command,
+            returncode=returncode,
+            stdout=encoded_stdout,
+            stderr=encoded_stderr)
 
     return _encode_command_output(stdout)
 
@@ -178,6 +198,7 @@ def quote(word_list):
     if not isinstance(word_list, (tuple, list)):
         word_list = (word_list,)
 
-    return " ".join(list("'{0}'".format(s.replace("'", "'\\''")) for s in word_list))
+    return " ".join(list("'{0}'".format(s.replace("'", "'\\''"))
+                         for s in word_list))
 
 # End shell command util functions

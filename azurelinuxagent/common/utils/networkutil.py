@@ -22,6 +22,7 @@ class RouteEntry(object):
     Represents a single route. The destination, gateway, and mask members are hex representations of the IPv4 address in
     network byte order.
     """
+
     def __init__(self, interface, destination, gateway, mask, flags, metric):
         self.interface = interface
         self.destination = destination
@@ -33,10 +34,11 @@ class RouteEntry(object):
     @staticmethod
     def _net_hex_to_dotted_quad(value):
         if len(value) != 8:
-            raise Exception("String to dotted quad conversion must be 8 characters")
+            raise Exception(
+                "String to dotted quad conversion must be 8 characters")
         octets = []
         for idx in range(6, -2, -2):
-            octets.append(str(int(value[idx:idx+2], 16)))
+            octets.append(str(int(value[idx:idx + 2], 16)))
         return ".".join(octets)
 
     def destination_quad(self):
@@ -50,17 +52,27 @@ class RouteEntry(object):
 
     def to_json(self):
         f = '{{"Iface": "{0}", "Destination": "{1}", "Gateway": "{2}", "Mask": "{3}", "Flags": "{4:#06x}", "Metric": "{5}"}}'
-        return f.format(self.interface, self.destination_quad(), self.gateway_quad(), self.mask_quad(),
-                       self.flags, self.metric)
+        return f.format(
+            self.interface,
+            self.destination_quad(),
+            self.gateway_quad(),
+            self.mask_quad(),
+            self.flags,
+            self.metric)
 
     def __str__(self):
         f = "Iface: {0}\tDestination: {1}\tGateway: {2}\tMask: {3}\tFlags: {4:#06x}\tMetric: {5}"
-        return f.format(self.interface, self.destination_quad(), self.gateway_quad(), self.mask_quad(),
-                        self.flags, self.metric)
+        return f.format(
+            self.interface,
+            self.destination_quad(),
+            self.gateway_quad(),
+            self.mask_quad(),
+            self.flags,
+            self.metric)
 
     def __repr__(self):
-        return 'RouteEntry("{0}", "{1}", "{2}", "{3}", "{4:#04x}", "{5}")'\
-            .format(self.interface, self.destination, self.gateway, self.mask, self.flags, self.metric)
+        return 'RouteEntry("{0}", "{1}", "{2}", "{3}", "{4:#04x}", "{5}")' .format(
+            self.interface, self.destination, self.gateway, self.mask, self.flags, self.metric)
 
 
 class NetworkInterfaceCard:
@@ -78,12 +90,13 @@ class NetworkInterfaceCard:
 
     def __eq__(self, other):
         return self.link == other.link and \
-               self.ipv4 == other.ipv4 and \
-               self.ipv6 == other.ipv6
+            self.ipv4 == other.ipv4 and \
+            self.ipv6 == other.ipv6
 
     @staticmethod
     def _json_array(items):
-        return "[{0}]".format(",".join(['"{0}"'.format(x) for x in sorted(items)]))
+        return "[{0}]".format(",".join(['"{0}"'.format(x)
+                                        for x in sorted(items)]))
 
     def __str__(self):
         entries = ['"name": "{0}"'.format(self.name),

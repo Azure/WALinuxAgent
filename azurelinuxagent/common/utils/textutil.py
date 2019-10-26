@@ -121,7 +121,8 @@ def hex_dump3(buf, offset, length):
     """
     Dump range of buf in formatted hex.
     """
-    return ''.join(['%02X' % str_to_ord(char) for char in buf[offset:offset + length]])
+    return ''.join(['%02X' % str_to_ord(char)
+                    for char in buf[offset:offset + length]])
 
 
 def hex_dump2(buf):
@@ -158,7 +159,7 @@ def hex_dump(buffer, size):
         if (i % 16) == 0:
             result += "%06X: " % i
         byte = buffer[i]
-        if type(byte) == str:
+        if isinstance(byte, str):
             byte = ord(byte.decode('latin1'))
         result += "%02X " % byte
         if (i & 15) == 7:
@@ -173,7 +174,7 @@ def hex_dump(buffer, size):
             result += " "
             for j in range(i - (i % 16), i + 1):
                 byte = buffer[j]
-                if type(byte) == str:
+                if isinstance(byte, str):
                     byte = str_to_ord(byte.decode('latin1'))
                 k = '.'
                 if is_printable(byte):
@@ -189,7 +190,7 @@ def str_to_ord(a):
     Allows indexing into a string or an array of integers transparently.
     Generic utility function.
     """
-    if type(a) == type(b'') or type(a) == type(u''):
+    if isinstance(a, type(b'')) or isinstance(a, type(u'')):
         a = ord(a)
     return a
 
@@ -289,7 +290,8 @@ def gen_password_hash(password, crypt_id, salt_len):
     salt = ''.join(random.choice(collection) for _ in range(salt_len))
     salt = "${0}${1}".format(crypt_id, salt)
     if sys.version_info[0] == 2:
-        # if python 2.*, encode to type 'str' to prevent Unicode Encode Error from crypt.crypt
+        # if python 2.*, encode to type 'str' to prevent Unicode Encode Error
+        # from crypt.crypt
         password = password.encode('utf-8')
     return crypt.crypt(password, salt)
 
@@ -313,7 +315,8 @@ def compress(s):
     """
     from azurelinuxagent.common.version import PY_VERSION_MAJOR
     if PY_VERSION_MAJOR > 2:
-        return base64.b64encode(zlib.compress(bytes(s, 'utf-8'))).decode('utf-8')
+        return base64.b64encode(zlib.compress(
+            bytes(s, 'utf-8'))).decode('utf-8')
     return base64.b64encode(zlib.compress(s))
 
 
@@ -345,10 +348,10 @@ def swap_hexstring(s, width=2):
         s = ('0' * (width - (len(s) % width))) + s
 
     return ''.join(reversed(
-                        re.findall(
-                                r'[a-f0-9]{{{0}}}'.format(width),
-                                s,
-                                re.IGNORECASE)))
+        re.findall(
+            r'[a-f0-9]{{{0}}}'.format(width),
+            s,
+            re.IGNORECASE)))
 
 
 def parse_json(json_str):
@@ -369,7 +372,8 @@ def is_str_none_or_whitespace(s):
 
 
 def is_str_empty(s):
-    return is_str_none_or_whitespace(s) or is_str_none_or_whitespace(s.rstrip(' \t\r\n\0'))
+    return is_str_none_or_whitespace(
+        s) or is_str_none_or_whitespace(s.rstrip(' \t\r\n\0'))
 
 
 def hash_strings(string_list):
@@ -386,7 +390,14 @@ def hash_strings(string_list):
 
 
 def format_memory_value(unit, value):
-    units = {'bytes': 1, 'kilobytes': 1024, 'megabytes': 1024*1024, 'gigabytes': 1024*1024*1024}
+    units = {
+        'bytes': 1,
+        'kilobytes': 1024,
+        'megabytes': 1024 *
+        1024,
+        'gigabytes': 1024 *
+        1024 *
+        1024}
 
     if unit not in units:
         raise ValueError("Unit must be one of {0}".format(units.keys()))

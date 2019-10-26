@@ -43,14 +43,16 @@ def wait_for_process_completion_or_timeout(process, timeout):
     if timeout == 0:
         os.killpg(os.getpgid(process.pid), signal.SIGKILL)
     else:
-        # process completed or forked; sleep 1 sec to give the child process (if any) a chance to start
+        # process completed or forked; sleep 1 sec to give the child process
+        # (if any) a chance to start
         time.sleep(1)
         return_code = process.wait()
 
     return timeout == 0, return_code
 
 
-def handle_process_completion(process, command, timeout, stdout, stderr, error_code):
+def handle_process_completion(
+        process, command, timeout, stdout, stderr, error_code):
     """
     Utility function that waits for process completion and retrieves its output (stdout and stderr) if it completed
     before the timeout period. Otherwise, the process will get killed and an ExtensionError will be raised.
@@ -64,16 +66,26 @@ def handle_process_completion(process, command, timeout, stdout, stderr, error_c
     :return:
     """
     # Wait for process completion or timeout
-    timed_out, return_code = wait_for_process_completion_or_timeout(process, timeout)
+    timed_out, return_code = wait_for_process_completion_or_timeout(
+        process, timeout)
     process_output = read_output(stdout, stderr)
 
     if timed_out:
-        raise ExtensionError("Timeout({0}): {1}\n{2}".format(timeout, command, process_output),
-                             code=ExtensionErrorCodes.PluginHandlerScriptTimedout)
+        raise ExtensionError(
+            "Timeout({0}): {1}\n{2}".format(
+                timeout,
+                command,
+                process_output),
+            code=ExtensionErrorCodes.PluginHandlerScriptTimedout)
 
     if return_code != 0:
-        raise ExtensionOperationError("Non-zero exit code: {0}, {1}\n{2}".format(return_code, command, process_output),
-                                      code=error_code, exit_code=return_code)
+        raise ExtensionOperationError(
+            "Non-zero exit code: {0}, {1}\n{2}".format(
+                return_code,
+                command,
+                process_output),
+            code=error_code,
+            exit_code=return_code)
 
     return process_output
 
@@ -96,7 +108,8 @@ def read_output(stdout, stderr):
 
         return format_stdout_stderr(stdout, stderr)
     except Exception as e:
-        return format_stdout_stderr("", "Cannot read stdout/stderr: {0}".format(ustr(e)))
+        return format_stdout_stderr(
+            "", "Cannot read stdout/stderr: {0}".format(ustr(e)))
 
 
 def format_stdout_stderr(stdout, stderr, max_len=TELEMETRY_MESSAGE_MAX_LEN):
@@ -124,7 +137,8 @@ def format_stdout_stderr(stdout, stderr, max_len=TELEMETRY_MESSAGE_MAX_LEN):
         return ''
 
     def to_s(captured_stdout, stdout_offset, captured_stderr, stderr_offset):
-        s = template.format(captured_stdout[stdout_offset:], captured_stderr[stderr_offset:])
+        s = template.format(
+            captured_stdout[stdout_offset:], captured_stderr[stderr_offset:])
         return s
 
     if len(stdout) + len(stderr) < max_len:
@@ -132,10 +146,10 @@ def format_stdout_stderr(stdout, stderr, max_len=TELEMETRY_MESSAGE_MAX_LEN):
     elif len(stdout) < max_len_each:
         bonus = max_len_each - len(stdout)
         stderr_len = min(max_len_each + bonus, len(stderr))
-        return to_s(stdout, 0, stderr, -1*stderr_len)
+        return to_s(stdout, 0, stderr, -1 * stderr_len)
     elif len(stderr) < max_len_each:
         bonus = max_len_each - len(stderr)
         stdout_len = min(max_len_each + bonus, len(stdout))
-        return to_s(stdout, -1*stdout_len, stderr, 0)
+        return to_s(stdout, -1 * stdout_len, stderr, 0)
     else:
-        return to_s(stdout, -1*max_len_each, stderr, -1*max_len_each)
+        return to_s(stdout, -1 * max_len_each, stderr, -1 * max_len_each)

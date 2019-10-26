@@ -18,11 +18,12 @@
 from tests.tools import *
 from azurelinuxagent.common.exception import *
 from azurelinuxagent.common.protocol import get_protocol_util, \
-                                            TAG_FILE_NAME
+    TAG_FILE_NAME
+
 
 @patch("time.sleep")
 class TestProtocolUtil(AgentTestCase):
-    
+
     @patch("azurelinuxagent.common.protocol.util.MetadataProtocol")
     @patch("azurelinuxagent.common.protocol.util.WireProtocol")
     def test_detect_protocol(self, WireProtocol, MetadataProtocol, _):
@@ -30,22 +31,22 @@ class TestProtocolUtil(AgentTestCase):
         MetadataProtocol.return_value = MagicMock()
 
         protocol_util = get_protocol_util()
-        
+
         protocol_util.dhcp_handler = MagicMock()
         protocol_util.dhcp_handler.endpoint = "foo.bar"
 
-        #Test wire protocol is available
+        # Test wire protocol is available
         protocol = protocol_util.get_protocol()
         self.assertEquals(WireProtocol.return_value, protocol)
 
-        #Test wire protocol is not available
+        # Test wire protocol is not available
         protocol_util.clear_protocol()
         WireProtocol.return_value.detect.side_effect = ProtocolError()
 
         protocol = protocol_util.get_protocol()
         self.assertEquals(MetadataProtocol.return_value, protocol)
 
-        #Test no protocol is available
+        # Test no protocol is available
         protocol_util.clear_protocol()
         WireProtocol.return_value.detect.side_effect = ProtocolError()
 
@@ -59,12 +60,12 @@ class TestProtocolUtil(AgentTestCase):
 
         tag_file = os.path.join(self.tmp_dir, TAG_FILE_NAME)
 
-        #Test tag file doesn't exist
+        # Test tag file doesn't exist
         protocol_util.get_protocol(by_file=True)
         protocol_util._detect_wire_protocol.assert_any_call()
         protocol_util._detect_metadata_protocol.assert_not_called()
 
-        #Test tag file exists
+        # Test tag file exists
         protocol_util.clear_protocol()
         protocol_util._detect_wire_protocol.reset_mock()
         protocol_util._detect_metadata_protocol.reset_mock()
@@ -78,4 +79,3 @@ class TestProtocolUtil(AgentTestCase):
 
 if __name__ == '__main__':
     unittest.main()
-

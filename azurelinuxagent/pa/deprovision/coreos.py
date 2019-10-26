@@ -19,16 +19,17 @@
 
 import azurelinuxagent.common.utils.fileutil as fileutil
 from azurelinuxagent.pa.deprovision.default import DeprovisionHandler, \
-                                                   DeprovisionAction
+    DeprovisionAction
+
 
 class CoreOSDeprovisionHandler(DeprovisionHandler):
     def __init__(self):
         super(CoreOSDeprovisionHandler, self).__init__()
 
     def setup(self, deluser):
-        warnings, actions = super(CoreOSDeprovisionHandler, self).setup(deluser)
+        warnings, actions = super(
+            CoreOSDeprovisionHandler, self).setup(deluser)
         warnings.append("WARNING! /etc/machine-id will be removed.")
         files_to_del = ['/etc/machine-id']
         actions.append(DeprovisionAction(fileutil.rm_files, files_to_del))
         return warnings, actions
-

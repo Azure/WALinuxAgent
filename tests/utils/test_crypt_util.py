@@ -28,19 +28,26 @@ class TestCryptoUtilOperations(AgentTestCase):
 
     def test_decrypt_encrypted_text(self):
         encrypted_string = load_data("wire/encrypted.enc")
-        prv_key = os.path.join(self.tmp_dir, "TransportPrivate.pem") 
+        prv_key = os.path.join(self.tmp_dir, "TransportPrivate.pem")
         with open(prv_key, 'w+') as c:
             c.write(load_data("wire/sample.pem"))
         secret = ']aPPEv}uNg1FPnl?'
         crypto = CryptUtil(conf.get_openssl_cmd())
         decrypted_string = crypto.decrypt_secret(encrypted_string, prv_key)
-        self.assertEquals(secret, decrypted_string, "decrypted string does not match expected")
+        self.assertEquals(
+            secret,
+            decrypted_string,
+            "decrypted string does not match expected")
 
     def test_decrypt_encrypted_text_missing_private_key(self):
         encrypted_string = load_data("wire/encrypted.enc")
         prv_key = os.path.join(self.tmp_dir, "TransportPrivate.pem")
         crypto = CryptUtil(conf.get_openssl_cmd())
-        self.assertRaises(CryptError, crypto.decrypt_secret, encrypted_string, "abc" + prv_key)
+        self.assertRaises(
+            CryptError,
+            crypto.decrypt_secret,
+            encrypted_string,
+            "abc" + prv_key)
 
     @skip_if_predicate_true(is_python_version_26, "Disabled on Python 2.6")
     def test_decrypt_encrypted_text_wrong_private_key(self):
@@ -49,7 +56,11 @@ class TestCryptoUtilOperations(AgentTestCase):
         with open(prv_key, 'w+') as c:
             c.write(load_data("wire/trans_prv"))
         crypto = CryptUtil(conf.get_openssl_cmd())
-        self.assertRaises(CryptError, crypto.decrypt_secret, encrypted_string, prv_key)
+        self.assertRaises(
+            CryptError,
+            crypto.decrypt_secret,
+            encrypted_string,
+            prv_key)
 
     def test_decrypt_encrypted_text_text_not_encrypted(self):
         encrypted_string = "abc@123"
@@ -57,7 +68,11 @@ class TestCryptoUtilOperations(AgentTestCase):
         with open(prv_key, 'w+') as c:
             c.write(load_data("wire/sample.pem"))
         crypto = CryptUtil(conf.get_openssl_cmd())
-        self.assertRaises(CryptError, crypto.decrypt_secret, encrypted_string, prv_key)
+        self.assertRaises(
+            CryptError,
+            crypto.decrypt_secret,
+            encrypted_string,
+            prv_key)
 
     def test_get_pubkey_from_crt(self):
         crypto = CryptUtil(conf.get_openssl_cmd())

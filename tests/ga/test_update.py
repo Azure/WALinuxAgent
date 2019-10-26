@@ -13,21 +13,21 @@ from azurelinuxagent.ga.update import *
 from tests.tools import *
 
 NO_ERROR = {
-    "last_failure" : 0.0,
-    "failure_count" : 0,
-    "was_fatal" : False
+    "last_failure": 0.0,
+    "failure_count": 0,
+    "was_fatal": False
 }
 
 FATAL_ERROR = {
-    "last_failure" : 42.42,
-    "failure_count" : 2,
-    "was_fatal" : True
+    "last_failure": 42.42,
+    "failure_count": 2,
+    "was_fatal": True
 }
 
 WITH_ERROR = {
-    "last_failure" : 42.42,
-    "failure_count" : 2,
-    "was_fatal" : False
+    "last_failure": 42.42,
+    "failure_count": 2,
+    "was_fatal": False
 }
 
 EMPTY_MANIFEST = {
@@ -90,7 +90,7 @@ class UpdateTestCase(AgentTestCase):
         src_bin = glob.glob(os.path.join(path, self.agent_bin(src_v, '*')))[0]
         dst_bin = os.path.join(path, self.agent_bin(dst_v, ''))
         shutil.move(src_bin, dst_bin)
-    
+
     def agents(self):
         return [GuestAgent(path=path) for path in self.agent_dirs()]
 
@@ -101,18 +101,19 @@ class UpdateTestCase(AgentTestCase):
         return get_agents(in_dir=self.tmp_dir)
 
     def agent_dir(self, version):
-        return os.path.join(self.tmp_dir, "{0}-{1}".format(AGENT_NAME, version))
+        return os.path.join(
+            self.tmp_dir, "{0}-{1}".format(AGENT_NAME, version))
 
     def agent_paths(self):
-        paths = glob.glob(os.path.join(self.tmp_dir, "*"))
-        paths.sort()
+        paths = sorted(glob.glob(os.path.join(self.tmp_dir, "*")))
         return paths
 
     def agent_pkgs(self):
         return get_agent_pkgs(in_dir=self.tmp_dir)
 
     def agent_versions(self):
-        v = [FlexibleVersion(AGENT_DIR_PATTERN.match(a).group(1)) for a in self.agent_dirs()]
+        v = [FlexibleVersion(AGENT_DIR_PATTERN.match(a).group(1))
+             for a in self.agent_dirs()]
         v.sort(reverse=True)
         return v
 
@@ -178,7 +179,7 @@ class UpdateTestCase(AgentTestCase):
         # Create agent packages and directories
         return self.replicate_agents(
             src_v=src_v,
-            count=count-agent_count,
+            count=count - agent_count,
             is_available=is_available)
 
     def remove_agents(self):
@@ -188,7 +189,7 @@ class UpdateTestCase(AgentTestCase):
                     os.remove(agent)
                 else:
                     shutil.rmtree(agent)
-            except:
+            except BaseException:
                 pass
         return
 
@@ -316,7 +317,11 @@ class TestGuestAgent(UpdateTestCase):
             os.path.join(self.agent_path, AGENT_ERROR_FILE),
             agent.get_agent_error_file())
 
-        path = ".".join((os.path.join(conf.get_lib_dir(), get_agent_name()), "zip"))
+        path = ".".join(
+            (os.path.join(
+                conf.get_lib_dir(),
+                get_agent_name()),
+                "zip"))
         self.assertEqual(path, agent.get_agent_pkg_path())
 
         self.assertTrue(agent.is_downloaded)
@@ -369,14 +374,15 @@ class TestGuestAgent(UpdateTestCase):
 
     @patch("azurelinuxagent.ga.update.GuestAgent._ensure_downloaded")
     @patch("azurelinuxagent.ga.update.GuestAgent._ensure_loaded")
-    def test_resource_gone_error_not_blacklisted(self, mock_loaded, mock_downloaded):
+    def test_resource_gone_error_not_blacklisted(
+            self, mock_loaded, mock_downloaded):
         try:
             mock_downloaded.side_effect = ResourceGoneError()
             agent = GuestAgent(path=self.agent_path)
             self.assertFalse(agent.is_blacklisted)
         except ResourceGoneError:
             pass
-        except:
+        except BaseException:
             self.fail("Exception was not expected!")
 
     @patch("azurelinuxagent.ga.update.GuestAgent._ensure_downloaded")
@@ -388,7 +394,7 @@ class TestGuestAgent(UpdateTestCase):
             self.assertFalse(agent.is_blacklisted)
         except IOError:
             pass
-        except:
+        except BaseException:
             self.fail("Exception was not expected!")
 
     @patch("azurelinuxagent.ga.update.GuestAgent._ensure_downloaded")
@@ -485,7 +491,7 @@ class TestGuestAgent(UpdateTestCase):
         self.assertFalse(os.path.isdir(self.agent_path))
 
         agent_pkg = load_bin_data(os.path.join("ga", get_agent_file_name()))
-        mock_http_get.return_value= ResponseMock(response=agent_pkg)
+        mock_http_get.return_value = ResponseMock(response=agent_pkg)
 
         pkg = ExtHandlerPackage(version=str(get_agent_version()))
         pkg.uris.append(ExtHandlerPackageUri())
@@ -501,7 +507,8 @@ class TestGuestAgent(UpdateTestCase):
         self.remove_agents()
         self.assertFalse(os.path.isdir(self.agent_path))
 
-        mock_http_get.return_value= ResponseMock(status=restutil.httpclient.SERVICE_UNAVAILABLE)
+        mock_http_get.return_value = ResponseMock(
+            status=restutil.httpclient.SERVICE_UNAVAILABLE)
 
         pkg = ExtHandlerPackage(version=str(get_agent_version()))
         pkg.uris.append(ExtHandlerPackageUri())
@@ -515,7 +522,8 @@ class TestGuestAgent(UpdateTestCase):
     @patch("azurelinuxagent.ga.update.GuestAgent._ensure_loaded")
     @patch("azurelinuxagent.ga.update.restutil.http_get")
     @patch("azurelinuxagent.ga.update.restutil.http_post")
-    def test_download_fallback(self, mock_http_post, mock_http_get, mock_loaded, mock_downloaded):
+    def test_download_fallback(
+            self, mock_http_post, mock_http_get, mock_loaded, mock_downloaded):
         self.remove_agents()
         self.assertFalse(os.path.isdir(self.agent_path))
 
@@ -525,8 +533,10 @@ class TestGuestAgent(UpdateTestCase):
 
         ext_uri = 'ext_uri'
         host_uri = 'host_uri'
-        api_uri = URI_FORMAT_GET_API_VERSIONS.format(host_uri, HOST_PLUGIN_PORT)
-        art_uri = URI_FORMAT_GET_EXTENSION_ARTIFACT.format(host_uri, HOST_PLUGIN_PORT)
+        api_uri = URI_FORMAT_GET_API_VERSIONS.format(
+            host_uri, HOST_PLUGIN_PORT)
+        art_uri = URI_FORMAT_GET_EXTENSION_ARTIFACT.format(
+            host_uri, HOST_PLUGIN_PORT)
         mock_host = HostPluginProtocol(host_uri,
                                        'container_id',
                                        'role_config')
@@ -565,10 +575,12 @@ class TestGuestAgent(UpdateTestCase):
                 a, k = mock_http_get.call_args_list[3]
                 self.assertEqual(False, k['use_proxy'])
 
-                self.assertEqual(mock_http_get.call_args_list[4][0][0], ext_uri)
+                self.assertEqual(
+                    mock_http_get.call_args_list[4][0][0], ext_uri)
                 a, k = mock_http_get.call_args_list[4]
 
-                self.assertEqual(mock_http_get.call_args_list[5][0][0], art_uri)
+                self.assertEqual(
+                    mock_http_get.call_args_list[5][0][0], art_uri)
                 a, k = mock_http_get.call_args_list[5]
                 self.assertEqual(False, k['use_proxy'])
 
@@ -578,7 +590,7 @@ class TestGuestAgent(UpdateTestCase):
         self.assertFalse(os.path.isdir(self.agent_path))
 
         agent_pkg = load_bin_data(os.path.join("ga", get_agent_file_name()))
-        mock_http_get.return_value= ResponseMock(response=agent_pkg)
+        mock_http_get.return_value = ResponseMock(response=agent_pkg)
 
         pkg = ExtHandlerPackage(version=str(get_agent_version()))
         pkg.uris.append(ExtHandlerPackageUri())
@@ -587,7 +599,8 @@ class TestGuestAgent(UpdateTestCase):
         self.assertTrue(os.path.isfile(agent.get_agent_manifest_path()))
         self.assertTrue(agent.is_downloaded)
 
-    @patch("azurelinuxagent.ga.update.GuestAgent._download", side_effect=UpdateError)
+    @patch("azurelinuxagent.ga.update.GuestAgent._download",
+           side_effect=UpdateError)
     def test_ensure_downloaded_download_fails(self, mock_download):
         self.remove_agents()
         self.assertFalse(os.path.isdir(self.agent_path))
@@ -601,7 +614,8 @@ class TestGuestAgent(UpdateTestCase):
         self.assertFalse(agent.is_blacklisted)
 
     @patch("azurelinuxagent.ga.update.GuestAgent._download")
-    @patch("azurelinuxagent.ga.update.GuestAgent._unpack", side_effect=UpdateError)
+    @patch("azurelinuxagent.ga.update.GuestAgent._unpack",
+           side_effect=UpdateError)
     def test_ensure_downloaded_unpack_fails(self, mock_unpack, mock_download):
         self.assertFalse(os.path.isdir(self.agent_path))
 
@@ -615,8 +629,10 @@ class TestGuestAgent(UpdateTestCase):
 
     @patch("azurelinuxagent.ga.update.GuestAgent._download")
     @patch("azurelinuxagent.ga.update.GuestAgent._unpack")
-    @patch("azurelinuxagent.ga.update.GuestAgent._load_manifest", side_effect=UpdateError)
-    def test_ensure_downloaded_load_manifest_fails(self, mock_manifest, mock_unpack, mock_download):
+    @patch("azurelinuxagent.ga.update.GuestAgent._load_manifest",
+           side_effect=UpdateError)
+    def test_ensure_downloaded_load_manifest_fails(
+            self, mock_manifest, mock_unpack, mock_download):
         self.assertFalse(os.path.isdir(self.agent_path))
 
         pkg = ExtHandlerPackage(version=str(get_agent_version()))
@@ -630,7 +646,8 @@ class TestGuestAgent(UpdateTestCase):
     @patch("azurelinuxagent.ga.update.GuestAgent._download")
     @patch("azurelinuxagent.ga.update.GuestAgent._unpack")
     @patch("azurelinuxagent.ga.update.GuestAgent._load_manifest")
-    def test_ensure_download_skips_blacklisted(self, mock_manifest, mock_unpack, mock_download):
+    def test_ensure_download_skips_blacklisted(
+            self, mock_manifest, mock_unpack, mock_download):
         agent = GuestAgent(path=self.agent_path)
         self.assertEqual(0, mock_download.call_count)
 
@@ -686,15 +703,18 @@ class TestUpdate(UpdateTestCase):
             versions = [latest_version]
         return ProtocolMock(versions=versions)
 
-    def _test_ensure_no_orphans(self, invocations=3, interval=ORPHAN_WAIT_INTERVAL, pid_count=0):
+    def _test_ensure_no_orphans(
+            self, invocations=3, interval=ORPHAN_WAIT_INTERVAL, pid_count=0):
         with patch.object(self.update_handler, 'osutil') as mock_util:
             # Note:
             # - Python only allows mutations of objects to which a function has
             #   a reference. Incrementing an integer directly changes the
             #   reference. Incrementing an item of a list changes an item to
             #   which the code has a reference.
-            #   See http://stackoverflow.com/questions/26408941/python-nested-functions-and-variable-scope
+            # See
+            # http://stackoverflow.com/questions/26408941/python-nested-functions-and-variable-scope
             iterations = [0]
+
             def iterator(*args, **kwargs):
                 iterations[0] += 1
                 return iterations[0] < invocations
@@ -706,14 +726,20 @@ class TestUpdate(UpdateTestCase):
 
             with patch('os.getpid', return_value=42):
                 with patch('time.sleep', return_value=None) as mock_sleep:
-                    self.update_handler._ensure_no_orphans(orphan_wait_interval=interval)
+                    self.update_handler._ensure_no_orphans(
+                        orphan_wait_interval=interval)
                     for pid_file in pid_files:
                         self.assertFalse(os.path.exists(pid_file))
                     return mock_util.check_pid_alive.call_count, mock_sleep.call_count
 
     def test_ensure_no_orphans(self):
-        fileutil.write_file(os.path.join(self.tmp_dir, "0_waagent.pid"), ustr(41))
-        calls, sleeps = self._test_ensure_no_orphans(invocations=3, pid_count=1)
+        fileutil.write_file(
+            os.path.join(
+                self.tmp_dir,
+                "0_waagent.pid"),
+            ustr(41))
+        calls, sleeps = self._test_ensure_no_orphans(
+            invocations=3, pid_count=1)
         self.assertEqual(3, calls)
         self.assertEqual(2, sleeps)
 
@@ -729,12 +755,16 @@ class TestUpdate(UpdateTestCase):
             self.assertEqual(0, sleeps)
 
     def test_ensure_no_orphans_kills_after_interval(self):
-        fileutil.write_file(os.path.join(self.tmp_dir, "0_waagent.pid"), ustr(41))
+        fileutil.write_file(
+            os.path.join(
+                self.tmp_dir,
+                "0_waagent.pid"),
+            ustr(41))
         with patch('os.kill') as mock_kill:
             calls, sleeps = self._test_ensure_no_orphans(
-                                        invocations=4,
-                                        interval=3*GOAL_STATE_INTERVAL,
-                                        pid_count=1)
+                invocations=4,
+                interval=3 * GOAL_STATE_INTERVAL,
+                pid_count=1)
             self.assertEqual(3, calls)
             self.assertEqual(2, sleeps)
             self.assertEqual(1, mock_kill.call_count)
@@ -746,8 +776,8 @@ class TestUpdate(UpdateTestCase):
 
         self.assertFalse(os.path.exists(path))
 
-        for n in range(0,99):
-            mock_time.utcnow.return_value = Mock(microsecond=n* 10000)
+        for n in range(0, 99):
+            mock_time.utcnow.return_value = Mock(microsecond=n * 10000)
 
             self.update_handler._ensure_partition_assigned()
 
@@ -767,7 +797,7 @@ class TestUpdate(UpdateTestCase):
         for path in test_files:
             fileutil.write_file(path, "Faux content")
             os.chmod(path,
-                stat.S_IRUSR | stat.S_IWUSR | stat.S_IRGRP | stat.S_IROTH)
+                     stat.S_IRUSR | stat.S_IWUSR | stat.S_IRGRP | stat.S_IROTH)
 
         self.update_handler._ensure_readonly_files()
 
@@ -786,7 +816,7 @@ class TestUpdate(UpdateTestCase):
         for path in test_files:
             fileutil.write_file(path, "Faux content")
             os.chmod(path,
-                stat.S_IRUSR | stat.S_IWUSR | stat.S_IRGRP | stat.S_IROTH)
+                     stat.S_IRUSR | stat.S_IWUSR | stat.S_IRGRP | stat.S_IROTH)
 
         self.update_handler._ensure_readonly_files()
 
@@ -820,12 +850,14 @@ class TestUpdate(UpdateTestCase):
         self.update_handler.child_launch_attempts = CHILD_LAUNCH_RESTART_MAX - 1
         self.assertRaises(Exception, self._test_evaluate_agent_health)
 
-    def test_evaluate_agent_health_will_not_raise_exception_for_long_restarts(self):
+    def test_evaluate_agent_health_will_not_raise_exception_for_long_restarts(
+            self):
         self.update_handler.child_launch_time = time.time() - 24 * 60
         self.update_handler.child_launch_attempts = CHILD_LAUNCH_RESTART_MAX
         self._test_evaluate_agent_health()
 
-    def test_evaluate_agent_health_will_not_raise_exception_too_few_restarts(self):
+    def test_evaluate_agent_health_will_not_raise_exception_too_few_restarts(
+            self):
         self.update_handler.child_launch_time = time.time()
         self.update_handler.child_launch_attempts = CHILD_LAUNCH_RESTART_MAX - 2
         self._test_evaluate_agent_health()
@@ -839,8 +871,10 @@ class TestUpdate(UpdateTestCase):
     def test_filter_blacklisted_agents(self):
         self.prepare_agents()
 
-        self.update_handler._set_agents([GuestAgent(path=path) for path in self.agent_dirs()])
-        self.assertEqual(len(self.agent_dirs()), len(self.update_handler.agents))
+        self.update_handler._set_agents(
+            [GuestAgent(path=path) for path in self.agent_dirs()])
+        self.assertEqual(len(self.agent_dirs()),
+                         len(self.update_handler.agents))
 
         kept_agents = self.update_handler.agents[::2]
         blacklisted_agents = self.update_handler.agents[1::2]
@@ -854,7 +888,8 @@ class TestUpdate(UpdateTestCase):
 
         self.assertTrue(0 <= len(self.update_handler.agents))
         self.update_handler._find_agents()
-        self.assertEqual(len(get_agents(self.tmp_dir)), len(self.update_handler.agents))
+        self.assertEqual(len(get_agents(self.tmp_dir)),
+                         len(self.update_handler.agents))
 
     def test_find_agents_does_reload(self):
         self.prepare_agents()
@@ -894,14 +929,15 @@ class TestUpdate(UpdateTestCase):
         latest_version = self.prepare_agents()
 
         latest_agent = self.update_handler.get_latest_agent()
-        self.assertEqual(len(get_agents(self.tmp_dir)), len(self.update_handler.agents))
+        self.assertEqual(len(get_agents(self.tmp_dir)),
+                         len(self.update_handler.agents))
         self.assertEqual(latest_version, latest_agent.version)
 
     def test_get_latest_agent_excluded(self):
         self.prepare_agent(AGENT_VERSION)
         self.assertFalse(self._test_upgrade_available(
-                                versions=self.agent_versions(),
-                                count=1))
+            versions=self.agent_versions(),
+            count=1))
         self.assertEqual(None, self.update_handler.get_latest_agent())
 
     def test_get_latest_agent_no_updates(self):
@@ -915,8 +951,10 @@ class TestUpdate(UpdateTestCase):
         self.prepare_agents()
         prior_agent = self.update_handler.get_latest_agent()
 
-        latest_version = self.prepare_agents(count=self.agent_count()+1, is_available=False)
-        latest_path = os.path.join(self.tmp_dir, "{0}-{1}".format(AGENT_NAME, latest_version))
+        latest_version = self.prepare_agents(
+            count=self.agent_count() + 1, is_available=False)
+        latest_path = os.path.join(
+            self.tmp_dir, "{0}-{1}".format(AGENT_NAME, latest_version))
         self.assertFalse(GuestAgent(latest_path).is_available)
 
         latest_agent = self.update_handler.get_latest_agent()
@@ -929,7 +967,14 @@ class TestUpdate(UpdateTestCase):
 
     def test_get_pid_files_returns_previous(self):
         for n in range(1250):
-            fileutil.write_file(os.path.join(self.tmp_dir, str(n)+"_waagent.pid"), ustr(n+1))
+            fileutil.write_file(
+                os.path.join(
+                    self.tmp_dir,
+                    str(n) +
+                    "_waagent.pid"),
+                ustr(
+                    n +
+                    1))
         pid_files = self.update_handler._get_pid_files()
         self.assertEqual(1250, len(pid_files))
 
@@ -938,7 +983,9 @@ class TestUpdate(UpdateTestCase):
             self.assertTrue(pid_re.match(os.path.basename(p)))
 
     def test_is_clean_start_returns_true_when_no_sentinel(self):
-        self.assertFalse(os.path.isfile(self.update_handler._sentinel_file_path()))
+        self.assertFalse(
+            os.path.isfile(
+                self.update_handler._sentinel_file_path()))
         self.assertTrue(self.update_handler._is_clean_start)
 
     def test_is_clean_start_returns_false_when_sentinel_exists(self):
@@ -969,22 +1016,33 @@ class TestUpdate(UpdateTestCase):
         self.update_handler.agents = self.agents()
 
         for agent in self.agents():
-            self.assertTrue(self.update_handler._is_version_eligible(agent.version))
+            self.assertTrue(
+                self.update_handler._is_version_eligible(
+                    agent.version))
 
-    @patch("azurelinuxagent.ga.update.is_current_agent_installed", return_value=False)
+    @patch(
+        "azurelinuxagent.ga.update.is_current_agent_installed",
+        return_value=False)
     def test_is_version_available_rejects(self, mock_current):
         self.prepare_agents(is_available=True)
         self.update_handler.agents = self.agents()
 
         self.update_handler.agents[0].mark_failure(is_fatal=True)
-        self.assertFalse(self.update_handler._is_version_eligible(self.agents()[0].version))
+        self.assertFalse(
+            self.update_handler._is_version_eligible(
+                self.agents()[0].version))
 
-    @patch("azurelinuxagent.ga.update.is_current_agent_installed", return_value=True)
+    @patch(
+        "azurelinuxagent.ga.update.is_current_agent_installed",
+        return_value=True)
     def test_is_version_available_accepts_current(self, mock_current):
         self.update_handler.agents = []
-        self.assertTrue(self.update_handler._is_version_eligible(CURRENT_VERSION))
+        self.assertTrue(
+            self.update_handler._is_version_eligible(CURRENT_VERSION))
 
-    @patch("azurelinuxagent.ga.update.is_current_agent_installed", return_value=False)
+    @patch(
+        "azurelinuxagent.ga.update.is_current_agent_installed",
+        return_value=False)
     def test_is_version_available_rejects_by_default(self, mock_current):
         self.prepare_agents()
         self.update_handler.agents = []
@@ -1024,17 +1082,20 @@ class TestUpdate(UpdateTestCase):
 
         # Ensure both directories and packages are removed
         for agent in purged_agents:
-            agent_path = os.path.join(self.tmp_dir, "{0}-{1}".format(AGENT_NAME, agent.version))
+            agent_path = os.path.join(
+                self.tmp_dir, "{0}-{1}".format(AGENT_NAME, agent.version))
             self.assertFalse(os.path.exists(agent_path))
             self.assertFalse(os.path.exists(agent_path + ".zip"))
 
         # Ensure kept agent directories and packages remain
         for agent in kept_agents:
-            agent_path = os.path.join(self.tmp_dir, "{0}-{1}".format(AGENT_NAME, agent.version))
+            agent_path = os.path.join(
+                self.tmp_dir, "{0}-{1}".format(AGENT_NAME, agent.version))
             self.assertTrue(os.path.exists(agent_path))
             self.assertTrue(os.path.exists(agent_path + ".zip"))
 
-    def _test_run_latest(self, mock_child=None, mock_time=None, child_args=None):
+    def _test_run_latest(self, mock_child=None,
+                         mock_time=None, child_args=None):
         if mock_child is None:
             mock_child = ChildMock()
         if mock_time is None:
@@ -1061,7 +1122,7 @@ class TestUpdate(UpdateTestCase):
         self.assertEqual(args, cmds)
         self.assertTrue(len(args) > 1)
         self.assertTrue(args[0].startswith("python"))
-        self.assertEqual("-run-exthandlers", args[len(args)-1])
+        self.assertEqual("-run-exthandlers", args[len(args) - 1])
         self.assertEqual(True, 'cwd' in kwargs)
         self.assertEqual(agent.get_agent_dir(), kwargs['cwd'])
         self.assertEqual(False, '\x00' in cmds[0])
@@ -1075,18 +1136,18 @@ class TestUpdate(UpdateTestCase):
 
         self.assertTrue(len(args) > 1)
         self.assertTrue(args[0].startswith("python"))
-        self.assertEqual("AnArgument", args[len(args)-1])
+        self.assertEqual("AnArgument", args[len(args) - 1])
 
     def test_run_latest_polls_and_waits_for_success(self):
         mock_child = ChildMock(return_value=None)
-        mock_time = TimeMock(time_increment=CHILD_HEALTH_INTERVAL/3)
+        mock_time = TimeMock(time_increment=CHILD_HEALTH_INTERVAL / 3)
         self._test_run_latest(mock_child=mock_child, mock_time=mock_time)
         self.assertEqual(2, mock_child.poll.call_count)
         self.assertEqual(1, mock_child.wait.call_count)
 
     def test_run_latest_polling_stops_at_success(self):
         mock_child = ChildMock(return_value=0)
-        mock_time = TimeMock(time_increment=CHILD_HEALTH_INTERVAL/3)
+        mock_time = TimeMock(time_increment=CHILD_HEALTH_INTERVAL / 3)
         self._test_run_latest(mock_child=mock_child, mock_time=mock_time)
         self.assertEqual(1, mock_child.poll.call_count)
         self.assertEqual(0, mock_child.wait.call_count)
@@ -1100,14 +1161,14 @@ class TestUpdate(UpdateTestCase):
 
     def test_run_latest_polls_frequently_if_installed_is_latest(self):
         mock_child = ChildMock(return_value=0)
-        mock_time = TimeMock(time_increment=CHILD_HEALTH_INTERVAL/2)
+        mock_time = TimeMock(time_increment=CHILD_HEALTH_INTERVAL / 2)
         self._test_run_latest(mock_time=mock_time)
         self.assertEqual(1, mock_time.sleep_interval)
 
     def test_run_latest_polls_every_second_if_installed_not_latest(self):
         self.prepare_agents()
 
-        mock_time = TimeMock(time_increment=CHILD_HEALTH_INTERVAL/2)
+        mock_time = TimeMock(time_increment=CHILD_HEALTH_INTERVAL / 2)
         self._test_run_latest(mock_time=mock_time)
         self.assertEqual(1, mock_time.sleep_interval)
 
@@ -1116,7 +1177,8 @@ class TestUpdate(UpdateTestCase):
 
         args, kwargs = self._test_run_latest()
 
-        self.assertEqual(args[0], [get_python_cmd(), "-u", sys.argv[0], "-run-exthandlers"])
+        self.assertEqual(args[0], [get_python_cmd(), "-u",
+                                   sys.argv[0], "-run-exthandlers"])
         self.assertEqual(True, 'cwd' in kwargs)
         self.assertEqual(os.getcwd(), kwargs['cwd'])
 
@@ -1131,7 +1193,9 @@ class TestUpdate(UpdateTestCase):
                     saved_stdout, sys.stdout = sys.stdout, stdout
                     saved_stderr, sys.stderr = sys.stderr, stderr
                     try:
-                        self._test_run_latest(mock_child=ChildMock(side_effect=faux_logger))
+                        self._test_run_latest(
+                            mock_child=ChildMock(
+                                side_effect=faux_logger))
                     finally:
                         sys.stdout = saved_stdout
                         sys.stderr = saved_stderr
@@ -1169,7 +1233,9 @@ class TestUpdate(UpdateTestCase):
         self.assertEqual(0, latest_agent.error.failure_count)
 
         with patch('azurelinuxagent.ga.update.UpdateHandler.get_latest_agent', return_value=latest_agent):
-            self._test_run_latest(mock_child=ChildMock(side_effect=Exception("Force blacklisting")))
+            self._test_run_latest(
+                mock_child=ChildMock(
+                    side_effect=Exception("Force blacklisting")))
 
         self.assertFalse(latest_agent.is_available)
         self.assertTrue(latest_agent.error.is_blacklisted)
@@ -1186,7 +1252,9 @@ class TestUpdate(UpdateTestCase):
 
         with patch('azurelinuxagent.ga.update.UpdateHandler.get_latest_agent', return_value=latest_agent):
             self.update_handler.running = False
-            self._test_run_latest(mock_child=ChildMock(side_effect=Exception("Attempt blacklisting")))
+            self._test_run_latest(
+                mock_child=ChildMock(
+                    side_effect=Exception("Attempt blacklisting")))
 
         self.assertTrue(latest_agent.is_available)
         self.assertFalse(latest_agent.error.is_blacklisted)
@@ -1204,7 +1272,8 @@ class TestUpdate(UpdateTestCase):
         self._test_run_latest()
         self.assertEqual(0, mock_signal.call_count)
 
-    def _test_run(self, invocations=1, calls=[call.run()], enable_updates=False, sleep_interval=(3,)):
+    def _test_run(self, invocations=1, calls=[
+                  call.run()], enable_updates=False, sleep_interval=(3,)):
         conf.get_autoupdate_enabled = Mock(return_value=enable_updates)
 
         # Note:
@@ -1212,8 +1281,10 @@ class TestUpdate(UpdateTestCase):
         #   a reference. Incrementing an integer directly changes the
         #   reference. Incrementing an item of a list changes an item to
         #   which the code has a reference.
-        #   See http://stackoverflow.com/questions/26408941/python-nested-functions-and-variable-scope
+        # See
+        # http://stackoverflow.com/questions/26408941/python-nested-functions-and-variable-scope
         iterations = [0]
+
         def iterator(*args, **kwargs):
             iterations[0] += 1
             if iterations[0] >= invocations:
@@ -1235,12 +1306,16 @@ class TestUpdate(UpdateTestCase):
                                         self.update_handler.run()
 
                                 self.assertEqual(1, mock_handler.call_count)
-                                self.assertEqual(mock_handler.return_value.method_calls, calls)
+                                self.assertEqual(
+                                    mock_handler.return_value.method_calls, calls)
                                 self.assertEqual(1, mock_ra_handler.call_count)
-                                self.assertEqual(mock_ra_handler.return_value.method_calls, calls)
-                                self.assertEqual(invocations, mock_sleep.call_count)
+                                self.assertEqual(
+                                    mock_ra_handler.return_value.method_calls, calls)
+                                self.assertEqual(
+                                    invocations, mock_sleep.call_count)
                                 if invocations > 0:
-                                    self.assertEqual(sleep_interval, mock_sleep.call_args[0])
+                                    self.assertEqual(
+                                        sleep_interval, mock_sleep.call_args[0])
                                 self.assertEqual(1, mock_monitor.call_count)
                                 self.assertEqual(1, mock_env.call_count)
                                 self.assertEqual(1, mock_exit.call_count)
@@ -1249,7 +1324,7 @@ class TestUpdate(UpdateTestCase):
         self._test_run()
 
     def test_run_keeps_running(self):
-        self._test_run(invocations=15, calls=[call.run()]*15)
+        self._test_run(invocations=15, calls=[call.run()] * 15)
 
     def test_run_stops_if_update_available(self):
         self.update_handler._upgrade_available = Mock(return_value=True)
@@ -1261,12 +1336,16 @@ class TestUpdate(UpdateTestCase):
 
     def test_run_clears_sentinel_on_successful_exit(self):
         self._test_run()
-        self.assertFalse(os.path.isfile(self.update_handler._sentinel_file_path()))
+        self.assertFalse(
+            os.path.isfile(
+                self.update_handler._sentinel_file_path()))
 
     def test_run_leaves_sentinel_on_unsuccessful_exit(self):
         self.update_handler._upgrade_available = Mock(side_effect=Exception)
         self._test_run(invocations=0, calls=[], enable_updates=True)
-        self.assertTrue(os.path.isfile(self.update_handler._sentinel_file_path()))
+        self.assertTrue(
+            os.path.isfile(
+                self.update_handler._sentinel_file_path()))
 
     def test_run_emits_restart_event(self):
         self.update_handler._emit_restart_event = Mock()
@@ -1276,14 +1355,17 @@ class TestUpdate(UpdateTestCase):
     def test_set_agents_sets_agents(self):
         self.prepare_agents()
 
-        self.update_handler._set_agents([GuestAgent(path=path) for path in self.agent_dirs()])
+        self.update_handler._set_agents(
+            [GuestAgent(path=path) for path in self.agent_dirs()])
         self.assertTrue(len(self.update_handler.agents) > 0)
-        self.assertEqual(len(self.agent_dirs()), len(self.update_handler.agents))
+        self.assertEqual(len(self.agent_dirs()),
+                         len(self.update_handler.agents))
 
     def test_set_agents_sorts_agents(self):
         self.prepare_agents()
 
-        self.update_handler._set_agents([GuestAgent(path=path) for path in self.agent_dirs()])
+        self.update_handler._set_agents(
+            [GuestAgent(path=path) for path in self.agent_dirs()])
 
         v = FlexibleVersion("100000")
         for a in self.update_handler.agents:
@@ -1291,9 +1373,13 @@ class TestUpdate(UpdateTestCase):
             v = a.version
 
     def test_set_sentinel(self):
-        self.assertFalse(os.path.isfile(self.update_handler._sentinel_file_path()))
+        self.assertFalse(
+            os.path.isfile(
+                self.update_handler._sentinel_file_path()))
         self.update_handler._set_sentinel()
-        self.assertTrue(os.path.isfile(self.update_handler._sentinel_file_path()))
+        self.assertTrue(
+            os.path.isfile(
+                self.update_handler._sentinel_file_path()))
 
     def test_set_sentinel_writes_current_agent(self):
         self.update_handler._set_sentinel()
@@ -1305,13 +1391,19 @@ class TestUpdate(UpdateTestCase):
         self.update_handler._set_sentinel()
         self.update_handler._shutdown()
         self.assertFalse(self.update_handler.running)
-        self.assertFalse(os.path.isfile(self.update_handler._sentinel_file_path()))
+        self.assertFalse(
+            os.path.isfile(
+                self.update_handler._sentinel_file_path()))
 
     def test_shutdown_ignores_missing_sentinel_file(self):
-        self.assertFalse(os.path.isfile(self.update_handler._sentinel_file_path()))
+        self.assertFalse(
+            os.path.isfile(
+                self.update_handler._sentinel_file_path()))
         self.update_handler._shutdown()
         self.assertFalse(self.update_handler.running)
-        self.assertFalse(os.path.isfile(self.update_handler._sentinel_file_path()))
+        self.assertFalse(
+            os.path.isfile(
+                self.update_handler._sentinel_file_path()))
 
     def test_shutdown_ignores_exceptions(self):
         self.update_handler._set_sentinel()
@@ -1335,20 +1427,24 @@ class TestUpdate(UpdateTestCase):
         self.update_handler.protocol_util = protocol
         conf.get_autoupdate_gafamily = Mock(return_value=protocol.family)
 
-        return self.update_handler._upgrade_available(base_version=base_version)
+        return self.update_handler._upgrade_available(
+            base_version=base_version)
 
     def test_upgrade_available_returns_true_on_first_use(self):
         self.assertTrue(self._test_upgrade_available())
 
     def test_upgrade_available_handles_missing_family(self):
-        extensions_config = ExtensionsConfig(load_data("wire/ext_conf_missing_family.xml"))
+        extensions_config = ExtensionsConfig(
+            load_data("wire/ext_conf_missing_family.xml"))
         protocol = ProtocolMock()
         protocol.family = "Prod"
         protocol.agent_manifests = extensions_config.vmagent_manifests
         self.update_handler.protocol_util = protocol
         with patch('azurelinuxagent.common.logger.warn') as mock_logger:
             with patch('tests.ga.test_update.ProtocolMock.get_vmagent_pkgs', side_effect=ProtocolError):
-                self.assertFalse(self.update_handler._upgrade_available(base_version=CURRENT_VERSION))
+                self.assertFalse(
+                    self.update_handler._upgrade_available(
+                        base_version=CURRENT_VERSION))
                 self.assertEqual(0, mock_logger.call_count)
 
     def test_upgrade_available_includes_old_agents(self):
@@ -1360,7 +1456,9 @@ class TestUpdate(UpdateTestCase):
         self.replicate_agents(src_v=old_version, count=old_count, increment=-1)
         all_count = len(self.agent_versions())
 
-        self.assertTrue(self._test_upgrade_available(versions=self.agent_versions()))
+        self.assertTrue(
+            self._test_upgrade_available(
+                versions=self.agent_versions()))
         self.assertEqual(all_count, len(self.update_handler.agents))
 
     def test_upgrade_available_purges_old_agents(self):
@@ -1390,7 +1488,9 @@ class TestUpdate(UpdateTestCase):
         self.prepare_agents()
         base_version = self.agent_versions()[0] + 1
         self.update_handler._is_version_eligible = lambda x: x == base_version
-        self.assertFalse(self._test_upgrade_available(base_version=base_version))
+        self.assertFalse(
+            self._test_upgrade_available(
+                base_version=base_version))
 
     def test_upgrade_available_skips_when_no_versions(self):
         self.assertFalse(self._test_upgrade_available(protocol=ProtocolMock()))
@@ -1410,11 +1510,19 @@ class TestUpdate(UpdateTestCase):
 
     def test_write_pid_file(self):
         for n in range(1112):
-            fileutil.write_file(os.path.join(self.tmp_dir, str(n)+"_waagent.pid"), ustr(n+1))
+            fileutil.write_file(
+                os.path.join(
+                    self.tmp_dir,
+                    str(n) +
+                    "_waagent.pid"),
+                ustr(
+                    n +
+                    1))
         with patch('os.getpid', return_value=1112):
             pid_files, pid_file = self.update_handler._write_pid_file()
             self.assertEqual(1112, len(pid_files))
-            self.assertEqual("1111_waagent.pid", os.path.basename(pid_files[-1]))
+            self.assertEqual("1111_waagent.pid",
+                             os.path.basename(pid_files[-1]))
             self.assertEqual("1112_waagent.pid", os.path.basename(pid_file))
             self.assertEqual(fileutil.read_file(pid_file), ustr(1112))
 
@@ -1483,7 +1591,9 @@ class TestUpdate(UpdateTestCase):
         self.assertTrue(ga_manifest_2.allowed_versions[0] == '2.2.13')
         self.assertTrue(ga_manifest_2.allowed_versions[1] == '2.2.14')
 
-    @patch('azurelinuxagent.common.conf.get_extensions_enabled', return_value=False)
+    @patch(
+        'azurelinuxagent.common.conf.get_extensions_enabled',
+        return_value=False)
     def test_update_happens_when_extensions_disabled(self, _):
         """
         Although the extension enabled config will not get checked
@@ -1491,15 +1601,29 @@ class TestUpdate(UpdateTestCase):
         behavior never changes.
         """
         self.update_handler._upgrade_available = Mock(return_value=True)
-        self._test_run(invocations=0, calls=[], enable_updates=True, sleep_interval=(300,))
+        self._test_run(
+            invocations=0,
+            calls=[],
+            enable_updates=True,
+            sleep_interval=(
+                300,
+            ))
 
-    @patch('azurelinuxagent.common.conf.get_extensions_enabled', return_value=False)
+    @patch(
+        'azurelinuxagent.common.conf.get_extensions_enabled',
+        return_value=False)
     def test_interval_changes_when_extensions_disabled(self, _):
         """
         When extension processing is disabled, the goal state interval should be larger.
         """
         self.update_handler._upgrade_available = Mock(return_value=False)
-        self._test_run(invocations=15, calls=[call.run()] * 15, sleep_interval=(300,))
+        self._test_run(
+            invocations=15,
+            calls=[
+                call.run()] * 15,
+            sleep_interval=(
+                300,
+            ))
 
 
 class MonitorThreadTest(AgentTestCase):
@@ -1511,6 +1635,7 @@ class MonitorThreadTest(AgentTestCase):
 
     def _test_run(self, invocations=1):
         iterations = [0]
+
         def iterator(*args, **kwargs):
             iterations[0] += 1
             if iterations[0] >= invocations:
@@ -1657,13 +1782,14 @@ class ChildMock(Mock):
 
 
 class ProtocolMock(object):
-    def __init__(self, family="TestAgent", etag=42, versions=None, client=None):
+    def __init__(self, family="TestAgent", etag=42,
+                 versions=None, client=None):
         self.family = family
         self.client = client
         self.call_counts = {
-            "get_vmagent_manifests" : 0,
-            "get_vmagent_pkgs" : 0,
-            "update_goal_state" : 0
+            "get_vmagent_manifests": 0,
+            "get_vmagent_pkgs": 0,
+            "update_goal_state": 0
         }
         self.goal_state_is_stale = False
         self.goal_state_forced = False
@@ -1682,9 +1808,10 @@ class ProtocolMock(object):
 
         if self.family is not None:
             manifest = VMAgentManifest(family=self.family)
-            for i in range(0,10):
+            for i in range(0, 10):
                 manifest_uri = "https://nowhere.msft/agent/{0}".format(i)
-                manifest.versionsManifestUris.append(VMAgentManifestUri(uri=manifest_uri))
+                manifest.versionsManifestUris.append(
+                    VMAgentManifestUri(uri=manifest_uri))
             self.agent_manifests.vmAgentManifests.append(manifest)
 
     def create_packages(self):
@@ -1694,7 +1821,7 @@ class ProtocolMock(object):
 
         for version in self.versions:
             package = ExtHandlerPackage(str(version))
-            for i in range(0,5):
+            for i in range(0, 5):
                 package_uri = "https://nowhere.msft/agent_pkg/{0}".format(i)
                 package.uris.append(ExtHandlerPackageUri(uri=package_uri))
             self.agent_packages.versions.append(package)
@@ -1722,7 +1849,8 @@ class ProtocolMock(object):
 
 
 class ResponseMock(Mock):
-    def __init__(self, status=restutil.httpclient.OK, response=None, reason=None):
+    def __init__(self, status=restutil.httpclient.OK,
+                 response=None, reason=None):
         Mock.__init__(self)
         self.status = status
         self.reason = reason

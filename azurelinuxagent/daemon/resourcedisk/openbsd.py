@@ -24,6 +24,7 @@ import azurelinuxagent.common.conf as conf
 from azurelinuxagent.common.exception import ResourceDiskError
 from azurelinuxagent.daemon.resourcedisk.default import ResourceDiskHandler
 
+
 class OpenBSDResourceDiskHandler(ResourceDiskHandler):
     def __init__(self):
         super(OpenBSDResourceDiskHandler, self).__init__()
@@ -108,6 +109,7 @@ class OpenBSDResourceDiskHandler(ResourceDiskHandler):
                 raise ResourceDiskError("Failed to mount partition {0}, "
                                         "error {1}".format(partition, output))
 
-        logger.info("Resource disk partition {0} is mounted at {1} with fstype "
-                    "{2}", partition, mount_point, fs)
+        logger.info(
+            "Resource disk partition {0} is mounted at {1} with fstype "
+            "{2}", partition, mount_point, fs)
         return mount_point

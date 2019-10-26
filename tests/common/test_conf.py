@@ -76,13 +76,17 @@ class TestConf(AgentTestCase):
         AgentTestCase.setUp(self)
         self.conf = ConfigurationProvider()
         load_conf_from_file(
-                os.path.join(data_dir, "test_waagent.conf"),
-                self.conf)
+            os.path.join(data_dir, "test_waagent.conf"),
+            self.conf)
 
     def test_key_value_handling(self):
         self.assertEqual("Value1", self.conf.get("FauxKey1", "Bad"))
         self.assertEqual("Value2 Value2", self.conf.get("FauxKey2", "Bad"))
-        self.assertEqual("delalloc,rw,noatime,nobarrier,users,mode=777", self.conf.get("FauxKey3", "Bad"))
+        self.assertEqual(
+            "delalloc,rw,noatime,nobarrier,users,mode=777",
+            self.conf.get(
+                "FauxKey3",
+                "Bad"))
 
     def test_get_ssh_dir(self):
         self.assertTrue(get_ssh_dir(self.conf).startswith("/notareal/path"))
@@ -159,8 +163,9 @@ class TestConf(AgentTestCase):
         self.assert_get_cgroups_excluded(config='CustomScript, RunCommand',
                                          expected_value=standard_values)
 
-        self.assert_get_cgroups_excluded(config='customScript, runCommand  , , ,,',
-                                         expected_value=standard_values)
+        self.assert_get_cgroups_excluded(
+            config='customScript, runCommand  , , ,,',
+            expected_value=standard_values)
 
         self.assert_get_cgroups_excluded(config='  customscript,runcommand  ',
                                          expected_value=standard_values)

@@ -39,15 +39,17 @@ ARCHIVE_DIRECTORY_NAME = 'history'
 MAX_ARCHIVED_STATES = 50
 
 CACHE_PATTERNS = [
-    re.compile("^(.*)\.(\d+)\.(agentsManifest)$", re.IGNORECASE),
-    re.compile("^(.*)\.(\d+)\.(manifest\.xml)$", re.IGNORECASE),
-    re.compile("^(.*)\.(\d+)\.(xml)$", re.IGNORECASE)
+    re.compile(r"^(.*)\.(\d+)\.(agentsManifest)$", re.IGNORECASE),
+    re.compile(r"^(.*)\.(\d+)\.(manifest\.xml)$", re.IGNORECASE),
+    re.compile(r"^(.*)\.(\d+)\.(xml)$", re.IGNORECASE)
 ]
 
 # 2018-04-06T08:21:37.142697
 # 2018-04-06T08:21:37.142697.zip
-ARCHIVE_PATTERNS_DIRECTORY = re.compile('^\d{4}\-\d{2}\-\d{2}T\d{2}:\d{2}:\d{2}\.\d+$')
-ARCHIVE_PATTERNS_ZIP       = re.compile('^\d{4}\-\d{2}\-\d{2}T\d{2}:\d{2}:\d{2}\.\d+\.zip$')
+ARCHIVE_PATTERNS_DIRECTORY = re.compile(
+    r'^\d{4}\-\d{2}\-\d{2}T\d{2}:\d{2}:\d{2}\.\d+$')
+ARCHIVE_PATTERNS_ZIP = re.compile(
+    r'^\d{4}\-\d{2}\-\d{2}T\d{2}:\d{2}:\d{2}\.\d+\.zip$')
 
 
 class StateFlusher(object):
@@ -73,7 +75,8 @@ class StateFlusher(object):
             self._purge(files)
 
     def history_dir(self, timestamp):
-        return os.path.join(self._source, ARCHIVE_DIRECTORY_NAME, timestamp.isoformat())
+        return os.path.join(
+            self._source, ARCHIVE_DIRECTORY_NAME, timestamp.isoformat())
 
     def _get_files_to_archive(self):
         files = []
@@ -89,7 +92,9 @@ class StateFlusher(object):
 
     def _archive(self, files, timestamp):
         for f in files:
-            dst = os.path.join(self.history_dir(timestamp), os.path.basename(f))
+            dst = os.path.join(
+                self.history_dir(timestamp),
+                os.path.basename(f))
             shutil.move(f, dst)
 
     def _purge(self, files):
@@ -147,7 +152,7 @@ class State(object):
 
 class StateZip(State):
     def __init__(self, path, timestamp):
-        super(StateZip,self).__init__(path, timestamp)
+        super(StateZip, self).__init__(path, timestamp)
 
     def delete(self):
         os.remove(self._path)

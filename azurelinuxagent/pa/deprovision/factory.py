@@ -16,7 +16,7 @@
 #
 
 from azurelinuxagent.common.version import DISTRO_NAME, DISTRO_VERSION, \
-                                     DISTRO_FULL_NAME
+    DISTRO_FULL_NAME
 
 from .default import DeprovisionHandler
 from .arch import ArchDeprovisionHandler
@@ -28,7 +28,7 @@ from .ubuntu import UbuntuDeprovisionHandler, Ubuntu1804DeprovisionHandler
 from distutils.version import LooseVersion as Version
 
 
-def get_deprovision_handler(distro_name=DISTRO_NAME, 
+def get_deprovision_handler(distro_name=DISTRO_NAME,
                             distro_version=DISTRO_VERSION,
                             distro_full_name=DISTRO_FULL_NAME):
     if distro_name == "arch":
@@ -44,4 +44,3 @@ def get_deprovision_handler(distro_name=DISTRO_NAME,
         return ClearLinuxDeprovisionHandler()
 
     return DeprovisionHandler()
-

@@ -36,7 +36,7 @@ class MockDaemonCall(object):
 
 
 class TestDaemon(AgentTestCase):
-    
+
     @patch("time.sleep")
     def test_daemon_restart(self, mock_sleep):
         # Mock daemon function
@@ -45,7 +45,7 @@ class TestDaemon(AgentTestCase):
         daemon_handler.daemon = mock_daemon
 
         daemon_handler.check_pid = Mock()
- 
+
         daemon_handler.run()
 
         mock_sleep.assert_any_call(15)
@@ -92,7 +92,9 @@ class TestDaemon(AgentTestCase):
         Agent should run normally when no disable_agent is found
         """
         with patch('azurelinuxagent.pa.provision.get_provision_handler', return_value=ProvisionHandler()):
-            self.assertFalse(os.path.exists(conf.get_disable_agent_file_path()))
+            self.assertFalse(
+                os.path.exists(
+                    conf.get_disable_agent_file_path()))
             daemon_handler = get_daemon_handler()
 
             def stop_daemon(child_args):
@@ -104,8 +106,10 @@ class TestDaemon(AgentTestCase):
             self.assertEqual(1, patch_run_provision.call_count)
             self.assertEqual(1, patch_run_latest.call_count)
 
-    @patch('azurelinuxagent.ga.update.UpdateHandler.run_latest', side_effect=AgentTestCase.fail)
-    @patch('azurelinuxagent.pa.provision.default.ProvisionHandler.run', side_effect=ProvisionHandler.write_agent_disabled)
+    @patch('azurelinuxagent.ga.update.UpdateHandler.run_latest',
+           side_effect=AgentTestCase.fail)
+    @patch('azurelinuxagent.pa.provision.default.ProvisionHandler.run',
+           side_effect=ProvisionHandler.write_agent_disabled)
     def test_daemon_agent_disabled(self, _, patch_run_latest):
         """
         Agent should provision, then sleep forever when disable_agent is found
@@ -113,7 +117,9 @@ class TestDaemon(AgentTestCase):
 
         with patch('azurelinuxagent.pa.provision.get_provision_handler', return_value=ProvisionHandler()):
             # file is created by provisioning handler
-            self.assertFalse(os.path.exists(conf.get_disable_agent_file_path()))
+            self.assertFalse(
+                os.path.exists(
+                    conf.get_disable_agent_file_path()))
             daemon_handler = get_daemon_handler()
 
             # we need to assert this thread will sleep forever, so fork it
@@ -131,4 +137,3 @@ class TestDaemon(AgentTestCase):
 
 if __name__ == '__main__':
     unittest.main()
-

@@ -39,9 +39,10 @@ KNOWN_IOERRORS = [
     errno.ENFILE,       # File table overflow
     errno.EMFILE,       # Too many open files
     errno.ENOSPC,       # Out of space
-    errno.ENAMETOOLONG, # Name too long
+    errno.ENAMETOOLONG,  # Name too long
     errno.ELOOP,        # Too many symbolic links encountered
-    121                 # Remote I/O error (errno.EREMOTEIO -- not present in all Python 2.7+)
+    # Remote I/O error (errno.EREMOTEIO -- not present in all Python 2.7+)
+    121
 ]
 
 
@@ -65,7 +66,8 @@ def read_file(filepath, asbin=False, remove_bom=False, encoding='utf-8'):
         return data
 
 
-def write_file(filepath, contents, asbin=False, encoding='utf-8', append=False):
+def write_file(filepath, contents, asbin=False,
+               encoding='utf-8', append=False):
     """
     Write 'contents' to 'filepath'.
     """
@@ -207,7 +209,7 @@ def findre_in_file(file_path, line_re):
                 match = re.search(pattern, line)
                 if match:
                     return match
-    except:
+    except BaseException:
         pass
 
     return None

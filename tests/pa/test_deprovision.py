@@ -31,7 +31,7 @@ class TestDeprovision(AgentTestCase):
     @patch('azurelinuxagent.common.protocol.get_protocol_util')
     @patch('azurelinuxagent.pa.deprovision.default.read_input')
     def test_confirmation(self,
-            mock_read, mock_protocol, mock_util, mock_signal):
+                          mock_read, mock_protocol, mock_util, mock_signal):
         dh = DeprovisionHandler()
 
         dh.setup = Mock()
@@ -56,10 +56,10 @@ class TestDeprovision(AgentTestCase):
     @distros("ubuntu")
     @patch('azurelinuxagent.common.conf.get_lib_dir')
     def test_del_lib_dir_files(self,
-                        distro_name,
-                        distro_version,
-                        distro_full_name,
-                        mock_conf):
+                               distro_name,
+                               distro_version,
+                               distro_full_name,
+                               mock_conf):
         dirs = [
             'WALinuxAgent-2.2.26/config',
             'Microsoft.Azure.Extensions.CustomScript-2.0.6/config',
@@ -82,8 +82,7 @@ class TestDeprovision(AgentTestCase):
             'Microsoft.Azure.Extensions.CustomScript-2.0.6/config/HandlerState',
             'Microsoft.Azure.Extensions.CustomScript-2.0.6/status/12.notstatus',
             'Microsoft.Azure.Extensions.CustomScript-2.0.6/mrseq',
-            'WALinuxAgent-2.2.26/config/0.settings'
-        ]
+            'WALinuxAgent-2.2.26/config/0.settings']
 
         tmp = tempfile.mkdtemp()
         mock_conf.return_value = tmp
@@ -109,7 +108,7 @@ class TestDeprovision(AgentTestCase):
         for f in actions[0].args:
             self.assertTrue(os.path.basename(f) in files)
         for f in actions[1].args:
-            self.assertTrue(f[len(tmp)+1:] in files)
+            self.assertTrue(f[len(tmp) + 1:] in files)
 
     @distros("redhat")
     def test_deprovision(self,
@@ -133,7 +132,8 @@ class TestDeprovision(AgentTestCase):
 
         with patch("os.path.realpath", return_value="/run/resolvconf/resolv.conf"):
             warnings, actions = deprovision_handler.setup(deluser=False)
-            assert any("/etc/resolvconf/resolv.conf.d/tail" in w for w in warnings)
+            assert any(
+                "/etc/resolvconf/resolv.conf.d/tail" in w for w in warnings)
 
 
 if __name__ == '__main__':

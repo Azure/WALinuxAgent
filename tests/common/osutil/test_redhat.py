@@ -27,7 +27,8 @@ class TestRedhat6xOSUtil(AgentTestCase):
         AgentTestCase.tearDown(self)
 
     def test_get_dhcp_pid_should_return_a_list_of_pids(self):
-        osutil_get_dhcp_pid_should_return_a_list_of_pids(self, Redhat6xOSUtil())
+        osutil_get_dhcp_pid_should_return_a_list_of_pids(
+            self, Redhat6xOSUtil())
 
 
 if __name__ == '__main__':

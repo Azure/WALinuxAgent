@@ -27,7 +27,7 @@ import os
 import imp
 import sys
 
-if __name__ == '__main__' :
+if __name__ == '__main__':
     import azurelinuxagent.agent as agent
     """
     Invoke main method of agent
@@ -46,4 +46,3 @@ if __name__ == 'waagent':
         raise ImportError("Can't load waagent")
     agent20 = imp.load_source('waagent', agent20_path)
     __all__ = dir(agent20)
-

@@ -21,6 +21,7 @@ from azurelinuxagent.common.exception import OSUtilError
 from azurelinuxagent.common.osutil.freebsd import FreeBSDOSUtil
 import os
 
+
 class NSBSDOSUtil(FreeBSDOSUtil):
 
     resolver = None
@@ -34,7 +35,8 @@ class NSBSDOSUtil(FreeBSDOSUtil):
             try:
                 import dns.resolver
             except ImportError:
-                raise OSUtilError("Python DNS resolver not available. Cannot proceed!")
+                raise OSUtilError(
+                    "Python DNS resolver not available. Cannot proceed!")
 
             self.resolver = dns.resolver.Resolver()
             servers = []
@@ -43,15 +45,17 @@ class NSBSDOSUtil(FreeBSDOSUtil):
             for server in output.split("\n"):
                 if server == '':
                     break
-                server = server[:-1] # remove last '='
-                cmd = "grep '{}' /etc/hosts".format(server) + " | awk '{print $1}'"
+                server = server[:-1]  # remove last '='
+                cmd = "grep '{}' /etc/hosts".format(server) + \
+                    " | awk '{print $1}'"
                 ret, ip = shellutil.run_get_output(cmd)
                 servers.append(ip)
             self.resolver.nameservers = servers
             dns.resolver.override_system_resolver(self.resolver)
 
     def set_hostname(self, hostname):
-        shellutil.run("/usr/Firewall/sbin/setconf /usr/Firewall/System/global SystemName {0}".format(hostname))
+        shellutil.run(
+            "/usr/Firewall/sbin/setconf /usr/Firewall/System/global SystemName {0}".format(hostname))
         shellutil.run("/usr/Firewall/sbin/enlog")
         shellutil.run("/usr/Firewall/sbin/enproxy -u")
         shellutil.run("/usr/Firewall/sbin/ensl -u")
@@ -65,8 +69,9 @@ class NSBSDOSUtil(FreeBSDOSUtil):
 
         shellutil.run('setconf /usr/Firewall/ConfigFiles/system SSH State 1',
                       chk_err=False)
-        shellutil.run('setconf /usr/Firewall/ConfigFiles/system SSH Password {}'.format(option),
-                      chk_err=False)
+        shellutil.run(
+            'setconf /usr/Firewall/ConfigFiles/system SSH Password {}'.format(option),
+            chk_err=False)
         shellutil.run('enservice', chk_err=False)
 
         logger.info("{0} SSH password-based authentication methods."
@@ -93,8 +98,9 @@ class NSBSDOSUtil(FreeBSDOSUtil):
                                "").format(output))
 
         # password set, activate webadmin and ssh access
-        shellutil.run('setconf /usr/Firewall/ConfigFiles/webadmin ACL any && ensl',
-                      chk_err=False)
+        shellutil.run(
+            'setconf /usr/Firewall/ConfigFiles/webadmin ACL any && ensl',
+            chk_err=False)
 
     def deploy_ssh_pubkey(self, username, pubkey):
         """
@@ -102,9 +108,11 @@ class NSBSDOSUtil(FreeBSDOSUtil):
         """
         path, thumbprint, value = pubkey
 
-        #overide parameters
-        super(NSBSDOSUtil, self).deploy_ssh_pubkey('admin',
-            ["/usr/Firewall/.ssh/authorized_keys", thumbprint, value])
+        # overide parameters
+        super(
+            NSBSDOSUtil, self).deploy_ssh_pubkey(
+            'admin', [
+                "/usr/Firewall/.ssh/authorized_keys", thumbprint, value])
 
     def del_root_password(self):
         logger.warn("Root password deletion disabled")
@@ -131,7 +139,7 @@ class NSBSDOSUtil(FreeBSDOSUtil):
         shellutil.run("ennetwork", chk_err=False)
 
     def set_dhcp_hostname(self, hostname):
-        #already done by the dhcp client
+        # already done by the dhcp client
         pass
 
     def get_firewall_dropped_packets(self, dst_ip=None):

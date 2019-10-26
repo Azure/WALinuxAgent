@@ -87,7 +87,8 @@ class DhcpHandler(object):
         logger.info("Test for route to {0}".format(KNOWN_WIRESERVER_IP))
         try:
             route_table = self.osutil.read_route_table()
-            if any([(KNOWN_WIRESERVER_IP_ENTRY in route) for route in route_table]):
+            if any([(KNOWN_WIRESERVER_IP_ENTRY in route)
+                    for route in route_table]):
                 # reset self.gateway and self.routes
                 # we do not need to alter the routing table
                 self.endpoint = KNOWN_WIRESERVER_IP
@@ -96,12 +97,13 @@ class DhcpHandler(object):
                 route_exists = True
                 logger.info("Route to {0} exists".format(KNOWN_WIRESERVER_IP))
             else:
-                logger.warn("No route exists to {0}".format(KNOWN_WIRESERVER_IP))
+                logger.warn(
+                    "No route exists to {0}".format(KNOWN_WIRESERVER_IP))
         except Exception as e:
             logger.error(
                 "Could not determine whether route exists to {0}: {1}".format(
                     KNOWN_WIRESERVER_IP, e))
-                    
+
         return route_exists
 
     @property
@@ -152,7 +154,7 @@ class DhcpHandler(object):
         """
         Check if DHCP is available
         """
-        (dhcp_available, endpoint) =  self.osutil.is_dhcp_available()
+        (dhcp_available, endpoint) = self.osutil.is_dhcp_available()
         if not dhcp_available:
             logger.info("send_dhcp_req: DHCP not available")
             self.endpoint = endpoint
@@ -387,7 +389,7 @@ def build_dhcp_request(mac_addr, request_broadcast):
         # set broadcast flag to true to request the dhcp server
         # to respond to a boradcast address,
         # this is useful when user dhclient fails.
-        request[0x0A] = 0x80;
+        request[0x0A] = 0x80
 
     # fill in ClientHardwareAddress
     for a in range(0, 6):
