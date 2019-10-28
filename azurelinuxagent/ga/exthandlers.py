@@ -817,7 +817,6 @@ class ExtHandlerInstance(object):
     def set_operation(self, op):
         self.operation = op
 
-
     def report_event(self, message="", is_success=True, duration=0, log_event=True):
         ext_handler_version = self.ext_handler.properties.version
         add_event(name=self.ext_handler.name, version=ext_handler_version, message=message,
