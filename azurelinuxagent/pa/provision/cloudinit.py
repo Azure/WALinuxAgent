@@ -127,15 +127,15 @@ class CloudInitProvisionHandler(ProvisionHandler):
                              "after {1}s".format(path,
                                                  max_retry * sleep_time))
 
-def cloud_init_is_enabled():
+def _cloud_init_is_enabled_systemd():
     """
-    Determine whether or not cloud-init is enabled.
+    Determine whether or not cloud-init is enabled on a systemd machine.
 
     Args:
         None
 
     Returns:
-        bool - True if cloud-init is enabled, False if otherwise.
+        bool: True if cloud-init is enabled, False if otherwise.
     """
 
     try:
@@ -147,8 +147,48 @@ def cloud_init_is_enabled():
 
         unit_is_enabled = systemctl_output == 'enabled'
     except Exception as exc:
-        logger.info('Error getting cloud-init enabled status: {0}'.format(exc))
+        logger.info('Error getting cloud-init enabled status from systemctl: {0}'.format(exc))
         unit_is_enabled = False
 
+    return unit_is_enabled
+
+def _cloud_init_is_enabled_service():
+    """
+    Determine whether or not cloud-init is enabled on a non-systemd machine.
+
+    Args:
+        None
+
+    Returns:
+        bool: True if cloud-init is enabled, False if otherwise.
+    """
+
+    try:
+        subprocess.check_output([
+            'service',
+            'cloud-init',
+            'status'
+        ], stderr=subprocess.STDOUT)
+
+        unit_is_enabled = True
+    except Exception as exc:
+        logger.info('Error getting cloud-init enabled status from service: {0}'.format(exc))
+        unit_is_enabled = False
+
+    return unit_is_enabled
+
+def cloud_init_is_enabled():
+    """
+    Determine whether or not cloud-init is enabled.
+
+    Args:
+        None
+
+    Returns:
+        bool: True if cloud-init is enabled, False if otherwise.
+    """
+
+    unit_is_enabled = _cloud_init_is_enabled_systemd() or _cloud_init_is_enabled_service()
     logger.info('cloud-init is enabled: {0}'.format(unit_is_enabled))
+
     return unit_is_enabled
