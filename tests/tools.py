@@ -64,6 +64,17 @@ _MAX_LENGTH = 120
 
 _MAX_LENGTH_SAFE_REPR = 80
 
+# Mock sleep to reduce test execution time
+_SLEEP = time.sleep
+
+
+def mock_sleep(sec=0.01):
+    """
+    Mocks the time.sleep method to reduce unit test time
+    :param sec: Time to replace the sleep call with, default = 0.01sec
+    """
+    _SLEEP(sec)
+
 
 def safe_repr(obj, short=False):
     try:
@@ -449,6 +460,10 @@ class AgentTestCase(unittest.TestCase):
         """
         if not file_path:
             file_path = os.path.join(self.tmp_dir, file_name)
+
+        directory = os.path.dirname(file_path)
+        if not os.path.exists(directory):
+            os.mkdir(directory)
 
         with open(file_path, "w") as script:
             if file_name.endswith(".py"):

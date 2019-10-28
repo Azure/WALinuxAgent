@@ -1,9 +1,11 @@
 # Copyright (c) Microsoft Corporation. All rights reserved.
 # Licensed under the Apache License.
 import json
+import subprocess
 
 from azurelinuxagent.common.protocol.restapi import ExtensionStatus, Extension, ExtHandler, ExtHandlerProperties
-from azurelinuxagent.ga.exthandlers import parse_ext_status, ExtHandlerInstance, get_exthandlers_handler
+from azurelinuxagent.ga.exthandlers import parse_ext_status, ExtHandlerInstance, get_exthandlers_handler, \
+    ExtCommandEnvVariable
 from azurelinuxagent.common.exception import ProtocolError, ExtensionError, ExtensionErrorCodes
 from azurelinuxagent.common.event import WALAEventOperation
 from azurelinuxagent.common.utils.extensionprocessutil import TELEMETRY_MESSAGE_MAX_LEN, format_stdout_stderr, read_output
@@ -231,6 +233,9 @@ class LaunchCommandTestCase(AgentTestCase):
         self.mock_get_log_dir = patch("azurelinuxagent.ga.exthandlers.ExtHandlerInstance.get_log_dir", lambda *_: self.log_dir)
         self.mock_get_log_dir.start()
 
+        self.mock_sleep = patch("time.sleep", lambda *_: mock_sleep(0.01))
+        self.mock_sleep.start()
+
         self.cgroups_enabled = CGroupConfigurator.get_instance().enabled()
         CGroupConfigurator.get_instance().disable()
 
@@ -242,6 +247,7 @@ class LaunchCommandTestCase(AgentTestCase):
 
         self.mock_get_log_dir.stop()
         self.mock_get_base_dir.stop()
+        self.mock_sleep.stop()
 
         AgentTestCase.tearDown(self)
 
@@ -575,3 +581,28 @@ sys.stderr.write("STDERR")
             output = self.ext_handler_instance.launch_command(command)
 
         self.assertIn("[stderr]\nCannot read stdout/stderr:", output)
+
+    def test_it_should_contain_all_helper_environment_variables(self):
+
+        helper_env_vars = {ExtCommandEnvVariable.ExtensionSeqNumber: self.ext_handler_instance.get_seq_no(),
+                           ExtCommandEnvVariable.ExtensionPath: self.tmp_dir,
+                           ExtCommandEnvVariable.ExtensionVersion: self.ext_handler_instance.ext_handler.properties.version}
+
+        command = """
+            printenv | grep -E '(%s)'
+        """ % '|'.join(helper_env_vars.keys())
+
+        test_file = self.create_script('printHelperEnvironments.sh', command)
+
+        with patch("subprocess.Popen", wraps=subprocess.Popen) as patch_popen:
+            output = self.ext_handler_instance.launch_command(test_file)
+
+            args, kwagrs = patch_popen.call_args
+            without_os_env = dict((k, v) for (k, v) in kwagrs['env'].items() if k not in os.environ)
+
+            # This check will fail if any helper environment variables are added/removed later on
+            self.assertEqual(helper_env_vars, without_os_env)
+
+            # This check is checking if the expected values are set for the extension commands
+            for helper_var in helper_env_vars:
+                self.assertIn("%s=%s" % (helper_var, helper_env_vars[helper_var]), output)
