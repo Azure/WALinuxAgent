@@ -749,26 +749,33 @@ class TestExtensionMetricsDataTelemetry(AgentTestCase):
     def test_send_extension_metrics_telemetry_with_actual_cgroup(self, patch_add_event, patch_add_metric, *arg):
         self.assertTrue(i_am_root(), "Test does not run when non-root")
 
-        max_num_polls = 5
-        time_to_wait = 3
-        extn_name = "foobar-1.0.0"
+        # This test has some timing issues when systemd is managing cgroups, so we force the file system API
+        # by creating a new instance of the CGroupConfigurator
+        with patch("azurelinuxagent.common.cgroupapi.CGroupsApi._is_systemd", return_value=False):
+            cgroup_configurator_instance = CGroupConfigurator._instance
+            CGroupConfigurator._instance = None
 
-        cgs = make_new_cgroup(extn_name)
-        self.assertEqual(len(cgs), 2)
+            try:
+                max_num_polls = 5
+                time_to_wait = 3
+                extn_name = "foobar-1.0.0"
 
-        ext_handler_properties = ExtHandlerProperties()
-        ext_handler_properties.version = "1.0.0"
-        ext_handler = ExtHandler(name='foobar')
-        ext_handler.properties = ext_handler_properties
-        ext_handler_instance = ExtHandlerInstance(ext_handler=ext_handler, protocol=None)
-        ext_handler_instance.set_operation("Enable")
+                cgs = make_new_cgroup(extn_name)
+                self.assertEqual(len(cgs), 2)
 
-        monitor_handler = get_monitor_handler()
-        monitor_handler.init_protocols()
-        monitor_handler.last_cgroup_polling_telemetry = datetime.datetime.utcnow() - timedelta(hours=1)
-        monitor_handler.last_cgroup_report_telemetry = datetime.datetime.utcnow() - timedelta(hours=1)
+                ext_handler_properties = ExtHandlerProperties()
+                ext_handler_properties.version = "1.0.0"
+                ext_handler = ExtHandler(name='foobar')
+                ext_handler.properties = ext_handler_properties
+                ext_handler_instance = ExtHandlerInstance(ext_handler=ext_handler, protocol=None)
+                ext_handler_instance.set_operation("Enable")
 
-        command = self.create_script("keep_cpu_busy_and_consume_memory_for_{0}_seconds".format(time_to_wait), '''
+                monitor_handler = get_monitor_handler()
+                monitor_handler.init_protocols()
+                monitor_handler.last_cgroup_polling_telemetry = datetime.datetime.utcnow() - timedelta(hours=1)
+                monitor_handler.last_cgroup_report_telemetry = datetime.datetime.utcnow() - timedelta(hours=1)
+
+                command = self.create_script("keep_cpu_busy_and_consume_memory_for_{0}_seconds".format(time_to_wait), '''
 nohup python -c "import time
 
 for i in range(5):
@@ -779,51 +786,54 @@ for i in range(5):
     print('Test loop')" &
 '''.format(time_to_wait))
 
-        self.log_dir = os.path.join(self.tmp_dir, "log")
+                self.log_dir = os.path.join(self.tmp_dir, "log")
 
-        with patch("azurelinuxagent.ga.exthandlers.ExtHandlerInstance.get_base_dir", lambda *_: self.tmp_dir) as \
-                patch_get_base_dir:
-            with patch("azurelinuxagent.ga.exthandlers.ExtHandlerInstance.get_log_dir", lambda *_: self.log_dir) as \
-                    patch_get_log_dir:
-                ext_handler_instance.launch_command(command)
+                with patch("azurelinuxagent.ga.exthandlers.ExtHandlerInstance.get_base_dir", lambda *_: self.tmp_dir) as \
+                        patch_get_base_dir:
+                    with patch("azurelinuxagent.ga.exthandlers.ExtHandlerInstance.get_log_dir", lambda *_: self.log_dir) as \
+                            patch_get_log_dir:
+                        ext_handler_instance.launch_command(command)
 
-        self.assertTrue(CGroupsTelemetry.is_tracked(os.path.join(
-            BASE_CGROUPS, "cpu", "walinuxagent.extensions", "foobar_1.0.0")))
-        self.assertTrue(CGroupsTelemetry.is_tracked(os.path.join(
-            BASE_CGROUPS, "memory", "walinuxagent.extensions", "foobar_1.0.0")))
+                self.assertTrue(CGroupsTelemetry.is_tracked(os.path.join(
+                    BASE_CGROUPS, "cpu", "walinuxagent.extensions", "foobar_1.0.0")))
+                self.assertTrue(CGroupsTelemetry.is_tracked(os.path.join(
+                    BASE_CGROUPS, "memory", "walinuxagent.extensions", "foobar_1.0.0")))
 
-        for i in range(max_num_polls):
-            metrics = CGroupsTelemetry.poll_all_tracked()
-            self.assertEqual(len(metrics), 3)
+                for i in range(max_num_polls):
+                    metrics = CGroupsTelemetry.poll_all_tracked()
+                    self.assertEqual(len(metrics), 3)
 
-        monitor_handler.poll_telemetry_metrics()
-        self.assertEqual(3, patch_add_metric.call_count)
+                monitor_handler.poll_telemetry_metrics()
+                self.assertEqual(3, patch_add_metric.call_count)
 
-        for call_arg in patch_add_metric.call_args_list:
-            self.assertIn(call_arg[0][0], ["Process", "Memory"])
-            if call_arg[0][0] == "Process":
-                self.assertEqual(call_arg[0][1], "% Processor Time")
-                self.assertIsInstance(call_arg[0][3], float)
-            if call_arg[0][0] == "Memory":
-                self.assertIn(call_arg[0][1], ["Total Memory Usage", "Max Memory Usage"])
-                self.assertIsInstance(call_arg[0][3], int)
+                for call_arg in patch_add_metric.call_args_list:
+                    self.assertIn(call_arg[0][0], ["Process", "Memory"])
+                    if call_arg[0][0] == "Process":
+                        self.assertEqual(call_arg[0][1], "% Processor Time")
+                        self.assertIsInstance(call_arg[0][3], float)
+                    if call_arg[0][0] == "Memory":
+                        self.assertIn(call_arg[0][1], ["Total Memory Usage", "Max Memory Usage"])
+                        self.assertIsInstance(call_arg[0][3], int)
 
-            self.assertEqual(call_arg[0][2], extn_name)
-            self.assertFalse(call_arg[0][4])
+                    self.assertEqual(call_arg[0][2], extn_name)
+                    self.assertFalse(call_arg[0][4])
 
-        monitor_handler.send_telemetry_metrics()
-        self.assertEqual(2, patch_add_event.call_count)  # One for launch command and one for extension metrics data
+                monitor_handler.send_telemetry_metrics()
+                self.assertEqual(3, patch_add_event.call_count)     # 1 for launch command, 1 for extension metrics data
+                                                                    # and 1 for Cgroups initialization
 
-        name = patch_add_event.call_args[0][0]
-        fields = patch_add_event.call_args[1]
+                name = patch_add_event.call_args[0][0]
+                fields = patch_add_event.call_args[1]
 
-        self.assertEqual(name, "WALinuxAgent")
-        self.assertEqual(fields["op"], "ExtensionMetricsData")
-        self.assertEqual(fields["is_success"], True)
-        self.assertEqual(fields["log_event"], False)
-        self.assertEqual(fields["is_internal"], False)
-        self.assertIsInstance(fields["message"], ustr)
-        monitor_handler.stop()
+                self.assertEqual(name, "WALinuxAgent")
+                self.assertEqual(fields["op"], "ExtensionMetricsData")
+                self.assertEqual(fields["is_success"], True)
+                self.assertEqual(fields["log_event"], False)
+                self.assertEqual(fields["is_internal"], False)
+                self.assertIsInstance(fields["message"], ustr)
+                monitor_handler.stop()
+            finally:
+                CGroupConfigurator._instance = cgroup_configurator_instance
 
     @skip_if_predicate_false(are_cgroups_enabled, "Does not run when Cgroups are not enabled")
     @skip_if_predicate_true(is_trusty_in_travis, "Does not run on Trusty in Travis")
@@ -832,26 +842,33 @@ for i in range(5):
     def test_report_event_metrics_sent_for_actual_cgroup(self, patch_report_event, http_get, patch_get_protocol, *args):
         self.assertTrue(i_am_root(), "Test does not run when non-root")
 
-        max_num_polls = 5
-        time_to_wait = 1
-        extn_name = "foobar-1.0.0"
+        # This test has some timing issues when systemd is managing cgroups, so we force the file system API
+        # by creating a new instance of the CGroupConfigurator
+        with patch("azurelinuxagent.common.cgroupapi.CGroupsApi._is_systemd", return_value=False):
+            cgroup_configurator_instance = CGroupConfigurator._instance
+            CGroupConfigurator._instance = None
 
-        cgs = make_new_cgroup(extn_name)
-        self.assertEqual(len(cgs), 2)
+            try:
+                max_num_polls = 5
+                time_to_wait = 1
+                extn_name = "foobar-1.0.0"
 
-        ext_handler_properties = ExtHandlerProperties()
-        ext_handler_properties.version = "1.0.0"
-        ext_handler = ExtHandler(name='foobar')
-        ext_handler.properties = ext_handler_properties
-        ext_handler_instance = ExtHandlerInstance(ext_handler=ext_handler, protocol=None)
-        ext_handler_instance.set_operation("Enable")
+                cgs = make_new_cgroup(extn_name)
+                self.assertEqual(len(cgs), 2)
 
-        monitor_handler = get_monitor_handler()
-        monitor_handler.init_protocols()
-        monitor_handler.last_cgroup_polling_telemetry = datetime.datetime.utcnow() - timedelta(hours=1)
-        monitor_handler.last_cgroup_report_telemetry = datetime.datetime.utcnow() - timedelta(hours=1)
+                ext_handler_properties = ExtHandlerProperties()
+                ext_handler_properties.version = "1.0.0"
+                ext_handler = ExtHandler(name='foobar')
+                ext_handler.properties = ext_handler_properties
+                ext_handler_instance = ExtHandlerInstance(ext_handler=ext_handler, protocol=None)
+                ext_handler_instance.set_operation("Enable")
 
-        command = self.create_script("keep_cpu_busy_and_consume_memory_for_{0}_seconds".format(time_to_wait), '''
+                monitor_handler = get_monitor_handler()
+                monitor_handler.init_protocols()
+                monitor_handler.last_cgroup_polling_telemetry = datetime.datetime.utcnow() - timedelta(hours=1)
+                monitor_handler.last_cgroup_report_telemetry = datetime.datetime.utcnow() - timedelta(hours=1)
+
+                command = self.create_script("keep_cpu_busy_and_consume_memory_for_{0}_seconds".format(time_to_wait), '''
 nohup python -c "import time
 
 for i in range(3):
@@ -861,44 +878,46 @@ for i in range(3):
     print('Test loop')" &
 '''.format(time_to_wait))
 
-        self.log_dir = os.path.join(self.tmp_dir, "log")
+                self.log_dir = os.path.join(self.tmp_dir, "log")
 
-        with patch("azurelinuxagent.ga.exthandlers.ExtHandlerInstance.get_base_dir", lambda *_: self.tmp_dir) as \
-                patch_get_base_dir:
-            with patch("azurelinuxagent.ga.exthandlers.ExtHandlerInstance.get_log_dir", lambda *_: self.log_dir) as \
-                    patch_get_log_dir:
-                ext_handler_instance.launch_command(command)
+                with patch("azurelinuxagent.ga.exthandlers.ExtHandlerInstance.get_base_dir", lambda *_: self.tmp_dir) as \
+                        patch_get_base_dir:
+                    with patch("azurelinuxagent.ga.exthandlers.ExtHandlerInstance.get_log_dir", lambda *_: self.log_dir) as \
+                            patch_get_log_dir:
+                        ext_handler_instance.launch_command(command)
 
-        self.assertTrue(CGroupsTelemetry.is_tracked(os.path.join(
-            BASE_CGROUPS, "cpu", "walinuxagent.extensions", "foobar_1.0.0")))
-        self.assertTrue(CGroupsTelemetry.is_tracked(os.path.join(
-            BASE_CGROUPS, "memory", "walinuxagent.extensions", "foobar_1.0.0")))
+                self.assertTrue(CGroupsTelemetry.is_tracked(os.path.join(
+                    BASE_CGROUPS, "cpu", "walinuxagent.extensions", "foobar_1.0.0")))
+                self.assertTrue(CGroupsTelemetry.is_tracked(os.path.join(
+                    BASE_CGROUPS, "memory", "walinuxagent.extensions", "foobar_1.0.0")))
 
-        for i in range(max_num_polls):
-            metrics = CGroupsTelemetry.poll_all_tracked()
-            self.assertEqual(len(metrics), 3)
+                for i in range(max_num_polls):
+                    metrics = CGroupsTelemetry.poll_all_tracked()
+                    self.assertEqual(len(metrics), 3)
 
-        monitor_handler.poll_telemetry_metrics()
-        monitor_handler.send_telemetry_metrics()
-        monitor_handler.collect_and_send_events()
+                monitor_handler.poll_telemetry_metrics()
+                monitor_handler.send_telemetry_metrics()
+                monitor_handler.collect_and_send_events()
 
-        telemetry_event_list = patch_report_event.call_args_list[0][0][0]
+                telemetry_event_list = patch_report_event.call_args_list[0][0][0]
 
-        for e in telemetry_event_list.events:
-            details_of_event = [x for x in e.parameters if x.name in
-                                ["Category", "Counter", "Instance", "Value"]]
+                for e in telemetry_event_list.events:
+                    details_of_event = [x for x in e.parameters if x.name in
+                                        ["Category", "Counter", "Instance", "Value"]]
 
-            for i in details_of_event:
-                if i.name == "Category":
-                    self.assertIn(i.value, ["Memory", "Process"])
-                if i.name == "Counter":
-                    self.assertIn(i.value, ["Max Memory Usage", "Total Memory Usage", "% Processor Time"])
-                if i.name == "Instance":
-                    self.assertEqual(i.value, extn_name)
-                if i.name == "Value":
-                    self.assertTrue(isinstance(i.value, int) or isinstance(i.value, float))
+                    for i in details_of_event:
+                        if i.name == "Category":
+                            self.assertIn(i.value, ["Memory", "Process"])
+                        if i.name == "Counter":
+                            self.assertIn(i.value, ["Max Memory Usage", "Total Memory Usage", "% Processor Time"])
+                        if i.name == "Instance":
+                            self.assertEqual(i.value, extn_name)
+                        if i.name == "Value":
+                            self.assertTrue(isinstance(i.value, int) or isinstance(i.value, float))
 
-        monitor_handler.stop()
+                monitor_handler.stop()
+            finally:
+                CGroupConfigurator._instance = cgroup_configurator_instance
 
     @patch("azurelinuxagent.common.osutil.default.DefaultOSUtil._get_proc_stat")
     def test_generate_extension_metrics_telemetry_dictionary(self, *args):
