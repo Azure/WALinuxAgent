@@ -1499,6 +1499,39 @@ class TestExtension(ExtensionTestCase):
             self.assertEqual(0, patch_get_enable_command.call_count)
 
     @patch('azurelinuxagent.ga.exthandlers.HandlerManifest.get_disable_command')
+    def test__extension_upgrade_failure_when_prev_version_disable_fails_and_recovers_on_next_incarnation(self, patch_get_disable_command,
+                                                                                                         *args):
+        test_data, exthandlers_handler, protocol = self._set_up_update_test_and_update_gs(patch_get_disable_command,
+                                                                                          *args)
+
+        with patch('azurelinuxagent.ga.exthandlers.HandlerManifest.get_enable_command') as patch_get_enable_command:
+            exthandlers_handler.run()
+
+            # When the previous version's disable fails, we expect the upgrade scenario to fail, so the enable
+            # for the new version is not called and the new version handler's status is reported as not ready.
+            self.assertEqual(1, patch_get_disable_command.call_count)
+            self.assertEqual(0, patch_get_enable_command.call_count)
+            self._assert_handler_status(protocol.report_vm_status, "NotReady", expected_ext_count=0, version="1.0.1")
+
+            # Ensure we are processing the same goal state only once
+            loop_run = 5
+            for x in range(loop_run):
+                exthandlers_handler.run()
+
+            self.assertEqual(1, patch_get_disable_command.call_count)
+            self.assertEqual(0, patch_get_enable_command.call_count)
+
+            # Force a new goal state incarnation, only then will we attempt the upgrade again
+            test_data.goal_state = test_data.goal_state.replace("<Incarnation>2<", "<Incarnation>3<")
+
+            # Ensure disable won't fail by making launch_command a no-op
+            with patch('azurelinuxagent.ga.exthandlers.ExtHandlerInstance.launch_command') as patch_launch_command:
+                exthandlers_handler.run()
+                self.assertEqual(2, patch_get_disable_command.call_count)
+                self.assertEqual(1, patch_get_enable_command.call_count)
+                self._assert_handler_status(protocol.report_vm_status, "Ready", expected_ext_count=1, version="1.0.1")
+
+    @patch('azurelinuxagent.ga.exthandlers.HandlerManifest.get_disable_command')
     def test__extension_upgrade_failure_when_prev_version_disable_fails_incorrect_zip(self, patch_get_disable_command,
                                                                                       *args):
         test_data, exthandlers_handler, protocol = self._set_up_update_test_and_update_gs(patch_get_disable_command,
