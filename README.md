@@ -183,8 +183,7 @@ A sample configuration file is shown below:
 
 ```yml
 Extensions.Enabled=y
-Provisioning.Enabled=y
-Provisioning.UseCloudInit=n
+Provisioning.Agent=auto
 Provisioning.DeleteRootPassword=n
 Provisioning.RegenerateSshHostKeyPair=y
 Provisioning.SshHostKeyPairType=rsa
@@ -237,9 +236,18 @@ without the agent. In order to do that, the `provisionVMAgent` flag must be set 
 provisioning time, via whichever API is being used. We will provide more details on
 this on our wiki when it is generally available. 
 
-#### __Provisioning.Enabled__
+#### __Provisioning.Agent__
 
-_Type: Boolean_  
+_Type: String_
+_Default: auto_
+
+Choose which provisioning agent to use (or allow waagent to figure it out by
+specifying "auto"). Possible options are "auto" (default), "waagent", "cloud-init",
+or "disabled".
+
+#### __Provisioning.Enabled__ (*removed in VERSION*)
+
+_Type: Boolean_ 
 _Default: y_
 
 This allows the user to enable or disable the provisioning functionality in the
@@ -247,9 +255,13 @@ agent. Valid values are "y" or "n". If provisioning is disabled, SSH host and
 user keys in the image are preserved and any configuration specified in the
 Azure provisioning API is ignored.
 
-#### __Provisioning.UseCloudInit__
-  
-_Type: Boolean_  
+_Note_: This configuration option has been removed and has no effect. waagent
+now auto-detects cloud-init as a provisioning agent (with an option to override
+with `Provisioning.Agent`).
+
+#### __Provisioning.UseCloudInit__ (*removed in VERSION*)
+
+_Type: Boolean_ 
 _Default: n_
 
 This options enables / disables support for provisioning by means of cloud-init.
@@ -257,6 +269,10 @@ When true ("y"), the agent will wait for cloud-init to complete before installin
 extensions and processing the latest goal state. _Provisioning.Enabled_ must be
 disabled ("n") for this option to have an effect. Setting _Provisioning.Enabled_ to
 true ("y") overrides this option and runs the built-in agent provisioning code.
+
+_Note_: This configuration option has been removed and has no effect. waagent
+now auto-detects cloud-init as a provisioning agent (with an option to override
+with `Provisioning.Agent`).
 
 #### __Provisioning.DeleteRootPassword__  
 
