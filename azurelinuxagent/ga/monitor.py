@@ -177,8 +177,8 @@ class MonitorHandler(object):
         try:
             ram = self.osutil.get_total_mem()
             processors = self.osutil.get_processor_cores()
-            self.sysinfo.append(TelemetryEventParam("RAM", ram))
-            self.sysinfo.append(TelemetryEventParam("Processors", processors))
+            self.sysinfo.append(TelemetryEventParam("RAM", int(ram)))
+            self.sysinfo.append(TelemetryEventParam("Processors", int(processors)))
         except OSUtilError as e:
             logger.warn("Failed to get system info: {0}", ustr(e))
 
@@ -206,7 +206,7 @@ class MonitorHandler(object):
             self.sysinfo.append(TelemetryEventParam('VMId',
                                                     vminfo.vmId))
             self.sysinfo.append(TelemetryEventParam('ImageOrigin',
-                                                    vminfo.image_origin))
+                                                    int(vminfo.image_origin)))
         except (HttpError, ValueError) as e:
             logger.warn("failed to get IMDS info: {0}", ustr(e))
 
