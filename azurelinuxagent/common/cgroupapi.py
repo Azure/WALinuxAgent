@@ -88,45 +88,10 @@ class CGroupsApi(object):
     @staticmethod
     def _is_systemd():
         """
-        Determine if systemd is managing system services. If this process (presumed to be the agent) is in a CPU cgroup
-        that looks like one created by systemd, we can assume systemd is in use.
-
-        TODO: We need to re-evaluate whether this the right logic to determine if Systemd is managing cgroups.
-
-        :return: True if systemd is managing system services
-        :rtype: Bool
+        Determine if systemd is managing system services; the implementation follows the same strategy as, for example,
+        sd_booted() in libsystemd, or /usr/sbin/service
         """
-        controller_id = CGroupsApi._get_controller_id('cpu')
-        current_process_cgroup_path = CGroupsApi._get_current_process_cgroup_relative_path(controller_id)
-        is_systemd = current_process_cgroup_path == 'system.slice/walinuxagent.service'
-
-        return is_systemd
-
-    @staticmethod
-    def _get_current_process_cgroup_relative_path(controller_id):
-        """
-        Get the cgroup path "suffix" for this process for the given controller. The leading "/" is always stripped,
-        so the suffix is suitable for passing to os.path.join(). (If the process is in the root cgroup, an empty
-        string is returned, and os.path.join() will still do the right thing.)
-        """
-        cgroup_paths = fileutil.read_file("/proc/self/cgroup")
-        for entry in cgroup_paths.splitlines():
-            fields = entry.split(':')
-            if fields[0] == controller_id:
-                return fields[2].lstrip(os.path.sep)
-        raise CGroupsException("This process belongs to no cgroup for controller ID {0}".format(controller_id))
-
-    @staticmethod
-    def _get_controller_id(controller):
-        """
-        Get the ID for a given cgroup controller
-        """
-        cgroup_states = fileutil.read_file("/proc/cgroups")
-        for entry in cgroup_states.splitlines():
-            fields = entry.split('\t')
-            if fields[0] == controller:
-                return fields[1]
-        raise CGroupsException("Cgroup controller {0} not found in /proc/cgroups".format(controller))
+        return os.path.exists('/run/systemd/system/')
 
     @staticmethod
     def _foreach_controller(operation, message):
@@ -394,8 +359,8 @@ class SystemdCgroupsApi(CGroupsApi):
         try:
             unit_path = os.path.join(UNIT_FILES_FILE_SYSTEM_PATH, unit_filename)
             fileutil.write_file(unit_path, unit_contents)
-            shellutil.run_get_output("systemctl daemon-reload")
-            shellutil.run_get_output("systemctl start {0}".format(unit_filename))
+            shellutil.run_command(["systemctl", "daemon-reload"])
+            shellutil.run_command(["systemctl", "start", unit_filename])
         except Exception as e:
             raise CGroupsException("Failed to create and start {0}. Error: {1}".format(unit_filename, ustr(e)))
 
@@ -463,9 +428,9 @@ After=system-{1}.slice""".format(extension_name, EXTENSIONS_ROOT_CGROUP_NAME)
         unit_filename = self._get_extension_slice_name(extension_name)
         try:
             unit_path = os.path.join(UNIT_FILES_FILE_SYSTEM_PATH, unit_filename)
-            shellutil.run_get_output("systemctl stop {0}".format(unit_filename))
+            shellutil.run_command(["systemctl", "stop", unit_filename])
             fileutil.rm_files(unit_path)
-            shellutil.run_get_output("systemctl daemon-reload")
+            shellutil.run_command(["systemctl", "daemon-reload"])
         except Exception as e:
             raise CGroupsException("Failed to remove {0}. Error: {1}".format(unit_filename, ustr(e)))
 
@@ -545,6 +510,8 @@ After=system-{1}.slice""".format(extension_name, EXTENSIONS_ROOT_CGROUP_NAME)
                 stderr.truncate(0)
 
                 # Try invoking the process again, this time without systemd-run
+                logger.info('Extension invocation using systemd failed, falling back to regular invocation '
+                            'without cgroups tracking.')
                 process = subprocess.Popen(command,
                                            shell=shell,
                                            cwd=cwd,

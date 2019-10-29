@@ -55,82 +55,40 @@ class CGroupsApiTestCase(AgentTestCase):
         self.assertTrue(type(api) == FileSystemCgroupsApi)
 
     def test_is_systemd_should_return_true_when_systemd_manages_current_process(self):
-        fileutil_read_file = fileutil.read_file
+        path_exists = os.path.exists
 
-        def mock_read_file(filepath, asbin=False, remove_bom=False, encoding='utf-8'):
-            if filepath == "/proc/cgroups":
-                return """
-#subsys_name	hierarchy	num_cgroups	enabled
-cpuset	11	1	1
-cpu	3	77	1
-cpuacct	3	77	1
-blkio	10	70	1
-memory	12	124	1
-devices	9	70	1
-freezer	4	1	1
-net_cls	2	1	1
-perf_event	7	1	1
-net_prio	2	1	1
-hugetlb	8	1	1
-pids	5	76	1
-rdma	6	1	1
-"""
-            if filepath == "/proc/self/cgroup":
-                return """
-12:memory:/system.slice/walinuxagent.service
-11:cpuset:/
-10:blkio:/system.slice/walinuxagent.service
-9:devices:/system.slice/walinuxagent.service
-8:hugetlb:/
-7:perf_event:/
-6:rdma:/
-5:pids:/system.slice/walinuxagent.service
-4:freezer:/
-3:cpu,cpuacct:/system.slice/walinuxagent.service
-2:net_cls,net_prio:/
-1:name=systemd:/system.slice/walinuxagent.service
-0::/system.slice/walinuxagent.service
-"""
-            return fileutil_read_file(filepath, asbin=asbin, remove_bom=remove_bom, encoding=encoding)
+        def mock_path_exists(path):
+            if path == "/run/systemd/system/":
+                mock_path_exists.path_tested = True
+                return True
+            return path_exists(path)
 
-        with patch("azurelinuxagent.common.cgroupapi.fileutil.read_file", mock_read_file):
+        mock_path_exists.path_tested = False
+
+        with patch("azurelinuxagent.common.cgroupapi.os.path.exists", mock_path_exists):
             is_systemd = CGroupsApi._is_systemd()
 
         self.assertTrue(is_systemd)
 
+        self.assertTrue(mock_path_exists.path_tested, 'The expected path was not tested; the implementation of CGroupsApi._is_systemd() may have changed.')
+
     def test_is_systemd_should_return_false_when_systemd_does_not_manage_current_process(self):
-        fileutil_read_file = fileutil.read_file
+        path_exists = os.path.exists
 
-        def mock_read_file(filepath, asbin=False, remove_bom=False, encoding='utf-8'):
-            if filepath == "/proc/cgroups":
-                return """
-#subsys_name	hierarchy	num_cgroups	enabled
-cpuset	11	1	1
-cpu	3	77	1
-cpuacct	3	77	1
-blkio	10	70	1
-memory	12	124	1
-devices	9	70	1
-freezer	4	1	1
-net_cls	2	1	1
-perf_event	7	1	1
-net_prio	2	1	1
-hugetlb	8	1	1
-pids	5	76	1
-rdma	6	1	1
-"""
-            if filepath == "/proc/self/cgroup":
-                return """
-3:name=systemd:/
-2:memory:/walinuxagent.service
-1:cpu,cpuacct:/walinuxagent.service
-"""
-            return fileutil_read_file(filepath, asbin=asbin, remove_bom=remove_bom, encoding=encoding)
+        def mock_path_exists(path):
+            if path == "/run/systemd/system/":
+                mock_path_exists.path_tested = True
+                return False
+            return path_exists(path)
 
-        with patch("azurelinuxagent.common.cgroupapi.fileutil.read_file", mock_read_file):
+        mock_path_exists.path_tested = False
+
+        with patch("azurelinuxagent.common.cgroupapi.os.path.exists", mock_path_exists):
             is_systemd = CGroupsApi._is_systemd()
 
         self.assertFalse(is_systemd)
+
+        self.assertTrue(mock_path_exists.path_tested, 'The expected path was not tested; the implementation of CGroupsApi._is_systemd() may have changed.')
 
     def test_foreach_controller_should_execute_operation_on_all_mounted_controllers(self):
         executed_controllers = []
@@ -549,16 +507,18 @@ class SystemdCgroupsApiTestCase(AgentTestCase):
 
     @patch('time.sleep', side_effect=lambda _: mock_sleep(0.001))
     def test_start_extension_command_should_use_fallback_option_if_systemd_times_out(self, _):
-        # Mock systemd timeout and make sure the failure is only attributed to the extension if the command fails
-        # using the fallback option
+        # Systemd has its own internal timeout which is shorter than what we define for extension operation timeout.
+        # When systemd times out, it will write a message to stderr and exit with exit code 1.
+        # In that case, we will internally recognize the failure due to the non-zero exit code, not as a timeout.
         original_popen = subprocess.Popen
-        success_cmd = "echo 'success'"
+        systemd_timeout_command = "echo 'Failed to start transient scope unit: Connection timed out' >&2 && exit 1"
 
         def mock_popen(*args, **kwargs):
-            # Inject a syntax error to the call
+            # If trying to invoke systemd, mock what would happen if systemd timed out internally:
+            # write failure to stderr and exit with exit code 1.
             new_args = args
             if "systemd-run" in args[0]:
-                new_args = (args[0].replace(success_cmd, "sleep 1s"),)    # Inject sleep for timeout
+                new_args = (systemd_timeout_command,)
 
             return original_popen(new_args, **kwargs)
 
@@ -566,21 +526,28 @@ class SystemdCgroupsApiTestCase(AgentTestCase):
 
         with tempfile.TemporaryFile(dir=self.tmp_dir, mode="w+b") as stdout:
             with tempfile.TemporaryFile(dir=self.tmp_dir, mode="w+b") as stderr:
-                with patch("azurelinuxagent.common.cgroupapi.subprocess.Popen", side_effect=mock_popen):
-                    with patch("azurelinuxagent.common.cgroupapi.SystemdCgroupsApi._is_systemd_failure",
-                               return_value=True):
-                        extension_cgroups, process_output = SystemdCgroupsApi().start_extension_command(
-                            extension_name="Microsoft.Compute.TestExtension-1.2.3",
-                            command="echo 'success'",
-                            timeout=300,
-                            shell=True,
-                            cwd=self.tmp_dir,
-                            env={},
-                            stdout=stdout,
-                            stderr=stderr)
+                with patch("azurelinuxagent.common.cgroupapi.subprocess.Popen", side_effect=mock_popen) \
+                        as patch_mock_popen:
+                    extension_cgroups, process_output = SystemdCgroupsApi().start_extension_command(
+                        extension_name="Microsoft.Compute.TestExtension-1.2.3",
+                        command="echo 'success'",
+                        timeout=300,
+                        shell=True,
+                        cwd=self.tmp_dir,
+                        env={},
+                        stdout=stdout,
+                        stderr=stderr)
 
-                        self.assertEquals(extension_cgroups, [])
-                        self.assertEquals(expected_output.format("success"), process_output)
+                    # We expect two calls to Popen, first for the systemd-run call, second for the fallback option
+                    self.assertEquals(2, patch_mock_popen.call_count)
+
+                    first_call_args = patch_mock_popen.mock_calls[0][1][0]
+                    second_call_args = patch_mock_popen.mock_calls[1][1][0]
+                    self.assertIn("systemd-run --unit", first_call_args)
+                    self.assertNotIn("systemd-run --unit", second_call_args)
+
+                    self.assertEquals(extension_cgroups, [])
+                    self.assertEquals(expected_output.format("success"), process_output)
 
     @attr('requires_sudo')
     @patch("azurelinuxagent.common.cgroupapi.add_event")
