@@ -2002,7 +2002,7 @@ class InVMArtifactsProfile(object):
                 json_settings = json.dumps({"runtimeSettings": [{"handlerSettings": handler_settings}]})
                 runtime_settings.text = json_settings
 
-            config_xml = xml.tostring(root, encoding='utf-8', method='xml')
+            config_xml = xml.tostring(root).decode()
             self.save_config(config_xml)
             extensions_config = ExtensionsConfig(config_xml)
 
