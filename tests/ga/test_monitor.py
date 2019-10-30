@@ -810,10 +810,9 @@ for i in range(5):
                     self.assertIn(call_arg[0][0], ["Process", "Memory"])
                     if call_arg[0][0] == "Process":
                         self.assertEqual(call_arg[0][1], "% Processor Time")
-                        self.assertIsInstance(call_arg[0][3], float)
                     if call_arg[0][0] == "Memory":
                         self.assertIn(call_arg[0][1], ["Total Memory Usage", "Max Memory Usage"])
-                        self.assertIsInstance(call_arg[0][3], int)
+                    self.assertIsInstance(call_arg[0][3], float)
 
                     self.assertEqual(call_arg[0][2], extn_name)
                     self.assertFalse(call_arg[0][4])
@@ -821,7 +820,6 @@ for i in range(5):
                 monitor_handler.send_telemetry_metrics()
                 self.assertEqual(3, patch_add_event.call_count)     # 1 for launch command, 1 for extension metrics data
                                                                     # and 1 for Cgroups initialization
-
                 name = patch_add_event.call_args[0][0]
                 fields = patch_add_event.call_args[1]
 
