@@ -28,7 +28,7 @@ from tests.tools import *
 
 
 class _MockedFileSystemTestCase(AgentTestCase):
-    def setUp(self, mock_cgroups_file_system_root=True):
+    def setUp(self):
         AgentTestCase.setUp(self)
 
         self.cgroups_file_system_root = os.path.join(self.tmp_dir, "cgroup")
@@ -36,15 +36,11 @@ class _MockedFileSystemTestCase(AgentTestCase):
         os.mkdir(os.path.join(self.cgroups_file_system_root, "cpu"))
         os.mkdir(os.path.join(self.cgroups_file_system_root, "memory"))
 
-        if mock_cgroups_file_system_root:
-            self.mock_cgroups_file_system_root = patch("azurelinuxagent.common.cgroupapi.CGROUPS_FILE_SYSTEM_ROOT", self.cgroups_file_system_root)
-            self.mock_cgroups_file_system_root.start()
-        else:
-            self.mock_cgroups_file_system_root = None
+        self.mock_cgroups_file_system_root = patch("azurelinuxagent.common.cgroupapi.CGROUPS_FILE_SYSTEM_ROOT", self.cgroups_file_system_root)
+        self.mock_cgroups_file_system_root.start()
 
     def tearDown(self):
-        if self.mock_cgroups_file_system_root is not None:
-            self.mock_cgroups_file_system_root.stop()
+        self.mock_cgroups_file_system_root.stop()
         AgentTestCase.tearDown(self)
 
 
@@ -624,7 +620,6 @@ class SystemdCgroupsApiMockedFileSystemTestCase(_MockedFileSystemTestCase):
         self.assertFalse(os.path.exists(legacy_memory_cgroup))
 
     def test_cleanup_legacy_cgroups_should_report_an_error_when_the_daemon_pid_was_added_to_the_legacy_cgroups(self):
-
         # Set up a mock /var/run/waagent.pid file
         daemon_pid = "42"
         daemon_pid_file = os.path.join(self.tmp_dir, "waagent.pid")
