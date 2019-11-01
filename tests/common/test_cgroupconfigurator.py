@@ -20,6 +20,7 @@ from __future__ import print_function
 import subprocess
 
 import errno
+from azurelinuxagent.common.cgroup import CGroup
 from azurelinuxagent.common.cgroupapi import VM_AGENT_CGROUP_NAME
 from azurelinuxagent.common.cgroupconfigurator import CGroupConfigurator
 from azurelinuxagent.common.cgroupstelemetry import CGroupsTelemetry
@@ -241,6 +242,10 @@ class CGroupConfiguratorTestCase(AgentTestCase):
                 raise OSError(errno.ENOSPC, os.strerror(errno.ENOSPC))
             fileutil.append_file(filepath, controller, **kwargs)
 
+        # Start tracking a couple of dummy cgroups
+        CGroupsTelemetry.track_cgroup(CGroup("dummy", "/sys/fs/cgroup/memory/system.slice/dummy.service", "cpu"))
+        CGroupsTelemetry.track_cgroup(CGroup("dummy", "/sys/fs/cgroup/memory/system.slice/dummy.service", "memory"))
+
         cgroup_configurator = CGroupConfigurator.get_instance()
 
         with patch("azurelinuxagent.common.cgroupconfigurator.add_event") as mock_add_event:
@@ -255,6 +260,7 @@ class CGroupConfiguratorTestCase(AgentTestCase):
         self.assertEquals(kwargs['message'], 'Failed to process legacy cgroups. Collection of resource usage data will be disabled. [Errno 28] No space left on device')
 
         self.assertFalse(cgroup_configurator.enabled())
+        self.assertEquals(len(CGroupsTelemetry._tracked), 0)
 
     @patch("azurelinuxagent.common.cgroupapi.CGroupsApi._is_systemd", return_value=True)
     def test_cleanup_legacy_cgroups_should_disable_cgroups_when_the_daemon_was_added_to_the_legacy_cgroup_on_systemd(self, _):
@@ -266,6 +272,10 @@ class CGroupConfiguratorTestCase(AgentTestCase):
         # Set up old controller cgroups and add the daemon PID to them
         CGroupsTools.create_legacy_agent_cgroup(self.cgroups_file_system_root, "cpu", daemon_pid)
         CGroupsTools.create_legacy_agent_cgroup(self.cgroups_file_system_root, "memory", daemon_pid)
+
+        # Start tracking a couple of dummy cgroups
+        CGroupsTelemetry.track_cgroup(CGroup("dummy", "/sys/fs/cgroup/memory/system.slice/dummy.service", "cpu"))
+        CGroupsTelemetry.track_cgroup(CGroup("dummy", "/sys/fs/cgroup/memory/system.slice/dummy.service", "memory"))
 
         cgroup_configurator = CGroupConfigurator.get_instance()
 
@@ -282,3 +292,4 @@ class CGroupConfiguratorTestCase(AgentTestCase):
             "Failed to process legacy cgroups. Collection of resource usage data will be disabled. The daemon's PID ({0}) was already added to the legacy cgroup; this invalidates resource usage data.".format(daemon_pid))
 
         self.assertFalse(cgroup_configurator.enabled())
+        self.assertEquals(len(CGroupsTelemetry._tracked), 0)

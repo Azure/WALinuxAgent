@@ -119,7 +119,7 @@ class CGroupConfigurator(object):
 
             def disable_cgroups(exception):
                 self.disable()
-
+                CGroupsTelemetry.reset()
                 add_event(
                     AGENT_NAME,
                     version=CURRENT_VERSION,
