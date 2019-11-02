@@ -1,6 +1,7 @@
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
+*$py.class
 
 # Virtualenv
 py3env/
@@ -27,6 +28,7 @@ var/
 
 # PyCharm
 .idea/
+.idea_modules/
 
 # PyInstaller
 #  Usually these files are written by a python script from a template
@@ -72,3 +74,27 @@ bin/waagent2.0c
 
 # mac osx specific files
 .DS_Store
+
+### VirtualEnv template
+# Virtualenv
+# http://iamzed.com/2009/05/07/a-primer-on-virtualenv/
+.Python
+[Bb]in
+[Ii]nclude
+[Ll]ib
+[Ll]ib64
+[Ll]ocal
+[Ss]cripts
+pyvenv.cfg
+.venv
+pip-selfcheck.json
+
+# virtualenv
+venv/
+ENV/
+
+# dotenv
+.env
+
+# pyenv
+.python-version
