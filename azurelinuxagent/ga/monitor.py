@@ -26,22 +26,21 @@ import uuid
 import azurelinuxagent.common.conf as conf
 import azurelinuxagent.common.logger as logger
 import azurelinuxagent.common.utils.networkutil as networkutil
-
 from azurelinuxagent.common.cgroupstelemetry import CGroupsTelemetry
+from azurelinuxagent.common.datacontract import set_properties
 from azurelinuxagent.common.errorstate import ErrorState
-from azurelinuxagent.common.event import add_event, WALAEventOperation
-from azurelinuxagent.common.exception import EventError, ProtocolError, OSUtilError, HttpError
+from azurelinuxagent.common.event import add_event, CONTAINER_ID_ENV_VARIABLE, WALAEventOperation
+from azurelinuxagent.common.exception import EventError, HttpError, OSUtilError, ProtocolError
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.osutil import get_osutil
 from azurelinuxagent.common.protocol import get_protocol_util
 from azurelinuxagent.common.protocol.healthservice import HealthService
 from azurelinuxagent.common.protocol.imds import get_imds_client
-from azurelinuxagent.common.telemetryevent import TelemetryEvent, TelemetryEventParam, TelemetryEventList
-from azurelinuxagent.common.datacontract import set_properties
+from azurelinuxagent.common.telemetryevent import TelemetryEvent, TelemetryEventList, TelemetryEventParam
 from azurelinuxagent.common.utils.restutil import IOErrorCounter
-from azurelinuxagent.common.utils.textutil import parse_doc, findall, find, getattrib, hash_strings
-from azurelinuxagent.common.version import DISTRO_NAME, DISTRO_VERSION, \
-    DISTRO_CODE_NAME, AGENT_NAME, CURRENT_AGENT, CURRENT_VERSION, AGENT_EXECUTION_MODE
+from azurelinuxagent.common.utils.textutil import find, findall, getattrib, hash_strings, parse_doc
+from azurelinuxagent.common.version import AGENT_EXECUTION_MODE, AGENT_NAME, CURRENT_AGENT, CURRENT_VERSION, \
+    DISTRO_CODE_NAME, DISTRO_NAME, DISTRO_VERSION
 
 
 def parse_event(data_str):
@@ -308,6 +307,11 @@ class MonitorHandler(object):
                 copy_param.append(param)
 
         copy_param.extend(self.sysinfo)
+
+        if "ContainerId" not in [v.name for v in event.parameters]:
+            copy_param.append(TelemetryEventParam(
+                              'ContainerId', os.environ.get(CONTAINER_ID_ENV_VARIABLE, "UNINITIALIZED")))
+
         event.parameters = copy_param
 
     def send_imds_heartbeat(self):

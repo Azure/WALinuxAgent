@@ -1,2 +1,4 @@
 distro; python_version >= '3.8'
 pyasn1
+nose
+mock
