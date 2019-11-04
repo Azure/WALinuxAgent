@@ -619,7 +619,7 @@ class TestExtensionMetricsDataTelemetry(AgentTestCase):
 
     def setUp(self):
         AgentTestCase.setUp(self)
-        CGroupsTelemetry.cleanup()
+        CGroupsTelemetry.reset()
 
     @patch('azurelinuxagent.common.event.EventLogger.add_event')
     @patch("azurelinuxagent.common.cgroupstelemetry.CGroupsTelemetry.poll_all_tracked")
