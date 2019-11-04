@@ -286,7 +286,7 @@ class ImdsClient(object):
                 return IMDS_CONNECTION_ERROR, "IMDS error in /metadata/{0}: Unable to connect to endpoint".format(resource_path)
             return IMDS_INTERNAL_SERVER_ERROR, "IMDS error in /metadata/{0}: {1}".format(resource_path, msg)
 
-        if resp.status == 500:
+        if resp.status >= 500:
             return IMDS_INTERNAL_SERVER_ERROR, "IMDS error in /metadata/{0}: {1}".format(
                                                resource_path, restutil.read_response_error(resp))
 
