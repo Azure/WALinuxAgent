@@ -4,7 +4,7 @@ import json
 import re
 
 import azurelinuxagent.common.utils.restutil as restutil
-from azurelinuxagent.common.exception import HttpError
+from azurelinuxagent.common.exception import HttpError, ResourceGoneError
 from azurelinuxagent.common.future import ustr
 import azurelinuxagent.common.logger as logger
 from azurelinuxagent.common.datacontract import DataContract, set_properties
@@ -19,6 +19,11 @@ IMDS_IMAGE_ORIGIN_UNKNOWN = 0
 IMDS_IMAGE_ORIGIN_CUSTOM = 1
 IMDS_IMAGE_ORIGIN_ENDORSED = 2
 IMDS_IMAGE_ORIGIN_PLATFORM = 3
+
+IMDS_RESPONSE_SUCCESS = 0
+IMDS_RESPONSE_ERROR = 1
+IMDS_CONNECTION_ERROR = 2
+IMDS_INTERNAL_SERVER_ERROR = 3
 
 
 def get_imds_client():
@@ -244,7 +249,8 @@ class ImdsClient(object):
             'User-Agent': restutil.HTTP_USER_AGENT_HEALTH,
             'Metadata': True,
         }
-        self._regex_imds_ioerror = re.compile(r".*HTTP Failed. GET http://[^ ]+ -- IOError timed out -- [0-9]+ attempts made")
+        self._regex_ioerror = re.compile(r".*HTTP Failed. GET http://[^ ]+ -- IOError .*")
+        self._regex_throttled = re.compile(r".*HTTP Retry. GET http://[^ ]+ -- Status Code 429 .*")
         self._protocol_util = get_protocol_util()
 
     def _get_metadata_url(self, endpoint, resource_path):
@@ -254,38 +260,71 @@ class ImdsClient(object):
         url = self._get_metadata_url(endpoint, resource_path)
         return restutil.http_get(url, headers=headers, use_proxy=False)
 
+    def _get_metadata_from_endpoint(self, endpoint, resource_path, headers):
+        """
+        Get metadata from one of the IMDS endpoints.
+
+        :param str endpoint: IMDS endpoint to call
+        :param str resource_path: path of IMDS resource
+        :param bool headers: headers to send in the request
+        :return: Tuple<status:int, response:str>
+            status: one of the following response status codes: IMDS_RESPONSE_SUCCESS, IMDS_RESPONSE_ERROR,
+                    IMDS_CONNECTION_ERROR, IMDS_INTERNAL_SERVER_ERROR
+            response: IMDS response on IMDS_RESPONSE_SUCCESS, failure message otherwise
+        """
+        try:
+            resp = self._http_get(endpoint=endpoint, resource_path=resource_path, headers=headers)
+        except ResourceGoneError:
+            return IMDS_INTERNAL_SERVER_ERROR, "IMDS error in /metadata/{0}: HTTP Failed with Status Code 410: Gone".format(resource_path)
+        except HttpError as e:
+            msg = str(e)
+            if self._regex_throttled.match(msg):
+                return IMDS_RESPONSE_ERROR, "IMDS error in /metadata/{0}: Throttled".format(resource_path)
+            if self._regex_ioerror.match(msg):
+                logger.periodic_warn(logger.EVERY_FIFTEEN_MINUTES,
+                                     "[PERIODIC] Unable to connect to IMDS endpoint {0}".format(endpoint))
+                return IMDS_CONNECTION_ERROR, "IMDS error in /metadata/{0}: Unable to connect to endpoint".format(resource_path)
+            return IMDS_INTERNAL_SERVER_ERROR, "IMDS error in /metadata/{0}: {1}".format(resource_path, msg)
+
+        if resp.status == 500:
+            return IMDS_INTERNAL_SERVER_ERROR, "IMDS error in /metadata/{0}: {1}".format(
+                                               resource_path, restutil.read_response_error(resp))
+
+        if restutil.request_failed(resp):
+            return IMDS_RESPONSE_ERROR, "IMDS error in /metadata/{0}: {1}".format(
+                                        resource_path, restutil.read_response_error(resp))
+
+        return IMDS_RESPONSE_SUCCESS, resp.read()
+
     def get_metadata(self, resource_path, is_health):
         """
         Get metadata from IMDS, falling back to Wireserver endpoint if necessary.
 
         :param str resource_path: path of IMDS resource
         :param bool is_health: True if for health/heartbeat, False otherwise
-        :return: Tuple<is_request_success:bool, response:str>
-            is_request_success: True when connection succeeds, False otherwise
-            response: response from IMDS on request success, failure message otherwise
+        :return: Tuple<is_request_success:bool, is_service_error:bool, response:str>
+            is_request_success: True for successful response, False otherwise
+            is_service_error: True when service returned an error, False for connection errors
+            response: response from IMDS on successful response, failure message otherwise
         """
         headers = self._health_headers if is_health else self._headers
         endpoint = IMDS_ENDPOINT
-        try:
-            resp = self._http_get(endpoint=endpoint, resource_path=resource_path, headers=headers)
-        except HttpError as e:
+
+        status, resp = self._get_metadata_from_endpoint(endpoint, resource_path, headers)
+        if status == IMDS_CONNECTION_ERROR:
             logger.periodic_warn(logger.EVERY_FIFTEEN_MINUTES,
                                  "[PERIODIC] Unable to connect to primary IMDS endpoint {0}".format(endpoint))
-            if not self._regex_imds_ioerror.match(str(e)):
-                raise
             endpoint = self._protocol_util.get_wireserver_endpoint()
-            try:
-                resp = self._http_get(endpoint=endpoint, resource_path=resource_path, headers=headers)
-            except HttpError as e:
-                logger.periodic_warn(logger.EVERY_FIFTEEN_MINUTES,
-                                     "[PERIODIC] Unable to connect to backup IMDS endpoint {0}".format(endpoint))
-                if not self._regex_imds_ioerror.match(str(e)):
-                    raise
-                return False, "IMDS error in /metadata/{0}: Unable to connect to endpoint".format(resource_path)
-        if restutil.request_failed(resp):
-            return False, "IMDS error in /metadata/{0}: {1}".format(
-                resource_path, restutil.read_response_error(resp))
-        return True, resp.read()
+            status, resp = self._get_metadata_from_endpoint(endpoint, resource_path, headers)
+
+        if status == IMDS_RESPONSE_SUCCESS:
+            return True, False, resp
+        elif status == IMDS_INTERNAL_SERVER_ERROR:
+            return False, True, resp
+        elif status == IMDS_CONNECTION_ERROR:
+            logger.periodic_warn(logger.EVERY_FIFTEEN_MINUTES,
+                                 "[PERIODIC] Unable to connect to backup IMDS endpoint {0}".format(endpoint))
+        return False, False, resp
 
     def get_compute(self):
         """
@@ -296,9 +335,9 @@ class ImdsClient(object):
         """
 
         # ensure we get a 200
-        success, resp = self.get_metadata('instance/compute', is_health=False)
+        success, service_error, resp = self.get_metadata('instance/compute', is_health=False)
         if not success:
-            raise HttpError(resp)
+            raise ValueError(resp)
 
         data = json.loads(ustr(resp, encoding="utf-8"))
 
@@ -313,14 +352,16 @@ class ImdsClient(object):
         is valid: compute should contain location, name, subscription id, and vm size
         and network should contain mac address and private ip address.
         :return: Tuple<is_healthy:bool, error_response:str>
-            is_healthy: True when validation succeeds, False otherwise
+            is_healthy: False when service returns an error, True on successful
+                        response and connection failures.
             error_response: validation failure details to assist with debugging
         """
 
         # ensure we get a 200
-        success, resp = self.get_metadata('instance', is_health=True)
+        success, is_service_error, resp = self.get_metadata('instance', is_health=True)
         if not success:
-            return False, resp
+            # we should only return False when the service is unhealthy
+            return (not is_service_error), resp
 
         # ensure the response is valid json
         try:
