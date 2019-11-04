@@ -62,14 +62,14 @@ class TestImds(AgentTestCase):
 
     @patch("azurelinuxagent.ga.update.restutil.http_get")
     def test_get_bad_request(self, mock_http_get):
-	mock_http_get.return_value = ResponseMock(status=restutil.httpclient.BAD_REQUEST)
+        mock_http_get.return_value = ResponseMock(status=restutil.httpclient.BAD_REQUEST)
 
         test_subject = imds.ImdsClient()
         self.assertRaises(ValueError, test_subject.get_compute)
 
     @patch("azurelinuxagent.ga.update.restutil.http_get")
     def test_get_internal_service_error(self, mock_http_get):
-	mock_http_get.return_value = ResponseMock(status=restutil.httpclient.INTERNAL_SERVER_ERROR)
+        mock_http_get.return_value = ResponseMock(status=restutil.httpclient.INTERNAL_SERVER_ERROR)
 
         test_subject = imds.ImdsClient()
         self.assertRaises(ValueError, test_subject.get_compute)

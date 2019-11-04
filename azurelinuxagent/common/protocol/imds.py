@@ -54,7 +54,7 @@ ENDORSED_IMAGE_INFO_MATCHER_JSON = """{
                 "14.04.6-LTS",
                 "14.04.7-LTS",
                 "14.04.8-LTS",
-                
+
                 "16.04-LTS",
                 "16.04.0-LTS",
                 "18.04-LTS",
@@ -82,7 +82,7 @@ ENDORSED_IMAGE_INFO_MATCHER_JSON = """{
         "CENTOS-HPC": { "Minimum": "6.3" }
     },
     "REDHAT": {
-        "RHEL": { 
+        "RHEL": {
             "Minimum": "6.7",
             "List": [
                 "7-LVM",
@@ -206,7 +206,6 @@ class ComputeInfo(DataContract):
         self.vmSize = vmSize
         self.vmScaleSetName = vmScaleSetName
         self.zone = zone
-
 
     @property
     def image_info(self):
