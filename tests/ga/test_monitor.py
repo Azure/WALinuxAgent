@@ -420,7 +420,6 @@ class TestMonitor(AgentTestCase):
         monitor_handler.stop()
 
 
-@patch('azurelinuxagent.common.event.EventLogger.add_event')
 @patch('azurelinuxagent.common.osutil.get_osutil')
 @patch("azurelinuxagent.common.protocol.healthservice.HealthService._report")
 @patch("azurelinuxagent.common.protocol.wire.CryptUtil")
@@ -468,16 +467,8 @@ class TestEventMonitoring(AgentTestCase):
     @patch("platform.system", return_value="Linux")
     @patch("azurelinuxagent.common.osutil.default.DefaultOSUtil.get_processor_cores", return_value=4)
     @patch("azurelinuxagent.common.osutil.default.DefaultOSUtil.get_total_mem", return_value=10000)
-    @patch("azurelinuxagent.common.protocol.wire.WireClient.send_event")
-    @patch("azurelinuxagent.common.conf.get_lib_dir")
-    def test_collect_and_send_events(self, mock_lib_dir, patch_send_event, patch_get_total_mem, patch_os_cores,
-                                     patch_platform_system, patch_platform_release, patch_get_vminfo, patch_get_compute,
-                                     *args):
-        mock_lib_dir.return_value = self.lib_dir
-
-        test_data = WireProtocolData(DATA_FILE)
-        monitor_handler, protocol = self._create_mock(test_data, *args)
-        monitor_handler.init_protocols()
+    def mock_init_sysinfo(self, monitor_handler, *args):
+        # Mock all values that are dependent on the environment to ensure consistency across testing environments.
         monitor_handler.init_sysinfo()
 
         # Replacing OSVersion to make it platform agnostic. We can't mock global constants (eg. DISTRO_NAME,
@@ -490,6 +481,57 @@ class TestEventMonitoring(AgentTestCase):
                                                        "DISTRO_VERSION",
                                                        "DISTRO_CODE_NAME",
                                                        platform.release())
+
+    @patch("azurelinuxagent.common.conf.get_lib_dir")
+    def test_collect_and_send_events_should_prepare_all_fields_for_all_event_files(self, mock_lib_dir, *args):
+        # Test collecting and sending both agent and extension events from the moment they're created to the moment
+        # they are to be reported. Ensure all necessary fields from sysinfo are present, as well as the container id.
+        mock_lib_dir.return_value = self.lib_dir
+
+        test_data = WireProtocolData(DATA_FILE)
+        monitor_handler, protocol = self._create_mock(test_data, *args)
+        monitor_handler.init_protocols()
+        self.mock_init_sysinfo(monitor_handler)
+
+        # Add agent event file
+        self.event_logger.add_event(name=AGENT_NAME,
+                                    version=CURRENT_VERSION,
+                                    op=WALAEventOperation.HeartBeat,
+                                    is_success=True,
+                                    message="Heartbeat",
+                                    log_event=False)
+
+        # Add extension event file the way extension do it, by dropping a .tld file in the events folder
+        source_file = os.path.join(data_dir, "ext/dsc_event.json")
+        dest_file = os.path.join(conf.get_lib_dir(), "events", "dsc_event.tld")
+        shutil.copyfile(source_file, dest_file)
+
+        # Collect these events and assert they are being sent with the correct sysinfo parameters from the agent
+        with patch.object(protocol, "report_event") as patch_report_event:
+            monitor_handler.collect_and_send_events()
+
+            telemetry_events_list = patch_report_event.call_args_list[0][0][0]
+            self.assertEqual(len(telemetry_events_list.events), 2)
+
+            for event in telemetry_events_list.events:
+                # All sysinfo parameters coming from the agent have to be present in the telemetry event to be emitted
+                for param in monitor_handler.sysinfo:
+                    self.assertTrue(param in event.parameters)
+
+                # The container id is a special parameter that is not a part of the static sysinfo parameter list.
+                # The container id value is obtained from the goal state and must be present in all telemetry events.
+                container_id_param = TelemetryEventParam("ContainerId", protocol.client.goal_state.container_id)
+                self.assertTrue(container_id_param in event.parameters)
+
+    @patch("azurelinuxagent.common.protocol.wire.WireClient.send_event")
+    @patch("azurelinuxagent.common.conf.get_lib_dir")
+    def test_collect_and_send_events(self, mock_lib_dir, patch_send_event, *args):
+        mock_lib_dir.return_value = self.lib_dir
+
+        test_data = WireProtocolData(DATA_FILE)
+        monitor_handler, protocol = self._create_mock(test_data, *args)
+        monitor_handler.init_protocols()
+        self.mock_init_sysinfo(monitor_handler)
 
         self.event_logger.save_event(create_event_message(message="Message-Test"))
         monitor_handler.collect_and_send_events()
