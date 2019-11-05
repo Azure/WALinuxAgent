@@ -248,6 +248,11 @@ class UpdateHandler(object):
         """
 
         try:
+            # NOTE: Do not add any telemetry events until after the monitoring handler has been started with the
+            # call to 'monitor_thread.run()'. That method call initializes the protocol, which is needed in order to
+            # load the goal state and update the container id in memory. Any telemetry events sent before this happens
+            # will result in an uninitialized container id value.
+
             logger.info(u"Agent {0} is running as the goal state agent",
                         CURRENT_AGENT)
 
@@ -261,6 +266,8 @@ class UpdateHandler(object):
             from azurelinuxagent.ga.monitor import get_monitor_handler
             monitor_thread = get_monitor_handler()
             monitor_thread.run()
+
+            # NOTE: Any telemetry events added from this point on will be properly populated with the container id.
 
             from azurelinuxagent.ga.env import get_env_handler
             env_thread = get_env_handler()
