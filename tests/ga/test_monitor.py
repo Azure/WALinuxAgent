@@ -92,62 +92,142 @@ def get_event_message(duration, evt_type, is_internal, is_success, message, name
 @patch("azurelinuxagent.common.protocol.healthservice.HealthService._report")
 @patch("azurelinuxagent.common.utils.restutil.http_get")
 class TestMonitor(AgentTestCase):
+
     def test_parse_xml_event(self, *args):
         data_str = load_data('ext/event.xml')
         event = parse_xml_event(data_str)
         self.assertNotEqual(None, event)
         self.assertNotEqual(0, event.parameters)
-        self.assertNotEqual(None, event.parameters[0])
+        self.assertTrue(all(param is not None for param in event.parameters))
 
-    def test_add_sysinfo(self, *args):
+    def test_parse_json_event(self, *args):
+        data_str = load_data('ext/event.json')
+        event = parse_json_event(data_str)
+        self.assertNotEqual(None, event)
+        self.assertNotEqual(0, event.parameters)
+        self.assertTrue(all(param is not None for param in event.parameters))
+
+    def test_add_sysinfo_should_honor_sysinfo_values_from_agent_for_agent_events(self, *args):
         data_str = load_data('ext/event.xml')
         event = parse_xml_event(data_str)
+
+        # Pretend that the test event is coming from the agent by ensuring the event already has a container id
+        # generated on the fly
+        container_id_value = "TEST-CONTAINER-ID-ALREADY-PRESENT-GUID"
+        event.parameters.append(TelemetryEventParam("ContainerId", container_id_value))
         monitor_handler = get_monitor_handler()
 
-        vm_name = 'dummy_vm'
-        tenant_name = 'dummy_tenant'
-        role_name = 'dummy_role'
-        role_instance_name = 'dummy_role_instance'
-        execution_mode_value = "IAAS"
+        sysinfo_vm_name_value = "sysinfo_dummy_vm"
+        sysinfo_tenant_name_value = "sysinfo_dummy_tenant"
+        sysinfo_role_name_value = "sysinfo_dummy_role"
+        sysinfo_role_instance_name_value = "sysinfo_dummy_role_instance"
+        sysinfo_execution_mode_value = "sysinfo_IAAS"
 
         vm_name_param = "VMName"
         tenant_name_param = "TenantName"
         role_name_param = "RoleName"
         role_instance_name_param = "RoleInstanceName"
         execution_mode_param = "ExecutionMode"
+        container_id_param = "ContainerId"
 
         sysinfo = [
-            TelemetryEventParam(role_instance_name_param, role_instance_name),
-            TelemetryEventParam(vm_name_param, vm_name),
-            TelemetryEventParam(execution_mode_param, execution_mode_value),
-            TelemetryEventParam(tenant_name_param, tenant_name),
-            TelemetryEventParam(role_name_param, role_name)
+            TelemetryEventParam(role_instance_name_param, sysinfo_role_instance_name_value),
+            TelemetryEventParam(vm_name_param, sysinfo_vm_name_value),
+            TelemetryEventParam(execution_mode_param, sysinfo_execution_mode_value),
+            TelemetryEventParam(tenant_name_param, sysinfo_tenant_name_value),
+            TelemetryEventParam(role_name_param, sysinfo_role_name_value)
         ]
         monitor_handler.sysinfo = sysinfo
         monitor_handler.add_sysinfo(event)
 
         self.assertNotEqual(None, event)
         self.assertNotEqual(0, event.parameters)
-        self.assertNotEqual(None, event.parameters[0])
+        self.assertTrue(all(param is not None for param in event.parameters))
+
         counter = 0
         for p in event.parameters:
             if p.name == vm_name_param:
-                self.assertEqual(vm_name, p.value)
+                self.assertEqual(sysinfo_vm_name_value, p.value)
                 counter += 1
             elif p.name == tenant_name_param:
-                self.assertEqual(tenant_name, p.value)
+                self.assertEqual(sysinfo_tenant_name_value, p.value)
                 counter += 1
             elif p.name == role_name_param:
-                self.assertEqual(role_name, p.value)
+                self.assertEqual(sysinfo_role_name_value, p.value)
                 counter += 1
             elif p.name == role_instance_name_param:
-                self.assertEqual(role_instance_name, p.value)
+                self.assertEqual(sysinfo_role_instance_name_value, p.value)
                 counter += 1
             elif p.name == execution_mode_param:
-                self.assertEqual(execution_mode_value, p.value)
+                self.assertEqual(sysinfo_execution_mode_value, p.value)
+                counter += 1
+            elif p.name == container_id_param:
+                self.assertEqual(container_id_value, p.value)
                 counter += 1
 
-        self.assertEqual(5, counter)
+        self.assertEqual(6, counter)
+
+    def test_add_sysinfo_should_honor_sysinfo_values_from_agent_for_extension_events(self, *args):
+        # The difference between agent and extension events is that extension events don't have the container id
+        # populated on the fly like the agent events do. Ensure the container id is populated in add_sysinfo.
+        data_str = load_data('ext/event.xml')
+        event = parse_xml_event(data_str)
+        monitor_handler = get_monitor_handler()
+
+        # Prepare the os environment variable to read the container id value from
+        container_id_value = "TEST-CONTAINER-ID-ADDED-IN-SYSINFO-GUID"
+        os.environ[CONTAINER_ID_ENV_VARIABLE] = container_id_value
+
+        sysinfo_vm_name_value = "sysinfo_dummy_vm"
+        sysinfo_tenant_name_value = "sysinfo_dummy_tenant"
+        sysinfo_role_name_value = "sysinfo_dummy_role"
+        sysinfo_role_instance_name_value = "sysinfo_dummy_role_instance"
+        sysinfo_execution_mode_value = "sysinfo_IAAS"
+
+        vm_name_param = "VMName"
+        tenant_name_param = "TenantName"
+        role_name_param = "RoleName"
+        role_instance_name_param = "RoleInstanceName"
+        execution_mode_param = "ExecutionMode"
+        container_id_param = "ContainerId"
+
+        sysinfo = [
+            TelemetryEventParam(role_instance_name_param, sysinfo_role_instance_name_value),
+            TelemetryEventParam(vm_name_param, sysinfo_vm_name_value),
+            TelemetryEventParam(execution_mode_param, sysinfo_execution_mode_value),
+            TelemetryEventParam(tenant_name_param, sysinfo_tenant_name_value),
+            TelemetryEventParam(role_name_param, sysinfo_role_name_value)
+        ]
+        monitor_handler.sysinfo = sysinfo
+        monitor_handler.add_sysinfo(event)
+
+        self.assertNotEqual(None, event)
+        self.assertNotEqual(0, event.parameters)
+        self.assertTrue(all(param is not None for param in event.parameters))
+
+        counter = 0
+        for p in event.parameters:
+            if p.name == vm_name_param:
+                self.assertEqual(sysinfo_vm_name_value, p.value)
+                counter += 1
+            elif p.name == tenant_name_param:
+                self.assertEqual(sysinfo_tenant_name_value, p.value)
+                counter += 1
+            elif p.name == role_name_param:
+                self.assertEqual(sysinfo_role_name_value, p.value)
+                counter += 1
+            elif p.name == role_instance_name_param:
+                self.assertEqual(sysinfo_role_instance_name_value, p.value)
+                counter += 1
+            elif p.name == execution_mode_param:
+                self.assertEqual(sysinfo_execution_mode_value, p.value)
+                counter += 1
+            elif p.name == container_id_param:
+                self.assertEqual(container_id_value, p.value)
+                counter += 1
+
+        self.assertEqual(6, counter)
+        os.environ.pop(CONTAINER_ID_ENV_VARIABLE)
 
     @patch("azurelinuxagent.ga.monitor.MonitorHandler.send_telemetry_heartbeat")
     @patch("azurelinuxagent.ga.monitor.MonitorHandler.collect_and_send_events")
@@ -414,7 +494,7 @@ class TestEventMonitoring(AgentTestCase):
         self.event_logger.save_event(create_event_message(message="Message-Test"))
         monitor_handler.collect_and_send_events()
 
-        # Validating the crafted message by the collect_and_sent_event call.
+        # Validating the crafted message by the collect_and_send_events call.
         self.assertEqual(1, patch_send_event.call_count)
         send_event_call_args = protocol.client.send_event.call_args[0]
         sample_message = '<Event id="1">' \
@@ -440,7 +520,8 @@ class TestEventMonitoring(AgentTestCase):
                          '<Param Name="SubscriptionId" Value="DummySubId" T="mt:wstr" />' \
                          '<Param Name="ResourceGroupName" Value="DummyRG" T="mt:wstr" />' \
                          '<Param Name="VMId" Value="DummyVmId" T="mt:wstr" />' \
-                         '<Param Name="ImageOrigin" Value="1" T="mt:uint64" />]]>' \
+                         '<Param Name="ImageOrigin" Value="1" T="mt:uint64" />'\
+                         '<Param Name="ContainerId" Value="c6d5526c-5ac2-4200-b6e2-56f2b70c5ab2" T="mt:wstr" />]]>'\
                          '</Event>'.format(AGENT_VERSION)
 
         self.assertEqual(sample_message, send_event_call_args[1])
