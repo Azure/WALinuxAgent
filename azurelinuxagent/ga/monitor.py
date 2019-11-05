@@ -230,7 +230,7 @@ class MonitorHandler(object):
         Periodically read, parse, and send events located in the events folder. Currently, this is done every minute.
         Any .tld file dropped in the events folder will be emitted. These event files can be created either by the
         agent or the extensions. We don't have control over extension's events parameters, but we will override
-        any values they might have set for sys_info parameters:
+        any values they might have set for sys_info parameters.
         """
         if self.last_event_collection is None:
             self.last_event_collection = datetime.datetime.utcnow() - MonitorHandler.EVENT_COLLECTION_PERIOD
@@ -310,7 +310,7 @@ class MonitorHandler(object):
         This method is called after parsing the event file in the events folder and before emitting it. This means
         all events, either coming from the agent or from the extensions, are passed through this method. The purpose
         is to add a static list of sys_info parameters such as VMName, Region, RAM, etc. If the sys_info parameters
-        are already populated in the event, they are not overwritten.
+        are already populated in the event, they will be overwritten by the sys_info values obtained from the agent.
         Since the ContainerId parameter is only populated on the fly for the agent events because it is not a static
         sys_info parameter, an event coming from an extension will not have it, so we explicitly add it.
         :param event: Event to be enriched with sys_info parameters
