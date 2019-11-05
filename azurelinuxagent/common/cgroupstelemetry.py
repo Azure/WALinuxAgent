@@ -140,38 +140,54 @@ class CGroupsTelemetry(object):
 
 class CgroupMetrics(object):
     def __init__(self):
-        self._memory_usage = Metric()
-        self._max_memory_usage = Metric()
-        self._cpu_usage = Metric()
+        self._memory_usage = ResourceMetrics()
+        self._max_memory_usage = ResourceMetrics()
+        self._cpu_usage = ResourceMetrics()
+
+        self._memory_usage_from_resource = ResourceMetrics()
+        self._memory_usage_from_proc_statm = ResourceMetrics()
+
         self.marked_for_delete = False
 
     def collect_data(self, cgroup):
         # noinspection PyBroadException
         try:
             if cgroup.controller == "cpu":
-                self._cpu_usage.append(cgroup.get_cpu_usage())
+                self._cpu_usage.metric.append(cgroup.get_cpu_usage())
             elif cgroup.controller == "memory":
-                self._memory_usage.append(cgroup.get_memory_usage())
-                self._max_memory_usage.append(cgroup.get_max_memory_usage())
+                self._memory_usage.metric.append(cgroup.get_memory_usage())
+                self._max_memory_usage.metric.append(cgroup.get_max_memory_usage())
             else:
-                raise CGroupsException('CGroup controller {0} is not supported'.format(controller))
+                raise CGroupsException('CGroup controller {0} is not supported'.format(cgroup.controller))
         except Exception as e:
             if not isinstance(e, (IOError, OSError)) or e.errno != errno.ENOENT:
                 logger.periodic_warn(logger.EVERY_HALF_HOUR, 'Could not collect metrics for cgroup {0}. Error : {1}'.format(cgroup.path, ustr(e)))
 
     def get_memory_usage(self):
-        return self._memory_usage
+        return self._memory_usage.metric
 
     def get_max_memory_usage(self):
-        return self._max_memory_usage
+        return self._max_memory_usage.metric
 
     def get_cpu_usage(self):
-        return self._cpu_usage
+        return self._cpu_usage.metric
+
+    def get_memory_usage_from_resource(self):
+        return self._memory_usage_from_resource.metric
+
+    def get_max_memory_usage_from_proc_statm(self):
+        return self._memory_usage_from_proc_statm.metric
 
     def clear(self):
-        self._memory_usage.clear()
-        self._max_memory_usage.clear()
-        self._cpu_usage.clear()
+        self._memory_usage.metric.clear()
+        self._max_memory_usage.metric.clear()
+        self._cpu_usage.metric.clear()
+
+
+class ResourceMetrics(object):
+    def __init__(self):
+        self.process_id = None
+        self.metric = Metric()
 
 
 class Metric(object):
