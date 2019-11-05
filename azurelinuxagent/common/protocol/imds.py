@@ -2,6 +2,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 import json
 import re
+from collections import namedtuple
 
 import azurelinuxagent.common.utils.restutil as restutil
 from azurelinuxagent.common.exception import HttpError, ResourceGoneError
@@ -20,6 +21,7 @@ IMDS_IMAGE_ORIGIN_CUSTOM = 1
 IMDS_IMAGE_ORIGIN_ENDORSED = 2
 IMDS_IMAGE_ORIGIN_PLATFORM = 3
 
+MetadataResult = namedtuple('MetadataResult', ['success', 'service_error', 'response'])
 IMDS_RESPONSE_SUCCESS = 0
 IMDS_RESPONSE_ERROR = 1
 IMDS_CONNECTION_ERROR = 2
@@ -281,7 +283,7 @@ class ImdsClient(object):
                 return IMDS_RESPONSE_ERROR, "IMDS error in /metadata/{0}: Throttled".format(resource_path)
             if self._regex_ioerror.match(msg):
                 logger.periodic_warn(logger.EVERY_FIFTEEN_MINUTES,
-                                     "[PERIODIC] Unable to connect to IMDS endpoint {0}".format(endpoint))
+                                     "[PERIODIC] [IMDS_CONNECTION_ERROR] Unable to connect to IMDS endpoint {0}".format(endpoint))
                 return IMDS_CONNECTION_ERROR, "IMDS error in /metadata/{0}: Unable to connect to endpoint".format(resource_path)
             return IMDS_INTERNAL_SERVER_ERROR, "IMDS error in /metadata/{0}: {1}".format(resource_path, msg)
 
@@ -301,10 +303,8 @@ class ImdsClient(object):
 
         :param str resource_path: path of IMDS resource
         :param bool is_health: True if for health/heartbeat, False otherwise
-        :return: Tuple<is_request_success:bool, is_service_error:bool, response:str>
-            is_request_success: True for successful response, False otherwise
-            is_service_error: True when service returned an error, False for connection errors
-            response: response from IMDS on successful response, failure message otherwise
+        :return: instance of MetadataResult
+        :rtype: MetadataResult
         """
         headers = self._health_headers if is_health else self._headers
         endpoint = IMDS_ENDPOINT
@@ -312,18 +312,18 @@ class ImdsClient(object):
         status, resp = self._get_metadata_from_endpoint(endpoint, resource_path, headers)
         if status == IMDS_CONNECTION_ERROR:
             logger.periodic_warn(logger.EVERY_FIFTEEN_MINUTES,
-                                 "[PERIODIC] Unable to connect to primary IMDS endpoint {0}".format(endpoint))
+                                 "[PERIODIC] [IMDS_CONNECTION_ERROR] Unable to connect to primary IMDS endpoint {0}".format(endpoint))
             endpoint = self._protocol_util.get_wireserver_endpoint()
             status, resp = self._get_metadata_from_endpoint(endpoint, resource_path, headers)
 
         if status == IMDS_RESPONSE_SUCCESS:
-            return True, False, resp
+            return MetadataResult(True, False, resp)
         elif status == IMDS_INTERNAL_SERVER_ERROR:
-            return False, True, resp
+            return MetadataResult(False, True, resp)
         elif status == IMDS_CONNECTION_ERROR:
             logger.periodic_warn(logger.EVERY_FIFTEEN_MINUTES,
-                                 "[PERIODIC] Unable to connect to backup IMDS endpoint {0}".format(endpoint))
-        return False, False, resp
+                                 "[PERIODIC] [IMDS_CONNECTION_ERROR] Unable to connect to backup IMDS endpoint {0}".format(endpoint))
+        return MetadataResult(False, False, resp)
 
     def get_compute(self):
         """
@@ -334,11 +334,11 @@ class ImdsClient(object):
         """
 
         # ensure we get a 200
-        success, service_error, resp = self.get_metadata('instance/compute', is_health=False)
-        if not success:
-            raise ValueError(resp)
+        result = self.get_metadata('instance/compute', is_health=False)
+        if not result.success:
+            raise HttpError(result.response)
 
-        data = json.loads(ustr(resp, encoding="utf-8"))
+        data = json.loads(ustr(result.response, encoding="utf-8"))
 
         compute_info = ComputeInfo()
         set_properties('compute', compute_info, data)
@@ -357,14 +357,14 @@ class ImdsClient(object):
         """
 
         # ensure we get a 200
-        success, is_service_error, resp = self.get_metadata('instance', is_health=True)
-        if not success:
+        result = self.get_metadata('instance', is_health=True)
+        if not result.success:
             # we should only return False when the service is unhealthy
-            return (not is_service_error), resp
+            return (not result.service_error), result.response
 
         # ensure the response is valid json
         try:
-            json_data = json.loads(ustr(resp, encoding="utf-8"))
+            json_data = json.loads(ustr(result.response, encoding="utf-8"))
         except Exception as e:
             return False, "JSON parsing failed: {0}".format(ustr(e))
 
