@@ -33,10 +33,10 @@ import azurelinuxagent.common.utils.textutil as textutil
 from azurelinuxagent.common.osutil.default import DefaultOSUtil
 
 
-class DebianOSUtil(DefaultOSUtil):
+class DebianOSBaseUtil(DefaultOSUtil):
 
     def __init__(self):
-        super(DebianOSUtil, self).__init__()
+        super(DebianOSBaseUtil, self).__init__()
         self.jit_enabled = True
 
     def restart_ssh_service(self):
@@ -61,10 +61,10 @@ class DebianOSUtil(DefaultOSUtil):
         return self.get_endpoint_from_leases_path('/var/lib/dhcp/dhclient.*.leases')
 
 
-class DebianOS8Util(DebianOSUtil):
+class DebianOSModernUtil(DebianOSBaseUtil):
 
     def __init__(self):
-        super(DebianOS8Util, self).__init__()
+        super(DebianOSModernUtil, self).__init__()
         self.jit_enabled = True
         self.service_name = self.get_service_name()
 

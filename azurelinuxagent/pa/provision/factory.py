@@ -16,19 +16,24 @@
 #
 
 import azurelinuxagent.common.conf as conf
-
+from azurelinuxagent.common import logger
 from azurelinuxagent.common.version import DISTRO_NAME, DISTRO_VERSION, \
                                      DISTRO_FULL_NAME
 
 from .default import ProvisionHandler
-from .cloudinit import CloudInitProvisionHandler
+from .cloudinit import CloudInitProvisionHandler, cloud_init_is_enabled
 
-def get_provision_handler(distro_name=DISTRO_NAME, 
+def get_provision_handler(distro_name=DISTRO_NAME,
                             distro_version=DISTRO_VERSION,
                             distro_full_name=DISTRO_FULL_NAME):
 
-    if conf.get_provision_cloudinit():
+    provisioning_agent = conf.get_provisioning_agent()
+
+    if provisioning_agent == 'cloud-init' or (
+            provisioning_agent == 'auto' and
+            cloud_init_is_enabled()):
+        logger.info('Using cloud-init for provisioning')
         return CloudInitProvisionHandler()
 
+    logger.info('Using waagent for provisioning')
     return ProvisionHandler()
-

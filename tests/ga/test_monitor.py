@@ -33,7 +33,7 @@ from azurelinuxagent.common import logger
 from azurelinuxagent.common.cgroup import CGroup
 from azurelinuxagent.common.cgroupstelemetry import CGroupsTelemetry
 from azurelinuxagent.common.datacontract import get_properties
-from azurelinuxagent.common.event import EventLogger, WALAEventOperation
+from azurelinuxagent.common.event import EventLogger, WALAEventOperation, CONTAINER_ID_ENV_VARIABLE
 from azurelinuxagent.common.exception import HttpError
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.protocol.imds import ComputeInfo
@@ -41,11 +41,11 @@ from azurelinuxagent.common.protocol.restapi import VMInfo
 from azurelinuxagent.common.protocol.wire import WireProtocol
 from azurelinuxagent.common.telemetryevent import TelemetryEventParam, TelemetryEvent
 from azurelinuxagent.common.utils import restutil, fileutil
-from azurelinuxagent.common.version import AGENT_VERSION, CURRENT_VERSION
+from azurelinuxagent.common.version import AGENT_VERSION, CURRENT_VERSION, AGENT_NAME
 from azurelinuxagent.ga.monitor import parse_xml_event, get_monitor_handler, MonitorHandler, \
-    generate_extension_metrics_telemetry_dictionary
+    generate_extension_metrics_telemetry_dictionary, parse_json_event
 from tests.common.test_cgroupstelemetry import make_new_cgroup, consume_cpu_time, consume_memory
-from tests.protocol.mockwiredata import WireProtocolData, DATA_FILE
+from tests.protocol.mockwiredata import WireProtocolData, DATA_FILE, conf
 from tests.tools import load_data, AgentTestCase, data_dir, are_cgroups_enabled, i_am_root, skip_if_predicate_false
 
 
@@ -107,62 +107,142 @@ def get_event_message(duration, evt_type, is_internal, is_success, message, name
 @patch("azurelinuxagent.common.protocol.healthservice.HealthService._report")
 @patch("azurelinuxagent.common.utils.restutil.http_get")
 class TestMonitor(AgentTestCase):
+
     def test_parse_xml_event(self, *args):
         data_str = load_data('ext/event.xml')
         event = parse_xml_event(data_str)
         self.assertNotEqual(None, event)
         self.assertNotEqual(0, event.parameters)
-        self.assertNotEqual(None, event.parameters[0])
+        self.assertTrue(all(param is not None for param in event.parameters))
 
-    def test_add_sysinfo(self, *args):
+    def test_parse_json_event(self, *args):
+        data_str = load_data('ext/event.json')
+        event = parse_json_event(data_str)
+        self.assertNotEqual(None, event)
+        self.assertNotEqual(0, event.parameters)
+        self.assertTrue(all(param is not None for param in event.parameters))
+
+    def test_add_sysinfo_should_honor_sysinfo_values_from_agent_for_agent_events(self, *args):
         data_str = load_data('ext/event.xml')
         event = parse_xml_event(data_str)
+
+        # Pretend that the test event is coming from the agent by ensuring the event already has a container id
+        # generated on the fly
+        container_id_value = "TEST-CONTAINER-ID-ALREADY-PRESENT-GUID"
+        event.parameters.append(TelemetryEventParam("ContainerId", container_id_value))
         monitor_handler = get_monitor_handler()
 
-        vm_name = 'dummy_vm'
-        tenant_name = 'dummy_tenant'
-        role_name = 'dummy_role'
-        role_instance_name = 'dummy_role_instance'
-        execution_mode_value = "IAAS"
+        sysinfo_vm_name_value = "sysinfo_dummy_vm"
+        sysinfo_tenant_name_value = "sysinfo_dummy_tenant"
+        sysinfo_role_name_value = "sysinfo_dummy_role"
+        sysinfo_role_instance_name_value = "sysinfo_dummy_role_instance"
+        sysinfo_execution_mode_value = "sysinfo_IAAS"
 
         vm_name_param = "VMName"
         tenant_name_param = "TenantName"
         role_name_param = "RoleName"
         role_instance_name_param = "RoleInstanceName"
         execution_mode_param = "ExecutionMode"
+        container_id_param = "ContainerId"
 
         sysinfo = [
-            TelemetryEventParam(role_instance_name_param, role_instance_name),
-            TelemetryEventParam(vm_name_param, vm_name),
-            TelemetryEventParam(execution_mode_param, execution_mode_value),
-            TelemetryEventParam(tenant_name_param, tenant_name),
-            TelemetryEventParam(role_name_param, role_name)
+            TelemetryEventParam(role_instance_name_param, sysinfo_role_instance_name_value),
+            TelemetryEventParam(vm_name_param, sysinfo_vm_name_value),
+            TelemetryEventParam(execution_mode_param, sysinfo_execution_mode_value),
+            TelemetryEventParam(tenant_name_param, sysinfo_tenant_name_value),
+            TelemetryEventParam(role_name_param, sysinfo_role_name_value)
         ]
         monitor_handler.sysinfo = sysinfo
         monitor_handler.add_sysinfo(event)
 
         self.assertNotEqual(None, event)
         self.assertNotEqual(0, event.parameters)
-        self.assertNotEqual(None, event.parameters[0])
+        self.assertTrue(all(param is not None for param in event.parameters))
+
         counter = 0
         for p in event.parameters:
             if p.name == vm_name_param:
-                self.assertEqual(vm_name, p.value)
+                self.assertEqual(sysinfo_vm_name_value, p.value)
                 counter += 1
             elif p.name == tenant_name_param:
-                self.assertEqual(tenant_name, p.value)
+                self.assertEqual(sysinfo_tenant_name_value, p.value)
                 counter += 1
             elif p.name == role_name_param:
-                self.assertEqual(role_name, p.value)
+                self.assertEqual(sysinfo_role_name_value, p.value)
                 counter += 1
             elif p.name == role_instance_name_param:
-                self.assertEqual(role_instance_name, p.value)
+                self.assertEqual(sysinfo_role_instance_name_value, p.value)
                 counter += 1
             elif p.name == execution_mode_param:
-                self.assertEqual(execution_mode_value, p.value)
+                self.assertEqual(sysinfo_execution_mode_value, p.value)
+                counter += 1
+            elif p.name == container_id_param:
+                self.assertEqual(container_id_value, p.value)
                 counter += 1
 
-        self.assertEqual(5, counter)
+        self.assertEqual(6, counter)
+
+    def test_add_sysinfo_should_honor_sysinfo_values_from_agent_for_extension_events(self, *args):
+        # The difference between agent and extension events is that extension events don't have the container id
+        # populated on the fly like the agent events do. Ensure the container id is populated in add_sysinfo.
+        data_str = load_data('ext/event.xml')
+        event = parse_xml_event(data_str)
+        monitor_handler = get_monitor_handler()
+
+        # Prepare the os environment variable to read the container id value from
+        container_id_value = "TEST-CONTAINER-ID-ADDED-IN-SYSINFO-GUID"
+        os.environ[CONTAINER_ID_ENV_VARIABLE] = container_id_value
+
+        sysinfo_vm_name_value = "sysinfo_dummy_vm"
+        sysinfo_tenant_name_value = "sysinfo_dummy_tenant"
+        sysinfo_role_name_value = "sysinfo_dummy_role"
+        sysinfo_role_instance_name_value = "sysinfo_dummy_role_instance"
+        sysinfo_execution_mode_value = "sysinfo_IAAS"
+
+        vm_name_param = "VMName"
+        tenant_name_param = "TenantName"
+        role_name_param = "RoleName"
+        role_instance_name_param = "RoleInstanceName"
+        execution_mode_param = "ExecutionMode"
+        container_id_param = "ContainerId"
+
+        sysinfo = [
+            TelemetryEventParam(role_instance_name_param, sysinfo_role_instance_name_value),
+            TelemetryEventParam(vm_name_param, sysinfo_vm_name_value),
+            TelemetryEventParam(execution_mode_param, sysinfo_execution_mode_value),
+            TelemetryEventParam(tenant_name_param, sysinfo_tenant_name_value),
+            TelemetryEventParam(role_name_param, sysinfo_role_name_value)
+        ]
+        monitor_handler.sysinfo = sysinfo
+        monitor_handler.add_sysinfo(event)
+
+        self.assertNotEqual(None, event)
+        self.assertNotEqual(0, event.parameters)
+        self.assertTrue(all(param is not None for param in event.parameters))
+
+        counter = 0
+        for p in event.parameters:
+            if p.name == vm_name_param:
+                self.assertEqual(sysinfo_vm_name_value, p.value)
+                counter += 1
+            elif p.name == tenant_name_param:
+                self.assertEqual(sysinfo_tenant_name_value, p.value)
+                counter += 1
+            elif p.name == role_name_param:
+                self.assertEqual(sysinfo_role_name_value, p.value)
+                counter += 1
+            elif p.name == role_instance_name_param:
+                self.assertEqual(sysinfo_role_instance_name_value, p.value)
+                counter += 1
+            elif p.name == execution_mode_param:
+                self.assertEqual(sysinfo_execution_mode_value, p.value)
+                counter += 1
+            elif p.name == container_id_param:
+                self.assertEqual(container_id_value, p.value)
+                counter += 1
+
+        self.assertEqual(6, counter)
+        os.environ.pop(CONTAINER_ID_ENV_VARIABLE)
 
     @patch("azurelinuxagent.ga.monitor.MonitorHandler.send_telemetry_heartbeat")
     @patch("azurelinuxagent.ga.monitor.MonitorHandler.collect_and_send_events")
@@ -355,7 +435,6 @@ class TestMonitor(AgentTestCase):
         monitor_handler.stop()
 
 
-@patch('azurelinuxagent.common.event.EventLogger.add_event')
 @patch('azurelinuxagent.common.osutil.get_osutil')
 @patch("azurelinuxagent.common.protocol.healthservice.HealthService._report")
 @patch("azurelinuxagent.common.protocol.wire.CryptUtil")
@@ -403,16 +482,8 @@ class TestEventMonitoring(AgentTestCase):
     @patch("platform.system", return_value="Linux")
     @patch("azurelinuxagent.common.osutil.default.DefaultOSUtil.get_processor_cores", return_value=4)
     @patch("azurelinuxagent.common.osutil.default.DefaultOSUtil.get_total_mem", return_value=10000)
-    @patch("azurelinuxagent.common.protocol.wire.WireClient.send_event")
-    @patch("azurelinuxagent.common.conf.get_lib_dir")
-    def test_collect_and_send_events(self, mock_lib_dir, patch_send_event, patch_get_total_mem, patch_os_cores,
-                                     patch_platform_system, patch_platform_release, patch_get_vminfo, patch_get_compute,
-                                     *args):
-        mock_lib_dir.return_value = self.lib_dir
-
-        test_data = WireProtocolData(DATA_FILE)
-        monitor_handler, protocol = self._create_mock(test_data, *args)
-        monitor_handler.init_protocols()
+    def mock_init_sysinfo(self, monitor_handler, *args):
+        # Mock all values that are dependent on the environment to ensure consistency across testing environments.
         monitor_handler.init_sysinfo()
 
         # Replacing OSVersion to make it platform agnostic. We can't mock global constants (eg. DISTRO_NAME,
@@ -426,10 +497,61 @@ class TestEventMonitoring(AgentTestCase):
                                                        "DISTRO_CODE_NAME",
                                                        platform.release())
 
+    @patch("azurelinuxagent.common.conf.get_lib_dir")
+    def test_collect_and_send_events_should_prepare_all_fields_for_all_event_files(self, mock_lib_dir, *args):
+        # Test collecting and sending both agent and extension events from the moment they're created to the moment
+        # they are to be reported. Ensure all necessary fields from sysinfo are present, as well as the container id.
+        mock_lib_dir.return_value = self.lib_dir
+
+        test_data = WireProtocolData(DATA_FILE)
+        monitor_handler, protocol = self._create_mock(test_data, *args)
+        monitor_handler.init_protocols()
+        self.mock_init_sysinfo(monitor_handler)
+
+        # Add agent event file
+        self.event_logger.add_event(name=AGENT_NAME,
+                                    version=CURRENT_VERSION,
+                                    op=WALAEventOperation.HeartBeat,
+                                    is_success=True,
+                                    message="Heartbeat",
+                                    log_event=False)
+
+        # Add extension event file the way extension do it, by dropping a .tld file in the events folder
+        source_file = os.path.join(data_dir, "ext/dsc_event.json")
+        dest_file = os.path.join(conf.get_lib_dir(), "events", "dsc_event.tld")
+        shutil.copyfile(source_file, dest_file)
+
+        # Collect these events and assert they are being sent with the correct sysinfo parameters from the agent
+        with patch.object(protocol, "report_event") as patch_report_event:
+            monitor_handler.collect_and_send_events()
+
+            telemetry_events_list = patch_report_event.call_args_list[0][0][0]
+            self.assertEqual(len(telemetry_events_list.events), 2)
+
+            for event in telemetry_events_list.events:
+                # All sysinfo parameters coming from the agent have to be present in the telemetry event to be emitted
+                for param in monitor_handler.sysinfo:
+                    self.assertTrue(param in event.parameters)
+
+                # The container id is a special parameter that is not a part of the static sysinfo parameter list.
+                # The container id value is obtained from the goal state and must be present in all telemetry events.
+                container_id_param = TelemetryEventParam("ContainerId", protocol.client.goal_state.container_id)
+                self.assertTrue(container_id_param in event.parameters)
+
+    @patch("azurelinuxagent.common.protocol.wire.WireClient.send_event")
+    @patch("azurelinuxagent.common.conf.get_lib_dir")
+    def test_collect_and_send_events(self, mock_lib_dir, patch_send_event, *args):
+        mock_lib_dir.return_value = self.lib_dir
+
+        test_data = WireProtocolData(DATA_FILE)
+        monitor_handler, protocol = self._create_mock(test_data, *args)
+        monitor_handler.init_protocols()
+        self.mock_init_sysinfo(monitor_handler)
+
         self.event_logger.save_event(create_dummy_event(message="Message-Test"))
         monitor_handler.collect_and_send_events()
 
-        # Validating the crafted message by the collect_and_sent_event call.
+        # Validating the crafted message by the collect_and_send_events call.
         self.assertEqual(1, patch_send_event.call_count)
         send_event_call_args = protocol.client.send_event.call_args[0]
         sample_message = '<Event id="1">' \
@@ -454,7 +576,8 @@ class TestEventMonitoring(AgentTestCase):
                          '<Param Name="SubscriptionId" Value="DummySubId" T="mt:wstr" />' \
                          '<Param Name="ResourceGroupName" Value="DummyRG" T="mt:wstr" />' \
                          '<Param Name="VMId" Value="DummyVmId" T="mt:wstr" />' \
-                         '<Param Name="ImageOrigin" Value="1" T="mt:uint64" />]]>' \
+                         '<Param Name="ImageOrigin" Value="1" T="mt:uint64" />'\
+                         '<Param Name="ContainerId" Value="c6d5526c-5ac2-4200-b6e2-56f2b70c5ab2" T="mt:wstr" />]]>'\
                          '</Event>'.format(AGENT_VERSION)
 
         self.assertEqual(sample_message, send_event_call_args[1])
@@ -633,7 +756,7 @@ class TestExtensionMetricsDataTelemetry(AgentTestCase):
 
     def setUp(self):
         AgentTestCase.setUp(self)
-        CGroupsTelemetry.cleanup()
+        CGroupsTelemetry.reset()
 
     @patch('azurelinuxagent.common.event.EventLogger.add_event')
     @patch("azurelinuxagent.common.cgroupstelemetry.CGroupsTelemetry.poll_all_tracked")
