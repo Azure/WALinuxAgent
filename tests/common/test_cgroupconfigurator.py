@@ -103,6 +103,18 @@ class CGroupConfiguratorTestCase(AgentTestCase):
                 CGroupConfigurator.get_instance().enable()
             self.assertIn("cgroups are not supported", str(context_manager.exception))
 
+    def test_disable_should_reset_tracked_cgroups(self):
+        configurator = CGroupConfigurator.get_instance()
+
+        # Start tracking a couple of dummy cgroups
+        CGroupsTelemetry.track_cgroup(CGroup("dummy", "/sys/fs/cgroup/memory/system.slice/dummy.service", "cpu"))
+        CGroupsTelemetry.track_cgroup(CGroup("dummy", "/sys/fs/cgroup/memory/system.slice/dummy.service", "memory"))
+
+        configurator.disable()
+
+        self.assertFalse(configurator.enabled())
+        self.assertEquals(len(CGroupsTelemetry._tracked), 0)
+
     def test_cgroup_operations_should_not_invoke_the_cgroup_api_when_cgroups_are_not_enabled(self):
         configurator = CGroupConfigurator.get_instance()
         configurator.disable()
