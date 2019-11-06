@@ -33,7 +33,7 @@ class TestAgentError(AgentTestCase):
         for exception_name, exception_class in TestAgentError.agent_exceptions:
             exception_instance = exception_class("A test Message")
 
-            self.assertEqual(exception_instance.message, "[{0}] A test Message".format(exception_name))
+            self.assertEqual(str(exception_instance), "[{0}] A test Message".format(exception_name))
 
     def test_agent_exceptions_should_include_the_inner_exception_in_their_error_message(self):
         inner_exception = Exception("The inner exception")
@@ -41,4 +41,4 @@ class TestAgentError(AgentTestCase):
         for exception_name, exception_class in TestAgentError.agent_exceptions:
             exception_instance = exception_class("A test Message", inner_exception)
 
-            self.assertEqual(exception_instance.message, "[{0}] A test Message\nInner error: The inner exception".format(exception_name))
+            self.assertEqual(str(exception_instance), "[{0}] A test Message\nInner error: The inner exception".format(exception_name))
