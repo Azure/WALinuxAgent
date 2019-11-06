@@ -235,7 +235,7 @@ class ComputeInfo(DataContract):
 
         except Exception as e:
             logger.periodic_warn(logger.EVERY_FIFTEEN_MINUTES,
-                                 "[PERIODIC] Could not determine the image origin from IMDS: {0}".format(str(e)))
+                                 "[PERIODIC] Could not determine the image origin from IMDS: {0}".format(ustr(e)))
             return IMDS_IMAGE_ORIGIN_UNKNOWN
 
 
