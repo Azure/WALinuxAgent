@@ -320,36 +320,26 @@ class MonitorHandler(object):
         sysinfo_names = [v.name for v in self.sysinfo]
         final_parameters = []
 
+        # Refer: azurelinuxagent.common.event.EventLogger.add_default_parameters_to_event for agent specific values.
+        #
+        # Default fields are only populated by Agent and not the extension. Agent will fill up any event if they don't
+        # have the default params. Example: GAVersion and ContainerId are populated for agent events on the fly,
+        # but not for extension events. Add it if it's missing.
+        default_values = [("ContainerId", get_container_id_from_env()), ("GAVersion", CURRENT_AGENT),
+                          ("OpcodeName", ""), ("EventTid", 0), ("EventPid", 0), ("TaskName", ""), ("KeywordName", "")]
+
         for param in event.parameters:
             # Discard any sys_info parameters already in the event, since they will be overwritten
             if param.name in sysinfo_names:
                 continue
-
             final_parameters.append(param)
 
         # Add sys_info params populated by the agent
         final_parameters.extend(self.sysinfo)
 
-        if "ContainerId" not in event:
-            # ContainerId is populated for agent events on the fly, but not for extension events. Add it if it's missing.
-            final_parameters.append(
-                TelemetryEventParam("ContainerId", get_container_id_from_env()))
-        if "GAVersion" not in event:
-            # GAVersion is populated for agent events on the fly, but not for extension events. Add it if it's missing.
-            final_parameters.append(TelemetryEventParam("GAVersion", CURRENT_AGENT))
-
-        # Default fields are only populated by Agent and not the extension. Agent will fill up any event if they don't
-        # have the default params.
-        if "OpcodeName" not in event:
-            final_parameters.append(TelemetryEventParam("OpcodeName", datetime.datetime.utcnow().__str__()))
-        if "EventTid" not in event:
-            final_parameters.append(TelemetryEventParam("EventTid", ""))
-        if "EventPid" not in event:
-            final_parameters.append(TelemetryEventParam("EventPid", ""))
-        if "TaskName" not in event:
-            final_parameters.append(TelemetryEventParam("TaskName", ""))
-        if "KeywordName" not in event:
-            final_parameters.append(TelemetryEventParam("KeywordName", ""))
+        for default_value in default_values:
+            if default_value[0] not in event:
+                final_parameters.append(TelemetryEventParam(default_value[0], default_value[1]))
 
         event.parameters = final_parameters
 

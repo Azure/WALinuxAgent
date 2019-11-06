@@ -74,7 +74,6 @@ def create_dummy_event(size=0,
                        evt_type="",
                        message="DummyMessage",
                        invalid_chars=False):
-
     return get_event_message(name=size if size != 0 else name,
                              op=op,
                              is_success=is_success,
@@ -124,13 +123,9 @@ class TestMonitor(AgentTestCase):
         self.assertTrue(all(param is not None for param in event.parameters))
 
     def test_add_sysinfo_should_honor_sysinfo_values_from_agent_for_agent_events(self, *args):
-        data_str = load_data('ext/event_from_agent.xml')
-        event = parse_xml_event(data_str)
+        data_str = load_data('ext/event_from_agent.json')
+        event = parse_json_event(data_str)
 
-        # Pretend that the test event is coming from the agent by ensuring the event already has a container id
-        # generated on the fly
-        container_id_value = "TEST-CONTAINER-ID-ALREADY-PRESENT-GUID"
-        event.parameters.append(TelemetryEventParam("ContainerId", container_id_value))
         monitor_handler = get_monitor_handler()
 
         sysinfo_vm_name_value = "sysinfo_dummy_vm"
@@ -138,11 +133,12 @@ class TestMonitor(AgentTestCase):
         sysinfo_role_name_value = "sysinfo_dummy_role"
         sysinfo_role_instance_name_value = "sysinfo_dummy_role_instance"
         sysinfo_execution_mode_value = "sysinfo_IAAS"
+        container_id_value = "TEST-CONTAINER-ID-ALREADY-PRESENT-GUID"
         GAVersion_value = "WALinuxAgent-2.2.44"
-        OpcodeName_value = "10101010"
-        EventTid_value = 140240309798656
+        OpcodeName_value = "2019-11-02 01:42:49.188030"
+        EventTid_value = 140240384030528
         EventPid_value = 108573
-        TaskName_value = "MonitorHandler"
+        TaskName_value = "ExtHandler"
         KeywordName_value = ""
 
         vm_name_param = "VMName"
@@ -174,6 +170,7 @@ class TestMonitor(AgentTestCase):
 
         counter = 0
         for p in event.parameters:
+            print(p.name, p.value)
             if p.name == vm_name_param:
                 self.assertEqual(sysinfo_vm_name_value, p.value)
                 counter += 1
@@ -230,9 +227,9 @@ class TestMonitor(AgentTestCase):
         sysinfo_role_instance_name_value = "sysinfo_dummy_role_instance"
         sysinfo_execution_mode_value = "sysinfo_IAAS"
         GAVersion_value = "WALinuxAgent-2.2.44"
-        OpcodeName_value = "2019-01-01 01:30:00"  # Mocking time below.
-        EventTid_value = ""
-        EventPid_value = ""
+        OpcodeName_value = ""
+        EventTid_value = 0
+        EventPid_value = 0
         TaskName_value = ""
         KeywordName_value = ""
 
@@ -257,16 +254,12 @@ class TestMonitor(AgentTestCase):
             TelemetryEventParam(role_name_param, sysinfo_role_name_value)
         ]
         monitor_handler.sysinfo = sysinfo
-        with patch("azurelinuxagent.ga.monitor.datetime") as patch_datetime:
-            patch_datetime.datetime.utcnow = Mock(return_value=datetime.datetime.strptime("2019-01-01 01:30:00",
-                                                                        '%Y-%m-%d %H:%M:%S'))
-            monitor_handler.add_sysinfo(event)
+        monitor_handler.add_sysinfo(event)
 
         self.assertNotEqual(None, event)
         self.assertNotEqual(0, event.parameters)
         self.assertTrue(all(param is not None for param in event.parameters))
 
-        counter = 0
         counter = 0
         for p in event.parameters:
             if p.name == vm_name_param:
@@ -647,8 +640,8 @@ class TestEventMonitoring(AgentTestCase):
                          '<Param Name="ImageOrigin" Value="1" T="mt:uint64" />' \
                          '<Param Name="ContainerId" Value="c6d5526c-5ac2-4200-b6e2-56f2b70c5ab2" T="mt:wstr" />' \
                          '<Param Name="GAVersion" Value="WALinuxAgent-2.2.44" T="mt:wstr" />' \
-                         '<Param Name="EventTid" Value="" T="mt:wstr" />' \
-                         '<Param Name="EventPid" Value="" T="mt:wstr" />' \
+                         '<Param Name="EventTid" Value="0" T="mt:uint64" />' \
+                         '<Param Name="EventPid" Value="0" T="mt:uint64" />' \
                          '<Param Name="TaskName" Value="" T="mt:wstr" />' \
                          '<Param Name="KeywordName" Value="" T="mt:wstr" />]]>' \
                          '</Event>'.format(AGENT_VERSION)

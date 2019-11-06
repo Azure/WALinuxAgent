@@ -16,7 +16,6 @@
 #
 
 import atexit
-import datetime
 import json
 import os
 import sys
@@ -280,7 +279,7 @@ class EventLogger(object):
         event.parameters.append(TelemetryEventParam('Duration', duration))
         event.parameters.append(TelemetryEventParam('ExtensionType', evt_type))
 
-        self._add_default_parameters_to_event(event)
+        self.add_default_parameters_to_event(event)
         data = get_properties(event)
         try:
             self.save_event(json.dumps(data))
@@ -307,7 +306,7 @@ class EventLogger(object):
         event.parameters.append(TelemetryEventParam('Context2', ''))
         event.parameters.append(TelemetryEventParam('Context3', ''))
 
-        self._add_default_parameters_to_event(event)
+        self.add_default_parameters_to_event(event)
         data = get_properties(event)
         try:
             self.save_event(json.dumps(data))
@@ -335,7 +334,7 @@ class EventLogger(object):
         event.parameters.append(TelemetryEventParam('Instance', instance))
         event.parameters.append(TelemetryEventParam('Value', value))
 
-        self._add_default_parameters_to_event(event)
+        self.add_default_parameters_to_event(event)
         data = get_properties(event)
         try:
             self.save_event(json.dumps(data))
@@ -343,27 +342,26 @@ class EventLogger(object):
             logger.error("{0}", e)
 
     @staticmethod
-    def _add_default_parameters_to_event(event):
+    def add_default_parameters_to_event(event, set_default_values=False):
         # We write the GAVersion here rather than add it in azurelinuxagent.ga.monitor.MonitorHandler.add_sysinfo
         # as there could be a possibility of events being sent with newer version of the agent, rather than the agent
         # version generating the event.
         # Old behavior example: V1 writes the event on the disk and finds an update immediately, and updates. Now the
         # new monitor thread would pick up the events from the disk and send it with the CURRENT_AGENT, which would have
         # newer version of the agent. This causes confusion.
-        event.parameters.append(TelemetryEventParam("GAVersion", CURRENT_AGENT))
-
+        #
         # ContainerId can change due to live migration and we want to preserve the container Id of the container writing
         # the event, rather than sending the event.
-        event.parameters.append(TelemetryEventParam('ContainerId', get_container_id_from_env()))
+        # OpcodeName: This is used as the actual time of event generation.
 
-        # This is used as the actual time of event generation.
-        event.parameters.append(TelemetryEventParam('OpcodeName', datetime.utcnow().__str__()))
+        default_parameters = [("GAVersion", CURRENT_AGENT), ('ContainerId', get_container_id_from_env()),
+                              ('OpcodeName', datetime.utcnow().__str__()),
+                              ('EventTid', threading.current_thread().ident),
+                              ('EventPid', os.getpid()), ("TaskName", threading.current_thread().getName()),
+                              ("KeywordName", '')]
 
-        # Other commong parameters added to the events
-        event.parameters.append(TelemetryEventParam('EventTid', threading.current_thread().ident))
-        event.parameters.append(TelemetryEventParam('EventPid', os.getpid()))
-        event.parameters.append(TelemetryEventParam("TaskName", threading.current_thread().getName()))
-        event.parameters.append(TelemetryEventParam("KeywordName", ''))  # Unused field for now.
+        for param in default_parameters:
+            event.parameters.append(TelemetryEventParam(param[0], param[1]))
 
 
 __event_logger__ = EventLogger()
