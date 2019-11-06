@@ -170,7 +170,6 @@ class TestMonitor(AgentTestCase):
 
         counter = 0
         for p in event.parameters:
-            print(p.name, p.value)
             if p.name == vm_name_param:
                 self.assertEqual(sysinfo_vm_name_value, p.value)
                 counter += 1
