@@ -341,7 +341,7 @@ class MonitorHandler(object):
         # Default fields are only populated by Agent and not the extension. Agent will fill up any event if they don't
         # have the default params.
         if "OpcodeName" not in event:
-            final_parameters.append(TelemetryEventParam("OpcodeName", datetime.utcnow().__str__()))
+            final_parameters.append(TelemetryEventParam("OpcodeName", datetime.datetime.utcnow().__str__()))
         if "EventTid" not in event:
             final_parameters.append(TelemetryEventParam("EventTid", ""))
         if "EventPid" not in event:

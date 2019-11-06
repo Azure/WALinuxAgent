@@ -95,6 +95,7 @@ def get_event_message(duration, evt_type, is_internal, is_success, message, name
     event.parameters.append(TelemetryEventParam('Message', message))
     event.parameters.append(TelemetryEventParam('Duration', duration))
     event.parameters.append(TelemetryEventParam('ExtensionType', evt_type))
+    event.parameters.append(TelemetryEventParam('OpcodeName', '2019-11-06 02:00:44.307835'))
 
     data = get_properties(event)
     return json.dumps(data)
@@ -257,7 +258,7 @@ class TestMonitor(AgentTestCase):
         ]
         monitor_handler.sysinfo = sysinfo
         with patch("azurelinuxagent.ga.monitor.datetime") as patch_datetime:
-            patch_datetime.utcnow = Mock(return_value=datetime.datetime.strptime("2019-01-01 01:30:00",
+            patch_datetime.datetime.utcnow = Mock(return_value=datetime.datetime.strptime("2019-01-01 01:30:00",
                                                                         '%Y-%m-%d %H:%M:%S'))
             monitor_handler.add_sysinfo(event)
 
@@ -613,6 +614,8 @@ class TestEventMonitoring(AgentTestCase):
         self.mock_init_sysinfo(monitor_handler)
 
         self.event_logger.save_event(create_dummy_event(message="Message-Test"))
+
+        monitor_handler.last_event_collection = None
         monitor_handler.collect_and_send_events()
 
         # Validating the crafted message by the collect_and_send_events call.
@@ -627,6 +630,7 @@ class TestEventMonitoring(AgentTestCase):
                          '<Param Name="Message" Value="Message-Test" T="mt:wstr" />' \
                          '<Param Name="Duration" Value="0" T="mt:uint64" />' \
                          '<Param Name="ExtensionType" Value="" T="mt:wstr" />' \
+                         '<Param Name="OpcodeName" Value="2019-11-06 02:00:44.307835" T="mt:wstr" />' \
                          '<Param Name="OSVersion" ' \
                          'Value="Linux:DISTRO_NAME-DISTRO_VERSION-DISTRO_CODE_NAME:platform-release" T="mt:wstr" />' \
                          '<Param Name="ExecutionMode" Value="IAAS" T="mt:wstr" />' \
@@ -640,10 +644,16 @@ class TestEventMonitoring(AgentTestCase):
                          '<Param Name="SubscriptionId" Value="DummySubId" T="mt:wstr" />' \
                          '<Param Name="ResourceGroupName" Value="DummyRG" T="mt:wstr" />' \
                          '<Param Name="VMId" Value="DummyVmId" T="mt:wstr" />' \
-                         '<Param Name="ImageOrigin" Value="1" T="mt:uint64" />'\
-                         '<Param Name="ContainerId" Value="c6d5526c-5ac2-4200-b6e2-56f2b70c5ab2" T="mt:wstr" />]]>'\
+                         '<Param Name="ImageOrigin" Value="1" T="mt:uint64" />' \
+                         '<Param Name="ContainerId" Value="c6d5526c-5ac2-4200-b6e2-56f2b70c5ab2" T="mt:wstr" />' \
+                         '<Param Name="GAVersion" Value="WALinuxAgent-2.2.44" T="mt:wstr" />' \
+                         '<Param Name="EventTid" Value="" T="mt:wstr" />' \
+                         '<Param Name="EventPid" Value="" T="mt:wstr" />' \
+                         '<Param Name="TaskName" Value="" T="mt:wstr" />' \
+                         '<Param Name="KeywordName" Value="" T="mt:wstr" />]]>' \
                          '</Event>'.format(AGENT_VERSION)
 
+        self.maxDiff = None
         self.assertEqual(sample_message, send_event_call_args[1])
 
     @patch("azurelinuxagent.common.protocol.wire.WireClient.send_event")
