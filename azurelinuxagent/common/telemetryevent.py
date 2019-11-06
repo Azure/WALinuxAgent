@@ -35,6 +35,10 @@ class TelemetryEvent(DataContract):
         self.providerId = providerId
         self.parameters = DataContractList(TelemetryEventParam)
 
+    # Checking if the particular param name is in the TelemetryEvent.
+    def __contains__(self, param_name):
+        return param_name in [param.name for param in self.parameters]
+
 
 class TelemetryEventList(DataContract):
     def __init__(self):

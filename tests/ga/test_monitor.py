@@ -14,24 +14,39 @@
 #
 # Requires Python 2.6+ and Openssl 1.0+
 #
+import datetime
+import json
+import os
+import platform
 import random
+import shutil
 import string
+import sys
+import tempfile
+import time
 from datetime import timedelta
 
+from mock import Mock, MagicMock, patch
 from nose.plugins.attrib import attr
 
+from azurelinuxagent.common import logger
 from azurelinuxagent.common.cgroup import CGroup
+from azurelinuxagent.common.cgroupstelemetry import CGroupsTelemetry
 from azurelinuxagent.common.datacontract import get_properties
-from azurelinuxagent.common.event import EventLogger
-from azurelinuxagent.common.protocol.imds import ComputeInfo, IMDS_IMAGE_ORIGIN_ENDORSED
+from azurelinuxagent.common.event import EventLogger, WALAEventOperation, CONTAINER_ID_ENV_VARIABLE
+from azurelinuxagent.common.exception import HttpError
+from azurelinuxagent.common.future import ustr
+from azurelinuxagent.common.protocol.imds import ComputeInfo
 from azurelinuxagent.common.protocol.restapi import VMInfo
 from azurelinuxagent.common.protocol.wire import WireProtocol
-from azurelinuxagent.common.utils import restutil
-from azurelinuxagent.common.version import AGENT_VERSION
-from azurelinuxagent.ga.monitor import *
+from azurelinuxagent.common.telemetryevent import TelemetryEventParam, TelemetryEvent
+from azurelinuxagent.common.utils import restutil, fileutil
+from azurelinuxagent.common.version import AGENT_VERSION, CURRENT_VERSION, AGENT_NAME
+from azurelinuxagent.ga.monitor import parse_xml_event, get_monitor_handler, MonitorHandler, \
+    generate_extension_metrics_telemetry_dictionary, parse_json_event
 from tests.common.test_cgroupstelemetry import make_new_cgroup, consume_cpu_time, consume_memory
-from tests.protocol.mockwiredata import WireProtocolData, DATA_FILE
-from tests.tools import *
+from tests.protocol.mockwiredata import WireProtocolData, DATA_FILE, conf
+from tests.tools import load_data, AgentTestCase, data_dir, are_cgroups_enabled, i_am_root, skip_if_predicate_false
 
 
 class ResponseMock(Mock):
@@ -49,17 +64,16 @@ def random_generator(size=6, chars=string.ascii_uppercase + string.digits + stri
     return ''.join(random.choice(chars) for x in range(size))
 
 
-def create_event_message(size=0,
-                         name="DummyExtension",
-                         op=WALAEventOperation.Unknown,
-                         is_success=True,
-                         duration=0,
-                         version=CURRENT_VERSION,
-                         is_internal=False,
-                         evt_type="",
-                         message="DummyMessage",
-                         invalid_chars=False):
-
+def create_dummy_event(size=0,
+                       name="DummyExtension",
+                       op=WALAEventOperation.Unknown,
+                       is_success=True,
+                       duration=0,
+                       version=CURRENT_VERSION,
+                       is_internal=False,
+                       evt_type="",
+                       message="DummyMessage",
+                       invalid_chars=False):
     return get_event_message(name=size if size != 0 else name,
                              op=op,
                              is_success=is_success,
@@ -80,6 +94,7 @@ def get_event_message(duration, evt_type, is_internal, is_success, message, name
     event.parameters.append(TelemetryEventParam('Message', message))
     event.parameters.append(TelemetryEventParam('Duration', duration))
     event.parameters.append(TelemetryEventParam('ExtensionType', evt_type))
+    event.parameters.append(TelemetryEventParam('OpcodeName', '2019-11-06 02:00:44.307835'))
 
     data = get_properties(event)
     return json.dumps(data)
@@ -94,7 +109,7 @@ def get_event_message(duration, evt_type, is_internal, is_success, message, name
 class TestMonitor(AgentTestCase):
 
     def test_parse_xml_event(self, *args):
-        data_str = load_data('ext/event.xml')
+        data_str = load_data('ext/event_from_extension.xml')
         event = parse_xml_event(data_str)
         self.assertNotEqual(None, event)
         self.assertNotEqual(0, event.parameters)
@@ -108,13 +123,9 @@ class TestMonitor(AgentTestCase):
         self.assertTrue(all(param is not None for param in event.parameters))
 
     def test_add_sysinfo_should_honor_sysinfo_values_from_agent_for_agent_events(self, *args):
-        data_str = load_data('ext/event.xml')
-        event = parse_xml_event(data_str)
+        data_str = load_data('ext/event_from_agent.json')
+        event = parse_json_event(data_str)
 
-        # Pretend that the test event is coming from the agent by ensuring the event already has a container id
-        # generated on the fly
-        container_id_value = "TEST-CONTAINER-ID-ALREADY-PRESENT-GUID"
-        event.parameters.append(TelemetryEventParam("ContainerId", container_id_value))
         monitor_handler = get_monitor_handler()
 
         sysinfo_vm_name_value = "sysinfo_dummy_vm"
@@ -122,6 +133,13 @@ class TestMonitor(AgentTestCase):
         sysinfo_role_name_value = "sysinfo_dummy_role"
         sysinfo_role_instance_name_value = "sysinfo_dummy_role_instance"
         sysinfo_execution_mode_value = "sysinfo_IAAS"
+        container_id_value = "TEST-CONTAINER-ID-ALREADY-PRESENT-GUID"
+        GAVersion_value = "WALinuxAgent-2.2.44"
+        OpcodeName_value = "2019-11-02 01:42:49.188030"
+        EventTid_value = 140240384030528
+        EventPid_value = 108573
+        TaskName_value = "ExtHandler"
+        KeywordName_value = ""
 
         vm_name_param = "VMName"
         tenant_name_param = "TenantName"
@@ -129,6 +147,12 @@ class TestMonitor(AgentTestCase):
         role_instance_name_param = "RoleInstanceName"
         execution_mode_param = "ExecutionMode"
         container_id_param = "ContainerId"
+        GAVersion_param = "GAVersion"
+        OpcodeName_param = "OpcodeName"
+        EventTid_param = "EventTid"
+        EventPid_param = "EventPid"
+        TaskName_param = "TaskName"
+        KeywordName_param = "KeywordName"
 
         sysinfo = [
             TelemetryEventParam(role_instance_name_param, sysinfo_role_instance_name_value),
@@ -164,13 +188,31 @@ class TestMonitor(AgentTestCase):
             elif p.name == container_id_param:
                 self.assertEqual(container_id_value, p.value)
                 counter += 1
+            elif p.name == GAVersion_param:
+                self.assertEqual(GAVersion_value, p.value)
+                counter += 1
+            elif p.name == OpcodeName_param:
+                self.assertEqual(OpcodeName_value, p.value)
+                counter += 1
+            elif p.name == EventTid_param:
+                self.assertEqual(EventTid_value, p.value)
+                counter += 1
+            elif p.name == EventPid_param:
+                self.assertEqual(EventPid_value, p.value)
+                counter += 1
+            elif p.name == TaskName_param:
+                self.assertEqual(TaskName_value, p.value)
+                counter += 1
+            elif p.name == KeywordName_param:
+                self.assertEqual(KeywordName_value, p.value)
+                counter += 1
 
-        self.assertEqual(6, counter)
+        self.assertEqual(12, counter)
 
     def test_add_sysinfo_should_honor_sysinfo_values_from_agent_for_extension_events(self, *args):
         # The difference between agent and extension events is that extension events don't have the container id
         # populated on the fly like the agent events do. Ensure the container id is populated in add_sysinfo.
-        data_str = load_data('ext/event.xml')
+        data_str = load_data('ext/event_from_extension.xml')
         event = parse_xml_event(data_str)
         monitor_handler = get_monitor_handler()
 
@@ -183,6 +225,12 @@ class TestMonitor(AgentTestCase):
         sysinfo_role_name_value = "sysinfo_dummy_role"
         sysinfo_role_instance_name_value = "sysinfo_dummy_role_instance"
         sysinfo_execution_mode_value = "sysinfo_IAAS"
+        GAVersion_value = "WALinuxAgent-2.2.44"
+        OpcodeName_value = ""
+        EventTid_value = 0
+        EventPid_value = 0
+        TaskName_value = ""
+        KeywordName_value = ""
 
         vm_name_param = "VMName"
         tenant_name_param = "TenantName"
@@ -190,6 +238,12 @@ class TestMonitor(AgentTestCase):
         role_instance_name_param = "RoleInstanceName"
         execution_mode_param = "ExecutionMode"
         container_id_param = "ContainerId"
+        GAVersion_param = "GAVersion"
+        OpcodeName_param = "OpcodeName"
+        EventTid_param = "EventTid"
+        EventPid_param = "EventPid"
+        TaskName_param = "TaskName"
+        KeywordName_param = "KeywordName"
 
         sysinfo = [
             TelemetryEventParam(role_instance_name_param, sysinfo_role_instance_name_value),
@@ -225,8 +279,26 @@ class TestMonitor(AgentTestCase):
             elif p.name == container_id_param:
                 self.assertEqual(container_id_value, p.value)
                 counter += 1
+            elif p.name == GAVersion_param:
+                self.assertEqual(GAVersion_value, p.value)
+                counter += 1
+            elif p.name == OpcodeName_param:
+                self.assertEqual(OpcodeName_value, p.value)
+                counter += 1
+            elif p.name == EventTid_param:
+                self.assertEqual(EventTid_value, p.value)
+                counter += 1
+            elif p.name == EventPid_param:
+                self.assertEqual(EventPid_value, p.value)
+                counter += 1
+            elif p.name == TaskName_param:
+                self.assertEqual(TaskName_value, p.value)
+                counter += 1
+            elif p.name == KeywordName_param:
+                self.assertEqual(KeywordName_value, p.value)
+                counter += 1
 
-        self.assertEqual(6, counter)
+        self.assertEqual(12, counter)
         os.environ.pop(CONTAINER_ID_ENV_VARIABLE)
 
     @patch("azurelinuxagent.ga.monitor.MonitorHandler.send_telemetry_heartbeat")
@@ -533,7 +605,9 @@ class TestEventMonitoring(AgentTestCase):
         monitor_handler.init_protocols()
         self.mock_init_sysinfo(monitor_handler)
 
-        self.event_logger.save_event(create_event_message(message="Message-Test"))
+        self.event_logger.save_event(create_dummy_event(message="Message-Test"))
+
+        monitor_handler.last_event_collection = None
         monitor_handler.collect_and_send_events()
 
         # Validating the crafted message by the collect_and_send_events call.
@@ -548,9 +622,9 @@ class TestEventMonitoring(AgentTestCase):
                          '<Param Name="Message" Value="Message-Test" T="mt:wstr" />' \
                          '<Param Name="Duration" Value="0" T="mt:uint64" />' \
                          '<Param Name="ExtensionType" Value="" T="mt:wstr" />' \
+                         '<Param Name="OpcodeName" Value="2019-11-06 02:00:44.307835" T="mt:wstr" />' \
                          '<Param Name="OSVersion" ' \
                          'Value="Linux:DISTRO_NAME-DISTRO_VERSION-DISTRO_CODE_NAME:platform-release" T="mt:wstr" />' \
-                         '<Param Name="GAVersion" Value="WALinuxAgent-{0}" T="mt:wstr" />' \
                          '<Param Name="ExecutionMode" Value="IAAS" T="mt:wstr" />' \
                          '<Param Name="RAM" Value="10000" T="mt:uint64" />' \
                          '<Param Name="Processors" Value="4" T="mt:uint64" />' \
@@ -562,10 +636,16 @@ class TestEventMonitoring(AgentTestCase):
                          '<Param Name="SubscriptionId" Value="DummySubId" T="mt:wstr" />' \
                          '<Param Name="ResourceGroupName" Value="DummyRG" T="mt:wstr" />' \
                          '<Param Name="VMId" Value="DummyVmId" T="mt:wstr" />' \
-                         '<Param Name="ImageOrigin" Value="1" T="mt:uint64" />'\
-                         '<Param Name="ContainerId" Value="c6d5526c-5ac2-4200-b6e2-56f2b70c5ab2" T="mt:wstr" />]]>'\
+                         '<Param Name="ImageOrigin" Value="1" T="mt:uint64" />' \
+                         '<Param Name="ContainerId" Value="c6d5526c-5ac2-4200-b6e2-56f2b70c5ab2" T="mt:wstr" />' \
+                         '<Param Name="GAVersion" Value="WALinuxAgent-2.2.44" T="mt:wstr" />' \
+                         '<Param Name="EventTid" Value="0" T="mt:uint64" />' \
+                         '<Param Name="EventPid" Value="0" T="mt:uint64" />' \
+                         '<Param Name="TaskName" Value="" T="mt:wstr" />' \
+                         '<Param Name="KeywordName" Value="" T="mt:wstr" />]]>' \
                          '</Event>'.format(AGENT_VERSION)
 
+        self.maxDiff = None
         self.assertEqual(sample_message, send_event_call_args[1])
 
     @patch("azurelinuxagent.common.protocol.wire.WireClient.send_event")
@@ -581,7 +661,7 @@ class TestEventMonitoring(AgentTestCase):
 
         for power in sizes:
             size = 2 ** power
-            self.event_logger.save_event(create_event_message(size))
+            self.event_logger.save_event(create_dummy_event(size))
         monitor_handler.collect_and_send_events()
 
         # The send_event call would be called each time, as we are filling up the buffer up to the brim for each call.
@@ -601,7 +681,7 @@ class TestEventMonitoring(AgentTestCase):
 
         for power in sizes:
             size = 2 ** power
-            self.event_logger.save_event(create_event_message(size))
+            self.event_logger.save_event(create_dummy_event(size))
 
         with patch("azurelinuxagent.common.logger.periodic_warn") as patch_periodic_warn:
             monitor_handler.collect_and_send_events()
@@ -669,7 +749,7 @@ class TestEventMonitoring(AgentTestCase):
 
         for power in sizes:
             size = 2 ** power * 1024
-            self.event_logger.save_event(create_event_message(size))
+            self.event_logger.save_event(create_dummy_event(size))
 
         with patch("azurelinuxagent.common.logger.error") as mock_error:
             with patch("azurelinuxagent.common.utils.restutil.http_post") as mock_http_post:
@@ -696,7 +776,7 @@ class TestEventMonitoring(AgentTestCase):
 
         for power in sizes:
             size = 2 ** power * 1024
-            self.event_logger.save_event(create_event_message(size))
+            self.event_logger.save_event(create_dummy_event(size))
 
         monitor_handler.last_event_collection = datetime.datetime.utcnow() - timedelta(hours=1)
         # This test validates that if we hit an issue while sending an event, we never send it again.
@@ -721,7 +801,7 @@ class TestEventMonitoring(AgentTestCase):
 
         for power in sizes:
             size = 2 ** power * 1024
-            self.event_logger.save_event(create_event_message(size))
+            self.event_logger.save_event(create_dummy_event(size))
 
         monitor_handler.last_event_collection = datetime.datetime.utcnow() - timedelta(hours=1)
         with patch("azurelinuxagent.common.logger.error") as mock_error:

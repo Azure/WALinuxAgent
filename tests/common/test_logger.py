@@ -18,11 +18,11 @@
 import json
 from datetime import datetime
 
-import azurelinuxagent.common.logger as logger
-from azurelinuxagent.common.event import add_log_event
-from azurelinuxagent.common.version import CURRENT_AGENT, CURRENT_VERSION
+from mock import patch, MagicMock
 
-from tests.tools import *
+from azurelinuxagent.common import logger
+from azurelinuxagent.common.event import add_log_event
+from tests.tools import AgentTestCase
 
 _MSG_INFO = "This is our test info logging message {0} {1}"
 _MSG_WARN = "This is our test warn logging message {0} {1}"
@@ -178,7 +178,7 @@ class TestLogger(AgentTestCase):
         self.assertEqual('FFF0196F-EE4C-4EAF-9AA5-776F622DEB4F', telemetry_json['providerId'])
         self.assertEqual(7, telemetry_json['eventId'])
 
-        self.assertEqual(5, len(telemetry_json['parameters']))
+        self.assertEqual(12, len(telemetry_json['parameters']))
         for x in telemetry_json['parameters']:
             if x['name'] == 'EventName':
                 self.assertEqual(x['value'], 'Log')
