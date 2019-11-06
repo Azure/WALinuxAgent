@@ -634,7 +634,7 @@ class SystemdCgroupsApiMockedFileSystemTestCase(_MockedFileSystemTestCase):
                 with self.assertRaises(CGroupsException) as context_manager:
                     SystemdCgroupsApi().cleanup_legacy_cgroups()
 
-        self.assertEquals(context_manager.exception.message, "The daemon's PID ({0}) was already added to the legacy cgroup; this invalidates resource usage data.".format(daemon_pid))
+        self.assertEquals(context_manager.exception.message, "[CGroupsException] The daemon's PID ({0}) was already added to the legacy cgroup; this invalidates resource usage data.".format(daemon_pid))
 
         # The method should have deleted the legacy cgroups
         self.assertFalse(os.path.exists(legacy_cpu_cgroup))

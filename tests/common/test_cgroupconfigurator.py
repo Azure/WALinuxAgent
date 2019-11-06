@@ -289,7 +289,7 @@ class CGroupConfiguratorTestCase(AgentTestCase):
         self.assertFalse(kwargs['is_success'])
         self.assertEquals(
             kwargs['message'],
-            "Failed to process legacy cgroups. Collection of resource usage data will be disabled. The daemon's PID ({0}) was already added to the legacy cgroup; this invalidates resource usage data.".format(daemon_pid))
+            "Failed to process legacy cgroups. Collection of resource usage data will be disabled. [CGroupsException] The daemon's PID ({0}) was already added to the legacy cgroup; this invalidates resource usage data.".format(daemon_pid))
 
         self.assertFalse(cgroup_configurator.enabled())
         self.assertEquals(len(CGroupsTelemetry._tracked), 0)
