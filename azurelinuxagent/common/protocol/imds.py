@@ -311,8 +311,6 @@ class ImdsClient(object):
 
         status, resp = self._get_metadata_from_endpoint(endpoint, resource_path, headers)
         if status == IMDS_CONNECTION_ERROR:
-            logger.periodic_warn(logger.EVERY_FIFTEEN_MINUTES,
-                                 "[PERIODIC] [IMDS_CONNECTION_ERROR] Unable to connect to primary IMDS endpoint {0}".format(endpoint))
             endpoint = self._protocol_util.get_wireserver_endpoint()
             status, resp = self._get_metadata_from_endpoint(endpoint, resource_path, headers)
 
@@ -320,9 +318,6 @@ class ImdsClient(object):
             return MetadataResult(True, False, resp)
         elif status == IMDS_INTERNAL_SERVER_ERROR:
             return MetadataResult(False, True, resp)
-        elif status == IMDS_CONNECTION_ERROR:
-            logger.periodic_warn(logger.EVERY_FIFTEEN_MINUTES,
-                                 "[PERIODIC] [IMDS_CONNECTION_ERROR] Unable to connect to backup IMDS endpoint {0}".format(endpoint))
         return MetadataResult(False, False, resp)
 
     def get_compute(self):
