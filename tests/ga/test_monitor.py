@@ -109,7 +109,7 @@ def get_event_message(duration, evt_type, is_internal, is_success, message, name
 class TestMonitor(AgentTestCase):
 
     def test_parse_xml_event(self, *args):
-        data_str = load_data('ext/event.xml')
+        data_str = load_data('ext/event_from_extension.xml')
         event = parse_xml_event(data_str)
         self.assertNotEqual(None, event)
         self.assertNotEqual(0, event.parameters)
@@ -123,7 +123,7 @@ class TestMonitor(AgentTestCase):
         self.assertTrue(all(param is not None for param in event.parameters))
 
     def test_add_sysinfo_should_honor_sysinfo_values_from_agent_for_agent_events(self, *args):
-        data_str = load_data('ext/event.xml')
+        data_str = load_data('ext/event_from_agent.xml')
         event = parse_xml_event(data_str)
 
         # Pretend that the test event is coming from the agent by ensuring the event already has a container id
@@ -137,6 +137,12 @@ class TestMonitor(AgentTestCase):
         sysinfo_role_name_value = "sysinfo_dummy_role"
         sysinfo_role_instance_name_value = "sysinfo_dummy_role_instance"
         sysinfo_execution_mode_value = "sysinfo_IAAS"
+        GAVersion_value = "WALinuxAgent-2.2.44"
+        OpcodeName_value = "10101010"
+        EventTid_value = 140240309798656
+        EventPid_value = 108573
+        TaskName_value = "MonitorHandler"
+        KeywordName_value = ""
 
         vm_name_param = "VMName"
         tenant_name_param = "TenantName"
@@ -144,6 +150,12 @@ class TestMonitor(AgentTestCase):
         role_instance_name_param = "RoleInstanceName"
         execution_mode_param = "ExecutionMode"
         container_id_param = "ContainerId"
+        GAVersion_param = "GAVersion"
+        OpcodeName_param = "OpcodeName"
+        EventTid_param = "EventTid"
+        EventPid_param = "EventPid"
+        TaskName_param = "TaskName"
+        KeywordName_param = "KeywordName"
 
         sysinfo = [
             TelemetryEventParam(role_instance_name_param, sysinfo_role_instance_name_value),
@@ -179,13 +191,31 @@ class TestMonitor(AgentTestCase):
             elif p.name == container_id_param:
                 self.assertEqual(container_id_value, p.value)
                 counter += 1
+            elif p.name == GAVersion_param:
+                self.assertEqual(GAVersion_value, p.value)
+                counter += 1
+            elif p.name == OpcodeName_param:
+                self.assertEqual(OpcodeName_value, p.value)
+                counter += 1
+            elif p.name == EventTid_param:
+                self.assertEqual(EventTid_value, p.value)
+                counter += 1
+            elif p.name == EventPid_param:
+                self.assertEqual(EventPid_value, p.value)
+                counter += 1
+            elif p.name == TaskName_param:
+                self.assertEqual(TaskName_value, p.value)
+                counter += 1
+            elif p.name == KeywordName_param:
+                self.assertEqual(KeywordName_value, p.value)
+                counter += 1
 
-        self.assertEqual(6, counter)
+        self.assertEqual(12, counter)
 
     def test_add_sysinfo_should_honor_sysinfo_values_from_agent_for_extension_events(self, *args):
         # The difference between agent and extension events is that extension events don't have the container id
         # populated on the fly like the agent events do. Ensure the container id is populated in add_sysinfo.
-        data_str = load_data('ext/event.xml')
+        data_str = load_data('ext/event_from_extension.xml')
         event = parse_xml_event(data_str)
         monitor_handler = get_monitor_handler()
 
@@ -198,6 +228,12 @@ class TestMonitor(AgentTestCase):
         sysinfo_role_name_value = "sysinfo_dummy_role"
         sysinfo_role_instance_name_value = "sysinfo_dummy_role_instance"
         sysinfo_execution_mode_value = "sysinfo_IAAS"
+        GAVersion_value = "WALinuxAgent-2.2.44"
+        OpcodeName_value = "2019-01-01 01:30:00"  # Mocking time below.
+        EventTid_value = ""
+        EventPid_value = ""
+        TaskName_value = ""
+        KeywordName_value = ""
 
         vm_name_param = "VMName"
         tenant_name_param = "TenantName"
@@ -205,6 +241,12 @@ class TestMonitor(AgentTestCase):
         role_instance_name_param = "RoleInstanceName"
         execution_mode_param = "ExecutionMode"
         container_id_param = "ContainerId"
+        GAVersion_param = "GAVersion"
+        OpcodeName_param = "OpcodeName"
+        EventTid_param = "EventTid"
+        EventPid_param = "EventPid"
+        TaskName_param = "TaskName"
+        KeywordName_param = "KeywordName"
 
         sysinfo = [
             TelemetryEventParam(role_instance_name_param, sysinfo_role_instance_name_value),
@@ -214,12 +256,16 @@ class TestMonitor(AgentTestCase):
             TelemetryEventParam(role_name_param, sysinfo_role_name_value)
         ]
         monitor_handler.sysinfo = sysinfo
-        monitor_handler.add_sysinfo(event)
+        with patch("azurelinuxagent.ga.monitor.datetime") as patch_datetime:
+            patch_datetime.utcnow = Mock(return_value=datetime.datetime.strptime("2019-01-01 01:30:00",
+                                                                        '%Y-%m-%d %H:%M:%S'))
+            monitor_handler.add_sysinfo(event)
 
         self.assertNotEqual(None, event)
         self.assertNotEqual(0, event.parameters)
         self.assertTrue(all(param is not None for param in event.parameters))
 
+        counter = 0
         counter = 0
         for p in event.parameters:
             if p.name == vm_name_param:
@@ -240,8 +286,26 @@ class TestMonitor(AgentTestCase):
             elif p.name == container_id_param:
                 self.assertEqual(container_id_value, p.value)
                 counter += 1
+            elif p.name == GAVersion_param:
+                self.assertEqual(GAVersion_value, p.value)
+                counter += 1
+            elif p.name == OpcodeName_param:
+                self.assertEqual(OpcodeName_value, p.value)
+                counter += 1
+            elif p.name == EventTid_param:
+                self.assertEqual(EventTid_value, p.value)
+                counter += 1
+            elif p.name == EventPid_param:
+                self.assertEqual(EventPid_value, p.value)
+                counter += 1
+            elif p.name == TaskName_param:
+                self.assertEqual(TaskName_value, p.value)
+                counter += 1
+            elif p.name == KeywordName_param:
+                self.assertEqual(KeywordName_value, p.value)
+                counter += 1
 
-        self.assertEqual(6, counter)
+        self.assertEqual(12, counter)
         os.environ.pop(CONTAINER_ID_ENV_VARIABLE)
 
     @patch("azurelinuxagent.ga.monitor.MonitorHandler.send_telemetry_heartbeat")

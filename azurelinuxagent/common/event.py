@@ -344,9 +344,22 @@ class EventLogger(object):
 
     @staticmethod
     def _add_default_parameters_to_event(event):
+        # We write the GAVersion here rather than add it in azurelinuxagent.ga.monitor.MonitorHandler.add_sysinfo
+        # as there could be a possibility of events being sent with newer version of the agent, rather than the agent
+        # version generating the event.
+        # Old behavior example: V1 writes the event on the disk and finds an update immediately, and updates. Now the
+        # new monitor thread would pick up the events from the disk and send it with the CURRENT_AGENT, which would have
+        # newer version of the agent. This causes confusion.
         event.parameters.append(TelemetryEventParam("GAVersion", CURRENT_AGENT))
+
+        # ContainerId can change due to live migration and we want to preserve the container Id of the container writing
+        # the event, rather than sending the event.
         event.parameters.append(TelemetryEventParam('ContainerId', get_container_id_from_env()))
+
+        # This is used as the actual time of event generation.
         event.parameters.append(TelemetryEventParam('OpcodeName', datetime.utcnow().__str__()))
+
+        # Other commong parameters added to the events
         event.parameters.append(TelemetryEventParam('EventTid', threading.current_thread().ident))
         event.parameters.append(TelemetryEventParam('EventPid', os.getpid()))
         event.parameters.append(TelemetryEventParam("TaskName", threading.current_thread().getName()))

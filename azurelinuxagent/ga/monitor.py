@@ -29,7 +29,8 @@ import azurelinuxagent.common.utils.networkutil as networkutil
 
 from azurelinuxagent.common.cgroupstelemetry import CGroupsTelemetry
 from azurelinuxagent.common.errorstate import ErrorState
-from azurelinuxagent.common.event import add_event, WALAEventOperation, CONTAINER_ID_ENV_VARIABLE
+from azurelinuxagent.common.event import add_event, WALAEventOperation, CONTAINER_ID_ENV_VARIABLE, \
+    get_container_id_from_env
 from azurelinuxagent.common.exception import EventError, ProtocolError, OSUtilError, HttpError
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.osutil import get_osutil
@@ -329,10 +330,26 @@ class MonitorHandler(object):
         # Add sys_info params populated by the agent
         final_parameters.extend(self.sysinfo)
 
-        # Container id is populated for agent events on the fly, but not for extension events. Add it if it's missing.
-        if "ContainerId" not in [param.name for param in event.parameters]:
+        if "ContainerId" not in event:
+            # ContainerId is populated for agent events on the fly, but not for extension events. Add it if it's missing.
             final_parameters.append(
-                TelemetryEventParam("ContainerId", os.environ.get(CONTAINER_ID_ENV_VARIABLE, "UNINITIALIZED")))
+                TelemetryEventParam("ContainerId", get_container_id_from_env()))
+        if "GAVersion" not in event:
+            # GAVersion is populated for agent events on the fly, but not for extension events. Add it if it's missing.
+            final_parameters.append(TelemetryEventParam("GAVersion", CURRENT_AGENT))
+
+        # Default fields are only populated by Agent and not the extension. Agent will fill up any event if they don't
+        # have the default params.
+        if "OpcodeName" not in event:
+            final_parameters.append(TelemetryEventParam("OpcodeName", datetime.utcnow().__str__()))
+        if "EventTid" not in event:
+            final_parameters.append(TelemetryEventParam("EventTid", ""))
+        if "EventPid" not in event:
+            final_parameters.append(TelemetryEventParam("EventPid", ""))
+        if "TaskName" not in event:
+            final_parameters.append(TelemetryEventParam("TaskName", ""))
+        if "KeywordName" not in event:
+            final_parameters.append(TelemetryEventParam("KeywordName", ""))
 
         event.parameters = final_parameters
 
