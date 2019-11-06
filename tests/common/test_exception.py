@@ -17,7 +17,7 @@
 
 import sys, inspect
 from azurelinuxagent.common.exception import AgentError
-from tests.tools import *
+from tests.tools import AgentTestCase
 
 
 class TestAgentError(AgentTestCase):
