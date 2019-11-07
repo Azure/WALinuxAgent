@@ -17,11 +17,13 @@
 
 from __future__ import print_function
 
+import os
 import random
 
 from azurelinuxagent.common.cgroup import CpuCgroup, MemoryCgroup, CGroup
 from azurelinuxagent.common.exception import CGroupsException
-from tests.tools import *
+from azurelinuxagent.common.utils import fileutil
+from tests.tools import AgentTestCase, patch, data_dir
 
 
 def consume_cpu_time():

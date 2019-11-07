@@ -17,14 +17,17 @@
 
 from __future__ import print_function
 
+import os
+import re
 import subprocess
+import tempfile
 from azurelinuxagent.common.cgroupapi import CGroupsApi, FileSystemCgroupsApi, SystemdCgroupsApi, CGROUPS_FILE_SYSTEM_ROOT, VM_AGENT_CGROUP_NAME
 from azurelinuxagent.common.exception import CGroupsException, ExtensionError, ExtensionErrorCodes
 from azurelinuxagent.common.future import ustr
-from azurelinuxagent.common.utils import shellutil
+from azurelinuxagent.common.utils import shellutil, fileutil
 from nose.plugins.attrib import attr
 from tests.utils.cgroups_tools import CGroupsTools
-from tests.tools import *
+from tests.tools import AgentTestCase, patch, skip_if_predicate_false, is_systemd_present, i_am_root, mock_sleep
 
 
 class _MockedFileSystemTestCase(AgentTestCase):
