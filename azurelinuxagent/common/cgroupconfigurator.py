@@ -78,8 +78,9 @@ class CGroupConfigurator(object):
 
         def disable(self):
             self._enabled = False
+            CGroupsTelemetry.reset()
 
-        def _invoke_cgroup_operation(self, operation, error_message):
+        def _invoke_cgroup_operation(self, operation, error_message, on_error=None):
             """
             Ensures the given operation is invoked only if cgroups are enabled and traps any errors on the operation.
             """
@@ -89,7 +90,12 @@ class CGroupConfigurator(object):
             try:
                 return operation()
             except Exception as e:
-                logger.warn("{0}. Error: {1}".format(error_message, ustr(e)))
+                logger.warn("{0} Error: {1}".format(error_message, ustr(e)))
+                if on_error is not None:
+                    try:
+                        on_error(e)
+                    except Exception as ex:
+                        logger.warn("CGroupConfigurator._invoke_cgroup_operation: {0}".format(ustr(e)))
 
         def create_agent_cgroups(self, track_cgroups):
             """
@@ -104,14 +110,25 @@ class CGroupConfigurator(object):
 
                 return cgroups
 
-            self._invoke_cgroup_operation(__impl, "Failed to create a cgroup for the VM Agent; resource usage for the Agent will not be tracked")
+            self._invoke_cgroup_operation(__impl, "Failed to create a cgroup for the VM Agent; resource usage for the Agent will not be tracked.")
 
-        def cleanup_old_cgroups(self):
+        def cleanup_legacy_cgroups(self):
             def __impl():
-                self._cgroups_api.cleanup_old_cgroups()
+                self._cgroups_api.cleanup_legacy_cgroups()
 
-            self._invoke_cgroup_operation(__impl, "Failed to update the tracking of the daemon; resource usage "
-                                                  "of the agent will not include the daemon process.")
+            message = 'Failed to process legacy cgroups. Collection of resource usage data will be disabled.'
+
+            def disable_cgroups(exception):
+                self.disable()
+                add_event(
+                    AGENT_NAME,
+                    version=CURRENT_VERSION,
+                    op=WALAEventOperation.CGroupsCleanUp,
+                    is_success=False,
+                    log_event=False,
+                    message='{0} {1}'.format(message, ustr(exception)))
+
+            self._invoke_cgroup_operation(__impl, message, on_error=disable_cgroups)
 
         def create_extension_cgroups_root(self):
             """
@@ -120,7 +137,7 @@ class CGroupConfigurator(object):
             def __impl():
                 self._cgroups_api.create_extension_cgroups_root()
 
-            self._invoke_cgroup_operation(__impl, "Failed to create a root cgroup for extensions; resource usage for extensions will not be tracked")
+            self._invoke_cgroup_operation(__impl, "Failed to create a root cgroup for extensions; resource usage for extensions will not be tracked.")
 
         def create_extension_cgroups(self, name):
             """
@@ -129,7 +146,7 @@ class CGroupConfigurator(object):
             def __impl():
                 return self._cgroups_api.create_extension_cgroups(name)
 
-            return self._invoke_cgroup_operation(__impl, "Failed to create a cgroup for extension '{0}'; resource usage will not be tracked".format(name))
+            return self._invoke_cgroup_operation(__impl, "Failed to create a cgroup for extension '{0}'; resource usage will not be tracked.".format(name))
 
         def remove_extension_cgroups(self, name):
             """

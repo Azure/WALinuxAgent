@@ -1,0 +1,38 @@
+{
+   "eventId":"1",
+   "parameters":[
+      {
+         "name":"Name",
+         "value":"Microsoft.Azure.GuestConfiguration.DSCAgent"
+      },
+      {
+         "name":"Version",
+         "value":"1.18.0"
+      },
+      {
+         "name":"IsInternal",
+         "value":true
+      },
+      {
+         "name":"Operation",
+         "value":"GuestConfigAgent.Scenario"
+      },
+      {
+         "name":"OperationSuccess",
+         "value":true
+      },
+      {
+         "name":"Message",
+         "value":"<DSCLOG>[2019-11-05 10:06:52.688] [PID 11487] [TID 11513] [Timer Manager] [INFO] [89f9cf47-c02d-4774-b21a-abdf2beb3cd9] Run pull refresh for timer 'dsc_refresh_timer'</DSCLOG>\n"
+      },
+      {
+         "name":"Duration",
+         "value":0
+      },
+      {
+         "name":"ExtentionType",
+         "value":""
+      }
+   ],
+   "providerId":"69B669B9-4AF8-4C50-BDC4-6006FA76E975"
+}

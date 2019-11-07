@@ -74,11 +74,11 @@ def make_new_cgroup(name="test-cgroup"):
 class TestCGroupsTelemetry(AgentTestCase):
     def setUp(self):
         AgentTestCase.setUp(self)
-        CGroupsTelemetry.cleanup()
+        CGroupsTelemetry.reset()
 
     def tearDown(self):
         AgentTestCase.tearDown(self)
-        CGroupsTelemetry.cleanup()
+        CGroupsTelemetry.reset()
 
     def _assert_cgroup_metrics_equal(self, cpu_usage, memory_usage, max_memory_usage):
         for _, cgroup_metric in CGroupsTelemetry._cgroup_metrics.items():

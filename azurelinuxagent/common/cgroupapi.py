@@ -61,7 +61,7 @@ class CGroupsApi(object):
     def start_extension_command(self, extension_name, command, timeout, shell, cwd, env, stdout, stderr, error_code):
         raise NotImplementedError()
 
-    def cleanup_old_cgroups(self):
+    def cleanup_legacy_cgroups(self):
         raise NotImplementedError()
 
     @staticmethod
@@ -100,20 +100,52 @@ class CGroupsApi(object):
         is not mounted or if an error occurs in the operation
         :return: Returns a list of error messages or an empty list if no errors occurred
         """
-        errors = []
         mounted_controllers = os.listdir(CGROUPS_FILE_SYSTEM_ROOT)
 
         for controller in CGROUP_CONTROLLERS:
             try:
                 if controller not in mounted_controllers:
-                    logger.warn('Cgroup controller "{0}" is not mounted. {1}'.format(controller, message))
+                    logger.warn('Cgroup controller "{0}" is not mounted. {1}', controller, message)
                 else:
                     operation(controller)
             except Exception as e:
-                msg = 'Error in cgroup controller "{0}": {1}. {2}'.format(controller, ustr(e), message)
-                logger.warn(msg)
-                errors.append(msg)
-        return errors
+                logger.warn('Error in cgroup controller "{0}": {1}. {2}', controller, ustr(e), message)
+
+    @staticmethod
+    def _foreach_legacy_cgroup(operation):
+        """
+        Previous versions of the daemon (2.2.31-2.2.40) wrote their PID to /sys/fs/cgroup/{cpu,memory}/WALinuxAgent/WALinuxAgent;
+        starting from version 2.2.41 we track the agent service in walinuxagent.service instead of WALinuxAgent/WALinuxAgent. Also,
+        when running under systemd, the PIDs should not be explicitly moved to the cgroup filesystem. The older daemons would
+        incorrectly do that under certain conditions.
+
+        This method checks for the existence of the legacy cgroups and, if the daemon's PID has been added to them, executes the
+        given operation on the cgroups. After this check, the method attempts to remove the legacy cgroups.
+
+        :param operation:
+            The function to execute on each legacy cgroup. It must take 2 arguments: the controller and the daemon's PID
+        """
+        legacy_cgroups = []
+        for controller in ['cpu', 'memory']:
+            cgroup = os.path.join(CGROUPS_FILE_SYSTEM_ROOT, controller, "WALinuxAgent", "WALinuxAgent")
+            if os.path.exists(cgroup):
+                logger.info('Found legacy cgroup {0}', cgroup)
+                legacy_cgroups.append((controller, cgroup))
+
+        try:
+            for controller, cgroup in legacy_cgroups:
+                procs_file = os.path.join(cgroup, "cgroup.procs")
+
+                if os.path.exists(procs_file):
+                    procs_file_contents = fileutil.read_file(procs_file).strip()
+                    daemon_pid = fileutil.read_file(get_agent_pid_file_path()).strip()
+
+                    if daemon_pid in procs_file_contents:
+                        operation(controller, daemon_pid)
+        finally:
+            for _, cgroup in legacy_cgroups:
+                logger.info('Removing {0}', cgroup)
+                shutil.rmtree(cgroup, ignore_errors=True)
 
 
 class FileSystemCgroupsApi(CGroupsApi):
@@ -144,6 +176,10 @@ class FileSystemCgroupsApi(CGroupsApi):
                     raise
 
     @staticmethod
+    def _get_agent_cgroup_path(controller):
+        return os.path.join(CGROUPS_FILE_SYSTEM_ROOT, controller, VM_AGENT_CGROUP_NAME)
+
+    @staticmethod
     def _get_extension_cgroups_root_path(controller):
         return os.path.join(CGROUPS_FILE_SYSTEM_ROOT, controller, EXTENSIONS_ROOT_CGROUP_NAME)
 
@@ -158,8 +194,7 @@ class FileSystemCgroupsApi(CGroupsApi):
         return os.path.join(extensions_root, cgroup_name)
 
     def _create_extension_cgroup(self, controller, extension_name):
-        return CGroup.create(self._get_extension_cgroup_path(controller, extension_name),
-                             controller, extension_name)
+        return CGroup.create(self._get_extension_cgroup_path(controller, extension_name), controller, extension_name)
 
     @staticmethod
     def _add_process_to_cgroup(pid, cgroup_path):
@@ -167,40 +202,20 @@ class FileSystemCgroupsApi(CGroupsApi):
         fileutil.append_file(tasks_file, "{0}\n".format(pid))
         logger.info("Added PID {0} to cgroup {1}".format(pid, cgroup_path))
 
-    def cleanup_old_cgroups(self):
-        # Old daemon versions (2.2.31-2.2.40) wrote their PID to the WALinuxAgent/WALinuxAgent cgroup.
-        # Starting from version 2.2.41, we track the agent service in walinuxagent.service. This method
-        # cleans up the old behavior by moving the daemon's PID to the new cgroup and deleting the old cgroup.
-        daemon_pid_file = get_agent_pid_file_path()
-        daemon_pid = fileutil.read_file(daemon_pid_file)
+    def cleanup_legacy_cgroups(self):
+        """
+        Previous versions of the daemon (2.2.31-2.2.40) wrote their PID to /sys/fs/cgroup/{cpu,memory}/WALinuxAgent/WALinuxAgent;
+        starting from version 2.2.41 we track the agent service in walinuxagent.service instead of WALinuxAgent/WALinuxAgent. This
+        method moves the daemon's PID from the legacy cgroups to the newer cgroups.
+        """
+        def move_daemon_pid(controller, daemon_pid):
+            new_path = FileSystemCgroupsApi._get_agent_cgroup_path(controller)
+            logger.info("Writing daemon's PID ({0}) to {1}", daemon_pid, new_path)
+            fileutil.append_file(os.path.join(new_path, "cgroup.procs"), daemon_pid)
+            msg = "Moved daemon's PID from legacy cgroup to {0}".format(new_path)
+            add_event(AGENT_NAME, version=CURRENT_VERSION, op=WALAEventOperation.CGroupsCleanUp, is_success=True, message=msg)
 
-        def cleanup_old_controller(controller):
-            old_path = os.path.join(CGROUPS_FILE_SYSTEM_ROOT, controller, "WALinuxAgent", "WALinuxAgent")
-            new_path = os.path.join(CGROUPS_FILE_SYSTEM_ROOT, controller, VM_AGENT_CGROUP_NAME)
-
-            if not os.path.isdir(old_path):
-                return
-
-            contents = fileutil.read_file(os.path.join(old_path, "cgroup.procs"))
-
-            if daemon_pid in contents:
-                fileutil.append_file(os.path.join(new_path, "cgroup.procs"), daemon_pid)
-                shutil.rmtree(old_path, ignore_errors=True)
-
-        errors = self._foreach_controller(cleanup_old_controller,
-                                          "Failed to update the tracking of the daemon; resource usage of the agent "
-                                          "will not include the daemon process.")
-
-        if len(errors) == 0:
-            msg = 'Successfully cleaned up old cgroups in WALinuxAgent/WALinuxAgent.'
-        else:
-            msg = 'Failed to clean up old cgroups in WALinuxAgent/WALinuxAgent. Errors: {0}'.format(errors)
-
-        add_event(AGENT_NAME,
-                  version=CURRENT_VERSION,
-                  op=WALAEventOperation.CGroupsCleanUp,
-                  is_success=len(errors) == 0,
-                  message=msg)
+        CGroupsApi._foreach_legacy_cgroup(move_daemon_pid)
 
     def create_agent_cgroups(self):
         """
@@ -211,7 +226,7 @@ class FileSystemCgroupsApi(CGroupsApi):
         pid = int(os.getpid())
 
         def create_cgroup(controller):
-            path = os.path.join(CGROUPS_FILE_SYSTEM_ROOT, controller, VM_AGENT_CGROUP_NAME)
+            path = FileSystemCgroupsApi._get_agent_cgroup_path(controller)
 
             if not os.path.isdir(path):
                 FileSystemCgroupsApi._try_mkdir(path)
@@ -499,17 +514,24 @@ After=system-{1}.slice""".format(extension_name, EXTENSIONS_ROOT_CGROUP_NAME)
                 # There was an issue with systemd-run. We need to log it and retry the extension without systemd.
                 err_msg = 'Systemd process exited with code %s and output %s' % (e.exit_code, process_output) \
                     if isinstance(e, ExtensionOperationError) else "Systemd timed-out, output: %s" % process_output
+                event_msg = 'Failed to run systemd-run for unit {0}.scope. ' \
+                            'Will retry invoking the extension without systemd. ' \
+                            'Systemd-run error: {1}'.format(scope_name, err_msg)
                 add_event(AGENT_NAME,
                           version=CURRENT_VERSION,
                           op=WALAEventOperation.InvokeCommandUsingSystemd,
                           is_success=False,
-                          message='Failed to run systemd-run for unit {0}.scope. {1}'
-                                  .format(scope_name, err_msg))
+                          log_event=False,
+                          message=event_msg)
+                logger.warn(event_msg)
+
                 # Reset the stdout and stderr
                 stdout.truncate(0)
                 stderr.truncate(0)
 
                 # Try invoking the process again, this time without systemd-run
+                logger.info('Extension invocation using systemd failed, falling back to regular invocation '
+                            'without cgroups tracking.')
                 process = subprocess.Popen(command,
                                            shell=shell,
                                            cwd=cwd,
@@ -530,6 +552,15 @@ After=system-{1}.slice""".format(extension_name, EXTENSIONS_ROOT_CGROUP_NAME)
         # The process terminated in time and successfully
         return extension_cgroups, process_output
 
-    def cleanup_old_cgroups(self):
-        # No cleanup needed from the old daemon in the systemd case.
-        pass
+    def cleanup_legacy_cgroups(self):
+        """
+        Previous versions of the daemon (2.2.31-2.2.40) wrote their PID to /sys/fs/cgroup/{cpu,memory}/WALinuxAgent/WALinuxAgent;
+        starting from version 2.2.41 we track the agent service in walinuxagent.service instead of WALinuxAgent/WALinuxAgent. If
+        we find that any of the legacy groups include the PID of the daemon then we disable data collection for this instance
+        (under systemd, moving PIDs across the cgroup file system can produce unpredictable results)
+        """
+        def report_error(_, daemon_pid):
+            raise CGroupsException(
+                "The daemon's PID ({0}) was already added to the legacy cgroup; this invalidates resource usage data.".format(daemon_pid))
+
+        CGroupsApi._foreach_legacy_cgroup(report_error)
