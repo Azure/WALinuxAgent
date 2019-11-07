@@ -52,14 +52,9 @@ class AgentNetworkError(AgentError):
 
 
 class CGroupsException(AgentError):
+    def __init__(self, msg=None, inner=None):
+        super(CGroupsException, self).__init__(msg, inner)
 
-    def __init__(self, msg, inner=None):
-        super(AgentError, self).__init__(msg, inner)
-        # TODO: AgentError should set the message - investigate whether doing it there would break anything
-        self.message = msg
-
-    def __str__(self):
-        return self.message
 
 class ExtensionError(AgentError):
     """
