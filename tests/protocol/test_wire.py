@@ -16,13 +16,18 @@
 # Requires Python 2.6+ and Openssl 1.0+
 #
 
+import stat
+import tempfile
+import unittest
 import zipfile
 
 from azurelinuxagent.common.telemetryevent import TelemetryEvent, TelemetryEventParam
 from azurelinuxagent.common.protocol.wire import *
 from azurelinuxagent.common.utils.shellutil import run_get_output
 from tests.ga.test_monitor import random_generator
-from tests.protocol.mockwiredata import *
+from tests.protocol.mockwiredata import DATA_FILE, DATA_FILE_CERT_FORMAT_NOT_PFX, DATA_FILE_NO_CERT_FORMAT, \
+    DATA_FILE_NO_EXT, DATA_FILE_EXT_NO_PUBLIC, DATA_FILE_EXT_NO_SETTINGS, WireProtocolData
+from tests.tools import ANY, AgentTestCase, MagicMock, Mock, patch, running_under_travis, skip_if_predicate_true
 
 data_with_bom = b'\xef\xbb\xbfhehe'
 testurl = 'http://foo'

@@ -16,13 +16,20 @@
 #
 
 import os.path
+import unittest
 
 from datetime import timedelta
 
 from azurelinuxagent.ga.monitor import get_monitor_handler
 from nose.plugins.attrib import attr
-from tests.protocol.mockwiredata import *
+from tests.protocol.mockwiredata import DATA_FILE, DATA_FILE_EXT_AUTOUPGRADE, \
+    DATA_FILE_EXT_AUTOUPGRADE_INTERNALVERSION, DATA_FILE_EXT_DELETION, DATA_FILE_EXT_INTERNALVERSION, \
+    DATA_FILE_EXT_ROLLINGUPGRADE, DATA_FILE_EXT_SEQUENCING, DATA_FILE_EXT_SINGLE, DATA_FILE_NO_EXT, \
+    DATA_FILE_EXT_NO_PUBLIC, DATA_FILE_EXT_NO_SETTINGS, DATA_FILE_MULTIPLE_EXT, WireProtocolData
+from tests.tools import are_cgroups_enabled, AgentTestCase, data_dir, i_am_root, MagicMock, Mock, \
+    skip_if_predicate_false, patch
 
+from azurelinuxagent.common.exception import ResourceGoneError
 from azurelinuxagent.common.protocol.restapi import Extension, ExtHandlerProperties
 from azurelinuxagent.ga.exthandlers import *
 from azurelinuxagent.common.protocol.wire import WireProtocol, InVMArtifactsProfile
