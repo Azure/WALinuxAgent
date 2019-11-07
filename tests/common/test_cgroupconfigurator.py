@@ -20,14 +20,16 @@ from __future__ import print_function
 import subprocess
 
 import errno
+import os
+import re
 from azurelinuxagent.common.cgroup import CGroup
-from azurelinuxagent.common.cgroupapi import VM_AGENT_CGROUP_NAME
 from azurelinuxagent.common.cgroupconfigurator import CGroupConfigurator
 from azurelinuxagent.common.cgroupstelemetry import CGroupsTelemetry
 from azurelinuxagent.common.exception import CGroupsException
 from azurelinuxagent.common.osutil.default import DefaultOSUtil
+from azurelinuxagent.common.utils import fileutil
 from tests.utils.cgroups_tools import CGroupsTools
-from tests.tools import *
+from tests.tools import AgentTestCase, patch
 
 
 class CGroupConfiguratorTestCase(AgentTestCase):
