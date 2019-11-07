@@ -22,10 +22,7 @@ from datetime import timedelta
 
 from azurelinuxagent.ga.monitor import get_monitor_handler
 from nose.plugins.attrib import attr
-from tests.protocol.mockwiredata import DATA_FILE, DATA_FILE_EXT_AUTOUPGRADE, \
-    DATA_FILE_EXT_AUTOUPGRADE_INTERNALVERSION, DATA_FILE_EXT_DELETION, DATA_FILE_EXT_INTERNALVERSION, \
-    DATA_FILE_EXT_ROLLINGUPGRADE, DATA_FILE_EXT_SEQUENCING, DATA_FILE_EXT_SINGLE, DATA_FILE_NO_EXT, \
-    DATA_FILE_EXT_NO_PUBLIC, DATA_FILE_EXT_NO_SETTINGS, DATA_FILE_MULTIPLE_EXT, WireProtocolData
+from tests.protocol import mockwiredata
 from tests.tools import are_cgroups_enabled, AgentTestCase, data_dir, i_am_root, MagicMock, Mock, \
     skip_if_predicate_false, patch
 
@@ -367,7 +364,7 @@ class TestExtension(ExtensionTestCase):
         :param args: Any additional args passed to the function, needed for creating a mock for handler and protocol
         :return: test_data, exthandlers_handler, protocol
         """
-        test_data = WireProtocolData(DATA_FILE_EXT_SINGLE)
+        test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE_EXT_SINGLE)
         exthandlers_handler, protocol = self._create_mock(test_data, *args)
 
         # Ensure initial install and enable is successful
@@ -388,7 +385,7 @@ class TestExtension(ExtensionTestCase):
         return test_data, exthandlers_handler, protocol
 
     def test_ext_handler(self, *args):
-        test_data = WireProtocolData(DATA_FILE)
+        test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE)
         exthandlers_handler, protocol = self._create_mock(test_data, *args)
 
         # Test enable scenario.
@@ -451,7 +448,7 @@ class TestExtension(ExtensionTestCase):
         self._assert_no_handler_status(protocol.report_vm_status)
 
     def test_ext_zip_file_packages_removed_in_update_case(self, *args):
-        test_data = WireProtocolData(DATA_FILE)
+        test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE)
         exthandlers_handler, protocol = self._create_mock(test_data, *args)
 
         # Test enable scenario.
@@ -490,7 +487,7 @@ class TestExtension(ExtensionTestCase):
                                          extension_version="1.2.0")
 
     def test_ext_zip_file_packages_removed_in_uninstall_case(self, *args):
-        test_data = WireProtocolData(DATA_FILE)
+        test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE)
         exthandlers_handler, protocol = self._create_mock(test_data, *args)
         extension_version = "1.0.0"
 
@@ -511,7 +508,7 @@ class TestExtension(ExtensionTestCase):
                                          extension_version=extension_version)
 
     def test_ext_zip_file_packages_removed_in_update_and_uninstall_case(self, *args):
-        test_data = WireProtocolData(DATA_FILE)
+        test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE)
         exthandlers_handler, protocol = self._create_mock(test_data, *args)
 
         # Test enable scenario.
@@ -559,21 +556,21 @@ class TestExtension(ExtensionTestCase):
                                          extension_version="1.2.0")
 
     def test_ext_handler_no_settings(self, *args):
-        test_data = WireProtocolData(DATA_FILE_EXT_NO_SETTINGS)
+        test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE_EXT_NO_SETTINGS)
         exthandlers_handler, protocol = self._create_mock(test_data, *args)
 
         exthandlers_handler.run()
         self._assert_handler_status(protocol.report_vm_status, "Ready", 0, "1.0.0")
 
     def test_ext_handler_no_public_settings(self, *args):
-        test_data = WireProtocolData(DATA_FILE_EXT_NO_PUBLIC)
+        test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE_EXT_NO_PUBLIC)
         exthandlers_handler, protocol = self._create_mock(test_data, *args)
 
         exthandlers_handler.run()
         self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.0.0")
 
     def test_ext_handler_no_ext(self, *args):
-        test_data = WireProtocolData(DATA_FILE_NO_EXT)
+        test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE_NO_EXT)
         exthandlers_handler, protocol = self._create_mock(test_data, *args)
 
         # Assert no extension handler status
@@ -581,7 +578,7 @@ class TestExtension(ExtensionTestCase):
         self._assert_no_handler_status(protocol.report_vm_status)
 
     def test_ext_handler_sequencing(self, *args):
-        test_data = WireProtocolData(DATA_FILE_EXT_SEQUENCING)
+        test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE_EXT_SEQUENCING)
         exthandlers_handler, protocol = self._create_mock(test_data, *args)
 
         # Test enable scenario.
@@ -654,14 +651,14 @@ class TestExtension(ExtensionTestCase):
         self.assertEqual(exthandlers_handler.ext_handlers.extHandlers[1].properties.extensions[0].dependencyLevel, 5)
 
     def test_ext_handler_sequencing_default_dependency_level(self, *args):
-        test_data = WireProtocolData(DATA_FILE)
+        test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE)
         exthandlers_handler, protocol = self._create_mock(test_data, *args)
         exthandlers_handler.run()
         self.assertEqual(exthandlers_handler.ext_handlers.extHandlers[0].properties.extensions[0].dependencyLevel, 0)
         self.assertEqual(exthandlers_handler.ext_handlers.extHandlers[0].properties.extensions[0].dependencyLevel, 0)
 
     def test_ext_handler_sequencing_invalid_dependency_level(self, *args):
-        test_data = WireProtocolData(DATA_FILE_EXT_SEQUENCING)
+        test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE_EXT_SEQUENCING)
         exthandlers_handler, protocol = self._create_mock(test_data, *args)
 
         test_data.goal_state = test_data.goal_state.replace("<Incarnation>1<",
@@ -723,7 +720,7 @@ class TestExtension(ExtensionTestCase):
 
         expected_status_json = json.loads(expected_status)
 
-        test_data = WireProtocolData(DATA_FILE_MULTIPLE_EXT)
+        test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE_MULTIPLE_EXT)
         exthandlers_handler, protocol = self._create_mock(test_data, *args)
         exthandlers_handler.run()
 
@@ -733,7 +730,7 @@ class TestExtension(ExtensionTestCase):
         self.assertEquals(expected_status_json, actual_status_json)
 
     def test_ext_handler_rollingupgrade(self, *args):
-        test_data = WireProtocolData(DATA_FILE_EXT_ROLLINGUPGRADE)
+        test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE_EXT_ROLLINGUPGRADE)
         exthandlers_handler, protocol = self._create_mock(test_data, *args)
 
         # Test enable scenario.
@@ -813,7 +810,7 @@ class TestExtension(ExtensionTestCase):
     def test_ext_handler_download_failure_transient(self, mock_add_event, *args):
         original_sleep = time.sleep
 
-        test_data = WireProtocolData(DATA_FILE)
+        test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE)
         exthandlers_handler, protocol = self._create_mock(test_data, *args)
         protocol.download_ext_handler_pkg = Mock(side_effect=ProtocolError)
 
@@ -824,7 +821,7 @@ class TestExtension(ExtensionTestCase):
     @patch('azurelinuxagent.common.errorstate.ErrorState.is_triggered')
     @patch('azurelinuxagent.ga.exthandlers.add_event')
     def test_ext_handler_report_status_permanent(self, mock_add_event, mock_error_state, *args):
-        test_data = WireProtocolData(DATA_FILE)
+        test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE)
         exthandlers_handler, protocol = self._create_mock(test_data, *args)
         protocol.report_vm_status = Mock(side_effect=ProtocolError)
 
@@ -838,7 +835,7 @@ class TestExtension(ExtensionTestCase):
 
     @patch('azurelinuxagent.ga.exthandlers.add_event')
     def test_ext_handler_report_status_resource_gone(self, mock_add_event, *args):
-        test_data = WireProtocolData(DATA_FILE)
+        test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE)
         exthandlers_handler, protocol = self._create_mock(test_data, *args)
         protocol.report_vm_status = Mock(side_effect=ResourceGoneError)
 
@@ -852,7 +849,7 @@ class TestExtension(ExtensionTestCase):
     @patch('azurelinuxagent.common.errorstate.ErrorState.is_triggered')
     @patch('azurelinuxagent.ga.exthandlers.ExtHandlerInstance.report_event')
     def test_ext_handler_download_failure_permanent_ProtocolError(self, mock_add_event, mock_error_state, *args):
-        test_data = WireProtocolData(DATA_FILE)
+        test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE)
         exthandlers_handler, protocol = self._create_mock(test_data, *args)
         protocol.get_ext_handler_pkgs = Mock(side_effect=ProtocolError)
 
@@ -870,7 +867,7 @@ class TestExtension(ExtensionTestCase):
     @patch('azurelinuxagent.common.event.add_event')
     def test_ext_handler_download_failure_permanent_with_ExtensionDownloadError_and_triggered(self, mock_add_event,
                                                                                               mock_error_state, *args):
-        test_data = WireProtocolData(DATA_FILE)
+        test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE)
         exthandlers_handler, protocol = self._create_mock(test_data, *args)
         protocol.get_ext_handler_pkgs = Mock(side_effect=ExtensionDownloadError)
 
@@ -890,7 +887,7 @@ class TestExtension(ExtensionTestCase):
     def test_ext_handler_download_failure_permanent_with_ExtensionDownloadError_and_not_triggered(self, mock_add_event,
                                                                                                   mock_error_state,
                                                                                                   *args):
-        test_data = WireProtocolData(DATA_FILE)
+        test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE)
         exthandlers_handler, protocol = self._create_mock(test_data, *args)
         protocol.get_ext_handler_pkgs = Mock(side_effect=ExtensionDownloadError)
 
@@ -902,7 +899,7 @@ class TestExtension(ExtensionTestCase):
 
     @patch('azurelinuxagent.ga.exthandlers.fileutil')
     def test_ext_handler_io_error(self, mock_fileutil, *args):
-        test_data = WireProtocolData(DATA_FILE)
+        test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE)
         exthandlers_handler, protocol = self._create_mock(test_data, *args)
 
         mock_fileutil.write_file.return_value = IOError("Mock IO Error")
@@ -939,7 +936,7 @@ class TestExtension(ExtensionTestCase):
                         self.assertTrue(exthandlers_handler.extension_processing_allowed())
 
     def test_handle_ext_handlers_on_hold_true(self, *args):
-        test_data = WireProtocolData(DATA_FILE)
+        test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE)
         exthandlers_handler, protocol = self._create_mock(test_data, *args)
         exthandlers_handler.ext_handlers, exthandlers_handler.last_etag = protocol.get_ext_handlers()
         protocol.get_artifacts_profile = MagicMock()
@@ -958,7 +955,7 @@ class TestExtension(ExtensionTestCase):
             self.assertEqual(1, patch_handle_ext_handlers.call_count)
 
     def test_handle_ext_handlers_on_hold_false(self, *args):
-        test_data = WireProtocolData(DATA_FILE)
+        test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE)
         exthandlers_handler, protocol = self._create_mock(test_data, *args)
         exthandlers_handler.ext_handlers, exthandlers_handler.last_etag = protocol.get_ext_handlers()
         exthandlers_handler.protocol = protocol
@@ -982,7 +979,7 @@ class TestExtension(ExtensionTestCase):
             self.assertEqual(1, patch_handle_ext_handler.call_count)
 
     def test_last_etag_on_extension_processing(self, *args):
-        test_data = WireProtocolData(DATA_FILE)
+        test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE)
         exthandlers_handler, protocol = self._create_mock(test_data, *args)
         exthandlers_handler.ext_handlers, etag = protocol.get_ext_handlers()
         exthandlers_handler.protocol = protocol
@@ -1009,7 +1006,7 @@ class TestExtension(ExtensionTestCase):
         self.assertEquals(expected_seq_no, ext_status.sequenceNumber)
 
     def test_ext_handler_no_reporting_status(self, *args):
-        test_data = WireProtocolData(DATA_FILE)
+        test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE)
         exthandlers_handler, protocol = self._create_mock(test_data, *args)
         exthandlers_handler.run()
         self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.0.0")
@@ -1030,7 +1027,7 @@ class TestExtension(ExtensionTestCase):
         Testing wait_for_handler_successful_completion() when there is no extension in a handler.
         Expected to return True.
         '''
-        test_data = WireProtocolData(DATA_FILE)
+        test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE)
         exthandlers_handler, protocol = self._create_mock(test_data, *args)
 
         handler = ExtHandler(name="handler")
@@ -1058,7 +1055,7 @@ class TestExtension(ExtensionTestCase):
         Testing wait_for_handler_successful_completion() when there is no status file or seq_no is negative.
         Expected to return False.
         '''
-        test_data = WireProtocolData(DATA_FILE)
+        test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE)
         exthandlers_handler, protocol = self._create_mock(test_data, *args)
 
         ExtHandlerInstance.get_ext_handling_status = MagicMock(return_value=None)
@@ -1069,7 +1066,7 @@ class TestExtension(ExtensionTestCase):
         Testing wait_for_handler_successful_completion() when there is successful status.
         Expected to return True.
         '''
-        test_data = WireProtocolData(DATA_FILE)
+        test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE)
         exthandlers_handler, protocol = self._create_mock(test_data, *args)
 
         status = "success"
@@ -1082,7 +1079,7 @@ class TestExtension(ExtensionTestCase):
         Testing wait_for_handler_successful_completion() when there is error status.
         Expected to return False.
         '''
-        test_data = WireProtocolData(DATA_FILE)
+        test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE)
         exthandlers_handler, protocol = self._create_mock(test_data, *args)
 
         status = "error"
@@ -1095,7 +1092,7 @@ class TestExtension(ExtensionTestCase):
         Testing wait_for_handler_successful_completion() when there is non terminal status.
         Expected to return False.
         '''
-        test_data = WireProtocolData(DATA_FILE)
+        test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE)
         exthandlers_handler, protocol = self._create_mock(test_data, *args)
 
         # Choose a non-terminal status
@@ -1109,7 +1106,7 @@ class TestExtension(ExtensionTestCase):
         Testing get_ext_handling_status() function with various cases and
         verifying against the expected values
         '''
-        test_data = WireProtocolData(DATA_FILE)
+        test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE)
         exthandlers_handler, protocol = self._create_mock(test_data, *args)
 
         handler_name = "Handler"
@@ -1152,7 +1149,7 @@ class TestExtension(ExtensionTestCase):
         Testing is_ext_handling_complete() with various input and
         verifying against the expected output values.
         '''
-        test_data = WireProtocolData(DATA_FILE)
+        test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE)
         exthandlers_handler, protocol = self._create_mock(test_data, *args)
 
         handler_name = "Handler"
@@ -1190,18 +1187,18 @@ class TestExtension(ExtensionTestCase):
                     config_version = '1.3.0'
                     decision_version = '1.3.0'
                     if autoupgrade:
-                        datafile = DATA_FILE_EXT_AUTOUPGRADE_INTERNALVERSION
+                        datafile = mockwiredata.DATA_FILE_EXT_AUTOUPGRADE_INTERNALVERSION
                     else:
-                        datafile = DATA_FILE_EXT_INTERNALVERSION
+                        datafile = mockwiredata.DATA_FILE_EXT_INTERNALVERSION
                 else:
                     config_version = '1.0.0'
                     decision_version = '1.0.0'
                     if autoupgrade:
-                        datafile = DATA_FILE_EXT_AUTOUPGRADE
+                        datafile = mockwiredata.DATA_FILE_EXT_AUTOUPGRADE
                     else:
-                        datafile = DATA_FILE
+                        datafile = mockwiredata.DATA_FILE
 
-                _, protocol = self._create_mock(WireProtocolData(datafile), *args)
+                _, protocol = self._create_mock(mockwiredata.WireProtocolData(datafile), *args)
                 ext_handlers, _ = protocol.get_ext_handlers()
                 self.assertEqual(1, len(ext_handlers.extHandlers))
                 ext_handler = ext_handlers.extHandlers[0]
@@ -1234,7 +1231,7 @@ class TestExtension(ExtensionTestCase):
             (None, '4.1', '4.1.0.0'),
         ]
 
-        _, protocol = self._create_mock(WireProtocolData(DATA_FILE), *args)
+        _, protocol = self._create_mock(mockwiredata.WireProtocolData(mockwiredata.DATA_FILE), *args)
         version_uri = Mock()
         version_uri.uri = 'http://some/Microsoft.OSTCExtensions_ExampleHandlerLinux_asiaeast_manifest.xml'
 
@@ -1254,19 +1251,19 @@ class TestExtension(ExtensionTestCase):
     @patch('azurelinuxagent.common.conf.get_extensions_enabled', return_value=False)
     def test_extensions_disabled(self, _, *args):
         # test status is reported for no extensions
-        test_data = WireProtocolData(DATA_FILE_NO_EXT)
+        test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE_NO_EXT)
         exthandlers_handler, protocol = self._create_mock(test_data, *args)
         exthandlers_handler.run()
         self._assert_no_handler_status(protocol.report_vm_status)
 
         # test status is reported, but extensions are not processed
-        test_data = WireProtocolData(DATA_FILE)
+        test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE)
         exthandlers_handler, protocol = self._create_mock(test_data, *args)
         exthandlers_handler.run()
         self._assert_no_handler_status(protocol.report_vm_status)
 
     def test_extensions_deleted(self, *args):
-        test_data = WireProtocolData(DATA_FILE_EXT_DELETION)
+        test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE_EXT_DELETION)
         exthandlers_handler, protocol = self._create_mock(test_data, *args)
 
         # Ensure initial enable is successful
@@ -1293,7 +1290,7 @@ class TestExtension(ExtensionTestCase):
         """
         When extension install fails, the operation should not be retried.
         """
-        test_data = WireProtocolData(DATA_FILE_EXT_SINGLE)
+        test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE_EXT_SINGLE)
         exthandlers_handler, protocol = self._create_mock(test_data, *args)
 
         # Ensure initial install is unsuccessful
@@ -1316,7 +1313,7 @@ class TestExtension(ExtensionTestCase):
         """
         When extension install fails, the operation should be reported to our telemetry service.
         """
-        test_data = WireProtocolData(DATA_FILE_EXT_SINGLE)
+        test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE_EXT_SINGLE)
         exthandlers_handler, protocol = self._create_mock(test_data, *args)
 
         # Ensure install is unsuccessful
@@ -1331,7 +1328,7 @@ class TestExtension(ExtensionTestCase):
         """
         When extension enable fails, the operation should not be retried.
         """
-        test_data = WireProtocolData(DATA_FILE_EXT_SINGLE)
+        test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE_EXT_SINGLE)
         exthandlers_handler, protocol = self._create_mock(test_data, *args)
 
         # Ensure initial install is successful, but enable fails
@@ -1354,7 +1351,7 @@ class TestExtension(ExtensionTestCase):
         """
         When extension enable fails, the operation should be reported.
         """
-        test_data = WireProtocolData(DATA_FILE_EXT_SINGLE)
+        test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE_EXT_SINGLE)
         exthandlers_handler, protocol = self._create_mock(test_data, *args)
 
         # Ensure initial install is successful, but enable fails
@@ -1371,7 +1368,7 @@ class TestExtension(ExtensionTestCase):
         """
         When extension disable fails, the operation should not be retried.
         """
-        test_data = WireProtocolData(DATA_FILE_EXT_SINGLE)
+        test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE_EXT_SINGLE)
         exthandlers_handler, protocol = self._create_mock(test_data, *args)
 
         # Ensure initial install and enable is successful, but disable fails
@@ -1407,7 +1404,7 @@ class TestExtension(ExtensionTestCase):
         """
         When extension disable fails, the operation should be reported.
         """
-        test_data = WireProtocolData(DATA_FILE_EXT_SINGLE)
+        test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE_EXT_SINGLE)
         exthandlers_handler, protocol = self._create_mock(test_data, *args)
 
         # Ensure initial install and enable is successful, but disable fails
@@ -1435,7 +1432,7 @@ class TestExtension(ExtensionTestCase):
         """
         When extension uninstall fails, the operation should not be retried.
         """
-        test_data = WireProtocolData(DATA_FILE_EXT_SINGLE)
+        test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE_EXT_SINGLE)
         exthandlers_handler, protocol = self._create_mock(test_data, *args)
 
         # Ensure initial install and enable is successful, but uninstall fails
@@ -1750,7 +1747,7 @@ class TestExtension(ExtensionTestCase):
         self._assert_ext_status(protocol.report_ext_status, "success", 0)
 
     def test_ext_path_and_version_env_variables_set_for_ever_operation(self, *args):
-        test_data = WireProtocolData(DATA_FILE_EXT_SINGLE)
+        test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE_EXT_SINGLE)
         exthandlers_handler, protocol = self._create_mock(test_data, *args)
 
         with patch.object(CGroupConfigurator.get_instance(), "start_extension_command") as patch_start_cmd:
@@ -1768,7 +1765,7 @@ class TestExtension(ExtensionTestCase):
 
     @patch("azurelinuxagent.common.cgroupconfigurator.handle_process_completion", side_effect="Process Successful")
     def test_ext_sequence_no_should_be_set_for_every_command_call(self, _, *args):
-        test_data = WireProtocolData(DATA_FILE_MULTIPLE_EXT)
+        test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE_MULTIPLE_EXT)
         exthandlers_handler, protocol = self._create_mock(test_data, *args)
 
         with patch("subprocess.Popen") as patch_popen:
@@ -1819,7 +1816,7 @@ class TestExtension(ExtensionTestCase):
         base_dir = os.path.join(conf.get_lib_dir(), 'OSTCExtensions.ExampleHandlerLinux-1.0.0', test_file_name)
         self.create_script(test_file_name, test_file, base_dir)
 
-        test_data = WireProtocolData(DATA_FILE_EXT_SINGLE)
+        test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE_EXT_SINGLE)
         exthandlers_handler, protocol = self._create_mock(test_data, *args)
         expected_seq_no = 0
 
@@ -1906,7 +1903,7 @@ class TestExtension(ExtensionTestCase):
 class TestExtensionSequencing(AgentTestCase):
 
     def _create_mock(self, mock_http_get, MockCryptUtil):
-        test_data = WireProtocolData(DATA_FILE)
+        test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE)
 
         # Mock protocol to return test data
         mock_http_get.side_effect = test_data.mock_http_get
@@ -2163,7 +2160,7 @@ class TestExtensionWithCGroupsEnabled(AgentTestCase):
     def test_ext_handler_with_cgroup_enabled(self, *args):
         self.assertTrue(i_am_root(), "Test does not run when non-root")
 
-        test_data = WireProtocolData(DATA_FILE)
+        test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE)
         exthandlers_handler, _, protocol = self._create_mock(test_data, *args)
 
         # Test enable scenario.
@@ -2230,7 +2227,7 @@ class TestExtensionWithCGroupsEnabled(AgentTestCase):
     def test_ext_handler_and_monitor_handler_with_cgroup_enabled(self, patch_add_event, *args):
         self.assertTrue(i_am_root(), "Test does not run when non-root")
 
-        test_data = WireProtocolData(DATA_FILE)
+        test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE)
         exthandlers_handler, monitor_handler, protocol = self._create_mock(test_data, *args)
 
         monitor_handler.last_cgroup_polling_telemetry = datetime.datetime.utcnow() - timedelta(hours=1)
@@ -2265,7 +2262,7 @@ class TestExtensionWithCGroupsEnabled(AgentTestCase):
         from azurelinuxagent.common.cgroupapi import CGroupsApi
         print(CGroupsApi._is_systemd())
 
-        test_data = WireProtocolData(DATA_FILE)
+        test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE)
         exthandlers_handler, _, protocol = self._create_mock(test_data, *args)
 
         # Test enable scenario.
