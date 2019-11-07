@@ -41,7 +41,7 @@ from azurelinuxagent.common.protocol.restapi import VMInfo
 from azurelinuxagent.common.protocol.wire import WireProtocol
 from azurelinuxagent.common.telemetryevent import TelemetryEventParam, TelemetryEvent
 from azurelinuxagent.common.utils import restutil, fileutil
-from azurelinuxagent.common.version import AGENT_VERSION, CURRENT_VERSION, AGENT_NAME
+from azurelinuxagent.common.version import AGENT_VERSION, CURRENT_VERSION, AGENT_NAME, CURRENT_AGENT
 from azurelinuxagent.ga.monitor import parse_xml_event, get_monitor_handler, MonitorHandler, \
     generate_extension_metrics_telemetry_dictionary, parse_json_event
 from tests.common.test_cgroupstelemetry import make_new_cgroup, consume_cpu_time, consume_memory
@@ -638,12 +638,12 @@ class TestEventMonitoring(AgentTestCase):
                          '<Param Name="VMId" Value="DummyVmId" T="mt:wstr" />' \
                          '<Param Name="ImageOrigin" Value="1" T="mt:uint64" />' \
                          '<Param Name="ContainerId" Value="c6d5526c-5ac2-4200-b6e2-56f2b70c5ab2" T="mt:wstr" />' \
-                         '<Param Name="GAVersion" Value="WALinuxAgent-2.2.44" T="mt:wstr" />' \
+                         '<Param Name="GAVersion" Value="{1}" T="mt:wstr" />' \
                          '<Param Name="EventTid" Value="0" T="mt:uint64" />' \
                          '<Param Name="EventPid" Value="0" T="mt:uint64" />' \
                          '<Param Name="TaskName" Value="" T="mt:wstr" />' \
                          '<Param Name="KeywordName" Value="" T="mt:wstr" />]]>' \
-                         '</Event>'.format(AGENT_VERSION)
+                         '</Event>'.format(AGENT_VERSION, CURRENT_AGENT)
 
         self.maxDiff = None
         self.assertEqual(sample_message, send_event_call_args[1])
