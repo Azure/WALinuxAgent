@@ -28,6 +28,7 @@ import azurelinuxagent.common.conf as conf
 from azurelinuxagent.common.datacontract import get_properties, set_properties, validate_param
 from azurelinuxagent.common.exception import HttpError, ProtocolError
 import azurelinuxagent.common.logger as logger
+from azurelinuxagent.common.protocol.wire import ExtensionsConfig
 from azurelinuxagent.common.utils import restutil
 import azurelinuxagent.common.utils.fileutil as fileutil
 import azurelinuxagent.common.utils.shellutil as shellutil
@@ -265,7 +266,7 @@ class MetadataProtocol(Protocol):
         set_properties("vmAgentVersions", vmagent_pkgs, data)
         return vmagent_pkgs
 
-    def get_ext_handlers(self, last_etag=None):
+    def get_ext_conf(self, last_etag=None):
         self.update_goal_state()
         headers = {
             "x-ms-vmagent-public-x509-cert": self._get_trans_cert()
@@ -274,7 +275,9 @@ class MetadataProtocol(Protocol):
         data, etag = self._get_data(self.ext_uri, headers=headers)
         if last_etag is None or last_etag != etag:
             set_properties("extensionHandlers", ext_list.extHandlers, data)
-        return ext_list, etag
+        ext_conf = ExtensionsConfig(xml_text=None)
+        ext_conf.ext_handlers = ext_list
+        return ext_conf, etag
 
     def get_ext_handler_pkgs(self, ext_handler):
         logger.verbose("Get extension handler packages")

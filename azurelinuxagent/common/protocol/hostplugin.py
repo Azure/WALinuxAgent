@@ -43,7 +43,12 @@ HEADER_VERSION = "x-ms-version"
 HEADER_HOST_CONFIG_NAME = "x-ms-host-config-name"
 HEADER_ARTIFACT_LOCATION = "x-ms-artifact-location"
 HEADER_ARTIFACT_MANIFEST_LOCATION = "x-ms-artifact-manifest-location"
+
+# Indicates HostGAPlugin should download the VMArtifactsProfile blob
+# if it hasn't already done so to check if the manifest url is whitelisted
 HEADER_VERIFY_FROM_ARTIFACTS_BLOB = "x-ms-verify-from-artifacts-blob"
+
+# RFC 7232, section 3.2
 HEADER_IF_NONE_MATCH = "if-none-match"
 MAXIMUM_PAGEBLOB_PAGE_SIZE = 4 * 1024 * 1024  # Max page size: 4MB
 

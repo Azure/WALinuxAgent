@@ -69,7 +69,7 @@ TRANSPORT_PRV_FILE_NAME = "TransportPrivate.pem"
 # Store the last retrieved container id as an environment variable to be shared between threads for telemetry purposes
 CONTAINER_ID_ENV_VARIABLE = "AZURE_GUEST_AGENT_CONTAINER_ID"
 
-FAST_TRACK_EXTENSIONS_PATTERN = re.compile("^(FastTrackExtensionsConfig)\.(\d+)\.(xml)$", re.IGNORECASE)
+FAST_TRACK_EXTENSIONS_PATTERN = re.compile(r'^(FastTrackExtensionsConfig).(\d+).(xml)$', re.IGNORECASE)
 
 HEADER_ETAG = "etag"
 
