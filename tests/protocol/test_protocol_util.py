@@ -15,10 +15,14 @@
 # Requires Python 2.6+ and Openssl 1.0+
 #
 
-from tests.tools import *
+import os
+import unittest
+
+from tests.tools import AgentTestCase, MagicMock, Mock, patch
 from azurelinuxagent.common.exception import *
 from azurelinuxagent.common.protocol import get_protocol_util, \
                                             TAG_FILE_NAME
+
 
 @patch("time.sleep")
 class TestProtocolUtil(AgentTestCase):

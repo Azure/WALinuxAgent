@@ -16,9 +16,9 @@
 #
 import xml
 
-from tests.tools import *
+from tests.tools import AgentTestCase, load_data, patch
 from azurelinuxagent.common.protocol.wire import *
-from azurelinuxagent.common.osutil import get_osutil
+
 
 class TestRemoteAccess(AgentTestCase):
     def test_parse_remote_access(self):
