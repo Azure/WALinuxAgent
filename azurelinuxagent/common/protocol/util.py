@@ -71,7 +71,7 @@ class ProtocolUtil(object):
 
     def __init__(self):
         self.lock = threading.Lock()
-        self.lock_wireserver = threading.Lock()
+        self.lock_wireserver_endpoint = threading.Lock()
         self.protocol = None
         self.endpoint = None
         self.osutil = get_osutil()
@@ -160,7 +160,7 @@ class ProtocolUtil(object):
             TAG_FILE_NAME)
 
     def get_wireserver_endpoint(self):
-        self.lock_wireserver.acquire()
+        self.lock_wireserver_endpoint.acquire()
 
         try:
             if self.endpoint:
@@ -186,10 +186,10 @@ class ProtocolUtil(object):
 
             return self.endpoint
         finally:
-            self.lock_wireserver.release()
+            self.lock_wireserver_endpoint.release()
 
     def _set_wireserver_endpoint(self, endpoint):
-        self.lock_wireserver.acquire()
+        self.lock_wireserver_endpoint.acquire()
         try:
             self.endpoint = endpoint
             file_path = self._get_wireserver_endpoint_file_path()
@@ -197,14 +197,14 @@ class ProtocolUtil(object):
         except (IOError, OSError) as e:
             raise OSUtilError(ustr(e))
         finally:
-            self.lock_wireserver.release()
+            self.lock_wireserver_endpoint.release()
 
     def _clear_wireserver_endpoint(self):
         """
         Cleanup previous saved wireserver endpoint.
         """
         logger.info("Clean wireserver endpoint")
-        self.lock_wireserver.acquire()
+        self.lock_wireserver_endpoint.acquire()
 
         try:
             self.endpoint = None
@@ -220,7 +220,7 @@ class ProtocolUtil(object):
                     return
                 logger.error("Failed to clear wiresever endpoint: {0}", e)
         finally:
-            self.lock_wireserver.release()
+            self.lock_wireserver_endpoint.release()
 
     def _detect_wire_protocol(self):
         endpoint = self.dhcp_handler.endpoint
