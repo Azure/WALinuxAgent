@@ -203,7 +203,6 @@ class ProtocolUtil(object):
         """
         Cleanup previous saved wireserver endpoint.
         """
-        logger.info("Clean wireserver endpoint")
         self.lock_wireserver_endpoint.acquire()
 
         try:
@@ -312,8 +311,8 @@ class ProtocolUtil(object):
         """
         Cleanup previous saved protocol endpoint.
         """
+        logger.info("Clean protocol and wireserver endpoint")
         self._clear_wireserver_endpoint()
-        logger.info("Clean protocol")
         self.protocol = None
         protocol_file_path = self._get_protocol_file_path()
         if not os.path.isfile(protocol_file_path):
