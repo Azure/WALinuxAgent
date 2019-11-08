@@ -19,7 +19,7 @@ from tests.tools import *
 from azurelinuxagent.common.exception import *
 from azurelinuxagent.common.protocol import get_protocol_util, \
                                             TAG_FILE_NAME
-from azurelinuxagent.common.utils.restutil import DEFAULT_PROTOCOL_ENDPOINT
+from azurelinuxagent.common.utils.restutil import KNOWN_WIRESERVER_IP
 from azurelinuxagent.common.protocol.util import ENDPOINT_FILE_NAME
 from errno import ENOENT
 
@@ -97,7 +97,7 @@ class TestProtocolUtil(AgentTestCase):
 
         # Test wire protocol when no endpoint file has been written
         protocol_util._detect_wire_protocol()
-        self.assertEqual(DEFAULT_PROTOCOL_ENDPOINT, protocol_util.get_wireserver_endpoint())
+        self.assertEqual(KNOWN_WIRESERVER_IP, protocol_util.get_wireserver_endpoint())
 
         # Test wire protocol when endpoint was previously detected
         protocol_util.clear_protocol()
@@ -168,19 +168,19 @@ class TestProtocolUtil(AgentTestCase):
         mock_fileutil.read_file.side_effect = IOError()
 
         ep = protocol_util.get_wireserver_endpoint()
-        self.assertEquals(ep, DEFAULT_PROTOCOL_ENDPOINT)
+        self.assertEquals(ep, KNOWN_WIRESERVER_IP)
 
         # Test get endpoint when file not found
         mock_fileutil.read_file.side_effect = IOError(ENOENT, 'File not found')
 
         ep = protocol_util.get_wireserver_endpoint()
-        self.assertEquals(ep, DEFAULT_PROTOCOL_ENDPOINT)
+        self.assertEquals(ep, KNOWN_WIRESERVER_IP)
 
         # Test get endpoint for empty file
         mock_fileutil.read_file.return_value = ""
 
         ep = protocol_util.get_wireserver_endpoint()
-        self.assertEquals(ep, DEFAULT_PROTOCOL_ENDPOINT)
+        self.assertEquals(ep, KNOWN_WIRESERVER_IP)
 
         # Test set endpoint for io error
         mock_fileutil.write_file.side_effect = IOError()

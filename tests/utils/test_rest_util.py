@@ -28,7 +28,7 @@ class TestIOErrorCounter(AgentTestCase):
         restutil.IOErrorCounter.set_protocol_endpoint()
 
         restutil.IOErrorCounter.increment(
-            restutil.DEFAULT_PROTOCOL_ENDPOINT, restutil.HOST_PLUGIN_PORT)
+            restutil.KNOWN_WIRESERVER_IP, restutil.HOST_PLUGIN_PORT)
 
         counts = restutil.IOErrorCounter.get_and_reset()
         self.assertEqual(1, counts["hostplugin"])
@@ -40,7 +40,7 @@ class TestIOErrorCounter(AgentTestCase):
         restutil.IOErrorCounter.set_protocol_endpoint()
 
         restutil.IOErrorCounter.increment(
-            restutil.DEFAULT_PROTOCOL_ENDPOINT, 80)
+            restutil.KNOWN_WIRESERVER_IP, 80)
 
         counts = restutil.IOErrorCounter.get_and_reset()
         self.assertEqual(0, counts["hostplugin"])
@@ -64,11 +64,11 @@ class TestIOErrorCounter(AgentTestCase):
         restutil.IOErrorCounter.set_protocol_endpoint()
 
         restutil.IOErrorCounter.increment(
-            restutil.DEFAULT_PROTOCOL_ENDPOINT, restutil.HOST_PLUGIN_PORT)
+            restutil.KNOWN_WIRESERVER_IP, restutil.HOST_PLUGIN_PORT)
         restutil.IOErrorCounter.increment(
-            restutil.DEFAULT_PROTOCOL_ENDPOINT, restutil.HOST_PLUGIN_PORT)
+            restutil.KNOWN_WIRESERVER_IP, restutil.HOST_PLUGIN_PORT)
         restutil.IOErrorCounter.increment(
-            restutil.DEFAULT_PROTOCOL_ENDPOINT, 80)
+            restutil.KNOWN_WIRESERVER_IP, 80)
         restutil.IOErrorCounter.increment(
             '169.254.169.254', 80)
         restutil.IOErrorCounter.increment(

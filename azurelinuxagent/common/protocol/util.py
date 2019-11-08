@@ -36,7 +36,7 @@ from azurelinuxagent.common.dhcp import get_dhcp_handler
 from azurelinuxagent.common.protocol.ovfenv import OvfEnv
 from azurelinuxagent.common.protocol.wire import WireProtocol
 from azurelinuxagent.common.protocol.metadata import MetadataProtocol
-from azurelinuxagent.common.utils.restutil import DEFAULT_PROTOCOL_ENDPOINT, \
+from azurelinuxagent.common.utils.restutil import KNOWN_WIRESERVER_IP, \
                                                   IOErrorCounter
 
 OVF_FILE_NAME = "ovf-env.xml"
@@ -181,7 +181,7 @@ class ProtocolUtil(object):
             else:
                 logger.error("[GetWireserverEndpoint] Missing file {0}", file_path)
 
-            self.endpoint = DEFAULT_PROTOCOL_ENDPOINT
+            self.endpoint = KNOWN_WIRESERVER_IP
             logger.info("Using hardcoded Wireserver endpoint {0}", self.endpoint)
 
             return self.endpoint

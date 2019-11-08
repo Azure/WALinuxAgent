@@ -30,7 +30,7 @@ from azurelinuxagent.common.osutil import get_osutil
 
 # the kernel routing table representation of 168.63.129.16
 KNOWN_WIRESERVER_IP_ENTRY = '10813FA8'
-from azurelinuxagent.common.utils.restutil import DEFAULT_PROTOCOL_ENDPOINT as KNOWN_WIRESERVER_IP
+from azurelinuxagent.common.utils.restutil import KNOWN_WIRESERVER_IP
 
 
 def get_dhcp_handler():
