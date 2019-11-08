@@ -428,7 +428,7 @@ class ExtHandlersHandler(object):
                 return
 
             self.get_artifact_error_state.reset()
-            if not ext_handler_i.is_upgrade and self.last_etag == etag:
+            if self.last_etag == etag:
                 if self.log_etag:
                     ext_handler_i.logger.verbose("Version {0} is current for etag {1}",
                                                  ext_handler_i.pkg.version,
@@ -684,7 +684,6 @@ class ExtHandlerInstance(object):
         self.operation = None
         self.pkg = None
         self.pkg_file = None
-        self.is_upgrade = False
         self.logger = None
         self.set_logger()
 
@@ -744,12 +743,6 @@ class ExtHandlerInstance(object):
             self.pkg = selected_pkg
             if self.pkg is not None:
                 self.ext_handler.properties.version = str(selected_pkg.version)
-
-        # Note if the selected package is different than that installed
-        if installed_pkg is None \
-                or (
-                self.pkg is not None and FlexibleVersion(self.pkg.version) != FlexibleVersion(installed_pkg.version)):
-            self.is_upgrade = True
 
         if self.pkg is not None:
             self.logger.verbose("Use version: {0}", self.pkg.version)
@@ -823,7 +816,6 @@ class ExtHandlerInstance(object):
 
     def set_operation(self, op):
         self.operation = op
-
 
     def report_event(self, message="", is_success=True, duration=0, log_event=True):
         ext_handler_version = self.ext_handler.properties.version

@@ -25,12 +25,19 @@ class TelemetryEventParam(DataContract):
         self.name = name
         self.value = value
 
+    def __eq__(self, other):
+        return isinstance(other, TelemetryEventParam) and other.name == self.name and other.value == self.value
+
 
 class TelemetryEvent(DataContract):
     def __init__(self, eventId=None, providerId=None):
         self.eventId = eventId
         self.providerId = providerId
         self.parameters = DataContractList(TelemetryEventParam)
+
+    # Checking if the particular param name is in the TelemetryEvent.
+    def __contains__(self, param_name):
+        return param_name in [param.name for param in self.parameters]
 
 
 class TelemetryEventList(DataContract):

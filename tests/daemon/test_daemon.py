@@ -85,9 +85,10 @@ class TestDaemon(AgentTestCase):
             daemon_handler.run()
             self.assertFalse(OPENSSL_FIPS_ENVIRONMENT in os.environ)
 
+    @patch('azurelinuxagent.common.conf.get_provisioning_agent', return_value='waagent')
     @patch('azurelinuxagent.ga.update.UpdateHandler.run_latest')
     @patch('azurelinuxagent.pa.provision.default.ProvisionHandler.run')
-    def test_daemon_agent_enabled(self, patch_run_provision, patch_run_latest):
+    def test_daemon_agent_enabled(self, patch_run_provision, patch_run_latest, gpa):
         """
         Agent should run normally when no disable_agent is found
         """
@@ -104,9 +105,10 @@ class TestDaemon(AgentTestCase):
             self.assertEqual(1, patch_run_provision.call_count)
             self.assertEqual(1, patch_run_latest.call_count)
 
+    @patch('azurelinuxagent.common.conf.get_provisioning_agent', return_value='waagent')
     @patch('azurelinuxagent.ga.update.UpdateHandler.run_latest', side_effect=AgentTestCase.fail)
     @patch('azurelinuxagent.pa.provision.default.ProvisionHandler.run', side_effect=ProvisionHandler.write_agent_disabled)
-    def test_daemon_agent_disabled(self, _, patch_run_latest):
+    def test_daemon_agent_disabled(self, _, patch_run_latest, gpa):
         """
         Agent should provision, then sleep forever when disable_agent is found
         """

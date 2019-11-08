@@ -248,22 +248,26 @@ class UpdateHandler(object):
         """
 
         try:
+            # NOTE: Do not add any telemetry events until after the monitoring handler has been started with the
+            # call to 'monitor_thread.run()'. That method call initializes the protocol, which is needed in order to
+            # load the goal state and update the container id in memory. Any telemetry events sent before this happens
+            # will result in an uninitialized container id value.
+
             logger.info(u"Agent {0} is running as the goal state agent",
                         CURRENT_AGENT)
 
-            # Log OS-specific info, locally and as a telemetry event.
-            msg = u"Distro info: {0} {1}, osutil class being used: {2}, " \
-                  u"agent service name: {3}".format(DISTRO_NAME, DISTRO_VERSION,
-                                                    type(self.osutil).__name__, self.osutil.service_name)
-            add_event(AGENT_NAME,
-                      op=WALAEventOperation.Release43PR1580,
-                      message=msg)
-            logger.info(msg)
+            # Log OS-specific info locally.
+            os_info_msg = u"Distro info: {0} {1}, osutil class being used: {2}, " \
+                          u"agent service name: {3}".format(DISTRO_NAME, DISTRO_VERSION,
+                                                            type(self.osutil).__name__, self.osutil.service_name)
+            logger.info(os_info_msg)
 
             # Launch monitoring threads
             from azurelinuxagent.ga.monitor import get_monitor_handler
             monitor_thread = get_monitor_handler()
             monitor_thread.run()
+
+            # NOTE: Any telemetry events added from this point on will be properly populated with the container id.
 
             from azurelinuxagent.ga.env import get_env_handler
             env_thread = get_env_handler()
@@ -281,6 +285,12 @@ class UpdateHandler(object):
             self._ensure_partition_assigned()
             self._ensure_readonly_files()
             self._ensure_cgroups_initialized()
+
+            # Send OS-specific info as a telemetry event after the monitoring thread has been initialized, and with
+            # it the container id too.
+            add_event(AGENT_NAME,
+                      op=WALAEventOperation.OSInfo,
+                      message=os_info_msg)
 
             goal_state_interval = GOAL_STATE_INTERVAL \
                 if conf.get_extensions_enabled() \
@@ -457,7 +467,7 @@ class UpdateHandler(object):
     def _ensure_cgroups_initialized(self):
         configurator = CGroupConfigurator.get_instance()
         configurator.create_agent_cgroups(track_cgroups=True)
-        configurator.cleanup_old_cgroups()
+        configurator.cleanup_legacy_cgroups()
         configurator.create_extension_cgroups_root()
 
     def _evaluate_agent_health(self, latest_agent):
