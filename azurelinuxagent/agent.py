@@ -68,7 +68,7 @@ class Agent(object):
             logger.add_logger_appender(logger.AppenderType.CONSOLE, level,
                     path="/dev/console")
 
-        if conf.get_logs_to_telemetry():
+        if not event.SEND_LOGS_TO_TELEMETRY:
             logger.add_logger_appender(logger.AppenderType.TELEMETRY,
                                        logger.LogLevel.WARNING,
                                        path=event.add_log_event)

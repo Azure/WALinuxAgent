@@ -21,7 +21,7 @@ from datetime import datetime
 from mock import MagicMock, patch
 
 import azurelinuxagent.common.logger as logger
-from azurelinuxagent.common.event import add_log_event, TELEMETRY_LOG_EVENT_ID, TELEMETRY_LOG_PROVIDER_ID
+from azurelinuxagent.common.event import add_log_event, TELEMETRY_LOG_EVENT_ID, TELEMETRY_LOG_PROVIDER_ID, EventLogger
 from tests.tools import AgentTestCase
 
 _MSG_INFO = "This is our test info logging message {0} {1}"
@@ -163,11 +163,26 @@ class TestLogger(AgentTestCase):
     def test_telemetry_logger(self):
         mock = MagicMock()
         appender = logger.TelemetryAppender(logger.LogLevel.WARNING, mock)
-        appender.write(logger.LogLevel.WARNING, "--unit-test--")
 
-        mock.assert_called_once_with(logger.LogLevel.WARNING, "--unit-test--")
+        appender.write(logger.LogLevel.WARNING, "--unit-test-WARNING--")
+        mock.assert_called_with(logger.LogLevel.WARNING, "--unit-test-WARNING--")
+        mock.reset_mock()
 
-    @patch("azurelinuxagent.common.conf.get_logs_to_telemetry", return_value=True)
+        appender.write(logger.LogLevel.ERROR, "--unit-test-ERROR--")
+        mock.assert_called_with(logger.LogLevel.ERROR, "--unit-test-ERROR--")
+        mock.reset_mock()
+
+        appender.write(logger.LogLevel.INFO, "--unit-test-INFO--")
+        mock.assert_not_called()
+        mock.reset_mock()
+
+        for i in range(5):
+            appender.write(logger.LogLevel.ERROR, "--unit-test-ERROR--")
+            appender.write(logger.LogLevel.INFO, "--unit-test-INFO--")
+
+        self.assertEquals(5, mock.call_count)  # Only ERROR should be called.
+
+    @patch("azurelinuxagent.common.event.send_logs_to_telemetry", return_value=True)
     @patch('azurelinuxagent.common.event.EventLogger.save_event')
     def test_telemetry_logger_sending_correct_fields(self, mock_save, patch_conf_get_logs_to_telemetry):
         appender = logger.TelemetryAppender(logger.LogLevel.WARNING, add_log_event)
@@ -203,3 +218,25 @@ class TestLogger(AgentTestCase):
                                                 'Failed to create a cgroup for extension '
                                                 'Microsoft.OSTCExtensions.DummyExtension-1.2.3.4')
         self.assertEqual(0, mock_save.call_count)
+
+    @patch('azurelinuxagent.common.logger.Logger.error')
+    @patch('azurelinuxagent.common.logger.Logger.warn')
+    def test_telemetry_logger_verify_not_logging_errors_warnings(self, mock_warn, mock_error):
+        appender = logger.TelemetryAppender(logger.LogLevel.WARNING, add_log_event)
+
+        with patch('azurelinuxagent.common.event.EventLogger.save_event') as mock_save:
+            appender.write(logger.LogLevel.WARNING, 'Cgroup controller "memory" is not mounted. '
+                                                    'Microsoft.OSTCExtensions.DummyExtension-1.2.3.4')
+            self.assertEqual(1, mock_save.call_count)
+            self.assertEqual(0, mock_warn.call_count)
+            self.assertEqual(0, mock_error.call_count)
+
+        # Writing 2000 events should generate only one more log event due to too many files. #1035 was caused due to
+        # too many files being written in an error condition (earlier code would write 1000 files in this case).
+        for _ in range(2000):
+            appender.write(logger.LogLevel.WARNING, 'Cgroup controller "memory" is not mounted. '
+                                                    'Microsoft.OSTCExtensions.DummyExtension-1.2.3.4')
+
+        self.assertEqual(1, mock_warn.call_count)
+        self.assertEqual(0, mock_error.call_count)
+

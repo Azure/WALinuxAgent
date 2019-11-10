@@ -42,6 +42,11 @@ CONTAINER_ID_ENV_VARIABLE = "AZURE_GUEST_AGENT_CONTAINER_ID"
 
 TELEMETRY_LOG_PROVIDER_ID = "FFF0196F-EE4C-4EAF-9AA5-776F622DEB4F"
 TELEMETRY_LOG_EVENT_ID = 7
+SEND_LOGS_TO_TELEMETRY = True
+
+
+def send_logs_to_telemetry():
+    return SEND_LOGS_TO_TELEMETRY
 
 
 def get_container_id_from_env():
@@ -216,7 +221,8 @@ class EventLogger(object):
 
     def save_event(self, data):
         if self.event_dir is None:
-            logger.warn("Cannot save event -- Event reporter is not initialized.")
+            logger.periodic_warn(logger.EVERY_FIFTEEN_MINUTES,
+                                 "[PERIODIC] Cannot save event -- Event reporter is not initialized.")
             return
 
         try:
@@ -227,12 +233,14 @@ class EventLogger(object):
 
         existing_events = os.listdir(self.event_dir)
         if len(existing_events) >= 1000:
+            logger.periodic_warn(logger.EVERY_FIFTEEN_MINUTES,
+                                 "[PERIODIC] Too many files under: {0}, current count:  {1}, removing oldest".format(
+                                     self.event_dir, len(existing_events)))
             existing_events.sort()
             oldest_files = existing_events[:-999]
-            logger.warn("Too many files under: {0}, removing oldest".format(self.event_dir))
             try:
-                for f in oldest_files:
-                    os.remove(os.path.join(self.event_dir, f))
+                for event_file in oldest_files:
+                    os.remove(os.path.join(self.event_dir, event_file))
             except IOError as e:
                 raise EventError(e)
 
@@ -294,7 +302,7 @@ class EventLogger(object):
         event = TelemetryEvent(TELEMETRY_LOG_EVENT_ID, TELEMETRY_LOG_PROVIDER_ID)
         event.parameters.append(TelemetryEventParam('EventName', WALAEventOperation.Log))
         event.parameters.append(TelemetryEventParam('CapabilityUsed', logger.LogLevel.STRINGS[level]))
-        event.parameters.append(TelemetryEventParam('Context1', self._cleanup_message(message)))
+        event.parameters.append(TelemetryEventParam('Context1', self._clean_up_message(message)))
         event.parameters.append(TelemetryEventParam('Context2', ''))
         event.parameters.append(TelemetryEventParam('Context3', ''))
 
@@ -334,7 +342,7 @@ class EventLogger(object):
             logger.error("{0}", e)
 
     @staticmethod
-    def _cleanup_message(message):
+    def _clean_up_message(message):
         # By the time the message has gotten to this point it is formatted as
         #
         #   YYYY/MM/DD HH:mm:ss.fffffff LEVEL <text>.
@@ -449,7 +457,7 @@ def add_log_event(level, message, reporter=__event_logger__):
         # See #1035 for not adding warning statements here.
         return
 
-    if not conf.get_logs_to_telemetry():
+    if not SEND_LOGS_TO_TELEMETRY:
         return
 
     if level >= logger.LogLevel.WARNING:
