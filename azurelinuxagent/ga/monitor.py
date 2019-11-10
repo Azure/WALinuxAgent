@@ -29,19 +29,20 @@ import azurelinuxagent.common.utils.networkutil as networkutil
 
 from azurelinuxagent.common.cgroupstelemetry import CGroupsTelemetry
 from azurelinuxagent.common.errorstate import ErrorState
-from azurelinuxagent.common.event import add_event, WALAEventOperation
+from azurelinuxagent.common.event import add_event, WALAEventOperation, CONTAINER_ID_ENV_VARIABLE, \
+    get_container_id_from_env
 from azurelinuxagent.common.exception import EventError, ProtocolError, OSUtilError, HttpError
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.osutil import get_osutil
 from azurelinuxagent.common.protocol import get_protocol_util
 from azurelinuxagent.common.protocol.healthservice import HealthService
 from azurelinuxagent.common.protocol.imds import get_imds_client
-from azurelinuxagent.common.protocol.restapi import TelemetryEventParam, \
-    TelemetryEventList, TelemetryEvent, set_properties
+from azurelinuxagent.common.telemetryevent import TelemetryEvent, TelemetryEventParam, TelemetryEventList
+from azurelinuxagent.common.datacontract import set_properties
 from azurelinuxagent.common.utils.restutil import IOErrorCounter
 from azurelinuxagent.common.utils.textutil import parse_doc, findall, find, getattrib, hash_strings
 from azurelinuxagent.common.version import DISTRO_NAME, DISTRO_VERSION, \
-    DISTRO_CODE_NAME, AGENT_NAME, CURRENT_AGENT, CURRENT_VERSION
+    DISTRO_CODE_NAME, AGENT_NAME, CURRENT_AGENT, CURRENT_VERSION, AGENT_EXECUTION_MODE
 
 
 def parse_event(data_str):
@@ -114,12 +115,16 @@ class MonitorHandler(object):
     IMDS_HEARTBEAT_PERIOD = datetime.timedelta(minutes=1)
     IMDS_HEALTH_PERIOD = datetime.timedelta(minutes=3)
 
+    # Resetting loggers period
+    RESET_LOGGERS_PERIOD = datetime.timedelta(hours=12)
+
     def __init__(self):
         self.osutil = get_osutil()
         self.protocol_util = get_protocol_util()
         self.imds_client = get_imds_client()
 
         self.event_thread = None
+        self.last_reset_loggers_time = None
         self.last_event_collection = None
         self.last_telemetry_heartbeat = None
         self.last_cgroup_polling_telemetry = None
@@ -158,6 +163,7 @@ class MonitorHandler(object):
     def start(self):
         self.event_thread = threading.Thread(target=self.daemon)
         self.event_thread.setDaemon(True)
+        self.event_thread.setName("MonitorHandler")
         self.event_thread.start()
 
     def init_sysinfo(self):
@@ -167,8 +173,7 @@ class MonitorHandler(object):
                                                  DISTRO_CODE_NAME,
                                                  platform.release())
         self.sysinfo.append(TelemetryEventParam("OSVersion", osversion))
-        self.sysinfo.append(
-            TelemetryEventParam("GAVersion", CURRENT_AGENT))
+        self.sysinfo.append(TelemetryEventParam("ExecutionMode", AGENT_EXECUTION_MODE))
 
         try:
             ram = self.osutil.get_total_mem()
@@ -222,6 +227,12 @@ class MonitorHandler(object):
             raise EventError(msg)
 
     def collect_and_send_events(self):
+        """
+        Periodically read, parse, and send events located in the events folder. Currently, this is done every minute.
+        Any .tld file dropped in the events folder will be emitted. These event files can be created either by the
+        agent or the extensions. We don't have control over extension's events parameters, but we will override
+        any values they might have set for sys_info parameters.
+        """
         if self.last_event_collection is None:
             self.last_event_collection = datetime.datetime.utcnow() - MonitorHandler.EVENT_COLLECTION_PERIOD
 
@@ -275,15 +286,62 @@ class MonitorHandler(object):
             self.send_host_plugin_heartbeat()
             self.send_imds_heartbeat()
             self.log_altered_network_configuration()
+            self.reset_loggers()
             time.sleep(min_delta)
 
+    def reset_loggers(self):
+        """
+        The loggers maintain hash-tables in memory and they need to be cleaned up from time to time.
+        For reference, please check azurelinuxagent.common.logger.Logger and
+        azurelinuxagent.common.event.EventLogger classes
+        """
+        time_now = datetime.datetime.utcnow()
+        if not self.last_reset_loggers_time:
+            self.last_reset_loggers_time = time_now
+
+        if time_now >= (self.last_reset_loggers_time +
+                        MonitorHandler.RESET_LOGGERS_PERIOD):
+            try:
+                logger.reset_periodic()
+            finally:
+                self.last_reset_loggers_time = time_now
+
     def add_sysinfo(self, event):
+        """
+        This method is called after parsing the event file in the events folder and before emitting it. This means
+        all events, either coming from the agent or from the extensions, are passed through this method. The purpose
+        is to add a static list of sys_info parameters such as VMName, Region, RAM, etc. If the sys_info parameters
+        are already populated in the event, they will be overwritten by the sys_info values obtained from the agent.
+        Since the ContainerId parameter is only populated on the fly for the agent events because it is not a static
+        sys_info parameter, an event coming from an extension will not have it, so we explicitly add it.
+        :param event: Event to be enriched with sys_info parameters
+        :return: Event with all parameters added, ready to be reported
+        """
         sysinfo_names = [v.name for v in self.sysinfo]
+        final_parameters = []
+
+        # Refer: azurelinuxagent.common.event.EventLogger.add_default_parameters_to_event for agent specific values.
+        #
+        # Default fields are only populated by Agent and not the extension. Agent will fill up any event if they don't
+        # have the default params. Example: GAVersion and ContainerId are populated for agent events on the fly,
+        # but not for extension events. Add it if it's missing.
+        default_values = [("ContainerId", get_container_id_from_env()), ("GAVersion", CURRENT_AGENT),
+                          ("OpcodeName", ""), ("EventTid", 0), ("EventPid", 0), ("TaskName", ""), ("KeywordName", "")]
+
         for param in event.parameters:
+            # Discard any sys_info parameters already in the event, since they will be overwritten
             if param.name in sysinfo_names:
-                logger.verbose("Remove existing event parameter: [{0}:{1}]", param.name, param.value)
-                event.parameters.remove(param)
-        event.parameters.extend(self.sysinfo)
+                continue
+            final_parameters.append(param)
+
+        # Add sys_info params populated by the agent
+        final_parameters.extend(self.sysinfo)
+
+        for default_value in default_values:
+            if default_value[0] not in event:
+                final_parameters.append(TelemetryEventParam(default_value[0], default_value[1]))
+
+        event.parameters = final_parameters
 
     def send_imds_heartbeat(self):
         """

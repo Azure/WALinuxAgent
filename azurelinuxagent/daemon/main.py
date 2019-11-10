@@ -69,7 +69,6 @@ class DaemonHandler(object):
         self.initialize_environment()
 
         CGroupConfigurator.get_instance().create_agent_cgroups(track_cgroups=False)
-        CGroupConfigurator.get_instance().cleanup_old_cgroups()
 
         # If FIPS is enabled, set the OpenSSL environment variable
         # Note:

@@ -18,11 +18,11 @@
 import json
 from datetime import datetime
 
-import azurelinuxagent.common.logger as logger
-from azurelinuxagent.common.event import add_log_event, TELEMETRY_LOG_PROVIDER_ID, TELEMETRY_LOG_EVENT_ID
-from azurelinuxagent.common.version import CURRENT_AGENT, CURRENT_VERSION
+from mock import MagicMock, patch
 
-from tests.tools import *
+import azurelinuxagent.common.logger as logger
+from azurelinuxagent.common.event import add_log_event, TELEMETRY_LOG_EVENT_ID, TELEMETRY_LOG_PROVIDER_ID
+from tests.tools import AgentTestCase
 
 _MSG_INFO = "This is our test info logging message {0} {1}"
 _MSG_WARN = "This is our test warn logging message {0} {1}"
@@ -64,24 +64,38 @@ class TestLogger(AgentTestCase):
     def test_periodic_does_not_emit_if_previously_sent(self, mock_info, mock_error, mock_warn, mock_verbose):
         # The count does not increase from 1 - the first time it sends the data.
         logger.periodic_info(logger.EVERY_DAY, _MSG_INFO, *_DATA)
+        self.assertIn(hash(_MSG_INFO), logger.DEFAULT_LOGGER.periodic_messages)
         self.assertEqual(1, mock_info.call_count)
+
         logger.periodic_info(logger.EVERY_DAY, _MSG_INFO, *_DATA)
+        self.assertIn(hash(_MSG_INFO), logger.DEFAULT_LOGGER.periodic_messages)
         self.assertEqual(1, mock_info.call_count)
 
         logger.periodic_warn(logger.EVERY_DAY, _MSG_WARN, *_DATA)
+        self.assertIn(hash(_MSG_WARN), logger.DEFAULT_LOGGER.periodic_messages)
         self.assertEqual(1, mock_warn.call_count)
+
         logger.periodic_warn(logger.EVERY_DAY, _MSG_WARN, *_DATA)
+        self.assertIn(hash(_MSG_WARN), logger.DEFAULT_LOGGER.periodic_messages)
         self.assertEqual(1, mock_warn.call_count)
 
         logger.periodic_error(logger.EVERY_DAY, _MSG_ERROR, *_DATA)
+        self.assertIn(hash(_MSG_ERROR), logger.DEFAULT_LOGGER.periodic_messages)
         self.assertEqual(1, mock_error.call_count)
+
         logger.periodic_error(logger.EVERY_DAY, _MSG_ERROR, *_DATA)
+        self.assertIn(hash(_MSG_ERROR), logger.DEFAULT_LOGGER.periodic_messages)
         self.assertEqual(1, mock_error.call_count)
 
         logger.periodic_verbose(logger.EVERY_DAY, _MSG_VERBOSE, *_DATA)
+        self.assertIn(hash(_MSG_VERBOSE), logger.DEFAULT_LOGGER.periodic_messages)
         self.assertEqual(1, mock_verbose.call_count)
+
         logger.periodic_verbose(logger.EVERY_DAY, _MSG_VERBOSE, *_DATA)
+        self.assertIn(hash(_MSG_VERBOSE), logger.DEFAULT_LOGGER.periodic_messages)
         self.assertEqual(1, mock_verbose.call_count)
+
+        self.assertEqual(4, len(logger.DEFAULT_LOGGER.periodic_messages))
 
     @patch('azurelinuxagent.common.logger.Logger.verbose')
     @patch('azurelinuxagent.common.logger.Logger.warn')
@@ -167,7 +181,7 @@ class TestLogger(AgentTestCase):
         self.assertEqual(TELEMETRY_LOG_PROVIDER_ID, telemetry_json['providerId'])
         self.assertEqual(TELEMETRY_LOG_EVENT_ID, telemetry_json['eventId'])
 
-        self.assertEqual(5, len(telemetry_json['parameters']))
+        self.assertEqual(12, len(telemetry_json['parameters']))
         for x in telemetry_json['parameters']:
             if x['name'] == 'EventName':
                 self.assertEqual(x['value'], 'Log')

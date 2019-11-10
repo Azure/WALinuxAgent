@@ -37,6 +37,7 @@ import azurelinuxagent.common.logger as logger
 import azurelinuxagent.common.utils.fileutil as fileutil
 import azurelinuxagent.common.version as version
 from azurelinuxagent.common.cgroupconfigurator import CGroupConfigurator
+from azurelinuxagent.common.datacontract import get_properties, set_properties
 from azurelinuxagent.common.errorstate import ErrorState, ERROR_STATE_DELTA_INSTALL
 from azurelinuxagent.common.event import add_event, WALAEventOperation, elapsed_milliseconds, report_event
 from azurelinuxagent.common.exception import ExtensionError, ProtocolError, ProtocolNotFoundError, \
@@ -46,9 +47,7 @@ from azurelinuxagent.common.protocol import get_protocol_util
 from azurelinuxagent.common.protocol.restapi import ExtHandlerStatus, \
     ExtensionStatus, \
     ExtensionSubStatus, \
-    VMStatus, ExtHandler, \
-    get_properties, \
-    set_properties
+    VMStatus, ExtHandler
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
 from azurelinuxagent.common.version import AGENT_NAME, CURRENT_VERSION, GOAL_STATE_AGENT_VERSION, \
     DISTRO_NAME, DISTRO_VERSION, PY_VERSION_MAJOR, PY_VERSION_MINOR, PY_VERSION_MICRO
@@ -87,8 +86,6 @@ class ExtCommandEnvVariable(object):
     ExtensionVersion = "%s_EXTENSION_VERSION" % Prefix
     ExtensionSeqNumber = "ConfigSequenceNumber"  # At par with Windows Guest Agent
     UpdatingFromVersion = "%s_UPDATING_FROM_VERSION" % Prefix
-    CurrentAgentVersion = "%s_CURRENT_VERSION" % Prefix
-
 
 
 def get_traceback(e):
@@ -431,7 +428,7 @@ class ExtHandlersHandler(object):
                 return
 
             self.get_artifact_error_state.reset()
-            if not ext_handler_i.is_upgrade and self.last_etag == etag:
+            if self.last_etag == etag:
                 if self.log_etag:
                     ext_handler_i.logger.verbose("Version {0} is current for etag {1}",
                                                  ext_handler_i.pkg.version,
@@ -687,7 +684,6 @@ class ExtHandlerInstance(object):
         self.operation = None
         self.pkg = None
         self.pkg_file = None
-        self.is_upgrade = False
         self.logger = None
         self.set_logger()
 
@@ -747,12 +743,6 @@ class ExtHandlerInstance(object):
             self.pkg = selected_pkg
             if self.pkg is not None:
                 self.ext_handler.properties.version = str(selected_pkg.version)
-
-        # Note if the selected package is different than that installed
-        if installed_pkg is None \
-                or (
-                self.pkg is not None and FlexibleVersion(self.pkg.version) != FlexibleVersion(installed_pkg.version)):
-            self.is_upgrade = True
 
         if self.pkg is not None:
             self.logger.verbose("Use version: {0}", self.pkg.version)
@@ -826,7 +816,6 @@ class ExtHandlerInstance(object):
 
     def set_operation(self, op):
         self.operation = op
-
 
     def report_event(self, message="", is_success=True, duration=0, log_event=True):
         ext_handler_version = self.ext_handler.properties.version
@@ -1223,7 +1212,6 @@ class ExtHandlerInstance(object):
                 # Always add Extension Path and version to the current launch_command (Ask from publishers)
                 env.update({ExtCommandEnvVariable.ExtensionPath: base_dir,
                             ExtCommandEnvVariable.ExtensionVersion: str(self.ext_handler.properties.version),
-                            ExtCommandEnvVariable.CurrentAgentVersion: str(GOAL_STATE_AGENT_VERSION),
                             ExtCommandEnvVariable.ExtensionSeqNumber: str(self.get_seq_no())})
 
                 try:

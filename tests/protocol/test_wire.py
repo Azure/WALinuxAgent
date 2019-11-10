@@ -18,6 +18,7 @@
 
 import zipfile
 
+from azurelinuxagent.common.telemetryevent import TelemetryEvent, TelemetryEventParam
 from azurelinuxagent.common.protocol.wire import *
 from azurelinuxagent.common.utils.shellutil import run_get_output
 from tests.ga.test_monitor import random_generator

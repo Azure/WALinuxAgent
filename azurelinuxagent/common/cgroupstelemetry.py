@@ -108,8 +108,6 @@ class CGroupsTelemetry(object):
                     CGroupsTelemetry._cgroup_metrics[key].marked_for_delete]:
             del CGroupsTelemetry._cgroup_metrics[key]
 
-        logger.reset_periodic()
-
         return collected_metrics
 
     @staticmethod
@@ -134,7 +132,7 @@ class CGroupsTelemetry(object):
                     CGroupsTelemetry.stop_tracking(cgroup)
 
     @staticmethod
-    def cleanup():
+    def reset():
         with CGroupsTelemetry._rlock:
             CGroupsTelemetry._tracked *= 0  # emptying the list
             CGroupsTelemetry._cgroup_metrics = {}
