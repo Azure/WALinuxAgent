@@ -19,11 +19,17 @@ from __future__ import print_function
 
 import subprocess
 
+import errno
+import os
+import re
+from azurelinuxagent.common.cgroup import CGroup
 from azurelinuxagent.common.cgroupconfigurator import CGroupConfigurator
 from azurelinuxagent.common.cgroupstelemetry import CGroupsTelemetry
 from azurelinuxagent.common.exception import CGroupsException
 from azurelinuxagent.common.osutil.default import DefaultOSUtil
-from tests.tools import *
+from azurelinuxagent.common.utils import fileutil
+from tests.utils.cgroups_tools import CGroupsTools
+from tests.tools import AgentTestCase, patch
 
 
 class CGroupConfiguratorTestCase(AgentTestCase):
@@ -99,6 +105,18 @@ class CGroupConfiguratorTestCase(AgentTestCase):
                 CGroupConfigurator.get_instance().enable()
             self.assertIn("cgroups are not supported", str(context_manager.exception))
 
+    def test_disable_should_reset_tracked_cgroups(self):
+        configurator = CGroupConfigurator.get_instance()
+
+        # Start tracking a couple of dummy cgroups
+        CGroupsTelemetry.track_cgroup(CGroup("dummy", "/sys/fs/cgroup/memory/system.slice/dummy.service", "cpu"))
+        CGroupsTelemetry.track_cgroup(CGroup("dummy", "/sys/fs/cgroup/memory/system.slice/dummy.service", "memory"))
+
+        configurator.disable()
+
+        self.assertFalse(configurator.enabled())
+        self.assertEquals(len(CGroupsTelemetry._tracked), 0)
+
     def test_cgroup_operations_should_not_invoke_the_cgroup_api_when_cgroups_are_not_enabled(self):
         configurator = CGroupConfigurator.get_instance()
         configurator.disable()
@@ -106,7 +124,7 @@ class CGroupConfiguratorTestCase(AgentTestCase):
         # List of operations to test, and the functions to mock used in order to do verifications
         operations = [
             [lambda: configurator.create_agent_cgroups(track_cgroups=False), "azurelinuxagent.common.cgroupapi.FileSystemCgroupsApi.create_agent_cgroups"],
-            [lambda: configurator.cleanup_old_cgroups(),                     "azurelinuxagent.common.cgroupapi.FileSystemCgroupsApi.cleanup_old_cgroups"],
+            [lambda: configurator.cleanup_legacy_cgroups(),                  "azurelinuxagent.common.cgroupapi.FileSystemCgroupsApi.cleanup_legacy_cgroups"],
             [lambda: configurator.create_extension_cgroups_root(),           "azurelinuxagent.common.cgroupapi.FileSystemCgroupsApi.create_extension_cgroups_root"],
             [lambda: configurator.create_extension_cgroups("A.B.C-1.0.0"),   "azurelinuxagent.common.cgroupapi.FileSystemCgroupsApi.create_extension_cgroups"],
             [lambda: configurator.remove_extension_cgroups("A.B.C-1.0.0"),   "azurelinuxagent.common.cgroupapi.FileSystemCgroupsApi.remove_extension_cgroups"]
@@ -121,28 +139,30 @@ class CGroupConfiguratorTestCase(AgentTestCase):
     def test_cgroup_operations_should_log_a_warning_when_the_cgroup_api_raises_an_exception(self):
         configurator = CGroupConfigurator.get_instance()
 
-        # List of operations to test, and the functions to mock in order to raise exceptions
-        operations = [
-            [lambda: configurator.create_agent_cgroups(track_cgroups=False), "azurelinuxagent.common.cgroupapi.FileSystemCgroupsApi.create_agent_cgroups"],
-            [lambda: configurator.cleanup_old_cgroups(),                     "azurelinuxagent.common.cgroupapi.FileSystemCgroupsApi.cleanup_old_cgroups"],
-            [lambda: configurator.create_extension_cgroups_root(),           "azurelinuxagent.common.cgroupapi.FileSystemCgroupsApi.create_extension_cgroups_root"],
-            [lambda: configurator.create_extension_cgroups("A.B.C-1.0.0"),   "azurelinuxagent.common.cgroupapi.FileSystemCgroupsApi.create_extension_cgroups"],
-            [lambda: configurator.remove_extension_cgroups("A.B.C-1.0.0"),   "azurelinuxagent.common.cgroupapi.FileSystemCgroupsApi.remove_extension_cgroups"]
-        ]
+        # cleanup_legacy_cgroups disables cgroups on error, so make disable() a no-op
+        with patch.object(configurator, "disable"):
+            # List of operations to test, and the functions to mock in order to raise exceptions
+            operations = [
+                [lambda: configurator.create_agent_cgroups(track_cgroups=False), "azurelinuxagent.common.cgroupapi.FileSystemCgroupsApi.create_agent_cgroups"],
+                [lambda: configurator.cleanup_legacy_cgroups(),                  "azurelinuxagent.common.cgroupapi.FileSystemCgroupsApi.cleanup_legacy_cgroups"],
+                [lambda: configurator.create_extension_cgroups_root(),           "azurelinuxagent.common.cgroupapi.FileSystemCgroupsApi.create_extension_cgroups_root"],
+                [lambda: configurator.create_extension_cgroups("A.B.C-1.0.0"),   "azurelinuxagent.common.cgroupapi.FileSystemCgroupsApi.create_extension_cgroups"],
+                [lambda: configurator.remove_extension_cgroups("A.B.C-1.0.0"),   "azurelinuxagent.common.cgroupapi.FileSystemCgroupsApi.remove_extension_cgroups"]
+            ]
 
-        def raise_exception(*_):
-            raise Exception("A TEST EXCEPTION")
+            def raise_exception(*_):
+                raise Exception("A TEST EXCEPTION")
 
-        for op in operations:
-            with patch("azurelinuxagent.common.cgroupconfigurator.logger.warn") as mock_logger_warn:
-                with patch(op[1], raise_exception):
-                    op[0]()
+            for op in operations:
+                with patch("azurelinuxagent.common.cgroupconfigurator.logger.warn") as mock_logger_warn:
+                    with patch(op[1], raise_exception):
+                        op[0]()
 
-                self.assertEquals(mock_logger_warn.call_count, 1)
+                    self.assertEquals(mock_logger_warn.call_count, 1)
 
-                args, kwargs = mock_logger_warn.call_args
-                message = args[0]
-                self.assertIn("A TEST EXCEPTION", message)
+                    args, kwargs = mock_logger_warn.call_args
+                    message = args[0]
+                    self.assertIn("A TEST EXCEPTION", message)
 
     def test_start_extension_command_should_forward_to_subprocess_popen_when_groups_are_not_enabled(self):
         configurator = CGroupConfigurator.get_instance()
@@ -216,3 +236,74 @@ class CGroupConfiguratorTestCase(AgentTestCase):
                     stdout=subprocess.PIPE,
                     stderr=subprocess.PIPE)
             self.assertIn("A TEST EXCEPTION", str(context_manager.exception))
+
+    def test_cleanup_legacy_cgroups_should_disable_cgroups_when_it_fails_to_process_legacy_cgroups(self):
+        # Set up a mock /var/run/waagent.pid file
+        daemon_pid = "42"
+        daemon_pid_file = os.path.join(self.tmp_dir, "waagent.pid")
+        fileutil.write_file(daemon_pid_file, daemon_pid + "\n")
+
+        # Set up old controller cgroups and add the daemon PID to them
+        CGroupsTools.create_legacy_agent_cgroup(self.cgroups_file_system_root, "cpu", daemon_pid)
+        CGroupsTools.create_legacy_agent_cgroup(self.cgroups_file_system_root, "memory", daemon_pid)
+
+        # Set up new controller cgroups and add extension handler's PID to them
+        CGroupsTools.create_agent_cgroup(self.cgroups_file_system_root, "cpu", "999")
+        CGroupsTools.create_agent_cgroup(self.cgroups_file_system_root, "memory", "999")
+
+        def mock_append_file(filepath, contents, **kwargs):
+            if re.match(r'/.*/cpu/.*/cgroup.procs', filepath):
+                raise OSError(errno.ENOSPC, os.strerror(errno.ENOSPC))
+            fileutil.append_file(filepath, controller, **kwargs)
+
+        # Start tracking a couple of dummy cgroups
+        CGroupsTelemetry.track_cgroup(CGroup("dummy", "/sys/fs/cgroup/memory/system.slice/dummy.service", "cpu"))
+        CGroupsTelemetry.track_cgroup(CGroup("dummy", "/sys/fs/cgroup/memory/system.slice/dummy.service", "memory"))
+
+        cgroup_configurator = CGroupConfigurator.get_instance()
+
+        with patch("azurelinuxagent.common.cgroupconfigurator.add_event") as mock_add_event:
+            with patch("azurelinuxagent.common.cgroupapi.get_agent_pid_file_path", return_value=daemon_pid_file):
+                with patch("azurelinuxagent.common.cgroupapi.fileutil.append_file", side_effect=mock_append_file):
+                    cgroup_configurator.cleanup_legacy_cgroups()
+
+        self.assertEquals(len(mock_add_event.call_args_list), 1)
+        _, kwargs = mock_add_event.call_args_list[0]
+        self.assertEquals(kwargs['op'], 'CGroupsCleanUp')
+        self.assertFalse(kwargs['is_success'])
+        self.assertEquals(kwargs['message'], 'Failed to process legacy cgroups. Collection of resource usage data will be disabled. [Errno 28] No space left on device')
+
+        self.assertFalse(cgroup_configurator.enabled())
+        self.assertEquals(len(CGroupsTelemetry._tracked), 0)
+
+    @patch("azurelinuxagent.common.cgroupapi.CGroupsApi._is_systemd", return_value=True)
+    def test_cleanup_legacy_cgroups_should_disable_cgroups_when_the_daemon_was_added_to_the_legacy_cgroup_on_systemd(self, _):
+        # Set up a mock /var/run/waagent.pid file
+        daemon_pid = "42"
+        daemon_pid_file = os.path.join(self.tmp_dir, "waagent.pid")
+        fileutil.write_file(daemon_pid_file, daemon_pid + "\n")
+
+        # Set up old controller cgroups and add the daemon PID to them
+        CGroupsTools.create_legacy_agent_cgroup(self.cgroups_file_system_root, "cpu", daemon_pid)
+        CGroupsTools.create_legacy_agent_cgroup(self.cgroups_file_system_root, "memory", daemon_pid)
+
+        # Start tracking a couple of dummy cgroups
+        CGroupsTelemetry.track_cgroup(CGroup("dummy", "/sys/fs/cgroup/memory/system.slice/dummy.service", "cpu"))
+        CGroupsTelemetry.track_cgroup(CGroup("dummy", "/sys/fs/cgroup/memory/system.slice/dummy.service", "memory"))
+
+        cgroup_configurator = CGroupConfigurator.get_instance()
+
+        with patch("azurelinuxagent.common.cgroupconfigurator.add_event") as mock_add_event:
+            with patch("azurelinuxagent.common.cgroupapi.get_agent_pid_file_path", return_value=daemon_pid_file):
+                    cgroup_configurator.cleanup_legacy_cgroups()
+
+        self.assertEquals(len(mock_add_event.call_args_list), 1)
+        _, kwargs = mock_add_event.call_args_list[0]
+        self.assertEquals(kwargs['op'], 'CGroupsCleanUp')
+        self.assertFalse(kwargs['is_success'])
+        self.assertEquals(
+            kwargs['message'],
+            "Failed to process legacy cgroups. Collection of resource usage data will be disabled. [CGroupsException] The daemon's PID ({0}) was already added to the legacy cgroup; this invalidates resource usage data.".format(daemon_pid))
+
+        self.assertFalse(cgroup_configurator.enabled())
+        self.assertEquals(len(CGroupsTelemetry._tracked), 0)

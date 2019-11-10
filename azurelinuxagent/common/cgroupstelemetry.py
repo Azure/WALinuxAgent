@@ -159,7 +159,7 @@ class CGroupsTelemetry(object):
                     CGroupsTelemetry.stop_tracking(cgroup)
 
     @staticmethod
-    def cleanup():
+    def reset():
         with CGroupsTelemetry._rlock:
             CGroupsTelemetry._tracked *= 0  # emptying the list
             CGroupsTelemetry._cgroup_metrics = {}
