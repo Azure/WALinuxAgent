@@ -1,0 +1,21 @@
+<Data>
+    <Provider id="69B669B9-4AF8-4C50-BDC4-6006FA76E975"/>
+    <Event id="1"/>
+    <Param Name="OperationSuccess" Value="True" T="mt:bool"/>
+    <Param Name="Processors" Value="0" T="mt:uint64"/>
+    <Param Name="Version" Value="1.4.1.0" T="mt:wstr"/>
+    <Param Name="RoleName" Value="" T="mt:wstr"/>
+    <Param Name="IsInternal" Value="False" T="mt:bool"/>
+    <Param Name="RAM" Value="0" T="mt:uint64"/>
+    <Param Name="ExecutionMode" Value="IAAS" T="mt:wstr"/>
+    <Param Name="RoleInstanceName" Value="" T="mt:wstr"/>
+    <Param Name="Name" Value="CustomScript" T="mt:wstr"/>
+    <Param Name="Message" Value="(01302)Script is finished.&#10;---stdout---&#10;hello&#10;&#10;---errout---&#10;&#10;"
+           T="mt:wstr"/>
+    <Param Name="OSVersion" Value="" T="mt:wstr"/>
+    <Param Name="Operation" Value="RunScript" T="mt:wstr"/>
+    <Param Name="GAVersion" Value="WALinuxAgent-2.2.44" T="mt:wstr"/>
+    <Param Name="TenantName" Value="" T="mt:wstr"/>
+    <Param Name="Duration" Value="0" T="mt:uint64"/>
+    <Param Name="ExtensionType" Value="" T="mt:wstr"/>
+</Data>
