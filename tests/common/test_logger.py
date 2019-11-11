@@ -219,9 +219,10 @@ class TestLogger(AgentTestCase):
                                                 'Microsoft.OSTCExtensions.DummyExtension-1.2.3.4')
         self.assertEqual(0, mock_save.call_count)
 
+    @patch("azurelinuxagent.common.event.send_logs_to_telemetry", return_value=True)
     @patch('azurelinuxagent.common.logger.Logger.error')
     @patch('azurelinuxagent.common.logger.Logger.warn')
-    def test_telemetry_logger_verify_not_logging_errors_warnings(self, mock_warn, mock_error):
+    def test_telemetry_logger_verify_not_logging_errors_warnings(self, mock_warn, mock_error, *args):
         appender = logger.TelemetryAppender(logger.LogLevel.WARNING, add_log_event)
 
         with patch('azurelinuxagent.common.event.EventLogger.save_event') as mock_save:

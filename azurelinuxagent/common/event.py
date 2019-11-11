@@ -457,7 +457,7 @@ def add_log_event(level, message, reporter=__event_logger__):
         # See #1035 for not adding warning statements here.
         return
 
-    if not SEND_LOGS_TO_TELEMETRY:
+    if not send_logs_to_telemetry():
         return
 
     if level >= logger.LogLevel.WARNING:
