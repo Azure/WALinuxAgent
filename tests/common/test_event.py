@@ -470,7 +470,8 @@ class TestMetrics(AgentTestCase):
             self.assertEqual(perf_metric_event["eventId"], event.TELEMETRY_METRICS_EVENT_ID)
             self.assertEqual(perf_metric_event["providerId"], event.TELEMETRY_EVENT_PROVIDER_ID)
             for i in perf_metric_event["parameters"]:
-                self.assertIn(i["name"], ['Category', 'Counter', 'Instance', 'Value'])
+                self.assertIn(i["name"], ["Category", "Counter", "Instance", "Value", "GAVersion", "ContainerId",
+                                          "OpcodeName", "EventTid", "EventPid", "TaskName", "KeywordName"])
                 if i["name"] == "Category":
                     self.assertEqual(i["value"], "DummyCategory")
                     category_present = True
