@@ -554,8 +554,9 @@ class TestEventMonitoring(AgentTestCase):
                                                        "DISTRO_CODE_NAME",
                                                        platform.release())
 
+    @patch("azurelinuxagent.common.event.send_logs_to_telemetry", return_value=True)
     @patch("azurelinuxagent.common.conf.get_lib_dir")
-    def test_collect_and_send_events_should_prepare_all_fields_for_all_event_files(self, mock_lib_dir, *args):
+    def test_collect_and_send_events_should_prepare_all_fields_for_all_event_files(self, mock_lib_dir, mock_logs, *args):
         # Test collecting and sending both agent and extension events from the moment they're created to the moment
         # they are to be reported. Ensure all necessary fields from sysinfo are present, as well as the container id.
         mock_lib_dir.return_value = self.lib_dir
@@ -573,6 +574,8 @@ class TestEventMonitoring(AgentTestCase):
                                     message="Heartbeat",
                                     log_event=False)
 
+        self.event_logger.add_log_event(logger.LogLevel.WARNING, "Test sending a log event.")
+
         # Add extension event file the way extension do it, by dropping a .tld file in the events folder
         source_file = os.path.join(data_dir, "ext/dsc_event.json")
         dest_file = os.path.join(conf.get_lib_dir(), "events", "dsc_event.tld")
@@ -583,7 +586,7 @@ class TestEventMonitoring(AgentTestCase):
             monitor_handler.collect_and_send_events()
 
             telemetry_events_list = patch_report_event.call_args_list[0][0][0]
-            self.assertEqual(len(telemetry_events_list.events), 2)
+            self.assertEqual(len(telemetry_events_list.events), 3)
 
             for event in telemetry_events_list.events:
                 # All sysinfo parameters coming from the agent have to be present in the telemetry event to be emitted
