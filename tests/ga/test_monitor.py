@@ -578,6 +578,9 @@ class TestEventMonitoring(AgentTestCase):
                                     message="Heartbeat",
                                     log_event=False)
 
+        # Add agent event file
+        self.event_logger.add_metric("Process", "% Processor Time", "walinuxagent.service", 10)
+
         # Add extension event file the way extension do it, by dropping a .tld file in the events folder
         source_file = os.path.join(data_dir, "ext/dsc_event.json")
         dest_file = os.path.join(conf.get_lib_dir(), "events", "dsc_event.tld")
@@ -588,16 +591,22 @@ class TestEventMonitoring(AgentTestCase):
             monitor_handler.collect_and_send_events()
 
             telemetry_events_list = patch_report_event.call_args_list[0][0][0]
-            self.assertEqual(len(telemetry_events_list.events), 2)
+            self.assertEqual(len(telemetry_events_list.events), 3)
 
             for event in telemetry_events_list.events:
                 # All sysinfo parameters coming from the agent have to be present in the telemetry event to be emitted
                 for param in monitor_handler.sysinfo:
                     self.assertTrue(param in event.parameters)
 
-                # The container id is a special parameter that is not a part of the static sysinfo parameter list.
+                # The container id, GAVersion are special parameters that are not a part of the static sysinfo parameter
+                # list.
+
                 # The container id value is obtained from the goal state and must be present in all telemetry events.
                 container_id_param = TelemetryEventParam("ContainerId", protocol.client.goal_state.container_id)
+                self.assertTrue(container_id_param in event.parameters)
+
+                # Same for GAVersion
+                container_id_param = TelemetryEventParam("GAVersion", CURRENT_AGENT)
                 self.assertTrue(container_id_param in event.parameters)
 
     @patch("azurelinuxagent.common.protocol.wire.WireClient.send_event")
@@ -832,7 +841,7 @@ class TestExtensionMetricsDataTelemetry(AgentTestCase):
 
     def tearDown(self):
         AgentTestCase.tearDown(self)
-        CGroupsTelemetry.cleanup()
+        CGroupsTelemetry.reset()
 
     @patch('azurelinuxagent.common.event.EventLogger.add_metric')
     @patch('azurelinuxagent.common.event.EventLogger.add_event')

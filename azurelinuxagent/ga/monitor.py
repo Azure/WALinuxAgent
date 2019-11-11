@@ -479,7 +479,7 @@ class MonitorHandler(object):
 
             if metrics:
                 for metric in metrics:
-                    report_metric(metric.category, metric.counter, metric.instance, float(metric.value))
+                    report_metric(metric.category, metric.counter, metric.instance, metric.value)
 
     def send_telemetry_metrics(self):
         time_now = datetime.datetime.utcnow()

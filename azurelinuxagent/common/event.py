@@ -414,7 +414,12 @@ def report_metric(category, counter, instance, value, log_event=False, reporter=
         message = "Metric {0}/{1} [{2}] = {3}".format(category, counter, instance, value)
         _log_event(AGENT_NAME, "METRIC", message, 0)
         return
-    reporter.add_metric(category, counter, instance, value, log_event)
+    try:
+        reporter.add_metric(category, counter, instance, float(value), log_event)
+    except ValueError:
+        message = "{0}/{1} [{2}] = {3}".format(category, counter, instance, value)
+        logger.periodic_warn(logger.EVERY_HALF_HOUR, "[PERIODIC] Cannot cast the metric value. Details of the Metric - "
+                                                     "{0}/{1} [{2}] = {3}".format(category, counter, instance, value))
 
 
 def add_event(name, op=WALAEventOperation.Unknown, is_success=True, duration=0, version=str(CURRENT_VERSION), message="",
