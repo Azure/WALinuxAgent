@@ -189,7 +189,8 @@ class TestWireProtocol(AgentTestCase):
         wire_protocol_client.ext_conf = ExtensionsConfig(WireProtocolData(DATA_FILE).ext_conf)
         self.assertEqual(wire_protocol_client.ext_conf.status_upload_blob,
                          'https://test.blob.core.windows.net/vhds/test-cs12.test-cs12.test-cs12.status?'
-                         'sr=b&sp=rw&se=9999-01-01&sk=key1&sv=2014-02-14&sig=SOMESIG')
+                         'sr=b&sp=rw&se=9999-01-01&sk=key1&sv=2014-02-14&'
+                         'sig=hfRh7gzUE7sUtYwke78IOlZOrTRCYvkec4hGZ9zZzXo')
         self.assertEqual(wire_protocol_client.ext_conf.status_upload_blob_type,
                          u'BlockBlob')
         pass
@@ -608,7 +609,7 @@ class TestWireClient(AgentTestCase):
         self.assertEqual(1, len(ext_conf.ext_handlers.extHandlers))
         self.assertEqual(2, len(ext_conf.vmagent_manifests.vmAgentManifests))
         self.assertEqual("https://test.blob.core.windows.net/vhds/test-cs12.test-cs12.test-cs12.status?"
-                         "sr=b&sp=rw&se=9999-01-01&sk=key1&sv=2014-02-14&sig=SOMESIG", ext_conf.status_upload_blob)
+                         "sr=b&sp=rw&se=9999-01-01&sk=key1&sv=2014-02-14&sig=hfRh7gzUE7sUtYwke78IOlZOrTRCYvkec4hGZ9zZzXo", ext_conf.status_upload_blob)
         self.assertEqual("BlockBlob", ext_conf.status_upload_blob_type)
         self.assertEqual(None, ext_conf.artifacts_profile_blob)
 

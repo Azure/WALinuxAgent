@@ -70,7 +70,7 @@
         </Plugin>
     </PluginSettings>
     <StatusUploadBlob statusBlobType="BlockBlob">
-        https://test.blob.core.windows.net/vhds/test-cs12.test-cs12.test-cs12.status?sr=b&amp;sp=rw&amp;se=9999-01-01&amp;sk=key1&amp;sv=2014-02-14&amp;sig=SOMESIG
+        https://test.blob.core.windows.net/vhds/test-cs12.test-cs12.test-cs12.status?sr=b&amp;sp=rw&amp;se=9999-01-01&amp;sk=key1&amp;sv=2014-02-14&amp;sig=hfRh7gzUE7sUtYwke78IOlZOrTRCYvkec4hGZ9zZzXo
     </StatusUploadBlob>
 </Extensions>
 
