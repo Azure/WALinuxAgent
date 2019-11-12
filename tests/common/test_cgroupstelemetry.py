@@ -24,7 +24,7 @@ from mock import patch
 from azurelinuxagent.common.cgroup import CGroup
 from azurelinuxagent.common.cgroupconfigurator import CGroupConfigurator
 from azurelinuxagent.common.cgroupstelemetry import CGroupsTelemetry, Metric
-from azurelinuxagent.common.osutil.default import BASE_CGROUPS
+from azurelinuxagent.common.osutil.default import BASE_CGROUPS, DefaultOSUtil
 from azurelinuxagent.common.protocol.restapi import ExtHandlerProperties, ExtHandler
 from azurelinuxagent.ga.exthandlers import ExtHandlerInstance
 from nose.plugins.attrib import attr
@@ -105,7 +105,6 @@ class TestCGroupsTelemetry(AgentTestCase):
                     self.assertEqual(metric.value, memory_metric_value)
                 elif metric.counter == "Max Memory Usage":
                     self.assertEqual(metric.value, max_memory_metric_value)
-
 
     @patch("azurelinuxagent.common.cgroup.CpuCgroup._get_current_cpu_total")
     @patch("azurelinuxagent.common.osutil.default.DefaultOSUtil.get_total_cpu_ticks_since_boot")
@@ -611,93 +610,86 @@ class TestCGroupsTelemetry(AgentTestCase):
     @skip_if_predicate_false(are_cgroups_enabled, "Does not run when Cgroups are not enabled")
     @skip_if_predicate_true(is_trusty_in_travis, "Does not run on Trusty in Travis")
     @attr('requires_sudo')
-    def test_telemetry_with_tracked_cgroup(self):
+    @patch("azurelinuxagent.common.cgroupconfigurator.get_osutil", return_value=DefaultOSUtil())
+    @patch("azurelinuxagent.common.cgroupapi.CGroupsApi._is_systemd", return_value=False)
+    def test_telemetry_with_tracked_cgroup(self, *_):
         self.assertTrue(i_am_root(), "Test does not run when non-root")
+        CGroupConfigurator._instance = None
 
-        # This test has some timing issues when systemd is managing cgroups, so we force the file system API
-        # by creating a new instance of the CGroupConfigurator
-        with patch("azurelinuxagent.common.cgroupapi.CGroupsApi._is_systemd", return_value=False):
-            cgroup_configurator_instance = CGroupConfigurator._instance
-            CGroupConfigurator._instance = None
+        max_num_polls = 30
+        time_to_wait = 3
+        extn_name = "foobar-1.0.0"
+        num_summarization_values = 7
 
-            try:
-                max_num_polls = 30
-                time_to_wait = 3
-                extn_name = "foobar-1.0.0"
-                num_summarization_values = 7
+        cgs = make_new_cgroup(extn_name)
+        self.assertEqual(len(cgs), 2)
 
-                cgs = make_new_cgroup(extn_name)
-                self.assertEqual(len(cgs), 2)
+        ext_handler_properties = ExtHandlerProperties()
+        ext_handler_properties.version = "1.0.0"
+        self.ext_handler = ExtHandler(name='foobar')
+        self.ext_handler.properties = ext_handler_properties
+        self.ext_handler_instance = ExtHandlerInstance(ext_handler=self.ext_handler, protocol=None)
 
-                ext_handler_properties = ExtHandlerProperties()
-                ext_handler_properties.version = "1.0.0"
-                self.ext_handler = ExtHandler(name='foobar')
-                self.ext_handler.properties = ext_handler_properties
-                self.ext_handler_instance = ExtHandlerInstance(ext_handler=self.ext_handler, protocol=None)
+        command = self.create_script("keep_cpu_busy_and_consume_memory_for_5_seconds", '''
+        nohup python -c "import time
 
-                command = self.create_script("keep_cpu_busy_and_consume_memory_for_5_seconds", '''
-nohup python -c "import time
+        for i in range(5):
+            x = [1, 2, 3, 4, 5] * (i * 1000)
+            time.sleep({0})
+            x *= 0
+            print('Test loop')" &
+        '''.format(time_to_wait))
 
-for i in range(5):
-    x = [1, 2, 3, 4, 5] * (i * 1000)
-    time.sleep({0})
-    x *= 0
-    print('Test loop')" &
-'''.format(time_to_wait))
+        self.log_dir = os.path.join(self.tmp_dir, "log")
 
-                self.log_dir = os.path.join(self.tmp_dir, "log")
+        with patch("azurelinuxagent.ga.exthandlers.ExtHandlerInstance.get_base_dir", lambda *_: self.tmp_dir) as \
+                patch_get_base_dir:
+            with patch("azurelinuxagent.ga.exthandlers.ExtHandlerInstance.get_log_dir", lambda *_: self.log_dir) as \
+                    patch_get_log_dir:
+                self.ext_handler_instance.launch_command(command)
 
-                with patch("azurelinuxagent.ga.exthandlers.ExtHandlerInstance.get_base_dir", lambda *_: self.tmp_dir) as \
-                        patch_get_base_dir:
-                    with patch("azurelinuxagent.ga.exthandlers.ExtHandlerInstance.get_log_dir", lambda *_: self.log_dir) as \
-                            patch_get_log_dir:
-                        self.ext_handler_instance.launch_command(command)
+        for cg in CGroupsTelemetry._tracked:
+            print(cg.name, cg.path)
+            # SystemdCgroupsApi() if CGroupsApi._is_systemd() else FileSystemCgroupsApi()
+        from azurelinuxagent.common.cgroupapi import SystemdCgroupsApi
+        print(isinstance(CGroupConfigurator.get_instance()._cgroups_api, SystemdCgroupsApi))
+        from azurelinuxagent.common.cgroupapi import FileSystemCgroupsApi
+        print(isinstance(CGroupConfigurator.get_instance()._cgroups_api, FileSystemCgroupsApi))
 
-                #
-                # If the test is made to run using the systemd API, then the paths of the cgroups need to be checked differently:
-                #
-                #     self.assertEquals(len(CGroupsTelemetry._tracked), 2)
-                #     cpu = os.path.join(BASE_CGROUPS, "cpu", "system.slice", r"foobar_1.0.0_.*\.scope")
-                #     self.assertTrue(any(re.match(cpu, tracked.path) for tracked in CGroupsTelemetry._tracked))
-                #     memory = os.path.join(BASE_CGROUPS, "memory", "system.slice", r"foobar_1.0.0_.*\.scope")
-                #     self.assertTrue(any(re.match(memory, tracked.path) for tracked in CGroupsTelemetry._tracked))
-                #
-                self.assertTrue(CGroupsTelemetry.is_tracked(os.path.join(
-                    BASE_CGROUPS, "cpu", "walinuxagent.extensions", "foobar_1.0.0")))
-                self.assertTrue(CGroupsTelemetry.is_tracked(os.path.join(
-                    BASE_CGROUPS, "memory", "walinuxagent.extensions", "foobar_1.0.0")))
+        self.assertTrue(CGroupsTelemetry.is_tracked(os.path.join(
+            BASE_CGROUPS, "cpu", "walinuxagent.extensions", "foobar_1.0.0")))
+        self.assertTrue(CGroupsTelemetry.is_tracked(os.path.join(
+            BASE_CGROUPS, "memory", "walinuxagent.extensions", "foobar_1.0.0")))
 
-                for i in range(max_num_polls):
-                    CGroupsTelemetry.poll_all_tracked()
-                    time.sleep(0.5)
+        for i in range(max_num_polls):
+            CGroupsTelemetry.poll_all_tracked()
+            time.sleep(0.5)
 
-                collected_metrics = CGroupsTelemetry.report_all_tracked()
+        collected_metrics = CGroupsTelemetry.report_all_tracked()
 
-                self.assertIn("memory", collected_metrics[extn_name])
-                self.assertIn("cur_mem", collected_metrics[extn_name]["memory"])
-                self.assertIn("max_mem", collected_metrics[extn_name]["memory"])
-                self.assertEqual(len(collected_metrics[extn_name]["memory"]["cur_mem"]), num_summarization_values)
-                self.assertEqual(len(collected_metrics[extn_name]["memory"]["max_mem"]), num_summarization_values)
+        self.assertIn("memory", collected_metrics[extn_name])
+        self.assertIn("cur_mem", collected_metrics[extn_name]["memory"])
+        self.assertIn("max_mem", collected_metrics[extn_name]["memory"])
+        self.assertEqual(len(collected_metrics[extn_name]["memory"]["cur_mem"]), num_summarization_values)
+        self.assertEqual(len(collected_metrics[extn_name]["memory"]["max_mem"]), num_summarization_values)
 
-                self.assertIsInstance(collected_metrics[extn_name]["memory"]["cur_mem"][5], str)
-                self.assertIsInstance(collected_metrics[extn_name]["memory"]["cur_mem"][6], str)
-                self.assertIsInstance(collected_metrics[extn_name]["memory"]["max_mem"][5], str)
-                self.assertIsInstance(collected_metrics[extn_name]["memory"]["max_mem"][6], str)
+        self.assertIsInstance(collected_metrics[extn_name]["memory"]["cur_mem"][5], str)
+        self.assertIsInstance(collected_metrics[extn_name]["memory"]["cur_mem"][6], str)
+        self.assertIsInstance(collected_metrics[extn_name]["memory"]["max_mem"][5], str)
+        self.assertIsInstance(collected_metrics[extn_name]["memory"]["max_mem"][6], str)
 
-                self.assertIn("cpu", collected_metrics[extn_name])
-                self.assertIn("cur_cpu", collected_metrics[extn_name]["cpu"])
-                self.assertEqual(len(collected_metrics[extn_name]["cpu"]["cur_cpu"]), num_summarization_values)
+        self.assertIn("cpu", collected_metrics[extn_name])
+        self.assertIn("cur_cpu", collected_metrics[extn_name]["cpu"])
+        self.assertEqual(len(collected_metrics[extn_name]["cpu"]["cur_cpu"]), num_summarization_values)
 
-                self.assertIsInstance(collected_metrics[extn_name]["cpu"]["cur_cpu"][5], str)
-                self.assertIsInstance(collected_metrics[extn_name]["cpu"]["cur_cpu"][6], str)
+        self.assertIsInstance(collected_metrics[extn_name]["cpu"]["cur_cpu"][5], str)
+        self.assertIsInstance(collected_metrics[extn_name]["cpu"]["cur_cpu"][6], str)
 
-                for i in range(5):
-                    self.assertGreater(collected_metrics[extn_name]["memory"]["cur_mem"][i], 0)
-                    self.assertGreater(collected_metrics[extn_name]["memory"]["max_mem"][i], 0)
-                    self.assertGreaterEqual(collected_metrics[extn_name]["cpu"]["cur_cpu"][i], 0)
-                    # Equal because CPU could be zero for minimum value.
-            finally:
-                CGroupConfigurator._instance = cgroup_configurator_instance
+        for i in range(5):
+            self.assertGreater(collected_metrics[extn_name]["memory"]["cur_mem"][i], 0)
+            self.assertGreater(collected_metrics[extn_name]["memory"]["max_mem"][i], 0)
+            self.assertGreaterEqual(collected_metrics[extn_name]["cpu"]["cur_cpu"][i], 0)
+            # Equal because CPU could be zero for minimum value.
 
 
 class TestMetric(AgentTestCase):

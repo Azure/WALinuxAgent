@@ -272,14 +272,14 @@ class EventLogger(object):
     def _add_event(self, duration, evt_type, is_internal, is_success, message, name, op, version, event_id):
         event = TelemetryEvent(event_id, TELEMETRY_EVENT_PROVIDER_ID)
 
-        event.parameters.append(TelemetryEventParam('Name', name))
+        event.parameters.append(TelemetryEventParam('Name', str(name)))
         event.parameters.append(TelemetryEventParam('Version', str(version)))
-        event.parameters.append(TelemetryEventParam('IsInternal', is_internal))
-        event.parameters.append(TelemetryEventParam('Operation', op))
-        event.parameters.append(TelemetryEventParam('OperationSuccess', is_success))
-        event.parameters.append(TelemetryEventParam('Message', message))
-        event.parameters.append(TelemetryEventParam('Duration', duration))
-        event.parameters.append(TelemetryEventParam('ExtensionType', evt_type))
+        event.parameters.append(TelemetryEventParam('IsInternal', bool(is_internal)))
+        event.parameters.append(TelemetryEventParam('Operation', str(op)))
+        event.parameters.append(TelemetryEventParam('OperationSuccess', bool(is_success)))
+        event.parameters.append(TelemetryEventParam('Message', str(message)))
+        event.parameters.append(TelemetryEventParam('Duration', int(duration)))
+        event.parameters.append(TelemetryEventParam('ExtensionType', str(evt_type)))
 
         self.add_default_parameters_to_event(event)
         data = get_properties(event)
@@ -331,10 +331,10 @@ class EventLogger(object):
             _log_event(AGENT_NAME, "METRIC", message, 0)
 
         event = TelemetryEvent(TELEMETRY_METRICS_EVENT_ID, TELEMETRY_EVENT_PROVIDER_ID)
-        event.parameters.append(TelemetryEventParam('Category', category))
-        event.parameters.append(TelemetryEventParam('Counter', counter))
-        event.parameters.append(TelemetryEventParam('Instance', instance))
-        event.parameters.append(TelemetryEventParam('Value', value))
+        event.parameters.append(TelemetryEventParam('Category', str(category)))
+        event.parameters.append(TelemetryEventParam('Counter', str(counter)))
+        event.parameters.append(TelemetryEventParam('Instance', str(instance)))
+        event.parameters.append(TelemetryEventParam('Value', float(value)))
 
         self.add_default_parameters_to_event(event)
         data = get_properties(event)
