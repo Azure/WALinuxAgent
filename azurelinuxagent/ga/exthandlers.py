@@ -216,22 +216,22 @@ class ExtHandlersHandler(object):
         self.protocol = None
         self.ext_conf = None
         self.ext_handlers = None
-        self.last_instantiation = None
+        self.last_incarnation = None
         self.artifacts_profile = None
         self.last_vm_artifacts_seqno = None
         self.last_etag = None
         self.log_report = False
-        self.log_instantiation = True
+        self.log_incarnation = True
         self.log_process = False
 
         self.report_status_error_state = ErrorState()
         self.get_artifact_error_state = ErrorState(min_timedelta=ERROR_STATE_DELTA_INSTALL)
 
     def run(self):
-        self.ext_handlers, instantiation = None, None
+        self.ext_handlers, incarnation = None, None
         try:
             self.protocol = self.protocol_util.get_protocol()
-            self.ext_conf, instantiation = self.protocol.get_ext_conf()
+            self.ext_conf, incarnation = self.protocol.get_ext_conf()
             self.ext_handlers = self.ext_conf.ext_handlers
             self.get_artifact_error_state.reset()
         except Exception as e:
@@ -264,7 +264,7 @@ class ExtHandlersHandler(object):
         self.get_artifacts_profile()
 
         try:
-            msg = u"Handle extensions updates for incarnation {0}".format(instantiation)
+            msg = u"Handle extensions updates for incarnation {0}".format(incarnation)
             logger.verbose(msg)
             # Log status report success on new config
             self.log_report = True
@@ -273,7 +273,7 @@ class ExtHandlersHandler(object):
                 sequence_number = None
                 if self.artifacts_profile is not None and conf.get_extensions_fast_track_enabled():
                     sequence_number = self.artifacts_profile.get_sequence_number()
-                self.process_goal_state(instantiation, sequence_number)
+                self.process_goal_state(incarnation, sequence_number)
 
             self.report_ext_handlers_status()
             self.cleanup_outdated_handlers()
@@ -302,43 +302,48 @@ class ExtHandlersHandler(object):
                       is_success=False,
                       message=detailed_msg)
 
-    def process_goal_state(self, instantiation, sequence_number):
-        fabric_goal_state_changed, fast_track_changed = self.determine_what_changed(instantiation, sequence_number)
+    def process_goal_state(self, incarnation, sequence_number):
+        fabric_goal_state_changed = self.determine_fabric_changed(incarnation)
+        fast_track_changed = self.determine_fast_track_changed(sequence_number)
         if fabric_goal_state_changed:
             self.protocol.set_fast_track(False)
 
         # Fabric goal state takes precedence over VMArtifactsProfile blob goal state
         # So, process the Fabric goal state first
         self.handle_ext_handlers(fabric_goal_state_changed)
-        self.last_instantiation = instantiation
+        self.last_incarnation = incarnation
 
         # Now process the VMArtifactsProfile if it changed. Note that just because the VMArtifactsProfile changed
         # doesn't mean the FastTrack goal state changed
         if fast_track_changed and self.artifacts_profile is not None:
-            self.process_vm_artifacts_profile_for_fast_track(sequence_number)
+            vm_artifacts_ext_conf = self.artifacts_profile.transform_to_extensions_config()
+            self.process_vm_artifacts_profile_for_fast_track(sequence_number, vm_artifacts_ext_conf)
         elif self.protocol.client.get_use_fast_track():
             # Our last goal state was via VMArtifactsProfile, so reset the extension handlers
-            self.ext_conf = self.protocol.client.get_ext_conf(force=True)
+            self.ext_conf = self.protocol.client.get_ext_conf(read_always=True)
             self.ext_handlers = self.ext_conf.ext_handlers
 
-    def determine_what_changed(self, instantiation, sequence_number):
+    def determine_fabric_changed(self, incarnation):
         fabric_goal_state_changed = False
-        fast_track_changed = False
 
-        if self.last_instantiation != instantiation:
-            logger.info('Goal state changed with instantiation={0}(last:{1})'.
-                        format(str(instantiation), str(self.last_instantiation)))
+        if self.last_incarnation != incarnation:
+            logger.info('Goal state changed with incarnation={0}(last:{1})'.
+                        format(str(incarnation), str(self.last_incarnation)))
             fabric_goal_state_changed = True
+
+        return fabric_goal_state_changed
+
+    def determine_fast_track_changed(self, sequence_number):
+        fast_track_changed = False
 
         if sequence_number is not None and self.last_vm_artifacts_seqno != sequence_number and \
                 conf.get_extensions_fast_track_enabled():
             logger.info('VMArtifactsProfile changed with sequence number={0}(last:{1})'.
                         format(str(sequence_number), str(self.last_vm_artifacts_seqno)))
             fast_track_changed = True
-        return fabric_goal_state_changed, fast_track_changed
+        return fast_track_changed
 
-    def process_vm_artifacts_profile_for_fast_track(self, sequence_number):
-        vm_artifacts_ext_conf = self.artifacts_profile.transform_to_extensions_config()
+    def process_vm_artifacts_profile_for_fast_track(self, sequence_number, vm_artifacts_ext_conf):
         if vm_artifacts_ext_conf is not None:
             # We need to add the status upload blob from Fabric goal state because we don't receive this
             # from the VMArtifactsProfile blob
@@ -350,7 +355,7 @@ class ExtHandlersHandler(object):
                 self.protocol.set_fast_track(True, sequence_number)
 
                 # Reset the extension config and reload it, which will load it with the FastTrack extensions
-                self.ext_conf = self.protocol.client.get_ext_conf(force=True)
+                self.ext_conf = self.protocol.client.get_ext_conf(read_always=True)
                 self.ext_handlers = self.ext_conf.ext_handlers
                 self.handle_ext_handlers(True)
         self.last_vm_artifacts_seqno = sequence_number
@@ -513,13 +518,13 @@ class ExtHandlersHandler(object):
             self.get_artifact_error_state.reset()
 
             if not goal_state_changed:
-                if self.log_instantiation:
+                if self.log_incarnation:
                     ext_handler_i.logger.verbose("Version {0} is current",
                                                  ext_handler_i.pkg.version)
-                    self.log_instantiation = False
+                    self.log_incarnation = False
                 return
 
-            self.log_instantiation = True
+            self.log_incarnation = True
 
             ext_handler_i.logger.info("Target handler state: {0}", state)
             if state == u"enabled":

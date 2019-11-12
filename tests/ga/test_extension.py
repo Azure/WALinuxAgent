@@ -1224,14 +1224,14 @@ class TestExtension(ExtensionTestCase):
         # Disable extension handling blocking in the first run and enable in the 2nd run
         with patch.object(exthandlers_handler, 'extension_processing_allowed', side_effect=[False, True]):
             exthandlers_handler.run()
-            self.assertIsNone(exthandlers_handler.last_instantiation,
+            self.assertIsNone(exthandlers_handler.last_incarnation,
                               "The last etag should be None initially as extension_processing is False")
-            self.assertNotEqual(etag, exthandlers_handler.last_instantiation,
+            self.assertNotEqual(etag, exthandlers_handler.last_incarnation,
                                 "Last etag and etag should not be same if extension processing is disabled")
             exthandlers_handler.run()
-            self.assertIsNotNone(exthandlers_handler.last_instantiation,
+            self.assertIsNotNone(exthandlers_handler.last_incarnation,
                                  "Last etag should not be none if extension processing is allowed")
-            self.assertEqual(etag, exthandlers_handler.last_instantiation,
+            self.assertEqual(etag, exthandlers_handler.last_incarnation,
                              "Last etag and etag should be same if extension processing is enabled")
 
     def _assert_ext_status(self, report_ext_status, expected_status,

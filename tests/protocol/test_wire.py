@@ -606,6 +606,57 @@ class TestWireProtocol(AgentTestCase):
 
 class TestWireClient(AgentTestCase):
 
+    @patch("azurelinuxagent.common.protocol.wire.WireClient.get_use_fast_track")
+    def test_get_ext_conf(self, mock_get_use_fast_track, *args):
+        client = WireClient(wireserver_url)
+        client.get_file_path_for_fast_track = Mock(return_value="ft")
+        client.get_file_path_for_fabric = Mock(return_value="fabric")
+        mock_get_use_fast_track.return_value = True
+        client.fetch_cache = Mock(return_value=None)
+
+        # Nothing is called if ext_conf is not None and read_always is false
+        old_ext_conf = ExtensionsConfig(None)
+        client.ext_conf = old_ext_conf
+        ext_conf = client.get_ext_conf(read_always=False)
+        self.assertEqual(old_ext_conf, ext_conf)
+        self.assertEqual(0, mock_get_use_fast_track.call_count)
+
+        # read_always is set and this is fast track
+        ext_conf = client.get_ext_conf(read_always=True)
+        self.assertNotEqual(old_ext_conf, ext_conf)
+        self.assertEquals(1, mock_get_use_fast_track.call_count)
+        self.assertEqual(1, client.get_file_path_for_fast_track.call_count)
+        self.assertEqual(0, client.get_file_path_for_fabric.call_count)
+
+        # read_always is set and this is fabric
+        mock_get_use_fast_track.return_value = False
+        ext_conf = client.get_ext_conf(read_always=True)
+        self.assertNotEqual(old_ext_conf, ext_conf)
+        self.assertEquals(2, mock_get_use_fast_track.call_count)
+        self.assertEqual(1, client.get_file_path_for_fast_track.call_count)
+        self.assertEqual(1, client.get_file_path_for_fabric.call_count)
+        self.assertEqual(2, client.fetch_cache.call_count)
+
+        # fast_track returns an empty path
+        mock_get_use_fast_track.return_value = True
+        client.get_file_path_for_fast_track.return_value = None
+        ext_conf = client.get_ext_conf(read_always=True)
+        self.assertNotEqual(old_ext_conf, ext_conf)
+        self.assertEquals(3, mock_get_use_fast_track.call_count)
+        self.assertEqual(2, client.get_file_path_for_fast_track.call_count)
+        self.assertEqual(2, client.get_file_path_for_fabric.call_count)
+        self.assertEqual(3, client.fetch_cache.call_count)
+
+        # ext_conf is None
+        client.ext_conf = None
+        mock_get_use_fast_track.return_value = False
+        ext_conf = client.get_ext_conf(read_always=False)
+        self.assertNotEqual(old_ext_conf, ext_conf)
+        self.assertEquals(4, mock_get_use_fast_track.call_count)
+        self.assertEqual(2, client.get_file_path_for_fast_track.call_count)
+        self.assertEqual(3, client.get_file_path_for_fabric.call_count)
+        self.assertEqual(4, client.fetch_cache.call_count)
+
     def test_save_or_update_goal_state_should_save_new_goal_state_file(self):
         # Assert the file didn't exist before
         incarnation = 42

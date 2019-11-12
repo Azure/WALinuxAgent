@@ -20,43 +20,51 @@ class TestExtHandlers(AgentTestCase):
         mock_get_extensions_fast_track_enabled.return_value = True
 
         handler = ExtHandlersHandler()
-        handler.last_instantiation = 5
+        handler.last_incarnation = 5
         handler.last_vm_artifacts_seqno = 3
 
         # Nothing changed
-        fabric_goal_state_changed, fast_track_changed = handler.determine_what_changed(5, None)
+        fabric_goal_state_changed = handler.determine_fabric_changed(5)
+        fast_track_changed = handler.determine_fast_track_changed(None)
         self.assertFalse(fabric_goal_state_changed)
         self.assertFalse(fast_track_changed)
-        fabric_goal_state_changed, fast_track_changed = handler.determine_what_changed(5, 3)
+        fabric_goal_state_changed = handler.determine_fabric_changed(5)
+        fast_track_changed = handler.determine_fast_track_changed(3)
         self.assertFalse(fabric_goal_state_changed)
         self.assertFalse(fast_track_changed)
 
         # Only fabric changed
-        fabric_goal_state_changed, fast_track_changed = handler.determine_what_changed(6, None)
+        fabric_goal_state_changed = handler.determine_fabric_changed(6)
+        fast_track_changed = handler.determine_fast_track_changed(None)
         self.assertTrue(fabric_goal_state_changed)
         self.assertFalse(fast_track_changed)
-        fabric_goal_state_changed, fast_track_changed = handler.determine_what_changed(6, 3)
+        fabric_goal_state_changed = handler.determine_fabric_changed(6)
+        fast_track_changed = handler.determine_fast_track_changed(3)
         self.assertTrue(fabric_goal_state_changed)
         self.assertFalse(fast_track_changed)
 
         # Only FastTrack changed
-        fabric_goal_state_changed, fast_track_changed = handler.determine_what_changed(5, 4)
+        fabric_goal_state_changed = handler.determine_fabric_changed(5)
+        fast_track_changed = handler.determine_fast_track_changed(4)
         self.assertFalse(fabric_goal_state_changed)
         self.assertTrue(fast_track_changed)
 
         # Both changed
-        fabric_goal_state_changed, fast_track_changed = handler.determine_what_changed(6, 4)
+        fabric_goal_state_changed = handler.determine_fabric_changed(6)
+        fast_track_changed = handler.determine_fast_track_changed(4)
         self.assertTrue(fabric_goal_state_changed)
         self.assertTrue(fast_track_changed)
 
         # Previous change was FastTrack. Now Fabric changed
-        fabric_goal_state_changed, fast_track_changed = handler.determine_what_changed(6, None)
+        fabric_goal_state_changed = handler.determine_fabric_changed(6)
+        fast_track_changed = handler.determine_fast_track_changed(None)
         self.assertTrue(fabric_goal_state_changed)
         self.assertFalse(fast_track_changed)
 
         # FastTrack not enabled
         mock_get_extensions_fast_track_enabled.return_value = False
-        fabric_goal_state_changed, fast_track_changed = handler.determine_what_changed(5, 4)
+        fabric_goal_state_changed = handler.determine_fabric_changed(5)
+        fast_track_changed = handler.determine_fast_track_changed(4)
         self.assertFalse(fabric_goal_state_changed)
         self.assertFalse(fast_track_changed)
 

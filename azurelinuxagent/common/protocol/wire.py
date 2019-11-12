@@ -942,8 +942,8 @@ class WireClient(object):
         else:
             return False
 
-    def get_ext_conf(self, force=False):
-        if self.ext_conf is None or force:
+    def get_ext_conf(self, read_always=False):
+        if self.ext_conf is None or read_always:
             goal_state = None
             local_file = None
             use_fast_track = self.get_use_fast_track()
@@ -1940,34 +1940,34 @@ class InVMArtifactsProfile(object):
             return int(self.inVMArtifactsProfileBlobSeqNo)
         return None
 
-    """
-    We need to convert the json from the InVmArtifactsProfile blob to the following
-    format for the ExtensionsConfig:
-    <Extensions version="1.0.0.0" goalStateIncarnation="9">
-    <Plugins>
-        <Plugin name="MyExtension.Blah" version="1.0.0"
-                location="http://somewhere.xml"
-                config="" state="enabled" autoUpgrade="false"
-                failoverlocation="http://somewherelese.xml"
-                runAsStartupTask="false" isJson="true"/>
-        <Plugin name="Microsoft.Flipperdoodle" version="1.0.0"
-                location="https://somewhere_two.xml"
-                state="enabled" autoUpgrade="true"
-                failoverlocation="https://somewhereelse_two.xml"
-                runAsStartupTask="false" isJson="true" useExactVersion="false"/>
-    </Plugins>
-    <PluginSettings>
-        <Plugin name="MyExtension.Blah" version="1.0.0">
-            <RuntimeSettings seqNo="0">{"runtimeSettings":[{"handlerSettings":{"protectedSettingsCertThumbprint":"4037FBF5F1F3014F99B5D6C7799E9B20E6871CB3","protectedSettings":"MIICWgYJK","publicSettings":{"foo":"bar"}}}]}</RuntimeSettings>
-        </Plugin>
-        <Plugin name="Microsoft.Flipperdoodle" version="1.0.0">
-            <RuntimeSettings seqNo="0">{"runtimeSettings":[{"handlerSettings":{"protectedSettingsCertThumbprint":"4037FBF5F1F3014F99B5D6C7799E9B20E6871CB3","protectedSettings":"MIICWgYJK","publicSettings":{"foo":"bar"}}}]}</RuntimeSettings>
-        </Plugin>
-    </PluginSettings>
-    <StatusUploadBlob statusBlobType="BlockBlob">https://putblobhere</StatusUploadBlob>
-    </Extensions>
-    """
     def transform_to_extensions_config(self):
+        """
+        We need to convert the json from the InVmArtifactsProfile blob to the following
+        format for the ExtensionsConfig:
+        <Extensions version="1.0.0.0" goalStateIncarnation="9">
+        <Plugins>
+            <Plugin name="MyExtension.Blah" version="1.0.0"
+                    location="http://somewhere.xml"
+                    config="" state="enabled" autoUpgrade="false"
+                    failoverlocation="http://somewherelese.xml"
+                    runAsStartupTask="false" isJson="true"/>
+            <Plugin name="Microsoft.Flipperdoodle" version="1.0.0"
+                    location="https://somewhere_two.xml"
+                    state="enabled" autoUpgrade="true"
+                    failoverlocation="https://somewhereelse_two.xml"
+                    runAsStartupTask="false" isJson="true" useExactVersion="false"/>
+        </Plugins>
+        <PluginSettings>
+            <Plugin name="MyExtension.Blah" version="1.0.0">
+                <RuntimeSettings seqNo="0">{"runtimeSettings":[{"handlerSettings":{"protectedSettingsCertThumbprint":"4037FBF5F1F3014F99B5D6C7799E9B20E6871CB3","protectedSettings":"MIICWgYJK","publicSettings":{"foo":"bar"}}}]}</RuntimeSettings>
+            </Plugin>
+            <Plugin name="Microsoft.Flipperdoodle" version="1.0.0">
+                <RuntimeSettings seqNo="0">{"runtimeSettings":[{"handlerSettings":{"protectedSettingsCertThumbprint":"4037FBF5F1F3014F99B5D6C7799E9B20E6871CB3","protectedSettings":"MIICWgYJK","publicSettings":{"foo":"bar"}}}]}</RuntimeSettings>
+            </Plugin>
+        </PluginSettings>
+        <StatusUploadBlob statusBlobType="BlockBlob">https://putblobhere</StatusUploadBlob>
+        </Extensions>
+        """
         if 'extensionGoalStates' in self.__dict__:
             import xml.etree.ElementTree as xml
             root = xml.Element("Extensions")
