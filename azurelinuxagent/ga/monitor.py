@@ -208,7 +208,7 @@ class MonitorHandler(object):
             self.sysinfo.append(TelemetryEventParam('VMId',
                                                     vminfo.vmId))
             self.sysinfo.append(TelemetryEventParam('ImageOrigin',
-                                                    int(vminfo.image_origin)))
+                                                    int(vminfo.image_origin())))
         except (HttpError, ValueError) as e:
             logger.warn("failed to get IMDS info: {0}", ustr(e))
 
@@ -282,7 +282,7 @@ class MonitorHandler(object):
         while self.should_run:
             self.send_telemetry_heartbeat()
             self.poll_telemetry_metrics()
-            self.send_telemetry_metrics()
+            self.send_telemetry_metrics()   # This will be removed in favor of poll_telemetry_metrics() and it'll directly send the perf data for each cgroup.
             self.collect_and_send_events()
             self.send_host_plugin_heartbeat()
             self.send_imds_heartbeat()
@@ -468,6 +468,11 @@ class MonitorHandler(object):
             self.last_telemetry_heartbeat = datetime.datetime.utcnow()
 
     def poll_telemetry_metrics(self):
+        """
+        This method polls the tracked cgroups to get data from the cgroups filesystem and send the data directly.
+
+        :return:
+        """
         time_now = datetime.datetime.utcnow()
         if not self.last_cgroup_polling_telemetry:
             self.last_cgroup_polling_telemetry = time_now
@@ -482,6 +487,11 @@ class MonitorHandler(object):
                     report_metric(metric.category, metric.counter, metric.instance, metric.value)
 
     def send_telemetry_metrics(self):
+        """
+        The send_telemetry_metrics would soon be removed in favor of sending performance metrics directly.
+
+        :return:
+        """
         time_now = datetime.datetime.utcnow()
 
         if not self.last_cgroup_report_telemetry:

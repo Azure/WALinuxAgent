@@ -32,7 +32,7 @@ from tests.tools import AgentTestCase, skip_if_predicate_false, skip_if_predicat
                         are_cgroups_enabled, is_trusty_in_travis, i_am_root
 
 
-def raise_ioerror(*args):
+def raise_ioerror(*_):
     e = IOError()
     from errno import EIO
     e.errno = EIO

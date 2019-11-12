@@ -23,6 +23,9 @@ from azurelinuxagent.common.exception import CGroupsException
 from azurelinuxagent.common.future import ustr
 
 
+MetricValue = namedtuple('Metric', ['category', 'counter', 'instance', 'value'])
+
+
 class CGroupsTelemetry(object):
     """
     """
@@ -94,6 +97,16 @@ class CGroupsTelemetry(object):
 
     @staticmethod
     def report_all_tracked():
+        """
+        The report_all_tracked's purpose is to collect the data from the tracked cgroups and process the metric into a
+        data structure by _process_cgroup_metric. The perf metric is added into the data structure and returned to the
+        caller.
+
+        The report_all_tracked would be removed soon - in favor of sending report_metric directly, when polling the data
+        from tracked groups.
+
+        :return collected_metrics: dictionary of cgroups metrics.
+        """
         collected_metrics = {}
 
         for name, cgroup_metrics in CGroupsTelemetry._cgroup_metrics.items():
@@ -114,7 +127,6 @@ class CGroupsTelemetry(object):
     @staticmethod
     def poll_all_tracked():
         metrics = []
-        MetricValue = namedtuple('Metric', ['category', 'counter', 'instance', 'value'])
 
         with CGroupsTelemetry._rlock:
             for cgroup in CGroupsTelemetry._tracked[:]:

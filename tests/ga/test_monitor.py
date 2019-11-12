@@ -33,7 +33,7 @@ from nose.plugins.attrib import attr
 from azurelinuxagent.common import logger, event
 from azurelinuxagent.common.cgroup import CGroup, CpuCgroup
 from azurelinuxagent.common.cgroupconfigurator import CGroupConfigurator
-from azurelinuxagent.common.cgroupstelemetry import CGroupsTelemetry
+from azurelinuxagent.common.cgroupstelemetry import CGroupsTelemetry, MetricValue
 from azurelinuxagent.common.datacontract import get_properties
 from azurelinuxagent.common.event import CONTAINER_ID_ENV_VARIABLE, EventLogger, WALAEventOperation
 from azurelinuxagent.common.exception import HttpError
@@ -849,7 +849,6 @@ class TestExtensionMetricsDataTelemetry(AgentTestCase):
     @patch("azurelinuxagent.common.cgroupstelemetry.CGroupsTelemetry.report_all_tracked")
     def test_send_extension_metrics_telemetry(self, patch_report_all_tracked, patch_poll_all_tracked, patch_add_event,
                                               patch_add_metric, *args):
-        MetricValue = namedtuple('Metric', ['category', 'counter', 'instance', 'value'])
         patch_poll_all_tracked.return_value = [MetricValue("Process", "% Processor Time", 1, 1),
                                                MetricValue("Memory", "Total Memory Usage", 1, 1),
                                                MetricValue("Memory", "Max Memory Usage", 1, 1)]
