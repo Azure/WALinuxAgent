@@ -221,6 +221,8 @@ class EventLogger(object):
 
     def save_event(self, data):
         if self.event_dir is None:
+            # To prevent the chance of #1035 happening - introduced periodic_WARNs.
+            # More details about it - azurelinuxagent.common.event.add_log_event's pydoc.
             logger.periodic_warn(logger.EVERY_FIFTEEN_MINUTES,
                                  "[PERIODIC] Cannot save event -- Event reporter is not initialized.")
             return
@@ -233,6 +235,8 @@ class EventLogger(object):
 
         existing_events = os.listdir(self.event_dir)
         if len(existing_events) >= 1000:
+            # To prevent the chance of #1035 happening - introduced periodic_WARNs.
+            # More details about it - azurelinuxagent.common.event.add_log_event's pydoc.
             logger.periodic_warn(logger.EVERY_FIFTEEN_MINUTES,
                                  "[PERIODIC] Too many files under: {0}, current count:  {1}, removing oldest".format(
                                      self.event_dir, len(existing_events)))
@@ -453,8 +457,23 @@ def add_event(name, op=WALAEventOperation.Unknown, is_success=True, duration=0, 
 
 
 def add_log_event(level, message, reporter=__event_logger__):
+    """
+    # See #1035 for not adding warning/error statements here (any where in the call-tree).
+    The issue with #1035 was never-ending machinery generating events continuously and stretching the system.
+
+    At t=0 - Assume 999 events are already in the events folder.
+    At t=1 - Now, assuming that a new log.WARN [1] event comes in and needs to be written - when saving this event on
+    the disk `save_event` would generate another log.WARN [2] as it warns that there are too many events on the dist.
+
+    Thus, this new WARN [2] event again would propagate more WARN events to be written, thus introducing a never-ending
+    cycle of WARNs being written. It would lead to stalling of the agent
+
+    :param level: LoggerLevel of the log event
+    :param message: Message
+    :param reporter:
+    :return:
+    """
     if reporter.event_dir is None:
-        # See #1035 for not adding warning statements here.
         return
 
     if not send_logs_to_telemetry():
@@ -462,6 +481,7 @@ def add_log_event(level, message, reporter=__event_logger__):
 
     if level >= logger.LogLevel.WARNING:
         reporter.add_log_event(level, message)
+
 
 def add_periodic(delta, name, op=WALAEventOperation.Unknown, is_success=True, duration=0,
                  version=str(CURRENT_VERSION), message="", evt_type="", is_internal=False, log_event=True, force=False,
