@@ -417,7 +417,6 @@ def report_metric(category, counter, instance, value, log_event=False, reporter=
     try:
         reporter.add_metric(category, counter, instance, float(value), log_event)
     except ValueError:
-        message = "{0}/{1} [{2}] = {3}".format(category, counter, instance, value)
         logger.periodic_warn(logger.EVERY_HALF_HOUR, "[PERIODIC] Cannot cast the metric value. Details of the Metric - "
                                                      "{0}/{1} [{2}] = {3}".format(category, counter, instance, value))
 
