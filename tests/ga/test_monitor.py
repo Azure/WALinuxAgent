@@ -26,12 +26,12 @@ import tempfile
 import time
 from datetime import timedelta
 
-from mock import MagicMock, Mock, patch
 from nose.plugins.attrib import attr
 
 from azurelinuxagent.common import logger
 from azurelinuxagent.common.cgroup import CGroup
 from azurelinuxagent.common.cgroupstelemetry import CGroupsTelemetry
+import azurelinuxagent.common.conf as conf
 from azurelinuxagent.common.datacontract import get_properties
 from azurelinuxagent.common.event import CONTAINER_ID_ENV_VARIABLE, EventLogger, WALAEventOperation
 from azurelinuxagent.common.exception import HttpError
@@ -46,7 +46,8 @@ from azurelinuxagent.ga.monitor import generate_extension_metrics_telemetry_dict
     MonitorHandler, parse_json_event, parse_xml_event
 from tests.common.test_cgroupstelemetry import consume_cpu_time, consume_memory, make_new_cgroup
 from tests.protocol.mockwiredata import conf, DATA_FILE, WireProtocolData
-from tests.tools import AgentTestCase, are_cgroups_enabled, data_dir, i_am_root, load_data, skip_if_predicate_false
+from tests.tools import Mock, MagicMock, patch, load_data, AgentTestCase, data_dir, are_cgroups_enabled, \
+    i_am_root, skip_if_predicate_false
 
 
 class ResponseMock(Mock):

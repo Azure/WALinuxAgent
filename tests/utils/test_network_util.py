@@ -17,7 +17,7 @@
 
 import azurelinuxagent.common.utils.networkutil as networkutil
 
-from tests.tools import *
+from tests.tools import AgentTestCase
 
 
 class TestNetworkOperations(AgentTestCase):

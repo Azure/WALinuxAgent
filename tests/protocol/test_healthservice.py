@@ -19,7 +19,7 @@ from azurelinuxagent.common.exception import HttpError
 from azurelinuxagent.common.protocol.healthservice import Observation, HealthService
 from azurelinuxagent.common.utils import restutil
 from tests.protocol.test_hostplugin import MockResponse
-from tests.tools import *
+from tests.tools import AgentTestCase, patch
 
 
 class TestHealthService(AgentTestCase):

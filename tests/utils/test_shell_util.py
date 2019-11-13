@@ -16,8 +16,7 @@
 # Requires Python 2.6+ and Openssl 1.0+
 #
 
-from tests.tools import *
-from azurelinuxagent.common.logger import LogLevel
+from tests.tools import AgentTestCase, patch
 import unittest
 import azurelinuxagent.common.utils.shellutil as shellutil
 
@@ -155,7 +154,8 @@ class RunCommandTestCase(AgentTestCase):
         exception = context_manager.exception
         self.assertIn("No such file or directory", str(exception))
 
-    def test_run_command_it_should_not_log_by_default(self):
+    @patch("azurelinuxagent.common.utils.shellutil.logger", autospec=True)
+    def test_run_command_it_should_not_log_by_default(self, mock_logger):
 
         def assert_no_message_logged(command):
             try:

@@ -21,9 +21,10 @@
 import os
 import stat
 import sys
+import unittest
 from azurelinuxagent.common.utils import shellutil
 from azurelinuxagent.daemon.resourcedisk import get_resourcedisk_handler
-from tests.tools import *
+from tests.tools import AgentTestCase, patch
 
 
 class TestResourceDisk(AgentTestCase):
