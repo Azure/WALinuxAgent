@@ -14,12 +14,17 @@
 #
 # Requires Python 2.6+ and Openssl 1.0+
 #
+
+import os
+import unittest
+
 from multiprocessing import Process
 
+import azurelinuxagent.common.conf as conf
 from azurelinuxagent.daemon import *
 from azurelinuxagent.daemon.main import OPENSSL_FIPS_ENVIRONMENT
 from azurelinuxagent.pa.provision.default import ProvisionHandler
-from tests.tools import *
+from tests.tools import AgentTestCase, Mock, patch
 
 
 class MockDaemonCall(object):

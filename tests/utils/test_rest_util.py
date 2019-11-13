@@ -15,11 +15,14 @@
 # Requires Python 2.6+ and Openssl 1.0+
 #
 
+import os
+import unittest
+
 from azurelinuxagent.common.exception import HttpError, ResourceGoneError, InvalidContainerError
 import azurelinuxagent.common.utils.restutil as restutil
 from azurelinuxagent.common.utils.restutil import HTTP_USER_AGENT
 from azurelinuxagent.common.future import httpclient, ustr
-from tests.tools import *
+from tests.tools import AgentTestCase, call, Mock, MagicMock, patch
 
 
 class TestIOErrorCounter(AgentTestCase):

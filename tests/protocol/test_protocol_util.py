@@ -15,13 +15,17 @@
 # Requires Python 2.6+ and Openssl 1.0+
 #
 
-from tests.tools import *
+import os
+import unittest
+
+from tests.tools import AgentTestCase, MagicMock, Mock, patch
 from azurelinuxagent.common.exception import *
 from azurelinuxagent.common.protocol import get_protocol_util, \
                                             TAG_FILE_NAME
 from azurelinuxagent.common.utils.restutil import KNOWN_WIRESERVER_IP
 from azurelinuxagent.common.protocol.util import ENDPOINT_FILE_NAME
 from errno import ENOENT
+
 
 @patch("time.sleep")
 class TestProtocolUtil(AgentTestCase):

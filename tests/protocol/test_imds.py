@@ -17,6 +17,8 @@
 # Requires Python 2.6+ and Openssl 1.0+
 
 import json
+import os
+import unittest
 
 import azurelinuxagent.common.protocol.imds as imds
 
@@ -25,7 +27,7 @@ from azurelinuxagent.common.exception import HttpError, ResourceGoneError
 from azurelinuxagent.common.future import ustr, httpclient
 from azurelinuxagent.common.utils import restutil
 from tests.ga.test_update import ResponseMock
-from tests.tools import *
+from tests.tools import AgentTestCase, data_dir, MagicMock, Mock, patch
 
 
 class TestImds(AgentTestCase):
