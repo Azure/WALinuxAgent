@@ -4,7 +4,10 @@
 from azurelinuxagent.ga.exthandlers import ExtHandlerInstance
 from azurelinuxagent.common.protocol.restapi import ExtHandler, ExtHandlerProperties, ExtHandlerPackage, \
     ExtHandlerVersionUri
-from tests.tools import *
+import os
+import shutil
+import sys
+from tests.tools import AgentTestCase, patch
 
 
 class ExtHandlerInstanceTestCase(AgentTestCase):

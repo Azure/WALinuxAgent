@@ -19,6 +19,7 @@ import base64
 import json
 import sys
 import datetime
+import unittest
 
 import azurelinuxagent.common.protocol.restapi as restapi
 import azurelinuxagent.common.protocol.wire as wire
@@ -31,7 +32,7 @@ from azurelinuxagent.common.protocol.hostplugin import API_VERSION
 from azurelinuxagent.common.utils import restutil
 from tests.protocol.mockwiredata import WireProtocolData, DATA_FILE
 from tests.protocol.test_wire import MockResponse
-from tests.tools import *
+from tests.tools import AgentTestCase, PY_VERSION_MAJOR, Mock, patch
 
 if sys.version_info[0] == 3:
     import http.client as httpclient

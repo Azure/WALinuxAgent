@@ -98,13 +98,13 @@ HTTP_USER_AGENT_HEALTH = "{0}+health".format(HTTP_USER_AGENT)
 INVALID_CONTAINER_CONFIGURATION = "InvalidContainerConfiguration"
 REQUEST_ROLE_CONFIG_FILE_NOT_FOUND = "RequestRoleConfigFileNotFound"
 
-DEFAULT_PROTOCOL_ENDPOINT = '168.63.129.16'
+KNOWN_WIRESERVER_IP = '168.63.129.16'
 HOST_PLUGIN_PORT = 32526
 
 
 class IOErrorCounter(object):
     _lock = threading.RLock()
-    _protocol_endpoint = DEFAULT_PROTOCOL_ENDPOINT
+    _protocol_endpoint = KNOWN_WIRESERVER_IP
     _counts = {"hostplugin":0, "protocol":0, "other":0}
 
     @staticmethod
@@ -131,7 +131,7 @@ class IOErrorCounter(object):
             IOErrorCounter._counts = {"hostplugin":0, "protocol":0, "other":0}
 
     @staticmethod
-    def set_protocol_endpoint(endpoint=DEFAULT_PROTOCOL_ENDPOINT):
+    def set_protocol_endpoint(endpoint=KNOWN_WIRESERVER_IP):
         IOErrorCounter._protocol_endpoint = endpoint
 
 

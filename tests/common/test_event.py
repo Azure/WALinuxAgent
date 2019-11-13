@@ -22,8 +22,6 @@ import os
 import threading
 from datetime import datetime, timedelta
 
-from mock import Mock, patch
-
 from azurelinuxagent.common import event, logger
 from azurelinuxagent.common.event import add_event, elapsed_milliseconds, WALAEventOperation
 from azurelinuxagent.common.exception import EventError
@@ -33,7 +31,8 @@ from azurelinuxagent.common.utils import fileutil
 from azurelinuxagent.common.utils.extensionprocessutil import read_output
 from azurelinuxagent.common.version import CURRENT_AGENT, CURRENT_VERSION
 from azurelinuxagent.ga.monitor import MonitorHandler
-from tests.tools import AgentTestCase, data_dir, load_data
+
+from tests.tools import AgentTestCase, load_data, data_dir, patch, Mock
 
 
 class TestEvent(AgentTestCase):

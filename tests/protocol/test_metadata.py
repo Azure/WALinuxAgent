@@ -15,15 +15,13 @@
 # Requires Python 2.6+ and Openssl 1.0+
 #
 
-from azurelinuxagent.common.datacontract import get_properties, set_properties
-from azurelinuxagent.common.exception import ProtocolError
 from azurelinuxagent.common.protocol.metadata import *
 from azurelinuxagent.common.protocol.restapi import *
 from azurelinuxagent.common.telemetryevent import TelemetryEventList, TelemetryEvent
 from azurelinuxagent.common.utils import restutil
 
 from tests.protocol.mockmetadata import *
-from tests.tools import *
+from tests.tools import AgentTestCase, patch
 
 
 class TestMetadataProtocolGetters(AgentTestCase):
