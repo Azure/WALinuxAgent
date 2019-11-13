@@ -631,14 +631,14 @@ class TestCGroupsTelemetry(AgentTestCase):
         self.ext_handler_instance = ExtHandlerInstance(ext_handler=self.ext_handler, protocol=None)
 
         command = self.create_script("keep_cpu_busy_and_consume_memory_for_5_seconds", '''
-        nohup python -c "import time
+nohup python -c "import time
 
-        for i in range(5):
-            x = [1, 2, 3, 4, 5] * (i * 1000)
-            time.sleep({0})
-            x *= 0
-            print('Test loop')" &
-        '''.format(time_to_wait))
+for i in range(5):
+    x = [1, 2, 3, 4, 5] * (i * 1000)
+    time.sleep({0})
+    x *= 0
+    print('Test loop')" &
+'''.format(time_to_wait))
 
         self.log_dir = os.path.join(self.tmp_dir, "log")
 
@@ -647,14 +647,6 @@ class TestCGroupsTelemetry(AgentTestCase):
             with patch("azurelinuxagent.ga.exthandlers.ExtHandlerInstance.get_log_dir", lambda *_: self.log_dir) as \
                     patch_get_log_dir:
                 self.ext_handler_instance.launch_command(command)
-
-        for cg in CGroupsTelemetry._tracked:
-            print(cg.name, cg.path)
-            # SystemdCgroupsApi() if CGroupsApi._is_systemd() else FileSystemCgroupsApi()
-        from azurelinuxagent.common.cgroupapi import SystemdCgroupsApi
-        print(isinstance(CGroupConfigurator.get_instance()._cgroups_api, SystemdCgroupsApi))
-        from azurelinuxagent.common.cgroupapi import FileSystemCgroupsApi
-        print(isinstance(CGroupConfigurator.get_instance()._cgroups_api, FileSystemCgroupsApi))
 
         self.assertTrue(CGroupsTelemetry.is_tracked(os.path.join(
             BASE_CGROUPS, "cpu", "walinuxagent.extensions", "foobar_1.0.0")))

@@ -1048,11 +1048,11 @@ for i in range(5):
     @skip_if_predicate_false(are_cgroups_enabled, "Does not run when Cgroups are not enabled")
     @skip_if_predicate_true(is_trusty_in_travis, "Does not run on Trusty in Travis")
     @patch("azurelinuxagent.common.cgroupconfigurator.get_osutil", return_value=DefaultOSUtil())
-    @patch("azurelinuxagent.common.cgroupapi.CGroupsApi.", return_value=False)
+    @patch("azurelinuxagent.common.cgroupapi.CGroupsApi._is_systemd", return_value=False)
     @patch('azurelinuxagent.common.protocol.wire.WireClient.report_event')
     @attr('requires_sudo')
     def test_report_event_metrics_sent_for_actual_cgroup(self, patch_report_event, patch__is_systemd, patch_get_osutil,
-                                                         http_get, patch_get_protocol, *_):
+                                                         http_get, patch_get_protocol, *args):
         self.assertTrue(i_am_root(), "Test does not run when non-root")
         CGroupConfigurator._instance = None
 
@@ -1079,10 +1079,10 @@ for i in range(5):
 nohup python -c "import time
 
 for i in range(3):
-x = [1, 2, 3, 4, 5] * (i * 1000)
-time.sleep({0})
-x *= 0
-print('Test loop')" &
+    x = [1, 2, 3, 4, 5] * (i * 1000)
+    time.sleep({0})
+    x *= 0
+    print('Test loop')" &
 '''.format(time_to_wait))
 
         self.log_dir = os.path.join(self.tmp_dir, "log")
