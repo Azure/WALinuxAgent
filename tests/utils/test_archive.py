@@ -3,9 +3,14 @@
 from datetime import datetime, timedelta
 
 import zipfile
+import os
+import shutil
+import tempfile
 
+import azurelinuxagent.common.logger as logger
+from azurelinuxagent.common.utils import fileutil
 from azurelinuxagent.common.utils.archive import StateFlusher, StateArchiver, MAX_ARCHIVED_STATES
-from tests.tools import *
+from tests.tools import AgentTestCase
 
 debug = False
 if os.environ.get('DEBUG') == '1':

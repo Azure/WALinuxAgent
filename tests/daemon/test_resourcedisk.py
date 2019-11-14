@@ -15,10 +15,11 @@
 # Requires Python 2.6+ and Openssl 1.0+
 #
 
-from tests.tools import *
-from azurelinuxagent.common.exception import *
-from azurelinuxagent.daemon import *
+import unittest
+
+from tests.tools import AgentTestCase
 from azurelinuxagent.daemon.resourcedisk.default import ResourceDiskHandler
+
 
 class TestResourceDisk(AgentTestCase):
     def test_mount_flags_empty(self):
