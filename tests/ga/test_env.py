@@ -16,7 +16,7 @@
 #
 from azurelinuxagent.common.osutil.default import DefaultOSUtil, shellutil
 from azurelinuxagent.ga.env import EnvHandler
-from tests.tools import *
+from tests.tools import AgentTestCase, patch
 
 
 class TestEnvHandler(AgentTestCase):
@@ -33,7 +33,6 @@ class TestEnvHandler(AgentTestCase):
         # that always returns the default implementation.
         self.mock_get_osutil = patch("azurelinuxagent.common.osutil.factory._get_osutil", return_value=DefaultOSUtil())
         self.mock_get_osutil.start()
-
 
     def tearDown(self):
         self.mock_get_osutil.stop()

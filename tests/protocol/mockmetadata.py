@@ -15,9 +15,8 @@
 # Requires Python 2.6+ and Openssl 1.0+
 #
 
-from tests.tools import *
+from tests.tools import load_data, MagicMock, Mock
 from azurelinuxagent.common.future import httpclient
-from azurelinuxagent.common.utils.cryptutil import CryptUtil
 
 DATA_FILE = {
         "identity": "metadata/identity.json",
@@ -31,6 +30,7 @@ DATA_FILE = {
 
 DATA_FILE_NO_EXT = DATA_FILE.copy()
 DATA_FILE_NO_EXT["ext_handlers"] = "metadata/ext_handlers_no_ext.json"
+
 
 class MetadataProtocolData(object):
     def __init__(self, data_files):

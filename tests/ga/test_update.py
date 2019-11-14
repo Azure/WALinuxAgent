@@ -3,14 +3,15 @@
 
 from __future__ import print_function
 
-from azurelinuxagent.common.event import *
+import tempfile
+import unittest
+
 from azurelinuxagent.common.protocol.hostplugin import *
 from azurelinuxagent.common.protocol.metadata import *
 from azurelinuxagent.common.protocol.wire import *
-from azurelinuxagent.common.utils.fileutil import *
 from azurelinuxagent.ga.update import *
+from tests.tools import AgentTestCase, call, data_dir, DEFAULT, patch, load_bin_data, load_data, Mock, MagicMock
 
-from tests.tools import *
 
 NO_ERROR = {
     "last_failure" : 0.0,

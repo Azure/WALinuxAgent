@@ -16,9 +16,8 @@
 #
 # Requires Python 2.6+ and Openssl 1.0+
 
-from azurelinuxagent.common.datacontract import set_properties
 from azurelinuxagent.common.protocol.imds import ImageInfoMatcher
-from tests.tools import *
+import unittest
 
 
 class TestImageInfoMatcher(unittest.TestCase):

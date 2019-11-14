@@ -15,21 +15,19 @@
 #
 # Requires Python 2.6+ and Openssl 1.0+
 #
+
 import json
 import os
 import stat
+import tempfile
 import time
 import unittest
 import zipfile
 
-import tempfile
-
-from azurelinuxagent.common.future import httpclient
-from mock import patch, Mock, ANY, MagicMock
-
 from azurelinuxagent.common import conf
 from azurelinuxagent.common.exception import InvalidContainerError, ResourceGoneError, ProtocolError, \
     ExtensionDownloadError
+from azurelinuxagent.common.future import httpclient
 from azurelinuxagent.common.protocol.hostplugin import HostPluginProtocol
 from azurelinuxagent.common.protocol.wire import WireProtocol, WireClient, GoalState, ExtensionsConfig, \
     InVMArtifactsProfile, VMAgentManifestUri, StatusBlob, VMStatus, INCARNATION_FILE_NAME, ExtHandlerVersionUri, \
@@ -39,9 +37,8 @@ from azurelinuxagent.common.utils import fileutil, restutil
 from azurelinuxagent.common.utils.shellutil import run_get_output
 from azurelinuxagent.common.version import CURRENT_VERSION, DISTRO_NAME, DISTRO_VERSION
 from tests.ga.test_monitor import random_generator
-from tests.protocol.mockwiredata import WireProtocolData, DATA_FILE, DATA_FILE_NO_EXT, DATA_FILE_EXT_NO_SETTINGS, \
-    DATA_FILE_EXT_NO_PUBLIC, DATA_FILE_NO_CERT_FORMAT, DATA_FILE_CERT_FORMAT_NOT_PFX
-from tests.tools import AgentTestCase, skip_if_predicate_true, running_under_travis
+from tests.protocol import mockwiredata
+from tests.tools import ANY, MagicMock, Mock, patch, AgentTestCase, skip_if_predicate_true, running_under_travis
 
 data_with_bom = b'\xef\xbb\xbfhehe'
 testurl = 'http://foo'
@@ -102,37 +99,37 @@ class TestWireProtocol(AgentTestCase):
 
     def test_getters(self, *args):
         """Normal case"""
-        test_data = WireProtocolData(DATA_FILE)
+        test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE)
         self._test_getters(test_data, True, *args)
 
     def test_getters_no_ext(self, *args):
         """Provision with agent is not checked"""
-        test_data = WireProtocolData(DATA_FILE_NO_EXT)
+        test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE_NO_EXT)
         self._test_getters(test_data, True, *args)
 
     def test_getters_ext_no_settings(self, *args):
         """Extensions without any settings"""
-        test_data = WireProtocolData(DATA_FILE_EXT_NO_SETTINGS)
+        test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE_EXT_NO_SETTINGS)
         self._test_getters(test_data, True, *args)
 
     def test_getters_ext_no_public(self, *args):
         """Extensions without any public settings"""
-        test_data = WireProtocolData(DATA_FILE_EXT_NO_PUBLIC)
+        test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE_EXT_NO_PUBLIC)
         self._test_getters(test_data, True, *args)
 
     def test_getters_ext_no_cert_format(self, *args):
         """Certificate format not specified"""
-        test_data = WireProtocolData(DATA_FILE_NO_CERT_FORMAT)
+        test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE_NO_CERT_FORMAT)
         self._test_getters(test_data, True, *args)
 
     def test_getters_ext_cert_format_not_pfx(self, *args):
         """Certificate format is not Pkcs7BlobWithPfxContents specified"""
-        test_data = WireProtocolData(DATA_FILE_CERT_FORMAT_NOT_PFX)
+        test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE_CERT_FORMAT_NOT_PFX)
         self._test_getters(test_data, False, *args)
 
     @patch("azurelinuxagent.common.protocol.healthservice.HealthService.report_host_plugin_extension_artifact")
     def test_getters_with_stale_goal_state(self, patch_report, *args):
-        test_data = WireProtocolData(DATA_FILE)
+        test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE)
         test_data.emulate_stale_goal_state = True
 
         self._test_getters(test_data, True, *args)
@@ -186,7 +183,7 @@ class TestWireProtocol(AgentTestCase):
 
     def test_status_blob_parsing(self, *args):
         wire_protocol_client = WireProtocol(WIRESERVER_URL).client
-        wire_protocol_client.ext_conf = ExtensionsConfig(WireProtocolData(DATA_FILE).ext_conf)
+        wire_protocol_client.ext_conf = ExtensionsConfig(mockwiredata.WireProtocolData(mockwiredata.DATA_FILE).ext_conf)
         self.assertEqual(wire_protocol_client.ext_conf.status_upload_blob,
                          'https://test.blob.core.windows.net/vhds/test-cs12.test-cs12.test-cs12.status?'
                          'sr=b&sp=rw&se=9999-01-01&sk=key1&sv=2014-02-14&'
@@ -197,7 +194,7 @@ class TestWireProtocol(AgentTestCase):
 
     def test_get_host_ga_plugin(self, *args):
         wire_protocol_client = WireProtocol(WIRESERVER_URL).client
-        goal_state = GoalState(WireProtocolData(DATA_FILE).goal_state)
+        goal_state = GoalState(mockwiredata.WireProtocolData(mockwiredata.DATA_FILE).goal_state)
 
         with patch.object(WireClient, "get_goal_state", return_value=goal_state) as patch_get_goal_state:
             host_plugin = wire_protocol_client.get_host_plugin()
@@ -283,7 +280,7 @@ class TestWireProtocol(AgentTestCase):
         wire_protocol_client.ext_conf.status_upload_blob = testurl
         wire_protocol_client.ext_conf.status_upload_blob_type = testtype
         wire_protocol_client.status_blob.vm_status = vmstatus
-        goal_state = GoalState(WireProtocolData(DATA_FILE).goal_state)
+        goal_state = GoalState(mockwiredata.WireProtocolData(mockwiredata.DATA_FILE).goal_state)
 
         with patch.object(HostPluginProtocol,
                           "ensure_initialized",
@@ -329,7 +326,7 @@ class TestWireProtocol(AgentTestCase):
         wire_protocol_client.ext_conf.status_upload_blob = testurl
         wire_protocol_client.ext_conf.status_upload_blob_type = testtype
         wire_protocol_client.status_blob.vm_status = vmstatus
-        goal_state = GoalState(WireProtocolData(DATA_FILE).goal_state)
+        goal_state = GoalState(mockwiredata.WireProtocolData(mockwiredata.DATA_FILE).goal_state)
 
         with patch.object(StatusBlob, "prepare", side_effect=Exception) as mock_prepare:
             self.assertRaises(ProtocolError, wire_protocol_client.upload_status_blob)
@@ -350,7 +347,7 @@ class TestWireProtocol(AgentTestCase):
         wire_protocol_client = WireProtocol(WIRESERVER_URL).client
         wire_protocol_client.ext_conf = ExtensionsConfig(None)
         wire_protocol_client.ext_conf.artifacts_profile_blob = testurl
-        goal_state = GoalState(WireProtocolData(DATA_FILE).goal_state)
+        goal_state = GoalState(mockwiredata.WireProtocolData(mockwiredata.DATA_FILE).goal_state)
         wire_protocol_client.get_goal_state = Mock(return_value=goal_state)
 
         with patch.object(HostPluginProtocol, "get_artifact_request",
@@ -379,7 +376,7 @@ class TestWireProtocol(AgentTestCase):
         wire_protocol_client = WireProtocol(WIRESERVER_URL).client
         wire_protocol_client.ext_conf = ExtensionsConfig(None)
         wire_protocol_client.ext_conf.artifacts_profile_blob = testurl
-        goal_state = GoalState(WireProtocolData(DATA_FILE).goal_state)
+        goal_state = GoalState(mockwiredata.WireProtocolData(mockwiredata.DATA_FILE).goal_state)
         wire_protocol_client.get_goal_state = Mock(return_value=goal_state)
 
         # response is invalid json
@@ -399,7 +396,7 @@ class TestWireProtocol(AgentTestCase):
         wire_protocol_client = WireProtocol(WIRESERVER_URL).client
         wire_protocol_client.ext_conf = ExtensionsConfig(None)
         wire_protocol_client.ext_conf.artifacts_profile_blob = testurl
-        goal_state = GoalState(WireProtocolData(DATA_FILE).goal_state)
+        goal_state = GoalState(mockwiredata.WireProtocolData(mockwiredata.DATA_FILE).goal_state)
         wire_protocol_client.get_goal_state = Mock(return_value=goal_state)
 
         wire_protocol_client.call_storage_service = Mock(
@@ -464,7 +461,7 @@ class TestWireProtocol(AgentTestCase):
         wire_protocol_client = WireProtocol(WIRESERVER_URL).client
         wire_protocol_client.ext_conf = ExtensionsConfig(None)
         wire_protocol_client.ext_conf.artifacts_profile_blob = testurl
-        goal_state = GoalState(WireProtocolData(DATA_FILE).goal_state)
+        goal_state = GoalState(mockwiredata.WireProtocolData(mockwiredata.DATA_FILE).goal_state)
         wire_protocol_client.get_goal_state = Mock(return_value=goal_state)
         wire_protocol_client.fetch = Mock(side_effect=[None, '{"onHold": "true"}'])
         with patch.object(HostPluginProtocol,
@@ -582,13 +579,13 @@ class TestWireProtocol(AgentTestCase):
 class TestWireClient(AgentTestCase):
 
     def test_get_ext_conf_without_uri(self, *args):
-        test_goal_state = GoalState(WireProtocolData(DATA_FILE).goal_state)
+        test_goal_state = GoalState(mockwiredata.WireProtocolData(mockwiredata.DATA_FILE).goal_state)
         test_goal_state.ext_uri = None
         wire_protocol_client = WireProtocol(WIRESERVER_URL).client
         wire_protocol_client.get_goal_state = Mock(return_value=test_goal_state)
 
         with patch("azurelinuxagent.common.protocol.wire.WireClient.fetch_cache",
-                   return_value=WireProtocolData(DATA_FILE).ext_conf):
+                   return_value=mockwiredata.WireProtocolData(mockwiredata.DATA_FILE).ext_conf):
             ext_conf = wire_protocol_client.get_ext_conf()
 
         self.assertEqual(0, len(ext_conf.ext_handlers.extHandlers))
@@ -598,12 +595,12 @@ class TestWireClient(AgentTestCase):
         self.assertIsNone(ext_conf.artifacts_profile_blob)
 
     def test_get_ext_conf_with_uri(self, *args):
-        test_goal_state = GoalState(WireProtocolData(DATA_FILE).goal_state)
+        test_goal_state = GoalState(mockwiredata.WireProtocolData(mockwiredata.DATA_FILE).goal_state)
         wire_protocol_client = WireProtocol(WIRESERVER_URL).client
         wire_protocol_client.get_goal_state = Mock(return_value=test_goal_state)
 
         with patch("azurelinuxagent.common.protocol.wire.WireClient.fetch_cache",
-                   return_value=WireProtocolData(DATA_FILE).ext_conf):
+                   return_value=mockwiredata.WireProtocolData(mockwiredata.DATA_FILE).ext_conf):
             ext_conf = wire_protocol_client.get_ext_conf()
 
         self.assertEqual(1, len(ext_conf.ext_handlers.extHandlers))
@@ -619,7 +616,7 @@ class TestWireClient(AgentTestCase):
         goal_state_file = os.path.join(conf.get_lib_dir(), "GoalState.{0}.xml".format(incarnation))
         self.assertFalse(os.path.exists(goal_state_file))
 
-        xml_text = WireProtocolData(DATA_FILE).goal_state
+        xml_text = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE).goal_state
         client = WireClient(WIRESERVER_URL)
         client.save_or_update_goal_state_file(incarnation, xml_text)
 
@@ -632,7 +629,7 @@ class TestWireClient(AgentTestCase):
     def test_save_or_update_goal_state_should_update_existing_goal_state_file(self):
         incarnation = 42
         goal_state_file = os.path.join(conf.get_lib_dir(), "GoalState.{0}.xml".format(incarnation))
-        xml_text = WireProtocolData(DATA_FILE).goal_state
+        xml_text = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE).goal_state
 
         with open(goal_state_file, "w") as f:
             f.write(xml_text)
@@ -644,7 +641,7 @@ class TestWireClient(AgentTestCase):
             self.assertEquals("".join(contents), xml_text)
 
         # Update the container id
-        new_goal_state = WireProtocolData(DATA_FILE).goal_state.replace("c6d5526c-5ac2-4200-b6e2-56f2b70c5ab2",
+        new_goal_state = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE).goal_state.replace("c6d5526c-5ac2-4200-b6e2-56f2b70c5ab2",
                                                                         "z6d5526c-5ac2-4200-b6e2-56f2b70c5ab2")
         client = WireClient(WIRESERVER_URL)
         client.save_or_update_goal_state_file(incarnation, new_goal_state)
@@ -661,7 +658,7 @@ class TestWireClient(AgentTestCase):
         with open(incarnation_file, "w") as f:
             f.write(incarnation)
 
-        xml_text = WireProtocolData(DATA_FILE).goal_state
+        xml_text = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE).goal_state
         goal_state_file = os.path.join(conf.get_lib_dir(), "GoalState.{0}.xml".format(incarnation))
 
         with open(goal_state_file, "w") as f:
@@ -672,7 +669,7 @@ class TestWireClient(AgentTestCase):
         old_container_id = host.container_id
 
         # Update the container id
-        new_goal_state = WireProtocolData(DATA_FILE).goal_state.replace("c6d5526c-5ac2-4200-b6e2-56f2b70c5ab2",
+        new_goal_state = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE).goal_state.replace("c6d5526c-5ac2-4200-b6e2-56f2b70c5ab2",
                                                                         "z6d5526c-5ac2-4200-b6e2-56f2b70c5ab2")
         with patch("azurelinuxagent.common.protocol.wire.WireClient.fetch_config", return_value=new_goal_state):
             client.update_goal_state(forced=False)
@@ -1025,7 +1022,7 @@ class TestWireClient(AgentTestCase):
                         self.assertEquals(HostPluginProtocol.is_default_channel(), False)
 
     def test_send_request_using_appropriate_channel_should_not_invoke_host_channel_when_direct_channel_succeeds(self, *args):
-        xml_text = WireProtocolData(DATA_FILE).goal_state
+        xml_text = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE).goal_state
         client = WireClient(WIRESERVER_URL)
         client.goal_state = GoalState(xml_text)
         client.get_host_plugin().set_default_channel(False)
@@ -1048,7 +1045,7 @@ class TestWireClient(AgentTestCase):
         self.assertEquals(0, host_func.counter)
 
     def test_send_request_using_appropriate_channel_should_not_use_direct_channel_when_host_channel_is_default(self, *args):
-        xml_text = WireProtocolData(DATA_FILE).goal_state
+        xml_text = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE).goal_state
         client = WireClient(WIRESERVER_URL)
         client.goal_state = GoalState(xml_text)
         client.get_host_plugin().set_default_channel(True)
@@ -1071,7 +1068,7 @@ class TestWireClient(AgentTestCase):
         self.assertEquals(1, host_func.counter)
 
     def test_send_request_using_appropriate_channel_should_use_host_channel_when_direct_channel_fails(self, *args):
-        xml_text = WireProtocolData(DATA_FILE).goal_state
+        xml_text = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE).goal_state
         client = WireClient(WIRESERVER_URL)
         client.goal_state = GoalState(xml_text)
         host = client.get_host_plugin()
@@ -1097,7 +1094,7 @@ class TestWireClient(AgentTestCase):
         self.assertEquals(True, host.is_default_channel())
 
     def test_send_request_using_appropriate_channel_should_retry_the_host_channel_after_reloading_goal_state(self, *args):
-        xml_text = WireProtocolData(DATA_FILE).goal_state
+        xml_text = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE).goal_state
         client = WireClient(WIRESERVER_URL)
         client.goal_state = GoalState(xml_text)
         client.get_host_plugin().set_default_channel(False)
