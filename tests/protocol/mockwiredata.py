@@ -15,7 +15,7 @@
 # Requires Python 2.6+ and Openssl 1.0+
 #
 
-from tests.tools import *
+from tests.tools import load_bin_data, load_data, MagicMock, Mock
 from azurelinuxagent.common.exception import HttpError, ResourceGoneError
 from azurelinuxagent.common.future import httpclient
 from azurelinuxagent.common.utils.cryptutil import CryptUtil

@@ -21,7 +21,7 @@ from azurelinuxagent.common.exception import RemoteAccessError
 from azurelinuxagent.common.protocol.wire import *
 from azurelinuxagent.ga.remoteaccess import RemoteAccessHandler
 from tests.common.osutil.mock_osutil import MockOSUtil
-from tests.tools import *
+from tests.tools import AgentTestCase, load_data, patch
 
 
 info_messages = []

@@ -24,13 +24,12 @@ import string
 import sys
 import tempfile
 import time
-from collections import namedtuple
 from datetime import timedelta
 
-from mock import MagicMock, Mock, patch
 from nose.plugins.attrib import attr
 
-from azurelinuxagent.common import logger, event
+import azurelinuxagent.common.conf as conf
+from azurelinuxagent.common import event, logger
 from azurelinuxagent.common.cgroup import CGroup, CpuCgroup
 from azurelinuxagent.common.cgroupconfigurator import CGroupConfigurator
 from azurelinuxagent.common.cgroupstelemetry import CGroupsTelemetry, MetricValue
@@ -41,17 +40,17 @@ from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.osutil.default import BASE_CGROUPS, DefaultOSUtil
 from azurelinuxagent.common.protocol.imds import ComputeInfo
 from azurelinuxagent.common.protocol.restapi import VMInfo
-from azurelinuxagent.common.protocol.wire import WireProtocol, ExtHandler, ExtHandlerProperties
-from azurelinuxagent.common.telemetryevent import TelemetryEvent, TelemetryEventParam
-from azurelinuxagent.common.utils import fileutil, restutil
-from azurelinuxagent.common.version import AGENT_NAME, AGENT_VERSION, CURRENT_AGENT, CURRENT_VERSION
+from azurelinuxagent.common.protocol.wire import ExtHandler, ExtHandlerProperties, WireProtocol
+from azurelinuxagent.common.telemetryevent import TelemetryEventParam, TelemetryEvent
+from azurelinuxagent.common.utils import restutil, fileutil
+from azurelinuxagent.common.version import AGENT_VERSION, CURRENT_VERSION, AGENT_NAME, CURRENT_AGENT
 from azurelinuxagent.ga.exthandlers import ExtHandlerInstance
-from azurelinuxagent.ga.monitor import generate_extension_metrics_telemetry_dictionary, get_monitor_handler, \
-    MonitorHandler, parse_json_event, parse_xml_event
+from azurelinuxagent.ga.monitor import parse_xml_event, get_monitor_handler, MonitorHandler, \
+    generate_extension_metrics_telemetry_dictionary, parse_json_event
 from tests.common.test_cgroupstelemetry import make_new_cgroup
-from tests.protocol.mockwiredata import conf, DATA_FILE, WireProtocolData
-from tests.tools import AgentTestCase, are_cgroups_enabled, data_dir, i_am_root, load_data, skip_if_predicate_false, \
-    is_trusty_in_travis, skip_if_predicate_true
+from tests.protocol.mockwiredata import WireProtocolData, DATA_FILE
+from tests.tools import Mock, MagicMock, patch, load_data, AgentTestCase, data_dir, are_cgroups_enabled, \
+    i_am_root, skip_if_predicate_false, is_trusty_in_travis, skip_if_predicate_true
 
 
 class ResponseMock(Mock):

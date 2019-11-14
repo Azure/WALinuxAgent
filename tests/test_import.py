@@ -1,4 +1,4 @@
-from tests.tools import *
+from tests.tools import AgentTestCase
 import azurelinuxagent.common.osutil as osutil
 import azurelinuxagent.common.dhcp as dhcp
 import azurelinuxagent.common.protocol as protocol

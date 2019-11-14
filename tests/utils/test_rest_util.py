@@ -15,11 +15,14 @@
 # Requires Python 2.6+ and Openssl 1.0+
 #
 
+import os
+import unittest
+
 from azurelinuxagent.common.exception import HttpError, ResourceGoneError, InvalidContainerError
 import azurelinuxagent.common.utils.restutil as restutil
 from azurelinuxagent.common.utils.restutil import HTTP_USER_AGENT
 from azurelinuxagent.common.future import httpclient, ustr
-from tests.tools import *
+from tests.tools import AgentTestCase, call, Mock, MagicMock, patch
 
 
 class TestIOErrorCounter(AgentTestCase):
@@ -28,7 +31,7 @@ class TestIOErrorCounter(AgentTestCase):
         restutil.IOErrorCounter.set_protocol_endpoint()
 
         restutil.IOErrorCounter.increment(
-            restutil.DEFAULT_PROTOCOL_ENDPOINT, restutil.HOST_PLUGIN_PORT)
+            restutil.KNOWN_WIRESERVER_IP, restutil.HOST_PLUGIN_PORT)
 
         counts = restutil.IOErrorCounter.get_and_reset()
         self.assertEqual(1, counts["hostplugin"])
@@ -40,7 +43,7 @@ class TestIOErrorCounter(AgentTestCase):
         restutil.IOErrorCounter.set_protocol_endpoint()
 
         restutil.IOErrorCounter.increment(
-            restutil.DEFAULT_PROTOCOL_ENDPOINT, 80)
+            restutil.KNOWN_WIRESERVER_IP, 80)
 
         counts = restutil.IOErrorCounter.get_and_reset()
         self.assertEqual(0, counts["hostplugin"])
@@ -64,11 +67,11 @@ class TestIOErrorCounter(AgentTestCase):
         restutil.IOErrorCounter.set_protocol_endpoint()
 
         restutil.IOErrorCounter.increment(
-            restutil.DEFAULT_PROTOCOL_ENDPOINT, restutil.HOST_PLUGIN_PORT)
+            restutil.KNOWN_WIRESERVER_IP, restutil.HOST_PLUGIN_PORT)
         restutil.IOErrorCounter.increment(
-            restutil.DEFAULT_PROTOCOL_ENDPOINT, restutil.HOST_PLUGIN_PORT)
+            restutil.KNOWN_WIRESERVER_IP, restutil.HOST_PLUGIN_PORT)
         restutil.IOErrorCounter.increment(
-            restutil.DEFAULT_PROTOCOL_ENDPOINT, 80)
+            restutil.KNOWN_WIRESERVER_IP, 80)
         restutil.IOErrorCounter.increment(
             '169.254.169.254', 80)
         restutil.IOErrorCounter.increment(

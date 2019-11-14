@@ -1072,7 +1072,7 @@ class DefaultOSUtil(object):
                       chk_err=False)
 
     def is_dhcp_available(self):
-        return (True, '')
+        return True
 
     def is_dhcp_enabled(self):
         return False
