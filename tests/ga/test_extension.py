@@ -24,7 +24,7 @@ from azurelinuxagent.ga.monitor import get_monitor_handler
 from nose.plugins.attrib import attr
 from tests.protocol import mockwiredata
 from tests.tools import are_cgroups_enabled, AgentTestCase, data_dir, i_am_root, MagicMock, Mock, \
-    skip_if_predicate_false, patch
+    skip_if_predicate_false, patch, is_trusty_in_travis, skip_if_predicate_true
 
 from azurelinuxagent.common.exception import ResourceGoneError
 from azurelinuxagent.common.protocol.restapi import Extension, ExtHandlerProperties
@@ -2222,38 +2222,53 @@ class TestExtensionWithCGroupsEnabled(AgentTestCase):
         exthandlers_handler.run()
         self._assert_no_handler_status(protocol.report_vm_status)
 
+    @skip_if_predicate_true(lambda: True, "Skipping this test currently: We need two different tests - one for "
+                                  "FileSystemCgroupAPI based test and one for SystemDCgroupAPI based test. @vrdmr will "
+                                  "be splitting this test in subsequent PRs")
+    @skip_if_predicate_true(is_trusty_in_travis, "Does not run on Trusty in Travis as CPU cgroup is not mounted")
+    @patch('azurelinuxagent.common.event.EventLogger.add_metric')
     @patch('azurelinuxagent.common.event.EventLogger.add_event')
     @attr('requires_sudo')
-    def test_ext_handler_and_monitor_handler_with_cgroup_enabled(self, patch_add_event, *args):
+    def test_ext_handler_and_monitor_handler_with_cgroup_enabled(self, patch_add_event, patch_add_metric, *args):
         self.assertTrue(i_am_root(), "Test does not run when non-root")
 
-        test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE)
-        exthandlers_handler, monitor_handler, protocol = self._create_mock(test_data, *args)
+        # This test has some timing issues when systemd is managing cgroups, so we force the file system API
+        # by creating a new instance of the CGroupConfigurator
+        with patch("azurelinuxagent.common.cgroupapi.CGroupsApi._is_systemd", return_value=False):
+            cgroup_configurator_instance = CGroupConfigurator._instance
+            CGroupConfigurator._instance = None
 
-        monitor_handler.last_cgroup_polling_telemetry = datetime.datetime.utcnow() - timedelta(hours=1)
-        monitor_handler.last_cgroup_report_telemetry = datetime.datetime.utcnow() - timedelta(hours=1)
+            try:
+                test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE)
+                exthandlers_handler, monitor_handler, protocol = self._create_mock(test_data, *args)
 
-        # Test enable scenario.
-        exthandlers_handler.run()
-        self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.0.0")
-        self._assert_ext_status(protocol.report_ext_status, "success", 0)
+                monitor_handler.last_cgroup_polling_telemetry = datetime.datetime.utcnow() - timedelta(hours=1)
+                monitor_handler.last_cgroup_report_telemetry = datetime.datetime.utcnow() - timedelta(hours=1)
 
-        monitor_handler.poll_telemetry_metrics()
-        monitor_handler.send_telemetry_metrics()
+                # Test enable scenario.
+                exthandlers_handler.run()
+                self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.0.0")
+                self._assert_ext_status(protocol.report_ext_status, "success", 0)
 
-        self.assertEqual(patch_add_event.call_count, 4)
+                monitor_handler.poll_telemetry_metrics()
+                monitor_handler.send_telemetry_metrics()
 
-        name = patch_add_event.call_args[0][0]
-        fields = patch_add_event.call_args[1]
+                self.assertEqual(patch_add_event.call_count, 5)
+                self.assertEqual(patch_add_metric.call_count, 3)
 
-        self.assertEqual(name, "WALinuxAgent")
-        self.assertEqual(fields["op"], "ExtensionMetricsData")
-        self.assertEqual(fields["is_success"], True)
-        self.assertEqual(fields["log_event"], False)
-        self.assertEqual(fields["is_internal"], False)
-        self.assertIsInstance(fields["message"], ustr)
+                name = patch_add_event.call_args[0][0]
+                fields = patch_add_event.call_args[1]
 
-        monitor_handler.stop()
+                self.assertEqual(name, "WALinuxAgent")
+                self.assertEqual(fields["op"], "ExtensionMetricsData")
+                self.assertEqual(fields["is_success"], True)
+                self.assertEqual(fields["log_event"], False)
+                self.assertEqual(fields["is_internal"], False)
+                self.assertIsInstance(fields["message"], ustr)
+
+                monitor_handler.stop()
+            finally:
+                CGroupConfigurator._instance = cgroup_configurator_instance
 
     @attr('requires_sudo')
     def test_ext_handler_with_systemd_cgroup_enabled(self, *args):

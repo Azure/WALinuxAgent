@@ -24,7 +24,7 @@ from datetime import datetime, timedelta
 
 from azurelinuxagent.common import event, logger
 from azurelinuxagent.common.event import add_event, \
-    WALAEventOperation, elapsed_milliseconds
+    WALAEventOperation, elapsed_milliseconds, report_metric
 from azurelinuxagent.common.exception import EventError
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.protocol.wire import GoalState
@@ -437,19 +437,50 @@ class TestEvent(AgentTestCase):
         utc_start = datetime.utcnow() + timedelta(days=1)
         self.assertEqual(0, elapsed_milliseconds(utc_start))
 
+
+class TestMetrics(AgentTestCase):
     @patch('azurelinuxagent.common.event.EventLogger.save_event')
     def test_report_metric(self, mock_event):
         event.report_metric("cpu", "%idle", "_total", 10.0)
         self.assertEqual(1, mock_event.call_count)
         event_json = mock_event.call_args[0][0]
-        self.assertIn("69B669B9-4AF8-4C50-BDC4-6006FA76E975", event_json)
+        self.assertIn(event.TELEMETRY_EVENT_PROVIDER_ID, event_json)
         self.assertIn("%idle", event_json)
         import json
         event_dictionary = json.loads(event_json)
-        self.assertEqual(event_dictionary['providerId'], "69B669B9-4AF8-4C50-BDC4-6006FA76E975")
+        self.assertEqual(event_dictionary['providerId'], event.TELEMETRY_EVENT_PROVIDER_ID)
         for parameter in event_dictionary["parameters"]:
             if parameter['name'] == 'Counter':
                 self.assertEqual(parameter['value'], '%idle')
                 break
         else:
             self.fail("Counter '%idle' not found in event parameters: {0}".format(repr(event_dictionary)))
+
+    def test_save_metric(self):
+        category_present, counter_present, instance_present, value_present = False, False, False, False
+        report_metric("DummyCategory", "DummyCounter", "DummyInstance", 100)
+        self.assertTrue(len(os.listdir(self.tmp_dir)) == 1)
+
+        # checking the extension of the file created.
+        for filename in os.listdir(self.tmp_dir):
+            self.assertEqual(".tld", filename[-4:])
+            perf_metric_event = json.loads(fileutil.read_file(os.path.join(self.tmp_dir, filename)))
+            self.assertEqual(perf_metric_event["eventId"], event.TELEMETRY_METRICS_EVENT_ID)
+            self.assertEqual(perf_metric_event["providerId"], event.TELEMETRY_EVENT_PROVIDER_ID)
+            for i in perf_metric_event["parameters"]:
+                self.assertIn(i["name"], ["Category", "Counter", "Instance", "Value", "GAVersion", "ContainerId",
+                                          "OpcodeName", "EventTid", "EventPid", "TaskName", "KeywordName"])
+                if i["name"] == "Category":
+                    self.assertEqual(i["value"], "DummyCategory")
+                    category_present = True
+                if i["name"] == "Counter":
+                    self.assertEqual(i["value"], "DummyCounter")
+                    counter_present = True
+                if i["name"] == "Instance":
+                    self.assertEqual(i["value"], "DummyInstance")
+                    instance_present = True
+                if i["name"] == "Value":
+                    self.assertEqual(i["value"], 100)
+                    value_present = True
+            
+            self.assertTrue(category_present and counter_present and instance_present and value_present)

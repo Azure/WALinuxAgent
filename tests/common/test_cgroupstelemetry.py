@@ -24,12 +24,19 @@ from mock import patch
 from azurelinuxagent.common.cgroup import CGroup
 from azurelinuxagent.common.cgroupconfigurator import CGroupConfigurator
 from azurelinuxagent.common.cgroupstelemetry import CGroupsTelemetry, Metric
-from azurelinuxagent.common.osutil.default import BASE_CGROUPS
+from azurelinuxagent.common.osutil.default import BASE_CGROUPS, DefaultOSUtil
 from azurelinuxagent.common.protocol.restapi import ExtHandlerProperties, ExtHandler
 from azurelinuxagent.ga.exthandlers import ExtHandlerInstance
 from nose.plugins.attrib import attr
 from tests.tools import AgentTestCase, skip_if_predicate_false, skip_if_predicate_true, \
                         are_cgroups_enabled, is_trusty_in_travis, i_am_root
+
+
+def raise_ioerror(*_):
+    e = IOError()
+    from errno import EIO
+    e.errno = EIO
+    raise e
 
 
 def median(lst):
@@ -86,6 +93,19 @@ class TestCGroupsTelemetry(AgentTestCase):
             self.assertListEqual(cgroup_metric.get_max_memory_usage()._data, max_memory_usage)
             self.assertListEqual(cgroup_metric.get_cpu_usage()._data, cpu_usage)
 
+    def _assert_cgroup_polling_metrics_equal(self, metrics, cpu_metric_value, memory_metric_value, max_memory_metric_value):
+        for metric in metrics:
+            self.assertIn(metric.category, ["Process", "Memory"])
+            if metric.category == "Process":
+                self.assertEqual(metric.counter, "% Processor Time")
+                self.assertEqual(metric.value, cpu_metric_value)
+            if metric.category == "Memory":
+                self.assertIn(metric.counter, ["Total Memory Usage", "Max Memory Usage"])
+                if metric.counter == "Total Memory Usage":
+                    self.assertEqual(metric.value, memory_metric_value)
+                elif metric.counter == "Max Memory Usage":
+                    self.assertEqual(metric.value, max_memory_metric_value)
+
     @patch("azurelinuxagent.common.cgroup.CpuCgroup._get_current_cpu_total")
     @patch("azurelinuxagent.common.osutil.default.DefaultOSUtil.get_total_cpu_ticks_since_boot")
     def test_telemetry_polling_with_active_cgroups(self, *args):
@@ -115,12 +135,14 @@ class TestCGroupsTelemetry(AgentTestCase):
                         poll_count = 1
 
                         for data_count in range(poll_count, 10):
-                            CGroupsTelemetry.poll_all_tracked()
+                            metrics = CGroupsTelemetry.poll_all_tracked()
                             self.assertEqual(len(CGroupsTelemetry._cgroup_metrics), num_extensions)
                             self._assert_cgroup_metrics_equal(
                                 cpu_usage=[current_cpu] * data_count,
                                 memory_usage=[current_memory] * data_count,
                                 max_memory_usage=[current_max_memory] * data_count)
+                            self.assertEqual(len(metrics), num_extensions * 3)
+                            self._assert_cgroup_polling_metrics_equal(metrics, current_cpu, current_memory, current_max_memory)
 
                         CGroupsTelemetry.report_all_tracked()
 
@@ -159,7 +181,7 @@ class TestCGroupsTelemetry(AgentTestCase):
                             self.assertTrue(CGroupsTelemetry.is_tracked("dummy_cpu_path_{0}".format(i)))
                             self.assertTrue(CGroupsTelemetry.is_tracked("dummy_memory_path_{0}".format(i)))
 
-                        CGroupsTelemetry.poll_all_tracked()
+                        metrics = CGroupsTelemetry.poll_all_tracked()
 
                         for i in range(num_extensions):
                             self.assertFalse(CGroupsTelemetry.is_tracked("dummy_cpu_path_{0}".format(i)))
@@ -170,6 +192,8 @@ class TestCGroupsTelemetry(AgentTestCase):
                             cpu_usage=[current_cpu] * data_count,
                             memory_usage=[current_memory] * data_count,
                             max_memory_usage=[current_max_memory] * data_count)
+                        self.assertEqual(len(metrics), num_extensions * 3)
+                        self._assert_cgroup_polling_metrics_equal(metrics, current_cpu, current_memory, current_max_memory)
 
                         CGroupsTelemetry.report_all_tracked()
 
@@ -349,7 +373,10 @@ class TestCGroupsTelemetry(AgentTestCase):
                             patch_get_cpu_percent.return_value = cpu_percent_values[i]
                             patch_get_memory_usage.return_value = memory_usage_values[i]  # example 200 MB
                             patch_get_memory_max_usage.return_value = max_memory_usage_values[i]  # example 450 MB
-                            CGroupsTelemetry.poll_all_tracked()
+                            metrics = CGroupsTelemetry.poll_all_tracked()
+                            self.assertEqual(len(metrics), 3 * num_extensions)
+                            self._assert_cgroup_polling_metrics_equal(metrics, cpu_percent_values[i], memory_usage_values[i],
+                                                                      max_memory_usage_values[i])
 
         collected_metrics = CGroupsTelemetry.report_all_tracked()
         for i in range(num_extensions):
@@ -460,7 +487,8 @@ class TestCGroupsTelemetry(AgentTestCase):
                 patch_get_memory_usage.side_effect = Exception("File not found")
 
                 for data_count in range(1, 10):
-                    CGroupsTelemetry.poll_all_tracked()
+                    metrics = CGroupsTelemetry.poll_all_tracked()
+                    self.assertEqual(len(metrics), 0)
 
                 self.assertEqual(CGroupsTelemetry._cgroup_metrics.__len__(), num_extensions)
 
@@ -494,10 +522,12 @@ class TestCGroupsTelemetry(AgentTestCase):
                     poll_count = 1
 
                     for data_count in range(poll_count, 10):
-                        CGroupsTelemetry.poll_all_tracked()
+                        metrics = CGroupsTelemetry.poll_all_tracked()
 
                         self.assertEqual(CGroupsTelemetry._cgroup_metrics.__len__(), num_extensions)
                         self._assert_cgroup_metrics_equal(cpu_usage=[current_cpu] * data_count, memory_usage=[], max_memory_usage=[])
+                        self.assertEqual(len(metrics), num_extensions * 1)  # Only CPU populated
+                        self._assert_cgroup_polling_metrics_equal(metrics, current_cpu, 0, 0)
 
                     CGroupsTelemetry.report_all_tracked()
 
@@ -533,30 +563,33 @@ class TestCGroupsTelemetry(AgentTestCase):
                         poll_count = 1
 
                         for data_count in range(poll_count, 10):
-                            CGroupsTelemetry.poll_all_tracked()
+                            metrics = CGroupsTelemetry.poll_all_tracked()
                             self.assertEqual(len(CGroupsTelemetry._cgroup_metrics), num_extensions)
                             self._assert_cgroup_metrics_equal(
                                 cpu_usage=[],
                                 memory_usage=[current_memory] * data_count,
                                 max_memory_usage=[current_max_memory] * data_count)
+                            # Memory is only populated, CPU is not. Thus 2 metrics per cgroup.
+                            self.assertEqual(len(metrics), num_extensions * 2)
+                            self._assert_cgroup_polling_metrics_equal(metrics, 0, current_memory, current_max_memory)
 
                         CGroupsTelemetry.report_all_tracked()
 
                         self.assertEqual(len(CGroupsTelemetry._cgroup_metrics), num_extensions)
                         self._assert_cgroup_metrics_equal([], [], [])
 
-    @patch("azurelinuxagent.common.cgroup.MemoryCgroup.get_memory_usage")
-    @patch("azurelinuxagent.common.cgroup.MemoryCgroup.get_max_memory_usage")
-    @patch("azurelinuxagent.common.cgroup.CpuCgroup.get_cpu_usage")
+    @patch("azurelinuxagent.common.cgroup.MemoryCgroup.get_memory_usage", side_effect=raise_ioerror)
+    @patch("azurelinuxagent.common.cgroup.MemoryCgroup.get_max_memory_usage", side_effect=raise_ioerror)
+    @patch("azurelinuxagent.common.cgroup.CpuCgroup.get_cpu_usage", side_effect=raise_ioerror)
     @patch("azurelinuxagent.common.osutil.default.DefaultOSUtil.get_total_cpu_ticks_since_boot")
-    def test_extension_temetry_not_sent_for_empty_perf_metrics(self, *args):
+    def test_extension_telemetry_not_sent_for_empty_perf_metrics(self, *args):
         num_extensions = 5
         for i in range(num_extensions):
             dummy_cpu_cgroup = CGroup.create("dummy_cpu_path_{0}".format(i), "cpu", "dummy_extension_{0}".format(i))
             CGroupsTelemetry.track_cgroup(dummy_cpu_cgroup)
 
-            dummy_memory_cgroup = CGroup.create("dummy_memory_path_{0}".format(i), "memory",
-                                                "dummy_extension_{0}".format(i))
+            dummy_memory_cgroup = CGroup.create("dummy_memory_path_{0}".format(i),
+                                                "memory", "dummy_extension_{0}".format(i))
             CGroupsTelemetry.track_cgroup(dummy_memory_cgroup)
 
         with patch("azurelinuxagent.common.cgroupstelemetry.CGroupsTelemetry._process_cgroup_metric") as \
@@ -568,39 +601,39 @@ class TestCGroupsTelemetry(AgentTestCase):
                 poll_count = 1
 
                 for data_count in range(poll_count, 10):
-                    CGroupsTelemetry.poll_all_tracked()
+                    metrics = CGroupsTelemetry.poll_all_tracked()
+                    self.assertEqual(0, len(metrics))
 
                 collected_metrics = CGroupsTelemetry.report_all_tracked()
                 self.assertEqual(0, len(collected_metrics))
 
+    @skip_if_predicate_true(lambda: True, "Skipping this test currently: We need two different tests - one for "
+                                  "FileSystemCgroupAPI based test and one for SystemDCgroupAPI based test. @vrdmr will "
+                                  "be splitting this test in subsequent PRs")
     @skip_if_predicate_false(are_cgroups_enabled, "Does not run when Cgroups are not enabled")
     @skip_if_predicate_true(is_trusty_in_travis, "Does not run on Trusty in Travis")
     @attr('requires_sudo')
-    def test_telemetry_with_tracked_cgroup(self):
+    @patch("azurelinuxagent.common.cgroupconfigurator.get_osutil", return_value=DefaultOSUtil())
+    @patch("azurelinuxagent.common.cgroupapi.CGroupsApi._is_systemd", return_value=False)
+    def test_telemetry_with_tracked_cgroup(self, *_):
         self.assertTrue(i_am_root(), "Test does not run when non-root")
+        CGroupConfigurator._instance = None
 
-        # This test has some timing issues when systemd is managing cgroups, so we force the file system API
-        # by creating a new instance of the CGroupConfigurator
-        with patch("azurelinuxagent.common.cgroupapi.CGroupsApi._is_systemd", return_value=False):
-            cgroup_configurator_instance = CGroupConfigurator._instance
-            CGroupConfigurator._instance = None
+        max_num_polls = 30
+        time_to_wait = 3
+        extn_name = "foobar-1.0.0"
+        num_summarization_values = 7
 
-            try:
-                max_num_polls = 30
-                time_to_wait = 3
-                extn_name = "foobar-1.0.0"
-                num_summarization_values = 7
+        cgs = make_new_cgroup(extn_name)
+        self.assertEqual(len(cgs), 2)
 
-                cgs = make_new_cgroup(extn_name)
-                self.assertEqual(len(cgs), 2)
+        ext_handler_properties = ExtHandlerProperties()
+        ext_handler_properties.version = "1.0.0"
+        self.ext_handler = ExtHandler(name='foobar')
+        self.ext_handler.properties = ext_handler_properties
+        self.ext_handler_instance = ExtHandlerInstance(ext_handler=self.ext_handler, protocol=None)
 
-                ext_handler_properties = ExtHandlerProperties()
-                ext_handler_properties.version = "1.0.0"
-                self.ext_handler = ExtHandler(name='foobar')
-                self.ext_handler.properties = ext_handler_properties
-                self.ext_handler_instance = ExtHandlerInstance(ext_handler=self.ext_handler, protocol=None)
-
-                command = self.create_script("keep_cpu_busy_and_consume_memory_for_5_seconds", '''
+        command = self.create_script("keep_cpu_busy_and_consume_memory_for_5_seconds", '''
 nohup python -c "import time
 
 for i in range(5):
@@ -610,59 +643,48 @@ for i in range(5):
     print('Test loop')" &
 '''.format(time_to_wait))
 
-                self.log_dir = os.path.join(self.tmp_dir, "log")
+        self.log_dir = os.path.join(self.tmp_dir, "log")
 
-                with patch("azurelinuxagent.ga.exthandlers.ExtHandlerInstance.get_base_dir", lambda *_: self.tmp_dir) as \
-                        patch_get_base_dir:
-                    with patch("azurelinuxagent.ga.exthandlers.ExtHandlerInstance.get_log_dir", lambda *_: self.log_dir) as \
-                            patch_get_log_dir:
-                        self.ext_handler_instance.launch_command(command)
+        with patch("azurelinuxagent.ga.exthandlers.ExtHandlerInstance.get_base_dir", lambda *_: self.tmp_dir) as \
+                patch_get_base_dir:
+            with patch("azurelinuxagent.ga.exthandlers.ExtHandlerInstance.get_log_dir", lambda *_: self.log_dir) as \
+                    patch_get_log_dir:
+                self.ext_handler_instance.launch_command(command)
 
-                #
-                # If the test is made to run using the systemd API, then the paths of the cgroups need to be checked differently:
-                #
-                #     self.assertEquals(len(CGroupsTelemetry._tracked), 2)
-                #     cpu = os.path.join(BASE_CGROUPS, "cpu", "system.slice", r"foobar_1.0.0_.*\.scope")
-                #     self.assertTrue(any(re.match(cpu, tracked.path) for tracked in CGroupsTelemetry._tracked))
-                #     memory = os.path.join(BASE_CGROUPS, "memory", "system.slice", r"foobar_1.0.0_.*\.scope")
-                #     self.assertTrue(any(re.match(memory, tracked.path) for tracked in CGroupsTelemetry._tracked))
-                #
-                self.assertTrue(CGroupsTelemetry.is_tracked(os.path.join(
-                    BASE_CGROUPS, "cpu", "walinuxagent.extensions", "foobar_1.0.0")))
-                self.assertTrue(CGroupsTelemetry.is_tracked(os.path.join(
-                    BASE_CGROUPS, "memory", "walinuxagent.extensions", "foobar_1.0.0")))
+        self.assertTrue(CGroupsTelemetry.is_tracked(os.path.join(
+            BASE_CGROUPS, "cpu", "walinuxagent.extensions", "foobar_1.0.0")))
+        self.assertTrue(CGroupsTelemetry.is_tracked(os.path.join(
+            BASE_CGROUPS, "memory", "walinuxagent.extensions", "foobar_1.0.0")))
 
-                for i in range(max_num_polls):
-                    CGroupsTelemetry.poll_all_tracked()
-                    time.sleep(0.5)
+        for i in range(max_num_polls):
+            CGroupsTelemetry.poll_all_tracked()
+            time.sleep(0.5)
 
-                collected_metrics = CGroupsTelemetry.report_all_tracked()
+        collected_metrics = CGroupsTelemetry.report_all_tracked()
 
-                self.assertIn("memory", collected_metrics[extn_name])
-                self.assertIn("cur_mem", collected_metrics[extn_name]["memory"])
-                self.assertIn("max_mem", collected_metrics[extn_name]["memory"])
-                self.assertEqual(len(collected_metrics[extn_name]["memory"]["cur_mem"]), num_summarization_values)
-                self.assertEqual(len(collected_metrics[extn_name]["memory"]["max_mem"]), num_summarization_values)
+        self.assertIn("memory", collected_metrics[extn_name])
+        self.assertIn("cur_mem", collected_metrics[extn_name]["memory"])
+        self.assertIn("max_mem", collected_metrics[extn_name]["memory"])
+        self.assertEqual(len(collected_metrics[extn_name]["memory"]["cur_mem"]), num_summarization_values)
+        self.assertEqual(len(collected_metrics[extn_name]["memory"]["max_mem"]), num_summarization_values)
 
-                self.assertIsInstance(collected_metrics[extn_name]["memory"]["cur_mem"][5], str)
-                self.assertIsInstance(collected_metrics[extn_name]["memory"]["cur_mem"][6], str)
-                self.assertIsInstance(collected_metrics[extn_name]["memory"]["max_mem"][5], str)
-                self.assertIsInstance(collected_metrics[extn_name]["memory"]["max_mem"][6], str)
+        self.assertIsInstance(collected_metrics[extn_name]["memory"]["cur_mem"][5], str)
+        self.assertIsInstance(collected_metrics[extn_name]["memory"]["cur_mem"][6], str)
+        self.assertIsInstance(collected_metrics[extn_name]["memory"]["max_mem"][5], str)
+        self.assertIsInstance(collected_metrics[extn_name]["memory"]["max_mem"][6], str)
 
-                self.assertIn("cpu", collected_metrics[extn_name])
-                self.assertIn("cur_cpu", collected_metrics[extn_name]["cpu"])
-                self.assertEqual(len(collected_metrics[extn_name]["cpu"]["cur_cpu"]), num_summarization_values)
+        self.assertIn("cpu", collected_metrics[extn_name])
+        self.assertIn("cur_cpu", collected_metrics[extn_name]["cpu"])
+        self.assertEqual(len(collected_metrics[extn_name]["cpu"]["cur_cpu"]), num_summarization_values)
 
-                self.assertIsInstance(collected_metrics[extn_name]["cpu"]["cur_cpu"][5], str)
-                self.assertIsInstance(collected_metrics[extn_name]["cpu"]["cur_cpu"][6], str)
+        self.assertIsInstance(collected_metrics[extn_name]["cpu"]["cur_cpu"][5], str)
+        self.assertIsInstance(collected_metrics[extn_name]["cpu"]["cur_cpu"][6], str)
 
-                for i in range(5):
-                    self.assertGreater(collected_metrics[extn_name]["memory"]["cur_mem"][i], 0)
-                    self.assertGreater(collected_metrics[extn_name]["memory"]["max_mem"][i], 0)
-                    self.assertGreaterEqual(collected_metrics[extn_name]["cpu"]["cur_cpu"][i], 0)
-                    # Equal because CPU could be zero for minimum value.
-            finally:
-                CGroupConfigurator._instance = cgroup_configurator_instance
+        for i in range(5):
+            self.assertGreater(collected_metrics[extn_name]["memory"]["cur_mem"][i], 0)
+            self.assertGreater(collected_metrics[extn_name]["memory"]["max_mem"][i], 0)
+            self.assertGreaterEqual(collected_metrics[extn_name]["cpu"]["cur_cpu"][i], 0)
+            # Equal because CPU could be zero for minimum value.
 
 
 class TestMetric(AgentTestCase):

@@ -35,6 +35,7 @@ from azurelinuxagent.common.version import CURRENT_VERSION, CURRENT_AGENT
 
 _EVENT_MSG = "Event: name={0}, op={1}, message={2}, duration={3}"
 TELEMETRY_EVENT_PROVIDER_ID = "69B669B9-4AF8-4C50-BDC4-6006FA76E975"
+TELEMETRY_METRICS_EVENT_ID = 4
 
 # Store the last retrieved container id as an environment variable to be shared between threads for telemetry purposes
 CONTAINER_ID_ENV_VARIABLE = "AZURE_GUEST_AGENT_CONTAINER_ID"
@@ -270,14 +271,15 @@ class EventLogger(object):
 
     def _add_event(self, duration, evt_type, is_internal, is_success, message, name, op, version, event_id):
         event = TelemetryEvent(event_id, TELEMETRY_EVENT_PROVIDER_ID)
-        event.parameters.append(TelemetryEventParam('Name', name))
+
+        event.parameters.append(TelemetryEventParam('Name', str(name)))
         event.parameters.append(TelemetryEventParam('Version', str(version)))
-        event.parameters.append(TelemetryEventParam('IsInternal', is_internal))
-        event.parameters.append(TelemetryEventParam('Operation', op))
-        event.parameters.append(TelemetryEventParam('OperationSuccess', is_success))
-        event.parameters.append(TelemetryEventParam('Message', message))
-        event.parameters.append(TelemetryEventParam('Duration', duration))
-        event.parameters.append(TelemetryEventParam('ExtensionType', evt_type))
+        event.parameters.append(TelemetryEventParam('IsInternal', bool(is_internal)))
+        event.parameters.append(TelemetryEventParam('Operation', str(op)))
+        event.parameters.append(TelemetryEventParam('OperationSuccess', bool(is_success)))
+        event.parameters.append(TelemetryEventParam('Message', str(message)))
+        event.parameters.append(TelemetryEventParam('Duration', int(duration)))
+        event.parameters.append(TelemetryEventParam('ExtensionType', str(evt_type)))
 
         self.add_default_parameters_to_event(event)
         data = get_properties(event)
@@ -328,11 +330,11 @@ class EventLogger(object):
             message = "Metric {0}/{1} [{2}] = {3}".format(category, counter, instance, value)
             _log_event(AGENT_NAME, "METRIC", message, 0)
 
-        event = TelemetryEvent(4, "69B669B9-4AF8-4C50-BDC4-6006FA76E975")
-        event.parameters.append(TelemetryEventParam('Category', category))
-        event.parameters.append(TelemetryEventParam('Counter', counter))
-        event.parameters.append(TelemetryEventParam('Instance', instance))
-        event.parameters.append(TelemetryEventParam('Value', value))
+        event = TelemetryEvent(TELEMETRY_METRICS_EVENT_ID, TELEMETRY_EVENT_PROVIDER_ID)
+        event.parameters.append(TelemetryEventParam('Category', str(category)))
+        event.parameters.append(TelemetryEventParam('Counter', str(counter)))
+        event.parameters.append(TelemetryEventParam('Instance', str(instance)))
+        event.parameters.append(TelemetryEventParam('Value', float(value)))
 
         self.add_default_parameters_to_event(event)
         data = get_properties(event)
@@ -412,7 +414,11 @@ def report_metric(category, counter, instance, value, log_event=False, reporter=
         message = "Metric {0}/{1} [{2}] = {3}".format(category, counter, instance, value)
         _log_event(AGENT_NAME, "METRIC", message, 0)
         return
-    reporter.add_metric(category, counter, instance, value, log_event)
+    try:
+        reporter.add_metric(category, counter, instance, float(value), log_event)
+    except ValueError:
+        logger.periodic_warn(logger.EVERY_HALF_HOUR, "[PERIODIC] Cannot cast the metric value. Details of the Metric - "
+                                                     "{0}/{1} [{2}] = {3}".format(category, counter, instance, value))
 
 
 def add_event(name, op=WALAEventOperation.Unknown, is_success=True, duration=0, version=str(CURRENT_VERSION), message="",
