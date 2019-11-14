@@ -239,3 +239,22 @@ class TestLogger(AgentTestCase):
         self.assertEqual(1, mock_warn.call_count)
         self.assertEqual(0, mock_error.call_count)
 
+    def test_telemetry_logger_verify_maximum_recursion_depths_doesnt_happen(self, *_):
+        logger.add_logger_appender(logger.AppenderType.FILE, logger.LogLevel.INFO, path="/dev/null")
+        logger.add_logger_appender(logger.AppenderType.TELEMETRY, logger.LogLevel.WARNING, path=add_log_event)
+
+        # Calling logger.warn 1000 times would cause the telemetry appender to writing 1000 events into the events dir.
+        for _ in range(1000):
+            logger.warn('Test Log - Warning')
+
+        exception_caught = False
+
+        # #1035 was caused due to too many files being written in an error condition. Adding one more here would break
+        # the camels back earlier. This should be resolved now.
+        try:
+            for _ in range(1000):
+                logger.warn('Test Log - Warning')
+        except RuntimeError:
+            exception_caught = True
+
+        self.assertFalse(exception_caught, msg="Caught a Runtime Error")
