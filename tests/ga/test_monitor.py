@@ -45,7 +45,7 @@ from azurelinuxagent.common.version import AGENT_NAME, CURRENT_VERSION, AGENT_VE
 from azurelinuxagent.ga.monitor import generate_extension_metrics_telemetry_dictionary, get_monitor_handler, \
     MonitorHandler, parse_json_event, parse_xml_event
 from tests.common.test_cgroupstelemetry import consume_cpu_time, consume_memory, make_new_cgroup
-from tests.protocol.mockwiredata import conf, DATA_FILE, WireProtocolData
+from tests.protocol.mockwiredata import DATA_FILE, WireProtocolData
 from tests.tools import Mock, MagicMock, patch, load_data, AgentTestCase, data_dir, are_cgroups_enabled, \
     i_am_root, skip_if_predicate_false
 
