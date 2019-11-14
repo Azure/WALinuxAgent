@@ -73,10 +73,7 @@ class CoreOSUtil(DefaultOSUtil):
         return shellutil.run("systemctl stop waagent", chk_err=False)
 
     def get_dhcp_pid(self):
-        ret = shellutil.run_get_output("systemctl show -p MainPID "
-                                       "systemd-networkd", chk_err=False)
-        pid = ret[1].split('=', 1)[-1].strip() if ret[0] == 0 else None
-        return pid if pid != '0' else None
+        return self._get_dhcp_pid(["systemctl", "show", "-p", "MainPID", "systemd-networkd"])
 
     def conf_sshd(self, disable_password):
         # In CoreOS, /etc/sshd_config is mount readonly.  Skip the setting.

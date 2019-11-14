@@ -45,7 +45,7 @@ from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.utils.cryptutil import CryptUtil
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
 from azurelinuxagent.common.utils.networkutil import RouteEntry, NetworkInterfaceCard
-from azurelinuxagent.common.version import DISTRO_CODE_NAME
+from azurelinuxagent.common.utils.shellutil import CommandError
 
 __RULES_FILES__ = [ "/lib/udev/rules.d/75-persistent-net-generator.rules",
                     "/etc/udev/rules.d/70-persistent-net.rules" ]
@@ -1097,9 +1097,19 @@ class DefaultOSUtil(object):
         cmd = "ip route add {0} via {1}".format(net, gateway)
         return shellutil.run(cmd, chk_err=False)
 
+    @staticmethod
+    def _text_to_pid_list(text):
+        return [int(n) for n in text.split()]
+
+    @staticmethod
+    def _get_dhcp_pid(command):
+        try:
+            return DefaultOSUtil._text_to_pid_list(shellutil.run_command(command))
+        except CommandError as exception:
+            return []
+
     def get_dhcp_pid(self):
-        ret = shellutil.run_get_output("pidof dhclient", chk_err=False)
-        return ret[1] if ret[0] == 0 else None
+        return self._get_dhcp_pid(["pidof", "dhclient"])
 
     def set_hostname(self, hostname):
         fileutil.write_file('/etc/hostname', hostname)

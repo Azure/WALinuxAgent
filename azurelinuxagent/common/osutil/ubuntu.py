@@ -55,8 +55,7 @@ class Ubuntu12OSUtil(Ubuntu14OSUtil):
 
     # Override
     def get_dhcp_pid(self):
-        ret = shellutil.run_get_output("pidof dhclient3", chk_err=False)
-        return ret[1] if ret[0] == 0 else None
+        return self._get_dhcp_pid(["pidof", "dhclient3"])
 
     def mount_cgroups(self):
         pass
@@ -90,8 +89,7 @@ class Ubuntu18OSUtil(Ubuntu16OSUtil):
         super(Ubuntu18OSUtil, self).__init__()
 
     def get_dhcp_pid(self):
-        ret = shellutil.run_get_output("pidof systemd-networkd")
-        return ret[1] if ret[0] == 0 else None
+        return self._get_dhcp_pid(["pidof", "systemd-networkd"])
 
     def start_network(self):
         return shellutil.run("systemctl start systemd-networkd", chk_err=False)

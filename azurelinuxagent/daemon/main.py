@@ -61,7 +61,6 @@ class DaemonHandler(object):
 
     def run(self, child_args=None):
         logger.info("{0} Version:{1}", AGENT_LONG_NAME, AGENT_VERSION)
-        logger.info("OS: {0} {1}", DISTRO_NAME, DISTRO_VERSION)
         logger.info("Python: {0}.{1}.{2}", PY_VERSION_MAJOR, PY_VERSION_MINOR,
                     PY_VERSION_MICRO)
 
