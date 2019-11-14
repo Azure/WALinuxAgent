@@ -10,11 +10,6 @@ try:
 except Exception:
     pass
 
-try:
-    from collections import OrderedDict  # For Py 2.7+
-except ImportError:
-    from ordereddict import OrderedDict  # Works only on 2.6
-
 """
 Add alias for python2 and python3 libs and functions.
 """
@@ -38,6 +33,11 @@ elif sys.version_info[0] == 2:
     ustr = unicode
 
     bytebuffer = buffer
+
+    try:
+        from collections import OrderedDict  # For Py 2.7+
+    except ImportError:
+        from ordereddict import OrderedDict  # Works only on 2.6
 else:
     raise ImportError("Unknown python version: {0}".format(sys.version_info))
 
