@@ -607,6 +607,9 @@ class TestCGroupsTelemetry(AgentTestCase):
                 collected_metrics = CGroupsTelemetry.report_all_tracked()
                 self.assertEqual(0, len(collected_metrics))
 
+    @skip_if_predicate_true(lambda: True, "Skipping this test currently: We need two different tests - one for "
+                                  "FileSystemCgroupAPI based test and one for SystemDCgroupAPI based test. @vrdmr will "
+                                  "be splitting this test in subsequent PRs")
     @skip_if_predicate_false(are_cgroups_enabled, "Does not run when Cgroups are not enabled")
     @skip_if_predicate_true(is_trusty_in_travis, "Does not run on Trusty in Travis")
     @attr('requires_sudo')

@@ -953,6 +953,9 @@ class TestExtensionMetricsDataTelemetry(AgentTestCase):
 
         monitor_handler.stop()
 
+    @skip_if_predicate_true(lambda: True, "Skipping this test currently: We need two different tests - one for "
+                                  "FileSystemCgroupAPI based test and one for SystemDCgroupAPI based test. @vrdmr will "
+                                  "be splitting this test in subsequent PRs")
     @skip_if_predicate_false(are_cgroups_enabled, "Does not run when Cgroups are not enabled")
     @skip_if_predicate_true(is_trusty_in_travis, "Does not run on Trusty in Travis")
     @patch('azurelinuxagent.common.event.EventLogger.add_metric')
@@ -1045,6 +1048,9 @@ for i in range(5):
             finally:
                 CGroupConfigurator._instance = cgroup_configurator_instance
 
+    @skip_if_predicate_true(lambda: True, "Skipping this test currently: We need two different tests - one for "
+                                  "FileSystemCgroupAPI based test and one for SystemDCgroupAPI based test. @vrdmr will "
+                                  "be splitting this test in subsequent PRs")
     @skip_if_predicate_false(are_cgroups_enabled, "Does not run when Cgroups are not enabled")
     @skip_if_predicate_true(is_trusty_in_travis, "Does not run on Trusty in Travis")
     @patch("azurelinuxagent.common.cgroupconfigurator.get_osutil", return_value=DefaultOSUtil())
