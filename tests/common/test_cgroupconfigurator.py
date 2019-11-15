@@ -20,14 +20,16 @@ from __future__ import print_function
 import subprocess
 
 import errno
+import os
+import re
 from azurelinuxagent.common.cgroup import CGroup
-from azurelinuxagent.common.cgroupapi import VM_AGENT_CGROUP_NAME
 from azurelinuxagent.common.cgroupconfigurator import CGroupConfigurator
 from azurelinuxagent.common.cgroupstelemetry import CGroupsTelemetry
 from azurelinuxagent.common.exception import CGroupsException
 from azurelinuxagent.common.osutil.default import DefaultOSUtil
+from azurelinuxagent.common.utils import fileutil
 from tests.utils.cgroups_tools import CGroupsTools
-from tests.tools import *
+from tests.tools import AgentTestCase, patch
 
 
 class CGroupConfiguratorTestCase(AgentTestCase):
@@ -102,6 +104,18 @@ class CGroupConfiguratorTestCase(AgentTestCase):
             with self.assertRaises(CGroupsException) as context_manager:
                 CGroupConfigurator.get_instance().enable()
             self.assertIn("cgroups are not supported", str(context_manager.exception))
+
+    def test_disable_should_reset_tracked_cgroups(self):
+        configurator = CGroupConfigurator.get_instance()
+
+        # Start tracking a couple of dummy cgroups
+        CGroupsTelemetry.track_cgroup(CGroup("dummy", "/sys/fs/cgroup/memory/system.slice/dummy.service", "cpu"))
+        CGroupsTelemetry.track_cgroup(CGroup("dummy", "/sys/fs/cgroup/memory/system.slice/dummy.service", "memory"))
+
+        configurator.disable()
+
+        self.assertFalse(configurator.enabled())
+        self.assertEquals(len(CGroupsTelemetry._tracked), 0)
 
     def test_cgroup_operations_should_not_invoke_the_cgroup_api_when_cgroups_are_not_enabled(self):
         configurator = CGroupConfigurator.get_instance()
@@ -289,7 +303,7 @@ class CGroupConfiguratorTestCase(AgentTestCase):
         self.assertFalse(kwargs['is_success'])
         self.assertEquals(
             kwargs['message'],
-            "Failed to process legacy cgroups. Collection of resource usage data will be disabled. The daemon's PID ({0}) was already added to the legacy cgroup; this invalidates resource usage data.".format(daemon_pid))
+            "Failed to process legacy cgroups. Collection of resource usage data will be disabled. [CGroupsException] The daemon's PID ({0}) was already added to the legacy cgroup; this invalidates resource usage data.".format(daemon_pid))
 
         self.assertFalse(cgroup_configurator.enabled())
         self.assertEquals(len(CGroupsTelemetry._tracked), 0)

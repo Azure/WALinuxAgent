@@ -17,14 +17,17 @@
 
 from __future__ import print_function
 
+import os
+import re
 import subprocess
+import tempfile
 from azurelinuxagent.common.cgroupapi import CGroupsApi, FileSystemCgroupsApi, SystemdCgroupsApi, CGROUPS_FILE_SYSTEM_ROOT, VM_AGENT_CGROUP_NAME
 from azurelinuxagent.common.exception import CGroupsException, ExtensionError, ExtensionErrorCodes
 from azurelinuxagent.common.future import ustr
-from azurelinuxagent.common.utils import shellutil
+from azurelinuxagent.common.utils import shellutil, fileutil
 from nose.plugins.attrib import attr
 from tests.utils.cgroups_tools import CGroupsTools
-from tests.tools import *
+from tests.tools import AgentTestCase, patch, skip_if_predicate_false, is_systemd_present, i_am_root, mock_sleep
 
 
 class _MockedFileSystemTestCase(AgentTestCase):
@@ -634,7 +637,7 @@ class SystemdCgroupsApiMockedFileSystemTestCase(_MockedFileSystemTestCase):
                 with self.assertRaises(CGroupsException) as context_manager:
                     SystemdCgroupsApi().cleanup_legacy_cgroups()
 
-        self.assertEquals(context_manager.exception.message, "The daemon's PID ({0}) was already added to the legacy cgroup; this invalidates resource usage data.".format(daemon_pid))
+        self.assertEquals(str(context_manager.exception), "[CGroupsException] The daemon's PID ({0}) was already added to the legacy cgroup; this invalidates resource usage data.".format(daemon_pid))
 
         # The method should have deleted the legacy cgroups
         self.assertFalse(os.path.exists(legacy_cpu_cgroup))

@@ -78,6 +78,7 @@ class CGroupConfigurator(object):
 
         def disable(self):
             self._enabled = False
+            CGroupsTelemetry.reset()
 
         def _invoke_cgroup_operation(self, operation, error_message, on_error=None):
             """
@@ -119,7 +120,6 @@ class CGroupConfigurator(object):
 
             def disable_cgroups(exception):
                 self.disable()
-                CGroupsTelemetry.reset()
                 add_event(
                     AGENT_NAME,
                     version=CURRENT_VERSION,

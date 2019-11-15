@@ -19,8 +19,6 @@ import socket
 import array
 import time
 import azurelinuxagent.common.logger as logger
-import azurelinuxagent.common.utils.shellutil as shellutil
-from azurelinuxagent.common.utils import fileutil
 from azurelinuxagent.common.utils.textutil import hex_dump, hex_dump2, \
     hex_dump3, \
     compare_bytes, str_to_ord, \
@@ -29,9 +27,10 @@ from azurelinuxagent.common.utils.textutil import hex_dump, hex_dump2, \
 from azurelinuxagent.common.exception import DhcpError
 from azurelinuxagent.common.osutil import get_osutil
 
+
 # the kernel routing table representation of 168.63.129.16
 KNOWN_WIRESERVER_IP_ENTRY = '10813FA8'
-KNOWN_WIRESERVER_IP = '168.63.129.16'
+from azurelinuxagent.common.utils.restutil import KNOWN_WIRESERVER_IP
 
 
 def get_dhcp_handler():
@@ -152,10 +151,10 @@ class DhcpHandler(object):
         """
         Check if DHCP is available
         """
-        (dhcp_available, endpoint) =  self.osutil.is_dhcp_available()
+        dhcp_available =  self.osutil.is_dhcp_available()
         if not dhcp_available:
             logger.info("send_dhcp_req: DHCP not available")
-            self.endpoint = endpoint
+            self.endpoint = KNOWN_WIRESERVER_IP
             return
 
         """

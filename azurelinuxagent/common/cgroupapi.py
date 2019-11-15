@@ -514,12 +514,17 @@ After=system-{1}.slice""".format(extension_name, EXTENSIONS_ROOT_CGROUP_NAME)
                 # There was an issue with systemd-run. We need to log it and retry the extension without systemd.
                 err_msg = 'Systemd process exited with code %s and output %s' % (e.exit_code, process_output) \
                     if isinstance(e, ExtensionOperationError) else "Systemd timed-out, output: %s" % process_output
+                event_msg = 'Failed to run systemd-run for unit {0}.scope. ' \
+                            'Will retry invoking the extension without systemd. ' \
+                            'Systemd-run error: {1}'.format(scope_name, err_msg)
                 add_event(AGENT_NAME,
                           version=CURRENT_VERSION,
                           op=WALAEventOperation.InvokeCommandUsingSystemd,
                           is_success=False,
-                          message='Failed to run systemd-run for unit {0}.scope. {1}'
-                                  .format(scope_name, err_msg))
+                          log_event=False,
+                          message=event_msg)
+                logger.warn(event_msg)
+
                 # Reset the stdout and stderr
                 stdout.truncate(0)
                 stderr.truncate(0)

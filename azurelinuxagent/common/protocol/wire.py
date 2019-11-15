@@ -891,11 +891,11 @@ class WireClient(object):
 
     def get_ext_conf(self):
         if self.ext_conf is None:
-            goal_state = self.get_goal_state()
-            if goal_state.ext_uri is None:
+            local_goal_state = self.get_goal_state()
+            if local_goal_state.ext_uri is None:
                 self.ext_conf = ExtensionsConfig(None)
             else:
-                local_file = EXT_CONF_FILE_NAME.format(goal_state.incarnation)
+                local_file = EXT_CONF_FILE_NAME.format(local_goal_state.incarnation)
                 local_file = os.path.join(conf.get_lib_dir(), local_file)
                 xml_text = self.fetch_cache(local_file)
                 self.ext_conf = ExtensionsConfig(xml_text)

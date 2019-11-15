@@ -27,6 +27,7 @@ import os
 import sys
 import re
 import subprocess
+import threading
 import traceback
 
 import azurelinuxagent.common.logger as logger
@@ -38,6 +39,7 @@ from azurelinuxagent.common.version import AGENT_NAME, AGENT_LONG_VERSION, \
                                      PY_VERSION_MICRO, GOAL_STATE_AGENT_VERSION
 from azurelinuxagent.common.osutil import get_osutil
 from azurelinuxagent.common.utils import fileutil
+
 
 class Agent(object):
     def __init__(self, verbose, conf_file_path=None):
@@ -92,6 +94,7 @@ class Agent(object):
         Run agent daemon
         """
         logger.set_prefix("Daemon")
+        threading.current_thread().setName("Daemon")
         child_args = None \
             if self.conf_file_path is None \
                 else "-configuration-path:{0}".format(self.conf_file_path)
@@ -132,6 +135,7 @@ class Agent(object):
         Run the update and extension handler
         """
         logger.set_prefix("ExtHandler")
+        threading.current_thread().setName("ExtHandler")
         from azurelinuxagent.ga.update import get_update_handler
         update_handler = get_update_handler()
         update_handler.run(debug)
@@ -140,6 +144,7 @@ class Agent(object):
         configuration = conf.get_configuration()
         for k in sorted(configuration.keys()):
             print("{0} = {1}".format(k, configuration[k]))
+
 
 def main(args=[]):
     """
