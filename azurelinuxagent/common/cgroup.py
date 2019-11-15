@@ -115,6 +115,26 @@ class CGroup(object):
 
         return False
 
+    def get_tracked_processes(self):
+        try:
+            procs = self._get_parameters("cgroup.procs")
+            if procs:
+                return procs
+        except (IOError, OSError) as e:
+            if e.errno == errno.ENOENT:
+                # only suppressing file not found exceptions.
+                pass
+            else:
+                logger.periodic_warn(logger.EVERY_HALF_HOUR,
+                                     'Could not get list of procs from "cgroup.procs" file in the cgroup: {0}.'
+                                     ' Internal error: {1}'.format(self.path, ustr(e)))
+        except CGroupsException as e:
+            logger.periodic_warn(logger.EVERY_HALF_HOUR,
+                                 'Could not get list of tasks from "cgroup.procs" file in the cgroup: {0}.'
+                                 ' Internal error: {1}'.format(self.path, ustr(e)))
+            return None
+        return None
+
 
 class CpuCgroup(CGroup):
     def __init__(self, name, cgroup_path):

@@ -14,6 +14,7 @@
 #
 # Requires Python 2.6+ and Openssl 1.0+
 import errno
+import os
 import threading
 from collections import namedtuple
 from datetime import datetime as dt
@@ -183,7 +184,6 @@ class CgroupMetrics(object):
         self._max_memory_usage = ResourceMetrics()
         self._cpu_usage = ResourceMetrics()
 
-        self._memory_usage_from_resource = ResourceMetrics()
         self._memory_usage_from_proc_statm = ResourceMetrics()
 
         self.marked_for_delete = False
@@ -202,11 +202,14 @@ class CgroupMetrics(object):
             if not isinstance(e, (IOError, OSError)) or e.errno != errno.ENOENT:
                 logger.periodic_warn(logger.EVERY_HALF_HOUR, 'Could not collect metrics for cgroup {0}. Error : {1}'.format(cgroup.path, ustr(e)))
 
+    def add_memory_usage(self, usage):
+        self._memory_usage.metric.append(usage)
+
     def add_max_memory_usage(self, usage):
-        self._max_memory_usage.append(usage)
+        self._max_memory_usage.metric.append(usage)
 
     def add_cpu_usage(self, usage):
-        self._cpu_usage.append(usage)
+        self._cpu_usage.metric.append(usage)
 
     def get_memory_usage(self):
         return self._memory_usage.metric

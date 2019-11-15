@@ -76,6 +76,23 @@ class TestCGroup(AgentTestCase):
 
         self.assertEqual(True, test_cgroup.is_active())
 
+    def test_get_tracked_processes(self):
+        test_cgroup = CGroup.create(os.path.join(data_dir, "cgroups", "cpu_mount"), "cpu", "test_extension")
+        self.assertIsNone(test_cgroup.get_tracked_processes())
+
+        with open(os.path.join(data_dir, "cgroups", "cpu_mount", "cgroup.procs"), mode="wb") as tasks:
+            tasks.write(str(1000).encode())
+
+        self.assertEqual([1000], test_cgroup.get_tracked_processes())
+
+        test_cgroup = CGroup.create(os.path.join(data_dir, "cgroups", "memory_mount"), "memory", "test_extension")
+        self.assertIsNone(test_cgroup.get_tracked_processes())
+
+        with open(os.path.join(data_dir, "cgroups", "memory_mount", "tasks"), mode="wb") as tasks:
+            tasks.write(str(1000).encode())
+
+        self.assertEqual([1000], test_cgroup.get_tracked_processes())
+
     @patch("azurelinuxagent.common.logger.periodic_warn")
     def test_is_active_file_not_present(self, patch_periodic_warn):
         test_cgroup = CGroup.create(os.path.join(data_dir, "cgroups", "not_cpu_mount"), "cpu", "test_extension")
