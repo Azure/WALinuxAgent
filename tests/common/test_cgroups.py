@@ -38,12 +38,25 @@ class TestCGroup(AgentTestCase):
     def setUp(self):
         AgentTestCase.setUp(self)
 
+        with open(os.path.join(data_dir, "cgroups", "cpu_mount", "tasks"), mode="wb") as tasks:
+            tasks.truncate(0)
+        with open(os.path.join(data_dir, "cgroups", "memory_mount", "tasks"), mode="wb") as tasks:
+            tasks.truncate(0)
+        with open(os.path.join(data_dir, "cgroups", "cpu_mount", "cgroup.procs"), mode="wb") as tasks:
+            tasks.truncate(0)
+        with open(os.path.join(data_dir, "cgroups", "memory_mount", "cgroup.procs"), mode="wb") as tasks:
+            tasks.truncate(0)
+
     def tearDown(self):
         AgentTestCase.tearDown(self)
 
         with open(os.path.join(data_dir, "cgroups", "cpu_mount", "tasks"), mode="wb") as tasks:
             tasks.truncate(0)
         with open(os.path.join(data_dir, "cgroups", "memory_mount", "tasks"), mode="wb") as tasks:
+            tasks.truncate(0)
+        with open(os.path.join(data_dir, "cgroups", "cpu_mount", "cgroup.procs"), mode="wb") as tasks:
+            tasks.truncate(0)
+        with open(os.path.join(data_dir, "cgroups", "memory_mount", "cgroup.procs"), mode="wb") as tasks:
             tasks.truncate(0)
 
     def test_correct_creation(self):
@@ -83,15 +96,15 @@ class TestCGroup(AgentTestCase):
         with open(os.path.join(data_dir, "cgroups", "cpu_mount", "cgroup.procs"), mode="wb") as tasks:
             tasks.write(str(1000).encode())
 
-        self.assertEqual([1000], test_cgroup.get_tracked_processes())
+        self.assertEqual(['1000'], test_cgroup.get_tracked_processes())
 
         test_cgroup = CGroup.create(os.path.join(data_dir, "cgroups", "memory_mount"), "memory", "test_extension")
         self.assertIsNone(test_cgroup.get_tracked_processes())
 
-        with open(os.path.join(data_dir, "cgroups", "memory_mount", "tasks"), mode="wb") as tasks:
+        with open(os.path.join(data_dir, "cgroups", "memory_mount", "cgroup.procs"), mode="wb") as tasks:
             tasks.write(str(1000).encode())
 
-        self.assertEqual([1000], test_cgroup.get_tracked_processes())
+        self.assertEqual(['1000'], test_cgroup.get_tracked_processes())
 
     @patch("azurelinuxagent.common.logger.periodic_warn")
     def test_is_active_file_not_present(self, patch_periodic_warn):

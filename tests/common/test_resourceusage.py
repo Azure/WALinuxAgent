@@ -1,0 +1,34 @@
+# Copyright 2016 Microsoft Corporation
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+# Requires Python 2.6+ and Openssl 1.0+
+#
+import os
+
+from azurelinuxagent.common.resourceusage import MemoryResourceUsage
+from azurelinuxagent.common.utils import fileutil
+from tests.tools import AgentTestCase, data_dir, Mock, patch
+
+
+class TestMemoryResourceUsage(AgentTestCase):
+    @patch("azurelinuxagent.common.resourceusage.fileutil")
+    def test_get_memory_usage_from_proc_statm(self, patch_read_file):
+        patch_read_file.read_file.return_value = fileutil.read_file(os.path.join(data_dir, "cgroups", "dummy_proc_statm"))
+        mem_usage = MemoryResourceUsage.get_memory_usage_from_proc_statm(1000)
+        self.assertEqual(mem_usage, 331866112)
+
+        # No such file exists. Return 0 MB used.
+        patch_read_file.read_file.side_effect = IOError()
+        mem_usage = MemoryResourceUsage.get_memory_usage_from_proc_statm(1000)
+        self.assertEqual(0, mem_usage)

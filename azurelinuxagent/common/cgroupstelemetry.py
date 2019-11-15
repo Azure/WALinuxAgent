@@ -22,7 +22,7 @@ from datetime import datetime as dt
 from azurelinuxagent.common import logger
 from azurelinuxagent.common.exception import CGroupsException
 from azurelinuxagent.common.future import ustr
-
+from azurelinuxagent.common.resourceusage import MemoryResourceUsage
 
 MetricValue = namedtuple('Metric', ['category', 'counter', 'instance', 'value'])
 
@@ -147,9 +147,21 @@ class CGroupsTelemetry(object):
                         max_memory_usage = cgroup.get_max_memory_usage()
                         CGroupsTelemetry._cgroup_metrics[cgroup.name].add_max_memory_usage(max_memory_usage)
                         metrics.append(MetricValue("Memory", "Max Memory Usage", cgroup.name, max_memory_usage))
+
+                        pids = cgroup.get_tracked_processes()
+
+                        if pids:
+                            metrics.append(
+                                MetricValue("Memory", "Processes Tracked by Cgroup", cgroup.path + ":" + str(pids),
+                                            len(pids)))
+
+                            memory_usage_for_tracked_processes = [
+                                (pid, MemoryResourceUsage.get_memory_usage_from_proc_statm(pid)) for pid in pids]
+
+                            for mem_usage in memory_usage_for_tracked_processes:
+                                metrics.append(MetricValue("Memory", "Memory Used by Process", mem_usage[0], mem_usage[1]))
                     else:
-                        raise CGroupsException('CGroup controller {0} is not supported for cgroup {1}'.format(
-                                               cgroup.controller, cgroup.name))
+                        raise CGroupsException('CGroup controller {0} is not supported for cgroup {1}'.format(cgroup.controller, cgroup.name))
                 except Exception as e:
                     # There can be scenarios when the CGroup has been deleted by the time we are fetching the values
                     # from it. This would raise IOError with file entry not found (ERRNO: 2). We do not want to log
@@ -184,23 +196,7 @@ class CgroupMetrics(object):
         self._max_memory_usage = ResourceMetrics()
         self._cpu_usage = ResourceMetrics()
 
-        self._memory_usage_from_proc_statm = ResourceMetrics()
-
         self.marked_for_delete = False
-
-    def collect_data(self, cgroup):
-        # noinspection PyBroadException
-        try:
-            if cgroup.controller == "cpu":
-                self._cpu_usage.metric.append(cgroup.get_cpu_usage())
-            elif cgroup.controller == "memory":
-                self._memory_usage.metric.append(cgroup.get_memory_usage())
-                self._max_memory_usage.metric.append(cgroup.get_max_memory_usage())
-            else:
-                raise CGroupsException('CGroup controller {0} is not supported'.format(cgroup.controller))
-        except Exception as e:
-            if not isinstance(e, (IOError, OSError)) or e.errno != errno.ENOENT:
-                logger.periodic_warn(logger.EVERY_HALF_HOUR, 'Could not collect metrics for cgroup {0}. Error : {1}'.format(cgroup.path, ustr(e)))
 
     def add_memory_usage(self, usage):
         self._memory_usage.metric.append(usage)
@@ -219,12 +215,6 @@ class CgroupMetrics(object):
 
     def get_cpu_usage(self):
         return self._cpu_usage.metric
-
-    def get_memory_usage_from_resource(self):
-        return self._memory_usage_from_resource.metric
-
-    def get_max_memory_usage_from_proc_statm(self):
-        return self._memory_usage_from_proc_statm.metric
 
     def clear(self):
         self._memory_usage.metric.clear()

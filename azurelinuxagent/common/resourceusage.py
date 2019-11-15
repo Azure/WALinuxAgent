@@ -35,7 +35,7 @@ class MemoryResourceUsage(ResourceUsage):
     def get_memory_usage_from_proc_statm(process_id):
         proc_pid_rss = 0
         try:
-            proc_pid_rss = MemoryResourceUsage.get_proc_rss()
+            proc_pid_rss = MemoryResourceUsage._get_proc_rss(process_id)
         except Exception as e:
             logger.periodic_info(EVERY_SIX_HOURS, "[PERIODIC] Could not get the /prod/{0}/statm data due to {1}",
                                  process_id, ustr(e))
@@ -43,7 +43,7 @@ class MemoryResourceUsage(ResourceUsage):
         return proc_pid_rss
 
     @staticmethod
-    def get_proc_rss(process_id):
+    def _get_proc_rss(process_id):
         """
         /proc/<pid>/statm fields: columns are (in pages):
 
