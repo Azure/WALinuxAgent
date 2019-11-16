@@ -116,6 +116,10 @@ class CGroup(object):
         return False
 
     def get_tracked_processes(self):
+        """
+
+        :return: List of Str (Pids)
+        """
         try:
             procs = self._get_parameters("cgroup.procs")
             if procs:

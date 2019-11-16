@@ -89,9 +89,9 @@ class TestCGroupsTelemetry(AgentTestCase):
 
     def _assert_cgroup_metrics_equal(self, cpu_usage, memory_usage, max_memory_usage):
         for _, cgroup_metric in CGroupsTelemetry._cgroup_metrics.items():
-            self.assertListEqual(cgroup_metric.get_memory_usage()._data, memory_usage)
-            self.assertListEqual(cgroup_metric.get_max_memory_usage()._data, max_memory_usage)
-            self.assertListEqual(cgroup_metric.get_cpu_usage()._data, cpu_usage)
+            self.assertListEqual(cgroup_metric.get_memory_metrics()._data, memory_usage)
+            self.assertListEqual(cgroup_metric.get_max_memory_metrics()._data, max_memory_usage)
+            self.assertListEqual(cgroup_metric.get_cpu_metrics()._data, cpu_usage)
 
     def _assert_cgroup_polling_metrics_equal(self, metrics, cpu_metric_value, memory_metric_value, max_memory_metric_value):
         for metric in metrics:

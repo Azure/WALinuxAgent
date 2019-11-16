@@ -290,7 +290,7 @@ class MonitorHandler(object):
             self.reset_loggers()
             time.sleep(min_delta)
 
-    def reset_loggers(self):
+    def reset_loggers(self, passed_logger=None):
         """
         The loggers maintain hash-tables in memory and they need to be cleaned up from time to time.
         For reference, please check azurelinuxagent.common.logger.Logger and
@@ -304,6 +304,8 @@ class MonitorHandler(object):
                         MonitorHandler.RESET_LOGGERS_PERIOD):
             try:
                 logger.reset_periodic()
+                if passed_logger:
+                    passed_logger.reset_periodic()
             finally:
                 self.last_reset_loggers_time = time_now
 

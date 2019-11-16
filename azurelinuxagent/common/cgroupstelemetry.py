@@ -25,6 +25,7 @@ from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.resourceusage import MemoryResourceUsage
 
 MetricValue = namedtuple('Metric', ['category', 'counter', 'instance', 'value'])
+StatmMetricValue = namedtuple('StatmMetricValue', ['pid', 'resource_metric'])
 
 
 class CGroupsTelemetry(object):
@@ -41,9 +42,10 @@ class CGroupsTelemetry(object):
 
     @staticmethod
     def _process_cgroup_metric(cgroup_metrics):
-        memory_usage = cgroup_metrics.get_memory_usage()
-        max_memory_usage = cgroup_metrics.get_max_memory_usage()
-        cpu_usage = cgroup_metrics.get_cpu_usage()
+        memory_usage = cgroup_metrics.get_memory_metrics()
+        max_memory_usage = cgroup_metrics.get_max_memory_metrics()
+        cpu_usage = cgroup_metrics.get_cpu_metrics()
+        memory_usage_per_process = cgroup_metrics.get_proc_statm_memory_metrics()
 
         processed_extension = {}
 
@@ -61,6 +63,11 @@ class CGroupsTelemetry(object):
                 processed_extension["memory"]["max_mem"] = CGroupsTelemetry._get_metrics_list(max_memory_usage)
             else:
                 processed_extension["memory"] = {"max_mem": CGroupsTelemetry._get_metrics_list(max_memory_usage)}
+
+        if memory_usage_per_process:
+            if "proc_statm_memory" in processed_extension:
+                for pid_process_memory in memory_usage_per_process:
+                    processed_extension["memory"]["proc_statm_memory"] = {pid_process_memory.pid : CGroupsTelemetry._get_metrics_list(pid_process_memory.resource_metric)}
 
         return processed_extension
 
@@ -154,14 +161,15 @@ class CGroupsTelemetry(object):
                             metrics.append(
                                 MetricValue("Memory", "Processes Tracked by Cgroup", cgroup.path + ":" + str(pids),
                                             len(pids)))
-
-                            memory_usage_for_tracked_processes = [
-                                (pid, MemoryResourceUsage.get_memory_usage_from_proc_statm(pid)) for pid in pids]
-
-                            for mem_usage in memory_usage_for_tracked_processes:
-                                metrics.append(MetricValue("Memory", "Memory Used by Process", mem_usage[0], mem_usage[1]))
+                            for pid in pids:
+                                mem_usage_from_procstatm = MemoryResourceUsage.get_memory_usage_from_proc_statm(pid)
+                                metrics.append(
+                                    MetricValue("Memory", "Memory Used by Process", pid, mem_usage_from_procstatm))
+                                CGroupsTelemetry._cgroup_metrics[cgroup.name].add_proc_statm_memory(pid,
+                                                                                                    mem_usage_from_procstatm)
                     else:
-                        raise CGroupsException('CGroup controller {0} is not supported for cgroup {1}'.format(cgroup.controller, cgroup.name))
+                        raise CGroupsException('CGroup controller {0} is not supported for cgroup {1}'.format(
+                            cgroup.controller, cgroup.name))
                 except Exception as e:
                     # There can be scenarios when the CGroup has been deleted by the time we are fetching the values
                     # from it. This would raise IOError with file entry not found (ERRNO: 2). We do not want to log
@@ -192,40 +200,44 @@ class CGroupsTelemetry(object):
 
 class CgroupMetrics(object):
     def __init__(self):
-        self._memory_usage = ResourceMetrics()
-        self._max_memory_usage = ResourceMetrics()
-        self._cpu_usage = ResourceMetrics()
+        self._memory_usage = Metric()
+        self._max_memory_usage = Metric()
+        self._cpu_usage = Metric()
+        self._proc_statm_mem = {}
 
         self.marked_for_delete = False
 
     def add_memory_usage(self, usage):
-        self._memory_usage.metric.append(usage)
+        self._memory_usage.append(usage)
 
     def add_max_memory_usage(self, usage):
-        self._max_memory_usage.metric.append(usage)
+        self._max_memory_usage.append(usage)
 
     def add_cpu_usage(self, usage):
-        self._cpu_usage.metric.append(usage)
+        self._cpu_usage.append(usage)
 
-    def get_memory_usage(self):
-        return self._memory_usage.metric
+    def add_proc_statm_memory(self, pid, usage):
+        if pid not in self._proc_statm_mem:
+            self._proc_statm_mem[pid] = Metric()
+        self._proc_statm_mem[pid].metric.append(usage)
 
-    def get_max_memory_usage(self):
-        return self._max_memory_usage.metric
+    def get_memory_metrics(self):
+        return self._memory_usage
 
-    def get_cpu_usage(self):
-        return self._cpu_usage.metric
+    def get_max_memory_metrics(self):
+        return self._max_memory_usage
+
+    def get_cpu_metrics(self):
+        return self._cpu_usage
+
+    def get_proc_statm_memory_metrics(self):
+        return [StatmMetricValue(pid, metric) for pid, metric in self._proc_statm_mem]
 
     def clear(self):
-        self._memory_usage.metric.clear()
-        self._max_memory_usage.metric.clear()
-        self._cpu_usage.metric.clear()
-
-
-class ResourceMetrics(object):
-    def __init__(self):
-        self.process_id = None
-        self.metric = Metric()
+        self._memory_usage.clear()
+        self._max_memory_usage.clear()
+        self._cpu_usage.clear()
+        self._proc_statm_mem.clear()
 
 
 class Metric(object):

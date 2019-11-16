@@ -111,6 +111,13 @@ def get_event_message(duration, evt_type, is_internal, is_success, message, name
 @patch("azurelinuxagent.common.protocol.healthservice.HealthService._report")
 @patch("azurelinuxagent.common.utils.restutil.http_get")
 class TestMonitor(AgentTestCase):
+    def setUp(self):
+        AgentTestCase.setUp(self)
+        prefix = "UnitTest"
+        self.logger = logger.Logger(logger.DEFAULT_LOGGER, prefix)
+
+    def tearDown(self):
+        AgentTestCase.tearDown(self)
 
     def test_parse_xml_event(self, *args):
         data_str = load_data('ext/event_from_extension.xml')
@@ -448,18 +455,18 @@ class TestMonitor(AgentTestCase):
     @patch('azurelinuxagent.common.logger.Logger.info')
     def test_reset_loggers(self, mock_info, *args):
         # Adding 100 different messages
-        for i in range(100):
+        for i in range(1, 101):
             event_message = "Test {0}".format(i)
-            logger.periodic_info(logger.EVERY_DAY, event_message)
+            self.logger.periodic_info(logger.EVERY_DAY, event_message)
 
             self.assertIn(hash(event_message), logger.DEFAULT_LOGGER.periodic_messages)
-            self.assertEqual(i + 1, mock_info.call_count)  # range starts from 0.
+            self.assertEqual(i, mock_info.call_count)  # range starts from 0.
 
         self.assertEqual(100, len(logger.DEFAULT_LOGGER.periodic_messages))
 
         # Adding 1 message 100 times, but the same message. Mock Info should be called only once.
         for i in range(100):
-            logger.periodic_info(logger.EVERY_DAY, "Test-Message")
+            self.logger.periodic_info(logger.EVERY_DAY, "Test-Message")
 
         self.assertIn(hash("Test-Message"), logger.DEFAULT_LOGGER.periodic_messages)
         self.assertEqual(101, mock_info.call_count)  # 100 calls from the previous section. Adding only 1.
@@ -470,7 +477,7 @@ class TestMonitor(AgentTestCase):
         monitor_handler.last_reset_loggers_time = datetime.datetime.utcnow() - timedelta(hours=1)
         MonitorHandler.RESET_LOGGERS_PERIOD = timedelta(milliseconds=100)
 
-        monitor_handler.reset_loggers()
+        monitor_handler.reset_loggers(self.logger)
 
         # The hash map got cleaned up by the reset_loggers method
         self.assertEqual(0, len(logger.DEFAULT_LOGGER.periodic_messages))
