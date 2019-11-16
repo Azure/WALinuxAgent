@@ -362,7 +362,7 @@ class EventLogger(object):
 
         :param event_parameters: List of parameters of the event.
         :param set_values_for_agent: Need default values populated or not. Extensions need only GAVersion and
-                                            ContainerId to be populated and others sould be
+                                            ContainerId to be populated and others should be
         :return: Event with default parameters populated (either values for agent or extension)
         """
         DefaultParameter = namedtuple('DefaultParameter', ['name', 'value'])

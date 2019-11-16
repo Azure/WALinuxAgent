@@ -34,9 +34,9 @@ elif sys.version_info[0] == 2:
 
     bytebuffer = buffer
 
-    try:
+    if sys.version_info[1] >= 7:
         from collections import OrderedDict  # For Py 2.7+
-    except ImportError:
+    else:
         from ordereddict import OrderedDict  # Works only on 2.6
 else:
     raise ImportError("Unknown python version: {0}".format(sys.version_info))

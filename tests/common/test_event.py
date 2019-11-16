@@ -455,29 +455,28 @@ class TestEvent(AgentTestCase):
         else:
             self.fail("Counter '%idle' not found in event parameters: {0}".format(repr(event_dictionary)))
 
-    @patch("azurelinuxagent.common.event.get_container_id_from_env", return_value="TEST_CONTAINER_ID")
-    def test_add_default_parameters_to_extension_event(self, *args):
-        # When no values are populated in the TelemetryEventParamList.
-        default_parameters_expected = {"GAVersion": CURRENT_AGENT,
-                                       'ContainerId': "TEST_CONTAINER_ID",
-                                       'OpcodeName': "",
-                                       'EventTid': 0,
-                                       'EventPid': 0,
-                                       "TaskName": "",
-                                       "KeywordName": ""}
-        default_parameters_expected_names = set(default_parameters_expected.keys())
-        extension_param_list_empty = EventLogger.add_default_parameters_to_event([], set_values_for_agent=False)
+    def _assert_default_params_get_correctly_added(self, param_list_actual, parameters_expected):
+        default_parameters_expected_names = set(parameters_expected.keys())
 
         # Converting list of TelemetryEventParam into a dictionary, for easier look up of values.
-        param_list_dict = OrderedDict([(param.name, param.value) for param in extension_param_list_empty])
+        param_list_dict = OrderedDict([(param.name, param.value) for param in param_list_actual])
 
         counter = 0
         for p in default_parameters_expected_names:
             self.assertIn(p, param_list_dict)
-            self.assertEqual(param_list_dict[p], default_parameters_expected[p])
+            self.assertEqual(param_list_dict[p], parameters_expected[p])
             counter += 1
 
         self.assertEqual(len(default_parameters_expected_names), counter)
+
+    @patch("azurelinuxagent.common.event.get_container_id_from_env", return_value="TEST_CONTAINER_ID")
+    def test_add_default_parameters_to_extension_event(self, *args):
+        default_parameters_expected = {"GAVersion": CURRENT_AGENT, 'ContainerId': "TEST_CONTAINER_ID", 'OpcodeName': "",
+                                       'EventTid': 0, 'EventPid': 0, "TaskName": "", "KeywordName": ""}
+
+        # When no values are populated in the TelemetryEventParamList.
+        extension_param_list_empty = EventLogger.add_default_parameters_to_event([], set_values_for_agent=False)
+        self._assert_default_params_get_correctly_added(extension_param_list_empty, default_parameters_expected)
 
         # When some values are already populated in the TelemetryEventParamList.
         extension_param_list_populated = [TelemetryEventParam('Name', "DummyExtension"),
@@ -487,20 +486,28 @@ class TestEvent(AgentTestCase):
                                           TelemetryEventParam('Message', "TestMessage"),
                                           TelemetryEventParam('Duration', 10), TelemetryEventParam('ExtensionType', ''),
                                           TelemetryEventParam('OpcodeName', '')]
+        extension_param_list_with_defaults = EventLogger.add_default_parameters_to_event(extension_param_list_populated,
+                                                                                         set_values_for_agent=False)
+        self._assert_default_params_get_correctly_added(extension_param_list_with_defaults, default_parameters_expected)
 
-        extension_param_list_with_defaults = EventLogger.add_default_parameters_to_event(
-            extension_param_list_populated, set_values_for_agent=False)
+        parameters_expected = {"GAVersion": CURRENT_AGENT, 'ContainerId': "TEST_CONTAINER_ID", 'OpcodeName': "",
+                               'EventTid': 100, 'EventPid': 10, "TaskName": "", "KeywordName": ""}
 
-        # Converting list of TelemetryEventParam into a dictionary, for easier look up of values.
-        param_list_dict = OrderedDict([(param.name, param.value) for param in extension_param_list_with_defaults])
-
-        counter = 0
-        for p in default_parameters_expected_names:
-            self.assertIn(p, param_list_dict)
-            self.assertEqual(param_list_dict[p], default_parameters_expected[p])
-            counter += 1
-
-        self.assertEqual(len(default_parameters_expected_names), counter)
+        # When some values are already populated in the TelemetryEventParamList.
+        extension_param_list_populated = [TelemetryEventParam('Name', "DummyExtension"),
+                                          TelemetryEventParam('Version', CURRENT_VERSION),
+                                          TelemetryEventParam('Operation', "DummyOperation"),
+                                          TelemetryEventParam('OperationSuccess', True),
+                                          TelemetryEventParam('Message', "TestMessage"),
+                                          TelemetryEventParam('Duration', 10),
+                                          TelemetryEventParam('ExtensionType', ''),
+                                          TelemetryEventParam('OpcodeName', ''),
+                                          TelemetryEventParam('EventTid', 100),
+                                          TelemetryEventParam('EventPid', 10)]
+        extension_param_list_with_defaults = EventLogger.add_default_parameters_to_event(extension_param_list_populated,
+                                                                                         set_values_for_agent=False)
+        self._assert_default_params_get_correctly_added(extension_param_list_with_defaults,
+                                                        parameters_expected)
 
     @patch("threading.Thread.getName", return_value="HelloWorldTask")
     @patch('os.getpid', return_value=42)
@@ -509,8 +516,6 @@ class TestEvent(AgentTestCase):
     def test_add_default_parameters_to_agent_event(self, patch_datetime, *args):
         patch_datetime.utcnow = Mock(return_value=datetime.strptime("2019-01-01 01:30:00",
                                                                     '%Y-%m-%d %H:%M:%S'))
-
-        # When no values are populated in the TelemetryEventParamList.
         default_parameters_expected = {"GAVersion": CURRENT_AGENT,
                                        'ContainerId': "TEST_CONTAINER_ID",
                                        'OpcodeName': "2019-01-01 01:30:00",
@@ -518,20 +523,8 @@ class TestEvent(AgentTestCase):
                                        'EventPid': 42,
                                        "TaskName": "HelloWorldTask",
                                        "KeywordName": ""}
-        default_parameters_expected_names = set(default_parameters_expected.keys())
-
         agent_param_list_empty = EventLogger.add_default_parameters_to_event([], set_values_for_agent=True)
-
-        # Converting list of TelemetryEventParam into a dictionary, for easier look up of values.
-        param_list_dict = OrderedDict([(param.name, param.value) for param in agent_param_list_empty])
-
-        counter = 0
-        for p in default_parameters_expected_names:
-            self.assertIn(p, param_list_dict)
-            self.assertEqual(param_list_dict[p], default_parameters_expected[p])
-            counter += 1
-
-        self.assertEqual(len(default_parameters_expected_names), counter)
+        self._assert_default_params_get_correctly_added(agent_param_list_empty, default_parameters_expected)
 
         # When some values are already populated in the TelemetryEventParamList.
         agent_param_list_populated = [TelemetryEventParam('Name', "DummyExtension"),
@@ -541,23 +534,13 @@ class TestEvent(AgentTestCase):
                                       TelemetryEventParam('Message', "TestMessage"),
                                       TelemetryEventParam('Duration', 10), TelemetryEventParam('ExtensionType', ''),
                                       TelemetryEventParam('OpcodeName', '')]
-
         agent_param_list_after_defaults_added = EventLogger.add_default_parameters_to_event(agent_param_list_populated,
                                                                                             set_values_for_agent=True)
-
-        # Converting list of TelemetryEventParam into a dictionary, for easier look up of values.
-        param_list_dict = OrderedDict([(param.name, param.value) for param in agent_param_list_after_defaults_added])
-
-        counter = 0
-        for p in default_parameters_expected_names:
-            self.assertIn(p, param_list_dict)
-            self.assertEqual(param_list_dict[p], default_parameters_expected[p])
-            counter += 1
-
-        self.assertEqual(len(default_parameters_expected_names), counter)
+        self._assert_default_params_get_correctly_added(agent_param_list_after_defaults_added,
+                                                        default_parameters_expected)
 
         # When some values are already populated in the TelemetryEventParamList, along with some
-        # default values already populated and it should be replaces..
+        # default values already populated and it should be replaced, when set_values_for_agent=True
         agent_param_list_populated = [TelemetryEventParam('Name', "DummyExtension"),
                                       TelemetryEventParam('Version', CURRENT_VERSION),
                                       TelemetryEventParam('Operation', "DummyOperation"),
@@ -571,14 +554,5 @@ class TestEvent(AgentTestCase):
 
         agent_param_list_after_defaults_added = EventLogger.add_default_parameters_to_event(agent_param_list_populated,
                                                                                             set_values_for_agent=True)
-
-        # Converting list of TelemetryEventParam into a dictionary, for easier look up of values.
-        param_list_dict = OrderedDict([(param.name, param.value) for param in agent_param_list_after_defaults_added])
-
-        counter = 0
-        for p in default_parameters_expected_names:
-            self.assertIn(p, param_list_dict)
-            self.assertEqual(param_list_dict[p], default_parameters_expected[p])
-            counter += 1
-
-        self.assertEqual(len(default_parameters_expected_names), counter)
+        self._assert_default_params_get_correctly_added(agent_param_list_after_defaults_added,
+                                                        default_parameters_expected)
