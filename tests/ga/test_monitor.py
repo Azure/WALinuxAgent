@@ -114,7 +114,7 @@ class TestMonitor(AgentTestCase):
     def setUp(self):
         AgentTestCase.setUp(self)
         prefix = "UnitTest"
-        self.logger = logger.Logger(logger.DEFAULT_LOGGER, prefix)
+        self.logger = logger.Logger(None, prefix)
 
     def tearDown(self):
         AgentTestCase.tearDown(self)
@@ -459,18 +459,18 @@ class TestMonitor(AgentTestCase):
             event_message = "Test {0}".format(i)
             self.logger.periodic_info(logger.EVERY_DAY, event_message)
 
-            self.assertIn(hash(event_message), logger.DEFAULT_LOGGER.periodic_messages)
+            self.assertIn(hash(event_message), self.logger.periodic_messages)
             self.assertEqual(i, mock_info.call_count)  # range starts from 0.
 
-        self.assertEqual(100, len(logger.DEFAULT_LOGGER.periodic_messages))
+        self.assertEqual(100, len(self.logger.periodic_messages))
 
         # Adding 1 message 100 times, but the same message. Mock Info should be called only once.
         for i in range(100):
             self.logger.periodic_info(logger.EVERY_DAY, "Test-Message")
 
-        self.assertIn(hash("Test-Message"), logger.DEFAULT_LOGGER.periodic_messages)
+        self.assertIn(hash("Test-Message"), self.logger.periodic_messages)
         self.assertEqual(101, mock_info.call_count)  # 100 calls from the previous section. Adding only 1.
-        self.assertEqual(101, len(logger.DEFAULT_LOGGER.periodic_messages))  # One new message in the hash map.
+        self.assertEqual(101, len(self.logger.periodic_messages))  # One new message in the hash map.
 
         # Resetting the logger time states.
         monitor_handler = get_monitor_handler()
@@ -480,7 +480,7 @@ class TestMonitor(AgentTestCase):
         monitor_handler.reset_loggers(self.logger)
 
         # The hash map got cleaned up by the reset_loggers method
-        self.assertEqual(0, len(logger.DEFAULT_LOGGER.periodic_messages))
+        self.assertEqual(0, len(self.logger.periodic_messages))
 
         monitor_handler.stop()
 

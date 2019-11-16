@@ -219,7 +219,7 @@ class CgroupMetrics(object):
     def add_proc_statm_memory(self, pid, usage):
         if pid not in self._proc_statm_mem:
             self._proc_statm_mem[pid] = Metric()
-        self._proc_statm_mem[pid].metric.append(usage)
+        self._proc_statm_mem[pid].append(usage)
 
     def get_memory_metrics(self):
         return self._memory_usage
