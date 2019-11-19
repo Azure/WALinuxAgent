@@ -67,7 +67,14 @@ class CGroupsTelemetry(object):
         if memory_usage_per_process:
             if "proc_statm_memory" in processed_extension:
                 for pid_process_memory in memory_usage_per_process:
-                    processed_extension["memory"]["proc_statm_memory"] = {pid_process_memory.pid : CGroupsTelemetry._get_metrics_list(pid_process_memory.resource_metric)}
+                    processed_extension["proc_statm_memory"][pid_process_memory.pid] = {pid_process_memory.pid:
+                                                                    CGroupsTelemetry._get_metrics_list(
+                                                                        pid_process_memory.resource_metric)}
+            else:
+                for pid_process_memory in memory_usage_per_process:
+                    processed_extension["proc_statm_memory"] = {pid_process_memory.pid:
+                                                            CGroupsTelemetry._get_metrics_list(
+                                                                        pid_process_memory.resource_metric)}
 
         return processed_extension
 
@@ -231,7 +238,7 @@ class CgroupMetrics(object):
         return self._cpu_usage
 
     def get_proc_statm_memory_metrics(self):
-        return [StatmMetricValue(pid, metric) for pid, metric in self._proc_statm_mem]
+        return [StatmMetricValue(pid, metric) for pid, metric in self._proc_statm_mem.items()]
 
     def clear(self):
         self._memory_usage.clear()
