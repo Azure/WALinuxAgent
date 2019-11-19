@@ -26,11 +26,10 @@ import uuid
 import azurelinuxagent.common.conf as conf
 import azurelinuxagent.common.logger as logger
 import azurelinuxagent.common.utils.networkutil as networkutil
-
 from azurelinuxagent.common.cgroupstelemetry import CGroupsTelemetry
+from azurelinuxagent.common.datacontract import set_properties
 from azurelinuxagent.common.errorstate import ErrorState
-from azurelinuxagent.common.event import add_event, WALAEventOperation, CONTAINER_ID_ENV_VARIABLE, \
-    get_container_id_from_env
+from azurelinuxagent.common.event import EventLogger
 from azurelinuxagent.common.event import add_event, WALAEventOperation, report_metric
 from azurelinuxagent.common.exception import EventError, ProtocolError, OSUtilError, HttpError
 from azurelinuxagent.common.future import ustr
@@ -39,11 +38,10 @@ from azurelinuxagent.common.protocol import get_protocol_util
 from azurelinuxagent.common.protocol.healthservice import HealthService
 from azurelinuxagent.common.protocol.imds import get_imds_client
 from azurelinuxagent.common.telemetryevent import TelemetryEvent, TelemetryEventParam, TelemetryEventList
-from azurelinuxagent.common.datacontract import set_properties
 from azurelinuxagent.common.utils.restutil import IOErrorCounter
 from azurelinuxagent.common.utils.textutil import parse_doc, findall, find, getattrib, hash_strings
 from azurelinuxagent.common.version import DISTRO_NAME, DISTRO_VERSION, \
-    DISTRO_CODE_NAME, AGENT_NAME, CURRENT_AGENT, CURRENT_VERSION, AGENT_EXECUTION_MODE
+    DISTRO_CODE_NAME, AGENT_NAME, CURRENT_VERSION, AGENT_EXECUTION_MODE
 
 
 def parse_event(data_str):
@@ -321,14 +319,6 @@ class MonitorHandler(object):
         sysinfo_names = [v.name for v in self.sysinfo]
         final_parameters = []
 
-        # Refer: azurelinuxagent.common.event.EventLogger.add_default_parameters_to_event for agent specific values.
-        #
-        # Default fields are only populated by Agent and not the extension. Agent will fill up any event if they don't
-        # have the default params. Example: GAVersion and ContainerId are populated for agent events on the fly,
-        # but not for extension events. Add it if it's missing.
-        default_values = [("ContainerId", get_container_id_from_env()), ("GAVersion", CURRENT_AGENT),
-                          ("OpcodeName", ""), ("EventTid", 0), ("EventPid", 0), ("TaskName", ""), ("KeywordName", "")]
-
         for param in event.parameters:
             # Discard any sys_info parameters already in the event, since they will be overwritten
             if param.name in sysinfo_names:
@@ -337,10 +327,7 @@ class MonitorHandler(object):
 
         # Add sys_info params populated by the agent
         final_parameters.extend(self.sysinfo)
-
-        for default_value in default_values:
-            if default_value[0] not in event:
-                final_parameters.append(TelemetryEventParam(default_value[0], default_value[1]))
+        final_parameters = EventLogger.add_default_parameters_to_event(final_parameters, set_values_for_agent=False)
 
         event.parameters = final_parameters
 

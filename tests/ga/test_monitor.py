@@ -40,15 +40,16 @@ from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.osutil.default import BASE_CGROUPS, DefaultOSUtil
 from azurelinuxagent.common.protocol.imds import ComputeInfo
 from azurelinuxagent.common.protocol.restapi import VMInfo
-from azurelinuxagent.common.protocol.wire import ExtHandler, ExtHandlerProperties, WireProtocol
-from azurelinuxagent.common.telemetryevent import TelemetryEventParam, TelemetryEvent
-from azurelinuxagent.common.utils import restutil, fileutil
-from azurelinuxagent.common.version import AGENT_VERSION, CURRENT_VERSION, AGENT_NAME, CURRENT_AGENT
+from azurelinuxagent.common.protocol.wire import ExtHandler, ExtHandlerProperties
+from azurelinuxagent.common.protocol.wire import WireProtocol
+from azurelinuxagent.common.telemetryevent import TelemetryEvent, TelemetryEventParam
+from azurelinuxagent.common.utils import fileutil, restutil
+from azurelinuxagent.common.version import AGENT_NAME, CURRENT_VERSION, AGENT_VERSION, CURRENT_AGENT
 from azurelinuxagent.ga.exthandlers import ExtHandlerInstance
-from azurelinuxagent.ga.monitor import parse_xml_event, get_monitor_handler, MonitorHandler, \
-    generate_extension_metrics_telemetry_dictionary, parse_json_event
+from azurelinuxagent.ga.monitor import generate_extension_metrics_telemetry_dictionary, get_monitor_handler, \
+    MonitorHandler, parse_json_event, parse_xml_event
 from tests.common.test_cgroupstelemetry import make_new_cgroup
-from tests.protocol.mockwiredata import WireProtocolData, DATA_FILE
+from tests.protocol.mockwiredata import DATA_FILE, WireProtocolData
 from tests.tools import Mock, MagicMock, patch, load_data, AgentTestCase, data_dir, are_cgroups_enabled, \
     i_am_root, skip_if_predicate_false, is_trusty_in_travis, skip_if_predicate_true
 
@@ -626,8 +627,9 @@ class TestEventMonitoring(AgentTestCase):
         # Validating the crafted message by the collect_and_send_events call.
         self.assertEqual(1, patch_send_event.call_count)
         send_event_call_args = protocol.client.send_event.call_args[0]
-        sample_message = '<Event id="1">' \
-                         '<![CDATA[<Param Name="Name" Value="DummyExtension" T="mt:wstr" />' \
+
+        sample_message = '<Event id="1"><![CDATA[' \
+                         '<Param Name="Name" Value="DummyExtension" T="mt:wstr" />' \
                          '<Param Name="Version" Value="{0}" T="mt:wstr" />' \
                          '<Param Name="IsInternal" Value="False" T="mt:bool" />' \
                          '<Param Name="Operation" Value="Unknown" T="mt:wstr" />' \
@@ -650,13 +652,13 @@ class TestEventMonitoring(AgentTestCase):
                          '<Param Name="ResourceGroupName" Value="DummyRG" T="mt:wstr" />' \
                          '<Param Name="VMId" Value="DummyVmId" T="mt:wstr" />' \
                          '<Param Name="ImageOrigin" Value="1" T="mt:uint64" />' \
-                         '<Param Name="ContainerId" Value="c6d5526c-5ac2-4200-b6e2-56f2b70c5ab2" T="mt:wstr" />' \
                          '<Param Name="GAVersion" Value="{1}" T="mt:wstr" />' \
+                         '<Param Name="ContainerId" Value="c6d5526c-5ac2-4200-b6e2-56f2b70c5ab2" T="mt:wstr" />' \
                          '<Param Name="EventTid" Value="0" T="mt:uint64" />' \
                          '<Param Name="EventPid" Value="0" T="mt:uint64" />' \
                          '<Param Name="TaskName" Value="" T="mt:wstr" />' \
-                         '<Param Name="KeywordName" Value="" T="mt:wstr" />]]>' \
-                         '</Event>'.format(AGENT_VERSION, CURRENT_AGENT)
+                         '<Param Name="KeywordName" Value="" T="mt:wstr" />' \
+                         ']]></Event>'.format(AGENT_VERSION, CURRENT_AGENT)
 
         self.maxDiff = None
         self.assertEqual(sample_message, send_event_call_args[1])
