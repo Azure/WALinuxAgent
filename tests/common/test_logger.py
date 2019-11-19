@@ -16,10 +16,14 @@
 #
 
 import json
+import os
+import tempfile
 from datetime import datetime
 
 import azurelinuxagent.common.logger as logger
-from azurelinuxagent.common.event import add_log_event, TELEMETRY_LOG_EVENT_ID, TELEMETRY_LOG_PROVIDER_ID, EventLogger
+from azurelinuxagent.common.event import add_log_event, TELEMETRY_LOG_EVENT_ID, TELEMETRY_LOG_PROVIDER_ID, EventLogger, \
+    __event_logger__
+from azurelinuxagent.common.utils import fileutil
 from tests.tools import AgentTestCase, patch, MagicMock
 
 _MSG_INFO = "This is our test info logging message {0} {1}"
@@ -32,11 +36,19 @@ _DATA = ["arg1", "arg2"]
 class TestLogger(AgentTestCase):
     def setUp(self):
         AgentTestCase.setUp(self)
+
+        self.lib_dir = tempfile.mkdtemp()
+        self.event_dir = os.path.join(self.lib_dir, "events")
+        fileutil.mkdir(self.event_dir)
+
+        self.log_file = tempfile.mkstemp(prefix="logfile-")[1]
+
         logger.reset_periodic()
 
     def tearDown(self):
         AgentTestCase.tearDown(self)
         logger.reset_periodic()
+        fileutil.rm_dirs(self.event_dir)
 
     @patch('azurelinuxagent.common.logger.Logger.verbose')
     @patch('azurelinuxagent.common.logger.Logger.warn')
@@ -239,6 +251,7 @@ class TestLogger(AgentTestCase):
         self.assertEqual(1, mock_warn.call_count)
         self.assertEqual(0, mock_error.call_count)
 
+    @patch("azurelinuxagent.common.event.send_logs_to_telemetry", return_value=True)
     def test_telemetry_logger_verify_maximum_recursion_depths_doesnt_happen(self, *_):
         logger.add_logger_appender(logger.AppenderType.FILE, logger.LogLevel.INFO, path="/dev/null")
         logger.add_logger_appender(logger.AppenderType.TELEMETRY, logger.LogLevel.WARNING, path=add_log_event)
@@ -258,3 +271,35 @@ class TestLogger(AgentTestCase):
             exception_caught = True
 
         self.assertFalse(exception_caught, msg="Caught a Runtime Error")
+
+    @patch("azurelinuxagent.common.event.send_logs_to_telemetry", return_value=True)
+    @patch("azurelinuxagent.common.conf.get_lib_dir")
+    def test_telemetry_logger_verifying_all_logs_get_written(self, mock_lib_dir, *_):
+        mock_lib_dir.return_value = self.lib_dir
+        __event_logger__.event_dir = self.event_dir
+        no_of_log_statements = 1100
+
+        logger.add_logger_appender(logger.AppenderType.FILE, logger.LogLevel.INFO, path=self.log_file)
+        logger.add_logger_appender(logger.AppenderType.TELEMETRY, logger.LogLevel.WARNING, path=add_log_event)
+        exception_caught = False
+
+        # Calling logger.warn 1100 times would cause the telemetry appender to writing 1000 events into the events dir,
+        # and then drop the remaining 100 events. It sould not generate the RuntimeError
+        try:
+            for i in range(0, no_of_log_statements):
+                logger.warn('Test Log - {0} - 1 - Warning'.format(i))
+        except RuntimeError:
+            exception_caught = True
+
+        self.assertFalse(exception_caught, msg="Caught a Runtime Error")
+        self.assertEqual(1000, len(os.listdir(__event_logger__.event_dir)))
+
+        try:
+            with open(self.log_file) as logfile:
+                logcontent = logfile.readlines()
+
+                # Checking the last log entry.
+                # Subtracting 1 as range is exclusive of the upper bound
+                self.assertIn("WARNING Test Log - {0} - 1 - Warning".format(no_of_log_statements - 1), logcontent[-1])
+        except Exception as e:
+            self.assertFalse(True, "The log file looks like it isn't correctly setup for this test. Take a look. {0}".format(e))

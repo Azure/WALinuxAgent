@@ -219,12 +219,11 @@ class EventLogger(object):
         self.event_dir = None
         self.periodic_events = {}
 
-    def save_event(self, data):
+    def save_event(self, data, prevent_telemetry_logging=True):
         if self.event_dir is None:
             # To prevent the chance of #1035 happening - introduced periodic_WARNs.
             # More details about it - azurelinuxagent.common.event.add_log_event's pydoc.
-            logger.periodic_warn(logger.EVERY_FIFTEEN_MINUTES,
-                                 "[PERIODIC] Cannot save event -- Event reporter is not initialized.")
+            logger.warn("Cannot save event -- Event reporter is not initialized.")
             return
 
         try:
@@ -237,8 +236,7 @@ class EventLogger(object):
         if len(existing_events) >= 1000:
             # To prevent the chance of #1035 happening - introduced periodic_WARNs.
             # More details about it - azurelinuxagent.common.event.add_log_event's pydoc.
-            logger.periodic_warn(logger.EVERY_FIFTEEN_MINUTES,
-                                 "[PERIODIC] Too many files under: {0}, current count:  {1}, removing oldest".format(
+            logger.warn("Too many files under: {0}, current count:  {1}, removing oldest".format(
                                      self.event_dir, len(existing_events)))
             existing_events.sort()
             oldest_files = existing_events[:-999]
@@ -303,6 +301,11 @@ class EventLogger(object):
             logger.periodic_error(logger.EVERY_FIFTEEN_MINUTES, "[PERIODIC] {0}".format(ustr(e)))
 
     def add_log_event(self, level, message):
+        existing_events = os.listdir(self.event_dir)
+        if len(existing_events) >= 1000:
+            # If the number of events in the directory are more than 1000, we won't log anything and directly return.
+            return
+
         event = TelemetryEvent(TELEMETRY_LOG_EVENT_ID, TELEMETRY_LOG_PROVIDER_ID)
         event.parameters.append(TelemetryEventParam('EventName', WALAEventOperation.Log))
         event.parameters.append(TelemetryEventParam('CapabilityUsed', logger.LogLevel.STRINGS[level]))
