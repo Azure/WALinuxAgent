@@ -18,6 +18,7 @@
 Log utils
 """
 import sys
+import os
 
 from azurelinuxagent.common.future import ustr
 from datetime import datetime, timedelta
@@ -105,8 +106,8 @@ class Logger(object):
             for appender in self.logger.appenders:
                 appender.write(level, log_item)
 
-    def add_appender(self, appender_type, level, path):
-        appender = _create_logger_appender(appender_type, level, path)
+    def add_appender(self, appender_type, level, path, max_bytes=0, backup_count=0):
+        appender = _create_logger_appender(appender_type, level, path, max_bytes=max_bytes, backup_count=backup_count)
         self.appenders.append(appender)
 
 
@@ -125,17 +126,46 @@ class ConsoleAppender(object):
 
 
 class FileAppender(object):
-    def __init__(self, level, path):
+    def __init__(self, level, path, max_bytes, backup_count):
         self.level = level
         self.path = path
+        self.max_bytes = max_bytes
+        self.backup_count = backup_count
 
     def write(self, level, msg):
         if self.level <= level:
+
+            if self.shouldRollover(msg):
+                self.doRollover()
+
             try:
                 with open(self.path, "a+") as log_file:
                     log_file.write(msg)
             except IOError:
                 pass
+
+    def shouldRollover(self, msg):
+        if self.backup_count == 0:
+            return False
+
+        if os.stat(self.path).st_size + len(msg) > self.max_bytes:
+            return True
+
+        return False
+
+    def doRollover(self):
+        if self.backup_count > 0:
+            for i in range(self.backup_count-1, 0, -1):
+                src = "%s.%d" % (self.path, i)
+                dst = "%s.%d" % (self.path, i + 1)
+                if os.path.exists(src):
+                    if os.path.exists(dst):
+                        os.remove(dst)
+                    os.rename(src, dst)
+            dst = "%s.1" % self.path
+            if os.path.exists(dst):
+                os.remove(dst)
+            os.rename(self.path, dst)
 
 
 class StdoutAppender(object):
@@ -187,8 +217,8 @@ class AppenderType(object):
     TELEMETRY = 3
 
 
-def add_logger_appender(appender_type, level=LogLevel.INFO, path=None):
-    DEFAULT_LOGGER.add_appender(appender_type, level, path)
+def add_logger_appender(appender_type, level=LogLevel.INFO, path=None, max_bytes=0, backup_count=0):
+    DEFAULT_LOGGER.add_appender(appender_type, level, path, max_bytes=max_bytes, backup_count=backup_count)
 
 
 def reset_periodic():
@@ -251,11 +281,11 @@ def log(level, msg_format, *args):
     DEFAULT_LOGGER.log(level, msg_format, args)
 
 
-def _create_logger_appender(appender_type, level=LogLevel.INFO, path=None):
+def _create_logger_appender(appender_type, level=LogLevel.INFO, path=None, max_bytes=0, backup_count=0):
     if appender_type == AppenderType.CONSOLE:
         return ConsoleAppender(level, path)
     elif appender_type == AppenderType.FILE:
-        return FileAppender(level, path)
+        return FileAppender(level, path, max_bytes=max_bytes, backup_count=backup_count)
     elif appender_type == AppenderType.STDOUT:
         return StdoutAppender(level)
     elif appender_type == AppenderType.TELEMETRY:

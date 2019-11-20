@@ -134,6 +134,7 @@ __STRING_OPTIONS__ = {
     "ResourceDisk.Filesystem": "ext3",
     "AutoUpdate.GAFamily": "Prod",
     "CGroups.Excluded": "customscript,runcommand",
+    "Logs.Dir": "/var/log"
 }
 
 
@@ -142,7 +143,9 @@ __INTEGER_OPTIONS__ = {
     "Provisioning.PasswordCryptSaltLength": 10,
     "HttpProxy.Port": None,
     "ResourceDisk.SwapSizeMB": 0,
-    "Autoupdate.Frequency": 3600
+    "Autoupdate.Frequency": 3600,
+    "Logs.MaxBytes": 10000000,
+    "Logs.BackupCount": 0
 }
 
 
@@ -178,6 +181,15 @@ def enable_check_rdma_driver(conf=__conf__):
 
 def get_logs_verbose(conf=__conf__):
     return conf.get_switch("Logs.Verbose", False)
+
+def get_logs_dir(conf=__conf__):
+    return conf.get("Logs.Dir", "/var/log")
+
+def get_logs_rotation_max_bytes(conf=__conf__):
+    return conf.get_int("Logs.MaxBytes", 10000000)
+
+def get_logs_rotation_backup_count(conf=__conf__):
+    return conf.get_int("Logs.BackupCount", 0)
 
 def get_logs_console(conf=__conf__):
     return conf.get_switch("Logs.Console", True)
