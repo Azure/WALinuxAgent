@@ -257,16 +257,16 @@ class TestLogger(AgentTestCase):
         logger.add_logger_appender(logger.AppenderType.TELEMETRY, logger.LogLevel.WARNING, path=add_log_event)
 
         # Calling logger.warn 1000 times would cause the telemetry appender to writing 1000 events into the events dir.
-        for _ in range(1000):
-            logger.warn('Test Log - Warning')
+        for i in range(1000):
+            logger.warn('Test Log - {0} - 1 - Warning'.format(i))
 
         exception_caught = False
 
         # #1035 was caused due to too many files being written in an error condition. Adding one more here would break
         # the camels back earlier. This should be resolved now.
         try:
-            for _ in range(1000):
-                logger.warn('Test Log - Warning')
+            for i in range(1000):
+                logger.warn('Test Log - {0} - 1 - Warning'.format(i))
         except RuntimeError:
             exception_caught = True
 
@@ -282,12 +282,15 @@ class TestLogger(AgentTestCase):
         logger.add_logger_appender(logger.AppenderType.FILE, logger.LogLevel.INFO, path=self.log_file)
         logger.add_logger_appender(logger.AppenderType.TELEMETRY, logger.LogLevel.WARNING, path=add_log_event)
         exception_caught = False
+        print(self.log_file)
 
         # Calling logger.warn 1100 times would cause the telemetry appender to writing 1000 events into the events dir,
         # and then drop the remaining 100 events. It sould not generate the RuntimeError
+
+        for i in range(0, 1000):
+            logger.warn('Test Log - {0} - 1 - Warning'.format(i))
         try:
-            for i in range(0, no_of_log_statements):
-                logger.warn('Test Log - {0} - 1 - Warning'.format(i))
+            logger.warn('Test Log - {0} - 1 - Warning'.format(1001))
         except RuntimeError:
             exception_caught = True
 

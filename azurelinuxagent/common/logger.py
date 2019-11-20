@@ -100,18 +100,35 @@ class Logger(object):
                         encoding="ascii")
 
         for appender in self.appenders:
-            appender.write(level, log_item)
+            if not appender.appender_in_use:
+                try:
+                    appender.appender_in_use = True
+                    appender.write(level, log_item)
+                finally:
+                    appender.appender_in_use = False
+
         if self.logger != self:
             for appender in self.logger.appenders:
-                appender.write(level, log_item)
+                if not appender.appender_in_use:
+                    try:
+                        appender.appender_in_use = True
+                        appender.write(level, log_item)
+                    finally:
+                        appender.appender_in_use = False
 
     def add_appender(self, appender_type, level, path):
         appender = _create_logger_appender(appender_type, level, path)
         self.appenders.append(appender)
 
 
-class ConsoleAppender(object):
+class Appender(object):
+    def __init__(self):
+        self.appender_in_use = False
+
+
+class ConsoleAppender(Appender):
     def __init__(self, level, path):
+        super(ConsoleAppender, self).__init__()
         self.level = level
         self.path = path
 
@@ -124,8 +141,9 @@ class ConsoleAppender(object):
                 pass
 
 
-class FileAppender(object):
+class FileAppender(Appender):
     def __init__(self, level, path):
+        super(FileAppender, self).__init__()
         self.level = level
         self.path = path
 
@@ -138,8 +156,9 @@ class FileAppender(object):
                 pass
 
 
-class StdoutAppender(object):
+class StdoutAppender(Appender):
     def __init__(self, level):
+        super(StdoutAppender, self).__init__()
         self.level = level
 
     def write(self, level, msg):
@@ -150,8 +169,9 @@ class StdoutAppender(object):
                 pass
 
 
-class TelemetryAppender(object):
+class TelemetryAppender(Appender):
     def __init__(self, level, event_func):
+        super(TelemetryAppender, self).__init__()
         self.level = level
         self.event_func = event_func
 

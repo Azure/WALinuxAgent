@@ -44,6 +44,7 @@ TELEMETRY_LOG_PROVIDER_ID = "FFF0196F-EE4C-4EAF-9AA5-776F622DEB4F"
 TELEMETRY_LOG_EVENT_ID = 7
 SEND_LOGS_TO_TELEMETRY = False
 
+MAX_NUMBER_OF_EVENTS = 1000
 
 def send_logs_to_telemetry():
     return SEND_LOGS_TO_TELEMETRY
@@ -219,10 +220,8 @@ class EventLogger(object):
         self.event_dir = None
         self.periodic_events = {}
 
-    def save_event(self, data, prevent_telemetry_logging=True):
+    def save_event(self, data):
         if self.event_dir is None:
-            # To prevent the chance of #1035 happening - introduced periodic_WARNs.
-            # More details about it - azurelinuxagent.common.event.add_log_event's pydoc.
             logger.warn("Cannot save event -- Event reporter is not initialized.")
             return
 
@@ -233,9 +232,7 @@ class EventLogger(object):
             raise EventError(msg)
 
         existing_events = os.listdir(self.event_dir)
-        if len(existing_events) >= 1000:
-            # To prevent the chance of #1035 happening - introduced periodic_WARNs.
-            # More details about it - azurelinuxagent.common.event.add_log_event's pydoc.
+        if len(existing_events) >= MAX_NUMBER_OF_EVENTS:
             logger.warn("Too many files under: {0}, current count:  {1}, removing oldest".format(
                                      self.event_dir, len(existing_events)))
             existing_events.sort()
@@ -255,6 +252,8 @@ class EventLogger(object):
         except IOError as e:
             msg = "Failed to write events to file: {0}".format(e)
             raise EventError(msg)
+
+        print("add_log_event: ", data.encode("utf-8"))
 
     def reset_periodic(self):
         self.periodic_events = {}
@@ -301,11 +300,6 @@ class EventLogger(object):
             logger.periodic_error(logger.EVERY_FIFTEEN_MINUTES, "[PERIODIC] {0}".format(ustr(e)))
 
     def add_log_event(self, level, message):
-        existing_events = os.listdir(self.event_dir)
-        if len(existing_events) >= 1000:
-            # If the number of events in the directory are more than 1000, we won't log anything and directly return.
-            return
-
         event = TelemetryEvent(TELEMETRY_LOG_EVENT_ID, TELEMETRY_LOG_PROVIDER_ID)
         event.parameters.append(TelemetryEventParam('EventName', WALAEventOperation.Log))
         event.parameters.append(TelemetryEventParam('CapabilityUsed', logger.LogLevel.STRINGS[level]))
