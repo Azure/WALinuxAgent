@@ -21,10 +21,10 @@ import tempfile
 from datetime import datetime
 
 import azurelinuxagent.common.logger as logger
-from azurelinuxagent.common.event import add_log_event, TELEMETRY_LOG_EVENT_ID, TELEMETRY_LOG_PROVIDER_ID, EventLogger, \
-    __event_logger__
+from azurelinuxagent.common.event import __event_logger__, add_log_event, TELEMETRY_LOG_EVENT_ID, \
+    TELEMETRY_LOG_PROVIDER_ID
 from azurelinuxagent.common.utils import fileutil
-from tests.tools import AgentTestCase, patch, MagicMock
+from tests.tools import AgentTestCase, MagicMock, patch
 
 _MSG_INFO = "This is our test info logging message {0} {1}"
 _MSG_WARN = "This is our test warn logging message {0} {1}"
@@ -229,6 +229,99 @@ class TestLogger(AgentTestCase):
                                                 'Microsoft.OSTCExtensions.DummyExtension-1.2.3.4')
         self.assertEqual(0, mock_save.call_count)
 
+    @patch("azurelinuxagent.common.logger.StdoutAppender.write")
+    @patch("azurelinuxagent.common.logger.TelemetryAppender.write")
+    @patch("azurelinuxagent.common.logger.ConsoleAppender.write")
+    @patch("azurelinuxagent.common.logger.FileAppender.write")
+    def test_add_appender(self, mock_file_write, mock_console_write, mock_telem_write, mock_stdout_write):
+        lg = logger.Logger(logger.DEFAULT_LOGGER, "Test_logger")
+        lg.prefix("YoloLogger")
+
+        lg.add_appender(logger.AppenderType.FILE, logger.LogLevel.INFO, path=self.log_file)
+        lg.add_appender(logger.AppenderType.TELEMETRY, logger.LogLevel.WARNING, path=add_log_event)
+        lg.add_appender(logger.AppenderType.CONSOLE, logger.LogLevel.WARNING, path="/dev/null")
+        lg.add_appender(logger.AppenderType.STDOUT, logger.LogLevel.WARNING, path=None)
+
+        counter = 0
+        for appender in lg.appenders:
+            if isinstance(appender, logger.FileAppender):
+                counter += 1
+            elif isinstance(appender, logger.TelemetryAppender):
+                counter += 1
+            elif isinstance(appender, logger.ConsoleAppender):
+                counter += 1
+            elif isinstance(appender, logger.StdoutAppender):
+                counter += 1
+
+        # All 4 appenders should have been included.
+        self.assertEquals(4, counter)
+
+        lg.warn("Test Log")
+        self.assertEqual(mock_file_write.call_count, 1)
+        self.assertEqual(mock_console_write.call_count, 1)
+        self.assertEqual(mock_telem_write.call_count, 1)
+        self.assertEqual(mock_stdout_write.call_count, 1)
+
+        lg.info("Test Log")
+        self.assertEqual(mock_file_write.call_count, 2)
+        self.assertEqual(mock_console_write.call_count, 2)
+        self.assertEqual(mock_telem_write.call_count, 2)
+        self.assertEqual(mock_stdout_write.call_count, 2)
+
+        lg.error("Test Log")
+        self.assertEqual(mock_file_write.call_count, 3)
+        self.assertEqual(mock_console_write.call_count, 3)
+        self.assertEqual(mock_telem_write.call_count, 3)
+        self.assertEqual(mock_stdout_write.call_count, 3)
+
+    @patch("azurelinuxagent.common.logger.StdoutAppender.write")
+    @patch("azurelinuxagent.common.logger.TelemetryAppender.write")
+    @patch("azurelinuxagent.common.logger.ConsoleAppender.write")
+    @patch("azurelinuxagent.common.logger.FileAppender.write")
+    def test_set_prefix(self, mock_file_write, mock_console_write, mock_telem_write, mock_stdout_write):
+        lg = logger.Logger(logger.DEFAULT_LOGGER, "Test_logger")
+        prefix = "YoloLogger"
+
+        lg.set_prefix(prefix)
+        self.assertEquals(lg.prefix, prefix)
+
+        lg.add_appender(logger.AppenderType.FILE, logger.LogLevel.INFO, path=self.log_file)
+        lg.add_appender(logger.AppenderType.TELEMETRY, logger.LogLevel.WARNING, path=add_log_event)
+        lg.add_appender(logger.AppenderType.CONSOLE, logger.LogLevel.WARNING, path="/dev/null")
+        lg.add_appender(logger.AppenderType.STDOUT, logger.LogLevel.WARNING, path=None)
+
+        lg.error("Test Log")
+
+        self.assertIn(prefix, mock_file_write.call_args[0][1])
+        self.assertIn(prefix, mock_console_write.call_args[0][1])
+        self.assertIn(prefix, mock_telem_write.call_args[0][1])
+        self.assertIn(prefix, mock_stdout_write.call_args[0][1])
+
+    @patch("azurelinuxagent.common.logger.StdoutAppender.write")
+    @patch("azurelinuxagent.common.logger.TelemetryAppender.write")
+    @patch("azurelinuxagent.common.logger.ConsoleAppender.write")
+    @patch("azurelinuxagent.common.logger.FileAppender.write")
+    def test_nested_logger(self, mock_file_write, mock_console_write, mock_telem_write, mock_stdout_write):
+        logger.add_logger_appender(logger.AppenderType.FILE, logger.LogLevel.INFO, path=self.log_file)
+        logger.add_logger_appender(logger.AppenderType.TELEMETRY, logger.LogLevel.WARNING, path=add_log_event)
+        logger.add_logger_appender(logger.AppenderType.CONSOLE, logger.LogLevel.WARNING, path="/dev/null")
+        logger.add_logger_appender(logger.AppenderType.STDOUT, logger.LogLevel.WARNING)
+        logger.set_prefix("DefaultLogger")
+
+        child_prefix = "YoloLogger"
+        lg = logger.Logger(logger.DEFAULT_LOGGER, child_prefix)
+
+        lg.error("Test Log")
+        self.assertEqual(mock_file_write.call_count, 1)
+        self.assertEqual(mock_console_write.call_count, 1)
+        self.assertEqual(mock_telem_write.call_count, 1)
+        self.assertEqual(mock_stdout_write.call_count, 1)
+
+        self.assertIn(child_prefix, mock_file_write.call_args[0][1])
+        self.assertIn(child_prefix, mock_console_write.call_args[0][1])
+        self.assertIn(child_prefix, mock_telem_write.call_args[0][1])
+        self.assertIn(child_prefix, mock_stdout_write.call_args[0][1])
+
     @patch("azurelinuxagent.common.event.send_logs_to_telemetry", return_value=True)
     @patch('azurelinuxagent.common.logger.Logger.error')
     @patch('azurelinuxagent.common.logger.Logger.warn')
@@ -256,45 +349,41 @@ class TestLogger(AgentTestCase):
         logger.add_logger_appender(logger.AppenderType.FILE, logger.LogLevel.INFO, path="/dev/null")
         logger.add_logger_appender(logger.AppenderType.TELEMETRY, logger.LogLevel.WARNING, path=add_log_event)
 
-        # Calling logger.warn 1000 times would cause the telemetry appender to writing 1000 events into the events dir.
         for i in range(1000):
             logger.warn('Test Log - {0} - 1 - Warning'.format(i))
 
         exception_caught = False
 
-        # #1035 was caused due to too many files being written in an error condition. Adding one more here would break
+        # #1035 was caused due to too many files being written in an error condition. Adding even one more here broke
         # the camels back earlier. This should be resolved now.
         try:
-            for i in range(1000):
+            for i in range(10):
+                logger.warn('Test Log - {0} - 2 - Warning'.format(i))
+        except RuntimeError:
+            exception_caught = True
+
+        self.assertFalse(exception_caught, msg="Caught a Runtime Error. This should not have been raised.")
+
+    @patch("azurelinuxagent.common.event.send_logs_to_telemetry", return_value=True)
+    @patch("azurelinuxagent.common.conf.get_lib_dir")
+    def test_telemetry_logger_check_all_file_logs_written_when_events_gt_1000(self, mock_lib_dir, *_):
+        mock_lib_dir.return_value = self.lib_dir
+        __event_logger__.event_dir = self.event_dir
+        no_of_log_statements = 1100
+        exception_caught = False
+
+        logger.add_logger_appender(logger.AppenderType.FILE, logger.LogLevel.INFO, path=self.log_file)
+        logger.add_logger_appender(logger.AppenderType.TELEMETRY, logger.LogLevel.WARNING, path=add_log_event)
+
+        # Calling logger.warn no_of_log_statements times would cause the telemetry appender to writing
+        # 1000 events into the events dir, and then drop the remaining events. It should not generate the RuntimeError
+        try:
+            for i in range(0, no_of_log_statements):
                 logger.warn('Test Log - {0} - 1 - Warning'.format(i))
         except RuntimeError:
             exception_caught = True
 
-        self.assertFalse(exception_caught, msg="Caught a Runtime Error")
-
-    @patch("azurelinuxagent.common.event.send_logs_to_telemetry", return_value=True)
-    @patch("azurelinuxagent.common.conf.get_lib_dir")
-    def test_telemetry_logger_verifying_all_logs_get_written(self, mock_lib_dir, *_):
-        mock_lib_dir.return_value = self.lib_dir
-        __event_logger__.event_dir = self.event_dir
-        no_of_log_statements = 1100
-
-        logger.add_logger_appender(logger.AppenderType.FILE, logger.LogLevel.INFO, path=self.log_file)
-        logger.add_logger_appender(logger.AppenderType.TELEMETRY, logger.LogLevel.WARNING, path=add_log_event)
-        exception_caught = False
-        print(self.log_file)
-
-        # Calling logger.warn 1100 times would cause the telemetry appender to writing 1000 events into the events dir,
-        # and then drop the remaining 100 events. It sould not generate the RuntimeError
-
-        for i in range(0, 1000):
-            logger.warn('Test Log - {0} - 1 - Warning'.format(i))
-        try:
-            logger.warn('Test Log - {0} - 1 - Warning'.format(1001))
-        except RuntimeError:
-            exception_caught = True
-
-        self.assertFalse(exception_caught, msg="Caught a Runtime Error")
+        self.assertFalse(exception_caught, msg="Caught a Runtime Error. This should not have been raised.")
         self.assertEqual(1000, len(os.listdir(__event_logger__.event_dir)))
 
         try:
@@ -305,4 +394,5 @@ class TestLogger(AgentTestCase):
                 # Subtracting 1 as range is exclusive of the upper bound
                 self.assertIn("WARNING Test Log - {0} - 1 - Warning".format(no_of_log_statements - 1), logcontent[-1])
         except Exception as e:
-            self.assertFalse(True, "The log file looks like it isn't correctly setup for this test. Take a look. {0}".format(e))
+            self.assertFalse(True, "The log file looks like it isn't correctly setup for this test. "
+                                   "Take a look. {0}".format(e))

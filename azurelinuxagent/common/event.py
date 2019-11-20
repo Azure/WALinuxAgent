@@ -233,8 +233,8 @@ class EventLogger(object):
 
         existing_events = os.listdir(self.event_dir)
         if len(existing_events) >= MAX_NUMBER_OF_EVENTS:
-            logger.warn("Too many files under: {0}, current count:  {1}, removing oldest".format(
-                                     self.event_dir, len(existing_events)))
+            logger.periodic_warn(logger.EVERY_MINUTE, "[PERIODIC] Too many files under: {0}, current count:  {1}, "
+                                                      "removing oldest".format(self.event_dir, len(existing_events)))
             existing_events.sort()
             oldest_files = existing_events[:-999]
             try:
@@ -252,8 +252,6 @@ class EventLogger(object):
         except IOError as e:
             msg = "Failed to write events to file: {0}".format(e)
             raise EventError(msg)
-
-        print("add_log_event: ", data.encode("utf-8"))
 
     def reset_periodic(self):
         self.periodic_events = {}
