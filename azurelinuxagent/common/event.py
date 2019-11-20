@@ -23,19 +23,21 @@ import sys
 import threading
 import time
 import traceback
+from collections import namedtuple
 from datetime import datetime
 
 import azurelinuxagent.common.conf as conf
 import azurelinuxagent.common.logger as logger
 from azurelinuxagent.common.exception import EventError
-from azurelinuxagent.common.future import ustr
-from azurelinuxagent.common.datacontract import get_properties
+from azurelinuxagent.common.future import ustr, OrderedDict
+from azurelinuxagent.common.datacontract import get_properties, DataContractList
 from azurelinuxagent.common.telemetryevent import TelemetryEventParam, TelemetryEvent
 from azurelinuxagent.common.utils import fileutil, textutil
 from azurelinuxagent.common.version import CURRENT_VERSION, CURRENT_AGENT
 
 _EVENT_MSG = "Event: name={0}, op={1}, message={2}, duration={3}"
 TELEMETRY_EVENT_PROVIDER_ID = "69B669B9-4AF8-4C50-BDC4-6006FA76E975"
+TELEMETRY_METRICS_EVENT_ID = 4
 
 # Store the last retrieved container id as an environment variable to be shared between threads for telemetry purposes
 CONTAINER_ID_ENV_VARIABLE = "AZURE_GUEST_AGENT_CONTAINER_ID"
@@ -281,16 +283,17 @@ class EventLogger(object):
 
     def _add_event(self, duration, evt_type, is_internal, is_success, message, name, op, version, event_id):
         event = TelemetryEvent(event_id, TELEMETRY_EVENT_PROVIDER_ID)
-        event.parameters.append(TelemetryEventParam('Name', name))
-        event.parameters.append(TelemetryEventParam('Version', str(version)))
-        event.parameters.append(TelemetryEventParam('IsInternal', is_internal))
-        event.parameters.append(TelemetryEventParam('Operation', op))
-        event.parameters.append(TelemetryEventParam('OperationSuccess', is_success))
-        event.parameters.append(TelemetryEventParam('Message', message))
-        event.parameters.append(TelemetryEventParam('Duration', duration))
-        event.parameters.append(TelemetryEventParam('ExtensionType', evt_type))
 
-        self.add_default_parameters_to_event(event)
+        event.parameters.append(TelemetryEventParam('Name', str(name)))
+        event.parameters.append(TelemetryEventParam('Version', str(version)))
+        event.parameters.append(TelemetryEventParam('IsInternal', bool(is_internal)))
+        event.parameters.append(TelemetryEventParam('Operation', str(op)))
+        event.parameters.append(TelemetryEventParam('OperationSuccess', bool(is_success)))
+        event.parameters.append(TelemetryEventParam('Message', str(message)))
+        event.parameters.append(TelemetryEventParam('Duration', int(duration)))
+        event.parameters.append(TelemetryEventParam('ExtensionType', str(evt_type)))
+
+        event.parameters = self.add_default_parameters_to_event(event.parameters)
         data = get_properties(event)
         try:
             self.save_event(json.dumps(data))
@@ -305,7 +308,7 @@ class EventLogger(object):
         event.parameters.append(TelemetryEventParam('Context2', ''))
         event.parameters.append(TelemetryEventParam('Context3', ''))
 
-        self.add_default_parameters_to_event(event)
+        event.parameters = self.add_default_parameters_to_event(event.parameters)
         data = get_properties(event)
         try:
             self.save_event(json.dumps(data))
@@ -327,13 +330,13 @@ class EventLogger(object):
             message = "Metric {0}/{1} [{2}] = {3}".format(category, counter, instance, value)
             _log_event(AGENT_NAME, "METRIC", message, 0)
 
-        event = TelemetryEvent(4, "69B669B9-4AF8-4C50-BDC4-6006FA76E975")
-        event.parameters.append(TelemetryEventParam('Category', category))
-        event.parameters.append(TelemetryEventParam('Counter', counter))
-        event.parameters.append(TelemetryEventParam('Instance', instance))
-        event.parameters.append(TelemetryEventParam('Value', value))
+        event = TelemetryEvent(TELEMETRY_METRICS_EVENT_ID, TELEMETRY_EVENT_PROVIDER_ID)
+        event.parameters.append(TelemetryEventParam('Category', str(category)))
+        event.parameters.append(TelemetryEventParam('Counter', str(counter)))
+        event.parameters.append(TelemetryEventParam('Instance', str(instance)))
+        event.parameters.append(TelemetryEventParam('Value', float(value)))
 
-        self.add_default_parameters_to_event(event)
+        event.parameters = self.add_default_parameters_to_event(event.parameters)
         data = get_properties(event)
         try:
             self.save_event(json.dumps(data))
@@ -365,26 +368,51 @@ class EventLogger(object):
             return message
 
     @staticmethod
-    def add_default_parameters_to_event(event, set_default_values=False):
-        # We write the GAVersion here rather than add it in azurelinuxagent.ga.monitor.MonitorHandler.add_sysinfo
-        # as there could be a possibility of events being sent with newer version of the agent, rather than the agent
-        # version generating the event.
-        # Old behavior example: V1 writes the event on the disk and finds an update immediately, and updates. Now the
-        # new monitor thread would pick up the events from the disk and send it with the CURRENT_AGENT, which would have
-        # newer version of the agent. This causes confusion.
-        #
-        # ContainerId can change due to live migration and we want to preserve the container Id of the container writing
-        # the event, rather than sending the event.
-        # OpcodeName: This is used as the actual time of event generation.
+    def add_default_parameters_to_event(event_parameters, set_values_for_agent=True):
+        """
+        Default fields are only populated by Agent and not the extension. Agent will fill up any event if they don't
+        have the default params. Example: GAVersion and ContainerId are populated for agent events on the fly,
+        but not for extension events. Add it if it's missing.
 
-        default_parameters = [("GAVersion", CURRENT_AGENT), ('ContainerId', get_container_id_from_env()),
-                              ('OpcodeName', datetime.utcnow().__str__()),
-                              ('EventTid', threading.current_thread().ident),
-                              ('EventPid', os.getpid()), ("TaskName", threading.current_thread().getName()),
-                              ("KeywordName", '')]
+        We write the GAVersion here rather than add it in azurelinuxagent.ga.monitor.MonitorHandler.add_sysinfo
+        as there could be a possibility of events being sent with newer version of the agent, rather than the agent
+        version generating the event.
+        # Old behavior example: V1 writes the event on the disk and finds an update immediately, and updates. Now the
+        new monitor thread would pick up the events from the disk and send it with the CURRENT_AGENT, which would have
+        newer version of the agent. This causes confusion.
+
+        ContainerId can change due to live migration and we want to preserve the container Id of the container writing
+        the event, rather than sending the event.
+        OpcodeName - This is used as the actual time of event generation.
+
+        :param event_parameters: List of parameters of the event.
+        :param set_values_for_agent: Need default values populated or not. Extensions need only GAVersion and
+                                            ContainerId to be populated and others should be
+        :return: Event with default parameters populated (either values for agent or extension)
+        """
+        DefaultParameter = namedtuple('DefaultParameter', ['name', 'value'])
+        default_parameters = [DefaultParameter("GAVersion", CURRENT_AGENT),
+                              DefaultParameter('ContainerId', get_container_id_from_env()),
+                              DefaultParameter('OpcodeName', datetime.utcnow().__str__() if set_values_for_agent else ""),
+                              DefaultParameter('EventTid', threading.current_thread().ident if set_values_for_agent else 0),
+                              DefaultParameter('EventPid', os.getpid() if set_values_for_agent else 0),
+                              DefaultParameter("TaskName", threading.current_thread().getName() if set_values_for_agent else ""),
+                              DefaultParameter("KeywordName", '')]
+
+        # Converting the event_parameters into a dictionary as it helps to easily look up and get values
+        param_names = OrderedDict([(param.name, param.value) for param in event_parameters])
 
         for param in default_parameters:
-            event.parameters.append(TelemetryEventParam(param[0], param[1]))
+            if param.name not in param_names or set_values_for_agent:
+                # If set_values_for_agent, we disregard any values already set for an existing default property and
+                # replaces it with a latest entry.
+                param_names[param.name] = param.value
+
+        parameters = DataContractList(TelemetryEventParam)
+        for name, value in param_names.items():
+            parameters.append(TelemetryEventParam(name, value))
+
+        return parameters
 
 
 __event_logger__ = EventLogger()
@@ -435,7 +463,11 @@ def report_metric(category, counter, instance, value, log_event=False, reporter=
         message = "Metric {0}/{1} [{2}] = {3}".format(category, counter, instance, value)
         _log_event(AGENT_NAME, "METRIC", message, 0)
         return
-    reporter.add_metric(category, counter, instance, value, log_event)
+    try:
+        reporter.add_metric(category, counter, instance, float(value), log_event)
+    except ValueError:
+        logger.periodic_warn(logger.EVERY_HALF_HOUR, "[PERIODIC] Cannot cast the metric value. Details of the Metric - "
+                                                     "{0}/{1} [{2}] = {3}".format(category, counter, instance, value))
 
 
 def add_event(name, op=WALAEventOperation.Unknown, is_success=True, duration=0, version=str(CURRENT_VERSION), message="",
