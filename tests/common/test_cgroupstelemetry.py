@@ -19,8 +19,6 @@ import os
 import random
 import time
 
-from mock import patch
-
 from azurelinuxagent.common.cgroup import CGroup
 from azurelinuxagent.common.cgroupconfigurator import CGroupConfigurator
 from azurelinuxagent.common.cgroupstelemetry import CGroupsTelemetry, Metric
@@ -29,7 +27,7 @@ from azurelinuxagent.common.protocol.restapi import ExtHandlerProperties, ExtHan
 from azurelinuxagent.ga.exthandlers import ExtHandlerInstance
 from nose.plugins.attrib import attr
 from tests.tools import AgentTestCase, skip_if_predicate_false, skip_if_predicate_true, \
-                        are_cgroups_enabled, is_trusty_in_travis, i_am_root
+                        are_cgroups_enabled, is_trusty_in_travis, i_am_root, patch
 
 
 def raise_ioerror(*_):

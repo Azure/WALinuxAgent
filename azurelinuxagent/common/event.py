@@ -237,9 +237,10 @@ class EventLogger(object):
         if len(existing_events) >= MAX_NUMBER_OF_EVENTS:
             logger.periodic_warn(logger.EVERY_MINUTE, "[PERIODIC] Too many files under: {0}, current count:  {1}, "
                                                       "removing oldest".format(self.event_dir, len(existing_events)))
-            existing_events.sort()
-            oldest_files = existing_events[:-999]
             try:
+                existing_events = os.listdir(self.event_dir)
+                existing_events.sort()
+                oldest_files = existing_events[:-999]
                 for event_file in oldest_files:
                     os.remove(os.path.join(self.event_dir, event_file))
             except IOError as e:
