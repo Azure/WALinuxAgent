@@ -234,8 +234,7 @@ class TestLogger(AgentTestCase):
     @patch("azurelinuxagent.common.logger.ConsoleAppender.write")
     @patch("azurelinuxagent.common.logger.FileAppender.write")
     def test_add_appender(self, mock_file_write, mock_console_write, mock_telem_write, mock_stdout_write):
-        lg = logger.Logger(logger.DEFAULT_LOGGER, "Test_logger")
-        lg.prefix("YoloLogger")
+        lg = logger.Logger(logger.DEFAULT_LOGGER, "YoloLogger")
 
         lg.add_appender(logger.AppenderType.FILE, logger.LogLevel.INFO, path=self.log_file)
         lg.add_appender(logger.AppenderType.TELEMETRY, logger.LogLevel.WARNING, path=add_log_event)
@@ -279,7 +278,7 @@ class TestLogger(AgentTestCase):
     @patch("azurelinuxagent.common.logger.ConsoleAppender.write")
     @patch("azurelinuxagent.common.logger.FileAppender.write")
     def test_set_prefix(self, mock_file_write, mock_console_write, mock_telem_write, mock_stdout_write):
-        lg = logger.Logger(logger.DEFAULT_LOGGER, "Test_logger")
+        lg = logger.Logger(logger.DEFAULT_LOGGER)
         prefix = "YoloLogger"
 
         lg.set_prefix(prefix)
@@ -344,6 +343,8 @@ class TestLogger(AgentTestCase):
         self.assertEqual(1, mock_warn.call_count)
         self.assertEqual(0, mock_error.call_count)
 
+    @patch("azurelinuxagent.common.logger.StdoutAppender.write")
+    @patch("azurelinuxagent.common.logger.ConsoleAppender.write")
     @patch("azurelinuxagent.common.event.send_logs_to_telemetry", return_value=True)
     def test_telemetry_logger_verify_maximum_recursion_depths_doesnt_happen(self, *_):
         logger.add_logger_appender(logger.AppenderType.FILE, logger.LogLevel.INFO, path="/dev/null")
@@ -364,6 +365,8 @@ class TestLogger(AgentTestCase):
 
         self.assertFalse(exception_caught, msg="Caught a Runtime Error. This should not have been raised.")
 
+    @patch("azurelinuxagent.common.logger.StdoutAppender.write")
+    @patch("azurelinuxagent.common.logger.ConsoleAppender.write")
     @patch("azurelinuxagent.common.event.send_logs_to_telemetry", return_value=True)
     @patch("azurelinuxagent.common.conf.get_lib_dir")
     def test_telemetry_logger_check_all_file_logs_written_when_events_gt_1000(self, mock_lib_dir, *_):
@@ -371,15 +374,17 @@ class TestLogger(AgentTestCase):
         __event_logger__.event_dir = self.event_dir
         no_of_log_statements = 1100
         exception_caught = False
+        prefix = "YoloLogger"
 
-        logger.add_logger_appender(logger.AppenderType.FILE, logger.LogLevel.INFO, path=self.log_file)
-        logger.add_logger_appender(logger.AppenderType.TELEMETRY, logger.LogLevel.WARNING, path=add_log_event)
+        lg = logger.Logger(logger.DEFAULT_LOGGER, prefix)
+        lg.add_appender(logger.AppenderType.FILE, logger.LogLevel.INFO, path=self.log_file)
+        lg.add_appender(logger.AppenderType.TELEMETRY, logger.LogLevel.WARNING, path=add_log_event)
 
         # Calling logger.warn no_of_log_statements times would cause the telemetry appender to writing
         # 1000 events into the events dir, and then drop the remaining events. It should not generate the RuntimeError
         try:
             for i in range(0, no_of_log_statements):
-                logger.warn('Test Log - {0} - 1 - Warning'.format(i))
+                lg.warn('Test Log - {0} - 1 - Warning'.format(i))
         except RuntimeError:
             exception_caught = True
 
@@ -392,7 +397,8 @@ class TestLogger(AgentTestCase):
 
                 # Checking the last log entry.
                 # Subtracting 1 as range is exclusive of the upper bound
-                self.assertIn("WARNING Test Log - {0} - 1 - Warning".format(no_of_log_statements - 1), logcontent[-1])
+                self.assertIn("WARNING {1} Test Log - {0} - 1 - Warning".format(no_of_log_statements - 1, prefix),
+                              logcontent[-1])
         except Exception as e:
             self.assertFalse(True, "The log file looks like it isn't correctly setup for this test. "
                                    "Take a look. {0}".format(e))
