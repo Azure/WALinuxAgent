@@ -88,7 +88,7 @@ class Logger(object):
             msg = msg_format.format(*args)
         else:
             msg = msg_format
-        time = datetime.now().strftime(u'%Y/%m/%d %H:%M:%S.%f')
+        time = datetime.utcnow().strftime(u'%Y/%m/%d %H:%M:%S.%f')
         level_str = LogLevel.STRINGS[level]
         if self.prefix is not None:
             log_item = u"{0} {1} {2} {3}\n".format(time, level_str, self.prefix,

@@ -16,10 +16,12 @@
 #
 
 import json
+import os
 from datetime import datetime
 
 from azurelinuxagent.common import logger
 from azurelinuxagent.common.event import add_log_event
+from azurelinuxagent.common.logger import Logger, LogLevel
 from tests.tools import AgentTestCase, patch, MagicMock
 
 _MSG_INFO = "This is our test info logging message {0} {1}"
@@ -192,3 +194,18 @@ class TestLogger(AgentTestCase):
 
             elif x['name'] == 'Context3':
                 self.assertEqual(x['value'], '')
+
+    def test_logger_should_log_in_utc(self):
+        file_name = "test.log"
+        file_path = os.path.join(self.tmp_dir, file_name)
+        test_logger = Logger()
+        test_logger.add_appender(logger.AppenderType.FILE, logger.LogLevel.INFO, path=file_path)
+
+        before_write_utc = datetime.utcnow().strftime(u'%Y/%m/%d %H:%M:%S')
+        test_logger.info("The time should be in UTC")
+
+        with open(file_path, "r") as log_file:
+            log = log_file.read()
+            time_in_file = log.split(LogLevel.STRINGS[logger.LogLevel.INFO])[0]
+
+            self.assertIn(before_write_utc, time_in_file)   # Comparing the UTC timestamp till seconds only
