@@ -211,7 +211,7 @@ class TestLogger(AgentTestCase):
                 time_in_file = datetime.strptime(log.split(LogLevel.STRINGS[logger.LogLevel.INFO])[0].strip()
                                                  , u'%Y-%m-%dT%H:%M:%S.%fZ')
             except ValueError:
-                self.fail("Ensure timestamp is of format '%Y-%m-%dT%H:%M:%S.%fZ'")
+                self.fail("Ensure timestamp follows ISO-8601 format + 'Z' for UTC")
 
             # If the time difference is > 5secs, there's a high probability that the time_in_file is in different TZ
             self.assertTrue((time_in_file-before_write_utc) <= timedelta(seconds=5))
