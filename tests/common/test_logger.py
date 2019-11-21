@@ -403,7 +403,7 @@ class TestLogger(AgentTestCase):
             exception_caught = True
 
         self.assertFalse(exception_caught, msg="Caught a Runtime Error. This should not have been raised.")
-        self.assertEqual(1000, len(os.listdir(__event_logger__.event_dir)))
+        self.assertEqual(MAX_NUMBER_OF_EVENTS, len(os.listdir(__event_logger__.event_dir)))
 
         try:
             with open(self.log_file) as logfile:
