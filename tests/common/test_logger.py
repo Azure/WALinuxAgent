@@ -17,7 +17,6 @@
 
 import json
 import os
-from datetime import datetime
 from datetime import datetime, timedelta
 
 from azurelinuxagent.common import logger
