@@ -18,6 +18,7 @@
 import json
 import os
 from datetime import datetime
+from datetime import timedelta
 
 from azurelinuxagent.common import logger
 from azurelinuxagent.common.event import add_log_event
@@ -201,11 +202,13 @@ class TestLogger(AgentTestCase):
         test_logger = Logger()
         test_logger.add_appender(logger.AppenderType.FILE, logger.LogLevel.INFO, path=file_path)
 
-        before_write_utc = datetime.utcnow().strftime(u'%Y/%m/%d %H:%M:%S')
+        before_write_utc = datetime.utcnow()
         test_logger.info("The time should be in UTC")
 
         with open(file_path, "r") as log_file:
             log = log_file.read()
-            time_in_file = log.split(LogLevel.STRINGS[logger.LogLevel.INFO])[0]
+            time_in_file = datetime.strptime(log.split(LogLevel.STRINGS[logger.LogLevel.INFO])[0].strip()
+                                             , u'%Y/%m/%d %H:%M:%S.%f')
 
-            self.assertIn(before_write_utc, time_in_file)   # Comparing the UTC timestamp till seconds only
+            # If the time difference is > 5secs, there's a high probability that the time_in_file is in different TZ
+            self.assertTrue((time_in_file-before_write_utc) <= timedelta(seconds=5))
