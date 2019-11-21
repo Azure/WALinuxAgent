@@ -22,7 +22,7 @@ from datetime import datetime
 
 import azurelinuxagent.common.logger as logger
 from azurelinuxagent.common.event import __event_logger__, add_log_event, TELEMETRY_LOG_EVENT_ID, \
-    TELEMETRY_LOG_PROVIDER_ID
+    TELEMETRY_LOG_PROVIDER_ID, MAX_NUMBER_OF_EVENTS
 from azurelinuxagent.common.utils import fileutil
 from tests.tools import AgentTestCase, MagicMock, patch
 
@@ -364,7 +364,7 @@ class TestLogger(AgentTestCase):
         logger.add_logger_appender(logger.AppenderType.FILE, logger.LogLevel.INFO, path="/dev/null")
         logger.add_logger_appender(logger.AppenderType.TELEMETRY, logger.LogLevel.WARNING, path=add_log_event)
 
-        for i in range(1000):
+        for i in range(MAX_NUMBER_OF_EVENTS):
             logger.warn('Test Log - {0} - 1 - Warning'.format(i))
 
         exception_caught = False
@@ -383,10 +383,10 @@ class TestLogger(AgentTestCase):
     @patch("azurelinuxagent.common.logger.ConsoleAppender.write")
     @patch("azurelinuxagent.common.event.send_logs_to_telemetry", return_value=True)
     @patch("azurelinuxagent.common.conf.get_lib_dir")
-    def test_telemetry_logger_check_all_file_logs_written_when_events_gt_1000(self, mock_lib_dir, *_):
+    def test_telemetry_logger_check_all_file_logs_written_when_events_gt_MAX_NUMBER_OF_EVENTS(self, mock_lib_dir, *_):
         mock_lib_dir.return_value = self.lib_dir
         __event_logger__.event_dir = self.event_dir
-        no_of_log_statements = 1100
+        no_of_log_statements = MAX_NUMBER_OF_EVENTS + 100
         exception_caught = False
         prefix = "YoloLogger"
 
