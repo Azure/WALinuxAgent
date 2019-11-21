@@ -48,6 +48,7 @@ class TestLogger(AgentTestCase):
     def tearDown(self):
         AgentTestCase.tearDown(self)
         logger.reset_periodic()
+        logger.DEFAULT_LOGGER.appenders *= 0
         fileutil.rm_dirs(self.event_dir)
 
     @patch('azurelinuxagent.common.logger.Logger.verbose')
@@ -190,7 +191,7 @@ class TestLogger(AgentTestCase):
             appender.write(logger.LogLevel.ERROR, "--unit-test-ERROR--")
             appender.write(logger.LogLevel.INFO, "--unit-test-INFO--")
 
-        self.assertEquals(5, mock.call_count)  # Only ERROR should be called.
+        self.assertEqual(5, mock.call_count)  # Only ERROR should be called.
 
     @patch("azurelinuxagent.common.event.send_logs_to_telemetry", return_value=True)
     @patch('azurelinuxagent.common.event.EventLogger.save_event')
@@ -234,7 +235,7 @@ class TestLogger(AgentTestCase):
     @patch("azurelinuxagent.common.logger.ConsoleAppender.write")
     @patch("azurelinuxagent.common.logger.FileAppender.write")
     def test_add_appender(self, mock_file_write, mock_console_write, mock_telem_write, mock_stdout_write):
-        lg = logger.Logger(logger.DEFAULT_LOGGER, "YoloLogger")
+        lg = logger.Logger(logger.DEFAULT_LOGGER, "TestLogger1")
 
         lg.add_appender(logger.AppenderType.FILE, logger.LogLevel.INFO, path=self.log_file)
         lg.add_appender(logger.AppenderType.TELEMETRY, logger.LogLevel.WARNING, path=add_log_event)
@@ -253,25 +254,25 @@ class TestLogger(AgentTestCase):
                 counter += 1
 
         # All 4 appenders should have been included.
-        self.assertEquals(4, counter)
+        self.assertEqual(4, counter)
 
         lg.warn("Test Log")
-        self.assertEqual(mock_file_write.call_count, 1)
-        self.assertEqual(mock_console_write.call_count, 1)
-        self.assertEqual(mock_telem_write.call_count, 1)
-        self.assertEqual(mock_stdout_write.call_count, 1)
+        self.assertEqual(1, mock_file_write.call_count)
+        self.assertEqual(1, mock_console_write.call_count)
+        self.assertEqual(1, mock_telem_write.call_count)
+        self.assertEqual(1, mock_stdout_write.call_count)
 
         lg.info("Test Log")
-        self.assertEqual(mock_file_write.call_count, 2)
-        self.assertEqual(mock_console_write.call_count, 2)
-        self.assertEqual(mock_telem_write.call_count, 2)
-        self.assertEqual(mock_stdout_write.call_count, 2)
+        self.assertEqual(2, mock_file_write.call_count)
+        self.assertEqual(2, mock_console_write.call_count)
+        self.assertEqual(2, mock_telem_write.call_count)
+        self.assertEqual(2, mock_stdout_write.call_count)
 
         lg.error("Test Log")
-        self.assertEqual(mock_file_write.call_count, 3)
-        self.assertEqual(mock_console_write.call_count, 3)
-        self.assertEqual(mock_telem_write.call_count, 3)
-        self.assertEqual(mock_stdout_write.call_count, 3)
+        self.assertEqual(3, mock_file_write.call_count)
+        self.assertEqual(3, mock_console_write.call_count)
+        self.assertEqual(3, mock_telem_write.call_count)
+        self.assertEqual(3, mock_stdout_write.call_count)
 
     @patch("azurelinuxagent.common.logger.StdoutAppender.write")
     @patch("azurelinuxagent.common.logger.TelemetryAppender.write")
@@ -301,25 +302,38 @@ class TestLogger(AgentTestCase):
     @patch("azurelinuxagent.common.logger.ConsoleAppender.write")
     @patch("azurelinuxagent.common.logger.FileAppender.write")
     def test_nested_logger(self, mock_file_write, mock_console_write, mock_telem_write, mock_stdout_write):
+        parent_prefix = "ParentLogger"
+        child_prefix = "ChildLogger"
+
         logger.add_logger_appender(logger.AppenderType.FILE, logger.LogLevel.INFO, path=self.log_file)
         logger.add_logger_appender(logger.AppenderType.TELEMETRY, logger.LogLevel.WARNING, path=add_log_event)
         logger.add_logger_appender(logger.AppenderType.CONSOLE, logger.LogLevel.WARNING, path="/dev/null")
         logger.add_logger_appender(logger.AppenderType.STDOUT, logger.LogLevel.WARNING)
-        logger.set_prefix("DefaultLogger")
+        logger.set_prefix(parent_prefix)
 
-        child_prefix = "YoloLogger"
         lg = logger.Logger(logger.DEFAULT_LOGGER, child_prefix)
 
         lg.error("Test Log")
-        self.assertEqual(mock_file_write.call_count, 1)
-        self.assertEqual(mock_console_write.call_count, 1)
-        self.assertEqual(mock_telem_write.call_count, 1)
-        self.assertEqual(mock_stdout_write.call_count, 1)
+        self.assertEqual(1, mock_file_write.call_count)
+        self.assertEqual(1, mock_console_write.call_count)
+        self.assertEqual(1, mock_telem_write.call_count)
+        self.assertEqual(1, mock_stdout_write.call_count)
 
         self.assertIn(child_prefix, mock_file_write.call_args[0][1])
         self.assertIn(child_prefix, mock_console_write.call_args[0][1])
         self.assertIn(child_prefix, mock_telem_write.call_args[0][1])
         self.assertIn(child_prefix, mock_stdout_write.call_args[0][1])
+
+        logger.error("Test Log")
+        self.assertEqual(2, mock_file_write.call_count)
+        self.assertEqual(2, mock_console_write.call_count)
+        self.assertEqual(2, mock_telem_write.call_count)
+        self.assertEqual(2, mock_stdout_write.call_count)
+
+        self.assertIn(parent_prefix, mock_file_write.call_args[0][1])
+        self.assertIn(parent_prefix, mock_console_write.call_args[0][1])
+        self.assertIn(parent_prefix, mock_telem_write.call_args[0][1])
+        self.assertIn(parent_prefix, mock_stdout_write.call_args[0][1])
 
     @patch("azurelinuxagent.common.event.send_logs_to_telemetry", return_value=True)
     @patch('azurelinuxagent.common.logger.Logger.error')
@@ -376,15 +390,15 @@ class TestLogger(AgentTestCase):
         exception_caught = False
         prefix = "YoloLogger"
 
-        lg = logger.Logger(logger.DEFAULT_LOGGER, prefix)
-        lg.add_appender(logger.AppenderType.FILE, logger.LogLevel.INFO, path=self.log_file)
-        lg.add_appender(logger.AppenderType.TELEMETRY, logger.LogLevel.WARNING, path=add_log_event)
+        logger.add_logger_appender(logger.AppenderType.FILE, logger.LogLevel.INFO, path=self.log_file)
+        logger.add_logger_appender(logger.AppenderType.TELEMETRY, logger.LogLevel.WARNING, path=add_log_event)
+        logger.set_prefix(prefix)
 
         # Calling logger.warn no_of_log_statements times would cause the telemetry appender to writing
         # 1000 events into the events dir, and then drop the remaining events. It should not generate the RuntimeError
         try:
             for i in range(0, no_of_log_statements):
-                lg.warn('Test Log - {0} - 1 - Warning'.format(i))
+                logger.warn('Test Log - {0} - 1 - Warning'.format(i))
         except RuntimeError:
             exception_caught = True
 
@@ -399,6 +413,97 @@ class TestLogger(AgentTestCase):
                 # Subtracting 1 as range is exclusive of the upper bound
                 self.assertIn("WARNING {1} Test Log - {0} - 1 - Warning".format(no_of_log_statements - 1, prefix),
                               logcontent[-1])
+
+                # Checking the 1001st log entry. We know that 1001st entry would generate a PERIODIC message of too many
+                # events, which should be captured in the log file as well.
+                self.assertRegex(logcontent[1001], r"(.*WARNING\s*{0}\s*\[PERIODIC\]\s*Too many files under:.*{1}, "
+                                                   r"current count\:\s*\d+,\s*removing oldest\s*.*)".format(prefix,
+                                                                                                            self.event_dir))
         except Exception as e:
             self.assertFalse(True, "The log file looks like it isn't correctly setup for this test. "
                                    "Take a look. {0}".format(e))
+
+
+class TestAppender(AgentTestCase):
+    def setUp(self):
+        AgentTestCase.setUp(self)
+
+        self.lib_dir = tempfile.mkdtemp()
+        self.event_dir = os.path.join(self.lib_dir, "events")
+        fileutil.mkdir(self.event_dir)
+
+        self.log_file = tempfile.mkstemp(prefix="logfile-")[1]
+
+        logger.reset_periodic()
+
+    def tearDown(self):
+        AgentTestCase.tearDown(self)
+        logger.reset_periodic()
+        fileutil.rm_dirs(self.event_dir)
+        logger.DEFAULT_LOGGER.appenders *= 0
+
+    def test_console_appender(self):
+        logger.add_logger_appender(logger.AppenderType.CONSOLE, logger.LogLevel.WARNING, path=self.log_file)
+
+        logger.verbose("test-verbose")
+        with open(self.log_file) as logfile:
+            logcontent = logfile.readlines()
+            # Levels are honored and Verbose should not be written.
+            self.assertEqual(0, len(logcontent))
+
+        logger.info("test-info")
+        with open(self.log_file) as logfile:
+            logcontent = logfile.readlines()
+            # Levels are honored and Info should not be written.
+            self.assertEqual(0, len(logcontent))
+
+        # As console has a mode of w, it'll always only have 1 line only.
+        logger.warn("test-warn")
+        with open(self.log_file) as logfile:
+            logcontent = logfile.readlines()
+            self.assertEqual(1, len(logcontent))
+            self.assertRegex(logcontent[0], r"(.*WARNING\s*test-warn.*)")
+
+        logger.error("test-error")
+        with open(self.log_file) as logfile:
+            logcontent = logfile.readlines()
+            # Levels are honored and Info, Verbose should not be written.
+            self.assertEqual(1, len(logcontent))
+            self.assertRegex(logcontent[0], r"(.*ERROR\s*test-error.*)")
+
+    def test_file_appender(self):
+        logger.add_logger_appender(logger.AppenderType.FILE, logger.LogLevel.INFO, path=self.log_file)
+        logger.verbose("test-verbose")
+        logger.info("test-info")
+        logger.warn("test-warn")
+        logger.error("test-error")
+
+        with open(self.log_file) as logfile:
+            logcontent = logfile.readlines()
+            # Levels are honored and Verbose should not be written.
+            self.assertEqual(3, len(logcontent))
+            self.assertRegex(logcontent[0], r"(.*INFO\s*test-info.*)")
+            self.assertRegex(logcontent[1], r"(.*WARNING\s*test-warn.*)")
+            self.assertRegex(logcontent[2], r"(.*ERROR\s*test-error.*)")
+
+    @patch("azurelinuxagent.common.event.send_logs_to_telemetry", return_value=True)
+    @patch("azurelinuxagent.common.event.EventLogger.add_log_event")
+    def test_telemetry_appender(self, mock_add_log_event, *_):
+        logger.add_logger_appender(logger.AppenderType.TELEMETRY, logger.LogLevel.WARNING, path=add_log_event)
+        logger.verbose("test-verbose")
+        logger.info("test-info")
+        logger.warn("test-warn")
+        logger.error("test-error")
+
+        self.assertEqual(2, mock_add_log_event.call_count)
+
+    @patch("azurelinuxagent.common.logger.sys.stdout.write")
+    def test_stdout_appender(self, mock_sys_stdout):
+        logger.add_logger_appender(logger.AppenderType.STDOUT, logger.LogLevel.ERROR)
+        logger.verbose("test-verbose")
+        logger.info("test-info")
+        logger.warn("test-warn")
+        logger.error("test-error")
+
+        # Validating only test-error gets logged and not others.
+        self.assertEqual(1, mock_sys_stdout.call_count)

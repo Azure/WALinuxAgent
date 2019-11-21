@@ -92,21 +92,22 @@ class Logger(object):
             how using appender_lock flag can help.
 
             logger.warn("foo")
-                |- log.warn (
+                |- log.warn() (azurelinuxagent.common.logger.Logger.warn)
                     |- log() (azurelinuxagent.common.logger.Logger.log)
-                        |- FileAppender.appender_lock sets to True and not log_appender.appender_lock is True.
+                        |- FileAppender.appender_lock is currently False not log_appender.appender_lock is True
+                            |- We sets it to True.
                         |- FileAppender.write completes.
                         |- FileAppender.appender_lock sets to False.
-                        |- TelemetryAppender.appender_lock sets to True.
-                    [A] |- TelemetryAppender.write gets called but has an error and writes a log.warn("bar").
+                        |- TelemetryAppender.appender_lock is currently False not log_appender.appender_lock is True
+                            |- We sets it to True.
+                    [A] |- TelemetryAppender.write gets called but has an error and writes a log.warn("bar")
                             |- log() (azurelinuxagent.common.logger.Logger.log)
-                            |- FileAppender.appender_lock sets to True.
+                            |- FileAppender.appender_lock is set to True (log_appender.appender_lock was false when entering).
                             |- FileAppender.write completes.
                             |- FileAppender.appender_lock sets to False.
                             |- TelemetryAppender.appender_lock is already True, not log_appender.appender_lock is False
                             Thus [A] cannot happen again if TelemetryAppender.write is not getting called. It prevents
                             faulty appenders to not get called again and again.
-
 
             :param log_appender: Appender
             :return: None

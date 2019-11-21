@@ -233,18 +233,19 @@ class EventLogger(object):
             msg = "Failed to create events folder {0}. Error: {1}".format(self.event_dir, ustr(e))
             raise EventError(msg)
 
-        existing_events = os.listdir(self.event_dir)
-        if len(existing_events) >= MAX_NUMBER_OF_EVENTS:
-            logger.periodic_warn(logger.EVERY_MINUTE, "[PERIODIC] Too many files under: {0}, current count:  {1}, "
-                                                      "removing oldest".format(self.event_dir, len(existing_events)))
-            try:
-                existing_events = os.listdir(self.event_dir)
+        try:
+            existing_events = os.listdir(self.event_dir)
+            if len(existing_events) >= MAX_NUMBER_OF_EVENTS:
+                logger.periodic_warn(logger.EVERY_MINUTE, "[PERIODIC] Too many files under: {0}, current count:  {1}, "
+                                                          "removing oldest event files".format(self.event_dir,
+                                                                                               len(existing_events)))
                 existing_events.sort()
                 oldest_files = existing_events[:-999]
                 for event_file in oldest_files:
                     os.remove(os.path.join(self.event_dir, event_file))
-            except IOError as e:
-                raise EventError(e)
+        except (IOError, OSError) as e:
+            msg = "Failed to remove old events from events folder {0}. Error: {1}".format(self.event_dir, ustr(e))
+            raise EventError(msg)
 
         filename = os.path.join(self.event_dir,
                                 ustr(int(time.time() * 1000000)))
@@ -252,7 +253,7 @@ class EventLogger(object):
             with open(filename + ".tmp", 'wb+') as hfile:
                 hfile.write(data.encode("utf-8"))
             os.rename(filename + ".tmp", filename + ".tld")
-        except IOError as e:
+        except (IOError, OSError) as e:
             msg = "Failed to write events to file: {0}".format(e)
             raise EventError(msg)
 
@@ -342,7 +343,7 @@ class EventLogger(object):
         try:
             self.save_event(json.dumps(data))
         except EventError as e:
-            logger.error("{0}", e)
+            logger.periodic_error(logger.EVERY_FIFTEEN_MINUTES, "[PERIODIC] {0}".format(ustr(e)))
 
     @staticmethod
     def _clean_up_message(message):
@@ -486,16 +487,6 @@ def add_event(name, op=WALAEventOperation.Unknown, is_success=True, duration=0, 
 
 def add_log_event(level, message, reporter=__event_logger__):
     """
-    # See #1035 for not adding warning/error statements here (any where in the call-tree).
-    The issue with #1035 was never-ending machinery generating events continuously and stretching the system.
-
-    At t=0 - Assume 999 events are already in the events folder.
-    At t=1 - Now, assuming that a new log.WARN [1] event comes in and needs to be written - when saving this event on
-    the disk `save_event` would generate another log.WARN [2] as it warns that there are too many events on the dist.
-
-    Thus, this new WARN [2] event again would propagate more WARN events to be written, thus introducing a never-ending
-    cycle of WARNs being written. It would lead to stalling of the agent
-
     :param level: LoggerLevel of the log event
     :param message: Message
     :param reporter:
