@@ -19,11 +19,8 @@ from __future__ import print_function
 
 import random
 
-from azurelinuxagent.common.cgroup import CpuCgroup, MemoryCgroup
-from azurelinuxagent.common.cgroupconfigurator import CGroupConfigurator
-from azurelinuxagent.common.cgroupstelemetry import CGroupsTelemetry
+from azurelinuxagent.common.cgroup import CpuCgroup, MemoryCgroup, CGroup
 from azurelinuxagent.common.exception import CGroupsException
-from azurelinuxagent.common.version import AGENT_NAME
 from tests.tools import *
 
 
@@ -34,297 +31,128 @@ def consume_cpu_time():
     return waste
 
 
-def make_self_cgroups():
-    """
-    Build a CGroups object for the cgroup to which this process already belongs
+class TestCGroup(AgentTestCase):
 
-    :return: CGroups containing this process
-    :rtype: CGroupConfigurator
-    """
+    def setUp(self):
+        AgentTestCase.setUp(self)
 
-    def path_maker(hierarchy, __):
-        suffix = CGroupConfigurator._get_current_process_cgroup_path(CGroupConfigurator.get_hierarchy_id('cpu'))
-        return os.path.join(BASE_CGROUPS, hierarchy, suffix)
+    def tearDown(self):
+        AgentTestCase.tearDown(self)
 
-    return CGroupConfigurator("inplace", path_maker)
+        with open(os.path.join(data_dir, "cgroups", "cpu_mount", "tasks"), mode="wb") as tasks:
+            tasks.truncate(0)
+        with open(os.path.join(data_dir, "cgroups", "memory_mount", "tasks"), mode="wb") as tasks:
+            tasks.truncate(0)
 
+    def test_correct_creation(self):
+        test_cgroup = CGroup.create("dummy_path", "cpu", "test_extension")
+        self.assertIsInstance(test_cgroup, CpuCgroup)
+        self.assertEqual(test_cgroup.controller, "cpu")
+        self.assertEqual(test_cgroup.path, "dummy_path")
+        self.assertEqual(test_cgroup.name, "test_extension")
 
-def make_root_cgroups():
-    """
-    Build a CGroups object for the topmost cgroup
+        test_cgroup = CGroup.create("dummy_path", "memory", "test_extension")
+        self.assertIsInstance(test_cgroup, MemoryCgroup)
+        self.assertEqual(test_cgroup.controller, "memory")
+        self.assertEqual(test_cgroup.path, "dummy_path")
+        self.assertEqual(test_cgroup.name, "test_extension")
 
-    :return: CGroups for most-encompassing cgroup
-    :rtype: CGroupConfigurator
-    """
+    def test_is_active(self):
+        test_cgroup = CGroup.create(os.path.join(data_dir, "cgroups", "cpu_mount"), "cpu", "test_extension")
+        self.assertEqual(False, test_cgroup.is_active())
 
-    def path_maker(hierarchy, _):
-        return os.path.join(BASE_CGROUPS, hierarchy)
+        with open(os.path.join(data_dir, "cgroups", "cpu_mount", "tasks"), mode="wb") as tasks:
+            tasks.write(str(1000).encode())
 
-    return CGroupConfigurator("root", path_maker)
+        self.assertEqual(True, test_cgroup.is_active())
 
+        test_cgroup = CGroup.create(os.path.join(data_dir, "cgroups", "memory_mount"), "memory", "test_extension")
+        self.assertEqual(False, test_cgroup.is_active())
 
-def i_am_root():
-    return os.geteuid() == 0
+        with open(os.path.join(data_dir, "cgroups", "memory_mount", "tasks"), mode="wb") as tasks:
+            tasks.write(str(1000).encode())
 
+        self.assertEqual(True, test_cgroup.is_active())
 
-@skip_if_predicate_false(lambda: False, "TODO: Need new unit tests")
-class TestCGroups(AgentTestCase):
-    @classmethod
-    def setUpClass(cls):
-        CGroupConfigurator.get_instance()
-        super(AgentTestCase, cls).setUpClass()
+    @patch("azurelinuxagent.common.logger.periodic_warn")
+    def test_is_active_file_not_present(self, patch_periodic_warn):
+        test_cgroup = CGroup.create(os.path.join(data_dir, "cgroups", "not_cpu_mount"), "cpu", "test_extension")
+        self.assertEqual(False, test_cgroup.is_active())
 
-    def test_cgroup_utilities(self):
-        """
-        Test utilities for querying cgroup metadata
-        """
-        cpu_id = CGroupConfigurator.get_hierarchy_id('cpu')
-        self.assertGreater(int(cpu_id), 0)
-        memory_id = CGroupConfigurator.get_hierarchy_id('memory')
-        self.assertGreater(int(memory_id), 0)
-        self.assertNotEqual(cpu_id, memory_id)
+        test_cgroup = CGroup.create(os.path.join(data_dir, "cgroups", "not_memory_mount"), "memory", "test_extension")
+        self.assertEqual(False, test_cgroup.is_active())
 
-    def test_telemetry_inplace(self):
-        """
-        Test raw measures and basic statistics for the cgroup in which this process is currently running.
-        """
-        cg = make_self_cgroups()
-        self.assertIn('cpu', cg.cgroups)
-        self.assertIn('memory', cg.cgroups)
-        ct = CGroupsTelemetry("test", cg)
-        cpu = CpuCgroup(ct)
-        self.assertGreater(cpu._current_system_cpu, 0)
+        self.assertEqual(0, patch_periodic_warn.call_count)
 
-        consume_cpu_time()  # Eat some CPU
-        cpu._update_cpu_data()
+    @patch("azurelinuxagent.common.logger.periodic_warn")
+    def test_is_active_incorrect_file(self, patch_periodic_warn):
+        test_cgroup = CGroup.create(os.path.join(data_dir, "cgroups", "cpu_mount", "tasks"), "cpu", "test_extension")
+        self.assertEqual(False, test_cgroup.is_active())
+        self.assertEqual(1, patch_periodic_warn.call_count)
 
-        self.assertGreater(cpu._current_cpu_total, cpu._previous_cpu_total)
-        self.assertGreater(cpu._current_system_cpu, cpu._previous_system_cpu)
-
-        percent_used = cpu._get_cpu_percent()
-        self.assertGreater(percent_used, 0)
-
-    def test_telemetry_in_place_leaf_cgroup(self):
-        """
-        Ensure this leaf (i.e. not root of cgroup tree) cgroup has distinct metrics from the root cgroup.
-        """
-        # Does nothing on systems where the default cgroup for a randomly-created process (like this test invocation)
-        # is the root cgroup.
-        cg = make_self_cgroups()
-        root = make_root_cgroups()
-        if cg.cgroups['cpu'] != root.cgroups['cpu']:
-            ct = CGroupsTelemetry("test", cg)
-            cpu = CpuCgroup(ct)
-            self.assertLess(cpu._current_cpu_total, cpu._current_system_cpu)
-
-            consume_cpu_time()  # Eat some CPU
-            time.sleep(1)  # Generate some idle time
-            cpu._update_cpu_data()
-            self.assertLess(cpu._current_cpu_total, cpu._current_system_cpu)
-
-    def exercise_telemetry_instantiation(self, test_cgroup):
-        test_extension_name = test_cgroup.name
-        CGroupsTelemetry.track_cgroup(test_cgroup)
-        self.assertIn('cpu', test_cgroup.cgroups)
-        self.assertIn('memory', test_cgroup.cgroups)
-        self.assertTrue(CGroupsTelemetry.is_tracked(test_extension_name))
-        consume_cpu_time()
-        time.sleep(1)
-        metrics, limits = CGroupsTelemetry.report_all_tracked()
-        my_metrics = metrics[test_extension_name]
-        self.assertEqual(len(my_metrics), 2)
-        for item in my_metrics:
-            metric_family, metric_name, metric_value = item
-            if metric_family == "Process":
-                self.assertEqual(metric_name, "% Processor Time")
-                self.assertGreater(metric_value, 0.0)
-            elif metric_family == "Memory":
-                self.assertEqual(metric_name, "Total Memory Usage")
-                self.assertGreater(metric_value, 100000)
-            else:
-                self.fail("Unknown metric {0}/{1} value {2}".format(metric_family, metric_name, metric_value))
-
-        my_limits = limits[test_extension_name]
-        self.assertIsInstance(my_limits, CGroupsLimits, msg="is not the correct instance")
-        self.assertGreater(my_limits.cpu_limit, 0.0)
-        self.assertGreater(my_limits.memory_limit, 0.0)
-
-    @skip_if_predicate_false(i_am_root, "Test does not run when non-root")
-    def test_telemetry_instantiation_as_superuser(self):
-        """
-        Tracking a new cgroup for an extension; collect all metrics.
-        """
-        # Record initial state
-        initial_cgroup = make_self_cgroups()
-
-        # Put the process into a different cgroup, consume some resources, ensure we see them end-to-end
-        test_cgroup = CGroupConfigurator.for_extension("agent_unittest")
-        test_cgroup.add(os.getpid())
-        self.assertNotEqual(initial_cgroup.cgroups['cpu'], test_cgroup.cgroups['cpu'])
-        self.assertNotEqual(initial_cgroup.cgroups['memory'], test_cgroup.cgroups['memory'])
-
-        self.exercise_telemetry_instantiation(test_cgroup)
-
-        # Restore initial state
-        CGroupsTelemetry.stop_tracking("agent_unittest")
-        initial_cgroup.add(os.getpid())
-
-    @skip_if_predicate_true(i_am_root, "Test does not run when root")
-    def test_telemetry_instantiation_as_normal_user(self):
-        """
-        Tracking an existing cgroup for an extension; collect all metrics.
-        """
-        self.exercise_telemetry_instantiation(make_self_cgroups())
-
-    @skip_if_predicate_true(i_am_root, "Test does not run when root")
-    @patch("azurelinuxagent.common.conf.get_cgroups_enforce_limits")
-    @patch("azurelinuxagent.common.cgroupconfigurator.CGroupConfigurator.set_cpu_limit")
-    @patch("azurelinuxagent.common.cgroupconfigurator.CGroupConfigurator.set_memory_limit")
-    def test_telemetry_instantiation_as_normal_user_with_limits(self, mock_get_cgroups_enforce_limits,
-                                                                mock_set_cpu_limit,
-                                                                mock_set_memory_limit):
-        """
-        Tracking an existing cgroup for an extension; collect all metrics.
-        """
-        mock_get_cgroups_enforce_limits.return_value = True
-
-        cg = make_self_cgroups()
-        cg.set_limits()
-        self.exercise_telemetry_instantiation(cg)
-
-    def test_cpu_telemetry(self):
-        """
-        Test Cpu telemetry class
-        """
-        cg = make_self_cgroups()
-        self.assertIn('cpu', cg.cgroups)
-        ct = CGroupsTelemetry('test', cg)
-        self.assertIs(cg, ct.cgroup)
-        cpu = CpuCgroup(ct)
-        self.assertIs(cg, cpu.cgt.cgroup)
-        ticks_before = cpu._current_cpu_total
-        consume_cpu_time()
-        time.sleep(1)
-        cpu._update_cpu_data()
-        ticks_after = cpu._current_cpu_total
-        self.assertGreater(ticks_after, ticks_before)
-        p2 = cpu._get_cpu_percent()
-        self.assertGreater(p2, 0)
-        # when running under PyCharm, this is often > 100
-        # on a multi-core machine
-        self.assertLess(p2, 200)
-
-    def test_memory_telemetry(self):
-        """
-        Test Memory telemetry class
-        """
-        cg = make_self_cgroups()
-        raw_usage_file_contents = cg.get_file_contents('memory', 'memory.usage_in_bytes')
-        self.assertIsNotNone(raw_usage_file_contents)
-        self.assertGreater(len(raw_usage_file_contents), 0)
-        self.assertIn('memory', cg.cgroups)
-        ct = CGroupsTelemetry('test', cg)
-        self.assertIs(cg, ct.cgroup)
-        memory = MemoryCgroup(ct)
-        usage_in_bytes = memory._get_memory_usage()
-        self.assertGreater(usage_in_bytes, 100000)
-
-    def test_format_memory_value(self):
-        """
-        Test formatting of memory amounts into human-readable units
-        """
-        self.assertEqual(-1, CGroupConfigurator._format_memory_value('bytes', None))
-        self.assertEqual(2048, CGroupConfigurator._format_memory_value('kilobytes', 2))
-        self.assertEqual(0, CGroupConfigurator._format_memory_value('kilobytes', 0))
-        self.assertEqual(2048000, CGroupConfigurator._format_memory_value('kilobytes', 2000))
-        self.assertEqual(2048 * 1024, CGroupConfigurator._format_memory_value('megabytes', 2))
-        self.assertEqual((1024 + 512) * 1024 * 1024, CGroupConfigurator._format_memory_value('gigabytes', 1.5))
-        self.assertRaises(CGroupsException, CGroupConfigurator._format_memory_value, 'KiloBytes', 1)
-
-    @patch('azurelinuxagent.common.event.add_event')
-    @patch('azurelinuxagent.common.conf.get_cgroups_enforce_limits')
-    @patch('azurelinuxagent.common.cgroupconfigurator.CGroupConfigurator.set_memory_limit')
-    @patch('azurelinuxagent.common.cgroupconfigurator.CGroupConfigurator.set_cpu_limit')
-    @patch('azurelinuxagent.common.cgroupapi.FileSystemCgroupsApi._try_mkdir')
-    def assert_limits(self, _, patch_set_cpu, patch_set_memory_limit, patch_get_enforce, patch_add_event,
-                      ext_name,
-                      expected_cpu_limit,
-                      limits_enforced=True,
-                      exception_raised=False):
-
-        should_limit = expected_cpu_limit > 0
-        patch_get_enforce.return_value = limits_enforced
-
-        if exception_raised:
-            patch_set_memory_limit.side_effect = CGroupsException('set_memory_limit error')
-
-        try:
-            cg = CGroupConfigurator.for_extension(ext_name)
-            cg.set_limits()
-            if exception_raised:
-                self.fail('exception expected')
-        except CGroupsException:
-            if not exception_raised:
-                self.fail('exception not expected')
-
-        self.assertEqual(should_limit, patch_set_cpu.called)
-        self.assertEqual(should_limit, patch_set_memory_limit.called)
-        self.assertEqual(should_limit, patch_add_event.called)
-
-        if should_limit:
-            actual_cpu_limit = patch_set_cpu.call_args[0][0]
-            actual_memory_limit = patch_set_memory_limit.call_args[0][0]
-            event_kw_args = patch_add_event.call_args[1]
-
-            self.assertEqual(expected_cpu_limit, actual_cpu_limit)
-            self.assertTrue(actual_memory_limit >= DEFAULT_MEM_LIMIT_MIN_MB)
-            self.assertEqual(event_kw_args['op'], 'SetCGroupsLimits')
-            self.assertEqual(event_kw_args['is_success'], not exception_raised)
-            self.assertTrue('{0}%'.format(expected_cpu_limit) in event_kw_args['message'])
-            self.assertTrue(ext_name in event_kw_args['message'])
-            self.assertEqual(exception_raised, 'set_memory_limit error' in event_kw_args['message'])
-
-    def test_limits(self):
-        self.assert_limits(ext_name="normal_extension", expected_cpu_limit=40)
-        self.assert_limits(ext_name="customscript_extension", expected_cpu_limit=-1)
-        self.assert_limits(ext_name=AGENT_NAME, expected_cpu_limit=10)
-        self.assert_limits(ext_name="normal_extension", expected_cpu_limit=-1, limits_enforced=False)
-        self.assert_limits(ext_name=AGENT_NAME, expected_cpu_limit=-1, limits_enforced=False)
-        self.assert_limits(ext_name="normal_extension", expected_cpu_limit=40, exception_raised=True)
+        test_cgroup = CGroup.create(os.path.join(data_dir, "cgroups", "memory_mount", "tasks"), "memory", "test_extension")
+        self.assertEqual(False, test_cgroup.is_active())
+        self.assertEqual(2, patch_periodic_warn.call_count)
 
 
-@skip_if_predicate_false(lambda: False, "TODO: Need new unit tests")
-class TestCGroupsLimits(AgentTestCase):
-    @patch("azurelinuxagent.common.osutil.default.DefaultOSUtil.get_total_mem", return_value=1024)
-    def test_no_limits_passed(self, patched_get_total_mem):
-        cgroup_name = "test_cgroup"
-        limits = CGroupsLimits(cgroup_name)
-        self.assertEqual(limits.cpu_limit, CGroupsLimits.get_default_cpu_limits(cgroup_name))
-        self.assertEqual(limits.memory_limit, CGroupsLimits.get_default_memory_limits(cgroup_name))
+class TestCpuCgroup(AgentTestCase):
+    def setUp(self):
+        AgentTestCase.setUp(self)
 
-    @patch("azurelinuxagent.common.osutil.default.DefaultOSUtil.get_total_mem", return_value=1024)
-    def test_with_limits_passed(self, patched_get_total_mem):
-        cpu_limit = 50
-        memory_limit = 300
-        cgroup_name = "test_cgroup"
+    @patch("azurelinuxagent.common.osutil.default.DefaultOSUtil._get_proc_stat")
+    def test_cpu_cgroup_create(self, patch_get_proc_stat):
+        patch_get_proc_stat.return_value = fileutil.read_file(os.path.join(data_dir, "cgroups", "dummy_proc_stat"))
+        test_cpu_cg = CpuCgroup("test_extension", "dummy_path")
 
-        threshold = {"cpu": cpu_limit}
-        limits = CGroupsLimits(cgroup_name, threshold=threshold)
-        self.assertEqual(limits.cpu_limit, cpu_limit)
-        self.assertEqual(limits.memory_limit, CGroupsLimits.get_default_memory_limits(cgroup_name))
+        self.assertEqual(398488, test_cpu_cg._current_system_cpu)
+        self.assertEqual(0, test_cpu_cg._current_cpu_total)
+        self.assertEqual(0, test_cpu_cg._previous_cpu_total)
+        self.assertEqual(0, test_cpu_cg._previous_system_cpu)
 
-        threshold = {"memory": memory_limit}
-        limits = CGroupsLimits(cgroup_name, threshold=threshold)
-        self.assertEqual(limits.cpu_limit, CGroupsLimits.get_default_cpu_limits(cgroup_name))
-        self.assertEqual(limits.memory_limit, memory_limit)
+        self.assertEqual("cpu", test_cpu_cg.controller)
 
-        threshold = {"cpu": cpu_limit, "memory": memory_limit}
-        limits = CGroupsLimits(cgroup_name, threshold=threshold)
-        self.assertEqual(limits.cpu_limit, cpu_limit)
-        self.assertEqual(limits.memory_limit, memory_limit)
+    @patch("azurelinuxagent.common.osutil.default.DefaultOSUtil.get_processor_cores", return_value=1)
+    @patch("azurelinuxagent.common.osutil.default.DefaultOSUtil._get_proc_stat")
+    def test_get_cpu_usage(self, patch_get_proc_stat, *args):
+        patch_get_proc_stat.return_value = fileutil.read_file(os.path.join(data_dir, "cgroups", "dummy_proc_stat"))
+        test_cpu_cg = CpuCgroup("test_extension", os.path.join(data_dir, "cgroups", "cpu_mount"))
 
-        # Incorrect key
-        threshold = {"cpux": cpu_limit}
-        limits = CGroupsLimits(cgroup_name, threshold=threshold)
-        self.assertEqual(limits.cpu_limit, CGroupsLimits.get_default_cpu_limits(cgroup_name))
-        self.assertEqual(limits.memory_limit, CGroupsLimits.get_default_memory_limits(cgroup_name))
+        # Mocking CPU consumption
+        patch_get_proc_stat.return_value = fileutil.read_file(os.path.join(data_dir, "cgroups",
+                                                                           "dummy_proc_stat_updated"))
+
+        cpu_usage = test_cpu_cg.get_cpu_usage()
+
+        self.assertEqual(5.114, cpu_usage)
+
+    def test_get_current_cpu_total_exception_handling(self):
+        test_cpu_cg = CpuCgroup("test_extension", "dummy_path")
+        self.assertRaises(IOError, test_cpu_cg._get_current_cpu_total)
+
+        # Trying to raise ERRNO 20.
+        test_cpu_cg = CpuCgroup("test_extension", os.path.join(data_dir, "cgroups", "cpu_mount", "cpuacct.stat"))
+        self.assertRaises(CGroupsException, test_cpu_cg._get_current_cpu_total)
+
+
+class TestMemoryCgroup(AgentTestCase):
+    def test_memory_cgroup_create(self):
+        test_mem_cg = MemoryCgroup("test_extension", os.path.join(data_dir, "cgroups", "memory_mount"))
+        self.assertEqual("memory", test_mem_cg.controller)
+
+    def test_get_metrics(self):
+        test_mem_cg = MemoryCgroup("test_extension", os.path.join(data_dir, "cgroups", "memory_mount"))
+
+        memory_usage = test_mem_cg.get_memory_usage()
+        self.assertEqual(100000, memory_usage)
+
+        max_memory_usage = test_mem_cg.get_max_memory_usage()
+        self.assertEqual(1000000, max_memory_usage)
+
+    def test_get_metrics_when_files_not_present(self):
+        test_mem_cg = MemoryCgroup("test_extension", os.path.join(data_dir, "cgroups"))
+
+        memory_usage = test_mem_cg.get_memory_usage()
+        self.assertEqual(0, memory_usage)
+
+        max_memory_usage = test_mem_cg.get_max_memory_usage()
+        self.assertEqual(0, max_memory_usage)

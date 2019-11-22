@@ -16,14 +16,10 @@
 
 import azurelinuxagent.common.utils.fileutil as fileutil
 import azurelinuxagent.common.utils.shellutil as shellutil
-import azurelinuxagent.common.utils.textutil as textutil
 import azurelinuxagent.common.logger as logger
 from azurelinuxagent.common.exception import OSUtilError
 from azurelinuxagent.common.osutil.freebsd import FreeBSDOSUtil
-from azurelinuxagent.common.future import ustr
-import azurelinuxagent.common.conf as conf
 import os
-import time
 
 class NSBSDOSUtil(FreeBSDOSUtil):
 
@@ -120,12 +116,12 @@ class NSBSDOSUtil(FreeBSDOSUtil):
         shellutil.run("/usr/Firewall/sbin/nstop dhclient", chk_err=False)
 
     def get_dhcp_pid(self):
-        ret = None
+        ret = ""
         pidfile = "/var/run/dhclient.pid"
 
         if os.path.isfile(pidfile):
             ret = fileutil.read_file(pidfile, encoding='ascii')
-        return ret
+        return self._text_to_pid_list(ret)
 
     def eject_dvd(self, chk_err=True):
         pass

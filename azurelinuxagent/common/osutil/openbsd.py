@@ -35,6 +35,7 @@ UUID_PATTERN = re.compile(
     r'^\s*[A-F0-9]{8}(?:\-[A-F0-9]{4}){3}\-[A-F0-9]{12}\s*$',
     re.IGNORECASE)
 
+
 class OpenBSDOSUtil(DefaultOSUtil):
 
     def __init__(self):
@@ -56,17 +57,17 @@ class OpenBSDOSUtil(DefaultOSUtil):
         return shellutil.run('rcctl restart sshd', chk_err=False)
 
     def start_agent_service(self):
-        return shellutil.run('rcctl start waagent', chk_err=False)
+        return shellutil.run('rcctl start {0}'.format(self.service_name), chk_err=False)
 
     def stop_agent_service(self):
-        return shellutil.run('rcctl stop waagent', chk_err=False)
+        return shellutil.run('rcctl stop {0}'.format(self.service_name), chk_err=False)
 
     def register_agent_service(self):
-        shellutil.run('chmod 0555 /etc/rc.d/waagent', chk_err=False)
-        return shellutil.run('rcctl enable waagent', chk_err=False)
+        shellutil.run('chmod 0555 /etc/rc.d/{0}'.format(self.service_name), chk_err=False)
+        return shellutil.run('rcctl enable {0}'.format(self.service_name), chk_err=False)
 
     def unregister_agent_service(self):
-        return shellutil.run('rcctl disable waagent', chk_err=False)
+        return shellutil.run('rcctl disable {0}'.format(self.service_name), chk_err=False)
 
     def del_account(self, username):
         if self.is_sys_user(username):
@@ -225,9 +226,7 @@ class OpenBSDOSUtil(DefaultOSUtil):
                       "{0}".format(ifname), chk_err=False)
 
     def get_dhcp_pid(self):
-        ret, output = shellutil.run_get_output("pgrep -n dhclient",
-                                               chk_err=False)
-        return output if ret == 0 else None
+        return self._get_dhcp_pid(["pgrep", "-n", "dhclient"])
 
     def get_dvd_device(self, dev_dir='/dev'):
         pattern = r'cd[0-9]c'

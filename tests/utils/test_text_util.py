@@ -194,6 +194,18 @@ class TestTextUtil(AgentTestCase):
         self.assertNotEqual(textutil.is_str_none_or_whitespace(hex_null_1), textutil.is_str_empty(hex_null_1))
         self.assertNotEqual(textutil.is_str_none_or_whitespace(hex_null_2), textutil.is_str_empty(hex_null_2))
 
+    def test_format_memory_value(self):
+        """
+        Test formatting of memory amounts into human-readable units
+        """
+        self.assertEqual(2048, textutil.format_memory_value('kilobytes', 2))
+        self.assertEqual(0, textutil.format_memory_value('kilobytes', 0))
+        self.assertEqual(2048000, textutil.format_memory_value('kilobytes', 2000))
+        self.assertEqual(2048 * 1024, textutil.format_memory_value('megabytes', 2))
+        self.assertEqual((1024 + 512) * 1024 * 1024, textutil.format_memory_value('gigabytes', 1.5))
+        self.assertRaises(ValueError, textutil.format_memory_value, 'KiloBytes', 1)
+        self.assertRaises(TypeError, textutil.format_memory_value, 'bytes', None)
+
 
 if __name__ == '__main__':
     unittest.main()

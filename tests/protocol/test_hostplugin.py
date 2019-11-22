@@ -76,7 +76,25 @@ class TestHostPlugin(AgentTestCase):
         status_blob.vm_status = restapi.VMStatus(message="Ready", status="Ready")
         return status_blob
 
+    def _relax_timestamp(self, headers):
+        new_headers = []
+
+        for header in headers:
+            header_value = header['headerValue']
+            if header['headerName'] == 'x-ms-date':
+                timestamp = header['headerValue']
+                header_value = timestamp[:timestamp.rfind(":")]
+
+            new_header = {header['headerName']: header_value}
+            new_headers.append(new_header)
+
+        return new_headers
+
     def _compare_data(self, actual, expected):
+        # Remove seconds from the timestamps for testing purposes, that level or granularity introduces test flakiness
+        actual['headers'] = self._relax_timestamp(actual['headers'])
+        expected['headers'] = self._relax_timestamp(expected['headers'])
+
         for k in iter(expected.keys()):
             if k == 'content' or k == 'requestUri':
                 if actual[k] != expected[k]:
