@@ -19,11 +19,13 @@
 # http://msdn.microsoft.com/en-us/library/cc227259%28PROT.13%29.aspx
 
 import mock
-from tests.tools import *
+from tests.tools import AgentTestCase, Mock, patch
+import unittest
 
 import azurelinuxagent.daemon.scvmm as scvmm
 from azurelinuxagent.daemon.main import *
 from azurelinuxagent.common.osutil.default import DefaultOSUtil
+
 
 class TestSCVMM(AgentTestCase):
     def test_scvmm_detection_with_file(self):

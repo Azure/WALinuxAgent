@@ -15,16 +15,20 @@
 # Requires Python 2.6+ and Openssl 1.0+
 #
 
+import os
 import socket
+import time
+import unittest
 
 import azurelinuxagent.common.osutil.bigip as osutil
 import azurelinuxagent.common.osutil.default as default
 import azurelinuxagent.common.utils.shellutil as shellutil
 
 from azurelinuxagent.common.exception import OSUtilError
+import azurelinuxagent.common.logger as logger
 from azurelinuxagent.common.osutil.bigip import BigIpOSUtil
 from .test_default import osutil_get_dhcp_pid_should_return_a_list_of_pids
-from tests.tools import *
+from tests.tools import AgentTestCase, patch
 
 
 class TestBigIpOSUtil_wait_until_mcpd_is_initialized(AgentTestCase):

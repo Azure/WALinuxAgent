@@ -20,7 +20,7 @@ import os.path
 from azurelinuxagent.agent import *
 from azurelinuxagent.common.conf import *
 
-from tests.tools import *
+from tests.tools import AgentTestCase, data_dir, Mock, patch
 
 EXPECTED_CONFIGURATION = \
 """AutoUpdate.Enabled = True
@@ -69,6 +69,7 @@ ResourceDisk.Format = True
 ResourceDisk.MountOptions = None
 ResourceDisk.MountPoint = /mnt/resource
 ResourceDisk.SwapSizeMB = 0""".split('\n')
+
 
 class TestAgent(AgentTestCase):
 

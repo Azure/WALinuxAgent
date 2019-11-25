@@ -18,11 +18,9 @@
 import json
 from datetime import datetime
 
-from mock import patch, MagicMock
-
 from azurelinuxagent.common import logger
 from azurelinuxagent.common.event import add_log_event
-from tests.tools import AgentTestCase
+from tests.tools import AgentTestCase, patch, MagicMock
 
 _MSG_INFO = "This is our test info logging message {0} {1}"
 _MSG_WARN = "This is our test warn logging message {0} {1}"
