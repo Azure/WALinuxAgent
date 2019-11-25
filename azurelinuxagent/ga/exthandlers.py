@@ -357,6 +357,8 @@ class ExtHandlersHandler(object):
                 # Reset the extension config and reload it, which will load it with the FastTrack extensions
                 self.ext_conf = self.protocol.client.get_ext_conf(read_always=True)
                 self.ext_handlers = self.ext_conf.ext_handlers
+
+                # Faking a goal state change here by passing True
                 self.handle_ext_handlers(True)
         self.last_vm_artifacts_seqno = sequence_number
 

@@ -51,7 +51,7 @@ TELEMETRY_URI = "http://{0}/machine?comp=telemetrydata"
 
 WIRE_SERVER_ADDR_FILE_NAME = "WireServer"
 INCARNATION_FILE_NAME = "Incarnation"
-SEQUENCE_NUMBER_FILE_NAME = "SequenceNumber"
+SEQUENCE_NUMBER_FILE_NAME = "ArtifactProfileSequenceNumber"
 GOAL_STATE_SOURCE_FILE_NAME = "GoalStateSource"
 GOAL_STATE_FILE_NAME = "GoalState.{0}.xml"
 HOSTING_ENV_FILE_NAME = "HostingEnvironmentConfig.xml"
@@ -929,9 +929,10 @@ class WireClient(object):
     def get_sequence_number(self):
         path = os.path.join(conf.get_lib_dir(), SEQUENCE_NUMBER_FILE_NAME)
         if os.path.exists(path):
-            return int(fileutil.read_file(path))
-        else:
-            return 0
+            sequence_number = fileutil.read_file(path)
+            if sequence_number is not None:
+                return int(fileutil.read_file(path))
+        return -1
 
     def get_use_fast_track(self):
         path = os.path.join(conf.get_lib_dir(), GOAL_STATE_SOURCE_FILE_NAME)
@@ -1089,12 +1090,12 @@ class WireClient(object):
             # Different direct channel functions report failure in different ways: by returning None, False,
             # or raising ResourceGone or InvalidContainer exceptions.
             if not ret and not not_modified:
-                logger.info("Request failed using the HostGAPlugin. switching to direct.")
+                logger.periodic_info(logger.EVERY_HOUR, "Request failed using the HostGAPlugin. switching to direct.")
         except (ResourceGoneError, InvalidContainerError) as e:
             msg = "Request failed with the current host plugin configuration." \
                   "ContainerId: {0}, role config file: {1}." \
                   "Error: {2}".format(self.host_plugin.container_id, self.host_plugin.role_config_name, ustr(e))
-            logger.info(msg)
+            logger.periodic_info(logger.EVERY_HOUR, msg)
 
         if ret or not_modified:
             return ret, etag
@@ -1102,11 +1103,7 @@ class WireClient(object):
         try:
             ret = direct_func()
         except (ResourceGoneError, InvalidContainerError) as e:
-            logger.info("Request failed with direct. Error: {0}".format(ustr(e)))
-
-        if not ret:
-            # Try through the host one more time
-            ret, etag, not_modified = host_func()
+            logger.periodic_info(logger.EVERY_HOUR, "Request failed with direct. Error: {0}".format(ustr(e)))
 
         return ret, etag
 
@@ -2003,13 +2000,13 @@ class InVMArtifactsProfile(object):
                 runtime_settings.text = json_settings
 
             config_xml = xml.tostring(root).decode()
-            self.save_config(config_xml)
+            self.save_fasttrack_extension_config(config_xml)
             extensions_config = ExtensionsConfig(config_xml)
 
             return extensions_config
         return None
 
-    def save_config(self, config_xml):
+    def save_fasttrack_extension_config(self, config_xml):
         # before we write the new file, remove all the old ones
         files_to_delete = []
         for f in os.listdir(conf.get_lib_dir()):

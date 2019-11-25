@@ -1023,7 +1023,7 @@ class TestWireClient(AgentTestCase):
 
     @patch("azurelinuxagent.common.protocol.wire.WireClient.get_goal_state")
     @patch("azurelinuxagent.common.protocol.hostplugin.HostPluginProtocol.get_artifact_request")
-    def test_get_artifacts_profile_should_retry_the_host_channel_after_reloading_goal_state(self, mock_get_artifact_request, *args):
+    def test_get_artifacts_profile_should_not_retry_the_host_channel_after_reloading_goal_state(self, mock_get_artifact_request, *args):
         mock_get_artifact_request.return_value = "dummy_url", "dummy_header"
         client = WireClient("foo.bar")
         client.ext_conf = ExtensionsConfig(None)
@@ -1044,9 +1044,9 @@ class TestWireClient(AgentTestCase):
                     with patch("azurelinuxagent.common.protocol.wire.WireClient.get_artifacts_profile_through_host",
                                wraps=client.get_artifacts_profile_through_host) as patch_host:
                         ret = client.get_artifacts_profile()
-                        self.assertIsInstance(ret, InVMArtifactsProfile)
+                        self.assertIsNone(ret)
 
-                        self.assertEquals(patch_host.call_count, 2)
+                        self.assertEquals(patch_host.call_count, 1)
                         self.assertEquals(patch_direct.call_count, 1)
                         self.assertEquals(mock_update_goal_state.call_count, 0)
 
@@ -1074,7 +1074,7 @@ class TestWireClient(AgentTestCase):
                         ret = client.get_artifacts_profile()
                         self.assertEquals(ret, None)
 
-                        self.assertEquals(patch_host.call_count, 2)
+                        self.assertEquals(patch_host.call_count, 1)
                         self.assertEquals(patch_direct.call_count, 1)
                         self.assertEquals(mock_update_goal_state.call_count, 0)
 

@@ -368,7 +368,7 @@ class TestExtension(ExtensionTestCase):
     def assert_status_files(self, goal_state_source, incarnation, sequence_number, settings_number, fast_track):
         goal_state_source_path = os.path.join(self.tmp_dir, 'GoalStateSource')
         incarnation_path = os.path.join(self.tmp_dir, 'Incarnation')
-        sequence_number_path = os.path.join(self.tmp_dir, 'SequenceNumber')
+        sequence_number_path = os.path.join(self.tmp_dir, 'ArtifactProfileSequenceNumber')
         if fast_track:
             ext_conf_path = os.path.join(self.tmp_dir, "FastTrackExtensionsConfig.{0}.xml".format(sequence_number))
         else:

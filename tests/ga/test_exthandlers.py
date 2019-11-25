@@ -75,13 +75,13 @@ class TestExtHandlers(AgentTestCase):
         config_xml = "<blah/>"
 
         # Write the config file
-        profile.save_config(config_xml)
+        profile.save_fasttrack_extension_config(config_xml)
         config_file_1 = os.path.join(self.tmp_dir, "FastTrackExtensionsConfig.5.xml")
         self.assertTrue(os.path.exists(config_file_1))
 
         # Writing the next one will delete the first
         profile.inVMArtifactsProfileBlobSeqNo = 6
-        profile.save_config(config_xml)
+        profile.save_fasttrack_extension_config(config_xml)
         config_file_2 = os.path.join(self.tmp_dir, "FastTrackExtensionsConfig.6.xml")
         self.assertTrue(os.path.exists(config_file_2))
         self.assertFalse(os.path.exists(config_file_1))
