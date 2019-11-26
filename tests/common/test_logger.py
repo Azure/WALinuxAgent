@@ -16,10 +16,12 @@
 #
 
 import json
-from datetime import datetime
+import os
+from datetime import datetime, timedelta
 
 from azurelinuxagent.common import logger
 from azurelinuxagent.common.event import add_log_event
+from azurelinuxagent.common.logger import Logger, LogLevel
 from tests.tools import AgentTestCase, patch, MagicMock
 
 _MSG_INFO = "This is our test info logging message {0} {1}"
@@ -192,3 +194,23 @@ class TestLogger(AgentTestCase):
 
             elif x['name'] == 'Context3':
                 self.assertEqual(x['value'], '')
+
+    def test_logger_should_log_in_utc(self):
+        file_name = "test.log"
+        file_path = os.path.join(self.tmp_dir, file_name)
+        test_logger = Logger()
+        test_logger.add_appender(logger.AppenderType.FILE, logger.LogLevel.INFO, path=file_path)
+
+        before_write_utc = datetime.utcnow()
+        test_logger.info("The time should be in UTC")
+
+        with open(file_path, "r") as log_file:
+            log = log_file.read()
+            try:
+                time_in_file = datetime.strptime(log.split(LogLevel.STRINGS[logger.LogLevel.INFO])[0].strip()
+                                                 , u'%Y-%m-%dT%H:%M:%S.%fZ')
+            except ValueError:
+                self.fail("Ensure timestamp follows ISO-8601 format + 'Z' for UTC")
+
+            # If the time difference is > 5secs, there's a high probability that the time_in_file is in different TZ
+            self.assertTrue((time_in_file-before_write_utc) <= timedelta(seconds=5))
