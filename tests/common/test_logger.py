@@ -256,6 +256,10 @@ class TestLogger(AgentTestCase):
         # All 4 appenders should have been included.
         self.assertEqual(4, counter)
 
+        # The write for all the loggers will get called, but the levels are honored in the individual write method
+        # itself. Each appender has its own test to validate the writing of the log message for different levels.
+        # For Reference: tests.common.test_logger.TestAppender
+
         lg.warn("Test Log")
         self.assertEqual(1, mock_file_write.call_count)
         self.assertEqual(1, mock_console_write.call_count)
@@ -302,6 +306,14 @@ class TestLogger(AgentTestCase):
     @patch("azurelinuxagent.common.logger.ConsoleAppender.write")
     @patch("azurelinuxagent.common.logger.FileAppender.write")
     def test_nested_logger(self, mock_file_write, mock_console_write, mock_telem_write, mock_stdout_write):
+        """
+        The purpose of this test is to see if the logger gets correctly created when passed it another logger and also
+        if the appender correctly gets the messages logged. This is how the ExtHandlerInstance logger works.
+
+        I initialize the default logger(logger), then create a new logger(lg) from it, and then log using logger & lg.
+        See if both logs are flowing through or not.
+        """
+
         parent_prefix = "ParentLogger"
         child_prefix = "ChildLogger"
 
@@ -336,26 +348,29 @@ class TestLogger(AgentTestCase):
         self.assertIn(parent_prefix, mock_stdout_write.call_args[0][1])
 
     @patch("azurelinuxagent.common.event.send_logs_to_telemetry", return_value=True)
-    @patch('azurelinuxagent.common.logger.Logger.error')
-    @patch('azurelinuxagent.common.logger.Logger.warn')
-    def test_telemetry_logger_verify_not_logging_errors_warnings(self, mock_warn, mock_error, *args):
-        appender = logger.TelemetryAppender(logger.LogLevel.WARNING, add_log_event)
+    @patch("azurelinuxagent.common.conf.get_lib_dir")
+    def test_telemetry_logger_add_log_event(self, mock_lib_dir, *_):
+        mock_lib_dir.return_value = self.lib_dir
+        __event_logger__.event_dir = self.event_dir
+        prefix = "YoloLogger"
 
-        with patch('azurelinuxagent.common.event.EventLogger.save_event') as mock_save:
-            appender.write(logger.LogLevel.WARNING, 'Cgroup controller "memory" is not mounted. '
-                                                    'Microsoft.OSTCExtensions.DummyExtension-1.2.3.4')
-            self.assertEqual(1, mock_save.call_count)
-            self.assertEqual(0, mock_warn.call_count)
-            self.assertEqual(0, mock_error.call_count)
+        logger.add_logger_appender(logger.AppenderType.TELEMETRY, logger.LogLevel.WARNING, path=add_log_event)
+        logger.set_prefix(prefix)
 
-        # Writing 2000 events should generate only one more log event due to too many files. #1035 was caused due to
-        # too many files being written in an error condition (earlier code would write 1000 files in this case).
-        for _ in range(2000):
-            appender.write(logger.LogLevel.WARNING, 'Cgroup controller "memory" is not mounted. '
-                                                    'Microsoft.OSTCExtensions.DummyExtension-1.2.3.4')
+        logger.warn('Test Log - Warning')
 
-        self.assertEqual(1, mock_warn.call_count)
-        self.assertEqual(0, mock_error.call_count)
+        event_files = os.listdir(__event_logger__.event_dir)
+        self.assertEqual(1, len(event_files))
+
+        log_file_event = os.path.join(__event_logger__.event_dir, event_files[0])
+        try:
+            with open(log_file_event) as logfile:
+                logcontent = logfile.read()
+                # Checking the contents of the event file.
+                self.assertIn("Test Log - Warning", logcontent)
+        except Exception as e:
+            self.assertFalse(True, "The log file looks like it isn't correctly setup for this test. Take a look. "
+                                   "{0}".format(e))
 
     @patch("azurelinuxagent.common.logger.StdoutAppender.write")
     @patch("azurelinuxagent.common.logger.ConsoleAppender.write")
@@ -370,7 +385,9 @@ class TestLogger(AgentTestCase):
         exception_caught = False
 
         # #1035 was caused due to too many files being written in an error condition. Adding even one more here broke
-        # the camels back earlier. This should be resolved now.
+        # the camels back earlier - It would go into an infinite recursion as telemetry would call log, which in turn
+        # would call telemetry, and so on.
+        # The description of the fix is given in the comments @ azurelinuxagent.common.logger.Logger#log.write_log.
         try:
             for i in range(10):
                 logger.warn('Test Log - {0} - 2 - Warning'.format(i))
@@ -441,6 +458,27 @@ class TestAppender(AgentTestCase):
         logger.reset_periodic()
         fileutil.rm_dirs(self.event_dir)
         logger.DEFAULT_LOGGER.appenders *= 0
+
+    @patch("azurelinuxagent.common.event.send_logs_to_telemetry", return_value=True)
+    @patch("azurelinuxagent.common.logger.sys.stdout.write")
+    @patch("azurelinuxagent.common.event.EventLogger.add_log_event")
+    def test_no_appenders_added(self, mock_add_log_event, mock_sys_stdout, *_):
+        # Validating no logs are written in any appender
+
+        logger.verbose("test-verbose")
+        logger.info("test-info")
+        logger.warn("test-warn")
+        logger.error("test-error")
+
+        # Validating Console and File logs
+        with open(self.log_file) as logfile:
+            logcontent = logfile.readlines()
+            self.assertEqual(0, len(logcontent))
+
+        # Validating telemetry call
+        self.assertEqual(0, mock_add_log_event.call_count)
+        # Validating stdout call
+        self.assertEqual(0, mock_sys_stdout.call_count)
 
     def test_console_appender(self):
         logger.add_logger_appender(logger.AppenderType.CONSOLE, logger.LogLevel.WARNING, path=self.log_file)

@@ -23,18 +23,16 @@ import threading
 from datetime import datetime, timedelta
 
 from azurelinuxagent.common import event, logger
-from azurelinuxagent.common.event import add_event, elapsed_milliseconds, WALAEventOperation
-from azurelinuxagent.common.event import add_event, report_metric, WALAEventOperation, elapsed_milliseconds, EventLogger
+from azurelinuxagent.common.event import add_event, elapsed_milliseconds, EventLogger, report_metric, WALAEventOperation
 from azurelinuxagent.common.exception import EventError
-from azurelinuxagent.common.future import ustr, OrderedDict
+from azurelinuxagent.common.future import OrderedDict, ustr
 from azurelinuxagent.common.protocol.wire import GoalState
 from azurelinuxagent.common.telemetryevent import TelemetryEventParam
 from azurelinuxagent.common.utils import fileutil
 from azurelinuxagent.common.utils.extensionprocessutil import read_output
 from azurelinuxagent.common.version import CURRENT_AGENT, CURRENT_VERSION
 from azurelinuxagent.ga.monitor import MonitorHandler
-
-from tests.tools import AgentTestCase, load_data, data_dir, patch, Mock
+from tests.tools import AgentTestCase, data_dir, load_data, Mock, patch
 
 
 class TestEvent(AgentTestCase):
@@ -594,8 +592,8 @@ class TestMetrics(AgentTestCase):
 
         self.assertEqual(None, ev_logger._clean_up_message(None))
         self.assertEqual("", ev_logger._clean_up_message(""))
-        self.assertEqual("Daemon Activate resource disk failure",
-                         ev_logger._clean_up_message("Daemon Activate resource disk failure"))
+        self.assertEqual("Daemon Activate resource disk failure", ev_logger._clean_up_message(
+            "Daemon Activate resource disk failure"))
         self.assertEqual("[M.A.E.CS-2.0.7] Target handler state", ev_logger._clean_up_message(
             '2019/10/07 21:54:16.629444 INFO [M.A.E.CS-2.0.7] Target handler state'))
         self.assertEqual("[M.A.E.CS-2.0.7] Initializing extension M.A.E.CS-2.0.7", ev_logger._clean_up_message(
@@ -604,31 +602,36 @@ class TestMetrics(AgentTestCase):
             "2019/10/07 21:55:38.474861 INFO ExtHandler ProcessGoalState completed [incarnation 4; 4197 ms]"))
         self.assertEqual("Daemon Azure Linux Agent Version:2.2.43", ev_logger._clean_up_message(
             "2019/10/07 21:52:28.615720 INFO Daemon Azure Linux Agent Version:2.2.43"))
-        self.assertEqual(
-            'Daemon Cgroup controller "memory" is not mounted. Failed to create a cgroup for the VM Agent; resource '
-            'usage will not be tracked',
-            ev_logger._clean_up_message(
-                'Daemon Cgroup controller "memory" is not mounted. Failed to create a cgroup for the VM Agent; '
-                'resource usage will not be tracked'))
+        self.assertEqual('Daemon Cgroup controller "memory" is not mounted. Failed to create a cgroup for the VM Agent;'
+                         ' resource usage will not be tracked',
+                         ev_logger._clean_up_message('Daemon Cgroup controller "memory" is not mounted. Failed to '
+                                                     'create a cgroup for the VM Agent; resource usage will not be '
+                                                     'tracked'))
         self.assertEqual('ExtHandler Root directory /sys/fs/cgroup/memory/walinuxagent.extensions does not exist.',
-                         ev_logger._clean_up_message(
-                             "2019/10/08 23:45:05.691037 WARNING ExtHandler Root directory "
-                             "/sys/fs/cgroup/memory/walinuxagent.extensions does not exist."))
+                         ev_logger._clean_up_message("2019/10/08 23:45:05.691037 WARNING ExtHandler Root directory "
+                                                     "/sys/fs/cgroup/memory/walinuxagent.extensions does not exist."))
         self.assertEqual("LinuxAzureDiagnostic started to handle.",
                          ev_logger._clean_up_message("2019/10/07 22:02:40 LinuxAzureDiagnostic started to handle."))
         self.assertEqual("VMAccess started to handle.",
                          ev_logger._clean_up_message("2019/10/07 21:56:58 VMAccess started to handle."))
         self.assertEqual(
             '[PERIODIC] ExtHandler Root directory /sys/fs/cgroup/memory/walinuxagent.extensions does not exist.',
-            ev_logger._clean_up_message(
-                "2019/10/08 23:45:05.691037 WARNING [PERIODIC] ExtHandler Root directory "
-                "/sys/fs/cgroup/memory/walinuxagent.extensions does not exist."))
+            ev_logger._clean_up_message("2019/10/08 23:45:05.691037 WARNING [PERIODIC] ExtHandler Root directory "
+                                        "/sys/fs/cgroup/memory/walinuxagent.extensions does not exist."))
         self.assertEqual("[PERIODIC] LinuxAzureDiagnostic started to handle.", ev_logger._clean_up_message(
             "2019/10/07 22:02:40 [PERIODIC] LinuxAzureDiagnostic started to handle."))
         self.assertEqual("[PERIODIC] VMAccess started to handle.",
                          ev_logger._clean_up_message("2019/10/07 21:56:58 [PERIODIC] VMAccess started to handle."))
-        self.assertEqual(ev_logger._clean_up_message(
-            '[PERIODIC] Daemon Cgroup controller "memory" is not mounted. Failed to create a cgroup for the VM Agent; '
-            'resource usage will not be tracked'),
-                         '[PERIODIC] Daemon Cgroup controller "memory" is not mounted. Failed to create a cgroup for '
-                         'the VM Agent; resource usage will not be tracked')
+        self.assertEqual('[PERIODIC] Daemon Cgroup controller "memory" is not mounted. Failed to create a cgroup for '
+                         'the VM Agent; resource usage will not be tracked',
+                         ev_logger._clean_up_message('[PERIODIC] Daemon Cgroup controller "memory" is not mounted. '
+                                                     'Failed to create a cgroup for the VM Agent; resource usage will '
+                                                     'not be tracked'))
+        self.assertEquals('The time should be in UTC', ev_logger._clean_up_message(
+            '2019-11-26T18:15:06.866746Z INFO The time should be in UTC'))
+        self.assertEquals('The time should be in UTC', ev_logger._clean_up_message(
+            '2019-11-26T18:15:06.866746Z The time should be in UTC'))
+        self.assertEquals('[PERIODIC] The time should be in UTC', ev_logger._clean_up_message(
+            '2019-11-26T18:15:06.866746Z INFO [PERIODIC] The time should be in UTC'))
+        self.assertEquals('[PERIODIC] The time should be in UTC', ev_logger._clean_up_message(
+            '2019-11-26T18:15:06.866746Z [PERIODIC] The time should be in UTC'))

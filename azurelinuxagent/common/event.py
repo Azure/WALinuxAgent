@@ -349,25 +349,42 @@ class EventLogger(object):
     def _clean_up_message(message):
         # By the time the message has gotten to this point it is formatted as
         #
+        #   Old Time format
         #   YYYY/MM/DD HH:mm:ss.fffffff LEVEL <text>.
         #   YYYY/MM/DD HH:mm:ss.fffffff <text>.
         #   YYYY/MM/DD HH:mm:ss LEVEL <text>.
         #   YYYY/MM/DD HH:mm:ss <text>.
         #
+        #   UTC ISO Time format added in #1716
+        #   YYYY-MM-DDTHH:mm:ss.fffffffZ LEVEL <text>.
+        #   YYYY-MM-DDTHH:mm:ss.fffffffZ <text>.
+        #   YYYY-MM-DDTHH:mm:ssZ LEVEL <text>.
+        #   YYYY-MM-DDTHH:mm:ssZ <text>.
+        #
         # The timestamp and the level are redundant, and should be stripped. The logging library does not schematize
         # this data, so I am forced to parse the message using a regex.  The format is regular, so the burden is low,
         # and usability on the telemetry side is high.
-        #
 
         if not message:
             return message
 
-        log_format_parser = re.compile(r"^\d+/\d+/\d+\s\d+:\d+:\d+\.?\d*(\s[A-Z]*\s)?\s?(.*)$")
-        extract_message = log_format_parser.search(message)
-        if extract_message:
-            return extract_message.group(2) # The message bit
+        # Adding two regexs to simplify the handling of logs and to keep it maintainable. Most of the logs would have
+        # level includent in the log itself, but if it doesn't have, the second regex is a catch all case and will work
+        # for all the cases.
+        log_level_format_parser = re.compile(r"^.*(INFO|WARNING|ERROR|VERBOSE)\s*(.*)$")
+        log_format_parser = re.compile(r"^[0-9:/\-TZ\s.]*\s(.*)$")
+
+        # Parsing the log messages containing levels in it
+        extract_level_message = log_level_format_parser.search(message)
+        if extract_level_message:
+            return extract_level_message.group(2)  # The message bit
         else:
-            return message
+            # Parsing the log messages without levels in it.
+            extract_message = log_format_parser.search(message)
+            if extract_message:
+                return extract_message.group(1)  # The message bit
+            else:
+                return message
 
     @staticmethod
     def add_default_parameters_to_event(event_parameters, set_values_for_agent=True):
