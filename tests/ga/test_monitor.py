@@ -901,6 +901,8 @@ class TestExtensionMetricsDataTelemetry(AgentTestCase):
         self.assertEqual(0, patch_add_metric.call_count)
         monitor_handler.stop()
 
+    # mocking get_proc_stat to make it run on Mac and other systems. This test does not need to read the values of the
+    # /proc/stat file on the filesystem.
     @patch("azurelinuxagent.common.osutil.default.DefaultOSUtil._get_proc_stat")
     @patch('azurelinuxagent.common.event.EventLogger.add_metric')
     @patch("azurelinuxagent.common.cgroup.MemoryCgroup.get_memory_usage")
@@ -923,6 +925,8 @@ class TestExtensionMetricsDataTelemetry(AgentTestCase):
         self.assertEqual(0, patch_add_metric.call_count)  # No metrics should be sent.
         monitor_handler.stop()
 
+    # mocking get_proc_stat to make it run on Mac and other systems. This test does not need to read the values of the
+    # /proc/stat file on the filesystem.
     @patch("azurelinuxagent.common.osutil.default.DefaultOSUtil._get_proc_stat")
     @patch('azurelinuxagent.common.event.EventLogger.add_metric')
     @patch("azurelinuxagent.common.cgroup.CpuCgroup.get_cpu_usage")
@@ -1137,6 +1141,8 @@ for i in range(3):
 
         monitor_handler.stop()
 
+    # mocking get_proc_stat to make it run on Mac and other systems. This test does not need to read the values of the
+    # /proc/stat file on the filesystem.
     @patch("azurelinuxagent.common.osutil.default.DefaultOSUtil._get_proc_stat")
     def test_generate_extension_metrics_telemetry_dictionary(self, *args):
         num_polls = 10

@@ -46,6 +46,8 @@ class TestCGroup(AgentTestCase):
         with open(os.path.join(data_dir, "cgroups", "memory_mount", "tasks"), mode="wb") as tasks:
             tasks.truncate(0)
 
+    # mocking get_proc_stat to make it run on Mac and other systems. This test does not need to read the values of the
+    # /proc/stat file on the filesystem.
     @patch("azurelinuxagent.common.osutil.default.DefaultOSUtil._get_proc_stat")
     def test_correct_creation(self, *_):
         test_cgroup = CGroup.create("dummy_path", "cpu", "test_extension")
@@ -60,6 +62,8 @@ class TestCGroup(AgentTestCase):
         self.assertEqual(test_cgroup.path, "dummy_path")
         self.assertEqual(test_cgroup.name, "test_extension")
 
+    # mocking get_proc_stat to make it run on Mac and other systems. This test does not need to read the values of the
+    # /proc/stat file on the filesystem.
     @patch("azurelinuxagent.common.osutil.default.DefaultOSUtil._get_proc_stat")
     def test_is_active(self, *_):
         test_cgroup = CGroup.create(os.path.join(data_dir, "cgroups", "cpu_mount"), "cpu", "test_extension")
@@ -78,6 +82,8 @@ class TestCGroup(AgentTestCase):
 
         self.assertEqual(True, test_cgroup.is_active())
 
+    # mocking get_proc_stat to make it run on Mac and other systems. This test does not need to read the values of the
+    # /proc/stat file on the filesystem.
     @patch("azurelinuxagent.common.osutil.default.DefaultOSUtil._get_proc_stat")
     @patch("azurelinuxagent.common.logger.periodic_warn")
     def test_is_active_file_not_present(self, patch_periodic_warn, *_):
@@ -89,6 +95,8 @@ class TestCGroup(AgentTestCase):
 
         self.assertEqual(0, patch_periodic_warn.call_count)
 
+    # mocking get_proc_stat to make it run on Mac and other systems. This test does not need to read the values of the
+    # /proc/stat file on the filesystem.
     @patch("azurelinuxagent.common.osutil.default.DefaultOSUtil._get_proc_stat")
     @patch("azurelinuxagent.common.logger.periodic_warn")
     def test_is_active_incorrect_file(self, patch_periodic_warn, *_):
@@ -105,6 +113,8 @@ class TestCpuCgroup(AgentTestCase):
     def setUp(self):
         AgentTestCase.setUp(self)
 
+    # mocking get_proc_stat to make it run on Mac and other systems. This test does not need to read the values of the
+    # /proc/stat file on the filesystem.
     @patch("azurelinuxagent.common.osutil.default.DefaultOSUtil._get_proc_stat")
     def test_cpu_cgroup_create(self, patch_get_proc_stat):
         patch_get_proc_stat.return_value = fileutil.read_file(os.path.join(data_dir, "cgroups", "dummy_proc_stat"))
@@ -117,6 +127,8 @@ class TestCpuCgroup(AgentTestCase):
 
         self.assertEqual("cpu", test_cpu_cg.controller)
 
+    # mocking get_proc_stat to make it run on Mac and other systems. This test does not need to read the values of the
+    # /proc/stat file on the filesystem.
     @patch("azurelinuxagent.common.osutil.default.DefaultOSUtil.get_processor_cores", return_value=1)
     @patch("azurelinuxagent.common.osutil.default.DefaultOSUtil._get_proc_stat")
     def test_get_cpu_usage(self, patch_get_proc_stat, *args):
@@ -131,6 +143,8 @@ class TestCpuCgroup(AgentTestCase):
 
         self.assertEqual(5.114, cpu_usage)
 
+    # mocking get_proc_stat to make it run on Mac and other systems. This test does not need to read the values of the
+    # /proc/stat file on the filesystem.
     @patch("azurelinuxagent.common.osutil.default.DefaultOSUtil._get_proc_stat")
     def test_get_current_cpu_total_exception_handling(self, *_):
         test_cpu_cg = CpuCgroup("test_extension", "dummy_path")
