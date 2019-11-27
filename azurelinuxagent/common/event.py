@@ -48,6 +48,7 @@ SEND_LOGS_TO_TELEMETRY = False
 
 MAX_NUMBER_OF_EVENTS = 1000
 
+
 def send_logs_to_telemetry():
     return SEND_LOGS_TO_TELEMETRY
 

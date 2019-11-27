@@ -126,7 +126,8 @@ class Logger(object):
             msg = msg_format.format(*args)
         else:
             msg = msg_format
-        time = datetime.now().strftime(u'%Y/%m/%d %H:%M:%S.%f')
+            # This format is based on ISO-8601, Z represents UTC (Zero offset)
+        time = datetime.utcnow().isoformat() + "Z"
         level_str = LogLevel.STRINGS[level]
         if self.prefix is not None:
             log_item = u"{0} {1} {2} {3}\n".format(time, level_str, self.prefix,

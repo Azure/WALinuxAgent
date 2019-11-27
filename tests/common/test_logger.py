@@ -18,11 +18,11 @@
 import json
 import os
 import tempfile
-from datetime import datetime
+from datetime import datetime, timedelta
 
+from azurelinuxagent.common.event import __event_logger__, add_log_event, MAX_NUMBER_OF_EVENTS, TELEMETRY_LOG_EVENT_ID,\
+    TELEMETRY_LOG_PROVIDER_ID
 import azurelinuxagent.common.logger as logger
-from azurelinuxagent.common.event import __event_logger__, add_log_event, TELEMETRY_LOG_EVENT_ID, \
-    TELEMETRY_LOG_PROVIDER_ID, MAX_NUMBER_OF_EVENTS
 from azurelinuxagent.common.utils import fileutil
 from tests.tools import AgentTestCase, MagicMock, patch
 
@@ -170,6 +170,26 @@ class TestLogger(AgentTestCase):
 
         logger.periodic_verbose(logger.EVERY_DAY, _MSG_VERBOSE, *_DATA)
         mock_verbose.assert_called_once_with(_MSG_VERBOSE, *_DATA)
+
+    def test_logger_should_log_in_utc(self):
+        file_name = "test.log"
+        file_path = os.path.join(self.tmp_dir, file_name)
+        test_logger = logger.Logger()
+        test_logger.add_appender(logger.AppenderType.FILE, logger.LogLevel.INFO, path=file_path)
+
+        before_write_utc = datetime.utcnow()
+        test_logger.info("The time should be in UTC")
+
+        with open(file_path, "r") as log_file:
+            log = log_file.read()
+            try:
+                time_in_file = datetime.strptime(log.split(logger.LogLevel.STRINGS[logger.LogLevel.INFO])[0].strip()
+                                                 , u'%Y-%m-%dT%H:%M:%S.%fZ')
+            except ValueError:
+                self.fail("Ensure timestamp follows ISO-8601 format + 'Z' for UTC")
+
+            # If the time difference is > 5secs, there's a high probability that the time_in_file is in different TZ
+            self.assertTrue((time_in_file-before_write_utc) <= timedelta(seconds=5))
 
     def test_telemetry_logger(self):
         mock = MagicMock()
