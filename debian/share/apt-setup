@@ -1,0 +1,21 @@
+#!/bin/sh
+
+set -euE
+
+if [ ! -e /var/lib/waagent/provisioned ]; then
+	echo "waagent did not finish provisioning yet!" >&2
+	exit 1
+fi
+if [ -e /var/lib/waagent/provisioned_apt-setup ]; then
+	exit 0
+fi
+
+touch /var/lib/waagent/provisioned_apt-setup
+
+PROTOCOL=$(cat /var/lib/waagent/Protocol)
+
+if [ "$PROTOCOL" = "WireProtocol" ]; then
+	sed -i -e 's#http://deb.debian.org#http://debian-archive.trafficmanager.net#' /etc/apt/sources.list
+fi
+
+apt-get update

@@ -1,0 +1,12 @@
+#!/bin/sh
+# postinst script for #PACKAGE#
+
+set -e
+
+if [ "$1" = configure ] && [ -z "$2" ]; then
+    mkdir --mode 0700 /var/lib/waagent
+fi
+
+#DEBHELPER#
+
+exit 0

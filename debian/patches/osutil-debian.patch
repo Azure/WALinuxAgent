@@ -1,0 +1,25 @@
+From: Bastian Blank <bastian.blank@credativ.de>
+Date: Wed, 24 Aug 2016 16:25:56 +0200
+Subject: Support Debian in osutil
+
+---
+ azurelinuxagent/common/osutil/debian.py | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/azurelinuxagent/common/osutil/debian.py b/azurelinuxagent/common/osutil/debian.py
+index 9178814..fc0a631 100644
+--- a/azurelinuxagent/common/osutil/debian.py
++++ b/azurelinuxagent/common/osutil/debian.py
+@@ -42,10 +42,10 @@ class DebianOSUtil(DefaultOSUtil):
+         return shellutil.run("systemctl --job-mode=ignore-dependencies try-reload-or-restart ssh", chk_err=False)
+ 
+     def stop_agent_service(self):
+-        return shellutil.run("service azurelinuxagent stop", chk_err=False)
++        return shellutil.run("systemctl --job-mode=ignore-dependencies stop walinuxagent", chk_err=False)
+ 
+     def start_agent_service(self):
+-        return shellutil.run("service azurelinuxagent start", chk_err=False)
++        return shellutil.run("systemctl --job-mode=ignore-dependencies start walinuxagent", chk_err=False)
+ 
+     def start_network(self):
+         pass

@@ -1,0 +1,13 @@
+[Unit]
+Description=Microsft Azure Linux Agent (apt setup)
+Requires=waagent-provision.service
+After=waagent-provision.service
+Before=multi-user.target
+ConditionVirtualization=microsoft
+
+[Service]
+ExecStart=/usr/share/waagent/apt-setup
+StandardOutput=journal+console
+
+[Install]
+WantedBy=walinuxagent.service

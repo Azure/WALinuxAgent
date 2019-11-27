@@ -1,0 +1,31 @@
+From: Bastian Blank <bastian.blank@credativ.de>
+Date: Fri, 7 Jul 2017 17:13:52 +0200
+Subject: Disable bytecode save in exthandler
+
+---
+ azurelinuxagent/ga/update.py | 5 ++++-
+ 1 file changed, 4 insertions(+), 1 deletion(-)
+
+diff --git a/azurelinuxagent/ga/update.py b/azurelinuxagent/ga/update.py
+index 848ff0c..7ddd5fe 100644
+--- a/azurelinuxagent/ga/update.py
++++ b/azurelinuxagent/ga/update.py
+@@ -147,6 +147,9 @@ class UpdateHandler(object):
+         if child_args is not None:
+             agent_cmd = "{0} {1}".format(agent_cmd, child_args)
+ 
++        env = os.environ.copy()
++        env['PYTHONDONTWRITEBYTECODE'] = '1'
++
+         try:
+ 
+             # Launch the correct Python version for python-based agents
+@@ -162,7 +165,7 @@ class UpdateHandler(object):
+                 cwd=agent_dir,
+                 stdout=sys.stdout,
+                 stderr=sys.stderr,
+-                env=os.environ)
++                env=env)
+ 
+             logger.verbose(u"Agent {0} launched with command '{1}'", agent_name, agent_cmd)
+ 

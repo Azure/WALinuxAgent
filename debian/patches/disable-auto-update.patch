@@ -1,0 +1,21 @@
+From: Bastian Blank <bastian.blank@credativ.de>
+Date: Tue, 29 May 2018 14:24:59 +0200
+Subject: Default auto update
+
+---
+ config/debian/waagent.conf | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/config/debian/waagent.conf b/config/debian/waagent.conf
+index 28e496e..e605009 100644
+--- a/config/debian/waagent.conf
++++ b/config/debian/waagent.conf
+@@ -106,7 +106,7 @@ OS.SshDir=/etc/ssh
+ # OS.EnableRDMA=y
+ 
+ # Enable or disable goal state processing auto-update, default is enabled
+-# AutoUpdate.Enabled=y
++AutoUpdate.Enabled=n
+ 
+ # Determine the update family, this should not be changed
+ # AutoUpdate.GAFamily=Prod

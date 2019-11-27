@@ -1,0 +1,34 @@
+#!/usr/bin/make -f
+# Uncomment this to turn on verbose mode.
+#export DH_VERBOSE=1
+
+export PYBUILD_INSTALL_ARGS=--install-scripts /usr/sbin
+
+%:
+	dh $@ --with python3,systemd --buildsystem pybuild
+
+override_dh_auto_install:
+	dh_auto_install
+	rm -rf debian/waagent/usr/lib/python3*/dist-packages/tests/
+
+override_dh_auto_test:
+	true
+
+override_dh_auto_clean:
+	dh_auto_clean
+	rm -rf AzureLinuxAgent.egg-info
+
+override_dh_installinit:
+	dh_installinit -p waagent --name walinuxagent
+
+override_dh_systemd_enable:
+	dh_systemd_enable -p waagent --name walinuxagent
+	dh_systemd_enable -p waagent --name waagent-apt
+	dh_systemd_enable -p waagent --name waagent-provision
+	dh_systemd_enable -p waagent --name waagent-resourcedisk
+
+override_dh_systemd_start:
+	dh_systemd_start -p waagent --name walinuxagent
+	dh_systemd_start -p waagent --name waagent-apt
+	dh_systemd_start -p waagent --name waagent-provision
+	dh_systemd_start -p waagent --name waagent-resourcedisk

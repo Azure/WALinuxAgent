@@ -1,0 +1,10 @@
+osutil-debian.patch
+user-shell.patch
+agent-command-provision.patch
+agent-command-resourcedisk.patch
+resourcedisk-filesystem.patch
+disable-bytecode-exthandler.patch
+entry-points.patch
+disable-auto-update.patch
+ignore-tests.patch
+config.patch

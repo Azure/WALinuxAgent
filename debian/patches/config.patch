@@ -1,0 +1,36 @@
+Index: WALinuxAgent/config/debian/waagent.conf
+===================================================================
+--- WALinuxAgent.orig/config/debian/waagent.conf
++++ WALinuxAgent/config/debian/waagent.conf
+@@ -3,27 +3,27 @@
+ #
+ 
+ # Enable instance creation
+-Provisioning.Enabled=y
++Provisioning.Enabled=n
+ 
+ # Enable extension handling. Do not disable this unless you do not need password reset,
+ # backup, monitoring, or any extension handling whatsoever.
+ Extensions.Enabled=y
+ 
+ # Rely on cloud-init to provision
+-Provisioning.UseCloudInit=n
++Provisioning.UseCloudInit=y
+ 
+ # Password authentication for root account will be unavailable.
+ Provisioning.DeleteRootPassword=y
+ 
+ # Generate fresh host key pair.
+-Provisioning.RegenerateSshHostKeyPair=y
++Provisioning.RegenerateSshHostKeyPair=n
+ 
+ # Supported values are "rsa", "dsa", "ecdsa", "ed25519", and "auto".
+ # The "auto" option is supported on OpenSSH 5.9 (2011) and later.
+ Provisioning.SshHostKeyPairType=auto
+ 
+ # Monitor host name changes and publish changes via DHCP requests.
+-Provisioning.MonitorHostName=y
++Provisioning.MonitorHostName=n
+ 
+ # Decode CustomData from Base64.
+ Provisioning.DecodeCustomData=n
