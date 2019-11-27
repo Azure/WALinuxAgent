@@ -24,6 +24,7 @@ from datetime import datetime, timedelta
 
 EVERY_DAY = timedelta(days=1)
 EVERY_HALF_DAY = timedelta(hours=12)
+EVERY_SIX_HOURS = timedelta(hours=6)
 EVERY_HOUR = timedelta(hours=1)
 EVERY_HALF_HOUR = timedelta(minutes=30)
 EVERY_FIFTEEN_MINUTES = timedelta(minutes=15)
@@ -45,13 +46,13 @@ class Logger(object):
     def set_prefix(self, prefix):
         self.prefix = prefix
 
-    def is_period_elapsed(self, delta, h):
+    def _is_period_elapsed(self, delta, h):
         return h not in self.logger.periodic_messages or \
             (self.logger.periodic_messages[h] + delta) <= datetime.now()
 
     def _periodic(self, delta, log_level_op, msg_format, *args):
         h = hash(msg_format)
-        if self.is_period_elapsed(delta, h):
+        if self._is_period_elapsed(delta, h):
             log_level_op(msg_format, *args)
             self.logger.periodic_messages[h] = datetime.now()
 
@@ -80,7 +81,7 @@ class Logger(object):
         self.log(LogLevel.ERROR, msg_format, *args)
 
     def log(self, level, msg_format, *args):
-        #if msg_format is not unicode convert it to unicode
+        # if msg_format is not unicode convert it to unicode
         if type(msg_format) is not ustr:
             msg_format = ustr(msg_format, errors="backslashreplace")
         if len(args) > 0:
@@ -199,18 +200,34 @@ def set_prefix(prefix):
 
 
 def periodic_info(delta, msg_format, *args):
+    """
+    The hash-map maintaining the state of the logs gets reset here -
+    azurelinuxagent.ga.monitor.MonitorHandler.reset_loggers. The current time period is defined by RESET_LOGGERS_PERIOD.
+    """
     DEFAULT_LOGGER.periodic_info(delta, msg_format, *args)
 
 
 def periodic_verbose(delta, msg_format, *args):
+    """
+    The hash-map maintaining the state of the logs gets reset here -
+    azurelinuxagent.ga.monitor.MonitorHandler.reset_loggers. The current time period is defined by RESET_LOGGERS_PERIOD.
+    """
     DEFAULT_LOGGER.periodic_verbose(delta, msg_format, *args)
 
 
 def periodic_error(delta, msg_format, *args):
+    """
+    The hash-map maintaining the state of the logs gets reset here -
+    azurelinuxagent.ga.monitor.MonitorHandler.reset_loggers. The current time period is defined by RESET_LOGGERS_PERIOD.
+    """
     DEFAULT_LOGGER.periodic_error(delta, msg_format, *args)
 
 
 def periodic_warn(delta, msg_format, *args):
+    """
+    The hash-map maintaining the state of the logs gets reset here -
+    azurelinuxagent.ga.monitor.MonitorHandler.reset_loggers. The current time period is defined by RESET_LOGGERS_PERIOD.
+    """
     DEFAULT_LOGGER.periodic_warn(delta, msg_format, *args)
 
 

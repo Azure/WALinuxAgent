@@ -1104,13 +1104,12 @@ class TestUpdate(UpdateTestCase):
         self._test_run_latest(mock_time=mock_time)
         self.assertEqual(1, mock_time.sleep_interval)
 
-    def test_run_latest_polls_moderately_if_installed_not_latest(self):
+    def test_run_latest_polls_every_second_if_installed_not_latest(self):
         self.prepare_agents()
 
-        mock_child = ChildMock(return_value=0)
         mock_time = TimeMock(time_increment=CHILD_HEALTH_INTERVAL/2)
         self._test_run_latest(mock_time=mock_time)
-        self.assertNotEqual(1, mock_time.sleep_interval)
+        self.assertEqual(1, mock_time.sleep_interval)
 
     def test_run_latest_defaults_to_current(self):
         self.assertEqual(None, self.update_handler.get_latest_agent())
@@ -1340,15 +1339,6 @@ class TestUpdate(UpdateTestCase):
 
     def test_upgrade_available_returns_true_on_first_use(self):
         self.assertTrue(self._test_upgrade_available())
-
-    def test_upgrade_available_will_refresh_goal_state(self):
-        protocol = self._create_protocol()
-        protocol.emulate_stale_goal_state()
-        self.assertTrue(self._test_upgrade_available(protocol=protocol))
-        self.assertEqual(2, protocol.call_counts["get_vmagent_manifests"])
-        self.assertEqual(1, protocol.call_counts["get_vmagent_pkgs"])
-        self.assertEqual(1, protocol.call_counts["update_goal_state"])
-        self.assertTrue(protocol.goal_state_forced)
 
     def test_upgrade_available_handles_missing_family(self):
         extensions_config = ExtensionsConfig(load_data("wire/ext_conf_missing_family.xml"))

@@ -2,7 +2,8 @@
 # Licensed under the Apache License.
 
 from azurelinuxagent.ga.exthandlers import ExtHandlerInstance
-from azurelinuxagent.common.protocol.restapi import ExtHandler, ExtHandlerProperties
+from azurelinuxagent.common.protocol.restapi import ExtHandler, ExtHandlerProperties, ExtHandlerPackage, \
+    ExtHandlerVersionUri
 from tests.tools import *
 
 
@@ -16,12 +17,30 @@ class ExtHandlerInstanceTestCase(AgentTestCase):
         ext_handler.properties = ext_handler_properties
         self.ext_handler_instance = ExtHandlerInstance(ext_handler=ext_handler, protocol=None)
 
+        pkg_uri = ExtHandlerVersionUri()
+        pkg_uri.uri = "http://bar/foo__1.2.3"
+        self.ext_handler_instance.pkg = ExtHandlerPackage(ext_handler_properties.version)
+        self.ext_handler_instance.pkg.uris.append(pkg_uri)
+
+        self.base_dir = self.tmp_dir
         self.extension_directory = os.path.join(self.tmp_dir, "extension_directory")
         self.mock_get_base_dir = patch.object(self.ext_handler_instance, "get_base_dir", return_value=self.extension_directory)
         self.mock_get_base_dir.start()
 
     def tearDown(self):
         self.mock_get_base_dir.stop()
+
+    def test_rm_ext_handler_dir_should_remove_the_extension_packages(self):
+        os.mkdir(self.extension_directory)
+        open(os.path.join(self.extension_directory, "extension_file1"), 'w').close()
+        open(os.path.join(self.extension_directory, "extension_file2"), 'w').close()
+        open(os.path.join(self.extension_directory, "extension_file3"), 'w').close()
+        open(os.path.join(self.base_dir, "foo__1.2.3.zip"), 'w').close()
+
+        self.ext_handler_instance.remove_ext_handler()
+
+        self.assertFalse(os.path.exists(self.extension_directory))
+        self.assertFalse(os.path.exists(os.path.join(self.base_dir, "foo__1.2.3.zip")))
 
     def test_rm_ext_handler_dir_should_remove_the_extension_directory(self):
         os.mkdir(self.extension_directory)

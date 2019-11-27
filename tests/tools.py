@@ -31,16 +31,20 @@ from functools import wraps
 
 import time
 
+from azurelinuxagent.common.cgroupconfigurator import CGroupConfigurator
 import azurelinuxagent.common.event as event
 import azurelinuxagent.common.conf as conf
 import azurelinuxagent.common.logger as logger
+from azurelinuxagent.common.osutil.factory import _get_osutil
+from azurelinuxagent.common.osutil.ubuntu import Ubuntu14OSUtil, Ubuntu16OSUtil
 from azurelinuxagent.common.utils import fileutil
-
 from azurelinuxagent.common.version import PY_VERSION_MAJOR
 
-# Import mock module for Python2 and Python3
 try:
     from unittest.mock import Mock, patch, MagicMock, ANY, DEFAULT, call
+
+    # Import mock module for Python2 and Python3
+    from bin.waagent2 import Agent
 except ImportError:
     from mock import Mock, patch, MagicMock, ANY, DEFAULT, call
 
@@ -59,6 +63,18 @@ if debug:
 _MAX_LENGTH = 120
 
 _MAX_LENGTH_SAFE_REPR = 80
+
+# Mock sleep to reduce test execution time
+_SLEEP = time.sleep
+
+
+def mock_sleep(sec=0.01):
+    """
+    Mocks the time.sleep method to reduce unit test time
+    :param sec: Time to replace the sleep call with, default = 0.01sec
+    """
+    _SLEEP(sec)
+
 
 def safe_repr(obj, short=False):
     try:
@@ -97,6 +113,59 @@ def _safe_repr(obj, short=False):
     if not short or len(result) < _MAX_LENGTH:
         return result
     return result[:_MAX_LENGTH] + ' [truncated]...'
+
+
+def running_under_travis():
+    return 'TRAVIS' in os.environ and os.environ['TRAVIS'] == 'true'
+
+
+def get_osutil_for_travis():
+    distro_name = os.environ['_system_name'].lower()
+    distro_version = os.environ['_system_version']
+
+    if distro_name == "ubuntu" and distro_version == "14.04":
+        return Ubuntu14OSUtil()
+
+    if distro_name == "ubuntu" and distro_version == "16.04":
+        return Ubuntu16OSUtil()
+
+
+def mock_get_osutil(*args):
+    # It's a known issue that calling platform.linux_distribution() in Travis will result in the wrong info.
+    # See https://github.com/travis-ci/travis-ci/issues/2755
+    # When running in Travis, use manual distro resolution that relies on environment variables.
+    if running_under_travis():
+        return get_osutil_for_travis()
+    else:
+        return _get_osutil(*args)
+
+
+def are_cgroups_enabled():
+    # We use a function decorator to check if cgroups are enabled in multiple tests, which at some point calls
+    # get_osutil. The global mock for that function doesn't get executed before the function decorators are imported,
+    # so we need to specifically mock it beforehand.
+    mock__get_osutil = patch("azurelinuxagent.common.osutil.factory._get_osutil", mock_get_osutil)
+    mock__get_osutil.start()
+    ret = CGroupConfigurator.get_instance().enabled
+    mock__get_osutil.stop()
+    return ret
+
+
+def is_trusty_in_travis():
+    # In Travis, Trusty (Ubuntu 14.04) is missing the cpuacct.stat file,
+    # possibly because the accounting is not enabled by default.
+    if not running_under_travis():
+        return False
+
+    return type(get_osutil_for_travis()) == Ubuntu14OSUtil
+
+
+def is_systemd_present():
+    return os.path.exists("/run/systemd/system")
+
+
+def i_am_root():
+    return os.geteuid() == 0
 
 
 class AgentTestCase(unittest.TestCase):
@@ -159,9 +228,14 @@ class AgentTestCase(unittest.TestCase):
         event.init_event_status(self.tmp_dir)
         event.init_event_logger(self.tmp_dir)
 
+        self.mock__get_osutil = patch("azurelinuxagent.common.osutil.factory._get_osutil", mock_get_osutil)
+        self.mock__get_osutil.start()
+
     def tearDown(self):
         if not debug and self.tmp_dir is not None:
             shutil.rmtree(self.tmp_dir)
+
+        self.mock__get_osutil.stop()
 
     def emulate_assertIn(self, a, b, msg=None):
         if a not in b:
@@ -375,12 +449,21 @@ class AgentTestCase(unittest.TestCase):
             fileutil.write_file(f, "faux content")
             time.sleep(with_sleep)
 
-    def _create_script(self, file_name, contents):
+    def create_script(self, file_name, contents, file_path=None):
         """
         Creates an executable script with the given contents.
         If file_name ends with ".py", it creates a Python3 script, otherwise it creates a bash script
+        :param file_name: The name of the file to create the script with
+        :param contents: Contents of the script file
+        :param file_path: The path of the file where to create it in (we use /tmp/ by default)
+        :return:
         """
-        file_path = os.path.join(self.tmp_dir, file_name)
+        if not file_path:
+            file_path = os.path.join(self.tmp_dir, file_name)
+
+        directory = os.path.dirname(file_path)
+        if not os.path.exists(directory):
+            os.mkdir(directory)
 
         with open(file_path, "w") as script:
             if file_name.endswith(".py"):
