@@ -29,15 +29,20 @@ class Ubuntu14OSUtil(DefaultOSUtil):
     def __init__(self):
         super(Ubuntu14OSUtil, self).__init__()
         self.jit_enabled = True
+        self.service_name = self.get_service_name()
+
+    @staticmethod
+    def get_service_name():
+        return "walinuxagent"
 
     def start_network(self):
         return shellutil.run("service networking start", chk_err=False)
 
     def stop_agent_service(self):
-        return shellutil.run("service walinuxagent stop", chk_err=False)
+        return shellutil.run("service {0} stop".format(self.service_name), chk_err=False)
 
     def start_agent_service(self):
-        return shellutil.run("service walinuxagent start", chk_err=False)
+        return shellutil.run("service {0} start".format(self.service_name), chk_err=False)
 
     def remove_rules_files(self, rules_files=""):
         pass
@@ -55,8 +60,7 @@ class Ubuntu12OSUtil(Ubuntu14OSUtil):
 
     # Override
     def get_dhcp_pid(self):
-        ret = shellutil.run_get_output("pidof dhclient3", chk_err=False)
-        return ret[1] if ret[0] == 0 else None
+        return self._get_dhcp_pid(["pidof", "dhclient3"])
 
     def mount_cgroups(self):
         pass
@@ -68,12 +72,13 @@ class Ubuntu16OSUtil(Ubuntu14OSUtil):
     """
     def __init__(self):
         super(Ubuntu16OSUtil, self).__init__()
+        self.service_name = self.get_service_name()
 
     def register_agent_service(self):
-        return shellutil.run("systemctl unmask walinuxagent", chk_err=False)
+        return shellutil.run("systemctl unmask {0}".format(self.service_name), chk_err=False)
 
     def unregister_agent_service(self):
-        return shellutil.run("systemctl mask walinuxagent", chk_err=False)
+        return shellutil.run("systemctl mask {0}".format(self.service_name), chk_err=False)
 
     def mount_cgroups(self):
         """
@@ -88,10 +93,10 @@ class Ubuntu18OSUtil(Ubuntu16OSUtil):
     """
     def __init__(self):
         super(Ubuntu18OSUtil, self).__init__()
+        self.service_name = self.get_service_name()
 
     def get_dhcp_pid(self):
-        ret = shellutil.run_get_output("pidof systemd-networkd")
-        return ret[1] if ret[0] == 0 else None
+        return self._get_dhcp_pid(["pidof", "systemd-networkd"])
 
     def start_network(self):
         return shellutil.run("systemctl start systemd-networkd", chk_err=False)
@@ -106,10 +111,10 @@ class Ubuntu18OSUtil(Ubuntu16OSUtil):
         return self.stop_network()
 
     def start_agent_service(self):
-        return shellutil.run("systemctl start walinuxagent", chk_err=False)
+        return shellutil.run("systemctl start {0}".format(self.service_name), chk_err=False)
 
     def stop_agent_service(self):
-        return shellutil.run("systemctl stop walinuxagent", chk_err=False)
+        return shellutil.run("systemctl stop {0}".format(self.service_name), chk_err=False)
 
 
 class UbuntuOSUtil(Ubuntu16OSUtil):

@@ -20,7 +20,6 @@
 import base64
 import errno
 import struct
-import sys
 import os.path
 import subprocess
 
@@ -29,9 +28,10 @@ from azurelinuxagent.common.exception import CryptError
 
 import azurelinuxagent.common.logger as logger
 import azurelinuxagent.common.utils.shellutil as shellutil
-import azurelinuxagent.common.utils.textutil as textutil
+
 
 DECRYPT_SECRET_CMD = "{0} cms -decrypt -inform DER -inkey {1} -in /dev/stdin"
+
 
 class CryptUtil(object):
     def __init__(self, openssl_cmd):
@@ -46,34 +46,30 @@ class CryptUtil(object):
                "-out {2}").format(self.openssl_cmd, prv_file, crt_file)
         rc = shellutil.run(cmd)
         if rc != 0:
-            logger.error("Failed to create {0} and {1} certificates".format(
-                prv_file, crt_file))
+            logger.error("Failed to create {0} and {1} certificates".format(prv_file, crt_file))
 
     def get_pubkey_from_prv(self, file_name):
         if not os.path.exists(file_name):
             raise IOError(errno.ENOENT, "File not found", file_name)
         else:
-            cmd = "{0} rsa -in {1} -pubout 2>/dev/null".format(self.openssl_cmd,
-                                                               file_name)
-            pub = shellutil.run_get_output(cmd)[1]
+            cmd = [self.openssl_cmd, "rsa", "-in", file_name, "-pubout"]
+            pub = shellutil.run_command(cmd, log_error=True)
             return pub
 
     def get_pubkey_from_crt(self, file_name):
         if not os.path.exists(file_name):
             raise IOError(errno.ENOENT, "File not found", file_name)
         else:
-            cmd = "{0} x509 -in {1} -pubkey -noout".format(self.openssl_cmd,
-                                                           file_name)
-            pub = shellutil.run_get_output(cmd)[1]
+            cmd = [self.openssl_cmd, "x509", "-in", file_name, "-pubkey", "-noout"]
+            pub = shellutil.run_command(cmd, log_error=True)
             return pub
 
     def get_thumbprint_from_crt(self, file_name):
         if not os.path.exists(file_name):
             raise IOError(errno.ENOENT, "File not found", file_name)
         else:
-            cmd = "{0} x509 -in {1} -fingerprint -noout".format(self.openssl_cmd,
-                                                                file_name)
-            thumbprint = shellutil.run_get_output(cmd)[1]
+            cmd = [self.openssl_cmd, "x509", "-in", file_name, "-fingerprint", "-noout"]
+            thumbprint = shellutil.run_command(cmd)
             thumbprint = thumbprint.rstrip().split('=')[1].replace(':', '').upper()
             return thumbprint
 
@@ -117,7 +113,7 @@ class CryptUtil(object):
             keydata.extend(b"\0")
             keydata.extend(self.num_to_bytes(n))
             keydata_base64 = base64.b64encode(bytebuffer(keydata))
-            return ustr(b"ssh-rsa " +  keydata_base64 + b"\n", 
+            return ustr(b"ssh-rsa " +  keydata_base64 + b"\n",
                         encoding='utf-8')
         except ImportError as e:
             raise CryptError("Failed to load pyasn1.codec.der")

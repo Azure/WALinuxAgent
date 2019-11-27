@@ -63,9 +63,7 @@ class OpenWRTOSUtil(DefaultOSUtil):
                                "output:{2}").format(username, retcode, out))
 
     def get_dhcp_pid(self):
-        cmd = "pidof {0}".format(self.dhclient_name)
-        ret= shellutil.run_get_output(cmd, chk_err=False)
-        return ret[1] if ret[0] == 0 else None
+        return self._get_dhcp_pid(["pidof", self.dhclient_name])
 
     def get_nic_state(self):
         """
@@ -135,16 +133,16 @@ class OpenWRTOSUtil(DefaultOSUtil):
             logger.warn("sshd service does not exists", username)
 
     def stop_agent_service(self):
-        return shellutil.run("/etc/init.d/waagent stop", chk_err=True)
+        return shellutil.run("/etc/init.d/{0} stop".format(self.service_name), chk_err=True)
 
     def start_agent_service(self):
-        return shellutil.run("/etc/init.d/waagent start", chk_err=True)
+        return shellutil.run("/etc/init.d/{0} start".format(self.service_name), chk_err=True)
 
     def register_agent_service(self):
-        return shellutil.run("/etc/init.d/waagent enable", chk_err=True)
+        return shellutil.run("/etc/init.d/{0} enable".format(self.service_name), chk_err=True)
 
     def unregister_agent_service(self):
-        return shellutil.run("/etc/init.d/waagent disable", chk_err=True)
+        return shellutil.run("/etc/init.d/{0} disable".format(self.service_name), chk_err=True)
 
     def set_hostname(self, hostname):
         fileutil.write_file('/etc/hostname', hostname)

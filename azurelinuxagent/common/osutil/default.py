@@ -45,7 +45,7 @@ from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.utils.cryptutil import CryptUtil
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
 from azurelinuxagent.common.utils.networkutil import RouteEntry, NetworkInterfaceCard
-from azurelinuxagent.common.version import DISTRO_CODE_NAME
+from azurelinuxagent.common.utils.shellutil import CommandError
 
 __RULES_FILES__ = [ "/lib/udev/rules.d/75-persistent-net-generator.rules",
                     "/etc/udev/rules.d/70-persistent-net.rules" ]
@@ -104,6 +104,11 @@ class DefaultOSUtil(object):
         self.selinux = None
         self.disable_route_warning = False
         self.jit_enabled = False
+        self.service_name = self.get_service_name()
+
+    @staticmethod
+    def get_service_name():
+        return "waagent"
 
     def get_firewall_dropped_packets(self, dst_ip=None):
         # If a previous attempt failed, do not retry
@@ -299,17 +304,9 @@ class DefaultOSUtil(object):
     @staticmethod
     def is_cgroups_supported():
         """
-        Enabled by default; disabled in WSL and Trusty.
+        Enabled by default; disabled if the base path of cgroups doesn't exist.
         """
-        is_wsl = '-Microsoft-' in platform.platform()
-        supported = True
-        base_fs_exists = os.path.exists(BASE_CGROUPS)
-
-        # Fails on Trusty based systems as cgroups is not mounted by default.
-        if DISTRO_CODE_NAME.lower() is "trusty":
-            supported = False
-
-        return not is_wsl and base_fs_exists and supported
+        return os.path.exists(BASE_CGROUPS)
 
     @staticmethod
     def _cgroup_path(tail=""):
@@ -325,22 +322,34 @@ class DefaultOSUtil(object):
                            option="-t tmpfs",
                            chk_err=False)
             elif not os.path.isdir(self._cgroup_path()):
-                logger.error("Could not mount cgroups: ordinary file at {0}".format(path))
+                logger.error("Could not mount cgroups: ordinary file at {0}", path)
                 return
 
-            for metric_hierarchy in ['cpu,cpuacct', 'memory']:
-                target_path = self._cgroup_path(metric_hierarchy)
-                if not os.path.exists(target_path):
-                    fileutil.mkdir(target_path)
-                    self.mount(device=metric_hierarchy,
-                               mount_point=target_path,
-                               option="-t cgroup -o {0}".format(metric_hierarchy),
-                               chk_err=False)
+            controllers_to_mount = ['cpu,cpuacct', 'memory']
+            errors = 0
+            cpu_mounted = False
+            for controller in controllers_to_mount:
+                try:
+                    target_path = self._cgroup_path(controller)
+                    if not os.path.exists(target_path):
+                        fileutil.mkdir(target_path)
+                        self.mount(device=controller,
+                                   mount_point=target_path,
+                                   option="-t cgroup -o {0}".format(controller),
+                                   chk_err=False)
+                        if controller == 'cpu,cpuacct':
+                            cpu_mounted = True
+                except Exception as exception:
+                    errors += 1
+                    if errors == len(controllers_to_mount):
+                        raise
+                    logger.warn("Could not mount cgroup controller {0}: {1}", controller, ustr(exception))
 
-            for metric_hierarchy in ['cpu', 'cpuacct']:
-                target_path = self._cgroup_path(metric_hierarchy)
-                if not os.path.exists(target_path):
-                    os.symlink(self._cgroup_path('cpu,cpuacct'), target_path)
+            if cpu_mounted:
+                for controller in ['cpu', 'cpuacct']:
+                    target_path = self._cgroup_path(controller)
+                    if not os.path.exists(target_path):
+                        os.symlink(self._cgroup_path('cpu,cpuacct'), target_path)
 
         except OSError as oe:
             # log a warning for read-only file systems
@@ -1097,9 +1106,19 @@ class DefaultOSUtil(object):
         cmd = "ip route add {0} via {1}".format(net, gateway)
         return shellutil.run(cmd, chk_err=False)
 
+    @staticmethod
+    def _text_to_pid_list(text):
+        return [int(n) for n in text.split()]
+
+    @staticmethod
+    def _get_dhcp_pid(command):
+        try:
+            return DefaultOSUtil._text_to_pid_list(shellutil.run_command(command))
+        except CommandError as exception:
+            return []
+
     def get_dhcp_pid(self):
-        ret = shellutil.run_get_output("pidof dhclient", chk_err=False)
-        return ret[1] if ret[0] == 0 else None
+        return self._get_dhcp_pid(["pidof", "dhclient"])
 
     def set_hostname(self, hostname):
         fileutil.write_file('/etc/hostname', hostname)

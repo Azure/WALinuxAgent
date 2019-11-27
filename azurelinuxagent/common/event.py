@@ -28,14 +28,16 @@ import azurelinuxagent.common.conf as conf
 import azurelinuxagent.common.logger as logger
 from azurelinuxagent.common.exception import EventError
 from azurelinuxagent.common.future import ustr
-from azurelinuxagent.common.protocol.restapi import TelemetryEventParam, \
-    TelemetryEvent, \
-    get_properties
+from azurelinuxagent.common.datacontract import get_properties
+from azurelinuxagent.common.telemetryevent import TelemetryEventParam, TelemetryEvent
 from azurelinuxagent.common.utils import fileutil, textutil
 from azurelinuxagent.common.version import CURRENT_VERSION
 
 _EVENT_MSG = "Event: name={0}, op={1}, message={2}, duration={3}"
+TELEMETRY_EVENT_PROVIDER_ID = "69B669B9-4AF8-4C50-BDC4-6006FA76E975"
 
+# Store the last retrieved container id as an environment variable to be shared between threads for telemetry purposes
+CONTAINER_ID_ENV_VARIABLE = "AZURE_GUEST_AGENT_CONTAINER_ID"
 
 class WALAEventOperation:
     ActivateResourceDisk = "ActivateResourceDisk"
@@ -44,6 +46,7 @@ class WALAEventOperation:
     ArtifactsProfileBlob = "ArtifactsProfileBlob"
     AutoUpdate = "AutoUpdate"
     CustomData = "CustomData"
+    CGroupsCleanUp = "CGroupsCleanUp"
     CGroupsLimitsCrossed = "CGroupsLimitsCrossed"
     ExtensionMetricsData = "ExtensionMetricsData"
     Deploy = "Deploy"
@@ -71,6 +74,7 @@ class WALAEventOperation:
     ProcessGoalState = "ProcessGoalState"
     Provision = "Provision"
     ProvisionGuestAgent = "ProvisionGuestAgent"
+    Release43PR1580 = "Release43PR1580"
     RemoteAccessHandling = "RemoteAccessHandling"
     ReportStatus = "ReportStatus"
     ReportStatusExtended = "ReportStatusExtended"
@@ -92,6 +96,7 @@ SHOULD_ENCODE_MESSAGE_OP = [
     WALAEventOperation.Install,
     WALAEventOperation.UnInstall,
 ]
+
 
 class EventStatus(object):
     EVENT_STATUS_FILE = "event_status.json"
@@ -205,7 +210,11 @@ class EventLogger(object):
             logger.warn("Cannot save event -- Event reporter is not initialized.")
             return
 
-        fileutil.mkdir(self.event_dir, mode=0o700)
+        try:
+            fileutil.mkdir(self.event_dir, mode=0o700)
+        except (IOError, OSError) as e:
+            msg = "Failed to create events folder {0}. Error: {1}".format(self.event_dir, ustr(e))
+            raise EventError(msg)
 
         existing_events = os.listdir(self.event_dir)
         if len(existing_events) >= 1000:
@@ -225,7 +234,8 @@ class EventLogger(object):
                 hfile.write(data.encode("utf-8"))
             os.rename(filename + ".tmp", filename + ".tld")
         except IOError as e:
-            raise EventError("Failed to write events to file:{0}", e)
+            msg = "Failed to write events to file: {0}".format(e)
+            raise EventError(msg)
 
     def reset_periodic(self):
         self.periodic_events = {}
@@ -262,11 +272,10 @@ class EventLogger(object):
         if (not is_success) and log_event:
             _log_event(name, op, message, duration, is_success=is_success)
 
-        self._add_event(duration, evt_type, is_internal, is_success, message, name, op, version, eventId=1)
-        self._add_event(duration, evt_type, is_internal, is_success, message, name, op, version, eventId=6)
+        self._add_event(duration, evt_type, is_internal, is_success, message, name, op, version, event_id=1)
 
-    def _add_event(self, duration, evt_type, is_internal, is_success, message, name, op, version, eventId):
-        event = TelemetryEvent(eventId, "69B669B9-4AF8-4C50-BDC4-6006FA76E975")
+    def _add_event(self, duration, evt_type, is_internal, is_success, message, name, op, version, event_id):
+        event = TelemetryEvent(event_id, TELEMETRY_EVENT_PROVIDER_ID)
         event.parameters.append(TelemetryEventParam('Name', name))
         event.parameters.append(TelemetryEventParam('Version', str(version)))
         event.parameters.append(TelemetryEventParam('IsInternal', is_internal))
@@ -276,12 +285,14 @@ class EventLogger(object):
         event.parameters.append(TelemetryEventParam('Message', message))
         event.parameters.append(TelemetryEventParam('Duration', duration))
         event.parameters.append(TelemetryEventParam('ExtensionType', evt_type))
+        event.parameters.append(TelemetryEventParam('ContainerId',
+                                                    os.environ.get(CONTAINER_ID_ENV_VARIABLE, "UNINITIALIZED")))
 
         data = get_properties(event)
         try:
             self.save_event(json.dumps(data))
         except EventError as e:
-            logger.error("{0}", e)
+            logger.periodic_error(logger.EVERY_FIFTEEN_MINUTES, "[PERIODIC] {0}".format(ustr(e)))
 
     def add_log_event(self, level, message):
         # By the time the message has gotten to this point it is formatted as

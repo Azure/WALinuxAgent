@@ -85,20 +85,19 @@ class BigIpOSUtil(DefaultOSUtil):
         return shellutil.run("/usr/bin/bigstart restart sshd", chk_err=False)
 
     def stop_agent_service(self):
-        return shellutil.run("/sbin/service waagent stop", chk_err=False)
+        return shellutil.run("/sbin/service {0} stop".format(self.service_name), chk_err=False)
 
     def start_agent_service(self):
-        return shellutil.run("/sbin/service waagent start", chk_err=False)
+        return shellutil.run("/sbin/service {0} start".format(self.service_name), chk_err=False)
 
     def register_agent_service(self):
-        return shellutil.run("/sbin/chkconfig --add waagent", chk_err=False)
+        return shellutil.run("/sbin/chkconfig --add {0}".format(self.service_name), chk_err=False)
 
     def unregister_agent_service(self):
-        return shellutil.run("/sbin/chkconfig --del waagent", chk_err=False)
+        return shellutil.run("/sbin/chkconfig --del {0}".format(self.service_name), chk_err=False)
 
     def get_dhcp_pid(self):
-        ret = shellutil.run_get_output("/sbin/pidof dhclient")
-        return ret[1] if ret[0] == 0 else None
+        return self._get_dhcp_pid(["/sbin/pidof", "dhclient"])
 
     def set_hostname(self, hostname):
         """Set the static hostname of the device

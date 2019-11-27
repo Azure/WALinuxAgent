@@ -19,6 +19,7 @@ from datetime import datetime as dt
 
 from azurelinuxagent.common import logger
 from azurelinuxagent.common.future import ustr
+from azurelinuxagent.common.exception import CGroupsException
 
 
 class CGroupsTelemetry(object):
@@ -35,24 +36,26 @@ class CGroupsTelemetry(object):
 
     @staticmethod
     def _process_cgroup_metric(cgroup_metrics):
-        current_memory_usage, max_memory_levels, current_cpu_usage = cgroup_metrics.get_metrics()
+        memory_usage = cgroup_metrics.get_memory_usage()
+        max_memory_usage = cgroup_metrics.get_max_memory_usage()
+        cpu_usage = cgroup_metrics.get_cpu_usage()
 
         processed_extension = {}
 
-        if current_cpu_usage.count() > 0:
-            processed_extension["cpu"] = {"cur_cpu": CGroupsTelemetry._get_metrics_list(current_cpu_usage)}
+        if cpu_usage.count() > 0:
+            processed_extension["cpu"] = {"cur_cpu": CGroupsTelemetry._get_metrics_list(cpu_usage)}
 
-        if current_memory_usage.count() > 0:
+        if memory_usage.count() > 0:
             if "memory" in processed_extension:
-                processed_extension["memory"]["cur_mem"] = CGroupsTelemetry._get_metrics_list(current_memory_usage)
+                processed_extension["memory"]["cur_mem"] = CGroupsTelemetry._get_metrics_list(memory_usage)
             else:
-                processed_extension["memory"] = {"cur_mem": CGroupsTelemetry._get_metrics_list(current_memory_usage)}
+                processed_extension["memory"] = {"cur_mem": CGroupsTelemetry._get_metrics_list(memory_usage)}
 
-        if max_memory_levels.count() > 0:
+        if max_memory_usage.count() > 0:
             if "memory" in processed_extension:
-                processed_extension["memory"]["max_mem"] = CGroupsTelemetry._get_metrics_list(max_memory_levels)
+                processed_extension["memory"]["max_mem"] = CGroupsTelemetry._get_metrics_list(max_memory_usage)
             else:
-                processed_extension["memory"] = {"max_mem": CGroupsTelemetry._get_metrics_list(max_memory_levels)}
+                processed_extension["memory"] = {"max_mem": CGroupsTelemetry._get_metrics_list(max_memory_usage)}
 
         return processed_extension
 
@@ -105,8 +108,6 @@ class CGroupsTelemetry(object):
                     CGroupsTelemetry._cgroup_metrics[key].marked_for_delete]:
             del CGroupsTelemetry._cgroup_metrics[key]
 
-        logger.reset_periodic()
-
         return collected_metrics
 
     @staticmethod
@@ -117,19 +118,7 @@ class CGroupsTelemetry(object):
                 if cgroup.name not in CGroupsTelemetry._cgroup_metrics:
                     CGroupsTelemetry._cgroup_metrics[cgroup.name] = CgroupMetrics()
 
-                metric = None
-                # noinspection PyBroadException
-                try:
-                    metric = cgroup.collect()
-                except Exception as e:
-                    if isinstance(e, (IOError, OSError)) and e.errno == errno.ENOENT:
-                        pass
-                    else:
-                        logger.periodic_warn(logger.EVERY_HALF_HOUR,
-                                             'Could not collect the cgroup metrics for cgroup path {0}. '
-                                             'Internal error : {1}'.format(cgroup.path, ustr(e)))
-                if metric:
-                    CGroupsTelemetry._cgroup_metrics[cgroup.name].add_new_data(cgroup.controller, metric)
+                CGroupsTelemetry._cgroup_metrics[cgroup.name].collect_data(cgroup)
 
                 if not cgroup.is_active():
                     CGroupsTelemetry.stop_tracking(cgroup)
@@ -151,32 +140,38 @@ class CGroupsTelemetry(object):
 
 class CgroupMetrics(object):
     def __init__(self):
-        self._current_memory_usage = Metric()
-        self._max_memory_levels = Metric()
-        self._current_cpu_usage = Metric()
+        self._memory_usage = Metric()
+        self._max_memory_usage = Metric()
+        self._cpu_usage = Metric()
         self.marked_for_delete = False
 
-    def _add_memory_usage(self, metric):
-        self._current_memory_usage.append(metric[0].value)
-        self._max_memory_levels.append(metric[1].value)
+    def collect_data(self, cgroup):
+        # noinspection PyBroadException
+        try:
+            if cgroup.controller == "cpu":
+                self._cpu_usage.append(cgroup.get_cpu_usage())
+            elif cgroup.controller == "memory":
+                self._memory_usage.append(cgroup.get_memory_usage())
+                self._max_memory_usage.append(cgroup.get_max_memory_usage())
+            else:
+                raise CGroupsException('CGroup controller {0} is not supported'.format(controller))
+        except Exception as e:
+            if not isinstance(e, (IOError, OSError)) or e.errno != errno.ENOENT:
+                logger.periodic_warn(logger.EVERY_HALF_HOUR, 'Could not collect metrics for cgroup {0}. Error : {1}'.format(cgroup.path, ustr(e)))
 
-    def _add_cpu_usage(self, metric):
-        self._current_cpu_usage.append(metric[0].value)
+    def get_memory_usage(self):
+        return self._memory_usage
 
-    def add_new_data(self, controller, metric):
-        if metric:
-            if controller is "cpu":
-                self._add_cpu_usage(metric)
-            elif controller is "memory":
-                self._add_memory_usage(metric)
+    def get_max_memory_usage(self):
+        return self._max_memory_usage
 
-    def get_metrics(self):
-        return self._current_memory_usage, self._max_memory_levels, self._current_cpu_usage
+    def get_cpu_usage(self):
+        return self._cpu_usage
 
     def clear(self):
-        self._current_memory_usage.clear()
-        self._max_memory_levels.clear()
-        self._current_cpu_usage.clear()
+        self._memory_usage.clear()
+        self._max_memory_usage.clear()
+        self._cpu_usage.clear()
 
 
 class Metric(object):
@@ -185,20 +180,21 @@ class Metric(object):
         self._first_poll_time = None
         self._last_poll_time = None
 
-    def append(self, metric):
+    def append(self, data):
         if not self._first_poll_time:
             #  We only want to do it first time.
             self._first_poll_time = dt.utcnow()
 
-        self._data.append(metric)
+        self._data.append(data)
         self._last_poll_time = dt.utcnow()
 
     def clear(self):
+        self._first_poll_time = None
+        self._last_poll_time = None
         self._data *= 0
 
     def average(self):
-        return float(sum(self._data)
-                     ) / float(len(self._data)) if self._data else None
+        return float(sum(self._data)) / float(len(self._data)) if self._data else None
 
     def max(self):
         return max(self._data) if self._data else None

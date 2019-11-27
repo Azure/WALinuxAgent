@@ -32,6 +32,7 @@ import azurelinuxagent.common.utils.textutil as textutil
 from azurelinuxagent.common.version import DISTRO_NAME, DISTRO_VERSION, DISTRO_FULL_NAME
 from azurelinuxagent.common.osutil.default import DefaultOSUtil
 
+
 class SUSE11OSUtil(DefaultOSUtil):
 
     def __init__(self):
@@ -44,9 +45,7 @@ class SUSE11OSUtil(DefaultOSUtil):
         shellutil.run("hostname {0}".format(hostname), chk_err=False)
 
     def get_dhcp_pid(self):
-        ret = shellutil.run_get_output("pidof {0}".format(self.dhclient_name),
-                                       chk_err=False)
-        return ret[1] if ret[0] == 0 else None
+        return self._get_dhcp_pid(["pidof", self.dhclient_name])
 
     def is_dhcp_enabled(self):
         return True
@@ -66,16 +65,17 @@ class SUSE11OSUtil(DefaultOSUtil):
         return shellutil.run("/sbin/service sshd restart", chk_err=False)
 
     def stop_agent_service(self):
-        return shellutil.run("/sbin/service waagent stop", chk_err=False)
+        return shellutil.run("/sbin/service {0} stop".format(self.service_name), chk_err=False)
 
     def start_agent_service(self):
-        return shellutil.run("/sbin/service waagent start", chk_err=False)
+        return shellutil.run("/sbin/service {0} start".format(self.service_name), chk_err=False)
 
     def register_agent_service(self):
-        return shellutil.run("/sbin/insserv waagent", chk_err=False)
+        return shellutil.run("/sbin/insserv {0}".format(self.service_name), chk_err=False)
 
     def unregister_agent_service(self):
-        return shellutil.run("/sbin/insserv -r waagent", chk_err=False)
+        return shellutil.run("/sbin/insserv -r {0}".format(self.service_name), chk_err=False)
+
 
 class SUSEOSUtil(SUSE11OSUtil):
     def __init__(self):
@@ -97,15 +97,13 @@ class SUSEOSUtil(SUSE11OSUtil):
         return shellutil.run("systemctl restart sshd", chk_err=False)
 
     def stop_agent_service(self):
-        return shellutil.run("systemctl stop waagent", chk_err=False)
+        return shellutil.run("systemctl stop {0}".format(self.service_name), chk_err=False)
 
     def start_agent_service(self):
-        return shellutil.run("systemctl start waagent", chk_err=False)
+        return shellutil.run("systemctl start {0}".format(self.service_name), chk_err=False)
 
     def register_agent_service(self):
-        return shellutil.run("systemctl enable waagent", chk_err=False)
+        return shellutil.run("systemctl enable {0}".format(self.service_name), chk_err=False)
 
     def unregister_agent_service(self):
-        return shellutil.run("systemctl disable waagent", chk_err=False)
-
-
+        return shellutil.run("systemctl disable {0}".format(self.service_name), chk_err=False)
