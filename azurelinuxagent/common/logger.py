@@ -18,9 +18,9 @@
 Log utils
 """
 import sys
+from datetime import datetime, timedelta
 
 from azurelinuxagent.common.future import ustr
-from datetime import datetime, timedelta
 
 EVERY_DAY = timedelta(days=1)
 EVERY_HALF_DAY = timedelta(hours=12)
@@ -28,6 +28,7 @@ EVERY_SIX_HOURS = timedelta(hours=6)
 EVERY_HOUR = timedelta(hours=1)
 EVERY_HALF_HOUR = timedelta(minutes=30)
 EVERY_FIFTEEN_MINUTES = timedelta(minutes=15)
+EVERY_MINUTE = timedelta(minutes=1)
 
 
 class Logger(object):
@@ -81,6 +82,43 @@ class Logger(object):
         self.log(LogLevel.ERROR, msg_format, *args)
 
     def log(self, level, msg_format, *args):
+        def write_log(log_appender):
+            """
+            The appender_lock flag is used to signal if the logger is currently in use. This prevents a subsequent log
+            coming in due to writing of a log statement to be not written.
+
+            Eg:
+            Assuming a logger with two appenders - FileAppender and TelemetryAppender. Here is an example of
+            how using appender_lock flag can help.
+
+            logger.warn("foo")
+                |- log.warn() (azurelinuxagent.common.logger.Logger.warn)
+                    |- log() (azurelinuxagent.common.logger.Logger.log)
+                        |- FileAppender.appender_lock is currently False not log_appender.appender_lock is True
+                            |- We sets it to True.
+                        |- FileAppender.write completes.
+                        |- FileAppender.appender_lock sets to False.
+                        |- TelemetryAppender.appender_lock is currently False not log_appender.appender_lock is True
+                            |- We sets it to True.
+                    [A] |- TelemetryAppender.write gets called but has an error and writes a log.warn("bar")
+                            |- log() (azurelinuxagent.common.logger.Logger.log)
+                            |- FileAppender.appender_lock is set to True (log_appender.appender_lock was false when entering).
+                            |- FileAppender.write completes.
+                            |- FileAppender.appender_lock sets to False.
+                            |- TelemetryAppender.appender_lock is already True, not log_appender.appender_lock is False
+                            Thus [A] cannot happen again if TelemetryAppender.write is not getting called. It prevents
+                            faulty appenders to not get called again and again.
+
+            :param log_appender: Appender
+            :return: None
+            """
+            if not log_appender.appender_lock:
+                try:
+                    log_appender.appender_lock = True
+                    log_appender.write(level, log_item)
+                finally:
+                    log_appender.appender_lock = False
+
         # if msg_format is not unicode convert it to unicode
         if type(msg_format) is not ustr:
             msg_format = ustr(msg_format, errors="backslashreplace")
@@ -101,19 +139,28 @@ class Logger(object):
                         encoding="ascii")
 
         for appender in self.appenders:
-            appender.write(level, log_item)
+            write_log(appender)
         if self.logger != self:
             for appender in self.logger.appenders:
-                appender.write(level, log_item)
+                write_log(appender)
 
     def add_appender(self, appender_type, level, path):
         appender = _create_logger_appender(appender_type, level, path)
         self.appenders.append(appender)
 
 
-class ConsoleAppender(object):
-    def __init__(self, level, path):
+class Appender(object):
+    def __init__(self, level):
+        self.appender_lock = False
         self.level = level
+
+    def write(self, level, msg):
+        pass
+
+
+class ConsoleAppender(Appender):
+    def __init__(self, level, path):
+        super(ConsoleAppender, self).__init__(level)
         self.path = path
 
     def write(self, level, msg):
@@ -125,9 +172,9 @@ class ConsoleAppender(object):
                 pass
 
 
-class FileAppender(object):
+class FileAppender(Appender):
     def __init__(self, level, path):
-        self.level = level
+        super(FileAppender, self).__init__(level)
         self.path = path
 
     def write(self, level, msg):
@@ -139,9 +186,9 @@ class FileAppender(object):
                 pass
 
 
-class StdoutAppender(object):
+class StdoutAppender(Appender):
     def __init__(self, level):
-        self.level = level
+        super(StdoutAppender, self).__init__(level)
 
     def write(self, level, msg):
         if self.level <= level:
@@ -151,9 +198,9 @@ class StdoutAppender(object):
                 pass
 
 
-class TelemetryAppender(object):
+class TelemetryAppender(Appender):
     def __init__(self, level, event_func):
-        self.level = level
+        super(TelemetryAppender, self).__init__(level)
         self.event_func = event_func
 
     def write(self, level, msg):

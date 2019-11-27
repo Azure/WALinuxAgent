@@ -18,6 +18,7 @@
 import atexit
 import json
 import os
+import re
 import sys
 import threading
 import time
@@ -40,6 +41,16 @@ TELEMETRY_METRICS_EVENT_ID = 4
 
 # Store the last retrieved container id as an environment variable to be shared between threads for telemetry purposes
 CONTAINER_ID_ENV_VARIABLE = "AZURE_GUEST_AGENT_CONTAINER_ID"
+
+TELEMETRY_LOG_PROVIDER_ID = "FFF0196F-EE4C-4EAF-9AA5-776F622DEB4F"
+TELEMETRY_LOG_EVENT_ID = 7
+SEND_LOGS_TO_TELEMETRY = False
+
+MAX_NUMBER_OF_EVENTS = 1000
+
+
+def send_logs_to_telemetry():
+    return SEND_LOGS_TO_TELEMETRY
 
 
 def get_container_id_from_env():
@@ -223,16 +234,19 @@ class EventLogger(object):
             msg = "Failed to create events folder {0}. Error: {1}".format(self.event_dir, ustr(e))
             raise EventError(msg)
 
-        existing_events = os.listdir(self.event_dir)
-        if len(existing_events) >= 1000:
-            existing_events.sort()
-            oldest_files = existing_events[:-999]
-            logger.warn("Too many files under: {0}, removing oldest".format(self.event_dir))
-            try:
-                for f in oldest_files:
-                    os.remove(os.path.join(self.event_dir, f))
-            except IOError as e:
-                raise EventError(e)
+        try:
+            existing_events = os.listdir(self.event_dir)
+            if len(existing_events) >= MAX_NUMBER_OF_EVENTS:
+                logger.periodic_warn(logger.EVERY_MINUTE, "[PERIODIC] Too many files under: {0}, current count:  {1}, "
+                                                          "removing oldest event files".format(self.event_dir,
+                                                                                               len(existing_events)))
+                existing_events.sort()
+                oldest_files = existing_events[:-999]
+                for event_file in oldest_files:
+                    os.remove(os.path.join(self.event_dir, event_file))
+        except (IOError, OSError) as e:
+            msg = "Failed to remove old events from events folder {0}. Error: {1}".format(self.event_dir, ustr(e))
+            raise EventError(msg)
 
         filename = os.path.join(self.event_dir,
                                 ustr(int(time.time() * 1000000)))
@@ -240,7 +254,7 @@ class EventLogger(object):
             with open(filename + ".tmp", 'wb+') as hfile:
                 hfile.write(data.encode("utf-8"))
             os.rename(filename + ".tmp", filename + ".tld")
-        except IOError as e:
+        except (IOError, OSError) as e:
             msg = "Failed to write events to file: {0}".format(e)
             raise EventError(msg)
 
@@ -290,22 +304,10 @@ class EventLogger(object):
             logger.periodic_error(logger.EVERY_FIFTEEN_MINUTES, "[PERIODIC] {0}".format(ustr(e)))
 
     def add_log_event(self, level, message):
-        # By the time the message has gotten to this point it is formatted as
-        #
-        #   YYYY/MM/DD HH:mm:ss.fffffff LEVEL <text>.
-        #
-        # The timestamp and the level are redundant, and should be stripped.
-        # The logging library does not schematize this data, so I am forced
-        # to parse the message.  The format is regular, so the burden is low.
-
-        parts = message.split(' ', 3)
-        msg = parts[3] if len(parts) == 4 \
-            else message
-
-        event = TelemetryEvent(7, "FFF0196F-EE4C-4EAF-9AA5-776F622DEB4F")
+        event = TelemetryEvent(TELEMETRY_LOG_EVENT_ID, TELEMETRY_LOG_PROVIDER_ID)
         event.parameters.append(TelemetryEventParam('EventName', WALAEventOperation.Log))
         event.parameters.append(TelemetryEventParam('CapabilityUsed', logger.LogLevel.STRINGS[level]))
-        event.parameters.append(TelemetryEventParam('Context1', msg))
+        event.parameters.append(TelemetryEventParam('Context1', self._clean_up_message(message)))
         event.parameters.append(TelemetryEventParam('Context2', ''))
         event.parameters.append(TelemetryEventParam('Context3', ''))
 
@@ -342,7 +344,48 @@ class EventLogger(object):
         try:
             self.save_event(json.dumps(data))
         except EventError as e:
-            logger.error("{0}", e)
+            logger.periodic_error(logger.EVERY_FIFTEEN_MINUTES, "[PERIODIC] {0}".format(ustr(e)))
+
+    @staticmethod
+    def _clean_up_message(message):
+        # By the time the message has gotten to this point it is formatted as
+        #
+        #   Old Time format
+        #   YYYY/MM/DD HH:mm:ss.fffffff LEVEL <text>.
+        #   YYYY/MM/DD HH:mm:ss.fffffff <text>.
+        #   YYYY/MM/DD HH:mm:ss LEVEL <text>.
+        #   YYYY/MM/DD HH:mm:ss <text>.
+        #
+        #   UTC ISO Time format added in #1716
+        #   YYYY-MM-DDTHH:mm:ss.fffffffZ LEVEL <text>.
+        #   YYYY-MM-DDTHH:mm:ss.fffffffZ <text>.
+        #   YYYY-MM-DDTHH:mm:ssZ LEVEL <text>.
+        #   YYYY-MM-DDTHH:mm:ssZ <text>.
+        #
+        # The timestamp and the level are redundant, and should be stripped. The logging library does not schematize
+        # this data, so I am forced to parse the message using a regex.  The format is regular, so the burden is low,
+        # and usability on the telemetry side is high.
+
+        if not message:
+            return message
+
+        # Adding two regexs to simplify the handling of logs and to keep it maintainable. Most of the logs would have
+        # level includent in the log itself, but if it doesn't have, the second regex is a catch all case and will work
+        # for all the cases.
+        log_level_format_parser = re.compile(r"^.*(INFO|WARNING|ERROR|VERBOSE)\s*(.*)$")
+        log_format_parser = re.compile(r"^[0-9:/\-TZ\s.]*\s(.*)$")
+
+        # Parsing the log messages containing levels in it
+        extract_level_message = log_level_format_parser.search(message)
+        if extract_level_message:
+            return extract_level_message.group(2)  # The message bit
+        else:
+            # Parsing the log messages without levels in it.
+            extract_message = log_format_parser.search(message)
+            if extract_message:
+                return extract_message.group(1)  # The message bit
+            else:
+                return message
 
     @staticmethod
     def add_default_parameters_to_event(event_parameters, set_values_for_agent=True):
@@ -461,10 +504,20 @@ def add_event(name, op=WALAEventOperation.Unknown, is_success=True, duration=0, 
 
 
 def add_log_event(level, message, reporter=__event_logger__):
+    """
+    :param level: LoggerLevel of the log event
+    :param message: Message
+    :param reporter:
+    :return:
+    """
     if reporter.event_dir is None:
         return
 
-    reporter.add_log_event(level, message)
+    if not send_logs_to_telemetry():
+        return
+
+    if level >= logger.LogLevel.WARNING:
+        reporter.add_log_event(level, message)
 
 
 def add_periodic(delta, name, op=WALAEventOperation.Unknown, is_success=True, duration=0,

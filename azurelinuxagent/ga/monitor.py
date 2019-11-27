@@ -220,7 +220,7 @@ class MonitorHandler(object):
             logger.verbose("Processed event file: {0}", evt_file_name)
             os.remove(evt_file_name)
             return data_str
-        except (IOError, UnicodeDecodeError) as e:
+        except (IOError, OSError, UnicodeDecodeError) as e:
             os.remove(evt_file_name)
             msg = "Failed to process {0}, {1}".format(evt_file_name, e)
             raise EventError(msg)

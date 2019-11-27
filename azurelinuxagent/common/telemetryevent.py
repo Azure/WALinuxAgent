@@ -28,6 +28,7 @@ class TelemetryEventParam(DataContract):
     def __eq__(self, other):
         return isinstance(other, TelemetryEventParam) and other.name == self.name and other.value == self.value
 
+
 class TelemetryEvent(DataContract):
     def __init__(self, eventId=None, providerId=None):
         self.eventId = eventId

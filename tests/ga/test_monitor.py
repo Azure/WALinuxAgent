@@ -559,8 +559,9 @@ class TestEventMonitoring(AgentTestCase):
                                                        "DISTRO_CODE_NAME",
                                                        platform.release())
 
+    @patch("azurelinuxagent.common.event.send_logs_to_telemetry", return_value=True)
     @patch("azurelinuxagent.common.conf.get_lib_dir")
-    def test_collect_and_send_events_should_prepare_all_fields_for_all_event_files(self, mock_lib_dir, *args):
+    def test_collect_and_send_events_should_prepare_all_fields_for_all_event_files(self, mock_lib_dir, _, *args):
         # Test collecting and sending both agent and extension events from the moment they're created to the moment
         # they are to be reported. Ensure all necessary fields from sysinfo are present, as well as the container id.
         mock_lib_dir.return_value = self.lib_dir
@@ -578,8 +579,11 @@ class TestEventMonitoring(AgentTestCase):
                                     message="Heartbeat",
                                     log_event=False)
 
-        # Add agent event file
+        # Add agent metric
         self.event_logger.add_metric("Process", "% Processor Time", "walinuxagent.service", 10)
+
+        # Add agent log
+        self.event_logger.add_log_event(logger.LogLevel.WARNING, "Test sending a log event.")
 
         # Add extension event file the way extension do it, by dropping a .tld file in the events folder
         source_file = os.path.join(data_dir, "ext/dsc_event.json")
@@ -591,7 +595,7 @@ class TestEventMonitoring(AgentTestCase):
             monitor_handler.collect_and_send_events()
 
             telemetry_events_list = patch_report_event.call_args_list[0][0][0]
-            self.assertEqual(len(telemetry_events_list.events), 3)
+            self.assertEqual(len(telemetry_events_list.events), 4)
 
             for event in telemetry_events_list.events:
                 # All sysinfo parameters coming from the agent have to be present in the telemetry event to be emitted
@@ -745,7 +749,7 @@ class TestEventMonitoring(AgentTestCase):
                 return "builtins"
 
         with patch("{0}.open".format(builtins_version())) as mock_open:
-            mock_open.side_effect = OSError(13, "Permission denied")
+            mock_open.side_effect = IOError(13, "Permission denied")
             monitor_handler.collect_and_send_events()
 
             # Invalid events
@@ -897,6 +901,9 @@ class TestExtensionMetricsDataTelemetry(AgentTestCase):
         self.assertEqual(0, patch_add_metric.call_count)
         monitor_handler.stop()
 
+    # mocking get_proc_stat to make it run on Mac and other systems. This test does not need to read the values of the
+    # /proc/stat file on the filesystem.
+    @patch("azurelinuxagent.common.osutil.default.DefaultOSUtil._get_proc_stat")
     @patch('azurelinuxagent.common.event.EventLogger.add_metric')
     @patch("azurelinuxagent.common.cgroup.MemoryCgroup.get_memory_usage")
     @patch('azurelinuxagent.common.logger.Logger.periodic_warn')
@@ -918,6 +925,9 @@ class TestExtensionMetricsDataTelemetry(AgentTestCase):
         self.assertEqual(0, patch_add_metric.call_count)  # No metrics should be sent.
         monitor_handler.stop()
 
+    # mocking get_proc_stat to make it run on Mac and other systems. This test does not need to read the values of the
+    # /proc/stat file on the filesystem.
+    @patch("azurelinuxagent.common.osutil.default.DefaultOSUtil._get_proc_stat")
     @patch('azurelinuxagent.common.event.EventLogger.add_metric')
     @patch("azurelinuxagent.common.cgroup.CpuCgroup.get_cpu_usage")
     @patch('azurelinuxagent.common.logger.Logger.periodic_warn')
@@ -1131,6 +1141,8 @@ for i in range(3):
 
         monitor_handler.stop()
 
+    # mocking get_proc_stat to make it run on Mac and other systems. This test does not need to read the values of the
+    # /proc/stat file on the filesystem.
     @patch("azurelinuxagent.common.osutil.default.DefaultOSUtil._get_proc_stat")
     def test_generate_extension_metrics_telemetry_dictionary(self, *args):
         num_polls = 10

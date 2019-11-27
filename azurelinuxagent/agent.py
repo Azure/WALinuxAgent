@@ -67,10 +67,11 @@ class Agent(object):
         if conf.get_logs_console():
             logger.add_logger_appender(logger.AppenderType.CONSOLE, level,
                     path="/dev/console")
-        # See issue #1035
-        # logger.add_logger_appender(logger.AppenderType.TELEMETRY,
-        #                            logger.LogLevel.WARNING,
-        #                            path=event.add_log_event)
+
+        if not event.send_logs_to_telemetry():
+            logger.add_logger_appender(logger.AppenderType.TELEMETRY,
+                                       logger.LogLevel.WARNING,
+                                       path=event.add_log_event)
 
         ext_log_dir = conf.get_ext_log_dir()
         try:

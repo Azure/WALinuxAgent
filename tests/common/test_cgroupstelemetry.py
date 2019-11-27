@@ -19,8 +19,6 @@ import os
 import random
 import time
 
-from mock import patch
-
 from azurelinuxagent.common.cgroup import CGroup
 from azurelinuxagent.common.cgroupconfigurator import CGroupConfigurator
 from azurelinuxagent.common.cgroupstelemetry import CGroupsTelemetry, Metric
@@ -29,7 +27,7 @@ from azurelinuxagent.common.protocol.restapi import ExtHandlerProperties, ExtHan
 from azurelinuxagent.ga.exthandlers import ExtHandlerInstance
 from nose.plugins.attrib import attr
 from tests.tools import AgentTestCase, skip_if_predicate_false, skip_if_predicate_true, \
-                        are_cgroups_enabled, is_trusty_in_travis, i_am_root
+                        are_cgroups_enabled, is_trusty_in_travis, i_am_root, patch
 
 
 def raise_ioerror(*_):
@@ -259,6 +257,8 @@ class TestCGroupsTelemetry(AgentTestCase):
                         self.assertEqual(CGroupsTelemetry._cgroup_metrics.__len__(), no_extensions_expected)
                         self._assert_cgroup_metrics_equal([], [], [])
 
+    # mocking get_proc_stat to make it run on Mac and other systems. This test does not need to read the values of the
+    # /proc/stat file on the filesystem.
     @patch("azurelinuxagent.common.osutil.default.DefaultOSUtil._get_proc_stat")
     @patch("azurelinuxagent.common.logger.periodic_warn")
     @patch("azurelinuxagent.common.utils.fileutil.read_file")
@@ -285,6 +285,8 @@ class TestCGroupsTelemetry(AgentTestCase):
             CGroupsTelemetry.poll_all_tracked()
             self.assertEqual(0, patch_periodic_warn.call_count)
 
+    # mocking get_proc_stat to make it run on Mac and other systems. This test does not need to read the values of the
+    # /proc/stat file on the filesystem.
     @patch("azurelinuxagent.common.osutil.default.DefaultOSUtil._get_proc_stat")
     @patch("azurelinuxagent.common.logger.periodic_warn")
     @patch("azurelinuxagent.common.utils.fileutil.read_file")
@@ -318,6 +320,8 @@ class TestCGroupsTelemetry(AgentTestCase):
             CGroupsTelemetry.poll_all_tracked()
             self.assertEqual(poll_count * expected_count_per_call, patch_periodic_warn.call_count)
 
+    # mocking get_proc_stat to make it run on Mac and other systems. This test does not need to read the values of the
+    # /proc/stat file on the filesystem.
     @patch("azurelinuxagent.common.osutil.default.DefaultOSUtil._get_proc_stat")
     @patch("azurelinuxagent.common.utils.fileutil.read_file")
     def test_telemetry_polling_to_generate_transient_logs_index_error(self, mock_read_file, *args):
@@ -400,8 +404,8 @@ class TestCGroupsTelemetry(AgentTestCase):
             self.assertListEqual(generate_metric_list(cpu_percent_values),
                                  collected_metrics[name]["cpu"]["cur_cpu"][0:5])
 
-    # mocking get_proc_stat to make it run on Mac and other systems
-    # this test does not need to read the values of the /proc/stat file
+    # mocking get_proc_stat to make it run on Mac and other systems. This test does not need to read the values of the
+    # /proc/stat file on the filesystem.
     @patch("azurelinuxagent.common.osutil.default.DefaultOSUtil._get_proc_stat")
     def test_cgroup_tracking(self, *args):
         num_extensions = 5
@@ -420,8 +424,8 @@ class TestCGroupsTelemetry(AgentTestCase):
 
         self.assertEqual(num_extensions * num_controllers, len(CGroupsTelemetry._tracked))
 
-    # mocking get_proc_stat to make it run on Mac and other systems
-    # this test does not need to read the values of the /proc/stat file
+    # mocking get_proc_stat to make it run on Mac and other systems. This test does not need to read the values of the
+    # /proc/stat file on the filesystem.
     @patch("azurelinuxagent.common.osutil.default.DefaultOSUtil._get_proc_stat")
     def test_cgroup_pruning(self, *args):
         num_extensions = 5
@@ -448,8 +452,8 @@ class TestCGroupsTelemetry(AgentTestCase):
 
         self.assertEqual(0, len(CGroupsTelemetry._tracked))
 
-    # mocking get_proc_stat to make it run on Mac and other systems
-    # this test does not need to read the values of the /proc/stat file
+    # mocking get_proc_stat to make it run on Mac and other systems. This test does not need to read the values of the
+    # /proc/stat file on the filesystem.
     @patch("azurelinuxagent.common.osutil.default.DefaultOSUtil._get_proc_stat")
     def test_cgroup_is_tracked(self, *args):
         num_extensions = 5
@@ -468,8 +472,8 @@ class TestCGroupsTelemetry(AgentTestCase):
         self.assertFalse(CGroupsTelemetry.is_tracked("not_present_cpu_dummy_path"))
         self.assertFalse(CGroupsTelemetry.is_tracked("not_present_memory_dummy_path"))
 
-    # mocking get_proc_stat to make it run on Mac and other systems
-    # this test does not need to read the values of the /proc/stat file
+    # mocking get_proc_stat to make it run on Mac and other systems. This test does not need to read the values of the
+    # /proc/stat file on the filesystem.
     @patch("azurelinuxagent.common.osutil.default.DefaultOSUtil._get_proc_stat")
     def test_process_cgroup_metric_with_incorrect_cgroups_mounted(self, *args):
         num_extensions = 5
