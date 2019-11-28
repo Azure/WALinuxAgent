@@ -21,4 +21,4 @@ Note: Please add some context which would help us understand the problem better
 Add any other context about the problem here.
 
 **Log file attached**
-If possible, please provide the full /var/log/waagent.log file to help us understand the problem better and get the context of the issue. You can 
+If possible, please provide the full /var/log/waagent.log file to help us understand the problem better and get the context of the issue.
