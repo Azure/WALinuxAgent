@@ -22,10 +22,12 @@ from datetime import datetime as dt
 from azurelinuxagent.common import logger
 from azurelinuxagent.common.exception import CGroupsException
 from azurelinuxagent.common.future import ustr
-from azurelinuxagent.common.resourceusage import MemoryResourceUsage
+from azurelinuxagent.common.resourceusage import MemoryResourceUsage, ProcessInfo
 
 MetricValue = namedtuple('Metric', ['category', 'counter', 'instance', 'value'])
 StatmMetricValue = namedtuple('StatmMetricValue', ['pid', 'resource_metric'])
+
+DELIM = " | "
 
 
 class CGroupsTelemetry(object):
@@ -34,6 +36,13 @@ class CGroupsTelemetry(object):
     _tracked = []
     _cgroup_metrics = {}
     _rlock = threading.RLock()
+
+    @staticmethod
+    def get_process_info_summary(process_id):
+        process_cmdline = ProcessInfo.get_proc_cmdline(process_id)
+        process_name = ProcessInfo.get_proc_name(process_id)
+
+        return process_id + DELIM + process_name + DELIM + process_cmdline
 
     @staticmethod
     def _get_metrics_list(metric):
@@ -67,15 +76,15 @@ class CGroupsTelemetry(object):
         if memory_usage_per_process:
             if "proc_statm_memory" in processed_extension:
                 for pid_process_memory in memory_usage_per_process:
-                    processed_extension["proc_statm_memory"][pid_process_memory.pid] = {pid_process_memory.pid:
-                                                                    CGroupsTelemetry._get_metrics_list(
-                                                                        pid_process_memory.resource_metric)}
+                    processed_extension["proc_statm_memory"][CGroupsTelemetry.get_process_info_summary(
+                        pid_process_memory.pid)] = CGroupsTelemetry._get_metrics_list(
+                        pid_process_memory.resource_metric)
             else:
                 for pid_process_memory in memory_usage_per_process:
-                    processed_extension["proc_statm_memory"] = {pid_process_memory.pid:
+                    processed_extension["proc_statm_memory"] = {
+                        CGroupsTelemetry.get_process_info_summary(pid_process_memory.pid):
                                                             CGroupsTelemetry._get_metrics_list(
                                                                         pid_process_memory.resource_metric)}
-
         return processed_extension
 
     @staticmethod
@@ -165,15 +174,13 @@ class CGroupsTelemetry(object):
                         pids = cgroup.get_tracked_processes()
 
                         if pids:
-                            metrics.append(
-                                MetricValue("Memory", "Processes Tracked by Cgroup", cgroup.path + ":" + str(pids),
-                                            len(pids)))
                             for pid in pids:
                                 mem_usage_from_procstatm = MemoryResourceUsage.get_memory_usage_from_proc_statm(pid)
-                                metrics.append(
-                                    MetricValue("Memory", "Memory Used by Process", pid, mem_usage_from_procstatm))
-                                CGroupsTelemetry._cgroup_metrics[cgroup.name].add_proc_statm_memory(pid,
-                                                                                                    mem_usage_from_procstatm)
+                                metrics.append(MetricValue("Memory", "Memory Used by Process",
+                                                           CGroupsTelemetry.get_process_info_summary(pid),
+                                                           mem_usage_from_procstatm))
+                                CGroupsTelemetry._cgroup_metrics[cgroup.name].add_proc_statm_memory(
+                                    pid, mem_usage_from_procstatm)
                     else:
                         raise CGroupsException('CGroup controller {0} is not supported for cgroup {1}'.format(
                             cgroup.controller, cgroup.name))

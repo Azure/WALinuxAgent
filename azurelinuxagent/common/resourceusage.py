@@ -13,10 +13,11 @@
 # limitations under the License.
 #
 # Requires Python 2.6+ and Openssl 1.0+
+
 import os
-from resource import RUSAGE_SELF, getrusage
 
 from azurelinuxagent.common import logger
+from azurelinuxagent.common.exception import AgentError
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.logger import EVERY_SIX_HOURS
 from azurelinuxagent.common.utils import fileutil
@@ -24,6 +25,9 @@ from azurelinuxagent.common.utils import fileutil
 
 PAGE_SIZE = os.sysconf('SC_PAGE_SIZE')
 PROC_STATM_FILENAME_FORMAT = "/proc/{0}/statm"
+PROC_CMDLINE_FILENAME_FORMAT = "/proc/{0}/cmdline"
+PROC_COMM_FILENAME_FORMAT = "/proc/{0}/comm"
+PROC_STATUS_FILENAME_FORMAT = "/proc/{0}/status"
 
 
 class ResourceUsage(object):
@@ -68,3 +72,76 @@ class MemoryResourceUsage(ResourceUsage):
             raise
 
         return pid_rss * PAGE_SIZE
+
+
+class ProcessInfo(object):
+    @staticmethod
+    def get_proc_name(process_id):
+        proc_pid_rss = None
+        try:
+            proc_pid_rss = ProcessInfo._get_proc_comm(process_id)
+        except ProcessInfoException as e:
+            logger.periodic_info(EVERY_SIX_HOURS, "[PERIODIC] {0}", ustr(e))
+        return proc_pid_rss
+
+    @staticmethod
+    def get_proc_cmdline(process_id):
+        proc_pid_rss = None
+        try:
+            proc_pid_rss = ProcessInfo._get_proc_cmdline(process_id)
+        except ProcessInfoException as e:
+            logger.periodic_info(EVERY_SIX_HOURS, "[PERIODIC] {0}", ustr(e))
+        return proc_pid_rss
+
+    @classmethod
+    def _get_proc_cmdline(cls, process_id):
+        """
+        /proc/<pid>/cmdline returns cmdline arguments passed to the Linux kernel. The returned string is delimited with
+        the \0 character and needs to be replaced with some other character to make it readable.
+
+        Here an example:
+        root@vm:/# cat /proc/1392/cmdline
+        python--targettest_resourceusage.py
+        root@vm:/# cat /proc/1392/cmdline | tr "\0" " "
+        python --target test_resourceusage.py
+
+        :return: command line passed to the process string.
+        """
+        cmdline_file_name = PROC_CMDLINE_FILENAME_FORMAT.format(process_id)
+        try:
+            pid_cmdline = fileutil.read_file(cmdline_file_name).replace("\0", " ").strip()
+            pid_cmdline_str = str(pid_cmdline)
+        except Exception as e:
+            raise ProcessInfoException("Could not get contents from {0}".format(cmdline_file_name), e)
+
+        return pid_cmdline_str
+
+    @classmethod
+    def _get_proc_comm(cls, process_id):
+        """
+        /proc/<pid>/comm This file exposes the process's comm value—that is, the command name associated with the
+        process. Strings longer than TASK_COMM_LEN (16) characters are silently truncated.
+
+        Here an example:
+        root@vm:/# cat /proc/1392/comm
+        python
+
+        :return: process name
+        """
+        comm_file_name = PROC_COMM_FILENAME_FORMAT.format(process_id)
+        try:
+            pid_comm = fileutil.read_file(comm_file_name).strip()
+            pid_comm_str = str(pid_comm)
+        except Exception as e:
+            raise ProcessInfoException("Could not get contents from {0}".format(comm_file_name), e)
+
+        return pid_comm_str
+
+
+class ProcessInfoException(AgentError):
+    """
+    When we
+    """
+
+    def __init__(self, msg=None, inner=None):
+        super(ProcessInfoException, self).__init__(msg, inner)

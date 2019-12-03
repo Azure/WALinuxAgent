@@ -16,6 +16,7 @@
 #
 # Requires Python 2.6+ and Openssl 1.0+
 #
+
 """
 Defines all exceptions
 """
@@ -44,7 +45,7 @@ class AgentConfigError(AgentError):
 
 class AgentNetworkError(AgentError):
     """
-    When network is not available\.
+    When network is not available.
     """
 
     def __init__(self, msg=None, inner=None):
@@ -52,6 +53,10 @@ class AgentNetworkError(AgentError):
 
 
 class CGroupsException(AgentError):
+    """
+    When cgroups are not available or could not fetch data from CGroup.
+    """
+
     def __init__(self, msg=None, inner=None):
         super(CGroupsException, self).__init__(msg, inner)
 

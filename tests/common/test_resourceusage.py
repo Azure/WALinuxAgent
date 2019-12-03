@@ -16,7 +16,7 @@
 #
 import os
 
-from azurelinuxagent.common.resourceusage import MemoryResourceUsage
+from azurelinuxagent.common.resourceusage import MemoryResourceUsage, ProcessInfo
 from azurelinuxagent.common.utils import fileutil
 from tests.tools import AgentTestCase, data_dir, Mock, patch
 
@@ -32,3 +32,29 @@ class TestMemoryResourceUsage(AgentTestCase):
         patch_read_file.read_file.side_effect = IOError()
         mem_usage = MemoryResourceUsage.get_memory_usage_from_proc_statm(1000)
         self.assertEqual(0, mem_usage)
+
+
+class TestProcessInfo(AgentTestCase):
+    @patch("azurelinuxagent.common.resourceusage.fileutil")
+    def test_get_proc_cmdline(self, patch_read_file):
+        patch_read_file.read_file.return_value = fileutil.read_file(
+            os.path.join(data_dir, "cgroups", "dummy_proc_cmdline"))
+        cmdline = ProcessInfo.get_proc_cmdline(1000)
+        self.assertEqual("python -u bin/WALinuxAgent-2.2.45-py2.7.egg -run-exthandlers", cmdline)
+
+        # No such file exists; expect None instead.
+        patch_read_file.read_file.side_effect = IOError()
+        cmdline = ProcessInfo.get_proc_cmdline(1000)
+        self.assertEqual(None, cmdline)
+
+    @patch("azurelinuxagent.common.resourceusage.fileutil")
+    def test_get_proc_comm(self, patch_read_file):
+        patch_read_file.read_file.return_value = fileutil.read_file(
+            os.path.join(data_dir, "cgroups", "dummy_proc_comm"))
+        proc_name = ProcessInfo.get_proc_name(1000)
+        self.assertEqual("python", proc_name)
+
+        # No such file exists; expect None instead.
+        patch_read_file.read_file.side_effect = IOError()
+        proc_name = ProcessInfo.get_proc_name(1000)
+        self.assertEqual(None, proc_name)

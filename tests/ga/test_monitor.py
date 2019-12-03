@@ -1132,7 +1132,7 @@ for i in range(3):
                     self.assertIn(i.value, ["Memory", "Process"])
                 if i.name == "Counter":
                     self.assertIn(i.value, ["Max Memory Usage", "Total Memory Usage", "% Processor Time",
-                                            "Processes Tracked by Cgroup", "Memory Used by Process"])
+                                            "Memory Used by Process"])
                 if i.name == "Value":
                     self.assertTrue(isinstance(i.value, int) or isinstance(i.value, float))
 
