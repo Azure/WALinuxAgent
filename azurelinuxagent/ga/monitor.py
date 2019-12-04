@@ -98,7 +98,6 @@ def generate_extension_metrics_telemetry_dictionary(schema_version=1.0,
     else:
         return None
 
-
 def get_monitor_handler():
     return MonitorHandler()
 

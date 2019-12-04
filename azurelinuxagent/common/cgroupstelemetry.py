@@ -74,13 +74,12 @@ class CGroupsTelemetry(object):
                 processed_extension["memory"] = {"max_mem": CGroupsTelemetry._get_metrics_list(max_memory_usage)}
 
         if memory_usage_per_process:
-            if "proc_statm_memory" in processed_extension:
-                for pid_process_memory in memory_usage_per_process:
+            for pid_process_memory in memory_usage_per_process:
+                if "proc_statm_memory" in processed_extension:
                     processed_extension["proc_statm_memory"][CGroupsTelemetry.get_process_info_summary(
                         pid_process_memory.pid)] = CGroupsTelemetry._get_metrics_list(
                         pid_process_memory.resource_metric)
-            else:
-                for pid_process_memory in memory_usage_per_process:
+                else:
                     processed_extension["proc_statm_memory"] = {
                         CGroupsTelemetry.get_process_info_summary(pid_process_memory.pid):
                                                             CGroupsTelemetry._get_metrics_list(
