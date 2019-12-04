@@ -203,7 +203,6 @@ class ExtHandlerState(object):
     NotInstalled = "NotInstalled"
     Installed = "Installed"
     Enabled = "Enabled"
-    Failed = "Failed"
 
 
 def get_exthandlers_handler():
@@ -1023,19 +1022,14 @@ class ExtHandlerInstance(object):
         env = {'VERSION': version, ExtCommandEnvVariable.DisableReturnCode: disable_exit_code,
                ExtCommandEnvVariable.UpdatingFromVersion: updating_from_version}
 
-        try:
-            self.set_operation(WALAEventOperation.Update)
-            man = self.load_manifest()
-            update_cmd = man.get_update_command()
-            self.logger.info("Update extension [{0}]".format(update_cmd))
-            self.launch_command(update_cmd,
-                                timeout=900,
-                                extension_error_code=ExtensionErrorCodes.PluginUpdateProcessingFailed,
-                                env=env)
-        except ExtensionError:
-            # prevent the handler update from being retried
-            self.set_handler_state(ExtHandlerState.Failed)
-            raise
+        self.set_operation(WALAEventOperation.Update)
+        man = self.load_manifest()
+        update_cmd = man.get_update_command()
+        self.logger.info("Update extension [{0}]".format(update_cmd))
+        self.launch_command(update_cmd,
+                            timeout=900,
+                            extension_error_code=ExtensionErrorCodes.PluginUpdateProcessingFailed,
+                            env=env)
 
     def update_with_install(self, uninstall_exit_code=None):
         man = self.load_manifest()
