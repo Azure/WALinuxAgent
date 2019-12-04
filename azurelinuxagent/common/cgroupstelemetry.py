@@ -19,6 +19,7 @@ from collections import namedtuple
 from datetime import datetime as dt
 
 from azurelinuxagent.common import logger
+from azurelinuxagent.common.cgroup import CpuCgroup
 from azurelinuxagent.common.exception import CGroupsException
 from azurelinuxagent.common.future import ustr
 
@@ -68,6 +69,10 @@ class CGroupsTelemetry(object):
         """
         Adds the given item to the dictionary of tracked cgroups
         """
+        if isinstance(cgroup, CpuCgroup):
+            # set the current cpu usage
+            cgroup.initialize_cpu_usage()
+
         with CGroupsTelemetry._rlock:
             if not CGroupsTelemetry.is_tracked(cgroup.path):
                 CGroupsTelemetry._tracked.append(cgroup)
