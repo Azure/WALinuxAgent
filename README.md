@@ -1,11 +1,13 @@
 # Microsoft Azure Linux Agent
 
-## Master branch status
+## Develop branch status
 
 [![Travis CI](https://travis-ci.org/Azure/WALinuxAgent.svg?branch=develop)](https://travis-ci.org/Azure/WALinuxAgent/branches)
 [![CodeCov](https://codecov.io/gh/Azure/WALinusAgent/branch/develop/graph/badge.svg)](https://codecov.io/gh/Azure/WALinuxAgent/branch/develop)
 
 Each badge below represents our basic validation tests for an image, which are executed several times each day. These include provisioning, user account, disk, extension and networking scenarios.
+
+Note: These badges represent testing to our develop branch and not master which might not be stable. For a stable build please use master branch instead. 
 
 Image | Status |
 ------|--------|
