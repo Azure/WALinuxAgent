@@ -1,0 +1,38 @@
+{
+   "eventId":1,
+   "providerId":"69B669B9-4AF8-4C50-BDC4-6006FA76E975",
+   "parameters":[
+      {
+         "name":"Name",
+         "value":"CustomScript"
+      },
+      {
+         "name":"Version",
+         "value":"1.4.1.0"
+      },
+      {
+         "name":"IsInternal",
+         "value":false
+      },
+      {
+         "name":"Operation",
+         "value":"RunScript"
+      },
+      {
+         "name":"OperationSuccess",
+         "value":true
+      },
+      {
+         "name":"Message",
+         "value":"(01302)Script is finished.&#10;---stdout---&#10;hello&#10;&#10;---errout---&#10;&#10;"
+      },
+      {
+         "name":"Duration",
+         "value":0
+      },
+      {
+         "name":"ExtensionType",
+         "value":""
+      }
+   ]
+}

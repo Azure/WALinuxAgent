@@ -89,13 +89,10 @@ def run_get_output(cmd, chk_err=True, log_cmd=True, expected_errors=[]):
         output = subprocess.check_output(cmd,
                                          stderr=subprocess.STDOUT,
                                          shell=True)
-        output = ustr(output,
-                      encoding='utf-8',
-                      errors="backslashreplace")
+        output = _encode_command_output(output)
     except subprocess.CalledProcessError as e:
-        output = ustr(e.output,
-                      encoding='utf-8',
-                      errors="backslashreplace")
+        output = _encode_command_output(e.output)
+
         if chk_err:
             msg = u"Command: [{0}], " \
                   u"return code: [{1}], " \

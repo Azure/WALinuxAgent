@@ -61,6 +61,7 @@ class DaemonHandler(object):
 
     def run(self, child_args=None):
         logger.info("{0} Version:{1}", AGENT_LONG_NAME, AGENT_VERSION)
+        logger.info("OS: {0} {1}", DISTRO_NAME, DISTRO_VERSION)
         logger.info("Python: {0}.{1}.{2}", PY_VERSION_MAJOR, PY_VERSION_MINOR,
                     PY_VERSION_MICRO)
 
@@ -68,7 +69,6 @@ class DaemonHandler(object):
         self.initialize_environment()
 
         CGroupConfigurator.get_instance().create_agent_cgroups(track_cgroups=False)
-        CGroupConfigurator.get_instance().cleanup_old_cgroups()
 
         # If FIPS is enabled, set the OpenSSL environment variable
         # Note:
