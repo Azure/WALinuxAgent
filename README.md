@@ -7,7 +7,7 @@
 
 Each badge below represents our basic validation tests for an image, which are executed several times each day. These include provisioning, user account, disk, extension and networking scenarios.
 
-Note: These badges represent testing to our develop branch and not master which might not be stable. For a stable build please use master branch instead. 
+Note: These badges represent testing to our develop branch which might not be stable. For a stable build please use master branch instead. 
 
 Image | Status |
 ------|--------|
