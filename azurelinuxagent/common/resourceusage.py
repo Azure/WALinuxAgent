@@ -119,7 +119,7 @@ class ProcessInfo(object):
     @classmethod
     def _get_proc_comm(cls, process_id):
         """
-        /proc/<pid>/comm This file exposes the process's comm value—that is, the command name associated with the
+        /proc/<pid>/comm This file exposes the process's comm value-that is, the command name associated with the
         process. Strings longer than TASK_COMM_LEN (16) characters are silently truncated.
 
         Here an example:
