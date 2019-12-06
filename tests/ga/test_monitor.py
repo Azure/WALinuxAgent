@@ -40,15 +40,16 @@ from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.osutil.default import BASE_CGROUPS, DefaultOSUtil
 from azurelinuxagent.common.protocol.imds import ComputeInfo
 from azurelinuxagent.common.protocol.restapi import VMInfo
-from azurelinuxagent.common.protocol.wire import ExtHandler, ExtHandlerProperties, WireProtocol
-from azurelinuxagent.common.telemetryevent import TelemetryEventParam, TelemetryEvent
-from azurelinuxagent.common.utils import restutil, fileutil
-from azurelinuxagent.common.version import AGENT_VERSION, CURRENT_VERSION, AGENT_NAME, CURRENT_AGENT
+from azurelinuxagent.common.protocol.wire import ExtHandler, ExtHandlerProperties
+from azurelinuxagent.common.protocol.wire import WireProtocol
+from azurelinuxagent.common.telemetryevent import TelemetryEvent, TelemetryEventParam
+from azurelinuxagent.common.utils import fileutil, restutil
+from azurelinuxagent.common.version import AGENT_NAME, CURRENT_VERSION, AGENT_VERSION, CURRENT_AGENT
 from azurelinuxagent.ga.exthandlers import ExtHandlerInstance
-from azurelinuxagent.ga.monitor import parse_xml_event, get_monitor_handler, MonitorHandler, \
-    generate_extension_metrics_telemetry_dictionary, parse_json_event
+from azurelinuxagent.ga.monitor import generate_extension_metrics_telemetry_dictionary, get_monitor_handler, \
+    MonitorHandler, parse_json_event, parse_xml_event
 from tests.common.test_cgroupstelemetry import make_new_cgroup
-from tests.protocol.mockwiredata import WireProtocolData, DATA_FILE
+from tests.protocol.mockwiredata import DATA_FILE, WireProtocolData
 from tests.tools import Mock, MagicMock, patch, load_data, AgentTestCase, data_dir, are_cgroups_enabled, \
     i_am_root, skip_if_predicate_false, is_trusty_in_travis, skip_if_predicate_true
 
@@ -565,8 +566,9 @@ class TestEventMonitoring(AgentTestCase):
                                                        "DISTRO_CODE_NAME",
                                                        platform.release())
 
+    @patch("azurelinuxagent.common.event.send_logs_to_telemetry", return_value=True)
     @patch("azurelinuxagent.common.conf.get_lib_dir")
-    def test_collect_and_send_events_should_prepare_all_fields_for_all_event_files(self, mock_lib_dir, *args):
+    def test_collect_and_send_events_should_prepare_all_fields_for_all_event_files(self, mock_lib_dir, _, *args):
         # Test collecting and sending both agent and extension events from the moment they're created to the moment
         # they are to be reported. Ensure all necessary fields from sysinfo are present, as well as the container id.
         mock_lib_dir.return_value = self.lib_dir
@@ -584,8 +586,11 @@ class TestEventMonitoring(AgentTestCase):
                                     message="Heartbeat",
                                     log_event=False)
 
-        # Add agent event file
+        # Add agent metric
         self.event_logger.add_metric("Process", "% Processor Time", "walinuxagent.service", 10)
+
+        # Add agent log
+        self.event_logger.add_log_event(logger.LogLevel.WARNING, "Test sending a log event.")
 
         # Add extension event file the way extension do it, by dropping a .tld file in the events folder
         source_file = os.path.join(data_dir, "ext/dsc_event.json")
@@ -597,7 +602,7 @@ class TestEventMonitoring(AgentTestCase):
             monitor_handler.collect_and_send_events()
 
             telemetry_events_list = patch_report_event.call_args_list[0][0][0]
-            self.assertEqual(len(telemetry_events_list.events), 3)
+            self.assertEqual(len(telemetry_events_list.events), 4)
 
             for event in telemetry_events_list.events:
                 # All sysinfo parameters coming from the agent have to be present in the telemetry event to be emitted
@@ -633,8 +638,9 @@ class TestEventMonitoring(AgentTestCase):
         # Validating the crafted message by the collect_and_send_events call.
         self.assertEqual(1, patch_send_event.call_count)
         send_event_call_args = protocol.client.send_event.call_args[0]
-        sample_message = '<Event id="1">' \
-                         '<![CDATA[<Param Name="Name" Value="DummyExtension" T="mt:wstr" />' \
+
+        sample_message = '<Event id="1"><![CDATA[' \
+                         '<Param Name="Name" Value="DummyExtension" T="mt:wstr" />' \
                          '<Param Name="Version" Value="{0}" T="mt:wstr" />' \
                          '<Param Name="IsInternal" Value="False" T="mt:bool" />' \
                          '<Param Name="Operation" Value="Unknown" T="mt:wstr" />' \
@@ -657,13 +663,13 @@ class TestEventMonitoring(AgentTestCase):
                          '<Param Name="ResourceGroupName" Value="DummyRG" T="mt:wstr" />' \
                          '<Param Name="VMId" Value="DummyVmId" T="mt:wstr" />' \
                          '<Param Name="ImageOrigin" Value="1" T="mt:uint64" />' \
-                         '<Param Name="ContainerId" Value="c6d5526c-5ac2-4200-b6e2-56f2b70c5ab2" T="mt:wstr" />' \
                          '<Param Name="GAVersion" Value="{1}" T="mt:wstr" />' \
+                         '<Param Name="ContainerId" Value="c6d5526c-5ac2-4200-b6e2-56f2b70c5ab2" T="mt:wstr" />' \
                          '<Param Name="EventTid" Value="0" T="mt:uint64" />' \
                          '<Param Name="EventPid" Value="0" T="mt:uint64" />' \
                          '<Param Name="TaskName" Value="" T="mt:wstr" />' \
-                         '<Param Name="KeywordName" Value="" T="mt:wstr" />]]>' \
-                         '</Event>'.format(AGENT_VERSION, CURRENT_AGENT)
+                         '<Param Name="KeywordName" Value="" T="mt:wstr" />' \
+                         ']]></Event>'.format(AGENT_VERSION, CURRENT_AGENT)
 
         self.maxDiff = None
         self.assertEqual(sample_message, send_event_call_args[1])
@@ -750,7 +756,7 @@ class TestEventMonitoring(AgentTestCase):
                 return "builtins"
 
         with patch("{0}.open".format(builtins_version())) as mock_open:
-            mock_open.side_effect = OSError(13, "Permission denied")
+            mock_open.side_effect = IOError(13, "Permission denied")
             monitor_handler.collect_and_send_events()
 
             # Invalid events
@@ -902,6 +908,9 @@ class TestExtensionMetricsDataTelemetry(AgentTestCase):
         self.assertEqual(0, patch_add_metric.call_count)
         monitor_handler.stop()
 
+    # mocking get_proc_stat to make it run on Mac and other systems. This test does not need to read the values of the
+    # /proc/stat file on the filesystem.
+    @patch("azurelinuxagent.common.osutil.default.DefaultOSUtil._get_proc_stat")
     @patch('azurelinuxagent.common.event.EventLogger.add_metric')
     @patch("azurelinuxagent.common.cgroup.MemoryCgroup.get_memory_usage")
     @patch('azurelinuxagent.common.logger.Logger.periodic_warn')
@@ -923,6 +932,9 @@ class TestExtensionMetricsDataTelemetry(AgentTestCase):
         self.assertEqual(0, patch_add_metric.call_count)  # No metrics should be sent.
         monitor_handler.stop()
 
+    # mocking get_proc_stat to make it run on Mac and other systems. This test does not need to read the values of the
+    # /proc/stat file on the filesystem.
+    @patch("azurelinuxagent.common.osutil.default.DefaultOSUtil._get_proc_stat")
     @patch('azurelinuxagent.common.event.EventLogger.add_metric')
     @patch("azurelinuxagent.common.cgroup.CpuCgroup.get_cpu_usage")
     @patch('azurelinuxagent.common.logger.Logger.periodic_warn')
@@ -1138,6 +1150,8 @@ for i in range(3):
 
         monitor_handler.stop()
 
+    # mocking get_proc_stat to make it run on Mac and other systems. This test does not need to read the values of the
+    # /proc/stat file on the filesystem.
     @patch("azurelinuxagent.common.osutil.default.DefaultOSUtil._get_proc_stat")
     def test_generate_extension_metrics_telemetry_dictionary(self, *args):
         num_polls = 10

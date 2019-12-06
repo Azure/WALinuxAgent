@@ -23,16 +23,16 @@ import threading
 from datetime import datetime, timedelta
 
 from azurelinuxagent.common import event, logger
-from azurelinuxagent.common.event import add_event, \
-    WALAEventOperation, elapsed_milliseconds, report_metric
+from azurelinuxagent.common.event import add_event, elapsed_milliseconds, EventLogger, report_metric, WALAEventOperation
 from azurelinuxagent.common.exception import EventError
-from azurelinuxagent.common.future import ustr
+from azurelinuxagent.common.future import OrderedDict, ustr
 from azurelinuxagent.common.protocol.wire import GoalState
+from azurelinuxagent.common.telemetryevent import TelemetryEventParam
 from azurelinuxagent.common.utils import fileutil
 from azurelinuxagent.common.utils.extensionprocessutil import read_output
-from azurelinuxagent.common.version import CURRENT_VERSION, CURRENT_AGENT
+from azurelinuxagent.common.version import CURRENT_AGENT, CURRENT_VERSION
 from azurelinuxagent.ga.monitor import MonitorHandler
-from tests.tools import AgentTestCase, load_data, data_dir, patch, Mock
+from tests.tools import AgentTestCase, data_dir, load_data, Mock, patch
 
 
 class TestEvent(AgentTestCase):
@@ -437,6 +437,108 @@ class TestEvent(AgentTestCase):
         utc_start = datetime.utcnow() + timedelta(days=1)
         self.assertEqual(0, elapsed_milliseconds(utc_start))
 
+    def _assert_default_params_get_correctly_added(self, param_list_actual, parameters_expected):
+        default_parameters_expected_names = set(parameters_expected.keys())
+
+        # Converting list of TelemetryEventParam into a dictionary, for easier look up of values.
+        param_list_dict = OrderedDict([(param.name, param.value) for param in param_list_actual])
+
+        counter = 0
+        for p in default_parameters_expected_names:
+            self.assertIn(p, param_list_dict)
+            self.assertEqual(param_list_dict[p], parameters_expected[p])
+            counter += 1
+
+        self.assertEqual(len(default_parameters_expected_names), counter)
+
+    @patch("azurelinuxagent.common.event.get_container_id_from_env", return_value="TEST_CONTAINER_ID")
+    def test_add_default_parameters_to_extension_event(self, *args):
+        default_parameters_expected = {"GAVersion": CURRENT_AGENT, 'ContainerId': "TEST_CONTAINER_ID", 'OpcodeName': "",
+                                       'EventTid': 0, 'EventPid': 0, "TaskName": "", "KeywordName": ""}
+
+        # When no values are populated in the TelemetryEventParamList.
+        extension_param_list_empty = EventLogger.add_default_parameters_to_event([], set_values_for_agent=False)
+        self._assert_default_params_get_correctly_added(extension_param_list_empty, default_parameters_expected)
+
+        # When some values are already populated in the TelemetryEventParamList.
+        extension_param_list_populated = [TelemetryEventParam('Name', "DummyExtension"),
+                                          TelemetryEventParam('Version', CURRENT_VERSION),
+                                          TelemetryEventParam('Operation', "DummyOperation"),
+                                          TelemetryEventParam('OperationSuccess', True),
+                                          TelemetryEventParam('Message', "TestMessage"),
+                                          TelemetryEventParam('Duration', 10), TelemetryEventParam('ExtensionType', ''),
+                                          TelemetryEventParam('OpcodeName', '')]
+        extension_param_list_with_defaults = EventLogger.add_default_parameters_to_event(extension_param_list_populated,
+                                                                                         set_values_for_agent=False)
+        self._assert_default_params_get_correctly_added(extension_param_list_with_defaults, default_parameters_expected)
+
+        parameters_expected = {"GAVersion": CURRENT_AGENT, 'ContainerId': "TEST_CONTAINER_ID", 'OpcodeName': "",
+                               'EventTid': 100, 'EventPid': 10, "TaskName": "", "KeywordName": ""}
+
+        # When some values are already populated in the TelemetryEventParamList.
+        extension_param_list_populated = [TelemetryEventParam('Name', "DummyExtension"),
+                                          TelemetryEventParam('Version', CURRENT_VERSION),
+                                          TelemetryEventParam('Operation', "DummyOperation"),
+                                          TelemetryEventParam('OperationSuccess', True),
+                                          TelemetryEventParam('Message', "TestMessage"),
+                                          TelemetryEventParam('Duration', 10),
+                                          TelemetryEventParam('ExtensionType', ''),
+                                          TelemetryEventParam('OpcodeName', ''),
+                                          TelemetryEventParam('EventTid', 100),
+                                          TelemetryEventParam('EventPid', 10)]
+        extension_param_list_with_defaults = EventLogger.add_default_parameters_to_event(extension_param_list_populated,
+                                                                                         set_values_for_agent=False)
+        self._assert_default_params_get_correctly_added(extension_param_list_with_defaults,
+                                                        parameters_expected)
+
+    @patch("threading.Thread.getName", return_value="HelloWorldTask")
+    @patch('os.getpid', return_value=42)
+    @patch("azurelinuxagent.common.event.get_container_id_from_env", return_value="TEST_CONTAINER_ID")
+    @patch("azurelinuxagent.common.event.datetime")
+    def test_add_default_parameters_to_agent_event(self, patch_datetime, *args):
+        patch_datetime.utcnow = Mock(return_value=datetime.strptime("2019-01-01 01:30:00",
+                                                                    '%Y-%m-%d %H:%M:%S'))
+        default_parameters_expected = {"GAVersion": CURRENT_AGENT,
+                                       'ContainerId': "TEST_CONTAINER_ID",
+                                       'OpcodeName': "2019-01-01 01:30:00",
+                                       'EventTid': threading.current_thread().ident,
+                                       'EventPid': 42,
+                                       "TaskName": "HelloWorldTask",
+                                       "KeywordName": ""}
+        agent_param_list_empty = EventLogger.add_default_parameters_to_event([], set_values_for_agent=True)
+        self._assert_default_params_get_correctly_added(agent_param_list_empty, default_parameters_expected)
+
+        # When some values are already populated in the TelemetryEventParamList.
+        agent_param_list_populated = [TelemetryEventParam('Name', "DummyExtension"),
+                                      TelemetryEventParam('Version', CURRENT_VERSION),
+                                      TelemetryEventParam('Operation', "DummyOperation"),
+                                      TelemetryEventParam('OperationSuccess', True),
+                                      TelemetryEventParam('Message', "TestMessage"),
+                                      TelemetryEventParam('Duration', 10), TelemetryEventParam('ExtensionType', ''),
+                                      TelemetryEventParam('OpcodeName', '')]
+        agent_param_list_after_defaults_added = EventLogger.add_default_parameters_to_event(agent_param_list_populated,
+                                                                                            set_values_for_agent=True)
+        self._assert_default_params_get_correctly_added(agent_param_list_after_defaults_added,
+                                                        default_parameters_expected)
+
+        # When some values are already populated in the TelemetryEventParamList, along with some
+        # default values already populated and it should be replaced, when set_values_for_agent=True
+        agent_param_list_populated = [TelemetryEventParam('Name', "DummyExtension"),
+                                      TelemetryEventParam('Version', CURRENT_VERSION),
+                                      TelemetryEventParam('Operation', "DummyOperation"),
+                                      TelemetryEventParam('OperationSuccess', True),
+                                      TelemetryEventParam('Message', "TestMessage"),
+                                      TelemetryEventParam('Duration', 10), TelemetryEventParam('ExtensionType', ''),
+                                      TelemetryEventParam('OpcodeName', 'timestamp'),
+                                      TelemetryEventParam('ContainerId', 'SOME-CONTAINER'),
+                                      TelemetryEventParam('EventTid', 10101010), TelemetryEventParam('EventPid', 110),
+                                      TelemetryEventParam('TaskName', 'Test-TaskName')]
+
+        agent_param_list_after_defaults_added = EventLogger.add_default_parameters_to_event(agent_param_list_populated,
+                                                                                            set_values_for_agent=True)
+        self._assert_default_params_get_correctly_added(agent_param_list_after_defaults_added,
+                                                        default_parameters_expected)
+
 
 class TestMetrics(AgentTestCase):
     @patch('azurelinuxagent.common.event.EventLogger.save_event')
@@ -484,3 +586,52 @@ class TestMetrics(AgentTestCase):
                     value_present = True
             
             self.assertTrue(category_present and counter_present and instance_present and value_present)
+
+    def test_cleanup_message(self):
+        ev_logger = event.EventLogger()
+
+        self.assertEqual(None, ev_logger._clean_up_message(None))
+        self.assertEqual("", ev_logger._clean_up_message(""))
+        self.assertEqual("Daemon Activate resource disk failure", ev_logger._clean_up_message(
+            "Daemon Activate resource disk failure"))
+        self.assertEqual("[M.A.E.CS-2.0.7] Target handler state", ev_logger._clean_up_message(
+            '2019/10/07 21:54:16.629444 INFO [M.A.E.CS-2.0.7] Target handler state'))
+        self.assertEqual("[M.A.E.CS-2.0.7] Initializing extension M.A.E.CS-2.0.7", ev_logger._clean_up_message(
+            '2019/10/07 21:54:17.284385 INFO [M.A.E.CS-2.0.7] Initializing extension M.A.E.CS-2.0.7'))
+        self.assertEqual("ExtHandler ProcessGoalState completed [incarnation 4; 4197 ms]", ev_logger._clean_up_message(
+            "2019/10/07 21:55:38.474861 INFO ExtHandler ProcessGoalState completed [incarnation 4; 4197 ms]"))
+        self.assertEqual("Daemon Azure Linux Agent Version:2.2.43", ev_logger._clean_up_message(
+            "2019/10/07 21:52:28.615720 INFO Daemon Azure Linux Agent Version:2.2.43"))
+        self.assertEqual('Daemon Cgroup controller "memory" is not mounted. Failed to create a cgroup for the VM Agent;'
+                         ' resource usage will not be tracked',
+                         ev_logger._clean_up_message('Daemon Cgroup controller "memory" is not mounted. Failed to '
+                                                     'create a cgroup for the VM Agent; resource usage will not be '
+                                                     'tracked'))
+        self.assertEqual('ExtHandler Root directory /sys/fs/cgroup/memory/walinuxagent.extensions does not exist.',
+                         ev_logger._clean_up_message("2019/10/08 23:45:05.691037 WARNING ExtHandler Root directory "
+                                                     "/sys/fs/cgroup/memory/walinuxagent.extensions does not exist."))
+        self.assertEqual("LinuxAzureDiagnostic started to handle.",
+                         ev_logger._clean_up_message("2019/10/07 22:02:40 LinuxAzureDiagnostic started to handle."))
+        self.assertEqual("VMAccess started to handle.",
+                         ev_logger._clean_up_message("2019/10/07 21:56:58 VMAccess started to handle."))
+        self.assertEqual(
+            '[PERIODIC] ExtHandler Root directory /sys/fs/cgroup/memory/walinuxagent.extensions does not exist.',
+            ev_logger._clean_up_message("2019/10/08 23:45:05.691037 WARNING [PERIODIC] ExtHandler Root directory "
+                                        "/sys/fs/cgroup/memory/walinuxagent.extensions does not exist."))
+        self.assertEqual("[PERIODIC] LinuxAzureDiagnostic started to handle.", ev_logger._clean_up_message(
+            "2019/10/07 22:02:40 [PERIODIC] LinuxAzureDiagnostic started to handle."))
+        self.assertEqual("[PERIODIC] VMAccess started to handle.",
+                         ev_logger._clean_up_message("2019/10/07 21:56:58 [PERIODIC] VMAccess started to handle."))
+        self.assertEqual('[PERIODIC] Daemon Cgroup controller "memory" is not mounted. Failed to create a cgroup for '
+                         'the VM Agent; resource usage will not be tracked',
+                         ev_logger._clean_up_message('[PERIODIC] Daemon Cgroup controller "memory" is not mounted. '
+                                                     'Failed to create a cgroup for the VM Agent; resource usage will '
+                                                     'not be tracked'))
+        self.assertEquals('The time should be in UTC', ev_logger._clean_up_message(
+            '2019-11-26T18:15:06.866746Z INFO The time should be in UTC'))
+        self.assertEquals('The time should be in UTC', ev_logger._clean_up_message(
+            '2019-11-26T18:15:06.866746Z The time should be in UTC'))
+        self.assertEquals('[PERIODIC] The time should be in UTC', ev_logger._clean_up_message(
+            '2019-11-26T18:15:06.866746Z INFO [PERIODIC] The time should be in UTC'))
+        self.assertEquals('[PERIODIC] The time should be in UTC', ev_logger._clean_up_message(
+            '2019-11-26T18:15:06.866746Z [PERIODIC] The time should be in UTC'))
