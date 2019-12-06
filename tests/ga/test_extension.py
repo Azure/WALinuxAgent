@@ -313,6 +313,7 @@ class TestExtension(ExtensionTestCase):
     def _assert_handler_status(self, report_vm_status, expected_status,
                                expected_ext_count, version,
                                expected_handler_name="OSTCExtensions.ExampleHandlerLinux"):
+        # self._assert_handler_status(protocol.report_vm_status, "NotReady", expected_ext_count=0, version="1.0.1")
         self.assertTrue(report_vm_status.called)
         args, kw = report_vm_status.call_args
         vm_status = args[0]
@@ -1478,15 +1479,28 @@ class TestExtension(ExtensionTestCase):
             self.assertEqual(1, patch_get_update_command.call_count)
             self.assertEqual(0, patch_get_enable_command.call_count)
 
-            # On the next iteration, update should be retried.
+            # We report the failure of the new extension version
+            self._assert_handler_status(protocol.report_vm_status, "NotReady", expected_ext_count=0, version="1.0.1")
+
+            # Ensure that the upgrade scenario is executed only once per goal state.
+            # Note that the incarnation number didn't change.
             exthandlers_handler.run()
             self.assertEqual(1, patch_get_update_command.call_count)
             self.assertEqual(0, patch_get_enable_command.call_count)
 
-        self.assertEquals("Ready", protocol.report_vm_status.call_args[0][0].vmAgent.status)
+            # This time we don't report status for that extension since the old version has been disabled, and the
+            # new one has been cleaned up by the cleanup_outdated_handlers method since its state was NotInstalled.
+            self._assert_no_handler_status(protocol.report_vm_status)
 
-        # Since the old extension is disabled, and the new one never got enabled, there is nothing to report.
-        self._assert_no_handler_status(protocol.report_vm_status)
+            # If the incarnation number changes (there's a new goal state), ensure we do the entire upgrade process
+            # again.
+            test_data.goal_state = test_data.goal_state.replace("<Incarnation>2<", "<Incarnation>3<")
+            exthandlers_handler.run()
+            self.assertEqual(2, patch_get_update_command.call_count)
+            self.assertEqual(0, patch_get_enable_command.call_count)
+
+            # We report the failure of the new extension version
+            self._assert_handler_status(protocol.report_vm_status, "NotReady", expected_ext_count=0, version="1.0.1")
 
     @patch('azurelinuxagent.ga.exthandlers.HandlerManifest.get_disable_command')
     def test_extension_upgrade_failure_when_prev_version_disable_fails(self, patch_get_disable_command, *args):
