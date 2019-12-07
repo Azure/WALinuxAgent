@@ -61,13 +61,9 @@ class CGroup(object):
         :return: Entire contents of the file
         :rtype: str
         """
-
         parameter_file = self._get_cgroup_file(file_name)
 
-        try:
-            return fileutil.read_file(parameter_file)
-        except Exception:
-            raise
+        return fileutil.read_file(parameter_file)
 
     def _get_parameters(self, parameter_name, first_line_only=False):
         """
@@ -131,23 +127,29 @@ class CpuCgroup(CGroup):
             self.name, self.path, self.controller
         )
 
-    def _get_cpu_ticks(self):
+    def _get_cpu_ticks(self, allow_no_such_file_or_directory_error=False):
         """
         Returns the number of USER_HZ of CPU time (user and system) consumed by this cgroup.
+
+        If allow_no_such_file_or_directory_error is set to True and cpuacct.stat does not exist the function
+        returns 0; this is useful when the function can be called before the cgroup has been created.
         """
         try:
             cpu_stat = self._get_file_contents('cpuacct.stat')
         except Exception as e:
-            if isinstance(e, (IOError, OSError)) and e.errno == errno.ENOENT:
+            if not isinstance(e, (IOError, OSError)) or e.errno != errno.ENOENT:
+                raise CGroupsException("Failed to read cpuacct.stat: {0}".format(ustr(e)))
+            if not allow_no_such_file_or_directory_error:
                 raise e
-            raise CGroupsException("Failed to read cpuacct.stat: {0}".format(ustr(e)))
+            cpu_stat = None
 
         cpu_ticks = 0
 
-        if cpu_stat:
-            m = re_user_system_times.match(cpu_stat)
-            if m:
-                cpu_ticks = int(m.groups()[0]) + int(m.groups()[1])
+        if cpu_stat is not None:
+            match = re_user_system_times.match(cpu_stat)
+            if not match:
+                raise CGroupsException("The contents of {0} are invalid: {1}".format(self._get_cgroup_file('cpuacct.stat'), cpu_stat))
+            cpu_ticks = int(match.groups()[0]) + int(match.groups()[1])
 
         return cpu_ticks
 
@@ -160,7 +162,7 @@ class CpuCgroup(CGroup):
         """
         if self._cpu_usage_initialized():
             raise CGroupsException("initialize_cpu_usage() should be invoked only once")
-        self._current_cgroup_cpu = self._get_cpu_ticks()
+        self._current_cgroup_cpu = self._get_cpu_ticks(allow_no_such_file_or_directory_error=True)
         self._current_system_cpu = self._osutil.get_total_cpu_ticks_since_boot()
 
     def get_cpu_usage(self):

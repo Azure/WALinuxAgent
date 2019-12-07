@@ -17,6 +17,7 @@
 
 from __future__ import print_function
 
+import errno
 import os
 import random
 
@@ -106,13 +107,17 @@ class TestCpuCgroup(AgentTestCase):
 
         #
         # Tests that need to mock the contents of /proc/stat or */cpuacct/stat can set this map from
-        # the file that needs to be mocked to the mock file (each test starts with an empty map).
+        # the file that needs to be mocked to the mock file (each test starts with an empty map). If
+        # an Exception is given instead of a path, the exception is raised
         #
         cls.mock_read_file_map = {}
 
         def mock_read_file(filepath, **args):
             if filepath in cls.mock_read_file_map:
-                filepath = cls.mock_read_file_map[filepath]
+                mapped_value = cls.mock_read_file_map[filepath]
+                if isinstance(mapped_value, Exception):
+                    raise mapped_value
+                filepath = mapped_value
             return original_read_file(filepath, **args)
 
         cls.mock_read_file = patch("azurelinuxagent.common.utils.fileutil.read_file", side_effect=mock_read_file)
@@ -132,7 +137,7 @@ class TestCpuCgroup(AgentTestCase):
 
         TestCpuCgroup.mock_read_file_map = {
             "/proc/stat": os.path.join(data_dir, "cgroups", "proc_stat_t0"),
-            "/sys/fs/cgroup/cpu/system.slice/test/cpuacct.stat": os.path.join(data_dir, "cgroups", "cpuacct.stat_t0")
+            os.path.join(cgroup.path, "cpuacct.stat"): os.path.join(data_dir, "cgroups", "cpuacct.stat_t0")
         }
 
         cgroup.initialize_cpu_usage()
@@ -145,14 +150,14 @@ class TestCpuCgroup(AgentTestCase):
 
         TestCpuCgroup.mock_read_file_map = {
             "/proc/stat": os.path.join(data_dir, "cgroups", "proc_stat_t0"),
-            "/sys/fs/cgroup/cpu/system.slice/test/cpuacct.stat": os.path.join(data_dir, "cgroups", "cpuacct.stat_t0")
+            os.path.join(cgroup.path, "cpuacct.stat"): os.path.join(data_dir, "cgroups", "cpuacct.stat_t0")
         }
 
         cgroup.initialize_cpu_usage()
 
         TestCpuCgroup.mock_read_file_map = {
             "/proc/stat": os.path.join(data_dir, "cgroups", "proc_stat_t1"),
-            "/sys/fs/cgroup/cpu/system.slice/test/cpuacct.stat": os.path.join(data_dir, "cgroups", "cpuacct.stat_t1")
+            os.path.join(cgroup.path, "cpuacct.stat"): os.path.join(data_dir, "cgroups", "cpuacct.stat_t1")
         }
 
         cpu_usage = cgroup.get_cpu_usage()
@@ -161,19 +166,36 @@ class TestCpuCgroup(AgentTestCase):
 
         TestCpuCgroup.mock_read_file_map = {
             "/proc/stat": os.path.join(data_dir, "cgroups", "proc_stat_t2"),
-            "/sys/fs/cgroup/cpu/system.slice/test/cpuacct.stat": os.path.join(data_dir, "cgroups", "cpuacct.stat_t2")
+            os.path.join(cgroup.path, "cpuacct.stat"): os.path.join(data_dir, "cgroups", "cpuacct.stat_t2")
         }
 
         cpu_usage = cgroup.get_cpu_usage()
 
         self.assertEquals(cpu_usage, 0.045)
 
+    def test_initialie_cpu_usage_should_set_the_cgroup_usage_to_0_when_the_cgroup_does_not_exist(self):
+        cgroup = CpuCgroup("test", "/sys/fs/cgroup/cpu/system.slice/test")
+
+        io_error_2 = IOError()
+        io_error_2.errno = errno.ENOENT  # "No such directory"
+
+        TestCpuCgroup.mock_read_file_map = {
+            "/proc/stat": os.path.join(data_dir, "cgroups", "proc_stat_t0"),
+            os.path.join(cgroup.path, "cpuacct.stat"): io_error_2
+        }
+
+        cgroup.initialize_cpu_usage()
+
+        self.assertEquals(cgroup._current_cgroup_cpu, 0)
+        self.assertEquals(cgroup._current_system_cpu, 5496872)  # check the system usage just for test sanity
+
+
     def test_initialize_cpu_usage_should_raise_an_exception_when_called_more_than_once(self):
         cgroup = CpuCgroup("test", "/sys/fs/cgroup/cpu/system.slice/test")
 
         TestCpuCgroup.mock_read_file_map = {
             "/proc/stat": os.path.join(data_dir, "cgroups", "proc_stat_t0"),
-            "/sys/fs/cgroup/cpu/system.slice/test/cpuacct.stat": os.path.join(data_dir, "cgroups", "cpuacct.stat_t0")
+            os.path.join(cgroup.path, "cpuacct.stat"): os.path.join(data_dir, "cgroups", "cpuacct.stat_t0")
         }
 
         cgroup.initialize_cpu_usage()
