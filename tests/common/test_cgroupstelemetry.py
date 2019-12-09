@@ -341,7 +341,7 @@ class TestCGroupsTelemetry(AgentTestCase):
         # Trying to invoke IndexError during the getParameter call
         with patch("azurelinuxagent.common.utils.fileutil.read_file", return_value=''):
             with patch("azurelinuxagent.common.logger.periodic_warn") as patch_periodic_warn:
-                expected_call_count = 1  # called only once at start, and then gets removed from the tracked data.
+                expected_call_count = 2  # 1 periodic warning for the cpu cgroups, and 1 for memory
                 for data_count in range(1, 10):
                     CGroupsTelemetry.poll_all_tracked()
                     self.assertEqual(expected_call_count, patch_periodic_warn.call_count)
