@@ -143,12 +143,13 @@ class TestCGroupsTelemetry(AgentTestCase):
         if not proc_ids:
             proc_ids = TestCGroupsTelemetry.TestProcessIds
 
+        processes_instances = [CGroupsTelemetry.get_process_info_summary(pid) for pid in proc_ids]
         for _, cgroup_metric in CGroupsTelemetry._cgroup_metrics.items():
             self.assertListEqual(cgroup_metric.get_memory_metrics()._data, memory_usage)
             self.assertListEqual(cgroup_metric.get_max_memory_metrics()._data, max_memory_usage)
             self.assertListEqual(cgroup_metric.get_cpu_metrics()._data, cpu_usage)
             for kv_pair in cgroup_metric.get_proc_statm_memory_metrics():
-                self.assertIn(kv_pair.pid, proc_ids)
+                self.assertIn(kv_pair.pid, processes_instances)
                 self.assertListEqual(kv_pair.resource_metric._data, memory_statm_memory_usage)
 
     def _assert_polled_metrics_equal(self, metrics, cpu_metric_value, memory_metric_value,

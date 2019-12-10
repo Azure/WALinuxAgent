@@ -28,6 +28,8 @@ MetricValue = namedtuple('Metric', ['category', 'counter', 'instance', 'value'])
 StatmMetricValue = namedtuple('StatmMetricValue', ['pid', 'resource_metric'])
 
 DELIM = " | "
+DEFAULT_PROCESS_NAME = "NO_PROCESS_FOUND"
+DEFAULT_PROCESS_COMMANDLINE = "NO_CMDLINE_FOUND"
 
 
 class CGroupsTelemetry(object):
@@ -39,8 +41,12 @@ class CGroupsTelemetry(object):
 
     @staticmethod
     def get_process_info_summary(process_id):
-        process_cmdline = ProcessInfo.get_proc_cmdline(process_id)
-        process_name = ProcessInfo.get_proc_name(process_id)
+        process_cmdline = ProcessInfo.get_proc_cmdline(process_id) if not None else DEFAULT_PROCESS_COMMANDLINE
+        process_name = ProcessInfo.get_proc_name(process_id) if not None else DEFAULT_PROCESS_NAME
+
+        # The ProcessName and ProcessCommandLine can be None if the file /proc/<pid>/{comm,cmdline} cease to exist;
+        # eg: the process can die, or finish. Which is why we need Default Names, in case we fail to fetch the details
+        # from those files.
 
         return process_id + DELIM + process_name + DELIM + process_cmdline
 
@@ -76,14 +82,11 @@ class CGroupsTelemetry(object):
         if memory_usage_per_process:
             for pid_process_memory in memory_usage_per_process:
                 if "proc_statm_memory" in processed_extension:
-                    processed_extension["proc_statm_memory"][CGroupsTelemetry.get_process_info_summary(
-                        pid_process_memory.pid)] = CGroupsTelemetry._get_metrics_list(
-                        pid_process_memory.resource_metric)
+                    processed_extension["proc_statm_memory"][pid_process_memory.pid] = \
+                        CGroupsTelemetry._get_metrics_list(pid_process_memory.resource_metric)
                 else:
-                    processed_extension["proc_statm_memory"] = {
-                        CGroupsTelemetry.get_process_info_summary(pid_process_memory.pid):
-                                                            CGroupsTelemetry._get_metrics_list(
-                                                                        pid_process_memory.resource_metric)}
+                    processed_extension["proc_statm_memory"] = {pid_process_memory.pid:
+                        CGroupsTelemetry._get_metrics_list(pid_process_memory.resource_metric)}
         return processed_extension
 
     @staticmethod
@@ -179,7 +182,7 @@ class CGroupsTelemetry(object):
                                                            CGroupsTelemetry.get_process_info_summary(pid),
                                                            mem_usage_from_procstatm))
                                 CGroupsTelemetry._cgroup_metrics[cgroup.name].add_proc_statm_memory(
-                                    pid, mem_usage_from_procstatm)
+                                    CGroupsTelemetry.get_process_info_summary(pid), mem_usage_from_procstatm)
                     else:
                         raise CGroupsException('CGroup controller {0} is not supported for cgroup {1}'.format(
                             cgroup.controller, cgroup.name))
