@@ -196,7 +196,7 @@ class FileAppender(Appender):
         if self.backup_count == 0:
             return False
 
-        if os.stat(self.path).st_size + len(msg) > self.max_bytes:
+        if os.path.exists(self.path) and os.stat(self.path).st_size + len(msg) > self.max_bytes:
             return True
 
         return False
