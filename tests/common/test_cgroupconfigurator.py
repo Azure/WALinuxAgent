@@ -203,15 +203,18 @@ class CGroupConfiguratorTestCase(AgentTestCase):
             self.assertEqual(mock_start_extension_command.call_count, 1)
 
     def test_start_extension_command_should_start_tracking_the_extension_cgroups(self):
-        CGroupConfigurator.get_instance().start_extension_command(
-            extension_name="Microsoft.Compute.TestExtension-1.2.3",
-            command="date",
-            timeout=300,
-            shell=False,
-            cwd=self.tmp_dir,
-            env={},
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE)
+        # CPU usage is initialized when we begin tracking a CPU cgroup; since this test does not retrieve the
+        # CPU usage, there is no need for initialization
+        with patch("azurelinuxagent.common.cgroup.CpuCgroup.initialize_cpu_usage"):
+            CGroupConfigurator.get_instance().start_extension_command(
+                extension_name="Microsoft.Compute.TestExtension-1.2.3",
+                command="date",
+                timeout=300,
+                shell=False,
+                cwd=self.tmp_dir,
+                env={},
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE)
 
         self.assertTrue(CGroupsTelemetry.is_tracked(os.path.join(
             self.cgroups_file_system_root, "cpu", "walinuxagent.extensions/Microsoft.Compute.TestExtension_1.2.3")))
