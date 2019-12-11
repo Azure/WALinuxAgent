@@ -16,6 +16,7 @@
 #
 
 import os.path
+import subprocess
 import unittest
 
 from datetime import timedelta
@@ -1466,19 +1467,32 @@ class TestExtension(ExtensionTestCase):
     @patch('azurelinuxagent.ga.exthandlers.HandlerManifest.get_update_command')
     def test_extension_upgrade_failure_when_new_version_update_fails(self, patch_get_update_command, *args):
         """
-        When the update command of the new extension fails, it should result in the new extension removed and the
+        When the update command of the new extension fails, it should result in the new extension failed and the
         old extension disabled. On the next goal state, the entire upgrade scenario should be retried (once),
         meaning the download, initialize and update are called on the new extension.
         Note: we don't re-download the zip since it wasn't cleaned up in the previous goal state (we only clean up
-        NotInstalled handlers), so we just re-use the existing zip.
+        NotInstalled handlers), so we just re-use the existing zip of the new extension.
         """
         test_data, exthandlers_handler, protocol = self._set_up_update_test_and_update_gs(patch_get_update_command,
                                                                                           *args)
+        extension_name = exthandlers_handler.ext_handlers.extHandlers[0].name
+        extension_calls = []
+        original_popen = subprocess.Popen
 
-        with patch('azurelinuxagent.ga.exthandlers.HandlerManifest.get_enable_command') as patch_get_enable_command:
+        def mock_popen(*args, **kwargs):
+            # Maintain an internal list of invoked commands of the test extension to assert on later
+            if extension_name in args[0]:
+                extension_calls.append(args[0])
+            return original_popen(*args, **kwargs)
+
+        with patch('azurelinuxagent.common.cgroupapi.subprocess.Popen', side_effect=mock_popen):
             exthandlers_handler.run()
-            self.assertEqual(1, patch_get_update_command.call_count)
-            self.assertEqual(0, patch_get_enable_command.call_count)
+            update_command_count = len(filter(lambda call: patch_get_update_command.return_value in call,
+                                               extension_calls))
+            enable_command_count = len(filter(lambda call: "-enable" in call, extension_calls))
+            
+            self.assertEquals(1, update_command_count)
+            self.assertEquals(0, enable_command_count)
 
             # We report the failure of the new extension version
             self._assert_handler_status(protocol.report_vm_status, "NotReady", expected_ext_count=1, version="1.0.1")
@@ -1488,15 +1502,22 @@ class TestExtension(ExtensionTestCase):
             for x in range(loop_run):
                 exthandlers_handler.run()
 
-            self.assertEqual(1, patch_get_update_command.call_count)
-            self.assertEqual(0, patch_get_enable_command.call_count)
+            update_command_count = len(filter(lambda call: patch_get_update_command.return_value in call,
+                                              extension_calls))
+            enable_command_count = len(filter(lambda call: "-enable" in call, extension_calls))
+            self.assertEquals(1, update_command_count)
+            self.assertEquals(0, enable_command_count)
 
             # If the incarnation number changes (there's a new goal state), ensure we go through the entire upgrade
             # process again.
             test_data.goal_state = test_data.goal_state.replace("<Incarnation>2<", "<Incarnation>3<")
             exthandlers_handler.run()
-            self.assertEqual(2, patch_get_update_command.call_count)
-            self.assertEqual(0, patch_get_enable_command.call_count)
+
+            update_command_count = len(filter(lambda call: patch_get_update_command.return_value in call,
+                                              extension_calls))
+            enable_command_count = len(filter(lambda call: "-enable" in call, extension_calls))
+            self.assertEquals(2, update_command_count)
+            self.assertEquals(0, enable_command_count)
 
             # We report the failure of the new extension version
             self._assert_handler_status(protocol.report_vm_status, "NotReady", expected_ext_count=1, version="1.0.1")
