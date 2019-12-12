@@ -1487,9 +1487,10 @@ class TestExtension(ExtensionTestCase):
 
         with patch('azurelinuxagent.common.cgroupapi.subprocess.Popen', side_effect=mock_popen):
             exthandlers_handler.run()
-            update_command_count = len(filter(lambda call: patch_get_update_command.return_value in call,
-                                               extension_calls))
-            enable_command_count = len(filter(lambda call: "-enable" in call, extension_calls))
+            update_command_count = len([extension_call for extension_call in extension_calls
+                                        if patch_get_update_command.return_value in extension_call])
+            enable_command_count = len([extension_call for extension_call in extension_calls
+                                        if "-enable" in extension_call])
             
             self.assertEquals(1, update_command_count)
             self.assertEquals(0, enable_command_count)
@@ -1502,9 +1503,10 @@ class TestExtension(ExtensionTestCase):
             for x in range(loop_run):
                 exthandlers_handler.run()
 
-            update_command_count = len(filter(lambda call: patch_get_update_command.return_value in call,
-                                              extension_calls))
-            enable_command_count = len(filter(lambda call: "-enable" in call, extension_calls))
+            update_command_count = len([extension_call for extension_call in extension_calls
+                                        if patch_get_update_command.return_value in extension_call])
+            enable_command_count = len([extension_call for extension_call in extension_calls
+                                        if "-enable" in extension_call])
             self.assertEquals(1, update_command_count)
             self.assertEquals(0, enable_command_count)
 
@@ -1513,9 +1515,10 @@ class TestExtension(ExtensionTestCase):
             test_data.goal_state = test_data.goal_state.replace("<Incarnation>2<", "<Incarnation>3<")
             exthandlers_handler.run()
 
-            update_command_count = len(filter(lambda call: patch_get_update_command.return_value in call,
-                                              extension_calls))
-            enable_command_count = len(filter(lambda call: "-enable" in call, extension_calls))
+            update_command_count = len([extension_call for extension_call in extension_calls
+                                        if patch_get_update_command.return_value in extension_call])
+            enable_command_count = len([extension_call for extension_call in extension_calls
+                                        if "-enable" in extension_call])
             self.assertEquals(2, update_command_count)
             self.assertEquals(0, enable_command_count)
 
