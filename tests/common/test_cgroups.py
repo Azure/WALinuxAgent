@@ -257,8 +257,12 @@ class TestMemoryCgroup(AgentTestCase):
     def test_get_metrics_when_files_not_present(self):
         test_mem_cg = MemoryCgroup("test_extension", os.path.join(data_dir, "cgroups"))
 
-        memory_usage = test_mem_cg.get_memory_usage()
-        self.assertEqual(0, memory_usage)
+        with self.assertRaises(IOError) as e:
+            test_mem_cg.get_memory_usage()
 
-        max_memory_usage = test_mem_cg.get_max_memory_usage()
-        self.assertEqual(0, max_memory_usage)
+        self.assertEqual(e.exception.errno, errno.ENOENT)
+
+        with self.assertRaises(IOError) as e:
+            test_mem_cg.get_max_memory_usage()
+
+        self.assertEqual(e.exception.errno, errno.ENOENT)
