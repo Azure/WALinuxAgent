@@ -19,16 +19,16 @@ import os
 import random
 import time
 
-from mock import patch
 from azurelinuxagent.common.cgroup import CGroup
 from azurelinuxagent.common.cgroupconfigurator import CGroupConfigurator
 from azurelinuxagent.common.cgroupstelemetry import CGroupsTelemetry, Metric
 from azurelinuxagent.common.osutil.default import BASE_CGROUPS, DefaultOSUtil
 from azurelinuxagent.common.protocol.restapi import ExtHandler, ExtHandlerProperties
+from azurelinuxagent.common.utils import fileutil
 from azurelinuxagent.ga.exthandlers import ExtHandlerInstance
 from nose.plugins.attrib import attr
 from tests.tools import AgentTestCase, skip_if_predicate_false, skip_if_predicate_true, \
-                        are_cgroups_enabled, is_trusty_in_travis, i_am_root, patch
+                        are_cgroups_enabled, is_trusty_in_travis, i_am_root, data_dir, patch
 
 
 def raise_ioerror(*_):
@@ -106,12 +106,28 @@ class TestCGroupsTelemetry(AgentTestCase):
                                           return_value=TestCGroupsTelemetry.TestProcCommandLine)
         cls.mock_get_proc_cmdline.start()
 
+        # CPU Cgroups compute usage based on /proc/stat and /sys/fs/cgroup/.../cpuacct.stat; use mock data for those
+        # files
+        original_read_file = fileutil.read_file
+
+        def mock_read_file(filepath, **args):
+            if filepath == "/proc/stat":
+                filepath = os.path.join(data_dir, "cgroups", "proc_stat_t0")
+            elif filepath.endswith("/cpuacct.stat"):
+                filepath = os.path.join(data_dir, "cgroups", "cpuacct.stat_t0")
+            return original_read_file(filepath, **args)
+
+        cls._mock_read_cpu_cgroup_file = patch("azurelinuxagent.common.utils.fileutil.read_file",
+                                               side_effect=mock_read_file)
+        cls._mock_read_cpu_cgroup_file.start()
+
     @classmethod
     def tearDownClass(cls):
         cls.mock_get_memory_usage_from_proc_statm.stop()
         cls.mock_get_tracked_processes.stop()
         cls.mock_get_proc_name.stop()
         cls.mock_get_proc_cmdline.stop()
+        cls._mock_read_cpu_cgroup_file.stop()
 
         AgentTestCase.tearDownClass()
 
@@ -215,8 +231,6 @@ class TestCGroupsTelemetry(AgentTestCase):
                     self.assertListEqual(generate_metric_list(cpu_percent_values),
                                          collected_metrics[name]["cpu"]["cur_cpu"][0:5])
 
-    @patch("azurelinuxagent.common.cgroup.CpuCgroup._get_current_cpu_total")
-    @patch("azurelinuxagent.common.osutil.default.DefaultOSUtil.get_total_cpu_ticks_since_boot")
     def test_telemetry_polling_with_active_cgroups(self, *args):
         num_extensions = 3
 
@@ -224,7 +238,7 @@ class TestCGroupsTelemetry(AgentTestCase):
 
         with patch("azurelinuxagent.common.cgroup.MemoryCgroup.get_max_memory_usage") as patch_get_memory_max_usage:
             with patch("azurelinuxagent.common.cgroup.MemoryCgroup.get_memory_usage") as patch_get_memory_usage:
-                with patch("azurelinuxagent.common.cgroup.CpuCgroup._get_cpu_percent") as patch_get_cpu_percent:
+                with patch("azurelinuxagent.common.cgroup.CpuCgroup.get_cpu_usage") as patch_get_cpu_usage:
                     with patch("azurelinuxagent.common.cgroup.CGroup.is_active") as patch_is_active:
                         patch_is_active.return_value = True
 
@@ -236,7 +250,7 @@ class TestCGroupsTelemetry(AgentTestCase):
 
                         # 1 CPU metric + 1 Current Memory + 1 Max memor + num_processes * memory from statm
                         num_of_metrics_per_extn_expected = 1 + 1 + 1 + 3 * 1
-                        patch_get_cpu_percent.return_value = current_cpu
+                        patch_get_cpu_usage.return_value = current_cpu
                         patch_get_memory_usage.return_value = current_memory  # example 200 MB
                         patch_get_memory_max_usage.return_value = current_max_memory  # example 450 MB
                         num_polls = 10
@@ -294,8 +308,6 @@ class TestCGroupsTelemetry(AgentTestCase):
         self.assertEqual(CGroupsTelemetry._cgroup_metrics.__len__(), no_extensions_expected)
         self._assert_calculated_resource_metrics_equal([], [], [], [], [])
 
-    @patch("azurelinuxagent.common.osutil.default.DefaultOSUtil.get_total_cpu_ticks_since_boot")
-    @patch("azurelinuxagent.common.cgroup.CpuCgroup._get_current_cpu_total")
     @patch("azurelinuxagent.common.cgroup.MemoryCgroup.get_max_memory_usage")
     @patch("azurelinuxagent.common.cgroup.MemoryCgroup.get_memory_usage")
     @patch("azurelinuxagent.common.cgroup.CpuCgroup.get_cpu_usage")
@@ -354,11 +366,8 @@ class TestCGroupsTelemetry(AgentTestCase):
 
     # mocking get_proc_stat to make it run on Mac and other systems. This test does not need to read the values of the
     # /proc/stat file on the filesystem.
-    @patch("azurelinuxagent.common.osutil.default.DefaultOSUtil._get_proc_stat")
     @patch("azurelinuxagent.common.logger.periodic_warn")
-    @patch("azurelinuxagent.common.utils.fileutil.read_file")
-    def test_telemetry_polling_to_not_generate_transient_logs_ioerror_file_not_found(self, mock_read_file,
-                                                                                     patch_periodic_warn, *args):
+    def test_telemetry_polling_to_not_generate_transient_logs_ioerror_file_not_found(self, patch_periodic_warn):
         num_extensions = 1
         self._track_new_extension_cgroups(num_extensions)
         self.assertEqual(0, patch_periodic_warn.call_count)
@@ -366,20 +375,15 @@ class TestCGroupsTelemetry(AgentTestCase):
         # Not expecting logs present for io_error with errno=errno.ENOENT
         io_error_2 = IOError()
         io_error_2.errno = errno.ENOENT
-        mock_read_file.side_effect = io_error_2
 
-        poll_count = 1
-        for data_count in range(poll_count, 10):
-            CGroupsTelemetry.poll_all_tracked()
-            self.assertEqual(0, patch_periodic_warn.call_count)
+        with patch("azurelinuxagent.common.utils.fileutil.read_file", side_effect=io_error_2):
+            poll_count = 1
+            for data_count in range(poll_count, 10):
+                CGroupsTelemetry.poll_all_tracked()
+                self.assertEqual(0, patch_periodic_warn.call_count)
 
-    # mocking get_proc_stat to make it run on Mac and other systems. This test does not need to read the values of the
-    # /proc/stat file on the filesystem.
-    @patch("azurelinuxagent.common.osutil.default.DefaultOSUtil._get_proc_stat")
     @patch("azurelinuxagent.common.logger.periodic_warn")
-    @patch("azurelinuxagent.common.utils.fileutil.read_file")
-    def test_telemetry_polling_to_generate_transient_logs_ioerror_permission_denied(self, mock_read_file,
-                                                                                    patch_periodic_warn, *args):
+    def test_telemetry_polling_to_generate_transient_logs_ioerror_permission_denied(self, patch_periodic_warn):
         num_extensions = 1
         num_controllers = 2
         is_active_check_per_controller = 2
@@ -390,43 +394,39 @@ class TestCGroupsTelemetry(AgentTestCase):
         # Expecting logs to be present for different kind of errors
         io_error_3 = IOError()
         io_error_3.errno = errno.EPERM
-        mock_read_file.side_effect = io_error_3
 
-        poll_count = 1
-        expected_count_per_call = num_controllers + is_active_check_per_controller
-        # each collect per controller would generate a log statement, and each cgroup would invoke a
-        # is active check raising an exception
+        with patch("azurelinuxagent.common.utils.fileutil.read_file", side_effect=io_error_3):
+            poll_count = 1
+            expected_count_per_call = num_controllers + is_active_check_per_controller
+            # each collect per controller would generate a log statement, and each cgroup would invoke a
+            # is active check raising an exception
 
-        for data_count in range(poll_count, 10):
-            CGroupsTelemetry.poll_all_tracked()
-            self.assertEqual(poll_count * expected_count_per_call, patch_periodic_warn.call_count)
+            for data_count in range(poll_count, 10):
+                CGroupsTelemetry.poll_all_tracked()
+                self.assertEqual(poll_count * expected_count_per_call, patch_periodic_warn.call_count)
 
-    # mocking get_proc_stat to make it run on Mac and other systems. This test does not need to read the values of the
-    # /proc/stat file on the filesystem.
-    @patch("azurelinuxagent.common.osutil.default.DefaultOSUtil._get_proc_stat")
-    @patch("azurelinuxagent.common.utils.fileutil.read_file")
-    def test_telemetry_polling_to_generate_transient_logs_index_error(self, mock_read_file, *args):
+    def test_telemetry_polling_to_generate_transient_logs_index_error(self):
         num_extensions = 1
         self._track_new_extension_cgroups(num_extensions)
 
         # Generating a different kind of error (non-IOError) to check the logging.
         # Trying to invoke IndexError during the getParameter call
-        mock_read_file.return_value = ''
+        with patch("azurelinuxagent.common.utils.fileutil.read_file", return_value=''):
+            with patch("azurelinuxagent.common.logger.periodic_warn") as patch_periodic_warn:
+                expected_call_count = 2  # 1 periodic warning for the cpu cgroups, and 1 for memory
+                for data_count in range(1, 10):
+                    CGroupsTelemetry.poll_all_tracked()
+                    self.assertEqual(expected_call_count, patch_periodic_warn.call_count)
 
-        with patch("azurelinuxagent.common.logger.periodic_warn") as patch_periodic_warn:
-            expected_call_count = 1  # called only once at start, and then gets removed from the tracked data.
-            for data_count in range(1, 10):
-                CGroupsTelemetry.poll_all_tracked()
-                self.assertEqual(expected_call_count, patch_periodic_warn.call_count)
-
-    @patch("azurelinuxagent.common.osutil.default.DefaultOSUtil.get_total_cpu_ticks_since_boot")
-    @patch("azurelinuxagent.common.cgroup.CpuCgroup._get_current_cpu_total")
-    @patch("azurelinuxagent.common.cgroup.CpuCgroup._update_cpu_data")
+    @patch("azurelinuxagent.common.cgroup.MemoryCgroup.get_max_memory_usage")
+    @patch("azurelinuxagent.common.cgroup.MemoryCgroup.get_memory_usage")
+    @patch("azurelinuxagent.common.cgroup.CpuCgroup.get_cpu_usage")
+    @patch("azurelinuxagent.common.cgroup.CGroup.is_active")
     @patch("azurelinuxagent.common.resourceusage.MemoryResourceUsage.get_memory_usage_from_proc_statm")
-    def test_telemetry_calculations(self, patch_get_statm, *args):
+    def test_telemetry_calculations(self, patch_get_statm, patch_is_active, patch_get_cpu_usage,
+                                                           patch_get_memory_usage, patch_get_memory_max_usage, *args):
         num_polls = 10
         num_extensions = 1
-        num_summarization_values = 7
 
         cpu_percent_values = [random.randint(0, 100) for _ in range(num_polls)]
 
@@ -438,33 +438,26 @@ class TestCGroupsTelemetry(AgentTestCase):
         self._track_new_extension_cgroups(num_extensions)
         self.assertEqual(2 * num_extensions, len(CGroupsTelemetry._tracked))
 
-        with patch("azurelinuxagent.common.cgroup.MemoryCgroup.get_max_memory_usage") as patch_get_memory_max_usage:
-            with patch("azurelinuxagent.common.cgroup.MemoryCgroup.get_memory_usage") as patch_get_memory_usage:
-                with patch("azurelinuxagent.common.cgroup.CpuCgroup.get_cpu_usage") as patch_get_cpu_percent:
-                    with patch("azurelinuxagent.common.cgroup.CGroup.is_active") as patch_is_active:
-                        for i in range(num_polls):
-                            patch_is_active.return_value = True
-                            patch_get_cpu_percent.return_value = cpu_percent_values[i]
-                            patch_get_memory_usage.return_value = memory_usage_values[i]  # example 200 MB
-                            patch_get_memory_max_usage.return_value = max_memory_usage_values[i]  # example 450 MB
-                            patch_get_statm.return_value = proc_stat_memory_usage_values[i]
+        for i in range(num_polls):
+            patch_is_active.return_value = True
+            patch_get_cpu_usage.return_value = cpu_percent_values[i]
+            patch_get_memory_usage.return_value = memory_usage_values[i]  # example 200 MB
+            patch_get_memory_max_usage.return_value = max_memory_usage_values[i]  # example 450 MB
+            patch_get_statm.return_value = proc_stat_memory_usage_values[i]
 
-                            metrics = CGroupsTelemetry.poll_all_tracked()
+            metrics = CGroupsTelemetry.poll_all_tracked()
 
-                            # 1 CPU metric + 1 Current Memory + 1 Max memory + num_processes (3) * memory from statm
-                            self.assertEqual(len(metrics), 6 * num_extensions)
-                            self._assert_polled_metrics_equal(metrics, cpu_percent_values[i], memory_usage_values[i],
-                                                              max_memory_usage_values[i],
-                                                              proc_stat_memory_usage_values[i])
+            # 1 CPU metric + 1 Current Memory + 1 Max memory + num_processes (3) * memory from statm
+            self.assertEqual(len(metrics), 6 * num_extensions)
+            self._assert_polled_metrics_equal(metrics, cpu_percent_values[i], memory_usage_values[i],
+                                              max_memory_usage_values[i],
+                                              proc_stat_memory_usage_values[i])
 
         collected_metrics = CGroupsTelemetry.report_all_tracked()
         self._assert_extension_metrics_data(collected_metrics, num_extensions,
                                             cpu_percent_values, proc_stat_memory_usage_values, memory_usage_values,
                                             max_memory_usage_values)
 
-    # mocking get_proc_stat to make it run on Mac and other systems
-    # this test does not need to read the values of the /proc/stat file
-    @patch("azurelinuxagent.common.osutil.default.DefaultOSUtil._get_proc_stat")
     def test_cgroup_tracking(self, *args):
         num_extensions = 5
         num_controllers = 2
@@ -472,9 +465,6 @@ class TestCGroupsTelemetry(AgentTestCase):
         self._assert_cgroups_are_tracked(num_extensions)
         self.assertEqual(num_extensions * num_controllers, len(CGroupsTelemetry._tracked))
 
-    # mocking get_proc_stat to make it run on Mac and other systems. This test does not need to read the values of the
-    # /proc/stat file on the filesystem.
-    @patch("azurelinuxagent.common.osutil.default.DefaultOSUtil._get_proc_stat")
     def test_cgroup_pruning(self, *args):
         num_extensions = 5
         num_controllers = 2
@@ -489,9 +479,6 @@ class TestCGroupsTelemetry(AgentTestCase):
 
         self.assertEqual(0, len(CGroupsTelemetry._tracked))
 
-    # mocking get_proc_stat to make it run on Mac and other systems. This test does not need to read the values of the
-    # /proc/stat file on the filesystem.
-    @patch("azurelinuxagent.common.osutil.default.DefaultOSUtil._get_proc_stat")
     def test_cgroup_is_tracked(self, *args):
         num_extensions = 5
         self._track_new_extension_cgroups(num_extensions)
@@ -499,106 +486,94 @@ class TestCGroupsTelemetry(AgentTestCase):
         self.assertFalse(CGroupsTelemetry.is_tracked("not_present_cpu_dummy_path"))
         self.assertFalse(CGroupsTelemetry.is_tracked("not_present_memory_dummy_path"))
 
-    # mocking get_proc_stat to make it run on Mac and other systems. This test does not need to read the values of the
-    # /proc/stat file on the filesystem.
-    @patch("azurelinuxagent.common.osutil.default.DefaultOSUtil._get_proc_stat")
+    @patch("azurelinuxagent.common.cgroup.CpuCgroup.get_cpu_usage", side_effect=raise_ioerror)
+    @patch("azurelinuxagent.common.cgroup.MemoryCgroup.get_memory_usage", side_effect=raise_ioerror)
     def test_process_cgroup_metric_with_incorrect_cgroups_mounted(self, *args):
         num_extensions = 5
         self._track_new_extension_cgroups(num_extensions)
 
-        with patch("azurelinuxagent.common.cgroup.CpuCgroup.get_cpu_usage") as patch_get_cpu_usage:
-            with patch("azurelinuxagent.common.cgroup.MemoryCgroup.get_memory_usage") as patch_get_memory_usage:
-                patch_get_cpu_usage.side_effect = Exception("File not found")
-                patch_get_memory_usage.side_effect = Exception("File not found")
+        for data_count in range(1, 10):
+            metrics = CGroupsTelemetry.poll_all_tracked()
+            self.assertEqual(len(metrics), 0)
 
-                for data_count in range(1, 10):
-                    metrics = CGroupsTelemetry.poll_all_tracked()
-                    self.assertEqual(len(metrics), 0)
+        self.assertEqual(CGroupsTelemetry._cgroup_metrics.__len__(), num_extensions)
 
-                self.assertEqual(CGroupsTelemetry._cgroup_metrics.__len__(), num_extensions)
+        collected_metrics = {}
+        for name, cgroup_metrics in CGroupsTelemetry._cgroup_metrics.items():
+            collected_metrics[name] = CGroupsTelemetry._process_cgroup_metric(cgroup_metrics)
+            self.assertEqual(collected_metrics[name], {})  # empty
 
-                collected_metrics = {}
-                for name, cgroup_metrics in CGroupsTelemetry._cgroup_metrics.items():
-                    collected_metrics[name] = CGroupsTelemetry._process_cgroup_metric(cgroup_metrics)
-                    self.assertEqual(collected_metrics[name], {})  # empty
-
-    @patch("azurelinuxagent.common.cgroup.CpuCgroup._get_current_cpu_total")
-    @patch("azurelinuxagent.common.osutil.default.DefaultOSUtil.get_total_cpu_ticks_since_boot")
-    def test_process_cgroup_metric_with_no_memory_cgroup_mounted(self, *_):
+    @patch("azurelinuxagent.common.cgroup.MemoryCgroup.get_memory_usage", side_effect=raise_ioerror)
+    def test_process_cgroup_metric_with_no_memory_cgroup_mounted(self, *args):
         num_extensions = 5
         self._track_new_extension_cgroups(num_extensions)
 
-        with patch("azurelinuxagent.common.cgroup.CpuCgroup._get_cpu_percent") as patch_get_cpu_percent:
-            with patch("azurelinuxagent.common.cgroup.MemoryCgroup.get_memory_usage") as patch_get_memory_usage:
-                with patch("azurelinuxagent.common.cgroup.CGroup.is_active") as patch_is_active:
-                    patch_is_active.return_value = True
-                    patch_get_memory_usage.side_effect = Exception("File not found")
+        with patch("azurelinuxagent.common.cgroup.CpuCgroup.get_cpu_usage") as patch_get_cpu_usage:
+            with patch("azurelinuxagent.common.cgroup.CGroup.is_active") as patch_is_active:
+                patch_is_active.return_value = True
 
-                    current_cpu = 30
-                    patch_get_cpu_percent.return_value = current_cpu
+                current_cpu = 30
+                patch_get_cpu_usage.return_value = current_cpu
 
-                    poll_count = 1
+                poll_count = 1
 
-                    for data_count in range(poll_count, 10):
-                        metrics = CGroupsTelemetry.poll_all_tracked()
-
-                        self.assertEqual(CGroupsTelemetry._cgroup_metrics.__len__(), num_extensions)
-                        self._assert_calculated_resource_metrics_equal(cpu_usage=[current_cpu] * data_count, memory_usage=[], max_memory_usage=[], proc_ids=[], memory_statm_memory_usage=[])
-                        self.assertEqual(len(metrics), num_extensions * 1)  # Only CPU populated
-                        self._assert_polled_metrics_equal(metrics, current_cpu, 0, 0, 0)
-
-                    CGroupsTelemetry.report_all_tracked()
+                for data_count in range(poll_count, 10):
+                    metrics = CGroupsTelemetry.poll_all_tracked()
 
                     self.assertEqual(CGroupsTelemetry._cgroup_metrics.__len__(), num_extensions)
-                    self._assert_calculated_resource_metrics_equal([], [], [], [], [])
+                    self._assert_calculated_resource_metrics_equal(cpu_usage=[current_cpu] * data_count, memory_usage=[]
+                                                                   , max_memory_usage=[], proc_ids=[],
+                                                                   memory_statm_memory_usage=[])
+                    self.assertEqual(len(metrics), num_extensions * 1)  # Only CPU populated
+                    self._assert_polled_metrics_equal(metrics, current_cpu, 0, 0, 0)
 
-    @patch("azurelinuxagent.common.cgroup.CpuCgroup._get_current_cpu_total")
-    @patch("azurelinuxagent.common.osutil.default.DefaultOSUtil.get_total_cpu_ticks_since_boot")
-    def test_process_cgroup_metric_with_no_cpu_cgroup_mounted(self, *_):
+                CGroupsTelemetry.report_all_tracked()
+
+                self.assertEqual(CGroupsTelemetry._cgroup_metrics.__len__(), num_extensions)
+                self._assert_calculated_resource_metrics_equal([], [], [], [], [])
+
+    @patch("azurelinuxagent.common.cgroup.CpuCgroup.get_cpu_usage", side_effect=raise_ioerror)
+    def test_process_cgroup_metric_with_no_cpu_cgroup_mounted(self, *args):
         num_extensions = 5
 
         self._track_new_extension_cgroups(num_extensions)
 
         with patch("azurelinuxagent.common.cgroup.MemoryCgroup.get_max_memory_usage") as patch_get_memory_max_usage:
             with patch("azurelinuxagent.common.cgroup.MemoryCgroup.get_memory_usage") as patch_get_memory_usage:
-                with patch("azurelinuxagent.common.cgroup.CpuCgroup.get_cpu_usage") as patch_get_cpu_usage:
-                    with patch("azurelinuxagent.common.cgroup.CGroup.is_active") as patch_is_active:
-                        patch_is_active.return_value = True
+                with patch("azurelinuxagent.common.cgroup.CGroup.is_active") as patch_is_active:
+                    patch_is_active.return_value = True
 
-                        patch_get_cpu_usage.side_effect = Exception("File not found")
+                    current_memory = 209715200
+                    current_max_memory = 471859200
 
-                        current_memory = 209715200
-                        current_max_memory = 471859200
-
-                        patch_get_memory_usage.return_value = current_memory  # example 200 MB
-                        patch_get_memory_max_usage.return_value = current_max_memory  # example 450 MB
-                        num_polls = 10
-                        for data_count in range(1, num_polls + 1):
-                            metrics = CGroupsTelemetry.poll_all_tracked()
-                            self.assertEqual(len(CGroupsTelemetry._cgroup_metrics), num_extensions)
-                            self._assert_calculated_resource_metrics_equal(cpu_usage=[], memory_usage=[current_memory] * data_count,
-                                                                           max_memory_usage=[current_max_memory] * data_count,
-                                                                           memory_statm_memory_usage=[TestCGroupsTelemetry.TestProcStatmMemoryUsed] * data_count,
-                                                                           proc_ids=TestCGroupsTelemetry.TestProcessIds)
-                            # Memory is only populated, CPU is not. Thus 5 metrics per cgroup.
-                            self.assertEqual(len(metrics), num_extensions * 5)
-                            self._assert_polled_metrics_equal(metrics, 0, current_memory, current_max_memory,
-                                                              TestCGroupsTelemetry.TestProcStatmMemoryUsed)
-
-                        collected_metrics = CGroupsTelemetry.report_all_tracked()
-                        self._assert_extension_metrics_data(collected_metrics, num_extensions,
-                                                            [], [TestCGroupsTelemetry.TestProcStatmMemoryUsed] * num_polls,
-                                                            [current_memory] * num_polls,
-                                                            [current_max_memory] * num_polls,
-                                                            is_cpu_present=False)
-
+                    patch_get_memory_usage.return_value = current_memory  # example 200 MB
+                    patch_get_memory_max_usage.return_value = current_max_memory  # example 450 MB
+                    num_polls = 10
+                    for data_count in range(1, num_polls + 1):
+                        metrics = CGroupsTelemetry.poll_all_tracked()
                         self.assertEqual(len(CGroupsTelemetry._cgroup_metrics), num_extensions)
-                        self._assert_calculated_resource_metrics_equal([], [], [], [], [])
+                        self._assert_calculated_resource_metrics_equal(cpu_usage=[], memory_usage=[current_memory] * data_count,
+                                                                       max_memory_usage=[current_max_memory] * data_count,
+                                                                       memory_statm_memory_usage=[TestCGroupsTelemetry.TestProcStatmMemoryUsed] * data_count,
+                                                                       proc_ids=TestCGroupsTelemetry.TestProcessIds)
+                        # Memory is only populated, CPU is not. Thus 5 metrics per cgroup.
+                        self.assertEqual(len(metrics), num_extensions * 5)
+                        self._assert_polled_metrics_equal(metrics, 0, current_memory, current_max_memory,
+                                                          TestCGroupsTelemetry.TestProcStatmMemoryUsed)
+
+                    collected_metrics = CGroupsTelemetry.report_all_tracked()
+                    self._assert_extension_metrics_data(collected_metrics, num_extensions,
+                                                        [], [TestCGroupsTelemetry.TestProcStatmMemoryUsed] * num_polls,
+                                                        [current_memory] * num_polls,
+                                                        [current_max_memory] * num_polls,
+                                                        is_cpu_present=False)
+
+                    self.assertEqual(len(CGroupsTelemetry._cgroup_metrics), num_extensions)
+                    self._assert_calculated_resource_metrics_equal([], [], [], [], [])
 
     @patch("azurelinuxagent.common.cgroup.MemoryCgroup.get_memory_usage", side_effect=raise_ioerror)
     @patch("azurelinuxagent.common.cgroup.MemoryCgroup.get_max_memory_usage", side_effect=raise_ioerror)
     @patch("azurelinuxagent.common.cgroup.CpuCgroup.get_cpu_usage", side_effect=raise_ioerror)
-    @patch("azurelinuxagent.common.osutil.default.DefaultOSUtil.get_total_cpu_ticks_since_boot")
     def test_extension_telemetry_not_sent_for_empty_perf_metrics(self, *args):
         num_extensions = 5
         self._track_new_extension_cgroups(num_extensions)

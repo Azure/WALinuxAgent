@@ -1354,7 +1354,7 @@ class DefaultOSUtil(object):
         if proc_stat is not None:
             for line in proc_stat.splitlines():
                 if ALL_CPUS_REGEX.match(line):
-                    system_cpu = sum(int(i) for i in line.split()[1:7])
+                    system_cpu = sum(int(i) for i in line.split()[1:8])  # see "man proc" for a description of these fields
                     break
         return system_cpu
 
