@@ -239,15 +239,11 @@ class MemoryCgroup(CGroup):
 
         try:
             usage = self._get_parameters('memory.usage_in_bytes', first_line_only=True)
-        except (IOError, OSError) as e:
-            if e.errno == errno.ENOENT:
-                # only suppressing file not found exceptions.
-                pass
-            else:
+        except Exception as e:
+            if isinstance(e, (IOError, OSError)) and e.errno == errno.ENOENT:
                 raise e
+            raise CGroupsException("Exception while attempting to read {0}".format("memory.usage_in_bytes"), e)
 
-        if not usage:
-            usage = "0"
         return int(usage)
 
     def get_max_memory_usage(self):
@@ -260,12 +256,9 @@ class MemoryCgroup(CGroup):
         usage = None
         try:
             usage = self._get_parameters('memory.max_usage_in_bytes', first_line_only=True)
-        except (IOError, OSError) as e:
-            if e.errno == errno.ENOENT:
-                # only suppressing file not found exceptions.
-                pass
-            else:
+        except Exception as e:
+            if isinstance(e, (IOError, OSError)) and e.errno == errno.ENOENT:
                 raise e
-        if not usage:
-            usage = "0"
+            raise CGroupsException("Exception while attempting to read {0}".format("memory.usage_in_bytes"), e)
+
         return int(usage)

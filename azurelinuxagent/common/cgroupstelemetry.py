@@ -224,18 +224,22 @@ class CgroupMetrics(object):
         self.marked_for_delete = False
 
     def add_memory_usage(self, usage):
-        self._memory_usage.append(usage)
+        if not self.marked_for_delete:
+            self._memory_usage.append(usage)
 
     def add_max_memory_usage(self, usage):
-        self._max_memory_usage.append(usage)
+        if not self.marked_for_delete:
+            self._max_memory_usage.append(usage)
 
     def add_cpu_usage(self, usage):
-        self._cpu_usage.append(usage)
+        if not self.marked_for_delete:
+            self._cpu_usage.append(usage)
 
     def add_proc_statm_memory(self, pid, usage):
-        if pid not in self._proc_statm_mem:
-            self._proc_statm_mem[pid] = Metric()
-        self._proc_statm_mem[pid].append(usage)
+        if not self.marked_for_delete:
+            if pid not in self._proc_statm_mem:
+                self._proc_statm_mem[pid] = Metric()
+            self._proc_statm_mem[pid].append(usage)
 
     def get_memory_metrics(self):
         return self._memory_usage
