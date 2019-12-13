@@ -41,8 +41,9 @@ class MemoryResourceUsage(ResourceUsage):
         try:
             proc_pid_rss = MemoryResourceUsage._get_proc_rss(process_id)
         except Exception as e:
-            logger.periodic_info(EVERY_SIX_HOURS, "[PERIODIC] Could not get the /prod/{0}/statm data due to {1}",
-                                 process_id, ustr(e))
+            if isinstance(e, (IOError, OSError)):
+                raise
+            logger.periodic_info(EVERY_SIX_HOURS, "[PERIODIC] Could not get the /prod/{0}/statm data due to {1}", process_id, ustr(e))
             raise ProcessInfoException("Could not get the /proc/{0}/statm due to {1}".format(process_id, ustr(e)))
         return proc_pid_rss
 

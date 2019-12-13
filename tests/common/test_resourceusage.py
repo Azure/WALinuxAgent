@@ -14,47 +14,81 @@
 #
 # Requires Python 2.6+ and Openssl 1.0+
 #
+
 import os
 
-from azurelinuxagent.common.resourceusage import MemoryResourceUsage, ProcessInfo
+from azurelinuxagent.common.resourceusage import MemoryResourceUsage, ProcessInfo, ProcessInfoException
 from azurelinuxagent.common.utils import fileutil
-from tests.tools import AgentTestCase, data_dir, Mock, patch
+from tests.tools import AgentTestCase, data_dir, patch
+
+
+def raise_ioerror(*_):
+    e = IOError()
+    from errno import ENOENT
+    e.errno = ENOENT
+    raise e
+
+
+def raise_exception(*_):
+    raise Exception()
 
 
 class TestMemoryResourceUsage(AgentTestCase):
     @patch("azurelinuxagent.common.resourceusage.fileutil")
     def test_get_memory_usage_from_proc_statm(self, patch_read_file):
-        patch_read_file.read_file.return_value = fileutil.read_file(os.path.join(data_dir, "cgroups", "dummy_proc_statm"))
+        patch_read_file.read_file.return_value = fileutil.read_file(os.path.join(
+            data_dir, "cgroups", "dummy_proc_statm"))
         mem_usage = MemoryResourceUsage.get_memory_usage_from_proc_statm(1000)
         self.assertEqual(mem_usage, 331866112)
 
-        # No such file exists. Return 0 MB used.
-        patch_read_file.read_file.side_effect = IOError()
-        mem_usage = MemoryResourceUsage.get_memory_usage_from_proc_statm(1000)
-        self.assertEqual(0, mem_usage)
+        # No such file exists. Throw IOError (similar to the IOError we throw for Cgroups).
+        patch_read_file.read_file.side_effect = raise_ioerror
+        with self.assertRaises(IOError):
+            MemoryResourceUsage.get_memory_usage_from_proc_statm(1000)
+
+        # Some other exception occured. Throw ProcessInfoException.
+        patch_read_file.read_file.side_effect = raise_exception
+        with self.assertRaises(ProcessInfoException):
+            MemoryResourceUsage.get_memory_usage_from_proc_statm(1000)
 
 
 class TestProcessInfo(AgentTestCase):
     @patch("azurelinuxagent.common.resourceusage.fileutil")
     def test_get_proc_cmdline(self, patch_read_file):
-        patch_read_file.read_file.return_value = fileutil.read_file(
-            os.path.join(data_dir, "cgroups", "dummy_proc_cmdline"))
+        patch_read_file.read_file.return_value = fileutil.read_file(os.path.join(data_dir, "cgroups", "dummy_proc_cmdline"))
         cmdline = ProcessInfo.get_proc_cmdline(1000)
         self.assertEqual("python -u bin/WALinuxAgent-2.2.45-py2.7.egg -run-exthandlers", cmdline)
 
+        patch_read_file.read_file.side_effect = raise_ioerror
         # No such file exists; expect None instead.
-        patch_read_file.read_file.side_effect = IOError()
         cmdline = ProcessInfo.get_proc_cmdline(1000)
         self.assertEqual(None, cmdline)
 
+        # No such file exists; _get_proc_cmdline throws exception.
+        with self.assertRaises(ProcessInfoException):
+            ProcessInfo._get_proc_cmdline(1000)
+
+        patch_read_file.read_file.side_effect = raise_exception
+        # Other exception; _get_proc_cmdline throws exception.
+        with self.assertRaises(ProcessInfoException):
+            ProcessInfo._get_proc_cmdline(1000)
+
     @patch("azurelinuxagent.common.resourceusage.fileutil")
     def test_get_proc_comm(self, patch_read_file):
-        patch_read_file.read_file.return_value = fileutil.read_file(
-            os.path.join(data_dir, "cgroups", "dummy_proc_comm"))
+        patch_read_file.read_file.return_value = fileutil.read_file(os.path.join(data_dir, "cgroups", "dummy_proc_comm"))
         proc_name = ProcessInfo.get_proc_name(1000)
         self.assertEqual("python", proc_name)
 
+        patch_read_file.read_file.side_effect = raise_ioerror
         # No such file exists; expect None instead.
-        patch_read_file.read_file.side_effect = IOError()
         proc_name = ProcessInfo.get_proc_name(1000)
         self.assertEqual(None, proc_name)
+
+        # No such file exists; _get_proc_comm throws exception.
+        with self.assertRaises(ProcessInfoException):
+            ProcessInfo._get_proc_comm(1000)
+
+        patch_read_file.read_file.side_effect = raise_exception
+        # Other exception; _get_proc_cmdline throws exception.
+        with self.assertRaises(ProcessInfoException):
+            ProcessInfo._get_proc_comm(1000)
