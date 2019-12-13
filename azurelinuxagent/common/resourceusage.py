@@ -43,7 +43,7 @@ class MemoryResourceUsage(ResourceUsage):
         except Exception as e:
             logger.periodic_info(EVERY_SIX_HOURS, "[PERIODIC] Could not get the /prod/{0}/statm data due to {1}",
                                  process_id, ustr(e))
-
+            raise ProcessInfoException("Could not get the /proc/{0}/statm due to {1}".format(process_id, ustr(e)))
         return proc_pid_rss
 
     @staticmethod
@@ -65,11 +65,8 @@ class MemoryResourceUsage(ResourceUsage):
 
         :return: resident set size in bytes.
         """
-        try:
-            pid_statm = fileutil.read_file(PROC_STATM_FILENAME_FORMAT.format(process_id)).split()
-            pid_rss = int(pid_statm[1])  # Index 1 is RSS.
-        except Exception:
-            raise
+        pid_statm = fileutil.read_file(PROC_STATM_FILENAME_FORMAT.format(process_id)).split()
+        pid_rss = int(pid_statm[1])  # Index 1 is RSS.
 
         return pid_rss * PAGE_SIZE
 
@@ -100,7 +97,7 @@ class ProcessInfo(object):
         the \0 character and needs to be replaced with some other character to make it readable.
 
         Here an example:
-        root@vm:/# cat /proc/1392/cmdline
+        root@vm:/# cat /proc/1392/cmdlineg
         python--targettest_resourceusage.py
         root@vm:/# cat /proc/1392/cmdline | tr "\0" " "
         python --target test_resourceusage.py
@@ -110,11 +107,10 @@ class ProcessInfo(object):
         cmdline_file_name = PROC_CMDLINE_FILENAME_FORMAT.format(process_id)
         try:
             pid_cmdline = fileutil.read_file(cmdline_file_name).replace("\0", " ").strip()
-            pid_cmdline_str = str(pid_cmdline)
         except Exception as e:
             raise ProcessInfoException("Could not get contents from {0}".format(cmdline_file_name), e)
 
-        return pid_cmdline_str
+        return pid_cmdline
 
     @classmethod
     def _get_proc_comm(cls, process_id):

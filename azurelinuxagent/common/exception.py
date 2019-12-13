@@ -54,7 +54,7 @@ class AgentNetworkError(AgentError):
 
 class CGroupsException(AgentError):
     """
-    When cgroups are not available or could not fetch data from CGroup.
+    Exception to classify any cgroups related issue.
     """
 
     def __init__(self, msg=None, inner=None):

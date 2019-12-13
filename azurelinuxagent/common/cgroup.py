@@ -132,7 +132,6 @@ class CGroup(object):
             logger.periodic_warn(logger.EVERY_HALF_HOUR,
                                  'Could not get list of tasks from "cgroup.procs" file in the cgroup: {0}.'
                                  ' Internal error: {1}'.format(self.path, ustr(e)))
-            return None
         return None
 
 
@@ -239,7 +238,7 @@ class MemoryCgroup(CGroup):
             usage = self._get_parameters('memory.usage_in_bytes', first_line_only=True)
         except Exception as e:
             if isinstance(e, (IOError, OSError)) and e.errno == errno.ENOENT:
-                raise e
+                raise
             raise CGroupsException("Exception while attempting to read {0}".format("memory.usage_in_bytes"), e)
 
         return int(usage)
@@ -256,7 +255,7 @@ class MemoryCgroup(CGroup):
             usage = self._get_parameters('memory.max_usage_in_bytes', first_line_only=True)
         except Exception as e:
             if isinstance(e, (IOError, OSError)) and e.errno == errno.ENOENT:
-                raise e
+                raise
             raise CGroupsException("Exception while attempting to read {0}".format("memory.usage_in_bytes"), e)
 
         return int(usage)

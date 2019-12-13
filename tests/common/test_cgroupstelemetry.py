@@ -246,7 +246,6 @@ class TestCGroupsTelemetry(AgentTestCase):
                         current_memory = 209715200
                         current_max_memory = 471859200
                         current_proc_statm = TestCGroupsTelemetry.TestProcStatmMemoryUsed
-                        print(current_proc_statm)
 
                         # 1 CPU metric + 1 Current Memory + 1 Max memor + num_processes * memory from statm
                         num_of_metrics_per_extn_expected = 1 + 1 + 1 + 3 * 1
@@ -280,7 +279,6 @@ class TestCGroupsTelemetry(AgentTestCase):
         self.assertEqual(CGroupsTelemetry._cgroup_metrics.__len__(), num_extensions)
         self._assert_calculated_resource_metrics_equal([], [], [], [], [])
 
-    @patch("azurelinuxagent.common.osutil.default.DefaultOSUtil.get_total_cpu_ticks_since_boot")
     @patch("azurelinuxagent.common.cgroup.MemoryCgroup.get_max_memory_usage", side_effect=raise_ioerror)
     @patch("azurelinuxagent.common.cgroup.MemoryCgroup.get_memory_usage", side_effect=raise_ioerror)
     @patch("azurelinuxagent.common.cgroup.CpuCgroup.get_cpu_usage", side_effect=raise_ioerror)

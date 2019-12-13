@@ -161,7 +161,6 @@ class CGroupsTelemetry(object):
 
         with CGroupsTelemetry._rlock:
             for cgroup in CGroupsTelemetry._tracked[:]:
-                # noinspection PyBroadException
                 if cgroup.name not in CGroupsTelemetry._cgroup_metrics:
                     CGroupsTelemetry._cgroup_metrics[cgroup.name] = CgroupMetrics()
                 try:
@@ -182,12 +181,18 @@ class CGroupsTelemetry(object):
 
                         if pids:
                             for pid in pids:
-                                mem_usage_from_procstatm = MemoryResourceUsage.get_memory_usage_from_proc_statm(pid)
-                                metrics.append(MetricValue("Memory", "Memory Used by Process",
-                                                           CGroupsTelemetry.get_process_info_summary(pid),
-                                                           mem_usage_from_procstatm))
-                                CGroupsTelemetry._cgroup_metrics[cgroup.name].add_proc_statm_memory(
-                                    CGroupsTelemetry.get_process_info_summary(pid), mem_usage_from_procstatm)
+                                try:
+                                    mem_usage_from_procstatm = MemoryResourceUsage.get_memory_usage_from_proc_statm(pid)
+                                    metrics.append(MetricValue("Memory", "Memory Used by Process",
+                                                               CGroupsTelemetry.get_process_info_summary(pid),
+                                                               mem_usage_from_procstatm))
+                                    CGroupsTelemetry._cgroup_metrics[cgroup.name].add_proc_statm_memory(
+                                        CGroupsTelemetry.get_process_info_summary(pid), mem_usage_from_procstatm)
+                                except Exception as e:
+                                    if not isinstance(e, (IOError, OSError)) or e.errno != errno.ENOENT:
+                                        logger.periodic_warn(
+                                            logger.EVERY_HOUR, "[PERIODIC] Could not collect proc_statm for pid {0}. "
+                                                               "Error : {1}", pid, ustr(e))
                     else:
                         raise CGroupsException('CGroup controller {0} is not supported for cgroup {1}'.format(
                             cgroup.controller, cgroup.name))
