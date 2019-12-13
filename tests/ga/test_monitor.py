@@ -37,6 +37,7 @@ from azurelinuxagent.common.datacontract import get_properties
 from azurelinuxagent.common.event import CONTAINER_ID_ENV_VARIABLE, EventLogger, WALAEventOperation
 from azurelinuxagent.common.exception import HttpError
 from azurelinuxagent.common.future import ustr
+from azurelinuxagent.common.logger import Logger
 from azurelinuxagent.common.osutil.default import BASE_CGROUPS, DefaultOSUtil
 from azurelinuxagent.common.protocol.imds import ComputeInfo
 from azurelinuxagent.common.protocol.restapi import VMInfo
@@ -112,6 +113,13 @@ def get_event_message(duration, evt_type, is_internal, is_success, message, name
 @patch("azurelinuxagent.common.protocol.healthservice.HealthService._report")
 @patch("azurelinuxagent.common.utils.restutil.http_get")
 class TestMonitor(AgentTestCase):
+    def setUp(self):
+        AgentTestCase.setUp(self)
+        prefix = "UnitTest"
+        logger.DEFAULT_LOGGER = Logger(prefix=prefix)
+
+    def tearDown(self):
+        AgentTestCase.tearDown(self)
 
     def test_parse_xml_event(self, *args):
         data_str = load_data('ext/event_from_extension.xml')
