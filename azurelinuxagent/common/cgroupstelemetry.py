@@ -23,10 +23,11 @@ from azurelinuxagent.common import logger
 from azurelinuxagent.common.cgroup import CpuCgroup
 from azurelinuxagent.common.exception import CGroupsException
 from azurelinuxagent.common.future import ustr
+from azurelinuxagent.common.logger import EVERY_SIX_HOURS
 from azurelinuxagent.common.resourceusage import MemoryResourceUsage, ProcessInfo
 
 MetricValue = namedtuple('Metric', ['category', 'counter', 'instance', 'value'])
-StatmMetricValue = namedtuple('StatmMetricValue', ['pid', 'resource_metric'])
+StatmMetricValue = namedtuple('StatmMetricValue', ['pid_name_cmdline', 'resource_metric'])
 
 DELIM = " | "
 DEFAULT_PROCESS_NAME = "NO_PROCESS_FOUND"
@@ -42,12 +43,21 @@ class CGroupsTelemetry(object):
 
     @staticmethod
     def get_process_info_summary(process_id):
-        process_cmdline = ProcessInfo.get_proc_cmdline(process_id) if not None else DEFAULT_PROCESS_COMMANDLINE
-        process_name = ProcessInfo.get_proc_name(process_id) if not None else DEFAULT_PROCESS_NAME
+        process_cmdline = DEFAULT_PROCESS_COMMANDLINE
+        process_name = DEFAULT_PROCESS_NAME
 
-        # The ProcessName and ProcessCommandLine can be None if the file /proc/<pid>/{comm,cmdline} cease to exist;
-        # eg: the process can die, or finish. Which is why we need Default Names, in case we fail to fetch the details
-        # from those files.
+        # The ProcessName and ProcessCommandLine can generate Exception if the file /proc/<pid>/{comm,cmdline} cease to
+        # exist; eg: the process can die, or finish. Which is why we need Default Names, in case we fail to fetch the
+        # details from those files.
+        try:
+            process_cmdline = ProcessInfo.get_proc_cmdline(process_id) if not None else DEFAULT_PROCESS_COMMANDLINE
+        except Exception as e:
+            logger.periodic_info(EVERY_SIX_HOURS, "[PERIODIC] {0}", ustr(e))
+
+        try:
+            process_name = ProcessInfo.get_proc_name(process_id) if not None else DEFAULT_PROCESS_NAME
+        except Exception as e:
+            logger.periodic_info(EVERY_SIX_HOURS, "[PERIODIC] {0}", ustr(e))
 
         return process_id + DELIM + process_name + DELIM + process_cmdline
 
@@ -80,13 +90,13 @@ class CGroupsTelemetry(object):
             else:
                 processed_extension["memory"] = {"max_mem": CGroupsTelemetry._get_metrics_list(max_memory_usage)}
 
-        if memory_usage_per_process:
+        if len(memory_usage_per_process) > 0:
             for pid_process_memory in memory_usage_per_process:
                 if "proc_statm_memory" in processed_extension:
-                    processed_extension["proc_statm_memory"][pid_process_memory.pid] = \
+                    processed_extension["proc_statm_memory"][pid_process_memory.pid_name_cmdline] = \
                         CGroupsTelemetry._get_metrics_list(pid_process_memory.resource_metric)
                 else:
-                    processed_extension["proc_statm_memory"] = {pid_process_memory.pid:
+                    processed_extension["proc_statm_memory"] = {pid_process_memory.pid_name_cmdline:
                         CGroupsTelemetry._get_metrics_list(pid_process_memory.resource_metric)}
         return processed_extension
 
@@ -261,7 +271,10 @@ class CgroupMetrics(object):
         return self._cpu_usage
 
     def get_proc_statm_memory_metrics(self):
-        return [StatmMetricValue(pid, metric) for pid, metric in self._proc_statm_mem.items()]
+        """
+        :return: StatmMetricValue tuples of pid and metric
+        """
+        return [StatmMetricValue(pid_name_cmdline, metric) for pid_name_cmdline, metric in self._proc_statm_mem.items()]
 
     def clear(self):
         self._memory_usage.clear()

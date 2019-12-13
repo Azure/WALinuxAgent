@@ -165,7 +165,7 @@ class TestCGroupsTelemetry(AgentTestCase):
             self.assertListEqual(cgroup_metric.get_max_memory_metrics()._data, max_memory_usage)
             self.assertListEqual(cgroup_metric.get_cpu_metrics()._data, cpu_usage)
             for kv_pair in cgroup_metric.get_proc_statm_memory_metrics():
-                self.assertIn(kv_pair.pid, processes_instances)
+                self.assertIn(kv_pair.pid_name_cmdline, processes_instances)
                 self.assertListEqual(kv_pair.resource_metric._data, memory_statm_memory_usage)
 
     def _assert_polled_metrics_equal(self, metrics, cpu_metric_value, memory_metric_value,

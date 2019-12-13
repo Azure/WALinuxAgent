@@ -60,12 +60,8 @@ class TestProcessInfo(AgentTestCase):
         self.assertEqual("python -u bin/WALinuxAgent-2.2.45-py2.7.egg -run-exthandlers", cmdline)
 
         patch_read_file.read_file.side_effect = raise_ioerror
-        # No such file exists; expect None instead.
-        cmdline = ProcessInfo.get_proc_cmdline(1000)
-        self.assertEqual(None, cmdline)
-
         # No such file exists; _get_proc_cmdline throws exception.
-        with self.assertRaises(ProcessInfoException):
+        with self.assertRaises(IOError):
             ProcessInfo._get_proc_cmdline(1000)
 
         patch_read_file.read_file.side_effect = raise_exception
@@ -81,12 +77,8 @@ class TestProcessInfo(AgentTestCase):
 
         patch_read_file.read_file.side_effect = raise_ioerror
         # No such file exists; expect None instead.
-        proc_name = ProcessInfo.get_proc_name(1000)
-        self.assertEqual(None, proc_name)
-
-        # No such file exists; _get_proc_comm throws exception.
-        with self.assertRaises(ProcessInfoException):
-            ProcessInfo._get_proc_comm(1000)
+        with self.assertRaises(IOError):
+            ProcessInfo.get_proc_name(1000)
 
         patch_read_file.read_file.side_effect = raise_exception
         # Other exception; _get_proc_cmdline throws exception.

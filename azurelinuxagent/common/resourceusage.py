@@ -75,20 +75,12 @@ class MemoryResourceUsage(ResourceUsage):
 class ProcessInfo(object):
     @staticmethod
     def get_proc_name(process_id):
-        proc_pid_rss = None
-        try:
-            proc_pid_rss = ProcessInfo._get_proc_comm(process_id)
-        except ProcessInfoException as e:
-            logger.periodic_info(EVERY_SIX_HOURS, "[PERIODIC] {0}", ustr(e))
+        proc_pid_rss = ProcessInfo._get_proc_comm(process_id)
         return proc_pid_rss
 
     @staticmethod
     def get_proc_cmdline(process_id):
-        proc_pid_rss = None
-        try:
-            proc_pid_rss = ProcessInfo._get_proc_cmdline(process_id)
-        except ProcessInfoException as e:
-            logger.periodic_info(EVERY_SIX_HOURS, "[PERIODIC] {0}", ustr(e))
+        proc_pid_rss = ProcessInfo._get_proc_cmdline(process_id)
         return proc_pid_rss
 
     @classmethod
@@ -109,6 +101,8 @@ class ProcessInfo(object):
         try:
             pid_cmdline = fileutil.read_file(cmdline_file_name).replace("\0", " ").strip()
         except Exception as e:
+            if isinstance(e, (IOError, OSError)):
+                raise
             raise ProcessInfoException("Could not get contents from {0}".format(cmdline_file_name), e)
 
         return pid_cmdline
@@ -130,6 +124,8 @@ class ProcessInfo(object):
             pid_comm = fileutil.read_file(comm_file_name).strip()
             pid_comm_str = str(pid_comm)
         except Exception as e:
+            if isinstance(e, (IOError, OSError)):
+                raise
             raise ProcessInfoException("Could not get contents from {0}".format(comm_file_name), e)
 
         return pid_comm_str
