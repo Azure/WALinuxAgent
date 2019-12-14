@@ -15,17 +15,18 @@
 # Requires Python 2.6+ and Openssl 1.0+
 #
 
-from tests.tools import *
-from azurelinuxagent.common.exception import *
-from azurelinuxagent.daemon import *
+import unittest
+
+from tests.tools import AgentTestCase
 from azurelinuxagent.daemon.resourcedisk.default import ResourceDiskHandler
+
 
 class TestResourceDisk(AgentTestCase):
     def test_mount_flags_empty(self):
         partition = '/dev/sdb1'
         mountpoint = '/mnt/resource'
         options = None
-        expected = 'mount /dev/sdb1 /mnt/resource'
+        expected = 'mount -t ext3 /dev/sdb1 /mnt/resource'
         rdh = ResourceDiskHandler()
         mount_string = rdh.get_mount_string(options, partition, mountpoint)
         self.assertEqual(expected, mount_string)
@@ -34,7 +35,7 @@ class TestResourceDisk(AgentTestCase):
         partition = '/dev/sdb1'
         mountpoint = '/mnt/resource'
         options = 'noexec,noguid,nodev'
-        expected = 'mount -o noexec,noguid,nodev /dev/sdb1 /mnt/resource'
+        expected = 'mount -t ext3 -o noexec,noguid,nodev /dev/sdb1 /mnt/resource'
         rdh = ResourceDiskHandler()
         mount_string = rdh.get_mount_string(options, partition, mountpoint)
         self.assertEqual(expected, mount_string)

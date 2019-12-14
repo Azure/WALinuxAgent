@@ -2,14 +2,17 @@
 # Licensed under the Apache License.
 import json
 import subprocess
+import os
+import time
 
 from azurelinuxagent.common.protocol.restapi import ExtensionStatus, Extension, ExtHandler, ExtHandlerProperties
 from azurelinuxagent.ga.exthandlers import parse_ext_status, ExtHandlerInstance, get_exthandlers_handler, \
     ExtCommandEnvVariable
+from azurelinuxagent.common.cgroupconfigurator import CGroupConfigurator
 from azurelinuxagent.common.exception import ProtocolError, ExtensionError, ExtensionErrorCodes
 from azurelinuxagent.common.event import WALAEventOperation
 from azurelinuxagent.common.utils.extensionprocessutil import TELEMETRY_MESSAGE_MAX_LEN, format_stdout_stderr, read_output
-from tests.tools import *
+from tests.tools import AgentTestCase, patch, mock_sleep
 
 
 class TestExtHandlers(AgentTestCase):

@@ -32,7 +32,7 @@ from azurelinuxagent.common.osutil.bigip import BigIpOSUtil
 from azurelinuxagent.common.osutil.gaia import GaiaOSUtil
 from azurelinuxagent.common.osutil.iosxe import IosxeOSUtil
 from azurelinuxagent.common.osutil.openwrt import OpenWRTOSUtil
-from tests.tools import *
+from tests.tools import AgentTestCase, patch
 
 
 class TestOsUtilFactory(AgentTestCase):

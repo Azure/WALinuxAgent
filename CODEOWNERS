@@ -10,5 +10,13 @@
 # questions, please feel free to reach out to thstring@microsoft.com.
 /azurelinuxagent/pa/ @trstringer @anhvoms
 
-# Guest Agent team
+#
+# RDMA
+#
+/azurelinuxagent/common/rdma.py @longlimsft
+/azurelinuxagent/pa/rdma/ @longlimsft
+
+#
+# Linux Agent team
+#
 * @narrieta @vrdmr @pgombar @larohra

@@ -249,14 +249,20 @@ class ResourceDiskHandler(object):
 
         return err_code, output
 
-    @staticmethod
-    def get_mount_string(mount_options, partition, mount_point):
+    def get_mount_string(self, mount_options, partition, mount_point):
         if mount_options is not None:
-            return 'mount -o {0} {1} {2}'.format(mount_options,
-                                                 partition,
-                                                 mount_point)
+            return 'mount -t {0} -o {1} {2} {3}'.format(
+                self.fs,
+                mount_options,
+                partition,
+                mount_point
+            )
         else:
-            return 'mount {0} {1}'.format(partition, mount_point)
+            return 'mount -t {0} {1} {2}'.format(
+                self.fs,
+                partition,
+                mount_point
+            )
 
     @staticmethod
     def check_existing_swap_file(swapfile, swaplist, size):
