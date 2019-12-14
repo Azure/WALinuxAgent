@@ -198,11 +198,10 @@ class CGroupsTelemetry(object):
 
                         max_memory_usage = cgroup.get_max_memory_usage()
                         CGroupsTelemetry._cgroup_metrics[cgroup.name].add_max_memory_usage(max_memory_usage)
-                        metrics.append(MetricValue(MetricsCategory.MEMORY_CATEGORY, MetricsCounter.
-                                                   TOTAL_MEM_USAGE, cgroup.name, max_memory_usage))
+                        metrics.append(MetricValue(MetricsCategory.MEMORY_CATEGORY, MetricsCounter.MAX_MEM_USAGE,
+                                                   cgroup.name, max_memory_usage))
 
                         pids = cgroup.get_tracked_processes()
-
                         for pid in pids:
                             try:
                                 mem_usage_from_procstatm = MemoryResourceUsage.get_memory_usage_from_proc_statm(pid)
