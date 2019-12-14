@@ -26,15 +26,20 @@ from azurelinuxagent.common.utils import fileutil
 re_user_system_times = re.compile(r'user (\d+)\nsystem (\d+)\n')
 
 
+class CGroupContollers(object):
+    CPU = "cpu"
+    MEMORY = "memory"
+
+
 class CGroup(object):
     @staticmethod
     def create(cgroup_path, controller, extension_name):
         """
         Factory method to create the correct CGroup.
         """
-        if controller == "cpu":
+        if controller == CGroupContollers.CPU:
             return CpuCgroup(extension_name, cgroup_path)
-        if controller == "memory":
+        if controller == CGroupContollers.MEMORY:
             return MemoryCgroup(extension_name, cgroup_path)
         raise CGroupsException('CGroup controller {0} is not supported'.format(controller))
 
@@ -107,19 +112,15 @@ class CGroup(object):
             logger.periodic_warn(logger.EVERY_HALF_HOUR,
                                  'Could not get list of tasks from "tasks" file in the cgroup: {0}.'
                                  ' Internal error: {1}'.format(self.path, ustr(e)))
-            return False
-
         return False
 
     def get_tracked_processes(self):
         """
-
-        :return: List of Str (Pids)
+        :return: List of Str (Pids). Will return an empty string if we couldn't fetch any tracked processes.
         """
+        procs = []
         try:
             procs = self._get_parameters("cgroup.procs")
-            if procs:
-                return procs
         except (IOError, OSError) as e:
             if e.errno == errno.ENOENT:
                 # only suppressing file not found exceptions.
@@ -132,12 +133,12 @@ class CGroup(object):
             logger.periodic_warn(logger.EVERY_HALF_HOUR,
                                  'Could not get list of tasks from "cgroup.procs" file in the cgroup: {0}.'
                                  ' Internal error: {1}'.format(self.path, ustr(e)))
-        return None
+        return procs
 
 
 class CpuCgroup(CGroup):
     def __init__(self, name, cgroup_path):
-        super(CpuCgroup, self).__init__(name, cgroup_path, "cpu")
+        super(CpuCgroup, self).__init__(name, cgroup_path, CGroupContollers.CPU)
 
         self._osutil = get_osutil()
         self._previous_cgroup_cpu = None
@@ -218,7 +219,7 @@ class MemoryCgroup(CGroup):
 
         :return: MemoryCgroup
         """
-        super(MemoryCgroup, self).__init__(name, cgroup_path, "memory")
+        super(MemoryCgroup, self).__init__(name, cgroup_path, CGroupContollers.MEMORY)
 
     def __str__(self):
         return "cgroup: Name: {0}, cgroup_path: {1}; Controller: {2}".format(
@@ -233,7 +234,6 @@ class MemoryCgroup(CGroup):
         :rtype: int
         """
         usage = None
-
         try:
             usage = self._get_parameters('memory.usage_in_bytes', first_line_only=True)
         except Exception as e:

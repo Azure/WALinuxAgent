@@ -35,30 +35,24 @@ def consume_cpu_time():
 
 
 class TestCGroup(AgentTestCase):
+    @staticmethod
+    def _clean_up_test_files():
+        with open(os.path.join(data_dir, "cgroups", "cpu_mount", "tasks"), mode="wb") as tasks:
+            tasks.truncate(0)
+        with open(os.path.join(data_dir, "cgroups", "memory_mount", "tasks"), mode="wb") as tasks:
+            tasks.truncate(0)
+        with open(os.path.join(data_dir, "cgroups", "cpu_mount", "cgroup.procs"), mode="wb") as procs:
+            procs.truncate(0)
+        with open(os.path.join(data_dir, "cgroups", "memory_mount", "cgroup.procs"), mode="wb") as procs:
+            procs.truncate(0)
 
     def setUp(self):
         AgentTestCase.setUp(self)
-
-        with open(os.path.join(data_dir, "cgroups", "cpu_mount", "tasks"), mode="wb") as tasks:
-            tasks.truncate(0)
-        with open(os.path.join(data_dir, "cgroups", "memory_mount", "tasks"), mode="wb") as tasks:
-            tasks.truncate(0)
-        with open(os.path.join(data_dir, "cgroups", "cpu_mount", "cgroup.procs"), mode="wb") as tasks:
-            tasks.truncate(0)
-        with open(os.path.join(data_dir, "cgroups", "memory_mount", "cgroup.procs"), mode="wb") as tasks:
-            tasks.truncate(0)
+        TestCGroup._clean_up_test_files()
 
     def tearDown(self):
         AgentTestCase.tearDown(self)
-
-        with open(os.path.join(data_dir, "cgroups", "cpu_mount", "tasks"), mode="wb") as tasks:
-            tasks.truncate(0)
-        with open(os.path.join(data_dir, "cgroups", "memory_mount", "tasks"), mode="wb") as tasks:
-            tasks.truncate(0)
-        with open(os.path.join(data_dir, "cgroups", "cpu_mount", "cgroup.procs"), mode="wb") as tasks:
-            tasks.truncate(0)
-        with open(os.path.join(data_dir, "cgroups", "memory_mount", "cgroup.procs"), mode="wb") as tasks:
-            tasks.truncate(0)
+        TestCGroup._clean_up_test_files()
 
     def test_correct_creation(self):
         test_cgroup = CGroup.create("dummy_path", "cpu", "test_extension")
@@ -92,7 +86,7 @@ class TestCGroup(AgentTestCase):
 
     def test_get_tracked_processes(self):
         test_cgroup = CGroup.create(os.path.join(data_dir, "cgroups", "cpu_mount"), "cpu", "test_extension")
-        self.assertIsNone(test_cgroup.get_tracked_processes())
+        self.assertListEqual(test_cgroup.get_tracked_processes(), [])
 
         with open(os.path.join(data_dir, "cgroups", "cpu_mount", "cgroup.procs"), mode="wb") as tasks:
             tasks.write(str(1000).encode())
@@ -100,7 +94,7 @@ class TestCGroup(AgentTestCase):
         self.assertEqual(['1000'], test_cgroup.get_tracked_processes())
 
         test_cgroup = CGroup.create(os.path.join(data_dir, "cgroups", "memory_mount"), "memory", "test_extension")
-        self.assertIsNone(test_cgroup.get_tracked_processes())
+        self.assertListEqual(test_cgroup.get_tracked_processes(), [])
 
         with open(os.path.join(data_dir, "cgroups", "memory_mount", "cgroup.procs"), mode="wb") as tasks:
             tasks.write(str(1000).encode())
@@ -123,8 +117,8 @@ class TestCGroup(AgentTestCase):
         self.assertEqual(False, test_cgroup.is_active())
         self.assertEqual(1, patch_periodic_warn.call_count)
 
-        test_cgroup = CGroup.create(os.path.join(data_dir, "cgroups", "memory_mount", "tasks"), "memory", "test_extension")
-        self.assertEqual(False, test_cgroup.is_active())
+        test_cgp = CGroup.create(os.path.join(data_dir, "cgroups", "memory_mount", "tasks"), "memory", "test_extension")
+        self.assertEqual(False, test_cgp.is_active())
         self.assertEqual(2, patch_periodic_warn.call_count)
 
 

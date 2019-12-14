@@ -90,7 +90,7 @@ class ProcessInfo(object):
         the \0 character and needs to be replaced with some other character to make it readable.
 
         Here an example:
-        root@vm:/# cat /proc/1392/cmdlineg
+        root@vm:/# cat /proc/1392/cmdline
         python--targettest_resourceusage.py
         root@vm:/# cat /proc/1392/cmdline | tr "\0" " "
         python --target test_resourceusage.py
@@ -133,7 +133,7 @@ class ProcessInfo(object):
 
 class ProcessInfoException(AgentError):
     """
-    When we
+    Exception to classify any issues when we get any issues related to fetching ProcessInfo (cmdline, comm, etc.).
     """
 
     def __init__(self, msg=None, inner=None):

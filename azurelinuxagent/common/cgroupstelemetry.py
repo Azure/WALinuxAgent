@@ -14,13 +14,12 @@
 #
 # Requires Python 2.6+ and Openssl 1.0+
 import errno
-import os
 import threading
 from collections import namedtuple
 from datetime import datetime as dt
 
 from azurelinuxagent.common import logger
-from azurelinuxagent.common.cgroup import CpuCgroup
+from azurelinuxagent.common.cgroup import CpuCgroup, CGroupContollers
 from azurelinuxagent.common.exception import CGroupsException
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.logger import EVERY_SIX_HOURS
@@ -32,6 +31,18 @@ StatmMetricValue = namedtuple('StatmMetricValue', ['pid_name_cmdline', 'resource
 DELIM = " | "
 DEFAULT_PROCESS_NAME = "NO_PROCESS_FOUND"
 DEFAULT_PROCESS_COMMANDLINE = "NO_CMDLINE_FOUND"
+
+
+class MetricsCategory(object):
+    MEMORY_CATEGORY = "Memory"
+    PROCESS_CATEGORY = "Process"
+
+
+class MetricsCounter(object):
+    PROCESSOR_PERCENT_TIME = "% Processor Time"
+    TOTAL_MEM_USAGE = "Total Memory Usage"
+    MAX_MEM_USAGE = "Max Memory Usage"
+    MEM_USED_BY_PROCESS = "Memory Used by Process"
 
 
 class CGroupsTelemetry(object):
@@ -90,14 +101,14 @@ class CGroupsTelemetry(object):
             else:
                 processed_extension["memory"] = {"max_mem": CGroupsTelemetry._get_metrics_list(max_memory_usage)}
 
-        if len(memory_usage_per_process) > 0:
-            for pid_process_memory in memory_usage_per_process:
-                if "proc_statm_memory" in processed_extension:
-                    processed_extension["proc_statm_memory"][pid_process_memory.pid_name_cmdline] = \
-                        CGroupsTelemetry._get_metrics_list(pid_process_memory.resource_metric)
-                else:
-                    processed_extension["proc_statm_memory"] = {pid_process_memory.pid_name_cmdline:
-                        CGroupsTelemetry._get_metrics_list(pid_process_memory.resource_metric)}
+        for pid_process_memory in memory_usage_per_process:
+            if "proc_statm_memory" in processed_extension:
+                processed_extension["proc_statm_memory"][pid_process_memory.pid_name_cmdline] = \
+                    CGroupsTelemetry._get_metrics_list(pid_process_memory.resource_metric)
+            else:
+                processed_extension["proc_statm_memory"] = {pid_process_memory.pid_name_cmdline:
+                    CGroupsTelemetry._get_metrics_list(pid_process_memory.resource_metric)}
+
         return processed_extension
 
     @staticmethod
@@ -174,35 +185,36 @@ class CGroupsTelemetry(object):
                 if cgroup.name not in CGroupsTelemetry._cgroup_metrics:
                     CGroupsTelemetry._cgroup_metrics[cgroup.name] = CgroupMetrics()
                 try:
-                    if cgroup.controller == "cpu":
+                    if cgroup.controller == CGroupContollers.CPU:
                         current_cpu_usage = cgroup.get_cpu_usage()
                         CGroupsTelemetry._cgroup_metrics[cgroup.name].add_cpu_usage(current_cpu_usage)
-                        metrics.append(MetricValue("Process", "% Processor Time", cgroup.name, current_cpu_usage))
-                    elif cgroup.controller == "memory":
+                        metrics.append(MetricValue(MetricsCategory.PROCESS_CATEGORY, MetricsCounter.
+                                                   PROCESSOR_PERCENT_TIME, cgroup.name, current_cpu_usage))
+                    elif cgroup.controller == CGroupContollers.MEMORY:
                         current_memory_usage = cgroup.get_memory_usage()
                         CGroupsTelemetry._cgroup_metrics[cgroup.name].add_memory_usage(current_memory_usage)
-                        metrics.append(MetricValue("Memory", "Total Memory Usage", cgroup.name, current_memory_usage))
+                        metrics.append(MetricValue(MetricsCategory.MEMORY_CATEGORY, MetricsCounter.
+                                                   TOTAL_MEM_USAGE, cgroup.name, current_memory_usage))
 
                         max_memory_usage = cgroup.get_max_memory_usage()
                         CGroupsTelemetry._cgroup_metrics[cgroup.name].add_max_memory_usage(max_memory_usage)
-                        metrics.append(MetricValue("Memory", "Max Memory Usage", cgroup.name, max_memory_usage))
+                        metrics.append(MetricValue(MetricsCategory.MEMORY_CATEGORY, MetricsCounter.
+                                                   TOTAL_MEM_USAGE, cgroup.name, max_memory_usage))
 
                         pids = cgroup.get_tracked_processes()
 
-                        if pids:
-                            for pid in pids:
-                                try:
-                                    mem_usage_from_procstatm = MemoryResourceUsage.get_memory_usage_from_proc_statm(pid)
-                                    metrics.append(MetricValue("Memory", "Memory Used by Process",
-                                                               CGroupsTelemetry.get_process_info_summary(pid),
-                                                               mem_usage_from_procstatm))
-                                    CGroupsTelemetry._cgroup_metrics[cgroup.name].add_proc_statm_memory(
-                                        CGroupsTelemetry.get_process_info_summary(pid), mem_usage_from_procstatm)
-                                except Exception as e:
-                                    if not isinstance(e, (IOError, OSError)) or e.errno != errno.ENOENT:
-                                        logger.periodic_warn(
-                                            logger.EVERY_HOUR, "[PERIODIC] Could not collect proc_statm for pid {0}. "
-                                                               "Error : {1}", pid, ustr(e))
+                        for pid in pids:
+                            try:
+                                mem_usage_from_procstatm = MemoryResourceUsage.get_memory_usage_from_proc_statm(pid)
+                                metrics.append(MetricValue(MetricsCategory.MEMORY_CATEGORY, MetricsCounter.
+                                                           MEM_USED_BY_PROCESS, CGroupsTelemetry.get_process_info_summary(pid),
+                                                           mem_usage_from_procstatm))
+                                CGroupsTelemetry._cgroup_metrics[cgroup.name].add_proc_statm_memory(
+                                    CGroupsTelemetry.get_process_info_summary(pid), mem_usage_from_procstatm)
+                            except Exception as e:
+                                if not isinstance(e, (IOError, OSError)) or e.errno != errno.ENOENT:
+                                    logger.periodic_warn(logger.EVERY_HOUR, "[PERIODIC] Could not collect proc_statm "
+                                                                            "for pid {0}. Error : {1}", pid, ustr(e))
                     else:
                         raise CGroupsException('CGroup controller {0} is not supported for cgroup {1}'.format(
                             cgroup.controller, cgroup.name))
