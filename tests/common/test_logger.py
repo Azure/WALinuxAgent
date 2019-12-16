@@ -191,6 +191,27 @@ class TestLogger(AgentTestCase):
             # If the time difference is > 5secs, there's a high probability that the time_in_file is in different TZ
             self.assertTrue((time_in_file-before_write_utc) <= timedelta(seconds=5))
 
+    def test_logger_should_log_micro_seconds(self):
+        file_name = "test.log"
+        file_path = os.path.join(self.tmp_dir, file_name)
+        test_logger = logger.Logger()
+        test_logger.add_appender(logger.AppenderType.FILE, logger.LogLevel.INFO, path=file_path)
+
+        # datetime.isoformat() skips ms if ms=0, this test ensures that ms is always set
+        ts_with_no_ms = datetime.utcnow().replace(microsecond=0)
+
+        with patch("datetime.utcnow", side_effect=ts_with_no_ms):
+            with open(file_path, "r") as log_file:
+                test_logger.info("The time should contain milli-seconds")
+                log = log_file.read()
+                try:
+                    time_in_file = datetime.strptime(log.split(logger.LogLevel.STRINGS[logger.LogLevel.INFO])[0].strip()
+                                                     , u'%Y-%m-%dT%H:%M:%S.%fZ')
+                except ValueError:
+                    self.fail("Ensure timestamp follows ISO-8601 format + 'Z' for UTC")
+
+                self.assertEqual(ts_with_no_ms, time_in_file, "Timestamps dont match")
+
     def test_telemetry_logger(self):
         mock = MagicMock()
         appender = logger.TelemetryAppender(logger.LogLevel.WARNING, mock)
