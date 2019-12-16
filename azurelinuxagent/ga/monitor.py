@@ -96,7 +96,6 @@ def generate_extension_metrics_telemetry_dictionary(schema_version=1.0,
     else:
         return None
 
-
 def get_monitor_handler():
     return MonitorHandler()
 
@@ -458,20 +457,23 @@ class MonitorHandler(object):
         """
         This method polls the tracked cgroups to get data from the cgroups filesystem and send the data directly.
 
-        :return:
+        :return: List of Metrics (which would be sent to PerfCounterMetrics directly.
         """
-        time_now = datetime.datetime.utcnow()
-        if not self.last_cgroup_polling_telemetry:
-            self.last_cgroup_polling_telemetry = time_now
+        try:  # If there is an issue in reporting, it should not take down whole monitor thread.
+            time_now = datetime.datetime.utcnow()
+            if not self.last_cgroup_polling_telemetry:
+                self.last_cgroup_polling_telemetry = time_now
 
-        if time_now >= (self.last_cgroup_polling_telemetry +
-                        MonitorHandler.CGROUP_TELEMETRY_POLLING_PERIOD):
-            metrics = CGroupsTelemetry.poll_all_tracked()
-            self.last_cgroup_polling_telemetry = time_now
+            if time_now >= (self.last_cgroup_polling_telemetry +
+                            MonitorHandler.CGROUP_TELEMETRY_POLLING_PERIOD):
+                metrics = CGroupsTelemetry.poll_all_tracked()
+                self.last_cgroup_polling_telemetry = time_now
 
-            if metrics:
-                for metric in metrics:
-                    report_metric(metric.category, metric.counter, metric.instance, metric.value)
+                if metrics:
+                    for metric in metrics:
+                        report_metric(metric.category, metric.counter, metric.instance, metric.value)
+        except Exception as e:
+            logger.warn("Could not poll all the tracked telemetry due to {0}", ustr(e))
 
     def send_telemetry_metrics(self):
         """
@@ -481,22 +483,25 @@ class MonitorHandler(object):
         """
         time_now = datetime.datetime.utcnow()
 
-        if not self.last_cgroup_report_telemetry:
-            self.last_cgroup_report_telemetry = time_now
+        try:  # If there is an issue in reporting, it should not take down whole monitor thread.
+            if not self.last_cgroup_report_telemetry:
+                self.last_cgroup_report_telemetry = time_now
 
-        if time_now >= (self.last_cgroup_report_telemetry + MonitorHandler.CGROUP_TELEMETRY_REPORTING_PERIOD):
-            performance_metrics = CGroupsTelemetry.report_all_tracked()
-            self.last_cgroup_report_telemetry = time_now
+            if time_now >= (self.last_cgroup_report_telemetry + MonitorHandler.CGROUP_TELEMETRY_REPORTING_PERIOD):
+                performance_metrics = CGroupsTelemetry.report_all_tracked()
+                self.last_cgroup_report_telemetry = time_now
 
-            if performance_metrics:
-                message = generate_extension_metrics_telemetry_dictionary(schema_version=1.0,
-                                                                          performance_metrics=performance_metrics)
-                add_event(name=AGENT_NAME,
-                          version=CURRENT_VERSION,
-                          op=WALAEventOperation.ExtensionMetricsData,
-                          is_success=True,
-                          message=ustr(message),
-                          log_event=False)
+                if performance_metrics:
+                    message = generate_extension_metrics_telemetry_dictionary(schema_version=1.0,
+                                                                              performance_metrics=performance_metrics)
+                    add_event(name=AGENT_NAME,
+                              version=CURRENT_VERSION,
+                              op=WALAEventOperation.ExtensionMetricsData,
+                              is_success=True,
+                              message=ustr(message),
+                              log_event=False)
+        except Exception as e:
+            logger.warn("Could not report all the tracked telemetry due to {0}", ustr(e))
 
     def log_altered_network_configuration(self):
         """

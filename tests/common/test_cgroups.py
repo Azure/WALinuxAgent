@@ -35,17 +35,24 @@ def consume_cpu_time():
 
 
 class TestCGroup(AgentTestCase):
-
-    def setUp(self):
-        AgentTestCase.setUp(self)
-
-    def tearDown(self):
-        AgentTestCase.tearDown(self)
-
+    @staticmethod
+    def _clean_up_test_files():
         with open(os.path.join(data_dir, "cgroups", "cpu_mount", "tasks"), mode="wb") as tasks:
             tasks.truncate(0)
         with open(os.path.join(data_dir, "cgroups", "memory_mount", "tasks"), mode="wb") as tasks:
             tasks.truncate(0)
+        with open(os.path.join(data_dir, "cgroups", "cpu_mount", "cgroup.procs"), mode="wb") as procs:
+            procs.truncate(0)
+        with open(os.path.join(data_dir, "cgroups", "memory_mount", "cgroup.procs"), mode="wb") as procs:
+            procs.truncate(0)
+
+    def setUp(self):
+        AgentTestCase.setUp(self)
+        TestCGroup._clean_up_test_files()
+
+    def tearDown(self):
+        AgentTestCase.tearDown(self)
+        TestCGroup._clean_up_test_files()
 
     def test_correct_creation(self):
         test_cgroup = CGroup.create("dummy_path", "cpu", "test_extension")
@@ -77,6 +84,23 @@ class TestCGroup(AgentTestCase):
 
         self.assertEqual(True, test_cgroup.is_active())
 
+    def test_get_tracked_processes(self):
+        test_cgroup = CGroup.create(os.path.join(data_dir, "cgroups", "cpu_mount"), "cpu", "test_extension")
+        self.assertListEqual(test_cgroup.get_tracked_processes(), [])
+
+        with open(os.path.join(data_dir, "cgroups", "cpu_mount", "cgroup.procs"), mode="wb") as tasks:
+            tasks.write(str(1000).encode())
+
+        self.assertEqual(['1000'], test_cgroup.get_tracked_processes())
+
+        test_cgroup = CGroup.create(os.path.join(data_dir, "cgroups", "memory_mount"), "memory", "test_extension")
+        self.assertListEqual(test_cgroup.get_tracked_processes(), [])
+
+        with open(os.path.join(data_dir, "cgroups", "memory_mount", "cgroup.procs"), mode="wb") as tasks:
+            tasks.write(str(1000).encode())
+
+        self.assertEqual(['1000'], test_cgroup.get_tracked_processes())
+
     @patch("azurelinuxagent.common.logger.periodic_warn")
     def test_is_active_file_not_present(self, patch_periodic_warn):
         test_cgroup = CGroup.create(os.path.join(data_dir, "cgroups", "not_cpu_mount"), "cpu", "test_extension")
@@ -93,8 +117,8 @@ class TestCGroup(AgentTestCase):
         self.assertEqual(False, test_cgroup.is_active())
         self.assertEqual(1, patch_periodic_warn.call_count)
 
-        test_cgroup = CGroup.create(os.path.join(data_dir, "cgroups", "memory_mount", "tasks"), "memory", "test_extension")
-        self.assertEqual(False, test_cgroup.is_active())
+        test_cgp = CGroup.create(os.path.join(data_dir, "cgroups", "memory_mount", "tasks"), "memory", "test_extension")
+        self.assertEqual(False, test_cgp.is_active())
         self.assertEqual(2, patch_periodic_warn.call_count)
 
 
@@ -227,8 +251,12 @@ class TestMemoryCgroup(AgentTestCase):
     def test_get_metrics_when_files_not_present(self):
         test_mem_cg = MemoryCgroup("test_extension", os.path.join(data_dir, "cgroups"))
 
-        memory_usage = test_mem_cg.get_memory_usage()
-        self.assertEqual(0, memory_usage)
+        with self.assertRaises(IOError) as e:
+            test_mem_cg.get_memory_usage()
 
-        max_memory_usage = test_mem_cg.get_max_memory_usage()
-        self.assertEqual(0, max_memory_usage)
+        self.assertEqual(e.exception.errno, errno.ENOENT)
+
+        with self.assertRaises(IOError) as e:
+            test_mem_cg.get_max_memory_usage()
+
+        self.assertEqual(e.exception.errno, errno.ENOENT)
