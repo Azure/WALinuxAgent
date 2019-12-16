@@ -191,6 +191,30 @@ class TestLogger(AgentTestCase):
             # If the time difference is > 5secs, there's a high probability that the time_in_file is in different TZ
             self.assertTrue((time_in_file-before_write_utc) <= timedelta(seconds=5))
 
+    @patch("azurelinuxagent.common.logger.datetime")
+    def test_logger_should_log_micro_seconds(self, mock_dt):
+        # datetime.isoformat() skips ms if ms=0, this test ensures that ms is always set
+
+        file_name = "test.log"
+        file_path = os.path.join(self.tmp_dir, file_name)
+        test_logger = logger.Logger()
+        test_logger.add_appender(logger.AppenderType.FILE, logger.LogLevel.INFO, path=file_path)
+
+        ts_with_no_ms = datetime.utcnow().replace(microsecond=0)
+        mock_dt.utcnow = MagicMock(return_value=ts_with_no_ms)
+
+        test_logger.info("The time should contain milli-seconds")
+
+        with open(file_path, "r") as log_file:
+            log = log_file.read()
+            try:
+                time_in_file = datetime.strptime(log.split(logger.LogLevel.STRINGS[logger.LogLevel.INFO])[0].strip()
+                                                 , u'%Y-%m-%dT%H:%M:%S.%fZ')
+            except ValueError:
+                self.fail("Ensure timestamp follows ISO-8601 format and has micro seconds in it")
+
+            self.assertEqual(ts_with_no_ms, time_in_file, "Timestamps dont match")
+
     def test_telemetry_logger(self):
         mock = MagicMock()
         appender = logger.TelemetryAppender(logger.LogLevel.WARNING, mock)
