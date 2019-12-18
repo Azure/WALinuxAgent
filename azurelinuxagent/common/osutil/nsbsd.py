@@ -28,6 +28,10 @@ class NSBSDOSUtil(FreeBSDOSUtil):
     def __init__(self):
         super(NSBSDOSUtil, self).__init__()
 
+        self.agent_log_dir = "/log/azure"
+        self.agent_log_rotation_maxbytes = 4000000
+        self.agent_log_rotation_backupcount = 1
+
         if self.resolver is None:
             # NSBSD doesn't have a system resolver, configure a python one
 

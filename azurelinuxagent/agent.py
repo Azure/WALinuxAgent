@@ -62,7 +62,7 @@ class Agent(object):
         #Init log
         verbose = verbose or conf.get_logs_verbose()
         level = logger.LogLevel.VERBOSE if verbose else logger.LogLevel.INFO
-        log_dir = conf.get_logs_dir()
+        log_dir = self.osutil.get_agent_log_dir()
         try:
             if os.path.isfile(log_dir):
                 raise Exception("{0} is a file".format(log_dir))
@@ -73,8 +73,8 @@ class Agent(object):
                 "Exception occurred while creating "
                 "log directory {0}: {1}".format(log_dir, e))
         log_file = os.path.join(log_dir, "waagent.log")
-        log_max_bytes = conf.get_logs_rotation_max_bytes()
-        log_backup_count = conf.get_logs_rotation_backup_count()
+        log_max_bytes = self.osutil.get_agent_log_rotation_maxbytes()
+        log_backup_count = self.osutil.get_agent_log_rotation_backupcount()
         logger.add_logger_appender(logger.AppenderType.FILE, level,
                                    path=log_file,
                                    max_bytes=log_max_bytes,

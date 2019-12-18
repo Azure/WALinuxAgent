@@ -103,6 +103,9 @@ GEN2_DEVICE_ID = 'f8b3781a-1e82-4818-a1c3-63d806ec15bb'
 class DefaultOSUtil(object):
     def __init__(self):
         self.agent_conf_file_path = '/etc/waagent.conf'
+        self.agent_log_dir = '/var/log'
+        self.agent_log_rotation_maxbytes = 0
+        self.agent_log_rotation_backupcount = 0
         self.selinux = None
         self.disable_route_warning = False
         self.jit_enabled = False
@@ -1420,3 +1423,12 @@ class DefaultOSUtil(object):
                     handler(state[interface_name], result.group(2))
                 else:
                     logger.error("Interface {0} has {1} but no link state".format(interface_name, description))
+
+    def get_agent_log_dir(self):
+        return self.agent_log_dir
+
+    def get_agent_log_rotation_maxbytes(self):
+        return self.agent_log_rotation_maxbytes
+
+    def get_agent_log_rotation_backupcount(self):
+        return self.agent_log_rotation_backupcount
