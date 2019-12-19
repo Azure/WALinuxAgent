@@ -1,7 +1,7 @@
-/var/log/waagent.log {
+/var/log/azure/*/*.log {
     compress
-    size 20M
-    rotate 50
+    size 10M
+    rotate 20
     dateext
     notifempty
     missingok
