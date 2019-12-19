@@ -106,10 +106,8 @@ class WireProtocol(Protocol):
         cryptutil = CryptUtil(conf.get_openssl_cmd())
         cryptutil.gen_transport_cert(trans_prv_file, trans_cert_file)
 
-        self.update_goal_state(forced=True)
-
-    def update_goal_state(self, forced=False, max_retry=3):
-        self.client.update_goal_state(forced=forced, max_retry=max_retry)
+        # Set the initial goal state
+        self.client.update_goal_state(forced=True)
 
     def get_vminfo(self):
         goal_state = self.client.get_goal_state()
@@ -136,7 +134,7 @@ class WireProtocol(Protocol):
 
     def get_vmagent_manifests(self):
         # Update goal state to get latest extensions config
-        self.update_goal_state()
+        self.client.update_goal_state()
         goal_state = self.client.get_goal_state()
         ext_conf = self.client.get_ext_conf()
         return ext_conf.vmagent_manifests, goal_state.incarnation
@@ -150,7 +148,7 @@ class WireProtocol(Protocol):
     def get_ext_handlers(self):
         logger.verbose("Get extension handler config")
         # Update goal state to get latest extensions config
-        self.update_goal_state()
+        self.client.update_goal_state()
         goal_state = self.client.get_goal_state()
         ext_conf = self.client.get_ext_conf()
         # In wire protocol, incarnation is equivalent to ETag
@@ -761,78 +759,88 @@ class WireClient(object):
         self.save_cache(local_file, xml_text)
         self.ext_conf = ExtensionsConfig(xml_text)
 
-    def save_or_update_goal_state_file(self, incarnation, xml_text):
-        # It should create a new file if the incarnation number is new.
-        # It should overwrite the existing file if the incarnation number is the same.
-        file_name = GOAL_STATE_FILE_NAME.format(incarnation)
-        goal_state_file = os.path.join(conf.get_lib_dir(), file_name)
-        self.save_cache(goal_state_file, xml_text)
+    # Type of update performed by _update_from_goal_state()
+    class UpdateType(object):
+        # Update the Host GA Plugin client (Contained ID and RoleConfigName)
+        HostPlugin = 0
+        # Update the full goal state only if the incarnation has changed
+        GoalState = 1
+        # Update the full goal state unconditionally
+        GoalStateForced = 2
 
-    def update_host_plugin(self, container_id, role_config_name):
-        if self.host_plugin is not None:
-            self.host_plugin.container_id = container_id
-            self.host_plugin.role_config_name = role_config_name
+    def update_host_plugin_from_goal_state(self):
+        """
+        Fetches a new goal state and updates the Container ID and Role Config Name of the host plugin client
+        """
+        self._update_from_goal_state(WireClient.UpdateType.HostPlugin)
 
-    def update_goal_state(self, forced=False, max_retry=3):
+    def update_goal_state(self, forced=False):
+        """
+        Updates the goal state if the incarnation changed or if 'forced' is True
+        """
+        self._update_from_goal_state(WireClient.UpdateType.GoalStateForced if forced else WireClient.UpdateType.GoalState)
+
+    def _update_from_goal_state(self, refresh_type):
+        """
+        Fetches a new goal state and updates the internal state of the WireClient according to the requested 'refresh_type'
+        """
         incarnation_file = os.path.join(conf.get_lib_dir(), INCARNATION_FILE_NAME)
         uri = GOAL_STATE_URI.format(self.endpoint)
 
-        current_goal_state_from_configuration = None
-        for retry in range(0, max_retry):
+        max_retry = 3
+
+        for retry in range(1, max_retry + 1):
             try:
-                if current_goal_state_from_configuration is None:
-                    xml_text = self.fetch_config(uri, self.get_header())
-                    current_goal_state_from_configuration = GoalState(xml_text)
+                new_goal_state_xml = self.fetch_config(uri, self.get_header())
+                new_goal_state = GoalState(new_goal_state_xml)
 
-                    if not forced:
-                        last_incarnation = None
-                        if os.path.isfile(incarnation_file):
-                            last_incarnation = fileutil.read_file(incarnation_file)
-                        new_incarnation = current_goal_state_from_configuration.incarnation
+                def update_host_plugin():
+                    if self.host_plugin is not None:
+                        self.host_plugin.container_id = new_goal_state.container_id
+                        self.host_plugin.role_config_name = new_goal_state.role_config_name
 
-                        if last_incarnation is not None and last_incarnation == new_incarnation:
-                            # Incarnation number is not updated, but role config file and container ID
-                            # can change without the incarnation number changing. Ensure they are updated in
-                            # the goal state file on disk, as well as in the HostGA plugin instance.
-                            self.goal_state = current_goal_state_from_configuration
-                            self.save_or_update_goal_state_file(new_incarnation, xml_text)
-                            self.update_host_plugin(current_goal_state_from_configuration.container_id,
-                                                    current_goal_state_from_configuration.role_config_name)
+                if refresh_type == WireClient.UpdateType.HostPlugin:
+                    update_host_plugin()
+                    return
 
-                            return
-                self.goal_state_flusher.flush(datetime.utcnow())
+                def incarnation_changed():
+                    last_incarnation = None
+                    if os.path.isfile(incarnation_file):
+                        last_incarnation = fileutil.read_file(incarnation_file)
+                    return last_incarnation is None or last_incarnation != new_goal_state.incarnation
 
-                self.goal_state = current_goal_state_from_configuration
-                self.save_or_update_goal_state_file(current_goal_state_from_configuration.incarnation, xml_text)
-                self.update_hosting_env(current_goal_state_from_configuration)
-                self.update_shared_conf(current_goal_state_from_configuration)
-                self.update_certs(current_goal_state_from_configuration)
-                self.update_ext_conf(current_goal_state_from_configuration)
-                self.update_remote_access_conf(current_goal_state_from_configuration)
-                self.save_cache(incarnation_file, current_goal_state_from_configuration.incarnation)
-                self.update_host_plugin(current_goal_state_from_configuration.container_id,
-                                        current_goal_state_from_configuration.role_config_name)
+                if refresh_type == WireClient.UpdateType.GoalStateForced or incarnation_changed() or self.goal_state is None:
+                    def save_goal_state(incarnation, xml_text):
+                        file_name = GOAL_STATE_FILE_NAME.format(incarnation)
+                        goal_state_file = os.path.join(conf.get_lib_dir(), file_name)
+                        self.save_cache(goal_state_file, xml_text)
+
+                    self.goal_state_flusher.flush(datetime.utcnow())
+
+                    self.goal_state = new_goal_state
+                    save_goal_state(new_goal_state.incarnation, new_goal_state_xml)
+                    self.update_hosting_env(new_goal_state)
+                    self.update_shared_conf(new_goal_state)
+                    self.update_certs(new_goal_state)
+                    self.update_ext_conf(new_goal_state)
+                    self.update_remote_access_conf(new_goal_state)
+                    self.save_cache(incarnation_file, new_goal_state.incarnation)
+
+                    update_host_plugin()
 
                 return
 
             except IOError as e:
-                logger.warn("IOError processing goal state, retrying [{0}]", ustr(e))
+                logger.warn("IOError processing goal state (attempt {0}/{1}) [{2}]", retry, max_retry, ustr(e))
 
             except ResourceGoneError:
-                logger.info("Goal state is stale, re-fetching")
-                current_goal_state_from_configuration = None
+                logger.info("Goal state is stale, re-fetching (attempt {0}/{1})", retry, max_retry)
 
             except ProtocolError as e:
-                if retry < max_retry - 1:
-                    logger.verbose("ProtocolError processing goal state, retrying [{0}]", ustr(e))
-                else:
-                    logger.error("ProtocolError processing goal state, giving up [{0}]", ustr(e))
+                logger.verbose("ProtocolError processing goal state (attempt {0}/{1}) [{2}]", retry, max_retry, ustr(e))
 
             except Exception as e:
-                if retry < max_retry - 1:
-                    logger.verbose("Exception processing goal state, retrying: [{0}]", ustr(e))
-                else:
-                    logger.error("Exception processing goal state, giving up: [{0}]", ustr(e))
+                logger.verbose("Exception processing goal state (attempt {0}/{1}) [{2}]", retry, max_retry, ustr(e))
 
         raise ProtocolError("Exceeded max retry updating goal state")
 
@@ -1041,7 +1049,7 @@ class WireClient(object):
                   "Error: {2}".format(old_container_id, old_role_config_name, ustr(e))
             logger.periodic_info(logger.EVERY_SIX_HOURS, msg)
 
-            self.update_goal_state(forced=True)
+            self.update_host_plugin_from_goal_state()
 
             new_container_id = self.host_plugin.container_id
             new_role_config_name = self.host_plugin.role_config_name
@@ -1090,6 +1098,7 @@ class WireClient(object):
         ext_conf = self.get_ext_conf()
 
         if ext_conf.status_upload_blob is None:
+            # the status upload blob is in ExtensionsConfig so force a full goal state refresh
             self.update_goal_state(forced=True)
             ext_conf = self.get_ext_conf()
 
@@ -1120,8 +1129,8 @@ class WireClient(object):
             host.put_vm_status(self.status_blob, ext_conf.status_upload_blob, ext_conf.status_upload_blob_type)
             return
         except ResourceGoneError:
-            # do not attempt direct, force goal state update and wait to try again
-            self.update_goal_state(forced=True)
+            # refresh the host plugin client and try again on the next iteration of the main loop
+            self.update_host_plugin_from_goal_state()
             return
         except Exception as e:
             # for all other errors, fall back to direct
@@ -1369,12 +1378,9 @@ class GoalState(object):
         self.container_id = None
         self.load_balancer_probe_port = None
         self.xml_text = None
-        self.parse(xml_text)
+        self._parse(xml_text)
 
-    def parse(self, xml_text):
-        """
-        Request configuration data from endpoint server.
-        """
+    def _parse(self, xml_text):
         self.xml_text = xml_text
         xml_doc = parse_doc(xml_text)
         self.incarnation = findtext(xml_doc, "Incarnation")
@@ -1393,15 +1399,9 @@ class GoalState(object):
         self.remote_access_uri = findtext(container, "RemoteAccessInfo")
         lbprobe_ports = find(xml_doc, "LBProbePorts")
         self.load_balancer_probe_port = findtext(lbprobe_ports, "Port")
-        return self
 
 
 class HostingEnv(object):
-    """
-    parse Hosting enviromnet config and store in
-    HostingEnvironmentConfig.xml
-    """
-
     def __init__(self, xml_text):
         if xml_text is None:
             raise ValueError("HostingEnvironmentConfig.xml is None")
@@ -1410,12 +1410,9 @@ class HostingEnv(object):
         self.role_name = None
         self.deployment_name = None
         self.xml_text = None
-        self.parse(xml_text)
+        self._parse(xml_text)
 
-    def parse(self, xml_text):
-        """
-        parse and create HostingEnvironmentConfig.xml.
-        """
+    def _parse(self, xml_text):
         self.xml_text = xml_text
         xml_doc = parse_doc(xml_text)
         incarnation = find(xml_doc, "Incarnation")
@@ -1424,24 +1421,12 @@ class HostingEnv(object):
         self.role_name = getattrib(role, "name")
         deployment = find(xml_doc, "Deployment")
         self.deployment_name = getattrib(deployment, "name")
-        return self
 
 
 class SharedConfig(object):
-    """
-    parse role endpoint server and goal state config.
-    """
-
     def __init__(self, xml_text):
         logger.verbose("Load SharedConfig.xml")
-        self.parse(xml_text)
-
-    def parse(self, xml_text):
-        """
-        parse and write configuration to file SharedConfig.xml.
-        """
-        # Not used currently
-        return self
+        self.xml_text = xml_text
 
 
 class RemoteAccess(object):
@@ -1470,9 +1455,9 @@ class RemoteAccess(object):
         self.user_list = RemoteAccessUsersList()
 
         self.xml_text = None
-        self.parse(xml_text)
+        self._parse(xml_text)
 
-    def parse(self, xml_text):
+    def _parse(self, xml_text):
         """
         Parse xml document containing user account information
         """
@@ -1486,11 +1471,10 @@ class RemoteAccess(object):
         users = findall(user_collection, "User")
 
         for user in users:
-            remote_access_user = self.parse_user(user)
+            remote_access_user = self._parse_user(user)
             self.user_list.users.append(remote_access_user)
-        return self
 
-    def parse_user(self, user):
+    def _parse_user(self, user):
         name = findtext(user, "Name")
         encrypted_password = findtext(user, "Password")
         expiration = findtext(user, "Expiration")
@@ -1520,9 +1504,9 @@ class Certificates(object):
         logger.verbose("Load Certificates.xml")
         self.client = client
         self.cert_list = CertList()
-        self.parse(xml_text)
+        self._parse(xml_text)
 
-    def parse(self, xml_text):
+    def _parse(self, xml_text):
         """
         Parse multiple certificates into seperate files.
         """
@@ -1628,11 +1612,6 @@ class Certificates(object):
 
 
 class ExtensionsConfig(object):
-    """
-    parse ExtensionsConfig, downloading and unpacking them to /var/lib/waagent.
-    Install if <enabled>true</enabled>, remove if it is set to false.
-    """
-
     def __init__(self, xml_text):
         logger.verbose("Load ExtensionsConfig.xml")
         self.ext_handlers = ExtHandlerList()
@@ -1641,12 +1620,9 @@ class ExtensionsConfig(object):
         self.status_upload_blob_type = None
         self.artifacts_profile_blob = None
         if xml_text is not None:
-            self.parse(xml_text)
+            self._parse(xml_text)
 
-    def parse(self, xml_text):
-        """
-        Write configuration to file ExtensionsConfig.xml.
-        """
+    def _parse(self, xml_text):
         xml_doc = parse_doc(xml_text)
 
         ga_families_list = find(xml_doc, "GAFamilies")
@@ -1669,9 +1645,9 @@ class ExtensionsConfig(object):
         plugin_settings = findall(plugin_settings_list, "Plugin")
 
         for plugin in plugins:
-            ext_handler = self.parse_plugin(plugin)
+            ext_handler = self._parse_plugin(plugin)
             self.ext_handlers.extHandlers.append(ext_handler)
-            self.parse_plugin_settings(ext_handler, plugin_settings)
+            self._parse_plugin_settings(ext_handler, plugin_settings)
 
         self.status_upload_blob = findtext(xml_doc, "StatusUploadBlob")
         self.artifacts_profile_blob = findtext(xml_doc, "InVMArtifactsProfileBlob")
@@ -1682,7 +1658,7 @@ class ExtensionsConfig(object):
         logger.verbose("Extension config shows status blob type as [{0}]",
                        self.status_upload_blob_type)
 
-    def parse_plugin(self, plugin):
+    def _parse_plugin(self, plugin):
         ext_handler = ExtHandler()
         ext_handler.name = getattrib(plugin, "name")
         ext_handler.properties.version = getattrib(plugin, "version")
@@ -1696,7 +1672,7 @@ class ExtensionsConfig(object):
             ext_handler.versionUris.append(version_uri)
         return ext_handler
 
-    def parse_plugin_settings(self, ext_handler, plugin_settings):
+    def _parse_plugin_settings(self, ext_handler, plugin_settings):
         if plugin_settings is None:
             return
 
@@ -1751,9 +1727,9 @@ class ExtensionManifest(object):
         logger.verbose("Load ExtensionManifest.xml")
         self.pkg_list = ExtHandlerPackageList()
         self.allowed_versions = None
-        self.parse(xml_text)
+        self._parse(xml_text)
 
-    def parse(self, xml_text):
+    def _parse(self, xml_text):
         xml_doc = parse_doc(xml_text)
         self._handle_packages(findall(find(xml_doc,
                                            "Plugins"),

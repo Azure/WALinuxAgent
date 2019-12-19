@@ -15,6 +15,8 @@
 # Requires Python 2.6+ and Openssl 1.0+
 #
 
+import re
+
 from tests.tools import load_bin_data, load_data, MagicMock, Mock
 from azurelinuxagent.common.exception import HttpError, ResourceGoneError
 from azurelinuxagent.common.future import httpclient
@@ -28,7 +30,7 @@ DATA_FILE = {
         "certs": "wire/certs.xml",
         "ext_conf": "wire/ext_conf.xml",
         "manifest": "wire/manifest.xml",
-        "ga_manifest" : "wire/ga_manifest.xml",
+        "ga_manifest": "wire/ga_manifest.xml",
         "trans_prv": "wire/trans_prv",
         "trans_cert": "wire/trans_cert",
         "test_ext": "ext/sample_ext-1.3.0.zip"
@@ -77,29 +79,45 @@ class WireProtocolData(object):
     def __init__(self, data_files=DATA_FILE):
         self.emulate_stale_goal_state = False
         self.call_counts = {
-            "comp=versions" : 0,
-            "/versions" : 0,
-            "goalstate" : 0,
-            "hostingenvuri" : 0,
-            "sharedconfiguri" : 0,
-            "certificatesuri" : 0,
-            "extensionsconfiguri" : 0,
-            "extensionArtifact" : 0,
-            "manifest.xml" : 0,
-            "manifest_of_ga.xml" : 0,
-            "ExampleHandlerLinux" : 0
+            "comp=versions": 0,
+            "/versions": 0,
+            "goalstate": 0,
+            "hostingenvuri": 0,
+            "sharedconfiguri": 0,
+            "certificatesuri": 0,
+            "extensionsconfiguri": 0,
+            "extensionArtifact": 0,
+            "manifest.xml": 0,
+            "manifest_of_ga.xml": 0,
+            "ExampleHandlerLinux": 0
         }
-        self.version_info = load_data(data_files.get("version_info"))
-        self.goal_state = load_data(data_files.get("goal_state"))
-        self.hosting_env = load_data(data_files.get("hosting_env"))
-        self.shared_config = load_data(data_files.get("shared_config"))
-        self.certs = load_data(data_files.get("certs"))
-        self.ext_conf = load_data(data_files.get("ext_conf"))
-        self.manifest = load_data(data_files.get("manifest"))
-        self.ga_manifest = load_data(data_files.get("ga_manifest"))
-        self.trans_prv = load_data(data_files.get("trans_prv"))
-        self.trans_cert = load_data(data_files.get("trans_cert"))
-        self.ext = load_bin_data(data_files.get("test_ext"))
+        self.data_files = data_files
+        self.version_info = None
+        self.goal_state = None
+        self.hosting_env = None
+        self.shared_config = None
+        self.certs = None
+        self.ext_conf = None
+        self.manifest = None
+        self.ga_manifest = None
+        self.trans_prv = None
+        self.trans_cert = None
+        self.ext = None
+
+        self.reload()
+
+    def reload(self):
+        self.version_info = load_data(self.data_files.get("version_info"))
+        self.goal_state = load_data(self.data_files.get("goal_state"))
+        self.hosting_env = load_data(self.data_files.get("hosting_env"))
+        self.shared_config = load_data(self.data_files.get("shared_config"))
+        self.certs = load_data(self.data_files.get("certs"))
+        self.ext_conf = load_data(self.data_files.get("ext_conf"))
+        self.manifest = load_data(self.data_files.get("manifest"))
+        self.ga_manifest = load_data(self.data_files.get("ga_manifest"))
+        self.trans_prv = load_data(self.data_files.get("trans_prv"))
+        self.trans_cert = load_data(self.data_files.get("trans_cert"))
+        self.ext = load_bin_data(self.data_files.get("test_ext"))
 
     def mock_http_get(self, url, *args, **kwargs):
         content = None
@@ -182,3 +200,52 @@ class WireProtocolData(object):
 
         with open(trans_cert_file, 'w+') as cert_file:
             cert_file.write(self.trans_cert)
+
+    #
+    # Having trouble reading the regular expressions below? you are not alone!
+    #
+    # For the use of "(?<=" "(?=" see 7.2.1 in https://docs.python.org/3.1/library/re.html
+    # For the use of "\g<1>" see backreferences in https://docs.python.org/3.1/library/re.html#re.sub
+    #
+    # Note that these regular expressions are not enough to _parse all valid XML documents (e.g. they do
+    # not account for metacharacters like < or > in the values) but they are good enough for the test
+    # data. There are some basic checks, but the functions could could not match valid XML or produce
+    # invalid XML if their input is too complex.
+    #
+    @staticmethod
+    def replace_xml_element_value(xml_document, element_name, element_value):
+        new_xml_document = re.sub(r'(?<=<{0}>).+(?=</{0}>)'.format(element_name), element_value, xml_document)
+        if new_xml_document == xml_document:
+            raise Exception("Could not match element '{0}'", element_name)
+        return new_xml_document
+
+    @staticmethod
+    def replace_xml_attribute_value(xml_document, element_name, attribute_name, attribute_value):
+        new_xml_document = re.sub(r'(?<=<{0} )(.*{1}=")[^"]+(?="[^>]*>)'.format(element_name, attribute_name), r'\g<1>{0}'.format(attribute_value), xml_document)
+        if new_xml_document == xml_document:
+            raise Exception("Could not match attribute '{0}' of element '{1}'", attribute_name, element_name)
+        return new_xml_document
+
+    def set_incarnation(self, incarnation):
+        '''
+        Sets the incarnation in the goal state, but not on its subcomponents (e.g. hosting env, shared config)
+        '''
+        self.goal_state = WireProtocolData.replace_xml_element_value(self.goal_state, "Incarnation", incarnation)
+
+    def set_container_id(self, container_id):
+        self.goal_state = WireProtocolData.replace_xml_element_value(self.goal_state, "ContainerId", container_id)
+
+    def set_role_config_name(self, role_config_name):
+        self.goal_state = WireProtocolData.replace_xml_element_value(self.goal_state, "ConfigName", role_config_name)
+
+    def set_hosting_env_deployment_name(self, deployment_name):
+        self.hosting_env = WireProtocolData.replace_xml_attribute_value(self.hosting_env, "Deployment", "name", deployment_name)
+
+    def set_shared_config_deployment_name(self, deployment_name):
+        self.shared_config = WireProtocolData.replace_xml_attribute_value(self.shared_config, "Deployment", "name", deployment_name)
+
+    def set_extensions_config_sequence_number(self, sequence_number):
+        '''
+        Sets the sequence number for *all* extensions
+        '''
+        self.ext_conf = WireProtocolData.replace_xml_attribute_value(self.ext_conf, "RuntimeSettings", "seqNo", sequence_number)

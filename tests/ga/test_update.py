@@ -1667,7 +1667,6 @@ class ProtocolMock(object):
             "update_goal_state" : 0
         }
         self.goal_state_is_stale = False
-        self.goal_state_forced = False
         self.etag = etag
         self.versions = versions if versions is not None else []
         self.create_manifests()
@@ -1717,9 +1716,8 @@ class ProtocolMock(object):
             raise ResourceGoneError()
         return self.agent_packages
 
-    def update_goal_state(self, forced=False, max_retry=3):
+    def update_goal_state(self, full_goal_state=False, max_retry=3):
         self.call_counts["update_goal_state"] += 1
-        self.goal_state_forced = self.goal_state_forced or forced
 
 
 class ResponseMock(Mock):
