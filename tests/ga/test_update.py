@@ -1716,7 +1716,7 @@ class ProtocolMock(object):
             raise ResourceGoneError()
         return self.agent_packages
 
-    def update_goal_state(self, full_goal_state=False, max_retry=3):
+    def update_goal_state(self, forced=False):
         self.call_counts["update_goal_state"] += 1
 
 

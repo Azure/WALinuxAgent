@@ -207,10 +207,10 @@ class WireProtocolData(object):
     # For the use of "(?<=" "(?=" see 7.2.1 in https://docs.python.org/3.1/library/re.html
     # For the use of "\g<1>" see backreferences in https://docs.python.org/3.1/library/re.html#re.sub
     #
-    # Note that these regular expressions are not enough to _parse all valid XML documents (e.g. they do
+    # Note that these regular expressions are not enough to parse all valid XML documents (e.g. they do
     # not account for metacharacters like < or > in the values) but they are good enough for the test
-    # data. There are some basic checks, but the functions could could not match valid XML or produce
-    # invalid XML if their input is too complex.
+    # data. There are some basic checks, but the functions may not match valid XML or produce invalid
+    # XML if their input is too complex.
     #
     @staticmethod
     def replace_xml_element_value(xml_document, element_name, element_value):

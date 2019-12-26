@@ -1086,7 +1086,7 @@ class GoalStateTestCase(AgentTestCase):
 
 class UpdateGoalStateTestCase(GoalStateTestCase):
     """
-    Tests for WireClient.update_host_plugin_from_goal_state()
+    Tests for WireClient.update_goal_state()
     """
     def test_it_should_update_the_goal_state_and_the_host_plugin_when_the_incarnation_changes(self):
         # if the incarnation changes the behavior is the same for forced and non-forced updates

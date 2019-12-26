@@ -760,8 +760,8 @@ class WireClient(object):
         self.ext_conf = ExtensionsConfig(xml_text)
 
     # Type of update performed by _update_from_goal_state()
-    class UpdateType(object):
-        # Update the Host GA Plugin client (Contained ID and RoleConfigName)
+    class _UpdateType(object):
+        # Update the Host GA Plugin client (Container ID and RoleConfigName)
         HostPlugin = 0
         # Update the full goal state only if the incarnation has changed
         GoalState = 1
@@ -772,13 +772,13 @@ class WireClient(object):
         """
         Fetches a new goal state and updates the Container ID and Role Config Name of the host plugin client
         """
-        self._update_from_goal_state(WireClient.UpdateType.HostPlugin)
+        self._update_from_goal_state(WireClient._UpdateType.HostPlugin)
 
     def update_goal_state(self, forced=False):
         """
         Updates the goal state if the incarnation changed or if 'forced' is True
         """
-        self._update_from_goal_state(WireClient.UpdateType.GoalStateForced if forced else WireClient.UpdateType.GoalState)
+        self._update_from_goal_state(WireClient._UpdateType.GoalStateForced if forced else WireClient._UpdateType.GoalState)
 
     def _update_from_goal_state(self, refresh_type):
         """
@@ -799,7 +799,7 @@ class WireClient(object):
                         self.host_plugin.container_id = new_goal_state.container_id
                         self.host_plugin.role_config_name = new_goal_state.role_config_name
 
-                if refresh_type == WireClient.UpdateType.HostPlugin:
+                if refresh_type == WireClient._UpdateType.HostPlugin:
                     update_host_plugin()
                     return
 
@@ -809,7 +809,7 @@ class WireClient(object):
                         last_incarnation = fileutil.read_file(incarnation_file)
                     return last_incarnation is None or last_incarnation != new_goal_state.incarnation
 
-                if refresh_type == WireClient.UpdateType.GoalStateForced or incarnation_changed() or self.goal_state is None:
+                if refresh_type == WireClient._UpdateType.GoalStateForced or incarnation_changed() or self.goal_state is None:
                     def save_goal_state(incarnation, xml_text):
                         file_name = GOAL_STATE_FILE_NAME.format(incarnation)
                         goal_state_file = os.path.join(conf.get_lib_dir(), file_name)
