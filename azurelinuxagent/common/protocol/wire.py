@@ -558,7 +558,7 @@ class SingletonMeta(type):
             # release may then enter this section. But since the Singleton field
             # is already initialized, the thread won't create a new object.
             if not cls._instance:
-                cls._instance = super(SingletonMeta).__call__(*args, **kwargs)
+                cls._instance = super(SingletonMeta, cls).__call__(*args, **kwargs)
                 logger.warn("Creating new WireClient object: %s " % cls._instance)
         return cls._instance
 
