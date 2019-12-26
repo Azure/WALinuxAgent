@@ -24,6 +24,7 @@ import re
 import time
 import xml.sax.saxutils as saxutils
 from datetime import datetime
+from threading import Lock
 
 import azurelinuxagent.common.conf as conf
 from azurelinuxagent.common.datacontract import validate_param, set_properties
@@ -533,15 +534,54 @@ def event_to_v1(event):
     return event_str
 
 
+class SingletonMeta(type):
+    """
+    This is a thread-safe implementation of Singleton.
+    """
+
+    _instance = None
+
+    _lock = Lock()
+    """
+    We now have a lock object that will be used to synchronize threads during
+    first access to the Singleton.
+    """
+
+    def __call__(cls, *args, **kwargs):
+        # Now, imagine that the program has just been launched. Since there's no
+        # Singleton instance yet, multiple threads can simultaneously pass the
+        # previous conditional and reach this point almost at the same time. The
+        # first of them will acquire lock and will proceed further, while the
+        # rest will wait here.
+        with cls._lock:
+            # The first thread to acquire the lock, reaches this conditional,
+            # goes inside and creates the Singleton instance. Once it leaves the
+            # lock block, a thread that might have been waiting for the lock
+            # release may then enter this section. But since the Singleton field
+            # is already initialized, the thread won't create a new object.
+            if not cls._instance:
+                cls._instance = super(SingletonMeta).__call__(*args, **kwargs)
+                logger.warn("Creating new WireClient object: %s " % cls._instance)
+        return cls._instance
+
+
 class WireClient(object):
+    __metaclass__ = SingletonMeta
+
     def __init__(self, endpoint):
         logger.info("Wire server endpoint:{0}", endpoint)
+        logger.warn("WireClient Object: %s" % self)
         self.endpoint = endpoint
         self.goal_state = None
-        self.updated = None
+        # Property not being used and no file either
+        # self.updated = None
+        # Property and file used for self.protocol.get_vminfo() (MonitorHandler)
         self.hosting_env = None
+        # Property not being used, File used for this - setup_rdma_device
         self.shared_conf = None
+        # Property never used, File used for - remote_access_handler.run()
         self.remote_access = None
+        # Property used in protocol.get_certs() but that function doesnt look like its used anywhere
         self.certs = None
         self.ext_conf = None
         self.host_plugin = None
