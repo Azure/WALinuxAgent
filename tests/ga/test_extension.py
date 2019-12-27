@@ -313,8 +313,6 @@ class TestExtension(ExtensionTestCase):
 
     def setUp(self):
         super(TestExtension, self).setUp()
-        # Clear off the singleton instances of WireClient class for each test
-        WireClient.clear()
 
     def _assert_handler_status(self, report_vm_status, expected_status,
                                expected_ext_count, version,
@@ -355,10 +353,6 @@ class TestExtension(ExtensionTestCase):
         MockCryptUtil.side_effect = test_data.mock_crypt_util
 
         protocol = WireProtocol("foo.bar")
-        new_prot = WireProtocol("test.dd")
-
-        # Assert that every wireclient instance is the same
-        self.assertEqual(protocol.client, new_prot.client)
         protocol.detect()
         protocol.report_ext_status = MagicMock()
         protocol.report_vm_status = MagicMock()

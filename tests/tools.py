@@ -233,8 +233,6 @@ class AgentTestCase(unittest.TestCase):
         self.mock__get_osutil = patch("azurelinuxagent.common.osutil.factory._get_osutil", mock_get_osutil)
         self.mock__get_osutil.start()
 
-        WireClient.clear()
-
     def tearDown(self):
         if not debug and self.tmp_dir is not None:
             shutil.rmtree(self.tmp_dir)

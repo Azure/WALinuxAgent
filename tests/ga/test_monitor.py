@@ -26,6 +26,7 @@ import tempfile
 import time
 from datetime import timedelta
 
+from azurelinuxagent.common.protocol.util import ProtocolUtil
 from nose.plugins.attrib import attr
 
 import azurelinuxagent.common.conf as conf
@@ -117,6 +118,7 @@ class TestMonitor(AgentTestCase):
         AgentTestCase.setUp(self)
         prefix = "UnitTest"
         logger.DEFAULT_LOGGER = Logger(prefix=prefix)
+        ProtocolUtil.clear()
 
     def tearDown(self):
         AgentTestCase.tearDown(self)

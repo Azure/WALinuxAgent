@@ -11,7 +11,6 @@ class _Singleton(type):
         with cls._lock:
             if cls not in cls._instances:
                 cls._instances[cls] = super(_Singleton, cls).__call__(*args, **kwargs)
-                # logger.warn("Creating new WireClient object: %s " % cls._instances[cls])
         return cls._instances[cls]
 
     def clear(cls):

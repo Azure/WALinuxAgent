@@ -27,18 +27,17 @@ from datetime import datetime
 from threading import Lock
 
 import azurelinuxagent.common.conf as conf
-from azurelinuxagent.common.Singleton import Singleton
-from azurelinuxagent.common.datacontract import validate_param, set_properties
-from azurelinuxagent.common.event import add_event, add_periodic, WALAEventOperation, CONTAINER_ID_ENV_VARIABLE
+import azurelinuxagent.common.logger as logger
 import azurelinuxagent.common.utils.textutil as textutil
+from azurelinuxagent.common.datacontract import validate_param, set_properties
+from azurelinuxagent.common.event import add_periodic, WALAEventOperation, CONTAINER_ID_ENV_VARIABLE
 from azurelinuxagent.common.exception import ProtocolNotFoundError, \
     ResourceGoneError, ExtensionDownloadError, InvalidContainerError, ProtocolError, HttpError
 from azurelinuxagent.common.future import httpclient, bytebuffer
-import azurelinuxagent.common.logger as logger
-from azurelinuxagent.common.utils import fileutil, restutil
 from azurelinuxagent.common.protocol.hostplugin import HostPluginProtocol
 from azurelinuxagent.common.protocol.restapi import *
 from azurelinuxagent.common.telemetryevent import TelemetryEventList
+from azurelinuxagent.common.utils import fileutil, restutil
 from azurelinuxagent.common.utils.archive import StateFlusher
 from azurelinuxagent.common.utils.cryptutil import CryptUtil
 from azurelinuxagent.common.utils.textutil import parse_doc, findall, find, \
@@ -143,6 +142,7 @@ class WireProtocol(Protocol):
 
     def get_vmagent_pkgs(self, vmagent_manifest):
         goal_state = self.client.get_goal_state()
+        # Only update handler calls this so no need to lock it
         ga_manifest = self.client.get_gafamily_manifest(vmagent_manifest, goal_state)
         valid_pkg_list = self.client.filter_package_list(vmagent_manifest.family, ga_manifest, goal_state)
         return valid_pkg_list
@@ -164,6 +164,7 @@ class WireProtocol(Protocol):
 
     def get_artifacts_profile(self):
         logger.verbose("Get In-VM Artifacts Profile")
+        # This is a stateless call, the agent always fetches the latest blob and returns data. No need to lock
         return self.client.get_artifacts_profile()
 
     def download_ext_handler_pkg_through_host(self, uri, destination):
@@ -533,38 +534,7 @@ def event_to_v1(event):
     return event_str
 
 
-class SingletonMeta(type):
-    """
-    This is a thread-safe implementation of Singleton.
-    """
-
-    _instance = None
-
-    _lock = Lock()
-    """
-    We now have a lock object that will be used to synchronize threads during
-    first access to the Singleton.
-    """
-
-    def __call__(cls, *args, **kwargs):
-        # Now, imagine that the program has just been launched. Since there's no
-        # Singleton instance yet, multiple threads can simultaneously pass the
-        # previous conditional and reach this point almost at the same time. The
-        # first of them will acquire lock and will proceed further, while the
-        # rest will wait here.
-        with cls._lock:
-            # The first thread to acquire the lock, reaches this conditional,
-            # goes inside and creates the Singleton instance. Once it leaves the
-            # lock block, a thread that might have been waiting for the lock
-            # release may then enter this section. But since the Singleton field
-            # is already initialized, the thread won't create a new object.
-            if not cls._instance:
-                cls._instance = super(SingletonMeta, cls).__call__(*args, **kwargs)
-                logger.warn("Creating new WireClient object: %s " % cls._instance)
-        return cls._instance
-
-
-class WireClient(Singleton):
+class WireClient(object):
 
     def __init__(self, endpoint):
         logger.info("Wire server endpoint:{0}", endpoint)
@@ -855,18 +825,19 @@ class WireClient(Singleton):
                         goal_state_file = os.path.join(conf.get_lib_dir(), file_name)
                         self.save_cache(goal_state_file, xml_text)
 
-                    self.goal_state_flusher.flush(datetime.utcnow())
+                    with Lock():
+                        # Locking the objects when incarnation change/Forced to make them more thread friendly
+                        self.goal_state_flusher.flush(datetime.utcnow())
+                        self.goal_state = new_goal_state
+                        save_goal_state(new_goal_state.incarnation, new_goal_state_xml)
+                        self.update_hosting_env(new_goal_state)
+                        self.update_shared_conf(new_goal_state)
+                        self.update_certs(new_goal_state)
+                        self.update_ext_conf(new_goal_state)
+                        self.update_remote_access_conf(new_goal_state)
+                        self.save_cache(incarnation_file, new_goal_state.incarnation)
 
-                    self.goal_state = new_goal_state
-                    save_goal_state(new_goal_state.incarnation, new_goal_state_xml)
-                    self.update_hosting_env(new_goal_state)
-                    self.update_shared_conf(new_goal_state)
-                    self.update_certs(new_goal_state)
-                    self.update_ext_conf(new_goal_state)
-                    self.update_remote_access_conf(new_goal_state)
-                    self.save_cache(incarnation_file, new_goal_state.incarnation)
-
-                    update_host_plugin()
+                        update_host_plugin()
 
                 return
 

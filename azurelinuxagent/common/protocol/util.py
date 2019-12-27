@@ -27,6 +27,7 @@ import time
 import azurelinuxagent.common.conf as conf
 import azurelinuxagent.common.logger as logger
 import azurelinuxagent.common.utils.fileutil as fileutil
+from azurelinuxagent.common.Singleton import Singleton
 
 from azurelinuxagent.common.exception import ProtocolError, OSUtilError, \
                                       ProtocolNotFoundError, DhcpError
@@ -63,7 +64,7 @@ def get_protocol_util():
     return ProtocolUtil()
 
 
-class ProtocolUtil(object):
+class ProtocolUtil(Singleton):
     """
     ProtocolUtil handles initialization for protocol instance. 2 protocol types
     are invoked, wire protocol and metadata protocols.

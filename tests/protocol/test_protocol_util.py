@@ -23,12 +23,16 @@ from azurelinuxagent.common.exception import *
 from azurelinuxagent.common.protocol import get_protocol_util, \
                                             TAG_FILE_NAME
 from azurelinuxagent.common.utils.restutil import KNOWN_WIRESERVER_IP
-from azurelinuxagent.common.protocol.util import ENDPOINT_FILE_NAME
+from azurelinuxagent.common.protocol.util import ProtocolUtil
 from errno import ENOENT
 
 
 @patch("time.sleep")
 class TestProtocolUtil(AgentTestCase):
+
+    def setUp(self):
+        super(TestProtocolUtil, self).setUp()
+        ProtocolUtil.clear()
     
     @patch("azurelinuxagent.common.protocol.util.MetadataProtocol")
     @patch("azurelinuxagent.common.protocol.util.WireProtocol")
