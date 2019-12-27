@@ -30,7 +30,7 @@ from tests.tools import are_cgroups_enabled, AgentTestCase, data_dir, i_am_root,
 from azurelinuxagent.common.exception import ResourceGoneError
 from azurelinuxagent.common.protocol.restapi import Extension, ExtHandlerProperties
 from azurelinuxagent.ga.exthandlers import *
-from azurelinuxagent.common.protocol.wire import WireProtocol, InVMArtifactsProfile
+from azurelinuxagent.common.protocol.wire import WireProtocol, InVMArtifactsProfile, WireClient
 
 # Mocking the original sleep to reduce test execution time
 SLEEP = time.sleep
@@ -311,6 +311,11 @@ class ExtensionTestCase(AgentTestCase):
 @patch("azurelinuxagent.common.utils.restutil.http_get")
 class TestExtension(ExtensionTestCase):
 
+    def setUp(self):
+        super(TestExtension, self).setUp()
+        # Clear off the singleton instances of WireClient class for each test
+        WireClient.clear()
+
     def _assert_handler_status(self, report_vm_status, expected_status,
                                expected_ext_count, version,
                                expected_handler_name="OSTCExtensions.ExampleHandlerLinux"):
@@ -350,6 +355,10 @@ class TestExtension(ExtensionTestCase):
         MockCryptUtil.side_effect = test_data.mock_crypt_util
 
         protocol = WireProtocol("foo.bar")
+        new_prot = WireProtocol("test.dd")
+
+        # Assert that every wireclient instance is the same
+        self.assertEqual(protocol.client, new_prot.client)
         protocol.detect()
         protocol.report_ext_status = MagicMock()
         protocol.report_vm_status = MagicMock()
