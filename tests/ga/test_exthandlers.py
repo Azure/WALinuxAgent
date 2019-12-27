@@ -5,6 +5,8 @@ import subprocess
 import os
 import time
 
+from azurelinuxagent.common.protocol.util import ProtocolUtil
+
 from azurelinuxagent.common.protocol.restapi import ExtensionStatus, Extension, ExtHandler, ExtHandlerProperties
 from azurelinuxagent.ga.exthandlers import parse_ext_status, ExtHandlerInstance, get_exthandlers_handler, \
     ExtCommandEnvVariable
@@ -16,6 +18,11 @@ from tests.tools import AgentTestCase, patch, mock_sleep
 
 
 class TestExtHandlers(AgentTestCase):
+
+    def setUp(self):
+        super(TestExtHandlers, self).setUp()
+        ProtocolUtil.clear()
+
     def test_parse_extension_status00(self):
         """
         Parse a status report for a successful execution of an extension.
@@ -201,7 +208,11 @@ class TestExtHandlers(AgentTestCase):
         patch_get_protocol.side_effect = ProtocolError(test_message) # get_protocol will throw if the wire server cannot be reached
         patch_is_triggered.return_value = True # protocol errors are reported only after a delay; force the error to be reported now
 
-        get_exthandlers_handler().run()
+        ext_handler = get_exthandlers_handler()
+        ext_handler.run()
+
+        print(ext_handler.protocol)
+
 
         self.assertEquals(patch_add_event.call_count, 2)
 
