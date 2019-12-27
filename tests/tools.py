@@ -31,6 +31,8 @@ from functools import wraps
 
 import time
 
+from azurelinuxagent.common.protocol.wire import WireClient
+
 from azurelinuxagent.common.cgroupconfigurator import CGroupConfigurator
 import azurelinuxagent.common.event as event
 import azurelinuxagent.common.conf as conf
@@ -230,6 +232,8 @@ class AgentTestCase(unittest.TestCase):
 
         self.mock__get_osutil = patch("azurelinuxagent.common.osutil.factory._get_osutil", mock_get_osutil)
         self.mock__get_osutil.start()
+
+        WireClient.clear()
 
     def tearDown(self):
         if not debug and self.tmp_dir is not None:
