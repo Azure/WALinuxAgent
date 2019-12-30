@@ -555,6 +555,19 @@ class WireClient(object):
         self.host_plugin = None
         self.status_blob = StatusBlob(self)
         self.goal_state_flusher = StateFlusher(conf.get_lib_dir())
+        self._initialize_locks()
+
+    def _initialize_locks(self):
+        # Initialize a lock for every object that needs to be thread safe
+        self._locks = {
+            self.goal_state: Lock(),
+            self.ext_conf: Lock(),
+            self.host_plugin: Lock(),
+            self.hosting_env: Lock(),
+            self.remote_access: Lock(),
+            self.certs: Lock(),
+            self.shared_conf: Lock()
+        }
 
     def call_wireserver(self, http_req, *args, **kwargs):
         try:
@@ -687,19 +700,21 @@ class WireClient(object):
                 headers=headers,
                 use_proxy=use_proxy)
 
+            host_plugin = self.get_host_plugin()
             if restutil.request_failed(resp):
                 error_response = restutil.read_response_error(resp)
                 msg = "Fetch failed from [{0}]: {1}".format(uri, error_response)
                 logger.warn(msg)
-                if self.host_plugin is not None:
-                    self.host_plugin.report_fetch_health(uri,
-                                                         is_healthy=not restutil.request_failed_at_hostplugin(resp),
-                                                         source='WireClient',
-                                                         response=error_response)
+
+                if host_plugin is not None:
+                    host_plugin.report_fetch_health(uri,
+                                                     is_healthy=not restutil.request_failed_at_hostplugin(resp),
+                                                     source='WireClient',
+                                                     response=error_response)
                 raise ProtocolError(msg)
             else:
-                if self.host_plugin is not None:
-                    self.host_plugin.report_fetch_health(uri, source='WireClient')
+                if host_plugin is not None:
+                    host_plugin.report_fetch_health(uri, source='WireClient')
 
         except (HttpError, ProtocolError, IOError) as e:
             logger.verbose("Fetch failed from [{0}]: {1}", uri, e)
@@ -710,64 +725,72 @@ class WireClient(object):
     def update_hosting_env(self, goal_state):
         if goal_state.hosting_env_uri is None:
             raise ProtocolError("HostingEnvironmentConfig uri is empty")
-        local_file = os.path.join(conf.get_lib_dir(), HOSTING_ENV_FILE_NAME)
-        xml_text = self.fetch_config(goal_state.hosting_env_uri,
-                                     self.get_header())
-        self.save_cache(local_file, xml_text)
-        self.hosting_env = HostingEnv(xml_text)
+        with self._locks[self.hosting_env]:
+            local_file = os.path.join(conf.get_lib_dir(), HOSTING_ENV_FILE_NAME)
+            xml_text = self.fetch_config(goal_state.hosting_env_uri,
+                                         self.get_header())
+            self.save_cache(local_file, xml_text)
+            self.hosting_env = HostingEnv(xml_text)
 
     def update_shared_conf(self, goal_state):
         if goal_state.shared_conf_uri is None:
             raise ProtocolError("SharedConfig uri is empty")
-        local_file = os.path.join(conf.get_lib_dir(), SHARED_CONF_FILE_NAME)
-        xml_text = self.fetch_config(goal_state.shared_conf_uri,
-                                     self.get_header())
-        self.save_cache(local_file, xml_text)
-        self.shared_conf = SharedConfig(xml_text)
+        with self._locks[self.shared_conf]:
+            local_file = os.path.join(conf.get_lib_dir(), SHARED_CONF_FILE_NAME)
+            xml_text = self.fetch_config(goal_state.shared_conf_uri,
+                                         self.get_header())
+            self.save_cache(local_file, xml_text)
+            self.shared_conf = SharedConfig(xml_text)
 
     def update_certs(self, goal_state):
         if goal_state.certs_uri is None:
             return
-        local_file = os.path.join(conf.get_lib_dir(), CERTS_FILE_NAME)
-        xml_text = self.fetch_config(goal_state.certs_uri,
-                                     self.get_header_for_cert())
-        self.save_cache(local_file, xml_text)
-        self.certs = Certificates(self, xml_text)
+        with self._locks[self.certs]:
+            local_file = os.path.join(conf.get_lib_dir(), CERTS_FILE_NAME)
+            xml_text = self.fetch_config(goal_state.certs_uri,
+                                         self.get_header_for_cert())
+            self.save_cache(local_file, xml_text)
+            self.certs = Certificates(self, xml_text)
 
     def update_remote_access_conf(self, goal_state):
         if goal_state.remote_access_uri is None:
             # Nothing in accounts data.  Just return, nothing to do.
             return
-        xml_text = self.fetch_config(goal_state.remote_access_uri,
-                                     self.get_header_for_cert())
-        self.remote_access = RemoteAccess(xml_text)
-        local_file = os.path.join(conf.get_lib_dir(), REMOTE_ACCESS_FILE_NAME.format(self.remote_access.incarnation))
-        self.save_cache(local_file, xml_text)
+        with self._locks[self.remote_access]:
+            xml_text = self.fetch_config(goal_state.remote_access_uri,
+                                         self.get_header_for_cert())
+            self.remote_access = RemoteAccess(xml_text)
+            local_file = os.path.join(conf.get_lib_dir(), REMOTE_ACCESS_FILE_NAME.format(self.remote_access.incarnation))
+            self.save_cache(local_file, xml_text)
 
     def get_remote_access(self):
-        incarnation_file = os.path.join(conf.get_lib_dir(),
-                                        INCARNATION_FILE_NAME)
-        incarnation = self.fetch_cache(incarnation_file)
-        file_name = REMOTE_ACCESS_FILE_NAME.format(incarnation)
-        remote_access_file = os.path.join(conf.get_lib_dir(), file_name)
-        if not os.path.isfile(remote_access_file):
-            # no remote access data.
-            return None
-        xml_text = self.fetch_cache(remote_access_file)
-        remote_access = RemoteAccess(xml_text)
-        return remote_access
+        with self._locks[self.remote_access]:
+            if self.remote_access:
+                return self.remote_access
+            incarnation_file = os.path.join(conf.get_lib_dir(),
+                                            INCARNATION_FILE_NAME)
+            incarnation = self.fetch_cache(incarnation_file)
+            file_name = REMOTE_ACCESS_FILE_NAME.format(incarnation)
+            remote_access_file = os.path.join(conf.get_lib_dir(), file_name)
+            if not os.path.isfile(remote_access_file):
+                # no remote access data.
+                return None
+            xml_text = self.fetch_cache(remote_access_file)
+            remote_access = RemoteAccess(xml_text)
+            return remote_access
 
     def update_ext_conf(self, goal_state):
-        if goal_state.ext_uri is None:
-            logger.info("ExtensionsConfig.xml uri is empty")
-            self.ext_conf = ExtensionsConfig(None)
-            return
-        incarnation = goal_state.incarnation
-        local_file = os.path.join(conf.get_lib_dir(),
-                                  EXT_CONF_FILE_NAME.format(incarnation))
-        xml_text = self.fetch_config(goal_state.ext_uri, self.get_header())
-        self.save_cache(local_file, xml_text)
-        self.ext_conf = ExtensionsConfig(xml_text)
+        with self._locks[self.ext_conf]:
+            if goal_state.ext_uri is None:
+                logger.info("ExtensionsConfig.xml uri is empty")
+                self.ext_conf = ExtensionsConfig(None)
+                return
+            incarnation = goal_state.incarnation
+            local_file = os.path.join(conf.get_lib_dir(),
+                                      EXT_CONF_FILE_NAME.format(incarnation))
+            xml_text = self.fetch_config(goal_state.ext_uri, self.get_header())
+            self.save_cache(local_file, xml_text)
+            self.ext_conf = ExtensionsConfig(xml_text)
 
     # Type of update performed by _update_from_goal_state()
     class _UpdateType(object):
@@ -805,9 +828,10 @@ class WireClient(object):
                 new_goal_state = GoalState(new_goal_state_xml)
 
                 def update_host_plugin():
-                    if self.host_plugin is not None:
-                        self.host_plugin.container_id = new_goal_state.container_id
-                        self.host_plugin.role_config_name = new_goal_state.role_config_name
+                    with self._locks[self.host_plugin]:
+                        if self.host_plugin is not None:
+                            self.host_plugin.container_id = new_goal_state.container_id
+                            self.host_plugin.role_config_name = new_goal_state.role_config_name
 
                 if refresh_type == WireClient._UpdateType.HostPlugin:
                     update_host_plugin()
@@ -825,19 +849,23 @@ class WireClient(object):
                         goal_state_file = os.path.join(conf.get_lib_dir(), file_name)
                         self.save_cache(goal_state_file, xml_text)
 
-                    with Lock():
-                        # Locking the objects when incarnation change/Forced to make them more thread friendly
-                        self.goal_state_flusher.flush(datetime.utcnow())
-                        self.goal_state = new_goal_state
-                        save_goal_state(new_goal_state.incarnation, new_goal_state_xml)
-                        self.update_hosting_env(new_goal_state)
-                        self.update_shared_conf(new_goal_state)
-                        self.update_certs(new_goal_state)
-                        self.update_ext_conf(new_goal_state)
-                        self.update_remote_access_conf(new_goal_state)
-                        self.save_cache(incarnation_file, new_goal_state.incarnation)
+                    def _update_goal_state_object(new_goal_state):
+                        with self._locks[self.goal_state]:
+                            self.goal_state = new_goal_state
 
-                        update_host_plugin()
+                    # Locking the objects when incarnation change/Forced to make them more thread friendly
+                    self.goal_state_flusher.flush(datetime.utcnow())
+                    _update_goal_state_object(new_goal_state)
+                    # self.goal_state = new_goal_state
+                    save_goal_state(new_goal_state.incarnation, new_goal_state_xml)
+                    self.update_hosting_env(new_goal_state)
+                    self.update_shared_conf(new_goal_state)
+                    self.update_certs(new_goal_state)
+                    self.update_ext_conf(new_goal_state)
+                    self.update_remote_access_conf(new_goal_state)
+                    self.save_cache(incarnation_file, new_goal_state.incarnation)
+
+                    update_host_plugin()
 
                 return
 
@@ -856,41 +884,45 @@ class WireClient(object):
         raise ProtocolError("Exceeded max retry updating goal state")
 
     def get_goal_state(self):
-        if self.goal_state is None:
-            incarnation_file = os.path.join(conf.get_lib_dir(),
-                                            INCARNATION_FILE_NAME)
-            incarnation = self.fetch_cache(incarnation_file)
+        with self._locks[self.goal_state]:
+            if self.goal_state is None:
+                incarnation_file = os.path.join(conf.get_lib_dir(),
+                                                INCARNATION_FILE_NAME)
+                incarnation = self.fetch_cache(incarnation_file)
 
-            file_name = GOAL_STATE_FILE_NAME.format(incarnation)
-            goal_state_file = os.path.join(conf.get_lib_dir(), file_name)
-            xml_text = self.fetch_cache(goal_state_file)
-            self.goal_state = GoalState(xml_text)
-        return self.goal_state
+                file_name = GOAL_STATE_FILE_NAME.format(incarnation)
+                goal_state_file = os.path.join(conf.get_lib_dir(), file_name)
+                xml_text = self.fetch_cache(goal_state_file)
+                self.goal_state = GoalState(xml_text)
+            return self.goal_state
 
     def get_hosting_env(self):
-        if self.hosting_env is None:
-            local_file = os.path.join(conf.get_lib_dir(),
-                                      HOSTING_ENV_FILE_NAME)
-            xml_text = self.fetch_cache(local_file)
-            self.hosting_env = HostingEnv(xml_text)
-        return self.hosting_env
+        with self._locks[self.hosting_env]:
+            if self.hosting_env is None:
+                local_file = os.path.join(conf.get_lib_dir(),
+                                          HOSTING_ENV_FILE_NAME)
+                xml_text = self.fetch_cache(local_file)
+                self.hosting_env = HostingEnv(xml_text)
+            return self.hosting_env
 
     def get_shared_conf(self):
-        if self.shared_conf is None:
-            local_file = os.path.join(conf.get_lib_dir(),
-                                      SHARED_CONF_FILE_NAME)
-            xml_text = self.fetch_cache(local_file)
-            self.shared_conf = SharedConfig(xml_text)
-        return self.shared_conf
+        with self._locks[self.shared_conf]:
+            if self.shared_conf is None:
+                local_file = os.path.join(conf.get_lib_dir(),
+                                          SHARED_CONF_FILE_NAME)
+                xml_text = self.fetch_cache(local_file)
+                self.shared_conf = SharedConfig(xml_text)
+            return self.shared_conf
 
     def get_certs(self):
-        if self.certs is None:
-            local_file = os.path.join(conf.get_lib_dir(), CERTS_FILE_NAME)
-            xml_text = self.fetch_cache(local_file)
-            self.certs = Certificates(self, xml_text)
-        if self.certs is None:
-            return None
-        return self.certs
+        with self._locks[self.certs]:
+            if self.certs is None:
+                local_file = os.path.join(conf.get_lib_dir(), CERTS_FILE_NAME)
+                xml_text = self.fetch_cache(local_file)
+                self.certs = Certificates(self, xml_text)
+            if self.certs is None:
+                return None
+            return self.certs
 
     def get_current_handlers(self):
         handler_list = list()
@@ -909,16 +941,17 @@ class WireClient(object):
         return handler_list
 
     def get_ext_conf(self):
-        if self.ext_conf is None:
-            local_goal_state = self.get_goal_state()
-            if local_goal_state.ext_uri is None:
-                self.ext_conf = ExtensionsConfig(None)
-            else:
-                local_file = EXT_CONF_FILE_NAME.format(local_goal_state.incarnation)
-                local_file = os.path.join(conf.get_lib_dir(), local_file)
-                xml_text = self.fetch_cache(local_file)
-                self.ext_conf = ExtensionsConfig(xml_text)
-        return self.ext_conf
+        with self._locks[self.ext_conf]:
+            if self.ext_conf is None:
+                local_goal_state = self.get_goal_state()
+                if local_goal_state.ext_uri is None:
+                    self.ext_conf = ExtensionsConfig(None)
+                else:
+                    local_file = EXT_CONF_FILE_NAME.format(local_goal_state.incarnation)
+                    local_file = os.path.join(conf.get_lib_dir(), local_file)
+                    xml_text = self.fetch_cache(local_file)
+                    self.ext_conf = ExtensionsConfig(xml_text)
+            return self.ext_conf
 
     def get_ext_manifest(self, ext_handler, goal_state):
         local_file = MANIFEST_FILE_NAME.format(ext_handler.name, goal_state.incarnation)
@@ -1052,8 +1085,9 @@ class WireClient(object):
         try:
             ret = host_func()
         except (ResourceGoneError, InvalidContainerError) as e:
-            old_container_id = self.host_plugin.container_id
-            old_role_config_name = self.host_plugin.role_config_name
+            host_plugin = self.get_host_plugin()
+            old_container_id = host_plugin.container_id
+            old_role_config_name = host_plugin.role_config_name
 
             msg = "[PERIODIC] Request failed with the current host plugin configuration. " \
                   "ContainerId: {0}, role config file: {1}. Fetching new goal state and retrying the call." \
@@ -1062,8 +1096,8 @@ class WireClient(object):
 
             self.update_host_plugin_from_goal_state()
 
-            new_container_id = self.host_plugin.container_id
-            new_role_config_name = self.host_plugin.role_config_name
+            new_container_id = host_plugin.container_id
+            new_role_config_name = host_plugin.role_config_name
             msg = "[PERIODIC] Host plugin reconfigured with new parameters. " \
                   "ContainerId: {0}, role config file: {1}.".format(new_container_id, new_role_config_name)
             logger.periodic_info(logger.EVERY_SIX_HOURS, msg)
@@ -1287,16 +1321,18 @@ class WireClient(object):
         }
 
     def get_host_plugin(self):
-        if self.host_plugin is None:
-            goal_state = self.get_goal_state()
-            self.host_plugin = HostPluginProtocol(self.endpoint,
-                                                  goal_state.container_id,
-                                                  goal_state.role_config_name)
-        return self.host_plugin
+        with self._locks[self.host_plugin]:
+            if self.host_plugin is None:
+                goal_state = self.get_goal_state()
+                self.host_plugin = HostPluginProtocol(self.endpoint,
+                                                      goal_state.container_id,
+                                                      goal_state.role_config_name)
+            return self.host_plugin
 
     def has_artifacts_profile_blob(self):
-        return self.ext_conf and not \
-            textutil.is_str_none_or_whitespace(self.ext_conf.artifacts_profile_blob)
+        ext_conf = self.get_ext_conf()
+        return ext_conf and not \
+            textutil.is_str_none_or_whitespace(ext_conf.artifacts_profile_blob)
 
     def get_artifacts_profile_through_host(self, blob):
         host = self.get_host_plugin()
@@ -1308,7 +1344,7 @@ class WireClient(object):
         artifacts_profile = None
 
         if self.has_artifacts_profile_blob():
-            blob = self.ext_conf.artifacts_profile_blob
+            blob = self.get_ext_conf().artifacts_profile_blob
             direct_func = lambda: self.fetch(blob)
             # NOTE: the host_func may be called after refreshing the goal state, be careful about any goal state data
             # in the lambda.
