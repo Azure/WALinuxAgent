@@ -33,6 +33,12 @@ class TestProtocolUtil(AgentTestCase):
     def setUp(self):
         super(TestProtocolUtil, self).setUp()
         ProtocolUtil.clear()
+
+    def test_get_protocol_util_should_return_same_object(self, _):
+        protocol_util1 = get_protocol_util()
+        protocol_util2 = get_protocol_util()
+
+        self.assertEqual(protocol_util1, protocol_util2)
     
     @patch("azurelinuxagent.common.protocol.util.MetadataProtocol")
     @patch("azurelinuxagent.common.protocol.util.WireProtocol")

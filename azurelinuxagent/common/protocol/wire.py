@@ -561,12 +561,7 @@ class WireClient(object):
         # Initialize a lock for every object that needs to be thread safe
         self._locks = {
             'goal_state': Lock(),
-            'ext_conf': Lock(),
-            'host_plugin': Lock(),
-            'hosting_env': Lock(),
-            'remote_access': Lock(),
-            'certs': Lock(),
-            'shared_conf': Lock()
+            'host_plugin': Lock()
         }
 
     def call_wireserver(self, http_req, *args, **kwargs):
@@ -725,46 +720,42 @@ class WireClient(object):
     def update_hosting_env(self, goal_state):
         if goal_state.hosting_env_uri is None:
             raise ProtocolError("HostingEnvironmentConfig uri is empty")
-        with self._locks['hosting_env']:
-            local_file = os.path.join(conf.get_lib_dir(), HOSTING_ENV_FILE_NAME)
-            xml_text = self.fetch_config(goal_state.hosting_env_uri,
-                                         self.get_header())
-            self.save_cache(local_file, xml_text)
-            self.hosting_env = HostingEnv(xml_text)
+        local_file = os.path.join(conf.get_lib_dir(), HOSTING_ENV_FILE_NAME)
+        xml_text = self.fetch_config(goal_state.hosting_env_uri,
+                                     self.get_header())
+        self.save_cache(local_file, xml_text)
+        self.hosting_env = HostingEnv(xml_text)
 
     def update_shared_conf(self, goal_state):
         if goal_state.shared_conf_uri is None:
             raise ProtocolError("SharedConfig uri is empty")
-        with self._locks['shared_conf']:
-            local_file = os.path.join(conf.get_lib_dir(), SHARED_CONF_FILE_NAME)
-            xml_text = self.fetch_config(goal_state.shared_conf_uri,
-                                         self.get_header())
-            self.save_cache(local_file, xml_text)
-            self.shared_conf = SharedConfig(xml_text)
+        local_file = os.path.join(conf.get_lib_dir(), SHARED_CONF_FILE_NAME)
+        xml_text = self.fetch_config(goal_state.shared_conf_uri,
+                                     self.get_header())
+        self.save_cache(local_file, xml_text)
+        self.shared_conf = SharedConfig(xml_text)
 
     def update_certs(self, goal_state):
         if goal_state.certs_uri is None:
             return
-        with self._locks['certs']:
-            local_file = os.path.join(conf.get_lib_dir(), CERTS_FILE_NAME)
-            xml_text = self.fetch_config(goal_state.certs_uri,
-                                         self.get_header_for_cert())
-            self.save_cache(local_file, xml_text)
-            self.certs = Certificates(self, xml_text)
+        local_file = os.path.join(conf.get_lib_dir(), CERTS_FILE_NAME)
+        xml_text = self.fetch_config(goal_state.certs_uri,
+                                     self.get_header_for_cert())
+        self.save_cache(local_file, xml_text)
+        self.certs = Certificates(self, xml_text)
 
     def update_remote_access_conf(self, goal_state):
         if goal_state.remote_access_uri is None:
             # Nothing in accounts data.  Just return, nothing to do.
             return
-        with self._locks['remote_access']:
-            xml_text = self.fetch_config(goal_state.remote_access_uri,
-                                         self.get_header_for_cert())
-            self.remote_access = RemoteAccess(xml_text)
-            local_file = os.path.join(conf.get_lib_dir(), REMOTE_ACCESS_FILE_NAME.format(self.remote_access.incarnation))
-            self.save_cache(local_file, xml_text)
+        xml_text = self.fetch_config(goal_state.remote_access_uri,
+                                     self.get_header_for_cert())
+        self.remote_access = RemoteAccess(xml_text)
+        local_file = os.path.join(conf.get_lib_dir(), REMOTE_ACCESS_FILE_NAME.format(self.remote_access.incarnation))
+        self.save_cache(local_file, xml_text)
 
     def get_remote_access(self):
-        with self._locks['remote_access']:
+        with self._locks['goal_state']:
             if self.remote_access:
                 return self.remote_access
             incarnation_file = os.path.join(conf.get_lib_dir(),
@@ -780,17 +771,16 @@ class WireClient(object):
             return remote_access
 
     def update_ext_conf(self, goal_state):
-        with self._locks['ext_conf']:
-            if goal_state.ext_uri is None:
-                logger.info("ExtensionsConfig.xml uri is empty")
-                self.ext_conf = ExtensionsConfig(None)
-                return
-            incarnation = goal_state.incarnation
-            local_file = os.path.join(conf.get_lib_dir(),
-                                      EXT_CONF_FILE_NAME.format(incarnation))
-            xml_text = self.fetch_config(goal_state.ext_uri, self.get_header())
-            self.save_cache(local_file, xml_text)
-            self.ext_conf = ExtensionsConfig(xml_text)
+        if goal_state.ext_uri is None:
+            logger.info("ExtensionsConfig.xml uri is empty")
+            self.ext_conf = ExtensionsConfig(None)
+            return
+        incarnation = goal_state.incarnation
+        local_file = os.path.join(conf.get_lib_dir(),
+                                  EXT_CONF_FILE_NAME.format(incarnation))
+        xml_text = self.fetch_config(goal_state.ext_uri, self.get_header())
+        self.save_cache(local_file, xml_text)
+        self.ext_conf = ExtensionsConfig(xml_text)
 
     # Type of update performed by _update_from_goal_state()
     class _UpdateType(object):
@@ -849,24 +839,19 @@ class WireClient(object):
                         goal_state_file = os.path.join(conf.get_lib_dir(), file_name)
                         self.save_cache(goal_state_file, xml_text)
 
-                    def _update_goal_state_object(new_goal_state):
-                        with self._locks['goal_state']:
-                            self.goal_state = new_goal_state
-
                     # Locking the objects when incarnation change/Forced to make them more thread friendly
-                    self.goal_state_flusher.flush(datetime.utcnow())
-                    _update_goal_state_object(new_goal_state)
-                    # self.goal_state = new_goal_state
-                    save_goal_state(new_goal_state.incarnation, new_goal_state_xml)
-                    self.update_hosting_env(new_goal_state)
-                    self.update_shared_conf(new_goal_state)
-                    self.update_certs(new_goal_state)
-                    self.update_ext_conf(new_goal_state)
-                    self.update_remote_access_conf(new_goal_state)
-                    self.save_cache(incarnation_file, new_goal_state.incarnation)
+                    with self._locks['goal_state']:
+                        self.goal_state_flusher.flush(datetime.utcnow())
+                        self.goal_state = new_goal_state
+                        save_goal_state(new_goal_state.incarnation, new_goal_state_xml)
+                        self.update_hosting_env(new_goal_state)
+                        self.update_shared_conf(new_goal_state)
+                        self.update_certs(new_goal_state)
+                        self.update_ext_conf(new_goal_state)
+                        self.update_remote_access_conf(new_goal_state)
+                        self.save_cache(incarnation_file, new_goal_state.incarnation)
 
-                    update_host_plugin()
-
+                        update_host_plugin()
                 return
 
             except IOError as e:
@@ -897,7 +882,7 @@ class WireClient(object):
             return self.goal_state
 
     def get_hosting_env(self):
-        with self._locks['hosting_env']:
+        with self._locks['goal_state']:
             if self.hosting_env is None:
                 local_file = os.path.join(conf.get_lib_dir(),
                                           HOSTING_ENV_FILE_NAME)
@@ -906,7 +891,7 @@ class WireClient(object):
             return self.hosting_env
 
     def get_shared_conf(self):
-        with self._locks['shared_conf']:
+        with self._locks['goal_state']:
             if self.shared_conf is None:
                 local_file = os.path.join(conf.get_lib_dir(),
                                           SHARED_CONF_FILE_NAME)
@@ -915,7 +900,7 @@ class WireClient(object):
             return self.shared_conf
 
     def get_certs(self):
-        with self._locks['certs']:
+        with self._locks['goal_state']:
             if self.certs is None:
                 local_file = os.path.join(conf.get_lib_dir(), CERTS_FILE_NAME)
                 xml_text = self.fetch_cache(local_file)
@@ -941,7 +926,7 @@ class WireClient(object):
         return handler_list
 
     def get_ext_conf(self):
-        with self._locks['ext_conf']:
+        with self._locks['goal_state']:
             if self.ext_conf is None:
                 local_goal_state = self.get_goal_state()
                 if local_goal_state.ext_uri is None:
