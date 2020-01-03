@@ -398,7 +398,7 @@ class TestExtension(ExtensionTestCase):
         self.assertEquals(actual_settings_number, str(settings_number))
 
     def test_multiple_fast_track_goal_states(self, *args):
-        test_data = WireProtocolData(DATA_FILE)
+        test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE)
         handler, protocol = self._create_mock(test_data, *args)
         mock_in_vm_artifacts_profile = InVMArtifactsProfile(test_data.vm_artifacts_profile)
         protocol.get_artifacts_profile = Mock(return_value=mock_in_vm_artifacts_profile)
@@ -423,7 +423,7 @@ class TestExtension(ExtensionTestCase):
             goal_state_source='FastTrack', incarnation=1, sequence_number=3, settings_number=2, fast_track=True)
 
     def test_multiple_fabric_goal_states(self, *args):
-        test_data = WireProtocolData(DATA_FILE)
+        test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE)
         handler, protocol = self._create_mock(test_data, *args)
         conf.get_extensions_fast_track_enabled = Mock(return_value=True)
 
@@ -446,7 +446,7 @@ class TestExtension(ExtensionTestCase):
             goal_state_source='Fabric', incarnation=3, sequence_number=0, settings_number=1, fast_track=False)
 
     def test_fast_track_then_fabric(self, *args):
-        test_data = WireProtocolData(DATA_FILE)
+        test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE)
         handler, protocol = self._create_mock(test_data, *args)
         mock_in_vm_artifacts_profile = InVMArtifactsProfile(test_data.vm_artifacts_profile)
         protocol.get_artifacts_profile = Mock(return_value=mock_in_vm_artifacts_profile)
@@ -477,7 +477,7 @@ class TestExtension(ExtensionTestCase):
             goal_state_source='Fabric', incarnation=2, sequence_number=2, settings_number=3, fast_track=False)
 
     def test_fabric_then_fast_track(self, *args):
-        test_data = WireProtocolData(DATA_FILE)
+        test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE)
         handler, protocol = self._create_mock(test_data, *args)
         conf.get_extensions_fast_track_enabled = Mock(return_value=True)
 
@@ -508,7 +508,7 @@ class TestExtension(ExtensionTestCase):
             goal_state_source='FastTrack', incarnation=2, sequence_number=1, settings_number=3, fast_track=True)
 
     def test_ext_handler_profile_blob_not_modified(self, *args):
-        test_data = WireProtocolData(DATA_FILE)
+        test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE)
         exthandlers_handler, protocol = self._create_mock(test_data, *args)
         conf.get_extensions_fast_track_enabled = Mock(return_value=True)
 
@@ -530,7 +530,7 @@ class TestExtension(ExtensionTestCase):
         self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.0.0")
 
     def test_ext_handler_profile_blob(self, *args):
-        test_data = WireProtocolData(DATA_FILE)
+        test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE)
         exthandlers_handler, protocol = self._create_mock(test_data, *args)
         conf.get_extensions_fast_track_enabled = Mock(return_value=True)
 
@@ -1441,7 +1441,7 @@ class TestExtension(ExtensionTestCase):
                         
                 _, protocol = self._create_mock(mockwiredata.WireProtocolData(datafile), *args)
                 ext_conf, _ = protocol.get_ext_conf()
-                ext_handlers, _ = ext_conf.ext_handlers
+                ext_handlers, _ = ext_conf.ext_handlers.extHandlers
 
                 self.assertEqual(1, len(ext_handlers.extHandlers))
                 ext_handler = ext_handlers.extHandlers[0]

@@ -331,28 +331,11 @@ class UpdateHandler(object):
 
                 remote_access_handler.run()
 
-                if last_etag != exthandlers_handler.last_etag:
-                    self._ensure_readonly_files()
-                    duration = elapsed_milliseconds(utc_start)
-                    logger.info('ProcessGoalState completed [incarnation {0}; {1} ms]',
-                                exthandlers_handler.last_etag,
-                                duration)
-                    add_event(
-                        AGENT_NAME,
-                        op=WALAEventOperation.ProcessGoalState,
-                        duration=duration,
-                        message="Incarnation {0}".format(exthandlers_handler.last_etag))
-                if last_vm_artifacts_seqno != exthandlers_handler.last_vm_artifacts_seqno:
-                    self._ensure_readonly_files()
-                    duration = elapsed_milliseconds(utc_start)
-                    logger.info('ProcessGoalState completed [seqno {0}; {1} ms]',
-                                exthandlers_handler.last_vm_artifacts_seqno,
-                                duration)
-                    add_event(
-                        AGENT_NAME,
-                        op=WALAEventOperation.ProcessGoalState,
-                        duration=duration,
-                        message="SeqNo {0}".format(exthandlers_handler.last_vm_artifacts_seqno))
+                self.log_goal_state_changes(
+                    last_etag, exthandlers_handler.last_etag, "incarnation", utc_start)
+                self.log_goal_state_changes(
+                    last_vm_artifacts_seqno, exthandlers_handler.last_vm_artifacts_seqno, "seqno", utc_start)
+
                 time.sleep(goal_state_interval)
 
         except Exception as e:
@@ -366,6 +349,20 @@ class UpdateHandler(object):
 
         self._shutdown()
         sys.exit(0)
+
+    def log_goal_state_changes(self, last_item, current_item, item_name, utc_start):
+        if last_item != current_item:
+            self._ensure_readonly_files()
+            duration = elapsed_milliseconds(utc_start)
+            logger.info('ProcessGoalState completed [{2} {0}; {1} ms]',
+                        current_item,
+                        duration,
+                        item_name)
+            add_event(
+                AGENT_NAME,
+                op=WALAEventOperation.ProcessGoalState,
+                duration=duration,
+                message="{0} {1}".format(item_name, current_item))
 
     def forward_signal(self, signum, frame):
         if signum == signal.SIGTERM:

@@ -176,13 +176,13 @@ class WireProtocol(Protocol):
         logger.verbose("Get In-VM Artifacts Profile")
         return self.client.get_artifacts_profile()
 
-    def set_fast_track(self, fast_track, sequence_number=None):
+    def set_fast_track(self, fast_track, vm_artifacts_seq_no=None):
         path = os.path.join(conf.get_lib_dir(), GOAL_STATE_SOURCE_FILE_NAME)
         if fast_track:
             self.client.save_cache(path, GOAL_STATE_SOURCE_FASTTRACK)
-            if sequence_number is not None:
+            if vm_artifacts_seq_no is not None:
                 sequence_number_file_path = os.path.join(conf.get_lib_dir(), SEQUENCE_NUMBER_FILE_NAME)
-                self.client.save_cache(sequence_number_file_path, ustr(sequence_number))
+                self.client.save_cache(sequence_number_file_path, ustr(vm_artifacts_seq_no))
         else:
             self.client.save_cache(path, GOAL_STATE_SOURCE_FABRIC)
 
@@ -971,9 +971,9 @@ class WireClient(object):
 
     def get_file_path_for_fast_track(self):
         local_file = None
-        sequence_number = self.get_sequence_number()
-        if sequence_number > 0:
-            local_file = EXT_CONFIG_FAST_TRACK_FILE_NAME.format(sequence_number)
+        vm_artifacts_seq_no = self.get_sequence_number()
+        if vm_artifacts_seq_no > 0:
+            local_file = EXT_CONFIG_FAST_TRACK_FILE_NAME.format(vm_artifacts_seq_no)
             local_file = os.path.join(conf.get_lib_dir(), local_file)
             if not os.path.isfile(local_file):
                 logger.error("File {0} is missing".format(local_file))
@@ -1937,7 +1937,7 @@ class InVMArtifactsProfile(object):
             return int(self.inVMArtifactsProfileBlobSeqNo)
         return None
 
-    def transform_to_extensions_config(self):
+    def transform_to_extensions_config(self, flush_func=None):
         """
         We need to convert the json from the InVmArtifactsProfile blob to the following
         format for the ExtensionsConfig:
@@ -2000,6 +2000,8 @@ class InVMArtifactsProfile(object):
                 runtime_settings.text = json_settings
 
             config_xml = xml.tostring(root).decode()
+            if flush_func is not None:
+                flush_func(datetime.utcnow())
             self.save_fasttrack_extension_config(config_xml)
             extensions_config = ExtensionsConfig(config_xml)
 
