@@ -1441,13 +1441,13 @@ class TestExtension(ExtensionTestCase):
                         
                 _, protocol = self._create_mock(mockwiredata.WireProtocolData(datafile), *args)
                 ext_conf, _ = protocol.get_ext_conf()
-                ext_handlers, _ = ext_conf.ext_handlers.extHandlers
+                ext_handlers = ext_conf.ext_handlers.extHandlers
 
-                self.assertEqual(1, len(ext_handlers.extHandlers))
-                ext_handler = ext_handlers.extHandlers[0]
+                self.assertEqual(1, len(ext_handlers))
+                ext_handler = ext_handlers[0]
                 self.assertEqual('OSTCExtensions.ExampleHandlerLinux', ext_handler.name)
                 self.assertEqual(config_version, ext_handler.properties.version, "config version.")
-                ExtHandlerInstance(ext_handler, protocol).decide_vers
+                ExtHandlerInstance(ext_handler, protocol).decide_version()
                 self.assertEqual(decision_version, ext_handler.properties.version, "decision version.")
 
     def test_ext_handler_version_decide_between_minor_versions(self, *args):

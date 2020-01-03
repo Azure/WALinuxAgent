@@ -891,7 +891,7 @@ class TestUpdate(UpdateTestCase):
         mock_get_host.assert_not_called()
         self.assertEqual(None, host)
 
-    def test_get_latest_agent(self):
+    deftest_get_latest_agent(self):
         latest_version = self.prepare_agents()
 
         latest_agent = self.update_handler.get_latest_agent()

@@ -1085,7 +1085,7 @@ class TestWireClient(AgentTestCase):
                         self.assertEquals(HostPluginProtocol.is_default_channel(), False)
 
     def test_send_request_hostplugin_first_should_invoke_hostplugin_when_not_default(self, *args):
-        xml_text = WireProtocolData(mockwiredata.DATA_FILE).goal_state
+        xml_text = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE).goal_state
         client = WireClient(wireserver_url)
 
         client.goal_state = GoalState(xml_text)
@@ -1108,7 +1108,7 @@ class TestWireClient(AgentTestCase):
         self.assertEquals(1, host_func.counter)
 
     def test_send_request_hostplugin_first_no_direct_on_not_modified(self, *args):
-        xml_text = WireProtocolData(mockwiredata.DATA_FILE).goal_state
+        xml_text = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE).goal_state
         client = WireClient(wireserver_url)
 
         client.goal_state = GoalState(xml_text)
@@ -1132,7 +1132,7 @@ class TestWireClient(AgentTestCase):
         self.assertEquals(1, host_func.counter)
 
     def test_send_request_hostplugin_first_should_go_direct_when_hostplugin_fails(self, *args):
-        xml_text = WireProtocolData(mockwiredata.DATA_FILE).goal_state
+        xml_text = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE).goal_state
         client = WireClient(wireserver_url)
 
         client.goal_state = GoalState(xml_text)
@@ -1155,7 +1155,7 @@ class TestWireClient(AgentTestCase):
         self.assertEquals(1, host_func.counter)
 
     def test_send_request_using_appropriate_channel_should_not_invoke_host_channel_when_direct_channel_succeeds(self, *args):
-        xml_text = WireProtocolData(DATA_FILE).goal_state
+        xml_text = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE).goal_state
         client = WireClient(wireserver_url)
         client.goal_state = GoalState(xml_text)
 

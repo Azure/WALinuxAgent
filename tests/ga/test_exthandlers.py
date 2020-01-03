@@ -5,6 +5,7 @@ import subprocess
 import os
 import time
 
+from azurelinuxagent.common.cgroupconfigurator import CGroupConfigurator
 from azurelinuxagent.common.protocol.restapi import ExtensionStatus, Extension, ExtHandler, ExtHandlerProperties
 from azurelinuxagent.ga.exthandlers import parse_ext_status, ExtHandlerInstance, get_exthandlers_handler, \
     ExtCommandEnvVariable, ExtHandlersHandler
@@ -243,7 +244,9 @@ class TestExtHandlers(AgentTestCase):
 
         self.assertEqual(expected_sequence_number, seq)
         if seq > -1:
-            self.assertTrue(path.endswith('/foo-1.2.3/status/{0}.status'.format(expected_sequence_number)))
+            self.assertTrue(
+                path.endswith('/foo-1.2.3/status/{0}.status'.format(expected_sequence_number)),
+                "Unexpected path: {0} for seq {1}".format(path, expected_sequence_number))
         else:
             self.assertIsNone(path)
 

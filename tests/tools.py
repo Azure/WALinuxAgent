@@ -19,6 +19,7 @@
 Define util functions for unit test
 """
 import difflib
+import errno
 import os
 import pprint
 import re
@@ -231,9 +232,16 @@ class AgentTestCase(unittest.TestCase):
         self.mock__get_osutil = patch("azurelinuxagent.common.osutil.factory._get_osutil", mock_get_osutil)
         self.mock__get_osutil.start()
 
+    @staticmethod
+    def empty_directory_error_handler(func, path, exec_info):
+        e = exec_info[1]
+        if e.errno == errno.ENOTEMPTY or e.errno == errno.ENOENT:
+            return  # directory is not empty
+        raise e
+
     def tearDown(self):
         if not debug and self.tmp_dir is not None:
-            shutil.rmtree(self.tmp_dir)
+            shutil.rmtree(self.tmp_dir, False, AgentTestCase.empty_directory_error_handler)
 
         self.mock__get_osutil.stop()
 
