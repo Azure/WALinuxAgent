@@ -145,7 +145,6 @@ class WireProtocol(Protocol):
 
     def get_vmagent_pkgs(self, vmagent_manifest):
         goal_state = self.client.get_goal_state()
-        # Only update handler calls this so no need to lock it
         ga_manifest = self.client.get_gafamily_manifest(vmagent_manifest, goal_state)
         valid_pkg_list = self.client.filter_package_list(vmagent_manifest.family, ga_manifest, goal_state)
         return valid_pkg_list
@@ -167,7 +166,6 @@ class WireProtocol(Protocol):
 
     def get_artifacts_profile(self):
         logger.verbose("Get In-VM Artifacts Profile")
-        # This is a stateless call, the agent always fetches the latest blob and returns data. No need to lock
         return self.client.get_artifacts_profile()
 
     def download_ext_handler_pkg_through_host(self, uri, destination):
@@ -541,18 +539,11 @@ class WireClient(object):
 
     def __init__(self, endpoint):
         logger.info("Wire server endpoint:{0}", endpoint)
-        logger.warn("WireClient Object: %s" % self)
         self.endpoint = endpoint
         self.goal_state = None
-        # Property not being used and no file either
-        # self.updated = None
-        # Property and file used for self.protocol.get_vminfo() (MonitorHandler)
         self.hosting_env = None
-        # Property not being used, File used for this - setup_rdma_device
         self.shared_conf = None
-        # Property never used, File used for - remote_access_handler.run()
         self.remote_access = None
-        # Property used in protocol.get_certs() but that function doesnt look like its used anywhere
         self.certs = None
         self.ext_conf = None
         self.host_plugin = None
@@ -822,8 +813,6 @@ class WireClient(object):
 
                 def incarnation_changed():
                     last_incarnation = self.get_goal_state().incarnation
-                    # if os.path.isfile(incarnation_file):
-                    #     last_incarnation = fileutil.read_file(incarnation_file)
                     return last_incarnation is None or last_incarnation != new_goal_state.incarnation
 
                 if refresh_type == WireClient._UpdateType.GoalStateForced or incarnation_changed() or self.goal_state is None:

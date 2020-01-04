@@ -17,7 +17,7 @@
 
 import os
 import unittest
-from queue import Queue
+from multiprocessing import Queue
 from threading import Thread
 
 from tests.tools import AgentTestCase, MagicMock, Mock, patch

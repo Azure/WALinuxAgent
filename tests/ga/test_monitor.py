@@ -26,7 +26,6 @@ import tempfile
 import time
 from datetime import timedelta
 
-from azurelinuxagent.common.protocol.util import ProtocolUtil
 from nose.plugins.attrib import attr
 
 import azurelinuxagent.common.conf as conf

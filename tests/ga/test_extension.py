@@ -311,9 +311,6 @@ class ExtensionTestCase(AgentTestCase):
 @patch("azurelinuxagent.common.utils.restutil.http_get")
 class TestExtension(ExtensionTestCase):
 
-    def setUp(self):
-        super(TestExtension, self).setUp()
-
     def _assert_handler_status(self, report_vm_status, expected_status,
                                expected_ext_count, version,
                                expected_handler_name="OSTCExtensions.ExampleHandlerLinux"):

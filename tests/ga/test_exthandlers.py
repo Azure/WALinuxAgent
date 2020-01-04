@@ -1,19 +1,18 @@
 # Copyright (c) Microsoft Corporation. All rights reserved.
 # Licensed under the Apache License.
 import json
-import subprocess
 import os
+import subprocess
 import time
 
-from azurelinuxagent.common.protocol.util import ProtocolUtil
-
+from azurelinuxagent.common.cgroupconfigurator import CGroupConfigurator
+from azurelinuxagent.common.event import WALAEventOperation
+from azurelinuxagent.common.exception import ProtocolError, ExtensionError, ExtensionErrorCodes
 from azurelinuxagent.common.protocol.restapi import ExtensionStatus, Extension, ExtHandler, ExtHandlerProperties
+from azurelinuxagent.common.utils.extensionprocessutil import TELEMETRY_MESSAGE_MAX_LEN, format_stdout_stderr, \
+    read_output
 from azurelinuxagent.ga.exthandlers import parse_ext_status, ExtHandlerInstance, get_exthandlers_handler, \
     ExtCommandEnvVariable
-from azurelinuxagent.common.cgroupconfigurator import CGroupConfigurator
-from azurelinuxagent.common.exception import ProtocolError, ExtensionError, ExtensionErrorCodes
-from azurelinuxagent.common.event import WALAEventOperation
-from azurelinuxagent.common.utils.extensionprocessutil import TELEMETRY_MESSAGE_MAX_LEN, format_stdout_stderr, read_output
 from tests.tools import AgentTestCase, patch, mock_sleep
 
 
@@ -204,11 +203,7 @@ class TestExtHandlers(AgentTestCase):
         patch_get_protocol.side_effect = ProtocolError(test_message) # get_protocol will throw if the wire server cannot be reached
         patch_is_triggered.return_value = True # protocol errors are reported only after a delay; force the error to be reported now
 
-        ext_handler = get_exthandlers_handler()
-        ext_handler.run()
-
-        print(ext_handler.protocol)
-
+        get_exthandlers_handler().run()
 
         self.assertEquals(patch_add_event.call_count, 2)
 

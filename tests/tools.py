@@ -26,17 +26,14 @@ import shutil
 import stat
 import sys
 import tempfile
+import time
 import unittest
 from functools import wraps
 
-import time
-
-from azurelinuxagent.common.protocol.wire import WireClient
-
-from azurelinuxagent.common.cgroupconfigurator import CGroupConfigurator
-import azurelinuxagent.common.event as event
 import azurelinuxagent.common.conf as conf
+import azurelinuxagent.common.event as event
 import azurelinuxagent.common.logger as logger
+from azurelinuxagent.common.cgroupconfigurator import CGroupConfigurator
 from azurelinuxagent.common.osutil.factory import _get_osutil
 from azurelinuxagent.common.osutil.ubuntu import Ubuntu14OSUtil, Ubuntu16OSUtil
 from azurelinuxagent.common.utils import fileutil

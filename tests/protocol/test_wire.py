@@ -24,8 +24,6 @@ import time
 import unittest
 import uuid
 import zipfile
-from multiprocessing import Queue
-from threading import Thread
 
 from azurelinuxagent.common.exception import InvalidContainerError, ResourceGoneError, ProtocolError, \
     ExtensionDownloadError
