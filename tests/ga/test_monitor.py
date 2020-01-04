@@ -118,7 +118,6 @@ class TestMonitor(AgentTestCase):
         AgentTestCase.setUp(self)
         prefix = "UnitTest"
         logger.DEFAULT_LOGGER = Logger(prefix=prefix)
-        ProtocolUtil.clear()
 
     def tearDown(self):
         AgentTestCase.tearDown(self)
@@ -344,18 +343,19 @@ class TestMonitor(AgentTestCase):
         self.assertEqual(0, patch_send_telemetry_metrics.call_count)
         self.assertEqual(0, patch_poll_telemetry_metrics.call_count)
 
-        monitor_handler.start()
-        time.sleep(1)
-        self.assertTrue(monitor_handler.is_alive())
+        with patch.object(monitor_handler, 'protocol'):
+            monitor_handler.start()
+            time.sleep(1)
+            self.assertTrue(monitor_handler.is_alive())
 
-        self.assertNotEqual(0, patch_hostplugin_heartbeat.call_count)
-        self.assertNotEqual(0, patch_send_events.call_count)
-        self.assertNotEqual(0, patch_telemetry_heartbeat.call_count)
-        self.assertNotEqual(0, patch_imds_heartbeat.call_count)
-        self.assertNotEqual(0, patch_send_telemetry_metrics.call_count)
-        self.assertNotEqual(0, patch_poll_telemetry_metrics.call_count)
+            self.assertNotEqual(0, patch_hostplugin_heartbeat.call_count)
+            self.assertNotEqual(0, patch_send_events.call_count)
+            self.assertNotEqual(0, patch_telemetry_heartbeat.call_count)
+            self.assertNotEqual(0, patch_imds_heartbeat.call_count)
+            self.assertNotEqual(0, patch_send_telemetry_metrics.call_count)
+            self.assertNotEqual(0, patch_poll_telemetry_metrics.call_count)
 
-        monitor_handler.stop()
+            monitor_handler.stop()
 
     @patch("azurelinuxagent.ga.monitor.MonitorHandler.send_telemetry_metrics")
     @patch("azurelinuxagent.ga.monitor.MonitorHandler.poll_telemetry_metrics")
@@ -372,28 +372,29 @@ class TestMonitor(AgentTestCase):
         self.assertEqual(None, monitor_handler.last_telemetry_heartbeat)
         self.assertEqual(None, monitor_handler.last_imds_heartbeat)
 
-        monitor_handler.start()
-        time.sleep(0.2)
-        self.assertTrue(monitor_handler.is_alive())
+        with patch.object(monitor_handler, 'protocol'):
+            monitor_handler.start()
+            time.sleep(0.2)
+            self.assertTrue(monitor_handler.is_alive())
 
-        self.assertNotEqual(None, monitor_handler.last_host_plugin_heartbeat)
-        self.assertNotEqual(None, monitor_handler.last_event_collection)
-        self.assertNotEqual(None, monitor_handler.last_telemetry_heartbeat)
-        self.assertNotEqual(None, monitor_handler.last_imds_heartbeat)
+            self.assertNotEqual(None, monitor_handler.last_host_plugin_heartbeat)
+            self.assertNotEqual(None, monitor_handler.last_event_collection)
+            self.assertNotEqual(None, monitor_handler.last_telemetry_heartbeat)
+            self.assertNotEqual(None, monitor_handler.last_imds_heartbeat)
 
-        heartbeat_hostplugin = monitor_handler.last_host_plugin_heartbeat
-        heartbeat_imds = monitor_handler.last_imds_heartbeat
-        heartbeat_telemetry = monitor_handler.last_telemetry_heartbeat
-        events_collection = monitor_handler.last_event_collection
+            heartbeat_hostplugin = monitor_handler.last_host_plugin_heartbeat
+            heartbeat_imds = monitor_handler.last_imds_heartbeat
+            heartbeat_telemetry = monitor_handler.last_telemetry_heartbeat
+            events_collection = monitor_handler.last_event_collection
 
-        time.sleep(0.5)
+            time.sleep(0.5)
 
-        self.assertNotEqual(heartbeat_imds, monitor_handler.last_imds_heartbeat)
-        self.assertNotEqual(heartbeat_hostplugin, monitor_handler.last_host_plugin_heartbeat)
-        self.assertNotEqual(events_collection, monitor_handler.last_event_collection)
-        self.assertNotEqual(heartbeat_telemetry, monitor_handler.last_telemetry_heartbeat)
+            self.assertNotEqual(heartbeat_imds, monitor_handler.last_imds_heartbeat)
+            self.assertNotEqual(heartbeat_hostplugin, monitor_handler.last_host_plugin_heartbeat)
+            self.assertNotEqual(events_collection, monitor_handler.last_event_collection)
+            self.assertNotEqual(heartbeat_telemetry, monitor_handler.last_telemetry_heartbeat)
 
-        monitor_handler.stop()
+            monitor_handler.stop()
 
     @patch("azurelinuxagent.ga.monitor.MonitorHandler.send_telemetry_metrics")
     @patch("azurelinuxagent.ga.monitor.MonitorHandler.poll_telemetry_metrics")
@@ -410,28 +411,29 @@ class TestMonitor(AgentTestCase):
         self.assertEqual(None, monitor_handler.last_telemetry_heartbeat)
         self.assertEqual(None, monitor_handler.last_imds_heartbeat)
 
-        monitor_handler.start()
-        time.sleep(0.2)
-        self.assertTrue(monitor_handler.is_alive())
+        with patch.object(monitor_handler, 'protocol'):
+            monitor_handler.start()
+            time.sleep(0.2)
+            self.assertTrue(monitor_handler.is_alive())
 
-        self.assertNotEqual(None, monitor_handler.last_host_plugin_heartbeat)
-        self.assertNotEqual(None, monitor_handler.last_event_collection)
-        self.assertNotEqual(None, monitor_handler.last_telemetry_heartbeat)
-        self.assertNotEqual(None, monitor_handler.last_imds_heartbeat)
+            self.assertNotEqual(None, monitor_handler.last_host_plugin_heartbeat)
+            self.assertNotEqual(None, monitor_handler.last_event_collection)
+            self.assertNotEqual(None, monitor_handler.last_telemetry_heartbeat)
+            self.assertNotEqual(None, monitor_handler.last_imds_heartbeat)
 
-        heartbeat_hostplugin = monitor_handler.last_host_plugin_heartbeat
-        heartbeat_imds = monitor_handler.last_imds_heartbeat
-        heartbeat_telemetry = monitor_handler.last_telemetry_heartbeat
-        events_collection = monitor_handler.last_event_collection
+            heartbeat_hostplugin = monitor_handler.last_host_plugin_heartbeat
+            heartbeat_imds = monitor_handler.last_imds_heartbeat
+            heartbeat_telemetry = monitor_handler.last_telemetry_heartbeat
+            events_collection = monitor_handler.last_event_collection
 
-        time.sleep(0.5)
+            time.sleep(0.5)
 
-        self.assertEqual(heartbeat_hostplugin, monitor_handler.last_host_plugin_heartbeat)
-        self.assertEqual(heartbeat_imds, monitor_handler.last_imds_heartbeat)
-        self.assertEqual(events_collection, monitor_handler.last_event_collection)
-        self.assertEqual(heartbeat_telemetry, monitor_handler.last_telemetry_heartbeat)
+            self.assertEqual(heartbeat_hostplugin, monitor_handler.last_host_plugin_heartbeat)
+            self.assertEqual(heartbeat_imds, monitor_handler.last_imds_heartbeat)
+            self.assertEqual(events_collection, monitor_handler.last_event_collection)
+            self.assertEqual(heartbeat_telemetry, monitor_handler.last_telemetry_heartbeat)
 
-        monitor_handler.stop()
+            monitor_handler.stop()
 
     @patch("azurelinuxagent.common.protocol.healthservice.HealthService.report_host_plugin_heartbeat")
     def test_heartbeat_creates_signal(self, patch_report_heartbeat, *args):

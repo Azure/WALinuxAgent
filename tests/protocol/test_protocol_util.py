@@ -17,6 +17,8 @@
 
 import os
 import unittest
+from queue import Queue
+from threading import Thread
 
 from tests.tools import AgentTestCase, MagicMock, Mock, patch
 from azurelinuxagent.common.exception import *
@@ -34,11 +36,36 @@ class TestProtocolUtil(AgentTestCase):
         super(TestProtocolUtil, self).setUp()
         ProtocolUtil.clear()
 
-    def test_get_protocol_util_should_return_same_object(self, _):
+    def test_get_protocol_util_should_return_same_object_for_same_thread(self, _):
         protocol_util1 = get_protocol_util()
         protocol_util2 = get_protocol_util()
 
         self.assertEqual(protocol_util1, protocol_util2)
+
+    def test_get_protocol_util_should_return_different_object_for_different_thread(self, _):
+        def get_util_obj(q, err):
+            try:
+                q.put(get_protocol_util())
+            except Exception as e:
+                err.put(str(e))
+
+        queue = Queue()
+        errors = Queue()
+        t1 = Thread(target=get_util_obj, args=(queue, errors))
+        t2 = Thread(target=get_util_obj, args=(queue, errors))
+        t1.start()
+        t2.start()
+        t1.join()
+        t2.join()
+
+        errs = []
+        while not errors.empty():
+            errs.append(errors.get())
+        if len(errs) > 0:
+            raise Exception("Unable to fetch protocol_util. Errors: %s" % ' , '.join(errs))
+
+        self.assertEqual(2, queue.qsize())  # Assert that there are 2 objects in the queue
+        self.assertNotEqual(queue.get(), queue.get())
     
     @patch("azurelinuxagent.common.protocol.util.MetadataProtocol")
     @patch("azurelinuxagent.common.protocol.util.WireProtocol")

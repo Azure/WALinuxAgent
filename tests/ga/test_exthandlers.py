@@ -19,10 +19,6 @@ from tests.tools import AgentTestCase, patch, mock_sleep
 
 class TestExtHandlers(AgentTestCase):
 
-    def setUp(self):
-        super(TestExtHandlers, self).setUp()
-        ProtocolUtil.clear()
-
     def test_parse_extension_status00(self):
         """
         Parse a status report for a successful execution of an extension.
