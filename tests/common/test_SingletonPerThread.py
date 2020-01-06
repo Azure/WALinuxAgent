@@ -1,6 +1,6 @@
 import uuid
 from multiprocessing import Queue
-from threading import Thread
+from threading import Thread, currentThread
 
 from azurelinuxagent.common.SingletonPerThread import SingletonPerThread
 from tests.tools import AgentTestCase
@@ -8,8 +8,8 @@ from tests.tools import AgentTestCase
 
 class TestSingletonPerThreadClass(SingletonPerThread):
 
-    def __init__(self, name=None):
-        self.name = name
+    def __init__(self):
+        self.name = currentThread().getName()
         # Unique identifier for a class object
         self.uuid = str(uuid.uuid4())
 
@@ -42,9 +42,9 @@ class TestSingletonPerThread(AgentTestCase):
             raise Exception("Unable to fetch protocol_util. Errors: %s" % ' , '.join(errs))
 
     @staticmethod
-    def _get_test_class_instance(q, err, name=None):
+    def _get_test_class_instance(q, err):
         try:
-            obj = TestSingletonPerThreadClass(name)
+            obj = TestSingletonPerThreadClass()
             q.put(obj)
         except Exception as e:
             err.put(str(e))
@@ -52,8 +52,16 @@ class TestSingletonPerThread(AgentTestCase):
     def _parse_output_and_return_thread_objects(self, queue_output):
         obj1, obj2 = queue_output.get(), queue_output.get()
 
-        t1_object = obj1 if obj1.name == self.THREAD_NAME_1 else obj2
-        t2_object = obj1 if obj1.name == self.THREAD_NAME_2 else obj2
+        def check_obj(name):
+            if obj1.name == name:
+                return obj1
+            elif obj2.name == name:
+                return obj2
+            else:
+                return None
+
+        t1_object = check_obj(self.THREAD_NAME_1)
+        t2_object = check_obj(self.THREAD_NAME_2)
 
         return t1_object, t2_object
 
@@ -78,7 +86,7 @@ class TestSingletonPerThread(AgentTestCase):
 
         def get_and_clear_test_class_instance(q, err):
             try:
-                q.put(TestSingletonPerThreadClass(self.THREAD_NAME_2))
+                q.put(TestSingletonPerThreadClass())
                 TestSingletonPerThreadClass.clear()
             except Exception as e:
                 err.put(str(e))
@@ -86,7 +94,7 @@ class TestSingletonPerThread(AgentTestCase):
         output = Queue()
         # Getting the initial instances in the first run
         self._setup_mutithread_and_execute(func1=self._get_test_class_instance,
-                                           args1=(output, self.errors, self.THREAD_NAME_1),
+                                           args1=(output, self.errors),
                                            func2=get_and_clear_test_class_instance,
                                            args2=(output, self.errors))
 
@@ -95,16 +103,14 @@ class TestSingletonPerThread(AgentTestCase):
         t1_obj, t2_obj = self._parse_output_and_return_thread_objects(output)
         self.assertNotEqual(t1_obj.uuid, t2_obj.uuid)
 
-        output = Queue()    # Re-initialize the queue
+        new_output = Queue()
         # Running the same again to verify that clear() only removes class object for the thread where it's called
         self._setup_mutithread_and_execute(func1=self._get_test_class_instance,
-                                           args1=(output, self.errors, self.THREAD_NAME_1),
+                                           args1=(new_output, self.errors),
                                            func2=get_and_clear_test_class_instance,
-                                           args2=(output, self.errors))
+                                           args2=(new_output, self.errors))
 
-        self.assertEqual(2, output.qsize())
-
-        new_t1_obj, new_t2_obj = self._parse_output_and_return_thread_objects(output)
+        new_t1_obj, new_t2_obj = self._parse_output_and_return_thread_objects(new_output)
 
         self.assertNotEqual(new_t1_obj.uuid, new_t2_obj.uuid)
         self.assertEqual(t1_obj.uuid, new_t1_obj.uuid, "Clear was not called for thread-1, the objects should be same")
@@ -114,20 +120,20 @@ class TestSingletonPerThread(AgentTestCase):
 
         output = Queue()
         self._setup_mutithread_and_execute(func1=self._get_test_class_instance,
-                                           args1=(output, self.errors, self.THREAD_NAME_1),
+                                           args1=(output, self.errors),
                                            func2=self._get_test_class_instance,
-                                           args2=(output, self.errors, self.THREAD_NAME_2))
+                                           args2=(output, self.errors))
 
         t1_obj, t2_obj = self._parse_output_and_return_thread_objects(output)
 
-        output = Queue()
+        new_output = Queue()
         # The 2nd call is to get new objects with the same thread name to verify if the objects are same
         self._setup_mutithread_and_execute(func1=self._get_test_class_instance,
-                                           args1=(output, self.errors, self.THREAD_NAME_1),
+                                           args1=(new_output, self.errors),
                                            func2=self._get_test_class_instance,
-                                           args2=(output, self.errors, self.THREAD_NAME_2))
+                                           args2=(new_output, self.errors))
 
-        new_t1_obj, new_t2_obj = self._parse_output_and_return_thread_objects(output)
+        new_t1_obj, new_t2_obj = self._parse_output_and_return_thread_objects(new_output)
 
         self.assertEqual(t1_obj.name, new_t1_obj.name)
         self.assertEqual(t1_obj.uuid, new_t1_obj.uuid)
