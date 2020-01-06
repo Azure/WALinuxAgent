@@ -6,9 +6,10 @@ from azurelinuxagent.common.SingletonPerThread import SingletonPerThread
 from tests.tools import AgentTestCase
 
 
-class TestSingletonPerThreadClass(SingletonPerThread):
+class TestClassToTestSingletonPerThread(SingletonPerThread):
 
     def __init__(self):
+        # Set the name of the object to the current thread name
         self.name = currentThread().getName()
         # Unique identifier for a class object
         self.uuid = str(uuid.uuid4())
@@ -21,8 +22,10 @@ class TestSingletonPerThread(AgentTestCase):
 
     def setUp(self):
         super(TestSingletonPerThread, self).setUp()
+        # In a multi-threaded environment, exceptions thrown in the child thread will not be propagated to the parent
+        # thread. In order to achieve that, adding all exceptions to a Queue and then checking that in parent thread.
         self.errors = Queue()
-        TestSingletonPerThreadClass.clear()
+        TestClassToTestSingletonPerThread.clear()
 
     def _setup_mutithread_and_execute(self, func1, args1, func2, args2):
 
@@ -39,12 +42,12 @@ class TestSingletonPerThread(AgentTestCase):
         while not self.errors.empty():
             errs.append(self.errors.get())
         if len(errs) > 0:
-            raise Exception("Unable to fetch protocol_util. Errors: %s" % ' , '.join(errs))
+            raise Exception("Errors: %s" % ' , '.join(errs))
 
     @staticmethod
     def _get_test_class_instance(q, err):
         try:
-            obj = TestSingletonPerThreadClass()
+            obj = TestClassToTestSingletonPerThread()
             q.put(obj)
         except Exception as e:
             err.put(str(e))
@@ -66,8 +69,8 @@ class TestSingletonPerThread(AgentTestCase):
         return t1_object, t2_object
 
     def test_it_should_have_only_one_instance_for_same_thread(self):
-        obj1 = TestSingletonPerThreadClass()
-        obj2 = TestSingletonPerThreadClass()
+        obj1 = TestClassToTestSingletonPerThread()
+        obj2 = TestClassToTestSingletonPerThread()
 
         self.assertEqual(obj1.uuid, obj2.uuid)
 
@@ -86,8 +89,8 @@ class TestSingletonPerThread(AgentTestCase):
 
         def get_and_clear_test_class_instance(q, err):
             try:
-                q.put(TestSingletonPerThreadClass())
-                TestSingletonPerThreadClass.clear()
+                q.put(TestClassToTestSingletonPerThread())
+                TestClassToTestSingletonPerThread.clear()
             except Exception as e:
                 err.put(str(e))
 
@@ -104,7 +107,7 @@ class TestSingletonPerThread(AgentTestCase):
         self.assertNotEqual(t1_obj.uuid, t2_obj.uuid)
 
         new_output = Queue()
-        # Running the same again to verify that clear() only removes class object for the thread where it's called
+        # Running the same again to verify that clear() only removes class object for the thread-2 where it's called
         self._setup_mutithread_and_execute(func1=self._get_test_class_instance,
                                            args1=(new_output, self.errors),
                                            func2=get_and_clear_test_class_instance,

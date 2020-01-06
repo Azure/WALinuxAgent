@@ -30,7 +30,7 @@ from tests.tools import are_cgroups_enabled, AgentTestCase, data_dir, i_am_root,
 from azurelinuxagent.common.exception import ResourceGoneError
 from azurelinuxagent.common.protocol.restapi import Extension, ExtHandlerProperties
 from azurelinuxagent.ga.exthandlers import *
-from azurelinuxagent.common.protocol.wire import WireProtocol, InVMArtifactsProfile, WireClient
+from azurelinuxagent.common.protocol.wire import WireProtocol, InVMArtifactsProfile
 
 # Mocking the original sleep to reduce test execution time
 SLEEP = time.sleep

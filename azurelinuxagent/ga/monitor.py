@@ -277,6 +277,7 @@ class MonitorHandler(object):
                         MonitorHandler.HOST_PLUGIN_HEARTBEAT_PERIOD,
                         MonitorHandler.IMDS_HEARTBEAT_PERIOD).seconds
         while self.should_run:
+            # Updating the goal_state periodically for the monitor thread to keep the WireClient object upto-date always
             self.protocol.update_goal_state()
             self.send_telemetry_heartbeat()
             self.poll_telemetry_metrics()
