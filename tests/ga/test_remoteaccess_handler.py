@@ -17,6 +17,8 @@
 
 from datetime import timedelta
 
+from azurelinuxagent.common.protocol.util import ProtocolUtil
+
 from azurelinuxagent.common.exception import RemoteAccessError
 from azurelinuxagent.common.protocol.wire import *
 from azurelinuxagent.ga.remoteaccess import RemoteAccessHandler
@@ -52,6 +54,7 @@ class TestRemoteAccessHandler(AgentTestCase):
 
     def setUp(self):
         super(TestRemoteAccessHandler, self).setUp()
+        ProtocolUtil.clear()
         del info_messages[:]
         del error_messages[:]
         for data in TestRemoteAccessHandler.eventing_data:

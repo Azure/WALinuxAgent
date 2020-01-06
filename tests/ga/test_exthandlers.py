@@ -5,6 +5,8 @@ import os
 import subprocess
 import time
 
+from azurelinuxagent.common.protocol.util import ProtocolUtil
+
 from azurelinuxagent.common.cgroupconfigurator import CGroupConfigurator
 from azurelinuxagent.common.event import WALAEventOperation
 from azurelinuxagent.common.exception import ProtocolError, ExtensionError, ExtensionErrorCodes
@@ -17,6 +19,10 @@ from tests.tools import AgentTestCase, patch, mock_sleep
 
 
 class TestExtHandlers(AgentTestCase):
+
+    def setUp(self):
+        super(TestExtHandlers, self).setUp()
+        ProtocolUtil.clear()
 
     def test_parse_extension_status00(self):
         """
