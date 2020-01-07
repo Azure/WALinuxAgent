@@ -23,8 +23,7 @@ from azurelinuxagent.common.exception import RemoteAccessError
 from azurelinuxagent.common.protocol.wire import *
 from azurelinuxagent.ga.remoteaccess import RemoteAccessHandler
 from tests.common.osutil.mock_osutil import MockOSUtil
-from tests.tools import AgentTestCase, load_data, patch
-
+from tests.tools import AgentTestCase, load_data, patch, clear_singleton_instances
 
 info_messages = []
 error_messages = []
@@ -54,7 +53,9 @@ class TestRemoteAccessHandler(AgentTestCase):
 
     def setUp(self):
         super(TestRemoteAccessHandler, self).setUp()
-        ProtocolUtil.clear()
+        # Since ProtocolUtil is not a singleton per thread, we need to clear it to ensure that the test cases are
+        # do not reuse a previous state
+        clear_singleton_instances(ProtocolUtil)
         del info_messages[:]
         del error_messages[:]
         for data in TestRemoteAccessHandler.eventing_data:

@@ -15,14 +15,16 @@ from azurelinuxagent.common.utils.extensionprocessutil import TELEMETRY_MESSAGE_
     read_output
 from azurelinuxagent.ga.exthandlers import parse_ext_status, ExtHandlerInstance, get_exthandlers_handler, \
     ExtCommandEnvVariable
-from tests.tools import AgentTestCase, patch, mock_sleep
+from tests.tools import AgentTestCase, patch, mock_sleep, clear_singleton_instances
 
 
 class TestExtHandlers(AgentTestCase):
 
     def setUp(self):
         super(TestExtHandlers, self).setUp()
-        ProtocolUtil.clear()
+        # Since ProtocolUtil is not a singleton per thread, we need to clear it to ensure that the test cases are
+        # do not reuse a previous state
+        clear_singleton_instances(ProtocolUtil)
 
     def test_parse_extension_status00(self):
         """

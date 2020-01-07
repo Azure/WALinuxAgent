@@ -27,7 +27,7 @@ import time
 import azurelinuxagent.common.conf as conf
 import azurelinuxagent.common.logger as logger
 import azurelinuxagent.common.utils.fileutil as fileutil
-from azurelinuxagent.common.SingletonPerThread import SingletonPerThread
+from azurelinuxagent.common.singletonperthread import SingletonPerThread
 
 from azurelinuxagent.common.exception import ProtocolError, OSUtilError, \
                                       ProtocolNotFoundError, DhcpError
@@ -68,6 +68,9 @@ class ProtocolUtil(SingletonPerThread):
     """
     ProtocolUtil handles initialization for protocol instance. 2 protocol types
     are invoked, wire protocol and metadata protocols.
+
+    Note: ProtocolUtil is a sub class of SingletonPerThread, this basically means that there would only be 1 single
+    instance of ProtocolUtil object per thread.
     """
 
     def __init__(self):

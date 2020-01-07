@@ -741,8 +741,6 @@ class WireClient(object):
         self.save_cache(local_file, xml_text)
 
     def get_remote_access(self):
-        if self.remote_access:
-            return self.remote_access
         incarnation_file = os.path.join(conf.get_lib_dir(),
                                         INCARNATION_FILE_NAME)
         incarnation = self.fetch_cache(incarnation_file)

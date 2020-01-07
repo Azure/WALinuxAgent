@@ -11,12 +11,7 @@ class _SingletonPerThreadMetaClass(type):
             obj_name = "%s__%s" % (cls.__name__, currentThread().getName())  # Object Name = className__threadName
             if obj_name not in cls._instances:
                 cls._instances[obj_name] = super(_SingletonPerThreadMetaClass, cls).__call__(*args, **kwargs)
-        return cls._instances[obj_name]
-
-    def clear(cls):
-        obj_name = "%s__%s" % (cls.__name__, currentThread().getName())  # Object Name = className__threadName
-        if obj_name in cls._instances:
-            del cls._instances[obj_name]
+            return cls._instances[obj_name]
 
 
 class SingletonPerThread(_SingletonPerThreadMetaClass('SingleObjectPerThreadMetaClass', (object,), {})):

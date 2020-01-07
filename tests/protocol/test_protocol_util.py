@@ -20,7 +20,7 @@ import unittest
 from multiprocessing import Queue
 from threading import Thread
 
-from tests.tools import AgentTestCase, MagicMock, Mock, patch
+from tests.tools import AgentTestCase, MagicMock, Mock, patch, clear_singleton_instances
 from azurelinuxagent.common.exception import *
 from azurelinuxagent.common.protocol import get_protocol_util, \
                                             TAG_FILE_NAME
@@ -34,7 +34,9 @@ class TestProtocolUtil(AgentTestCase):
 
     def setUp(self):
         super(TestProtocolUtil, self).setUp()
-        ProtocolUtil.clear()
+        # Since ProtocolUtil is not a singleton per thread, we need to clear it to ensure that the test cases are
+        # do not reuse a previous state
+        clear_singleton_instances(ProtocolUtil)
 
     def test_get_protocol_util_should_return_same_object_for_same_thread(self, _):
         protocol_util1 = get_protocol_util()

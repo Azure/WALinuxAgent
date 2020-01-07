@@ -53,7 +53,7 @@ from azurelinuxagent.ga.monitor import generate_extension_metrics_telemetry_dict
 from tests.common.test_cgroupstelemetry import make_new_cgroup
 from tests.protocol.mockwiredata import DATA_FILE, WireProtocolData
 from tests.tools import Mock, MagicMock, patch, load_data, AgentTestCase, data_dir, are_cgroups_enabled, \
-    i_am_root, skip_if_predicate_false, is_trusty_in_travis, skip_if_predicate_true
+    i_am_root, skip_if_predicate_false, is_trusty_in_travis, skip_if_predicate_true, clear_singleton_instances
 
 
 class ResponseMock(Mock):
@@ -118,7 +118,9 @@ class TestMonitor(AgentTestCase):
         AgentTestCase.setUp(self)
         prefix = "UnitTest"
         logger.DEFAULT_LOGGER = Logger(prefix=prefix)
-        ProtocolUtil.clear()
+        # Since ProtocolUtil is not a singleton per thread, we need to clear it to ensure that the test cases are
+        # do not reuse a previous state
+        clear_singleton_instances(ProtocolUtil)
 
     def tearDown(self):
         AgentTestCase.tearDown(self)
