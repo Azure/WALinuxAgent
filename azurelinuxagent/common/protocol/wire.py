@@ -110,8 +110,8 @@ class WireProtocol(Protocol):
         # Set the initial goal state
         self.client.update_goal_state(forced=True)
 
-    def update_goal_state(self, forced=False):
-        self.client.update_goal_state(forced)
+    def update_goal_state(self):
+        self.client.update_goal_state()
 
     def get_vminfo(self):
         goal_state = self.client.get_goal_state()
@@ -810,7 +810,7 @@ class WireClient(object):
                     return
 
                 def incarnation_changed():
-                    last_incarnation = self.get_goal_state().incarnation
+                    last_incarnation = self.goal_state.incarnation
                     return last_incarnation is None or last_incarnation != new_goal_state.incarnation
 
                 if refresh_type == WireClient._UpdateType.GoalStateForced or incarnation_changed() or self.goal_state is None:
@@ -1287,9 +1287,8 @@ class WireClient(object):
         return self.host_plugin
 
     def has_artifacts_profile_blob(self):
-        ext_conf = self.get_ext_conf()
-        return ext_conf and not \
-            textutil.is_str_none_or_whitespace(ext_conf.artifacts_profile_blob)
+        return self.ext_conf and not \
+            textutil.is_str_none_or_whitespace(self.ext_conf.artifacts_profile_blob)
 
     def get_artifacts_profile_through_host(self, blob):
         host = self.get_host_plugin()
@@ -1301,7 +1300,7 @@ class WireClient(object):
         artifacts_profile = None
 
         if self.has_artifacts_profile_blob():
-            blob = self.get_ext_conf().artifacts_profile_blob
+            blob = self.ext_conf.artifacts_profile_blob
             direct_func = lambda: self.fetch(blob)
             # NOTE: the host_func may be called after refreshing the goal state, be careful about any goal state data
             # in the lambda.
