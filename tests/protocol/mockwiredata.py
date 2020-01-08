@@ -230,7 +230,7 @@ class WireProtocolData(object):
         '''
         Sets the incarnation in the goal state, but not on its subcomponents (e.g. hosting env, shared config)
         '''
-        self.goal_state = WireProtocolData.replace_xml_element_value(self.goal_state, "Incarnation", incarnation)
+        self.goal_state = WireProtocolData.replace_xml_element_value(self.goal_state, "Incarnation", str(incarnation))
 
     def set_container_id(self, container_id):
         self.goal_state = WireProtocolData.replace_xml_element_value(self.goal_state, "ContainerId", container_id)
@@ -248,4 +248,22 @@ class WireProtocolData(object):
         '''
         Sets the sequence number for *all* extensions
         '''
-        self.ext_conf = WireProtocolData.replace_xml_attribute_value(self.ext_conf, "RuntimeSettings", "seqNo", sequence_number)
+        self.ext_conf = WireProtocolData.replace_xml_attribute_value(self.ext_conf, "RuntimeSettings", "seqNo", str(sequence_number))
+
+    def set_extensions_config_version(self, version):
+        '''
+        Sets the version for *all* extensions
+        '''
+        self.ext_conf = WireProtocolData.replace_xml_attribute_value(self.ext_conf, "Plugin", "version", version)
+
+    def set_extensions_config_state(self, state):
+        '''
+        Sets the state for *all* extensions
+        '''
+        self.ext_conf = WireProtocolData.replace_xml_attribute_value(self.ext_conf, "Plugin", "state", state)
+
+    def set_manifest_version(self, version):
+        '''
+        Sets the state for *all* extensions
+        '''
+        self.manifest = WireProtocolData.replace_xml_element_value(self.manifest, "Version", version)
