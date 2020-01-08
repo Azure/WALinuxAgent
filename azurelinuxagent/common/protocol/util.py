@@ -175,7 +175,7 @@ class ProtocolUtil(object):
                         logger.info("WireServer endpoint {0} read from file", self.endpoint)
                         return self.endpoint
 
-                    logger.error("[GetWireserverEndpoint] Unexpected empty file {0}: {1}", file_path, str(e))
+                    logger.error("[GetWireserverEndpoint] Unexpected empty file {0}", file_path)
                 except (IOError, OSError) as e:
                     logger.error("[GetWireserverEndpoint] Error reading file {0}: {1}", file_path, str(e))
             else:

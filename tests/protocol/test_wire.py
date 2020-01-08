@@ -958,7 +958,7 @@ class TestWireClient(AgentTestCase):
     def test_send_request_using_appropriate_channel_should_not_invoke_host_channel_when_direct_channel_succeeds(self, *args):
         xml_text = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE).goal_state
         client = WireClient(WIRESERVER_URL)
-        client.goal_state = GoalState(xml_text)
+        client.set_goal_state(GoalState(xml_text))
         client.get_host_plugin().set_default_channel(False)
 
         def direct_func(*args):
@@ -981,7 +981,7 @@ class TestWireClient(AgentTestCase):
     def test_send_request_using_appropriate_channel_should_not_use_direct_channel_when_host_channel_is_default(self, *args):
         xml_text = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE).goal_state
         client = WireClient(WIRESERVER_URL)
-        client.goal_state = GoalState(xml_text)
+        client.set_goal_state(GoalState(xml_text))
         client.get_host_plugin().set_default_channel(True)
 
         def direct_func(*args):
@@ -1004,7 +1004,7 @@ class TestWireClient(AgentTestCase):
     def test_send_request_using_appropriate_channel_should_use_host_channel_when_direct_channel_fails(self, *args):
         xml_text = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE).goal_state
         client = WireClient(WIRESERVER_URL)
-        client.goal_state = GoalState(xml_text)
+        client.set_goal_state(GoalState(xml_text))
         host = client.get_host_plugin()
         host.set_default_channel(False)
 
@@ -1030,7 +1030,7 @@ class TestWireClient(AgentTestCase):
     def test_send_request_using_appropriate_channel_should_retry_the_host_channel_after_reloading_goal_state(self, *args):
         xml_text = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE).goal_state
         client = WireClient(WIRESERVER_URL)
-        client.goal_state = GoalState(xml_text)
+        client.set_goal_state(GoalState(xml_text))
         client.get_host_plugin().set_default_channel(False)
 
         def direct_func(*args):
