@@ -535,7 +535,7 @@ class WireClient(object):
     def __init__(self, endpoint):
         logger.info("Wire server endpoint:{0}", endpoint)
         self.endpoint = endpoint
-        self.goal_state = None
+        self._goal_state = None
         self.updated = None
         self.hosting_env = None
         self.shared_conf = None
@@ -809,7 +809,7 @@ class WireClient(object):
                         last_incarnation = fileutil.read_file(incarnation_file)
                     return last_incarnation is None or last_incarnation != new_goal_state.incarnation
 
-                if refresh_type == WireClient._UpdateType.GoalStateForced or incarnation_changed() or self.goal_state is None:
+                if refresh_type == WireClient._UpdateType.GoalStateForced or incarnation_changed() or self._goal_state is None:
                     def save_goal_state(incarnation, xml_text):
                         file_name = GOAL_STATE_FILE_NAME.format(incarnation)
                         goal_state_file = os.path.join(conf.get_lib_dir(), file_name)
@@ -817,7 +817,7 @@ class WireClient(object):
 
                     self.goal_state_flusher.flush(datetime.utcnow())
 
-                    self.goal_state = new_goal_state
+                    self.set_goal_state(new_goal_state)
                     save_goal_state(new_goal_state.incarnation, new_goal_state_xml)
                     self.update_hosting_env(new_goal_state)
                     self.update_shared_conf(new_goal_state)
@@ -844,17 +844,21 @@ class WireClient(object):
 
         raise ProtocolError("Exceeded max retry updating goal state")
 
-    def get_goal_state(self):
-        if self.goal_state is None:
-            incarnation_file = os.path.join(conf.get_lib_dir(),
-                                            INCARNATION_FILE_NAME)
-            incarnation = self.fetch_cache(incarnation_file)
+    def set_goal_state(self, new_goal_state):
+        if new_goal_state is not None:
+            self._goal_state = new_goal_state
 
-            file_name = GOAL_STATE_FILE_NAME.format(incarnation)
-            goal_state_file = os.path.join(conf.get_lib_dir(), file_name)
-            xml_text = self.fetch_cache(goal_state_file)
-            self.goal_state = GoalState(xml_text)
-        return self.goal_state
+    def get_goal_state(self):
+        # if self._goal_state is None:
+        #     incarnation_file = os.path.join(conf.get_lib_dir(),
+        #                                     INCARNATION_FILE_NAME)
+        #     incarnation = self.fetch_cache(incarnation_file)
+        #
+        #     file_name = GOAL_STATE_FILE_NAME.format(incarnation)
+        #     goal_state_file = os.path.join(conf.get_lib_dir(), file_name)
+        #     xml_text = self.fetch_cache(goal_state_file)
+        #     self._goal_state = GoalState(xml_text)
+        return self._goal_state
 
     def get_hosting_env(self):
         if self.hosting_env is None:

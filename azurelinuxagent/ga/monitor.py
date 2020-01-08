@@ -153,6 +153,8 @@ class MonitorHandler(object):
 
     def init_protocols(self):
         self.protocol = self.protocol_util.get_protocol()
+        # Update the GoalState first time to instantiate all required objects for the monitor thread
+        self.protocol.update_goal_state()
         self.health_service = HealthService(self.protocol.endpoint)
 
     def is_alive(self):
