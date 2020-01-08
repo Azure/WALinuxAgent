@@ -2,8 +2,8 @@
     # Old versions of log files are compressed with gzip by default.
     compress
 
-    # Rotate log files > 10 MB, and keep last 20 archived files. With an average compression ratio of around 10:1, The
-    # archived files would be take an average of around 10 MB.
+    # Rotate log files > 10 MB, and keep last 10 archived files. With an compression ratio ranging from 5-10%, The
+    # archived files would take an average of around 5-10 MB.
     size 10M
     rotate 10
 
