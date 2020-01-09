@@ -34,8 +34,8 @@ class TestProtocolUtil(AgentTestCase):
 
     def setUp(self):
         super(TestProtocolUtil, self).setUp()
-        # Since ProtocolUtil is not a singleton per thread, we need to clear it to ensure that the test cases are
-        # do not reuse a previous state
+        # Since ProtocolUtil is a singleton per thread, we need to clear it to ensure that the test cases do not
+        # reuse a previous state
         clear_singleton_instances(ProtocolUtil)
 
     def test_get_protocol_util_should_return_same_object_for_same_thread(self, _):

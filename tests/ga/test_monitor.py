@@ -118,8 +118,8 @@ class TestMonitor(AgentTestCase):
         AgentTestCase.setUp(self)
         prefix = "UnitTest"
         logger.DEFAULT_LOGGER = Logger(prefix=prefix)
-        # Since ProtocolUtil is not a singleton per thread, we need to clear it to ensure that the test cases are
-        # do not reuse a previous state
+        # Since ProtocolUtil is a singleton per thread, we need to clear it to ensure that the test cases do not
+        # reuse a previous state
         clear_singleton_instances(ProtocolUtil)
 
     def tearDown(self):
