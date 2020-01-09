@@ -25,6 +25,9 @@ import time
 import xml.sax.saxutils as saxutils
 from datetime import datetime
 
+from azurelinuxagent.common.protocol.wire import GoalState, Certificates, RemoteAccess, ExtensionsConfig, SharedConfig, \
+    HostingEnv
+
 import azurelinuxagent.common.conf as conf
 from azurelinuxagent.common.datacontract import validate_param, set_properties
 from azurelinuxagent.common.event import add_event, add_periodic, WALAEventOperation, CONTAINER_ID_ENV_VARIABLE
@@ -126,9 +129,10 @@ class WireProtocol(Protocol):
         return certificates.cert_list
 
     def get_incarnation(self):
-        path = os.path.join(conf.get_lib_dir(), INCARNATION_FILE_NAME)
-        if os.path.exists(path):
-            return fileutil.read_file(path)
+        goal_state = self.client.get_goal_state()
+        # This check is not needed because a goal_state would always be initialized whenever get_incarnation is called
+        if goal_state is not None:
+            return goal_state.incarnation
         else:
             return 0
 
@@ -855,31 +859,31 @@ class WireClient(object):
 
         raise ProtocolError("Exceeded max retry updating goal state")
 
-    def set_goal_state(self, new_goal_state):
+    def set_goal_state(self, new_goal_state: GoalState):
         if new_goal_state is not None:
             self._goal_state = new_goal_state
 
-    def set_hosting_env(self, new_hosting_env):
+    def set_hosting_env(self, new_hosting_env: HostingEnv):
         if new_hosting_env is not None:
             self._hosting_env = new_hosting_env
 
-    def set_shared_conf(self, new_shared_config):
+    def set_shared_conf(self, new_shared_config: SharedConfig):
         if new_shared_config is not None:
             self._shared_conf = new_shared_config
 
-    def set_certs(self, new_certs):
+    def set_certs(self, new_certs: Certificates):
         if new_certs is not None:
             self._certs = new_certs
 
-    def set_ext_conf(self, new_ext_conf):
+    def set_ext_conf(self, new_ext_conf: ExtensionsConfig):
         if new_ext_conf is not None:
             self._ext_conf = new_ext_conf
 
-    def set_remote_access(self, new_remote_access):
+    def set_remote_access(self, new_remote_access: RemoteAccess):
         if new_remote_access is not None:
             self._remote_access = new_remote_access
 
-    def set_host_plugin(self, new_host_plugin):
+    def set_host_plugin(self, new_host_plugin: HostPluginProtocol):
         if new_host_plugin is not None:
             self._host_plugin = new_host_plugin
 
