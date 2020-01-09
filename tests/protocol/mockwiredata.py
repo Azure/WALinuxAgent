@@ -264,6 +264,6 @@ class WireProtocolData(object):
 
     def set_manifest_version(self, version):
         '''
-        Sets the state for *all* extensions
+        Sets the version of the extension manifest
         '''
         self.manifest = WireProtocolData.replace_xml_element_value(self.manifest, "Version", version)

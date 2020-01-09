@@ -307,7 +307,7 @@ class UpdateHandler(object):
                     break
 
                 #
-                # Check that all thread are still running
+                # Check that all the threads are still running
                 #
                 if not monitor_thread.is_alive():
                     logger.warn(u"Monitor thread died, restarting")
