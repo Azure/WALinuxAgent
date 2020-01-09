@@ -154,7 +154,7 @@ class DaemonHandler(object):
                     raise Exception("Attempt to setup RDMA without Wireserver")
                 protocol.client.update_goal_state(forced=True)
 
-                setup_rdma_device(nd_version)
+                setup_rdma_device(nd_version, protocol.client.get_shared_conf())
             except Exception as e:
                 logger.error("Error setting up rdma device: %s" % e)
         else:
