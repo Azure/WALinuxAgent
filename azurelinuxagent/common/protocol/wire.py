@@ -634,7 +634,7 @@ class WireClient(object):
 
                 if response:
                     host = self.get_host_plugin()
-                    host.manifest_uri = version.uri
+                    host.update_manifest_uri(version.uri)
                     return response
             except Exception as e:
                 logger.warn("Exception when fetching manifest. Error: {0}".format(ustr(e)))
@@ -750,6 +750,7 @@ class WireClient(object):
         #     return None
         # xml_text = self.fetch_cache(remote_access_file)
         # remote_access = RemoteAccess(xml_text)
+        # Original implementation was returning None if file had nothing, so just returning None too instead of error
         return self._remote_access
 
     def update_ext_conf(self, goal_state):
@@ -808,8 +809,8 @@ class WireClient(object):
                                                                 goal_state.container_id,
                                                                 goal_state.role_config_name))
                     else:
-                        host_plugin.container_id = new_goal_state.container_id
-                        host_plugin.role_config_name = new_goal_state.role_config_name
+                        host_plugin.update_container_id(new_goal_state.container_id)
+                        host_plugin.update_role_config_name(new_goal_state.role_config_name)
 
                 if refresh_type == WireClient._UpdateType.HostPlugin:
                     update_host_plugin()
@@ -894,6 +895,8 @@ class WireClient(object):
         #     goal_state_file = os.path.join(conf.get_lib_dir(), file_name)
         #     xml_text = self.fetch_cache(goal_state_file)
         #     self._goal_state = GoalState(xml_text)
+        if self._goal_state is None:
+            raise ProtocolError("Trying to fetch goal state before initialization!")
         return self._goal_state
 
     def get_hosting_env(self):
@@ -902,6 +905,8 @@ class WireClient(object):
         #                               HOSTING_ENV_FILE_NAME)
         #     xml_text = self.fetch_cache(local_file)
         #     self._hosting_env = HostingEnv(xml_text)
+        if self._hosting_env is None:
+            raise ProtocolError("Trying to fetch Hosting Environment before initialization!")
         return self._hosting_env
 
     def get_shared_conf(self):
@@ -910,6 +915,8 @@ class WireClient(object):
         #                               SHARED_CONF_FILE_NAME)
         #     xml_text = self.fetch_cache(local_file)
         #     self._shared_conf = SharedConfig(xml_text)
+        if self._shared_conf is None:
+            raise ProtocolError("Trying to fetch Shared Conf before initialization!")
         return self._shared_conf
 
     def get_certs(self):
@@ -917,8 +924,9 @@ class WireClient(object):
         #     local_file = os.path.join(conf.get_lib_dir(), CERTS_FILE_NAME)
         #     xml_text = self.fetch_cache(local_file)
         #     self._certs = Certificates(self, xml_text)
-        if self._certs is None:
-            return None
+        # if self._certs is None:
+        #     return None
+        # Original implementation was returning None if file had nothing, so just returning None too instead of error
         return self._certs
 
     # Function not being used, removing it
@@ -948,6 +956,8 @@ class WireClient(object):
         #         local_file = os.path.join(conf.get_lib_dir(), local_file)
         #         xml_text = self.fetch_cache(local_file)
         #         self._ext_conf = ExtensionsConfig(xml_text)
+        if self._ext_conf is None:
+            raise ProtocolError("Trying to fetch Extension Conf before initialization!")
         return self._ext_conf
 
     def get_ext_manifest(self, ext_handler, goal_state):
@@ -1320,7 +1330,7 @@ class WireClient(object):
     def get_host_plugin(self):
         # if self._host_plugin is None:
         #     goal_state = self.get_goal_state()
-        #     self._host_plugin = HostPluginProtocol(self.endpoint,
+        #     self.setHostPluginProtocol(self.endpoint,
         #                                            goal_state.container_id,
         #                                            goal_state.role_config_name)
         return self._host_plugin
