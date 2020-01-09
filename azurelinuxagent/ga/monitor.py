@@ -153,7 +153,7 @@ class MonitorHandler(object):
 
     def init_protocols(self):
         self.protocol = self.protocol_util.get_protocol()
-        self.health_service = HealthService(self.protocol.endpoint)
+        self.health_service = HealthService(self.protocol.get_endpoint())
 
     def is_alive(self):
         return self.event_thread is not None and self.event_thread.is_alive()
@@ -419,7 +419,7 @@ class MonitorHandler(object):
         if datetime.datetime.utcnow() >= (self.last_telemetry_heartbeat + MonitorHandler.TELEMETRY_HEARTBEAT_PERIOD):
             try:
                 incarnation = self.protocol.get_incarnation()
-                dropped_packets = self.osutil.get_firewall_dropped_packets(self.protocol.endpoint)
+                dropped_packets = self.osutil.get_firewall_dropped_packets(self.protocol.get_endpoint())
                 msg = "{0};{1};{2};{3}".format(incarnation, self.counter, self.heartbeat_id, dropped_packets)
 
                 add_event(

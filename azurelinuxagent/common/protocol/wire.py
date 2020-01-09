@@ -81,20 +81,10 @@ class UploadError(HttpError):
 class WireProtocol(Protocol):
     """Slim layer to adapt wire protocol data to metadata protocol interface"""
 
-    # TODO: Clean-up goal state processing
-    #  At present, some methods magically update GoalState (e.g.,
-    #  get_vmagent_manifests), others (e.g., get_vmagent_pkgs)
-    #  assume its presence. A better approach would make an explicit update
-    #  call that returns the incarnation number and
-    #  establishes that number the "context" for all other calls (either by
-    #  updating the internal state of the protocol or
-    #  by having callers pass the incarnation number to the method).
-
     def __init__(self, endpoint):
         if endpoint is None:
             raise ProtocolError("WireProtocol endpoint is None")
-        self.endpoint = endpoint
-        self.client = WireClient(self.endpoint)
+        self.client = WireClient(endpoint)
 
     def detect(self):
         self.client.check_wire_protocol_version()
@@ -108,6 +98,12 @@ class WireProtocol(Protocol):
 
         # Set the initial goal state
         self.client.update_goal_state(forced=True)
+
+    def update_goal_state(self):
+        self.client.update_goal_state()
+
+    def get_endpoint(self):
+        return self.client.endpoint
 
     def get_vminfo(self):
         goal_state = self.client.get_goal_state()
@@ -133,8 +129,6 @@ class WireProtocol(Protocol):
             return 0
 
     def get_vmagent_manifests(self):
-        # Update goal state to get latest extensions config
-        self.client.update_goal_state()
         goal_state = self.client.get_goal_state()
         ext_conf = self.client.get_ext_conf()
         return ext_conf.vmagent_manifests, goal_state.incarnation
@@ -147,8 +141,6 @@ class WireProtocol(Protocol):
 
     def get_ext_handlers(self):
         logger.verbose("Get extension handler config")
-        # Update goal state to get latest extensions config
-        self.client.update_goal_state()
         goal_state = self.client.get_goal_state()
         ext_conf = self.client.get_ext_conf()
         # In wire protocol, incarnation is equivalent to ETag
@@ -164,7 +156,7 @@ class WireProtocol(Protocol):
         logger.verbose("Get In-VM Artifacts Profile")
         return self.client.get_artifacts_profile()
 
-    def download_ext_handler_pkg_through_host(self, uri, destination):
+    def _download_ext_handler_pkg_through_host(self, uri, destination):
         host = self.client.get_host_plugin()
         uri, headers = host.get_artifact_request(uri, host.manifest_uri)
         success = self.client.stream(uri, destination, headers=headers, use_proxy=False)
@@ -174,7 +166,7 @@ class WireProtocol(Protocol):
         direct_func = lambda: self.client.stream(uri, destination, headers=None, use_proxy=True)
         # NOTE: the host_func may be called after refreshing the goal state, be careful about any goal state data
         # in the lambda.
-        host_func = lambda: self.download_ext_handler_pkg_through_host(uri, destination)
+        host_func = lambda: self._download_ext_handler_pkg_through_host(uri, destination)
 
         try:
             success = self.client.send_request_using_appropriate_channel(direct_func, host_func)
@@ -1094,7 +1086,6 @@ class WireClient(object):
         return ret
 
     def upload_status_blob(self):
-        self.update_goal_state()
         ext_conf = self.get_ext_conf()
 
         if ext_conf.status_upload_blob is None:

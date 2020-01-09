@@ -1,3 +1,5 @@
+from mock import Mock
+
 from tests.tools import AgentTestCase
 import azurelinuxagent.common.osutil as osutil
 import azurelinuxagent.common.dhcp as dhcp
@@ -25,5 +27,5 @@ class TestImportHandler(AgentTestCase):
         scvmm.get_scvmm_handler()
         monitor.get_monitor_handler()
         update.get_update_handler()
-        exthandlers.get_exthandlers_handler()
+        exthandlers.get_exthandlers_handler(Mock())
         remoteaccess.get_remote_access_handler()
