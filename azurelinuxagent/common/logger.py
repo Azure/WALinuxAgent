@@ -139,10 +139,23 @@ class Logger(object):
                         encoding="ascii")
 
         for appender in self.appenders:
-            write_log(appender)
+            appender.write(level, log_item)
+            #
+            # TODO: we should actually call
+            #
+            #     write_log(appender)
+            #
+            # (see PR #1659). Before doing that, write_log needs to be thread-safe.
+            #
+            # This needs to be done when SEND_LOGS_TO_TELEMETRY is enabled.
+            #
+
         if self.logger != self:
             for appender in self.logger.appenders:
-                write_log(appender)
+                appender.write(level, log_item)
+                #
+                # TODO: call write_log instead (see comment above)
+                #
 
     def add_appender(self, appender_type, level, path):
         appender = _create_logger_appender(appender_type, level, path)
