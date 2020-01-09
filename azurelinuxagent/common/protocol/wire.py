@@ -794,15 +794,9 @@ class WireClient(object):
                 new_goal_state = GoalState(new_goal_state_xml)
 
                 def update_host_plugin():
-                    host_plugin = self.get_host_plugin()
-                    if host_plugin is None:
-                        goal_state = self.get_goal_state()
-                        self.set_host_plugin(HostPluginProtocol(self.endpoint,
-                                                                goal_state.container_id,
-                                                                goal_state.role_config_name))
-                    else:
-                        host_plugin.update_container_id(new_goal_state.container_id)
-                        host_plugin.update_role_config_name(new_goal_state.role_config_name)
+                    if self._host_plugin is not None:
+                        self._host_plugin.update_container_id(new_goal_state.container_id)
+                        self._host_plugin.update_role_config_name(new_goal_state.role_config_name)
 
                 if refresh_type == WireClient._UpdateType.HostPlugin:
                     update_host_plugin()
@@ -949,7 +943,10 @@ class WireClient(object):
         #         xml_text = self.fetch_cache(local_file)
         #         self._ext_conf = ExtensionsConfig(xml_text)
         if self._ext_conf is None:
-            raise ProtocolError("Trying to fetch Extension Conf before initialization!")
+            if self.get_goal_state().ext_uri is None:
+                self.set_ext_conf(ExtensionsConfig(None))
+            else:
+                raise ProtocolError("Trying to fetch Extension Conf before initialization!")
         return self._ext_conf
 
     def get_ext_manifest(self, ext_handler, goal_state):
@@ -1319,11 +1316,11 @@ class WireClient(object):
         }
 
     def get_host_plugin(self):
-        # if self._host_plugin is None:
-        #     goal_state = self.get_goal_state()
-        #     self.setHostPluginProtocol(self.endpoint,
-        #                                            goal_state.container_id,
-        #                                            goal_state.role_config_name)
+        if self._host_plugin is None:
+            goal_state = self.get_goal_state()
+            self.set_host_plugin(HostPluginProtocol(self.endpoint,
+                                                    goal_state.container_id,
+                                                    goal_state.role_config_name))
         return self._host_plugin
 
     def has_artifacts_profile_blob(self):
