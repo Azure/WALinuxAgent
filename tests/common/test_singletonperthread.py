@@ -7,6 +7,28 @@ from tests.tools import AgentTestCase, clear_singleton_instances
 
 
 class TestClassToTestSingletonPerThread(SingletonPerThread):
+    """
+    Since these tests deal with testing in a multithreaded environment,
+    we employ the use of multiprocessing.Queue() to ensure that the data is consistent.
+
+     This test class uses a uuid to identify an object instead of directly using object reference because
+    Queue.get() returns a different object reference than what is put in it even though the object is same
+    (which is verified using uuid in this test class)
+
+    Eg:
+
+        obj1 = WireClient("obj1")
+        obj1
+        <__main__.WireClient object at 0x7f5e78476198>
+        q = Queue()
+        q.put(obj1)
+        test1 = q.get()
+        test1
+        <__main__.WireClient object at 0x7f5e78430630>
+
+        test1.endpoint == obj1.endpoint
+        True
+    """
 
     def __init__(self):
         # Set the name of the object to the current thread name
