@@ -25,9 +25,6 @@ import time
 import xml.sax.saxutils as saxutils
 from datetime import datetime
 
-from azurelinuxagent.common.protocol.wire import GoalState, Certificates, RemoteAccess, ExtensionsConfig, SharedConfig, \
-    HostingEnv
-
 import azurelinuxagent.common.conf as conf
 from azurelinuxagent.common.datacontract import validate_param, set_properties
 from azurelinuxagent.common.event import add_event, add_periodic, WALAEventOperation, CONTAINER_ID_ENV_VARIABLE
@@ -851,27 +848,27 @@ class WireClient(object):
 
         raise ProtocolError("Exceeded max retry updating goal state")
 
-    def set_goal_state(self, new_goal_state: GoalState):
+    def set_goal_state(self, new_goal_state):
         if new_goal_state is not None:
             self._goal_state = new_goal_state
 
-    def set_hosting_env(self, new_hosting_env: HostingEnv):
+    def set_hosting_env(self, new_hosting_env):
         if new_hosting_env is not None:
             self._hosting_env = new_hosting_env
 
-    def set_shared_conf(self, new_shared_config: SharedConfig):
+    def set_shared_conf(self, new_shared_config):
         if new_shared_config is not None:
             self._shared_conf = new_shared_config
 
-    def set_certs(self, new_certs: Certificates):
+    def set_certs(self, new_certs):
         if new_certs is not None:
             self._certs = new_certs
 
-    def set_ext_conf(self, new_ext_conf: ExtensionsConfig):
+    def set_ext_conf(self, new_ext_conf):
         if new_ext_conf is not None:
             self._ext_conf = new_ext_conf
 
-    def set_remote_access(self, new_remote_access: RemoteAccess):
+    def set_remote_access(self, new_remote_access):
         if new_remote_access is not None:
             self._remote_access = new_remote_access
 
