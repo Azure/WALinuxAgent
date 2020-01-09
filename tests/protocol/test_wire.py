@@ -840,8 +840,9 @@ class TestWireClient(AgentTestCase):
     def test_get_artifacts_profile_should_not_invoke_host_channel_when_direct_channel_succeeds(self, mock_get_artifact_request, *args):
         mock_get_artifact_request.return_value = "dummy_url", "dummy_header"
         client = WireClient("foo.bar")
-        client.ext_conf = ExtensionsConfig(None)
-        client.ext_conf.artifacts_profile_blob = "testurl"
+        ext_conf = ExtensionsConfig(None)
+        ext_conf.artifacts_profile_blob = "testurl"
+        client.set_ext_conf(ext_conf)
         json_profile = b'{ "onHold": true }'
 
         HostPluginProtocol.set_default_channel(False)
@@ -867,8 +868,9 @@ class TestWireClient(AgentTestCase):
     def test_get_artifacts_profile_should_use_host_channel_when_direct_channel_fails(self, mock_get_artifact_request, *args):
         mock_get_artifact_request.return_value = "dummy_url", "dummy_header"
         client = WireClient("foo.bar")
-        client.ext_conf = ExtensionsConfig(None)
-        client.ext_conf.artifacts_profile_blob = "testurl"
+        ext_conf = ExtensionsConfig(None)
+        ext_conf.artifacts_profile_blob = "testurl"
+        client.set_ext_conf(ext_conf)
         json_profile = b'{ "onHold": true }'
 
         HostPluginProtocol.set_default_channel(False)
@@ -899,8 +901,9 @@ class TestWireClient(AgentTestCase):
     def test_get_artifacts_profile_should_retry_the_host_channel_after_refreshing_the_host_plugin(self, mock_get_artifact_request, *args):
         mock_get_artifact_request.return_value = "dummy_url", "dummy_header"
         client = WireClient("foo.bar")
-        client.ext_conf = ExtensionsConfig(None)
-        client.ext_conf.artifacts_profile_blob = "testurl"
+        ext_conf = ExtensionsConfig(None)
+        ext_conf.artifacts_profile_blob = "testurl"
+        client.set_ext_conf(ext_conf)
         json_profile = b'{ "onHold": true }'
 
         HostPluginProtocol.set_default_channel(False)
@@ -931,8 +934,9 @@ class TestWireClient(AgentTestCase):
     def test_get_artifacts_profile_should_refresh_the_host_plugin_and_not_change_default_channel_if_host_plugin_fails(self, mock_get_artifact_request, *args):
         mock_get_artifact_request.return_value = "dummy_url", "dummy_header"
         client = WireClient("foo.bar")
-        client.ext_conf = ExtensionsConfig(None)
-        client.ext_conf.artifacts_profile_blob = "testurl"
+        ext_conf = ExtensionsConfig(None)
+        ext_conf.artifacts_profile_blob = "testurl"
+        client.set_ext_conf(ext_conf)
         json_profile = b'{ "onHold": true }'
 
         HostPluginProtocol.set_default_channel(False)
