@@ -528,13 +528,14 @@ class WireClient(object):
         logger.info("Wire server endpoint:{0}", endpoint)
         self.endpoint = endpoint
         self._goal_state = None
-        self.updated = None
+        # Not used anywhere so removing
+        # self.updated = None
         self._hosting_env = None
         self._shared_conf = None
-        self.remote_access = None
+        self._remote_access = None
         self._certs = None
-        self.ext_conf = None
-        self.host_plugin = None
+        self._ext_conf = None
+        self._host_plugin = None
         self.status_blob = StatusBlob(self)
         self.goal_state_flusher = StateFlusher(conf.get_lib_dir())
 
@@ -669,19 +670,21 @@ class WireClient(object):
                 headers=headers,
                 use_proxy=use_proxy)
 
+            host_plugin = self.get_host_plugin()
+
             if restutil.request_failed(resp):
                 error_response = restutil.read_response_error(resp)
                 msg = "Fetch failed from [{0}]: {1}".format(uri, error_response)
                 logger.warn(msg)
-                if self.host_plugin is not None:
-                    self.host_plugin.report_fetch_health(uri,
-                                                         is_healthy=not restutil.request_failed_at_hostplugin(resp),
-                                                         source='WireClient',
-                                                         response=error_response)
+                if host_plugin is not None:
+                    host_plugin.report_fetch_health(uri,
+                                                    is_healthy=not restutil.request_failed_at_hostplugin(resp),
+                                                    source='WireClient',
+                                                    response=error_response)
                 raise ProtocolError(msg)
             else:
-                if self.host_plugin is not None:
-                    self.host_plugin.report_fetch_health(uri, source='WireClient')
+                if host_plugin is not None:
+                    host_plugin.report_fetch_health(uri, source='WireClient')
 
         except (HttpError, ProtocolError, IOError) as e:
             logger.verbose("Fetch failed from [{0}]: {1}", uri, e)
@@ -722,34 +725,35 @@ class WireClient(object):
             return
         xml_text = self.fetch_config(goal_state.remote_access_uri,
                                      self.get_header_for_cert())
-        self.remote_access = RemoteAccess(xml_text)
-        local_file = os.path.join(conf.get_lib_dir(), REMOTE_ACCESS_FILE_NAME.format(self.remote_access.incarnation))
+        remote_access = RemoteAccess(xml_text)
+        local_file = os.path.join(conf.get_lib_dir(), REMOTE_ACCESS_FILE_NAME.format(remote_access.incarnation))
         self.save_cache(local_file, xml_text)
+        self.set_remote_access(remote_access)
 
     def get_remote_access(self):
-        incarnation_file = os.path.join(conf.get_lib_dir(),
-                                        INCARNATION_FILE_NAME)
-        incarnation = self.fetch_cache(incarnation_file)
-        file_name = REMOTE_ACCESS_FILE_NAME.format(incarnation)
-        remote_access_file = os.path.join(conf.get_lib_dir(), file_name)
-        if not os.path.isfile(remote_access_file):
-            # no remote access data.
-            return None
-        xml_text = self.fetch_cache(remote_access_file)
-        remote_access = RemoteAccess(xml_text)
-        return remote_access
+        # incarnation_file = os.path.join(conf.get_lib_dir(),
+        #                                 INCARNATION_FILE_NAME)
+        # incarnation = self.fetch_cache(incarnation_file)
+        # file_name = REMOTE_ACCESS_FILE_NAME.format(incarnation)
+        # remote_access_file = os.path.join(conf.get_lib_dir(), file_name)
+        # if not os.path.isfile(remote_access_file):
+        #     # no remote access data.
+        #     return None
+        # xml_text = self.fetch_cache(remote_access_file)
+        # remote_access = RemoteAccess(xml_text)
+        return self._remote_access
 
     def update_ext_conf(self, goal_state):
         if goal_state.ext_uri is None:
             logger.info("ExtensionsConfig.xml uri is empty")
-            self.ext_conf = ExtensionsConfig(None)
+            self.set_ext_conf(ExtensionsConfig(None))
             return
         incarnation = goal_state.incarnation
         local_file = os.path.join(conf.get_lib_dir(),
                                   EXT_CONF_FILE_NAME.format(incarnation))
         xml_text = self.fetch_config(goal_state.ext_uri, self.get_header())
         self.save_cache(local_file, xml_text)
-        self.ext_conf = ExtensionsConfig(xml_text)
+        self.set_ext_conf(ExtensionsConfig(xml_text))
 
     # Type of update performed by _update_from_goal_state()
     class _UpdateType(object):
@@ -770,7 +774,8 @@ class WireClient(object):
         """
         Updates the goal state if the incarnation changed or if 'forced' is True
         """
-        self._update_from_goal_state(WireClient._UpdateType.GoalStateForced if forced else WireClient._UpdateType.GoalState)
+        self._update_from_goal_state(
+            WireClient._UpdateType.GoalStateForced if forced else WireClient._UpdateType.GoalState)
 
     def _update_from_goal_state(self, refresh_type):
         """
@@ -787,9 +792,15 @@ class WireClient(object):
                 new_goal_state = GoalState(new_goal_state_xml)
 
                 def update_host_plugin():
-                    if self.host_plugin is not None:
-                        self.host_plugin.container_id = new_goal_state.container_id
-                        self.host_plugin.role_config_name = new_goal_state.role_config_name
+                    host_plugin = self.get_host_plugin()
+                    if host_plugin is None:
+                        goal_state = self.get_goal_state()
+                        self.set_host_plugin(HostPluginProtocol(self.endpoint,
+                                                                goal_state.container_id,
+                                                                goal_state.role_config_name))
+                    else:
+                        host_plugin.container_id = new_goal_state.container_id
+                        host_plugin.role_config_name = new_goal_state.role_config_name
 
                 if refresh_type == WireClient._UpdateType.HostPlugin:
                     update_host_plugin()
@@ -854,11 +865,15 @@ class WireClient(object):
 
     def set_ext_conf(self, new_ext_conf):
         if new_ext_conf is not None:
-            self._shared_conf = new_ext_conf
+            self._ext_conf = new_ext_conf
 
-    def set_remote_access_conf(self, new_remote_access_conf):
-        if new_remote_access_conf is not None:
-            self._shared_conf = new_remote_access_conf
+    def set_remote_access(self, new_remote_access):
+        if new_remote_access is not None:
+            self._remote_access = new_remote_access
+
+    def set_host_plugin(self, new_host_plugin):
+        if new_host_plugin is not None:
+            self._host_plugin = new_host_plugin
 
     def get_goal_state(self):
         # if self._goal_state is None:
@@ -897,33 +912,34 @@ class WireClient(object):
             return None
         return self._certs
 
-    def get_current_handlers(self):
-        handler_list = list()
-        try:
-            incarnation = self.fetch_cache(os.path.join(conf.get_lib_dir(),
-                                                        INCARNATION_FILE_NAME))
-            ext_conf = ExtensionsConfig(self.fetch_cache(os.path.join(conf.get_lib_dir(),
-                                                                      EXT_CONF_FILE_NAME.format(incarnation))))
-            handler_list = ext_conf.ext_handlers.extHandlers
-        except ProtocolError as pe:
-            # cache file is missing, nothing to do
-            logger.verbose(ustr(pe))
-        except Exception as e:
-            logger.error("Could not obtain current handlers: {0}", ustr(e))
-
-        return handler_list
+    # Function not being used, removing it
+    # def get_current_handlers(self):
+    #     handler_list = list()
+    #     try:
+    #         incarnation = self.fetch_cache(os.path.join(conf.get_lib_dir(),
+    #                                                     INCARNATION_FILE_NAME))
+    #         ext_conf = ExtensionsConfig(self.fetch_cache(os.path.join(conf.get_lib_dir(),
+    #                                                                   EXT_CONF_FILE_NAME.format(incarnation))))
+    #         handler_list = ext_conf.ext_handlers.extHandlers
+    #     except ProtocolError as pe:
+    #         # cache file is missing, nothing to do
+    #         logger.verbose(ustr(pe))
+    #     except Exception as e:
+    #         logger.error("Could not obtain current handlers: {0}", ustr(e))
+    #
+    #     return handler_list
 
     def get_ext_conf(self):
-        if self.ext_conf is None:
-            local_goal_state = self.get_goal_state()
-            if local_goal_state.ext_uri is None:
-                self.ext_conf = ExtensionsConfig(None)
-            else:
-                local_file = EXT_CONF_FILE_NAME.format(local_goal_state.incarnation)
-                local_file = os.path.join(conf.get_lib_dir(), local_file)
-                xml_text = self.fetch_cache(local_file)
-                self.ext_conf = ExtensionsConfig(xml_text)
-        return self.ext_conf
+        # if self._ext_conf is None:
+        #     local_goal_state = self.get_goal_state()
+        #     if local_goal_state.ext_uri is None:
+        #         self._ext_conf = ExtensionsConfig(None)
+        #     else:
+        #         local_file = EXT_CONF_FILE_NAME.format(local_goal_state.incarnation)
+        #         local_file = os.path.join(conf.get_lib_dir(), local_file)
+        #         xml_text = self.fetch_cache(local_file)
+        #         self._ext_conf = ExtensionsConfig(xml_text)
+        return self._ext_conf
 
     def get_ext_manifest(self, ext_handler, goal_state):
         local_file = MANIFEST_FILE_NAME.format(ext_handler.name, goal_state.incarnation)
@@ -1057,8 +1073,9 @@ class WireClient(object):
         try:
             ret = host_func()
         except (ResourceGoneError, InvalidContainerError) as e:
-            old_container_id = self.host_plugin.container_id
-            old_role_config_name = self.host_plugin.role_config_name
+            host_plugin = self.get_host_plugin()
+            old_container_id = host_plugin.container_id
+            old_role_config_name = host_plugin.role_config_name
 
             msg = "[PERIODIC] Request failed with the current host plugin configuration. " \
                   "ContainerId: {0}, role config file: {1}. Fetching new goal state and retrying the call." \
@@ -1067,8 +1084,8 @@ class WireClient(object):
 
             self.update_host_plugin_from_goal_state()
 
-            new_container_id = self.host_plugin.container_id
-            new_role_config_name = self.host_plugin.role_config_name
+            new_container_id = host_plugin.container_id
+            new_role_config_name = host_plugin.role_config_name
             msg = "[PERIODIC] Host plugin reconfigured with new parameters. " \
                   "ContainerId: {0}, role config file: {1}.".format(new_container_id, new_role_config_name)
             logger.periodic_info(logger.EVERY_SIX_HOURS, msg)
@@ -1291,16 +1308,17 @@ class WireClient(object):
         }
 
     def get_host_plugin(self):
-        if self.host_plugin is None:
-            goal_state = self.get_goal_state()
-            self.host_plugin = HostPluginProtocol(self.endpoint,
-                                                  goal_state.container_id,
-                                                  goal_state.role_config_name)
-        return self.host_plugin
+        # if self._host_plugin is None:
+        #     goal_state = self.get_goal_state()
+        #     self._host_plugin = HostPluginProtocol(self.endpoint,
+        #                                            goal_state.container_id,
+        #                                            goal_state.role_config_name)
+        return self._host_plugin
 
     def has_artifacts_profile_blob(self):
-        return self.ext_conf and not \
-            textutil.is_str_none_or_whitespace(self.ext_conf.artifacts_profile_blob)
+        ext_conf = self.get_ext_conf()
+        return ext_conf and not \
+            textutil.is_str_none_or_whitespace(ext_conf.artifacts_profile_blob)
 
     def get_artifacts_profile_through_host(self, blob):
         host = self.get_host_plugin()
@@ -1312,7 +1330,7 @@ class WireClient(object):
         artifacts_profile = None
 
         if self.has_artifacts_profile_blob():
-            blob = self.ext_conf.artifacts_profile_blob
+            blob = self.get_ext_conf().artifacts_profile_blob
             direct_func = lambda: self.fetch(blob)
             # NOTE: the host_func may be called after refreshing the goal state, be careful about any goal state data
             # in the lambda.
