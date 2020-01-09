@@ -46,7 +46,8 @@ TELEMETRY_LOG_PROVIDER_ID = "FFF0196F-EE4C-4EAF-9AA5-776F622DEB4F"
 TELEMETRY_LOG_EVENT_ID = 7
 
 #
-# When this flag is enabled the TODO comment in Logger.log() needs to be addressed
+# When this flag is enabled the TODO comment in Logger.log() needs to be addressed; also the tests
+# marked with "Enable this test when SEND_LOGS_TO_TELEMETRY is enabled" should be enabled.
 #
 SEND_LOGS_TO_TELEMETRY = False
 
