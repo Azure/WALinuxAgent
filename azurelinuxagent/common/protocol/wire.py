@@ -529,10 +529,10 @@ class WireClient(object):
         self.endpoint = endpoint
         self._goal_state = None
         self.updated = None
-        self.hosting_env = None
-        self.shared_conf = None
+        self._hosting_env = None
+        self._shared_conf = None
         self.remote_access = None
-        self.certs = None
+        self._certs = None
         self.ext_conf = None
         self.host_plugin = None
         self.status_blob = StatusBlob(self)
@@ -696,7 +696,7 @@ class WireClient(object):
         xml_text = self.fetch_config(goal_state.hosting_env_uri,
                                      self.get_header())
         self.save_cache(local_file, xml_text)
-        self.hosting_env = HostingEnv(xml_text)
+        self.set_hosting_env(HostingEnv(xml_text))
 
     def update_shared_conf(self, goal_state):
         if goal_state.shared_conf_uri is None:
@@ -705,7 +705,7 @@ class WireClient(object):
         xml_text = self.fetch_config(goal_state.shared_conf_uri,
                                      self.get_header())
         self.save_cache(local_file, xml_text)
-        self.shared_conf = SharedConfig(xml_text)
+        self.set_shared_conf(SharedConfig(xml_text))
 
     def update_certs(self, goal_state):
         if goal_state.certs_uri is None:
@@ -714,7 +714,7 @@ class WireClient(object):
         xml_text = self.fetch_config(goal_state.certs_uri,
                                      self.get_header_for_cert())
         self.save_cache(local_file, xml_text)
-        self.certs = Certificates(self, xml_text)
+        self.set_certs(Certificates(self, xml_text))
 
     def update_remote_access_conf(self, goal_state):
         if goal_state.remote_access_uri is None:
@@ -840,6 +840,26 @@ class WireClient(object):
         if new_goal_state is not None:
             self._goal_state = new_goal_state
 
+    def set_hosting_env(self, new_hosting_env):
+        if new_hosting_env is not None:
+            self._hosting_env = new_hosting_env
+
+    def set_shared_conf(self, new_shared_config):
+        if new_shared_config is not None:
+            self._shared_conf = new_shared_config
+
+    def set_certs(self, new_certs):
+        if new_certs is not None:
+            self._certs = new_certs
+
+    def set_ext_conf(self, new_ext_conf):
+        if new_ext_conf is not None:
+            self._shared_conf = new_ext_conf
+
+    def set_remote_access_conf(self, new_remote_access_conf):
+        if new_remote_access_conf is not None:
+            self._shared_conf = new_remote_access_conf
+
     def get_goal_state(self):
         # if self._goal_state is None:
         #     incarnation_file = os.path.join(conf.get_lib_dir(),
@@ -853,29 +873,29 @@ class WireClient(object):
         return self._goal_state
 
     def get_hosting_env(self):
-        if self.hosting_env is None:
-            local_file = os.path.join(conf.get_lib_dir(),
-                                      HOSTING_ENV_FILE_NAME)
-            xml_text = self.fetch_cache(local_file)
-            self.hosting_env = HostingEnv(xml_text)
-        return self.hosting_env
+        # if self._hosting_env is None:
+        #     local_file = os.path.join(conf.get_lib_dir(),
+        #                               HOSTING_ENV_FILE_NAME)
+        #     xml_text = self.fetch_cache(local_file)
+        #     self._hosting_env = HostingEnv(xml_text)
+        return self._hosting_env
 
     def get_shared_conf(self):
-        if self.shared_conf is None:
-            local_file = os.path.join(conf.get_lib_dir(),
-                                      SHARED_CONF_FILE_NAME)
-            xml_text = self.fetch_cache(local_file)
-            self.shared_conf = SharedConfig(xml_text)
-        return self.shared_conf
+        # if self._shared_conf is None:
+        #     local_file = os.path.join(conf.get_lib_dir(),
+        #                               SHARED_CONF_FILE_NAME)
+        #     xml_text = self.fetch_cache(local_file)
+        #     self._shared_conf = SharedConfig(xml_text)
+        return self._shared_conf
 
     def get_certs(self):
-        if self.certs is None:
-            local_file = os.path.join(conf.get_lib_dir(), CERTS_FILE_NAME)
-            xml_text = self.fetch_cache(local_file)
-            self.certs = Certificates(self, xml_text)
-        if self.certs is None:
+        # if self._certs is None:
+        #     local_file = os.path.join(conf.get_lib_dir(), CERTS_FILE_NAME)
+        #     xml_text = self.fetch_cache(local_file)
+        #     self._certs = Certificates(self, xml_text)
+        if self._certs is None:
             return None
-        return self.certs
+        return self._certs
 
     def get_current_handlers(self):
         handler_list = list()
