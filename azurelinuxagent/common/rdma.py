@@ -27,7 +27,6 @@ import azurelinuxagent.common.conf as conf
 import azurelinuxagent.common.logger as logger
 import azurelinuxagent.common.utils.fileutil as fileutil
 import azurelinuxagent.common.utils.shellutil as shellutil
-from azurelinuxagent.common.protocol.wire import SharedConfig
 from azurelinuxagent.common.utils.textutil import parse_doc, find, getattrib
 
 dapl_config_paths = [
@@ -37,7 +36,7 @@ dapl_config_paths = [
 ]
 
 
-def setup_rdma_device(nd_version, shared_conf: SharedConfig):
+def setup_rdma_device(nd_version, shared_conf):
     logger.verbose("Parsing SharedConfig XML contents for RDMA details")
     xml_doc = parse_doc(shared_conf.xml_text)
     if xml_doc is None:
