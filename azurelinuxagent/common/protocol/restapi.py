@@ -237,6 +237,12 @@ class Protocol(DataContract):
     def detect(self):
         raise NotImplementedError()
 
+    def update_goal_state(self):
+        raise NotImplementedError()
+
+    def get_endpoint(self):
+        raise NotImplementedError()
+
     def get_vminfo(self):
         raise NotImplementedError()
 

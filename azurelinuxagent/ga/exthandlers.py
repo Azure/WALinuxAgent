@@ -43,7 +43,6 @@ from azurelinuxagent.common.event import add_event, WALAEventOperation, elapsed_
 from azurelinuxagent.common.exception import ExtensionError, ProtocolError, ProtocolNotFoundError, \
     ExtensionDownloadError, ExtensionErrorCodes, ExtensionUpdateError, ExtensionOperationError
 from azurelinuxagent.common.future import ustr
-from azurelinuxagent.common.protocol import get_protocol_util
 from azurelinuxagent.common.protocol.restapi import ExtHandlerStatus, \
     ExtensionStatus, \
     ExtensionSubStatus, \
@@ -206,14 +205,13 @@ class ExtHandlerState(object):
     FailedUpgrade = "FailedUpgrade"
 
 
-def get_exthandlers_handler():
-    return ExtHandlersHandler()
+def get_exthandlers_handler(protocol):
+    return ExtHandlersHandler(protocol)
 
 
 class ExtHandlersHandler(object):
-    def __init__(self):
-        self.protocol_util = get_protocol_util()
-        self.protocol = None
+    def __init__(self, protocol):
+        self.protocol = protocol
         self.ext_handlers = None
         self.last_etag = None
         self.log_report = False
@@ -226,7 +224,6 @@ class ExtHandlersHandler(object):
     def run(self):
         self.ext_handlers, etag = None, None
         try:
-            self.protocol = self.protocol_util.get_protocol()
             self.ext_handlers, etag = self.protocol.get_ext_handlers()
             self.get_artifact_error_state.reset()
         except Exception as e:
@@ -259,12 +256,12 @@ class ExtHandlersHandler(object):
             # Log status report success on new config
             self.log_report = True
 
-            if self.extension_processing_allowed():
+            if self._extension_processing_allowed():
                 self.handle_ext_handlers(etag)
                 self.last_etag = etag
 
             self.report_ext_handlers_status()
-            self.cleanup_outdated_handlers()
+            self._cleanup_outdated_handlers()
         except Exception as e:
             msg = u"Exception processing extension handlers: {0}".format(ustr(e))
             detailed_msg = '{0} {1}'.format(msg, traceback.extract_tb(get_traceback(e)))
@@ -276,7 +273,7 @@ class ExtHandlersHandler(object):
                       message=detailed_msg)
             return
 
-    def cleanup_outdated_handlers(self):
+    def _cleanup_outdated_handlers(self):
         handlers = []
         pkgs = []
 
@@ -334,7 +331,7 @@ class ExtHandlersHandler(object):
                 except OSError as e:
                     logger.warn("Failed to remove extension package {0}: {1}".format(pkg, e.strerror))
 
-    def extension_processing_allowed(self):
+    def _extension_processing_allowed(self):
         if not conf.get_extensions_enabled():
             logger.verbose("Extension handling is disabled")
             return False

@@ -24,7 +24,7 @@ from azurelinuxagent.common.event import __event_logger__, add_log_event, MAX_NU
     TELEMETRY_LOG_PROVIDER_ID
 import azurelinuxagent.common.logger as logger
 from azurelinuxagent.common.utils import fileutil
-from tests.tools import AgentTestCase, MagicMock, patch
+from tests.tools import AgentTestCase, MagicMock, patch, skip_if_predicate_true
 
 _MSG_INFO = "This is our test info logging message {0} {1}"
 _MSG_WARN = "This is our test warn logging message {0} {1}"
@@ -416,6 +416,7 @@ class TestLogger(AgentTestCase):
             self.assertFalse(True, "The log file looks like it isn't correctly setup for this test. Take a look. "
                                    "{0}".format(e))
 
+    @skip_if_predicate_true(lambda: True, "Enable this test when SEND_LOGS_TO_TELEMETRY is enabled")
     @patch("azurelinuxagent.common.logger.StdoutAppender.write")
     @patch("azurelinuxagent.common.logger.ConsoleAppender.write")
     @patch("azurelinuxagent.common.event.send_logs_to_telemetry", return_value=True)
@@ -440,6 +441,7 @@ class TestLogger(AgentTestCase):
 
         self.assertFalse(exception_caught, msg="Caught a Runtime Error. This should not have been raised.")
 
+    @skip_if_predicate_true(lambda: True, "Enable this test when SEND_LOGS_TO_TELEMETRY is enabled")
     @patch("azurelinuxagent.common.logger.StdoutAppender.write")
     @patch("azurelinuxagent.common.logger.ConsoleAppender.write")
     @patch("azurelinuxagent.common.event.send_logs_to_telemetry", return_value=True)

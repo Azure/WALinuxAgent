@@ -292,7 +292,7 @@ class ResourceDiskHandler(object):
 
         if os.path.isfile(swapfile) and os.path.getsize(swapfile) != size:
             logger.info("Remove old swap file")
-            shellutil.run("swapoff -a", chk_err=False)
+            shellutil.run("swapoff {0}".format(swapfile), chk_err=False)
             os.remove(swapfile)
 
         if not os.path.isfile(swapfile):

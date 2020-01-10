@@ -13,6 +13,8 @@ from azurelinuxagent.common.exception import ProtocolError, ExtensionError, Exte
 from azurelinuxagent.common.protocol.restapi import ExtensionStatus, Extension, ExtHandler, ExtHandlerProperties
 from azurelinuxagent.common.utils.extensionprocessutil import TELEMETRY_MESSAGE_MAX_LEN, format_stdout_stderr, \
     read_output
+from mock import MagicMock
+from azurelinuxagent.common.protocol.wire import WireProtocol
 from azurelinuxagent.ga.exthandlers import parse_ext_status, ExtHandlerInstance, get_exthandlers_handler, \
     ExtCommandEnvVariable
 from tests.tools import AgentTestCase, patch, mock_sleep, clear_singleton_instances
@@ -204,14 +206,15 @@ class TestExtHandlers(AgentTestCase):
 
     @patch("azurelinuxagent.ga.exthandlers.add_event")
     @patch("azurelinuxagent.common.errorstate.ErrorState.is_triggered")
-    @patch("azurelinuxagent.common.protocol.util.ProtocolUtil.get_protocol")
-    def test_it_should_report_an_error_if_the_wireserver_cannot_be_reached(self, patch_get_protocol, patch_is_triggered, patch_add_event):
+    def test_it_should_report_an_error_if_the_wireserver_cannot_be_reached(self, patch_is_triggered, patch_add_event):
         test_message = "TEST MESSAGE"
 
-        patch_get_protocol.side_effect = ProtocolError(test_message) # get_protocol will throw if the wire server cannot be reached
         patch_is_triggered.return_value = True # protocol errors are reported only after a delay; force the error to be reported now
 
-        get_exthandlers_handler().run()
+        protocol = WireProtocol("foo.bar")
+        protocol.get_ext_handlers = MagicMock(side_effect=ProtocolError(test_message))
+
+        get_exthandlers_handler(protocol).run()
 
         self.assertEquals(patch_add_event.call_count, 2)
 

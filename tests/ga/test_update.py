@@ -1336,7 +1336,7 @@ class TestUpdate(UpdateTestCase):
         self.update_handler.protocol_util = protocol
         conf.get_autoupdate_gafamily = Mock(return_value=protocol.family)
 
-        return self.update_handler._upgrade_available(base_version=base_version)
+        return self.update_handler._upgrade_available(protocol, base_version=base_version)
 
     def test_upgrade_available_returns_true_on_first_use(self):
         self.assertTrue(self._test_upgrade_available())
@@ -1349,7 +1349,7 @@ class TestUpdate(UpdateTestCase):
         self.update_handler.protocol_util = protocol
         with patch('azurelinuxagent.common.logger.warn') as mock_logger:
             with patch('tests.ga.test_update.ProtocolMock.get_vmagent_pkgs', side_effect=ProtocolError):
-                self.assertFalse(self.update_handler._upgrade_available(base_version=CURRENT_VERSION))
+                self.assertFalse(self.update_handler._upgrade_available(protocol, base_version=CURRENT_VERSION))
                 self.assertEqual(0, mock_logger.call_count)
 
     def test_upgrade_available_includes_old_agents(self):
@@ -1716,7 +1716,7 @@ class ProtocolMock(object):
             raise ResourceGoneError()
         return self.agent_packages
 
-    def update_goal_state(self, forced=False):
+    def update_goal_state(self):
         self.call_counts["update_goal_state"] += 1
 
 

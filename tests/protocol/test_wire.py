@@ -626,8 +626,8 @@ class TestWireClient(AgentTestCase):
             with patch("azurelinuxagent.common.protocol.wire.WireClient.update_goal_state") as mock_update_goal_state:
                 with patch("azurelinuxagent.common.protocol.wire.WireClient.stream", wraps=protocol.client.stream) \
                         as patch_direct:
-                    with patch("azurelinuxagent.common.protocol.wire.WireProtocol.download_ext_handler_pkg_through_host",
-                               wraps=protocol.download_ext_handler_pkg_through_host) as patch_host:
+                    with patch("azurelinuxagent.common.protocol.wire.WireProtocol._download_ext_handler_pkg_through_host",
+                               wraps=protocol._download_ext_handler_pkg_through_host) as patch_host:
                         ret = protocol.download_ext_handler_pkg("uri", destination)
                         self.assertEquals(ret, True)
 
@@ -655,8 +655,8 @@ class TestWireClient(AgentTestCase):
             with patch("azurelinuxagent.common.protocol.wire.WireClient.update_goal_state") as mock_update_goal_state:
                 with patch("azurelinuxagent.common.protocol.wire.WireClient.stream", wraps=protocol.client.stream) \
                         as patch_direct:
-                    with patch("azurelinuxagent.common.protocol.wire.WireProtocol.download_ext_handler_pkg_through_host",
-                               wraps=protocol.download_ext_handler_pkg_through_host) as patch_host:
+                    with patch("azurelinuxagent.common.protocol.wire.WireProtocol._download_ext_handler_pkg_through_host",
+                               wraps=protocol._download_ext_handler_pkg_through_host) as patch_host:
                         ret = protocol.download_ext_handler_pkg("uri", destination)
                         self.assertEquals(ret, True)
 
@@ -685,8 +685,8 @@ class TestWireClient(AgentTestCase):
             with patch("azurelinuxagent.common.protocol.wire.WireClient.update_host_plugin_from_goal_state") as mock_update_host_plugin_from_goal_state:
                 with patch("azurelinuxagent.common.protocol.wire.WireClient.stream", wraps=protocol.client.stream) \
                         as patch_direct:
-                    with patch("azurelinuxagent.common.protocol.wire.WireProtocol.download_ext_handler_pkg_through_host",
-                               wraps=protocol.download_ext_handler_pkg_through_host) as patch_host:
+                    with patch("azurelinuxagent.common.protocol.wire.WireProtocol._download_ext_handler_pkg_through_host",
+                               wraps=protocol._download_ext_handler_pkg_through_host) as patch_host:
                         ret = protocol.download_ext_handler_pkg("uri", destination)
                         self.assertEquals(ret, True)
 
@@ -712,8 +712,8 @@ class TestWireClient(AgentTestCase):
             with patch("azurelinuxagent.common.protocol.wire.WireClient.update_host_plugin_from_goal_state") as mock_update_host_plugin_from_goal_state:
                 with patch("azurelinuxagent.common.protocol.wire.WireClient.stream", wraps=protocol.client.stream) \
                         as patch_direct:
-                    with patch("azurelinuxagent.common.protocol.wire.WireProtocol.download_ext_handler_pkg_through_host",
-                               wraps=protocol.download_ext_handler_pkg_through_host) as patch_host:
+                    with patch("azurelinuxagent.common.protocol.wire.WireProtocol._download_ext_handler_pkg_through_host",
+                               wraps=protocol._download_ext_handler_pkg_through_host) as patch_host:
                         ret = protocol.download_ext_handler_pkg("uri", destination)
                         self.assertEquals(ret, False)
 

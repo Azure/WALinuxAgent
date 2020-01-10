@@ -232,12 +232,15 @@ class TestHostPlugin(AgentTestCase):
         test_goal_state = wire.GoalState(WireProtocolData(DATA_FILE).goal_state)
         status = restapi.VMStatus(status="Ready", message="Guest Agent is running")
 
-        wire_protocol_client = wire.WireProtocol(wireserver_url).client
+        wire_protocol = wire.WireProtocol(wireserver_url)
+        wire_protocol_client = wire_protocol.client
         wire_protocol_client.get_goal_state = Mock(return_value=test_goal_state)
         wire_protocol_client.ext_conf = wire.ExtensionsConfig(None)
         wire_protocol_client.ext_conf.status_upload_blob = sas_url
         wire_protocol_client.ext_conf.status_upload_blob_type = page_blob_type
         wire_protocol_client.status_blob.set_vm_status(status)
+
+        wire_protocol.update_goal_state()
 
         # act
         wire_protocol_client.upload_status_blob()
@@ -272,12 +275,15 @@ class TestHostPlugin(AgentTestCase):
         test_goal_state = wire.GoalState(WireProtocolData(DATA_FILE).goal_state)
         status = restapi.VMStatus(status="Ready", message="Guest Agent is running")
 
-        wire_protocol_client = wire.WireProtocol(wireserver_url).client
+        wire_protocol = wire.WireProtocol(wireserver_url)
+        wire_protocol_client = wire_protocol.client
         wire_protocol_client.get_goal_state = Mock(return_value=test_goal_state)
         wire_protocol_client.ext_conf = wire.ExtensionsConfig(None)
         wire_protocol_client.ext_conf.status_upload_blob = sas_url
         wire_protocol_client.ext_conf.status_upload_blob_type = page_blob_type
         wire_protocol_client.status_blob.set_vm_status(status)
+
+        wire_protocol.update_goal_state()
 
         # act
         wire_protocol_client.upload_status_blob()
@@ -313,12 +319,15 @@ class TestHostPlugin(AgentTestCase):
         test_goal_state = wire.GoalState(WireProtocolData(DATA_FILE).goal_state)
         status = restapi.VMStatus(status="Ready", message="Guest Agent is running")
 
-        wire_protocol_client = wire.WireProtocol(wireserver_url).client
+        wire_protocol = wire.WireProtocol(wireserver_url)
+        wire_protocol_client = wire_protocol.client
         wire_protocol_client.get_goal_state = Mock(return_value=test_goal_state)
         wire_protocol_client.ext_conf = wire.ExtensionsConfig(None)
         wire_protocol_client.ext_conf.status_upload_blob = sas_url
         wire_protocol_client.ext_conf.status_upload_blob_type = page_blob_type
         wire_protocol_client.status_blob.set_vm_status(status)
+
+        wire_protocol.update_goal_state()
 
         # act
         wire_protocol_client.upload_status_blob()
@@ -354,12 +363,15 @@ class TestHostPlugin(AgentTestCase):
         test_goal_state = wire.GoalState(WireProtocolData(DATA_FILE).goal_state)
         status = restapi.VMStatus(status="Ready", message="Guest Agent is running")
 
-        wire_protocol_client = wire.WireProtocol(wireserver_url).client
+        wire_protocol = wire.WireProtocol(wireserver_url)
+        wire_protocol_client = wire_protocol.client
         wire_protocol_client.get_goal_state = Mock(return_value=test_goal_state)
         wire_protocol_client.ext_conf = wire.ExtensionsConfig(None)
         wire_protocol_client.ext_conf.status_upload_blob = sas_url
         wire_protocol_client.ext_conf.status_upload_blob_type = page_blob_type
         wire_protocol_client.status_blob.set_vm_status(status)
+
+        wire_protocol.update_goal_state()
 
         # act
         self.assertRaises(wire.ProtocolError, wire_protocol_client.upload_status_blob)

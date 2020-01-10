@@ -110,10 +110,10 @@ class EnvHandler(object):
                 # to WireServer.  The previous rules allowed traffic.  Having both rules in
                 # place negated the fix in 2.2.26.
                 if not reset_firewall_fules:
-                    self.osutil.remove_firewall(dst_ip=protocol.endpoint, uid=os.getuid())
+                    self.osutil.remove_firewall(dst_ip=protocol.get_endpoint(), uid=os.getuid())
                     reset_firewall_fules = True
 
-                success = self.osutil.enable_firewall(dst_ip=protocol.endpoint, uid=os.getuid())
+                success = self.osutil.enable_firewall(dst_ip=protocol.get_endpoint(), uid=os.getuid())
 
                 add_periodic(
                     logger.EVERY_HOUR,

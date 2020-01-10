@@ -170,7 +170,14 @@ class MetadataProtocol(Protocol):
                                 "{0}.crt".format(thumbprint))
         shutil.copyfile(trans_prv_file, prv_file)
         shutil.copyfile(trans_cert_file, crt_file)
-        self.update_goal_state()
+        self._update_certs_with_retry()
+
+    def update_goal_state(self):
+        # Metadata doesn't cache the goal state; nothing to do here...
+        pass
+
+    def get_endpoint(self):
+        return self.endpoint
 
     def get_vminfo(self):
         vminfo = VMInfo()
@@ -213,7 +220,7 @@ class MetadataProtocol(Protocol):
         return 0
 
     def get_vmagent_manifests(self):
-        self.update_goal_state()
+        self._update_certs_with_retry()
 
         headers = None if self.agent_etag is None else {IF_NONE_MATCH_HEADER: self.agent_etag}
 
@@ -266,7 +273,7 @@ class MetadataProtocol(Protocol):
         return vmagent_pkgs
 
     def get_ext_handlers(self, last_etag=None):
-        self.update_goal_state()
+        self._update_certs_with_retry()
         headers = {
             "x-ms-vmagent-public-x509-cert": self._get_trans_cert()
         }
@@ -330,7 +337,7 @@ class MetadataProtocol(Protocol):
         certificates = self.get_certs()
         return certificates.cert_list
 
-    def update_goal_state(self, max_retry=3):
+    def _update_certs_with_retry(self, max_retry=3):
         # Start updating goalstate, retry on 410
         for retry in range(0, max_retry):
             try:

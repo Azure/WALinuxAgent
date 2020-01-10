@@ -58,7 +58,7 @@ def raise_ioerror(*args):
 class TestExtensionCleanup(AgentTestCase):
     def setUp(self):
         AgentTestCase.setUp(self)
-        self.ext_handlers = ExtHandlersHandler()
+        self.ext_handlers = ExtHandlersHandler(Mock())
         self.lib_dir = tempfile.mkdtemp()
 
     def _install_handlers(self, start=0, count=1,
@@ -112,7 +112,7 @@ class TestExtensionCleanup(AgentTestCase):
         self.assertEqual(self._count_packages(), 10)
         self.assertEqual(self._count_installed(), 10)
 
-        self.ext_handlers.cleanup_outdated_handlers()
+        self.ext_handlers._cleanup_outdated_handlers()
 
         self.assertEqual(self._count_packages(), 10)
         self.assertEqual(self._count_installed(), 10)
@@ -129,7 +129,7 @@ class TestExtensionCleanup(AgentTestCase):
         self.assertEqual(self._count_installed(), 5)
         self.assertEqual(self._count_uninstalled(), 5)
 
-        self.ext_handlers.cleanup_outdated_handlers()
+        self.ext_handlers._cleanup_outdated_handlers()
 
         self.assertEqual(self._count_packages(), 5)
         self.assertEqual(self._count_installed(), 5)
@@ -146,7 +146,7 @@ class TestExtensionCleanup(AgentTestCase):
         self.assertEqual(self._count_installed(), 5)
         self.assertEqual(self._count_uninstalled(), 0)
 
-        self.ext_handlers.cleanup_outdated_handlers()
+        self.ext_handlers._cleanup_outdated_handlers()
 
         self.assertEqual(self._count_packages(), 5)
         self.assertEqual(self._count_installed(), 5)
@@ -342,9 +342,6 @@ class TestExtension(ExtensionTestCase):
         return
 
     def _create_mock(self, test_data, mock_http_get, MockCryptUtil, *args):
-        """Test enable/disable/uninstall of an extension"""
-        handler = get_exthandlers_handler()
-
         # Mock protocol to return test data
         mock_http_get.side_effect = test_data.mock_http_get
         MockCryptUtil.side_effect = test_data.mock_crypt_util
@@ -354,7 +351,8 @@ class TestExtension(ExtensionTestCase):
         protocol.report_ext_status = MagicMock()
         protocol.report_vm_status = MagicMock()
 
-        handler.protocol_util.get_protocol = Mock(return_value=protocol)
+        handler = get_exthandlers_handler(protocol)
+
         return handler, protocol
 
     def _set_up_update_test_and_update_gs(self, patch_command, *args):
@@ -376,9 +374,10 @@ class TestExtension(ExtensionTestCase):
         self._assert_ext_status(protocol.report_ext_status, "success", 0)
 
         # Next incarnation, update version
-        test_data.goal_state = test_data.goal_state.replace("<Incarnation>1<", "<Incarnation>2<")
-        test_data.ext_conf = test_data.ext_conf.replace('version="1.0.0"', 'version="1.0.1"')
-        test_data.manifest = test_data.manifest.replace('1.0.0', '1.0.1')
+        test_data.set_incarnation(2)
+        test_data.set_extensions_config_version("1.0.1")
+        test_data.set_manifest_version('1.0.1')
+        protocol.update_goal_state()
 
         # Ensure the patched command fails
         patch_command.return_value = "exit 1"
@@ -386,175 +385,182 @@ class TestExtension(ExtensionTestCase):
         return test_data, exthandlers_handler, protocol
 
     def test_ext_handler(self, *args):
+        # Test enable scenario.
         test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE)
         exthandlers_handler, protocol = self._create_mock(test_data, *args)
 
-        # Test enable scenario.
         exthandlers_handler.run()
+
         self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.0.0")
         self._assert_ext_status(protocol.report_ext_status, "success", 0)
 
         # Test goal state not changed
         exthandlers_handler.run()
+
         self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.0.0")
 
         # Test goal state changed
-        test_data.goal_state = test_data.goal_state.replace("<Incarnation>1<",
-                                                            "<Incarnation>2<")
-        test_data.ext_conf = test_data.ext_conf.replace("seqNo=\"0\"",
-                                                        "seqNo=\"1\"")
+        test_data.set_incarnation(2)
+        test_data.set_extensions_config_sequence_number(1)
+        protocol.update_goal_state()
+
         exthandlers_handler.run()
+
         self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.0.0")
         self._assert_ext_status(protocol.report_ext_status, "success", 1)
 
         # Test hotfix
-        test_data.goal_state = test_data.goal_state.replace("<Incarnation>2<",
-                                                            "<Incarnation>3<")
-        test_data.ext_conf = test_data.ext_conf.replace("1.0.0", "1.1.1")
-        test_data.ext_conf = test_data.ext_conf.replace("seqNo=\"1\"",
-                                                        "seqNo=\"2\"")
+        test_data.set_incarnation(3)
+        test_data.set_extensions_config_version("1.1.1")
+        test_data.set_extensions_config_sequence_number(2)
+        protocol.update_goal_state()
+
         exthandlers_handler.run()
+
         self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.1.1")
         self._assert_ext_status(protocol.report_ext_status, "success", 2)
 
         # Test upgrade
-        test_data.goal_state = test_data.goal_state.replace("<Incarnation>3<",
-                                                            "<Incarnation>4<")
-        test_data.ext_conf = test_data.ext_conf.replace("1.1.1", "1.2.0")
-        test_data.ext_conf = test_data.ext_conf.replace("seqNo=\"2\"",
-                                                        "seqNo=\"3\"")
+        test_data.set_incarnation(4)
+        test_data.set_extensions_config_version("1.2.0")
+        test_data.set_extensions_config_sequence_number(3)
+        protocol.update_goal_state()
+
         exthandlers_handler.run()
+
         self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.2.0")
         self._assert_ext_status(protocol.report_ext_status, "success", 3)
 
         # Test disable
-        test_data.goal_state = test_data.goal_state.replace("<Incarnation>4<",
-                                                            "<Incarnation>5<")
-        test_data.ext_conf = test_data.ext_conf.replace("enabled", "disabled")
+        test_data.set_incarnation(5)
+        test_data.set_extensions_config_state("disabled")
+        protocol.update_goal_state()
+
         exthandlers_handler.run()
-        self._assert_handler_status(protocol.report_vm_status, "NotReady",
-                                    1, "1.2.0")
+
+        self._assert_handler_status(protocol.report_vm_status, "NotReady", 1, "1.2.0")
 
         # Test uninstall
-        test_data.goal_state = test_data.goal_state.replace("<Incarnation>5<",
-                                                            "<Incarnation>6<")
-        test_data.ext_conf = test_data.ext_conf.replace("disabled", "uninstall")
+        test_data.set_incarnation(6)
+        test_data.set_extensions_config_state("uninstall")
+        protocol.update_goal_state()
+
         exthandlers_handler.run()
+
         self._assert_no_handler_status(protocol.report_vm_status)
 
         # Test uninstall again!
-        test_data.goal_state = test_data.goal_state.replace("<Incarnation>6<",
-                                                            "<Incarnation>7<")
+        test_data.set_incarnation(7)
+        protocol.update_goal_state()
+
         exthandlers_handler.run()
         self._assert_no_handler_status(protocol.report_vm_status)
 
     def test_ext_zip_file_packages_removed_in_update_case(self, *args):
+        # Test enable scenario.
         test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE)
         exthandlers_handler, protocol = self._create_mock(test_data, *args)
 
-        # Test enable scenario.
         exthandlers_handler.run()
+
         self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.0.0")
         self._assert_ext_status(protocol.report_ext_status, "success", 0)
-        self._assert_ext_pkg_file_status(expected_to_be_present=True,
-                                         extension_version="1.0.0")
+        self._assert_ext_pkg_file_status(expected_to_be_present=True, extension_version="1.0.0")
 
         # Update the package
-        test_data.goal_state = test_data.goal_state.replace("<Incarnation>1<",
-                                                            "<Incarnation>2<")
-        test_data.ext_conf = test_data.ext_conf.replace("seqNo=\"0\"",
-                                                        "seqNo=\"1\"")
-        test_data.ext_conf = test_data.ext_conf.replace("1.0.0", "1.1.0")
+        test_data.set_incarnation(2)
+        test_data.set_extensions_config_sequence_number(1)
+        test_data.set_extensions_config_version("1.1.0")
+        protocol.update_goal_state()
+
         exthandlers_handler.run()
+
         self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.1.0")
         self._assert_ext_status(protocol.report_ext_status, "success", 1)
-        self._assert_ext_pkg_file_status(expected_to_be_present=False,
-                                         extension_version="1.0.0")
-        self._assert_ext_pkg_file_status(expected_to_be_present=True,
-                                         extension_version="1.1.0")
+        self._assert_ext_pkg_file_status(expected_to_be_present=False, extension_version="1.0.0")
+        self._assert_ext_pkg_file_status(expected_to_be_present=True, extension_version="1.1.0")
 
         # Update the package second time
-        test_data.goal_state = test_data.goal_state.replace("<Incarnation>2<",
-                                                            "<Incarnation>3<")
-        test_data.ext_conf = test_data.ext_conf.replace("seqNo=\"1\"",
-                                                        "seqNo=\"2\"")
-        test_data.ext_conf = test_data.ext_conf.replace("1.1.0", "1.2.0")
+        test_data.set_incarnation(3)
+        test_data.set_extensions_config_sequence_number(2)
+        test_data.set_extensions_config_version("1.2.0")
+        protocol.update_goal_state()
+
         exthandlers_handler.run()
+
         self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.2.0")
         self._assert_ext_status(protocol.report_ext_status, "success", 2)
-        self._assert_ext_pkg_file_status(expected_to_be_present=False,
-                                         extension_version="1.1.0")
-        self._assert_ext_pkg_file_status(expected_to_be_present=True,
-                                         extension_version="1.2.0")
+        self._assert_ext_pkg_file_status(expected_to_be_present=False, extension_version="1.1.0")
+        self._assert_ext_pkg_file_status(expected_to_be_present=True, extension_version="1.2.0")
 
     def test_ext_zip_file_packages_removed_in_uninstall_case(self, *args):
+        # Test enable scenario.
         test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE)
         exthandlers_handler, protocol = self._create_mock(test_data, *args)
         extension_version = "1.0.0"
 
-        # Test enable scenario.
         exthandlers_handler.run()
+
         self._assert_handler_status(protocol.report_vm_status, "Ready", 1, extension_version)
         self._assert_ext_status(protocol.report_ext_status, "success", 0)
-        self._assert_ext_pkg_file_status(expected_to_be_present=True,
-                                         extension_version=extension_version)
+        self._assert_ext_pkg_file_status(expected_to_be_present=True, extension_version=extension_version)
 
         # Test uninstall
-        test_data.goal_state = test_data.goal_state.replace("<Incarnation>1<",
-                                                            "<Incarnation>2<")
-        test_data.ext_conf = test_data.ext_conf.replace("enabled", "uninstall")
+        test_data.set_incarnation(2)
+        test_data.set_extensions_config_state("uninstall")
+        protocol.update_goal_state()
+
         exthandlers_handler.run()
+
         self._assert_no_handler_status(protocol.report_vm_status)
-        self._assert_ext_pkg_file_status(expected_to_be_present=False,
-                                         extension_version=extension_version)
+        self._assert_ext_pkg_file_status(expected_to_be_present=False, extension_version=extension_version)
 
     def test_ext_zip_file_packages_removed_in_update_and_uninstall_case(self, *args):
+        # Test enable scenario.
         test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE)
         exthandlers_handler, protocol = self._create_mock(test_data, *args)
 
-        # Test enable scenario.
         exthandlers_handler.run()
+
         self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.0.0")
         self._assert_ext_status(protocol.report_ext_status, "success", 0)
-        self._assert_ext_pkg_file_status(expected_to_be_present=True,
-                                         extension_version="1.0.0")
+        self._assert_ext_pkg_file_status(expected_to_be_present=True, extension_version="1.0.0")
 
         # Update the package
-        test_data.goal_state = test_data.goal_state.replace("<Incarnation>1<",
-                                                            "<Incarnation>2<")
-        test_data.ext_conf = test_data.ext_conf.replace("seqNo=\"0\"",
-                                                        "seqNo=\"1\"")
-        test_data.ext_conf = test_data.ext_conf.replace("1.0.0", "1.1.0")
+        test_data.set_incarnation(2)
+        test_data.set_extensions_config_sequence_number(1)
+        test_data.set_extensions_config_version("1.1.0")
+        protocol.update_goal_state()
+
         exthandlers_handler.run()
+
         self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.1.0")
         self._assert_ext_status(protocol.report_ext_status, "success", 1)
-        self._assert_ext_pkg_file_status(expected_to_be_present=False,
-                                         extension_version="1.0.0")
-        self._assert_ext_pkg_file_status(expected_to_be_present=True,
-                                         extension_version="1.1.0")
+        self._assert_ext_pkg_file_status(expected_to_be_present=False, extension_version="1.0.0")
+        self._assert_ext_pkg_file_status(expected_to_be_present=True, extension_version="1.1.0")
 
         # Update the package second time
-        test_data.goal_state = test_data.goal_state.replace("<Incarnation>2<",
-                                                            "<Incarnation>3<")
-        test_data.ext_conf = test_data.ext_conf.replace("seqNo=\"1\"",
-                                                        "seqNo=\"2\"")
-        test_data.ext_conf = test_data.ext_conf.replace("1.1.0", "1.2.0")
+        test_data.set_incarnation(3)
+        test_data.set_extensions_config_sequence_number(2)
+        test_data.set_extensions_config_version("1.2.0")
+        protocol.update_goal_state()
+
         exthandlers_handler.run()
+
         self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.2.0")
         self._assert_ext_status(protocol.report_ext_status, "success", 2)
-        self._assert_ext_pkg_file_status(expected_to_be_present=False,
-                                         extension_version="1.1.0")
-        self._assert_ext_pkg_file_status(expected_to_be_present=True,
-                                         extension_version="1.2.0")
+        self._assert_ext_pkg_file_status(expected_to_be_present=False, extension_version="1.1.0")
+        self._assert_ext_pkg_file_status(expected_to_be_present=True, extension_version="1.2.0")
 
         # Test uninstall
-        test_data.goal_state = test_data.goal_state.replace("<Incarnation>3<",
-                                                            "<Incarnation>4<")
-        test_data.ext_conf = test_data.ext_conf.replace("enabled", "uninstall")
+        test_data.set_incarnation(4)
+        test_data.set_extensions_config_state("uninstall")
+        protocol.update_goal_state()
+
         exthandlers_handler.run()
+
         self._assert_no_handler_status(protocol.report_vm_status)
-        self._assert_ext_pkg_file_status(expected_to_be_present=False,
-                                         extension_version="1.2.0")
+        self._assert_ext_pkg_file_status(expected_to_be_present=False, extension_version="1.2.0")
 
     def test_ext_handler_no_settings(self, *args):
         test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE_EXT_NO_SETTINGS)
@@ -579,11 +585,12 @@ class TestExtension(ExtensionTestCase):
         self._assert_no_handler_status(protocol.report_vm_status)
 
     def test_ext_handler_sequencing(self, *args):
+        # Test enable scenario.
         test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE_EXT_SEQUENCING)
         exthandlers_handler, protocol = self._create_mock(test_data, *args)
 
-        # Test enable scenario.
         exthandlers_handler.run()
+
         self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.0.0",
                                     expected_handler_name="OSTCExtensions.OtherExampleHandlerLinux")
         self._assert_ext_status(protocol.report_ext_status, "success", 0)
@@ -601,16 +608,15 @@ class TestExtension(ExtensionTestCase):
                                     expected_handler_name="OSTCExtensions.OtherExampleHandlerLinux")
 
         # Test goal state changed
-        test_data.goal_state = test_data.goal_state.replace("<Incarnation>1<",
-                                                            "<Incarnation>2<")
-        test_data.ext_conf = test_data.ext_conf.replace("seqNo=\"0\"",
-                                                        "seqNo=\"1\"")
+        test_data.set_incarnation(2)
+        test_data.set_extensions_config_sequence_number(1)
         # Swap the dependency ordering
-        test_data.ext_conf = test_data.ext_conf.replace("dependencyLevel=\"2\"",
-                                                        "dependencyLevel=\"3\"")
-        test_data.ext_conf = test_data.ext_conf.replace("dependencyLevel=\"1\"",
-                                                        "dependencyLevel=\"4\"")
+        test_data.ext_conf = test_data.ext_conf.replace("dependencyLevel=\"2\"", "dependencyLevel=\"3\"")
+        test_data.ext_conf = test_data.ext_conf.replace("dependencyLevel=\"1\"", "dependencyLevel=\"4\"")
+        protocol.update_goal_state()
+
         exthandlers_handler.run()
+
         self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.0.0")
         self._assert_ext_status(protocol.report_ext_status, "success", 1)
 
@@ -622,12 +628,13 @@ class TestExtension(ExtensionTestCase):
         # In the case of disable, the last extension to be enabled should be
         # the first extension disabled. The first extension enabled should be
         # the last one disabled.
-        test_data.goal_state = test_data.goal_state.replace("<Incarnation>2<",
-                                                            "<Incarnation>3<")
-        test_data.ext_conf = test_data.ext_conf.replace("enabled", "disabled")
+        test_data.set_incarnation(3)
+        test_data.set_extensions_config_state("disabled")
+        protocol.update_goal_state()
+
         exthandlers_handler.run()
-        self._assert_handler_status(protocol.report_vm_status, "NotReady",
-                                    1, "1.0.0",
+
+        self._assert_handler_status(protocol.report_vm_status, "NotReady", 1, "1.0.0",
                                     expected_handler_name="OSTCExtensions.OtherExampleHandlerLinux")
         self.assertEqual(len(exthandlers_handler.ext_handlers.extHandlers), 2)
         self.assertEqual(exthandlers_handler.ext_handlers.extHandlers[0].properties.extensions[0].dependencyLevel, 4)
@@ -637,15 +644,16 @@ class TestExtension(ExtensionTestCase):
         # In the case of uninstall, the last extension to be installed should be
         # the first extension uninstalled. The first extension installed
         # should be the last one uninstalled.
-        test_data.goal_state = test_data.goal_state.replace("<Incarnation>3<",
-                                                            "<Incarnation>4<")
-        test_data.ext_conf = test_data.ext_conf.replace("disabled", "uninstall")
+        test_data.set_incarnation(4)
+        test_data.set_extensions_config_state("uninstall")
+
         # Swap the dependency ordering AGAIN
-        test_data.ext_conf = test_data.ext_conf.replace("dependencyLevel=\"3\"",
-                                                        "dependencyLevel=\"6\"")
-        test_data.ext_conf = test_data.ext_conf.replace("dependencyLevel=\"4\"",
-                                                        "dependencyLevel=\"5\"")
+        test_data.ext_conf = test_data.ext_conf.replace("dependencyLevel=\"3\"", "dependencyLevel=\"6\"")
+        test_data.ext_conf = test_data.ext_conf.replace("dependencyLevel=\"4\"", "dependencyLevel=\"5\"")
+        protocol.update_goal_state()
+
         exthandlers_handler.run()
+
         self._assert_no_handler_status(protocol.report_vm_status)
         self.assertEqual(len(exthandlers_handler.ext_handlers.extHandlers), 2)
         self.assertEqual(exthandlers_handler.ext_handlers.extHandlers[0].properties.extensions[0].dependencyLevel, 6)
@@ -660,16 +668,14 @@ class TestExtension(ExtensionTestCase):
 
     def test_ext_handler_sequencing_invalid_dependency_level(self, *args):
         test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE_EXT_SEQUENCING)
-        exthandlers_handler, protocol = self._create_mock(test_data, *args)
-
-        test_data.goal_state = test_data.goal_state.replace("<Incarnation>1<",
-                                                            "<Incarnation>2<")
-        test_data.ext_conf = test_data.ext_conf.replace("seqNo=\"0\"",
-                                                        "seqNo=\"1\"")
+        test_data.set_incarnation(2)
+        test_data.set_extensions_config_sequence_number(1)
         test_data.ext_conf = test_data.ext_conf.replace("dependencyLevel=\"1\"",
                                                         "dependencyLevel=\"a6\"")
         test_data.ext_conf = test_data.ext_conf.replace("dependencyLevel=\"2\"",
                                                         "dependencyLevel=\"5b\"")
+        exthandlers_handler, protocol = self._create_mock(test_data, *args)
+
         exthandlers_handler.run()
 
         self.assertEqual(exthandlers_handler.ext_handlers.extHandlers[0].properties.extensions[0].dependencyLevel, 0)
@@ -731,79 +737,97 @@ class TestExtension(ExtensionTestCase):
         self.assertEquals(expected_status_json, actual_status_json)
 
     def test_ext_handler_rollingupgrade(self, *args):
+        # Test enable scenario.
         test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE_EXT_ROLLINGUPGRADE)
         exthandlers_handler, protocol = self._create_mock(test_data, *args)
 
-        # Test enable scenario.
         exthandlers_handler.run()
+
         self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.0.0")
         self._assert_ext_status(protocol.report_ext_status, "success", 0)
 
         # Test goal state changed
-        test_data.goal_state = test_data.goal_state.replace("<Incarnation>1<",
-                                                            "<Incarnation>2<")
+        test_data.set_incarnation(2)
+        protocol.update_goal_state()
+
         exthandlers_handler.run()
+
         self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.0.0")
         self._assert_ext_status(protocol.report_ext_status, "success", 0)
 
         # Test minor version bump
-        test_data.goal_state = test_data.goal_state.replace("<Incarnation>2<",
-                                                            "<Incarnation>3<")
-        test_data.ext_conf = test_data.ext_conf.replace("1.0.0", "1.1.0")
+        test_data.set_incarnation(3)
+        test_data.set_extensions_config_version("1.1.0")
+        protocol.update_goal_state()
+
         exthandlers_handler.run()
+
         self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.1.0")
         self._assert_ext_status(protocol.report_ext_status, "success", 0)
 
         # Test hotfix version bump
-        test_data.goal_state = test_data.goal_state.replace("<Incarnation>3<",
-                                                            "<Incarnation>4<")
-        test_data.ext_conf = test_data.ext_conf.replace("1.1.0", "1.1.1")
+        test_data.set_incarnation(4)
+        test_data.set_extensions_config_version("1.1.1")
+        protocol.update_goal_state()
+
         exthandlers_handler.run()
+
         self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.1.1")
         self._assert_ext_status(protocol.report_ext_status, "success", 0)
 
         # Test disable
-        test_data.goal_state = test_data.goal_state.replace("<Incarnation>4<",
-                                                            "<Incarnation>5<")
-        test_data.ext_conf = test_data.ext_conf.replace("enabled", "disabled")
+        test_data.set_incarnation(5)
+        test_data.set_extensions_config_state("disabled")
+        protocol.update_goal_state()
+
         exthandlers_handler.run()
-        self._assert_handler_status(protocol.report_vm_status, "NotReady",
-                                    1, "1.1.1")
+
+        self._assert_handler_status(protocol.report_vm_status, "NotReady", 1, "1.1.1")
 
         # Test uninstall
-        test_data.goal_state = test_data.goal_state.replace("<Incarnation>5<",
-                                                            "<Incarnation>6<")
-        test_data.ext_conf = test_data.ext_conf.replace("disabled", "uninstall")
+        test_data.set_incarnation(6)
+        test_data.set_extensions_config_state("uninstall")
+        protocol.update_goal_state()
+
         exthandlers_handler.run()
+
         self._assert_no_handler_status(protocol.report_vm_status)
 
         # Test uninstall again!
-        test_data.goal_state = test_data.goal_state.replace("<Incarnation>6<",
-                                                            "<Incarnation>7<")
+        test_data.set_incarnation(7)
+        protocol.update_goal_state()
+
         exthandlers_handler.run()
+
         self._assert_no_handler_status(protocol.report_vm_status)
 
         # Test re-install
-        test_data.goal_state = test_data.goal_state.replace("<Incarnation>7<",
-                                                            "<Incarnation>8<")
-        test_data.ext_conf = test_data.ext_conf.replace("uninstall", "enabled")
+        test_data.set_incarnation(8)
+        test_data.set_extensions_config_state("enabled")
+        protocol.update_goal_state()
+
         exthandlers_handler.run()
+
         self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.1.1")
         self._assert_ext_status(protocol.report_ext_status, "success", 0)
 
         # Test version bump post-re-install
-        test_data.goal_state = test_data.goal_state.replace("<Incarnation>8<",
-                                                            "<Incarnation>9<")
-        test_data.ext_conf = test_data.ext_conf.replace("1.1.1", "1.2.0")
+        test_data.set_incarnation(9)
+        test_data.set_extensions_config_version("1.2.0")
+        protocol.update_goal_state()
+
         exthandlers_handler.run()
+
         self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.2.0")
         self._assert_ext_status(protocol.report_ext_status, "success", 0)
 
         # Test rollback
-        test_data.goal_state = test_data.goal_state.replace("<Incarnation>9<",
-                                                            "<Incarnation>10<")
-        test_data.ext_conf = test_data.ext_conf.replace("1.2.0", "1.1.0")
+        test_data.set_incarnation(10)
+        test_data.set_extensions_config_version("1.1.0")
+        protocol.update_goal_state()
+
         exthandlers_handler.run()
+
         self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.1.0")
         self._assert_ext_status(protocol.report_ext_status, "success", 0)
 
@@ -907,34 +931,33 @@ class TestExtension(ExtensionTestCase):
         exthandlers_handler.run()
 
     def test_extension_processing_allowed(self, *args):
-        exthandlers_handler = get_exthandlers_handler()
-        exthandlers_handler.protocol = Mock()
+        exthandlers_handler = get_exthandlers_handler(Mock())
 
         # disable extension handling in configuration
         with patch.object(conf, 'get_extensions_enabled', return_value=False):
-            self.assertFalse(exthandlers_handler.extension_processing_allowed())
+            self.assertFalse(exthandlers_handler._extension_processing_allowed())
 
         # enable extension handling in configuration
         with patch.object(conf, "get_extensions_enabled", return_value=True):
             # disable overprovisioning in configuration
             with patch.object(conf, 'get_enable_overprovisioning', return_value=False):
-                self.assertTrue(exthandlers_handler.extension_processing_allowed())
+                self.assertTrue(exthandlers_handler._extension_processing_allowed())
 
             # enable overprovisioning in configuration
             with patch.object(conf, "get_enable_overprovisioning", return_value=True):
                 # disable protocol support for over-provisioning
                 with patch.object(exthandlers_handler.protocol, 'supports_overprovisioning', return_value=False):
-                    self.assertTrue(exthandlers_handler.extension_processing_allowed())
+                    self.assertTrue(exthandlers_handler._extension_processing_allowed())
 
                 # enable protocol support for over-provisioning
                 with patch.object(exthandlers_handler.protocol, "supports_overprovisioning", return_value=True):
                     with patch.object(exthandlers_handler.protocol.get_artifacts_profile(), "is_on_hold",
                                       side_effect=[True, False]):
                         # Enable on_hold property in artifact_blob
-                        self.assertFalse(exthandlers_handler.extension_processing_allowed())
+                        self.assertFalse(exthandlers_handler._extension_processing_allowed())
 
                         # Disable on_hold property in artifact_blob
-                        self.assertTrue(exthandlers_handler.extension_processing_allowed())
+                        self.assertTrue(exthandlers_handler._extension_processing_allowed())
 
     def test_handle_ext_handlers_on_hold_true(self, *args):
         test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE)
@@ -944,13 +967,13 @@ class TestExtension(ExtensionTestCase):
         exthandlers_handler.protocol = protocol
 
         # Disable extension handling blocking
-        exthandlers_handler.extension_processing_allowed = Mock(return_value=False)
+        exthandlers_handler._extension_processing_allowed = Mock(return_value=False)
         with patch.object(ExtHandlersHandler, 'handle_ext_handlers') as patch_handle_ext_handlers:
             exthandlers_handler.run()
             self.assertEqual(0, patch_handle_ext_handlers.call_count)
 
         # enable extension handling blocking
-        exthandlers_handler.extension_processing_allowed = Mock(return_value=True)
+        exthandlers_handler._extension_processing_allowed = Mock(return_value=True)
         with patch.object(ExtHandlersHandler, 'handle_ext_handlers') as patch_handle_ext_handlers:
             exthandlers_handler.run()
             self.assertEqual(1, patch_handle_ext_handlers.call_count)
@@ -986,7 +1009,7 @@ class TestExtension(ExtensionTestCase):
         exthandlers_handler.protocol = protocol
 
         # Disable extension handling blocking in the first run and enable in the 2nd run
-        with patch.object(exthandlers_handler, 'extension_processing_allowed', side_effect=[False, True]):
+        with patch.object(exthandlers_handler, '_extension_processing_allowed', side_effect=[False, True]):
             exthandlers_handler.run()
             self.assertIsNone(exthandlers_handler.last_etag,
                               "The last etag should be None initially as extension_processing is False")
@@ -1264,23 +1287,24 @@ class TestExtension(ExtensionTestCase):
         self._assert_no_handler_status(protocol.report_vm_status)
 
     def test_extensions_deleted(self, *args):
+        # Ensure initial enable is successful
         test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE_EXT_DELETION)
         exthandlers_handler, protocol = self._create_mock(test_data, *args)
 
-        # Ensure initial enable is successful
         exthandlers_handler.run()
+
         self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.0.0")
         self._assert_ext_status(protocol.report_ext_status, "success", 0)
 
         # Update incarnation, simulate new extension version and old one deleted
-        test_data.goal_state = test_data.goal_state.replace("<Incarnation>1<",
-                                                            "<Incarnation>2<")
-        test_data.ext_conf = test_data.ext_conf.replace('version="1.0.0"',
-                                                        'version="1.0.1"')
-        test_data.manifest = test_data.manifest.replace('1.0.0', '1.0.1')
+        test_data.set_incarnation(2)
+        test_data.set_extensions_config_version("1.0.1")
+        test_data.set_manifest_version('1.0.1')
+        protocol.update_goal_state()
 
         # Ensure new extension can be enabled
         exthandlers_handler.run()
+
         self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.0.1")
         self._assert_ext_status(protocol.report_ext_status, "success", 0)
 
@@ -1369,12 +1393,12 @@ class TestExtension(ExtensionTestCase):
         """
         When extension disable fails, the operation should not be retried.
         """
+        # Ensure initial install and enable is successful, but disable fails
         test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE_EXT_SINGLE)
         exthandlers_handler, protocol = self._create_mock(test_data, *args)
-
-        # Ensure initial install and enable is successful, but disable fails
         patch_get_disable_command.call_count = 0
         patch_get_disable_command.return_value = "exit.sh 1"
+
         exthandlers_handler.run()
 
         self.assertEqual(0, patch_get_disable_command.call_count)
@@ -1383,17 +1407,19 @@ class TestExtension(ExtensionTestCase):
         self._assert_ext_status(protocol.report_ext_status, "success", 0)
 
         # Next incarnation, disable extension
-        test_data.goal_state = test_data.goal_state.replace("<Incarnation>1<",
-                                                            "<Incarnation>2<")
-        test_data.ext_conf = test_data.ext_conf.replace("enabled", "disabled")
+        test_data.set_incarnation(2)
+        test_data.set_extensions_config_state("disabled")
+        protocol.update_goal_state()
 
         exthandlers_handler.run()
+
         self.assertEqual(1, patch_get_disable_command.call_count)
         self.assertEqual(2, protocol.report_vm_status.call_count)
         self._assert_handler_status(protocol.report_vm_status, "NotReady", expected_ext_count=1, version="1.0.0")
 
         # Ensure there are no further retries
         exthandlers_handler.run()
+
         self.assertEqual(1, patch_get_disable_command.call_count)
         self.assertEqual(3, protocol.report_vm_status.call_count)
         self._assert_handler_status(protocol.report_vm_status, "NotReady", expected_ext_count=1, version="1.0.0")
@@ -1405,12 +1431,12 @@ class TestExtension(ExtensionTestCase):
         """
         When extension disable fails, the operation should be reported.
         """
+        # Ensure initial install and enable is successful, but disable fails
         test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE_EXT_SINGLE)
         exthandlers_handler, protocol = self._create_mock(test_data, *args)
-
-        # Ensure initial install and enable is successful, but disable fails
         patch_get_disable_command.call_count = 0
         patch_get_disable_command.return_value = "exit 1"
+
         exthandlers_handler.run()
 
         self.assertEqual(0, patch_get_disable_command.call_count)
@@ -1419,8 +1445,9 @@ class TestExtension(ExtensionTestCase):
         self._assert_ext_status(protocol.report_ext_status, "success", 0)
 
         # Next incarnation, disable extension
-        test_data.goal_state = test_data.goal_state.replace("<Incarnation>1<", "<Incarnation>2<")
-        test_data.ext_conf = test_data.ext_conf.replace("enabled", "disabled")
+        test_data.set_incarnation(2)
+        test_data.set_extensions_config_state("disabled")
+        protocol.update_goal_state()
 
         exthandlers_handler.run()
 
@@ -1433,12 +1460,12 @@ class TestExtension(ExtensionTestCase):
         """
         When extension uninstall fails, the operation should not be retried.
         """
+        # Ensure initial install and enable is successful, but uninstall fails
         test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE_EXT_SINGLE)
         exthandlers_handler, protocol = self._create_mock(test_data, *args)
-
-        # Ensure initial install and enable is successful, but uninstall fails
         patch_get_uninstall_command.call_count = 0
         patch_get_uninstall_command.return_value = "exit 1"
+
         exthandlers_handler.run()
 
         self.assertEqual(0, patch_get_uninstall_command.call_count)
@@ -1447,11 +1474,12 @@ class TestExtension(ExtensionTestCase):
         self._assert_ext_status(protocol.report_ext_status, "success", 0)
 
         # Next incarnation, disable extension
-        test_data.goal_state = test_data.goal_state.replace("<Incarnation>1<",
-                                                            "<Incarnation>2<")
-        test_data.ext_conf = test_data.ext_conf.replace("enabled", "uninstall")
+        test_data.set_incarnation(2)
+        test_data.set_extensions_config_state("uninstall")
+        protocol.update_goal_state()
 
         exthandlers_handler.run()
+
         self.assertEqual(1, patch_get_uninstall_command.call_count)
         self.assertEqual(2, protocol.report_vm_status.call_count)
         self.assertEquals("Ready", protocol.report_vm_status.call_args[0][0].vmAgent.status)
@@ -1459,6 +1487,7 @@ class TestExtension(ExtensionTestCase):
 
         # Ensure there are no further retries
         exthandlers_handler.run()
+
         self.assertEqual(1, patch_get_uninstall_command.call_count)
         self.assertEqual(3, protocol.report_vm_status.call_count)
         self.assertEquals("Ready", protocol.report_vm_status.call_args[0][0].vmAgent.status)
@@ -1473,8 +1502,7 @@ class TestExtension(ExtensionTestCase):
         Note: we don't re-download the zip since it wasn't cleaned up in the previous goal state (we only clean up
         NotInstalled handlers), so we just re-use the existing zip of the new extension.
         """
-        test_data, exthandlers_handler, protocol = self._set_up_update_test_and_update_gs(patch_get_update_command,
-                                                                                          *args)
+        test_data, exthandlers_handler, protocol = self._set_up_update_test_and_update_gs(patch_get_update_command, *args)
         extension_name = exthandlers_handler.ext_handlers.extHandlers[0].name
         extension_calls = []
         original_popen = subprocess.Popen
@@ -1512,7 +1540,9 @@ class TestExtension(ExtensionTestCase):
 
             # If the incarnation number changes (there's a new goal state), ensure we go through the entire upgrade
             # process again.
-            test_data.goal_state = test_data.goal_state.replace("<Incarnation>2<", "<Incarnation>3<")
+            test_data.set_incarnation(3)
+            protocol.update_goal_state()
+
             exthandlers_handler.run()
 
             update_command_count = len([extension_call for extension_call in extension_calls
@@ -1527,8 +1557,7 @@ class TestExtension(ExtensionTestCase):
 
     @patch('azurelinuxagent.ga.exthandlers.HandlerManifest.get_disable_command')
     def test_extension_upgrade_failure_when_prev_version_disable_fails(self, patch_get_disable_command, *args):
-        test_data, exthandlers_handler, protocol = self._set_up_update_test_and_update_gs(patch_get_disable_command,
-                                                                                          *args)
+        test_data, exthandlers_handler, protocol = self._set_up_update_test_and_update_gs(patch_get_disable_command, *args)
 
         with patch('azurelinuxagent.ga.exthandlers.HandlerManifest.get_enable_command') as patch_get_enable_command:
             exthandlers_handler.run()
@@ -1571,7 +1600,8 @@ class TestExtension(ExtensionTestCase):
             self.assertEqual(0, patch_get_enable_command.call_count)
 
             # Force a new goal state incarnation, only then will we attempt the upgrade again
-            test_data.goal_state = test_data.goal_state.replace("<Incarnation>2<", "<Incarnation>3<")
+            test_data.set_incarnation(3)
+            protocol.update_goal_state()
 
             # Ensure disable won't fail by making launch_command a no-op
             with patch('azurelinuxagent.ga.exthandlers.ExtHandlerInstance.launch_command') as patch_launch_command:
@@ -1775,7 +1805,9 @@ class TestExtension(ExtensionTestCase):
 
             # Initiating another run which shouldn't have any failed env variables in it if no failures
             # Updating Incarnation
-            test_data.goal_state = test_data.goal_state.replace("<Incarnation>2<", "<Incarnation>3<")
+            test_data.set_incarnation(3)
+            protocol.update_goal_state()
+
             exthandlers_handler.run()
             _, new_enable_kwargs = patch_start_cmd.call_args
 
@@ -1960,8 +1992,7 @@ class TestExtensionSequencing(AgentTestCase):
         protocol.report_vm_status = MagicMock()
         protocol.get_artifacts_profile = MagicMock()
 
-        handler = get_exthandlers_handler()
-        handler.protocol_util.get_protocol = Mock(return_value=protocol)
+        handler = get_exthandlers_handler(protocol)
         handler.ext_handlers, handler.last_etag = protocol.get_ext_handlers()
         conf.get_enable_overprovisioning = Mock(return_value=False)
 
@@ -2184,8 +2215,6 @@ class TestExtensionWithCGroupsEnabled(AgentTestCase):
         self.assertEquals(expected_seq_no, ext_status.sequenceNumber)
 
     def _create_mock(self, test_data, mock_http_get, mock_crypt_util, *args):
-        """Test enable/disable/uninstall of an extension"""
-        ext_handler = get_exthandlers_handler()
         monitor_handler = get_monitor_handler()
 
         # Mock protocol to return test data
@@ -2197,7 +2226,8 @@ class TestExtensionWithCGroupsEnabled(AgentTestCase):
         protocol.report_ext_status = MagicMock()
         protocol.report_vm_status = MagicMock()
 
-        ext_handler.protocol_util.get_protocol = Mock(return_value=protocol)
+        ext_handler = get_exthandlers_handler(protocol)
+
         monitor_handler.protocol_util.get_protocol = Mock(return_value=protocol)
         return ext_handler, monitor_handler, protocol
 
@@ -2205,11 +2235,12 @@ class TestExtensionWithCGroupsEnabled(AgentTestCase):
     def test_ext_handler_with_cgroup_enabled(self, *args):
         self.assertTrue(i_am_root(), "Test does not run when non-root")
 
+        # Test enable scenario.
         test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE)
         exthandlers_handler, _, protocol = self._create_mock(test_data, *args)
 
-        # Test enable scenario.
         exthandlers_handler.run()
+
         self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.0.0")
         self._assert_ext_status(protocol.report_ext_status, "success", 0)
 
@@ -2218,53 +2249,61 @@ class TestExtensionWithCGroupsEnabled(AgentTestCase):
         self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.0.0")
 
         # Test goal state changed
-        test_data.goal_state = test_data.goal_state.replace("<Incarnation>1<",
-                                                            "<Incarnation>2<")
-        test_data.ext_conf = test_data.ext_conf.replace("seqNo=\"0\"",
-                                                        "seqNo=\"1\"")
+        test_data.set_incarnation(2)
+        test_data.set_extensions_config_sequence_number(1)
+        protocol.update_goal_state()
+
         exthandlers_handler.run()
+
         self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.0.0")
         self._assert_ext_status(protocol.report_ext_status, "success", 1)
 
         # Test hotfix
-        test_data.goal_state = test_data.goal_state.replace("<Incarnation>2<",
-                                                            "<Incarnation>3<")
-        test_data.ext_conf = test_data.ext_conf.replace("1.0.0", "1.1.1")
-        test_data.ext_conf = test_data.ext_conf.replace("seqNo=\"1\"",
-                                                        "seqNo=\"2\"")
+        test_data.set_incarnation(3)
+        test_data.set_extensions_config_version("1.1.1")
+        test_data.set_extensions_config_sequence_number(2)
+        protocol.update_goal_state()
+
         exthandlers_handler.run()
+
         self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.1.1")
         self._assert_ext_status(protocol.report_ext_status, "success", 2)
 
         # Test upgrade
-        test_data.goal_state = test_data.goal_state.replace("<Incarnation>3<",
-                                                            "<Incarnation>4<")
-        test_data.ext_conf = test_data.ext_conf.replace("1.1.1", "1.2.0")
-        test_data.ext_conf = test_data.ext_conf.replace("seqNo=\"2\"",
-                                                        "seqNo=\"3\"")
+        test_data.set_incarnation(4)
+        test_data.set_extensions_config_version("1.2.0")
+        test_data.set_extensions_config_sequence_number(3)
+        protocol.update_goal_state()
+
         exthandlers_handler.run()
+
         self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.2.0")
         self._assert_ext_status(protocol.report_ext_status, "success", 3)
 
         # Test disable
-        test_data.goal_state = test_data.goal_state.replace("<Incarnation>4<",
-                                                            "<Incarnation>5<")
-        test_data.ext_conf = test_data.ext_conf.replace("enabled", "disabled")
+        test_data.set_incarnation(5)
+        test_data.set_extensions_config_state("disabled")
+        protocol.update_goal_state()
+
         exthandlers_handler.run()
-        self._assert_handler_status(protocol.report_vm_status, "NotReady",
-                                    1, "1.2.0")
+
+        self._assert_handler_status(protocol.report_vm_status, "NotReady", 1, "1.2.0")
 
         # Test uninstall
-        test_data.goal_state = test_data.goal_state.replace("<Incarnation>5<",
-                                                            "<Incarnation>6<")
-        test_data.ext_conf = test_data.ext_conf.replace("disabled", "uninstall")
+        test_data.set_incarnation(6)
+        test_data.set_extensions_config_state("uninstall")
+        protocol.update_goal_state()
+
         exthandlers_handler.run()
+
         self._assert_no_handler_status(protocol.report_vm_status)
 
         # Test uninstall again!
-        test_data.goal_state = test_data.goal_state.replace("<Incarnation>6<",
-                                                            "<Incarnation>7<")
+        test_data.set_incarnation(7)
+        protocol.update_goal_state()
+
         exthandlers_handler.run()
+
         self._assert_no_handler_status(protocol.report_vm_status)
 
     @skip_if_predicate_true(lambda: True, "Skipping this test currently: We need two different tests - one for "
@@ -2322,66 +2361,76 @@ class TestExtensionWithCGroupsEnabled(AgentTestCase):
         from azurelinuxagent.common.cgroupapi import CGroupsApi
         print(CGroupsApi._is_systemd())
 
+        # Test enable scenario.
         test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE)
         exthandlers_handler, _, protocol = self._create_mock(test_data, *args)
 
-        # Test enable scenario.
         exthandlers_handler.run()
+
         self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.0.0")
         self._assert_ext_status(protocol.report_ext_status, "success", 0)
 
         # Test goal state not changed
         exthandlers_handler.run()
+
         self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.0.0")
 
         # Test goal state changed
-        test_data.goal_state = test_data.goal_state.replace("<Incarnation>1<",
-                                                            "<Incarnation>2<")
-        test_data.ext_conf = test_data.ext_conf.replace("seqNo=\"0\"",
-                                                        "seqNo=\"1\"")
+        test_data.set_incarnation(2)
+        test_data.set_extensions_config_sequence_number(1)
+        protocol.update_goal_state()
+
         exthandlers_handler.run()
+
         self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.0.0")
         self._assert_ext_status(protocol.report_ext_status, "success", 1)
 
         # Test hotfix
-        test_data.goal_state = test_data.goal_state.replace("<Incarnation>2<",
-                                                            "<Incarnation>3<")
+        test_data.set_incarnation(3)
         test_data.ext_conf = test_data.ext_conf.replace("1.0.0", "1.1.1")
-        test_data.ext_conf = test_data.ext_conf.replace("seqNo=\"1\"",
-                                                        "seqNo=\"2\"")
+        test_data.set_extensions_config_sequence_number(2)
+        protocol.update_goal_state()
+
         exthandlers_handler.run()
+
         self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.1.1")
         self._assert_ext_status(protocol.report_ext_status, "success", 2)
 
         # Test upgrade
-        test_data.goal_state = test_data.goal_state.replace("<Incarnation>3<",
-                                                            "<Incarnation>4<")
-        test_data.ext_conf = test_data.ext_conf.replace("1.1.1", "1.2.0")
-        test_data.ext_conf = test_data.ext_conf.replace("seqNo=\"2\"",
-                                                        "seqNo=\"3\"")
+        test_data.set_incarnation(4)
+        test_data.set_extensions_config_version("1.2.0")
+        test_data.set_extensions_config_sequence_number(3)
+        protocol.update_goal_state()
+
         exthandlers_handler.run()
+
         self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.2.0")
         self._assert_ext_status(protocol.report_ext_status, "success", 3)
 
         # Test disable
-        test_data.goal_state = test_data.goal_state.replace("<Incarnation>4<",
-                                                            "<Incarnation>5<")
+        test_data.set_incarnation(5)
         test_data.ext_conf = test_data.ext_conf.replace("enabled", "disabled")
+        protocol.update_goal_state()
+
         exthandlers_handler.run()
-        self._assert_handler_status(protocol.report_vm_status, "NotReady",
-                                    1, "1.2.0")
+
+        self._assert_handler_status(protocol.report_vm_status, "NotReady", 1, "1.2.0")
 
         # Test uninstall
-        test_data.goal_state = test_data.goal_state.replace("<Incarnation>5<",
-                                                            "<Incarnation>6<")
+        test_data.set_incarnation(6)
         test_data.ext_conf = test_data.ext_conf.replace("disabled", "uninstall")
+        protocol.update_goal_state()
+
         exthandlers_handler.run()
+
         self._assert_no_handler_status(protocol.report_vm_status)
 
         # Test uninstall again!
-        test_data.goal_state = test_data.goal_state.replace("<Incarnation>6<",
-                                                            "<Incarnation>7<")
+        test_data.set_incarnation(7)
+        protocol.update_goal_state()
+
         exthandlers_handler.run()
+
         self._assert_no_handler_status(protocol.report_vm_status)
 
 

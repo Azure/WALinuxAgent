@@ -274,7 +274,9 @@ class UpdateHandler(object):
             env_thread.run()
 
             from azurelinuxagent.ga.exthandlers import get_exthandlers_handler, migrate_handler_state
-            exthandlers_handler = get_exthandlers_handler()
+            protocol = self.protocol_util.get_protocol()
+
+            exthandlers_handler = get_exthandlers_handler(protocol)
             migrate_handler_state()
 
             from azurelinuxagent.ga.remoteaccess import get_remote_access_handler
@@ -297,11 +299,16 @@ class UpdateHandler(object):
                 else GOAL_STATE_INTERVAL_DISABLED
 
             while self.running:
+                #
+                # Check that the parent process (the agent's daemon) is still running
+                #
                 if not debug and self._is_orphaned:
-                    logger.info("Agent {0} is an orphan -- exiting",
-                                CURRENT_AGENT)
+                    logger.info("Agent {0} is an orphan -- exiting", CURRENT_AGENT)
                     break
 
+                #
+                # Check that all the threads are still running
+                #
                 if not monitor_thread.is_alive():
                     logger.warn(u"Monitor thread died, restarting")
                     monitor_thread.start()
@@ -310,7 +317,12 @@ class UpdateHandler(object):
                     logger.warn(u"Environment thread died, restarting")
                     env_thread.start()
 
-                if self._upgrade_available():
+                #
+                # Process the goal state
+                #
+                protocol.update_goal_state()
+
+                if self._upgrade_available(protocol):
                     available_agent = self.get_latest_agent()
                     if available_agent is None:
                         logger.info(
@@ -631,7 +643,7 @@ class UpdateHandler(object):
                 str(e))
         return
 
-    def _upgrade_available(self, base_version=CURRENT_VERSION):
+    def _upgrade_available(self, protocol, base_version=CURRENT_VERSION):
         # Emit an event expressing the state of AutoUpdate
         # Note:
         # - Duplicate events get suppressed; state transitions always emit
@@ -658,7 +670,6 @@ class UpdateHandler(object):
         logger.verbose("Checking for agent family {0} updates", family)
 
         self.last_attempt_time = now
-        protocol = self.protocol_util.get_protocol()
 
         try:
             manifest_list, etag = protocol.get_vmagent_manifests()
