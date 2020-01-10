@@ -248,32 +248,31 @@ class UpdateHandler(object):
         """
 
         try:
-            # NOTE: Do not add any telemetry events until after the monitoring handler has been started with the
-            # call to 'monitor_thread.run()'. That method call initializes the protocol, which is needed in order to
-            # load the goal state and update the container id in memory. Any telemetry events sent before this happens
-            # will result in an uninitialized container id value.
+            logger.info(u"Agent {0} is running as the goal state agent", CURRENT_AGENT)
 
-            logger.info(u"Agent {0} is running as the goal state agent",
-                        CURRENT_AGENT)
+            #
+            # Fetch the goal state one time; some components depend on information provided by the goal state and this
+            # call ensures the required info is initialized (e.g telemetry depends on the container ID.)
+            #
+            protocol = self.protocol_util.get_protocol()
+            protocol.update_goal_state()
 
-            # Log OS-specific info locally.
-            os_info_msg = u"Distro info: {0} {1}, osutil class being used: {2}, " \
-                          u"agent service name: {3}".format(DISTRO_NAME, DISTRO_VERSION,
-                                                            type(self.osutil).__name__, self.osutil.service_name)
+            # Log OS-specific info.
+            os_info_msg = u"Distro info: {0} {1}, osutil class being used: {2}, agent service name: {3}"\
+                .format(DISTRO_NAME, DISTRO_VERSION,type(self.osutil).__name__, self.osutil.service_name)
+
             logger.info(os_info_msg)
+
+            add_event(AGENT_NAME, op=WALAEventOperation.OSInfo, message=os_info_msg)
 
             # Launch monitoring threads
             from azurelinuxagent.ga.monitor import get_monitor_handler
             monitor_thread = get_monitor_handler()
             monitor_thread.run()
 
-            # NOTE: Any telemetry events added from this point on will be properly populated with the container id.
-
             from azurelinuxagent.ga.env import get_env_handler
             env_thread = get_env_handler()
             env_thread.run()
-
-            protocol = self.protocol_util.get_protocol()
 
             from azurelinuxagent.ga.exthandlers import get_exthandlers_handler, migrate_handler_state
             exthandlers_handler = get_exthandlers_handler(protocol)
@@ -288,15 +287,7 @@ class UpdateHandler(object):
             self._ensure_readonly_files()
             self._ensure_cgroups_initialized()
 
-            # Send OS-specific info as a telemetry event after the monitoring thread has been initialized, and with
-            # it the container id too.
-            add_event(AGENT_NAME,
-                      op=WALAEventOperation.OSInfo,
-                      message=os_info_msg)
-
-            goal_state_interval = GOAL_STATE_INTERVAL \
-                if conf.get_extensions_enabled() \
-                else GOAL_STATE_INTERVAL_DISABLED
+            goal_state_interval = GOAL_STATE_INTERVAL if conf.get_extensions_enabled() else GOAL_STATE_INTERVAL_DISABLED
 
             while self.running:
                 #
