@@ -273,14 +273,14 @@ class UpdateHandler(object):
             env_thread = get_env_handler()
             env_thread.run()
 
-            from azurelinuxagent.ga.exthandlers import get_exthandlers_handler, migrate_handler_state
             protocol = self.protocol_util.get_protocol()
 
+            from azurelinuxagent.ga.exthandlers import get_exthandlers_handler, migrate_handler_state
             exthandlers_handler = get_exthandlers_handler(protocol)
             migrate_handler_state()
 
             from azurelinuxagent.ga.remoteaccess import get_remote_access_handler
-            remote_access_handler = get_remote_access_handler()
+            remote_access_handler = get_remote_access_handler(protocol)
 
             self._ensure_no_orphans()
             self._emit_restart_event()
