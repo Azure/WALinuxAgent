@@ -21,8 +21,8 @@ import os
 import stat
 import tempfile
 import time
-import uuid
 import unittest
+import uuid
 import zipfile
 
 from azurelinuxagent.common.exception import InvalidContainerError, ResourceGoneError, ProtocolError, \
@@ -30,7 +30,7 @@ from azurelinuxagent.common.exception import InvalidContainerError, ResourceGone
 from azurelinuxagent.common.future import httpclient
 from azurelinuxagent.common.protocol.hostplugin import HostPluginProtocol
 from azurelinuxagent.common.protocol.wire import WireProtocol, WireClient, GoalState, ExtensionsConfig, \
-    InVMArtifactsProfile, VMAgentManifestUri, StatusBlob, VMStatus, INCARNATION_FILE_NAME, ExtHandlerVersionUri, \
+    InVMArtifactsProfile, VMAgentManifestUri, StatusBlob, VMStatus, ExtHandlerVersionUri, \
     DataContractList, socket
 from azurelinuxagent.common.telemetryevent import TelemetryEvent, TelemetryEventParam, TelemetryEventList
 from azurelinuxagent.common.utils import fileutil, restutil

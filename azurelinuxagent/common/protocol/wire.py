@@ -24,19 +24,20 @@ import re
 import time
 import xml.sax.saxutils as saxutils
 from datetime import datetime
+from threading import Lock
 
 import azurelinuxagent.common.conf as conf
-from azurelinuxagent.common.datacontract import validate_param, set_properties
-from azurelinuxagent.common.event import add_event, add_periodic, WALAEventOperation, CONTAINER_ID_ENV_VARIABLE
+import azurelinuxagent.common.logger as logger
 import azurelinuxagent.common.utils.textutil as textutil
+from azurelinuxagent.common.datacontract import validate_param, set_properties
+from azurelinuxagent.common.event import add_periodic, WALAEventOperation, CONTAINER_ID_ENV_VARIABLE
 from azurelinuxagent.common.exception import ProtocolNotFoundError, \
     ResourceGoneError, ExtensionDownloadError, InvalidContainerError, ProtocolError, HttpError
 from azurelinuxagent.common.future import httpclient, bytebuffer
-import azurelinuxagent.common.logger as logger
-from azurelinuxagent.common.utils import fileutil, restutil
 from azurelinuxagent.common.protocol.hostplugin import HostPluginProtocol
 from azurelinuxagent.common.protocol.restapi import *
 from azurelinuxagent.common.telemetryevent import TelemetryEventList
+from azurelinuxagent.common.utils import fileutil, restutil
 from azurelinuxagent.common.utils.archive import StateFlusher
 from azurelinuxagent.common.utils.cryptutil import CryptUtil
 from azurelinuxagent.common.utils.textutil import parse_doc, findall, find, \
@@ -524,11 +525,11 @@ def event_to_v1(event):
 
 
 class WireClient(object):
+
     def __init__(self, endpoint):
         logger.info("Wire server endpoint:{0}", endpoint)
         self.endpoint = endpoint
         self.goal_state = None
-        self.updated = None
         self.hosting_env = None
         self.shared_conf = None
         self.remote_access = None
@@ -669,19 +670,21 @@ class WireClient(object):
                 headers=headers,
                 use_proxy=use_proxy)
 
+            host_plugin = self.get_host_plugin()
             if restutil.request_failed(resp):
                 error_response = restutil.read_response_error(resp)
                 msg = "Fetch failed from [{0}]: {1}".format(uri, error_response)
                 logger.warn(msg)
-                if self.host_plugin is not None:
-                    self.host_plugin.report_fetch_health(uri,
-                                                         is_healthy=not restutil.request_failed_at_hostplugin(resp),
-                                                         source='WireClient',
-                                                         response=error_response)
+
+                if host_plugin is not None:
+                    host_plugin.report_fetch_health(uri,
+                                                     is_healthy=not restutil.request_failed_at_hostplugin(resp),
+                                                     source='WireClient',
+                                                     response=error_response)
                 raise ProtocolError(msg)
             else:
-                if self.host_plugin is not None:
-                    self.host_plugin.report_fetch_health(uri, source='WireClient')
+                if host_plugin is not None:
+                    host_plugin.report_fetch_health(uri, source='WireClient')
 
         except (HttpError, ProtocolError, IOError) as e:
             logger.verbose("Fetch failed from [{0}]: {1}", uri, e)
@@ -808,7 +811,6 @@ class WireClient(object):
                         self.save_cache(goal_state_file, xml_text)
 
                     self.goal_state_flusher.flush(datetime.utcnow())
-
                     self.goal_state = new_goal_state
                     save_goal_state(new_goal_state.incarnation, new_goal_state_xml)
                     self.update_hosting_env(new_goal_state)
@@ -819,7 +821,6 @@ class WireClient(object):
                     self.save_cache(incarnation_file, new_goal_state.incarnation)
 
                     update_host_plugin()
-
                 return
 
             except IOError as e:
@@ -1033,8 +1034,9 @@ class WireClient(object):
         try:
             ret = host_func()
         except (ResourceGoneError, InvalidContainerError) as e:
-            old_container_id = self.host_plugin.container_id
-            old_role_config_name = self.host_plugin.role_config_name
+            host_plugin = self.get_host_plugin()
+            old_container_id = host_plugin.container_id
+            old_role_config_name = host_plugin.role_config_name
 
             msg = "[PERIODIC] Request failed with the current host plugin configuration. " \
                   "ContainerId: {0}, role config file: {1}. Fetching new goal state and retrying the call." \
@@ -1043,8 +1045,8 @@ class WireClient(object):
 
             self.update_host_plugin_from_goal_state()
 
-            new_container_id = self.host_plugin.container_id
-            new_role_config_name = self.host_plugin.role_config_name
+            new_container_id = host_plugin.container_id
+            new_role_config_name = host_plugin.role_config_name
             msg = "[PERIODIC] Host plugin reconfigured with new parameters. " \
                   "ContainerId: {0}, role config file: {1}.".format(new_container_id, new_role_config_name)
             logger.periodic_info(logger.EVERY_SIX_HOURS, msg)
