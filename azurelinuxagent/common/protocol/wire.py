@@ -783,7 +783,6 @@ class WireClient(object):
         """
         Fetches a new goal state and updates the internal state of the WireClient according to the requested 'refresh_type'
         """
-        incarnation_file = os.path.join(conf.get_lib_dir(), INCARNATION_FILE_NAME)
         uri = GOAL_STATE_URI.format(self.endpoint)
 
         max_retry = 3
@@ -804,8 +803,8 @@ class WireClient(object):
 
                 def incarnation_changed():
                     last_incarnation = None
-                    if os.path.isfile(incarnation_file):
-                        last_incarnation = fileutil.read_file(incarnation_file)
+                    if self._goal_state is not None:
+                        last_incarnation = self._goal_state.incarnation
                     return last_incarnation is None or last_incarnation != new_goal_state.incarnation
 
                 if refresh_type == WireClient._UpdateType.GoalStateForced or incarnation_changed() or self._goal_state is None:
@@ -823,7 +822,7 @@ class WireClient(object):
                     self.update_certs(new_goal_state)
                     self.update_ext_conf(new_goal_state)
                     self.update_remote_access_conf(new_goal_state)
-                    self.save_cache(incarnation_file, new_goal_state.incarnation)
+                    self.save_cache(os.path.join(conf.get_lib_dir(), INCARNATION_FILE_NAME), new_goal_state.incarnation)
 
                     update_host_plugin()
 

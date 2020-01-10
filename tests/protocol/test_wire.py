@@ -30,8 +30,7 @@ from azurelinuxagent.common.exception import InvalidContainerError, ResourceGone
 from azurelinuxagent.common.future import httpclient
 from azurelinuxagent.common.protocol.hostplugin import HostPluginProtocol
 from azurelinuxagent.common.protocol.wire import WireProtocol, WireClient, GoalState, ExtensionsConfig, \
-    InVMArtifactsProfile, VMAgentManifestUri, StatusBlob, VMStatus, INCARNATION_FILE_NAME, ExtHandlerVersionUri, \
-    DataContractList, socket
+    InVMArtifactsProfile, VMAgentManifestUri, StatusBlob, VMStatus, ExtHandlerVersionUri, DataContractList, socket
 from azurelinuxagent.common.telemetryevent import TelemetryEvent, TelemetryEventParam, TelemetryEventList
 from azurelinuxagent.common.utils import fileutil, restutil
 from azurelinuxagent.common.utils.shellutil import run_get_output
