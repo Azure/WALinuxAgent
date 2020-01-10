@@ -61,8 +61,9 @@ class DaemonHandler(object):
 
     def run(self, child_args=None):
         #
-        # The Container ID in telemetry events requires information retrieved from the goal state (e.g. Container ID).
-        # We can fetch the goal state only after protocol detection, which is done during provisioning.
+        # The Container ID in telemetry events is retrieved from the goal state. We can fetch the goal state
+        # only after protocol detection, which is done during provisioning.
+        #
         # Be aware that telemetry events emitted before that will not include the Container ID.
         #
         logger.info("{0} Version:{1}", AGENT_LONG_NAME, AGENT_VERSION)
