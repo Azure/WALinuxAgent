@@ -307,9 +307,9 @@ class ProtocolUtil(SingletonPerThread):
                 return
             logger.error("Failed to clear protocol endpoint: {0}", e)
 
-    def get_protocol(self, by_file=False):
+    def get_protocol(self): 
         """
-        Detect protocol by endpoints, if by_file is True
+        Detect protocol by endpoints
         :returns: protocol instance
         """
 
