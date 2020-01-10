@@ -103,7 +103,7 @@ class WireProtocol(Protocol):
         self.client.update_goal_state()
 
     def get_endpoint(self):
-        return self.client.endpoint
+        return self.client.get_endpoint()
 
     def get_vminfo(self):
         goal_state = self.client.get_goal_state()
@@ -527,7 +527,7 @@ def event_to_v1(event):
 class WireClient(object):
     def __init__(self, endpoint):
         logger.info("Wire server endpoint:{0}", endpoint)
-        self.endpoint = endpoint
+        self._endpoint = endpoint
         self._goal_state = None
         # Not used anywhere so removing
         # self.updated = None
@@ -539,6 +539,9 @@ class WireClient(object):
         self._host_plugin = None
         self.status_blob = StatusBlob(self)
         self.goal_state_flusher = StateFlusher(conf.get_lib_dir())
+
+    def get_endpoint(self):
+        return self._endpoint
 
     def call_wireserver(self, http_req, *args, **kwargs):
         try:
@@ -783,7 +786,7 @@ class WireClient(object):
         """
         Fetches a new goal state and updates the internal state of the WireClient according to the requested 'refresh_type'
         """
-        uri = GOAL_STATE_URI.format(self.endpoint)
+        uri = GOAL_STATE_URI.format(self.get_endpoint())
 
         max_retry = 3
 
@@ -1027,7 +1030,7 @@ class WireClient(object):
             os.unlink(agent_manifest)
 
     def check_wire_protocol_version(self):
-        uri = VERSION_INFO_URI.format(self.endpoint)
+        uri = VERSION_INFO_URI.format(self.get_endpoint())
         version_info_xml = self.fetch_config(uri, None)
         version_info = VersionInfo(version_info_xml)
 
@@ -1191,7 +1194,7 @@ class WireClient(object):
                                            goal_state.role_instance_id,
                                            thumbprint)
         role_prop = role_prop.encode("utf-8")
-        role_prop_uri = ROLE_PROP_URI.format(self.endpoint)
+        role_prop_uri = ROLE_PROP_URI.format(self.get_endpoint())
         headers = self.get_header_for_xml_content()
         try:
             resp = self.call_wireserver(restutil.http_post,
@@ -1215,7 +1218,7 @@ class WireClient(object):
                                              substatus,
                                              description)
         health_report = health_report.encode("utf-8")
-        health_report_uri = HEALTH_REPORT_URI.format(self.endpoint)
+        health_report_uri = HEALTH_REPORT_URI.format(self.get_endpoint())
         headers = self.get_header_for_xml_content()
         try:
             # 30 retries with 10s sleep gives ~5min for wireserver updates;
@@ -1236,7 +1239,7 @@ class WireClient(object):
                                                       resp.read()))
 
     def send_event(self, provider_id, event_str):
-        uri = TELEMETRY_URI.format(self.endpoint)
+        uri = TELEMETRY_URI.format(self.get_endpoint())
         data_format = ('<?xml version="1.0"?>'
                        '<TelemetryData version="1.0">'
                        '<Provider id="{0}">{1}'
@@ -1317,7 +1320,7 @@ class WireClient(object):
     def get_host_plugin(self):
         if self._host_plugin is None:
             goal_state = self.get_goal_state()
-            self.set_host_plugin(HostPluginProtocol(self.endpoint,
+            self.set_host_plugin(HostPluginProtocol(self.get_endpoint(),
                                                     goal_state.container_id,
                                                     goal_state.role_config_name))
         return self._host_plugin
