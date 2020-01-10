@@ -343,7 +343,7 @@ class ProtocolUtil(SingletonPerThread):
             protocols.append(prots.MetadataProtocol)
         protocol_name, protocol = self._detect_protocol(protocols)
 
-        IOErrorCounter.set_protocol_endpoint(endpoint=protocol.endpoint)
+        IOErrorCounter.set_protocol_endpoint(endpoint=protocol.get_endpoint())
         self._save_protocol(protocol_name)
 
         self._protocol = protocol

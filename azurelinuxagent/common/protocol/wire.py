@@ -799,7 +799,9 @@ class WireClient(object):
                     return
 
                 def incarnation_changed():
-                    last_incarnation = self.goal_state.incarnation
+                    last_incarnation = None
+                    if os.path.isfile(incarnation_file):
+                        last_incarnation = fileutil.read_file(incarnation_file)
                     return last_incarnation is None or last_incarnation != new_goal_state.incarnation
 
                 if refresh_type == WireClient._UpdateType.GoalStateForced or incarnation_changed() or self.goal_state is None:
