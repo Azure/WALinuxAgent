@@ -70,6 +70,16 @@ class TestWireProtocol(AgentTestCase):
         super(TestWireProtocol, self).setUp()
         HostPluginProtocol.set_default_channel(False)
 
+    @staticmethod
+    def _setup_test_ext_conf(wire_protocol_client, artifacts_profile_blob=None,
+                             status_upload_blob=None,
+                             status_upload_blob_type=None):
+        ext_conf = ExtensionsConfig(None)
+        ext_conf.artifacts_profile_blob = artifacts_profile_blob
+        ext_conf.status_upload_blob = status_upload_blob
+        ext_conf.status_upload_blob_type = status_upload_blob_type
+        wire_protocol_client.set_ext_conf(ext_conf)
+
     def _test_getters(self, test_data, certsMustBePresent, __, MockCryptUtil, _):
         MockCryptUtil.side_effect = test_data.mock_crypt_util
 
@@ -184,12 +194,13 @@ class TestWireProtocol(AgentTestCase):
 
     def test_status_blob_parsing(self, *args):
         wire_protocol_client = WireProtocol(WIRESERVER_URL).client
-        wire_protocol_client.ext_conf = ExtensionsConfig(mockwiredata.WireProtocolData(mockwiredata.DATA_FILE).ext_conf)
-        self.assertEqual(wire_protocol_client.ext_conf.status_upload_blob,
+        wire_protocol_client.set_ext_conf(
+            ExtensionsConfig(mockwiredata.WireProtocolData(mockwiredata.DATA_FILE).ext_conf))
+        self.assertEqual(wire_protocol_client.get_ext_conf().status_upload_blob,
                          'https://test.blob.core.windows.net/vhds/test-cs12.test-cs12.test-cs12.status?'
                          'sr=b&sp=rw&se=9999-01-01&sk=key1&sv=2014-02-14&'
                          'sig=hfRh7gzUE7sUtYwke78IOlZOrTRCYvkec4hGZ9zZzXo')
-        self.assertEqual(wire_protocol_client.ext_conf.status_upload_blob_type,
+        self.assertEqual(wire_protocol_client.get_ext_conf().status_upload_blob_type,
                          u'BlockBlob')
         pass
 
@@ -255,9 +266,7 @@ class TestWireProtocol(AgentTestCase):
         """
         vmstatus = VMStatus(message="Ready", status="Ready")
         wire_protocol_client = WireProtocol(WIRESERVER_URL).client
-        wire_protocol_client.ext_conf = ExtensionsConfig(None)
-        wire_protocol_client.ext_conf.status_upload_blob = testurl
-        wire_protocol_client.ext_conf.status_upload_blob_type = testtype
+        self._setup_test_ext_conf(wire_protocol_client, status_upload_blob=testurl, status_upload_blob_type=testtype)
         wire_protocol_client.status_blob.vm_status = vmstatus
 
         with patch.object(WireClient, "get_goal_state") as patch_get_goal_state:
@@ -277,9 +286,7 @@ class TestWireProtocol(AgentTestCase):
     def test_upload_status_blob_host_ga_plugin(self, *args):
         vmstatus = VMStatus(message="Ready", status="Ready")
         wire_protocol_client = WireProtocol(WIRESERVER_URL).client
-        wire_protocol_client.ext_conf = ExtensionsConfig(None)
-        wire_protocol_client.ext_conf.status_upload_blob = testurl
-        wire_protocol_client.ext_conf.status_upload_blob_type = testtype
+        self._setup_test_ext_conf(wire_protocol_client, status_upload_blob=testurl, status_upload_blob_type=testtype)
         wire_protocol_client.status_blob.vm_status = vmstatus
         goal_state = GoalState(mockwiredata.WireProtocolData(mockwiredata.DATA_FILE).goal_state)
 
@@ -304,9 +311,9 @@ class TestWireProtocol(AgentTestCase):
     def test_upload_status_blob_unknown_type_assumes_block(self, _, __, *args):
         vmstatus = VMStatus(message="Ready", status="Ready")
         wire_protocol_client = WireProtocol(WIRESERVER_URL).client
-        wire_protocol_client.ext_conf = ExtensionsConfig(None)
-        wire_protocol_client.ext_conf.status_upload_blob = testurl
-        wire_protocol_client.ext_conf.status_upload_blob_type = "NotALegalType"
+        self._setup_test_ext_conf(wire_protocol_client,
+                                  status_upload_blob=testurl,
+                                  status_upload_blob_type="NotALegalType")
         wire_protocol_client.status_blob.vm_status = vmstatus
 
         with patch.object(WireClient, "get_goal_state") as patch_get_goal_state:
@@ -323,9 +330,7 @@ class TestWireProtocol(AgentTestCase):
     def test_upload_status_blob_reports_prepare_error(self, *args):
         vmstatus = VMStatus(message="Ready", status="Ready")
         wire_protocol_client = WireProtocol(WIRESERVER_URL).client
-        wire_protocol_client.ext_conf = ExtensionsConfig(None)
-        wire_protocol_client.ext_conf.status_upload_blob = testurl
-        wire_protocol_client.ext_conf.status_upload_blob_type = testtype
+        self._setup_test_ext_conf(wire_protocol_client, status_upload_blob=testurl, status_upload_blob_type=testtype)
         wire_protocol_client.status_blob.vm_status = vmstatus
         goal_state = GoalState(mockwiredata.WireProtocolData(mockwiredata.DATA_FILE).goal_state)
 
@@ -335,19 +340,18 @@ class TestWireProtocol(AgentTestCase):
 
     def test_get_in_vm_artifacts_profile_blob_not_available(self, *args):
         wire_protocol_client = WireProtocol(WIRESERVER_URL).client
-        wire_protocol_client.ext_conf = ExtensionsConfig(None)
+        wire_protocol_client.set_ext_conf(ExtensionsConfig(None))
 
         # Test when artifacts_profile_blob is null/None
         self.assertEqual(None, wire_protocol_client.get_artifacts_profile())
 
         # Test when artifacts_profile_blob is whitespace
-        wire_protocol_client.ext_conf.artifacts_profile_blob = "  "
+        self._setup_test_ext_conf(wire_protocol_client, artifacts_profile_blob="  ")
         self.assertEqual(None, wire_protocol_client.get_artifacts_profile())
 
     def test_get_in_vm_artifacts_profile_response_body_not_valid(self, *args):
         wire_protocol_client = WireProtocol(WIRESERVER_URL).client
-        wire_protocol_client.ext_conf = ExtensionsConfig(None)
-        wire_protocol_client.ext_conf.artifacts_profile_blob = testurl
+        self._setup_test_ext_conf(wire_protocol_client, artifacts_profile_blob=testurl)
         goal_state = GoalState(mockwiredata.WireProtocolData(mockwiredata.DATA_FILE).goal_state)
         wire_protocol_client.get_goal_state = Mock(return_value=goal_state)
 
@@ -375,8 +379,7 @@ class TestWireProtocol(AgentTestCase):
     @patch("azurelinuxagent.common.event.add_event")
     def test_artifacts_profile_json_parsing(self, patch_event, *args):
         wire_protocol_client = WireProtocol(WIRESERVER_URL).client
-        wire_protocol_client.ext_conf = ExtensionsConfig(None)
-        wire_protocol_client.ext_conf.artifacts_profile_blob = testurl
+        self._setup_test_ext_conf(wire_protocol_client, artifacts_profile_blob=testurl)
         goal_state = GoalState(mockwiredata.WireProtocolData(mockwiredata.DATA_FILE).goal_state)
         wire_protocol_client.get_goal_state = Mock(return_value=goal_state)
 
@@ -395,8 +398,7 @@ class TestWireProtocol(AgentTestCase):
 
     def test_get_in_vm_artifacts_profile_default(self, *args):
         wire_protocol_client = WireProtocol(WIRESERVER_URL).client
-        wire_protocol_client.ext_conf = ExtensionsConfig(None)
-        wire_protocol_client.ext_conf.artifacts_profile_blob = testurl
+        self._setup_test_ext_conf(wire_protocol_client, artifacts_profile_blob=testurl)
         goal_state = GoalState(mockwiredata.WireProtocolData(mockwiredata.DATA_FILE).goal_state)
         wire_protocol_client.get_goal_state = Mock(return_value=goal_state)
 
@@ -460,8 +462,7 @@ class TestWireProtocol(AgentTestCase):
 
     def test_get_in_vm_artifacts_profile_host_ga_plugin(self, *args):
         wire_protocol_client = WireProtocol(WIRESERVER_URL).client
-        wire_protocol_client.ext_conf = ExtensionsConfig(None)
-        wire_protocol_client.ext_conf.artifacts_profile_blob = testurl
+        self._setup_test_ext_conf(wire_protocol_client, artifacts_profile_blob=testurl)
         goal_state = GoalState(mockwiredata.WireProtocolData(mockwiredata.DATA_FILE).goal_state)
         wire_protocol_client.get_goal_state = Mock(return_value=goal_state)
         wire_protocol_client.fetch = Mock(side_effect=[None, '{"onHold": "true"}'])
@@ -600,8 +601,8 @@ class TestWireClient(AgentTestCase):
         wire_protocol_client = WireProtocol(WIRESERVER_URL).client
         wire_protocol_client.get_goal_state = Mock(return_value=test_goal_state)
 
-        with patch("azurelinuxagent.common.protocol.wire.WireClient.fetch_cache",
-                   return_value=mockwiredata.WireProtocolData(mockwiredata.DATA_FILE).ext_conf):
+        with patch("azurelinuxagent.common.protocol.wire.WireClient.get_ext_conf",
+                   return_value=ExtensionsConfig(mockwiredata.WireProtocolData(mockwiredata.DATA_FILE).ext_conf)):
             ext_conf = wire_protocol_client.get_ext_conf()
 
         self.assertEqual(1, len(ext_conf.ext_handlers.extHandlers))
@@ -1135,24 +1136,24 @@ class UpdateGoalStateTestCase(GoalStateTestCase):
             else:
                 self.wire_client.update_goal_state()
 
-            sequence_number = self.wire_client.ext_conf.ext_handlers.extHandlers[0].properties.extensions[0].sequenceNumber
+            sequence_number = self.wire_client.get_ext_conf().ext_handlers.extHandlers[0].properties.extensions[0].sequenceNumber
 
-            self.assertEqual(self.wire_client.goal_state.incarnation, new_incarnation)
-            self.assertEqual(self.wire_client.hosting_env.deployment_name, new_hosting_env_deployment_name)
-            self.assertEqual(self.wire_client.shared_conf.xml_text, new_shared_conf)
+            self.assertEqual(self.wire_client.get_goal_state().incarnation, new_incarnation)
+            self.assertEqual(self.wire_client.get_hosting_env().deployment_name, new_hosting_env_deployment_name)
+            self.assertEqual(self.wire_client.get_shared_conf().xml_text, new_shared_conf)
             self.assertEqual(sequence_number, new_sequence_number)
-            self.assertEqual(len(self.wire_client.certs.cert_list.certificates), 0)
+            self.assertEqual(len(self.wire_client.get_certs().cert_list.certificates), 0)
 
-            self.assertEqual(self.wire_client.host_plugin.container_id, new_container_id)
-            self.assertEqual(self.wire_client.host_plugin.role_config_name, new_role_config_name)
+            self.assertEqual(self.wire_client.get_host_plugin().container_id, new_container_id)
+            self.assertEqual(self.wire_client.get_host_plugin().role_config_name, new_role_config_name)
 
     def test_non_forced_update_should_not_update_the_goal_state_nor_the_host_plugin_when_the_incarnation_does_not_change(self):
         # The container id, role config name and shared config can change without the incarnation changing; capture the initial
         # goal state and then change those fields.
-        goal_state = self.wire_client.goal_state.xml_text
-        shared_conf = self.wire_client.shared_conf.xml_text
-        container_id = self.wire_client.host_plugin.container_id
-        role_config_name = self.wire_client.host_plugin.role_config_name
+        goal_state = self.wire_client.get_goal_state().xml_text
+        shared_conf = self.wire_client.get_shared_conf().xml_text
+        container_id = self.wire_client.get_host_plugin().container_id
+        role_config_name = self.wire_client.get_host_plugin().role_config_name
 
         self.mock_data.set_container_id(str(uuid.uuid4()))
         self.mock_data.set_role_config_name(str(uuid.uuid4()))
@@ -1160,15 +1161,15 @@ class UpdateGoalStateTestCase(GoalStateTestCase):
 
         self.wire_client.update_goal_state()
 
-        self.assertEqual(self.wire_client.goal_state.xml_text, goal_state)
-        self.assertEqual(self.wire_client.shared_conf.xml_text, shared_conf)
+        self.assertEqual(self.wire_client.get_goal_state().xml_text, goal_state)
+        self.assertEqual(self.wire_client.get_shared_conf().xml_text, shared_conf)
 
-        self.assertEqual(self.wire_client.host_plugin.container_id, container_id)
-        self.assertEqual(self.wire_client.host_plugin.role_config_name, role_config_name)
+        self.assertEqual(self.wire_client.get_host_plugin().container_id, container_id)
+        self.assertEqual(self.wire_client.get_host_plugin().role_config_name, role_config_name)
 
     def test_forced_update_should_update_the_goal_state_and_the_host_plugin_when_the_incarnation_does_not_change(self):
         # The container id, role config name and shared config can change without the incarnation changing
-        incarnation = self.wire_client.goal_state.incarnation
+        incarnation = self.wire_client.get_goal_state().incarnation
         new_container_id = str(uuid.uuid4())
         new_role_config_name = str(uuid.uuid4())
         new_shared_conf = WireProtocolData.replace_xml_attribute_value(self.mock_data.shared_config, "Deployment", "name", str(uuid.uuid4()))
@@ -1179,11 +1180,11 @@ class UpdateGoalStateTestCase(GoalStateTestCase):
 
         self.wire_client.update_goal_state(forced=True)
 
-        self.assertEqual(self.wire_client.goal_state.incarnation, incarnation)
-        self.assertEqual(self.wire_client.shared_conf.xml_text, new_shared_conf)
+        self.assertEqual(self.wire_client.get_goal_state().incarnation, incarnation)
+        self.assertEqual(self.wire_client.get_shared_conf().xml_text, new_shared_conf)
 
-        self.assertEqual(self.wire_client.host_plugin.container_id, new_container_id)
-        self.assertEqual(self.wire_client.host_plugin.role_config_name, new_role_config_name)
+        self.assertEqual(self.wire_client.get_host_plugin().container_id, new_container_id)
+        self.assertEqual(self.wire_client.get_host_plugin().role_config_name, new_role_config_name)
 
 
 class UpdateHostPluginFromGoalStateTestCase(GoalStateTestCase):
@@ -1208,12 +1209,12 @@ class UpdateHostPluginFromGoalStateTestCase(GoalStateTestCase):
 
             self.wire_client.update_host_plugin_from_goal_state()
 
-            self.assertEqual(self.wire_client.host_plugin.container_id, new_container_id)
-            self.assertEqual(self.wire_client.host_plugin.role_config_name, new_role_config_name)
+            self.assertEqual(self.wire_client.get_host_plugin().container_id, new_container_id)
+            self.assertEqual(self.wire_client.get_host_plugin().role_config_name, new_role_config_name)
 
             # it should not update the goal state
-            self.assertEqual(self.wire_client.goal_state.xml_text, goal_state)
-            self.assertEqual(self.wire_client.shared_conf.xml_text, shared_conf)
+            self.assertEqual(self.wire_client.get_goal_state().xml_text, goal_state)
+            self.assertEqual(self.wire_client.get_shared_conf().xml_text, shared_conf)
 
 
 class MockResponse:
