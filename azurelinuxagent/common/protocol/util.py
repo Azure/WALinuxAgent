@@ -36,7 +36,6 @@ from azurelinuxagent.common.osutil import get_osutil
 from azurelinuxagent.common.dhcp import get_dhcp_handler
 from azurelinuxagent.common.protocol.ovfenv import OvfEnv
 from azurelinuxagent.common.protocol.wire import WireProtocol
-from azurelinuxagent.common.protocol.metadata import MetadataProtocol
 from azurelinuxagent.common.utils.restutil import KNOWN_WIRESERVER_IP, \
                                                   IOErrorCounter
 
@@ -57,7 +56,7 @@ class _nameset(set):
         raise AttributeError("%s not a valid value" % name)
 
 
-prots = _nameset(("WireProtocol", "MetadataProtocol"))
+prots = _nameset(("WireProtocol", ))
 
 
 def get_protocol_util():
@@ -241,11 +240,6 @@ class ProtocolUtil(SingletonPerThread):
             self.dhcp_handler.skip_cache = True
             raise e
 
-    def _detect_metadata_protocol(self):
-        protocol = MetadataProtocol()
-        protocol.detect()
-        return protocol
-
     def _detect_protocol(self, protocols):
         """
         Probe protocol endpoints in turn.
@@ -255,9 +249,7 @@ class ProtocolUtil(SingletonPerThread):
         for retry in range(0, MAX_RETRY):
             for protocol_name in protocols:
                 try:
-                    protocol = self._detect_wire_protocol() \
-                                if protocol_name == prots.WireProtocol \
-                                else self._detect_metadata_protocol()
+                    protocol = self._detect_wire_protocol()
 
                     return (protocol_name, protocol)
 
@@ -282,8 +274,6 @@ class ProtocolUtil(SingletonPerThread):
         if protocol_name == prots.WireProtocol:
             endpoint = self.get_wireserver_endpoint()
             return WireProtocol(endpoint)
-        elif protocol_name == prots.MetadataProtocol:
-            return MetadataProtocol()
         else:
             raise ProtocolNotFoundError(("Unknown protocol: {0}"
                                          "").format(protocol_name))
@@ -319,8 +309,7 @@ class ProtocolUtil(SingletonPerThread):
 
     def get_protocol(self, by_file=False):
         """
-        Detect protocol by endpoints, if by_file is True,
-        detect MetadataProtocol in priority.
+        Detect protocol by endpoints, if by_file is True
         :returns: protocol instance
         """
 
@@ -335,12 +324,6 @@ class ProtocolUtil(SingletonPerThread):
         logger.info("Detect protocol endpoints")
         protocols = [prots.WireProtocol]
 
-        if by_file:
-            tag_file_path = self._get_tag_file_path()
-            if os.path.isfile(tag_file_path):
-                protocols.insert(0, prots.MetadataProtocol)
-        else:
-            protocols.append(prots.MetadataProtocol)
         protocol_name, protocol = self._detect_protocol(protocols)
 
         IOErrorCounter.set_protocol_endpoint(endpoint=protocol.get_endpoint())
