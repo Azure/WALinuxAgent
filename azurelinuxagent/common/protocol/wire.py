@@ -867,7 +867,7 @@ class WireClient(object):
         if new_remote_access is not None:
             self._remote_access = new_remote_access
 
-    def set_host_plugin(self, new_host_plugin: HostPluginProtocol):
+    def set_host_plugin(self, new_host_plugin):
         if new_host_plugin is not None:
             self._host_plugin = new_host_plugin
 
