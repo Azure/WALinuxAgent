@@ -1,24 +1,33 @@
 # Copyright (c) Microsoft Corporation. All rights reserved.
 # Licensed under the Apache License.
 import json
-import subprocess
 import os
+import subprocess
 import time
 
-from mock import MagicMock
+from azurelinuxagent.common.protocol.util import ProtocolUtil
 
+from azurelinuxagent.common.cgroupconfigurator import CGroupConfigurator
+from azurelinuxagent.common.event import WALAEventOperation
+from azurelinuxagent.common.exception import ProtocolError, ExtensionError, ExtensionErrorCodes
 from azurelinuxagent.common.protocol.restapi import ExtensionStatus, Extension, ExtHandler, ExtHandlerProperties
+from azurelinuxagent.common.utils.extensionprocessutil import TELEMETRY_MESSAGE_MAX_LEN, format_stdout_stderr, \
+    read_output
+from mock import MagicMock
 from azurelinuxagent.common.protocol.wire import WireProtocol
 from azurelinuxagent.ga.exthandlers import parse_ext_status, ExtHandlerInstance, get_exthandlers_handler, \
     ExtCommandEnvVariable
-from azurelinuxagent.common.cgroupconfigurator import CGroupConfigurator
-from azurelinuxagent.common.exception import ProtocolError, ExtensionError, ExtensionErrorCodes
-from azurelinuxagent.common.event import WALAEventOperation
-from azurelinuxagent.common.utils.extensionprocessutil import TELEMETRY_MESSAGE_MAX_LEN, format_stdout_stderr, read_output
-from tests.tools import AgentTestCase, patch, mock_sleep
+from tests.tools import AgentTestCase, patch, mock_sleep, clear_singleton_instances
 
 
 class TestExtHandlers(AgentTestCase):
+
+    def setUp(self):
+        super(TestExtHandlers, self).setUp()
+        # Since ProtocolUtil is a singleton per thread, we need to clear it to ensure that the test cases do not
+        # reuse a previous state
+        clear_singleton_instances(ProtocolUtil)
+
     def test_parse_extension_status00(self):
         """
         Parse a status report for a successful execution of an extension.

@@ -21,8 +21,8 @@ import os
 import stat
 import tempfile
 import time
-import uuid
 import unittest
+import uuid
 import zipfile
 
 from azurelinuxagent.common.exception import InvalidContainerError, ResourceGoneError, ProtocolError, \

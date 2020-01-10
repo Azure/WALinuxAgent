@@ -24,19 +24,20 @@ import re
 import time
 import xml.sax.saxutils as saxutils
 from datetime import datetime
+from threading import Lock
 
 import azurelinuxagent.common.conf as conf
-from azurelinuxagent.common.datacontract import validate_param, set_properties
-from azurelinuxagent.common.event import add_event, add_periodic, WALAEventOperation, CONTAINER_ID_ENV_VARIABLE
+import azurelinuxagent.common.logger as logger
 import azurelinuxagent.common.utils.textutil as textutil
+from azurelinuxagent.common.datacontract import validate_param, set_properties
+from azurelinuxagent.common.event import add_periodic, WALAEventOperation, CONTAINER_ID_ENV_VARIABLE
 from azurelinuxagent.common.exception import ProtocolNotFoundError, \
     ResourceGoneError, ExtensionDownloadError, InvalidContainerError, ProtocolError, HttpError
 from azurelinuxagent.common.future import httpclient, bytebuffer
-import azurelinuxagent.common.logger as logger
-from azurelinuxagent.common.utils import fileutil, restutil
 from azurelinuxagent.common.protocol.hostplugin import HostPluginProtocol
 from azurelinuxagent.common.protocol.restapi import *
 from azurelinuxagent.common.telemetryevent import TelemetryEventList
+from azurelinuxagent.common.utils import fileutil, restutil
 from azurelinuxagent.common.utils.archive import StateFlusher
 from azurelinuxagent.common.utils.cryptutil import CryptUtil
 from azurelinuxagent.common.utils.textutil import parse_doc, findall, find, \
@@ -525,6 +526,7 @@ def event_to_v1(event):
 
 
 class WireClient(object):
+
     def __init__(self, endpoint):
         logger.info("Wire server endpoint:{0}", endpoint)
         self._endpoint = endpoint
@@ -680,6 +682,7 @@ class WireClient(object):
                 error_response = restutil.read_response_error(resp)
                 msg = "Fetch failed from [{0}]: {1}".format(uri, error_response)
                 logger.warn(msg)
+
                 if host_plugin is not None:
                     host_plugin.report_fetch_health(uri,
                                                     is_healthy=not restutil.request_failed_at_hostplugin(resp),
@@ -828,7 +831,6 @@ class WireClient(object):
                     self.save_cache(os.path.join(conf.get_lib_dir(), INCARNATION_FILE_NAME), new_goal_state.incarnation)
 
                     update_host_plugin()
-
                 return
 
             except IOError as e:
