@@ -123,12 +123,7 @@ class WireProtocol(Protocol):
         return certificates.cert_list
 
     def get_incarnation(self):
-        goal_state = self.client.get_goal_state()
-        # This check is not needed because a goal_state would always be initialized whenever get_incarnation is called
-        if goal_state is not None:
-            return goal_state.incarnation
-        else:
-            return 0
+        return self.client.get_goal_state().incarnation
 
     def get_vmagent_manifests(self):
         goal_state = self.client.get_goal_state()
@@ -531,8 +526,6 @@ class WireClient(object):
         logger.info("Wire server endpoint:{0}", endpoint)
         self._endpoint = endpoint
         self._goal_state = None
-        # Not used anywhere so removing
-        # self.updated = None
         self._hosting_env = None
         self._shared_conf = None
         self._remote_access = None
@@ -738,17 +731,6 @@ class WireClient(object):
         self.set_remote_access(remote_access)
 
     def get_remote_access(self):
-        # incarnation_file = os.path.join(conf.get_lib_dir(),
-        #                                 INCARNATION_FILE_NAME)
-        # incarnation = self.fetch_cache(incarnation_file)
-        # file_name = REMOTE_ACCESS_FILE_NAME.format(incarnation)
-        # remote_access_file = os.path.join(conf.get_lib_dir(), file_name)
-        # if not os.path.isfile(remote_access_file):
-        #     # no remote access data.
-        #     return None
-        # xml_text = self.fetch_cache(remote_access_file)
-        # remote_access = RemoteAccess(xml_text)
-        # Original implementation was returning None if file had nothing, so just returning None too instead of error
         return self._remote_access
 
     def update_ext_conf(self, goal_state):
@@ -820,7 +802,6 @@ class WireClient(object):
                         self.save_cache(goal_state_file, xml_text)
 
                     self.goal_state_flusher.flush(datetime.utcnow())
-
                     self.set_goal_state(new_goal_state)
                     save_goal_state(new_goal_state.incarnation, new_goal_state_xml)
                     self.update_hosting_env(new_goal_state)
@@ -876,76 +857,24 @@ class WireClient(object):
             self._host_plugin = new_host_plugin
 
     def get_goal_state(self):
-        # if self._goal_state is None:
-        #     incarnation_file = os.path.join(conf.get_lib_dir(),
-        #                                     INCARNATION_FILE_NAME)
-        #     incarnation = self.fetch_cache(incarnation_file)
-        #
-        #     file_name = GOAL_STATE_FILE_NAME.format(incarnation)
-        #     goal_state_file = os.path.join(conf.get_lib_dir(), file_name)
-        #     xml_text = self.fetch_cache(goal_state_file)
-        #     self._goal_state = GoalState(xml_text)
         if self._goal_state is None:
             raise ProtocolError("Trying to fetch goal state before initialization!")
         return self._goal_state
 
     def get_hosting_env(self):
-        # if self._hosting_env is None:
-        #     local_file = os.path.join(conf.get_lib_dir(),
-        #                               HOSTING_ENV_FILE_NAME)
-        #     xml_text = self.fetch_cache(local_file)
-        #     self._hosting_env = HostingEnv(xml_text)
         if self._hosting_env is None:
             raise ProtocolError("Trying to fetch Hosting Environment before initialization!")
         return self._hosting_env
 
     def get_shared_conf(self):
-        # if self._shared_conf is None:
-        #     local_file = os.path.join(conf.get_lib_dir(),
-        #                               SHARED_CONF_FILE_NAME)
-        #     xml_text = self.fetch_cache(local_file)
-        #     self._shared_conf = SharedConfig(xml_text)
         if self._shared_conf is None:
             raise ProtocolError("Trying to fetch Shared Conf before initialization!")
         return self._shared_conf
 
     def get_certs(self):
-        # if self._certs is None:
-        #     local_file = os.path.join(conf.get_lib_dir(), CERTS_FILE_NAME)
-        #     xml_text = self.fetch_cache(local_file)
-        #     self._certs = Certificates(self, xml_text)
-        # if self._certs is None:
-        #     return None
-        # Original implementation was returning None if file had nothing, so just returning None too instead of error
         return self._certs
 
-    # Function not being used, removing it
-    # def get_current_handlers(self):
-    #     handler_list = list()
-    #     try:
-    #         incarnation = self.fetch_cache(os.path.join(conf.get_lib_dir(),
-    #                                                     INCARNATION_FILE_NAME))
-    #         ext_conf = ExtensionsConfig(self.fetch_cache(os.path.join(conf.get_lib_dir(),
-    #                                                                   EXT_CONF_FILE_NAME.format(incarnation))))
-    #         handler_list = ext_conf.ext_handlers.extHandlers
-    #     except ProtocolError as pe:
-    #         # cache file is missing, nothing to do
-    #         logger.verbose(ustr(pe))
-    #     except Exception as e:
-    #         logger.error("Could not obtain current handlers: {0}", ustr(e))
-    #
-    #     return handler_list
-
     def get_ext_conf(self):
-        # if self._ext_conf is None:
-        #     local_goal_state = self.get_goal_state()
-        #     if local_goal_state.ext_uri is None:
-        #         self._ext_conf = ExtensionsConfig(None)
-        #     else:
-        #         local_file = EXT_CONF_FILE_NAME.format(local_goal_state.incarnation)
-        #         local_file = os.path.join(conf.get_lib_dir(), local_file)
-        #         xml_text = self.fetch_cache(local_file)
-        #         self._ext_conf = ExtensionsConfig(xml_text)
         if self._ext_conf is None:
             if self.get_goal_state().ext_uri is None:
                 self.set_ext_conf(ExtensionsConfig(None))
