@@ -7,7 +7,6 @@ import tempfile
 import unittest
 
 from azurelinuxagent.common.protocol.hostplugin import *
-from azurelinuxagent.common.protocol.metadata import *
 from azurelinuxagent.common.protocol.wire import *
 from azurelinuxagent.ga.update import *
 from tests.tools import AgentTestCase, call, data_dir, DEFAULT, patch, load_bin_data, load_data, Mock, MagicMock
@@ -886,7 +885,7 @@ class TestUpdate(UpdateTestCase):
 
     @patch('azurelinuxagent.common.protocol.wire.WireClient.get_host_plugin')
     def test_get_host_plugin_returns_none_otherwise(self, mock_get_host):
-        protocol = MetadataProtocol()
+        protocol = None  # Use None here as it should trigger None back
         host = self.update_handler._get_host_plugin(protocol=protocol)
         mock_get_host.assert_not_called()
         self.assertEqual(None, host)
