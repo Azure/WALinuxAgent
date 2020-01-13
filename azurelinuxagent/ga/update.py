@@ -268,7 +268,7 @@ class UpdateHandler(object):
             # Launch monitoring threads
             from azurelinuxagent.ga.monitor import get_monitor_handler
             monitor_thread = get_monitor_handler()
-            monitor_thread.run()
+            monitor_thread.start(init_data=True)
 
             from azurelinuxagent.ga.env import get_env_handler
             env_thread = get_env_handler()
