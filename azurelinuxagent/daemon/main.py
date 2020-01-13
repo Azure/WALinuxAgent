@@ -60,15 +60,18 @@ class DaemonHandler(object):
         self.osutil = get_osutil()
 
     def run(self, child_args=None):
+        #
+        # The Container ID in telemetry events is retrieved from the goal state. We can fetch the goal state
+        # only after protocol detection, which is done during provisioning.
+        #
+        # Be aware that telemetry events emitted before that will not include the Container ID.
+        #
         logger.info("{0} Version:{1}", AGENT_LONG_NAME, AGENT_VERSION)
         logger.info("OS: {0} {1}", DISTRO_NAME, DISTRO_VERSION)
-        logger.info("Python: {0}.{1}.{2}", PY_VERSION_MAJOR, PY_VERSION_MINOR,
-                    PY_VERSION_MICRO)
+        logger.info("Python: {0}.{1}.{2}", PY_VERSION_MAJOR, PY_VERSION_MINOR, PY_VERSION_MICRO)
 
         self.check_pid()
         self.initialize_environment()
-
-        CGroupConfigurator.get_instance().create_agent_cgroups(track_cgroups=False)
 
         # If FIPS is enabled, set the OpenSSL environment variable
         # Note:
@@ -137,6 +140,9 @@ class DaemonHandler(object):
         self.protocol_util.clear_protocol()
 
         self.provision_handler.run()
+
+        # Initialize the agent cgroup
+        CGroupConfigurator.get_instance().create_agent_cgroups(track_cgroups=False)
 
         # Enable RDMA, continue in errors
         if conf.enable_rdma():
