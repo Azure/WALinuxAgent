@@ -82,12 +82,6 @@ class TestProtocolUtil(AgentTestCase):
         protocol = protocol_util.get_protocol()
         self.assertEquals(WireProtocol.return_value, protocol)
 
-        # Test no protocol is available
-        protocol_util.clear_protocol()
-        WireProtocol.return_value.detect.side_effect = ProtocolError()
-
-        self.assertRaises(ProtocolError, protocol_util.get_protocol)
-
     @patch("azurelinuxagent.common.conf.get_lib_dir")
     @patch("azurelinuxagent.common.protocol.util.WireProtocol")
     def test_detect_wire_protocol_no_dhcp(self, WireProtocol, mock_get_lib_dir, _):
@@ -133,8 +127,6 @@ class TestProtocolUtil(AgentTestCase):
         protocol_util._detect_protocol = MagicMock()
 
         # Test for wire protocol
-        protocol_util._save_protocol("WireProtocol")
-
         protocol = protocol_util.get_protocol()
         self.assertEquals(WireProtocol.return_value, protocol)
         protocol_util.get_wireserver_endpoint.assert_any_call()
@@ -186,31 +178,6 @@ class TestProtocolUtil(AgentTestCase):
             mock_remove = Mock(side_effect=IOError(ENOENT, 'File not found'))
             protocol_util._clear_wireserver_endpoint()
             mock_remove.assert_not_called()
-
-    def test_protocol_file_states(self, _):
-        protocol_util = get_protocol_util()
-        protocol_util._clear_wireserver_endpoint = Mock()
-
-        protocol_file = protocol_util._get_protocol_file_path()
-
-        # Test clear protocol for io error
-        with open(protocol_file, "w+") as proto_fd:
-            proto_fd.write("")
-
-        with patch('os.remove') as mock_remove:
-            protocol_util.clear_protocol()
-            self.assertEqual(1, protocol_util._clear_wireserver_endpoint.call_count)
-            self.assertEqual(1, mock_remove.call_count)
-            self.assertEqual(protocol_file, mock_remove.call_args_list[0][0][0])
-
-        # Test clear protocol when file not found
-        protocol_util._clear_wireserver_endpoint.reset_mock()
-
-        with patch('os.remove') as mock_remove:
-            protocol_util.clear_protocol()
-            self.assertEqual(1, protocol_util._clear_wireserver_endpoint.call_count)
-            self.assertEqual(1, mock_remove.call_count)
-            self.assertEqual(protocol_file, mock_remove.call_args_list[0][0][0])
 
 
 if __name__ == '__main__':
