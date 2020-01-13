@@ -41,7 +41,6 @@ from azurelinuxagent.common.utils.restutil import KNOWN_WIRESERVER_IP, \
 
 OVF_FILE_NAME = "ovf-env.xml"
 TAG_FILE_NAME = "useMetadataEndpoint.tag"
-PROTOCOL_FILE_NAME = "Protocol"
 MAX_RETRY = 360
 PROBE_INTERVAL = 10
 ENDPOINT_FILE_NAME = "WireServerEndpoint"
@@ -54,9 +53,6 @@ class _nameset(set):
         if name in self:
             return name
         raise AttributeError("%s not a valid value" % name)
-
-
-prots = _nameset(("WireProtocol", ))
 
 
 def get_protocol_util():
@@ -144,11 +140,6 @@ class ProtocolUtil(SingletonPerThread):
         else:
             raise ProtocolError(
                 "ovf-env.xml is missing from {0}".format(ovf_file_path))
-
-    def _get_protocol_file_path(self):
-        return os.path.join(
-            conf.get_lib_dir(),
-            PROTOCOL_FILE_NAME)
 
     def _get_wireserver_endpoint_file_path(self):
         return os.path.join(
@@ -240,22 +231,21 @@ class ProtocolUtil(SingletonPerThread):
             self.dhcp_handler.skip_cache = True
             raise e
 
-    def _detect_protocol(self, protocols):
+    def _detect_protocol(self):
         """
         Probe protocol endpoints in turn.
         """
         self.clear_protocol()
 
         for retry in range(0, MAX_RETRY):
-            for protocol_name in protocols:
-                try:
-                    protocol = self._detect_wire_protocol()
+            try:
+                protocol = self._detect_wire_protocol()
 
-                    return (protocol_name, protocol)
+                return (protocol_name, protocol)
 
-                except ProtocolError as e:
-                    logger.info("Protocol endpoint not found: {0}, {1}",
-                                protocol_name, e)
+            except ProtocolError as e:
+                logger.info("Protocol endpoint not found: {0}, {1}",
+                            protocol_name, e)
 
             if retry < MAX_RETRY - 1:
                 logger.info("Retry detect protocols: retry={0}", retry)
@@ -266,27 +256,8 @@ class ProtocolUtil(SingletonPerThread):
         """
         Get protocol instance based on previous detecting result.
         """
-        protocol_file_path = self._get_protocol_file_path()
-        if not os.path.isfile(protocol_file_path):
-            raise ProtocolNotFoundError("No protocol found")
-
-        protocol_name = fileutil.read_file(protocol_file_path)
-        if protocol_name == prots.WireProtocol:
-            endpoint = self.get_wireserver_endpoint()
-            return WireProtocol(endpoint)
-        else:
-            raise ProtocolNotFoundError(("Unknown protocol: {0}"
-                                         "").format(protocol_name))
-
-    def _save_protocol(self, protocol_name):
-        """
-        Save protocol endpoint
-        """
-        protocol_file_path = self._get_protocol_file_path()
-        try:
-            fileutil.write_file(protocol_file_path, protocol_name)
-        except (IOError, OSError) as e:
-            logger.error("Failed to save protocol endpoint: {0}", e)
+        endpoint = self.get_wireserver_endpoint()
+        return WireProtocol(endpoint)
 
     def clear_protocol(self):
         """
@@ -295,17 +266,6 @@ class ProtocolUtil(SingletonPerThread):
         logger.info("Clean protocol and wireserver endpoint")
         self._clear_wireserver_endpoint()
         self._protocol = None
-        protocol_file_path = self._get_protocol_file_path()
-        if not os.path.isfile(protocol_file_path):
-            return
-
-        try:
-            os.remove(protocol_file_path)
-        except (IOError, OSError) as e:
-            # Ignore file-not-found errors (since the file is being removed)
-            if e.errno == errno.ENOENT:
-                return
-            logger.error("Failed to clear protocol endpoint: {0}", e)
 
     def get_protocol(self): 
         """
@@ -322,12 +282,10 @@ class ProtocolUtil(SingletonPerThread):
         except ProtocolNotFoundError:
             pass
         logger.info("Detect protocol endpoints")
-        protocols = [prots.WireProtocol]
 
-        protocol_name, protocol = self._detect_protocol(protocols)
+        protocol_name, protocol = self._detect_protocol()
 
         IOErrorCounter.set_protocol_endpoint(endpoint=protocol.get_endpoint())
-        self._save_protocol(protocol_name)
 
         self._protocol = protocol
         return self._protocol
