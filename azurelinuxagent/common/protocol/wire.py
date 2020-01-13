@@ -61,7 +61,6 @@ P7M_FILE_NAME = "Certificates.p7m"
 PEM_FILE_NAME = "Certificates.pem"
 EXT_CONF_FILE_NAME = "ExtensionsConfig.{0}.xml"
 MANIFEST_FILE_NAME = "{0}.{1}.manifest.xml"
-AGENTS_MANIFEST_FILE_NAME = "{0}.{1}.agentsManifest"
 TRANSPORT_CERT_FILE_NAME = "TransportCert.pem"
 TRANSPORT_PRV_FILE_NAME = "TransportPrivate.pem"
 # Store the last retrieved container id as an environment variable to be shared between threads for telemetry purposes
@@ -133,7 +132,7 @@ class WireProtocol(Protocol):
     def get_vmagent_pkgs(self, vmagent_manifest):
         goal_state = self.client.get_goal_state()
         ga_manifest = self.client.get_gafamily_manifest(vmagent_manifest, goal_state)
-        valid_pkg_list = self.client.filter_package_list(vmagent_manifest.family, ga_manifest, goal_state)
+        valid_pkg_list = ga_manifest.pkg_list
         return valid_pkg_list
 
     def get_ext_handlers(self):
@@ -731,6 +730,8 @@ class WireClient(object):
         self.set_remote_access(remote_access)
 
     def get_remote_access(self):
+        if self._remote_access is None:
+            raise ProtocolError("Trying to fetch Remote Access before initialization!")
         return self._remote_access
 
     def update_ext_conf(self, goal_state):
@@ -789,13 +790,8 @@ class WireClient(object):
                     update_host_plugin()
                     return
 
-                def incarnation_changed():
-                    last_incarnation = None
-                    if self._goal_state is not None:
-                        last_incarnation = self._goal_state.incarnation
-                    return last_incarnation is None or last_incarnation != new_goal_state.incarnation
-
-                if refresh_type == WireClient._UpdateType.GoalStateForced or incarnation_changed() or self._goal_state is None:
+                if self._goal_state is None or refresh_type == WireClient._UpdateType.GoalStateForced or \
+                        new_goal_state.incarnation != self._goal_state.incarnation:
                     def save_goal_state(incarnation, xml_text):
                         file_name = GOAL_STATE_FILE_NAME.format(incarnation)
                         goal_state_file = os.path.join(conf.get_lib_dir(), file_name)
@@ -829,32 +825,39 @@ class WireClient(object):
         raise ProtocolError("Exceeded max retry updating goal state")
 
     def set_goal_state(self, new_goal_state):
-        if new_goal_state is not None:
-            self._goal_state = new_goal_state
+        if new_goal_state is None:
+            raise ProtocolError("Tying to set empty Goal State object!")
+        self._goal_state = new_goal_state
 
     def set_hosting_env(self, new_hosting_env):
-        if new_hosting_env is not None:
-            self._hosting_env = new_hosting_env
+        if new_hosting_env is None:
+            raise ProtocolError("Tying to set empty Hosting Environment object!")
+        self._hosting_env = new_hosting_env
 
     def set_shared_conf(self, new_shared_config):
-        if new_shared_config is not None:
-            self._shared_conf = new_shared_config
+        if new_shared_config is None:
+            raise ProtocolError("Tying to set empty Shared Config object!")
+        self._shared_conf = new_shared_config
 
     def set_certs(self, new_certs):
-        if new_certs is not None:
-            self._certs = new_certs
+        if new_certs is None:
+            raise ProtocolError("Tying to set empty Certs object!")
+        self._certs = new_certs
 
     def set_ext_conf(self, new_ext_conf):
-        if new_ext_conf is not None:
-            self._ext_conf = new_ext_conf
+        if new_ext_conf is None:
+            raise ProtocolError("Tying to set empty Extension Config object!")
+        self._ext_conf = new_ext_conf
 
     def set_remote_access(self, new_remote_access):
-        if new_remote_access is not None:
-            self._remote_access = new_remote_access
+        if new_remote_access is None:
+            raise ProtocolError("Tying to set empty Remote Access object!")
+        self._remote_access = new_remote_access
 
     def set_host_plugin(self, new_host_plugin):
-        if new_host_plugin is not None:
-            self._host_plugin = new_host_plugin
+        if new_host_plugin is None:
+            raise ProtocolError("Tying to set empty Host Plugin object!")
+        self._host_plugin = new_host_plugin
 
     def get_goal_state(self):
         if self._goal_state is None:
@@ -872,6 +875,8 @@ class WireClient(object):
         return self._shared_conf
 
     def get_certs(self):
+        if self._certs is None:
+            raise ProtocolError("Trying to fetch Certs before initialization!")
         return self._certs
 
     def get_ext_conf(self):
@@ -893,44 +898,7 @@ class WireClient(object):
         except Exception as e:
             raise ExtensionDownloadError("Failed to retrieve extension manifest. Error: {0}".format(ustr(e)))
 
-    def filter_package_list(self, family, ga_manifest, goal_state):
-        complete_list = ga_manifest.pkg_list
-        agent_manifest = os.path.join(conf.get_lib_dir(),
-                                      AGENTS_MANIFEST_FILE_NAME.format(
-                                          family,
-                                          goal_state.incarnation))
-
-        if not os.path.exists(agent_manifest):
-            # clear memory cache
-            ga_manifest.allowed_versions = None
-
-            # create disk cache
-            with open(agent_manifest, mode='w') as manifest_fh:
-                for version in complete_list.versions:
-                    manifest_fh.write('{0}\n'.format(version.version))
-            fileutil.chmod(agent_manifest, 0o644)
-
-            return complete_list
-
-        else:
-            # use allowed versions from cache, otherwise from disk
-            if ga_manifest.allowed_versions is None:
-                with open(agent_manifest, mode='r') as manifest_fh:
-                    ga_manifest.allowed_versions = [v.strip('\n') for v
-                                                    in manifest_fh.readlines()]
-
-            # use the updated manifest urls for allowed versions
-            allowed_list = ExtHandlerPackageList()
-            allowed_list.versions = [version for version
-                                     in complete_list.versions
-                                     if version.version
-                                     in ga_manifest.allowed_versions]
-
-            return allowed_list
-
     def get_gafamily_manifest(self, vmagent_manifest, goal_state):
-        self._remove_stale_agent_manifest(vmagent_manifest.family, goal_state.incarnation)
-
         local_file = MANIFEST_FILE_NAME.format(vmagent_manifest.family, goal_state.incarnation)
         local_file = os.path.join(conf.get_lib_dir(), local_file)
 
@@ -940,25 +908,6 @@ class WireClient(object):
             return ExtensionManifest(xml_text)
         except Exception as e:
             raise ProtocolError("Failed to retrieve GAFamily manifest. Error: {0}".format(ustr(e)))
-
-    def _remove_stale_agent_manifest(self, family, incarnation):
-        """
-        The incarnation number can reset at any time, which means there
-        could be a stale agentsManifest on disk.  Stale files are cleaned
-        on demand as new goal states arrive from WireServer. If the stale
-        file is not removed agent upgrade may be delayed.
-
-        :param family: GA family, e.g. Prod or Test
-        :param incarnation: incarnation of the current goal state
-        """
-        fn = AGENTS_MANIFEST_FILE_NAME.format(
-            family,
-            incarnation)
-
-        agent_manifest = os.path.join(conf.get_lib_dir(), fn)
-
-        if os.path.exists(agent_manifest):
-            os.unlink(agent_manifest)
 
     def check_wire_protocol_version(self):
         uri = VERSION_INFO_URI.format(self.get_endpoint())
@@ -1401,6 +1350,40 @@ class SharedConfig(object):
     def __init__(self, xml_text):
         logger.verbose("Load SharedConfig.xml")
         self.xml_text = xml_text
+        self.rdma_ipv4_addr = None
+        self.rdma_mac_addr = None
+
+    def parse(self):
+        xml_doc = parse_doc(self.xml_text)
+        if xml_doc is None:
+            logger.error("Could not parse SharedConfig XML document")
+            return
+        instance_elem = find(xml_doc, "Instance")
+        if not instance_elem:
+            logger.error("Could not find <Instance> in SharedConfig document")
+            return
+
+        rdma_ipv4_addr = getattrib(instance_elem, "rdmaIPv4Address")
+        if not rdma_ipv4_addr:
+            logger.error(
+                "Could not find rdmaIPv4Address attribute on Instance element of SharedConfig.xml document")
+            return
+
+        rdma_mac_addr = getattrib(instance_elem, "rdmaMacAddress")
+        if not rdma_mac_addr:
+            logger.error(
+                "Could not find rdmaMacAddress attribute on Instance element of SharedConfig.xml document")
+            return
+
+        # add colons to the MAC address (e.g. 00155D33FF1D ->
+        # 00:15:5D:33:FF:1D)
+        rdma_mac_addr = ':'.join([rdma_mac_addr[i:i + 2]
+                                  for i in range(0, len(rdma_mac_addr), 2)])
+        logger.info("Found RDMA details. IPv4={0} MAC={1}".format(
+            rdma_ipv4_addr, rdma_mac_addr))
+
+        self.rdma_ipv4_addr = rdma_ipv4_addr
+        self.rdma_mac_addr = rdma_mac_addr
 
 
 class RemoteAccess(object):
@@ -1700,7 +1683,6 @@ class ExtensionManifest(object):
             raise ValueError("ExtensionManifest is None")
         logger.verbose("Load ExtensionManifest.xml")
         self.pkg_list = ExtHandlerPackageList()
-        self.allowed_versions = None
         self._parse(xml_text)
 
     def _parse(self, xml_text):

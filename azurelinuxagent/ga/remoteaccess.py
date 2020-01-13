@@ -28,7 +28,7 @@ import azurelinuxagent.common.logger as logger
 from datetime import datetime, timedelta
 
 from azurelinuxagent.common.event import add_event, WALAEventOperation
-from azurelinuxagent.common.exception import RemoteAccessError
+from azurelinuxagent.common.exception import RemoteAccessError, ProtocolError
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.utils.cryptutil import CryptUtil
 from azurelinuxagent.common.version import AGENT_NAME, CURRENT_VERSION
@@ -62,7 +62,12 @@ class RemoteAccessHandler(object):
                 if self.incarnation != current_incarnation:
                     # something changed. Handle remote access if any.
                     self.incarnation = current_incarnation
-                    self.remote_access = self.protocol.client.get_remote_access()
+                    try:
+                        self.remote_access = self.protocol.client.get_remote_access()
+                    except ProtocolError as e:
+                        logger.warn(
+                            "Error when trying to initialize Remote Access, setting it to None. Error: {0}".format(e))
+                        self.remote_access = None
                     self.handle_remote_access()
         except Exception as e:
             msg = u"Exception processing remote access handler: {0} {1}".format(ustr(e), traceback.format_exc())
