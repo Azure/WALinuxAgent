@@ -1352,8 +1352,10 @@ class SharedConfig(object):
         self.xml_text = xml_text
         self.rdma_ipv4_addr = None
         self.rdma_mac_addr = None
+        self._parse()
 
-    def parse(self):
+    def _parse(self):
+        logger.verbose("Parsing SharedConfig XML contents for RDMA details")
         xml_doc = parse_doc(self.xml_text)
         if xml_doc is None:
             logger.error("Could not parse SharedConfig XML document")

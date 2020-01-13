@@ -36,9 +36,7 @@ dapl_config_paths = [
 
 
 def setup_rdma_device(nd_version, shared_conf):
-    logger.verbose("Parsing SharedConfig XML contents for RDMA details")
-    shared_conf.parse()
-
+    logger.verbose("Fetching SharedConfig contents for RDMA details")
     if shared_conf.rdma_ipv4_addr is None or shared_conf.rdma_mac_addr is None:
         return
 
