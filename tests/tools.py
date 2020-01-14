@@ -544,10 +544,12 @@ def distros(distro_name=".*", distro_version=".*", distro_full_name=".*"):
     return decorator
 
 
-def clear_singleton_instances(cls):
+def clear_singleton_instances(cls, clean_all=False):
     # Adding this lock to avoid any race conditions
     with cls._lock:
         obj_name = "%s__%s" % (cls.__name__, currentThread().getName())  # Object Name = className__threadName
         if obj_name in cls._instances:
             del cls._instances[obj_name]
+        if clean_all:
+            cls._instances.clear()
 
