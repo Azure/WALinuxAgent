@@ -16,8 +16,8 @@ from azurelinuxagent.common.protocol.metadata import *
 from azurelinuxagent.common.protocol.wire import *
 from azurelinuxagent.ga.monitor import MonitorHandler
 from azurelinuxagent.ga.update import *
-from tests.tools import AgentTestCase, call, data_dir, DEFAULT, patch, load_bin_data, load_data, Mock, MagicMock,\
-    mock_sleep
+from tests.tools import AgentTestCase, call, data_dir, DEFAULT, patch, load_bin_data, load_data, Mock, MagicMock, \
+    mock_sleep, clear_singleton_instances
 
 NO_ERROR = {
     "last_failure" : 0.0,
@@ -1516,6 +1516,7 @@ class MonitorThreadTest(AgentTestCase):
         currentThread().setName("ExtHandler")
         self.update_handler = get_update_handler()
         self.update_handler.protocol_util = Mock()
+        clear_singleton_instances(ProtocolUtil)
 
     def _test_run(self, invocations=1):
         iterations = [0]
