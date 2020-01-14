@@ -1657,10 +1657,11 @@ class MonitorThreadTest(AgentTestCase):
         self.assertEqual(True, mock_env_thread.is_alive.called)
         self.assertEqual(True, mock_env_thread.start.called)
 
+    @patch("time.sleep", lambda *_: mock_sleep(0.01))
+    @patch("azurelinuxagent.common.protocol.util.ProtocolUtil.get_protocol")
     @patch('azurelinuxagent.ga.monitor.get_monitor_handler')
     @patch('azurelinuxagent.ga.env.get_env_handler')
-    @patch("time.sleep", lambda *_: mock_sleep(0.01))
-    def test_each_thread_should_have_separate_protocol_util(self, mock_env, mock_monitor):
+    def test_each_thread_should_have_separate_protocol_util(self, mock_env, mock_monitor, *args):
 
         self.assertTrue(self.update_handler.running)
         env_handler = EnvHandler()
@@ -1682,10 +1683,12 @@ class MonitorThreadTest(AgentTestCase):
         self.assertIn("ProtocolUtil__EnvHandler", singleton_instances)
         self.assertIn("ProtocolUtil__ExtHandler", singleton_instances)
 
+    @patch("azurelinuxagent.common.protocol.util.ProtocolUtil.get_protocol")
     @patch('azurelinuxagent.ga.env.get_env_handler')
+    @patch('azurelinuxagent.ga.monitor.MonitorHandler.send_telemetry_heartbeat',
+           side_effect=Exception("Fail Monitor Thread"))
     @patch('azurelinuxagent.ga.monitor.get_monitor_handler')
-    @patch("time.sleep", lambda *_: mock_sleep(0.01))
-    def test_monitor_handler_should_only_run_init_sysinfo_once(self, mock_monitor, *args):
+    def test_monitor_handler_should_only_run_init_sysinfo_once(self, mock_monitor, patch_fail, *args):
         self.assertTrue(self.update_handler.running)
         os_version = "OSVersion"
         execution_mode_value = {'value': None}
@@ -1706,22 +1709,23 @@ class MonitorThreadTest(AgentTestCase):
         monitor_handler = MonitorHandler()
         mock_monitor.return_value = monitor_handler
 
-        with patch("azurelinuxagent.common.protocol.util.ProtocolUtil.get_protocol"):
-            with patch("platform.system", side_effect=generate_new_platform_system):
-                with patch('azurelinuxagent.ga.monitor.MonitorHandler.send_telemetry_heartbeat',
-                           side_effect=Exception("Fail Monitor Thread")) as patch_failure_in_monitor_thread:
-                    self._test_run(invocations=2)
+        # There is some timing issues in the threading module in Py2 where the threads take time to join which was
+        # causing race conditions. To ensure that doesnt happen, I'm mocking the ensure_no_orphans function to force
+        # the monitor thread to join as that will fail due to the Exception being thrown above.
+        with patch("azurelinuxagent.ga.update.UpdateHandler._ensure_no_orphans",
+                   side_effect=lambda *_: monitor_handler.event_thread.join()):
+            with patch.object(platform, "system", side_effect=generate_new_platform_system):
+                self._test_run(invocations=3)
+                # Ensure that the monitor_handler thread is dead before proceeding with the test
+                while monitor_handler.is_alive():
+                    continue
+                self.assertFalse(monitor_handler.is_alive())
 
-        # Ensure that the monitor_handler thread is dead before proceeding with the test
-        while monitor_handler.is_alive():
-            continue
-        self.assertFalse(monitor_handler.is_alive())
+                # This is ensuring the testing conditions were met by checking the monitor thread was called multiple times
+                self.assertTrue(patch_fail.call_count > 1)
 
-        # This is ensuring the testing conditions were met by checking the monitor thread was called multiple times
-        self.assertTrue(patch_failure_in_monitor_thread.call_count > 1)
-
-        # Ensure that the OSVersion value is the same as the first time, ensuring that init_sysinfo was not called again
-        self.assertIn(execution_mode_value['value'], get_telemetry_event_value(monitor_handler.sysinfo, os_version))
+                # Ensure that the OSVersion value is the same as the first time, ensuring that init_sysinfo was not called again
+                self.assertIn(execution_mode_value['value'], get_telemetry_event_value(monitor_handler.sysinfo, os_version))
 
 
 class ChildMock(Mock):
