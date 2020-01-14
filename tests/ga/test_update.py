@@ -1516,7 +1516,7 @@ class MonitorThreadTest(AgentTestCase):
         currentThread().setName("ExtHandler")
         self.update_handler = get_update_handler()
         self.update_handler.protocol_util = Mock()
-        clear_singleton_instances(ProtocolUtil, clean_all=True)
+        clear_singleton_instances(ProtocolUtil)
 
     def _test_run(self, invocations=1):
         iterations = [0]
@@ -1671,7 +1671,10 @@ class MonitorThreadTest(AgentTestCase):
         env_handler.stop()
         monitor_handler.stop()
 
-        singleton_instances = ProtocolUtil._instances
+        singleton_instances = {}
+        for inst in ProtocolUtil._instances:
+            if ProtocolUtil.__name__ in inst:
+                singleton_instances[inst] = ProtocolUtil._instances[inst]
 
         self.assertEqual(3, len(singleton_instances))
         self.assertIn("ProtocolUtil__MonitorHandler", singleton_instances)
