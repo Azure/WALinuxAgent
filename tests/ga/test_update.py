@@ -5,13 +5,19 @@ from __future__ import print_function
 
 import tempfile
 import unittest
+from threading import currentThread
+
+from azurelinuxagent.ga.env import EnvHandler
+
+from azurelinuxagent.common.protocol.util import ProtocolUtil
 
 from azurelinuxagent.common.protocol.hostplugin import *
 from azurelinuxagent.common.protocol.metadata import *
 from azurelinuxagent.common.protocol.wire import *
+from azurelinuxagent.ga.monitor import MonitorHandler
 from azurelinuxagent.ga.update import *
-from tests.tools import AgentTestCase, call, data_dir, DEFAULT, patch, load_bin_data, load_data, Mock, MagicMock
-
+from tests.tools import AgentTestCase, call, data_dir, DEFAULT, patch, load_bin_data, load_data, Mock, MagicMock, \
+    clear_singleton_instances
 
 NO_ERROR = {
     "last_failure" : 0.0,
@@ -1507,6 +1513,7 @@ class MonitorThreadTest(AgentTestCase):
     def setUp(self):
         AgentTestCase.setUp(self)
         self.event_patch = patch('azurelinuxagent.common.event.add_event')
+        currentThread().setName("ExtHandler")
         self.update_handler = get_update_handler()
         self.update_handler.protocol_util = Mock()
 
@@ -1647,6 +1654,27 @@ class MonitorThreadTest(AgentTestCase):
         self.assertEqual(True, mock_env_thread.run.called)
         self.assertEqual(True, mock_env_thread.is_alive.called)
         self.assertEqual(True, mock_env_thread.start.called)
+
+    def test_each_thread_should_have_separate_protocol_util(self):
+
+        self.assertTrue(self.update_handler.running)
+        env_handler = EnvHandler()
+        monitor_handler = MonitorHandler()
+
+        with patch('azurelinuxagent.ga.monitor.get_monitor_handler', return_value=monitor_handler):
+            with patch('azurelinuxagent.ga.env.get_env_handler', return_value=env_handler):
+                self._test_run(invocations=0)
+                env_handler.stop()
+                monitor_handler.stop()
+                self.assertFalse(env_handler.server_thread.is_alive())
+                self.assertFalse(monitor_handler.event_thread.is_alive())
+
+                singleton_instances = ProtocolUtil._instances
+
+                self.assertEqual(3, len(singleton_instances))
+                self.assertIn("ProtocolUtil__MonitorHandler", singleton_instances)
+                self.assertIn("ProtocolUtil__EnvHandler", singleton_instances)
+                self.assertIn("ProtocolUtil__ExtHandler", singleton_instances)
 
 
 class ChildMock(Mock):

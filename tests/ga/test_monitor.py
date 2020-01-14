@@ -26,7 +26,7 @@ import tempfile
 import time
 from datetime import timedelta
 
-from azurelinuxagent.common.protocol.util import ProtocolUtil
+from azurelinuxagent.common.protocol.util import ProtocolUtil, get_protocol_util
 from nose.plugins.attrib import attr
 
 import azurelinuxagent.common.conf as conf
@@ -540,7 +540,9 @@ class TestEventMonitoring(AgentTestCase):
         protocol.report_ext_status = MagicMock()
         protocol.report_vm_status = MagicMock()
 
-        monitor_handler.protocol_util.get_protocol = Mock(return_value=protocol)
+        protocol_util = get_protocol_util()
+        protocol_util.get_protocol = Mock(return_value=protocol)
+        monitor_handler.protocol_util = Mock(return_value=protocol_util)
         return monitor_handler, protocol
 
     @patch("azurelinuxagent.common.protocol.imds.ImdsClient.get_compute",

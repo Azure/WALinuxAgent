@@ -129,6 +129,7 @@ class MonitorHandler(object):
         self.last_host_plugin_heartbeat = None
         self.last_imds_heartbeat = None
         self.protocol = None
+        self.protocol_util = None
         self.health_service = None
         self.last_route_table_hash = b''
         self.last_nic_state = {}
@@ -149,7 +150,8 @@ class MonitorHandler(object):
             self.event_thread.join()
 
     def init_protocols(self):
-        self.protocol = get_protocol_util().get_protocol()
+        self.protocol_util = get_protocol_util()
+        self.protocol = self.protocol_util.get_protocol()
         self.health_service = HealthService(self.protocol.get_endpoint())
 
     def is_alive(self):
