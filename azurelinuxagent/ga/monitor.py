@@ -29,19 +29,19 @@ import azurelinuxagent.common.utils.networkutil as networkutil
 from azurelinuxagent.common.cgroupstelemetry import CGroupsTelemetry
 from azurelinuxagent.common.datacontract import set_properties
 from azurelinuxagent.common.errorstate import ErrorState
-from azurelinuxagent.common.event import EventLogger
-from azurelinuxagent.common.event import add_event, WALAEventOperation, report_metric
-from azurelinuxagent.common.exception import EventError, ProtocolError, OSUtilError, HttpError
+from azurelinuxagent.common.event import add_event, EventLogger, get_container_id_from_env, report_metric, \
+    WALAEventOperation
+from azurelinuxagent.common.exception import EventError, HttpError, OSUtilError, ProtocolError
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.osutil import get_osutil
 from azurelinuxagent.common.protocol import get_protocol_util
 from azurelinuxagent.common.protocol.healthservice import HealthService
 from azurelinuxagent.common.protocol.imds import get_imds_client
-from azurelinuxagent.common.telemetryevent import TelemetryEvent, TelemetryEventParam, TelemetryEventList
+from azurelinuxagent.common.telemetryevent import TelemetryEvent, TelemetryEventList, TelemetryEventParam
 from azurelinuxagent.common.utils.restutil import IOErrorCounter
-from azurelinuxagent.common.utils.textutil import parse_doc, findall, find, getattrib, hash_strings
-from azurelinuxagent.common.version import DISTRO_NAME, DISTRO_VERSION, \
-    DISTRO_CODE_NAME, AGENT_NAME, CURRENT_VERSION, AGENT_EXECUTION_MODE
+from azurelinuxagent.common.utils.textutil import find, findall, getattrib, hash_strings, parse_doc
+from azurelinuxagent.common.version import AGENT_EXECUTION_MODE, AGENT_NAME, CURRENT_VERSION, DISTRO_CODE_NAME, \
+    DISTRO_NAME, DISTRO_VERSION
 
 
 def parse_event(data_str):
@@ -424,14 +424,11 @@ class MonitorHandler(object):
                 dropped_packets = self.osutil.get_firewall_dropped_packets(self.protocol.get_endpoint())
                 msg = "{0};{1};{2};{3}".format(incarnation, self.counter, self.heartbeat_id, dropped_packets)
 
-                add_event(
-                    name=AGENT_NAME,
-                    version=CURRENT_VERSION,
-                    op=WALAEventOperation.HeartBeat,
-                    is_success=True,
-                    message=msg,
-                    log_event=False)
+                add_event(name=AGENT_NAME, version=CURRENT_VERSION, op=WALAEventOperation.HeartBeat, is_success=True,
+                          message=msg, log_event=False)
 
+                logger.periodic_info(logger.EVERY_HALF_DAY, "[PERIODIC] Incarnation: {0}; ContainerId: {2}",
+                                     incarnation, self.counter, get_container_id_from_env())
                 self.counter += 1
 
                 io_errors = IOErrorCounter.get_and_reset()
