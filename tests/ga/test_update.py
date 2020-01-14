@@ -16,8 +16,8 @@ from azurelinuxagent.common.protocol.metadata import *
 from azurelinuxagent.common.protocol.wire import *
 from azurelinuxagent.ga.monitor import MonitorHandler
 from azurelinuxagent.ga.update import *
-from tests.tools import AgentTestCase, call, data_dir, DEFAULT, patch, load_bin_data, load_data, Mock, MagicMock, \
-    clear_singleton_instances
+from tests.tools import AgentTestCase, call, data_dir, DEFAULT, patch, load_bin_data, load_data, Mock, MagicMock,\
+    mock_sleep
 
 NO_ERROR = {
     "last_failure" : 0.0,
@@ -1655,26 +1655,27 @@ class MonitorThreadTest(AgentTestCase):
         self.assertEqual(True, mock_env_thread.is_alive.called)
         self.assertEqual(True, mock_env_thread.start.called)
 
-    def test_each_thread_should_have_separate_protocol_util(self):
+    @patch('azurelinuxagent.ga.monitor.get_monitor_handler')
+    @patch('azurelinuxagent.ga.env.get_env_handler')
+    @patch("time.sleep", lambda *_: mock_sleep(0.01))
+    def test_each_thread_should_have_separate_protocol_util(self, mock_env, mock_monitor):
 
         self.assertTrue(self.update_handler.running)
         env_handler = EnvHandler()
         monitor_handler = MonitorHandler()
+        mock_env.return_value = env_handler
+        mock_monitor.return_value = monitor_handler
 
-        with patch('azurelinuxagent.ga.monitor.get_monitor_handler', return_value=monitor_handler):
-            with patch('azurelinuxagent.ga.env.get_env_handler', return_value=env_handler):
-                self._test_run(invocations=0)
-                env_handler.stop()
-                monitor_handler.stop()
-                self.assertFalse(env_handler.server_thread.is_alive())
-                self.assertFalse(monitor_handler.event_thread.is_alive())
+        self._test_run(invocations=0)
+        env_handler.stop()
+        monitor_handler.stop()
 
-                singleton_instances = ProtocolUtil._instances
+        singleton_instances = ProtocolUtil._instances
 
-                self.assertEqual(3, len(singleton_instances))
-                self.assertIn("ProtocolUtil__MonitorHandler", singleton_instances)
-                self.assertIn("ProtocolUtil__EnvHandler", singleton_instances)
-                self.assertIn("ProtocolUtil__ExtHandler", singleton_instances)
+        self.assertEqual(3, len(singleton_instances))
+        self.assertIn("ProtocolUtil__MonitorHandler", singleton_instances)
+        self.assertIn("ProtocolUtil__EnvHandler", singleton_instances)
+        self.assertIn("ProtocolUtil__ExtHandler", singleton_instances)
 
 
 class ChildMock(Mock):
