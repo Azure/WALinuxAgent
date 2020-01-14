@@ -415,24 +415,22 @@ class EventLogger(object):
                                             ContainerId to be populated and others should be
         :return: Event with default parameters populated (either values for agent or extension)
         """
-        DefaultParameter = namedtuple('DefaultParameter', ['name', 'value'])
-        default_parameters = [DefaultParameter("GAVersion", CURRENT_AGENT),
-                              DefaultParameter('ContainerId', get_container_id_from_env()),
-                              DefaultParameter('OpcodeName', datetime.utcnow().__str__() if set_values_for_agent else ""),
-                              DefaultParameter('EventTid', threading.current_thread().ident if set_values_for_agent else 0),
-                              DefaultParameter('EventPid', os.getpid() if set_values_for_agent else 0),
-                              DefaultParameter("TaskName", threading.current_thread().getName() if set_values_for_agent else ""),
-                              DefaultParameter("KeywordName", '')]
-
         # Converting the event_parameters into a dictionary as it helps to easily look up and get values
         param_names = OrderedDict([(param.name, param.value) for param in event_parameters])
 
-        for param in default_parameters:
-            if param.name not in param_names or set_values_for_agent:
-                # If set_values_for_agent, we disregard any values already set for an existing default property and
-                # replaces it with a latest entry.
-                param_names[param.name] = param.value
+        overriden_parameters = [TelemetryEventParam('GAVersion', CURRENT_AGENT),
+                                TelemetryEventParam('ContainerId', get_container_id_from_env()),
+                                TelemetryEventParam('OpcodeName', datetime.utcnow().__str__() if set_values_for_agent else param_names.get('OpcodeName', '')),
+                                TelemetryEventParam('EventTid', threading.current_thread().ident if set_values_for_agent else param_names.get('EventTid', 0)),
+                                TelemetryEventParam('EventPid', os.getpid() if set_values_for_agent else param_names.get('EventPid', 0)),
+                                TelemetryEventParam('TaskName', threading.current_thread().getName() if set_values_for_agent else param_names.get('TaskName', '')),
+                                TelemetryEventParam("KeywordName", param_names.get('KeywordName', ''))]
 
+        for param in overriden_parameters:
+            # Update the fields stated above
+            param_names[param.name] = param.value
+
+        # Convert back to a list of telemetry event parameters
         parameters = DataContractList(TelemetryEventParam)
         for name, value in param_names.items():
             parameters.append(TelemetryEventParam(name, value))
