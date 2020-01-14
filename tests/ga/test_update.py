@@ -1724,7 +1724,7 @@ class MonitorThreadTest(AgentTestCase):
                 # This is ensuring the testing conditions were met by checking the monitor thread was called multiple times
                 self.assertTrue(patch_fail.call_count > 1)
 
-                # Ensure that the OSVersion value is the same as the first time, ensuring that init_sysinfo was not called again
+                # Check that the OSVersion value is the same as the first time by ensuring that init_sysinfo was not called again
                 self.assertIn(execution_mode_value['value'], get_telemetry_event_value(monitor_handler.sysinfo, os_version))
 
 
