@@ -98,6 +98,10 @@ class EnvHandler(object):
         If dhcp client process re-start has occurred, reset routes.
         Purge unnecessary files from disk cache.
         """
+
+        # The initialization of ProtocolUtil for the Environment thread should be done within the thread itself rather
+        # than initializing it in the ExtHandler thread. This is done to avoid any concurrency issues as each
+        # thread would now have its own ProtocolUtil object as per the SingletonPerThread model.
         self.protocol_util = get_protocol_util()
         protocol = self.protocol_util.get_protocol()
         reset_firewall_fules = False
