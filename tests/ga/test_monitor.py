@@ -139,7 +139,11 @@ class TestMonitor(AgentTestCase):
         self.assertNotEqual(0, event.parameters)
         self.assertTrue(all(param is not None for param in event.parameters))
 
-    def test_add_sysinfo_should_honor_sysinfo_values_from_agent_for_agent_events(self, *args):
+    def test_enrich_event_should_honor_values_from_agent_for_agent_events(self, *args):
+        # This test simulates how the event file is picked up from the events folder and final parameters are appended
+        # before reporting the event. In this case, because it's an agent event, it would have already been saved with
+        # all the necessary telemetry fields except the sysinfo ones. This test makes sure all existing telemetry
+        # fields are left untouched and only the sysinfo ones are added.
         data_str = load_data('ext/event_from_agent.json')
         event = parse_json_event(data_str)
 
@@ -179,7 +183,14 @@ class TestMonitor(AgentTestCase):
             TelemetryEventParam(role_name_param, sysinfo_role_name_value)
         ]
         monitor_handler.sysinfo = sysinfo
-        monitor_handler.add_sysinfo(event)
+
+        with patch("azurelinuxagent.common.event.EventLogger.add_default_parameters_to_event",
+                   wraps=EventLogger.add_default_parameters_to_event) as patch_add_default_parameters_to_event:
+            monitor_handler.finalize_event(event)
+
+            # Ensure we are not calling the method to override agent-specific fields with values from the agent since
+            # this is an agent event and this method was already called before the event was saved to the filesystem.
+            self.assertEquals(patch_add_default_parameters_to_event.call_count, 0)
 
         self.assertNotEqual(None, event)
         self.assertNotEqual(0, event.parameters)
@@ -226,15 +237,17 @@ class TestMonitor(AgentTestCase):
 
         self.assertEqual(12, counter)
 
-    def test_add_sysinfo_should_honor_sysinfo_values_from_agent_for_extension_events(self, *args):
-        # The difference between agent and extension events is that extension events don't have the container id
-        # populated on the fly like the agent events do. Ensure the container id is populated in add_sysinfo.
+    def test_enrich_event_should_honor_values_from_agent_for_extension_events(self, *args):
+        # This test simulates how the event file is picked up from the events folder and final parameters are appended
+        # before reporting the event. In this case, because it's an extension event, the agent needs to append the
+        # sysinfo telemetry fields and completely override fields that are supposed to be populated from the agent,
+        # such as the ContainerId, GAVersion, OpcodeName, EventTid, EventPid, TaskName, and KeywordName.
         data_str = load_data('ext/event_from_extension.xml')
         event = parse_xml_event(data_str)
         monitor_handler = get_monitor_handler()
 
         # Prepare the os environment variable to read the container id value from
-        container_id_value = "TEST-CONTAINER-ID-ADDED-IN-SYSINFO-GUID"
+        container_id_value = "TEST-CONTAINER-ID-ADDED-ON-THE-FLY"
         os.environ[CONTAINER_ID_ENV_VARIABLE] = container_id_value
 
         sysinfo_vm_name_value = "sysinfo_dummy_vm"
@@ -242,7 +255,7 @@ class TestMonitor(AgentTestCase):
         sysinfo_role_name_value = "sysinfo_dummy_role"
         sysinfo_role_instance_name_value = "sysinfo_dummy_role_instance"
         sysinfo_execution_mode_value = "sysinfo_IAAS"
-        GAVersion_value = "WALinuxAgent-2.2.44"
+        GAVersion_value = CURRENT_AGENT
         OpcodeName_value = ""
         EventTid_value = 0
         EventPid_value = 0
@@ -270,7 +283,14 @@ class TestMonitor(AgentTestCase):
             TelemetryEventParam(role_name_param, sysinfo_role_name_value)
         ]
         monitor_handler.sysinfo = sysinfo
-        monitor_handler.add_sysinfo(event)
+
+        with patch("azurelinuxagent.common.event.EventLogger.add_default_parameters_to_event",
+                   wraps=EventLogger.add_default_parameters_to_event) as patch_add_default_parameters_to_event:
+            monitor_handler.finalize_event(event)
+
+            # Ensure we are calling the method to override agent-specific fields with values from the agent since
+            # this is an extension event
+            self.assertEquals(patch_add_default_parameters_to_event.call_count, 1)
 
         self.assertNotEqual(None, event)
         self.assertNotEqual(0, event.parameters)

@@ -39,6 +39,15 @@ class TelemetryEvent(DataContract):
     def __contains__(self, param_name):
         return param_name in [param.name for param in self.parameters]
 
+    def is_extension_event(self):
+        # Events originating from the agent have "WALinuxAgent" as the Name parameter, or they don't have a Name
+        # parameter, in the case of log and metric events. So, in case the Name parameter exists and it is not
+        # "WALinuxAgent", it is an extension event.
+        for param in self.parameters:
+            if param.name == "Name":
+                return param.value != "WALinuxAgent"
+        return False
+
 
 class TelemetryEventList(DataContract):
     def __init__(self):

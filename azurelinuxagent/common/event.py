@@ -301,7 +301,7 @@ class EventLogger(object):
         event.parameters.append(TelemetryEventParam('Duration', int(duration)))
         event.parameters.append(TelemetryEventParam('ExtensionType', str(evt_type)))
 
-        event.parameters = self.add_default_parameters_to_event(event.parameters)
+        self.add_default_parameters_to_event(event)
         data = get_properties(event)
         try:
             self.save_event(json.dumps(data))
@@ -316,7 +316,7 @@ class EventLogger(object):
         event.parameters.append(TelemetryEventParam('Context2', ''))
         event.parameters.append(TelemetryEventParam('Context3', ''))
 
-        event.parameters = self.add_default_parameters_to_event(event.parameters)
+        self.add_default_parameters_to_event(event)
         data = get_properties(event)
         try:
             self.save_event(json.dumps(data))
@@ -344,7 +344,7 @@ class EventLogger(object):
         event.parameters.append(TelemetryEventParam('Instance', str(instance)))
         event.parameters.append(TelemetryEventParam('Value', float(value)))
 
-        event.parameters = self.add_default_parameters_to_event(event.parameters)
+        self.add_default_parameters_to_event(event)
         data = get_properties(event)
         try:
             self.save_event(json.dumps(data))
@@ -393,11 +393,15 @@ class EventLogger(object):
                 return message
 
     @staticmethod
-    def add_default_parameters_to_event(event_parameters, set_values_for_agent=True):
+    def add_default_parameters_to_event(event, is_agent_event=True):
         """
-        Default fields are only populated by Agent and not the extension. Agent will fill up any event if they don't
-        have the default params. Example: GAVersion and ContainerId are populated for agent events on the fly,
-        but not for extension events. Add it if it's missing.
+        Default fields are only populated by the agent and not the extension. The agent will populate these fields for
+        events that don't already have them. Example: GAVersion and ContainerId are populated for agent events on the
+        fly, but not for extension events, so we will always override these fields with the values from the agent.
+
+        Similarly, there are some fields that have a special use case when emitted by the agent, like OpcodeName (used
+        to capture the actual time of event generation), EventTid, EventPid and TaskName. In case the event is emitted
+        from the agent, override the values. Otherwise, keep the current value, if exists, and set to empty if not.
 
         We write the GAVersion here rather than add it in azurelinuxagent.ga.monitor.MonitorHandler.add_sysinfo
         as there could be a possibility of events being sent with newer version of the agent, rather than the agent
@@ -406,36 +410,35 @@ class EventLogger(object):
         new monitor thread would pick up the events from the disk and send it with the CURRENT_AGENT, which would have
         newer version of the agent. This causes confusion.
 
-        ContainerId can change due to live migration and we want to preserve the container Id of the container writing
+        ContainerId can change due to live migration and we want to preserve the container id of the container writing
         the event, rather than sending the event.
-        OpcodeName - This is used as the actual time of event generation.
 
-        :param event_parameters: List of parameters of the event.
-        :param set_values_for_agent: Need default values populated or not. Extensions need only GAVersion and
-                                            ContainerId to be populated and others should be
-        :return: Event with default parameters populated (either values for agent or extension)
+        :param event: Event which parameters need to be expanded and updated.
+        :param is_agent_event: Whether the default values will be populated from the agent or not.
+        :return: List of final parameters to be appended to the event (whether agent or extension event).
         """
         # Converting the event_parameters into a dictionary as it helps to easily look up and get values
-        param_names = OrderedDict([(param.name, param.value) for param in event_parameters])
+        event_params_dict = OrderedDict([(param.name, param.value) for param in event.parameters])
 
-        overriden_parameters = [TelemetryEventParam('GAVersion', CURRENT_AGENT),
-                                TelemetryEventParam('ContainerId', get_container_id_from_env()),
-                                TelemetryEventParam('OpcodeName', datetime.utcnow().__str__() if set_values_for_agent else param_names.get('OpcodeName', '')),
-                                TelemetryEventParam('EventTid', threading.current_thread().ident if set_values_for_agent else param_names.get('EventTid', 0)),
-                                TelemetryEventParam('EventPid', os.getpid() if set_values_for_agent else param_names.get('EventPid', 0)),
-                                TelemetryEventParam('TaskName', threading.current_thread().getName() if set_values_for_agent else param_names.get('TaskName', '')),
-                                TelemetryEventParam("KeywordName", param_names.get('KeywordName', ''))]
+        DefaultParameter = namedtuple('DefaultParameter', ['name', 'value'])
+        default_params = [DefaultParameter('GAVersion', CURRENT_AGENT),
+                          DefaultParameter('ContainerId', get_container_id_from_env()),
+                          DefaultParameter('OpcodeName', datetime.utcnow().__str__() if is_agent_event else event_params_dict.get('OpcodeName', '')),
+                          DefaultParameter('EventTid', threading.current_thread().ident if is_agent_event else event_params_dict.get('EventTid', 0)),
+                          DefaultParameter('EventPid', os.getpid() if is_agent_event else event_params_dict.get('EventPid', 0)),
+                          DefaultParameter('TaskName', threading.current_thread().getName() if is_agent_event else event_params_dict.get('TaskName', '')),
+                          DefaultParameter('KeywordName', event_params_dict.get('KeywordName', ''))]
 
-        for param in overriden_parameters:
-            # Update the fields stated above
-            param_names[param.name] = param.value
+        for param in default_params:
+            # Update or add the fields stated above
+            event_params_dict[param.name] = param.value
 
         # Convert back to a list of telemetry event parameters
-        parameters = DataContractList(TelemetryEventParam)
-        for name, value in param_names.items():
-            parameters.append(TelemetryEventParam(name, value))
+        final_parameters = DataContractList(TelemetryEventParam)
+        for name, value in event_params_dict.items():
+            final_parameters.append(TelemetryEventParam(name, value))
 
-        return parameters
+        event.parameters = final_parameters
 
 
 __event_logger__ = EventLogger()

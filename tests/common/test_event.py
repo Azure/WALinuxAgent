@@ -27,7 +27,7 @@ from azurelinuxagent.common.event import add_event, elapsed_milliseconds, EventL
 from azurelinuxagent.common.exception import EventError
 from azurelinuxagent.common.future import OrderedDict, ustr
 from azurelinuxagent.common.protocol.wire import GoalState
-from azurelinuxagent.common.telemetryevent import TelemetryEventParam
+from azurelinuxagent.common.telemetryevent import TelemetryEvent, TelemetryEventParam
 from azurelinuxagent.common.utils import fileutil
 from azurelinuxagent.common.utils.extensionprocessutil import read_output
 from azurelinuxagent.common.version import CURRENT_AGENT, CURRENT_VERSION
@@ -453,30 +453,23 @@ class TestEvent(AgentTestCase):
 
     @patch("azurelinuxagent.common.event.get_container_id_from_env", return_value="TEST_CONTAINER_ID")
     def test_add_default_parameters_to_extension_event(self, *args):
-        default_parameters_expected = {"GAVersion": CURRENT_AGENT, 'ContainerId': "TEST_CONTAINER_ID", 'OpcodeName': "",
-                                       'EventTid': 0, 'EventPid': 0, "TaskName": "", "KeywordName": ""}
+        # When no values are populated in the TelemetryEventParamList, they should be set to their default values.
+        empty_event = TelemetryEvent()
+        empty_event.parameters = []
+        EventLogger.add_default_parameters_to_event(empty_event, is_agent_event=False)
 
-        # When no values are populated in the TelemetryEventParamList.
-        extension_param_list_empty = EventLogger.add_default_parameters_to_event([], set_values_for_agent=False)
-        self._assert_default_params_get_correctly_added(extension_param_list_empty, default_parameters_expected)
+        default_parameters_expected = {'GAVersion': CURRENT_AGENT, 'ContainerId': 'TEST_CONTAINER_ID',
+                                       'OpcodeName': '', 'EventTid': 0, 'EventPid': 0, 'TaskName': '',
+                                       'KeywordName': ''}
+        self._assert_default_params_get_correctly_added(empty_event.parameters, default_parameters_expected)
 
-        # When some values are already populated in the TelemetryEventParamList.
-        extension_param_list_populated = [TelemetryEventParam('Name', "DummyExtension"),
-                                          TelemetryEventParam('Version', CURRENT_VERSION),
-                                          TelemetryEventParam('Operation', "DummyOperation"),
-                                          TelemetryEventParam('OperationSuccess', True),
-                                          TelemetryEventParam('Message', "TestMessage"),
-                                          TelemetryEventParam('Duration', 10),
-                                          TelemetryEventParam('ExtensionType', ''),
-                                          TelemetryEventParam('OpcodeName', ''),
-                                          TelemetryEventParam('ContainerId', "asdf")]
-        extension_param_list_with_defaults = EventLogger.add_default_parameters_to_event(extension_param_list_populated,
-                                                                                         set_values_for_agent=False)
-        self._assert_default_params_get_correctly_added(extension_param_list_with_defaults, default_parameters_expected)
-
-        # When some values are already populated in the TelemetryEventParamList.
-        parameters_expected = {"GAVersion": CURRENT_AGENT, 'ContainerId': "TEST_CONTAINER_ID", 'OpcodeName': "",
-                               'EventTid': 100, 'EventPid': 10, "TaskName": "", "KeywordName": ""}
+        # When some values are already populated in the TelemetryEventParamList by the extension, they should be
+        # honored, except ContainerId and GAVersion, which are always populated from the values given by the agent.
+        extension_opcodename = 'RANDOM_OpcodeName'
+        extension_eventtid = 42
+        extension_eventpid = 24
+        extension_taskname = 'RANDOM_TaskName'
+        extension_keywordname = 'RANDOM_KeywordName'
 
         extension_param_list_populated = [TelemetryEventParam('Name', "DummyExtension"),
                                           TelemetryEventParam('Version', CURRENT_VERSION),
@@ -485,13 +478,49 @@ class TestEvent(AgentTestCase):
                                           TelemetryEventParam('Message', "TestMessage"),
                                           TelemetryEventParam('Duration', 10),
                                           TelemetryEventParam('ExtensionType', ''),
-                                          TelemetryEventParam('OpcodeName', ''),
-                                          TelemetryEventParam('EventTid', 100),
-                                          TelemetryEventParam('EventPid', 10)]
-        extension_param_list_with_defaults = EventLogger.add_default_parameters_to_event(extension_param_list_populated,
-                                                                                         set_values_for_agent=False)
-        self._assert_default_params_get_correctly_added(extension_param_list_with_defaults,
-                                                        parameters_expected)
+                                          TelemetryEventParam('ContainerId', 'RANDOM_ContainerId'),
+                                          TelemetryEventParam('OpcodeName', extension_opcodename),
+                                          TelemetryEventParam('EventTid', extension_eventtid),
+                                          TelemetryEventParam('EventPid', extension_eventpid),
+                                          TelemetryEventParam('TaskName', extension_taskname),
+                                          TelemetryEventParam('KeywordName', extension_keywordname)
+                                          ]
+        populated_event = TelemetryEvent()
+        populated_event.parameters = extension_param_list_populated
+        EventLogger.add_default_parameters_to_event(populated_event, is_agent_event=False)
+
+        extension_default_parameters_expected_populated = {'GAVersion': CURRENT_AGENT,
+                                                           'ContainerId': 'TEST_CONTAINER_ID',
+                                                           'OpcodeName': extension_opcodename,
+                                                           'EventTid': extension_eventtid,
+                                                           'EventPid': extension_eventpid,
+                                                           'TaskName': extension_taskname,
+                                                           'KeywordName': extension_keywordname}
+
+        self._assert_default_params_get_correctly_added(populated_event.parameters,
+                                                        extension_default_parameters_expected_populated)
+
+        # When values are not populated in the TelemetryEventParamList by the extension, they should be set to their
+        # default values. ContainerId and GAVersion are always populated from the values given by the agent.
+        extension_param_list_not_populated = [TelemetryEventParam('Name', "DummyExtension"),
+                                              TelemetryEventParam('Version', CURRENT_VERSION),
+                                              TelemetryEventParam('Operation', "DummyOperation"),
+                                              TelemetryEventParam('OperationSuccess', True),
+                                              TelemetryEventParam('Message', "TestMessage"),
+                                              TelemetryEventParam('Duration', 10),
+                                              TelemetryEventParam('ExtensionType', ''),
+                                              TelemetryEventParam('GAVersion', 'RANDOM_GAVersion'),
+                                              TelemetryEventParam('ContainerId', 'RANDOM_ContainerId')]
+        semi_populated_event = TelemetryEvent()
+        semi_populated_event.parameters = extension_param_list_not_populated
+        EventLogger.add_default_parameters_to_event(semi_populated_event, is_agent_event=False)
+
+        extension_default_parameters_expected_not_populated = {'GAVersion': CURRENT_AGENT,
+                                                               'ContainerId': 'TEST_CONTAINER_ID',
+                                                               'OpcodeName': '', 'EventTid': 0, 'EventPid': 0,
+                                                               'TaskName': '', 'KeywordName': ''}
+        self._assert_default_params_get_correctly_added(semi_populated_event.parameters,
+                                                        extension_default_parameters_expected_not_populated)
 
     @patch("threading.Thread.getName", return_value="HelloWorldTask")
     @patch('os.getpid', return_value=42)
@@ -507,8 +536,10 @@ class TestEvent(AgentTestCase):
                                        'EventPid': 42,
                                        "TaskName": "HelloWorldTask",
                                        "KeywordName": ""}
-        agent_param_list_empty = EventLogger.add_default_parameters_to_event([], set_values_for_agent=True)
-        self._assert_default_params_get_correctly_added(agent_param_list_empty, default_parameters_expected)
+        empty_event = TelemetryEvent()
+        empty_event.parameters = []
+        EventLogger.add_default_parameters_to_event(empty_event, is_agent_event=True)
+        self._assert_default_params_get_correctly_added(empty_event.parameters, default_parameters_expected)
 
         # When some values are already populated in the TelemetryEventParamList.
         agent_param_list_populated = [TelemetryEventParam('Name', "DummyExtension"),
@@ -518,10 +549,10 @@ class TestEvent(AgentTestCase):
                                       TelemetryEventParam('Message', "TestMessage"),
                                       TelemetryEventParam('Duration', 10), TelemetryEventParam('ExtensionType', ''),
                                       TelemetryEventParam('OpcodeName', '')]
-        agent_param_list_after_defaults_added = EventLogger.add_default_parameters_to_event(agent_param_list_populated,
-                                                                                            set_values_for_agent=True)
-        self._assert_default_params_get_correctly_added(agent_param_list_after_defaults_added,
-                                                        default_parameters_expected)
+        populated_event = TelemetryEvent()
+        populated_event.parameters = agent_param_list_populated
+        EventLogger.add_default_parameters_to_event(populated_event, is_agent_event=True)
+        self._assert_default_params_get_correctly_added(populated_event.parameters, default_parameters_expected)
 
         # When some values are already populated in the TelemetryEventParamList, along with some
         # default values already populated and it should be replaced, when set_values_for_agent=True
@@ -535,11 +566,10 @@ class TestEvent(AgentTestCase):
                                       TelemetryEventParam('ContainerId', 'SOME-CONTAINER'),
                                       TelemetryEventParam('EventTid', 10101010), TelemetryEventParam('EventPid', 110),
                                       TelemetryEventParam('TaskName', 'Test-TaskName')]
-
-        agent_param_list_after_defaults_added = EventLogger.add_default_parameters_to_event(agent_param_list_populated,
-                                                                                            set_values_for_agent=True)
-        self._assert_default_params_get_correctly_added(agent_param_list_after_defaults_added,
-                                                        default_parameters_expected)
+        semi_populated_event = TelemetryEvent()
+        semi_populated_event.parameters = agent_param_list_populated
+        EventLogger.add_default_parameters_to_event(semi_populated_event, is_agent_event=True)
+        self._assert_default_params_get_correctly_added(semi_populated_event.parameters, default_parameters_expected)
 
 
 class TestMetrics(AgentTestCase):

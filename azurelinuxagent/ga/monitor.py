@@ -251,7 +251,7 @@ class MonitorHandler(object):
 
                     try:
                         event = parse_event(data_str)
-                        self.add_sysinfo(event)
+                        self.finalize_event(event)
                         event_list.events.append(event)
                     except (ValueError, ProtocolError) as e:
                         logger.warn("Failed to decode event file: {0}", ustr(e))
@@ -306,6 +306,19 @@ class MonitorHandler(object):
             finally:
                 self.last_reset_loggers_time = time_now
 
+    def finalize_event(self, event):
+        """
+        This method appends any necessary telemetry fields before the event is sent out and is called for any event
+        read from the events folder. The sysinfo parameter group is added for all events, both agent and extension.
+        The remaining parameter group (GAVersion, ContainerId, OpcodeName, EventTid, EvenPid, TaskName and KeywordName)
+        are added here explicitly for extension events, since the agent events already populated them before saving
+        the event to the filesystem. See event.py#add_event for more details.
+        """
+        self.add_sysinfo(event)
+
+        if event.is_extension_event():
+            EventLogger.add_default_parameters_to_event(event, is_agent_event=False)
+
     def add_sysinfo(self, event):
         """
         This method is called after parsing the event file in the events folder and before emitting it. This means
@@ -318,19 +331,17 @@ class MonitorHandler(object):
         :return: Event with all parameters added, ready to be reported
         """
         sysinfo_names = [v.name for v in self.sysinfo]
-        final_parameters = []
+        extended_parameters = []
 
         for param in event.parameters:
             # Discard any sys_info parameters already in the event, since they will be overwritten
             if param.name in sysinfo_names:
                 continue
-            final_parameters.append(param)
+            extended_parameters.append(param)
 
         # Add sys_info params populated by the agent
-        final_parameters.extend(self.sysinfo)
-        final_parameters = EventLogger.add_default_parameters_to_event(final_parameters, set_values_for_agent=False)
-
-        event.parameters = final_parameters
+        extended_parameters.extend(self.sysinfo)
+        event.parameters = extended_parameters
 
     def send_imds_heartbeat(self):
         """
