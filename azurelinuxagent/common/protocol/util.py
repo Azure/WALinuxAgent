@@ -241,11 +241,10 @@ class ProtocolUtil(SingletonPerThread):
             try:
                 protocol = self._detect_wire_protocol()
 
-                return (protocol_name, protocol)
+                return protocol
 
             except ProtocolError as e:
-                logger.info("Protocol endpoint not found: {0}, {1}",
-                            protocol_name, e)
+                logger.info("Wire protocol endpoint not found: {0}", e)
 
             if retry < MAX_RETRY - 1:
                 logger.info("Retry detect protocols: retry={0}", retry)
@@ -283,7 +282,7 @@ class ProtocolUtil(SingletonPerThread):
             pass
         logger.info("Detect protocol endpoints")
 
-        protocol_name, protocol = self._detect_protocol()
+        protocol = self._detect_protocol()
 
         IOErrorCounter.set_protocol_endpoint(endpoint=protocol.get_endpoint())
 
