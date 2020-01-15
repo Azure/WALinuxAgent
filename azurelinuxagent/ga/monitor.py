@@ -426,11 +426,7 @@ class MonitorHandler(object):
 
                 add_event(name=AGENT_NAME, version=CURRENT_VERSION, op=WALAEventOperation.HeartBeat, is_success=True,
                           message=msg, log_event=False)
-
-                logger.periodic_info(logger.EVERY_HALF_DAY, "[PERIODIC] Incarnation: {0}; ContainerId: {2}",
-                                     incarnation, self.counter, get_container_id_from_env())
                 self.counter += 1
-
                 io_errors = IOErrorCounter.get_and_reset()
                 hostplugin_errors = io_errors.get("hostplugin")
                 protocol_errors = io_errors.get("protocol")
