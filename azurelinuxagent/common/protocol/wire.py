@@ -698,7 +698,7 @@ class WireClient(object):
         xml_text = self.fetch_config(goal_state.hosting_env_uri,
                                      self.get_header())
         self.save_cache(local_file, xml_text)
-        self.set_hosting_env(HostingEnv(xml_text))
+        self._set_hosting_env(HostingEnv(xml_text))
 
     def update_shared_conf(self, goal_state):
         if goal_state.shared_conf_uri is None:
@@ -707,7 +707,7 @@ class WireClient(object):
         xml_text = self.fetch_config(goal_state.shared_conf_uri,
                                      self.get_header())
         self.save_cache(local_file, xml_text)
-        self.set_shared_conf(SharedConfig(xml_text))
+        self._set_shared_conf(SharedConfig(xml_text))
 
     def update_certs(self, goal_state):
         if goal_state.certs_uri is None:
@@ -716,7 +716,7 @@ class WireClient(object):
         xml_text = self.fetch_config(goal_state.certs_uri,
                                      self.get_header_for_cert())
         self.save_cache(local_file, xml_text)
-        self.set_certs(Certificates(self, xml_text))
+        self._set_certs(Certificates(self, xml_text))
 
     def update_remote_access_conf(self, goal_state):
         if goal_state.remote_access_uri is None:
@@ -727,24 +727,23 @@ class WireClient(object):
         remote_access = RemoteAccess(xml_text)
         local_file = os.path.join(conf.get_lib_dir(), REMOTE_ACCESS_FILE_NAME.format(remote_access.incarnation))
         self.save_cache(local_file, xml_text)
-        self.set_remote_access(remote_access)
+        self._set_remote_access(remote_access)
 
     def get_remote_access(self):
-        if self._remote_access is None:
-            raise ProtocolError("Trying to fetch Remote Access before initialization!")
+        # This property can be None in the GoalState, so not raising a ProtocolError here
         return self._remote_access
 
     def update_ext_conf(self, goal_state):
         if goal_state.ext_uri is None:
             logger.info("ExtensionsConfig.xml uri is empty")
-            self.set_ext_conf(ExtensionsConfig(None))
+            self._set_ext_conf(ExtensionsConfig(None))
             return
         incarnation = goal_state.incarnation
         local_file = os.path.join(conf.get_lib_dir(),
                                   EXT_CONF_FILE_NAME.format(incarnation))
         xml_text = self.fetch_config(goal_state.ext_uri, self.get_header())
         self.save_cache(local_file, xml_text)
-        self.set_ext_conf(ExtensionsConfig(xml_text))
+        self._set_ext_conf(ExtensionsConfig(xml_text))
 
     # Type of update performed by _update_from_goal_state()
     class _UpdateType(object):
@@ -798,7 +797,7 @@ class WireClient(object):
                         self.save_cache(goal_state_file, xml_text)
 
                     self.goal_state_flusher.flush(datetime.utcnow())
-                    self.set_goal_state(new_goal_state)
+                    self._set_goal_state(new_goal_state)
                     save_goal_state(new_goal_state.incarnation, new_goal_state_xml)
                     self.update_hosting_env(new_goal_state)
                     self.update_shared_conf(new_goal_state)
@@ -824,37 +823,37 @@ class WireClient(object):
 
         raise ProtocolError("Exceeded max retry updating goal state")
 
-    def set_goal_state(self, new_goal_state):
+    def _set_goal_state(self, new_goal_state):
         if new_goal_state is None:
             logger.warn("Setting empty Goal State object!")
         self._goal_state = new_goal_state
 
-    def set_hosting_env(self, new_hosting_env):
+    def _set_hosting_env(self, new_hosting_env):
         if new_hosting_env is None:
             logger.warn("Setting empty Hosting Environment object!")
         self._hosting_env = new_hosting_env
 
-    def set_shared_conf(self, new_shared_config):
+    def _set_shared_conf(self, new_shared_config):
         if new_shared_config is None:
             logger.warn("Setting empty Shared Config object!")
         self._shared_conf = new_shared_config
 
-    def set_certs(self, new_certs):
+    def _set_certs(self, new_certs):
         if new_certs is None:
             logger.warn("Setting empty Certs object!")
         self._certs = new_certs
 
-    def set_ext_conf(self, new_ext_conf):
+    def _set_ext_conf(self, new_ext_conf):
         if new_ext_conf is None:
             logger.warn("Setting empty Extension Config object!")
         self._ext_conf = new_ext_conf
 
-    def set_remote_access(self, new_remote_access):
+    def _set_remote_access(self, new_remote_access):
         if new_remote_access is None:
             logger.warn("Setting empty Remote Access object!")
         self._remote_access = new_remote_access
 
-    def set_host_plugin(self, new_host_plugin):
+    def _set_host_plugin(self, new_host_plugin):
         if new_host_plugin is None:
             logger.warn("Setting empty Host Plugin object!")
         self._host_plugin = new_host_plugin
@@ -875,14 +874,13 @@ class WireClient(object):
         return self._shared_conf
 
     def get_certs(self):
-        if self._certs is None:
-            raise ProtocolError("Trying to fetch Certs before initialization!")
+        # This property can be None in the GoalState, so not returning a ProtocolError here
         return self._certs
 
     def get_ext_conf(self):
         if self._ext_conf is None:
             if self.get_goal_state().ext_uri is None:
-                self.set_ext_conf(ExtensionsConfig(None))
+                self._set_ext_conf(ExtensionsConfig(None))
             else:
                 raise ProtocolError("Trying to fetch Extension Conf before initialization!")
         return self._ext_conf
@@ -1200,9 +1198,9 @@ class WireClient(object):
     def get_host_plugin(self):
         if self._host_plugin is None:
             goal_state = self.get_goal_state()
-            self.set_host_plugin(HostPluginProtocol(self.get_endpoint(),
-                                                    goal_state.container_id,
-                                                    goal_state.role_config_name))
+            self._set_host_plugin(HostPluginProtocol(self.get_endpoint(),
+                                                     goal_state.container_id,
+                                                     goal_state.role_config_name))
         return self._host_plugin
 
     def has_artifacts_profile_blob(self):

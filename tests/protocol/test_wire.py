@@ -67,7 +67,7 @@ def set_up_wireclient_ext_conf(wire_protocol_client, artifacts_profile_blob=None
     ext_conf.artifacts_profile_blob = artifacts_profile_blob
     ext_conf.status_upload_blob = status_upload_blob
     ext_conf.status_upload_blob_type = status_upload_blob_type
-    wire_protocol_client.set_ext_conf(ext_conf)
+    wire_protocol_client._set_ext_conf(ext_conf)
 
 
 @patch("time.sleep")
@@ -193,7 +193,7 @@ class TestWireProtocol(AgentTestCase):
 
     def test_status_blob_parsing(self, *args):
         wire_protocol_client = WireProtocol(WIRESERVER_URL).client
-        wire_protocol_client.set_ext_conf(
+        wire_protocol_client._set_ext_conf(
             ExtensionsConfig(mockwiredata.WireProtocolData(mockwiredata.DATA_FILE).ext_conf))
         self.assertEqual(wire_protocol_client.get_ext_conf().status_upload_blob,
                          'https://test.blob.core.windows.net/vhds/test-cs12.test-cs12.test-cs12.status?'
@@ -339,7 +339,7 @@ class TestWireProtocol(AgentTestCase):
 
     def test_get_in_vm_artifacts_profile_blob_not_available(self, *args):
         wire_protocol_client = WireProtocol(WIRESERVER_URL).client
-        wire_protocol_client.set_ext_conf(ExtensionsConfig(None))
+        wire_protocol_client._set_ext_conf(ExtensionsConfig(None))
 
         # Test when artifacts_profile_blob is null/None
         self.assertEqual(None, wire_protocol_client.get_artifacts_profile())
@@ -983,7 +983,7 @@ class TestWireClient(AgentTestCase):
                                                                                                                 *args):
         xml_text = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE).goal_state
         client = WireClient(WIRESERVER_URL)
-        client.set_goal_state(GoalState(xml_text))
+        client._set_goal_state(GoalState(xml_text))
         client.get_host_plugin().set_default_channel(False)
 
         def direct_func(*args):
@@ -1007,7 +1007,7 @@ class TestWireClient(AgentTestCase):
                                                                                                                *args):
         xml_text = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE).goal_state
         client = WireClient(WIRESERVER_URL)
-        client.set_goal_state(GoalState(xml_text))
+        client._set_goal_state(GoalState(xml_text))
         client.get_host_plugin().set_default_channel(True)
 
         def direct_func(*args):
@@ -1030,7 +1030,7 @@ class TestWireClient(AgentTestCase):
     def test_send_request_using_appropriate_channel_should_use_host_channel_when_direct_channel_fails(self, *args):
         xml_text = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE).goal_state
         client = WireClient(WIRESERVER_URL)
-        client.set_goal_state(GoalState(xml_text))
+        client._set_goal_state(GoalState(xml_text))
         host = client.get_host_plugin()
         host.set_default_channel(False)
 
@@ -1057,7 +1057,7 @@ class TestWireClient(AgentTestCase):
                                                                                                              *args):
         xml_text = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE).goal_state
         client = WireClient(WIRESERVER_URL)
-        client.set_goal_state(GoalState(xml_text))
+        client._set_goal_state(GoalState(xml_text))
         client.get_host_plugin().set_default_channel(False)
 
         def direct_func(*args):

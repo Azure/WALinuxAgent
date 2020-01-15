@@ -159,7 +159,7 @@ class TestHostPlugin(AgentTestCase):
         ext_conf = wire.ExtensionsConfig(None)
         ext_conf.status_upload_blob = sas_url
         ext_conf.status_upload_blob_type = page_blob_type
-        wire_protocol_client.set_ext_conf(ext_conf)
+        wire_protocol_client._set_ext_conf(ext_conf)
         wire_protocol_client.status_blob.set_vm_status(status)
 
         return wire_protocol
@@ -454,7 +454,7 @@ class TestHostPlugin(AgentTestCase):
                 wire_protocol_client = wire.WireProtocol(wireserver_url).client
                 ext_config = wire.ExtensionsConfig(None)
                 ext_config.status_upload_blob = sas_url
-                wire_protocol_client.set_ext_conf(ext_config)
+                wire_protocol_client._set_ext_conf(ext_config)
                 wire_protocol_client.status_blob.vm_status = vmstatus
                 wire_protocol_client.upload_status_blob()
 
