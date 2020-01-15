@@ -77,6 +77,15 @@ class HostPluginProtocol(object):
     def set_default_channel(is_default):
         HostPluginProtocol._is_default_channel = is_default
 
+    def update_container_id(self, new_container_id):
+        self.container_id = new_container_id
+
+    def update_role_config_name(self, new_role_config_name):
+        self.role_config_name = new_role_config_name
+
+    def update_manifest_uri(self, new_manifest_uri):
+        self.manifest_uri = new_manifest_uri
+
     def ensure_initialized(self):
         if not self.is_initialized:
             self.api_versions = self.get_api_versions()
