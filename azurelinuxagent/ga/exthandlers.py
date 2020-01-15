@@ -273,8 +273,6 @@ class ExtHandlersHandler(object):
                       message=detailed_msg)
             return
 
-        logger.periodic_info(logger.EVERY_HALF_HOUR, "[PERIODIC] WALinuxAgent HeartBeat")
-
     def _cleanup_outdated_handlers(self):
         handlers = []
         pkgs = []

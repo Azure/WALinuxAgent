@@ -259,7 +259,7 @@ class UpdateHandler(object):
 
             # Log OS-specific info.
             os_info_msg = u"Distro info: {0} {1}, osutil class being used: {2}, agent service name: {3}"\
-                .format(DISTRO_NAME, DISTRO_VERSION,type(self.osutil).__name__, self.osutil.service_name)
+                .format(DISTRO_NAME, DISTRO_VERSION, type(self.osutil).__name__, self.osutil.service_name)
 
             logger.info(os_info_msg)
 
@@ -344,6 +344,9 @@ class UpdateHandler(object):
                         op=WALAEventOperation.ProcessGoalState,
                         duration=duration,
                         message="Incarnation {0}".format(exthandlers_handler.last_etag))
+
+                logger.periodic_info(logger.EVERY_HALF_HOUR, u"Agent {0} is running as the goal state agent",
+                                     CURRENT_AGENT)
 
                 time.sleep(goal_state_interval)
 
