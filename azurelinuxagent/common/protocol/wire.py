@@ -826,37 +826,37 @@ class WireClient(object):
 
     def set_goal_state(self, new_goal_state):
         if new_goal_state is None:
-            raise ProtocolError("Tying to set empty Goal State object!")
+            logger.warn("Setting empty Goal State object!")
         self._goal_state = new_goal_state
 
     def set_hosting_env(self, new_hosting_env):
         if new_hosting_env is None:
-            raise ProtocolError("Tying to set empty Hosting Environment object!")
+            logger.warn("Setting empty Hosting Environment object!")
         self._hosting_env = new_hosting_env
 
     def set_shared_conf(self, new_shared_config):
         if new_shared_config is None:
-            raise ProtocolError("Tying to set empty Shared Config object!")
+            logger.warn("Setting empty Shared Config object!")
         self._shared_conf = new_shared_config
 
     def set_certs(self, new_certs):
         if new_certs is None:
-            raise ProtocolError("Tying to set empty Certs object!")
+            logger.warn("Setting empty Certs object!")
         self._certs = new_certs
 
     def set_ext_conf(self, new_ext_conf):
         if new_ext_conf is None:
-            raise ProtocolError("Tying to set empty Extension Config object!")
+            logger.warn("Setting empty Extension Config object!")
         self._ext_conf = new_ext_conf
 
     def set_remote_access(self, new_remote_access):
         if new_remote_access is None:
-            raise ProtocolError("Tying to set empty Remote Access object!")
+            logger.warn("Setting empty Remote Access object!")
         self._remote_access = new_remote_access
 
     def set_host_plugin(self, new_host_plugin):
         if new_host_plugin is None:
-            raise ProtocolError("Tying to set empty Host Plugin object!")
+            logger.warn("Setting empty Host Plugin object!")
         self._host_plugin = new_host_plugin
 
     def get_goal_state(self):
@@ -1350,42 +1350,6 @@ class SharedConfig(object):
     def __init__(self, xml_text):
         logger.verbose("Load SharedConfig.xml")
         self.xml_text = xml_text
-        self.rdma_ipv4_addr = None
-        self.rdma_mac_addr = None
-        self._parse()
-
-    def _parse(self):
-        logger.verbose("Parsing SharedConfig XML contents for RDMA details")
-        xml_doc = parse_doc(self.xml_text)
-        if xml_doc is None:
-            logger.error("Could not parse SharedConfig XML document")
-            return
-        instance_elem = find(xml_doc, "Instance")
-        if not instance_elem:
-            logger.error("Could not find <Instance> in SharedConfig document")
-            return
-
-        rdma_ipv4_addr = getattrib(instance_elem, "rdmaIPv4Address")
-        if not rdma_ipv4_addr:
-            logger.error(
-                "Could not find rdmaIPv4Address attribute on Instance element of SharedConfig.xml document")
-            return
-
-        rdma_mac_addr = getattrib(instance_elem, "rdmaMacAddress")
-        if not rdma_mac_addr:
-            logger.error(
-                "Could not find rdmaMacAddress attribute on Instance element of SharedConfig.xml document")
-            return
-
-        # add colons to the MAC address (e.g. 00155D33FF1D ->
-        # 00:15:5D:33:FF:1D)
-        rdma_mac_addr = ':'.join([rdma_mac_addr[i:i + 2]
-                                  for i in range(0, len(rdma_mac_addr), 2)])
-        logger.info("Found RDMA details. IPv4={0} MAC={1}".format(
-            rdma_ipv4_addr, rdma_mac_addr))
-
-        self.rdma_ipv4_addr = rdma_ipv4_addr
-        self.rdma_mac_addr = rdma_mac_addr
 
 
 class RemoteAccess(object):

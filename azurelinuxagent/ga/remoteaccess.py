@@ -64,9 +64,7 @@ class RemoteAccessHandler(object):
                     self.incarnation = current_incarnation
                     try:
                         self.remote_access = self.protocol.client.get_remote_access()
-                    except ProtocolError as e:
-                        logger.warn(
-                            "Error when trying to initialize Remote Access, setting it to None. Error: {0}".format(e))
+                    except ProtocolError:
                         self.remote_access = None
                     self.handle_remote_access()
         except Exception as e:

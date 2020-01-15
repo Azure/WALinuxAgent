@@ -60,9 +60,9 @@ def get_event(message, duration=30000, evt_type="", is_internal=False, is_succes
     return event
 
 
-def setup_wireclient_ext_conf(wire_protocol_client, artifacts_profile_blob=None,
-                              status_upload_blob=None,
-                              status_upload_blob_type=None):
+def set_up_wireclient_ext_conf(wire_protocol_client, artifacts_profile_blob=None,
+                               status_upload_blob=None,
+                               status_upload_blob_type=None):
     ext_conf = ExtensionsConfig(None)
     ext_conf.artifacts_profile_blob = artifacts_profile_blob
     ext_conf.status_upload_blob = status_upload_blob
@@ -265,7 +265,7 @@ class TestWireProtocol(AgentTestCase):
         """
         vmstatus = VMStatus(message="Ready", status="Ready")
         wire_protocol_client = WireProtocol(WIRESERVER_URL).client
-        setup_wireclient_ext_conf(wire_protocol_client, status_upload_blob=testurl, status_upload_blob_type=testtype)
+        set_up_wireclient_ext_conf(wire_protocol_client, status_upload_blob=testurl, status_upload_blob_type=testtype)
         wire_protocol_client.status_blob.vm_status = vmstatus
 
         with patch.object(WireClient, "get_goal_state") as patch_get_goal_state:
@@ -285,7 +285,7 @@ class TestWireProtocol(AgentTestCase):
     def test_upload_status_blob_host_ga_plugin(self, *args):
         vmstatus = VMStatus(message="Ready", status="Ready")
         wire_protocol_client = WireProtocol(WIRESERVER_URL).client
-        setup_wireclient_ext_conf(wire_protocol_client, status_upload_blob=testurl, status_upload_blob_type=testtype)
+        set_up_wireclient_ext_conf(wire_protocol_client, status_upload_blob=testurl, status_upload_blob_type=testtype)
         wire_protocol_client.status_blob.vm_status = vmstatus
         goal_state = GoalState(mockwiredata.WireProtocolData(mockwiredata.DATA_FILE).goal_state)
 
@@ -310,9 +310,9 @@ class TestWireProtocol(AgentTestCase):
     def test_upload_status_blob_unknown_type_assumes_block(self, _, __, *args):
         vmstatus = VMStatus(message="Ready", status="Ready")
         wire_protocol_client = WireProtocol(WIRESERVER_URL).client
-        setup_wireclient_ext_conf(wire_protocol_client,
-                                  status_upload_blob=testurl,
-                                  status_upload_blob_type="NotALegalType")
+        set_up_wireclient_ext_conf(wire_protocol_client,
+                                   status_upload_blob=testurl,
+                                   status_upload_blob_type="NotALegalType")
         wire_protocol_client.status_blob.vm_status = vmstatus
 
         with patch.object(WireClient, "get_goal_state") as patch_get_goal_state:
@@ -329,7 +329,7 @@ class TestWireProtocol(AgentTestCase):
     def test_upload_status_blob_reports_prepare_error(self, *args):
         vmstatus = VMStatus(message="Ready", status="Ready")
         wire_protocol_client = WireProtocol(WIRESERVER_URL).client
-        setup_wireclient_ext_conf(wire_protocol_client, status_upload_blob=testurl, status_upload_blob_type=testtype)
+        set_up_wireclient_ext_conf(wire_protocol_client, status_upload_blob=testurl, status_upload_blob_type=testtype)
         wire_protocol_client.status_blob.vm_status = vmstatus
         goal_state = GoalState(mockwiredata.WireProtocolData(mockwiredata.DATA_FILE).goal_state)
 
@@ -345,12 +345,12 @@ class TestWireProtocol(AgentTestCase):
         self.assertEqual(None, wire_protocol_client.get_artifacts_profile())
 
         # Test when artifacts_profile_blob is whitespace
-        setup_wireclient_ext_conf(wire_protocol_client, artifacts_profile_blob="  ")
+        set_up_wireclient_ext_conf(wire_protocol_client, artifacts_profile_blob="  ")
         self.assertEqual(None, wire_protocol_client.get_artifacts_profile())
 
     def test_get_in_vm_artifacts_profile_response_body_not_valid(self, *args):
         wire_protocol_client = WireProtocol(WIRESERVER_URL).client
-        setup_wireclient_ext_conf(wire_protocol_client, artifacts_profile_blob=testurl)
+        set_up_wireclient_ext_conf(wire_protocol_client, artifacts_profile_blob=testurl)
         goal_state = GoalState(mockwiredata.WireProtocolData(mockwiredata.DATA_FILE).goal_state)
         wire_protocol_client.get_goal_state = Mock(return_value=goal_state)
 
@@ -378,7 +378,7 @@ class TestWireProtocol(AgentTestCase):
     @patch("azurelinuxagent.common.event.add_event")
     def test_artifacts_profile_json_parsing(self, patch_event, *args):
         wire_protocol_client = WireProtocol(WIRESERVER_URL).client
-        setup_wireclient_ext_conf(wire_protocol_client, artifacts_profile_blob=testurl)
+        set_up_wireclient_ext_conf(wire_protocol_client, artifacts_profile_blob=testurl)
         goal_state = GoalState(mockwiredata.WireProtocolData(mockwiredata.DATA_FILE).goal_state)
         wire_protocol_client.get_goal_state = Mock(return_value=goal_state)
 
@@ -397,7 +397,7 @@ class TestWireProtocol(AgentTestCase):
 
     def test_get_in_vm_artifacts_profile_default(self, *args):
         wire_protocol_client = WireProtocol(WIRESERVER_URL).client
-        setup_wireclient_ext_conf(wire_protocol_client, artifacts_profile_blob=testurl)
+        set_up_wireclient_ext_conf(wire_protocol_client, artifacts_profile_blob=testurl)
         goal_state = GoalState(mockwiredata.WireProtocolData(mockwiredata.DATA_FILE).goal_state)
         wire_protocol_client.get_goal_state = Mock(return_value=goal_state)
 
@@ -461,7 +461,7 @@ class TestWireProtocol(AgentTestCase):
 
     def test_get_in_vm_artifacts_profile_host_ga_plugin(self, *args):
         wire_protocol_client = WireProtocol(WIRESERVER_URL).client
-        setup_wireclient_ext_conf(wire_protocol_client, artifacts_profile_blob=testurl)
+        set_up_wireclient_ext_conf(wire_protocol_client, artifacts_profile_blob=testurl)
         goal_state = GoalState(mockwiredata.WireProtocolData(mockwiredata.DATA_FILE).goal_state)
         wire_protocol_client.get_goal_state = Mock(return_value=goal_state)
         wire_protocol_client.fetch = Mock(side_effect=[None, '{"onHold": "true"}'])
@@ -863,7 +863,7 @@ class TestWireClient(AgentTestCase):
                                                                                                *args):
         mock_get_artifact_request.return_value = "dummy_url", "dummy_header"
         client = WireClient("foo.bar")
-        setup_wireclient_ext_conf(client, artifacts_profile_blob="testurl")
+        set_up_wireclient_ext_conf(client, artifacts_profile_blob="testurl")
         json_profile = b'{ "onHold": true }'
 
         HostPluginProtocol.set_default_channel(False)
@@ -890,7 +890,7 @@ class TestWireClient(AgentTestCase):
                                                                                      *args):
         mock_get_artifact_request.return_value = "dummy_url", "dummy_header"
         client = WireClient("foo.bar")
-        setup_wireclient_ext_conf(client, artifacts_profile_blob="testurl")
+        set_up_wireclient_ext_conf(client, artifacts_profile_blob="testurl")
         json_profile = b'{ "onHold": true }'
 
         HostPluginProtocol.set_default_channel(False)
@@ -923,7 +923,7 @@ class TestWireClient(AgentTestCase):
                                                                                                   *args):
         mock_get_artifact_request.return_value = "dummy_url", "dummy_header"
         client = WireClient("foo.bar")
-        setup_wireclient_ext_conf(client, artifacts_profile_blob="testurl")
+        set_up_wireclient_ext_conf(client, artifacts_profile_blob="testurl")
         json_profile = b'{ "onHold": true }'
 
         HostPluginProtocol.set_default_channel(False)
@@ -956,7 +956,7 @@ class TestWireClient(AgentTestCase):
             self, mock_get_artifact_request, *args):
         mock_get_artifact_request.return_value = "dummy_url", "dummy_header"
         client = WireClient("foo.bar")
-        setup_wireclient_ext_conf(client, artifacts_profile_blob="testurl")
+        set_up_wireclient_ext_conf(client, artifacts_profile_blob="testurl")
 
         HostPluginProtocol.set_default_channel(False)
 
