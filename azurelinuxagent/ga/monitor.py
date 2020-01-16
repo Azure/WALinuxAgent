@@ -118,7 +118,6 @@ class MonitorHandler(object):
 
     def __init__(self):
         self.osutil = get_osutil()
-        self.protocol_util = get_protocol_util()
         self.imds_client = get_imds_client()
 
         self.event_thread = None
@@ -130,6 +129,7 @@ class MonitorHandler(object):
         self.last_host_plugin_heartbeat = None
         self.last_imds_heartbeat = None
         self.protocol = None
+        self.protocol_util = None
         self.health_service = None
         self.last_route_table_hash = b''
         self.last_nic_state = {}
@@ -141,9 +141,7 @@ class MonitorHandler(object):
         self.imds_errorstate = ErrorState(min_timedelta=MonitorHandler.IMDS_HEALTH_PERIOD)
 
     def run(self):
-        self.init_protocols()
-        self.init_sysinfo()
-        self.start()
+        self.start(init_data=True)
 
     def stop(self):
         self.should_run = False
@@ -151,14 +149,20 @@ class MonitorHandler(object):
             self.event_thread.join()
 
     def init_protocols(self):
+        # The initialization of ProtocolUtil for the Monitor thread should be done within the thread itself rather
+        # than initializing it in the ExtHandler thread. This is done to avoid any concurrency issues as each
+        # thread would now have its own ProtocolUtil object as per the SingletonPerThread model.
+        self.protocol_util = get_protocol_util()
         self.protocol = self.protocol_util.get_protocol()
+        # Update the GoalState first time to instantiate all required objects for the monitor thread
+        self.protocol.update_goal_state()
         self.health_service = HealthService(self.protocol.get_endpoint())
 
     def is_alive(self):
         return self.event_thread is not None and self.event_thread.is_alive()
 
-    def start(self):
-        self.event_thread = threading.Thread(target=self.daemon)
+    def start(self, init_data=False):
+        self.event_thread = threading.Thread(target=self.daemon, args=(init_data,))
         self.event_thread.setDaemon(True)
         self.event_thread.setName("MonitorHandler")
         self.event_thread.start()
@@ -268,7 +272,12 @@ class MonitorHandler(object):
 
             self.last_event_collection = datetime.datetime.utcnow()
 
-    def daemon(self):
+    def daemon(self, init_data=False):
+
+        if init_data:
+            self.init_protocols()
+            self.init_sysinfo()
+
         min_delta = min(MonitorHandler.TELEMETRY_HEARTBEAT_PERIOD,
                         MonitorHandler.CGROUP_TELEMETRY_POLLING_PERIOD,
                         MonitorHandler.CGROUP_TELEMETRY_REPORTING_PERIOD,

@@ -26,7 +26,7 @@ import tempfile
 import time
 from datetime import timedelta
 
-from azurelinuxagent.common.protocol.util import ProtocolUtil
+from azurelinuxagent.common.protocol.util import ProtocolUtil, get_protocol_util
 from nose.plugins.attrib import attr
 
 import azurelinuxagent.common.conf as conf
@@ -540,7 +540,9 @@ class TestEventMonitoring(AgentTestCase):
         protocol.report_ext_status = MagicMock()
         protocol.report_vm_status = MagicMock()
 
-        monitor_handler.protocol_util.get_protocol = Mock(return_value=protocol)
+        protocol_util = get_protocol_util()
+        protocol_util.get_protocol = Mock(return_value=protocol)
+        monitor_handler.protocol_util = Mock(return_value=protocol_util)
         return monitor_handler, protocol
 
     @patch("azurelinuxagent.common.protocol.imds.ImdsClient.get_compute",
@@ -621,7 +623,7 @@ class TestEventMonitoring(AgentTestCase):
                 # list.
 
                 # The container id value is obtained from the goal state and must be present in all telemetry events.
-                container_id_param = TelemetryEventParam("ContainerId", protocol.client.goal_state.container_id)
+                container_id_param = TelemetryEventParam("ContainerId", protocol.client.get_goal_state().container_id)
                 self.assertTrue(container_id_param in event.parameters)
 
                 # Same for GAVersion
@@ -850,7 +852,6 @@ class TestEventMonitoring(AgentTestCase):
 @patch('azurelinuxagent.common.osutil.get_osutil')
 @patch('azurelinuxagent.common.protocol.get_protocol_util')
 @patch("azurelinuxagent.common.protocol.healthservice.HealthService._report")
-@patch('azurelinuxagent.common.protocol.util.ProtocolUtil.get_protocol', return_value=WireProtocol('endpoint'))
 @patch("azurelinuxagent.common.utils.restutil.http_get")
 class TestExtensionMetricsDataTelemetry(AgentTestCase):
 
@@ -858,10 +859,16 @@ class TestExtensionMetricsDataTelemetry(AgentTestCase):
         AgentTestCase.setUp(self)
         event.init_event_logger(os.path.join(self.tmp_dir, "events"))
         CGroupsTelemetry.reset()
+        clear_singleton_instances(ProtocolUtil)
+        protocol = WireProtocol('endpoint')
+        protocol.update_goal_state = MagicMock()
+        self.get_protocol = patch('azurelinuxagent.common.protocol.util.ProtocolUtil.get_protocol', return_value=protocol)
+        self.get_protocol.start()
 
     def tearDown(self):
         AgentTestCase.tearDown(self)
         CGroupsTelemetry.reset()
+        self.get_protocol.stop()
 
     @patch('azurelinuxagent.common.event.EventLogger.add_metric')
     @patch('azurelinuxagent.common.event.EventLogger.add_event')
@@ -1238,32 +1245,32 @@ for i in range(3):
         self.assertEqual(message_json, None)
 
 
-@patch('azurelinuxagent.common.event.EventLogger.add_event')
 @patch("azurelinuxagent.common.utils.restutil.http_post")
-@patch("azurelinuxagent.common.utils.restutil.http_get")
 @patch('azurelinuxagent.common.protocol.wire.WireClient.get_goal_state')
-@patch('azurelinuxagent.common.protocol.util.ProtocolUtil.get_protocol', return_value=WireProtocol('endpoint'))
+@patch('azurelinuxagent.common.event.EventLogger.add_event')
+@patch("azurelinuxagent.common.utils.restutil.http_get")
 class TestMonitorFailure(AgentTestCase):
 
     @patch("azurelinuxagent.common.protocol.healthservice.HealthService.report_host_plugin_heartbeat")
-    def test_error_heartbeat_creates_no_signal(self, patch_report_heartbeat, *args):
-        patch_http_get = args[2]
-        patch_add_event = args[4]
+    def test_error_heartbeat_creates_no_signal(self, patch_report_heartbeat, patch_http_get, patch_add_event, *args):
 
         monitor_handler = get_monitor_handler()
-        monitor_handler.init_protocols()
-        monitor_handler.last_host_plugin_heartbeat = datetime.datetime.utcnow() - timedelta(hours=1)
+        protocol = WireProtocol('endpoint')
+        protocol.update_goal_state = MagicMock()
+        with patch('azurelinuxagent.common.protocol.util.ProtocolUtil.get_protocol', return_value=protocol):
+            monitor_handler.init_protocols()
+            monitor_handler.last_host_plugin_heartbeat = datetime.datetime.utcnow() - timedelta(hours=1)
 
-        patch_http_get.side_effect = IOError('client error')
-        monitor_handler.send_host_plugin_heartbeat()
+            patch_http_get.side_effect = IOError('client error')
+            monitor_handler.send_host_plugin_heartbeat()
 
-        # health report should not be made
-        self.assertEqual(0, patch_report_heartbeat.call_count)
+            # health report should not be made
+            self.assertEqual(0, patch_report_heartbeat.call_count)
 
-        # telemetry with failure details is sent
-        self.assertEqual(1, patch_add_event.call_count)
-        self.assertEqual('HostPluginHeartbeat', patch_add_event.call_args[1]['op'])
-        self.assertTrue('client error' in patch_add_event.call_args[1]['message'])
+            # telemetry with failure details is sent
+            self.assertEqual(1, patch_add_event.call_count)
+            self.assertEqual('HostPluginHeartbeat', patch_add_event.call_args[1]['op'])
+            self.assertTrue('client error' in patch_add_event.call_args[1]['message'])
 
-        self.assertEqual(False, patch_add_event.call_args[1]['is_success'])
-        monitor_handler.stop()
+            self.assertEqual(False, patch_add_event.call_args[1]['is_success'])
+            monitor_handler.stop()
