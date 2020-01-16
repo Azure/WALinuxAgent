@@ -21,6 +21,8 @@ import unittest
 
 from datetime import timedelta
 
+from azurelinuxagent.common.protocol.util import get_protocol_util
+
 from azurelinuxagent.ga.monitor import get_monitor_handler
 from nose.plugins.attrib import attr
 from tests.protocol import mockwiredata
@@ -2228,7 +2230,9 @@ class TestExtensionWithCGroupsEnabled(AgentTestCase):
 
         ext_handler = get_exthandlers_handler(protocol)
 
-        monitor_handler.protocol_util.get_protocol = Mock(return_value=protocol)
+        protocol_util = get_protocol_util()
+        protocol_util.get_protocol = Mock(return_value=protocol)
+        monitor_handler.protocol_util = Mock(return_value=protocol_util)
         return ext_handler, monitor_handler, protocol
 
     @attr('requires_sudo')
