@@ -345,7 +345,7 @@ class UpdateHandler(object):
                         duration=duration,
                         message="Incarnation {0}".format(exthandlers_handler.last_etag))
 
-                logger.periodic_info(logger.EVERY_HALF_HOUR, u"Agent {0} is running as the goal state agent",
+                logger.periodic_info(logger.EVERY_HALF_HOUR, u"[PERIODIC] Agent {0} is running as the goal state agent",
                                      CURRENT_AGENT)
 
                 time.sleep(goal_state_interval)
