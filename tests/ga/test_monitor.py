@@ -461,15 +461,6 @@ class TestMonitor(AgentTestCase):
         self.assertEqual(False, args[5].call_args[1]['is_success'])
         monitor_handler.stop()
 
-    @patch("azurelinuxagent.ga.monitor.add_event")
-    def test_telemetry_heartbeat_creates_event(self, patch_add_event, *_):
-        monitor_handler = get_monitor_handler()
-        monitor_handler.init_protocols()
-        monitor_handler.last_telemetry_heartbeat = datetime.datetime.utcnow() - timedelta(hours=24)
-        monitor_handler.send_telemetry_heartbeat()
-        self.assertEqual(1, patch_add_event.call_count)
-        monitor_handler.stop()
-
     @patch('azurelinuxagent.common.logger.Logger.info')
     def test_reset_loggers(self, mock_info, *args):
         # Adding 100 different messages

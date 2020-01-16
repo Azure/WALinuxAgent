@@ -134,7 +134,6 @@ class MonitorHandler(object):
         self.last_route_table_hash = b''
         self.last_nic_state = {}
 
-        self.counter = 0
         self.sysinfo = []
         self.should_run = True
         self.heartbeat_id = str(uuid.uuid4()).upper()
@@ -420,21 +419,13 @@ class MonitorHandler(object):
 
         if datetime.datetime.utcnow() >= (self.last_telemetry_heartbeat + MonitorHandler.TELEMETRY_HEARTBEAT_PERIOD):
             try:
-                incarnation = self.protocol.get_incarnation()
-                dropped_packets = self.osutil.get_firewall_dropped_packets(self.protocol.get_endpoint())
-                msg = "{0};{1};{2};{3}".format(incarnation, self.counter, self.heartbeat_id, dropped_packets)
-
-                add_event(name=AGENT_NAME, version=CURRENT_VERSION, op=WALAEventOperation.HeartBeat, is_success=True,
-                          message=msg, log_event=False)
-                self.counter += 1
                 io_errors = IOErrorCounter.get_and_reset()
                 hostplugin_errors = io_errors.get("hostplugin")
                 protocol_errors = io_errors.get("protocol")
                 other_errors = io_errors.get("other")
 
                 if hostplugin_errors > 0 or protocol_errors > 0 or other_errors > 0:
-                    msg = "hostplugin:{0};protocol:{1};other:{2}".format(hostplugin_errors,
-                                                                         protocol_errors,
+                    msg = "hostplugin:{0};protocol:{1};other:{2}".format(hostplugin_errors, protocol_errors,
                                                                          other_errors)
                     add_event(
                         name=AGENT_NAME,
