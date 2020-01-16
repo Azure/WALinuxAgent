@@ -120,7 +120,7 @@ class UpdateHandler(object):
 
         self.last_telemetry_heartbeat = None
         self.heartbeat_id = str(uuid.uuid4()).upper()
-        self.counter = 0
+        self.heartbeat_counter = 0
 
     def run_latest(self, child_args=None):
         """
@@ -739,17 +739,17 @@ class UpdateHandler(object):
 
         return pid_files, pid_file
 
-    def _send_telemetry_heartbeat(self, protocol):
+    def _send_heartbeat_telemetry(self, protocol):
         if self.last_telemetry_heartbeat is None:
             self.last_telemetry_heartbeat = datetime.utcnow() - UpdateHandler.TELEMETRY_HEARTBEAT_PERIOD
 
         if datetime.utcnow() >= (self.last_telemetry_heartbeat + UpdateHandler.TELEMETRY_HEARTBEAT_PERIOD):
             dropped_packets = self.osutil.get_firewall_dropped_packets(protocol.get_endpoint())
-            msg = "{0};{1};{2}".format(self.counter, self.heartbeat_id, dropped_packets)
+            msg = "{0};{1};{2}".format(self.heartbeat_counter, self.heartbeat_id, dropped_packets)
 
             add_event(name=AGENT_NAME, version=CURRENT_VERSION, op=WALAEventOperation.HeartBeat, is_success=True,
                       message=msg, log_event=False)
-            self.counter += 1
+            self.heartbeat_counter += 1
 
             logger.info(u"Agent {0} is running as the goal state agent", CURRENT_AGENT)
             self.last_telemetry_heartbeat = datetime.utcnow()

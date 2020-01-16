@@ -1466,7 +1466,7 @@ class TestUpdate(UpdateTestCase):
         patch_info.reset_mock()  # To clear the logger.info in WireProtocol.
 
         update_handler.last_telemetry_heartbeat = datetime.utcnow() - timedelta(hours=1)
-        update_handler._send_telemetry_heartbeat(mock_protocol)
+        update_handler._send_heartbeat_telemetry(mock_protocol)
         self.assertEqual(1, patch_add_event.call_count)
         self.assertEqual(1, patch_info.call_count)
 
