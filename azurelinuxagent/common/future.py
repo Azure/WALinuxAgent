@@ -103,3 +103,4 @@ def get_openwrt_platform():
                 if product_matches.group(1) == "OpenWrt":
                     result[0] = "openwrt"
     return result
+
