@@ -59,7 +59,7 @@ def get_linux_distribution(get_full_name, supported_dists):
         if os.path.exists("/etc/openwrt_release"):
             osinfo = get_openwrt_platform()
 
-        if not osinfo or osinfo == ['', '', '']:
+        if not osinfo or osinfo == ['', '', ''] or 'distro' in sys.modules:
             return get_linux_distribution_from_distro(get_full_name)
         full_name = platform.linux_distribution()[0].strip()
         osinfo.append(full_name)
@@ -103,3 +103,4 @@ def get_openwrt_platform():
                 if product_matches.group(1) == "OpenWrt":
                     result[0] = "openwrt"
     return result
+
