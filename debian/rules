@@ -32,3 +32,6 @@ override_dh_systemd_start:
 	dh_systemd_start -p waagent --name waagent-apt
 	dh_systemd_start -p waagent --name waagent-provision
 	dh_systemd_start -p waagent --name waagent-resourcedisk
+
+override_dh_python3:
+	dh_python3 -O--buildsystem=pybuild --shebang "/usr/bin/env python3"
