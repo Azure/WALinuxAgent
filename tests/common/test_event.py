@@ -32,7 +32,7 @@ from azurelinuxagent.common.utils import fileutil
 from azurelinuxagent.common.utils.extensionprocessutil import read_output
 from azurelinuxagent.common.version import CURRENT_AGENT, CURRENT_VERSION
 from azurelinuxagent.ga.monitor import MonitorHandler
-from tests.tools import AgentTestCase, data_dir, load_data, Mock, patch
+from tests.tools import AgentTestCase, data_dir, load_data, Mock, patch, PropertyMock
 
 
 class TestEvent(AgentTestCase):
@@ -270,13 +270,10 @@ class TestEvent(AgentTestCase):
     @patch('azurelinuxagent.common.event.EventLogger.add_event')
     def test_periodic_forwards_args(self, mock_event):
         event.__event_logger__.reset_periodic()
-        event_time = datetime.utcnow().__str__()
         event.add_periodic(logger.EVERY_DAY, "FauxEvent", op=WALAEventOperation.Log, is_success=True, duration=0,
-                           version=str(CURRENT_VERSION), message="FauxEventMessage", evt_type="", is_internal=False,
-                           log_event=True, force=False)
+                           version=str(CURRENT_VERSION), message="FauxEventMessage", log_event=True, force=False)
         mock_event.assert_called_once_with("FauxEvent", op=WALAEventOperation.Log, is_success=True, duration=0,
-                                           version=str(CURRENT_VERSION), message="FauxEventMessage", evt_type="",
-                                           is_internal=False, log_event=True)
+                                           version=str(CURRENT_VERSION), message="FauxEventMessage", log_event=True)
 
     @patch("azurelinuxagent.common.event.datetime")
     @patch('azurelinuxagent.common.event.EventLogger.add_event')
@@ -284,14 +281,13 @@ class TestEvent(AgentTestCase):
         event.__event_logger__.reset_periodic()
         event.add_periodic(logger.EVERY_DAY, "FauxEvent", message="FauxEventMessage")
         mock_event.assert_called_once_with("FauxEvent", op=WALAEventOperation.Unknown, is_success=True, duration=0,
-                                           version=str(CURRENT_VERSION), message="FauxEventMessage", evt_type="",
-                                           is_internal=False, log_event=True)
+                                           version=str(CURRENT_VERSION), message="FauxEventMessage", log_event=True)
 
     @patch("azurelinuxagent.common.event.EventLogger.add_event")
     def test_add_event_default_variables(self, mock_add_event):
         add_event('test', message='test event')
-        mock_add_event.assert_called_once_with('test', duration=0, evt_type='', is_internal=False, is_success=True,
-                                               log_event=True, message='test event', op=WALAEventOperation.Unknown,
+        mock_add_event.assert_called_once_with('test', duration=0, is_success=True, log_event=True,
+                                               message='test event', op=WALAEventOperation.Unknown,
                                                version=str(CURRENT_VERSION))
 
     def test_save_event(self):
@@ -313,9 +309,9 @@ class TestEvent(AgentTestCase):
         duration = elapsed_milliseconds(datetime.utcnow())
         log_msg = "{0}\n{1}".format("DummyCmd", "\n".join([line for line in msg.split('\n') if line != ""]))
 
+        test_datetime = datetime.utcnow()
         with patch("azurelinuxagent.common.event.datetime") as patch_datetime:
-            patch_datetime.utcnow = Mock(return_value=datetime.strptime("2019-01-01 01:30:00",
-                                                                        '%Y-%m-%d %H:%M:%S'))
+            patch_datetime.utcnow = Mock(return_value=test_datetime)
             with patch('os.getpid', return_value=42):
                 with patch("threading.Thread.getName", return_value="HelloWorldTask"):
                     add_event('test_extension', message=log_msg, duration=duration)
@@ -347,7 +343,7 @@ class TestEvent(AgentTestCase):
                 elif i['name'] == 'ContainerId':
                     self.assertEqual(i['value'], 'UNINITIALIZED')
                 elif i['name'] == 'OpcodeName':
-                    self.assertEqual(i['value'], '2019-01-01 01:30:00')
+                    self.assertEqual(i['value'], test_datetime.strftime(u'%Y-%m-%dT%H:%M:%S.%fZ'))
                 elif i['name'] == 'EventTid':
                     self.assertEqual(i['value'], threading.current_thread().ident)
                 elif i['name'] == 'EventPid':
@@ -437,139 +433,91 @@ class TestEvent(AgentTestCase):
         utc_start = datetime.utcnow() + timedelta(days=1)
         self.assertEqual(0, elapsed_milliseconds(utc_start))
 
-    def _assert_default_params_get_correctly_added(self, param_list_actual, parameters_expected):
-        default_parameters_expected_names = set(parameters_expected.keys())
+    def _assert_param_lists_are_equal(self, param_list_actual, parameters_expected):
+        parameters_expected_names = set(parameters_expected.keys())
 
         # Converting list of TelemetryEventParam into a dictionary, for easier look up of values.
         param_list_dict = OrderedDict([(param.name, param.value) for param in param_list_actual])
 
-        counter = 0
-        for p in default_parameters_expected_names:
+        for p in parameters_expected_names:
             self.assertIn(p, param_list_dict)
             self.assertEqual(param_list_dict[p], parameters_expected[p])
-            counter += 1
 
-        self.assertEqual(len(default_parameters_expected_names), counter)
+        self.assertEqual(len(parameters_expected_names), len(param_list_actual))
 
-    @patch("azurelinuxagent.common.event.get_container_id_from_env", return_value="TEST_CONTAINER_ID")
-    def test_add_default_parameters_to_extension_event(self, *args):
-        # When no values are populated in the TelemetryEventParamList, they should be set to their default values.
-        empty_event = TelemetryEvent()
-        empty_event.parameters = []
-        EventLogger.add_default_parameters_to_event(empty_event, is_agent_event=False)
+    def test_add_common_parameters_to_event_should_add_common_parameters(self, *args):
+        event = TelemetryEvent()
+        event.parameters = []
 
-        default_parameters_expected = {'GAVersion': CURRENT_AGENT, 'ContainerId': 'TEST_CONTAINER_ID',
-                                       'OpcodeName': '', 'EventTid': 0, 'EventPid': 0, 'TaskName': '',
-                                       'KeywordName': ''}
-        self._assert_default_params_get_correctly_added(empty_event.parameters, default_parameters_expected)
+        test_container_id = 'TEST_CONTAINER_ID'
+        test_event_creation_time = datetime.utcnow().strftime(u'%Y-%m-%dT%H:%M:%S.%fZ')
+        test_event_tid = 42
+        test_event_pid = 24
+        test_taskname = 'TEST_THREAD_NAME'
 
-        # When some values are already populated in the TelemetryEventParamList by the extension, they should be
-        # honored, except ContainerId and GAVersion, which are always populated from the values given by the agent.
-        extension_opcodename = 'RANDOM_OpcodeName'
-        extension_eventtid = 42
-        extension_eventpid = 24
-        extension_taskname = 'RANDOM_TaskName'
-        extension_keywordname = 'RANDOM_KeywordName'
+        with patch("azurelinuxagent.common.event.get_container_id_from_env", return_value=test_container_id):
+            with patch("threading.Thread.ident", new_callable=PropertyMock(return_value=test_event_tid)):
+                with patch("os.getpid", return_value=test_event_pid):
+                    with patch("threading.Thread.getName", return_value=test_taskname):
+                        EventLogger.add_common_parameters_to_event(event, test_event_creation_time)
 
-        extension_param_list_populated = [TelemetryEventParam('Name', "DummyExtension"),
-                                          TelemetryEventParam('Version', CURRENT_VERSION),
-                                          TelemetryEventParam('Operation', "DummyOperation"),
-                                          TelemetryEventParam('OperationSuccess', True),
-                                          TelemetryEventParam('Message', "TestMessage"),
-                                          TelemetryEventParam('Duration', 10),
-                                          TelemetryEventParam('ExtensionType', ''),
-                                          TelemetryEventParam('ContainerId', 'RANDOM_ContainerId'),
-                                          TelemetryEventParam('OpcodeName', extension_opcodename),
-                                          TelemetryEventParam('EventTid', extension_eventtid),
-                                          TelemetryEventParam('EventPid', extension_eventpid),
-                                          TelemetryEventParam('TaskName', extension_taskname),
-                                          TelemetryEventParam('KeywordName', extension_keywordname)
-                                          ]
-        populated_event = TelemetryEvent()
-        populated_event.parameters = extension_param_list_populated
-        EventLogger.add_default_parameters_to_event(populated_event, is_agent_event=False)
+        common_parameters_expected = {'GAVersion': CURRENT_AGENT,
+                                      'ContainerId': test_container_id,
+                                      'OpcodeName': test_event_creation_time,
+                                      'EventTid': test_event_tid,
+                                      'EventPid': test_event_pid,
+                                      'TaskName': test_taskname,
+                                      'KeywordName': '',
+                                      'ExtensionType': '',
+                                      'IsInternal': False}
 
-        extension_default_parameters_expected_populated = {'GAVersion': CURRENT_AGENT,
-                                                           'ContainerId': 'TEST_CONTAINER_ID',
-                                                           'OpcodeName': extension_opcodename,
-                                                           'EventTid': extension_eventtid,
-                                                           'EventPid': extension_eventpid,
-                                                           'TaskName': extension_taskname,
-                                                           'KeywordName': extension_keywordname}
+        self._assert_param_lists_are_equal(event.parameters, common_parameters_expected)
 
-        self._assert_default_params_get_correctly_added(populated_event.parameters,
-                                                        extension_default_parameters_expected_populated)
+    def trim_extension_parameters_should_keep_only_extension_specific_fields(self, *args):
+        # Create an event with all fields from the GuestAgentExtensionEvents schema present and ensure only
+        # Name, Version, Operation, OperationSuccess, Message and Duration are kept, since they are the only fields
+        # whose values are owned by the extension.
+        extension_event = TelemetryEvent()
+        extension_event.parameters = [
+            TelemetryEventParam('Name', 'TEST_EXTENSION'),
+            TelemetryEventParam('GAVersion', 'TEST_GAVersion'),
+            TelemetryEventParam('ContainerId', 'TEST_ContainerId'),
+            TelemetryEventParam('Version', 'TEST_Version'),
+            TelemetryEventParam('Operation', 'TEST_Operation'),
+            TelemetryEventParam('OperationSuccess', 'TEST_OperationSuccess'),
+            TelemetryEventParam('Message', 'TEST_Message'),
+            TelemetryEventParam('Duration', 'TEST_Duration'),
+            TelemetryEventParam('OpcodeName', 'TEST_OpcodeName'),
+            TelemetryEventParam('EventTid', 'TEST_EventTid'),
+            TelemetryEventParam('EventPid', 'TEST_EventPid'),
+            TelemetryEventParam('TaskName', 'TEST_TaskName'),
+            TelemetryEventParam('KeywordName', 'TEST_KeywordName'),
+            TelemetryEventParam('ExtensionType', 'TEST_ExtensionType'),
+            TelemetryEventParam('IsInternal', 'TEST_IsInternal'),
+            TelemetryEventParam('ExecutionMode', 'TEST_ExecutionMode'),
+            TelemetryEventParam('OSVersion', 'TEST_OSVersion'),
+            TelemetryEventParam('RAM', 'TEST_RAM'),
+            TelemetryEventParam('Processors', 'TEST_Processors'),
+            TelemetryEventParam('TenantName', 'TEST_TenantName'),
+            TelemetryEventParam('RoleName', 'TEST_RoleName'),
+            TelemetryEventParam('RoleInstanceName', 'TEST_RoleInstanceName'),
+            TelemetryEventParam('SubscriptionId', 'TEST_SubscriptionId'),
+            TelemetryEventParam('ResourceGroupName', 'TEST_ResourceGroupName'),
+            TelemetryEventParam('VMId', 'TEST_VMId'),
+            TelemetryEventParam('ImageOrigin', 'TEST_ImageOrigin'),
+        ]
 
-        # When values are not populated in the TelemetryEventParamList by the extension, they should be set to their
-        # default values. ContainerId and GAVersion are always populated from the values given by the agent.
-        extension_param_list_not_populated = [TelemetryEventParam('Name', "DummyExtension"),
-                                              TelemetryEventParam('Version', CURRENT_VERSION),
-                                              TelemetryEventParam('Operation', "DummyOperation"),
-                                              TelemetryEventParam('OperationSuccess', True),
-                                              TelemetryEventParam('Message', "TestMessage"),
-                                              TelemetryEventParam('Duration', 10),
-                                              TelemetryEventParam('ExtensionType', ''),
-                                              TelemetryEventParam('GAVersion', 'RANDOM_GAVersion'),
-                                              TelemetryEventParam('ContainerId', 'RANDOM_ContainerId')]
-        semi_populated_event = TelemetryEvent()
-        semi_populated_event.parameters = extension_param_list_not_populated
-        EventLogger.add_default_parameters_to_event(semi_populated_event, is_agent_event=False)
+        extension_only_params = {
+            'Name': 'TEST_EXTENSION',
+            'Version': 'TEST_Version',
+            'Operation': 'TEST_Operation',
+            'OperationSuccess': 'TEST_OperationSuccess',
+            'Message': 'TEST_Message',
+            'Duration': 'TEST_Duration'
+        }
 
-        extension_default_parameters_expected_not_populated = {'GAVersion': CURRENT_AGENT,
-                                                               'ContainerId': 'TEST_CONTAINER_ID',
-                                                               'OpcodeName': '', 'EventTid': 0, 'EventPid': 0,
-                                                               'TaskName': '', 'KeywordName': ''}
-        self._assert_default_params_get_correctly_added(semi_populated_event.parameters,
-                                                        extension_default_parameters_expected_not_populated)
-
-    @patch("threading.Thread.getName", return_value="HelloWorldTask")
-    @patch('os.getpid', return_value=42)
-    @patch("azurelinuxagent.common.event.get_container_id_from_env", return_value="TEST_CONTAINER_ID")
-    @patch("azurelinuxagent.common.event.datetime")
-    def test_add_default_parameters_to_agent_event(self, patch_datetime, *args):
-        patch_datetime.utcnow = Mock(return_value=datetime.strptime("2019-01-01 01:30:00",
-                                                                    '%Y-%m-%d %H:%M:%S'))
-        default_parameters_expected = {"GAVersion": CURRENT_AGENT,
-                                       'ContainerId': "TEST_CONTAINER_ID",
-                                       'OpcodeName': "2019-01-01 01:30:00",
-                                       'EventTid': threading.current_thread().ident,
-                                       'EventPid': 42,
-                                       "TaskName": "HelloWorldTask",
-                                       "KeywordName": ""}
-        empty_event = TelemetryEvent()
-        empty_event.parameters = []
-        EventLogger.add_default_parameters_to_event(empty_event, is_agent_event=True)
-        self._assert_default_params_get_correctly_added(empty_event.parameters, default_parameters_expected)
-
-        # When some values are already populated in the TelemetryEventParamList.
-        agent_param_list_populated = [TelemetryEventParam('Name', "DummyExtension"),
-                                      TelemetryEventParam('Version', CURRENT_VERSION),
-                                      TelemetryEventParam('Operation', "DummyOperation"),
-                                      TelemetryEventParam('OperationSuccess', True),
-                                      TelemetryEventParam('Message', "TestMessage"),
-                                      TelemetryEventParam('Duration', 10), TelemetryEventParam('ExtensionType', ''),
-                                      TelemetryEventParam('OpcodeName', '')]
-        populated_event = TelemetryEvent()
-        populated_event.parameters = agent_param_list_populated
-        EventLogger.add_default_parameters_to_event(populated_event, is_agent_event=True)
-        self._assert_default_params_get_correctly_added(populated_event.parameters, default_parameters_expected)
-
-        # When some values are already populated in the TelemetryEventParamList, along with some
-        # default values already populated and it should be replaced, when set_values_for_agent=True
-        agent_param_list_populated = [TelemetryEventParam('Name', "DummyExtension"),
-                                      TelemetryEventParam('Version', CURRENT_VERSION),
-                                      TelemetryEventParam('Operation', "DummyOperation"),
-                                      TelemetryEventParam('OperationSuccess', True),
-                                      TelemetryEventParam('Message', "TestMessage"),
-                                      TelemetryEventParam('Duration', 10), TelemetryEventParam('ExtensionType', ''),
-                                      TelemetryEventParam('OpcodeName', 'timestamp'),
-                                      TelemetryEventParam('ContainerId', 'SOME-CONTAINER'),
-                                      TelemetryEventParam('EventTid', 10101010), TelemetryEventParam('EventPid', 110),
-                                      TelemetryEventParam('TaskName', 'Test-TaskName')]
-        semi_populated_event = TelemetryEvent()
-        semi_populated_event.parameters = agent_param_list_populated
-        EventLogger.add_default_parameters_to_event(semi_populated_event, is_agent_event=True)
-        self._assert_default_params_get_correctly_added(semi_populated_event.parameters, default_parameters_expected)
+        EventLogger.trim_extension_parameters(extension_event)
+        self._assert_param_lists_are_equal(extension_event.parameters, extension_only_params)
 
 
 class TestMetrics(AgentTestCase):
@@ -603,7 +551,8 @@ class TestMetrics(AgentTestCase):
             self.assertEqual(perf_metric_event["providerId"], event.TELEMETRY_EVENT_PROVIDER_ID)
             for i in perf_metric_event["parameters"]:
                 self.assertIn(i["name"], ["Category", "Counter", "Instance", "Value", "GAVersion", "ContainerId",
-                                          "OpcodeName", "EventTid", "EventPid", "TaskName", "KeywordName"])
+                                          "OpcodeName", "EventTid", "EventPid", "TaskName", "KeywordName",
+                                          "ExtensionType", "IsInternal"])
                 if i["name"] == "Category":
                     self.assertEqual(i["value"], "DummyCategory")
                     category_present = True

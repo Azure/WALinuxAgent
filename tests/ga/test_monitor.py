@@ -37,7 +37,7 @@ from azurelinuxagent.common.cgroupstelemetry import CGroupsTelemetry, MetricValu
 from azurelinuxagent.common.datacontract import get_properties
 from azurelinuxagent.common.event import CONTAINER_ID_ENV_VARIABLE, EventLogger, WALAEventOperation
 from azurelinuxagent.common.exception import HttpError
-from azurelinuxagent.common.future import ustr
+from azurelinuxagent.common.future import ustr, OrderedDict
 from azurelinuxagent.common.logger import Logger
 from azurelinuxagent.common.osutil.default import BASE_CGROUPS, DefaultOSUtil
 from azurelinuxagent.common.protocol.imds import ComputeInfo
@@ -52,8 +52,8 @@ from azurelinuxagent.ga.monitor import generate_extension_metrics_telemetry_dict
     MonitorHandler, parse_json_event, parse_xml_event
 from tests.common.test_cgroupstelemetry import make_new_cgroup
 from tests.protocol.mockwiredata import DATA_FILE, WireProtocolData
-from tests.tools import Mock, MagicMock, patch, load_data, AgentTestCase, data_dir, are_cgroups_enabled, \
-    i_am_root, skip_if_predicate_false, is_trusty_in_travis, skip_if_predicate_true, clear_singleton_instances
+from tests.tools import Mock, MagicMock, patch, load_data, AgentTestCase, data_dir, are_cgroups_enabled, i_am_root, \
+    skip_if_predicate_false, is_trusty_in_travis, skip_if_predicate_true, clear_singleton_instances, PropertyMock
 
 
 class ResponseMock(Mock):
@@ -77,31 +77,26 @@ def create_dummy_event(size=0,
                        is_success=True,
                        duration=0,
                        version=CURRENT_VERSION,
-                       is_internal=False,
-                       evt_type="",
-                       message="DummyMessage",
-                       invalid_chars=False):
+                       message="DummyMessage"):
     return get_event_message(name=size if size != 0 else name,
                              op=op,
                              is_success=is_success,
                              duration=duration,
                              version=version,
-                             message=random_generator(size) if size != 0 else message,
-                             evt_type=evt_type,
-                             is_internal=is_internal)
+                             message=random_generator(size) if size != 0 else message)
 
 
-def get_event_message(duration, evt_type, is_internal, is_success, message, name, op, version, eventId=1):
+def get_event_message(duration, is_success, message, name, op, version, eventId=1):
     event = TelemetryEvent(eventId, "XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX")
     event.parameters.append(TelemetryEventParam('Name', name))
     event.parameters.append(TelemetryEventParam('Version', str(version)))
-    event.parameters.append(TelemetryEventParam('IsInternal', is_internal))
+    event.parameters.append(TelemetryEventParam('IsInternal', False))
     event.parameters.append(TelemetryEventParam('Operation', op))
     event.parameters.append(TelemetryEventParam('OperationSuccess', is_success))
     event.parameters.append(TelemetryEventParam('Message', message))
     event.parameters.append(TelemetryEventParam('Duration', duration))
-    event.parameters.append(TelemetryEventParam('ExtensionType', evt_type))
-    event.parameters.append(TelemetryEventParam('OpcodeName', '2019-11-06 02:00:44.307835'))
+    event.parameters.append(TelemetryEventParam('ExtensionType', ''))
+    event.parameters.append(TelemetryEventParam('OpcodeName', 'TEST_OpcodeName'))
 
     data = get_properties(event)
     return json.dumps(data)
@@ -139,204 +134,146 @@ class TestMonitor(AgentTestCase):
         self.assertNotEqual(0, event.parameters)
         self.assertTrue(all(param is not None for param in event.parameters))
 
-    def test_enrich_event_should_honor_values_from_agent_for_agent_events(self, *args):
-        # This test simulates how the event file is picked up from the events folder and final parameters are appended
-        # before reporting the event. In this case, because it's an agent event, it would have already been saved with
-        # all the necessary telemetry fields except the sysinfo ones. This test makes sure all existing telemetry
-        # fields are left untouched and only the sysinfo ones are added.
+    @staticmethod
+    def create_mock_sysinfo():
+        os_version_param = "OSVersion"
+        execution_mode_param = "ExecutionMode"
+        ram_param = "RAM"
+        processors_param = "Processors"
+        vm_name_param = "VMName"
+        tenant_name_param = "TenantName"
+        role_name_param = "RoleName"
+        role_instance_name_param = "RoleInstanceName"
+        location_param = "Location"
+        subscription_id_param = "SubscriptionId"
+        rg_name_param = "ResourceGroupName"
+        vm_id_param = "VMId"
+        image_origin_param = "ImageOrigin"
+
+        os_version_value = "sysinfo_dummy_os_version"
+        execution_mode_value = "sysinfo_IAAS"
+        ram_value = "sysinfo_dummy_ram"
+        processors_value = "sysinfo_dummy_processors"
+        vm_name_value = "sysinfo_dummy_vm"
+        tenant_name_value = "sysinfo_dummy_tenant"
+        role_name_value = "sysinfo_dummy_role"
+        role_instance_name_value = "sysinfo_dummy_role_instance"
+        location_value = "sysinfo_dummy_location"
+        subscription_id_value = "sysinfo_dummy_subscription_id"
+        rg_name_value = "sysinfo_dummy_rg_name"
+        vm_id_value = "sysinfo_dummy_vm_id"
+        image_origin_value = "sysinfo_dummy_image_origin"
+
+        sysinfo = [
+            TelemetryEventParam(os_version_param, os_version_value),
+            TelemetryEventParam(execution_mode_param, execution_mode_value),
+            TelemetryEventParam(ram_param, ram_value),
+            TelemetryEventParam(processors_param, processors_value),
+            TelemetryEventParam(vm_name_param, vm_name_value),
+            TelemetryEventParam(tenant_name_param, tenant_name_value),
+            TelemetryEventParam(role_name_param, role_name_value),
+            TelemetryEventParam(role_instance_name_param, role_instance_name_value),
+            TelemetryEventParam(location_param, location_value),
+            TelemetryEventParam(subscription_id_param, subscription_id_value),
+            TelemetryEventParam(rg_name_param, rg_name_value),
+            TelemetryEventParam(vm_id_param, vm_id_value),
+            TelemetryEventParam(image_origin_param, image_origin_value)
+        ]
+
+        return sysinfo
+
+    def _assert_sysinfo(self, event, sysinfo, *args):
+        # Assert that the event contains all parameters and values from sysinfo.
+        event_params_dict = OrderedDict([(param.name, param.value) for param in event.parameters])
+
+        counter = 0
+        for sysinfo_param in sysinfo:
+            if sysinfo_param.name in event_params_dict.keys():
+                counter += 1
+                self.assertEquals(sysinfo_param.value, event_params_dict[sysinfo_param.name])
+
+        self.assertEqual(13, counter)
+
+    def _assert_event_is_finalized(self, event):
+        # Check that the event has all the necessary telemetry fields before reporting it; valid for all events.
+
+        params_specific = ['Name', 'Version', 'Operation', 'OperationSuccess', 'Message', 'Duration']
+        params_common = ['GAVersion', 'ContainerId', 'OpcodeName', 'EventTid', 'EventPid', 'TaskName', 'KeywordName',
+                         'ExtensionType', 'IsInternal']
+        params_sysinfo = ['OSVersion', 'ExecutionMode', 'RAM', 'Processors', 'VMName', 'TenantName', 'RoleName',
+                          'RoleInstanceName', 'Location', 'SubscriptionId', 'ResourceGroupName', 'VMId', 'ImageOrigin']
+        params_final = []
+        params_final.extend(params_specific)
+        params_final.extend(params_common)
+        params_final.extend(params_sysinfo)
+
+        event_params_dict = OrderedDict([(param.name, param.value) for param in event.parameters])
+        for param_name in params_final:
+            self.assertTrue(param_name in event_params_dict.keys())
+
+        self.assertEquals(len(event.parameters), len(params_final))
+
+    def test_finalize_event_fields_should_add_all_fields_before_sending_out_agent_events(self, *args):
+        # This test simulates how the event file is picked up from the events folder and the event is finalized before
+        # being sent out. For agent events, since the event would have already been saved with all the common fields,
+        # finalizing the event means just appending sysinfo parameters.
         data_str = load_data('ext/event_from_agent.json')
         event = parse_json_event(data_str)
 
         monitor_handler = get_monitor_handler()
+        mock_sysinfo = self.create_mock_sysinfo()
+        monitor_handler.sysinfo = mock_sysinfo
 
-        sysinfo_vm_name_value = "sysinfo_dummy_vm"
-        sysinfo_tenant_name_value = "sysinfo_dummy_tenant"
-        sysinfo_role_name_value = "sysinfo_dummy_role"
-        sysinfo_role_instance_name_value = "sysinfo_dummy_role_instance"
-        sysinfo_execution_mode_value = "sysinfo_IAAS"
-        container_id_value = "TEST-CONTAINER-ID-ALREADY-PRESENT-GUID"
-        GAVersion_value = "WALinuxAgent-2.2.44"
-        OpcodeName_value = "2019-11-02 01:42:49.188030"
-        EventTid_value = 140240384030528
-        EventPid_value = 108573
-        TaskName_value = "ExtHandler"
-        KeywordName_value = ""
+        with patch("azurelinuxagent.ga.monitor.MonitorHandler.add_sysinfo", wraps=monitor_handler.add_sysinfo) \
+                as patch_add_sys_info:
+            with patch("azurelinuxagent.common.event.EventLogger.add_common_parameters_to_event",
+                       wraps=EventLogger.add_common_parameters_to_event) as patch_add_common_parameters_to_event:
+                with patch("azurelinuxagent.common.event.EventLogger.trim_extension_parameters",
+                           wraps=EventLogger.trim_extension_parameters) as patch_trim_extension_parameters:
+                    monitor_handler.finalize_event_fields(event, event_creation_time=datetime.datetime.utcnow())
 
-        vm_name_param = "VMName"
-        tenant_name_param = "TenantName"
-        role_name_param = "RoleName"
-        role_instance_name_param = "RoleInstanceName"
-        execution_mode_param = "ExecutionMode"
-        container_id_param = "ContainerId"
-        GAVersion_param = "GAVersion"
-        OpcodeName_param = "OpcodeName"
-        EventTid_param = "EventTid"
-        EventPid_param = "EventPid"
-        TaskName_param = "TaskName"
-        KeywordName_param = "KeywordName"
-
-        sysinfo = [
-            TelemetryEventParam(role_instance_name_param, sysinfo_role_instance_name_value),
-            TelemetryEventParam(vm_name_param, sysinfo_vm_name_value),
-            TelemetryEventParam(execution_mode_param, sysinfo_execution_mode_value),
-            TelemetryEventParam(tenant_name_param, sysinfo_tenant_name_value),
-            TelemetryEventParam(role_name_param, sysinfo_role_name_value)
-        ]
-        monitor_handler.sysinfo = sysinfo
-
-        with patch("azurelinuxagent.common.event.EventLogger.add_default_parameters_to_event",
-                   wraps=EventLogger.add_default_parameters_to_event) as patch_add_default_parameters_to_event:
-            monitor_handler.finalize_event(event)
-
-            # Ensure we are not calling the method to override agent-specific fields with values from the agent since
-            # this is an agent event and this method was already called before the event was saved to the filesystem.
-            self.assertEquals(patch_add_default_parameters_to_event.call_count, 0)
+                    # Ensure we are only calling the method to add sysinfo to an agent event, since the other two
+                    # methods are only called for extension events.
+                    self.assertEquals(patch_add_sys_info.call_count, 1)
+                    self.assertEquals(patch_add_common_parameters_to_event.call_count, 0)
+                    self.assertEquals(patch_trim_extension_parameters.call_count, 0)
 
         self.assertNotEqual(None, event)
         self.assertNotEqual(0, event.parameters)
         self.assertTrue(all(param is not None for param in event.parameters))
+        self._assert_sysinfo(event, mock_sysinfo)
+        self._assert_event_is_finalized(event)
 
-        counter = 0
-        for p in event.parameters:
-            if p.name == vm_name_param:
-                self.assertEqual(sysinfo_vm_name_value, p.value)
-                counter += 1
-            elif p.name == tenant_name_param:
-                self.assertEqual(sysinfo_tenant_name_value, p.value)
-                counter += 1
-            elif p.name == role_name_param:
-                self.assertEqual(sysinfo_role_name_value, p.value)
-                counter += 1
-            elif p.name == role_instance_name_param:
-                self.assertEqual(sysinfo_role_instance_name_value, p.value)
-                counter += 1
-            elif p.name == execution_mode_param:
-                self.assertEqual(sysinfo_execution_mode_value, p.value)
-                counter += 1
-            elif p.name == container_id_param:
-                self.assertEqual(container_id_value, p.value)
-                counter += 1
-            elif p.name == GAVersion_param:
-                self.assertEqual(GAVersion_value, p.value)
-                counter += 1
-            elif p.name == OpcodeName_param:
-                self.assertEqual(OpcodeName_value, p.value)
-                counter += 1
-            elif p.name == EventTid_param:
-                self.assertEqual(EventTid_value, p.value)
-                counter += 1
-            elif p.name == EventPid_param:
-                self.assertEqual(EventPid_value, p.value)
-                counter += 1
-            elif p.name == TaskName_param:
-                self.assertEqual(TaskName_value, p.value)
-                counter += 1
-            elif p.name == KeywordName_param:
-                self.assertEqual(KeywordName_value, p.value)
-                counter += 1
-
-        self.assertEqual(12, counter)
-
-    def test_enrich_event_should_honor_values_from_agent_for_extension_events(self, *args):
-        # This test simulates how the event file is picked up from the events folder and final parameters are appended
-        # before reporting the event. In this case, because it's an extension event, the agent needs to append the
-        # sysinfo telemetry fields and completely override fields that are supposed to be populated from the agent,
-        # such as the ContainerId, GAVersion, OpcodeName, EventTid, EventPid, TaskName, and KeywordName.
+    def test_finalize_event_fields_should_add_all_fields_before_sending_out_extension_events(self, *args):
+        # This test simulates how the event file is picked up from the events folder and the event is finalized before
+        # being sent out. For extension events, this means that the non-extension parameters will be dropped and
+        # replaced with values from the agent, and that sysinfo and common parameters will be added.
         data_str = load_data('ext/event_from_extension.xml')
         event = parse_xml_event(data_str)
+
         monitor_handler = get_monitor_handler()
+        mock_sysinfo = self.create_mock_sysinfo()
+        monitor_handler.sysinfo = mock_sysinfo
 
-        # Prepare the os environment variable to read the container id value from
-        container_id_value = "TEST-CONTAINER-ID-ADDED-ON-THE-FLY"
-        os.environ[CONTAINER_ID_ENV_VARIABLE] = container_id_value
+        with patch("azurelinuxagent.ga.monitor.MonitorHandler.add_sysinfo", wraps=monitor_handler.add_sysinfo) \
+                as patch_add_sys_info:
+            with patch("azurelinuxagent.common.event.EventLogger.add_common_parameters_to_event",
+                       wraps=EventLogger.add_common_parameters_to_event) as patch_add_common_parameters_to_event:
+                with patch("azurelinuxagent.common.event.EventLogger.trim_extension_parameters",
+                           wraps=EventLogger.trim_extension_parameters) as patch_trim_extension_parameters:
+                    monitor_handler.finalize_event_fields(event, event_creation_time=datetime.datetime.utcnow())
 
-        sysinfo_vm_name_value = "sysinfo_dummy_vm"
-        sysinfo_tenant_name_value = "sysinfo_dummy_tenant"
-        sysinfo_role_name_value = "sysinfo_dummy_role"
-        sysinfo_role_instance_name_value = "sysinfo_dummy_role_instance"
-        sysinfo_execution_mode_value = "sysinfo_IAAS"
-        GAVersion_value = CURRENT_AGENT
-        OpcodeName_value = ""
-        EventTid_value = 0
-        EventPid_value = 0
-        TaskName_value = ""
-        KeywordName_value = ""
-
-        vm_name_param = "VMName"
-        tenant_name_param = "TenantName"
-        role_name_param = "RoleName"
-        role_instance_name_param = "RoleInstanceName"
-        execution_mode_param = "ExecutionMode"
-        container_id_param = "ContainerId"
-        GAVersion_param = "GAVersion"
-        OpcodeName_param = "OpcodeName"
-        EventTid_param = "EventTid"
-        EventPid_param = "EventPid"
-        TaskName_param = "TaskName"
-        KeywordName_param = "KeywordName"
-
-        sysinfo = [
-            TelemetryEventParam(role_instance_name_param, sysinfo_role_instance_name_value),
-            TelemetryEventParam(vm_name_param, sysinfo_vm_name_value),
-            TelemetryEventParam(execution_mode_param, sysinfo_execution_mode_value),
-            TelemetryEventParam(tenant_name_param, sysinfo_tenant_name_value),
-            TelemetryEventParam(role_name_param, sysinfo_role_name_value)
-        ]
-        monitor_handler.sysinfo = sysinfo
-
-        with patch("azurelinuxagent.common.event.EventLogger.add_default_parameters_to_event",
-                   wraps=EventLogger.add_default_parameters_to_event) as patch_add_default_parameters_to_event:
-            monitor_handler.finalize_event(event)
-
-            # Ensure we are calling the method to override agent-specific fields with values from the agent since
-            # this is an extension event
-            self.assertEquals(patch_add_default_parameters_to_event.call_count, 1)
+                    # Ensure we are trimming the non-extension parameters, adding the common parameters and finally
+                    # adding sysinfo parameters for extension events.
+                    self.assertEquals(patch_trim_extension_parameters.call_count, 1)
+                    self.assertEquals(patch_add_common_parameters_to_event.call_count, 1)
+                    self.assertEquals(patch_add_sys_info.call_count, 1)
 
         self.assertNotEqual(None, event)
         self.assertNotEqual(0, event.parameters)
         self.assertTrue(all(param is not None for param in event.parameters))
-
-        counter = 0
-        for p in event.parameters:
-            if p.name == vm_name_param:
-                self.assertEqual(sysinfo_vm_name_value, p.value)
-                counter += 1
-            elif p.name == tenant_name_param:
-                self.assertEqual(sysinfo_tenant_name_value, p.value)
-                counter += 1
-            elif p.name == role_name_param:
-                self.assertEqual(sysinfo_role_name_value, p.value)
-                counter += 1
-            elif p.name == role_instance_name_param:
-                self.assertEqual(sysinfo_role_instance_name_value, p.value)
-                counter += 1
-            elif p.name == execution_mode_param:
-                self.assertEqual(sysinfo_execution_mode_value, p.value)
-                counter += 1
-            elif p.name == container_id_param:
-                self.assertEqual(container_id_value, p.value)
-                counter += 1
-            elif p.name == GAVersion_param:
-                self.assertEqual(GAVersion_value, p.value)
-                counter += 1
-            elif p.name == OpcodeName_param:
-                self.assertEqual(OpcodeName_value, p.value)
-                counter += 1
-            elif p.name == EventTid_param:
-                self.assertEqual(EventTid_value, p.value)
-                counter += 1
-            elif p.name == EventPid_param:
-                self.assertEqual(EventPid_value, p.value)
-                counter += 1
-            elif p.name == TaskName_param:
-                self.assertEqual(TaskName_value, p.value)
-                counter += 1
-            elif p.name == KeywordName_param:
-                self.assertEqual(KeywordName_value, p.value)
-                counter += 1
-
-        self.assertEqual(12, counter)
-        os.environ.pop(CONTAINER_ID_ENV_VARIABLE)
+        self._assert_sysinfo(event, mock_sysinfo)
+        self._assert_event_is_finalized(event)
 
     @patch("azurelinuxagent.ga.monitor.MonitorHandler.send_telemetry_heartbeat")
     @patch("azurelinuxagent.ga.monitor.MonitorHandler.collect_and_send_events")
@@ -661,7 +598,17 @@ class TestEventMonitoring(AgentTestCase):
         self.event_logger.save_event(create_dummy_event(message="Message-Test"))
 
         monitor_handler.last_event_collection = None
-        monitor_handler.collect_and_send_events()
+
+        test_mtime = 1000 # epoch time, in ms
+        test_opcodename = datetime.datetime.fromtimestamp(test_mtime).strftime(u'%Y-%m-%dT%H:%M:%S.%fZ')
+        test_eventtid = 42
+        test_eventpid = 24
+        test_taskname = "TEST_TaskName"
+        with patch("os.path.getmtime", return_value=test_mtime):
+            with patch('os.getpid', return_value=test_eventpid):
+                with patch("threading.Thread.ident", new_callable=PropertyMock(return_value=test_eventtid)):
+                    with patch("threading.Thread.getName", return_value=test_taskname):
+                        monitor_handler.collect_and_send_events()
 
         # Validating the crafted message by the collect_and_send_events call.
         self.assertEqual(1, patch_send_event.call_count)
@@ -670,13 +617,19 @@ class TestEventMonitoring(AgentTestCase):
         sample_message = '<Event id="1"><![CDATA[' \
                          '<Param Name="Name" Value="DummyExtension" T="mt:wstr" />' \
                          '<Param Name="Version" Value="{0}" T="mt:wstr" />' \
-                         '<Param Name="IsInternal" Value="False" T="mt:bool" />' \
                          '<Param Name="Operation" Value="Unknown" T="mt:wstr" />' \
                          '<Param Name="OperationSuccess" Value="True" T="mt:bool" />' \
                          '<Param Name="Message" Value="Message-Test" T="mt:wstr" />' \
                          '<Param Name="Duration" Value="0" T="mt:uint64" />' \
-                         '<Param Name="ExtensionType" Value="" T="mt:wstr" />' \
-                         '<Param Name="OpcodeName" Value="2019-11-06 02:00:44.307835" T="mt:wstr" />' \
+                         '<Param Name="GAVersion" Value="{1}" T="mt:wstr" />' \
+                         '<Param Name="ContainerId" Value="c6d5526c-5ac2-4200-b6e2-56f2b70c5ab2" T="mt:wstr" />' \
+                         '<Param Name="OpcodeName" Value="{2}" T="mt:wstr" />' \
+                         '<Param Name="EventTid" Value="{3}" T="mt:uint64" />' \
+                         '<Param Name="EventPid" Value="{4}" T="mt:uint64" />' \
+                         '<Param Name="TaskName" Value="{5}" T="mt:wstr" />' \
+                         '<Param Name="KeywordName" Value="" T="mt:wstr" />' \
+                         '<Param Name="ExtensionType" Value="json" T="mt:wstr" />' \
+                         '<Param Name="IsInternal" Value="False" T="mt:bool" />'\
                          '<Param Name="OSVersion" ' \
                          'Value="Linux:DISTRO_NAME-DISTRO_VERSION-DISTRO_CODE_NAME:platform-release" T="mt:wstr" />' \
                          '<Param Name="ExecutionMode" Value="IAAS" T="mt:wstr" />' \
@@ -691,13 +644,8 @@ class TestEventMonitoring(AgentTestCase):
                          '<Param Name="ResourceGroupName" Value="DummyRG" T="mt:wstr" />' \
                          '<Param Name="VMId" Value="DummyVmId" T="mt:wstr" />' \
                          '<Param Name="ImageOrigin" Value="1" T="mt:uint64" />' \
-                         '<Param Name="GAVersion" Value="{1}" T="mt:wstr" />' \
-                         '<Param Name="ContainerId" Value="c6d5526c-5ac2-4200-b6e2-56f2b70c5ab2" T="mt:wstr" />' \
-                         '<Param Name="EventTid" Value="0" T="mt:uint64" />' \
-                         '<Param Name="EventPid" Value="0" T="mt:uint64" />' \
-                         '<Param Name="TaskName" Value="" T="mt:wstr" />' \
-                         '<Param Name="KeywordName" Value="" T="mt:wstr" />' \
-                         ']]></Event>'.format(AGENT_VERSION, CURRENT_AGENT)
+                         ']]></Event>'.format(AGENT_VERSION, CURRENT_AGENT, test_opcodename, test_eventtid,
+                                              test_eventpid, test_taskname)
 
         self.maxDiff = None
         self.assertEqual(sample_message, send_event_call_args[1])

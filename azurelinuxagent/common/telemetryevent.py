@@ -34,6 +34,7 @@ class TelemetryEvent(DataContract):
         self.eventId = eventId
         self.providerId = providerId
         self.parameters = DataContractList(TelemetryEventParam)
+        self.file_type = ""
 
     # Checking if the particular param name is in the TelemetryEvent.
     def __contains__(self, param_name):

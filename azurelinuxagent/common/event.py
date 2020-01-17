@@ -23,14 +23,13 @@ import sys
 import threading
 import time
 import traceback
-from collections import namedtuple
 from datetime import datetime
 
 import azurelinuxagent.common.conf as conf
 import azurelinuxagent.common.logger as logger
 from azurelinuxagent.common.exception import EventError
-from azurelinuxagent.common.future import ustr, OrderedDict
-from azurelinuxagent.common.datacontract import get_properties, DataContractList
+from azurelinuxagent.common.future import ustr
+from azurelinuxagent.common.datacontract import get_properties
 from azurelinuxagent.common.telemetryevent import TelemetryEventParam, TelemetryEvent
 from azurelinuxagent.common.utils import fileutil, textutil
 from azurelinuxagent.common.version import CURRENT_VERSION, CURRENT_AGENT
@@ -271,37 +270,34 @@ class EventLogger(object):
             (self.periodic_events[h] + delta) <= datetime.now()
 
     def add_periodic(self, delta, name, op=WALAEventOperation.Unknown, is_success=True, duration=0,
-                     version=str(CURRENT_VERSION), message="", evt_type="", is_internal=False, log_event=True,
-                     force=False):
+                     version=str(CURRENT_VERSION), message="", log_event=True, force=False):
         h = hash(name + op + ustr(is_success) + message)
 
         if force or self.is_period_elapsed(delta, h):
             self.add_event(name, op=op, is_success=is_success, duration=duration,
-                           version=version, message=message, evt_type=evt_type,
-                           is_internal=is_internal, log_event=log_event)
+                           version=version, message=message, log_event=log_event)
             self.periodic_events[h] = datetime.now()
 
     def add_event(self, name, op=WALAEventOperation.Unknown, is_success=True, duration=0, version=str(CURRENT_VERSION),
-                  message="", evt_type="", is_internal=False, log_event=True):
+                  message="", log_event=True):
 
         if (not is_success) and log_event:
             _log_event(name, op, message, duration, is_success=is_success)
 
-        self._add_event(duration, evt_type, is_internal, is_success, message, name, op, version, event_id=1)
+        self._add_event(duration, is_success, message, name, op, version, event_id=1)
 
-    def _add_event(self, duration, evt_type, is_internal, is_success, message, name, op, version, event_id):
+    def _add_event(self, duration, is_success, message, name, op, version, event_id):
         event = TelemetryEvent(event_id, TELEMETRY_EVENT_PROVIDER_ID)
 
         event.parameters.append(TelemetryEventParam('Name', str(name)))
         event.parameters.append(TelemetryEventParam('Version', str(version)))
-        event.parameters.append(TelemetryEventParam('IsInternal', bool(is_internal)))
         event.parameters.append(TelemetryEventParam('Operation', str(op)))
         event.parameters.append(TelemetryEventParam('OperationSuccess', bool(is_success)))
         event.parameters.append(TelemetryEventParam('Message', str(message)))
         event.parameters.append(TelemetryEventParam('Duration', int(duration)))
-        event.parameters.append(TelemetryEventParam('ExtensionType', str(evt_type)))
+        event_creation_time = datetime.utcnow().strftime(u'%Y-%m-%dT%H:%M:%S.%fZ')
 
-        self.add_default_parameters_to_event(event)
+        self.add_common_parameters_to_event(event, event_creation_time)
         data = get_properties(event)
         try:
             self.save_event(json.dumps(data))
@@ -315,8 +311,9 @@ class EventLogger(object):
         event.parameters.append(TelemetryEventParam('Context1', self._clean_up_message(message)))
         event.parameters.append(TelemetryEventParam('Context2', ''))
         event.parameters.append(TelemetryEventParam('Context3', ''))
+        event_creation_time = datetime.utcnow().strftime(u'%Y-%m-%dT%H:%M:%S.%fZ')
 
-        self.add_default_parameters_to_event(event)
+        self.add_common_parameters_to_event(event, event_creation_time)
         data = get_properties(event)
         try:
             self.save_event(json.dumps(data))
@@ -343,8 +340,9 @@ class EventLogger(object):
         event.parameters.append(TelemetryEventParam('Counter', str(counter)))
         event.parameters.append(TelemetryEventParam('Instance', str(instance)))
         event.parameters.append(TelemetryEventParam('Value', float(value)))
+        event_creation_time = datetime.utcnow().strftime(u'%Y-%m-%dT%H:%M:%S.%fZ')
 
-        self.add_default_parameters_to_event(event)
+        self.add_common_parameters_to_event(event, event_creation_time)
         data = get_properties(event)
         try:
             self.save_event(json.dumps(data))
@@ -393,52 +391,52 @@ class EventLogger(object):
                 return message
 
     @staticmethod
-    def add_default_parameters_to_event(event, is_agent_event=True):
+    def add_common_parameters_to_event(event, event_creation_time):
         """
-        Default fields are only populated by the agent and not the extension. The agent will populate these fields for
-        events that don't already have them. Example: GAVersion and ContainerId are populated for agent events on the
-        fly, but not for extension events, so we will always override these fields with the values from the agent.
+        This method adds a group of telemetry parameters to an existing event. These parameters are common to all
+        events being sent out. The common parameters are GAVersion, ContainerId, OpcodeName, EventTid, EventPid,
+        TaskName, KeywordName, ExtensionType, and IsInternal and are populated from the agent.
 
-        Similarly, there are some fields that have a special use case when emitted by the agent, like OpcodeName (used
-        to capture the actual time of event generation), EventTid, EventPid and TaskName. In case the event is emitted
-        from the agent, override the values. Otherwise, keep the current value, if exists, and set to empty if not.
+        For agent events, this method is called during event creation and before the event is saved to disk. By doing
+        this at event-creation time, we ensure the GAVersion and ContainerId values are real-time.
+        For extension events, this method is called during reading of the events from the events folder on disk and
+        before reporting it.
 
-        We write the GAVersion here rather than add it in azurelinuxagent.ga.monitor.MonitorHandler.add_sysinfo
-        as there could be a possibility of events being sent with newer version of the agent, rather than the agent
-        version generating the event.
-        # Old behavior example: V1 writes the event on the disk and finds an update immediately, and updates. Now the
-        new monitor thread would pick up the events from the disk and send it with the CURRENT_AGENT, which would have
-        newer version of the agent. This causes confusion.
-
-        ContainerId can change due to live migration and we want to preserve the container id of the container writing
-        the event, rather than sending the event.
-
-        :param event: Event which parameters need to be expanded and updated.
-        :param is_agent_event: Whether the default values will be populated from the agent or not.
-        :return: List of final parameters to be appended to the event (whether agent or extension event).
+        :param event: Event which parameters will be expanded with parameters common to all events being sent out.
+        :param event_creation_time: The time the event was created.
+        :return: Event containing the expanded list of telemetry parameters.
         """
-        # Converting the event_parameters into a dictionary as it helps to easily look up and get values
-        event_params_dict = OrderedDict([(param.name, param.value) for param in event.parameters])
+        common_params = [TelemetryEventParam('GAVersion', CURRENT_AGENT),
+                         TelemetryEventParam('ContainerId', get_container_id_from_env()),
+                         TelemetryEventParam('OpcodeName', str(event_creation_time)),
+                         TelemetryEventParam('EventTid', threading.current_thread().ident),
+                         TelemetryEventParam('EventPid', os.getpid()),
+                         TelemetryEventParam('TaskName', threading.current_thread().getName()),
+                         TelemetryEventParam('KeywordName', ''),
+                         TelemetryEventParam('ExtensionType', event.file_type),
+                         TelemetryEventParam('IsInternal', False)]
 
-        DefaultParameter = namedtuple('DefaultParameter', ['name', 'value'])
-        default_params = [DefaultParameter('GAVersion', CURRENT_AGENT),
-                          DefaultParameter('ContainerId', get_container_id_from_env()),
-                          DefaultParameter('OpcodeName', datetime.utcnow().__str__() if is_agent_event else event_params_dict.get('OpcodeName', '')),
-                          DefaultParameter('EventTid', threading.current_thread().ident if is_agent_event else event_params_dict.get('EventTid', 0)),
-                          DefaultParameter('EventPid', os.getpid() if is_agent_event else event_params_dict.get('EventPid', 0)),
-                          DefaultParameter('TaskName', threading.current_thread().getName() if is_agent_event else event_params_dict.get('TaskName', '')),
-                          DefaultParameter('KeywordName', event_params_dict.get('KeywordName', ''))]
+        event.parameters.extend(common_params)
 
-        for param in default_params:
-            # Update or add the fields stated above
-            event_params_dict[param.name] = param.value
+    @staticmethod
+    def trim_extension_parameters(event):
+        """
+        This method is called for extension events before they are sent out. Per the agreement with extension
+        publishers, the parameters that belong to extensions and will be reported intact are Name, Version, Operation,
+        OperationSuccess, Message, and Duration. Since there is nothing preventing extensions to instantiate other
+        fields (which belong to the agent), we call this method to ensure the rest of the parameters are trimmed since
+        they will be replaced with values coming from the agent.
+        :param event: Extension event to trim.
+        :return: Trimmed extension event; containing only extension-specific parameters.
+        """
+        params_to_keep = ['Name', 'Version', 'Operation', 'OperationSuccess', 'Message', 'Duration']
+        trimmed_params = []
 
-        # Convert back to a list of telemetry event parameters
-        final_parameters = DataContractList(TelemetryEventParam)
-        for name, value in event_params_dict.items():
-            final_parameters.append(TelemetryEventParam(name, value))
+        for param in event.parameters:
+            if param.name in params_to_keep:
+                trimmed_params.append(param)
 
-        event.parameters = final_parameters
+        event.parameters = trimmed_params
 
 
 __event_logger__ = EventLogger()
@@ -496,8 +494,8 @@ def report_metric(category, counter, instance, value, log_event=False, reporter=
                                                      "{0}/{1} [{2}] = {3}".format(category, counter, instance, value))
 
 
-def add_event(name, op=WALAEventOperation.Unknown, is_success=True, duration=0, version=str(CURRENT_VERSION), message="",
-              evt_type="", is_internal=False, log_event=True, reporter=__event_logger__):
+def add_event(name, op=WALAEventOperation.Unknown, is_success=True, duration=0, version=str(CURRENT_VERSION),
+              message="", log_event=True, reporter=__event_logger__):
     if reporter.event_dir is None:
         logger.warn("Cannot add event -- Event reporter is not initialized.")
         _log_event(name, op, message, duration, is_success=is_success)
@@ -506,7 +504,7 @@ def add_event(name, op=WALAEventOperation.Unknown, is_success=True, duration=0, 
     if should_emit_event(name, version, op, is_success):
         mark_event_status(name, version, op, is_success)
         reporter.add_event(name, op=op, is_success=is_success, duration=duration, version=str(version), message=message,
-                           evt_type=evt_type, is_internal=is_internal, log_event=log_event)
+                           log_event=log_event)
 
 
 def add_log_event(level, message, reporter=__event_logger__):
@@ -526,16 +524,15 @@ def add_log_event(level, message, reporter=__event_logger__):
         reporter.add_log_event(level, message)
 
 
-def add_periodic(delta, name, op=WALAEventOperation.Unknown, is_success=True, duration=0,
-                 version=str(CURRENT_VERSION), message="", evt_type="", is_internal=False, log_event=True, force=False,
-                 reporter=__event_logger__):
+def add_periodic(delta, name, op=WALAEventOperation.Unknown, is_success=True, duration=0, version=str(CURRENT_VERSION),
+                 message="", log_event=True, force=False, reporter=__event_logger__):
     if reporter.event_dir is None:
         logger.warn("Cannot add periodic event -- Event reporter is not initialized.")
         _log_event(name, op, message, duration, is_success=is_success)
         return
 
     reporter.add_periodic(delta, name, op=op, is_success=is_success, duration=duration, version=str(version),
-                          message=message, evt_type=evt_type, is_internal=is_internal, log_event=log_event, force=force)
+                          message=message, log_event=log_event, force=force)
 
 
 def mark_event_status(name, version, op, status):

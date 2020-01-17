@@ -41,12 +41,12 @@ from azurelinuxagent.common.utils import fileutil
 from azurelinuxagent.common.version import PY_VERSION_MAJOR
 
 try:
-    from unittest.mock import Mock, patch, MagicMock, ANY, DEFAULT, call
+    from unittest.mock import Mock, patch, MagicMock, ANY, DEFAULT, call, PropertyMock
 
     # Import mock module for Python2 and Python3
     from bin.waagent2 import Agent
 except ImportError:
-    from mock import Mock, patch, MagicMock, ANY, DEFAULT, call
+    from mock import Mock, patch, MagicMock, ANY, DEFAULT, call, PropertyMock
 
 test_dir = os.path.dirname(os.path.abspath(__file__))
 data_dir = os.path.join(test_dir, "data")

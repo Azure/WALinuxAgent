@@ -74,6 +74,7 @@ def parse_xml_event(data_str):
         param_nodes = findall(xml_doc, 'Param')
         for param_node in param_nodes:
             event.parameters.append(parse_xml_param(param_node))
+        event.file_type = "xml"
         return event
     except Exception as e:
         raise ValueError(ustr(e))
@@ -83,6 +84,7 @@ def parse_json_event(data_str):
     data = json.loads(data_str)
     event = TelemetryEvent()
     set_properties("TelemetryEvent", event, data)
+    event.file_type = "json"
     return event
 
 
@@ -243,6 +245,10 @@ class MonitorHandler(object):
                     if not event_file.endswith(".tld"):
                         continue
                     event_file_path = os.path.join(event_dir, event_file)
+                    event_creation_time_epoch = os.path.getmtime(event_file_path)
+                    event_creation_time = datetime.datetime.\
+                        fromtimestamp(event_creation_time_epoch).strftime(u'%Y-%m-%dT%H:%M:%S.%fZ')
+
                     try:
                         data_str = self.collect_event(event_file_path)
                     except EventError as e:
@@ -251,7 +257,7 @@ class MonitorHandler(object):
 
                     try:
                         event = parse_event(data_str)
-                        self.finalize_event(event)
+                        self.finalize_event_fields(event, event_creation_time)
                         event_list.events.append(event)
                     except (ValueError, ProtocolError) as e:
                         logger.warn("Failed to decode event file: {0}", ustr(e))
@@ -306,18 +312,20 @@ class MonitorHandler(object):
             finally:
                 self.last_reset_loggers_time = time_now
 
-    def finalize_event(self, event):
+    def finalize_event_fields(self, event, event_creation_time):
         """
         This method appends any necessary telemetry fields before the event is sent out and is called for any event
-        read from the events folder. The sysinfo parameter group is added for all events, both agent and extension.
-        The remaining parameter group (GAVersion, ContainerId, OpcodeName, EventTid, EvenPid, TaskName and KeywordName)
-        are added here explicitly for extension events, since the agent events already populated them before saving
-        the event to the filesystem. See event.py#add_event for more details.
-        """
-        self.add_sysinfo(event)
+        read from the events folder.
 
+        For agent events, the common parameters should have already been added to the event when it was created, so only
+        sysinfo parameters need to be appended. For extension events, we first trim any non-extension-specific fields
+        since the rest of the fields are to be used by the agent, and then we append the common parameters.
+        """
         if event.is_extension_event():
-            EventLogger.add_default_parameters_to_event(event, is_agent_event=False)
+            EventLogger.trim_extension_parameters(event)
+            EventLogger.add_common_parameters_to_event(event, event_creation_time)
+
+        self.add_sysinfo(event)
 
     def add_sysinfo(self, event):
         """
@@ -325,10 +333,8 @@ class MonitorHandler(object):
         all events, either coming from the agent or from the extensions, are passed through this method. The purpose
         is to add a static list of sys_info parameters such as VMName, Region, RAM, etc. If the sys_info parameters
         are already populated in the event, they will be overwritten by the sys_info values obtained from the agent.
-        Since the ContainerId parameter is only populated on the fly for the agent events because it is not a static
-        sys_info parameter, an event coming from an extension will not have it, so we explicitly add it.
-        :param event: Event to be enriched with sys_info parameters
-        :return: Event with all parameters added, ready to be reported
+        :param event: Event to be enriched with sys_info parameters.
+        :return: Event with all sysinfo parameters added.
         """
         sysinfo_names = [v.name for v in self.sysinfo]
         extended_parameters = []

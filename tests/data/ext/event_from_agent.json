@@ -6,7 +6,7 @@
   {"name": "OperationSuccess", "value": true},
   {"name": "Message", "value": "Incarnation 12"},
   {"name": "Duration", "value": 16610},
-  {"name": "ExtensionType", "value": ""},
+  {"name": "ExtensionType", "value": "json"},
   {"name": "GAVersion", "value": "WALinuxAgent-2.2.44"},
   {"name": "ContainerId", "value": "TEST-CONTAINER-ID-ALREADY-PRESENT-GUID"},
   {"name": "OpcodeName", "value": "2019-11-02 01:42:49.188030"},
