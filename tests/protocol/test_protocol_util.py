@@ -82,6 +82,13 @@ class TestProtocolUtil(AgentTestCase):
         protocol = protocol_util.get_protocol()
         self.assertEquals(WireProtocol.return_value, protocol)
 
+        # Test no protocol is available
+        protocol_util.clear_protocol()
+        WireProtocol.return_value.detect.side_effect = ProtocolError()
+
+        self.assertRaises(ProtocolError, protocol_util.get_protocol)
+
+
     @patch("azurelinuxagent.common.conf.get_lib_dir")
     @patch("azurelinuxagent.common.protocol.util.WireProtocol")
     def test_detect_wire_protocol_no_dhcp(self, WireProtocol, mock_get_lib_dir, _):
