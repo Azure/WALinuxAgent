@@ -1469,6 +1469,7 @@ class TestUpdate(UpdateTestCase):
         update_handler._send_heartbeat_telemetry(mock_protocol)
         self.assertEqual(1, patch_add_event.call_count)
         self.assertEqual(1, patch_info.call_count)
+        self.assertEqual(patch_info.call_args[0][0], "[HEARTBEAT] Agent {0} is running as the goal state agent")
 
 
 class MonitorThreadTest(AgentTestCase):

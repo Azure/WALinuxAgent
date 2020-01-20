@@ -751,7 +751,7 @@ class UpdateHandler(object):
                       message=msg, log_event=False)
             self.heartbeat_counter += 1
 
-            logger.info(u"Agent {0} is running as the goal state agent", CURRENT_AGENT)
+            logger.info(u"[HEARTBEAT] Agent {0} is running as the goal state agent", CURRENT_AGENT)
             self.last_telemetry_heartbeat = datetime.utcnow()
 
 
