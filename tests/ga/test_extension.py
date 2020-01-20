@@ -1046,7 +1046,7 @@ class TestExtension(ExtensionTestCase):
 
         exthandlers_handler.run()
         self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.0.0")
-        self._assert_ext_status(protocol.report_ext_status, "error", 0)
+        self._assert_ext_status(protocol.report_ext_status, EXTENSION_STATUS_ERROR, 0)
 
     def test_wait_for_handler_successful_completion_empty_exts(self, *args):
         '''
@@ -1170,11 +1170,159 @@ class TestExtension(ExtensionTestCase):
 
         os.path.exists = orig_state
 
-    def test_is_ext_handling_complete(self, *args):
-        '''
+    @patch("azurelinuxagent.ga.exthandlers.ExtHandlerInstance.get_status_file_path")
+    def test_collect_ext_status(self, patch_get_status_file_path, *args):
+        """
         Testing is_ext_handling_complete() with various input and
         verifying against the expected output values.
-        '''
+        """
+        patch_get_status_file_path.return_value = (0, os.path.join(data_dir, "ext", "sample-status.json"))
+
+        test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE)
+        exthandlers_handler, protocol = self._create_mock(test_data, *args)
+
+        handler_name = "TestHandler"
+        exthandler = ExtHandler(name=handler_name)
+        extension = Extension(name=handler_name)
+        exthandler.properties.extensions.append(extension)
+
+        ext_handler_i = ExtHandlerInstance(exthandler, protocol)
+
+        ext_status = ext_handler_i.collect_ext_status(extension)
+
+        self.assertEqual(ext_status.code, 1)
+        self.assertEqual(ext_status.configurationAppliedTime, None)
+        self.assertEqual(ext_status.operation, "Enable")
+        self.assertEqual(ext_status.sequenceNumber, 0)
+        self.assertEqual(ext_status.message, "Aenean semper nunc nisl, vitae sollicitudin felis consequat at. In "
+                                             "lobortis elementum sapien, non commodo odio semper ac.")
+        self.assertEqual(ext_status.status, EXTENSION_STATUS_SUCCESS)
+
+        self.assertEqual(len(ext_status.substatusList), 1)
+        sub_status = ext_status.substatusList[0]
+        self.assertEqual(sub_status.code, "0")
+        self.assertEqual(sub_status.message, None)
+        self.assertEqual(sub_status.status, EXTENSION_STATUS_SUCCESS)
+
+    @patch("azurelinuxagent.ga.exthandlers.ExtHandlerInstance.get_status_file_path")
+    def test_collect_ext_status_very_large_status_message(self, patch_get_status_file_path, *args):
+        """
+        Testing collect_ext_status() with a very large status file (>128K) to what it re
+        """
+        status_file_path = os.path.join(data_dir, "ext", "sample-status-very-large.json")
+        patch_get_status_file_path.return_value = (0, status_file_path)
+
+        test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE)
+        exthandlers_handler, protocol = self._create_mock(test_data, *args)
+
+        handler_name = "TestHandler"
+        exthandler = ExtHandler(name=handler_name)
+        extension = Extension(name=handler_name)
+        exthandler.properties.extensions.append(extension)
+
+        ext_handler_i = ExtHandlerInstance(exthandler, protocol)
+        ext_status = ext_handler_i.collect_ext_status(extension)
+
+        self.assertEqual(ext_status.code, -1)
+        self.assertEqual(ext_status.configurationAppliedTime, None)
+        self.assertEqual(ext_status.operation, None)
+        self.assertEqual(ext_status.sequenceNumber, 0)
+        self.assertRegex(ext_status.message, "Failed to get status file: Handler - {0}, status file {1} of size {2} "
+                         "bytes is too big. Max Limit allowed is {3} bytes".format(handler_name, status_file_path,
+                                                                                   141061, 131072))
+        self.assertEqual(ext_status.status, EXTENSION_STATUS_ERROR)
+        self.assertEqual(len(ext_status.substatusList), 0)
+
+    @patch("azurelinuxagent.ga.exthandlers.ExtHandlerInstance.get_status_file_path")
+    def test_collect_ext_status_read_file_read_exceptions(self, patch_get_status_file_path, *args):
+        """
+        Testing collect_ext_status to validate the readfile exceptions.
+        """
+        status_file_path = os.path.join(data_dir, "ext", "sample-status.json")
+        patch_get_status_file_path.return_value = (0, status_file_path)
+
+        test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE)
+        exthandlers_handler, protocol = self._create_mock(test_data, *args)
+
+        handler_name = "TestHandler"
+        exthandler = ExtHandler(name=handler_name)
+        extension = Extension(name=handler_name)
+        exthandler.properties.extensions.append(extension)
+
+        ext_handler_i = ExtHandlerInstance(exthandler, protocol)
+
+        with patch('azurelinuxagent.common.utils.fileutil.read_file') as patch_read_file:
+            patch_read_file.side_effect = IOError("No such file or directory: {0}".format(status_file_path))
+            ext_status = ext_handler_i.collect_ext_status(extension)
+
+            self.assertEqual(ext_status.code, -1)
+            self.assertEqual(ext_status.configurationAppliedTime, None)
+            self.assertEqual(ext_status.operation, None)
+            self.assertEqual(ext_status.sequenceNumber, 0)
+            self.assertRegex(ext_status.message, "Failed to get status file: No such file or directory: "
+                                                 "{0}".format(status_file_path))
+            self.assertEqual(ext_status.status, EXTENSION_STATUS_ERROR)
+            self.assertEqual(len(ext_status.substatusList), 0)
+
+    @patch("azurelinuxagent.ga.exthandlers.ExtHandlerInstance.get_status_file_path")
+    def test_collect_ext_status_json_exceptions(self, patch_get_status_file_path, *args):
+        """
+        Testing collect_ext_status() with a malformed json status file.
+        """
+        status_file_path = os.path.join(data_dir, "ext", "sample-status-invalid-format.json")
+        patch_get_status_file_path.return_value = (0, status_file_path)
+
+        test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE)
+        exthandlers_handler, protocol = self._create_mock(test_data, *args)
+
+        handler_name = "TestHandler"
+        exthandler = ExtHandler(name=handler_name)
+        extension = Extension(name=handler_name)
+        exthandler.properties.extensions.append(extension)
+
+        ext_handler_i = ExtHandlerInstance(exthandler, protocol)
+        ext_status = ext_handler_i.collect_ext_status(extension)
+
+        self.assertEqual(ext_status.code, -1)
+        self.assertEqual(ext_status.configurationAppliedTime, None)
+        self.assertEqual(ext_status.operation, None)
+        self.assertEqual(ext_status.sequenceNumber, 0)
+        self.assertRegex(ext_status.message, "Malformed status file: ")
+        self.assertEqual(ext_status.status, EXTENSION_STATUS_ERROR)
+        self.assertEqual(len(ext_status.substatusList), 0)
+
+    @patch("azurelinuxagent.ga.exthandlers.ExtHandlerInstance.get_status_file_path")
+    def test_collect_ext_status_parse_ext_status_exceptions(self, patch_get_status_file_path, *args):
+        """
+        Testing collect_ext_status() with a malformed json status file.
+        """
+        status_file_path = os.path.join(data_dir, "ext", "sample-status-invalid-status.json")
+        patch_get_status_file_path.return_value = (0, status_file_path)
+
+        test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE)
+        exthandlers_handler, protocol = self._create_mock(test_data, *args)
+
+        handler_name = "TestHandler"
+        exthandler = ExtHandler(name=handler_name)
+        extension = Extension(name=handler_name)
+        exthandler.properties.extensions.append(extension)
+
+        ext_handler_i = ExtHandlerInstance(exthandler, protocol)
+        ext_status = ext_handler_i.collect_ext_status(extension)
+
+        self.assertEqual(ext_status.code, ExtensionErrorCodes.PluginSettingsStatusInvalid)
+        self.assertEqual(ext_status.configurationAppliedTime, None)
+        self.assertEqual(ext_status.operation, None)
+        self.assertEqual(ext_status.sequenceNumber, 0)
+        self.assertRegex(ext_status.message, "Malformed status file: ")
+        self.assertEqual(ext_status.status, EXTENSION_STATUS_ERROR)
+        self.assertEqual(len(ext_status.substatusList), 0)
+
+    def test_is_ext_handling_complete(self, *args):
+        """
+        Testing is_ext_handling_complete() with various input and
+        verifying against the expected output values.
+        """
         test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE)
         exthandlers_handler, protocol = self._create_mock(test_data, *args)
 

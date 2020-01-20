@@ -38,24 +38,24 @@ import azurelinuxagent.common.utils.fileutil as fileutil
 import azurelinuxagent.common.version as version
 from azurelinuxagent.common.cgroupconfigurator import CGroupConfigurator
 from azurelinuxagent.common.datacontract import get_properties, set_properties
-from azurelinuxagent.common.errorstate import ErrorState, ERROR_STATE_DELTA_INSTALL
-from azurelinuxagent.common.event import add_event, WALAEventOperation, elapsed_milliseconds, report_event
-from azurelinuxagent.common.exception import ExtensionError, ProtocolError, ProtocolNotFoundError, \
-    ExtensionDownloadError, ExtensionErrorCodes, ExtensionUpdateError, ExtensionOperationError
+from azurelinuxagent.common.errorstate import ERROR_STATE_DELTA_INSTALL, ErrorState
+from azurelinuxagent.common.event import add_event, elapsed_milliseconds, report_event, WALAEventOperation
+from azurelinuxagent.common.exception import ExtensionDownloadError, ExtensionError, ExtensionErrorCodes, \
+    ExtensionOperationError, ExtensionUpdateError, ProtocolError, ProtocolNotFoundError
 from azurelinuxagent.common.future import ustr
-from azurelinuxagent.common.protocol.restapi import ExtHandlerStatus, \
-    ExtensionStatus, \
-    ExtensionSubStatus, \
-    VMStatus, ExtHandler
+from azurelinuxagent.common.protocol.restapi import ExtensionStatus, ExtensionSubStatus, ExtHandler, ExtHandlerStatus, \
+    VMStatus
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
-from azurelinuxagent.common.version import AGENT_NAME, CURRENT_VERSION, GOAL_STATE_AGENT_VERSION, \
-    DISTRO_NAME, DISTRO_VERSION, PY_VERSION_MAJOR, PY_VERSION_MINOR, PY_VERSION_MICRO
+from azurelinuxagent.common.version import AGENT_NAME, CURRENT_VERSION, DISTRO_NAME, DISTRO_VERSION, \
+    GOAL_STATE_AGENT_VERSION, PY_VERSION_MAJOR, PY_VERSION_MICRO, PY_VERSION_MINOR
 
 # HandlerEnvironment.json schema version
 HANDLER_ENVIRONMENT_VERSION = 1.0
 
 EXTENSION_STATUS_ERROR = 'error'
 EXTENSION_STATUS_SUCCESS = 'success'
+EXTENSION_STATUS_WARNING = 'warning'
+
 VALID_EXTENSION_STATUS = ['transitioning', 'error', 'success', 'warning']
 EXTENSION_TERMINAL_STATUSES = ['error', 'success']
 
@@ -75,6 +75,9 @@ NUMBER_OF_DOWNLOAD_RETRIES = 5
 # This is the default value for the env variables, whenever we call a command which is not an update scenario, we
 # set the env variable value to NOT_RUN to reduce ambiguity for the extension publishers
 NOT_RUN = "NOT_RUN"
+
+# Max size of individual status file
+MAX_STATUS_FILE_SIZE_IN_BYTES = 128 * 1024
 
 
 class ExtCommandEnvVariable(object):
@@ -1099,20 +1102,27 @@ class ExtHandlerInstance(object):
         ext_status = ExtensionStatus(seq_no=seq_no)
         try:
             data_str = fileutil.read_file(ext_status_file)
+
+            if len(data_str) > MAX_STATUS_FILE_SIZE_IN_BYTES:
+                msg = "Handler - {0}, status file {1} of size {2} bytes is too big. Max Limit allowed is {3} " \
+                      "bytes".format(ext.name, ext_status_file, len(data_str), MAX_STATUS_FILE_SIZE_IN_BYTES)
+                logger.periodic_warn(logger.EVERY_DAY, msg)
+                raise IOError(msg)
+
             data = json.loads(data_str)
             parse_ext_status(ext_status, data)
         except IOError as e:
-            ext_status.message = u"Failed to get status file {0}".format(e)
+            ext_status.message = u"Failed to get status file: {0}".format(e)
             ext_status.code = -1
-            ext_status.status = "error"
+            ext_status.status = EXTENSION_STATUS_ERROR
         except ExtensionError as e:
-            ext_status.message = u"Malformed status file {0}".format(e)
+            ext_status.message = u"Malformed status file: {0}".format(e)
             ext_status.code = ExtensionErrorCodes.PluginSettingsStatusInvalid
-            ext_status.status = "error"
+            ext_status.status = EXTENSION_STATUS_ERROR
         except ValueError as e:
-            ext_status.message = u"Malformed status file {0}".format(e)
+            ext_status.message = u"Malformed status file: {0}".format(e)
             ext_status.code = -1
-            ext_status.status = "error"
+            ext_status.status = EXTENSION_STATUS_ERROR
 
         return ext_status
 
