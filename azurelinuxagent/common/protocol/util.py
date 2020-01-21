@@ -251,13 +251,6 @@ class ProtocolUtil(SingletonPerThread):
                 time.sleep(PROBE_INTERVAL)
         raise ProtocolNotFoundError("No protocol found.")
 
-    def _get_protocol(self):
-        """
-        Get protocol instance based on previous detecting result.
-        """
-        endpoint = self.get_wireserver_endpoint()
-        return WireProtocol(endpoint)
-
     def clear_protocol(self):
         """
         Cleanup previous saved protocol endpoint.
@@ -275,11 +268,6 @@ class ProtocolUtil(SingletonPerThread):
         if self._protocol is not None:
             return self._protocol
 
-        try:
-            self._protocol = self._get_protocol()
-            return self._protocol
-        except ProtocolNotFoundError:
-            pass
         logger.info("Detect protocol endpoints")
 
         protocol = self._detect_protocol()

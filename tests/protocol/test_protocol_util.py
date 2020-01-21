@@ -125,19 +125,6 @@ class TestProtocolUtil(AgentTestCase):
 
         self.assertRaises(ProtocolError, protocol_util._detect_wire_protocol)
 
-    @patch("azurelinuxagent.common.protocol.util.WireProtocol")
-    def test_get_protocol(self, WireProtocol, _):
-        WireProtocol.return_value = MagicMock()
-
-        protocol_util = get_protocol_util()
-        protocol_util.get_wireserver_endpoint = Mock()
-        protocol_util._detect_protocol = MagicMock()
-
-        # Test for wire protocol
-        protocol = protocol_util.get_protocol()
-        self.assertEquals(WireProtocol.return_value, protocol)
-        protocol_util.get_wireserver_endpoint.assert_any_call()
-
     @patch("azurelinuxagent.common.utils.fileutil")
     @patch("azurelinuxagent.common.conf.get_lib_dir")
     def test_endpoint_file_states(self, mock_get_lib_dir, mock_fileutil, _):
