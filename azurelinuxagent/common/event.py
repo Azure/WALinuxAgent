@@ -78,6 +78,7 @@ class WALAEventOperation:
     Download = "Download"
     Enable = "Enable"
     ExtensionProcessing = "ExtensionProcessing"
+    FetchGoalState = "FetchGoalState"
     Firewall = "Firewall"
     GetArtifactExtended = "GetArtifactExtended"
     HealthCheck = "HealthCheck"

@@ -311,39 +311,46 @@ class UpdateHandler(object):
                 #
                 # Process the goal state
                 #
-                protocol.update_goal_state()
+                goal_state_fetched = False
+                try:
+                    protocol.update_goal_state()
+                    goal_state_fetched = True
+                except Exception as e:
+                    msg = u"Exception retrieving the goal state: {0}".format(ustr(traceback.format_exc()))
+                    add_event(AGENT_NAME, op=WALAEventOperation.FetchGoalState, version=CURRENT_VERSION, is_success=False, message=msg)
 
-                if self._upgrade_available(protocol):
-                    available_agent = self.get_latest_agent()
-                    if available_agent is None:
-                        logger.info(
-                            "Agent {0} is reverting to the installed agent -- exiting",
-                            CURRENT_AGENT)
-                    else:
-                        logger.info(
-                            u"Agent {0} discovered update {1} -- exiting",
-                            CURRENT_AGENT,
-                            available_agent.name)
-                    break
+                if goal_state_fetched:
+                    if self._upgrade_available(protocol):
+                        available_agent = self.get_latest_agent()
+                        if available_agent is None:
+                            logger.info(
+                                "Agent {0} is reverting to the installed agent -- exiting",
+                                CURRENT_AGENT)
+                        else:
+                            logger.info(
+                                u"Agent {0} discovered update {1} -- exiting",
+                                CURRENT_AGENT,
+                                available_agent.name)
+                        break
 
-                utc_start = datetime.utcnow()
+                    utc_start = datetime.utcnow()
 
-                last_etag = exthandlers_handler.last_etag
-                exthandlers_handler.run()
+                    last_etag = exthandlers_handler.last_etag
+                    exthandlers_handler.run()
 
-                remote_access_handler.run()
+                    remote_access_handler.run()
 
-                if last_etag != exthandlers_handler.last_etag:
-                    self._ensure_readonly_files()
-                    duration = elapsed_milliseconds(utc_start)
-                    logger.info('ProcessGoalState completed [incarnation {0}; {1} ms]',
-                                exthandlers_handler.last_etag,
-                                duration)
-                    add_event(
-                        AGENT_NAME,
-                        op=WALAEventOperation.ProcessGoalState,
-                        duration=duration,
-                        message="Incarnation {0}".format(exthandlers_handler.last_etag))
+                    if last_etag != exthandlers_handler.last_etag:
+                        self._ensure_readonly_files()
+                        duration = elapsed_milliseconds(utc_start)
+                        logger.info('ProcessGoalState completed [incarnation {0}; {1} ms]',
+                                    exthandlers_handler.last_etag,
+                                    duration)
+                        add_event(
+                            AGENT_NAME,
+                            op=WALAEventOperation.ProcessGoalState,
+                            duration=duration,
+                            message="Incarnation {0}".format(exthandlers_handler.last_etag))
 
                 time.sleep(goal_state_interval)
 
@@ -693,15 +700,8 @@ class UpdateHandler(object):
                 or (len(self.agents) > 0 and self.agents[0].version > base_version)
 
         except Exception as e:
-            msg = u"Exception retrieving agent manifests: {0}".format(
-                        ustr(traceback.format_exc()))
-            logger.warn(msg)
-            add_event(
-                AGENT_NAME,
-                op=WALAEventOperation.Download,
-                version=CURRENT_VERSION,
-                is_success=False,
-                message=msg)
+            msg = u"Exception retrieving agent manifests: {0}".format(ustr(traceback.format_exc()))
+            add_event(AGENT_NAME, op=WALAEventOperation.Download, version=CURRENT_VERSION, is_success=False, message=msg)
             return False
 
     def _write_pid_file(self):
