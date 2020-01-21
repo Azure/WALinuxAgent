@@ -317,7 +317,6 @@ class UpdateHandler(object):
                     goal_state_fetched = True
                 except Exception as e:
                     msg = u"Exception retrieving the goal state: {0}".format(ustr(traceback.format_exc()))
-                    logger.warn(msg)
                     add_event(AGENT_NAME, op=WALAEventOperation.FetchGoalState, version=CURRENT_VERSION, is_success=False, message=msg)
 
                 if goal_state_fetched:
@@ -701,15 +700,8 @@ class UpdateHandler(object):
                 or (len(self.agents) > 0 and self.agents[0].version > base_version)
 
         except Exception as e:
-            msg = u"Exception retrieving agent manifests: {0}".format(
-                        ustr(traceback.format_exc()))
-            logger.warn(msg)
-            add_event(
-                AGENT_NAME,
-                op=WALAEventOperation.Download,
-                version=CURRENT_VERSION,
-                is_success=False,
-                message=msg)
+            msg = u"Exception retrieving agent manifests: {0}".format(ustr(traceback.format_exc()))
+            add_event(AGENT_NAME, op=WALAEventOperation.Download, version=CURRENT_VERSION, is_success=False, message=msg)
             return False
 
     def _write_pid_file(self):
