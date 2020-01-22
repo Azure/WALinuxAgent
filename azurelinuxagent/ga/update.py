@@ -30,6 +30,7 @@ import subprocess
 import sys
 import time
 import traceback
+import uuid
 import zipfile
 
 from datetime import datetime, timedelta
@@ -99,6 +100,8 @@ def get_python_cmd():
 
 class UpdateHandler(object):
 
+    TELEMETRY_HEARTBEAT_PERIOD = timedelta(minutes=30)
+
     def __init__(self):
         self.osutil = get_osutil()
         self.protocol_util = get_protocol_util()
@@ -114,6 +117,10 @@ class UpdateHandler(object):
         self.child_process = None
 
         self.signal_handler = None
+
+        self.last_telemetry_heartbeat = None
+        self.heartbeat_id = str(uuid.uuid4()).upper()
+        self.heartbeat_counter = 0
 
     def run_latest(self, child_args=None):
         """
@@ -259,7 +266,7 @@ class UpdateHandler(object):
 
             # Log OS-specific info.
             os_info_msg = u"Distro info: {0} {1}, osutil class being used: {2}, agent service name: {3}"\
-                .format(DISTRO_NAME, DISTRO_VERSION,type(self.osutil).__name__, self.osutil.service_name)
+                .format(DISTRO_NAME, DISTRO_VERSION, type(self.osutil).__name__, self.osutil.service_name)
 
             logger.info(os_info_msg)
 
@@ -351,6 +358,8 @@ class UpdateHandler(object):
                             op=WALAEventOperation.ProcessGoalState,
                             duration=duration,
                             message="Incarnation {0}".format(exthandlers_handler.last_etag))
+
+                self._send_heartbeat_telemetry(protocol)
 
                 time.sleep(goal_state_interval)
 
@@ -729,6 +738,21 @@ class UpdateHandler(object):
                 ustr(e))
 
         return pid_files, pid_file
+
+    def _send_heartbeat_telemetry(self, protocol):
+        if self.last_telemetry_heartbeat is None:
+            self.last_telemetry_heartbeat = datetime.utcnow() - UpdateHandler.TELEMETRY_HEARTBEAT_PERIOD
+
+        if datetime.utcnow() >= (self.last_telemetry_heartbeat + UpdateHandler.TELEMETRY_HEARTBEAT_PERIOD):
+            dropped_packets = self.osutil.get_firewall_dropped_packets(protocol.get_endpoint())
+            msg = "{0};{1};{2}".format(self.heartbeat_counter, self.heartbeat_id, dropped_packets)
+
+            add_event(name=AGENT_NAME, version=CURRENT_VERSION, op=WALAEventOperation.HeartBeat, is_success=True,
+                      message=msg, log_event=False)
+            self.heartbeat_counter += 1
+
+            logger.info(u"[HEARTBEAT] Agent {0} is running as the goal state agent", CURRENT_AGENT)
+            self.last_telemetry_heartbeat = datetime.utcnow()
 
 
 class GuestAgent(object):
