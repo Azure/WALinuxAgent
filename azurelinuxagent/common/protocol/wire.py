@@ -61,7 +61,6 @@ P7M_FILE_NAME = "Certificates.p7m"
 PEM_FILE_NAME = "Certificates.pem"
 EXT_CONF_FILE_NAME = "ExtensionsConfig.{0}.xml"
 MANIFEST_FILE_NAME = "{0}.{1}.manifest.xml"
-AGENTS_MANIFEST_FILE_NAME = "{0}.{1}.agentsManifest"
 TRANSPORT_CERT_FILE_NAME = "TransportCert.pem"
 TRANSPORT_PRV_FILE_NAME = "TransportPrivate.pem"
 # Store the last retrieved container id as an environment variable to be shared between threads for telemetry purposes
@@ -104,7 +103,7 @@ class WireProtocol(Protocol):
         self.client.update_goal_state()
 
     def get_endpoint(self):
-        return self.client.endpoint
+        return self.client.get_endpoint()
 
     def get_vminfo(self):
         goal_state = self.client.get_goal_state()
@@ -123,11 +122,7 @@ class WireProtocol(Protocol):
         return certificates.cert_list
 
     def get_incarnation(self):
-        path = os.path.join(conf.get_lib_dir(), INCARNATION_FILE_NAME)
-        if os.path.exists(path):
-            return fileutil.read_file(path)
-        else:
-            return 0
+        return self.client.get_goal_state().incarnation
 
     def get_vmagent_manifests(self):
         goal_state = self.client.get_goal_state()
@@ -137,7 +132,7 @@ class WireProtocol(Protocol):
     def get_vmagent_pkgs(self, vmagent_manifest):
         goal_state = self.client.get_goal_state()
         ga_manifest = self.client.get_gafamily_manifest(vmagent_manifest, goal_state)
-        valid_pkg_list = self.client.filter_package_list(vmagent_manifest.family, ga_manifest, goal_state)
+        valid_pkg_list = ga_manifest.pkg_list
         return valid_pkg_list
 
     def get_ext_handlers(self):
@@ -528,16 +523,19 @@ class WireClient(object):
 
     def __init__(self, endpoint):
         logger.info("Wire server endpoint:{0}", endpoint)
-        self.endpoint = endpoint
-        self.goal_state = None
-        self.hosting_env = None
-        self.shared_conf = None
-        self.remote_access = None
-        self.certs = None
-        self.ext_conf = None
-        self.host_plugin = None
+        self._endpoint = endpoint
+        self._goal_state = None
+        self._hosting_env = None
+        self._shared_conf = None
+        self._remote_access = None
+        self._certs = None
+        self._ext_conf = None
+        self._host_plugin = None
         self.status_blob = StatusBlob(self)
         self.goal_state_flusher = StateFlusher(conf.get_lib_dir())
+
+    def get_endpoint(self):
+        return self._endpoint
 
     def call_wireserver(self, http_req, *args, **kwargs):
         try:
@@ -625,7 +623,7 @@ class WireClient(object):
 
                 if response:
                     host = self.get_host_plugin()
-                    host.manifest_uri = version.uri
+                    host.update_manifest_uri(version.uri)
                     return response
             except Exception as e:
                 logger.warn("Exception when fetching manifest. Error: {0}".format(ustr(e)))
@@ -671,6 +669,7 @@ class WireClient(object):
                 use_proxy=use_proxy)
 
             host_plugin = self.get_host_plugin()
+
             if restutil.request_failed(resp):
                 error_response = restutil.read_response_error(resp)
                 msg = "Fetch failed from [{0}]: {1}".format(uri, error_response)
@@ -678,9 +677,9 @@ class WireClient(object):
 
                 if host_plugin is not None:
                     host_plugin.report_fetch_health(uri,
-                                                     is_healthy=not restutil.request_failed_at_hostplugin(resp),
-                                                     source='WireClient',
-                                                     response=error_response)
+                                                    is_healthy=not restutil.request_failed_at_hostplugin(resp),
+                                                    source='WireClient',
+                                                    response=error_response)
                 raise ProtocolError(msg)
             else:
                 if host_plugin is not None:
@@ -699,7 +698,7 @@ class WireClient(object):
         xml_text = self.fetch_config(goal_state.hosting_env_uri,
                                      self.get_header())
         self.save_cache(local_file, xml_text)
-        self.hosting_env = HostingEnv(xml_text)
+        self._set_hosting_env(HostingEnv(xml_text))
 
     def update_shared_conf(self, goal_state):
         if goal_state.shared_conf_uri is None:
@@ -708,7 +707,7 @@ class WireClient(object):
         xml_text = self.fetch_config(goal_state.shared_conf_uri,
                                      self.get_header())
         self.save_cache(local_file, xml_text)
-        self.shared_conf = SharedConfig(xml_text)
+        self._set_shared_conf(SharedConfig(xml_text))
 
     def update_certs(self, goal_state):
         if goal_state.certs_uri is None:
@@ -717,7 +716,7 @@ class WireClient(object):
         xml_text = self.fetch_config(goal_state.certs_uri,
                                      self.get_header_for_cert())
         self.save_cache(local_file, xml_text)
-        self.certs = Certificates(self, xml_text)
+        self._set_certs(Certificates(self, xml_text))
 
     def update_remote_access_conf(self, goal_state):
         if goal_state.remote_access_uri is None:
@@ -725,34 +724,26 @@ class WireClient(object):
             return
         xml_text = self.fetch_config(goal_state.remote_access_uri,
                                      self.get_header_for_cert())
-        self.remote_access = RemoteAccess(xml_text)
-        local_file = os.path.join(conf.get_lib_dir(), REMOTE_ACCESS_FILE_NAME.format(self.remote_access.incarnation))
+        remote_access = RemoteAccess(xml_text)
+        local_file = os.path.join(conf.get_lib_dir(), REMOTE_ACCESS_FILE_NAME.format(remote_access.incarnation))
         self.save_cache(local_file, xml_text)
+        self._set_remote_access(remote_access)
 
     def get_remote_access(self):
-        incarnation_file = os.path.join(conf.get_lib_dir(),
-                                        INCARNATION_FILE_NAME)
-        incarnation = self.fetch_cache(incarnation_file)
-        file_name = REMOTE_ACCESS_FILE_NAME.format(incarnation)
-        remote_access_file = os.path.join(conf.get_lib_dir(), file_name)
-        if not os.path.isfile(remote_access_file):
-            # no remote access data.
-            return None
-        xml_text = self.fetch_cache(remote_access_file)
-        remote_access = RemoteAccess(xml_text)
-        return remote_access
+        # This property can be None in the GoalState, so not raising a ProtocolError here
+        return self._remote_access
 
     def update_ext_conf(self, goal_state):
         if goal_state.ext_uri is None:
             logger.info("ExtensionsConfig.xml uri is empty")
-            self.ext_conf = ExtensionsConfig(None)
+            self._set_ext_conf(ExtensionsConfig(None))
             return
         incarnation = goal_state.incarnation
         local_file = os.path.join(conf.get_lib_dir(),
                                   EXT_CONF_FILE_NAME.format(incarnation))
         xml_text = self.fetch_config(goal_state.ext_uri, self.get_header())
         self.save_cache(local_file, xml_text)
-        self.ext_conf = ExtensionsConfig(xml_text)
+        self._set_ext_conf(ExtensionsConfig(xml_text))
 
     # Type of update performed by _update_from_goal_state()
     class _UpdateType(object):
@@ -773,14 +764,14 @@ class WireClient(object):
         """
         Updates the goal state if the incarnation changed or if 'forced' is True
         """
-        self._update_from_goal_state(WireClient._UpdateType.GoalStateForced if forced else WireClient._UpdateType.GoalState)
+        self._update_from_goal_state(
+            WireClient._UpdateType.GoalStateForced if forced else WireClient._UpdateType.GoalState)
 
     def _update_from_goal_state(self, refresh_type):
         """
         Fetches a new goal state and updates the internal state of the WireClient according to the requested 'refresh_type'
         """
-        incarnation_file = os.path.join(conf.get_lib_dir(), INCARNATION_FILE_NAME)
-        uri = GOAL_STATE_URI.format(self.endpoint)
+        uri = GOAL_STATE_URI.format(self.get_endpoint())
 
         max_retry = 3
 
@@ -790,35 +781,30 @@ class WireClient(object):
                 new_goal_state = GoalState(new_goal_state_xml)
 
                 def update_host_plugin():
-                    if self.host_plugin is not None:
-                        self.host_plugin.container_id = new_goal_state.container_id
-                        self.host_plugin.role_config_name = new_goal_state.role_config_name
+                    if self._host_plugin is not None:
+                        self._host_plugin.update_container_id(new_goal_state.container_id)
+                        self._host_plugin.update_role_config_name(new_goal_state.role_config_name)
 
                 if refresh_type == WireClient._UpdateType.HostPlugin:
                     update_host_plugin()
                     return
 
-                def incarnation_changed():
-                    last_incarnation = None
-                    if os.path.isfile(incarnation_file):
-                        last_incarnation = fileutil.read_file(incarnation_file)
-                    return last_incarnation is None or last_incarnation != new_goal_state.incarnation
-
-                if refresh_type == WireClient._UpdateType.GoalStateForced or incarnation_changed() or self.goal_state is None:
+                if self._goal_state is None or refresh_type == WireClient._UpdateType.GoalStateForced or \
+                        new_goal_state.incarnation != self._goal_state.incarnation:
                     def save_goal_state(incarnation, xml_text):
                         file_name = GOAL_STATE_FILE_NAME.format(incarnation)
                         goal_state_file = os.path.join(conf.get_lib_dir(), file_name)
                         self.save_cache(goal_state_file, xml_text)
 
                     self.goal_state_flusher.flush(datetime.utcnow())
-                    self.goal_state = new_goal_state
+                    self._set_goal_state(new_goal_state)
                     save_goal_state(new_goal_state.incarnation, new_goal_state_xml)
                     self.update_hosting_env(new_goal_state)
                     self.update_shared_conf(new_goal_state)
                     self.update_certs(new_goal_state)
                     self.update_ext_conf(new_goal_state)
                     self.update_remote_access_conf(new_goal_state)
-                    self.save_cache(incarnation_file, new_goal_state.incarnation)
+                    self.save_cache(os.path.join(conf.get_lib_dir(), INCARNATION_FILE_NAME), new_goal_state.incarnation)
 
                     update_host_plugin()
                 return
@@ -837,70 +823,67 @@ class WireClient(object):
 
         raise ProtocolError("Exceeded max retry updating goal state")
 
-    def get_goal_state(self):
-        if self.goal_state is None:
-            incarnation_file = os.path.join(conf.get_lib_dir(),
-                                            INCARNATION_FILE_NAME)
-            incarnation = self.fetch_cache(incarnation_file)
+    def _set_goal_state(self, new_goal_state):
+        if new_goal_state is None:
+            logger.warn("Setting empty Goal State object!")
+        self._goal_state = new_goal_state
 
-            file_name = GOAL_STATE_FILE_NAME.format(incarnation)
-            goal_state_file = os.path.join(conf.get_lib_dir(), file_name)
-            xml_text = self.fetch_cache(goal_state_file)
-            self.goal_state = GoalState(xml_text)
-        return self.goal_state
+    def _set_hosting_env(self, new_hosting_env):
+        if new_hosting_env is None:
+            logger.warn("Setting empty Hosting Environment object!")
+        self._hosting_env = new_hosting_env
+
+    def _set_shared_conf(self, new_shared_config):
+        if new_shared_config is None:
+            logger.warn("Setting empty Shared Config object!")
+        self._shared_conf = new_shared_config
+
+    def _set_certs(self, new_certs):
+        if new_certs is None:
+            logger.warn("Setting empty Certs object!")
+        self._certs = new_certs
+
+    def _set_ext_conf(self, new_ext_conf):
+        if new_ext_conf is None:
+            logger.warn("Setting empty Extension Config object!")
+        self._ext_conf = new_ext_conf
+
+    def _set_remote_access(self, new_remote_access):
+        if new_remote_access is None:
+            logger.warn("Setting empty Remote Access object!")
+        self._remote_access = new_remote_access
+
+    def _set_host_plugin(self, new_host_plugin):
+        if new_host_plugin is None:
+            logger.warn("Setting empty Host Plugin object!")
+        self._host_plugin = new_host_plugin
+
+    def get_goal_state(self):
+        if self._goal_state is None:
+            raise ProtocolError("Trying to fetch goal state before initialization!")
+        return self._goal_state
 
     def get_hosting_env(self):
-        if self.hosting_env is None:
-            local_file = os.path.join(conf.get_lib_dir(),
-                                      HOSTING_ENV_FILE_NAME)
-            xml_text = self.fetch_cache(local_file)
-            self.hosting_env = HostingEnv(xml_text)
-        return self.hosting_env
+        if self._hosting_env is None:
+            raise ProtocolError("Trying to fetch Hosting Environment before initialization!")
+        return self._hosting_env
 
     def get_shared_conf(self):
-        if self.shared_conf is None:
-            local_file = os.path.join(conf.get_lib_dir(),
-                                      SHARED_CONF_FILE_NAME)
-            xml_text = self.fetch_cache(local_file)
-            self.shared_conf = SharedConfig(xml_text)
-        return self.shared_conf
+        if self._shared_conf is None:
+            raise ProtocolError("Trying to fetch Shared Conf before initialization!")
+        return self._shared_conf
 
     def get_certs(self):
-        if self.certs is None:
-            local_file = os.path.join(conf.get_lib_dir(), CERTS_FILE_NAME)
-            xml_text = self.fetch_cache(local_file)
-            self.certs = Certificates(self, xml_text)
-        if self.certs is None:
-            return None
-        return self.certs
-
-    def get_current_handlers(self):
-        handler_list = list()
-        try:
-            incarnation = self.fetch_cache(os.path.join(conf.get_lib_dir(),
-                                                        INCARNATION_FILE_NAME))
-            ext_conf = ExtensionsConfig(self.fetch_cache(os.path.join(conf.get_lib_dir(),
-                                                                      EXT_CONF_FILE_NAME.format(incarnation))))
-            handler_list = ext_conf.ext_handlers.extHandlers
-        except ProtocolError as pe:
-            # cache file is missing, nothing to do
-            logger.verbose(ustr(pe))
-        except Exception as e:
-            logger.error("Could not obtain current handlers: {0}", ustr(e))
-
-        return handler_list
+        # This property can be None in the GoalState, so not returning a ProtocolError here
+        return self._certs
 
     def get_ext_conf(self):
-        if self.ext_conf is None:
-            local_goal_state = self.get_goal_state()
-            if local_goal_state.ext_uri is None:
-                self.ext_conf = ExtensionsConfig(None)
+        if self._ext_conf is None:
+            if self.get_goal_state().ext_uri is None:
+                self._set_ext_conf(ExtensionsConfig(None))
             else:
-                local_file = EXT_CONF_FILE_NAME.format(local_goal_state.incarnation)
-                local_file = os.path.join(conf.get_lib_dir(), local_file)
-                xml_text = self.fetch_cache(local_file)
-                self.ext_conf = ExtensionsConfig(xml_text)
-        return self.ext_conf
+                raise ProtocolError("Trying to fetch Extension Conf before initialization!")
+        return self._ext_conf
 
     def get_ext_manifest(self, ext_handler, goal_state):
         local_file = MANIFEST_FILE_NAME.format(ext_handler.name, goal_state.incarnation)
@@ -913,44 +896,7 @@ class WireClient(object):
         except Exception as e:
             raise ExtensionDownloadError("Failed to retrieve extension manifest. Error: {0}".format(ustr(e)))
 
-    def filter_package_list(self, family, ga_manifest, goal_state):
-        complete_list = ga_manifest.pkg_list
-        agent_manifest = os.path.join(conf.get_lib_dir(),
-                                      AGENTS_MANIFEST_FILE_NAME.format(
-                                          family,
-                                          goal_state.incarnation))
-
-        if not os.path.exists(agent_manifest):
-            # clear memory cache
-            ga_manifest.allowed_versions = None
-
-            # create disk cache
-            with open(agent_manifest, mode='w') as manifest_fh:
-                for version in complete_list.versions:
-                    manifest_fh.write('{0}\n'.format(version.version))
-            fileutil.chmod(agent_manifest, 0o644)
-
-            return complete_list
-
-        else:
-            # use allowed versions from cache, otherwise from disk
-            if ga_manifest.allowed_versions is None:
-                with open(agent_manifest, mode='r') as manifest_fh:
-                    ga_manifest.allowed_versions = [v.strip('\n') for v
-                                                    in manifest_fh.readlines()]
-
-            # use the updated manifest urls for allowed versions
-            allowed_list = ExtHandlerPackageList()
-            allowed_list.versions = [version for version
-                                     in complete_list.versions
-                                     if version.version
-                                     in ga_manifest.allowed_versions]
-
-            return allowed_list
-
     def get_gafamily_manifest(self, vmagent_manifest, goal_state):
-        self._remove_stale_agent_manifest(vmagent_manifest.family, goal_state.incarnation)
-
         local_file = MANIFEST_FILE_NAME.format(vmagent_manifest.family, goal_state.incarnation)
         local_file = os.path.join(conf.get_lib_dir(), local_file)
 
@@ -961,27 +907,8 @@ class WireClient(object):
         except Exception as e:
             raise ProtocolError("Failed to retrieve GAFamily manifest. Error: {0}".format(ustr(e)))
 
-    def _remove_stale_agent_manifest(self, family, incarnation):
-        """
-        The incarnation number can reset at any time, which means there
-        could be a stale agentsManifest on disk.  Stale files are cleaned
-        on demand as new goal states arrive from WireServer. If the stale
-        file is not removed agent upgrade may be delayed.
-
-        :param family: GA family, e.g. Prod or Test
-        :param incarnation: incarnation of the current goal state
-        """
-        fn = AGENTS_MANIFEST_FILE_NAME.format(
-            family,
-            incarnation)
-
-        agent_manifest = os.path.join(conf.get_lib_dir(), fn)
-
-        if os.path.exists(agent_manifest):
-            os.unlink(agent_manifest)
-
     def check_wire_protocol_version(self):
-        uri = VERSION_INFO_URI.format(self.endpoint)
+        uri = VERSION_INFO_URI.format(self.get_endpoint())
         version_info_xml = self.fetch_config(uri, None)
         version_info = VersionInfo(version_info_xml)
 
@@ -1145,7 +1072,7 @@ class WireClient(object):
                                            goal_state.role_instance_id,
                                            thumbprint)
         role_prop = role_prop.encode("utf-8")
-        role_prop_uri = ROLE_PROP_URI.format(self.endpoint)
+        role_prop_uri = ROLE_PROP_URI.format(self.get_endpoint())
         headers = self.get_header_for_xml_content()
         try:
             resp = self.call_wireserver(restutil.http_post,
@@ -1169,7 +1096,7 @@ class WireClient(object):
                                              substatus,
                                              description)
         health_report = health_report.encode("utf-8")
-        health_report_uri = HEALTH_REPORT_URI.format(self.endpoint)
+        health_report_uri = HEALTH_REPORT_URI.format(self.get_endpoint())
         headers = self.get_header_for_xml_content()
         try:
             # 30 retries with 10s sleep gives ~5min for wireserver updates;
@@ -1190,7 +1117,7 @@ class WireClient(object):
                                                       resp.read()))
 
     def send_event(self, provider_id, event_str):
-        uri = TELEMETRY_URI.format(self.endpoint)
+        uri = TELEMETRY_URI.format(self.get_endpoint())
         data_format = ('<?xml version="1.0"?>'
                        '<TelemetryData version="1.0">'
                        '<Provider id="{0}">{1}'
@@ -1269,16 +1196,17 @@ class WireClient(object):
         }
 
     def get_host_plugin(self):
-        if self.host_plugin is None:
+        if self._host_plugin is None:
             goal_state = self.get_goal_state()
-            self.host_plugin = HostPluginProtocol(self.endpoint,
-                                                  goal_state.container_id,
-                                                  goal_state.role_config_name)
-        return self.host_plugin
+            self._set_host_plugin(HostPluginProtocol(self.get_endpoint(),
+                                                     goal_state.container_id,
+                                                     goal_state.role_config_name))
+        return self._host_plugin
 
     def has_artifacts_profile_blob(self):
-        return self.ext_conf and not \
-            textutil.is_str_none_or_whitespace(self.ext_conf.artifacts_profile_blob)
+        ext_conf = self.get_ext_conf()
+        return ext_conf and not \
+            textutil.is_str_none_or_whitespace(ext_conf.artifacts_profile_blob)
 
     def get_artifacts_profile_through_host(self, blob):
         host = self.get_host_plugin()
@@ -1290,7 +1218,7 @@ class WireClient(object):
         artifacts_profile = None
 
         if self.has_artifacts_profile_blob():
-            blob = self.ext_conf.artifacts_profile_blob
+            blob = self.get_ext_conf().artifacts_profile_blob
             direct_func = lambda: self.fetch(blob)
             # NOTE: the host_func may be called after refreshing the goal state, be careful about any goal state data
             # in the lambda.
@@ -1719,7 +1647,6 @@ class ExtensionManifest(object):
             raise ValueError("ExtensionManifest is None")
         logger.verbose("Load ExtensionManifest.xml")
         self.pkg_list = ExtHandlerPackageList()
-        self.allowed_versions = None
         self._parse(xml_text)
 
     def _parse(self, xml_text):

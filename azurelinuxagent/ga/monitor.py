@@ -29,19 +29,19 @@ import azurelinuxagent.common.utils.networkutil as networkutil
 from azurelinuxagent.common.cgroupstelemetry import CGroupsTelemetry
 from azurelinuxagent.common.datacontract import set_properties
 from azurelinuxagent.common.errorstate import ErrorState
-from azurelinuxagent.common.event import EventLogger
-from azurelinuxagent.common.event import add_event, WALAEventOperation, report_metric
-from azurelinuxagent.common.exception import EventError, ProtocolError, OSUtilError, HttpError
+from azurelinuxagent.common.event import add_event, EventLogger, get_container_id_from_env, report_metric, \
+    WALAEventOperation
+from azurelinuxagent.common.exception import EventError, HttpError, OSUtilError, ProtocolError
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.osutil import get_osutil
 from azurelinuxagent.common.protocol import get_protocol_util
 from azurelinuxagent.common.protocol.healthservice import HealthService
 from azurelinuxagent.common.protocol.imds import get_imds_client
-from azurelinuxagent.common.telemetryevent import TelemetryEvent, TelemetryEventParam, TelemetryEventList
+from azurelinuxagent.common.telemetryevent import TelemetryEvent, TelemetryEventList, TelemetryEventParam
 from azurelinuxagent.common.utils.restutil import IOErrorCounter
-from azurelinuxagent.common.utils.textutil import parse_doc, findall, find, getattrib, hash_strings
-from azurelinuxagent.common.version import DISTRO_NAME, DISTRO_VERSION, \
-    DISTRO_CODE_NAME, AGENT_NAME, CURRENT_VERSION, AGENT_EXECUTION_MODE
+from azurelinuxagent.common.utils.textutil import find, findall, getattrib, hash_strings, parse_doc
+from azurelinuxagent.common.version import AGENT_EXECUTION_MODE, AGENT_NAME, CURRENT_VERSION, DISTRO_CODE_NAME, \
+    DISTRO_NAME, DISTRO_VERSION
 
 
 def parse_event(data_str):
@@ -120,7 +120,6 @@ class MonitorHandler(object):
 
     def __init__(self):
         self.osutil = get_osutil()
-        self.protocol_util = get_protocol_util()
         self.imds_client = get_imds_client()
 
         self.event_thread = None
@@ -132,11 +131,11 @@ class MonitorHandler(object):
         self.last_host_plugin_heartbeat = None
         self.last_imds_heartbeat = None
         self.protocol = None
+        self.protocol_util = None
         self.health_service = None
         self.last_route_table_hash = b''
         self.last_nic_state = {}
 
-        self.counter = 0
         self.sysinfo = []
         self.should_run = True
         self.heartbeat_id = str(uuid.uuid4()).upper()
@@ -144,9 +143,7 @@ class MonitorHandler(object):
         self.imds_errorstate = ErrorState(min_timedelta=MonitorHandler.IMDS_HEALTH_PERIOD)
 
     def run(self):
-        self.init_protocols()
-        self.init_sysinfo()
-        self.start()
+        self.start(init_data=True)
 
     def stop(self):
         self.should_run = False
@@ -154,14 +151,20 @@ class MonitorHandler(object):
             self.event_thread.join()
 
     def init_protocols(self):
+        # The initialization of ProtocolUtil for the Monitor thread should be done within the thread itself rather
+        # than initializing it in the ExtHandler thread. This is done to avoid any concurrency issues as each
+        # thread would now have its own ProtocolUtil object as per the SingletonPerThread model.
+        self.protocol_util = get_protocol_util()
         self.protocol = self.protocol_util.get_protocol()
+        # Update the GoalState first time to instantiate all required objects for the monitor thread
+        self.protocol.update_goal_state()
         self.health_service = HealthService(self.protocol.get_endpoint())
 
     def is_alive(self):
         return self.event_thread is not None and self.event_thread.is_alive()
 
-    def start(self):
-        self.event_thread = threading.Thread(target=self.daemon)
+    def start(self, init_data=False):
+        self.event_thread = threading.Thread(target=self.daemon, args=(init_data,))
         self.event_thread.setDaemon(True)
         self.event_thread.setName("MonitorHandler")
         self.event_thread.start()
@@ -275,7 +278,12 @@ class MonitorHandler(object):
 
             self.last_event_collection = datetime.datetime.utcnow()
 
-    def daemon(self):
+    def daemon(self, init_data=False):
+
+        if init_data:
+            self.init_protocols()
+            self.init_sysinfo()
+
         min_delta = min(MonitorHandler.TELEMETRY_HEARTBEAT_PERIOD,
                         MonitorHandler.CGROUP_TELEMETRY_POLLING_PERIOD,
                         MonitorHandler.CGROUP_TELEMETRY_REPORTING_PERIOD,
@@ -437,28 +445,13 @@ class MonitorHandler(object):
 
         if datetime.datetime.utcnow() >= (self.last_telemetry_heartbeat + MonitorHandler.TELEMETRY_HEARTBEAT_PERIOD):
             try:
-                incarnation = self.protocol.get_incarnation()
-                dropped_packets = self.osutil.get_firewall_dropped_packets(self.protocol.get_endpoint())
-                msg = "{0};{1};{2};{3}".format(incarnation, self.counter, self.heartbeat_id, dropped_packets)
-
-                add_event(
-                    name=AGENT_NAME,
-                    version=CURRENT_VERSION,
-                    op=WALAEventOperation.HeartBeat,
-                    is_success=True,
-                    message=msg,
-                    log_event=False)
-
-                self.counter += 1
-
                 io_errors = IOErrorCounter.get_and_reset()
                 hostplugin_errors = io_errors.get("hostplugin")
                 protocol_errors = io_errors.get("protocol")
                 other_errors = io_errors.get("other")
 
                 if hostplugin_errors > 0 or protocol_errors > 0 or other_errors > 0:
-                    msg = "hostplugin:{0};protocol:{1};other:{2}".format(hostplugin_errors,
-                                                                         protocol_errors,
+                    msg = "hostplugin:{0};protocol:{1};other:{2}".format(hostplugin_errors, protocol_errors,
                                                                          other_errors)
                     add_event(
                         name=AGENT_NAME,

@@ -28,7 +28,7 @@ import azurelinuxagent.common.logger as logger
 from datetime import datetime, timedelta
 
 from azurelinuxagent.common.event import add_event, WALAEventOperation
-from azurelinuxagent.common.exception import RemoteAccessError
+from azurelinuxagent.common.exception import RemoteAccessError, ProtocolError
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.utils.cryptutil import CryptUtil
 from azurelinuxagent.common.version import AGENT_NAME, CURRENT_VERSION

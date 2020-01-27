@@ -550,4 +550,3 @@ def clear_singleton_instances(cls):
         obj_name = "%s__%s" % (cls.__name__, currentThread().getName())  # Object Name = className__threadName
         if obj_name in cls._instances:
             del cls._instances[obj_name]
-
