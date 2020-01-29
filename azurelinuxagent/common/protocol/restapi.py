@@ -240,6 +240,9 @@ class Protocol(DataContract):
     def update_goal_state(self):
         raise NotImplementedError()
 
+    def update_host_plugin_from_goal_state(self):
+        raise NotImplementedError()
+
     def get_endpoint(self):
         raise NotImplementedError()
 
