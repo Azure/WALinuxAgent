@@ -1046,7 +1046,7 @@ class TestExtension(ExtensionTestCase):
 
         exthandlers_handler.run()
         self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.0.0")
-        self._assert_ext_status(protocol.report_ext_status, EXTENSION_STATUS_ERROR, 0)
+        self._assert_ext_status(protocol.report_ext_status, EXTENSION_STATUS_WARNING, 0)
 
     def test_wait_for_handler_successful_completion_empty_exts(self, *args):
         '''
@@ -1223,14 +1223,13 @@ class TestExtension(ExtensionTestCase):
         ext_handler_i = ExtHandlerInstance(exthandler, protocol)
         ext_status = ext_handler_i.collect_ext_status(extension)
 
-        self.assertEqual(ext_status.code, -1)
+        self.assertEqual(ext_status.code, 1)
         self.assertEqual(ext_status.configurationAppliedTime, None)
-        self.assertEqual(ext_status.operation, None)
+        self.assertEqual(ext_status.operation, "Enable")
         self.assertEqual(ext_status.sequenceNumber, 0)
-        self.assertRegex(ext_status.message, "Failed to get status file: Handler - {0}, status file {1} of size {2} "
-                         "bytes is too big. Max Limit allowed is {3} bytes".format(handler_name, status_file_path,
-                                                                                   141061, 131072))
-        self.assertEqual(ext_status.status, EXTENSION_STATUS_ERROR)
+        self.assertRegex(ext_status.message, "Aenean semper nunc nisl, vitae sollicitudin felis consequat at. In "
+                                             "lobortis elementum sapien, non commodo odio semper ac.... TRUNCATED")
+        self.assertEqual(ext_status.status, EXTENSION_STATUS_SUCCESS)
         self.assertEqual(len(ext_status.substatusList), 0)
 
     @patch("azurelinuxagent.ga.exthandlers.ExtHandlerInstance.get_status_file_path")
@@ -1246,6 +1245,7 @@ class TestExtension(ExtensionTestCase):
 
         handler_name = "TestHandler"
         exthandler = ExtHandler(name=handler_name)
+        exthandler.properties.version = "1.0.0"
         extension = Extension(name=handler_name)
         exthandler.properties.extensions.append(extension)
 
@@ -1259,9 +1259,9 @@ class TestExtension(ExtensionTestCase):
             self.assertEqual(ext_status.configurationAppliedTime, None)
             self.assertEqual(ext_status.operation, None)
             self.assertEqual(ext_status.sequenceNumber, 0)
-            self.assertRegex(ext_status.message, "Failed to get status file: No such file or directory: "
-                                                 "{0}".format(status_file_path))
-            self.assertEqual(ext_status.status, EXTENSION_STATUS_ERROR)
+            self.assertRegex(ext_status.message, "Failed to find any status for extension - {0}-{1}. Failed due to No "
+                                                 "such file or directory: {2}".format("TestHandler", "1.0.0", status_file_path))
+            self.assertEqual(ext_status.status, EXTENSION_STATUS_WARNING)
             self.assertEqual(len(ext_status.substatusList), 0)
 
     @patch("azurelinuxagent.ga.exthandlers.ExtHandlerInstance.get_status_file_path")
@@ -1277,6 +1277,7 @@ class TestExtension(ExtensionTestCase):
 
         handler_name = "TestHandler"
         exthandler = ExtHandler(name=handler_name)
+        exthandler.properties.version = "1.0.0"
         extension = Extension(name=handler_name)
         exthandler.properties.extensions.append(extension)
 
@@ -1287,8 +1288,8 @@ class TestExtension(ExtensionTestCase):
         self.assertEqual(ext_status.configurationAppliedTime, None)
         self.assertEqual(ext_status.operation, None)
         self.assertEqual(ext_status.sequenceNumber, 0)
-        self.assertRegex(ext_status.message, "Malformed status file: ")
-        self.assertEqual(ext_status.status, EXTENSION_STATUS_ERROR)
+        self.assertRegex(ext_status.message, "Failed to read any status for extension - {0}-{1}. ".format("TestHandler", "1.0.0"))
+        self.assertEqual(ext_status.status, EXTENSION_STATUS_WARNING)
         self.assertEqual(len(ext_status.substatusList), 0)
 
     @patch("azurelinuxagent.ga.exthandlers.ExtHandlerInstance.get_status_file_path")
@@ -1314,8 +1315,9 @@ class TestExtension(ExtensionTestCase):
         self.assertEqual(ext_status.configurationAppliedTime, None)
         self.assertEqual(ext_status.operation, None)
         self.assertEqual(ext_status.sequenceNumber, 0)
-        self.assertRegex(ext_status.message, "Malformed status file: ")
-        self.assertEqual(ext_status.status, EXTENSION_STATUS_ERROR)
+        self.assertRegex(ext_status.message, "Could not get a valid status from the extension. "
+                                             "Encountered the following error")
+        self.assertEqual(ext_status.status, EXTENSION_STATUS_WARNING)
         self.assertEqual(len(ext_status.substatusList), 0)
 
     def test_is_ext_handling_complete(self, *args):

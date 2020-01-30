@@ -105,6 +105,7 @@ class WALAEventOperation:
     SequenceNumberMismatch = "SequenceNumberMismatch"
     SetCGroupsLimits = "SetCGroupsLimits"
     SkipUpdate = "SkipUpdate"
+    StatusProcessing = "StatusProcessing"
     UnhandledError = "UnhandledError"
     UnInstall = "UnInstall"
     Unknown = "Unknown"

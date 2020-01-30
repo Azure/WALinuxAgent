@@ -35,13 +35,14 @@ import zipfile
 import azurelinuxagent.common.conf as conf
 import azurelinuxagent.common.logger as logger
 import azurelinuxagent.common.utils.fileutil as fileutil
+from azurelinuxagent.common.protocol.util import NamedSet
 import azurelinuxagent.common.version as version
 from azurelinuxagent.common.cgroupconfigurator import CGroupConfigurator
 from azurelinuxagent.common.datacontract import get_properties, set_properties
 from azurelinuxagent.common.errorstate import ERROR_STATE_DELTA_INSTALL, ErrorState
-from azurelinuxagent.common.event import add_event, elapsed_milliseconds, report_event, WALAEventOperation
+from azurelinuxagent.common.event import add_event, elapsed_milliseconds, report_event, WALAEventOperation, add_periodic
 from azurelinuxagent.common.exception import ExtensionDownloadError, ExtensionError, ExtensionErrorCodes, \
-    ExtensionOperationError, ExtensionUpdateError, ProtocolError, ProtocolNotFoundError
+    ExtensionOperationError, ExtensionUpdateError, ProtocolError, ProtocolNotFoundError, ExtensionStatusError
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.protocol.restapi import ExtensionStatus, ExtensionSubStatus, ExtHandler, ExtHandlerStatus, \
     VMStatus
@@ -52,19 +53,20 @@ from azurelinuxagent.common.version import AGENT_NAME, CURRENT_VERSION, DISTRO_N
 # HandlerEnvironment.json schema version
 HANDLER_ENVIRONMENT_VERSION = 1.0
 
-EXTENSION_STATUS_ERROR = 'error'
-EXTENSION_STATUS_SUCCESS = 'success'
-EXTENSION_STATUS_WARNING = 'warning'
+VALID_EXTENSION_STATUS = NamedSet(('transitioning', 'warning', 'error', 'success'))
 
-VALID_EXTENSION_STATUS = ['transitioning', 'error', 'success', 'warning']
-EXTENSION_TERMINAL_STATUSES = ['error', 'success']
+EXTENSION_STATUS_ERROR = VALID_EXTENSION_STATUS.error
+EXTENSION_STATUS_SUCCESS = VALID_EXTENSION_STATUS.success
+EXTENSION_STATUS_WARNING = VALID_EXTENSION_STATUS.warning
+
+EXTENSION_TERMINAL_STATUSES = [EXTENSION_STATUS_ERROR, EXTENSION_STATUS_SUCCESS]
 
 VALID_HANDLER_STATUS = ['Ready', 'NotReady', "Installing", "Unresponsive"]
 
-HANDLER_PATTERN = "^([^-]+)-(\d+(?:\.\d+)*)"
-HANDLER_NAME_PATTERN = re.compile(HANDLER_PATTERN + "$", re.IGNORECASE)
+HANDLER_PATTERN = r'^([^-]+)-(\d+(?:\.\d+)*)'
+HANDLER_NAME_PATTERN = re.compile(HANDLER_PATTERN + r'$', re.IGNORECASE)
 HANDLER_PKG_EXT = ".zip"
-HANDLER_PKG_PATTERN = re.compile(HANDLER_PATTERN + r"\.zip$", re.IGNORECASE)
+HANDLER_PKG_PATTERN = re.compile(HANDLER_PATTERN + r'\.zip$', re.IGNORECASE)
 
 DEFAULT_EXT_TIMEOUT_MINUTES = 90
 
@@ -100,12 +102,14 @@ def get_traceback(e):
 
 def validate_has_key(obj, key, fullname):
     if key not in obj:
-        raise ExtensionError("Missing: {0}".format(fullname))
+        raise ExtensionStatusError("Invalid status format by extension: Missing {0} key".format(fullname),
+                                   code=ExtensionStatusError.StatusFileMalformed)
 
 
 def validate_in_range(val, valid_range, name):
     if val not in valid_range:
-        raise ExtensionError("Invalid {0}: {1}".format(name, val))
+        raise ExtensionStatusError("Invalid value {0} in range {1} at the node {2}".format(val, valid_range, name),
+                                   code=ExtensionStatusError.StatusFileMalformed)
 
 
 def parse_formatted_message(formatted_message):
@@ -119,8 +123,7 @@ def parse_formatted_message(formatted_message):
 def parse_ext_substatus(substatus):
     # Check extension sub status format
     validate_has_key(substatus, 'status', 'substatus/status')
-    validate_in_range(substatus['status'], VALID_EXTENSION_STATUS,
-                      'substatus/status')
+    validate_in_range(substatus['status'], VALID_EXTENSION_STATUS, 'substatus/status')
     status = ExtensionSubStatus()
     status.name = substatus.get('name')
     status.status = substatus.get('status')
@@ -1094,35 +1097,58 @@ class ExtHandlerInstance(object):
 
     def collect_ext_status(self, ext):
         self.logger.verbose("Collect extension status")
-
         seq_no, ext_status_file = self.get_status_file_path(ext)
         if seq_no == -1:
             return None
 
+        data = None
+        data_str = None
         ext_status = ExtensionStatus(seq_no=seq_no)
         try:
             data_str = fileutil.read_file(ext_status_file)
-
-            if len(data_str) > MAX_STATUS_FILE_SIZE_IN_BYTES:
-                msg = "Handler - {0}, status file {1} of size {2} bytes is too big. Max Limit allowed is {3} " \
-                      "bytes".format(ext.name, ext_status_file, len(data_str), MAX_STATUS_FILE_SIZE_IN_BYTES)
-                logger.periodic_warn(logger.EVERY_DAY, msg)
-                raise IOError(msg)
-
             data = json.loads(data_str)
-            parse_ext_status(ext_status, data)
         except IOError as e:
-            ext_status.message = u"Failed to get status file: {0}".format(e)
-            ext_status.code = -1
-            ext_status.status = EXTENSION_STATUS_ERROR
-        except ExtensionError as e:
-            ext_status.message = u"Malformed status file: {0}".format(e)
-            ext_status.code = ExtensionErrorCodes.PluginSettingsStatusInvalid
-            ext_status.status = EXTENSION_STATUS_ERROR
+            msg = u"Failed to find any status for extension - {0}-{1}. Failed due to {2}" \
+                .format(ext.name, self.ext_handler.properties.version, e)
+            ext_status.message = msg
+            ext_status.code = ExtensionErrorCodes.PluginUnknownFailure
+            ext_status.status = EXTENSION_STATUS_WARNING
         except ValueError as e:
-            ext_status.message = u"Malformed status file: {0}".format(e)
-            ext_status.code = -1
-            ext_status.status = EXTENSION_STATUS_ERROR
+            msg = u"Failed to read any status for extension - {0}-{1}. Failed due to {2}"\
+                .format(ext.name, self.ext_handler.properties.version, e)
+            ext_status.message = msg
+            ext_status.code = ExtensionErrorCodes.PluginUnknownFailure
+            ext_status.status = EXTENSION_STATUS_WARNING
+
+        if ext_status.code == ExtensionErrorCodes.PluginUnknownFailure:
+            logger.periodic_warn(logger.EVERY_HALF_HOUR, ext_status.message)
+            add_periodic(delta=logger.EVERY_HALF_HOUR, name=ext.name, version=self.ext_handler.properties.version,
+                         op=WALAEventOperation.StatusProcessing, is_success=False, message=ext_status.message,
+                         log_event=False)
+        else:
+            # We did not encounter any PluginUnknownFailures and thus the status file was correctly written and has
+            # valid json.
+            try:
+                parse_ext_status(ext_status, data)
+                if len(data_str) > MAX_STATUS_FILE_SIZE_IN_BYTES:
+                    raise ExtensionStatusError("Handler - {0}, status file {1} of size {2} bytes is too big. Max Limit "
+                                               "allowed is {3} bytes".format(ext.name, ext_status_file, len(data_str),
+                                                                             MAX_STATUS_FILE_SIZE_IN_BYTES),
+                                               code=ExtensionStatusError.MaxSizeExceeded)
+            except ExtensionStatusError as e:
+                logger.periodic_warn(logger.EVERY_HALF_HOUR, ustr(e))
+                add_periodic(delta=logger.EVERY_HALF_HOUR, name=ext.name, version=self.ext_handler.properties.version,
+                             op=WALAEventOperation.StatusProcessing, is_success=False, message=ustr(e), log_event=False)
+
+                if e.code == ExtensionStatusError.MaxSizeExceeded:
+                    # Emptying the substatus to reduce the size, and preserve other fields of the text
+                    ext_status.substatusList = []
+                    ext_status.message = ext_status.message[:200] + "... TRUNCATED"
+                elif e.code == ExtensionStatusError.StatusFileMalformed:
+                    ext_status.message = "Could not get a valid status from the extension. " \
+                                         "Encountered the following error: {0}".format(ustr(e))
+                    ext_status.code = ExtensionErrorCodes.PluginSettingsStatusInvalid
+                    ext_status.status = EXTENSION_STATUS_WARNING
 
         return ext_status
 

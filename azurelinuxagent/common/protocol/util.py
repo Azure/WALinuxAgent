@@ -50,14 +50,14 @@ PASSWORD_PATTERN = "<UserPassword>.*?<"
 PASSWORD_REPLACEMENT = "<UserPassword>*<"
 
 
-class _nameset(set):
+class NamedSet(set):
     def __getattr__(self, name):
         if name in self:
             return name
         raise AttributeError("%s not a valid value" % name)
 
 
-prots = _nameset(("WireProtocol", "MetadataProtocol"))
+prots = NamedSet(("WireProtocol", "MetadataProtocol"))
 
 
 def get_protocol_util():
