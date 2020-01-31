@@ -3,7 +3,7 @@ os: linux
 dist: xenial
 language: python
 env:
-  - NOSEOPTS="--with-timer" SETUPOPTS=""
+  - NOSEOPTS="--verbose --with-timer" SETUPOPTS=""
   # Add SETUPOPTS="check flake8" to enable flake8 checks
 
 matrix:
@@ -24,7 +24,7 @@ matrix:
     - python: 3.7
       env:
         - >-
-          NOSEOPTS="--with-coverage --with-timer --cover-inclusive
+          NOSEOPTS="--verbose --with-coverage --with-timer --cover-inclusive
           --cover-min-percentage=60 --cover-branches
           --cover-package=azurelinuxagent --cover-xml"
           SETUPOPTS=""
@@ -36,7 +36,7 @@ install:
 script:
   # future: - pylint setup.py makepkg.py azurelinuxagent/
   - nosetests $NOSEOPTS --attr '!requires_sudo' tests
-  - sudo env "PATH=$PATH" nosetests $NOSEOPTS --attr 'requires_sudo' tests
+  - sudo env "PATH=$PATH" nosetests $NOSEOPTS --verbose --attr 'requires_sudo' tests
   - if [ ! -z "$SETUPOPTS" ]; then /usr/bin/env python setup.py $SETUPOPTS; fi
 
 after_success:
