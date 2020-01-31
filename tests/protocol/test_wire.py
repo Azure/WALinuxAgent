@@ -213,38 +213,6 @@ class TestWireProtocol(AgentTestCase):
             self.assertEqual(goal_state.role_config_name, host_plugin.role_config_name)
             self.assertEqual(1, patch_get_goal_state.call_count)
 
-    @patch("azurelinuxagent.common.utils.restutil.http_request", side_effect=IOError)
-    @patch("azurelinuxagent.common.protocol.wire.WireClient.get_host_plugin")
-    @patch("azurelinuxagent.common.protocol.hostplugin.HostPluginProtocol.get_artifact_request")
-    def test_download_ext_handler_pkg_fallback(self, patch_request, patch_get_host, patch_http, *args):
-        ext_uri = 'extension_uri'
-        host_uri = 'host_uri'
-        destination = 'destination'
-        patch_get_host.return_value = HostPluginProtocol(host_uri, 'container_id', 'role_config')
-        patch_request.return_value = [host_uri, {}]
-
-        WireProtocol(WIRESERVER_URL).download_ext_handler_pkg(ext_uri, destination)
-
-        self.assertEqual(patch_http.call_count, 2)
-        self.assertEqual(patch_request.call_count, 1)
-        self.assertEqual(patch_http.call_args_list[0][0][1], ext_uri)
-        self.assertEqual(patch_http.call_args_list[1][0][1], host_uri)
-
-    @patch("azurelinuxagent.common.utils.restutil.http_request")
-    @patch("azurelinuxagent.common.protocol.wire.WireClient.get_host_plugin")
-    @patch("azurelinuxagent.common.protocol.hostplugin.HostPluginProtocol.get_artifact_request")
-    def test_download_ext_handler_pkg_stream(self, patch_request, patch_get_host, patch_http, *args):
-        ext_uri = 'extension_uri'
-        destination = 'destination'
-        patch_http.side_effect = MockResponse(body=b"OK", status_code=200)
-
-        WireProtocol(WIRESERVER_URL).download_ext_handler_pkg(ext_uri, destination)
-
-        self.assertEqual(patch_http.call_count, 1)
-        self.assertEqual(patch_request.call_count, 0)
-        self.assertEqual(patch_get_host.call_count, 0)
-        self.assertEqual(patch_http.call_args_list[0][0][1], ext_uri)
-
     @patch("azurelinuxagent.common.protocol.wire.WireClient.update_goal_state")
     def test_upload_status_blob_default(self, *args):
         """
