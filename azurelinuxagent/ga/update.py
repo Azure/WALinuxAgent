@@ -42,9 +42,8 @@ import azurelinuxagent.common.utils.restutil as restutil
 import azurelinuxagent.common.utils.textutil as textutil
 from azurelinuxagent.common.cgroupconfigurator import CGroupConfigurator
 
-from azurelinuxagent.common.event import add_event, add_periodic, \
-                                    elapsed_milliseconds, \
-                                    WALAEventOperation
+from azurelinuxagent.common.event import add_event, EventLogger, elapsed_milliseconds, WALAEventOperation, \
+    __event_logger__
 from azurelinuxagent.common.exception import ProtocolError, \
                                             ResourceGoneError, \
                                             UpdateError
@@ -53,6 +52,7 @@ from azurelinuxagent.common.osutil import get_osutil
 from azurelinuxagent.common.protocol import get_protocol_util
 from azurelinuxagent.common.protocol.hostplugin import HostPluginProtocol
 from azurelinuxagent.common.protocol.wire import WireProtocol
+from azurelinuxagent.common.protocol.imds import get_imds_client
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
 from azurelinuxagent.common.version import AGENT_NAME, AGENT_VERSION, AGENT_LONG_VERSION, \
                                             AGENT_DIR_GLOB, AGENT_PKG_GLOB, \
@@ -263,6 +263,10 @@ class UpdateHandler(object):
             #
             protocol = self.protocol_util.get_protocol()
             protocol.update_goal_state()
+
+            imds_client = get_imds_client(self.protocol_util.get_wireserver_endpoint())
+            protocol.init_sysinfo(imds_client)
+            EventLogger.update_old_events_on_disk(__event_logger__.event_dir)
 
             # Log OS-specific info.
             os_info_msg = u"Distro info: {0} {1}, osutil class being used: {2}, agent service name: {3}"\

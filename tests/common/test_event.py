@@ -19,23 +19,50 @@ from __future__ import print_function
 
 import json
 import os
-import threading
 from datetime import datetime, timedelta
 
 from azurelinuxagent.common import event, logger
-from azurelinuxagent.common.event import add_event, elapsed_milliseconds, EventLogger, report_metric, WALAEventOperation
+from azurelinuxagent.common.event import add_event, elapsed_milliseconds, EventLogger, report_metric, \
+    WALAEventOperation, parse_xml_event, parse_json_event, parse_event
 from azurelinuxagent.common.exception import EventError
 from azurelinuxagent.common.future import OrderedDict, ustr
 from azurelinuxagent.common.protocol.wire import GoalState
 from azurelinuxagent.common.telemetryevent import TelemetryEvent, TelemetryEventParam
 from azurelinuxagent.common.utils import fileutil
 from azurelinuxagent.common.utils.extensionprocessutil import read_output
-from azurelinuxagent.common.version import CURRENT_AGENT, CURRENT_VERSION
-from azurelinuxagent.ga.monitor import MonitorHandler
+from azurelinuxagent.common.version import AGENT_NAME, CURRENT_AGENT, CURRENT_VERSION
+from tests.ga.test_monitor import SysInfoMock
 from tests.tools import AgentTestCase, data_dir, load_data, Mock, patch, PropertyMock
 
 
 class TestEvent(AgentTestCase):
+
+    def setUp(self):
+        AgentTestCase.setUp(self)
+
+        self.event_dir = self.tmp_dir
+        event.init_event_logger(self.event_dir)
+
+        self.mock_sysinfo = patch("azurelinuxagent.common.sysinfo.SysInfo.get_instance", return_value=SysInfoMock)
+        self.mock_sysinfo.start()
+
+    def tearDown(self):
+        self.mock_sysinfo.stop()
+
+    def test_parse_xml_event(self, *args):
+        data_str = load_data('ext/event_from_extension.xml')
+        event = parse_xml_event(data_str)
+        self.assertNotEqual(None, event)
+        self.assertNotEqual(0, event.parameters)
+        self.assertTrue(all(param is not None for param in event.parameters))
+
+    def test_parse_json_event(self, *args):
+        data_str = load_data('ext/event.json')
+        event = parse_json_event(data_str)
+        self.assertNotEqual(None, event)
+        self.assertNotEqual(0, event.parameters)
+        self.assertTrue(all(param is not None for param in event.parameters))
+
     def test_add_event_should_read_container_id_from_process_environment(self):
         tmp_file = os.path.join(self.tmp_dir, "tmp_file")
 
@@ -290,12 +317,28 @@ class TestEvent(AgentTestCase):
                                                message='test event', op=WALAEventOperation.Unknown,
                                                version=str(CURRENT_VERSION))
 
+    @patch('azurelinuxagent.common.logger.verbose')
+    def test_collect_event_should_read_event_and_delete_the_file(self, patch_logger_verbose):
+        return_time = 42
+        filename = ustr(return_time * 1000000) + ".tld"
+        filepath = os.path.join(self.event_dir, filename)
+
+        with patch("time.time", return_value=return_time):
+            add_event('test', message='test event')
+
+        self.assertTrue(len(os.listdir(self.event_dir)) == 1)
+        EventLogger.collect_event(filepath)
+        self.assertTrue(len(os.listdir(self.event_dir)) == 0)
+
+        self.assertEquals(patch_logger_verbose.call_count, 2)
+        self.assertEquals(patch_logger_verbose.call_args_list[1][0][1], filepath)
+
     def test_save_event(self):
         add_event('test', message='test event')
-        self.assertTrue(len(os.listdir(self.tmp_dir)) == 1)
+        self.assertTrue(len(os.listdir(self.event_dir)) == 1)
 
         # checking the extension of the file created.
-        for filename in os.listdir(self.tmp_dir):
+        for filename in os.listdir(self.event_dir):
             self.assertEqual(".tld", filename[-4:])
 
     def test_save_event_message_with_non_ascii_characters(self):
@@ -317,46 +360,9 @@ class TestEvent(AgentTestCase):
                     add_event('test_extension', message=log_msg, duration=duration)
 
         for tld_file in os.listdir(self.tmp_dir):
-            event_str = MonitorHandler.collect_event(os.path.join(self.tmp_dir, tld_file))
-            event_json = json.loads(event_str)
-
-            self.assertEqual(len(event_json["parameters"]), 15)
-
-            # Checking the contents passed above, and also validating the default values that were passed in.
-            for i in event_json["parameters"]:
-                if i["name"] == "Name":
-                    self.assertEqual(i["value"], "test_extension")
-                elif i["name"] == "Message":
-                    self.assertEqual(i["value"], log_msg)
-                elif i["name"] == "Version":
-                    self.assertEqual(i["value"], str(CURRENT_VERSION))
-                elif i['name'] == 'IsInternal':
-                    self.assertEqual(i['value'], False)
-                elif i['name'] == 'Operation':
-                    self.assertEqual(i['value'], 'Unknown')
-                elif i['name'] == 'OperationSuccess':
-                    self.assertEqual(i['value'], True)
-                elif i['name'] == 'Duration':
-                    self.assertEqual(i['value'], 0)
-                elif i['name'] == 'ExtensionType':
-                    self.assertEqual(i['value'], '')
-                elif i['name'] == 'ContainerId':
-                    self.assertEqual(i['value'], 'UNINITIALIZED')
-                elif i['name'] == 'OpcodeName':
-                    self.assertEqual(i['value'], test_datetime.strftime(u'%Y-%m-%dT%H:%M:%S.%fZ'))
-                elif i['name'] == 'EventTid':
-                    self.assertEqual(i['value'], threading.current_thread().ident)
-                elif i['name'] == 'EventPid':
-                    self.assertEqual(i['value'], 42)
-                elif i['name'] == 'TaskName':
-                    self.assertEqual(i['value'], 'HelloWorldTask')
-                elif i['name'] == 'KeywordName':
-                    self.assertEqual(i['value'], '')
-                elif i['name'] == 'GAVersion':
-                    self.assertEqual(i['value'], str(CURRENT_AGENT))
-                else:
-                    self.assertFalse(True, "Contains a field outside the defaults expected. Field Name: {0}".
-                                     format(i['name']))
+            event_str = EventLogger.collect_event(os.path.join(self.tmp_dir, tld_file))
+            event = parse_event(event_str)
+            self._assert_event_schema_is_complete(event)
 
     def test_save_event_message_with_decode_errors(self):
         tmp_file = os.path.join(self.tmp_dir, "tmp_file")
@@ -364,7 +370,7 @@ class TestEvent(AgentTestCase):
 
         for tld_file in os.listdir(self.tmp_dir):
             try:
-                MonitorHandler.collect_event(os.path.join(self.tmp_dir, tld_file))
+                EventLogger.collect_event(os.path.join(self.tmp_dir, tld_file))
             except Exception as e:
                 self.assertIsInstance(e, EventError)
 
@@ -378,11 +384,11 @@ class TestEvent(AgentTestCase):
 
         num_of_events += 1 # adding the first add_event.
 
-        events = os.listdir(self.tmp_dir)
+        events = os.listdir(self.event_dir)
         events.sort()
         self.assertTrue(len(events) == num_of_events, "{0} is not equal to {1}".format(len(events), num_of_events))
 
-        first_event = os.path.join(self.tmp_dir, events[0])
+        first_event = os.path.join(self.event_dir, events[0])
         with open(first_event) as first_fh:
             first_event_text = first_fh.read()
             self.assertTrue('first event' in first_event_text)
@@ -390,18 +396,18 @@ class TestEvent(AgentTestCase):
         add_event('test', message='last event')
         # Adding the above event displaces the first_event
 
-        events = os.listdir(self.tmp_dir)
+        events = os.listdir(self.event_dir)
         events.sort()
         self.assertTrue(len(events) == num_of_events,
                         "{0} events found, {1} expected".format(len(events), num_of_events))
 
-        first_event = os.path.join(self.tmp_dir, events[0])
+        first_event = os.path.join(self.event_dir, events[0])
         with open(first_event) as first_fh:
             first_event_text = first_fh.read()
             self.assertFalse('first event' in first_event_text, "'first event' not in {0}".format(first_event_text))
             self.assertTrue('test event 0' in first_event_text)
 
-        last_event = os.path.join(self.tmp_dir, events[-1])
+        last_event = os.path.join(self.event_dir, events[-1])
         with open(last_event) as last_fh:
             last_event_text = last_fh.read()
             self.assertTrue('last event' in last_event_text)
@@ -445,6 +451,25 @@ class TestEvent(AgentTestCase):
 
         self.assertEqual(len(parameters_expected_names), len(param_list_actual))
 
+    def _assert_event_schema_is_complete(self, event):
+        # Check that the event has all the necessary telemetry fields before reporting it; valid for all events.
+
+        params_specific = ['Name', 'Version', 'Operation', 'OperationSuccess', 'Message', 'Duration']
+        params_common = ['GAVersion', 'ContainerId', 'OpcodeName', 'EventTid', 'EventPid', 'TaskName', 'KeywordName',
+                         'ExtensionType', 'IsInternal']
+        params_sysinfo = ['OSVersion', 'ExecutionMode', 'RAM', 'Processors', 'VMName', 'TenantName', 'RoleName',
+                          'RoleInstanceName', 'Location', 'SubscriptionId', 'ResourceGroupName', 'VMId', 'ImageOrigin']
+        params_final = []
+        params_final.extend(params_specific)
+        params_final.extend(params_common)
+        params_final.extend(params_sysinfo)
+
+        event_params_dict = OrderedDict([(param.name, param.value) for param in event.parameters])
+        for param_name in params_final:
+            self.assertTrue(param_name in event_params_dict.keys())
+
+        self.assertEquals(len(event.parameters), len(params_final))
+
     def test_add_common_parameters_to_event_should_add_common_parameters(self, *args):
         event = TelemetryEvent()
         event.parameters = []
@@ -459,7 +484,7 @@ class TestEvent(AgentTestCase):
             with patch("threading.Thread.ident", new_callable=PropertyMock(return_value=test_event_tid)):
                 with patch("os.getpid", return_value=test_event_pid):
                     with patch("threading.Thread.getName", return_value=test_taskname):
-                        EventLogger.add_common_parameters_to_event(event, test_event_creation_time)
+                        EventLogger._add_common_parameters_to_event(event, test_event_creation_time)
 
         common_parameters_expected = {'GAVersion': CURRENT_AGENT,
                                       'ContainerId': test_container_id,
@@ -472,6 +497,23 @@ class TestEvent(AgentTestCase):
                                       'IsInternal': False}
 
         self._assert_param_lists_are_equal(event.parameters, common_parameters_expected)
+
+    def test_add_sysinfo_parameters_to_event_should_add_sysinfo_parameters(self, *args):
+        event = TelemetryEvent()
+        event.parameters = [TelemetryEventParam("Name", "DummyName")]
+
+        with patch("azurelinuxagent.common.sysinfo.SysInfo.get_instance", return_value=SysInfoMock):
+            EventLogger._add_sysinfo_parameters_to_event(event)
+
+        # Add existing event parameter
+        event_parameters_expected = {"Name": "DummyName"}
+
+        # Add sysinfo parameters
+        sysinfo_parameters = SysInfoMock.get_sysinfo_telemetry_params()
+        for sysinfo_param in sysinfo_parameters:
+            event_parameters_expected[sysinfo_param.name] = sysinfo_param.value
+
+        self._assert_param_lists_are_equal(event.parameters, event_parameters_expected)
 
     def trim_extension_parameters_should_keep_only_extension_specific_fields(self, *args):
         # Create an event with all fields from the GuestAgentExtensionEvents schema present and ensure only
@@ -518,6 +560,98 @@ class TestEvent(AgentTestCase):
 
         EventLogger.trim_extension_parameters(extension_event)
         self._assert_param_lists_are_equal(extension_event.parameters, extension_only_params)
+
+    def test_finalize_event_fields_should_add_all_fields_before_sending_event(self, *args):
+        # The method responsible for finalizing an agent or extension event will receive an event with only the core
+        # parameters set: Name, Version, Operation, OperationSuccess, Message, and Duration.
+        event = TelemetryEvent()
+        event.parameters = [
+            TelemetryEventParam('Name', 'WALinuxAgent'),
+            TelemetryEventParam('Version', 'TEST_Version'),
+            TelemetryEventParam('Operation', 'TEST_Operation'),
+            TelemetryEventParam('OperationSuccess', 'TEST_OperationSuccess'),
+            TelemetryEventParam('Message', 'TEST_Message'),
+            TelemetryEventParam('Duration', 'TEST_Duration')
+        ]
+
+        EventLogger.finalize_event_fields(event, event_creation_time=datetime.utcnow())
+
+        self.assertNotEqual(None, event)
+        self.assertNotEqual(0, event.parameters)
+        self.assertTrue(all(param is not None for param in event.parameters))
+        self._assert_event_schema_is_complete(event)
+
+    def test_update_old_event_schema_should_only_add_missing_fields_and_keep_existing(self):
+        # Create an agent event with only a couple of fields. The test ensures the event will be properly updated
+        # by finalizing the parameters schema before it will be reported.
+        event = TelemetryEvent()
+        event.parameters = [
+            TelemetryEventParam('Name', 'WALinuxAgent'),
+            TelemetryEventParam('Version', 'TEST_OLD_Version'),
+            TelemetryEventParam('IsInternal', False),
+            TelemetryEventParam('Operation', 'TEST_OLD_Operation'),
+            TelemetryEventParam('OperationSuccess', 'TEST_OLD_OperationSuccess'),
+            TelemetryEventParam('Message', 'TEST_OLD_Message'),
+            TelemetryEventParam('Duration', 'TEST_OLD_Duration'),
+            TelemetryEventParam('ExtensionType', '')
+        ]
+        old_parameters = {}
+        for param in event.parameters:
+            old_parameters[param.name] = param.value
+
+        test_container_id = 'TEST_CONTAINER_ID'
+        test_event_creation_time = datetime.utcnow().strftime(u'%Y-%m-%dT%H:%M:%S.%fZ')
+        test_event_tid = 42
+        test_event_pid = 24
+        test_taskname = 'TEST_THREAD_NAME'
+
+        with patch("azurelinuxagent.common.event.get_container_id_from_env", return_value=test_container_id):
+            with patch("threading.Thread.ident", new_callable=PropertyMock(return_value=test_event_tid)):
+                with patch("os.getpid", return_value=test_event_pid):
+                    with patch("threading.Thread.getName", return_value=test_taskname):
+                        EventLogger._update_old_event_schema(event, test_event_creation_time)
+
+        common_parameters_expected = {'GAVersion': CURRENT_AGENT,
+                                      'ContainerId': test_container_id,
+                                      'OpcodeName': test_event_creation_time,
+                                      'EventTid': test_event_tid,
+                                      'EventPid': test_event_pid,
+                                      'TaskName': test_taskname,
+                                      'KeywordName': '',
+                                      'ExtensionType': '',
+                                      'IsInternal': False}
+
+        sysinfo_parameters_expected = {}
+        sysinfo_parameters = SysInfoMock.get_sysinfo_telemetry_params()
+        for sysinfo_param in sysinfo_parameters:
+            sysinfo_parameters_expected[sysinfo_param.name] = sysinfo_param.value
+
+        updated_parameters = dict(old_parameters)
+        updated_parameters.update(common_parameters_expected)
+        updated_parameters.update(sysinfo_parameters_expected)
+
+        self._assert_param_lists_are_equal(event.parameters, updated_parameters)
+
+    @patch('azurelinuxagent.common.logger.error')
+    def test_update_old_events_on_disk_should_only_update_old_agent_events(self, patch_logger_error, *args):
+        add_event(name=AGENT_NAME)
+        add_event(name="DummyExtension")
+
+        # Add an agent event which would be produced by an older agent (<2.2.47) and would be missing some fields.
+        # Achieve this by making the finalize_event_fields method a no-op.
+        with patch("azurelinuxagent.common.event.EventLogger.finalize_event_fields"):
+            add_event(name=AGENT_NAME, version="2.2.45")
+
+        self.assertEquals(len(os.listdir(self.event_dir)), 3)
+        EventLogger.update_old_events_on_disk(self.event_dir)
+
+        self.assertEquals(len(os.listdir(self.event_dir)), 3)
+        self.assertEquals(patch_logger_error.call_count, 0)
+
+        for tld_file in os.listdir(self.event_dir):
+            event_str = EventLogger.collect_event(os.path.join(self.tmp_dir, tld_file))
+            event = parse_event(event_str)
+            self._assert_event_schema_is_complete(event)
 
 
 class TestMetrics(AgentTestCase):

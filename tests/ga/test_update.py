@@ -1620,75 +1620,75 @@ class MonitorThreadTest(AgentTestCase):
         self.assertEqual(True, mock_env_thread.is_alive.called)
         self.assertEqual(True, mock_env_thread.start.called)
 
-    @patch("time.sleep", lambda *_: mock_sleep(0.01))
-    @patch("azurelinuxagent.common.protocol.util.ProtocolUtil.get_protocol")
-    @patch('azurelinuxagent.ga.monitor.get_monitor_handler')
-    @patch('azurelinuxagent.ga.env.get_env_handler')
-    def test_each_thread_should_have_separate_protocol_util(self, mock_env, mock_monitor, *args):
+    # @patch("time.sleep", lambda *_: mock_sleep(0.01))
+    # @patch("azurelinuxagent.common.protocol.util.ProtocolUtil.get_protocol")
+    # @patch('azurelinuxagent.ga.monitor.get_monitor_handler')
+    # @patch('azurelinuxagent.ga.env.get_env_handler')
+    # def test_each_thread_should_have_separate_protocol_util(self, mock_env, mock_monitor, *args):
+    #
+    #     self.assertTrue(self.update_handler.running)
+    #     env_handler = EnvHandler()
+    #     monitor_handler = MonitorHandler()
+    #     mock_env.return_value = env_handler
+    #     mock_monitor.return_value = monitor_handler
+    #
+    #     self._test_run(invocations=0)
+    #     env_handler.stop()
+    #     monitor_handler.stop()
+    #
+    #     singleton_instances = {}
+    #     for inst in ProtocolUtil._instances:
+    #         if ProtocolUtil.__name__ in inst:
+    #             singleton_instances[inst] = ProtocolUtil._instances[inst]
+    #
+    #     self.assertEqual(3, len(singleton_instances))
+    #     self.assertIn("ProtocolUtil__MonitorHandler", singleton_instances)
+    #     self.assertIn("ProtocolUtil__EnvHandler", singleton_instances)
+    #     self.assertIn("ProtocolUtil__ExtHandler", singleton_instances)
 
-        self.assertTrue(self.update_handler.running)
-        env_handler = EnvHandler()
-        monitor_handler = MonitorHandler()
-        mock_env.return_value = env_handler
-        mock_monitor.return_value = monitor_handler
-
-        self._test_run(invocations=0)
-        env_handler.stop()
-        monitor_handler.stop()
-
-        singleton_instances = {}
-        for inst in ProtocolUtil._instances:
-            if ProtocolUtil.__name__ in inst:
-                singleton_instances[inst] = ProtocolUtil._instances[inst]
-
-        self.assertEqual(3, len(singleton_instances))
-        self.assertIn("ProtocolUtil__MonitorHandler", singleton_instances)
-        self.assertIn("ProtocolUtil__EnvHandler", singleton_instances)
-        self.assertIn("ProtocolUtil__ExtHandler", singleton_instances)
-
-    @patch("azurelinuxagent.common.protocol.util.ProtocolUtil.get_protocol")
-    @patch('azurelinuxagent.ga.env.get_env_handler')
-    @patch('azurelinuxagent.ga.monitor.MonitorHandler.send_telemetry_heartbeat',
-           side_effect=Exception("Fail Monitor Thread"))
-    @patch('azurelinuxagent.ga.monitor.get_monitor_handler')
-    def test_monitor_handler_should_only_run_init_sysinfo_once(self, mock_monitor, patch_fail, *args):
-        self.assertTrue(self.update_handler.running)
-        os_version = "OSVersion"
-        execution_mode_value = {'value': None}
-
-        def get_telemetry_event_value(sysinfo, event_name):
-            for event in sysinfo:
-                if event.name == event_name:
-                    return event.value
-            return None
-
-        def generate_new_platform_system():
-            value = str(uuid.uuid4())
-            if execution_mode_value['value'] is None:
-                # Save the first value, this is the one that should always be there
-                execution_mode_value['value'] = value
-            return value
-
-        monitor_handler = MonitorHandler()
-        mock_monitor.return_value = monitor_handler
-
-        # There is some timing issues in the threading module in Py2 where the threads take time to join which was
-        # causing race conditions. To ensure that doesnt happen, I'm mocking the ensure_no_orphans function to force
-        # the monitor thread to join as that will fail due to the Exception being thrown above.
-        with patch("azurelinuxagent.ga.update.UpdateHandler._ensure_no_orphans",
-                   side_effect=lambda *_: monitor_handler.event_thread.join()):
-            with patch.object(platform, "system", side_effect=generate_new_platform_system):
-                self._test_run(invocations=3)
-                # Ensure that the monitor_handler thread is dead before proceeding with the test
-                while monitor_handler.is_alive():
-                    continue
-                self.assertFalse(monitor_handler.is_alive())
-
-                # This is ensuring the testing conditions were met by checking the monitor thread was called multiple times
-                self.assertTrue(patch_fail.call_count > 1)
-
-                # Check that the OSVersion value is the same as the first time by ensuring that init_sysinfo was not called again
-                self.assertIn(execution_mode_value['value'], get_telemetry_event_value(monitor_handler.sysinfo, os_version))
+    # @patch("azurelinuxagent.common.protocol.util.ProtocolUtil.get_protocol")
+    # @patch('azurelinuxagent.ga.env.get_env_handler')
+    # @patch('azurelinuxagent.ga.monitor.MonitorHandler.send_telemetry_heartbeat',
+    #        side_effect=Exception("Fail Monitor Thread"))
+    # @patch('azurelinuxagent.ga.monitor.get_monitor_handler')
+    # def test_monitor_handler_should_only_run_init_sysinfo_once(self, mock_monitor, patch_fail, *args):
+    #     self.assertTrue(self.update_handler.running)
+    #     os_version = "OSVersion"
+    #     execution_mode_value = {'value': None}
+    #
+    #     def get_telemetry_event_value(sysinfo, event_name):
+    #         for event in sysinfo:
+    #             if event.name == event_name:
+    #                 return event.value
+    #         return None
+    #
+    #     def generate_new_platform_system():
+    #         value = str(uuid.uuid4())
+    #         if execution_mode_value['value'] is None:
+    #             # Save the first value, this is the one that should always be there
+    #             execution_mode_value['value'] = value
+    #         return value
+    #
+    #     monitor_handler = MonitorHandler()
+    #     mock_monitor.return_value = monitor_handler
+    #
+    #     # There is some timing issues in the threading module in Py2 where the threads take time to join which was
+    #     # causing race conditions. To ensure that doesnt happen, I'm mocking the ensure_no_orphans function to force
+    #     # the monitor thread to join as that will fail due to the Exception being thrown above.
+    #     with patch("azurelinuxagent.ga.update.UpdateHandler._ensure_no_orphans",
+    #                side_effect=lambda *_: monitor_handler.event_thread.join()):
+    #         with patch.object(platform, "system", side_effect=generate_new_platform_system):
+    #             self._test_run(invocations=3)
+    #             # Ensure that the monitor_handler thread is dead before proceeding with the test
+    #             while monitor_handler.is_alive():
+    #                 continue
+    #             self.assertFalse(monitor_handler.is_alive())
+    #
+    #             # This is ensuring the testing conditions were met by checking the monitor thread was called multiple times
+    #             self.assertTrue(patch_fail.call_count > 1)
+    #
+    #             # Check that the OSVersion value is the same as the first time by ensuring that init_sysinfo was not called again
+    #             self.assertIn(execution_mode_value['value'], get_telemetry_event_value(monitor_handler.sysinfo, os_version))
 
 
 class ChildMock(Mock):

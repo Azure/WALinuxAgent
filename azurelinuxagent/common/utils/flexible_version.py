@@ -1,6 +1,7 @@
 from distutils import version
 import re
 
+
 class FlexibleVersion(version.Version):
     """
     A more flexible implementation of distutils.version.StrictVersion

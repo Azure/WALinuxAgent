@@ -35,7 +35,9 @@ from azurelinuxagent.common.exception import ProtocolNotFoundError, \
     ResourceGoneError, ExtensionDownloadError, InvalidContainerError, ProtocolError, HttpError
 from azurelinuxagent.common.future import httpclient, bytebuffer
 from azurelinuxagent.common.protocol.hostplugin import HostPluginProtocol
+from azurelinuxagent.common.protocol.imds import ComputeInfo
 from azurelinuxagent.common.protocol.restapi import *
+from azurelinuxagent.common.sysinfo import SysInfo
 from azurelinuxagent.common.telemetryevent import TelemetryEventList
 from azurelinuxagent.common.utils import fileutil, restutil
 from azurelinuxagent.common.utils.archive import StateFlusher
@@ -63,8 +65,6 @@ EXT_CONF_FILE_NAME = "ExtensionsConfig.{0}.xml"
 MANIFEST_FILE_NAME = "{0}.{1}.manifest.xml"
 TRANSPORT_CERT_FILE_NAME = "TransportCert.pem"
 TRANSPORT_PRV_FILE_NAME = "TransportPrivate.pem"
-# Store the last retrieved container id as an environment variable to be shared between threads for telemetry purposes
-CONTAINER_ID_ENV_VARIABLE = "AZURE_GUEST_AGENT_CONTAINER_ID"
 
 PROTOCOL_VERSION = "2012-11-30"
 ENDPOINT_FINE_NAME = "WireServer"
@@ -104,6 +104,22 @@ class WireProtocol(Protocol):
 
     def get_endpoint(self):
         return self.client.get_endpoint()
+
+    def init_sysinfo(self, imds_client):
+        vminfo = VMInfo()
+        compute_info = ComputeInfo()
+        try:
+            vminfo = self.get_vminfo()
+        except ProtocolError as e:
+            logger.warn("Failed to get system info: {0}", ustr(e))
+
+        try:
+            compute_info = imds_client.get_compute()
+        except (HttpError, ValueError) as e:
+            logger.warn("Failed to get IMDS info: {0}", ustr(e))
+
+        sysinfo = SysInfo.get_instance()
+        sysinfo._set_vminfo(vminfo, compute_info)
 
     def get_vminfo(self):
         goal_state = self.client.get_goal_state()

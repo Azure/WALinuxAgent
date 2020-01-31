@@ -16,9 +16,7 @@
 #
 
 import datetime
-import json
 import os
-import platform
 import threading
 import time
 import uuid
@@ -27,65 +25,19 @@ import azurelinuxagent.common.conf as conf
 import azurelinuxagent.common.logger as logger
 import azurelinuxagent.common.utils.networkutil as networkutil
 from azurelinuxagent.common.cgroupstelemetry import CGroupsTelemetry
-from azurelinuxagent.common.datacontract import set_properties
 from azurelinuxagent.common.errorstate import ErrorState
-from azurelinuxagent.common.event import add_event, EventLogger, get_container_id_from_env, report_metric, \
-    WALAEventOperation
-from azurelinuxagent.common.exception import EventError, HttpError, OSUtilError, ProtocolError
+from azurelinuxagent.common.event import EventLogger
+from azurelinuxagent.common.event import add_event, WALAEventOperation, parse_event, report_metric
+from azurelinuxagent.common.exception import EventError, ProtocolError
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.osutil import get_osutil
 from azurelinuxagent.common.protocol import get_protocol_util
 from azurelinuxagent.common.protocol.healthservice import HealthService
 from azurelinuxagent.common.protocol.imds import get_imds_client
-from azurelinuxagent.common.telemetryevent import TelemetryEvent, TelemetryEventList, TelemetryEventParam
+from azurelinuxagent.common.telemetryevent import TelemetryEventList
 from azurelinuxagent.common.utils.restutil import IOErrorCounter
-from azurelinuxagent.common.utils.textutil import find, findall, getattrib, hash_strings, parse_doc
-from azurelinuxagent.common.version import AGENT_EXECUTION_MODE, AGENT_NAME, CURRENT_VERSION, DISTRO_CODE_NAME, \
-    DISTRO_NAME, DISTRO_VERSION
-
-
-def parse_event(data_str):
-    try:
-        return parse_json_event(data_str)
-    except ValueError:
-        return parse_xml_event(data_str)
-
-
-def parse_xml_param(param_node):
-    name = getattrib(param_node, "Name")
-    value_str = getattrib(param_node, "Value")
-    attr_type = getattrib(param_node, "T")
-    value = value_str
-    if attr_type == 'mt:uint64':
-        value = int(value_str)
-    elif attr_type == 'mt:bool':
-        value = bool(value_str)
-    elif attr_type == 'mt:float64':
-        value = float(value_str)
-    return TelemetryEventParam(name, value)
-
-
-def parse_xml_event(data_str):
-    try:
-        xml_doc = parse_doc(data_str)
-        event_id = getattrib(find(xml_doc, "Event"), 'id')
-        provider_id = getattrib(find(xml_doc, "Provider"), 'id')
-        event = TelemetryEvent(event_id, provider_id)
-        param_nodes = findall(xml_doc, 'Param')
-        for param_node in param_nodes:
-            event.parameters.append(parse_xml_param(param_node))
-        event.file_type = "xml"
-        return event
-    except Exception as e:
-        raise ValueError(ustr(e))
-
-
-def parse_json_event(data_str):
-    data = json.loads(data_str)
-    event = TelemetryEvent()
-    set_properties("TelemetryEvent", event, data)
-    event.file_type = "json"
-    return event
+from azurelinuxagent.common.utils.textutil import hash_strings
+from azurelinuxagent.common.version import AGENT_NAME, CURRENT_VERSION
 
 
 def generate_extension_metrics_telemetry_dictionary(schema_version=1.0,
@@ -97,6 +49,7 @@ def generate_extension_metrics_telemetry_dictionary(schema_version=1.0,
         return telemetry_dict
     else:
         return None
+
 
 def get_monitor_handler():
     return MonitorHandler()
@@ -120,7 +73,7 @@ class MonitorHandler(object):
 
     def __init__(self):
         self.osutil = get_osutil()
-        self.imds_client = get_imds_client()
+        self.imds_client = None
 
         self.event_thread = None
         self.last_reset_loggers_time = None
@@ -136,7 +89,6 @@ class MonitorHandler(object):
         self.last_route_table_hash = b''
         self.last_nic_state = {}
 
-        self.sysinfo = []
         self.should_run = True
         self.heartbeat_id = str(uuid.uuid4()).upper()
         self.host_plugin_errorstate = ErrorState(min_timedelta=MonitorHandler.HOST_PLUGIN_HEALTH_PERIOD)
@@ -160,6 +112,10 @@ class MonitorHandler(object):
         self.protocol.update_goal_state()
         self.health_service = HealthService(self.protocol.get_endpoint())
 
+    def init_imds_client(self):
+        wireserver_endpoint = self.protocol_util.get_wireserver_endpoint()
+        self.imds_client = get_imds_client(wireserver_endpoint)
+
     def is_alive(self):
         return self.event_thread is not None and self.event_thread.is_alive()
 
@@ -169,72 +125,12 @@ class MonitorHandler(object):
         self.event_thread.setName("MonitorHandler")
         self.event_thread.start()
 
-    def init_sysinfo(self):
-        osversion = "{0}:{1}-{2}-{3}:{4}".format(platform.system(),
-                                                 DISTRO_NAME,
-                                                 DISTRO_VERSION,
-                                                 DISTRO_CODE_NAME,
-                                                 platform.release())
-        self.sysinfo.append(TelemetryEventParam("OSVersion", osversion))
-        self.sysinfo.append(TelemetryEventParam("ExecutionMode", AGENT_EXECUTION_MODE))
-
-        try:
-            ram = self.osutil.get_total_mem()
-            processors = self.osutil.get_processor_cores()
-            self.sysinfo.append(TelemetryEventParam("RAM", int(ram)))
-            self.sysinfo.append(TelemetryEventParam("Processors", int(processors)))
-        except OSUtilError as e:
-            logger.warn("Failed to get system info: {0}", ustr(e))
-
-        try:
-            vminfo = self.protocol.get_vminfo()
-            self.sysinfo.append(TelemetryEventParam("VMName",
-                                                    vminfo.vmName))
-            self.sysinfo.append(TelemetryEventParam("TenantName",
-                                                    vminfo.tenantName))
-            self.sysinfo.append(TelemetryEventParam("RoleName",
-                                                    vminfo.roleName))
-            self.sysinfo.append(TelemetryEventParam("RoleInstanceName",
-                                                    vminfo.roleInstanceName))
-        except ProtocolError as e:
-            logger.warn("Failed to get system info: {0}", ustr(e))
-
-        try:
-            vminfo = self.imds_client.get_compute()
-            self.sysinfo.append(TelemetryEventParam('Location',
-                                                    vminfo.location))
-            self.sysinfo.append(TelemetryEventParam('SubscriptionId',
-                                                    vminfo.subscriptionId))
-            self.sysinfo.append(TelemetryEventParam('ResourceGroupName',
-                                                    vminfo.resourceGroupName))
-            self.sysinfo.append(TelemetryEventParam('VMId',
-                                                    vminfo.vmId))
-            self.sysinfo.append(TelemetryEventParam('ImageOrigin',
-                                                    int(vminfo.image_origin)))
-        except (HttpError, ValueError) as e:
-            logger.warn("failed to get IMDS info: {0}", ustr(e))
-
-    @staticmethod
-    def collect_event(evt_file_name):
-        try:
-            logger.verbose("Found event file: {0}", evt_file_name)
-            with open(evt_file_name, "rb") as evt_file:
-                # if fail to open or delete the file, throw exception
-                data_str = evt_file.read().decode("utf-8")
-            logger.verbose("Processed event file: {0}", evt_file_name)
-            os.remove(evt_file_name)
-            return data_str
-        except (IOError, OSError, UnicodeDecodeError) as e:
-            os.remove(evt_file_name)
-            msg = "Failed to process {0}, {1}".format(evt_file_name, e)
-            raise EventError(msg)
-
     def collect_and_send_events(self):
         """
         Periodically read, parse, and send events located in the events folder. Currently, this is done every minute.
         Any .tld file dropped in the events folder will be emitted. These event files can be created either by the
-        agent or the extensions. We don't have control over extension's events parameters, but we will override
-        any values they might have set for sys_info parameters.
+        agent or the extensions. Since we don't have control over which parameters the extension's events contain,
+        we do some post-processing before reporting them to ensure the telemetry schema is consistent with agent events.
         """
         if self.last_event_collection is None:
             self.last_event_collection = datetime.datetime.utcnow() - MonitorHandler.EVENT_COLLECTION_PERIOD
@@ -253,16 +149,19 @@ class MonitorHandler(object):
                         fromtimestamp(event_creation_time_epoch).strftime(u'%Y-%m-%dT%H:%M:%S.%fZ')
 
                     try:
-                        data_str = self.collect_event(event_file_path)
+                        data_str = EventLogger.collect_event(event_file_path)
                     except EventError as e:
                         logger.error("{0}", ustr(e))
                         continue
 
                     try:
                         event = parse_event(data_str)
-                        self.finalize_event_fields(event, event_creation_time)
+                        if event.is_extension_event():
+                            EventLogger.trim_extension_parameters(event)
+                            EventLogger.finalize_event_fields(event, event_creation_time)
+
                         event_list.events.append(event)
-                    except (ValueError, ProtocolError) as e:
+                    except ValueError as e:
                         logger.warn("Failed to decode event file: {0}", ustr(e))
                         continue
 
@@ -282,7 +181,7 @@ class MonitorHandler(object):
 
         if init_data:
             self.init_protocols()
-            self.init_sysinfo()
+            self.init_imds_client()
 
         min_delta = min(MonitorHandler.TELEMETRY_HEARTBEAT_PERIOD,
                         MonitorHandler.CGROUP_TELEMETRY_POLLING_PERIOD,
@@ -295,7 +194,9 @@ class MonitorHandler(object):
             self.protocol.update_goal_state()
             self.send_telemetry_heartbeat()
             self.poll_telemetry_metrics()
-            self.send_telemetry_metrics()   # This will be removed in favor of poll_telemetry_metrics() and it'll directly send the perf data for each cgroup.
+            # This will be removed in favor of poll_telemetry_metrics() and it'll directly send the perf data
+            # for each cgroup.
+            self.send_telemetry_metrics()
             self.collect_and_send_events()
             self.send_host_plugin_heartbeat()
             self.send_imds_heartbeat()
@@ -319,43 +220,6 @@ class MonitorHandler(object):
                 logger.reset_periodic()
             finally:
                 self.last_reset_loggers_time = time_now
-
-    def finalize_event_fields(self, event, event_creation_time):
-        """
-        This method appends any necessary telemetry fields before the event is sent out and is called for any event
-        read from the events folder.
-
-        For agent events, the common parameters should have already been added to the event when it was created, so only
-        sysinfo parameters need to be appended. For extension events, we first trim any non-extension-specific fields
-        since the rest of the fields are to be used by the agent, and then we append the common parameters.
-        """
-        if event.is_extension_event():
-            EventLogger.trim_extension_parameters(event)
-            EventLogger.add_common_parameters_to_event(event, event_creation_time)
-
-        self.add_sysinfo(event)
-
-    def add_sysinfo(self, event):
-        """
-        This method is called after parsing the event file in the events folder and before emitting it. This means
-        all events, either coming from the agent or from the extensions, are passed through this method. The purpose
-        is to add a static list of sys_info parameters such as VMName, Region, RAM, etc. If the sys_info parameters
-        are already populated in the event, they will be overwritten by the sys_info values obtained from the agent.
-        :param event: Event to be enriched with sys_info parameters.
-        :return: Event with all sysinfo parameters added.
-        """
-        sysinfo_names = [v.name for v in self.sysinfo]
-        extended_parameters = []
-
-        for param in event.parameters:
-            # Discard any sys_info parameters already in the event, since they will be overwritten
-            if param.name in sysinfo_names:
-                continue
-            extended_parameters.append(param)
-
-        # Add sys_info params populated by the agent
-        extended_parameters.extend(self.sysinfo)
-        event.parameters = extended_parameters
 
     def send_imds_heartbeat(self):
         """

@@ -29,14 +29,17 @@ from azurelinuxagent.common.exception import InvalidContainerError, ResourceGone
     ExtensionDownloadError
 from azurelinuxagent.common.future import httpclient
 from azurelinuxagent.common.protocol.hostplugin import HostPluginProtocol
-from azurelinuxagent.common.protocol.wire import WireProtocol, WireClient, GoalState, ExtensionsConfig, \
+from azurelinuxagent.common.protocol.imds import get_imds_client, ComputeInfo
+from azurelinuxagent.common.protocol.wire import WireProtocol, WireClient, GoalState, ExtensionsConfig, HostingEnv, \
     InVMArtifactsProfile, VMAgentManifestUri, StatusBlob, VMStatus, ExtHandlerVersionUri, DataContractList, socket
+from azurelinuxagent.common.sysinfo import SysInfo
 from azurelinuxagent.common.telemetryevent import TelemetryEvent, TelemetryEventParam, TelemetryEventList
 from azurelinuxagent.common.utils import fileutil, restutil
 from azurelinuxagent.common.utils.shellutil import run_get_output
 from azurelinuxagent.common.version import CURRENT_VERSION, DISTRO_NAME, DISTRO_VERSION
 from tests.ga.test_monitor import random_generator
 from tests.protocol import mockwiredata
+from tests.protocol.test_imds import get_mock_compute_response
 from tests.protocol.mockwiredata import WireProtocolData
 from tests.tools import ANY, MagicMock, Mock, patch, AgentTestCase, skip_if_predicate_true, running_under_travis
 
@@ -152,6 +155,23 @@ class TestWireProtocol(AgentTestCase):
         #    HostingEnvironmentConfig, will be retrieved the expected number
         self.assertEqual(1, test_data.call_counts["hostingenvuri"])
         self.assertEqual(1, patch_report.call_count)
+
+    def test_init_sysinfo(self, *args):
+        SysInfo._instance = None
+
+        protocol = WireProtocol(WIRESERVER_URL)
+        imds_client = get_imds_client(protocol.get_endpoint())
+
+        goal_state = GoalState(mockwiredata.WireProtocolData(mockwiredata.DATA_FILE).goal_state)
+        hosting_env = HostingEnv(mockwiredata.WireProtocolData(mockwiredata.DATA_FILE).hosting_env)
+
+        with patch.object(WireClient, "get_goal_state", return_value=goal_state):
+            with patch.object(WireClient, "get_hosting_env", return_value=hosting_env):
+                with patch("azurelinuxagent.ga.update.restutil.http_get", return_value=get_mock_compute_response()):
+                    protocol.init_sysinfo(imds_client)
+
+        self.assertTrue(SysInfo._instance)
+        self.assertEquals(len(SysInfo.get_instance().get_sysinfo_telemetry_params()), 13)
 
     def test_call_storage_kwargs(self, *args):
         from azurelinuxagent.common.utils import restutil

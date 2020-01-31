@@ -9,7 +9,6 @@ from azurelinuxagent.common.exception import HttpError, ResourceGoneError
 from azurelinuxagent.common.future import ustr
 import azurelinuxagent.common.logger as logger
 from azurelinuxagent.common.datacontract import DataContract, set_properties
-from azurelinuxagent.common.protocol.util import get_protocol_util
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
 
 IMDS_ENDPOINT = '169.254.169.254'
@@ -28,8 +27,8 @@ IMDS_CONNECTION_ERROR = 2
 IMDS_INTERNAL_SERVER_ERROR = 3
 
 
-def get_imds_client():
-    return ImdsClient()
+def get_imds_client(wireserver_endpoint):
+    return ImdsClient(wireserver_endpoint)
 
 
 # A *slightly* future proof list of endorsed distros.
@@ -240,7 +239,7 @@ class ComputeInfo(DataContract):
 
 
 class ImdsClient(object):
-    def __init__(self, version=APIVERSION):
+    def __init__(self, wireserver_endpoint, version=APIVERSION):
         self._api_version = version
         self._headers = {
             'User-Agent': restutil.HTTP_USER_AGENT,
@@ -252,7 +251,7 @@ class ImdsClient(object):
         }
         self._regex_ioerror = re.compile(r".*HTTP Failed. GET http://[^ ]+ -- IOError .*")
         self._regex_throttled = re.compile(r".*HTTP Retry. GET http://[^ ]+ -- Status Code 429 .*")
-        self._protocol_util = get_protocol_util()
+        self._wireserver_endpoint = wireserver_endpoint
 
     def _get_metadata_url(self, endpoint, resource_path):
         return BASE_METADATA_URI.format(endpoint, resource_path, self._api_version)
@@ -311,7 +310,7 @@ class ImdsClient(object):
 
         status, resp = self._get_metadata_from_endpoint(endpoint, resource_path, headers)
         if status == IMDS_CONNECTION_ERROR:
-            endpoint = self._protocol_util.get_wireserver_endpoint()
+            endpoint = self._wireserver_endpoint
             status, resp = self._get_metadata_from_endpoint(endpoint, resource_path, headers)
 
         if status == IMDS_RESPONSE_SUCCESS:

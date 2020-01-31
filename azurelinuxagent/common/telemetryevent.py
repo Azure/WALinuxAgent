@@ -49,6 +49,12 @@ class TelemetryEvent(DataContract):
                 return param.value != "WALinuxAgent"
         return False
 
+    def get_version(self):
+        for param in self.parameters:
+            if param.name == "Version":
+                return param.value
+        return None
+
 
 class TelemetryEventList(DataContract):
     def __init__(self):

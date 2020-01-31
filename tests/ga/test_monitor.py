@@ -17,7 +17,6 @@
 import datetime
 import json
 import os
-import platform
 import random
 import shutil
 import string
@@ -35,24 +34,23 @@ from azurelinuxagent.common.cgroup import CGroup, CpuCgroup, MemoryCgroup
 from azurelinuxagent.common.cgroupconfigurator import CGroupConfigurator
 from azurelinuxagent.common.cgroupstelemetry import CGroupsTelemetry, MetricValue
 from azurelinuxagent.common.datacontract import get_properties
-from azurelinuxagent.common.event import CONTAINER_ID_ENV_VARIABLE, EventLogger, WALAEventOperation
+from azurelinuxagent.common.event import EventLogger, WALAEventOperation
 from azurelinuxagent.common.exception import HttpError
-from azurelinuxagent.common.future import ustr, OrderedDict
+from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.logger import Logger
 from azurelinuxagent.common.osutil.default import BASE_CGROUPS, DefaultOSUtil
-from azurelinuxagent.common.protocol.imds import ComputeInfo
-from azurelinuxagent.common.protocol.restapi import VMInfo
 from azurelinuxagent.common.protocol.wire import ExtHandler, ExtHandlerProperties
 from azurelinuxagent.common.protocol.wire import WireProtocol
 from azurelinuxagent.common.telemetryevent import TelemetryEvent, TelemetryEventParam
 from azurelinuxagent.common.utils import fileutil, restutil
-from azurelinuxagent.common.version import AGENT_NAME, CURRENT_VERSION, AGENT_VERSION, CURRENT_AGENT
+from azurelinuxagent.common.version import AGENT_NAME, AGENT_VERSION, CURRENT_VERSION, CURRENT_AGENT
 from azurelinuxagent.ga.exthandlers import ExtHandlerInstance
 from azurelinuxagent.ga.monitor import generate_extension_metrics_telemetry_dictionary, get_monitor_handler, \
-    MonitorHandler, parse_json_event, parse_xml_event
+    MonitorHandler
 from tests.common.test_cgroupstelemetry import make_new_cgroup
+from tests.common.test_sysinfo import SysInfoMock
 from tests.protocol.mockwiredata import DATA_FILE, WireProtocolData
-from tests.tools import Mock, MagicMock, patch, load_data, AgentTestCase, data_dir, are_cgroups_enabled, i_am_root, \
+from tests.tools import Mock, MagicMock, patch, AgentTestCase, data_dir, are_cgroups_enabled, i_am_root, \
     skip_if_predicate_false, is_trusty_in_travis, skip_if_predicate_true, clear_singleton_instances, PropertyMock
 
 
@@ -113,167 +111,13 @@ class TestMonitor(AgentTestCase):
         AgentTestCase.setUp(self)
         prefix = "UnitTest"
         logger.DEFAULT_LOGGER = Logger(prefix=prefix)
+
         # Since ProtocolUtil is a singleton per thread, we need to clear it to ensure that the test cases do not
         # reuse a previous state
         clear_singleton_instances(ProtocolUtil)
 
     def tearDown(self):
         AgentTestCase.tearDown(self)
-
-    def test_parse_xml_event(self, *args):
-        data_str = load_data('ext/event_from_extension.xml')
-        event = parse_xml_event(data_str)
-        self.assertNotEqual(None, event)
-        self.assertNotEqual(0, event.parameters)
-        self.assertTrue(all(param is not None for param in event.parameters))
-
-    def test_parse_json_event(self, *args):
-        data_str = load_data('ext/event.json')
-        event = parse_json_event(data_str)
-        self.assertNotEqual(None, event)
-        self.assertNotEqual(0, event.parameters)
-        self.assertTrue(all(param is not None for param in event.parameters))
-
-    @staticmethod
-    def create_mock_sysinfo():
-        os_version_param = "OSVersion"
-        execution_mode_param = "ExecutionMode"
-        ram_param = "RAM"
-        processors_param = "Processors"
-        vm_name_param = "VMName"
-        tenant_name_param = "TenantName"
-        role_name_param = "RoleName"
-        role_instance_name_param = "RoleInstanceName"
-        location_param = "Location"
-        subscription_id_param = "SubscriptionId"
-        rg_name_param = "ResourceGroupName"
-        vm_id_param = "VMId"
-        image_origin_param = "ImageOrigin"
-
-        os_version_value = "sysinfo_dummy_os_version"
-        execution_mode_value = "sysinfo_IAAS"
-        ram_value = "sysinfo_dummy_ram"
-        processors_value = "sysinfo_dummy_processors"
-        vm_name_value = "sysinfo_dummy_vm"
-        tenant_name_value = "sysinfo_dummy_tenant"
-        role_name_value = "sysinfo_dummy_role"
-        role_instance_name_value = "sysinfo_dummy_role_instance"
-        location_value = "sysinfo_dummy_location"
-        subscription_id_value = "sysinfo_dummy_subscription_id"
-        rg_name_value = "sysinfo_dummy_rg_name"
-        vm_id_value = "sysinfo_dummy_vm_id"
-        image_origin_value = "sysinfo_dummy_image_origin"
-
-        sysinfo = [
-            TelemetryEventParam(os_version_param, os_version_value),
-            TelemetryEventParam(execution_mode_param, execution_mode_value),
-            TelemetryEventParam(ram_param, ram_value),
-            TelemetryEventParam(processors_param, processors_value),
-            TelemetryEventParam(vm_name_param, vm_name_value),
-            TelemetryEventParam(tenant_name_param, tenant_name_value),
-            TelemetryEventParam(role_name_param, role_name_value),
-            TelemetryEventParam(role_instance_name_param, role_instance_name_value),
-            TelemetryEventParam(location_param, location_value),
-            TelemetryEventParam(subscription_id_param, subscription_id_value),
-            TelemetryEventParam(rg_name_param, rg_name_value),
-            TelemetryEventParam(vm_id_param, vm_id_value),
-            TelemetryEventParam(image_origin_param, image_origin_value)
-        ]
-
-        return sysinfo
-
-    def _assert_sysinfo(self, event, sysinfo, *args):
-        # Assert that the event contains all parameters and values from sysinfo.
-        event_params_dict = OrderedDict([(param.name, param.value) for param in event.parameters])
-
-        counter = 0
-        for sysinfo_param in sysinfo:
-            if sysinfo_param.name in event_params_dict.keys():
-                counter += 1
-                self.assertEquals(sysinfo_param.value, event_params_dict[sysinfo_param.name])
-
-        self.assertEqual(13, counter)
-
-    def _assert_event_is_finalized(self, event):
-        # Check that the event has all the necessary telemetry fields before reporting it; valid for all events.
-
-        params_specific = ['Name', 'Version', 'Operation', 'OperationSuccess', 'Message', 'Duration']
-        params_common = ['GAVersion', 'ContainerId', 'OpcodeName', 'EventTid', 'EventPid', 'TaskName', 'KeywordName',
-                         'ExtensionType', 'IsInternal']
-        params_sysinfo = ['OSVersion', 'ExecutionMode', 'RAM', 'Processors', 'VMName', 'TenantName', 'RoleName',
-                          'RoleInstanceName', 'Location', 'SubscriptionId', 'ResourceGroupName', 'VMId', 'ImageOrigin']
-        params_final = []
-        params_final.extend(params_specific)
-        params_final.extend(params_common)
-        params_final.extend(params_sysinfo)
-
-        event_params_dict = OrderedDict([(param.name, param.value) for param in event.parameters])
-        for param_name in params_final:
-            self.assertTrue(param_name in event_params_dict.keys())
-
-        self.assertEquals(len(event.parameters), len(params_final))
-
-    def test_finalize_event_fields_should_add_all_fields_before_sending_out_agent_events(self, *args):
-        # This test simulates how the event file is picked up from the events folder and the event is finalized before
-        # being sent out. For agent events, since the event would have already been saved with all the common fields,
-        # finalizing the event means just appending sysinfo parameters.
-        data_str = load_data('ext/event_from_agent.json')
-        event = parse_json_event(data_str)
-
-        monitor_handler = get_monitor_handler()
-        mock_sysinfo = self.create_mock_sysinfo()
-        monitor_handler.sysinfo = mock_sysinfo
-
-        with patch("azurelinuxagent.ga.monitor.MonitorHandler.add_sysinfo", wraps=monitor_handler.add_sysinfo) \
-                as patch_add_sys_info:
-            with patch("azurelinuxagent.common.event.EventLogger.add_common_parameters_to_event",
-                       wraps=EventLogger.add_common_parameters_to_event) as patch_add_common_parameters_to_event:
-                with patch("azurelinuxagent.common.event.EventLogger.trim_extension_parameters",
-                           wraps=EventLogger.trim_extension_parameters) as patch_trim_extension_parameters:
-                    monitor_handler.finalize_event_fields(event, event_creation_time=datetime.datetime.utcnow())
-
-                    # Ensure we are only calling the method to add sysinfo to an agent event, since the other two
-                    # methods are only called for extension events.
-                    self.assertEquals(patch_add_sys_info.call_count, 1)
-                    self.assertEquals(patch_add_common_parameters_to_event.call_count, 0)
-                    self.assertEquals(patch_trim_extension_parameters.call_count, 0)
-
-        self.assertNotEqual(None, event)
-        self.assertNotEqual(0, event.parameters)
-        self.assertTrue(all(param is not None for param in event.parameters))
-        self._assert_sysinfo(event, mock_sysinfo)
-        self._assert_event_is_finalized(event)
-
-    def test_finalize_event_fields_should_add_all_fields_before_sending_out_extension_events(self, *args):
-        # This test simulates how the event file is picked up from the events folder and the event is finalized before
-        # being sent out. For extension events, this means that the non-extension parameters will be dropped and
-        # replaced with values from the agent, and that sysinfo and common parameters will be added.
-        data_str = load_data('ext/event_from_extension.xml')
-        event = parse_xml_event(data_str)
-
-        monitor_handler = get_monitor_handler()
-        mock_sysinfo = self.create_mock_sysinfo()
-        monitor_handler.sysinfo = mock_sysinfo
-
-        with patch("azurelinuxagent.ga.monitor.MonitorHandler.add_sysinfo", wraps=monitor_handler.add_sysinfo) \
-                as patch_add_sys_info:
-            with patch("azurelinuxagent.common.event.EventLogger.add_common_parameters_to_event",
-                       wraps=EventLogger.add_common_parameters_to_event) as patch_add_common_parameters_to_event:
-                with patch("azurelinuxagent.common.event.EventLogger.trim_extension_parameters",
-                           wraps=EventLogger.trim_extension_parameters) as patch_trim_extension_parameters:
-                    monitor_handler.finalize_event_fields(event, event_creation_time=datetime.datetime.utcnow())
-
-                    # Ensure we are trimming the non-extension parameters, adding the common parameters and finally
-                    # adding sysinfo parameters for extension events.
-                    self.assertEquals(patch_trim_extension_parameters.call_count, 1)
-                    self.assertEquals(patch_add_common_parameters_to_event.call_count, 1)
-                    self.assertEquals(patch_add_sys_info.call_count, 1)
-
-        self.assertNotEqual(None, event)
-        self.assertNotEqual(0, event.parameters)
-        self.assertTrue(all(param is not None for param in event.parameters))
-        self._assert_sysinfo(event, mock_sysinfo)
-        self._assert_event_is_finalized(event)
 
     @patch("azurelinuxagent.ga.monitor.MonitorHandler.send_telemetry_heartbeat")
     @patch("azurelinuxagent.ga.monitor.MonitorHandler.collect_and_send_events")
@@ -481,7 +325,11 @@ class TestEventMonitoring(AgentTestCase):
         self.event_logger = EventLogger()
         self.event_logger.event_dir = os.path.join(self.lib_dir, "events")
 
+        self.mock_sysinfo = patch("azurelinuxagent.common.sysinfo.SysInfo.get_instance", return_value=SysInfoMock)
+        self.mock_sysinfo.start()
+
     def tearDown(self):
+        self.mock_sysinfo.stop()
         fileutil.rm_dirs(self.lib_dir)
 
     def _create_mock(self, test_data, mock_http_get, MockCryptUtil, *args):
@@ -502,48 +350,16 @@ class TestEventMonitoring(AgentTestCase):
         monitor_handler.protocol_util = Mock(return_value=protocol_util)
         return monitor_handler, protocol
 
-    @patch("azurelinuxagent.common.protocol.imds.ImdsClient.get_compute",
-           return_value=ComputeInfo(subscriptionId="DummySubId",
-                                    location="DummyVMLocation",
-                                    vmId="DummyVmId",
-                                    resourceGroupName="DummyRG",
-                                    publisher=""))
-    @patch("azurelinuxagent.common.protocol.wire.WireProtocol.get_vminfo",
-           return_value=VMInfo(subscriptionId="DummySubId",
-                               vmName="DummyVMName",
-                               containerId="DummyContainerId",
-                               roleName="DummyRoleName",
-                               roleInstanceName="DummyRoleInstanceName", tenantName="DummyTenant"))
-    @patch("platform.release", return_value="platform-release")
-    @patch("platform.system", return_value="Linux")
-    @patch("azurelinuxagent.common.osutil.default.DefaultOSUtil.get_processor_cores", return_value=4)
-    @patch("azurelinuxagent.common.osutil.default.DefaultOSUtil.get_total_mem", return_value=10000)
-    def mock_init_sysinfo(self, monitor_handler, *args):
-        # Mock all values that are dependent on the environment to ensure consistency across testing environments.
-        monitor_handler.init_sysinfo()
-
-        # Replacing OSVersion to make it platform agnostic. We can't mock global constants (eg. DISTRO_NAME,
-        # DISTRO_VERSION, DISTRO_CODENAME), so to make them constant during the test-time, we need to replace the
-        # OSVersion field in the event object.
-        for i in monitor_handler.sysinfo:
-            if i.name == "OSVersion":
-                i.value = "{0}:{1}-{2}-{3}:{4}".format(platform.system(),
-                                                       "DISTRO_NAME",
-                                                       "DISTRO_VERSION",
-                                                       "DISTRO_CODE_NAME",
-                                                       platform.release())
-
     @patch("azurelinuxagent.common.event.send_logs_to_telemetry", return_value=True)
     @patch("azurelinuxagent.common.conf.get_lib_dir")
-    def test_collect_and_send_events_should_prepare_all_fields_for_all_event_files(self, mock_lib_dir, _, *args):
-        # Test collecting and sending both agent and extension events from the moment they're created to the moment
-        # they are to be reported. Ensure all necessary fields from sysinfo are present, as well as the container id.
+    def test_collect_and_send_events_should_send_all_events_with_the_same_schema(self, mock_lib_dir, _, *args):
+        # Test collecting and sending both agent and extension events and ensure the telemetry schema is consistent
+        # before the events are sent.
         mock_lib_dir.return_value = self.lib_dir
 
         test_data = WireProtocolData(DATA_FILE)
         monitor_handler, protocol = self._create_mock(test_data, *args)
         monitor_handler.init_protocols()
-        self.mock_init_sysinfo(monitor_handler)
 
         # Add agent event file
         self.event_logger.add_event(name=AGENT_NAME,
@@ -553,39 +369,37 @@ class TestEventMonitoring(AgentTestCase):
                                     message="Heartbeat",
                                     log_event=False)
 
-        # Add agent metric
-        self.event_logger.add_metric("Process", "% Processor Time", "walinuxagent.service", 10)
-
-        # Add agent log
-        self.event_logger.add_log_event(logger.LogLevel.WARNING, "Test sending a log event.")
-
         # Add extension event file the way extension do it, by dropping a .tld file in the events folder
         source_file = os.path.join(data_dir, "ext/dsc_event.json")
         dest_file = os.path.join(conf.get_lib_dir(), "events", "dsc_event.tld")
         shutil.copyfile(source_file, dest_file)
 
-        # Collect these events and assert they are being sent with the correct sysinfo parameters from the agent
+        # Collect these events and assert they are being sent with the same telemetry parameters present
         with patch.object(protocol, "report_event") as patch_report_event:
             monitor_handler.collect_and_send_events()
 
             telemetry_events_list = patch_report_event.call_args_list[0][0][0]
-            self.assertEqual(len(telemetry_events_list.events), 4)
+            self.assertEqual(len(telemetry_events_list.events), 2)
+
+            telemetry_params_list = []
 
             for event in telemetry_events_list.events:
-                # All sysinfo parameters coming from the agent have to be present in the telemetry event to be emitted
-                for param in monitor_handler.sysinfo:
-                    self.assertTrue(param in event.parameters)
+                # Save each event's parameter names in a set in order to compare them to each other later
+                event_params_names = set()
+                for param in event.parameters:
+                    event_params_names.add(param.name)
+                telemetry_params_list.append(event_params_names)
 
-                # The container id, GAVersion are special parameters that are not a part of the static sysinfo parameter
-                # list.
-
-                # The container id value is obtained from the goal state and must be present in all telemetry events.
+                # Do an explicit check for ContainerId and GAVersion, as these parameters are important for telemetry
                 container_id_param = TelemetryEventParam("ContainerId", protocol.client.get_goal_state().container_id)
                 self.assertTrue(container_id_param in event.parameters)
 
-                # Same for GAVersion
-                container_id_param = TelemetryEventParam("GAVersion", CURRENT_AGENT)
-                self.assertTrue(container_id_param in event.parameters)
+                gaversion_param = TelemetryEventParam("GAVersion", CURRENT_AGENT)
+                self.assertTrue(gaversion_param in event.parameters)
+
+            # The schema of events being sent should be consistent across agent and extension events
+            self.assertEquals(telemetry_params_list[0], telemetry_params_list[1])
+            self.assertEquals(28, len(telemetry_params_list[0]))
 
     @patch("azurelinuxagent.common.protocol.wire.WireClient.send_event")
     @patch("azurelinuxagent.common.conf.get_lib_dir")
@@ -595,17 +409,16 @@ class TestEventMonitoring(AgentTestCase):
         test_data = WireProtocolData(DATA_FILE)
         monitor_handler, protocol = self._create_mock(test_data, *args)
         monitor_handler.init_protocols()
-        self.mock_init_sysinfo(monitor_handler)
 
         self.event_logger.save_event(create_dummy_event(message="Message-Test"))
 
         monitor_handler.last_event_collection = None
-
-        test_mtime = 1000 # epoch time, in ms
+        test_mtime = 1000  # epoch time, in ms
         test_opcodename = datetime.datetime.fromtimestamp(test_mtime).strftime(u'%Y-%m-%dT%H:%M:%S.%fZ')
         test_eventtid = 42
         test_eventpid = 24
         test_taskname = "TEST_TaskName"
+
         with patch("os.path.getmtime", return_value=test_mtime):
             with patch('os.getpid', return_value=test_eventpid):
                 with patch("threading.Thread.ident", new_callable=PropertyMock(return_value=test_eventtid)):
@@ -631,20 +444,19 @@ class TestEventMonitoring(AgentTestCase):
                          '<Param Name="TaskName" Value="{5}" T="mt:wstr" />' \
                          '<Param Name="KeywordName" Value="" T="mt:wstr" />' \
                          '<Param Name="ExtensionType" Value="json" T="mt:wstr" />' \
-                         '<Param Name="IsInternal" Value="False" T="mt:bool" />'\
-                         '<Param Name="OSVersion" ' \
-                         'Value="Linux:DISTRO_NAME-DISTRO_VERSION-DISTRO_CODE_NAME:platform-release" T="mt:wstr" />' \
-                         '<Param Name="ExecutionMode" Value="IAAS" T="mt:wstr" />' \
-                         '<Param Name="RAM" Value="10000" T="mt:uint64" />' \
-                         '<Param Name="Processors" Value="4" T="mt:uint64" />' \
-                         '<Param Name="VMName" Value="DummyVMName" T="mt:wstr" />' \
-                         '<Param Name="TenantName" Value="DummyTenant" T="mt:wstr" />' \
-                         '<Param Name="RoleName" Value="DummyRoleName" T="mt:wstr" />' \
-                         '<Param Name="RoleInstanceName" Value="DummyRoleInstanceName" T="mt:wstr" />' \
-                         '<Param Name="Location" Value="DummyVMLocation" T="mt:wstr" />' \
-                         '<Param Name="SubscriptionId" Value="DummySubId" T="mt:wstr" />' \
-                         '<Param Name="ResourceGroupName" Value="DummyRG" T="mt:wstr" />' \
-                         '<Param Name="VMId" Value="DummyVmId" T="mt:wstr" />' \
+                         '<Param Name="IsInternal" Value="False" T="mt:bool" />' \
+                         '<Param Name="OSVersion" Value="TEST_OSVersion" T="mt:wstr" />' \
+                         '<Param Name="ExecutionMode" Value="TEST_ExecutionMode" T="mt:wstr" />' \
+                         '<Param Name="RAM" Value="512" T="mt:uint64" />' \
+                         '<Param Name="Processors" Value="2" T="mt:uint64" />' \
+                         '<Param Name="VMName" Value="TEST_VMName" T="mt:wstr" />' \
+                         '<Param Name="TenantName" Value="TEST_TenantName" T="mt:wstr" />' \
+                         '<Param Name="RoleName" Value="TEST_RoleName" T="mt:wstr" />' \
+                         '<Param Name="RoleInstanceName" Value="TEST_RoleInstanceName" T="mt:wstr" />' \
+                         '<Param Name="Location" Value="TEST_Location" T="mt:wstr" />' \
+                         '<Param Name="SubscriptionId" Value="TEST_SubscriptionId" T="mt:wstr" />' \
+                         '<Param Name="ResourceGroupName" Value="TEST_ResourceGroupName" T="mt:wstr" />' \
+                         '<Param Name="VMId" Value="TEST_VMId" T="mt:wstr" />' \
                          '<Param Name="ImageOrigin" Value="1" T="mt:uint64" />' \
                          ']]></Event>'.format(AGENT_VERSION, CURRENT_AGENT, test_opcodename, test_eventtid,
                                               test_eventpid, test_taskname)
