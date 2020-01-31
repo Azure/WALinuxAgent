@@ -1227,8 +1227,10 @@ class TestExtension(ExtensionTestCase):
         self.assertEqual(ext_status.configurationAppliedTime, None)
         self.assertEqual(ext_status.operation, "Enable")
         self.assertEqual(ext_status.sequenceNumber, 0)
-        self.assertRegex(ext_status.message, "Aenean semper nunc nisl, vitae sollicitudin felis consequat at. In "
-                                             "lobortis elementum sapien, non commodo odio semper ac.... TRUNCATED")
+        self.assertRegex(ext_status.message, "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Vestibulum non "
+                                             "lacinia urna, sit amet venenatis orci. Praesent maximus erat et augue "
+                                             "tincidunt, quis fringilla urna mollis. Fusce id lacus veli ... "
+                                             "TRUNCATED MESSAGE")
         self.assertEqual(ext_status.status, EXTENSION_STATUS_SUCCESS)
         self.assertEqual(len(ext_status.substatusList), 0)
 
@@ -1259,8 +1261,9 @@ class TestExtension(ExtensionTestCase):
             self.assertEqual(ext_status.configurationAppliedTime, None)
             self.assertEqual(ext_status.operation, None)
             self.assertEqual(ext_status.sequenceNumber, 0)
-            self.assertRegex(ext_status.message, "Failed to find any status for extension - {0}-{1}. Failed due to No "
-                                                 "such file or directory: {2}".format("TestHandler", "1.0.0", status_file_path))
+            self.assertRegex(ext_status.message, "Failed to find any status for extension - {0}-{1}, Sequence number "
+                                                 "{2}. Failed due to No such file or directory: {3}".format(
+                "TestHandler", "1.0.0", 0, status_file_path))
             self.assertEqual(ext_status.status, EXTENSION_STATUS_WARNING)
             self.assertEqual(len(ext_status.substatusList), 0)
 
@@ -1288,7 +1291,8 @@ class TestExtension(ExtensionTestCase):
         self.assertEqual(ext_status.configurationAppliedTime, None)
         self.assertEqual(ext_status.operation, None)
         self.assertEqual(ext_status.sequenceNumber, 0)
-        self.assertRegex(ext_status.message, "Failed to read any status for extension - {0}-{1}. ".format("TestHandler", "1.0.0"))
+        self.assertRegex(ext_status.message, "Failed to read any status for extension - {0}-{1}, Sequence number {2}.".
+                         format("TestHandler", "1.0.0", 0))
         self.assertEqual(ext_status.status, EXTENSION_STATUS_WARNING)
         self.assertEqual(len(ext_status.substatusList), 0)
 
@@ -1305,6 +1309,7 @@ class TestExtension(ExtensionTestCase):
 
         handler_name = "TestHandler"
         exthandler = ExtHandler(name=handler_name)
+        exthandler.properties.version = "1.0.0"
         extension = Extension(name=handler_name)
         exthandler.properties.extensions.append(extension)
 
@@ -1315,8 +1320,8 @@ class TestExtension(ExtensionTestCase):
         self.assertEqual(ext_status.configurationAppliedTime, None)
         self.assertEqual(ext_status.operation, None)
         self.assertEqual(ext_status.sequenceNumber, 0)
-        self.assertRegex(ext_status.message, "Could not get a valid status from the extension. "
-                                             "Encountered the following error")
+        self.assertRegex(ext_status.message, "Could not get a valid status from the extension {0}-{1}. "
+                                             "Encountered the following error".format("TestHandler", "1.0.0"))
         self.assertEqual(ext_status.status, EXTENSION_STATUS_WARNING)
         self.assertEqual(len(ext_status.substatusList), 0)
 

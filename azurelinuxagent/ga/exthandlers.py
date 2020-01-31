@@ -1108,14 +1108,14 @@ class ExtHandlerInstance(object):
             data_str = fileutil.read_file(ext_status_file)
             data = json.loads(data_str)
         except IOError as e:
-            msg = u"Failed to find any status for extension - {0}-{1}. Failed due to {2}" \
-                .format(ext.name, self.ext_handler.properties.version, e)
+            msg = u"Failed to find any status for extension - {0}-{1}, Sequence number {2}. Failed due to {3}" \
+                .format(ext.name, self.ext_handler.properties.version, seq_no, e)
             ext_status.message = msg
             ext_status.code = ExtensionErrorCodes.PluginUnknownFailure
             ext_status.status = EXTENSION_STATUS_WARNING
         except ValueError as e:
-            msg = u"Failed to read any status for extension - {0}-{1}. Failed due to {2}"\
-                .format(ext.name, self.ext_handler.properties.version, e)
+            msg = u"Failed to read any status for extension - {0}-{1}, Sequence number {2}. Failed due to {3}"\
+                .format(ext.name, self.ext_handler.properties.version, seq_no, e)
             ext_status.message = msg
             ext_status.code = ExtensionErrorCodes.PluginUnknownFailure
             ext_status.status = EXTENSION_STATUS_WARNING
@@ -1131,9 +1131,10 @@ class ExtHandlerInstance(object):
             try:
                 parse_ext_status(ext_status, data)
                 if len(data_str) > MAX_STATUS_FILE_SIZE_IN_BYTES:
-                    raise ExtensionStatusError("Handler - {0}, status file {1} of size {2} bytes is too big. Max Limit "
-                                               "allowed is {3} bytes".format(ext.name, ext_status_file, len(data_str),
-                                                                             MAX_STATUS_FILE_SIZE_IN_BYTES),
+                    raise ExtensionStatusError("For Extension Handler {0}-{1}, the status file {2} of size {3} bytes is"
+                                               " too big. Max Limit allowed is {4} bytes"
+                                               .format(ext.name, self.ext_handler.properties.version, ext_status_file,
+                                                       len(data_str), MAX_STATUS_FILE_SIZE_IN_BYTES),
                                                code=ExtensionStatusError.MaxSizeExceeded)
             except ExtensionStatusError as e:
                 logger.periodic_warn(logger.EVERY_HALF_HOUR, ustr(e))
@@ -1143,10 +1144,12 @@ class ExtHandlerInstance(object):
                 if e.code == ExtensionStatusError.MaxSizeExceeded:
                     # Emptying the substatus to reduce the size, and preserve other fields of the text
                     ext_status.substatusList = []
-                    ext_status.message = ext_status.message[:200] + "... TRUNCATED"
+                    ext_status.message = ext_status.message if len(ext_status.message) < 200 \
+                        else ext_status.message[:200] + " ... TRUNCATED MESSAGE"
                 elif e.code == ExtensionStatusError.StatusFileMalformed:
-                    ext_status.message = "Could not get a valid status from the extension. " \
-                                         "Encountered the following error: {0}".format(ustr(e))
+                    ext_status.message = "Could not get a valid status from the extension {0}-{1}. Encountered the " \
+                                         "following error: {0}".format(ext.name, self.ext_handler.properties.version,
+                                                                       ustr(e))
                     ext_status.code = ExtensionErrorCodes.PluginSettingsStatusInvalid
                     ext_status.status = EXTENSION_STATUS_WARNING
 
