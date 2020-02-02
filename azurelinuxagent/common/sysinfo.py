@@ -16,6 +16,7 @@
 #
 
 import platform
+from threading import Lock
 import azurelinuxagent.common.logger as logger
 
 from azurelinuxagent.common.exception import OSUtilError
@@ -28,12 +29,14 @@ from azurelinuxagent.common.version import DISTRO_NAME, DISTRO_VERSION, DISTRO_C
 class SysInfo(object):
 
     _instance = None
+    _lock = Lock()
 
     @staticmethod
     def get_instance():
-        if SysInfo._instance is None:
-            SysInfo._instance = SysInfo().__impl()
-        return SysInfo._instance
+        with SysInfo._lock:
+            if SysInfo._instance is None:
+                SysInfo._instance = SysInfo().__impl()
+            return SysInfo._instance
 
     class __impl(object):
         def __init__(self):
@@ -60,7 +63,9 @@ class SysInfo(object):
                             "RoleInstanceName", "Location", "SubscriptionId", "ResourceGroupName", "VMId",
                             "ImageOrigin"]
 
-            self.params_dict = {key: None for key in params_names}
+            self.params_dict = {}
+            for key in params_names:
+                self.params_dict[key] = None
 
             osversion = "{0}:{1}-{2}-{3}:{4}".format(platform.system(),
                                                      DISTRO_NAME,
