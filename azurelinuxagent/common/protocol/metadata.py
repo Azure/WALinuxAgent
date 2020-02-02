@@ -172,6 +172,10 @@ class MetadataProtocol(Protocol):
         shutil.copyfile(trans_cert_file, crt_file)
         self._update_certs_with_retry()
 
+    def update_host_plugin_from_goal_state(self):
+        # Metadata doesn't cache the goal state; nothing to do here...
+        pass
+
     def update_goal_state(self):
         # Metadata doesn't cache the goal state; nothing to do here...
         pass

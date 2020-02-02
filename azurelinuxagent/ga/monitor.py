@@ -190,8 +190,7 @@ class MonitorHandler(object):
                         MonitorHandler.HOST_PLUGIN_HEARTBEAT_PERIOD,
                         MonitorHandler.IMDS_HEARTBEAT_PERIOD).seconds
         while self.should_run:
-            # Updating the goal_state periodically for the monitor thread to keep the WireClient object upto-date always
-            self.protocol.update_goal_state()
+            self.protocol.update_host_plugin_from_goal_state()
             self.send_telemetry_heartbeat()
             self.poll_telemetry_metrics()
             # This will be removed in favor of poll_telemetry_metrics() and it'll directly send the perf data

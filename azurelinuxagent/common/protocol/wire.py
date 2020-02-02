@@ -102,6 +102,9 @@ class WireProtocol(Protocol):
     def update_goal_state(self):
         self.client.update_goal_state()
 
+    def update_host_plugin_from_goal_state(self):
+        self.client.update_host_plugin_from_goal_state()
+
     def get_endpoint(self):
         return self.client.get_endpoint()
 
