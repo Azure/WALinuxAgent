@@ -257,7 +257,7 @@ class CGroupConfiguratorTestCase(AgentTestCase):
         def mock_append_file(filepath, contents, **kwargs):
             if re.match(r'/.*/cpu/.*/cgroup.procs', filepath):
                 raise OSError(errno.ENOSPC, os.strerror(errno.ENOSPC))
-            fileutil.append_file(filepath, controller, **kwargs)
+            fileutil.append_file(filepath, contents, **kwargs)
 
         # Start tracking a couple of dummy cgroups
         CGroupsTelemetry.track_cgroup(CGroup("dummy", "/sys/fs/cgroup/memory/system.slice/dummy.service", "cpu"))
