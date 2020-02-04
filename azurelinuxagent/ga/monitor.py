@@ -132,11 +132,11 @@ class MonitorHandler(object):
         agent or the extensions. Since we don't have control over which parameters the extension's events contain,
         we do some post-processing before reporting them to ensure the telemetry schema is consistent with agent events.
         """
-        if self.last_event_collection is None:
-            self.last_event_collection = datetime.datetime.utcnow() - MonitorHandler.EVENT_COLLECTION_PERIOD
+        try:
+            if self.last_event_collection is None:
+                self.last_event_collection = datetime.datetime.utcnow() - MonitorHandler.EVENT_COLLECTION_PERIOD
 
-        if datetime.datetime.utcnow() >= (self.last_event_collection + MonitorHandler.EVENT_COLLECTION_PERIOD):
-            try:
+            if datetime.datetime.utcnow() >= (self.last_event_collection + MonitorHandler.EVENT_COLLECTION_PERIOD):
                 event_list = TelemetryEventList()
                 event_dir = os.path.join(conf.get_lib_dir(), "events")
                 event_files = os.listdir(event_dir)
@@ -172,10 +172,10 @@ class MonitorHandler(object):
                     self.protocol.report_event(event_list)
                 except ProtocolError as e:
                     logger.error("{0}", ustr(e))
-            except Exception as e:
-                logger.warn("Failed to send events: {0}", ustr(e))
+        except Exception as e:
+            logger.warn("Failed to send events: {0}", ustr(e))
 
-            self.last_event_collection = datetime.datetime.utcnow()
+        self.last_event_collection = datetime.datetime.utcnow()
 
     def daemon(self, init_data=False):
 
@@ -190,17 +190,20 @@ class MonitorHandler(object):
                         MonitorHandler.HOST_PLUGIN_HEARTBEAT_PERIOD,
                         MonitorHandler.IMDS_HEARTBEAT_PERIOD).seconds
         while self.should_run:
-            self.protocol.update_host_plugin_from_goal_state()
-            self.send_telemetry_heartbeat()
-            self.poll_telemetry_metrics()
-            # This will be removed in favor of poll_telemetry_metrics() and it'll directly send the perf data
-            # for each cgroup.
-            self.send_telemetry_metrics()
-            self.collect_and_send_events()
-            self.send_host_plugin_heartbeat()
-            self.send_imds_heartbeat()
-            self.log_altered_network_configuration()
-            self.reset_loggers()
+            try:
+                self.protocol.update_host_plugin_from_goal_state()
+                self.send_telemetry_heartbeat()
+                self.poll_telemetry_metrics()
+                # This will be removed in favor of poll_telemetry_metrics() and it'll directly send the perf data for
+                # each cgroup.
+                self.send_telemetry_metrics()
+                self.collect_and_send_events()
+                self.send_host_plugin_heartbeat()
+                self.send_imds_heartbeat()
+                self.log_altered_network_configuration()
+                self.reset_loggers()
+            except Exception as e:
+                logger.warn("An error occurred in the monitor thread main loop; will skip the current iteration.\n{0}", ustr(e))
             time.sleep(min_delta)
 
     def reset_loggers(self):
@@ -209,16 +212,18 @@ class MonitorHandler(object):
         For reference, please check azurelinuxagent.common.logger.Logger and
         azurelinuxagent.common.event.EventLogger classes
         """
-        time_now = datetime.datetime.utcnow()
-        if not self.last_reset_loggers_time:
-            self.last_reset_loggers_time = time_now
-
-        if time_now >= (self.last_reset_loggers_time +
-                        MonitorHandler.RESET_LOGGERS_PERIOD):
-            try:
-                logger.reset_periodic()
-            finally:
+        try:
+            time_now = datetime.datetime.utcnow()
+            if not self.last_reset_loggers_time:
                 self.last_reset_loggers_time = time_now
+
+            if time_now >= (self.last_reset_loggers_time + MonitorHandler.RESET_LOGGERS_PERIOD):
+                logger.reset_periodic()
+
+        except Exception as e:
+            logger.warn("Failed to clear periodic loggers: {0}", ustr(e))
+
+        self.last_reset_loggers_time = time_now
 
     def send_imds_heartbeat(self):
         """
@@ -226,11 +231,11 @@ class MonitorHandler(object):
         successfully called and validated a response in the last IMDS_HEALTH_PERIOD.
         """
 
-        if self.last_imds_heartbeat is None:
-            self.last_imds_heartbeat = datetime.datetime.utcnow() - MonitorHandler.IMDS_HEARTBEAT_PERIOD
+        try:
+            if self.last_imds_heartbeat is None:
+                self.last_imds_heartbeat = datetime.datetime.utcnow() - MonitorHandler.IMDS_HEARTBEAT_PERIOD
 
-        if datetime.datetime.utcnow() >= (self.last_imds_heartbeat + MonitorHandler.IMDS_HEARTBEAT_PERIOD):
-            try:
+            if datetime.datetime.utcnow() >= (self.last_imds_heartbeat + MonitorHandler.IMDS_HEARTBEAT_PERIOD):
                 is_currently_healthy, response = self.imds_client.validate()
 
                 if is_currently_healthy:
@@ -243,29 +248,29 @@ class MonitorHandler(object):
 
                 self.health_service.report_imds_status(is_healthy, response)
 
-            except Exception as e:
-                msg = "Exception sending imds heartbeat: {0}".format(ustr(e))
-                add_event(
-                    name=AGENT_NAME,
-                    version=CURRENT_VERSION,
-                    op=WALAEventOperation.ImdsHeartbeat,
-                    is_success=False,
-                    message=msg,
-                    log_event=False)
+        except Exception as e:
+            msg = "Exception sending imds heartbeat: {0}".format(ustr(e))
+            add_event(
+                name=AGENT_NAME,
+                version=CURRENT_VERSION,
+                op=WALAEventOperation.ImdsHeartbeat,
+                is_success=False,
+                message=msg,
+                log_event=False)
 
-            self.last_imds_heartbeat = datetime.datetime.utcnow()
+        self.last_imds_heartbeat = datetime.datetime.utcnow()
 
     def send_host_plugin_heartbeat(self):
         """
         Send a health signal every HOST_PLUGIN_HEARTBEAT_PERIOD. The signal is 'Healthy' when we have been able to
         communicate with HostGAPlugin at least once in the last HOST_PLUGIN_HEALTH_PERIOD.
         """
-        if self.last_host_plugin_heartbeat is None:
-            self.last_host_plugin_heartbeat = datetime.datetime.utcnow() - MonitorHandler.HOST_PLUGIN_HEARTBEAT_PERIOD
+        try:
+            if self.last_host_plugin_heartbeat is None:
+                self.last_host_plugin_heartbeat = datetime.datetime.utcnow() - MonitorHandler.HOST_PLUGIN_HEARTBEAT_PERIOD
 
-        if datetime.datetime.utcnow() >= (
+            if datetime.datetime.utcnow() >= (
                 self.last_host_plugin_heartbeat + MonitorHandler.HOST_PLUGIN_HEARTBEAT_PERIOD):
-            try:
                 host_plugin = self.protocol.client.get_host_plugin()
                 host_plugin.ensure_initialized()
                 is_currently_healthy = host_plugin.get_health()
@@ -289,25 +294,24 @@ class MonitorHandler(object):
                         message='{0} since successful heartbeat'.format(self.host_plugin_errorstate.fail_time),
                         log_event=False)
 
-            except Exception as e:
-                msg = "Exception sending host plugin heartbeat: {0}".format(ustr(e))
-                add_event(
-                    name=AGENT_NAME,
-                    version=CURRENT_VERSION,
-                    op=WALAEventOperation.HostPluginHeartbeat,
-                    is_success=False,
-                    message=msg,
-                    log_event=False)
+        except Exception as e:
+            msg = "Exception sending host plugin heartbeat: {0}".format(ustr(e))
+            add_event(
+                name=AGENT_NAME,
+                version=CURRENT_VERSION,
+                op=WALAEventOperation.HostPluginHeartbeat,
+                is_success=False,
+                message=msg,
+                log_event=False)
 
             self.last_host_plugin_heartbeat = datetime.datetime.utcnow()
 
     def send_telemetry_heartbeat(self):
+        try:
+            if self.last_telemetry_heartbeat is None:
+                self.last_telemetry_heartbeat = datetime.datetime.utcnow() - MonitorHandler.TELEMETRY_HEARTBEAT_PERIOD
 
-        if self.last_telemetry_heartbeat is None:
-            self.last_telemetry_heartbeat = datetime.datetime.utcnow() - MonitorHandler.TELEMETRY_HEARTBEAT_PERIOD
-
-        if datetime.datetime.utcnow() >= (self.last_telemetry_heartbeat + MonitorHandler.TELEMETRY_HEARTBEAT_PERIOD):
-            try:
+            if datetime.datetime.utcnow() >= (self.last_telemetry_heartbeat + MonitorHandler.TELEMETRY_HEARTBEAT_PERIOD):
                 io_errors = IOErrorCounter.get_and_reset()
                 hostplugin_errors = io_errors.get("hostplugin")
                 protocol_errors = io_errors.get("protocol")
@@ -323,10 +327,10 @@ class MonitorHandler(object):
                         is_success=True,
                         message=msg,
                         log_event=False)
-            except Exception as e:
-                logger.warn("Failed to send heartbeat: {0}", ustr(e))
+        except Exception as e:
+            logger.warn("Failed to send heartbeat: {0}", ustr(e))
 
-            self.last_telemetry_heartbeat = datetime.datetime.utcnow()
+        self.last_telemetry_heartbeat = datetime.datetime.utcnow()
 
     def poll_telemetry_metrics(self):
         """
@@ -342,7 +346,6 @@ class MonitorHandler(object):
             if time_now >= (self.last_cgroup_polling_telemetry +
                             MonitorHandler.CGROUP_TELEMETRY_POLLING_PERIOD):
                 metrics = CGroupsTelemetry.poll_all_tracked()
-                self.last_cgroup_polling_telemetry = time_now
 
                 if metrics:
                     for metric in metrics:
@@ -350,21 +353,22 @@ class MonitorHandler(object):
         except Exception as e:
             logger.warn("Could not poll all the tracked telemetry due to {0}", ustr(e))
 
+        self.last_cgroup_polling_telemetry = datetime.datetime.utcnow()
+
     def send_telemetry_metrics(self):
         """
         The send_telemetry_metrics would soon be removed in favor of sending performance metrics directly.
 
         :return:
         """
-        time_now = datetime.datetime.utcnow()
-
         try:  # If there is an issue in reporting, it should not take down whole monitor thread.
+            time_now = datetime.datetime.utcnow()
+
             if not self.last_cgroup_report_telemetry:
                 self.last_cgroup_report_telemetry = time_now
 
             if time_now >= (self.last_cgroup_report_telemetry + MonitorHandler.CGROUP_TELEMETRY_REPORTING_PERIOD):
                 performance_metrics = CGroupsTelemetry.report_all_tracked()
-                self.last_cgroup_report_telemetry = time_now
 
                 if performance_metrics:
                     message = generate_extension_metrics_telemetry_dictionary(schema_version=1.0,
@@ -377,6 +381,8 @@ class MonitorHandler(object):
                               log_event=False)
         except Exception as e:
             logger.warn("Could not report all the tracked telemetry due to {0}", ustr(e))
+
+        self.last_cgroup_report_telemetry = datetime.datetime.utcnow()
 
     def log_altered_network_configuration(self):
         """
