@@ -122,7 +122,7 @@ class WireProtocol(Protocol):
             logger.warn("Failed to get IMDS info: {0}", ustr(e))
 
         sysinfo = SysInfo.get_instance()
-        sysinfo._set_vminfo(vminfo, compute_info)
+        sysinfo.set_vminfo(vminfo, compute_info)
 
     def get_vminfo(self):
         goal_state = self.client.get_goal_state()

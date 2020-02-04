@@ -17,34 +17,11 @@
 
 import platform
 
-from azurelinuxagent.common.event import TelemetryEventParam
 from azurelinuxagent.common.protocol.imds import ComputeInfo
 from azurelinuxagent.common.protocol.restapi import VMInfo
 from azurelinuxagent.common.sysinfo import SysInfo
 from azurelinuxagent.common.version import AGENT_EXECUTION_MODE, DISTRO_NAME, DISTRO_VERSION, DISTRO_CODE_NAME
-from tests.tools import patch, AgentTestCase, PropertyMock, Mock
-
-
-class SysInfoMock(Mock):
-
-    @staticmethod
-    def get_sysinfo_telemetry_params():
-        final_telemetry_params = [
-            TelemetryEventParam("OSVersion", "TEST_OSVersion"),
-            TelemetryEventParam("ExecutionMode", "TEST_ExecutionMode"),
-            TelemetryEventParam("RAM", 512),
-            TelemetryEventParam("Processors", 2),
-            TelemetryEventParam("VMName", "TEST_VMName"),
-            TelemetryEventParam("TenantName", "TEST_TenantName"),
-            TelemetryEventParam("RoleName", "TEST_RoleName"),
-            TelemetryEventParam("RoleInstanceName", "TEST_RoleInstanceName"),
-            TelemetryEventParam("Location", "TEST_Location"),
-            TelemetryEventParam("SubscriptionId", "TEST_SubscriptionId"),
-            TelemetryEventParam("ResourceGroupName", "TEST_ResourceGroupName"),
-            TelemetryEventParam("VMId", "TEST_VMId"),
-            TelemetryEventParam("ImageOrigin", 1),
-        ]
-        return final_telemetry_params
+from tests.tools import patch, AgentTestCase, PropertyMock
 
 
 class TestSysInfo(AgentTestCase):
@@ -98,7 +75,7 @@ class TestSysInfo(AgentTestCase):
             "ImageOrigin": compute_info.image_origin
         }
 
-        sysinfo._set_vminfo(vminfo, compute_info)
+        sysinfo.set_vminfo(vminfo, compute_info)
         sysinfo_telemetry_params = sysinfo.get_sysinfo_telemetry_params()
 
         for sysinfo_telemetry_param in sysinfo_telemetry_params:

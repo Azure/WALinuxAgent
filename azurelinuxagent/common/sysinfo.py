@@ -33,10 +33,12 @@ class SysInfo(object):
 
     @staticmethod
     def get_instance():
-        with SysInfo._lock:
-            if SysInfo._instance is None:
-                SysInfo._instance = SysInfo().__impl()
-            return SysInfo._instance
+        if SysInfo._instance is None:
+            # The instance gets initialized only once, on extension handler process start up in update.py. As part of
+            # the initialization, we finalize the internal list of sysinfo telemetry parameters, so any subsequent
+            # callers to `SysInfo.get_instance().get_sysinfo_telemetry_params` will get the finalized list.
+            SysInfo._instance = SysInfo().__impl()
+        return SysInfo._instance
 
     class __impl(object):
         def __init__(self):
@@ -45,7 +47,7 @@ class SysInfo(object):
             self._osutil = get_osutil()
             self._telemetry_params = []
 
-        def _set_vminfo(self, vminfo, compute_info):
+        def set_vminfo(self, vminfo, compute_info):
             # This method should only be called once, on service startup, from update.py. It will retrieve and populate
             # the necessary sysinfo fields into this object, which will be later used for reporting telemetry.
             self._vminfo = vminfo
@@ -57,15 +59,23 @@ class SysInfo(object):
             return self._telemetry_params
 
         def _init_sysinfo_params(self):
-            # Build a dictionary of null values to ensure the schema is consistent even if we fail to retrieve some
+            # Build a dictionary of dummy values to ensure the schema is consistent even if we fail to retrieve some
             # of these values.
-            params_names = ["OSVersion", "ExecutionMode", "RAM", "Processors", "VMName", "TenantName", "RoleName",
-                            "RoleInstanceName", "Location", "SubscriptionId", "ResourceGroupName", "VMId",
-                            "ImageOrigin"]
-
-            self.params_dict = {}
-            for key in params_names:
-                self.params_dict[key] = None
+            self.params_dict = {
+                "OSVersion": "OSVersion_UNINITIALIZED",
+                "ExecutionMode": "ExecutionMode_UNINITIALIZED",
+                "RAM": 0,
+                "Processors": 0,
+                "VMName": "VMName_UNINITIALIZED",
+                "TenantName": "TenantName_UNINITIALIZED",
+                "RoleName": "RoleName_UNINITIALIZED",
+                "RoleInstanceName": "RoleInstanceName_UNINITIALIZED",
+                "Location": "Location_UNINITIALIZED",
+                "SubscriptionId": "SubscriptionId_UNINITIALIZED",
+                "ResourceGroupName": "ResourceGroupName_UNINITIALIZED",
+                "VMId": "VMId_UNINITIALIZED",
+                "ImageOrigin": 0,
+            }
 
             osversion = "{0}:{1}-{2}-{3}:{4}".format(platform.system(),
                                                      DISTRO_NAME,

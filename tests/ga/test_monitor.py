@@ -48,7 +48,7 @@ from azurelinuxagent.ga.exthandlers import ExtHandlerInstance
 from azurelinuxagent.ga.monitor import generate_extension_metrics_telemetry_dictionary, get_monitor_handler, \
     MonitorHandler
 from tests.common.test_cgroupstelemetry import make_new_cgroup
-from tests.common.test_sysinfo import SysInfoMock
+from tests.common.mocksysinfo import SysInfoData
 from tests.protocol.mockwiredata import DATA_FILE, WireProtocolData
 from tests.tools import Mock, MagicMock, patch, AgentTestCase, data_dir, are_cgroups_enabled, i_am_root, \
     skip_if_predicate_false, is_trusty_in_travis, skip_if_predicate_true, clear_singleton_instances, PropertyMock
@@ -325,7 +325,7 @@ class TestEventMonitoring(AgentTestCase):
         self.event_logger = EventLogger()
         self.event_logger.event_dir = os.path.join(self.lib_dir, "events")
 
-        self.mock_sysinfo = patch("azurelinuxagent.common.sysinfo.SysInfo.get_instance", return_value=SysInfoMock)
+        self.mock_sysinfo = patch("azurelinuxagent.common.sysinfo.SysInfo.get_instance", return_value=SysInfoData)
         self.mock_sysinfo.start()
 
     def tearDown(self):

@@ -18,6 +18,7 @@
 #
 
 from azurelinuxagent.common.datacontract import DataContract, DataContractList
+from azurelinuxagent.common.version import AGENT_NAME
 
 
 class TelemetryEventParam(DataContract):
@@ -46,7 +47,7 @@ class TelemetryEvent(DataContract):
         # "WALinuxAgent", it is an extension event.
         for param in self.parameters:
             if param.name == "Name":
-                return param.value != "WALinuxAgent"
+                return param.value != AGENT_NAME
         return False
 
     def get_version(self):

@@ -266,7 +266,7 @@ class UpdateHandler(object):
 
             imds_client = get_imds_client(self.protocol_util.get_wireserver_endpoint())
             protocol.init_sysinfo(imds_client)
-            EventLogger.update_old_events_on_disk(__event_logger__.event_dir)
+            EventLogger.update_old_daemon_events_on_disk(__event_logger__.event_dir)
 
             # Log OS-specific info.
             os_info_msg = u"Distro info: {0} {1}, osutil class being used: {2}, agent service name: {3}"\

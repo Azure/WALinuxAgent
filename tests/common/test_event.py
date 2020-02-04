@@ -23,7 +23,7 @@ from datetime import datetime, timedelta
 
 from azurelinuxagent.common import event, logger
 from azurelinuxagent.common.event import add_event, elapsed_milliseconds, EventLogger, report_metric, \
-    WALAEventOperation, parse_xml_event, parse_json_event, parse_event
+    WALAEventOperation, parse_xml_event, parse_json_event, parse_event, EVENT_FILE_EXTENSION
 from azurelinuxagent.common.exception import EventError
 from azurelinuxagent.common.future import OrderedDict, ustr
 from azurelinuxagent.common.protocol.wire import GoalState
@@ -31,7 +31,7 @@ from azurelinuxagent.common.telemetryevent import TelemetryEvent, TelemetryEvent
 from azurelinuxagent.common.utils import fileutil
 from azurelinuxagent.common.utils.extensionprocessutil import read_output
 from azurelinuxagent.common.version import AGENT_NAME, CURRENT_AGENT, CURRENT_VERSION
-from tests.ga.test_monitor import SysInfoMock
+from tests.common.mocksysinfo import SysInfoData
 from tests.tools import AgentTestCase, data_dir, load_data, Mock, patch, PropertyMock
 
 
@@ -43,7 +43,7 @@ class TestEvent(AgentTestCase):
         self.event_dir = self.tmp_dir
         event.init_event_logger(self.event_dir)
 
-        self.mock_sysinfo = patch("azurelinuxagent.common.sysinfo.SysInfo.get_instance", return_value=SysInfoMock)
+        self.mock_sysinfo = patch("azurelinuxagent.common.sysinfo.SysInfo.get_instance", return_value=SysInfoData)
         self.mock_sysinfo.start()
 
     def tearDown(self):
@@ -320,14 +320,14 @@ class TestEvent(AgentTestCase):
     @patch('azurelinuxagent.common.logger.verbose')
     def test_collect_event_should_read_event_and_delete_the_file(self, patch_logger_verbose):
         return_time = 42
-        filename = ustr(return_time * 1000000) + ".tld"
+        filename = ustr(return_time * 1000000) + EVENT_FILE_EXTENSION
         filepath = os.path.join(self.event_dir, filename)
 
         with patch("time.time", return_value=return_time):
             add_event('test', message='test event')
 
         self.assertTrue(len(os.listdir(self.event_dir)) == 1)
-        EventLogger.collect_event(filepath)
+        EventLogger.collect_event_str(filepath)
         self.assertTrue(len(os.listdir(self.event_dir)) == 0)
 
         self.assertEquals(patch_logger_verbose.call_count, 2)
@@ -339,7 +339,7 @@ class TestEvent(AgentTestCase):
 
         # checking the extension of the file created.
         for filename in os.listdir(self.event_dir):
-            self.assertEqual(".tld", filename[-4:])
+            self.assertEqual(EVENT_FILE_EXTENSION, filename[-4:])
 
     def test_save_event_message_with_non_ascii_characters(self):
         test_data_dir = os.path.join(data_dir, "events", "collect_and_send_extension_stdout_stderror")
@@ -360,7 +360,7 @@ class TestEvent(AgentTestCase):
                     add_event('test_extension', message=log_msg, duration=duration)
 
         for tld_file in os.listdir(self.tmp_dir):
-            event_str = EventLogger.collect_event(os.path.join(self.tmp_dir, tld_file))
+            event_str = EventLogger.collect_event_str(os.path.join(self.tmp_dir, tld_file))
             event = parse_event(event_str)
             self._assert_event_schema_is_complete(event)
 
@@ -370,7 +370,7 @@ class TestEvent(AgentTestCase):
 
         for tld_file in os.listdir(self.tmp_dir):
             try:
-                EventLogger.collect_event(os.path.join(self.tmp_dir, tld_file))
+                EventLogger.collect_event_str(os.path.join(self.tmp_dir, tld_file))
             except Exception as e:
                 self.assertIsInstance(e, EventError)
 
@@ -502,14 +502,14 @@ class TestEvent(AgentTestCase):
         event = TelemetryEvent()
         event.parameters = [TelemetryEventParam("Name", "DummyName")]
 
-        with patch("azurelinuxagent.common.sysinfo.SysInfo.get_instance", return_value=SysInfoMock):
+        with patch("azurelinuxagent.common.sysinfo.SysInfo.get_instance", return_value=SysInfoData):
             EventLogger._add_sysinfo_parameters_to_event(event)
 
         # Add existing event parameter
         event_parameters_expected = {"Name": "DummyName"}
 
         # Add sysinfo parameters
-        sysinfo_parameters = SysInfoMock.get_sysinfo_telemetry_params()
+        sysinfo_parameters = SysInfoData.get_sysinfo_telemetry_params()
         for sysinfo_param in sysinfo_parameters:
             event_parameters_expected[sysinfo_param.name] = sysinfo_param.value
 
@@ -558,7 +558,7 @@ class TestEvent(AgentTestCase):
             'Duration': 'TEST_Duration'
         }
 
-        EventLogger.trim_extension_parameters(extension_event)
+        EventLogger.trim_extension_event_parameters(extension_event)
         self._assert_param_lists_are_equal(extension_event.parameters, extension_only_params)
 
     def test_finalize_event_fields_should_add_all_fields_before_sending_event(self, *args):
@@ -622,7 +622,7 @@ class TestEvent(AgentTestCase):
                                       'IsInternal': False}
 
         sysinfo_parameters_expected = {}
-        sysinfo_parameters = SysInfoMock.get_sysinfo_telemetry_params()
+        sysinfo_parameters = SysInfoData.get_sysinfo_telemetry_params()
         for sysinfo_param in sysinfo_parameters:
             sysinfo_parameters_expected[sysinfo_param.name] = sysinfo_param.value
 
@@ -643,13 +643,13 @@ class TestEvent(AgentTestCase):
             add_event(name=AGENT_NAME, version="2.2.45")
 
         self.assertEquals(len(os.listdir(self.event_dir)), 3)
-        EventLogger.update_old_events_on_disk(self.event_dir)
+        EventLogger.update_old_daemon_events_on_disk(self.event_dir)
 
         self.assertEquals(len(os.listdir(self.event_dir)), 3)
         self.assertEquals(patch_logger_error.call_count, 0)
 
         for tld_file in os.listdir(self.event_dir):
-            event_str = EventLogger.collect_event(os.path.join(self.tmp_dir, tld_file))
+            event_str = EventLogger.collect_event_str(os.path.join(self.tmp_dir, tld_file))
             event = parse_event(event_str)
             self._assert_event_schema_is_complete(event)
 
@@ -679,7 +679,7 @@ class TestMetrics(AgentTestCase):
 
         # checking the extension of the file created.
         for filename in os.listdir(self.tmp_dir):
-            self.assertEqual(".tld", filename[-4:])
+            self.assertEqual(EVENT_FILE_EXTENSION, filename[-4:])
             perf_metric_event = json.loads(fileutil.read_file(os.path.join(self.tmp_dir, filename)))
             self.assertEqual(perf_metric_event["eventId"], event.TELEMETRY_METRICS_EVENT_ID)
             self.assertEqual(perf_metric_event["providerId"], event.TELEMETRY_EVENT_PROVIDER_ID)

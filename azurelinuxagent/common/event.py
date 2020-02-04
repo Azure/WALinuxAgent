@@ -55,6 +55,8 @@ SEND_LOGS_TO_TELEMETRY = False
 
 MAX_NUMBER_OF_EVENTS = 1000
 
+EVENT_FILE_EXTENSION = ".tld"
+
 
 def send_logs_to_telemetry():
     return SEND_LOGS_TO_TELEMETRY
@@ -305,25 +307,24 @@ class EventLogger(object):
         try:
             with open(filename + ".tmp", 'wb+') as hfile:
                 hfile.write(data.encode("utf-8"))
-            os.rename(filename + ".tmp", filename + ".tld")
+            os.rename(filename + ".tmp", filename + EVENT_FILE_EXTENSION)
         except (IOError, OSError) as e:
             msg = "Failed to write events to file: {0}".format(e)
             raise EventError(msg)
 
     @staticmethod
-    def collect_event(evt_file_name):
+    def collect_event_str(evt_file_name):
         try:
             logger.verbose("Found event file: {0}", evt_file_name)
             with open(evt_file_name, "rb") as evt_file:
-                # if fail to open or delete the file, throw exception
                 data_str = evt_file.read().decode("utf-8")
             logger.verbose("Processed event file: {0}", evt_file_name)
-            os.remove(evt_file_name)
             return data_str
         except (IOError, OSError, UnicodeDecodeError) as e:
-            os.remove(evt_file_name)
             msg = "Failed to process {0}, {1}".format(evt_file_name, e)
             raise EventError(msg)
+        finally:
+            os.remove(evt_file_name)
 
     def reset_periodic(self):
         self.periodic_events = {}
@@ -468,7 +469,7 @@ class EventLogger(object):
         EventLogger._add_sysinfo_parameters_to_event(event)
 
     @staticmethod
-    def trim_extension_parameters(event):
+    def trim_extension_event_parameters(event):
         """
         This method is called for extension events before they are sent out. Per the agreement with extension
         publishers, the parameters that belong to extensions and will be reported intact are Name, Version, Operation,
@@ -478,7 +479,7 @@ class EventLogger(object):
         :param event: Extension event to trim.
         :return: Trimmed extension event; containing only extension-specific parameters.
         """
-        params_to_keep = ['Name', 'Version', 'Operation', 'OperationSuccess', 'Message', 'Duration']
+        params_to_keep = dict().fromkeys(['Name', 'Version', 'Operation', 'OperationSuccess', 'Message', 'Duration'])
         trimmed_params = []
 
         for param in event.parameters:
@@ -522,40 +523,45 @@ class EventLogger(object):
         event.parameters.extend(sysinfo_params)
 
     @staticmethod
-    def update_old_events_on_disk(event_dir):
-        # Since WALinuxAgent-2.2.47, the agent events' schema is finalized before the event is saved to disk. This means
-        # that once the events are collected and sent, there is no post-processing needed. Before 2.2.47, sysinfo
-        # params and some common fields would be added only after the event is read from disk and before it's reported.
-        # This means that old agent events (<2.2.47) would be saved to disk with an incomplete schema.
+    def update_old_daemon_events_on_disk(event_dir):
+        """
+        Since WALinuxAgent-2.2.47, the agent events' schema is finalized before the event is saved to disk. This means
+        that once the events are collected and sent, there is no post-processing needed. Before 2.2.47, sysinfo
+        params and some common fields would be added only after the event is read from disk and before it's reported.
+        This means that old agent events (<2.2.47) would be saved to disk with an incomplete schema.
 
-        # This method completes the agent event schema and is called only once, during extension handler start up, to
-        # ensure any remaining fields in the events folder that are still not sent are up to date with the schema.
-        event_files = os.listdir(event_dir)
+        This method completes the agent event schema and is called only once, during extension handler start up, to
+        ensure any remaining fields in the events folder that are still not sent are up to date with the schema.
+        :param event_dir: Directory with events on disk.
+        :return: Does not return, updates the event file on disk instead.
+        """
+        try:
+            event_files = os.listdir(event_dir)
 
-        for event_file in event_files:
-            if not event_file.endswith(".tld"):
-                continue
+            for event_file in event_files:
+                try:
+                    if not event_file.endswith(EVENT_FILE_EXTENSION):
+                        continue
 
-            event_file_path = os.path.join(event_dir, event_file)
-            try:
-                data_str = fileutil.read_file(event_file_path)
+                    event_file_path = os.path.join(event_dir, event_file)
+                    data_str = fileutil.read_file(event_file_path)
 
-                event = parse_event(data_str)
-                version = event.get_version()
-                if event.is_extension_event() or FlexibleVersion(version) >= FlexibleVersion("2.2.47"):
+                    event = parse_event(data_str)
+                    if event.is_extension_event() or FlexibleVersion(event.get_version()) >= FlexibleVersion("2.2.47"):
+                        continue
+
+                    # The event filename is <epoch_time>.tld. The factor 1000000 is defined in save_event.
+                    epoch_time = float(event_file[:-4]) / 1000000.0
+                    event_creation_time = datetime.fromtimestamp(epoch_time).strftime(u'%Y-%m-%dT%H:%M:%S.%fZ')
+                    EventLogger._update_old_event_schema(event, event_creation_time)
+
+                    data = get_properties(event)
+                    fileutil.write_file(event_file_path, json.dumps(data))
+                except Exception as e:
+                    logger.error("Failed to process old event {0}, {1}".format(event_file, ustr(e)))
                     continue
-
-                # The event filename is <epoch_time>.tld. The factor 1000000 is defined in save_event.
-                epoch_time = float(event_file[:-4]) / 1000000.0
-                event_creation_time = datetime.fromtimestamp(epoch_time).strftime(u'%Y-%m-%dT%H:%M:%S.%fZ')
-                EventLogger._update_old_event_schema(event, event_creation_time)
-
-                data = get_properties(event)
-                fileutil.write_file(event_file_path, json.dumps(data))
-            except (UnicodeDecodeError, ValueError, IOError, OSError) as e:
-                msg = "Failed to process old event {0}, {1}".format(event_file_path, e)
-                logger.error(msg)
-                continue
+        except Exception as e:
+            logger.error("Failed to update the telemetry schema of old daemon events on disk: {0}".format(ustr(e)))
 
     @staticmethod
     def _update_old_event_schema(event, event_creation_time):
