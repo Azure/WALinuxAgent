@@ -221,51 +221,6 @@ class TestWireProtocol(AgentTestCase):
             self.assertEqual(goal_state.role_config_name, host_plugin.role_config_name)
             self.assertEqual(1, patch_get_goal_state.call_count)
 
-    @patch("azurelinuxagent.common.utils.restutil.http_request", side_effect=IOError)
-    @patch("azurelinuxagent.common.protocol.wire.WireClient.get_host_plugin")
-    @patch("azurelinuxagent.common.protocol.hostplugin.HostPluginProtocol.get_artifact_request")
-    def test_download_ext_handler_pkg_fallback(self, patch_request, patch_get_host, patch_http, *args):
-        ext_uri = 'extension_uri'
-        host_uri = 'host_uri'
-        destination = 'destination'
-        patch_get_host.return_value = HostPluginProtocol(host_uri, 'container_id', 'role_config')
-        patch_request.return_value = [host_uri, {}]
-
-        WireProtocol(WIRESERVER_URL).download_ext_handler_pkg(ext_uri, destination)
-
-        self.assertEqual(patch_http.call_count, 2)
-        self.assertEqual(patch_request.call_count, 1)
-        self.assertEqual(patch_http.call_args_list[0][0][1], ext_uri)
-        self.assertEqual(patch_http.call_args_list[1][0][1], host_uri)
-
-    @skip_if_predicate_true(running_under_travis, "Travis unit tests should not have external dependencies")
-    def test_download_ext_handler_pkg_stream(self, *args):
-        ext_uri = 'https://dcrdata.blob.core.windows.net/files/packer.zip'
-        tmp = tempfile.mkdtemp()
-        destination = os.path.join(tmp, 'test_download_ext_handler_pkg_stream.zip')
-
-        success = WireProtocol(WIRESERVER_URL).download_ext_handler_pkg(ext_uri, destination)
-        self.assertTrue(success)
-        self.assertTrue(os.path.exists(destination))
-
-        # verify size
-        self.assertEqual(33193077, os.stat(destination).st_size)
-
-        # verify unzip
-        zipfile.ZipFile(destination).extractall(tmp)
-        packer = os.path.join(tmp, 'packer')
-        self.assertTrue(os.path.exists(packer))
-        fileutil.chmod(packer, os.stat(packer).st_mode | stat.S_IXUSR)
-
-        # verify unpacked size
-        self.assertEqual(105552030, os.stat(packer).st_size)
-
-        # execute, verify result
-        packer_version = '{0} --version'.format(packer)
-        rc, stdout = run_get_output(packer_version)
-        self.assertEqual(0, rc)
-        self.assertEqual('1.3.5\n', stdout)
-
     @patch("azurelinuxagent.common.protocol.wire.WireClient.update_goal_state")
     def test_upload_status_blob_default(self, *args):
         """

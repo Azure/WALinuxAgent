@@ -318,6 +318,38 @@ class TestMonitor(AgentTestCase):
         self.assertEqual(12, counter)
         os.environ.pop(CONTAINER_ID_ENV_VARIABLE)
 
+    def test_main_loop_should_handle_exceptions_retrieving_goal_state(self, *_):
+        monitor_handler = get_monitor_handler()
+
+        with patch("azurelinuxagent.common.logger.warn") as mock_warn:
+            with patch.object(monitor_handler, 'protocol') as mock_protocol:
+                mock_protocol.update_host_plugin_from_goal_state = Mock(side_effect=Exception("A TEST EXCEPTION"))
+
+                with patch("azurelinuxagent.ga.monitor.time") as mock_time:
+                    # time.sleep is called at the end of each iteration of the main loop; we use it to stop the
+                    # loop after a few iterations (this ensures that the test doesn't run for ever and is also
+                    # a check that the loop does not stop after the first error)
+                    def mock_sleep(_):
+                        mock_sleep.iterations += 1
+                        if mock_sleep.iterations >= 3:
+                            monitor_handler.stop()
+                    mock_sleep.iterations = 0
+
+                    mock_time.sleep = Mock(side_effect=mock_sleep)
+
+                    # run the main loop
+                    monitor_handler.daemon(init_data=False)
+
+                    self.assertEqual(mock_sleep.iterations, 3)
+
+                    self.assertEquals(mock_warn.call_count, 3)
+
+                    for call_args in mock_warn.call_args_list:
+                        args, kwargs = call_args
+                        self.assertEquals(len(args), 2)
+                        self.assertIn("A TEST EXCEPTION", args[1])
+
+
     @patch("azurelinuxagent.ga.monitor.MonitorHandler.send_telemetry_heartbeat")
     @patch("azurelinuxagent.ga.monitor.MonitorHandler.collect_and_send_events")
     @patch("azurelinuxagent.ga.monitor.MonitorHandler.send_host_plugin_heartbeat")
