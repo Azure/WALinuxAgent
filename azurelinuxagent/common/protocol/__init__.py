@@ -15,7 +15,7 @@
 # Requires Python 2.6+ and Openssl 1.0+
 #
 
-from azurelinuxagent.common.protocol.util import get_protocol_util, \
-                                                 OVF_FILE_NAME, \
-                                                 TAG_FILE_NAME
+# from azurelinuxagent.common.protocol.util import get_protocol_util, \
+#                                                  OVF_FILE_NAME, \
+#                                                  TAG_FILE_NAME
 

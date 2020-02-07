@@ -30,7 +30,7 @@ from azurelinuxagent.common.cgroupconfigurator import CGroupConfigurator
 from azurelinuxagent.common.event import add_event, WALAEventOperation
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.osutil import get_osutil
-from azurelinuxagent.common.protocol import get_protocol_util
+from azurelinuxagent.common.protocol.util import get_protocol_util
 from azurelinuxagent.common.protocol.wire import WireProtocol
 from azurelinuxagent.common.rdma import setup_rdma_device
 from azurelinuxagent.common.version import AGENT_NAME, AGENT_LONG_NAME, \

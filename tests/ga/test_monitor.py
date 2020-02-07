@@ -109,7 +109,7 @@ def get_event_message(duration, evt_type, is_internal, is_success, message, name
 
 @patch('azurelinuxagent.common.event.EventLogger.add_event')
 @patch('azurelinuxagent.common.osutil.get_osutil')
-@patch('azurelinuxagent.common.protocol.get_protocol_util')
+@patch('azurelinuxagent.common.protocol.util.get_protocol_util')
 @patch('azurelinuxagent.common.protocol.util.ProtocolUtil.get_protocol')
 @patch("azurelinuxagent.common.protocol.healthservice.HealthService._report")
 @patch("azurelinuxagent.common.utils.restutil.http_get")
@@ -850,7 +850,7 @@ class TestEventMonitoring(AgentTestCase):
 
 
 @patch('azurelinuxagent.common.osutil.get_osutil')
-@patch('azurelinuxagent.common.protocol.get_protocol_util')
+@patch('azurelinuxagent.common.protocol.util.get_protocol_util')
 @patch("azurelinuxagent.common.protocol.healthservice.HealthService._report")
 @patch("azurelinuxagent.common.utils.restutil.http_get")
 class TestExtensionMetricsDataTelemetry(AgentTestCase):

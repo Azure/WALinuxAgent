@@ -24,20 +24,23 @@ import time
 import unittest
 import uuid
 import zipfile
+import contextlib
 
 from azurelinuxagent.common.exception import InvalidContainerError, ResourceGoneError, ProtocolError, \
     ExtensionDownloadError
 from azurelinuxagent.common.future import httpclient
 from azurelinuxagent.common.protocol.hostplugin import HostPluginProtocol
-from azurelinuxagent.common.protocol.wire import WireProtocol, WireClient, GoalState, ExtensionsConfig, \
-    InVMArtifactsProfile, VMAgentManifestUri, StatusBlob, VMStatus, ExtHandlerVersionUri, DataContractList, socket
+from azurelinuxagent.common.goal_state import GoalState, ExtensionsConfig
+from azurelinuxagent.common.protocol.wire import WireProtocol, WireClient, InVMArtifactsProfile, VMAgentManifestUri, \
+    StatusBlob, VMStatus, ExtHandlerVersionUri, DataContractList, socket
 from azurelinuxagent.common.telemetryevent import TelemetryEvent, TelemetryEventParam, TelemetryEventList
 from azurelinuxagent.common.utils import fileutil, restutil
 from azurelinuxagent.common.utils.shellutil import run_get_output
 from azurelinuxagent.common.version import CURRENT_VERSION, DISTRO_NAME, DISTRO_VERSION
 from tests.ga.test_monitor import random_generator
-from tests.protocol import mockwiredata
-from tests.protocol.mockwiredata import WireProtocolData
+from tests.protocol import mockwiredata, mock_wire_protocol
+from tests.protocol.mockwiredata import WireProtocolData, DATA_FILE_NO_EXT
+
 from tests.tools import ANY, MagicMock, Mock, patch, AgentTestCase, skip_if_predicate_true, running_under_travis
 
 data_with_bom = b'\xef\xbb\xbfhehe'
@@ -60,14 +63,19 @@ def get_event(message, duration=30000, evt_type="", is_internal=False, is_succes
     return event
 
 
-def set_up_wireclient_ext_conf(wire_protocol_client, artifacts_profile_blob=None,
-                               status_upload_blob=None,
-                               status_upload_blob_type=None):
-    ext_conf = ExtensionsConfig(None)
-    ext_conf.artifacts_profile_blob = artifacts_profile_blob
-    ext_conf.status_upload_blob = status_upload_blob
-    ext_conf.status_upload_blob_type = status_upload_blob_type
-    wire_protocol_client._set_ext_conf(ext_conf)
+@contextlib.contextmanager
+def create_mock_protocol(artifacts_profile_blob=None, status_upload_blob=None, status_upload_blob_type=None):
+    wire_data = WireProtocolData(DATA_FILE_NO_EXT)
+
+    with mock_wire_protocol.create(wire_data) as protocol:
+        # These tests use mock wire data that dont have any extensions (extension config will be empty).
+        # Populate the upload blob and artifacts profile blob.
+        ext_conf = protocol.client._goal_state.ext_conf
+        ext_conf.artifacts_profile_blob = artifacts_profile_blob
+        ext_conf.status_upload_blob = status_upload_blob
+        ext_conf.status_upload_blob_type = status_upload_blob_type
+
+        yield protocol
 
 
 @patch("time.sleep")
@@ -861,28 +869,27 @@ class TestWireClient(AgentTestCase):
     def test_get_artifacts_profile_should_not_invoke_host_channel_when_direct_channel_succeeds(self,
                                                                                                mock_get_artifact_request,
                                                                                                *args):
-        mock_get_artifact_request.return_value = "dummy_url", "dummy_header"
-        client = WireClient("foo.bar")
-        set_up_wireclient_ext_conf(client, artifacts_profile_blob="testurl")
-        json_profile = b'{ "onHold": true }'
+        with create_mock_protocol(artifacts_profile_blob="testurl") as protocol:
+            mock_get_artifact_request.return_value = "dummy_url", "dummy_header"
+            json_profile = b'{ "onHold": true }'
 
-        HostPluginProtocol.set_default_channel(False)
-        mock_successful_response = MockResponse(body=json_profile, status_code=200)
+            HostPluginProtocol.set_default_channel(False)
+            mock_successful_response = MockResponse(body=json_profile, status_code=200)
 
-        # Direct channel succeeds
-        with patch("azurelinuxagent.common.utils.restutil._http_request", return_value=mock_successful_response):
-            with patch("azurelinuxagent.common.protocol.wire.WireClient.update_goal_state") as mock_update_goal_state:
-                with patch("azurelinuxagent.common.protocol.wire.WireClient.fetch", wraps=client.fetch) as patch_direct:
-                    with patch("azurelinuxagent.common.protocol.wire.WireClient.get_artifacts_profile_through_host",
-                               wraps=client.get_artifacts_profile_through_host) as patch_host:
-                        ret = client.get_artifacts_profile()
-                        self.assertIsInstance(ret, InVMArtifactsProfile)
+            # Direct channel succeeds
+            with patch("azurelinuxagent.common.utils.restutil.http_request", return_value=mock_successful_response):
+                with patch("azurelinuxagent.common.protocol.wire.WireClient.update_goal_state") as mock_update_goal_state:
+                    with patch("azurelinuxagent.common.protocol.wire.WireClient.fetch", wraps=protocol.client.fetch) as patch_direct:
+                        with patch("azurelinuxagent.common.protocol.wire.WireClient.get_artifacts_profile_through_host",
+                                   wraps=protocol.client.get_artifacts_profile_through_host) as patch_host:
+                            ret = protocol.client.get_artifacts_profile()
+                            self.assertIsInstance(ret, InVMArtifactsProfile)
 
-                        self.assertEquals(patch_host.call_count, 0)
-                        self.assertEquals(patch_direct.call_count, 1)
-                        self.assertEquals(mock_update_goal_state.call_count, 0)
+                            self.assertEquals(patch_host.call_count, 0)
+                            self.assertEquals(patch_direct.call_count, 1)
+                            self.assertEquals(mock_update_goal_state.call_count, 0)
 
-                        self.assertEquals(HostPluginProtocol.is_default_channel(), False)
+                            self.assertEquals(HostPluginProtocol.is_default_channel(), False)
 
     @patch("azurelinuxagent.common.protocol.wire.WireClient.get_goal_state")
     @patch("azurelinuxagent.common.protocol.hostplugin.HostPluginProtocol.get_artifact_request")

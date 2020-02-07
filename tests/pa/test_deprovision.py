@@ -29,7 +29,7 @@ from tests.tools import AgentTestCase, distros, Mock, patch
 class TestDeprovision(AgentTestCase):
     @patch('signal.signal')
     @patch('azurelinuxagent.common.osutil.get_osutil')
-    @patch('azurelinuxagent.common.protocol.get_protocol_util')
+    @patch('azurelinuxagent.common.protocol.util.get_protocol_util')
     @patch('azurelinuxagent.pa.deprovision.default.read_input')
     def test_confirmation(self,
             mock_read, mock_protocol, mock_util, mock_signal):

@@ -23,7 +23,7 @@ import unittest
 import azurelinuxagent.common.conf as conf
 from azurelinuxagent.common.exception import ProvisionError
 from azurelinuxagent.common.osutil.default import DefaultOSUtil
-from azurelinuxagent.common.protocol import OVF_FILE_NAME
+from azurelinuxagent.common.protocol.util import OVF_FILE_NAME
 from azurelinuxagent.pa.provision import get_provision_handler
 from azurelinuxagent.pa.provision.cloudinit import CloudInitProvisionHandler
 from azurelinuxagent.pa.provision.default import ProvisionHandler

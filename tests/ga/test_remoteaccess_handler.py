@@ -21,6 +21,7 @@ from mock import Mock, MagicMock
 from azurelinuxagent.common.protocol.util import ProtocolUtil
 
 from azurelinuxagent.common.exception import RemoteAccessError
+from azurelinuxagent.common.goal_state import RemoteAccess
 from azurelinuxagent.common.protocol.wire import *
 from azurelinuxagent.ga.remoteaccess import RemoteAccessHandler
 from tests.common.osutil.mock_osutil import MockOSUtil

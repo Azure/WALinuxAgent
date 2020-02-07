@@ -22,12 +22,12 @@ import re
 
 import azurelinuxagent.common.conf as conf
 import azurelinuxagent.common.logger as logger
-from azurelinuxagent.common.datacontract import set_properties
+from azurelinuxagent.common.datacontract import set_properties, DataContract, DataContractList
 from azurelinuxagent.common.event import CONTAINER_ID_ENV_VARIABLE
-from azurelinuxagent.common.protocol.restapi import *
 from azurelinuxagent.common.utils import fileutil
 from azurelinuxagent.common.utils.cryptutil import CryptUtil
 from azurelinuxagent.common.utils.textutil import parse_doc, findall, find, findtext, getattrib, gettext
+from azurelinuxagent.common.protocol.restapi import *
 
 GOAL_STATE_URI = "http://{0}/machine/?comp=goalstate"
 P7M_FILE_NAME = "Certificates.p7m"
@@ -38,10 +38,24 @@ TRANSPORT_PRV_FILE_NAME = "TransportPrivate.pem"
 # Store the last retrieved container id as an environment variable to be shared between threads for telemetry purposes
 CONTAINER_ID_ENV_VARIABLE = "AZURE_GUEST_AGENT_CONTAINER_ID"
 
+
 class GoalState(object):
-    def __init__(self, protocol):
-        uri = GOAL_STATE_URI.format(protocol.get_endpoint())
-        self.xml_text = self.fetch_config(uri, protocol.get_header())
+    def __init__(self, wire_client, full_goal_state=False, base_incarnation=None):
+        """
+        Fetches the goal state using the given wire client.
+
+        By default it fetches only the goal state itself; to fetch the entire goal state (that includes all the
+        nested components, such as the extension config) use the 'full_goal_state' parameter.
+
+        If 'base_incarnation' is given, it fetches the full goal state if the new incarnation is different than
+        the given value, otherwise it fetches only the goal state itself.
+
+        For better code readability, use the static fetch_* methods below instead of instantiating GoalState
+        directly.
+
+        """
+        uri = GOAL_STATE_URI.format(wire_client.get_endpoint())
+        self.xml_text = wire_client.fetch_config(uri, wire_client.get_header())
         xml_doc = parse_doc(self.xml_text)
 
         self.incarnation = findtext(xml_doc, "Incarnation")
@@ -57,34 +71,70 @@ class GoalState(object):
 
         os.environ[CONTAINER_ID_ENV_VARIABLE] = self.container_id
 
-        self.hosting_env_uri = findtext(xml_doc, "HostingEnvironmentConfig")
-        self.shared_conf_uri = findtext(xml_doc, "SharedConfig")
-        self.certs_uri = findtext(xml_doc, "Certificates")
-        self.ext_conf_uri = findtext(xml_doc, "ExtensionsConfig")
-        self.remote_access_uri = findtext(container, "RemoteAccessInfo")
+        if not (full_goal_state or base_incarnation is not None and self.incarnation != base_incarnation):
+            self.hosting_env = None
+            self.shared_conf = None
+            self.certs = None
+            self.ext_conf = None
+            self.remote_access = None
+            return
 
-        self.hosting_env = None
-        self.shared_conf = None
-        self.certs = None
-        self.ext_conf = None
-        self.remote_access = None
+        uri = findtext(xml_doc, "HostingEnvironmentConfig")
+        xml_text = wire_client.fetch_config(uri, wire_client.get_header())
+        self.hosting_env = HostingEnv(xml_text)
 
-    def fetch_full_goal_state(self, protocol):
-        self.hosting_env = HostingEnv(protocol, self.hosting_env_uri)
-        self.shared_conf = SharedConfig(protocol, self.shared_conf_uri)
-        self.ext_conf = ExtensionsConfig(protocol, self.ext_conf_uri)
+        uri = findtext(xml_doc, "SharedConfig")
+        xml_text = wire_client.fetch_config(uri, wire_client.get_header())
+        self.shared_conf = SharedConfig(xml_text)
 
-        if self.certs_uri is not None:
-            self.certs = Certificates(self, protocol, certs_uri)
+        uri = findtext(xml_doc, "Certificates")
+        if uri is None:
+            self.certs = None
+        else:
+            xml_text = wire_client.fetch_config(uri, wire_client.get_header_for_cert())
+            self.certs = Certificates(xml_text)
 
-        if self.remote_access_uri is not None:
-            self.remote_access = RemoteAccess(protocol, remote_access_uri)
+        uri = findtext(xml_doc, "ExtensionsConfig")
+        if uri is None:
+            self.ext_conf = ExtensionsConfig(None)
+        else:
+            xml_text = wire_client.fetch_config(uri, wire_client.get_header())
+            self.ext_conf = ExtensionsConfig(xml_text)
+
+        uri = findtext(container, "RemoteAccessInfo")
+        if uri is None:
+            self.remote_access = None
+        else:
+            xml_text = wire_client.fetch_config(uri, wire_client.get_header_for_cert())
+            self.remote_access = RemoteAccess(xml_text)
+
+    @staticmethod
+    def fetch_goal_state(wire_client):
+        """
+        Fetches the goal state, not including any nested properties (such as extension config).
+        """
+        return GoalState(wire_client)
+
+    @staticmethod
+    def fetch_full_goal_state(wire_client):
+        """
+        Fetches the full goal state, including nested properties (such as extension config).
+        """
+        return GoalState(wire_client, full_goal_state=True)
+
+    @staticmethod
+    def fetch_full_goal_state_if_incarnation_different_than(wire_client, incarnation):
+        """
+        Fetches the full goal state if the new incarnation is different than 'incarnation', otherwise returns None.
+        """
+        goal_state = GoalState(wire_client, base_incarnation=incarnation)
+        return goal_state if goal_state.incarnation != incarnation else None
 
 
 class HostingEnv(object):
-    def __init__(self, protocol, uri):
-        self.xml_text = protocol.fetch_config(uri, protocol.get_header())
-        xml_doc = parse_doc(self.xml_text)
+    def __init__(self, xml_text):
+        self.xml_text = xml_text
+        xml_doc = parse_doc(xml_text)
         incarnation = find(xml_doc, "Incarnation")
         self.vm_name = getattrib(incarnation, "instance")
         role = find(xml_doc, "Role")
@@ -94,15 +144,13 @@ class HostingEnv(object):
 
 
 class SharedConfig(object):
-    def __init__(self, protocol, uri):
-        self.xml_text = self.fetch_config(goal_state.shared_conf_uri, self.get_header())
+    def __init__(self, xml_text):
+        self.xml_text = xml_text
 
 
 class Certificates(object):
-    def __init__(self, protocol, uri):
+    def __init__(self, xml_text):
         self.cert_list = CertList()
-
-        xml_text = protocol.fetch_config(uri, protocol.get_header_for_cert())
 
         # Separate the certificates into individual files.
         xml_doc = parse_doc(xml_text)
@@ -197,25 +245,25 @@ class Certificates(object):
             self.cert_list.certificates.append(cert)
 
     @staticmethod
-    def _write_to_tmp_file(self, index, suffix, buf):
+    def _write_to_tmp_file(index, suffix, buf):
         file_name = os.path.join(conf.get_lib_dir(), "{0}.{1}".format(index, suffix))
         fileutil.write_file(file_name, "".join(buf))
         return file_name
 
 
 class ExtensionsConfig(object):
-    def __init__(self, protocol, uri):
+    def __init__(self, xml_text):
+        self.xml_text = xml_text
         self.ext_handlers = ExtHandlerList()
         self.vmagent_manifests = VMAgentManifestList()
         self.status_upload_blob = None
         self.status_upload_blob_type = None
         self.artifacts_profile_blob = None
 
-        if uri is None:
+        if xml_text is None:
             return
 
-        xml_text = protocol.fetch_config(uri, protocol.get_header())
-        xml_doc = parse_doc(xml_text)
+        xml_doc = parse_doc(self.xml_text)
 
         ga_families_list = find(xml_doc, "GAFamilies")
         ga_families = findall(ga_families_list, "GAFamily")
@@ -249,7 +297,7 @@ class ExtensionsConfig(object):
         logger.verbose("Extension config shows status blob type as [{0}]", self.status_upload_blob_type)
 
     @staticmethod
-    def _parse_plugin(self, plugin):
+    def _parse_plugin(plugin):
         ext_handler = ExtHandler()
         ext_handler.name = getattrib(plugin, "name")
         ext_handler.properties.version = getattrib(plugin, "version")
@@ -264,7 +312,7 @@ class ExtensionsConfig(object):
         return ext_handler
 
     @staticmethod
-    def _parse_plugin_settings(self, ext_handler, plugin_settings):
+    def _parse_plugin_settings(ext_handler, plugin_settings):
         if plugin_settings is None:
             return
 
@@ -329,11 +377,11 @@ class RemoteAccess(object):
     #     </Users>
     #   </RemoteAccess>
     #
-    def __init__(self, protocol, uri):
+    def __init__(self, xml_text):
+        self.xml_text = xml_text
         self.version = None
         self.incarnation = None
         self.user_list = RemoteAccessUsersList()
-        self.xml_text = protocol.fetch_config(uri, protocol.get_header_for_cert())
 
         if self.xml_text is None or len(self.xml_text) == 0:
             return
@@ -349,23 +397,10 @@ class RemoteAccess(object):
             self.user_list.users.append(remote_access_user)
 
     @staticmethod
-    def _parse_user(self, user):
+    def _parse_user(user):
         name = findtext(user, "Name")
         encrypted_password = findtext(user, "Password")
         expiration = findtext(user, "Expiration")
         remote_access_user = RemoteAccessUser(name, encrypted_password, expiration)
         return remote_access_user
-
-
-class UserAccount(object):
-    """
-    Stores information about single user account
-    """
-
-    def __init__(self):
-        self.Name = None
-        self.EncryptedPassword = None
-        self.Password = None
-        self.Expiration = None
-        self.Groups = []
 

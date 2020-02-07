@@ -715,25 +715,21 @@ class WireClient(object):
 
         for retry in range(1, max_retry + 1):
             try:
-                new_goal_state = GoalState(self)
-
-                def update_host_plugin():
-                    if self._host_plugin is not None:
-                        self._host_plugin.update_container_id(new_goal_state.container_id)
-                        self._host_plugin.update_role_config_name(new_goal_state.role_config_name)
-
                 if refresh_type == WireClient._UpdateType.HostPlugin:
-                    update_host_plugin()
+                    goal_state = GoalState.fetch_goal_state()
+                    self._update_host_plugin(goal_state.container_id, goal_state.role_config_name)
                     return
 
-                if self._goal_state is None or refresh_type == WireClient._UpdateType.GoalStateForced or \
-                        new_goal_state.incarnation != self._goal_state.incarnation:
+                if self._goal_state is None or refresh_type == WireClient._UpdateType.GoalStateForced:
+                    new_goal_state = GoalState.fetch_full_goal_state(self)
+                else:
+                    new_goal_state = GoalState.fetch_full_goal_state_if_incarnation_different_than(self, self._goal_state.incarnation)
 
-                    new_goal_state.fetch_full_goal_state(self)
+                if new_goal_state is not None:
                     self._goal_state = new_goal_state
                     self._save_goal_state()
+                    self._update_host_plugin(new_goal_state.container_id, new_goal_state.role_config_name)
 
-                    update_host_plugin()
                 return
 
             except IOError as e:
@@ -749,6 +745,11 @@ class WireClient(object):
                 logger.verbose("Exception processing goal state (attempt {0}/{1}) [{2}]", retry, max_retry, ustr(e))
 
         raise ProtocolError("Exceeded max retry updating goal state")
+
+    def _update_host_plugin(self, container_id, role_config_name):
+        if self._host_plugin is not None:
+            self._host_plugin.update_container_id(container_id)
+            self._host_plugin.update_role_config_name(role_config_name)
 
     def _save_goal_state(self):
         try:
@@ -815,7 +816,7 @@ class WireClient(object):
         if self._goal_state is None:
             raise ProtocolError("Trying to fetch Extension Manifest before initialization!")
 
-        local_file = MANIFEST_FILE_NAME.format(ext_handler.name, self.client.get_goal_state().incarnation)
+        local_file = MANIFEST_FILE_NAME.format(ext_handler.name, self.get_goal_state().incarnation)
         local_file = os.path.join(conf.get_lib_dir(), local_file)
 
         try:

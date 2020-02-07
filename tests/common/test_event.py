@@ -32,7 +32,8 @@ from azurelinuxagent.common.utils import fileutil
 from azurelinuxagent.common.utils.extensionprocessutil import read_output
 from azurelinuxagent.common.version import CURRENT_AGENT, CURRENT_VERSION
 from azurelinuxagent.ga.monitor import MonitorHandler
-from tests.tools import AgentTestCase, data_dir, load_data, Mock, patch
+from tests.protocol import mockwiredata, mock_wire_protocol
+from tests.tools import AgentTestCase, data_dir, Mock, patch
 
 
 class TestEvent(AgentTestCase):
@@ -59,29 +60,30 @@ class TestEvent(AgentTestCase):
                             '{{"value": "{0}", "name": "ContainerId"}}'.format(
                                 os.environ[event.CONTAINER_ID_ENV_VARIABLE]) in data)
 
-            # Container id is set as an environment variable when parsing the goal state
-            xml_text = load_data("wire/goal_state.xml")
-            goal_state = GoalState(xml_text)
+            mock_wire_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE)
 
-            container_id = goal_state.container_id
-            event.add_event(name='dummy_name')
-            data = fileutil.read_file(tmp_file)
-            self.assertTrue('{{"name": "ContainerId", "value": "{0}"}}'.format(container_id) in data or
-                            '{{"value": "{0}", "name": "ContainerId"}}'.format(container_id), data)
+            with mock_wire_protocol.create(mock_wire_data) as mock_protocol:
+                goal_state = GoalState(mock_protocol.client)
 
-            # Container id is updated as the goal state changes, both in telemetry event and in environment variables
-            new_container_id = "z6d5526c-5ac2-4200-b6e2-56f2b70c5ab2"
-            xml_text = load_data("wire/goal_state.xml")
-            xml_text_updated = xml_text.replace("c6d5526c-5ac2-4200-b6e2-56f2b70c5ab2", new_container_id)
-            goal_state = GoalState(xml_text_updated)
+                # Container id is set as an environment variable when parsing the goal state
+                container_id = goal_state.container_id
+                event.add_event(name='dummy_name')
+                data = fileutil.read_file(tmp_file)
+                self.assertTrue('{{"name": "ContainerId", "value": "{0}"}}'.format(container_id) in data or
+                                '{{"value": "{0}", "name": "ContainerId"}}'.format(container_id), data)
 
-            event.add_event(name='dummy_name')
-            data = fileutil.read_file(tmp_file)
+                # Container id is updated as the goal state changes, both in telemetry event and in environment variables
+                new_container_id = "z6d5526c-5ac2-4200-b6e2-56f2b70c5ab2"
+                mock_wire_data.set_container_id(new_container_id)
+                goal_state = GoalState(mock_protocol.client)
 
-            # Assert both the environment variable and telemetry event got updated
-            self.assertEquals(os.environ[event.CONTAINER_ID_ENV_VARIABLE], new_container_id)
-            self.assertTrue('{{"name": "ContainerId", "value": "{0}"}}'.format(new_container_id) in data or
-                            '{{"value": "{0}", "name": "ContainerId"}}'.format(new_container_id), data)
+                event.add_event(name='dummy_name')
+                data = fileutil.read_file(tmp_file)
+
+                # Assert both the environment variable and telemetry event got updated
+                self.assertEquals(os.environ[event.CONTAINER_ID_ENV_VARIABLE], new_container_id)
+                self.assertTrue('{{"name": "ContainerId", "value": "{0}"}}'.format(new_container_id) in data or
+                                '{{"value": "{0}", "name": "ContainerId"}}'.format(new_container_id), data)
 
         os.environ.pop(event.CONTAINER_ID_ENV_VARIABLE)
 

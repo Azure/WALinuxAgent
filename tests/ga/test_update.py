@@ -12,6 +12,7 @@ from azurelinuxagent.ga.env import EnvHandler
 
 from azurelinuxagent.common.protocol.util import ProtocolUtil
 
+from azurelinuxagent.common.goal_state import ExtensionsConfig
 from azurelinuxagent.common.protocol.hostplugin import *
 from azurelinuxagent.common.protocol.metadata import *
 from azurelinuxagent.common.protocol.util import ProtocolUtil
