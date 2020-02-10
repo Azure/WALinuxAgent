@@ -15,10 +15,10 @@
          <InstanceId>MachineRole_IN_0</InstanceId>
          <State>Started</State>
          <Configuration>
-         <HostingEnvironmentConfig>http://hostingenvuri/</HostingEnvironmentConfig>
-         <SharedConfig>http://sharedconfiguri/</SharedConfig>
-         <Certificates>http://certificatesuri/</Certificates>
-         <FullConfig>http://fullconfiguri/</FullConfig>
+         <HostingEnvironmentConfig>http://168.63.129.16:80/hostingenvuri/</HostingEnvironmentConfig>
+         <SharedConfig>http://168.63.129.16:80/sharedconfiguri/</SharedConfig>
+         <Certificates>http://168.63.129.16:80/certificatesuri/</Certificates>
+         <FullConfig>http://168.63.129.16:80/fullconfiguri/</FullConfig>
          </Configuration>
        </RoleInstance>
      </RoleInstanceList>

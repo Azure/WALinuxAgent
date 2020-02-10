@@ -17,25 +17,67 @@
 
 import contextlib
 from azurelinuxagent.common.protocol.wire import WireProtocol
-from azurelinuxagent.common.utils.restutil import KNOWN_WIRESERVER_IP
+from azurelinuxagent.common.utils.restutil import KNOWN_WIRESERVER_IP, http_get
 from tests.tools import patch
-
+from tests.protocol.mockwiredata import WireProtocolData
 
 @contextlib.contextmanager
-def create(mock_wire_data):
+def create(mock_wire_data_file):
+    """
+    Creates a mock WireProtocol object that will return the data specified by 'mock_wire_data_file' (which must
+    follow the structure of the data files defined in tests/protocol/mockwiredata.py).
 
-    mock_http_get = patch("azurelinuxagent.common.utils.restutil.http_get", side_effect=mock_wire_data.mock_http_get)
-    mock_crypt_util = patch("azurelinuxagent.common.protocol.wire.CryptUtil", side_effect=mock_wire_data.mock_crypt_util)
+    NOTE: This function creates mocks for azurelinuxagent.common.utils.restutil.http_get and
+          azurelinuxagent.common.protocol.wire.CryptUtil. These mocks can be stopped using the
+          methods stop_mock_http_get() and stop_mock_crypt_util().
 
-    mock_http_get.start()
-    mock_crypt_util.start()
+    The return value is an instance of WireProtocol augmented with these properties/methods:
+
+        * mock_wire_data - the WireProtocolData constructed from the mock_wire_data_file parameter.
+        * stop_mock_http_get() - stops the mock for restutil.http_get
+        * stop_mock_crypt_util() - stops the mock for CrypUtil
+    """
+    def stop_mock_http_get():
+        if stop_mock_http_get.mock is not None:
+            stop_mock_http_get.mock.stop()
+            stop_mock_http_get.mock = None
+    stop_mock_http_get.mock = None
+
+    def stop_mock_crypt_util():
+        if stop_mock_crypt_util.mock is not None:
+            stop_mock_crypt_util.mock.stop()
+            stop_mock_crypt_util.mock = None
+    stop_mock_crypt_util.mock = None
 
     protocol = WireProtocol(KNOWN_WIRESERVER_IP)
-    protocol.mock_data = mock_wire_data
-    protocol.detect()
+    protocol.mock_wire_data = WireProtocolData(mock_wire_data_file)
+    protocol.stop_mock_http_get = stop_mock_http_get
+    protocol.stop_mock_crypt_util = stop_mock_crypt_util
 
     try:
+        # To minimize the impact of mocking restutil.http_get we only use the mock data for requests
+        # to the wireserver or requests starting with "mock-goal-state"
+        original_http_get = http_get
+
+        wire_server_endpoint = 'http://{0}'.format(KNOWN_WIRESERVER_IP)
+
+        def mock_http_get(url, *args, **kwargs):
+            if not (url.startswith(wire_server_endpoint) or url.startswith('http://mock-goal-state/') or url.startswith('https://mock-goal-state/')):
+                return original_http_get(url, *args, **kwargs)
+            return protocol.mock_wire_data.mock_http_get(url, *args, **kwargs)
+
+        p = patch("azurelinuxagent.common.utils.restutil.http_get", side_effect=mock_http_get)
+        p.start()
+        stop_mock_http_get.mock = p
+
+        p = patch("azurelinuxagent.common.protocol.wire.CryptUtil", side_effect=protocol.mock_wire_data.mock_crypt_util)
+        p.start()
+        stop_mock_crypt_util.mock = p
+
+        protocol.detect()
+
         yield protocol
+
     finally:
-        mock_crypt_util.stop()
-        mock_http_get.stop()
+        protocol.stop_mock_crypt_util()
+        protocol.stop_mock_http_get()

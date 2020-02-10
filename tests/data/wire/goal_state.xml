@@ -15,11 +15,11 @@
          <InstanceId>MachineRole_IN_0</InstanceId>
          <State>Started</State>
          <Configuration>
-         <HostingEnvironmentConfig>http://hostingenvuri/</HostingEnvironmentConfig>
-         <SharedConfig>http://sharedconfiguri/</SharedConfig>
-         <Certificates>http://certificatesuri/</Certificates>
-         <ExtensionsConfig>http://extensionsconfiguri/</ExtensionsConfig>
-         <FullConfig>http://fullconfiguri/</FullConfig>
+         <HostingEnvironmentConfig>http://168.63.129.16:80/hostingenvuri/</HostingEnvironmentConfig>
+         <SharedConfig>http://168.63.129.16:80/sharedconfiguri/</SharedConfig>
+         <Certificates>http://168.63.129.16:80/certificatesuri/</Certificates>
+         <ExtensionsConfig>http://168.63.129.16:80/extensionsconfiguri/</ExtensionsConfig>
+         <FullConfig>http://168.63.129.16:80/fullconfiguri/</FullConfig>
          <ConfigName>DummyRoleConfigName.xml</ConfigName>
          </Configuration>
        </RoleInstance>

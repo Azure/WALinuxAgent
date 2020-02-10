@@ -16,7 +16,7 @@
 #
 import xml
 
-from azurelinuxagent.common.goal_state import GoalState, RemoteAccess
+from azurelinuxagent.common.protocol.goal_state import GoalState, RemoteAccess
 from tests.tools import AgentTestCase, load_data, patch, Mock
 from tests.protocol import mockwiredata, mock_wire_protocol
 
@@ -33,10 +33,8 @@ class TestRemoteAccess(AgentTestCase):
         self.assertEquals("2019-01-01", remote_access.user_list.users[0].expiration, "Expiration does not match.")
 
     def test_goal_state_with_no_remote_access(self):
-        mock_wire_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE)
-        with mock_wire_protocol.create(mock_wire_data) as protocol:
-            goal_state = GoalState.fetch_full_goal_state(protocol.client)
-            self.assertIsNone(goal_state.remote_access)
+        with mock_wire_protocol.create(mockwiredata.DATA_FILE) as protocol:
+            self.assertIsNone(protocol.client.get_remote_access())
 
     def test_parse_two_remote_access_accounts(self):
         data_str = load_data('wire/remote_access_two_accounts.xml')
@@ -76,10 +74,8 @@ class TestRemoteAccess(AgentTestCase):
         self.assertEquals(0, len(remote_access.user_list.users), "User count does not match.")
 
     def test_update_remote_access_conf_remote_access(self):
-        mock_wire_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE_REMOTE_ACCESS)
-        with mock_wire_protocol.create(mock_wire_data) as protocol:
-            goal_state = GoalState.fetch_full_goal_state(protocol.client)
-            self.assertIsNotNone(goal_state.remote_access)
+        with mock_wire_protocol.create(mockwiredata.DATA_FILE_REMOTE_ACCESS) as protocol:
+            self.assertIsNotNone(protocol.client.get_remote_access())
             self.assertEquals(1, len(protocol.client.get_remote_access().user_list.users))
             self.assertEquals('testAccount', protocol.client.get_remote_access().user_list.users[0].name)
             self.assertEquals('encryptedPasswordString', protocol.client.get_remote_access().user_list.users[0].encrypted_password)

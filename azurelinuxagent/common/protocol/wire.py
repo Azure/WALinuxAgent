@@ -32,7 +32,7 @@ from azurelinuxagent.common.event import add_periodic, WALAEventOperation
 from azurelinuxagent.common.exception import ProtocolNotFoundError, \
     ResourceGoneError, ExtensionDownloadError, InvalidContainerError, ProtocolError, HttpError
 from azurelinuxagent.common.future import httpclient, bytebuffer
-from azurelinuxagent.common.goal_state import GoalState, TRANSPORT_CERT_FILE_NAME, TRANSPORT_PRV_FILE_NAME
+from azurelinuxagent.common.protocol.goal_state import GoalState, TRANSPORT_CERT_FILE_NAME, TRANSPORT_PRV_FILE_NAME
 from azurelinuxagent.common.protocol.hostplugin import HostPluginProtocol
 from azurelinuxagent.common.protocol.restapi import *
 from azurelinuxagent.common.telemetryevent import TelemetryEventList
@@ -53,7 +53,6 @@ INCARNATION_FILE_NAME = "Incarnation"
 GOAL_STATE_FILE_NAME = "GoalState.{0}.xml"
 HOSTING_ENV_FILE_NAME = "HostingEnvironmentConfig.xml"
 SHARED_CONF_FILE_NAME = "SharedConfig.xml"
-CERTS_FILE_NAME = "Certificates.xml"
 REMOTE_ACCESS_FILE_NAME = "RemoteAccess.{0}.xml"
 EXT_CONF_FILE_NAME = "ExtensionsConfig.{0}.xml"
 MANIFEST_FILE_NAME = "{0}.{1}.manifest.xml"
@@ -716,7 +715,7 @@ class WireClient(object):
         for retry in range(1, max_retry + 1):
             try:
                 if refresh_type == WireClient._UpdateType.HostPlugin:
-                    goal_state = GoalState.fetch_goal_state()
+                    goal_state = GoalState.fetch_goal_state(self)
                     self._update_host_plugin(goal_state.container_id, goal_state.role_config_name)
                     return
 
@@ -762,26 +761,23 @@ class WireClient(object):
             local_file = os.path.join(conf.get_lib_dir(), INCARNATION_FILE_NAME)
             self.save_cache(local_file, self._goal_state.incarnation)
 
-            local_file = os.path.join(conf.get_lib_dir(), GOAL_STATE_FILE_NAME.format(self._goal_state.incarnation))
-            self.save_cache(local_file, self._goal_state.xml_text)
+            def save_if_not_none(goal_state_property, file_name):
+                file_path = os.path.join(conf.get_lib_dir(), file_name)
 
-            local_file = os.path.join(conf.get_lib_dir(), HOSTING_ENV_FILE_NAME)
-            self.save_cache(local_file, self._goal_state.hosting_env.xml_text)
+                if goal_state_property is not None and goal_state_property.xml_text is not None:
+                    self.save_cache(file_path, goal_state_property.xml_text)
+                else:  # remove the file from the previous goal state if it exists
+                    if os.path.exists(file_path):
+                        os.remove(file_path)
 
-            local_file = os.path.join(conf.get_lib_dir(), SHARED_CONF_FILE_NAME)
-            self.save_cache(local_file, self._goal_state.shared_conf.xml_text)
-
-            local_file = os.path.join(conf.get_lib_dir(), CERTS_FILE_NAME)
-            self.save_cache(local_file, self._goal_state.certs.xml_text)
-
-            local_file = os.path.join(conf.get_lib_dir(), EXT_CONF_FILE_NAME.format(self._goal_state.incarnation))
-            self.save_cache(local_file, self._goal_state.ext_conf.xml_text)
-
-            local_file = os.path.join(conf.get_lib_dir(), REMOTE_ACCESS_FILE_NAME.format(self._goal_state.incarnation))
-            self.save_cache(local_file, self._goal_state.remote_access.xml_text)
+            save_if_not_none(self._goal_state, GOAL_STATE_FILE_NAME.format(self._goal_state.incarnation))
+            save_if_not_none(self._goal_state.hosting_env, HOSTING_ENV_FILE_NAME)
+            save_if_not_none(self._goal_state.shared_conf, SHARED_CONF_FILE_NAME)
+            save_if_not_none(self._goal_state.ext_conf, EXT_CONF_FILE_NAME.format(self._goal_state.incarnation))
+            save_if_not_none(self._goal_state.remote_access, REMOTE_ACCESS_FILE_NAME.format(self._goal_state.incarnation))
 
         except Exception as e:
-            logger.warn("Failed to save the new goal state to disk: {0}", ustr(e))
+            logger.warn("Failed to save the goal state to disk: {0}", ustr(e))
 
     def _set_host_plugin(self, new_host_plugin):
         if new_host_plugin is None:

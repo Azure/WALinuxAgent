@@ -60,10 +60,8 @@ class TestEvent(AgentTestCase):
                             '{{"value": "{0}", "name": "ContainerId"}}'.format(
                                 os.environ[event.CONTAINER_ID_ENV_VARIABLE]) in data)
 
-            mock_wire_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE)
-
-            with mock_wire_protocol.create(mock_wire_data) as mock_protocol:
-                goal_state = GoalState(mock_protocol.client)
+            with mock_wire_protocol.create(mockwiredata.DATA_FILE) as protocol:
+                goal_state = protocol.client._goal_state
 
                 # Container id is set as an environment variable when parsing the goal state
                 container_id = goal_state.container_id
@@ -74,8 +72,8 @@ class TestEvent(AgentTestCase):
 
                 # Container id is updated as the goal state changes, both in telemetry event and in environment variables
                 new_container_id = "z6d5526c-5ac2-4200-b6e2-56f2b70c5ab2"
-                mock_wire_data.set_container_id(new_container_id)
-                goal_state = GoalState(mock_protocol.client)
+                protocol.mock_wire_data.set_container_id(new_container_id)
+                protocol.client.update_goal_state()
 
                 event.add_event(name='dummy_name')
                 data = fileutil.read_file(tmp_file)

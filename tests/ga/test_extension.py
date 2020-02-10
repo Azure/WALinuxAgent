@@ -33,6 +33,7 @@ from azurelinuxagent.common.exception import ResourceGoneError
 from azurelinuxagent.common.protocol.restapi import Extension, ExtHandlerProperties
 from azurelinuxagent.ga.exthandlers import *
 from azurelinuxagent.common.protocol.wire import WireProtocol, InVMArtifactsProfile
+from azurelinuxagent.common.utils.restutil import KNOWN_WIRESERVER_IP
 
 # Mocking the original sleep to reduce test execution time
 SLEEP = time.sleep
@@ -348,7 +349,7 @@ class TestExtension(ExtensionTestCase):
         mock_http_get.side_effect = test_data.mock_http_get
         MockCryptUtil.side_effect = test_data.mock_crypt_util
 
-        protocol = WireProtocol("foo.bar")
+        protocol = WireProtocol(KNOWN_WIRESERVER_IP)
         protocol.detect()
         protocol.report_ext_status = MagicMock()
         protocol.report_vm_status = MagicMock()
@@ -1259,7 +1260,7 @@ class TestExtension(ExtensionTestCase):
 
         _, protocol = self._create_mock(mockwiredata.WireProtocolData(mockwiredata.DATA_FILE), *args)
         version_uri = Mock()
-        version_uri.uri = 'http://some/Microsoft.OSTCExtensions_ExampleHandlerLinux_asiaeast_manifest.xml'
+        version_uri.uri = 'http://mock-goal-state/Microsoft.OSTCExtensions_ExampleHandlerLinux_asiaeast_manifest.xml'
 
         for (installed_version, config_version, expected_version) in cases:
             ext_handler = Mock()
@@ -1988,7 +1989,7 @@ class TestExtensionSequencing(AgentTestCase):
         mock_http_get.side_effect = test_data.mock_http_get
         MockCryptUtil.side_effect = test_data.mock_crypt_util
 
-        protocol = WireProtocol("foo.bar")
+        protocol = WireProtocol(KNOWN_WIRESERVER_IP)
         protocol.detect()
         protocol.report_ext_status = MagicMock()
         protocol.report_vm_status = MagicMock()
@@ -2223,7 +2224,7 @@ class TestExtensionWithCGroupsEnabled(AgentTestCase):
         mock_http_get.side_effect = test_data.mock_http_get
         mock_crypt_util.side_effect = test_data.mock_crypt_util
 
-        protocol = WireProtocol("foo.bar")
+        protocol = WireProtocol(KNOWN_WIRESERVER_IP)
         protocol.detect()
         protocol.report_ext_status = MagicMock()
         protocol.report_vm_status = MagicMock()

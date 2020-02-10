@@ -30,6 +30,7 @@ from azurelinuxagent.common.utils.textutil import parse_doc, findall, find, find
 from azurelinuxagent.common.protocol.restapi import *
 
 GOAL_STATE_URI = "http://{0}/machine/?comp=goalstate"
+CERTS_FILE_NAME = "Certificates.xml"
 P7M_FILE_NAME = "Certificates.p7m"
 PEM_FILE_NAME = "Certificates.pem"
 TRANSPORT_CERT_FILE_NAME = "TransportCert.pem"
@@ -151,6 +152,10 @@ class SharedConfig(object):
 class Certificates(object):
     def __init__(self, xml_text):
         self.cert_list = CertList()
+
+        # Save the certificates
+        local_file = os.path.join(conf.get_lib_dir(), CERTS_FILE_NAME)
+        fileutil.write_file(local_file, xml_text)
 
         # Separate the certificates into individual files.
         xml_doc = parse_doc(xml_text)
