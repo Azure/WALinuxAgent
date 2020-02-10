@@ -26,15 +26,15 @@ import shutil
 import stat
 import sys
 import tempfile
+import time
 import unittest
 from functools import wraps
+from threading import currentThread
 
-import time
-
-from azurelinuxagent.common.cgroupconfigurator import CGroupConfigurator
-import azurelinuxagent.common.event as event
 import azurelinuxagent.common.conf as conf
+import azurelinuxagent.common.event as event
 import azurelinuxagent.common.logger as logger
+from azurelinuxagent.common.cgroupconfigurator import CGroupConfigurator
 from azurelinuxagent.common.osutil.factory import _get_osutil
 from azurelinuxagent.common.osutil.ubuntu import Ubuntu14OSUtil, Ubuntu16OSUtil
 from azurelinuxagent.common.utils import fileutil
@@ -544,3 +544,9 @@ def distros(distro_name=".*", distro_version=".*", distro_full_name=".*"):
     return decorator
 
 
+def clear_singleton_instances(cls):
+    # Adding this lock to avoid any race conditions
+    with cls._lock:
+        obj_name = "%s__%s" % (cls.__name__, currentThread().getName())  # Object Name = className__threadName
+        if obj_name in cls._instances:
+            del cls._instances[obj_name]

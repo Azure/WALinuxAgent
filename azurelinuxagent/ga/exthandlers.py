@@ -43,7 +43,6 @@ from azurelinuxagent.common.event import add_event, WALAEventOperation, elapsed_
 from azurelinuxagent.common.exception import ExtensionError, ProtocolError, ProtocolNotFoundError, \
     ExtensionDownloadError, ExtensionErrorCodes, ExtensionUpdateError, ExtensionOperationError
 from azurelinuxagent.common.future import ustr
-from azurelinuxagent.common.protocol import get_protocol_util
 from azurelinuxagent.common.protocol.restapi import ExtHandlerStatus, \
     ExtensionStatus, \
     ExtensionSubStatus, \
@@ -203,17 +202,16 @@ class ExtHandlerState(object):
     NotInstalled = "NotInstalled"
     Installed = "Installed"
     Enabled = "Enabled"
-    Failed = "Failed"
+    FailedUpgrade = "FailedUpgrade"
 
 
-def get_exthandlers_handler():
-    return ExtHandlersHandler()
+def get_exthandlers_handler(protocol):
+    return ExtHandlersHandler(protocol)
 
 
 class ExtHandlersHandler(object):
-    def __init__(self):
-        self.protocol_util = get_protocol_util()
-        self.protocol = None
+    def __init__(self, protocol):
+        self.protocol = protocol
         self.ext_handlers = None
         self.last_etag = None
         self.log_report = False
@@ -226,7 +224,6 @@ class ExtHandlersHandler(object):
     def run(self):
         self.ext_handlers, etag = None, None
         try:
-            self.protocol = self.protocol_util.get_protocol()
             self.ext_handlers, etag = self.protocol.get_ext_handlers()
             self.get_artifact_error_state.reset()
         except Exception as e:
@@ -243,14 +240,8 @@ class ExtHandlersHandler(object):
                           message="Failed to get extension artifact for over "
                                   "{0}: {1}".format(self.get_artifact_error_state.min_timedelta, msg))
                 self.get_artifact_error_state.reset()
-            else:
-                logger.warn(msg)
 
-            add_event(AGENT_NAME,
-                      version=CURRENT_VERSION,
-                      op=WALAEventOperation.ExtensionProcessing,
-                      is_success=False,
-                      message=detailed_msg)
+            add_event(AGENT_NAME, version=CURRENT_VERSION, op=WALAEventOperation.ExtensionProcessing, is_success=False, message=detailed_msg)
             return
 
         try:
@@ -259,12 +250,12 @@ class ExtHandlersHandler(object):
             # Log status report success on new config
             self.log_report = True
 
-            if self.extension_processing_allowed():
+            if self._extension_processing_allowed():
                 self.handle_ext_handlers(etag)
                 self.last_etag = etag
 
             self.report_ext_handlers_status()
-            self.cleanup_outdated_handlers()
+            self._cleanup_outdated_handlers()
         except Exception as e:
             msg = u"Exception processing extension handlers: {0}".format(ustr(e))
             detailed_msg = '{0} {1}'.format(msg, traceback.extract_tb(get_traceback(e)))
@@ -276,7 +267,7 @@ class ExtHandlersHandler(object):
                       message=detailed_msg)
             return
 
-    def cleanup_outdated_handlers(self):
+    def _cleanup_outdated_handlers(self):
         handlers = []
         pkgs = []
 
@@ -334,7 +325,7 @@ class ExtHandlersHandler(object):
                 except OSError as e:
                     logger.warn("Failed to remove extension package {0}: {1}".format(pkg, e.strerror))
 
-    def extension_processing_allowed(self):
+    def _extension_processing_allowed(self):
         if not conf.get_extensions_enabled():
             logger.verbose("Extension handling is disabled")
             return False
@@ -484,7 +475,9 @@ class ExtHandlersHandler(object):
         handler_state = ext_handler_i.get_handler_state()
         ext_handler_i.logger.info("[Enable] current handler state is: {0}",
                                   handler_state.lower())
-        if handler_state == ExtHandlerState.NotInstalled:
+        # We go through the entire process of downloading and initializing the extension if it's either a fresh
+        # extension or if it's a retry of a previously failed upgrade.
+        if handler_state == ExtHandlerState.NotInstalled or handler_state == ExtHandlerState.FailedUpgrade:
             ext_handler_i.set_handler_state(ExtHandlerState.NotInstalled)
             ext_handler_i.download()
             ext_handler_i.initialize()
@@ -764,17 +757,17 @@ class ExtHandlerInstance(object):
         return FlexibleVersion(self_version) != FlexibleVersion(other_version)
 
     def get_installed_ext_handler(self):
-        lastest_version = self.get_installed_version()
-        if lastest_version is None:
+        latest_version = self.get_installed_version()
+        if latest_version is None:
             return None
 
         installed_handler = ExtHandler()
         set_properties("ExtHandler", installed_handler, get_properties(self.ext_handler))
-        installed_handler.properties.version = lastest_version
+        installed_handler.properties.version = latest_version
         return ExtHandlerInstance(installed_handler, self.protocol)
 
     def get_installed_version(self):
-        lastest_version = None
+        latest_version = None
 
         for path in glob.iglob(os.path.join(conf.get_lib_dir(), self.ext_handler.name + "-*")):
             if not os.path.isdir(path):
@@ -784,17 +777,16 @@ class ExtHandlerInstance(object):
             version_from_path = FlexibleVersion(path[separator + 1:])
             state_path = os.path.join(path, 'config', 'HandlerState')
 
-            if not os.path.exists(state_path) or \
-                    fileutil.read_file(state_path) == \
-                    ExtHandlerState.NotInstalled:
-                logger.verbose("Ignoring version of uninstalled extension: "
+            if not os.path.exists(state_path) or fileutil.read_file(state_path) == ExtHandlerState.NotInstalled \
+                    or fileutil.read_file(state_path) == ExtHandlerState.FailedUpgrade:
+                logger.verbose("Ignoring version of uninstalled or failed extension: "
                                "{0}".format(path))
                 continue
 
-            if lastest_version is None or lastest_version < version_from_path:
-                lastest_version = version_from_path
+            if latest_version is None or latest_version < version_from_path:
+                latest_version = version_from_path
 
-        return str(lastest_version) if lastest_version is not None else None
+        return str(latest_version) if latest_version is not None else None
 
     def copy_status_files(self, old_ext_handler_i):
         self.logger.info("Copy status files from old plugin to new")
@@ -1033,8 +1025,8 @@ class ExtHandlerInstance(object):
                                 extension_error_code=ExtensionErrorCodes.PluginUpdateProcessingFailed,
                                 env=env)
         except ExtensionError:
-            # prevent the handler update from being retried
-            self.set_handler_state(ExtHandlerState.Failed)
+            # Mark the handler as Failed so we don't clean it up and can keep reporting its status
+            self.set_handler_state(ExtHandlerState.FailedUpgrade)
             raise
 
     def update_with_install(self, uninstall_exit_code=None):

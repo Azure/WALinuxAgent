@@ -84,10 +84,10 @@ class TestRemoteAccess(AgentTestCase):
         protocol = WireProtocol('12.34.56.78')
         goal_state = protocol.client.get_goal_state()
         protocol.client.update_remote_access_conf(goal_state)
-        self.assertNotEquals(None, protocol.client.remote_access)
-        self.assertEquals(1, len(protocol.client.remote_access.user_list.users))
-        self.assertEquals('testAccount', protocol.client.remote_access.user_list.users[0].name)
-        self.assertEquals('encryptedPasswordString', protocol.client.remote_access.user_list.users[0].encrypted_password)
+        self.assertNotEquals(None, protocol.client.get_remote_access())
+        self.assertEquals(1, len(protocol.client.get_remote_access().user_list.users))
+        self.assertEquals('testAccount', protocol.client.get_remote_access().user_list.users[0].name)
+        self.assertEquals('encryptedPasswordString', protocol.client.get_remote_access().user_list.users[0].encrypted_password)
 
     def test_parse_bad_remote_access_data(self):
         data = "foobar"

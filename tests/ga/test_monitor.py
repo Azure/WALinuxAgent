@@ -26,17 +26,19 @@ import tempfile
 import time
 from datetime import timedelta
 
+from azurelinuxagent.common.protocol.util import ProtocolUtil, get_protocol_util
 from nose.plugins.attrib import attr
 
 import azurelinuxagent.common.conf as conf
 from azurelinuxagent.common import event, logger
-from azurelinuxagent.common.cgroup import CGroup, CpuCgroup
+from azurelinuxagent.common.cgroup import CGroup, CpuCgroup, MemoryCgroup
 from azurelinuxagent.common.cgroupconfigurator import CGroupConfigurator
 from azurelinuxagent.common.cgroupstelemetry import CGroupsTelemetry, MetricValue
 from azurelinuxagent.common.datacontract import get_properties
 from azurelinuxagent.common.event import CONTAINER_ID_ENV_VARIABLE, EventLogger, WALAEventOperation
 from azurelinuxagent.common.exception import HttpError
 from azurelinuxagent.common.future import ustr
+from azurelinuxagent.common.logger import Logger
 from azurelinuxagent.common.osutil.default import BASE_CGROUPS, DefaultOSUtil
 from azurelinuxagent.common.protocol.imds import ComputeInfo
 from azurelinuxagent.common.protocol.restapi import VMInfo
@@ -51,7 +53,7 @@ from azurelinuxagent.ga.monitor import generate_extension_metrics_telemetry_dict
 from tests.common.test_cgroupstelemetry import make_new_cgroup
 from tests.protocol.mockwiredata import DATA_FILE, WireProtocolData
 from tests.tools import Mock, MagicMock, patch, load_data, AgentTestCase, data_dir, are_cgroups_enabled, \
-    i_am_root, skip_if_predicate_false, is_trusty_in_travis, skip_if_predicate_true
+    i_am_root, skip_if_predicate_false, is_trusty_in_travis, skip_if_predicate_true, clear_singleton_instances
 
 
 class ResponseMock(Mock):
@@ -112,6 +114,16 @@ def get_event_message(duration, evt_type, is_internal, is_success, message, name
 @patch("azurelinuxagent.common.protocol.healthservice.HealthService._report")
 @patch("azurelinuxagent.common.utils.restutil.http_get")
 class TestMonitor(AgentTestCase):
+    def setUp(self):
+        AgentTestCase.setUp(self)
+        prefix = "UnitTest"
+        logger.DEFAULT_LOGGER = Logger(prefix=prefix)
+        # Since ProtocolUtil is a singleton per thread, we need to clear it to ensure that the test cases do not
+        # reuse a previous state
+        clear_singleton_instances(ProtocolUtil)
+
+    def tearDown(self):
+        AgentTestCase.tearDown(self)
 
     def test_parse_xml_event(self, *args):
         data_str = load_data('ext/event_from_extension.xml')
@@ -306,6 +318,38 @@ class TestMonitor(AgentTestCase):
         self.assertEqual(12, counter)
         os.environ.pop(CONTAINER_ID_ENV_VARIABLE)
 
+    def test_main_loop_should_handle_exceptions_retrieving_goal_state(self, *_):
+        monitor_handler = get_monitor_handler()
+
+        with patch("azurelinuxagent.common.logger.warn") as mock_warn:
+            with patch.object(monitor_handler, 'protocol') as mock_protocol:
+                mock_protocol.update_host_plugin_from_goal_state = Mock(side_effect=Exception("A TEST EXCEPTION"))
+
+                with patch("azurelinuxagent.ga.monitor.time") as mock_time:
+                    # time.sleep is called at the end of each iteration of the main loop; we use it to stop the
+                    # loop after a few iterations (this ensures that the test doesn't run for ever and is also
+                    # a check that the loop does not stop after the first error)
+                    def mock_sleep(_):
+                        mock_sleep.iterations += 1
+                        if mock_sleep.iterations >= 3:
+                            monitor_handler.stop()
+                    mock_sleep.iterations = 0
+
+                    mock_time.sleep = Mock(side_effect=mock_sleep)
+
+                    # run the main loop
+                    monitor_handler.daemon(init_data=False)
+
+                    self.assertEqual(mock_sleep.iterations, 3)
+
+                    self.assertEquals(mock_warn.call_count, 3)
+
+                    for call_args in mock_warn.call_args_list:
+                        args, kwargs = call_args
+                        self.assertEquals(len(args), 2)
+                        self.assertIn("A TEST EXCEPTION", args[1])
+
+
     @patch("azurelinuxagent.ga.monitor.MonitorHandler.send_telemetry_heartbeat")
     @patch("azurelinuxagent.ga.monitor.MonitorHandler.collect_and_send_events")
     @patch("azurelinuxagent.ga.monitor.MonitorHandler.send_host_plugin_heartbeat")
@@ -334,18 +378,19 @@ class TestMonitor(AgentTestCase):
         self.assertEqual(0, patch_send_telemetry_metrics.call_count)
         self.assertEqual(0, patch_poll_telemetry_metrics.call_count)
 
-        monitor_handler.start()
-        time.sleep(1)
-        self.assertTrue(monitor_handler.is_alive())
+        with patch.object(monitor_handler, 'protocol'):
+            monitor_handler.start()
+            time.sleep(1)
+            self.assertTrue(monitor_handler.is_alive())
 
-        self.assertNotEqual(0, patch_hostplugin_heartbeat.call_count)
-        self.assertNotEqual(0, patch_send_events.call_count)
-        self.assertNotEqual(0, patch_telemetry_heartbeat.call_count)
-        self.assertNotEqual(0, patch_imds_heartbeat.call_count)
-        self.assertNotEqual(0, patch_send_telemetry_metrics.call_count)
-        self.assertNotEqual(0, patch_poll_telemetry_metrics.call_count)
+            self.assertNotEqual(0, patch_hostplugin_heartbeat.call_count)
+            self.assertNotEqual(0, patch_send_events.call_count)
+            self.assertNotEqual(0, patch_telemetry_heartbeat.call_count)
+            self.assertNotEqual(0, patch_imds_heartbeat.call_count)
+            self.assertNotEqual(0, patch_send_telemetry_metrics.call_count)
+            self.assertNotEqual(0, patch_poll_telemetry_metrics.call_count)
 
-        monitor_handler.stop()
+            monitor_handler.stop()
 
     @patch("azurelinuxagent.ga.monitor.MonitorHandler.send_telemetry_metrics")
     @patch("azurelinuxagent.ga.monitor.MonitorHandler.poll_telemetry_metrics")
@@ -362,28 +407,29 @@ class TestMonitor(AgentTestCase):
         self.assertEqual(None, monitor_handler.last_telemetry_heartbeat)
         self.assertEqual(None, monitor_handler.last_imds_heartbeat)
 
-        monitor_handler.start()
-        time.sleep(0.2)
-        self.assertTrue(monitor_handler.is_alive())
+        with patch.object(monitor_handler, 'protocol'):
+            monitor_handler.start()
+            time.sleep(0.2)
+            self.assertTrue(monitor_handler.is_alive())
 
-        self.assertNotEqual(None, monitor_handler.last_host_plugin_heartbeat)
-        self.assertNotEqual(None, monitor_handler.last_event_collection)
-        self.assertNotEqual(None, monitor_handler.last_telemetry_heartbeat)
-        self.assertNotEqual(None, monitor_handler.last_imds_heartbeat)
+            self.assertNotEqual(None, monitor_handler.last_host_plugin_heartbeat)
+            self.assertNotEqual(None, monitor_handler.last_event_collection)
+            self.assertNotEqual(None, monitor_handler.last_telemetry_heartbeat)
+            self.assertNotEqual(None, monitor_handler.last_imds_heartbeat)
 
-        heartbeat_hostplugin = monitor_handler.last_host_plugin_heartbeat
-        heartbeat_imds = monitor_handler.last_imds_heartbeat
-        heartbeat_telemetry = monitor_handler.last_telemetry_heartbeat
-        events_collection = monitor_handler.last_event_collection
+            heartbeat_hostplugin = monitor_handler.last_host_plugin_heartbeat
+            heartbeat_imds = monitor_handler.last_imds_heartbeat
+            heartbeat_telemetry = monitor_handler.last_telemetry_heartbeat
+            events_collection = monitor_handler.last_event_collection
 
-        time.sleep(0.5)
+            time.sleep(0.5)
 
-        self.assertNotEqual(heartbeat_imds, monitor_handler.last_imds_heartbeat)
-        self.assertNotEqual(heartbeat_hostplugin, monitor_handler.last_host_plugin_heartbeat)
-        self.assertNotEqual(events_collection, monitor_handler.last_event_collection)
-        self.assertNotEqual(heartbeat_telemetry, monitor_handler.last_telemetry_heartbeat)
+            self.assertNotEqual(heartbeat_imds, monitor_handler.last_imds_heartbeat)
+            self.assertNotEqual(heartbeat_hostplugin, monitor_handler.last_host_plugin_heartbeat)
+            self.assertNotEqual(events_collection, monitor_handler.last_event_collection)
+            self.assertNotEqual(heartbeat_telemetry, monitor_handler.last_telemetry_heartbeat)
 
-        monitor_handler.stop()
+            monitor_handler.stop()
 
     @patch("azurelinuxagent.ga.monitor.MonitorHandler.send_telemetry_metrics")
     @patch("azurelinuxagent.ga.monitor.MonitorHandler.poll_telemetry_metrics")
@@ -400,28 +446,29 @@ class TestMonitor(AgentTestCase):
         self.assertEqual(None, monitor_handler.last_telemetry_heartbeat)
         self.assertEqual(None, monitor_handler.last_imds_heartbeat)
 
-        monitor_handler.start()
-        time.sleep(0.2)
-        self.assertTrue(monitor_handler.is_alive())
+        with patch.object(monitor_handler, 'protocol'):
+            monitor_handler.start()
+            time.sleep(0.2)
+            self.assertTrue(monitor_handler.is_alive())
 
-        self.assertNotEqual(None, monitor_handler.last_host_plugin_heartbeat)
-        self.assertNotEqual(None, monitor_handler.last_event_collection)
-        self.assertNotEqual(None, monitor_handler.last_telemetry_heartbeat)
-        self.assertNotEqual(None, monitor_handler.last_imds_heartbeat)
+            self.assertNotEqual(None, monitor_handler.last_host_plugin_heartbeat)
+            self.assertNotEqual(None, monitor_handler.last_event_collection)
+            self.assertNotEqual(None, monitor_handler.last_telemetry_heartbeat)
+            self.assertNotEqual(None, monitor_handler.last_imds_heartbeat)
 
-        heartbeat_hostplugin = monitor_handler.last_host_plugin_heartbeat
-        heartbeat_imds = monitor_handler.last_imds_heartbeat
-        heartbeat_telemetry = monitor_handler.last_telemetry_heartbeat
-        events_collection = monitor_handler.last_event_collection
+            heartbeat_hostplugin = monitor_handler.last_host_plugin_heartbeat
+            heartbeat_imds = monitor_handler.last_imds_heartbeat
+            heartbeat_telemetry = monitor_handler.last_telemetry_heartbeat
+            events_collection = monitor_handler.last_event_collection
 
-        time.sleep(0.5)
+            time.sleep(0.5)
 
-        self.assertEqual(heartbeat_hostplugin, monitor_handler.last_host_plugin_heartbeat)
-        self.assertEqual(heartbeat_imds, monitor_handler.last_imds_heartbeat)
-        self.assertEqual(events_collection, monitor_handler.last_event_collection)
-        self.assertEqual(heartbeat_telemetry, monitor_handler.last_telemetry_heartbeat)
+            self.assertEqual(heartbeat_hostplugin, monitor_handler.last_host_plugin_heartbeat)
+            self.assertEqual(heartbeat_imds, monitor_handler.last_imds_heartbeat)
+            self.assertEqual(events_collection, monitor_handler.last_event_collection)
+            self.assertEqual(heartbeat_telemetry, monitor_handler.last_telemetry_heartbeat)
 
-        monitor_handler.stop()
+            monitor_handler.stop()
 
     @patch("azurelinuxagent.common.protocol.healthservice.HealthService.report_host_plugin_heartbeat")
     def test_heartbeat_creates_signal(self, patch_report_heartbeat, *args):
@@ -525,7 +572,9 @@ class TestEventMonitoring(AgentTestCase):
         protocol.report_ext_status = MagicMock()
         protocol.report_vm_status = MagicMock()
 
-        monitor_handler.protocol_util.get_protocol = Mock(return_value=protocol)
+        protocol_util = get_protocol_util()
+        protocol_util.get_protocol = Mock(return_value=protocol)
+        monitor_handler.protocol_util = Mock(return_value=protocol_util)
         return monitor_handler, protocol
 
     @patch("azurelinuxagent.common.protocol.imds.ImdsClient.get_compute",
@@ -606,7 +655,7 @@ class TestEventMonitoring(AgentTestCase):
                 # list.
 
                 # The container id value is obtained from the goal state and must be present in all telemetry events.
-                container_id_param = TelemetryEventParam("ContainerId", protocol.client.goal_state.container_id)
+                container_id_param = TelemetryEventParam("ContainerId", protocol.client.get_goal_state().container_id)
                 self.assertTrue(container_id_param in event.parameters)
 
                 # Same for GAVersion
@@ -835,7 +884,6 @@ class TestEventMonitoring(AgentTestCase):
 @patch('azurelinuxagent.common.osutil.get_osutil')
 @patch('azurelinuxagent.common.protocol.get_protocol_util')
 @patch("azurelinuxagent.common.protocol.healthservice.HealthService._report")
-@patch('azurelinuxagent.common.protocol.util.ProtocolUtil.get_protocol', return_value=WireProtocol('endpoint'))
 @patch("azurelinuxagent.common.utils.restutil.http_get")
 class TestExtensionMetricsDataTelemetry(AgentTestCase):
 
@@ -843,10 +891,16 @@ class TestExtensionMetricsDataTelemetry(AgentTestCase):
         AgentTestCase.setUp(self)
         event.init_event_logger(os.path.join(self.tmp_dir, "events"))
         CGroupsTelemetry.reset()
+        clear_singleton_instances(ProtocolUtil)
+        protocol = WireProtocol('endpoint')
+        protocol.update_goal_state = MagicMock()
+        self.get_protocol = patch('azurelinuxagent.common.protocol.util.ProtocolUtil.get_protocol', return_value=protocol)
+        self.get_protocol.start()
 
     def tearDown(self):
         AgentTestCase.tearDown(self)
         CGroupsTelemetry.reset()
+        self.get_protocol.stop()
 
     @patch('azurelinuxagent.common.event.EventLogger.add_metric')
     @patch('azurelinuxagent.common.event.EventLogger.add_event')
@@ -901,9 +955,6 @@ class TestExtensionMetricsDataTelemetry(AgentTestCase):
         self.assertEqual(0, patch_add_metric.call_count)
         monitor_handler.stop()
 
-    # mocking get_proc_stat to make it run on Mac and other systems. This test does not need to read the values of the
-    # /proc/stat file on the filesystem.
-    @patch("azurelinuxagent.common.osutil.default.DefaultOSUtil._get_proc_stat")
     @patch('azurelinuxagent.common.event.EventLogger.add_metric')
     @patch("azurelinuxagent.common.cgroup.MemoryCgroup.get_memory_usage")
     @patch('azurelinuxagent.common.logger.Logger.periodic_warn')
@@ -914,7 +965,7 @@ class TestExtensionMetricsDataTelemetry(AgentTestCase):
         ioerror.errno = 2
         patch_get_memory_usage.side_effect = ioerror
 
-        CGroupsTelemetry._tracked.append(CpuCgroup("cgroup_name", "/test/path"))
+        CGroupsTelemetry._tracked.append(MemoryCgroup("cgroup_name", "/test/path"))
 
         monitor_handler = get_monitor_handler()
         monitor_handler.init_protocols()
@@ -925,9 +976,6 @@ class TestExtensionMetricsDataTelemetry(AgentTestCase):
         self.assertEqual(0, patch_add_metric.call_count)  # No metrics should be sent.
         monitor_handler.stop()
 
-    # mocking get_proc_stat to make it run on Mac and other systems. This test does not need to read the values of the
-    # /proc/stat file on the filesystem.
-    @patch("azurelinuxagent.common.osutil.default.DefaultOSUtil._get_proc_stat")
     @patch('azurelinuxagent.common.event.EventLogger.add_metric')
     @patch("azurelinuxagent.common.cgroup.CpuCgroup.get_cpu_usage")
     @patch('azurelinuxagent.common.logger.Logger.periodic_warn')
@@ -1076,6 +1124,7 @@ for i in range(5):
         max_num_polls = 5
         time_to_wait = 1
         extn_name = "foobar-1.0.0"
+        extn_folder_name = extn_name.replace("-", "_")
 
         cgs = make_new_cgroup(extn_name)
         self.assertEqual(len(cgs), 2)
@@ -1094,30 +1143,34 @@ for i in range(5):
 
         command = self.create_script("keep_cpu_busy_and_consume_memory_for_{0}_seconds".format(time_to_wait), '''
 nohup python -c "import time
+import subprocess
 
 for i in range(3):
     x = [1, 2, 3, 4, 5] * (i * 1000)
     time.sleep({0})
     x *= 0
-    print('Test loop')" &
+    print('Test loop')
+
+" &
 '''.format(time_to_wait))
 
         self.log_dir = os.path.join(self.tmp_dir, "log")
 
-        with patch("azurelinuxagent.ga.exthandlers.ExtHandlerInstance.get_base_dir", lambda *_: self.tmp_dir) as \
-                patch_get_base_dir:
-            with patch("azurelinuxagent.ga.exthandlers.ExtHandlerInstance.get_log_dir", lambda *_: self.log_dir) as \
-                    patch_get_log_dir:
+        with patch("azurelinuxagent.ga.exthandlers.ExtHandlerInstance.get_base_dir", lambda *_: self.tmp_dir):
+            with patch("azurelinuxagent.ga.exthandlers.ExtHandlerInstance.get_log_dir", lambda *_: self.log_dir):
                 ext_handler_instance.launch_command(command)
 
-        self.assertTrue(CGroupsTelemetry.is_tracked(os.path.join(
-            BASE_CGROUPS, "cpu", "walinuxagent.extensions", "foobar_1.0.0")))
-        self.assertTrue(CGroupsTelemetry.is_tracked(os.path.join(
-            BASE_CGROUPS, "memory", "walinuxagent.extensions", "foobar_1.0.0")))
+        self.assertTrue(CGroupsTelemetry.is_tracked(os.path.join(BASE_CGROUPS, "cpu", "walinuxagent.extensions", extn_folder_name)))
+        self.assertTrue(CGroupsTelemetry.is_tracked(os.path.join(BASE_CGROUPS, "memory", "walinuxagent.extensions", extn_folder_name)))
 
         for i in range(max_num_polls):
             metrics = CGroupsTelemetry.poll_all_tracked()
-            self.assertEqual(len(metrics), 3)
+            # Currently there are 3 types of memory related metrics and 1 CPU related metric.
+            # % Processor Time
+            # Total Memory Usage
+            # Max Memory Usage
+            # Memory Used by Process - This can have multiple entries (for each process that gets created).
+            self.assertEqual(len(metrics), 4)
 
         monitor_handler.poll_telemetry_metrics()
         monitor_handler.send_telemetry_metrics()
@@ -1126,6 +1179,7 @@ for i in range(3):
         telemetry_event_list = patch_report_event.call_args_list[0][0][0]
 
         for e in telemetry_event_list.events:
+            print([(i.name, i.value) for i in e.parameters])
             details_of_event = [x for x in e.parameters if x.name in
                                 ["Category", "Counter", "Instance", "Value"]]
 
@@ -1133,17 +1187,13 @@ for i in range(3):
                 if i.name == "Category":
                     self.assertIn(i.value, ["Memory", "Process"])
                 if i.name == "Counter":
-                    self.assertIn(i.value, ["Max Memory Usage", "Total Memory Usage", "% Processor Time"])
-                if i.name == "Instance":
-                    self.assertEqual(i.value, extn_name)
+                    self.assertIn(i.value, ["Max Memory Usage", "Total Memory Usage", "% Processor Time",
+                                            "Memory Used by Process"])
                 if i.name == "Value":
                     self.assertTrue(isinstance(i.value, int) or isinstance(i.value, float))
 
         monitor_handler.stop()
 
-    # mocking get_proc_stat to make it run on Mac and other systems. This test does not need to read the values of the
-    # /proc/stat file on the filesystem.
-    @patch("azurelinuxagent.common.osutil.default.DefaultOSUtil._get_proc_stat")
     def test_generate_extension_metrics_telemetry_dictionary(self, *args):
         num_polls = 10
         num_extensions = 1
@@ -1155,27 +1205,28 @@ for i in range(3):
         memory_usage_values = [random.randint(0, 8 * 1024 ** 3) for _ in range(num_polls)]
         max_memory_usage_values = [random.randint(0, 8 * 1024 ** 3) for _ in range(num_polls)]
 
-        for i in range(num_extensions):
-            dummy_cpu_cgroup = CGroup.create("dummy_cpu_path_{0}".format(i), "cpu", "dummy_extension_{0}".format(i))
-            CGroupsTelemetry.track_cgroup(dummy_cpu_cgroup)
+        # no need to initialize the CPU usage, since we mock get_cpu_usage() below
+        with patch("azurelinuxagent.common.cgroup.CpuCgroup.initialize_cpu_usage"):
+            for i in range(num_extensions):
+                dummy_cpu_cgroup = CGroup.create("dummy_cpu_path_{0}".format(i), "cpu", "dummy_extension_{0}".format(i))
+                CGroupsTelemetry.track_cgroup(dummy_cpu_cgroup)
 
-            dummy_memory_cgroup = CGroup.create("dummy_memory_path_{0}".format(i), "memory",
-                                                "dummy_extension_{0}".format(i))
-            CGroupsTelemetry.track_cgroup(dummy_memory_cgroup)
+                dummy_memory_cgroup = CGroup.create("dummy_memory_path_{0}".format(i), "memory",
+                                                    "dummy_extension_{0}".format(i))
+                CGroupsTelemetry.track_cgroup(dummy_memory_cgroup)
 
         self.assertEqual(2 * num_extensions, len(CGroupsTelemetry._tracked))
 
         with patch("azurelinuxagent.common.cgroup.MemoryCgroup.get_max_memory_usage") as patch_get_memory_max_usage:
             with patch("azurelinuxagent.common.cgroup.MemoryCgroup.get_memory_usage") as patch_get_memory_usage:
-                with patch("azurelinuxagent.common.cgroup.CpuCgroup._get_cpu_percent") as patch_get_cpu_percent:
-                    with patch("azurelinuxagent.common.cgroup.CpuCgroup._update_cpu_data") as patch_update_cpu_data:
-                        with patch("azurelinuxagent.common.cgroup.CGroup.is_active") as patch_is_active:
-                            for i in range(num_polls):
-                                patch_is_active.return_value = True
-                                patch_get_cpu_percent.return_value = cpu_percent_values[i]
-                                patch_get_memory_usage.return_value = memory_usage_values[i]  # example 200 MB
-                                patch_get_memory_max_usage.return_value = max_memory_usage_values[i]  # example 450 MB
-                                CGroupsTelemetry.poll_all_tracked()
+                with patch("azurelinuxagent.common.cgroup.CpuCgroup.get_cpu_usage") as patch_get_cpu_usage:
+                    with patch("azurelinuxagent.common.cgroup.CGroup.is_active") as patch_is_active:
+                        for i in range(num_polls):
+                            patch_is_active.return_value = True
+                            patch_get_cpu_usage.return_value = cpu_percent_values[i]
+                            patch_get_memory_usage.return_value = memory_usage_values[i]  # example 200 MB
+                            patch_get_memory_max_usage.return_value = max_memory_usage_values[i]  # example 450 MB
+                            CGroupsTelemetry.poll_all_tracked()
 
         performance_metrics = CGroupsTelemetry.report_all_tracked()
 
@@ -1226,32 +1277,32 @@ for i in range(3):
         self.assertEqual(message_json, None)
 
 
-@patch('azurelinuxagent.common.event.EventLogger.add_event')
 @patch("azurelinuxagent.common.utils.restutil.http_post")
-@patch("azurelinuxagent.common.utils.restutil.http_get")
 @patch('azurelinuxagent.common.protocol.wire.WireClient.get_goal_state')
-@patch('azurelinuxagent.common.protocol.util.ProtocolUtil.get_protocol', return_value=WireProtocol('endpoint'))
+@patch('azurelinuxagent.common.event.EventLogger.add_event')
+@patch("azurelinuxagent.common.utils.restutil.http_get")
 class TestMonitorFailure(AgentTestCase):
 
     @patch("azurelinuxagent.common.protocol.healthservice.HealthService.report_host_plugin_heartbeat")
-    def test_error_heartbeat_creates_no_signal(self, patch_report_heartbeat, *args):
-        patch_http_get = args[2]
-        patch_add_event = args[4]
+    def test_error_heartbeat_creates_no_signal(self, patch_report_heartbeat, patch_http_get, patch_add_event, *args):
 
         monitor_handler = get_monitor_handler()
-        monitor_handler.init_protocols()
-        monitor_handler.last_host_plugin_heartbeat = datetime.datetime.utcnow() - timedelta(hours=1)
+        protocol = WireProtocol('endpoint')
+        protocol.update_goal_state = MagicMock()
+        with patch('azurelinuxagent.common.protocol.util.ProtocolUtil.get_protocol', return_value=protocol):
+            monitor_handler.init_protocols()
+            monitor_handler.last_host_plugin_heartbeat = datetime.datetime.utcnow() - timedelta(hours=1)
 
-        patch_http_get.side_effect = IOError('client error')
-        monitor_handler.send_host_plugin_heartbeat()
+            patch_http_get.side_effect = IOError('client error')
+            monitor_handler.send_host_plugin_heartbeat()
 
-        # health report should not be made
-        self.assertEqual(0, patch_report_heartbeat.call_count)
+            # health report should not be made
+            self.assertEqual(0, patch_report_heartbeat.call_count)
 
-        # telemetry with failure details is sent
-        self.assertEqual(1, patch_add_event.call_count)
-        self.assertEqual('HostPluginHeartbeat', patch_add_event.call_args[1]['op'])
-        self.assertTrue('client error' in patch_add_event.call_args[1]['message'])
+            # telemetry with failure details is sent
+            self.assertEqual(1, patch_add_event.call_count)
+            self.assertEqual('HostPluginHeartbeat', patch_add_event.call_args[1]['op'])
+            self.assertTrue('client error' in patch_add_event.call_args[1]['message'])
 
-        self.assertEqual(False, patch_add_event.call_args[1]['is_success'])
-        monitor_handler.stop()
+            self.assertEqual(False, patch_add_event.call_args[1]['is_success'])
+            monitor_handler.stop()

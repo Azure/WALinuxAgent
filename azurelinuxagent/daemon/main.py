@@ -31,7 +31,7 @@ from azurelinuxagent.common.event import add_event, WALAEventOperation
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.osutil import get_osutil
 from azurelinuxagent.common.protocol import get_protocol_util
-from azurelinuxagent.common.protocol.wire import WireClient
+from azurelinuxagent.common.protocol.wire import WireProtocol
 from azurelinuxagent.common.rdma import setup_rdma_device
 from azurelinuxagent.common.version import AGENT_NAME, AGENT_LONG_NAME, \
     AGENT_VERSION, \
@@ -60,15 +60,18 @@ class DaemonHandler(object):
         self.osutil = get_osutil()
 
     def run(self, child_args=None):
+        #
+        # The Container ID in telemetry events is retrieved from the goal state. We can fetch the goal state
+        # only after protocol detection, which is done during provisioning.
+        #
+        # Be aware that telemetry events emitted before that will not include the Container ID.
+        #
         logger.info("{0} Version:{1}", AGENT_LONG_NAME, AGENT_VERSION)
         logger.info("OS: {0} {1}", DISTRO_NAME, DISTRO_VERSION)
-        logger.info("Python: {0}.{1}.{2}", PY_VERSION_MAJOR, PY_VERSION_MINOR,
-                    PY_VERSION_MICRO)
+        logger.info("Python: {0}.{1}.{2}", PY_VERSION_MAJOR, PY_VERSION_MINOR, PY_VERSION_MICRO)
 
         self.check_pid()
         self.initialize_environment()
-
-        CGroupConfigurator.get_instance().create_agent_cgroups(track_cgroups=False)
 
         # If FIPS is enabled, set the OpenSSL environment variable
         # Note:
@@ -138,6 +141,9 @@ class DaemonHandler(object):
 
         self.provision_handler.run()
 
+        # Initialize the agent cgroup
+        CGroupConfigurator.get_instance().create_agent_cgroups(track_cgroups=False)
+
         # Enable RDMA, continue in errors
         if conf.enable_rdma():
             nd_version = self.rdma_handler.get_rdma_version()
@@ -150,12 +156,11 @@ class DaemonHandler(object):
                 #   incarnation number. A forced update ensures the most
                 #   current values.
                 protocol = self.protocol_util.get_protocol()
-                client = protocol.client
-                if client is None or type(client) is not WireClient:
+                if type(protocol) is not WireProtocol:
                     raise Exception("Attempt to setup RDMA without Wireserver")
-                client.update_goal_state(forced=True)
+                protocol.client.update_goal_state(forced=True)
 
-                setup_rdma_device(nd_version)
+                setup_rdma_device(nd_version, protocol.client.get_shared_conf())
             except Exception as e:
                 logger.error("Error setting up rdma device: %s" % e)
         else:

@@ -149,6 +149,21 @@ class TestHostPlugin(AgentTestCase):
         self.assertEqual(headers['x-ms-containerid'], goal_state.container_id)
         self.assertEqual(headers['x-ms-host-config-name'], goal_state.role_config_name)
 
+    def _get_test_wire_protocol(self):
+        test_goal_state = wire.GoalState(WireProtocolData(DATA_FILE).goal_state)
+        status = restapi.VMStatus(status="Ready", message="Guest Agent is running")
+
+        wire_protocol = wire.WireProtocol(wireserver_url)
+        wire_protocol_client = wire_protocol.client
+        wire_protocol_client.get_goal_state = Mock(return_value=test_goal_state)
+        ext_conf = wire.ExtensionsConfig(None)
+        ext_conf.status_upload_blob = sas_url
+        ext_conf.status_upload_blob_type = page_blob_type
+        wire_protocol_client._set_ext_conf(ext_conf)
+        wire_protocol_client.status_blob.set_vm_status(status)
+
+        return wire_protocol
+
     @patch("azurelinuxagent.common.protocol.healthservice.HealthService.report_host_plugin_versions")
     @patch("azurelinuxagent.ga.update.restutil.http_get")
     @patch("azurelinuxagent.common.event.report_event")
@@ -229,18 +244,13 @@ class TestHostPlugin(AgentTestCase):
         channel are ignored.  Validate that the default channel is never changed
         as part of status upload.
         """
-        test_goal_state = wire.GoalState(WireProtocolData(DATA_FILE).goal_state)
-        status = restapi.VMStatus(status="Ready", message="Guest Agent is running")
 
-        wire_protocol_client = wire.WireProtocol(wireserver_url).client
-        wire_protocol_client.get_goal_state = Mock(return_value=test_goal_state)
-        wire_protocol_client.ext_conf = wire.ExtensionsConfig(None)
-        wire_protocol_client.ext_conf.status_upload_blob = sas_url
-        wire_protocol_client.ext_conf.status_upload_blob_type = page_blob_type
-        wire_protocol_client.status_blob.set_vm_status(status)
+        wire_protocol = self._get_test_wire_protocol()
+
+        wire_protocol.update_goal_state()
 
         # act
-        wire_protocol_client.upload_status_blob()
+        wire_protocol.client.upload_status_blob()
 
         # assert direct route is not called
         self.assertEqual(0, patch_upload.call_count, "Direct channel was used")
@@ -269,18 +279,12 @@ class TestHostPlugin(AgentTestCase):
         """
         When host plugin returns a 503, we should fall back to the direct channel
         """
-        test_goal_state = wire.GoalState(WireProtocolData(DATA_FILE).goal_state)
-        status = restapi.VMStatus(status="Ready", message="Guest Agent is running")
+        wire_protocol = self._get_test_wire_protocol()
 
-        wire_protocol_client = wire.WireProtocol(wireserver_url).client
-        wire_protocol_client.get_goal_state = Mock(return_value=test_goal_state)
-        wire_protocol_client.ext_conf = wire.ExtensionsConfig(None)
-        wire_protocol_client.ext_conf.status_upload_blob = sas_url
-        wire_protocol_client.ext_conf.status_upload_blob_type = page_blob_type
-        wire_protocol_client.status_blob.set_vm_status(status)
+        wire_protocol.update_goal_state()
 
         # act
-        wire_protocol_client.upload_status_blob()
+        wire_protocol.client.upload_status_blob()
 
         # assert direct route is called
         self.assertEqual(1, patch_upload.call_count, "Direct channel was not used")
@@ -305,22 +309,17 @@ class TestHostPlugin(AgentTestCase):
     @patch("azurelinuxagent.common.protocol.hostplugin.HostPluginProtocol._put_page_blob_status",
            side_effect=ResourceGoneError("410"))
     @patch("azurelinuxagent.common.protocol.wire.WireClient.update_goal_state")
-    def test_fallback_channel_410(self, patch_update, patch_put, patch_upload, _):
+    @patch("azurelinuxagent.common.protocol.wire.WireClient.update_host_plugin_from_goal_state")
+    def test_fallback_channel_410(self, patch_refresh_host_plugin, patch_update, patch_put, patch_upload, _):
         """
         When host plugin returns a 410, we should force the goal state update and return
         """
-        test_goal_state = wire.GoalState(WireProtocolData(DATA_FILE).goal_state)
-        status = restapi.VMStatus(status="Ready", message="Guest Agent is running")
+        wire_protocol = self._get_test_wire_protocol()
 
-        wire_protocol_client = wire.WireProtocol(wireserver_url).client
-        wire_protocol_client.get_goal_state = Mock(return_value=test_goal_state)
-        wire_protocol_client.ext_conf = wire.ExtensionsConfig(None)
-        wire_protocol_client.ext_conf.status_upload_blob = sas_url
-        wire_protocol_client.ext_conf.status_upload_blob_type = page_blob_type
-        wire_protocol_client.status_blob.set_vm_status(status)
+        wire_protocol.update_goal_state()
 
         # act
-        wire_protocol_client.upload_status_blob()
+        wire_protocol.client.upload_status_blob()
 
         # assert direct route is not called
         self.assertEqual(0, patch_upload.call_count, "Direct channel was used")
@@ -328,10 +327,10 @@ class TestHostPlugin(AgentTestCase):
         # assert host plugin route is called
         self.assertEqual(1, patch_put.call_count, "Host plugin was not used")
 
-        # assert update goal state is called twice, forced=True on the second
-        self.assertEqual(2, patch_update.call_count, "Update goal state unexpected call count")
-        self.assertEqual(1, len(patch_update.call_args[1]), "Update goal state unexpected call count")
-        self.assertTrue(patch_update.call_args[1]['forced'], "Update goal state unexpected call count")
+        # assert update goal state is called with no arguments (forced=False), then update_host_plugin_from_goal_state is called
+        self.assertEqual(1, patch_update.call_count, "Update goal state unexpected call count")
+        self.assertEqual(0, len(patch_update.call_args[1]), "Update goal state unexpected argument count")
+        self.assertEqual(1, patch_refresh_host_plugin.call_count, "Refresh host plugin unexpected call count")
 
         # ensure the correct url is used
         self.assertEqual(sas_url, patch_put.call_args[0][0])
@@ -350,18 +349,12 @@ class TestHostPlugin(AgentTestCase):
         """
         When host plugin returns a 500, and direct fails, we should raise a ProtocolError
         """
-        test_goal_state = wire.GoalState(WireProtocolData(DATA_FILE).goal_state)
-        status = restapi.VMStatus(status="Ready", message="Guest Agent is running")
+        wire_protocol = self._get_test_wire_protocol()
 
-        wire_protocol_client = wire.WireProtocol(wireserver_url).client
-        wire_protocol_client.get_goal_state = Mock(return_value=test_goal_state)
-        wire_protocol_client.ext_conf = wire.ExtensionsConfig(None)
-        wire_protocol_client.ext_conf.status_upload_blob = sas_url
-        wire_protocol_client.ext_conf.status_upload_blob_type = page_blob_type
-        wire_protocol_client.status_blob.set_vm_status(status)
+        wire_protocol.update_goal_state()
 
         # act
-        self.assertRaises(wire.ProtocolError, wire_protocol_client.upload_status_blob)
+        self.assertRaises(wire.ProtocolError, wire_protocol.client.upload_status_blob)
 
         # assert direct route is not called
         self.assertEqual(1, patch_upload.call_count, "Direct channel was not used")
@@ -385,22 +378,14 @@ class TestHostPlugin(AgentTestCase):
         """
         Validate the telemetry when uploading status fails
         """
-        test_goal_state = wire.GoalState(WireProtocolData(DATA_FILE).goal_state)
-        status = restapi.VMStatus(status="Ready",
-                                  message="Guest Agent is running")
         wire.HostPluginProtocol.set_default_channel(False)
-        with patch.object(wire.StatusBlob,
-                          "upload",
-                          return_value=False):
-            wire_protocol_client = wire.WireProtocol(wireserver_url).client
-            wire_protocol_client.get_goal_state = Mock(return_value=test_goal_state)
-            wire_protocol_client.ext_conf = wire.ExtensionsConfig(None)
-            wire_protocol_client.ext_conf.status_upload_blob = sas_url
-            wire_protocol_client.status_blob.set_vm_status(status)
+        with patch.object(wire.StatusBlob, "upload", return_value=False):
+
+            wire_protocol = self._get_test_wire_protocol()
+            wire_protocol_client = wire_protocol.client
+
             put_error = wire.HttpError("put status http error")
-            with patch.object(restutil,
-                              "http_put",
-                              side_effect=put_error) as patch_http_put:
+            with patch.object(restutil, "http_put", side_effect=put_error):
                 with patch.object(wire.HostPluginProtocol,
                                   "ensure_initialized", return_value=True):
                     self.assertRaises(wire.ProtocolError, wire_protocol_client.upload_status_blob)
@@ -467,10 +452,12 @@ class TestHostPlugin(AgentTestCase):
             with patch.object(wire.StatusBlob, "upload") as patch_upload:
                 patch_upload.return_value = True
                 wire_protocol_client = wire.WireProtocol(wireserver_url).client
-                wire_protocol_client.ext_conf = wire.ExtensionsConfig(None)
-                wire_protocol_client.ext_conf.status_upload_blob = sas_url
+                ext_config = wire.ExtensionsConfig(None)
+                ext_config.status_upload_blob = sas_url
+                wire_protocol_client._set_ext_conf(ext_config)
                 wire_protocol_client.status_blob.vm_status = vmstatus
                 wire_protocol_client.upload_status_blob()
+
                 self.assertTrue(patch_put.call_count == 0, "Fallback was engaged")
 
     def test_validate_block_blob(self):
