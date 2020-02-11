@@ -766,9 +766,6 @@ class WireClient(object):
 
                 if goal_state_property is not None and goal_state_property.xml_text is not None:
                     self.save_cache(file_path, goal_state_property.xml_text)
-                else:  # remove the file from the previous goal state if it exists
-                    if os.path.exists(file_path):
-                        os.remove(file_path)
 
             save_if_not_none(self._goal_state, GOAL_STATE_FILE_NAME.format(self._goal_state.incarnation))
             save_if_not_none(self._goal_state.hosting_env, HOSTING_ENV_FILE_NAME)
