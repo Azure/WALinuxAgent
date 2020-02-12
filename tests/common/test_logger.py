@@ -546,14 +546,14 @@ class TestAppender(AgentTestCase):
         with open(self.log_file) as logfile:
             logcontent = logfile.readlines()
             self.assertEqual(1, len(logcontent))
-            self.assertRegex(logcontent[0], r"(.*WARNING\s*test-warn.*)")
+            self.assertRegex(logcontent[0], r"(.*WARNING\s\w+\s*test-warn.*)")
 
         logger.error("test-error")
         with open(self.log_file) as logfile:
             logcontent = logfile.readlines()
             # Levels are honored and Info, Verbose should not be written.
             self.assertEqual(1, len(logcontent))
-            self.assertRegex(logcontent[0], r"(.*ERROR\s*test-error.*)")
+            self.assertRegex(logcontent[0], r"(.*ERROR\s\w+\s*test-error.*)")
 
     def test_file_appender(self):
         logger.add_logger_appender(logger.AppenderType.FILE, logger.LogLevel.INFO, path=self.log_file)
@@ -566,9 +566,9 @@ class TestAppender(AgentTestCase):
             logcontent = logfile.readlines()
             # Levels are honored and Verbose should not be written.
             self.assertEqual(3, len(logcontent))
-            self.assertRegex(logcontent[0], r"(.*INFO\s*test-info.*)")
-            self.assertRegex(logcontent[1], r"(.*WARNING\s*test-warn.*)")
-            self.assertRegex(logcontent[2], r"(.*ERROR\s*test-error.*)")
+            self.assertRegex(logcontent[0], r"(.*INFO\s\w+\s*test-info.*)")
+            self.assertRegex(logcontent[1], r"(.*WARNING\s\w+\s*test-warn.*)")
+            self.assertRegex(logcontent[2], r"(.*ERROR\s\w+\s*test-error.*)")
 
     @patch("azurelinuxagent.common.event.send_logs_to_telemetry", return_value=True)
     @patch("azurelinuxagent.common.event.EventLogger.add_log_event")
