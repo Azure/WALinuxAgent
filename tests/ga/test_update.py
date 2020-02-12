@@ -897,13 +897,6 @@ class TestUpdate(UpdateTestCase):
         self.assertEqual(1, mock_get_host.call_count)
         self.assertEqual("faux host", host)
 
-    @patch('azurelinuxagent.common.protocol.wire.WireClient.get_host_plugin')
-    def test_get_host_plugin_returns_none_otherwise(self, mock_get_host):
-        protocol = MetadataProtocol()
-        host = self.update_handler._get_host_plugin(protocol=protocol)
-        mock_get_host.assert_not_called()
-        self.assertEqual(None, host)
-
     def test_get_latest_agent(self):
         latest_version = self.prepare_agents()
 
