@@ -18,8 +18,11 @@ from azurelinuxagent.common.exception import ExtensionError, ExtensionErrorCodes
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.utils.extensionprocessutil import format_stdout_stderr, read_output, \
     wait_for_process_completion_or_timeout, handle_process_completion
-from tests.tools import *
+from tests.tools import AgentTestCase, patch
+import os
+import shutil
 import subprocess
+import tempfile
 
 
 class TestProcessUtils(AgentTestCase):

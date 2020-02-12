@@ -1,0 +1,22 @@
+/var/log/azure/*/*.log {
+    # Old versions of log files are compressed with gzip by default.
+    compress
+
+    # Rotate log files > 10 MB, and keep last 10 archived files. With an compression ratio ranging from 5-10%, The
+    # archived files would take an average of around 5-10 MB.
+    size 10M
+    rotate 10
+
+    # Add date as extension when rotating logs
+    dateext
+
+    # Formatting the date extension to YYYY-MM-DD-SSSSSSS format. logrotate does not provide hours, mins and seconds
+    # option. Adding the %s (system clock epoch time) to differentiate rotated log files within the same day.
+    dateformat -%Y-%m-%d-%s
+
+    # Do not rotate the log if it is empty
+    notifempty
+
+    # If the log file is missing, go on to the next one without issuing an error message.
+    missingok
+}

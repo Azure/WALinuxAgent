@@ -35,9 +35,9 @@ from azurelinuxagent.common.osutil import get_osutil
 from azurelinuxagent.common.dhcp import get_dhcp_handler
 from azurelinuxagent.common.protocol.ovfenv import OvfEnv
 from azurelinuxagent.common.protocol.wire import WireProtocol
-from azurelinuxagent.common.protocol.metadata import MetadataProtocol, \
-                                                     METADATA_ENDPOINT
-from azurelinuxagent.common.utils.restutil import IOErrorCounter
+from azurelinuxagent.common.protocol.metadata import MetadataProtocol
+from azurelinuxagent.common.utils.restutil import KNOWN_WIRESERVER_IP, \
+                                                  IOErrorCounter
 
 OVF_FILE_NAME = "ovf-env.xml"
 TAG_FILE_NAME = "useMetadataEndpoint.tag"
@@ -64,14 +64,16 @@ def get_protocol_util():
 
 
 class ProtocolUtil(object):
-
     """
     ProtocolUtil handles initialization for protocol instance. 2 protocol types
     are invoked, wire protocol and metadata protocols.
     """
+
     def __init__(self):
         self.lock = threading.Lock()
+        self.lock_wireserver_endpoint = threading.Lock()
         self.protocol = None
+        self.endpoint = None
         self.osutil = get_osutil()
         self.dhcp_handler = get_dhcp_handler()
 
@@ -95,7 +97,7 @@ class ProtocolUtil(object):
         try:
             ovfxml = fileutil.read_file(ovf_file_path_on_dvd, remove_bom=True)
             ovfenv = OvfEnv(ovfxml)
-        except IOError as e:
+        except (IOError, OSError) as e:
             raise ProtocolError("[CopyOvfEnv] Error reading file "
                                 "{0}: {1}".format(ovf_file_path_on_dvd,
                                                   ustr(e)))
@@ -105,7 +107,7 @@ class ProtocolUtil(object):
                             PASSWORD_REPLACEMENT,
                             ovfxml)
             fileutil.write_file(ovf_file_path, ovfxml)
-        except IOError as e:
+        except (IOError, OSError) as e:
             raise ProtocolError("[CopyOvfEnv] Error writing file "
                                 "{0}: {1}".format(ovf_file_path,
                                                   ustr(e)))
@@ -114,7 +116,7 @@ class ProtocolUtil(object):
             if os.path.isfile(tag_file_path_on_dvd):
                 logger.info("Found {0} in provisioning ISO", TAG_FILE_NAME)
                 shutil.copyfile(tag_file_path_on_dvd, tag_file_path)
-        except IOError as e:
+        except (IOError, OSError) as e:
             raise ProtocolError("[CopyOvfEnv] Error copying file "
                                 "{0} to {1}: {2}".format(tag_file_path,
                                                          tag_file_path,
@@ -147,24 +149,77 @@ class ProtocolUtil(object):
             conf.get_lib_dir(),
             PROTOCOL_FILE_NAME)
 
+    def _get_wireserver_endpoint_file_path(self):
+        return os.path.join(
+            conf.get_lib_dir(),
+            ENDPOINT_FILE_NAME)
+
     def _get_tag_file_path(self):
         return os.path.join(
             conf.get_lib_dir(),
             TAG_FILE_NAME)
 
     def get_wireserver_endpoint(self):
+        self.lock_wireserver_endpoint.acquire()
+
         try:
-            file_path = os.path.join(conf.get_lib_dir(), ENDPOINT_FILE_NAME)
-            return fileutil.read_file(file_path)
-        except IOError as e:
-            raise OSUtilError(ustr(e))
+            if self.endpoint:
+                return self.endpoint
+
+            file_path = self._get_wireserver_endpoint_file_path()
+            if os.path.isfile(file_path):
+                try:
+                    self.endpoint = fileutil.read_file(file_path)
+
+                    if self.endpoint:
+                        logger.info("WireServer endpoint {0} read from file", self.endpoint)
+                        return self.endpoint
+
+                    logger.error("[GetWireserverEndpoint] Unexpected empty file {0}: {1}", file_path, str(e))
+                except (IOError, OSError) as e:
+                    logger.error("[GetWireserverEndpoint] Error reading file {0}: {1}", file_path, str(e))
+            else:
+                logger.error("[GetWireserverEndpoint] Missing file {0}", file_path)
+
+            self.endpoint = KNOWN_WIRESERVER_IP
+            logger.info("Using hardcoded Wireserver endpoint {0}", self.endpoint)
+
+            return self.endpoint
+        finally:
+            self.lock_wireserver_endpoint.release()
 
     def _set_wireserver_endpoint(self, endpoint):
+        self.lock_wireserver_endpoint.acquire()
         try:
-            file_path = os.path.join(conf.get_lib_dir(), ENDPOINT_FILE_NAME)
+            self.endpoint = endpoint
+            file_path = self._get_wireserver_endpoint_file_path()
             fileutil.write_file(file_path, endpoint)
-        except IOError as e:
+        except (IOError, OSError) as e:
             raise OSUtilError(ustr(e))
+        finally:
+            self.lock_wireserver_endpoint.release()
+
+    def _clear_wireserver_endpoint(self):
+        """
+        Cleanup previous saved wireserver endpoint.
+        """
+        self.lock_wireserver_endpoint.acquire()
+
+        try:
+            self.endpoint = None
+            endpoint_file_path = self._get_wireserver_endpoint_file_path()
+            if not os.path.isfile(endpoint_file_path):
+                return
+
+            try:
+                os.remove(endpoint_file_path)
+            except (IOError, OSError) as e:
+                # Ignore file-not-found errors (since the file is being removed)
+                if e.errno == errno.ENOENT:
+                    return
+                logger.error("Failed to clear wiresever endpoint: {0}", e)
+        finally:
+            self.lock_wireserver_endpoint.release()
 
     def _detect_wire_protocol(self):
         endpoint = self.dhcp_handler.endpoint
@@ -172,7 +227,7 @@ class ProtocolUtil(object):
             '''
             Check if DHCP can be used to get the wire protocol endpoint
             '''
-            (dhcp_available, conf_endpoint) =  self.osutil.is_dhcp_available()
+            dhcp_available = self.osutil.is_dhcp_available()
             if dhcp_available:
                 logger.info("WireServer endpoint is not found. Rerun dhcp handler")
                 try:
@@ -183,11 +238,6 @@ class ProtocolUtil(object):
             else:
                 logger.info("_detect_wire_protocol: DHCP not available")
                 endpoint = self.get_wireserver_endpoint()
-                if endpoint == None:
-                    endpoint = conf_endpoint
-                    logger.info("Using hardcoded WireServer endpoint {0}", endpoint)
-                else:
-                    logger.info("WireServer endpoint {0} read from file", endpoint)
 
         try:
             protocol = WireProtocol(endpoint)
@@ -195,7 +245,7 @@ class ProtocolUtil(object):
             self._set_wireserver_endpoint(endpoint)
             return protocol
         except ProtocolError as e:
-            logger.info("WireServer is not responding. Reset endpoint")
+            logger.info("WireServer is not responding. Reset dhcp endpoint")
             self.dhcp_handler.endpoint = None
             self.dhcp_handler.skip_cache = True
             raise e
@@ -254,14 +304,15 @@ class ProtocolUtil(object):
         protocol_file_path = self._get_protocol_file_path()
         try:
             fileutil.write_file(protocol_file_path, protocol_name)
-        except IOError as e:
+        except (IOError, OSError) as e:
             logger.error("Failed to save protocol endpoint: {0}", e)
 
     def clear_protocol(self):
         """
-        Cleanup previous saved endpoint.
+        Cleanup previous saved protocol endpoint.
         """
-        logger.info("Clean protocol")
+        logger.info("Clean protocol and wireserver endpoint")
+        self._clear_wireserver_endpoint()
         self.protocol = None
         protocol_file_path = self._get_protocol_file_path()
         if not os.path.isfile(protocol_file_path):
@@ -269,7 +320,7 @@ class ProtocolUtil(object):
 
         try:
             os.remove(protocol_file_path)
-        except IOError as e:
+        except (IOError, OSError) as e:
             # Ignore file-not-found errors (since the file is being removed)
             if e.errno == errno.ENOENT:
                 return

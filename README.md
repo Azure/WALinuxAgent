@@ -1,11 +1,13 @@
 # Microsoft Azure Linux Agent
 
-## Master branch status
+## Develop branch status
 
 [![Travis CI](https://travis-ci.org/Azure/WALinuxAgent.svg?branch=develop)](https://travis-ci.org/Azure/WALinuxAgent/branches)
 [![CodeCov](https://codecov.io/gh/Azure/WALinusAgent/branch/develop/graph/badge.svg)](https://codecov.io/gh/Azure/WALinuxAgent/branch/develop)
 
 Each badge below represents our basic validation tests for an image, which are executed several times each day. These include provisioning, user account, disk, extension and networking scenarios.
+
+Note: These badges represent testing to our develop branch which might not be stable. For a stable build please use master branch instead. 
 
 Image | Status |
 ------|--------|
@@ -245,7 +247,7 @@ Choose which provisioning agent to use (or allow waagent to figure it out by
 specifying "auto"). Possible options are "auto" (default), "waagent", "cloud-init",
 or "disabled".
 
-#### __Provisioning.Enabled__ (*removed in VERSION*)
+#### __Provisioning.Enabled__ (*removed in 2.2.45*)
 
 _Type: Boolean_ 
 _Default: y_
@@ -259,7 +261,7 @@ _Note_: This configuration option has been removed and has no effect. waagent
 now auto-detects cloud-init as a provisioning agent (with an option to override
 with `Provisioning.Agent`).
 
-#### __Provisioning.UseCloudInit__ (*removed in VERSION*)
+#### __Provisioning.UseCloudInit__ (*removed in 2.2.45*)
 
 _Type: Boolean_ 
 _Default: n_

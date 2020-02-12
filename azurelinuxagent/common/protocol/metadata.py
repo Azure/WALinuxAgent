@@ -170,7 +170,7 @@ class MetadataProtocol(Protocol):
                                 "{0}.crt".format(thumbprint))
         shutil.copyfile(trans_prv_file, prv_file)
         shutil.copyfile(trans_cert_file, crt_file)
-        self.update_goal_state(forced=True)
+        self.update_goal_state()
 
     def get_vminfo(self):
         vminfo = VMInfo()
@@ -330,7 +330,7 @@ class MetadataProtocol(Protocol):
         certificates = self.get_certs()
         return certificates.cert_list
 
-    def update_goal_state(self, forced=False, max_retry=3):
+    def update_goal_state(self, max_retry=3):
         # Start updating goalstate, retry on 410
         for retry in range(0, max_retry):
             try:

@@ -3,14 +3,15 @@
 
 from __future__ import print_function
 
-from azurelinuxagent.common.event import *
+import tempfile
+import unittest
+
 from azurelinuxagent.common.protocol.hostplugin import *
 from azurelinuxagent.common.protocol.metadata import *
 from azurelinuxagent.common.protocol.wire import *
-from azurelinuxagent.common.utils.fileutil import *
 from azurelinuxagent.ga.update import *
+from tests.tools import AgentTestCase, call, data_dir, DEFAULT, patch, load_bin_data, load_data, Mock, MagicMock
 
-from tests.tools import *
 
 NO_ERROR = {
     "last_failure" : 0.0,
@@ -1666,7 +1667,6 @@ class ProtocolMock(object):
             "update_goal_state" : 0
         }
         self.goal_state_is_stale = False
-        self.goal_state_forced = False
         self.etag = etag
         self.versions = versions if versions is not None else []
         self.create_manifests()
@@ -1716,9 +1716,8 @@ class ProtocolMock(object):
             raise ResourceGoneError()
         return self.agent_packages
 
-    def update_goal_state(self, forced=False, max_retry=3):
+    def update_goal_state(self, forced=False):
         self.call_counts["update_goal_state"] += 1
-        self.goal_state_forced = self.goal_state_forced or forced
 
 
 class ResponseMock(Mock):

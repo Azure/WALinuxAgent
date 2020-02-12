@@ -26,11 +26,11 @@ import uuid
 import azurelinuxagent.common.conf as conf
 import azurelinuxagent.common.logger as logger
 import azurelinuxagent.common.utils.networkutil as networkutil
-
 from azurelinuxagent.common.cgroupstelemetry import CGroupsTelemetry
+from azurelinuxagent.common.datacontract import set_properties
 from azurelinuxagent.common.errorstate import ErrorState
-from azurelinuxagent.common.event import add_event, WALAEventOperation, CONTAINER_ID_ENV_VARIABLE, \
-    get_container_id_from_env
+from azurelinuxagent.common.event import EventLogger
+from azurelinuxagent.common.event import add_event, WALAEventOperation, report_metric
 from azurelinuxagent.common.exception import EventError, ProtocolError, OSUtilError, HttpError
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.osutil import get_osutil
@@ -38,11 +38,10 @@ from azurelinuxagent.common.protocol import get_protocol_util
 from azurelinuxagent.common.protocol.healthservice import HealthService
 from azurelinuxagent.common.protocol.imds import get_imds_client
 from azurelinuxagent.common.telemetryevent import TelemetryEvent, TelemetryEventParam, TelemetryEventList
-from azurelinuxagent.common.datacontract import set_properties
 from azurelinuxagent.common.utils.restutil import IOErrorCounter
 from azurelinuxagent.common.utils.textutil import parse_doc, findall, find, getattrib, hash_strings
 from azurelinuxagent.common.version import DISTRO_NAME, DISTRO_VERSION, \
-    DISTRO_CODE_NAME, AGENT_NAME, CURRENT_AGENT, CURRENT_VERSION, AGENT_EXECUTION_MODE
+    DISTRO_CODE_NAME, AGENT_NAME, CURRENT_VERSION, AGENT_EXECUTION_MODE
 
 
 def parse_event(data_str):
@@ -96,7 +95,6 @@ def generate_extension_metrics_telemetry_dictionary(schema_version=1.0,
         return telemetry_dict
     else:
         return None
-
 
 def get_monitor_handler():
     return MonitorHandler()
@@ -178,8 +176,8 @@ class MonitorHandler(object):
         try:
             ram = self.osutil.get_total_mem()
             processors = self.osutil.get_processor_cores()
-            self.sysinfo.append(TelemetryEventParam("RAM", ram))
-            self.sysinfo.append(TelemetryEventParam("Processors", processors))
+            self.sysinfo.append(TelemetryEventParam("RAM", int(ram)))
+            self.sysinfo.append(TelemetryEventParam("Processors", int(processors)))
         except OSUtilError as e:
             logger.warn("Failed to get system info: {0}", ustr(e))
 
@@ -207,7 +205,7 @@ class MonitorHandler(object):
             self.sysinfo.append(TelemetryEventParam('VMId',
                                                     vminfo.vmId))
             self.sysinfo.append(TelemetryEventParam('ImageOrigin',
-                                                    vminfo.image_origin))
+                                                    int(vminfo.image_origin)))
         except (HttpError, ValueError) as e:
             logger.warn("failed to get IMDS info: {0}", ustr(e))
 
@@ -221,7 +219,7 @@ class MonitorHandler(object):
             logger.verbose("Processed event file: {0}", evt_file_name)
             os.remove(evt_file_name)
             return data_str
-        except (IOError, UnicodeDecodeError) as e:
+        except (IOError, OSError, UnicodeDecodeError) as e:
             os.remove(evt_file_name)
             msg = "Failed to process {0}, {1}".format(evt_file_name, e)
             raise EventError(msg)
@@ -281,7 +279,7 @@ class MonitorHandler(object):
         while self.should_run:
             self.send_telemetry_heartbeat()
             self.poll_telemetry_metrics()
-            self.send_telemetry_metrics()
+            self.send_telemetry_metrics()   # This will be removed in favor of poll_telemetry_metrics() and it'll directly send the perf data for each cgroup.
             self.collect_and_send_events()
             self.send_host_plugin_heartbeat()
             self.send_imds_heartbeat()
@@ -320,14 +318,6 @@ class MonitorHandler(object):
         sysinfo_names = [v.name for v in self.sysinfo]
         final_parameters = []
 
-        # Refer: azurelinuxagent.common.event.EventLogger.add_default_parameters_to_event for agent specific values.
-        #
-        # Default fields are only populated by Agent and not the extension. Agent will fill up any event if they don't
-        # have the default params. Example: GAVersion and ContainerId are populated for agent events on the fly,
-        # but not for extension events. Add it if it's missing.
-        default_values = [("ContainerId", get_container_id_from_env()), ("GAVersion", CURRENT_AGENT),
-                          ("OpcodeName", ""), ("EventTid", 0), ("EventPid", 0), ("TaskName", ""), ("KeywordName", "")]
-
         for param in event.parameters:
             # Discard any sys_info parameters already in the event, since they will be overwritten
             if param.name in sysinfo_names:
@@ -336,10 +326,7 @@ class MonitorHandler(object):
 
         # Add sys_info params populated by the agent
         final_parameters.extend(self.sysinfo)
-
-        for default_value in default_values:
-            if default_value[0] not in event:
-                final_parameters.append(TelemetryEventParam(default_value[0], default_value[1]))
+        final_parameters = EventLogger.add_default_parameters_to_event(final_parameters, set_values_for_agent=False)
 
         event.parameters = final_parameters
 
@@ -467,34 +454,54 @@ class MonitorHandler(object):
             self.last_telemetry_heartbeat = datetime.datetime.utcnow()
 
     def poll_telemetry_metrics(self):
-        time_now = datetime.datetime.utcnow()
-        if not self.last_cgroup_polling_telemetry:
-            self.last_cgroup_polling_telemetry = time_now
+        """
+        This method polls the tracked cgroups to get data from the cgroups filesystem and send the data directly.
 
-        if time_now >= (self.last_cgroup_polling_telemetry +
-                        MonitorHandler.CGROUP_TELEMETRY_POLLING_PERIOD):
-            CGroupsTelemetry.poll_all_tracked()
-            self.last_cgroup_polling_telemetry = time_now
+        :return: List of Metrics (which would be sent to PerfCounterMetrics directly.
+        """
+        try:  # If there is an issue in reporting, it should not take down whole monitor thread.
+            time_now = datetime.datetime.utcnow()
+            if not self.last_cgroup_polling_telemetry:
+                self.last_cgroup_polling_telemetry = time_now
+
+            if time_now >= (self.last_cgroup_polling_telemetry +
+                            MonitorHandler.CGROUP_TELEMETRY_POLLING_PERIOD):
+                metrics = CGroupsTelemetry.poll_all_tracked()
+                self.last_cgroup_polling_telemetry = time_now
+
+                if metrics:
+                    for metric in metrics:
+                        report_metric(metric.category, metric.counter, metric.instance, metric.value)
+        except Exception as e:
+            logger.warn("Could not poll all the tracked telemetry due to {0}", ustr(e))
 
     def send_telemetry_metrics(self):
+        """
+        The send_telemetry_metrics would soon be removed in favor of sending performance metrics directly.
+
+        :return:
+        """
         time_now = datetime.datetime.utcnow()
 
-        if not self.last_cgroup_report_telemetry:
-            self.last_cgroup_report_telemetry = time_now
+        try:  # If there is an issue in reporting, it should not take down whole monitor thread.
+            if not self.last_cgroup_report_telemetry:
+                self.last_cgroup_report_telemetry = time_now
 
-        if time_now >= (self.last_cgroup_report_telemetry + MonitorHandler.CGROUP_TELEMETRY_REPORTING_PERIOD):
-            performance_metrics = CGroupsTelemetry.report_all_tracked()
-            self.last_cgroup_report_telemetry = time_now
+            if time_now >= (self.last_cgroup_report_telemetry + MonitorHandler.CGROUP_TELEMETRY_REPORTING_PERIOD):
+                performance_metrics = CGroupsTelemetry.report_all_tracked()
+                self.last_cgroup_report_telemetry = time_now
 
-            if performance_metrics:
-                message = generate_extension_metrics_telemetry_dictionary(schema_version=1.0,
-                                                                          performance_metrics=performance_metrics)
-                add_event(name=AGENT_NAME,
-                          version=CURRENT_VERSION,
-                          op=WALAEventOperation.ExtensionMetricsData,
-                          is_success=True,
-                          message=ustr(message),
-                          log_event=False)
+                if performance_metrics:
+                    message = generate_extension_metrics_telemetry_dictionary(schema_version=1.0,
+                                                                              performance_metrics=performance_metrics)
+                    add_event(name=AGENT_NAME,
+                              version=CURRENT_VERSION,
+                              op=WALAEventOperation.ExtensionMetricsData,
+                              is_success=True,
+                              message=ustr(message),
+                              log_event=False)
+        except Exception as e:
+            logger.warn("Could not report all the tracked telemetry due to {0}", ustr(e))
 
     def log_altered_network_configuration(self):
         """

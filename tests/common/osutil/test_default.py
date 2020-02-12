@@ -19,16 +19,20 @@ import socket
 import glob
 import mock
 import traceback
-import re
+import os
+import tempfile
+import unittest
 
 import azurelinuxagent.common.osutil.default as osutil
 import azurelinuxagent.common.utils.shellutil as shellutil
 import azurelinuxagent.common.utils.textutil as textutil
+import azurelinuxagent.common.conf as conf
 from azurelinuxagent.common.exception import OSUtilError
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.osutil import get_osutil
-from tests.tools import *
-
+from azurelinuxagent.common.utils import fileutil
+from tests.tools import AgentTestCase, call, patch, open_patch, load_data, \
+    running_under_travis, skip_if_predicate_true
 
 actual_get_proc_net_route = 'azurelinuxagent.common.osutil.default.DefaultOSUtil._get_proc_net_route'
 
