@@ -397,7 +397,7 @@ system swap space.
 _Type: Boolean_  
 _Default: n_
 
-If set, the swap file (/swapfile) is mounted as an encrypted filesystem.
+If set, the swap file (/swapfile) is mounted as an encrypted filesystem (flag supported only on FreeBSD.)
 
 #### __ResourceDisk.SwapSizeMB__
 
