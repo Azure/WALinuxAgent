@@ -16,6 +16,6 @@
 #
 
 from azurelinuxagent.common.protocol.util import get_protocol_util, \
-                                                 OVF_FILE_NAME, \
-                                                 TAG_FILE_NAME
+                                                 OVF_FILE_NAME
+
 

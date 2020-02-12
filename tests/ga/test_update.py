@@ -10,10 +10,7 @@ from threading import currentThread
 
 from azurelinuxagent.ga.env import EnvHandler
 
-from azurelinuxagent.common.protocol.util import ProtocolUtil
-
 from azurelinuxagent.common.protocol.hostplugin import *
-from azurelinuxagent.common.protocol.metadata import *
 from azurelinuxagent.common.protocol.util import ProtocolUtil
 from azurelinuxagent.common.protocol.wire import *
 from azurelinuxagent.ga.monitor import MonitorHandler
@@ -897,13 +894,6 @@ class TestUpdate(UpdateTestCase):
         self.assertEqual(1, mock_get_host.call_count)
         self.assertEqual("faux host", host)
 
-    @patch('azurelinuxagent.common.protocol.wire.WireClient.get_host_plugin')
-    def test_get_host_plugin_returns_none_otherwise(self, mock_get_host):
-        protocol = MetadataProtocol()
-        host = self.update_handler._get_host_plugin(protocol=protocol)
-        mock_get_host.assert_not_called()
-        self.assertEqual(None, host)
-
     def test_get_latest_agent(self):
         latest_version = self.prepare_agents()
 
@@ -1463,13 +1453,14 @@ class TestUpdate(UpdateTestCase):
     def test_telemetry_heartbeat_creates_event(self, patch_add_event, patch_info, *_):
         update_handler = get_update_handler()
         mock_protocol = WireProtocol("foo.bar")
-        patch_info.reset_mock()  # To clear the logger.info in WireProtocol.
 
         update_handler.last_telemetry_heartbeat = datetime.utcnow() - timedelta(hours=1)
         update_handler._send_heartbeat_telemetry(mock_protocol)
         self.assertEqual(1, patch_add_event.call_count)
-        self.assertEqual(1, patch_info.call_count)
-        self.assertEqual(patch_info.call_args[0][0], "[HEARTBEAT] Agent {0} is running as the goal state agent")
+        self.assertTrue(
+            any(call_args[0] == "[HEARTBEAT] Agent {0} is running as the goal state agent" for call_args in patch_info.call_args),
+            "The heartbeat was not written to the agent's log"
+        )
 
 
 class MonitorThreadTest(AgentTestCase):
