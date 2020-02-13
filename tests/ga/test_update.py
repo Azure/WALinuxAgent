@@ -10,6 +10,7 @@ from threading import currentThread
 
 from azurelinuxagent.ga.env import EnvHandler
 
+from azurelinuxagent.common.protocol.goal_state import ExtensionsConfig
 from azurelinuxagent.common.protocol.hostplugin import *
 from azurelinuxagent.common.protocol.util import ProtocolUtil
 from azurelinuxagent.common.protocol.wire import *

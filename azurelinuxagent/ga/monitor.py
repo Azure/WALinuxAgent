@@ -34,7 +34,7 @@ from azurelinuxagent.common.event import add_event, EventLogger, get_container_i
 from azurelinuxagent.common.exception import EventError, HttpError, OSUtilError, ProtocolError
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.osutil import get_osutil
-from azurelinuxagent.common.protocol import get_protocol_util
+from azurelinuxagent.common.protocol.util import get_protocol_util
 from azurelinuxagent.common.protocol.healthservice import HealthService
 from azurelinuxagent.common.protocol.imds import get_imds_client
 from azurelinuxagent.common.telemetryevent import TelemetryEvent, TelemetryEventList, TelemetryEventParam

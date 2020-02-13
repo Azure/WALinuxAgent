@@ -33,7 +33,8 @@ DATA_FILE = {
         "ga_manifest": "wire/ga_manifest.xml",
         "trans_prv": "wire/trans_prv",
         "trans_cert": "wire/trans_cert",
-        "test_ext": "ext/sample_ext-1.3.0.zip"
+        "test_ext": "ext/sample_ext-1.3.0.zip",
+        "remote_access": None
 }
 
 DATA_FILE_NO_EXT = DATA_FILE.copy()
@@ -75,6 +76,10 @@ DATA_FILE_NO_CERT_FORMAT["certs"] = "wire/certs_no_format_specified.xml"
 DATA_FILE_CERT_FORMAT_NOT_PFX = DATA_FILE.copy()
 DATA_FILE_CERT_FORMAT_NOT_PFX["certs"] = "wire/certs_format_not_pfx.xml"
 
+DATA_FILE_REMOTE_ACCESS = DATA_FILE.copy()
+DATA_FILE_REMOTE_ACCESS["goal_state"] = "wire/goal_state_remote_access.xml"
+DATA_FILE_REMOTE_ACCESS["remote_access"] = "wire/remote_access_single_account.xml"
+
 class WireProtocolData(object):
     def __init__(self, data_files=DATA_FILE):
         self.emulate_stale_goal_state = False
@@ -86,6 +91,7 @@ class WireProtocolData(object):
             "sharedconfiguri": 0,
             "certificatesuri": 0,
             "extensionsconfiguri": 0,
+            "remoteaccessinfouri": 0,
             "extensionArtifact": 0,
             "manifest.xml": 0,
             "manifest_of_ga.xml": 0,
@@ -103,6 +109,7 @@ class WireProtocolData(object):
         self.trans_prv = None
         self.trans_cert = None
         self.ext = None
+        self.remote_access = None
 
         self.reload()
 
@@ -118,6 +125,9 @@ class WireProtocolData(object):
         self.trans_prv = load_data(self.data_files.get("trans_prv"))
         self.trans_cert = load_data(self.data_files.get("trans_cert"))
         self.ext = load_bin_data(self.data_files.get("test_ext"))
+        remote_access_data_file = self.data_files.get("remote_access")
+        if remote_access_data_file is not None:
+            self.remote_access = load_data(remote_access_data_file)
 
     def mock_http_get(self, url, *args, **kwargs):
         content = None
@@ -149,6 +159,9 @@ class WireProtocolData(object):
         elif "extensionsconfiguri" in url:
             content = self.ext_conf
             self.call_counts["extensionsconfiguri"] += 1
+        elif "remoteaccessinfouri" in url:
+            content = self.remote_access
+            self.call_counts["remoteaccessinfouri"] += 1
 
         else:
             # A stale GoalState results in a 400 from the HostPlugin

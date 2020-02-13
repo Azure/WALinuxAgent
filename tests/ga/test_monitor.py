@@ -109,7 +109,7 @@ def get_event_message(duration, evt_type, is_internal, is_success, message, name
 
 @patch('azurelinuxagent.common.event.EventLogger.add_event')
 @patch('azurelinuxagent.common.osutil.get_osutil')
-@patch('azurelinuxagent.common.protocol.get_protocol_util')
+@patch('azurelinuxagent.common.protocol.util.get_protocol_util')
 @patch('azurelinuxagent.common.protocol.util.ProtocolUtil.get_protocol')
 @patch("azurelinuxagent.common.protocol.healthservice.HealthService._report")
 @patch("azurelinuxagent.common.utils.restutil.http_get")
@@ -567,7 +567,7 @@ class TestEventMonitoring(AgentTestCase):
         mock_http_get.side_effect = test_data.mock_http_get
         MockCryptUtil.side_effect = test_data.mock_crypt_util
 
-        protocol = WireProtocol("foo.bar")
+        protocol = WireProtocol(restutil.KNOWN_WIRESERVER_IP)
         protocol.detect()
         protocol.report_ext_status = MagicMock()
         protocol.report_vm_status = MagicMock()
@@ -827,7 +827,7 @@ class TestEventMonitoring(AgentTestCase):
                 monitor_handler.collect_and_send_events()
                 self.assertEqual(1, mock_error.call_count)
                 self.assertEqual("[ProtocolError] [Wireserver Exception] [ProtocolError] [Wireserver Failed] "
-                                 "URI http://foo.bar/machine?comp=telemetrydata  [HTTP Failed] Status Code 503",
+                                 "URI http://{0}/machine?comp=telemetrydata  [HTTP Failed] Status Code 503".format(protocol.get_endpoint()),
                                  mock_error.call_args[0][1])
                 self.assertEqual(0, len(os.listdir(self.event_logger.event_dir)))
 
@@ -882,7 +882,7 @@ class TestEventMonitoring(AgentTestCase):
 
 
 @patch('azurelinuxagent.common.osutil.get_osutil')
-@patch('azurelinuxagent.common.protocol.get_protocol_util')
+@patch('azurelinuxagent.common.protocol.util.get_protocol_util')
 @patch("azurelinuxagent.common.protocol.healthservice.HealthService._report")
 @patch("azurelinuxagent.common.utils.restutil.http_get")
 class TestExtensionMetricsDataTelemetry(AgentTestCase):
