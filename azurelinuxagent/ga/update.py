@@ -531,9 +531,8 @@ class UpdateHandler(object):
             logger.warn(u"Exception occurred loading available agents: {0}", ustr(e))
         return
 
-    def _get_host_plugin(self, protocol=None):
-        return protocol.client.get_host_plugin() \
-            if protocol and type(protocol) is WireProtocol and protocol.client else None
+    def _get_host_plugin(self, protocol):
+        return protocol.client.get_host_plugin() if protocol and protocol.client else None
 
     def _get_pid_parts(self):
         pid_file = conf.get_agent_pid_file_path()
