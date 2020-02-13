@@ -16,6 +16,7 @@
 #
 
 import contextlib
+import re
 from azurelinuxagent.common.protocol.wire import WireProtocol
 from azurelinuxagent.common.utils.restutil import KNOWN_WIRESERVER_IP, http_get
 from tests.tools import patch
@@ -59,10 +60,10 @@ def create(mock_wire_data_file):
         # to the wireserver or requests starting with "mock-goal-state"
         original_http_get = http_get
 
-        wire_server_endpoint = 'http://{0}'.format(KNOWN_WIRESERVER_IP)
+        mock_data_re = re.compile(r'https?://(mock-goal-state|{0}).*'.format(KNOWN_WIRESERVER_IP.replace(r'.', r'\.')), re.IGNORECASE)
 
         def mock_http_get(url, *args, **kwargs):
-            if not (url.startswith(wire_server_endpoint) or url.startswith('http://mock-goal-state/') or url.startswith('https://mock-goal-state/')):
+            if mock_data_re.match(url) is None:
                 return original_http_get(url, *args, **kwargs)
             return protocol.mock_wire_data.mock_http_get(url, *args, **kwargs)
 
