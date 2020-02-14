@@ -23,10 +23,9 @@ from datetime import datetime, timedelta
 
 from azurelinuxagent.common import event, logger
 from azurelinuxagent.common.event import add_event, elapsed_milliseconds, EventLogger, report_metric, \
-    WALAEventOperation, parse_xml_event, parse_json_event, parse_event, EVENT_FILE_EXTENSION
+    WALAEventOperation, parse_xml_event, parse_json_event, parse_event, EVENT_FILE_EXTENSION, EVENTS_DIRECTORY
 from azurelinuxagent.common.exception import EventError
 from azurelinuxagent.common.future import OrderedDict, ustr
-from azurelinuxagent.common.protocol.wire import GoalState
 from azurelinuxagent.common.telemetryevent import TelemetryEvent, TelemetryEventParam
 from azurelinuxagent.common.utils import fileutil
 from azurelinuxagent.common.utils.extensionprocessutil import read_output
@@ -342,7 +341,7 @@ class TestEvent(AgentTestCase):
             self.assertEqual(EVENT_FILE_EXTENSION, filename[-4:])
 
     def test_save_event_message_with_non_ascii_characters(self):
-        test_data_dir = os.path.join(data_dir, "events", "collect_and_send_extension_stdout_stderror")
+        test_data_dir = os.path.join(data_dir, EVENTS_DIRECTORY, "collect_and_send_extension_stdout_stderror")
         msg = ""
 
         with open(os.path.join(test_data_dir, "dummy_stdout_with_non_ascii_characters"), mode="r+b") as stdout:

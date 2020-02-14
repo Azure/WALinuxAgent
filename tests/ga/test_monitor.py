@@ -34,7 +34,7 @@ from azurelinuxagent.common.cgroup import CGroup, CpuCgroup, MemoryCgroup
 from azurelinuxagent.common.cgroupconfigurator import CGroupConfigurator
 from azurelinuxagent.common.cgroupstelemetry import CGroupsTelemetry, MetricValue
 from azurelinuxagent.common.datacontract import get_properties
-from azurelinuxagent.common.event import EventLogger, WALAEventOperation
+from azurelinuxagent.common.event import EventLogger, WALAEventOperation, EVENTS_DIRECTORY
 from azurelinuxagent.common.exception import HttpError
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.logger import Logger
@@ -50,6 +50,7 @@ from azurelinuxagent.ga.monitor import generate_extension_metrics_telemetry_dict
 from tests.common.test_cgroupstelemetry import make_new_cgroup
 from tests.common.mocksysinfo import SysInfoData
 from tests.protocol.mockwiredata import DATA_FILE, WireProtocolData
+from tests.protocol import mock_wire_protocol
 from tests.tools import Mock, MagicMock, patch, AgentTestCase, data_dir, are_cgroups_enabled, i_am_root, \
     skip_if_predicate_false, is_trusty_in_travis, skip_if_predicate_true, clear_singleton_instances, PropertyMock
 
@@ -315,15 +316,13 @@ class TestMonitor(AgentTestCase):
 
 @patch('azurelinuxagent.common.osutil.get_osutil')
 @patch("azurelinuxagent.common.protocol.healthservice.HealthService._report")
-@patch("azurelinuxagent.common.protocol.wire.CryptUtil")
-@patch("azurelinuxagent.common.utils.restutil.http_get")
 class TestEventMonitoring(AgentTestCase):
     def setUp(self):
         AgentTestCase.setUp(self)
         self.lib_dir = tempfile.mkdtemp()
 
         self.event_logger = EventLogger()
-        self.event_logger.event_dir = os.path.join(self.lib_dir, "events")
+        self.event_logger.event_dir = os.path.join(self.lib_dir, event.EVENTS_DIRECTORY)
 
         self.mock_sysinfo = patch("azurelinuxagent.common.sysinfo.SysInfo.get_instance", return_value=SysInfoData)
         self.mock_sysinfo.start()
@@ -332,301 +331,283 @@ class TestEventMonitoring(AgentTestCase):
         self.mock_sysinfo.stop()
         fileutil.rm_dirs(self.lib_dir)
 
-    def _create_mock(self, test_data, mock_http_get, MockCryptUtil, *args):
-        """Test enable/disable/uninstall of an extension"""
+    @staticmethod
+    def _create_monitor_handler(protocol):
         monitor_handler = get_monitor_handler()
-
-        # Mock protocol to return test data
-        mock_http_get.side_effect = test_data.mock_http_get
-        MockCryptUtil.side_effect = test_data.mock_crypt_util
-
-        protocol = WireProtocol(restutil.KNOWN_WIRESERVER_IP)
-        protocol.detect()
-        protocol.report_ext_status = MagicMock()
-        protocol.report_vm_status = MagicMock()
-
         protocol_util = get_protocol_util()
         protocol_util.get_protocol = Mock(return_value=protocol)
         monitor_handler.protocol_util = Mock(return_value=protocol_util)
-        return monitor_handler, protocol
+        monitor_handler.init_protocols()
+        return monitor_handler
 
     @patch("azurelinuxagent.common.event.send_logs_to_telemetry", return_value=True)
     @patch("azurelinuxagent.common.conf.get_lib_dir")
-    def test_collect_and_send_events_should_send_all_events_with_the_same_schema(self, mock_lib_dir, _, *args):
+    def test_collect_and_send_events_should_send_all_events_with_the_same_schema(self, mock_lib_dir, *_):
         # Test collecting and sending both agent and extension events and ensure the telemetry schema is consistent
         # before the events are sent.
         mock_lib_dir.return_value = self.lib_dir
 
-        test_data = WireProtocolData(DATA_FILE)
-        monitor_handler, protocol = self._create_mock(test_data, *args)
-        monitor_handler.init_protocols()
+        with mock_wire_protocol.create(DATA_FILE) as protocol:
+            monitor_handler = TestEventMonitoring._create_monitor_handler(protocol)
 
-        # Add agent event file
-        self.event_logger.add_event(name=AGENT_NAME,
-                                    version=CURRENT_VERSION,
-                                    op=WALAEventOperation.HeartBeat,
-                                    is_success=True,
-                                    message="Heartbeat",
-                                    log_event=False)
+            # Add agent event file
+            self.event_logger.add_event(name=AGENT_NAME,
+                                        version=CURRENT_VERSION,
+                                        op=WALAEventOperation.HeartBeat,
+                                        is_success=True,
+                                        message="Heartbeat",
+                                        log_event=False)
 
-        # Add extension event file the way extension do it, by dropping a .tld file in the events folder
-        source_file = os.path.join(data_dir, "ext/dsc_event.json")
-        dest_file = os.path.join(conf.get_lib_dir(), "events", "dsc_event.tld")
-        shutil.copyfile(source_file, dest_file)
+            # Add extension event file the way extension do it, by dropping a .tld file in the events folder
+            source_file = os.path.join(data_dir, "ext/dsc_event.json")
+            dest_file = os.path.join(conf.get_lib_dir(), EVENTS_DIRECTORY, "dsc_event.tld")
+            shutil.copyfile(source_file, dest_file)
 
-        # Collect these events and assert they are being sent with the same telemetry parameters present
-        with patch.object(protocol, "report_event") as patch_report_event:
+            # Collect these events and assert they are being sent with the same telemetry parameters present
+            with patch.object(protocol, "report_event") as patch_report_event:
+                monitor_handler.collect_and_send_events()
+
+                telemetry_events_list = patch_report_event.call_args_list[0][0][0]
+                self.assertEqual(len(telemetry_events_list.events), 2)
+
+                telemetry_params_list = []
+
+                for event in telemetry_events_list.events:
+                    # Save each event's parameter names in a set in order to compare them to each other later
+                    event_params_names = set()
+                    for param in event.parameters:
+                        event_params_names.add(param.name)
+                    telemetry_params_list.append(event_params_names)
+
+                    # Do an explicit check for ContainerId and GAVersion, as these parameters are important for telemetry
+                    container_id_param = TelemetryEventParam("ContainerId", protocol.client.get_goal_state().container_id)
+                    self.assertTrue(container_id_param in event.parameters)
+
+                    gaversion_param = TelemetryEventParam("GAVersion", CURRENT_AGENT)
+                    self.assertTrue(gaversion_param in event.parameters)
+
+                # The schema of events being sent should be consistent across agent and extension events
+                self.assertEquals(telemetry_params_list[0], telemetry_params_list[1])
+                self.assertEquals(28, len(telemetry_params_list[0]))
+
+    @patch("azurelinuxagent.common.protocol.wire.WireClient.send_event")
+    @patch("azurelinuxagent.common.conf.get_lib_dir")
+    def test_collect_and_send_events(self, mock_lib_dir, patch_send_event, *_):
+        mock_lib_dir.return_value = self.lib_dir
+
+        with mock_wire_protocol.create(DATA_FILE) as protocol:
+            monitor_handler = TestEventMonitoring._create_monitor_handler(protocol)
+
+            self.event_logger.save_event(create_dummy_event(message="Message-Test"))
+
+            monitor_handler.last_event_collection = None
+            test_mtime = 1000  # epoch time, in ms
+            test_opcodename = datetime.datetime.fromtimestamp(test_mtime).strftime(u'%Y-%m-%dT%H:%M:%S.%fZ')
+            test_eventtid = 42
+            test_eventpid = 24
+            test_taskname = "TEST_TaskName"
+
+            with patch("os.path.getmtime", return_value=test_mtime):
+                with patch('os.getpid', return_value=test_eventpid):
+                    with patch("threading.Thread.ident", new_callable=PropertyMock(return_value=test_eventtid)):
+                        with patch("threading.Thread.getName", return_value=test_taskname):
+                            monitor_handler.collect_and_send_events()
+
+            # Validating the crafted message by the collect_and_send_events call.
+            self.assertEqual(1, patch_send_event.call_count)
+            send_event_call_args = protocol.client.send_event.call_args[0]
+
+            sample_message = '<Event id="1"><![CDATA[' \
+                             '<Param Name="Name" Value="DummyExtension" T="mt:wstr" />' \
+                             '<Param Name="Version" Value="{0}" T="mt:wstr" />' \
+                             '<Param Name="Operation" Value="Unknown" T="mt:wstr" />' \
+                             '<Param Name="OperationSuccess" Value="True" T="mt:bool" />' \
+                             '<Param Name="Message" Value="Message-Test" T="mt:wstr" />' \
+                             '<Param Name="Duration" Value="0" T="mt:uint64" />' \
+                             '<Param Name="GAVersion" Value="{1}" T="mt:wstr" />' \
+                             '<Param Name="ContainerId" Value="c6d5526c-5ac2-4200-b6e2-56f2b70c5ab2" T="mt:wstr" />' \
+                             '<Param Name="OpcodeName" Value="{2}" T="mt:wstr" />' \
+                             '<Param Name="EventTid" Value="{3}" T="mt:uint64" />' \
+                             '<Param Name="EventPid" Value="{4}" T="mt:uint64" />' \
+                             '<Param Name="TaskName" Value="{5}" T="mt:wstr" />' \
+                             '<Param Name="KeywordName" Value="" T="mt:wstr" />' \
+                             '<Param Name="ExtensionType" Value="json" T="mt:wstr" />' \
+                             '<Param Name="IsInternal" Value="False" T="mt:bool" />' \
+                             '<Param Name="OSVersion" Value="TEST_OSVersion" T="mt:wstr" />' \
+                             '<Param Name="ExecutionMode" Value="TEST_ExecutionMode" T="mt:wstr" />' \
+                             '<Param Name="RAM" Value="512" T="mt:uint64" />' \
+                             '<Param Name="Processors" Value="2" T="mt:uint64" />' \
+                             '<Param Name="VMName" Value="TEST_VMName" T="mt:wstr" />' \
+                             '<Param Name="TenantName" Value="TEST_TenantName" T="mt:wstr" />' \
+                             '<Param Name="RoleName" Value="TEST_RoleName" T="mt:wstr" />' \
+                             '<Param Name="RoleInstanceName" Value="TEST_RoleInstanceName" T="mt:wstr" />' \
+                             '<Param Name="Location" Value="TEST_Location" T="mt:wstr" />' \
+                             '<Param Name="SubscriptionId" Value="TEST_SubscriptionId" T="mt:wstr" />' \
+                             '<Param Name="ResourceGroupName" Value="TEST_ResourceGroupName" T="mt:wstr" />' \
+                             '<Param Name="VMId" Value="TEST_VMId" T="mt:wstr" />' \
+                             '<Param Name="ImageOrigin" Value="1" T="mt:uint64" />' \
+                             ']]></Event>'.format(AGENT_VERSION, CURRENT_AGENT, test_opcodename, test_eventtid,
+                                                  test_eventpid, test_taskname)
+
+            self.maxDiff = None
+            self.assertEqual(sample_message, send_event_call_args[1])
+
+    @patch("azurelinuxagent.common.protocol.wire.WireClient.send_event")
+    @patch("azurelinuxagent.common.conf.get_lib_dir")
+    def test_collect_and_send_events_with_small_events(self, mock_lib_dir, patch_send_event, *_):
+        mock_lib_dir.return_value = self.lib_dir
+
+        with mock_wire_protocol.create(DATA_FILE) as protocol:
+            monitor_handler = TestEventMonitoring._create_monitor_handler(protocol)
+
+            sizes = [15, 15, 15, 15]  # get the powers of 2 - 2**16 is the limit
+
+            for power in sizes:
+                size = 2 ** power
+                self.event_logger.save_event(create_dummy_event(size))
             monitor_handler.collect_and_send_events()
 
-            telemetry_events_list = patch_report_event.call_args_list[0][0][0]
-            self.assertEqual(len(telemetry_events_list.events), 2)
+            # The send_event call would be called each time, as we are filling up the buffer up to the brim for each call.
 
-            telemetry_params_list = []
-
-            for event in telemetry_events_list.events:
-                # Save each event's parameter names in a set in order to compare them to each other later
-                event_params_names = set()
-                for param in event.parameters:
-                    event_params_names.add(param.name)
-                telemetry_params_list.append(event_params_names)
-
-                # Do an explicit check for ContainerId and GAVersion, as these parameters are important for telemetry
-                container_id_param = TelemetryEventParam("ContainerId", protocol.client.get_goal_state().container_id)
-                self.assertTrue(container_id_param in event.parameters)
-
-                gaversion_param = TelemetryEventParam("GAVersion", CURRENT_AGENT)
-                self.assertTrue(gaversion_param in event.parameters)
-
-            # The schema of events being sent should be consistent across agent and extension events
-            self.assertEquals(telemetry_params_list[0], telemetry_params_list[1])
-            self.assertEquals(28, len(telemetry_params_list[0]))
+            self.assertEqual(4, patch_send_event.call_count)
 
     @patch("azurelinuxagent.common.protocol.wire.WireClient.send_event")
     @patch("azurelinuxagent.common.conf.get_lib_dir")
-    def test_collect_and_send_events(self, mock_lib_dir, patch_send_event, *args):
+    def test_collect_and_send_events_with_large_events(self, mock_lib_dir, patch_send_event, *_):
         mock_lib_dir.return_value = self.lib_dir
 
-        test_data = WireProtocolData(DATA_FILE)
-        monitor_handler, protocol = self._create_mock(test_data, *args)
-        monitor_handler.init_protocols()
+        with mock_wire_protocol.create(DATA_FILE) as protocol:
+            monitor_handler = TestEventMonitoring._create_monitor_handler(protocol)
 
-        self.event_logger.save_event(create_dummy_event(message="Message-Test"))
+            sizes = [17, 17, 17]  # get the powers of 2
 
-        monitor_handler.last_event_collection = None
-        test_mtime = 1000  # epoch time, in ms
-        test_opcodename = datetime.datetime.fromtimestamp(test_mtime).strftime(u'%Y-%m-%dT%H:%M:%S.%fZ')
-        test_eventtid = 42
-        test_eventpid = 24
-        test_taskname = "TEST_TaskName"
+            for power in sizes:
+                size = 2 ** power
+                self.event_logger.save_event(create_dummy_event(size))
 
-        with patch("os.path.getmtime", return_value=test_mtime):
-            with patch('os.getpid', return_value=test_eventpid):
-                with patch("threading.Thread.ident", new_callable=PropertyMock(return_value=test_eventtid)):
-                    with patch("threading.Thread.getName", return_value=test_taskname):
-                        monitor_handler.collect_and_send_events()
+            with patch("azurelinuxagent.common.logger.periodic_warn") as patch_periodic_warn:
+                monitor_handler.collect_and_send_events()
+                self.assertEqual(3, patch_periodic_warn.call_count)
 
-        # Validating the crafted message by the collect_and_send_events call.
-        self.assertEqual(1, patch_send_event.call_count)
-        send_event_call_args = protocol.client.send_event.call_args[0]
-
-        sample_message = '<Event id="1"><![CDATA[' \
-                         '<Param Name="Name" Value="DummyExtension" T="mt:wstr" />' \
-                         '<Param Name="Version" Value="{0}" T="mt:wstr" />' \
-                         '<Param Name="Operation" Value="Unknown" T="mt:wstr" />' \
-                         '<Param Name="OperationSuccess" Value="True" T="mt:bool" />' \
-                         '<Param Name="Message" Value="Message-Test" T="mt:wstr" />' \
-                         '<Param Name="Duration" Value="0" T="mt:uint64" />' \
-                         '<Param Name="GAVersion" Value="{1}" T="mt:wstr" />' \
-                         '<Param Name="ContainerId" Value="c6d5526c-5ac2-4200-b6e2-56f2b70c5ab2" T="mt:wstr" />' \
-                         '<Param Name="OpcodeName" Value="{2}" T="mt:wstr" />' \
-                         '<Param Name="EventTid" Value="{3}" T="mt:uint64" />' \
-                         '<Param Name="EventPid" Value="{4}" T="mt:uint64" />' \
-                         '<Param Name="TaskName" Value="{5}" T="mt:wstr" />' \
-                         '<Param Name="KeywordName" Value="" T="mt:wstr" />' \
-                         '<Param Name="ExtensionType" Value="json" T="mt:wstr" />' \
-                         '<Param Name="IsInternal" Value="False" T="mt:bool" />' \
-                         '<Param Name="OSVersion" Value="TEST_OSVersion" T="mt:wstr" />' \
-                         '<Param Name="ExecutionMode" Value="TEST_ExecutionMode" T="mt:wstr" />' \
-                         '<Param Name="RAM" Value="512" T="mt:uint64" />' \
-                         '<Param Name="Processors" Value="2" T="mt:uint64" />' \
-                         '<Param Name="VMName" Value="TEST_VMName" T="mt:wstr" />' \
-                         '<Param Name="TenantName" Value="TEST_TenantName" T="mt:wstr" />' \
-                         '<Param Name="RoleName" Value="TEST_RoleName" T="mt:wstr" />' \
-                         '<Param Name="RoleInstanceName" Value="TEST_RoleInstanceName" T="mt:wstr" />' \
-                         '<Param Name="Location" Value="TEST_Location" T="mt:wstr" />' \
-                         '<Param Name="SubscriptionId" Value="TEST_SubscriptionId" T="mt:wstr" />' \
-                         '<Param Name="ResourceGroupName" Value="TEST_ResourceGroupName" T="mt:wstr" />' \
-                         '<Param Name="VMId" Value="TEST_VMId" T="mt:wstr" />' \
-                         '<Param Name="ImageOrigin" Value="1" T="mt:uint64" />' \
-                         ']]></Event>'.format(AGENT_VERSION, CURRENT_AGENT, test_opcodename, test_eventtid,
-                                              test_eventpid, test_taskname)
-
-        self.maxDiff = None
-        self.assertEqual(sample_message, send_event_call_args[1])
+            # The send_event call should never be called as the events are larger than 2**16.
+            self.assertEqual(0, patch_send_event.call_count)
 
     @patch("azurelinuxagent.common.protocol.wire.WireClient.send_event")
     @patch("azurelinuxagent.common.conf.get_lib_dir")
-    def test_collect_and_send_events_with_small_events(self, mock_lib_dir, patch_send_event, *args):
+    def test_collect_and_send_events_with_invalid_events(self, mock_lib_dir, patch_send_event, *_):
         mock_lib_dir.return_value = self.lib_dir
-
-        test_data = WireProtocolData(DATA_FILE)
-        monitor_handler, protocol = self._create_mock(test_data, *args)
-        monitor_handler.init_protocols()
-
-        sizes = [15, 15, 15, 15]  # get the powers of 2 - 2**16 is the limit
-
-        for power in sizes:
-            size = 2 ** power
-            self.event_logger.save_event(create_dummy_event(size))
-        monitor_handler.collect_and_send_events()
-
-        # The send_event call would be called each time, as we are filling up the buffer up to the brim for each call.
-
-        self.assertEqual(4, patch_send_event.call_count)
-
-    @patch("azurelinuxagent.common.protocol.wire.WireClient.send_event")
-    @patch("azurelinuxagent.common.conf.get_lib_dir")
-    def test_collect_and_send_events_with_large_events(self, mock_lib_dir, patch_send_event, *args):
-        mock_lib_dir.return_value = self.lib_dir
-
-        test_data = WireProtocolData(DATA_FILE)
-        monitor_handler, protocol = self._create_mock(test_data, *args)
-        monitor_handler.init_protocols()
-
-        sizes = [17, 17, 17]  # get the powers of 2
-
-        for power in sizes:
-            size = 2 ** power
-            self.event_logger.save_event(create_dummy_event(size))
-
-        with patch("azurelinuxagent.common.logger.periodic_warn") as patch_periodic_warn:
-            monitor_handler.collect_and_send_events()
-            self.assertEqual(3, patch_periodic_warn.call_count)
-
-        # The send_event call should never be called as the events are larger than 2**16.
-        self.assertEqual(0, patch_send_event.call_count)
-
-    @patch("azurelinuxagent.common.protocol.wire.WireClient.send_event")
-    @patch("azurelinuxagent.common.conf.get_lib_dir")
-    def test_collect_and_send_events_with_invalid_events(self, mock_lib_dir, patch_send_event, *args):
-        mock_lib_dir.return_value = self.lib_dir
-        dummy_events_dir = os.path.join(data_dir, "events", "collect_and_send_events_invalid_data")
+        dummy_events_dir = os.path.join(data_dir, EVENTS_DIRECTORY, "collect_and_send_events_invalid_data")
         fileutil.mkdir(self.event_logger.event_dir)
 
-        test_data = WireProtocolData(DATA_FILE)
-        monitor_handler, protocol = self._create_mock(test_data, *args)
-        monitor_handler.init_protocols()
+        with mock_wire_protocol.create(DATA_FILE) as protocol:
+            monitor_handler = TestEventMonitoring._create_monitor_handler(protocol)
 
-        for filename in os.listdir(dummy_events_dir):
-            shutil.copy(os.path.join(dummy_events_dir, filename), self.event_logger.event_dir)
+            for filename in os.listdir(dummy_events_dir):
+                shutil.copy(os.path.join(dummy_events_dir, filename), self.event_logger.event_dir)
 
-        monitor_handler.collect_and_send_events()
-
-        # Invalid events
-        self.assertEqual(0, patch_send_event.call_count)
-
-    @patch("azurelinuxagent.common.protocol.wire.WireClient.send_event")
-    @patch("azurelinuxagent.common.conf.get_lib_dir")
-    def test_collect_and_send_events_cannot_read_events(self, mock_lib_dir, patch_send_event, *args):
-        mock_lib_dir.return_value = self.lib_dir
-        dummy_events_dir = os.path.join(data_dir, "events", "collect_and_send_events_unreadable_data")
-        fileutil.mkdir(self.event_logger.event_dir)
-
-        test_data = WireProtocolData(DATA_FILE)
-        monitor_handler, protocol = self._create_mock(test_data, *args)
-        monitor_handler.init_protocols()
-
-        for filename in os.listdir(dummy_events_dir):
-            shutil.copy(os.path.join(dummy_events_dir, filename), self.event_logger.event_dir)
-
-        def builtins_version():
-            if sys.version_info[0] == 2:
-                return "__builtin__"
-            else:
-                return "builtins"
-
-        with patch("{0}.open".format(builtins_version())) as mock_open:
-            mock_open.side_effect = IOError(13, "Permission denied")
             monitor_handler.collect_and_send_events()
 
             # Invalid events
             self.assertEqual(0, patch_send_event.call_count)
 
+    @patch("azurelinuxagent.common.protocol.wire.WireClient.send_event")
     @patch("azurelinuxagent.common.conf.get_lib_dir")
-    def test_collect_and_send_with_http_post_returning_503(self, mock_lib_dir, *args):
+    def test_collect_and_send_events_cannot_read_events(self, mock_lib_dir, patch_send_event, *_):
+        mock_lib_dir.return_value = self.lib_dir
+        dummy_events_dir = os.path.join(data_dir, EVENTS_DIRECTORY, "collect_and_send_events_unreadable_data")
+        fileutil.mkdir(self.event_logger.event_dir)
+
+        with mock_wire_protocol.create(DATA_FILE) as protocol:
+            monitor_handler = TestEventMonitoring._create_monitor_handler(protocol)
+
+            for filename in os.listdir(dummy_events_dir):
+                shutil.copy(os.path.join(dummy_events_dir, filename), self.event_logger.event_dir)
+
+            def builtins_version():
+                if sys.version_info[0] == 2:
+                    return "__builtin__"
+                else:
+                    return "builtins"
+
+            with patch("{0}.open".format(builtins_version())) as mock_open:
+                mock_open.side_effect = IOError(13, "Permission denied")
+                monitor_handler.collect_and_send_events()
+
+                # Invalid events
+                self.assertEqual(0, patch_send_event.call_count)
+
+    @patch("azurelinuxagent.common.conf.get_lib_dir")
+    def test_collect_and_send_with_http_post_returning_503(self, mock_lib_dir, *_):
         mock_lib_dir.return_value = self.lib_dir
         fileutil.mkdir(self.event_logger.event_dir)
 
-        test_data = WireProtocolData(DATA_FILE)
-        monitor_handler, protocol = self._create_mock(test_data, *args)
-        monitor_handler.init_protocols()
+        with mock_wire_protocol.create(DATA_FILE) as protocol:
+            monitor_handler = TestEventMonitoring._create_monitor_handler(protocol)
 
-        sizes = [1, 2, 3]  # get the powers of 2, and multiple by 1024.
+            sizes = [1, 2, 3]  # get the powers of 2, and multiple by 1024.
 
-        for power in sizes:
-            size = 2 ** power * 1024
-            self.event_logger.save_event(create_dummy_event(size))
+            for power in sizes:
+                size = 2 ** power * 1024
+                self.event_logger.save_event(create_dummy_event(size))
 
-        with patch("azurelinuxagent.common.logger.error") as mock_error:
-            with patch("azurelinuxagent.common.utils.restutil.http_post") as mock_http_post:
-                mock_http_post.return_value = ResponseMock(
-                    status=restutil.httpclient.SERVICE_UNAVAILABLE,
-                    response="")
-                monitor_handler.collect_and_send_events()
-                self.assertEqual(1, mock_error.call_count)
-                self.assertEqual("[ProtocolError] [Wireserver Exception] [ProtocolError] [Wireserver Failed] "
-                                 "URI http://{0}/machine?comp=telemetrydata  [HTTP Failed] Status Code 503".format(protocol.get_endpoint()),
-                                 mock_error.call_args[0][1])
-                self.assertEqual(0, len(os.listdir(self.event_logger.event_dir)))
+            with patch("azurelinuxagent.common.logger.warn") as mock_warn:
+                with patch("azurelinuxagent.common.utils.restutil.http_post") as mock_http_post:
+                    mock_http_post.return_value = ResponseMock(
+                        status=restutil.httpclient.SERVICE_UNAVAILABLE,
+                        response="")
+                    monitor_handler.collect_and_send_events()
+                    self.assertEqual(1, mock_warn.call_count)
+                    self.assertEqual("[ProtocolError] [Wireserver Exception] [ProtocolError] [Wireserver Failed] "
+                                     "URI http://{0}/machine?comp=telemetrydata  [HTTP Failed] Status Code 503".format(protocol.get_endpoint()),
+                                     mock_warn.call_args[0][1])
+                    self.assertEqual(0, len(os.listdir(self.event_logger.event_dir)))
 
     @patch("azurelinuxagent.common.conf.get_lib_dir")
     def test_collect_and_send_with_send_event_generating_exception(self, mock_lib_dir, *args):
         mock_lib_dir.return_value = self.lib_dir
         fileutil.mkdir(self.event_logger.event_dir)
 
-        test_data = WireProtocolData(DATA_FILE)
-        monitor_handler, protocol = self._create_mock(test_data, *args)
-        monitor_handler.init_protocols()
+        with mock_wire_protocol.create(DATA_FILE) as protocol:
+            monitor_handler = TestEventMonitoring._create_monitor_handler(protocol)
 
-        sizes = [1, 2, 3]  # get the powers of 2, and multiple by 1024.
+            sizes = [1, 2, 3]  # get the powers of 2, and multiple by 1024.
 
-        for power in sizes:
-            size = 2 ** power * 1024
-            self.event_logger.save_event(create_dummy_event(size))
+            for power in sizes:
+                size = 2 ** power * 1024
+                self.event_logger.save_event(create_dummy_event(size))
 
-        monitor_handler.last_event_collection = datetime.datetime.utcnow() - timedelta(hours=1)
-        # This test validates that if we hit an issue while sending an event, we never send it again.
-        with patch("azurelinuxagent.common.logger.warn") as mock_warn:
-            with patch("azurelinuxagent.common.protocol.wire.WireClient.send_event") as patch_send_event:
-                patch_send_event.side_effect = Exception()
-                monitor_handler.collect_and_send_events()
+            monitor_handler.last_event_collection = datetime.datetime.utcnow() - timedelta(hours=1)
+            # This test validates that if we hit an issue while sending an event, we never send it again.
+            with patch("azurelinuxagent.common.logger.warn") as mock_warn:
+                with patch("azurelinuxagent.common.protocol.wire.WireClient.send_event") as patch_send_event:
+                    patch_send_event.side_effect = Exception()
+                    monitor_handler.collect_and_send_events()
 
-                self.assertEqual(1, mock_warn.call_count)
-                self.assertEqual(0, len(os.listdir(self.event_logger.event_dir)))
+                    self.assertEqual(1, mock_warn.call_count)
+                    self.assertEqual(0, len(os.listdir(self.event_logger.event_dir)))
 
     @patch("azurelinuxagent.common.conf.get_lib_dir")
     def test_collect_and_send_with_call_wireserver_returns_http_error(self, mock_lib_dir, *args):
         mock_lib_dir.return_value = self.lib_dir
         fileutil.mkdir(self.event_logger.event_dir)
 
-        test_data = WireProtocolData(DATA_FILE)
-        monitor_handler, protocol = self._create_mock(test_data, *args)
-        monitor_handler.init_protocols()
+        with mock_wire_protocol.create(DATA_FILE) as protocol:
+            monitor_handler = TestEventMonitoring._create_monitor_handler(protocol)
 
-        sizes = [1, 2, 3]  # get the powers of 2, and multiple by 1024.
+            sizes = [1, 2, 3]  # get the powers of 2, and multiple by 1024.
 
-        for power in sizes:
-            size = 2 ** power * 1024
-            self.event_logger.save_event(create_dummy_event(size))
+            for power in sizes:
+                size = 2 ** power * 1024
+                self.event_logger.save_event(create_dummy_event(size))
 
-        monitor_handler.last_event_collection = datetime.datetime.utcnow() - timedelta(hours=1)
-        with patch("azurelinuxagent.common.logger.error") as mock_error:
-            with patch("azurelinuxagent.common.protocol.wire.WireClient.call_wireserver") as patch_call_wireserver:
-                patch_call_wireserver.side_effect = HttpError
-                monitor_handler.collect_and_send_events()
+            monitor_handler.last_event_collection = datetime.datetime.utcnow() - timedelta(hours=1)
+            with patch("azurelinuxagent.common.logger.warn") as mock_warn:
+                with patch("azurelinuxagent.common.protocol.wire.WireClient.call_wireserver") as patch_call_wireserver:
+                    patch_call_wireserver.side_effect = HttpError
+                    monitor_handler.collect_and_send_events()
 
-                self.assertEqual(1, mock_error.call_count)
-                self.assertEqual(0, len(os.listdir(self.event_logger.event_dir)))
+                    self.assertEqual(1, mock_warn.call_count)
+                    self.assertEqual(0, len(os.listdir(self.event_logger.event_dir)))
 
 
 @patch('azurelinuxagent.common.osutil.get_osutil')
@@ -637,7 +618,7 @@ class TestExtensionMetricsDataTelemetry(AgentTestCase):
 
     def setUp(self):
         AgentTestCase.setUp(self)
-        event.init_event_logger(os.path.join(self.tmp_dir, "events"))
+        event.init_event_logger(os.path.join(self.tmp_dir, EVENTS_DIRECTORY))
         CGroupsTelemetry.reset()
         clear_singleton_instances(ProtocolUtil)
         protocol = WireProtocol('endpoint')

@@ -86,7 +86,7 @@ class Agent(object):
 
         #Init event reporter
         event.init_event_status(conf.get_lib_dir())
-        event_dir = os.path.join(conf.get_lib_dir(), "events")
+        event_dir = os.path.join(conf.get_lib_dir(), event.EVENTS_DIRECTORY)
         event.init_event_logger(event_dir)
         event.enable_unhandled_err_dump("WALA")
 

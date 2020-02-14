@@ -21,7 +21,7 @@ import tempfile
 from datetime import datetime, timedelta
 
 from azurelinuxagent.common.event import __event_logger__, add_log_event, MAX_NUMBER_OF_EVENTS, TELEMETRY_LOG_EVENT_ID,\
-    TELEMETRY_LOG_PROVIDER_ID
+    TELEMETRY_LOG_PROVIDER_ID, EVENTS_DIRECTORY
 import azurelinuxagent.common.logger as logger
 from azurelinuxagent.common.utils import fileutil
 from tests.tools import AgentTestCase, MagicMock, patch, skip_if_predicate_true
@@ -38,7 +38,7 @@ class TestLogger(AgentTestCase):
         AgentTestCase.setUp(self)
 
         self.lib_dir = tempfile.mkdtemp()
-        self.event_dir = os.path.join(self.lib_dir, "events")
+        self.event_dir = os.path.join(self.lib_dir, EVENTS_DIRECTORY)
         fileutil.mkdir(self.event_dir)
 
         self.log_file = tempfile.mkstemp(prefix="logfile-")[1]
@@ -492,7 +492,7 @@ class TestAppender(AgentTestCase):
         AgentTestCase.setUp(self)
 
         self.lib_dir = tempfile.mkdtemp()
-        self.event_dir = os.path.join(self.lib_dir, "events")
+        self.event_dir = os.path.join(self.lib_dir, EVENTS_DIRECTORY)
         fileutil.mkdir(self.event_dir)
 
         self.log_file = tempfile.mkstemp(prefix="logfile-")[1]

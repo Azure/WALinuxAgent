@@ -37,6 +37,9 @@ from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
 from azurelinuxagent.common.utils.textutil import parse_doc, findall, find, getattrib
 from azurelinuxagent.common.version import CURRENT_VERSION, CURRENT_AGENT
 
+EVENTS_DIRECTORY = "waagent.events"
+LEGACY_EVENTS_DIRECTORY = "events"
+
 _EVENT_MSG = "Event: name={0}, op={1}, message={2}, duration={3}"
 TELEMETRY_EVENT_PROVIDER_ID = "69B669B9-4AF8-4C50-BDC4-6006FA76E975"
 TELEMETRY_METRICS_EVENT_ID = 4

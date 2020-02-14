@@ -28,7 +28,7 @@ import azurelinuxagent.common.conf as conf
 import azurelinuxagent.common.logger as logger
 import azurelinuxagent.common.utils.textutil as textutil
 from azurelinuxagent.common.datacontract import validate_param
-from azurelinuxagent.common.event import add_periodic, WALAEventOperation
+from azurelinuxagent.common.event import add_periodic, WALAEventOperation, EVENTS_DIRECTORY
 from azurelinuxagent.common.exception import ProtocolNotFoundError, \
     ResourceGoneError, ExtensionDownloadError, InvalidContainerError, ProtocolError, HttpError
 from azurelinuxagent.common.future import httpclient, bytebuffer
@@ -203,7 +203,7 @@ class WireProtocol(Protocol):
         self.client.status_blob.set_ext_status(ext_handler_name, ext_status)
 
     def report_event(self, events):
-        validate_param("events", events, TelemetryEventList)
+        validate_param(EVENTS_DIRECTORY, events, TelemetryEventList)
         self.client.report_event(events)
 
 
