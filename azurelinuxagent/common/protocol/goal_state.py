@@ -23,7 +23,6 @@ import re
 import azurelinuxagent.common.conf as conf
 import azurelinuxagent.common.logger as logger
 from azurelinuxagent.common.datacontract import set_properties, DataContract, DataContractList
-from azurelinuxagent.common.event import CONTAINER_ID_ENV_VARIABLE
 from azurelinuxagent.common.utils import fileutil
 from azurelinuxagent.common.utils.cryptutil import CryptUtil
 from azurelinuxagent.common.utils.textutil import parse_doc, findall, find, findtext, getattrib, gettext
@@ -36,11 +35,14 @@ PEM_FILE_NAME = "Certificates.pem"
 TRANSPORT_CERT_FILE_NAME = "TransportCert.pem"
 TRANSPORT_PRV_FILE_NAME = "TransportPrivate.pem"
 
-# Store the last retrieved container id as an environment variable to be shared between threads for telemetry purposes
-CONTAINER_ID_ENV_VARIABLE = "AZURE_GUEST_AGENT_CONTAINER_ID"
-
 
 class GoalState(object):
+    #
+    # Some modules (e.g. telemetry) require an up-to-date container ID. We update this variable each time we
+    # fetch the goal state.
+    #
+    ContainerID = "00000000-0000-0000-0000-000000000000"
+
     def __init__(self, wire_client, full_goal_state=False, base_incarnation=None):
         """
         Fetches the goal state using the given wire client.
@@ -70,7 +72,7 @@ class GoalState(object):
         lbprobe_ports = find(xml_doc, "LBProbePorts")
         self.load_balancer_probe_port = findtext(lbprobe_ports, "Port")
 
-        os.environ[CONTAINER_ID_ENV_VARIABLE] = self.container_id
+        GoalState.ContainerID = self.container_id
 
         if not (full_goal_state or base_incarnation is not None and self.incarnation != base_incarnation):
             self.hosting_env = None

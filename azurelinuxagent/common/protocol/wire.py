@@ -36,7 +36,6 @@ from azurelinuxagent.common.protocol.goal_state import GoalState, TRANSPORT_CERT
 from azurelinuxagent.common.protocol.hostplugin import HostPluginProtocol
 from azurelinuxagent.common.protocol.imds import ComputeInfo
 from azurelinuxagent.common.protocol.restapi import *
-from azurelinuxagent.common.sysinfo import SysInfo
 from azurelinuxagent.common.telemetryevent import TelemetryEventList
 from azurelinuxagent.common.utils import fileutil, restutil
 from azurelinuxagent.common.utils.archive import StateFlusher
@@ -100,22 +99,6 @@ class WireProtocol(Protocol):
 
     def get_endpoint(self):
         return self.client.get_endpoint()
-
-    def init_sysinfo(self, imds_client):
-        vminfo = VMInfo()
-        compute_info = ComputeInfo()
-        try:
-            vminfo = self.get_vminfo()
-        except ProtocolError as e:
-            logger.warn("Failed to get system info: {0}", ustr(e))
-
-        try:
-            compute_info = imds_client.get_compute()
-        except (HttpError, ValueError) as e:
-            logger.warn("Failed to get IMDS info: {0}", ustr(e))
-
-        sysinfo = SysInfo.get_instance()
-        sysinfo.set_vminfo(vminfo, compute_info)
 
     def get_vminfo(self):
         goal_state = self.client.get_goal_state()

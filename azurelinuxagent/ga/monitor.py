@@ -16,25 +16,20 @@
 #
 
 import datetime
-import os
 import threading
 import time
 import uuid
 
-import azurelinuxagent.common.conf as conf
 import azurelinuxagent.common.logger as logger
 import azurelinuxagent.common.utils.networkutil as networkutil
 from azurelinuxagent.common.cgroupstelemetry import CGroupsTelemetry
 from azurelinuxagent.common.errorstate import ErrorState
-from azurelinuxagent.common.event import EventLogger, EVENTS_DIRECTORY, LEGACY_EVENTS_DIRECTORY
-from azurelinuxagent.common.event import add_event, WALAEventOperation, parse_event, report_metric, EVENT_FILE_EXTENSION
-from azurelinuxagent.common.exception import EventError
+from azurelinuxagent.common.event import add_event, WALAEventOperation, report_metric, collect_events
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.osutil import get_osutil
 from azurelinuxagent.common.protocol.util import get_protocol_util
 from azurelinuxagent.common.protocol.healthservice import HealthService
 from azurelinuxagent.common.protocol.imds import get_imds_client
-from azurelinuxagent.common.telemetryevent import TelemetryEventList
 from azurelinuxagent.common.utils.restutil import IOErrorCounter
 from azurelinuxagent.common.utils.textutil import hash_strings
 from azurelinuxagent.common.version import AGENT_NAME, CURRENT_VERSION
@@ -109,7 +104,6 @@ class MonitorHandler(object):
         self.protocol_util = get_protocol_util()
         self.protocol = self.protocol_util.get_protocol()
         # Update the GoalState first time to instantiate all required objects for the monitor thread
-        self.protocol.update_goal_state()
         self.health_service = HealthService(self.protocol.get_endpoint())
 
     def init_imds_client(self):
@@ -127,68 +121,24 @@ class MonitorHandler(object):
 
     def collect_and_send_events(self):
         """
-        Periodically read, parse, and send events located in the events folder. Currently, this is done every minute.
-        Any .tld file dropped in the events folder will be emitted. These event files can be created either by the
-        agent or the extensions. Since we don't have control over which parameters the extension's events contain,
-        we do some post-processing before reporting them to ensure the telemetry schema is consistent with agent events.
+        Periodically send any events located in the events folder
         """
         try:
             if self.last_event_collection is None:
                 self.last_event_collection = datetime.datetime.utcnow() - MonitorHandler.EVENT_COLLECTION_PERIOD
 
             if datetime.datetime.utcnow() >= (self.last_event_collection + MonitorHandler.EVENT_COLLECTION_PERIOD):
-                self._send_events(EVENTS_DIRECTORY)
-                self._send_events(LEGACY_EVENTS_DIRECTORY)
-        except Exception as e:
-            logger.error("Failed to send events: {0}", ustr(e))
-
-        self.last_event_collection = datetime.datetime.utcnow()
-
-    def _send_events(self, events_directory):
-        """
-        Periodically read, parse, and send events located in the events folder. Currently, this is done every minute.
-        Any .tld file dropped in the events folder will be emitted. These event files can be created either by the
-        agent or the extensions. Since we don't have control over which parameters the extension's events contain,
-        we do some post-processing before reporting them to ensure the telemetry schema is consistent with agent events.
-        """
-        try:
-            event_directory_full_path = os.path.join(conf.get_lib_dir(), events_directory)
-            if not os.path.exists(event_directory_full_path):
-                return
-
-            event_list = TelemetryEventList()
-            event_files = os.listdir(event_directory_full_path)
-            for event_file in event_files:
-                if not event_file.endswith(EVENT_FILE_EXTENSION):
-                    continue
-                event_file_path = os.path.join(event_directory_full_path, event_file)
-                event_creation_time_epoch = os.path.getmtime(event_file_path)
-                event_creation_time = datetime.datetime.\
-                    fromtimestamp(event_creation_time_epoch).strftime(u'%Y-%m-%dT%H:%M:%S.%fZ')
-
                 try:
-                    data_str = EventLogger.collect_event_str(event_file_path)
-                except EventError as e:
-                    logger.error("{0}", ustr(e))
-                    continue
+                    event_list = collect_events()
 
-                try:
-                    event = parse_event(data_str)
-                    if event.is_extension_event():
-                        EventLogger.trim_extension_event_parameters(event)
-                        EventLogger.finalize_event_fields(event, event_creation_time)
-
-                    event_list.events.append(event)
-                except ValueError as e:
-                    logger.warn("Failed to decode event file: {0}", ustr(e))
-                    continue
-
-            if len(event_list.events) == 0:
-                return
-
-            self.protocol.report_event(event_list)
+                    if len(event_list.events) > 0:
+                        self.protocol.report_event(event_list)
+                except Exception as e:
+                    logger.warn("{0}", ustr(e))
         except Exception as e:
             logger.warn("Failed to send events: {0}", ustr(e))
+
+        self.last_event_collection = datetime.datetime.utcnow()
 
     def daemon(self, init_data=False):
 

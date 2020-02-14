@@ -17,10 +17,9 @@
 import datetime
 import json
 import os
+import platform
 import random
-import shutil
 import string
-import sys
 import tempfile
 import time
 from datetime import timedelta
@@ -28,7 +27,6 @@ from datetime import timedelta
 from azurelinuxagent.common.protocol.util import ProtocolUtil, get_protocol_util
 from nose.plugins.attrib import attr
 
-import azurelinuxagent.common.conf as conf
 from azurelinuxagent.common import event, logger
 from azurelinuxagent.common.cgroup import CGroup, CpuCgroup, MemoryCgroup
 from azurelinuxagent.common.cgroupconfigurator import CGroupConfigurator
@@ -38,21 +36,22 @@ from azurelinuxagent.common.event import EventLogger, WALAEventOperation, EVENTS
 from azurelinuxagent.common.exception import HttpError
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.logger import Logger
+from azurelinuxagent.common.osutil import get_osutil
 from azurelinuxagent.common.osutil.default import BASE_CGROUPS, DefaultOSUtil
 from azurelinuxagent.common.protocol.wire import ExtHandler, ExtHandlerProperties
 from azurelinuxagent.common.protocol.wire import WireProtocol
 from azurelinuxagent.common.telemetryevent import TelemetryEvent, TelemetryEventParam
 from azurelinuxagent.common.utils import fileutil, restutil
-from azurelinuxagent.common.version import AGENT_NAME, AGENT_VERSION, CURRENT_VERSION, CURRENT_AGENT
+from azurelinuxagent.common.version import AGENT_VERSION, CURRENT_VERSION, CURRENT_AGENT, DISTRO_NAME, DISTRO_VERSION, DISTRO_CODE_NAME
 from azurelinuxagent.ga.exthandlers import ExtHandlerInstance
 from azurelinuxagent.ga.monitor import generate_extension_metrics_telemetry_dictionary, get_monitor_handler, \
     MonitorHandler
 from tests.common.test_cgroupstelemetry import make_new_cgroup
-from tests.common.mocksysinfo import SysInfoData
-from tests.protocol.mockwiredata import DATA_FILE, WireProtocolData
+from tests.protocol.mockwiredata import DATA_FILE
 from tests.protocol import mock_wire_protocol
 from tests.tools import Mock, MagicMock, patch, AgentTestCase, data_dir, are_cgroups_enabled, i_am_root, \
     skip_if_predicate_false, is_trusty_in_travis, skip_if_predicate_true, clear_singleton_instances, PropertyMock
+from tests.utils.event_logger_tools import EventLoggerTools
 
 
 class ResponseMock(Mock):
@@ -68,38 +67,6 @@ class ResponseMock(Mock):
 
 def random_generator(size=6, chars=string.ascii_uppercase + string.digits + string.ascii_lowercase):
     return ''.join(random.choice(chars) for x in range(size))
-
-
-def create_dummy_event(size=0,
-                       name="DummyExtension",
-                       op=WALAEventOperation.Unknown,
-                       is_success=True,
-                       duration=0,
-                       version=CURRENT_VERSION,
-                       message="DummyMessage"):
-    return get_event_message(name=size if size != 0 else name,
-                             op=op,
-                             is_success=is_success,
-                             duration=duration,
-                             version=version,
-                             message=random_generator(size) if size != 0 else message)
-
-
-def get_event_message(duration, is_success, message, name, op, version, eventId=1):
-    event = TelemetryEvent(eventId, "XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX")
-    event.parameters.append(TelemetryEventParam('Name', name))
-    event.parameters.append(TelemetryEventParam('Version', str(version)))
-    event.parameters.append(TelemetryEventParam('IsInternal', False))
-    event.parameters.append(TelemetryEventParam('Operation', op))
-    event.parameters.append(TelemetryEventParam('OperationSuccess', is_success))
-    event.parameters.append(TelemetryEventParam('Message', message))
-    event.parameters.append(TelemetryEventParam('Duration', duration))
-    event.parameters.append(TelemetryEventParam('ExtensionType', ''))
-    event.parameters.append(TelemetryEventParam('OpcodeName', 'TEST_OpcodeName'))
-
-    data = get_properties(event)
-    return json.dumps(data)
-
 
 @patch('azurelinuxagent.common.event.EventLogger.add_event')
 @patch('azurelinuxagent.common.osutil.get_osutil')
@@ -320,15 +287,11 @@ class TestEventMonitoring(AgentTestCase):
     def setUp(self):
         AgentTestCase.setUp(self)
         self.lib_dir = tempfile.mkdtemp()
+        self.event_dir = os.path.join(self.lib_dir, event.EVENTS_DIRECTORY)
 
-        self.event_logger = EventLogger()
-        self.event_logger.event_dir = os.path.join(self.lib_dir, event.EVENTS_DIRECTORY)
-
-        self.mock_sysinfo = patch("azurelinuxagent.common.sysinfo.SysInfo.get_instance", return_value=SysInfoData)
-        self.mock_sysinfo.start()
+        EventLoggerTools.initialize_event_logger(self.event_dir)
 
     def tearDown(self):
-        self.mock_sysinfo.stop()
         fileutil.rm_dirs(self.lib_dir)
 
     @staticmethod
@@ -340,55 +303,36 @@ class TestEventMonitoring(AgentTestCase):
         monitor_handler.init_protocols()
         return monitor_handler
 
-    @patch("azurelinuxagent.common.event.send_logs_to_telemetry", return_value=True)
-    @patch("azurelinuxagent.common.conf.get_lib_dir")
-    def test_collect_and_send_events_should_send_all_events_with_the_same_schema(self, mock_lib_dir, *_):
-        # Test collecting and sending both agent and extension events and ensure the telemetry schema is consistent
-        # before the events are sent.
-        mock_lib_dir.return_value = self.lib_dir
+    def _create_extension_event(self,
+                               size=0,
+                               name="DummyExtension",
+                               op=WALAEventOperation.Unknown,
+                               is_success=True,
+                               duration=0,
+                               version=CURRENT_VERSION,
+                               message="DummyMessage"):
+        event_data = TestEventMonitoring._get_event_data(name=size if size != 0 else name,
+                op=op,
+                is_success=is_success,
+                duration=duration,
+                version=version,
+                message=random_generator(size) if size != 0 else message)
+        event_file = os.path.join(self.event_dir, "{0}.tld".format(int(time.time() * 1000000)))
+        with open(event_file, 'wb+') as fd:
+            fd.write(event_data.encode('utf-8'))
 
-        with mock_wire_protocol.create(DATA_FILE) as protocol:
-            monitor_handler = TestEventMonitoring._create_monitor_handler(protocol)
+    @staticmethod
+    def _get_event_data(duration, is_success, message, name, op, version, eventId=1):
+        event = TelemetryEvent(eventId, "XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX")
+        event.parameters.append(TelemetryEventParam('Name', name))
+        event.parameters.append(TelemetryEventParam('Version', str(version)))
+        event.parameters.append(TelemetryEventParam('Operation', op))
+        event.parameters.append(TelemetryEventParam('OperationSuccess', is_success))
+        event.parameters.append(TelemetryEventParam('Message', message))
+        event.parameters.append(TelemetryEventParam('Duration', duration))
 
-            # Add agent event file
-            self.event_logger.add_event(name=AGENT_NAME,
-                                        version=CURRENT_VERSION,
-                                        op=WALAEventOperation.HeartBeat,
-                                        is_success=True,
-                                        message="Heartbeat",
-                                        log_event=False)
-
-            # Add extension event file the way extension do it, by dropping a .tld file in the events folder
-            source_file = os.path.join(data_dir, "ext/dsc_event.json")
-            dest_file = os.path.join(conf.get_lib_dir(), EVENTS_DIRECTORY, "dsc_event.tld")
-            shutil.copyfile(source_file, dest_file)
-
-            # Collect these events and assert they are being sent with the same telemetry parameters present
-            with patch.object(protocol, "report_event") as patch_report_event:
-                monitor_handler.collect_and_send_events()
-
-                telemetry_events_list = patch_report_event.call_args_list[0][0][0]
-                self.assertEqual(len(telemetry_events_list.events), 2)
-
-                telemetry_params_list = []
-
-                for event in telemetry_events_list.events:
-                    # Save each event's parameter names in a set in order to compare them to each other later
-                    event_params_names = set()
-                    for param in event.parameters:
-                        event_params_names.add(param.name)
-                    telemetry_params_list.append(event_params_names)
-
-                    # Do an explicit check for ContainerId and GAVersion, as these parameters are important for telemetry
-                    container_id_param = TelemetryEventParam("ContainerId", protocol.client.get_goal_state().container_id)
-                    self.assertTrue(container_id_param in event.parameters)
-
-                    gaversion_param = TelemetryEventParam("GAVersion", CURRENT_AGENT)
-                    self.assertTrue(gaversion_param in event.parameters)
-
-                # The schema of events being sent should be consistent across agent and extension events
-                self.assertEquals(telemetry_params_list[0], telemetry_params_list[1])
-                self.assertEquals(28, len(telemetry_params_list[0]))
+        data = get_properties(event)
+        return json.dumps(data)
 
     @patch("azurelinuxagent.common.protocol.wire.WireClient.send_event")
     @patch("azurelinuxagent.common.conf.get_lib_dir")
@@ -398,7 +342,7 @@ class TestEventMonitoring(AgentTestCase):
         with mock_wire_protocol.create(DATA_FILE) as protocol:
             monitor_handler = TestEventMonitoring._create_monitor_handler(protocol)
 
-            self.event_logger.save_event(create_dummy_event(message="Message-Test"))
+            self._create_extension_event(message="Message-Test")
 
             monitor_handler.last_event_collection = None
             test_mtime = 1000  # epoch time, in ms
@@ -417,6 +361,10 @@ class TestEventMonitoring(AgentTestCase):
             self.assertEqual(1, patch_send_event.call_count)
             send_event_call_args = protocol.client.send_event.call_args[0]
 
+            # Some of those expected values come from the mock protocol and imds client set up during test initialization
+            osutil = get_osutil()
+            osversion = u"{0}:{1}-{2}-{3}:{4}".format(platform.system(), DISTRO_NAME, DISTRO_VERSION, DISTRO_CODE_NAME,platform.release())
+
             sample_message = '<Event id="1"><![CDATA[' \
                              '<Param Name="Name" Value="DummyExtension" T="mt:wstr" />' \
                              '<Param Name="Version" Value="{0}" T="mt:wstr" />' \
@@ -433,21 +381,22 @@ class TestEventMonitoring(AgentTestCase):
                              '<Param Name="KeywordName" Value="" T="mt:wstr" />' \
                              '<Param Name="ExtensionType" Value="json" T="mt:wstr" />' \
                              '<Param Name="IsInternal" Value="False" T="mt:bool" />' \
-                             '<Param Name="OSVersion" Value="TEST_OSVersion" T="mt:wstr" />' \
-                             '<Param Name="ExecutionMode" Value="TEST_ExecutionMode" T="mt:wstr" />' \
-                             '<Param Name="RAM" Value="512" T="mt:uint64" />' \
-                             '<Param Name="Processors" Value="2" T="mt:uint64" />' \
-                             '<Param Name="VMName" Value="TEST_VMName" T="mt:wstr" />' \
-                             '<Param Name="TenantName" Value="TEST_TenantName" T="mt:wstr" />' \
-                             '<Param Name="RoleName" Value="TEST_RoleName" T="mt:wstr" />' \
-                             '<Param Name="RoleInstanceName" Value="TEST_RoleInstanceName" T="mt:wstr" />' \
-                             '<Param Name="Location" Value="TEST_Location" T="mt:wstr" />' \
-                             '<Param Name="SubscriptionId" Value="TEST_SubscriptionId" T="mt:wstr" />' \
-                             '<Param Name="ResourceGroupName" Value="TEST_ResourceGroupName" T="mt:wstr" />' \
-                             '<Param Name="VMId" Value="TEST_VMId" T="mt:wstr" />' \
-                             '<Param Name="ImageOrigin" Value="1" T="mt:uint64" />' \
+                             '<Param Name="OSVersion" Value="{6}" T="mt:wstr" />' \
+                             '<Param Name="ExecutionMode" Value="IAAS" T="mt:wstr" />' \
+                             '<Param Name="RAM" Value="{7}" T="mt:uint64" />' \
+                             '<Param Name="Processors" Value="{8}" T="mt:uint64" />' \
+                             '<Param Name="VMName" Value="MachineRole_IN_0" T="mt:wstr" />' \
+                             '<Param Name="TenantName" Value="db00a7755a5e4e8a8fe4b19bc3b330c3" T="mt:wstr" />' \
+                             '<Param Name="RoleName" Value="MachineRole" T="mt:wstr" />' \
+                             '<Param Name="RoleInstanceName" Value="MachineRole_IN_0" T="mt:wstr" />' \
+                             '<Param Name="Location" Value="uswest" T="mt:wstr" />' \
+                             '<Param Name="SubscriptionId" Value="AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE" T="mt:wstr" />' \
+                             '<Param Name="ResourceGroupName" Value="test-rg" T="mt:wstr" />' \
+                             '<Param Name="VMId" Value="99999999-8888-7777-6666-555555555555" T="mt:wstr" />' \
+                             '<Param Name="ImageOrigin" Value="2468" T="mt:uint64" />' \
                              ']]></Event>'.format(AGENT_VERSION, CURRENT_AGENT, test_opcodename, test_eventtid,
-                                                  test_eventpid, test_taskname)
+                                                  test_eventpid, test_taskname, osversion, int(osutil.get_total_mem()),
+                                                  osutil.get_processor_cores())
 
             self.maxDiff = None
             self.assertEqual(sample_message, send_event_call_args[1])
@@ -464,7 +413,7 @@ class TestEventMonitoring(AgentTestCase):
 
             for power in sizes:
                 size = 2 ** power
-                self.event_logger.save_event(create_dummy_event(size))
+                self._create_extension_event(size)
             monitor_handler.collect_and_send_events()
 
             # The send_event call would be called each time, as we are filling up the buffer up to the brim for each call.
@@ -483,7 +432,7 @@ class TestEventMonitoring(AgentTestCase):
 
             for power in sizes:
                 size = 2 ** power
-                self.event_logger.save_event(create_dummy_event(size))
+                self._create_extension_event(size)
 
             with patch("azurelinuxagent.common.logger.periodic_warn") as patch_periodic_warn:
                 monitor_handler.collect_and_send_events()
@@ -492,54 +441,10 @@ class TestEventMonitoring(AgentTestCase):
             # The send_event call should never be called as the events are larger than 2**16.
             self.assertEqual(0, patch_send_event.call_count)
 
-    @patch("azurelinuxagent.common.protocol.wire.WireClient.send_event")
-    @patch("azurelinuxagent.common.conf.get_lib_dir")
-    def test_collect_and_send_events_with_invalid_events(self, mock_lib_dir, patch_send_event, *_):
-        mock_lib_dir.return_value = self.lib_dir
-        dummy_events_dir = os.path.join(data_dir, EVENTS_DIRECTORY, "collect_and_send_events_invalid_data")
-        fileutil.mkdir(self.event_logger.event_dir)
-
-        with mock_wire_protocol.create(DATA_FILE) as protocol:
-            monitor_handler = TestEventMonitoring._create_monitor_handler(protocol)
-
-            for filename in os.listdir(dummy_events_dir):
-                shutil.copy(os.path.join(dummy_events_dir, filename), self.event_logger.event_dir)
-
-            monitor_handler.collect_and_send_events()
-
-            # Invalid events
-            self.assertEqual(0, patch_send_event.call_count)
-
-    @patch("azurelinuxagent.common.protocol.wire.WireClient.send_event")
-    @patch("azurelinuxagent.common.conf.get_lib_dir")
-    def test_collect_and_send_events_cannot_read_events(self, mock_lib_dir, patch_send_event, *_):
-        mock_lib_dir.return_value = self.lib_dir
-        dummy_events_dir = os.path.join(data_dir, EVENTS_DIRECTORY, "collect_and_send_events_unreadable_data")
-        fileutil.mkdir(self.event_logger.event_dir)
-
-        with mock_wire_protocol.create(DATA_FILE) as protocol:
-            monitor_handler = TestEventMonitoring._create_monitor_handler(protocol)
-
-            for filename in os.listdir(dummy_events_dir):
-                shutil.copy(os.path.join(dummy_events_dir, filename), self.event_logger.event_dir)
-
-            def builtins_version():
-                if sys.version_info[0] == 2:
-                    return "__builtin__"
-                else:
-                    return "builtins"
-
-            with patch("{0}.open".format(builtins_version())) as mock_open:
-                mock_open.side_effect = IOError(13, "Permission denied")
-                monitor_handler.collect_and_send_events()
-
-                # Invalid events
-                self.assertEqual(0, patch_send_event.call_count)
-
     @patch("azurelinuxagent.common.conf.get_lib_dir")
     def test_collect_and_send_with_http_post_returning_503(self, mock_lib_dir, *_):
         mock_lib_dir.return_value = self.lib_dir
-        fileutil.mkdir(self.event_logger.event_dir)
+        fileutil.mkdir(self.event_dir)
 
         with mock_wire_protocol.create(DATA_FILE) as protocol:
             monitor_handler = TestEventMonitoring._create_monitor_handler(protocol)
@@ -548,7 +453,7 @@ class TestEventMonitoring(AgentTestCase):
 
             for power in sizes:
                 size = 2 ** power * 1024
-                self.event_logger.save_event(create_dummy_event(size))
+                self._create_extension_event(size)
 
             with patch("azurelinuxagent.common.logger.warn") as mock_warn:
                 with patch("azurelinuxagent.common.utils.restutil.http_post") as mock_http_post:
@@ -560,12 +465,12 @@ class TestEventMonitoring(AgentTestCase):
                     self.assertEqual("[ProtocolError] [Wireserver Exception] [ProtocolError] [Wireserver Failed] "
                                      "URI http://{0}/machine?comp=telemetrydata  [HTTP Failed] Status Code 503".format(protocol.get_endpoint()),
                                      mock_warn.call_args[0][1])
-                    self.assertEqual(0, len(os.listdir(self.event_logger.event_dir)))
+                    self.assertEqual(0, len(os.listdir(self.event_dir)))
 
     @patch("azurelinuxagent.common.conf.get_lib_dir")
     def test_collect_and_send_with_send_event_generating_exception(self, mock_lib_dir, *args):
         mock_lib_dir.return_value = self.lib_dir
-        fileutil.mkdir(self.event_logger.event_dir)
+        fileutil.mkdir(self.event_dir)
 
         with mock_wire_protocol.create(DATA_FILE) as protocol:
             monitor_handler = TestEventMonitoring._create_monitor_handler(protocol)
@@ -574,7 +479,7 @@ class TestEventMonitoring(AgentTestCase):
 
             for power in sizes:
                 size = 2 ** power * 1024
-                self.event_logger.save_event(create_dummy_event(size))
+                self._create_extension_event(size)
 
             monitor_handler.last_event_collection = datetime.datetime.utcnow() - timedelta(hours=1)
             # This test validates that if we hit an issue while sending an event, we never send it again.
@@ -584,12 +489,12 @@ class TestEventMonitoring(AgentTestCase):
                     monitor_handler.collect_and_send_events()
 
                     self.assertEqual(1, mock_warn.call_count)
-                    self.assertEqual(0, len(os.listdir(self.event_logger.event_dir)))
+                    self.assertEqual(0, len(os.listdir(self.event_dir)))
 
     @patch("azurelinuxagent.common.conf.get_lib_dir")
     def test_collect_and_send_with_call_wireserver_returns_http_error(self, mock_lib_dir, *args):
         mock_lib_dir.return_value = self.lib_dir
-        fileutil.mkdir(self.event_logger.event_dir)
+        fileutil.mkdir(self.event_dir)
 
         with mock_wire_protocol.create(DATA_FILE) as protocol:
             monitor_handler = TestEventMonitoring._create_monitor_handler(protocol)
@@ -598,7 +503,7 @@ class TestEventMonitoring(AgentTestCase):
 
             for power in sizes:
                 size = 2 ** power * 1024
-                self.event_logger.save_event(create_dummy_event(size))
+                self._create_extension_event(size)
 
             monitor_handler.last_event_collection = datetime.datetime.utcnow() - timedelta(hours=1)
             with patch("azurelinuxagent.common.logger.warn") as mock_warn:
@@ -607,7 +512,7 @@ class TestEventMonitoring(AgentTestCase):
                     monitor_handler.collect_and_send_events()
 
                     self.assertEqual(1, mock_warn.call_count)
-                    self.assertEqual(0, len(os.listdir(self.event_logger.event_dir)))
+                    self.assertEqual(0, len(os.listdir(self.event_dir)))
 
 
 @patch('azurelinuxagent.common.osutil.get_osutil')

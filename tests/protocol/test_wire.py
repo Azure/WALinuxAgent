@@ -31,7 +31,6 @@ from azurelinuxagent.common.protocol.goal_state import ExtensionsConfig, Hosting
 from azurelinuxagent.common.protocol.imds import get_imds_client
 from azurelinuxagent.common.protocol.wire import WireProtocol, WireClient, GoalState, \
     InVMArtifactsProfile, VMAgentManifestUri, StatusBlob, VMStatus, ExtHandlerVersionUri, DataContractList, socket
-from azurelinuxagent.common.sysinfo import SysInfo
 from azurelinuxagent.common.telemetryevent import TelemetryEvent, TelemetryEventParam, TelemetryEventList
 from azurelinuxagent.common.utils import restutil
 from azurelinuxagent.common.version import CURRENT_VERSION, DISTRO_NAME, DISTRO_VERSION
@@ -158,17 +157,6 @@ class TestWireProtocol(AgentTestCase):
         #    HostingEnvironmentConfig, will be retrieved the expected number
         self.assertEqual(1, test_data.call_counts["hostingenvuri"])
         self.assertEqual(1, patch_report.call_count)
-
-    def test_init_sysinfo(self, *args):
-        SysInfo._instance = None
-
-        with mock_wire_protocol.create(mockwiredata.DATA_FILE) as protocol:
-            imds_client = get_imds_client(protocol.get_endpoint())
-            with patch("azurelinuxagent.ga.update.restutil.http_get", return_value=get_mock_compute_response()):
-                protocol.init_sysinfo(imds_client)
-
-        self.assertTrue(SysInfo._instance)
-        self.assertEquals(len(SysInfo.get_instance().get_sysinfo_telemetry_params()), 13)
 
     def test_call_storage_kwargs(self, *args):
         from azurelinuxagent.common.utils import restutil
