@@ -251,7 +251,7 @@ class TestLogger(AgentTestCase):
         self.assertEqual(TELEMETRY_LOG_PROVIDER_ID, telemetry_json['providerId'])
         self.assertEqual(TELEMETRY_LOG_EVENT_ID, telemetry_json['eventId'])
 
-        self.assertEqual(12, len(telemetry_json['parameters']))
+        self.assertEqual(14, len(telemetry_json['parameters']))
         for x in telemetry_json['parameters']:
             if x['name'] == 'EventName':
                 self.assertEqual(x['value'], 'Log')

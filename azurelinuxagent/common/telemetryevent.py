@@ -18,6 +18,7 @@
 #
 
 from azurelinuxagent.common.datacontract import DataContract, DataContractList
+from azurelinuxagent.common.version import AGENT_NAME
 
 
 class TelemetryEventParam(DataContract):
@@ -34,10 +35,26 @@ class TelemetryEvent(DataContract):
         self.eventId = eventId
         self.providerId = providerId
         self.parameters = DataContractList(TelemetryEventParam)
+        self.file_type = ""
 
     # Checking if the particular param name is in the TelemetryEvent.
     def __contains__(self, param_name):
         return param_name in [param.name for param in self.parameters]
+
+    def is_extension_event(self):
+        # Events originating from the agent have "WALinuxAgent" as the Name parameter, or they don't have a Name
+        # parameter, in the case of log and metric events. So, in case the Name parameter exists and it is not
+        # "WALinuxAgent", it is an extension event.
+        for param in self.parameters:
+            if param.name == "Name":
+                return param.value != AGENT_NAME
+        return False
+
+    def get_version(self):
+        for param in self.parameters:
+            if param.name == "Version":
+                return param.value
+        return None
 
 
 class TelemetryEventList(DataContract):
