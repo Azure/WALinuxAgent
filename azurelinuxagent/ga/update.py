@@ -657,10 +657,12 @@ class UpdateHandler(object):
             AGENT_NAME,
             version=CURRENT_VERSION,
             op=WALAEventOperation.AutoUpdate,
-            is_success=conf.get_autoupdate_enabled())
+            is_success=conf.get_autoupdate_enabled(),
+            log_event=False)
 
         # Ignore new agents if updating is disabled
         if not conf.get_autoupdate_enabled():
+            logger.warn(u"Agent auto-update is disabled.")
             return False
 
         now = time.time()
