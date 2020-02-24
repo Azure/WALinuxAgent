@@ -19,6 +19,7 @@ Log utils
 """
 import sys
 from datetime import datetime, timedelta
+from threading import currentThread
 
 from azurelinuxagent.common.future import ustr
 
@@ -129,11 +130,11 @@ class Logger(object):
             # This format is based on ISO-8601, Z represents UTC (Zero offset)
         time = datetime.utcnow().strftime(u'%Y-%m-%dT%H:%M:%S.%fZ')
         level_str = LogLevel.STRINGS[level]
+        thread_name = currentThread().getName()
         if self.prefix is not None:
-            log_item = u"{0} {1} {2} {3}\n".format(time, level_str, self.prefix,
-                                                   msg)
+            log_item = u"{0} {1} {2} {3} {4}\n".format(time, level_str, thread_name, self.prefix, msg)
         else:
-            log_item = u"{0} {1} {2}\n".format(time, level_str, msg)
+            log_item = u"{0} {1} {2} {3}\n".format(time, level_str, thread_name, msg)
 
         log_item = ustr(log_item.encode('ascii', "backslashreplace"), 
                         encoding="ascii")
