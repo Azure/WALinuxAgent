@@ -66,13 +66,13 @@ class TestProtocolUtil(AgentTestCase):
 
         self.assertEqual(2, queue.qsize())  # Assert that there are 2 objects in the queue
         self.assertNotEqual(queue.get(), queue.get())
-    
+
     @patch("azurelinuxagent.common.protocol.util.WireProtocol")
     def test_detect_protocol(self, WireProtocol, _):
         WireProtocol.return_value = MagicMock()
 
         protocol_util = get_protocol_util()
-        
+
         protocol_util.dhcp_handler = MagicMock()
         protocol_util.dhcp_handler.endpoint = "foo.bar"
 
@@ -119,7 +119,6 @@ class TestProtocolUtil(AgentTestCase):
         protocol_util = get_protocol_util()
         protocol_util.get_wireserver_endpoint = Mock()
         protocol_util._detect_protocol = MagicMock()
-        protocol_util._save_protocol("WireProtocol")
 
         protocol = protocol_util.get_protocol()
 
@@ -173,32 +172,6 @@ class TestProtocolUtil(AgentTestCase):
             mock_remove = Mock(side_effect=IOError(ENOENT, 'File not found'))
             protocol_util._clear_wireserver_endpoint()
             mock_remove.assert_not_called()
-
-    def test_protocol_file_states(self, _):
-        protocol_util = get_protocol_util()
-        protocol_util._clear_wireserver_endpoint = Mock()
-
-        protocol_file = protocol_util._get_protocol_file_path()
-
-        # Test clear protocol for io error
-        with open(protocol_file, "w+") as proto_fd:
-            proto_fd.write("")
-
-        with patch('os.remove') as mock_remove:
-            protocol_util.clear_protocol()
-            self.assertEqual(1, protocol_util._clear_wireserver_endpoint.call_count)
-            self.assertEqual(1, mock_remove.call_count)
-            self.assertEqual(protocol_file, mock_remove.call_args_list[0][0][0])
-
-        # Test clear protocol when file not found
-        protocol_util._clear_wireserver_endpoint.reset_mock()
-
-        with patch('os.remove') as mock_remove:
-            protocol_util.clear_protocol()
-            self.assertEqual(1, protocol_util._clear_wireserver_endpoint.call_count)
-            self.assertEqual(1, mock_remove.call_count)
-            self.assertEqual(protocol_file, mock_remove.call_args_list[0][0][0])
-
 
 if __name__ == '__main__':
     unittest.main()

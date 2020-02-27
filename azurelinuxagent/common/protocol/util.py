@@ -180,6 +180,7 @@ class ProtocolUtil(SingletonPerThread):
         """
         Probe protocol endpoints in turn.
         """
+        self.clear_protocol()
 
         for retry in range(0, MAX_RETRY):
             try:
