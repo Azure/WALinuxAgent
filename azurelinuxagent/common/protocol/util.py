@@ -37,7 +37,6 @@ from azurelinuxagent.common.protocol.wire import WireProtocol
 from azurelinuxagent.common.utils.restutil import KNOWN_WIRESERVER_IP, IOErrorCounter
 
 OVF_FILE_NAME = "ovf-env.xml"
-PROTOCOL_FILE_NAME = "Protocol"
 MAX_RETRY = 360
 PROBE_INTERVAL = 10
 ENDPOINT_FILE_NAME = "WireServerEndpoint"
@@ -121,9 +120,6 @@ class ProtocolUtil(SingletonPerThread):
             raise ProtocolError(
                 "ovf-env.xml is missing from {0}".format(ovf_file_path))
 
-    def _get_protocol_file_path(self):
-        return os.path.join(conf.get_lib_dir(), PROTOCOL_FILE_NAME)
-
     def _get_wireserver_endpoint_file_path(self):
         return os.path.join(
             conf.get_lib_dir(),
@@ -184,7 +180,6 @@ class ProtocolUtil(SingletonPerThread):
         """
         Probe protocol endpoints in turn.
         """
-        self.clear_protocol()
 
         for retry in range(0, MAX_RETRY):
             try:
@@ -227,22 +222,9 @@ class ProtocolUtil(SingletonPerThread):
         """
         Get protocol instance based on previous detecting result.
         """
-        protocol_file_path = self._get_protocol_file_path()
-        if not os.path.isfile(protocol_file_path):
-            raise ProtocolNotFoundError("No protocol found")
 
         endpoint = self.get_wireserver_endpoint()
         return WireProtocol(endpoint)
-
-    def _save_protocol(self, protocol_name):
-        """
-        Save protocol endpoint
-        """
-        protocol_file_path = self._get_protocol_file_path()
-        try:
-            fileutil.write_file(protocol_file_path, protocol_name)
-        except (IOError, OSError) as e:
-            logger.error("Failed to save protocol endpoint: {0}", e)
 
     def clear_protocol(self):
         """
@@ -251,17 +233,6 @@ class ProtocolUtil(SingletonPerThread):
         logger.info("Clean protocol and wireserver endpoint")
         self._clear_wireserver_endpoint()
         self._protocol = None
-        protocol_file_path = self._get_protocol_file_path()
-        if not os.path.isfile(protocol_file_path):
-            return
-
-        try:
-            os.remove(protocol_file_path)
-        except (IOError, OSError) as e:
-            # Ignore file-not-found errors (since the file is being removed)
-            if e.errno == errno.ENOENT:
-                return
-            logger.error("Failed to clear protocol endpoint: {0}", e)
 
     def get_protocol(self):
         """
@@ -283,7 +254,6 @@ class ProtocolUtil(SingletonPerThread):
         protocol = self._detect_protocol()
 
         IOErrorCounter.set_protocol_endpoint(endpoint=protocol.get_endpoint())
-        self._save_protocol(WIRE_PROTOCOL_NAME)
 
         self._protocol = protocol
         return self._protocol

@@ -135,10 +135,6 @@ class DaemonHandler(object):
         if conf.get_resourcedisk_format():
             self.resourcedisk_handler.run()
 
-        # Always redetermine the protocol start (e.g., wireserver vs.
-        # on-premise) since a VHD can move between environments
-        self.protocol_util.clear_protocol()
-
         self.provision_handler.run()
 
         # Initialize the agent cgroup
