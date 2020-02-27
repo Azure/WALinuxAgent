@@ -103,7 +103,6 @@ class MonitorHandler(object):
         # thread would now have its own ProtocolUtil object as per the SingletonPerThread model.
         self.protocol_util = get_protocol_util()
         self.protocol = self.protocol_util.get_protocol()
-        # Update the GoalState first time to instantiate all required objects for the monitor thread
         self.health_service = HealthService(self.protocol.get_endpoint())
 
     def init_imds_client(self):

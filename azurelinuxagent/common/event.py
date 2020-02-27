@@ -367,7 +367,6 @@ class EventLogger(object):
             parameters['ImageOrigin'].value = int(imds_info.image_origin)
         except Exception as e:
             logger.warn("Failed to get IMDS info; will be missing from telemetry: {0}", ustr(e))
-        logger.info('')
 
     def save_event(self, data):
         if self.event_dir is None:
@@ -569,7 +568,7 @@ class EventLogger(object):
 
     def collect_events(self):
         """
-        Retuns a list of events that need to sent to the telemetry pipeline and deletes the corresponding files
+        Retuns a list of events that need to be sent to the telemetry pipeline and deletes the corresponding files
         from the events directory.
         """
         event_list = TelemetryEventList()
@@ -592,6 +591,8 @@ class EventLogger(object):
 
                     event = parse_event(event_data)
 
+                    # "legacy" events are events produced by previous versions of the agent (<= 2.2.46) and extensions;
+                    # they do not include all the telemetry fields, so we add them here
                     is_legacy_event = match.group('agent_event') is None
 
                     if is_legacy_event:

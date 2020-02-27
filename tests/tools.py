@@ -338,14 +338,11 @@ class AgentTestCase(unittest.TestCase):
         def fail(message):
             self.fail(self._formatMessage(msg, message))
 
-        found = set()
-
         for k in first.keys():
             if k not in second:
                 fail("'{0}' is missing from second".format(k))
             if first[k] != second[k]:
                 fail("'{0}' != '{1}' (key: {2})".format(first[k], second[k], k))
-            found.add(k)
 
         for k in second.keys():
             if k not in first:
