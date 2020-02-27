@@ -604,7 +604,7 @@ class EventLogger(object):
                             EventLogger._trim_extension_event_parameters(event)
                             self._add_common_event_parameters(event, event_file_creation_time)
                         else:
-                            self._update_old_event_schema(event, event_file_creation_time)
+                            self._update_legacy_agent_event(event, event_file_creation_time)
 
                     event_list.events.append(event)
                 finally:
@@ -614,7 +614,7 @@ class EventLogger(object):
 
         return event_list
 
-    def _update_old_event_schema(self, event, event_creation_time):
+    def _update_legacy_agent_event(self, event, event_creation_time):
         # Ensure that if an agent event is missing a field from the schema defined since 2.2.47, the missing fields
         # will be appended, ensuring the event schema is complete before the event is reported.
         new_event = TelemetryEvent()
