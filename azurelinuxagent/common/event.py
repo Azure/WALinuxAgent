@@ -44,6 +44,7 @@ EVENTS_DIRECTORY = "events"
 
 _EVENT_MSG = "Event: name={0}, op={1}, message={2}, duration={3}"
 TELEMETRY_EVENT_PROVIDER_ID = "69B669B9-4AF8-4C50-BDC4-6006FA76E975"
+TELEMETRY_EVENT_EVENT_ID = 1
 TELEMETRY_METRICS_EVENT_ID = 4
 
 TELEMETRY_LOG_PROVIDER_ID = "FFF0196F-EE4C-4EAF-9AA5-776F622DEB4F"
@@ -425,11 +426,7 @@ class EventLogger(object):
         if (not is_success) and log_event:
             _log_event(name, op, message, duration, is_success=is_success)
 
-        self._add_event(duration, is_success, message, name, op, version, event_id=1)
-
-    def _add_event(self, duration, is_success, message, name, op, version, event_id):
-        event = TelemetryEvent(event_id, TELEMETRY_EVENT_PROVIDER_ID)
-
+        event = TelemetryEvent(TELEMETRY_EVENT_EVENT_ID, TELEMETRY_EVENT_PROVIDER_ID)
         event.parameters.append(TelemetryEventParam('Name', str(name)))
         event.parameters.append(TelemetryEventParam('Version', str(version)))
         event.parameters.append(TelemetryEventParam('Operation', str(op)))
