@@ -305,7 +305,8 @@ class TestHostPlugin(AgentTestCase):
     @patch("azurelinuxagent.common.protocol.hostplugin.HostPluginProtocol._put_page_blob_status",
            side_effect=ResourceGoneError("410"))
     @patch("azurelinuxagent.common.protocol.wire.WireClient.update_goal_state")
-    def test_fallback_channel_410(self, patch_update, patch_put, patch_upload, _):
+    @patch("azurelinuxagent.common.protocol.wire.WireClient.update_host_plugin_from_goal_state")
+    def test_fallback_channel_410(self, patch_refresh_host_plugin, patch_update, patch_put, patch_upload, _):
         """
         When host plugin returns a 410, we should force the goal state update and return
         """
@@ -328,10 +329,10 @@ class TestHostPlugin(AgentTestCase):
         # assert host plugin route is called
         self.assertEqual(1, patch_put.call_count, "Host plugin was not used")
 
-        # assert update goal state is called twice, forced=True on the second
-        self.assertEqual(2, patch_update.call_count, "Update goal state unexpected call count")
-        self.assertEqual(1, len(patch_update.call_args[1]), "Update goal state unexpected call count")
-        self.assertTrue(patch_update.call_args[1]['forced'], "Update goal state unexpected call count")
+        # assert update goal state is called with no arguments (forced=False), then update_host_plugin_from_goal_state is called
+        self.assertEqual(1, patch_update.call_count, "Update goal state unexpected call count")
+        self.assertEqual(0, len(patch_update.call_args[1]), "Update goal state unexpected argument count")
+        self.assertEqual(1, patch_refresh_host_plugin.call_count, "Refresh host plugin unexpected call count")
 
         # ensure the correct url is used
         self.assertEqual(sas_url, patch_put.call_args[0][0])

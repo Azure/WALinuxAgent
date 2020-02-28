@@ -37,6 +37,7 @@ from azurelinuxagent.common.datacontract import get_properties
 from azurelinuxagent.common.event import CONTAINER_ID_ENV_VARIABLE, EventLogger, WALAEventOperation
 from azurelinuxagent.common.exception import HttpError
 from azurelinuxagent.common.future import ustr
+from azurelinuxagent.common.logger import Logger
 from azurelinuxagent.common.osutil.default import BASE_CGROUPS, DefaultOSUtil
 from azurelinuxagent.common.protocol.imds import ComputeInfo
 from azurelinuxagent.common.protocol.restapi import VMInfo
@@ -112,6 +113,13 @@ def get_event_message(duration, evt_type, is_internal, is_success, message, name
 @patch("azurelinuxagent.common.protocol.healthservice.HealthService._report")
 @patch("azurelinuxagent.common.utils.restutil.http_get")
 class TestMonitor(AgentTestCase):
+    def setUp(self):
+        AgentTestCase.setUp(self)
+        prefix = "UnitTest"
+        logger.DEFAULT_LOGGER = Logger(prefix=prefix)
+
+    def tearDown(self):
+        AgentTestCase.tearDown(self)
 
     def test_parse_xml_event(self, *args):
         data_str = load_data('ext/event_from_extension.xml')
@@ -1070,6 +1078,7 @@ for i in range(5):
         max_num_polls = 5
         time_to_wait = 1
         extn_name = "foobar-1.0.0"
+        extn_folder_name = extn_name.replace("-", "_")
 
         cgs = make_new_cgroup(extn_name)
         self.assertEqual(len(cgs), 2)
@@ -1088,30 +1097,34 @@ for i in range(5):
 
         command = self.create_script("keep_cpu_busy_and_consume_memory_for_{0}_seconds".format(time_to_wait), '''
 nohup python -c "import time
+import subprocess
 
 for i in range(3):
     x = [1, 2, 3, 4, 5] * (i * 1000)
     time.sleep({0})
     x *= 0
-    print('Test loop')" &
+    print('Test loop')
+
+" &
 '''.format(time_to_wait))
 
         self.log_dir = os.path.join(self.tmp_dir, "log")
 
-        with patch("azurelinuxagent.ga.exthandlers.ExtHandlerInstance.get_base_dir", lambda *_: self.tmp_dir) as \
-                patch_get_base_dir:
-            with patch("azurelinuxagent.ga.exthandlers.ExtHandlerInstance.get_log_dir", lambda *_: self.log_dir) as \
-                    patch_get_log_dir:
+        with patch("azurelinuxagent.ga.exthandlers.ExtHandlerInstance.get_base_dir", lambda *_: self.tmp_dir):
+            with patch("azurelinuxagent.ga.exthandlers.ExtHandlerInstance.get_log_dir", lambda *_: self.log_dir):
                 ext_handler_instance.launch_command(command)
 
-        self.assertTrue(CGroupsTelemetry.is_tracked(os.path.join(
-            BASE_CGROUPS, "cpu", "walinuxagent.extensions", "foobar_1.0.0")))
-        self.assertTrue(CGroupsTelemetry.is_tracked(os.path.join(
-            BASE_CGROUPS, "memory", "walinuxagent.extensions", "foobar_1.0.0")))
+        self.assertTrue(CGroupsTelemetry.is_tracked(os.path.join(BASE_CGROUPS, "cpu", "walinuxagent.extensions", extn_folder_name)))
+        self.assertTrue(CGroupsTelemetry.is_tracked(os.path.join(BASE_CGROUPS, "memory", "walinuxagent.extensions", extn_folder_name)))
 
         for i in range(max_num_polls):
             metrics = CGroupsTelemetry.poll_all_tracked()
-            self.assertEqual(len(metrics), 3)
+            # Currently there are 3 types of memory related metrics and 1 CPU related metric.
+            # % Processor Time
+            # Total Memory Usage
+            # Max Memory Usage
+            # Memory Used by Process - This can have multiple entries (for each process that gets created).
+            self.assertEqual(len(metrics), 4)
 
         monitor_handler.poll_telemetry_metrics()
         monitor_handler.send_telemetry_metrics()
@@ -1120,6 +1133,7 @@ for i in range(3):
         telemetry_event_list = patch_report_event.call_args_list[0][0][0]
 
         for e in telemetry_event_list.events:
+            print([(i.name, i.value) for i in e.parameters])
             details_of_event = [x for x in e.parameters if x.name in
                                 ["Category", "Counter", "Instance", "Value"]]
 
@@ -1127,9 +1141,8 @@ for i in range(3):
                 if i.name == "Category":
                     self.assertIn(i.value, ["Memory", "Process"])
                 if i.name == "Counter":
-                    self.assertIn(i.value, ["Max Memory Usage", "Total Memory Usage", "% Processor Time"])
-                if i.name == "Instance":
-                    self.assertEqual(i.value, extn_name)
+                    self.assertIn(i.value, ["Max Memory Usage", "Total Memory Usage", "% Processor Time",
+                                            "Memory Used by Process"])
                 if i.name == "Value":
                     self.assertTrue(isinstance(i.value, int) or isinstance(i.value, float))
 

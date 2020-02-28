@@ -247,7 +247,7 @@ Choose which provisioning agent to use (or allow waagent to figure it out by
 specifying "auto"). Possible options are "auto" (default), "waagent", "cloud-init",
 or "disabled".
 
-#### __Provisioning.Enabled__ (*removed in VERSION*)
+#### __Provisioning.Enabled__ (*removed in 2.2.45*)
 
 _Type: Boolean_ 
 _Default: y_
@@ -261,7 +261,7 @@ _Note_: This configuration option has been removed and has no effect. waagent
 now auto-detects cloud-init as a provisioning agent (with an option to override
 with `Provisioning.Agent`).
 
-#### __Provisioning.UseCloudInit__ (*removed in VERSION*)
+#### __Provisioning.UseCloudInit__ (*removed in 2.2.45*)
 
 _Type: Boolean_ 
 _Default: n_
