@@ -58,7 +58,7 @@ SEND_LOGS_TO_TELEMETRY = False
 
 MAX_NUMBER_OF_EVENTS = 1000
 
-EVENT_FILE_EXTENSION = '.waagent.tld'
+AGENT_EVENT_FILE_EXTENSION = '.waagent.tld'
 EVENT_FILE_REGEX = re.compile(r'(?P<agent_event>\.waagent)?\.tld$')
 
 def send_logs_to_telemetry():
@@ -399,7 +399,7 @@ class EventLogger(object):
         try:
             with open(filename + ".tmp", 'wb+') as hfile:
                 hfile.write(data.encode("utf-8"))
-            os.rename(filename + ".tmp", filename + EVENT_FILE_EXTENSION)
+            os.rename(filename + ".tmp", filename + AGENT_EVENT_FILE_EXTENSION)
         except (IOError, OSError) as e:
             msg = "Failed to write events to file: {0}".format(e)
             raise EventError(msg)

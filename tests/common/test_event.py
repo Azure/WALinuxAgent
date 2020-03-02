@@ -18,13 +18,14 @@
 from __future__ import print_function
 
 import os
+import re
 import shutil
 import threading
 from datetime import datetime, timedelta
 
 from azurelinuxagent.common import event, logger
 from azurelinuxagent.common.event import add_event, add_periodic, add_log_event, elapsed_milliseconds, report_metric, \
-    WALAEventOperation, parse_xml_event, parse_json_event, EVENT_FILE_EXTENSION, EVENTS_DIRECTORY
+    WALAEventOperation, parse_xml_event, parse_json_event, AGENT_EVENT_FILE_EXTENSION, EVENTS_DIRECTORY
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.protocol.goal_state import GoalState
 from tests.protocol import mockwiredata, mock_wire_protocol
@@ -338,8 +339,8 @@ class TestEvent(AgentTestCase):
 
         # checking the extension of the file created.
         for filename in os.listdir(self.event_dir):
-            self.assertTrue(filename.endswith(EVENT_FILE_EXTENSION),
-                'Event file does not have the correct extension ({0}): {1}'.format(EVENT_FILE_EXTENSION, filename))
+            self.assertTrue(filename.endswith(AGENT_EVENT_FILE_EXTENSION),
+                'Event file does not have the correct extension ({0}): {1}'.format(AGENT_EVENT_FILE_EXTENSION, filename))
 
     @staticmethod
     def _get_event_message(evt):
@@ -357,22 +358,32 @@ class TestEvent(AgentTestCase):
         self.assertEquals(TestEvent._get_event_message(event_list.events[0]), u'World\u05e2\u05d9\u05d5\u05ea \u05d0\u05d7\u05e8\u05d5\u05ea\u0906\u091c')
 
     def test_collect_events_should_ignore_invalid_event_files(self):
-        self._create_test_event_file("custom_script.tld")
+        self._create_test_event_file("custom_script_1.tld")  # a valid event
         self._create_test_event_file("custom_script_utf-16.tld")
         self._create_test_event_file("custom_script_invalid_json.tld")
         os.chmod(self._create_test_event_file("custom_script_no_read_access.tld"), 0o200)
-        self._create_test_event_file("custom_script_valid_json.tld")
+        self._create_test_event_file("custom_script_2.tld")  # another valid event
 
         with patch("azurelinuxagent.common.event.logger.warn") as mock_warn:
             event_list = event.collect_events()
 
-            self.assertEquals(len(event_list.events), 2)
+            self.assertEquals(
+                len(event_list.events), 2)
             self.assertTrue(
                 all(TestEvent._get_event_message(evt) == "A test telemetry message." for evt in event_list.events),
                 "The valid events were not found")
 
-            # expected_warn_message = r'Failed to process event file.*custom_script_with_invalid_json.tld.*Error parsing event'
-            # self.assertIsNotNone(re.search(expected_warn_message, str(mock_warn.call_args[0])))
+            invalid_events = {}
+            for args in mock_warn.call_args_list:
+                if re.search('Failed to process event file', args[0][0]) is not None:
+                    invalid_events[args[0][1]] = args[0][1]
+
+            def assert_invalid_file_was_reported(file):
+                self.assertIn(file, invalid_events, '{0} was not reported as an invalid event file'.format(file))
+
+            assert_invalid_file_was_reported("custom_script_utf-16.tld")
+            assert_invalid_file_was_reported("custom_script_invalid_json.tld")
+            assert_invalid_file_was_reported("custom_script_no_read_access.tld")
 
     def test_save_event_rollover(self):
         # We keep 1000 events only, and the older ones are removed.
@@ -643,7 +654,7 @@ class TestEvent(AgentTestCase):
             )
 
     def test_collect_events_should_add_all_the_parameters_in_the_telemetry_schema_to_extension_events(self):
-        self._assert_extension_event_includes_all_parameters_in_the_telemetry_schema('custom_script.tld')
+        self._assert_extension_event_includes_all_parameters_in_the_telemetry_schema('custom_script_1.tld')
 
     def test_collect_events_should_ignore_extra_parameters_in_extension_events(self):
         self._assert_extension_event_includes_all_parameters_in_the_telemetry_schema('custom_script_extra_parameters.tld')
