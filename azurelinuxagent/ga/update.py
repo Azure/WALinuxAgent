@@ -670,7 +670,7 @@ class UpdateHandler(object):
             return False
 
         family = conf.get_autoupdate_gafamily()
-        logger.verbose("Checking for agent family {0} updates", family)
+        logger.info("Checking for agent updates (family: {0})", family)
 
         self.last_attempt_time = now
 
