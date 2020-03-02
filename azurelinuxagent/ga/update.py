@@ -30,6 +30,7 @@ import subprocess
 import sys
 import time
 import traceback
+import uuid
 import zipfile
 
 from datetime import datetime, timedelta
@@ -41,21 +42,14 @@ import azurelinuxagent.common.utils.restutil as restutil
 import azurelinuxagent.common.utils.textutil as textutil
 from azurelinuxagent.common.cgroupconfigurator import CGroupConfigurator
 
-from azurelinuxagent.common.event import add_event, add_periodic, \
-                                    elapsed_milliseconds, \
-                                    WALAEventOperation
-from azurelinuxagent.common.exception import ProtocolError, \
-                                            ResourceGoneError, \
-                                            UpdateError
+from azurelinuxagent.common.event import add_event, initialize_event_logger_vminfo_common_parameters, elapsed_milliseconds, WALAEventOperation
+from azurelinuxagent.common.exception import ResourceGoneError, UpdateError
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.osutil import get_osutil
-from azurelinuxagent.common.protocol import get_protocol_util
+from azurelinuxagent.common.protocol.util import get_protocol_util
 from azurelinuxagent.common.protocol.hostplugin import HostPluginProtocol
-from azurelinuxagent.common.protocol.wire import WireProtocol
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
-from azurelinuxagent.common.version import AGENT_NAME, AGENT_VERSION, AGENT_LONG_VERSION, \
-                                            AGENT_DIR_GLOB, AGENT_PKG_GLOB, \
-                                            AGENT_PATTERN, AGENT_NAME_PATTERN, AGENT_DIR_PATTERN, \
+from azurelinuxagent.common.version import AGENT_NAME, AGENT_VERSION, AGENT_DIR_PATTERN, \
                                             CURRENT_AGENT, CURRENT_VERSION, DISTRO_NAME, DISTRO_VERSION, \
                                             is_current_agent_installed
 
@@ -99,6 +93,8 @@ def get_python_cmd():
 
 class UpdateHandler(object):
 
+    TELEMETRY_HEARTBEAT_PERIOD = timedelta(minutes=30)
+
     def __init__(self):
         self.osutil = get_osutil()
         self.protocol_util = get_protocol_util()
@@ -114,6 +110,10 @@ class UpdateHandler(object):
         self.child_process = None
 
         self.signal_handler = None
+
+        self.last_telemetry_heartbeat = None
+        self.heartbeat_id = str(uuid.uuid4()).upper()
+        self.heartbeat_counter = 0
 
     def run_latest(self, child_args=None):
         """
@@ -257,9 +257,11 @@ class UpdateHandler(object):
             protocol = self.protocol_util.get_protocol()
             protocol.update_goal_state()
 
+            initialize_event_logger_vminfo_common_parameters(protocol)
+
             # Log OS-specific info.
             os_info_msg = u"Distro info: {0} {1}, osutil class being used: {2}, agent service name: {3}"\
-                .format(DISTRO_NAME, DISTRO_VERSION,type(self.osutil).__name__, self.osutil.service_name)
+                .format(DISTRO_NAME, DISTRO_VERSION, type(self.osutil).__name__, self.osutil.service_name)
 
             logger.info(os_info_msg)
 
@@ -311,39 +313,48 @@ class UpdateHandler(object):
                 #
                 # Process the goal state
                 #
-                protocol.update_goal_state()
+                goal_state_fetched = False
+                try:
+                    protocol.update_goal_state()
+                    goal_state_fetched = True
+                except Exception as e:
+                    msg = u"Exception retrieving the goal state: {0}".format(ustr(traceback.format_exc()))
+                    add_event(AGENT_NAME, op=WALAEventOperation.FetchGoalState, version=CURRENT_VERSION, is_success=False, message=msg)
 
-                if self._upgrade_available(protocol):
-                    available_agent = self.get_latest_agent()
-                    if available_agent is None:
-                        logger.info(
-                            "Agent {0} is reverting to the installed agent -- exiting",
-                            CURRENT_AGENT)
-                    else:
-                        logger.info(
-                            u"Agent {0} discovered update {1} -- exiting",
-                            CURRENT_AGENT,
-                            available_agent.name)
-                    break
+                if goal_state_fetched:
+                    if self._upgrade_available(protocol):
+                        available_agent = self.get_latest_agent()
+                        if available_agent is None:
+                            logger.info(
+                                "Agent {0} is reverting to the installed agent -- exiting",
+                                CURRENT_AGENT)
+                        else:
+                            logger.info(
+                                u"Agent {0} discovered update {1} -- exiting",
+                                CURRENT_AGENT,
+                                available_agent.name)
+                        break
 
-                utc_start = datetime.utcnow()
+                    utc_start = datetime.utcnow()
 
-                last_etag = exthandlers_handler.last_etag
-                exthandlers_handler.run()
+                    last_etag = exthandlers_handler.last_etag
+                    exthandlers_handler.run()
 
-                remote_access_handler.run()
+                    remote_access_handler.run()
 
-                if last_etag != exthandlers_handler.last_etag:
-                    self._ensure_readonly_files()
-                    duration = elapsed_milliseconds(utc_start)
-                    logger.info('ProcessGoalState completed [incarnation {0}; {1} ms]',
-                                exthandlers_handler.last_etag,
-                                duration)
-                    add_event(
-                        AGENT_NAME,
-                        op=WALAEventOperation.ProcessGoalState,
-                        duration=duration,
-                        message="Incarnation {0}".format(exthandlers_handler.last_etag))
+                    if last_etag != exthandlers_handler.last_etag:
+                        self._ensure_readonly_files()
+                        duration = elapsed_milliseconds(utc_start)
+                        logger.info('ProcessGoalState completed [incarnation {0}; {1} ms]',
+                                    exthandlers_handler.last_etag,
+                                    duration)
+                        add_event(
+                            AGENT_NAME,
+                            op=WALAEventOperation.ProcessGoalState,
+                            duration=duration,
+                            message="Incarnation {0}".format(exthandlers_handler.last_etag))
+
+                self._send_heartbeat_telemetry(protocol)
 
                 time.sleep(goal_state_interval)
 
@@ -515,9 +526,8 @@ class UpdateHandler(object):
             logger.warn(u"Exception occurred loading available agents: {0}", ustr(e))
         return
 
-    def _get_host_plugin(self, protocol=None):
-        return protocol.client.get_host_plugin() \
-            if protocol and type(protocol) is WireProtocol and protocol.client else None
+    def _get_host_plugin(self, protocol):
+        return protocol.client.get_host_plugin() if protocol and protocol.client else None
 
     def _get_pid_parts(self):
         pid_file = conf.get_agent_pid_file_path()
@@ -642,10 +652,12 @@ class UpdateHandler(object):
             AGENT_NAME,
             version=CURRENT_VERSION,
             op=WALAEventOperation.AutoUpdate,
-            is_success=conf.get_autoupdate_enabled())
+            is_success=conf.get_autoupdate_enabled(),
+            log_event=False)
 
         # Ignore new agents if updating is disabled
         if not conf.get_autoupdate_enabled():
+            logger.warn(u"Agent auto-update is disabled.")
             return False
 
         now = time.time()
@@ -693,15 +705,8 @@ class UpdateHandler(object):
                 or (len(self.agents) > 0 and self.agents[0].version > base_version)
 
         except Exception as e:
-            msg = u"Exception retrieving agent manifests: {0}".format(
-                        ustr(traceback.format_exc()))
-            logger.warn(msg)
-            add_event(
-                AGENT_NAME,
-                op=WALAEventOperation.Download,
-                version=CURRENT_VERSION,
-                is_success=False,
-                message=msg)
+            msg = u"Exception retrieving agent manifests: {0}".format(ustr(traceback.format_exc()))
+            add_event(AGENT_NAME, op=WALAEventOperation.Download, version=CURRENT_VERSION, is_success=False, message=msg)
             return False
 
     def _write_pid_file(self):
@@ -729,6 +734,21 @@ class UpdateHandler(object):
                 ustr(e))
 
         return pid_files, pid_file
+
+    def _send_heartbeat_telemetry(self, protocol):
+        if self.last_telemetry_heartbeat is None:
+            self.last_telemetry_heartbeat = datetime.utcnow() - UpdateHandler.TELEMETRY_HEARTBEAT_PERIOD
+
+        if datetime.utcnow() >= (self.last_telemetry_heartbeat + UpdateHandler.TELEMETRY_HEARTBEAT_PERIOD):
+            dropped_packets = self.osutil.get_firewall_dropped_packets(protocol.get_endpoint())
+            msg = "{0};{1};{2}".format(self.heartbeat_counter, self.heartbeat_id, dropped_packets)
+
+            add_event(name=AGENT_NAME, version=CURRENT_VERSION, op=WALAEventOperation.HeartBeat, is_success=True,
+                      message=msg, log_event=False)
+            self.heartbeat_counter += 1
+
+            logger.info(u"[HEARTBEAT] Agent {0} is running as the goal state agent", CURRENT_AGENT)
+            self.last_telemetry_heartbeat = datetime.utcnow()
 
 
 class GuestAgent(object):

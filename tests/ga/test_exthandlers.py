@@ -1,5 +1,20 @@
-# Copyright (c) Microsoft Corporation. All rights reserved.
-# Licensed under the Apache License.
+# Copyright 2020 Microsoft Corporation
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+# Requires Python 2.6+ and Openssl 1.0+
+#
+
 import json
 import os
 import subprocess
@@ -8,7 +23,7 @@ import time
 from azurelinuxagent.common.protocol.util import ProtocolUtil
 
 from azurelinuxagent.common.cgroupconfigurator import CGroupConfigurator
-from azurelinuxagent.common.event import WALAEventOperation
+from azurelinuxagent.common.event import WALAEventOperation, AGENT_EVENT_FILE_EXTENSION
 from azurelinuxagent.common.exception import ProtocolError, ExtensionError, ExtensionErrorCodes
 from azurelinuxagent.common.protocol.restapi import ExtensionStatus, Extension, ExtHandler, ExtHandlerProperties
 from azurelinuxagent.common.utils.extensionprocessutil import TELEMETRY_MESSAGE_MAX_LEN, format_stdout_stderr, \
@@ -297,7 +312,7 @@ sys.stderr.write("{1}")
 
         def list_directory():
             base_dir = self.ext_handler_instance.get_base_dir()
-            return [i for i in os.listdir(base_dir) if not i.endswith(".tld")] # ignore telemetry files
+            return [i for i in os.listdir(base_dir) if not i.endswith(AGENT_EVENT_FILE_EXTENSION)] # ignore telemetry files
 
         files_before = list_directory()
 

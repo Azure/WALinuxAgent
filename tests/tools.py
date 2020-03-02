@@ -41,12 +41,12 @@ from azurelinuxagent.common.utils import fileutil
 from azurelinuxagent.common.version import PY_VERSION_MAJOR
 
 try:
-    from unittest.mock import Mock, patch, MagicMock, ANY, DEFAULT, call
+    from unittest.mock import Mock, patch, MagicMock, ANY, DEFAULT, call, PropertyMock
 
     # Import mock module for Python2 and Python3
     from bin.waagent2 import Agent
 except ImportError:
-    from mock import Mock, patch, MagicMock, ANY, DEFAULT, call
+    from mock import Mock, patch, MagicMock, ANY, DEFAULT, call, PropertyMock
 
 test_dir = os.path.dirname(os.path.abspath(__file__))
 data_dir = os.path.join(test_dir, "data")
@@ -206,6 +206,7 @@ class AgentTestCase(unittest.TestCase):
             # keep a pointer to the original implementation to use when a context manager is not requested.
             cls.original_assertRaises = unittest.TestCase.assertRaises
             cls.assertRaises = cls.emulate_assertRaises
+            cls.assertDictEqual = cls.emulate_assertDictEqual
 
     @classmethod
     def tearDownClass(cls):
@@ -332,6 +333,20 @@ class AgentTestCase(unittest.TestCase):
                 self.fail("Expected exception {0} matching {1}.  Actual: {2}".format(
                     exception_type, regex, str(e)))
         self.fail("No exception was thrown.  Expected exception {0} matching {1}".format(exception_type, regex))
+
+    def emulate_assertDictEqual(self, first, second, msg=None):
+        def fail(message):
+            self.fail(self._formatMessage(msg, message))
+
+        for k in first.keys():
+            if k not in second:
+                fail("'{0}' is missing from second".format(k))
+            if first[k] != second[k]:
+                fail("'{0}' != '{1}' (key: {2})".format(first[k], second[k], k))
+
+        for k in second.keys():
+            if k not in first:
+                fail("'{0}' is missing from first".format(k))
 
     def emulate_assertListEqual(self, seq1, seq2, msg=None, seq_type=None):
         """An equality assertion for ordered sequences (like lists and tuples).

@@ -30,7 +30,7 @@ from azurelinuxagent.common import version
 
 from azurelinuxagent.common.exception import ProtocolError
 from azurelinuxagent.common.osutil import get_osutil
-from azurelinuxagent.common.protocol import get_protocol_util
+from azurelinuxagent.common.protocol.util import get_protocol_util
 from azurelinuxagent.ga.exthandlers import HANDLER_NAME_PATTERN
 
 

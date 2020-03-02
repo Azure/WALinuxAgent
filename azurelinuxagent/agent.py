@@ -84,9 +84,14 @@ class Agent(object):
                 "Exception occurred while creating extension "
                 "log directory {0}: {1}".format(ext_log_dir, e))
 
-        #Init event reporter
+        # Init event reporter
+        # Note that the reporter is not fully initialized here yet. Some telemetry fields are filled with data
+        # originating from the goal state or IMDS, which requires a WireProtocol instance. Once a protocol
+        # has been established, those fields must be explicitly initialized using
+        # initialize_event_logger_vminfo_common_parameters(). Any events created before that initialization
+        # will contain dummy values on those fields.
         event.init_event_status(conf.get_lib_dir())
-        event_dir = os.path.join(conf.get_lib_dir(), "events")
+        event_dir = os.path.join(conf.get_lib_dir(), event.EVENTS_DIRECTORY)
         event.init_event_logger(event_dir)
         event.enable_unhandled_err_dump("WALA")
 

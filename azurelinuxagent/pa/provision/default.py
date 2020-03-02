@@ -38,7 +38,7 @@ from azurelinuxagent.common.exception import ProvisionError, ProtocolError, \
     OSUtilError
 from azurelinuxagent.common.osutil import get_osutil
 from azurelinuxagent.common.protocol.restapi import ProvisionStatus
-from azurelinuxagent.common.protocol import get_protocol_util
+from azurelinuxagent.common.protocol.util import get_protocol_util
 from azurelinuxagent.common.version import AGENT_NAME
 
 CUSTOM_DATA_FILE = "CustomData"
@@ -77,7 +77,7 @@ class ProvisionHandler(object):
             logger.info("Copying ovf-env.xml")
             ovf_env = self.protocol_util.copy_ovf_env()
 
-            self.protocol_util.get_protocol(by_file=True)
+            self.protocol_util.get_protocol()
             self.report_not_ready("Provisioning", "Starting")
             logger.info("Starting provisioning")
 

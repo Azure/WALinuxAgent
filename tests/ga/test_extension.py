@@ -33,6 +33,7 @@ from azurelinuxagent.common.exception import ResourceGoneError
 from azurelinuxagent.common.protocol.restapi import Extension, ExtHandlerProperties
 from azurelinuxagent.ga.exthandlers import *
 from azurelinuxagent.common.protocol.wire import WireProtocol, InVMArtifactsProfile
+from azurelinuxagent.common.utils.restutil import KNOWN_WIRESERVER_IP
 
 # Mocking the original sleep to reduce test execution time
 SLEEP = time.sleep
@@ -348,7 +349,7 @@ class TestExtension(ExtensionTestCase):
         mock_http_get.side_effect = test_data.mock_http_get
         MockCryptUtil.side_effect = test_data.mock_crypt_util
 
-        protocol = WireProtocol("foo.bar")
+        protocol = WireProtocol(KNOWN_WIRESERVER_IP)
         protocol.detect()
         protocol.report_ext_status = MagicMock()
         protocol.report_vm_status = MagicMock()
@@ -1415,7 +1416,7 @@ class TestExtension(ExtensionTestCase):
 
         _, protocol = self._create_mock(mockwiredata.WireProtocolData(mockwiredata.DATA_FILE), *args)
         version_uri = Mock()
-        version_uri.uri = 'http://some/Microsoft.OSTCExtensions_ExampleHandlerLinux_asiaeast_manifest.xml'
+        version_uri.uri = 'http://mock-goal-state/Microsoft.OSTCExtensions_ExampleHandlerLinux_asiaeast_manifest.xml'
 
         for (installed_version, config_version, expected_version) in cases:
             ext_handler = Mock()
@@ -2144,7 +2145,7 @@ class TestExtensionSequencing(AgentTestCase):
         mock_http_get.side_effect = test_data.mock_http_get
         MockCryptUtil.side_effect = test_data.mock_crypt_util
 
-        protocol = WireProtocol("foo.bar")
+        protocol = WireProtocol(KNOWN_WIRESERVER_IP)
         protocol.detect()
         protocol.report_ext_status = MagicMock()
         protocol.report_vm_status = MagicMock()
@@ -2379,7 +2380,7 @@ class TestExtensionWithCGroupsEnabled(AgentTestCase):
         mock_http_get.side_effect = test_data.mock_http_get
         mock_crypt_util.side_effect = test_data.mock_crypt_util
 
-        protocol = WireProtocol("foo.bar")
+        protocol = WireProtocol(KNOWN_WIRESERVER_IP)
         protocol.detect()
         protocol.report_ext_status = MagicMock()
         protocol.report_vm_status = MagicMock()
@@ -2466,53 +2467,6 @@ class TestExtensionWithCGroupsEnabled(AgentTestCase):
 
         self._assert_no_handler_status(protocol.report_vm_status)
 
-    @skip_if_predicate_true(lambda: True, "Skipping this test currently: We need two different tests - one for "
-                                  "FileSystemCgroupAPI based test and one for SystemDCgroupAPI based test. @vrdmr will "
-                                  "be splitting this test in subsequent PRs")
-    @skip_if_predicate_true(is_trusty_in_travis, "Does not run on Trusty in Travis as CPU cgroup is not mounted")
-    @patch('azurelinuxagent.common.event.EventLogger.add_metric')
-    @patch('azurelinuxagent.common.event.EventLogger.add_event')
-    @attr('requires_sudo')
-    def test_ext_handler_and_monitor_handler_with_cgroup_enabled(self, patch_add_event, patch_add_metric, *args):
-        self.assertTrue(i_am_root(), "Test does not run when non-root")
-
-        # This test has some timing issues when systemd is managing cgroups, so we force the file system API
-        # by creating a new instance of the CGroupConfigurator
-        with patch("azurelinuxagent.common.cgroupapi.CGroupsApi._is_systemd", return_value=False):
-            cgroup_configurator_instance = CGroupConfigurator._instance
-            CGroupConfigurator._instance = None
-
-            try:
-                test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE)
-                exthandlers_handler, monitor_handler, protocol = self._create_mock(test_data, *args)
-
-                monitor_handler.last_cgroup_polling_telemetry = datetime.datetime.utcnow() - timedelta(hours=1)
-                monitor_handler.last_cgroup_report_telemetry = datetime.datetime.utcnow() - timedelta(hours=1)
-
-                # Test enable scenario.
-                exthandlers_handler.run()
-                self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.0.0")
-                self._assert_ext_status(protocol.report_ext_status, "success", 0)
-
-                monitor_handler.poll_telemetry_metrics()
-                monitor_handler.send_telemetry_metrics()
-
-                self.assertEqual(patch_add_event.call_count, 5)
-                self.assertEqual(patch_add_metric.call_count, 3)
-
-                name = patch_add_event.call_args[0][0]
-                fields = patch_add_event.call_args[1]
-
-                self.assertEqual(name, "WALinuxAgent")
-                self.assertEqual(fields["op"], "ExtensionMetricsData")
-                self.assertEqual(fields["is_success"], True)
-                self.assertEqual(fields["log_event"], False)
-                self.assertEqual(fields["is_internal"], False)
-                self.assertIsInstance(fields["message"], ustr)
-
-                monitor_handler.stop()
-            finally:
-                CGroupConfigurator._instance = cgroup_configurator_instance
 
     @attr('requires_sudo')
     def test_ext_handler_with_systemd_cgroup_enabled(self, *args):

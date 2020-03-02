@@ -241,14 +241,8 @@ class ExtHandlersHandler(object):
                           message="Failed to get extension artifact for over "
                                   "{0}: {1}".format(self.get_artifact_error_state.min_timedelta, msg))
                 self.get_artifact_error_state.reset()
-            else:
-                logger.warn(msg)
 
-            add_event(AGENT_NAME,
-                      version=CURRENT_VERSION,
-                      op=WALAEventOperation.ExtensionProcessing,
-                      is_success=False,
-                      message=detailed_msg)
+            add_event(AGENT_NAME, version=CURRENT_VERSION, op=WALAEventOperation.ExtensionProcessing, is_success=False, message=detailed_msg)
             return
 
         try:
