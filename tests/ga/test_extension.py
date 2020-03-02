@@ -1229,10 +1229,10 @@ class TestExtension(ExtensionTestCase):
         self.assertEqual(ext_status.configurationAppliedTime, None)
         self.assertEqual(ext_status.operation, "Enable")
         self.assertEqual(ext_status.sequenceNumber, 0)
-        self.assertRegex(ext_status.message, "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Vestibulum non "
+        self.assertEqual(ext_status.message, "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Vestibulum non "
                                              "lacinia urna, sit amet venenatis orci. Praesent maximus erat et augue "
                                              "tincidunt, quis fringilla urna mollis. Fusce id lacus veli ... "
-                                             "TRUNCATED MESSAGE")
+                                             "[TRUNCATED]")
         self.assertEqual(ext_status.status, VALID_EXTENSION_STATUS.success)
         self.assertEqual(len(ext_status.substatusList), 0)
 
