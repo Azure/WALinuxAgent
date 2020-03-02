@@ -54,12 +54,7 @@ from azurelinuxagent.common.version import AGENT_NAME, CURRENT_VERSION, DISTRO_N
 HANDLER_ENVIRONMENT_VERSION = 1.0
 
 VALID_EXTENSION_STATUS = NamedSet(('transitioning', 'warning', 'error', 'success'))
-
-EXTENSION_STATUS_ERROR = VALID_EXTENSION_STATUS.error
-EXTENSION_STATUS_SUCCESS = VALID_EXTENSION_STATUS.success
-EXTENSION_STATUS_WARNING = VALID_EXTENSION_STATUS.warning
-
-EXTENSION_TERMINAL_STATUSES = [EXTENSION_STATUS_ERROR, EXTENSION_STATUS_SUCCESS]
+EXTENSION_TERMINAL_STATUSES = [VALID_EXTENSION_STATUS.error, VALID_EXTENSION_STATUS.success]
 
 VALID_HANDLER_STATUS = ['Ready', 'NotReady', "Installing", "Unresponsive"]
 
@@ -145,7 +140,7 @@ def parse_ext_status(ext_status, data):
 
     status = status_data['status']
     if status not in VALID_EXTENSION_STATUS:
-        status = EXTENSION_STATUS_ERROR
+        status = VALID_EXTENSION_STATUS.error
 
     applied_time = status_data.get('configurationAppliedTime')
     ext_status.configurationAppliedTime = applied_time
@@ -404,7 +399,7 @@ class ExtHandlersHandler(object):
                           message=msg)
                 return False
 
-            if status != EXTENSION_STATUS_SUCCESS:
+            if status != VALID_EXTENSION_STATUS.success:
                 msg = "Extension {0} did not succeed. Status was {1}".format(ext.name, status)
                 logger.warn(msg)
                 add_event(AGENT_NAME,
@@ -1112,16 +1107,16 @@ class ExtHandlerInstance(object):
                 .format(ext.name, self.ext_handler.properties.version, seq_no, e)
             ext_status.message = msg
             ext_status.code = ExtensionErrorCodes.PluginUnknownFailure
-            ext_status.status = EXTENSION_STATUS_WARNING
+            ext_status.status = VALID_EXTENSION_STATUS.warning
         except ValueError as e:
             msg = u"Failed to read any status for extension - {0}-{1}, Sequence number {2}. Failed due to {3}"\
                 .format(ext.name, self.ext_handler.properties.version, seq_no, e)
             ext_status.message = msg
             ext_status.code = ExtensionErrorCodes.PluginUnknownFailure
-            ext_status.status = EXTENSION_STATUS_WARNING
+            ext_status.status = VALID_EXTENSION_STATUS.warning
 
         if ext_status.code == ExtensionErrorCodes.PluginUnknownFailure:
-            logger.periodic_warn(logger.EVERY_HALF_HOUR, ext_status.message)
+            logger.periodic_warn(logger.EVERY_HALF_HOUR, "[PERIODIC] " + ext_status.message)
             add_periodic(delta=logger.EVERY_HALF_HOUR, name=ext.name, version=self.ext_handler.properties.version,
                          op=WALAEventOperation.StatusProcessing, is_success=False, message=ext_status.message,
                          log_event=False)
@@ -1137,7 +1132,7 @@ class ExtHandlerInstance(object):
                                                        len(data_str), MAX_STATUS_FILE_SIZE_IN_BYTES),
                                                code=ExtensionStatusError.MaxSizeExceeded)
             except ExtensionStatusError as e:
-                logger.periodic_warn(logger.EVERY_HALF_HOUR, ustr(e))
+                logger.periodic_warn(logger.EVERY_HALF_HOUR, "[PERIODIC] " + ustr(e))
                 add_periodic(delta=logger.EVERY_HALF_HOUR, name=ext.name, version=self.ext_handler.properties.version,
                              op=WALAEventOperation.StatusProcessing, is_success=False, message=ustr(e), log_event=False)
 
@@ -1145,13 +1140,13 @@ class ExtHandlerInstance(object):
                     # Emptying the substatus to reduce the size, and preserve other fields of the text
                     ext_status.substatusList = []
                     ext_status.message = ext_status.message if len(ext_status.message) < 200 \
-                        else ext_status.message[:200] + " ... TRUNCATED MESSAGE"
+                        else ext_status.message[:200] + " ... [TRUNCATED]"
                 elif e.code == ExtensionStatusError.StatusFileMalformed:
                     ext_status.message = "Could not get a valid status from the extension {0}-{1}. Encountered the " \
                                          "following error: {0}".format(ext.name, self.ext_handler.properties.version,
                                                                        ustr(e))
                     ext_status.code = ExtensionErrorCodes.PluginSettingsStatusInvalid
-                    ext_status.status = EXTENSION_STATUS_WARNING
+                    ext_status.status = VALID_EXTENSION_STATUS.warning
 
         return ext_status
 

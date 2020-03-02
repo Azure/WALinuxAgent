@@ -1046,7 +1046,7 @@ class TestExtension(ExtensionTestCase):
 
         exthandlers_handler.run()
         self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.0.0")
-        self._assert_ext_status(protocol.report_ext_status, EXTENSION_STATUS_WARNING, 0)
+        self._assert_ext_status(protocol.report_ext_status, VALID_EXTENSION_STATUS.warning, 0)
 
     def test_wait_for_handler_successful_completion_empty_exts(self, *args):
         '''
@@ -1173,8 +1173,8 @@ class TestExtension(ExtensionTestCase):
     @patch("azurelinuxagent.ga.exthandlers.ExtHandlerInstance.get_status_file_path")
     def test_collect_ext_status(self, patch_get_status_file_path, *args):
         """
-        Testing is_ext_handling_complete() with various input and
-        verifying against the expected output values.
+        This test validates that collect_ext_status correctly picks up the status file (sample-status.json) and then
+        parses it correctly.
         """
         patch_get_status_file_path.return_value = (0, os.path.join(data_dir, "ext", "sample-status.json"))
 
@@ -1196,18 +1196,19 @@ class TestExtension(ExtensionTestCase):
         self.assertEqual(ext_status.sequenceNumber, 0)
         self.assertEqual(ext_status.message, "Aenean semper nunc nisl, vitae sollicitudin felis consequat at. In "
                                              "lobortis elementum sapien, non commodo odio semper ac.")
-        self.assertEqual(ext_status.status, EXTENSION_STATUS_SUCCESS)
+        self.assertEqual(ext_status.status, VALID_EXTENSION_STATUS.success)
 
         self.assertEqual(len(ext_status.substatusList), 1)
         sub_status = ext_status.substatusList[0]
         self.assertEqual(sub_status.code, "0")
         self.assertEqual(sub_status.message, None)
-        self.assertEqual(sub_status.status, EXTENSION_STATUS_SUCCESS)
+        self.assertEqual(sub_status.status, VALID_EXTENSION_STATUS.success)
 
     @patch("azurelinuxagent.ga.exthandlers.ExtHandlerInstance.get_status_file_path")
     def test_collect_ext_status_very_large_status_message(self, patch_get_status_file_path, *args):
         """
-        Testing collect_ext_status() with a very large status file (>128K) to what it re
+        Testing collect_ext_status() with a very large status file (>128K) to see if it correctly parses the status
+        without generating a really large message.
         """
         status_file_path = os.path.join(data_dir, "ext", "sample-status-very-large.json")
         patch_get_status_file_path.return_value = (0, status_file_path)
@@ -1231,7 +1232,7 @@ class TestExtension(ExtensionTestCase):
                                              "lacinia urna, sit amet venenatis orci. Praesent maximus erat et augue "
                                              "tincidunt, quis fringilla urna mollis. Fusce id lacus veli ... "
                                              "TRUNCATED MESSAGE")
-        self.assertEqual(ext_status.status, EXTENSION_STATUS_SUCCESS)
+        self.assertEqual(ext_status.status, VALID_EXTENSION_STATUS.success)
         self.assertEqual(len(ext_status.substatusList), 0)
 
     @patch("azurelinuxagent.ga.exthandlers.ExtHandlerInstance.get_status_file_path")
@@ -1264,7 +1265,7 @@ class TestExtension(ExtensionTestCase):
             self.assertRegex(ext_status.message, "Failed to find any status for extension - {0}-{1}, Sequence number "
                                                  "{2}. Failed due to No such file or directory: {3}".format(
                 "TestHandler", "1.0.0", 0, status_file_path))
-            self.assertEqual(ext_status.status, EXTENSION_STATUS_WARNING)
+            self.assertEqual(ext_status.status, VALID_EXTENSION_STATUS.warning)
             self.assertEqual(len(ext_status.substatusList), 0)
 
     @patch("azurelinuxagent.ga.exthandlers.ExtHandlerInstance.get_status_file_path")
@@ -1293,7 +1294,7 @@ class TestExtension(ExtensionTestCase):
         self.assertEqual(ext_status.sequenceNumber, 0)
         self.assertRegex(ext_status.message, "Failed to read any status for extension - {0}-{1}, Sequence number {2}.".
                          format("TestHandler", "1.0.0", 0))
-        self.assertEqual(ext_status.status, EXTENSION_STATUS_WARNING)
+        self.assertEqual(ext_status.status, VALID_EXTENSION_STATUS.warning)
         self.assertEqual(len(ext_status.substatusList), 0)
 
     @patch("azurelinuxagent.ga.exthandlers.ExtHandlerInstance.get_status_file_path")
@@ -1322,7 +1323,7 @@ class TestExtension(ExtensionTestCase):
         self.assertEqual(ext_status.sequenceNumber, 0)
         self.assertRegex(ext_status.message, "Could not get a valid status from the extension {0}-{1}. "
                                              "Encountered the following error".format("TestHandler", "1.0.0"))
-        self.assertEqual(ext_status.status, EXTENSION_STATUS_WARNING)
+        self.assertEqual(ext_status.status, VALID_EXTENSION_STATUS.warning)
         self.assertEqual(len(ext_status.substatusList), 0)
 
     def test_is_ext_handling_complete(self, *args):
