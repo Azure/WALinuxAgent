@@ -5,7 +5,6 @@ from __future__ import print_function
 
 import tempfile
 import unittest
-import uuid
 from threading import currentThread
 
 from azurelinuxagent.ga.env import EnvHandler
@@ -14,6 +13,7 @@ from azurelinuxagent.common.protocol.goal_state import ExtensionsConfig
 from azurelinuxagent.common.protocol.hostplugin import *
 from azurelinuxagent.common.protocol.util import ProtocolUtil
 from azurelinuxagent.common.protocol.wire import *
+from azurelinuxagent.common.version import AGENT_PKG_GLOB, AGENT_DIR_GLOB
 from azurelinuxagent.ga.monitor import MonitorHandler
 from azurelinuxagent.ga.update import *
 from tests.tools import AgentTestCase, call, data_dir, DEFAULT, patch, load_bin_data, load_data, Mock, MagicMock, \
@@ -1232,24 +1232,25 @@ class TestUpdate(UpdateTestCase):
             with patch('azurelinuxagent.ga.remoteaccess.get_remote_access_handler') as mock_ra_handler:
                 with patch('azurelinuxagent.ga.monitor.get_monitor_handler') as mock_monitor:
                     with patch('azurelinuxagent.ga.env.get_env_handler') as mock_env:
-                        with patch('time.sleep', side_effect=iterator) as mock_sleep:
-                            with patch('sys.exit') as mock_exit:
-                                if isinstance(os.getppid, MagicMock):
-                                    self.update_handler.run()
-                                else:
-                                    with patch('os.getppid', return_value=42):
+                        with patch('azurelinuxagent.ga.update.initialize_event_logger_vminfo_common_parameters'):
+                            with patch('time.sleep', side_effect=iterator) as mock_sleep:
+                                with patch('sys.exit') as mock_exit:
+                                    if isinstance(os.getppid, MagicMock):
                                         self.update_handler.run()
+                                    else:
+                                        with patch('os.getppid', return_value=42):
+                                            self.update_handler.run()
 
-                                self.assertEqual(1, mock_handler.call_count)
-                                self.assertEqual(mock_handler.return_value.method_calls, calls)
-                                self.assertEqual(1, mock_ra_handler.call_count)
-                                self.assertEqual(mock_ra_handler.return_value.method_calls, calls)
-                                self.assertEqual(invocations, mock_sleep.call_count)
-                                if invocations > 0:
-                                    self.assertEqual(sleep_interval, mock_sleep.call_args[0])
-                                self.assertEqual(1, mock_monitor.call_count)
-                                self.assertEqual(1, mock_env.call_count)
-                                self.assertEqual(1, mock_exit.call_count)
+                                    self.assertEqual(1, mock_handler.call_count)
+                                    self.assertEqual(mock_handler.return_value.method_calls, calls)
+                                    self.assertEqual(1, mock_ra_handler.call_count)
+                                    self.assertEqual(mock_ra_handler.return_value.method_calls, calls)
+                                    self.assertEqual(invocations, mock_sleep.call_count)
+                                    if invocations > 0:
+                                        self.assertEqual(sleep_interval, mock_sleep.call_args[0])
+                                    self.assertEqual(1, mock_monitor.call_count)
+                                    self.assertEqual(1, mock_env.call_count)
+                                    self.assertEqual(1, mock_exit.call_count)
 
     def test_run(self):
         self._test_run()
@@ -1485,11 +1486,12 @@ class MonitorThreadTest(AgentTestCase):
         with patch('os.getpid', return_value=42):
             with patch.object(UpdateHandler, '_is_orphaned') as mock_is_orphaned:
                 mock_is_orphaned.__get__ = Mock(return_value=False)
-                with patch('azurelinuxagent.ga.exthandlers.get_exthandlers_handler') as mock_handler:
-                    with patch('azurelinuxagent.ga.remoteaccess.get_remote_access_handler') as mock_ra_handler:
-                        with patch('time.sleep', side_effect=iterator) as mock_sleep:
-                            with patch('sys.exit') as mock_exit:
-                                self.update_handler.run()
+                with patch('azurelinuxagent.ga.exthandlers.get_exthandlers_handler'):
+                    with patch('azurelinuxagent.ga.remoteaccess.get_remote_access_handler'):
+                        with patch('azurelinuxagent.ga.update.initialize_event_logger_vminfo_common_parameters'):
+                            with patch('time.sleep', side_effect=iterator):
+                                with patch('sys.exit'):
+                                    self.update_handler.run()
 
     @patch('azurelinuxagent.ga.monitor.get_monitor_handler')
     @patch('azurelinuxagent.ga.env.get_env_handler')

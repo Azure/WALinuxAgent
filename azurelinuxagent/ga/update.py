@@ -42,21 +42,14 @@ import azurelinuxagent.common.utils.restutil as restutil
 import azurelinuxagent.common.utils.textutil as textutil
 from azurelinuxagent.common.cgroupconfigurator import CGroupConfigurator
 
-from azurelinuxagent.common.event import add_event, add_periodic, \
-                                    elapsed_milliseconds, \
-                                    WALAEventOperation
-from azurelinuxagent.common.exception import ProtocolError, \
-                                            ResourceGoneError, \
-                                            UpdateError
+from azurelinuxagent.common.event import add_event, initialize_event_logger_vminfo_common_parameters, elapsed_milliseconds, WALAEventOperation
+from azurelinuxagent.common.exception import ResourceGoneError, UpdateError
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.osutil import get_osutil
 from azurelinuxagent.common.protocol.util import get_protocol_util
 from azurelinuxagent.common.protocol.hostplugin import HostPluginProtocol
-from azurelinuxagent.common.protocol.wire import WireProtocol
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
-from azurelinuxagent.common.version import AGENT_NAME, AGENT_VERSION, AGENT_LONG_VERSION, \
-                                            AGENT_DIR_GLOB, AGENT_PKG_GLOB, \
-                                            AGENT_PATTERN, AGENT_NAME_PATTERN, AGENT_DIR_PATTERN, \
+from azurelinuxagent.common.version import AGENT_NAME, AGENT_VERSION, AGENT_DIR_PATTERN, \
                                             CURRENT_AGENT, CURRENT_VERSION, DISTRO_NAME, DISTRO_VERSION, \
                                             is_current_agent_installed
 
@@ -263,6 +256,8 @@ class UpdateHandler(object):
             #
             protocol = self.protocol_util.get_protocol()
             protocol.update_goal_state()
+
+            initialize_event_logger_vminfo_common_parameters(protocol)
 
             # Log OS-specific info.
             os_info_msg = u"Distro info: {0} {1}, osutil class being used: {2}, agent service name: {3}"\

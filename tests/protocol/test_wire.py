@@ -27,17 +27,19 @@ from azurelinuxagent.common.exception import InvalidContainerError, ResourceGone
     ExtensionDownloadError
 from azurelinuxagent.common.future import httpclient
 from azurelinuxagent.common.protocol.hostplugin import HostPluginProtocol
-from azurelinuxagent.common.protocol.goal_state import GoalState, ExtensionsConfig
-from azurelinuxagent.common.protocol.wire import WireProtocol, WireClient, InVMArtifactsProfile, VMAgentManifestUri, \
-    StatusBlob, VMStatus, ExtHandlerVersionUri, DataContractList, socket
+from azurelinuxagent.common.protocol.goal_state import ExtensionsConfig, HostingEnv
+from azurelinuxagent.common.protocol.imds import get_imds_client
+from azurelinuxagent.common.protocol.wire import WireProtocol, WireClient, GoalState, \
+    InVMArtifactsProfile, VMAgentManifestUri, StatusBlob, VMStatus, ExtHandlerVersionUri, DataContractList, socket
 from azurelinuxagent.common.telemetryevent import TelemetryEvent, TelemetryEventParam, TelemetryEventList
 from azurelinuxagent.common.utils import restutil
 from azurelinuxagent.common.version import CURRENT_VERSION, DISTRO_NAME, DISTRO_VERSION
 from tests.ga.test_monitor import random_generator
 from tests.protocol import mockwiredata, mock_wire_protocol
-from tests.protocol.mockwiredata import WireProtocolData, DATA_FILE_NO_EXT
-
-from tests.tools import ANY, MagicMock, Mock, patch, AgentTestCase, skip_if_predicate_true, running_under_travis
+from tests.protocol.mockwiredata import DATA_FILE_NO_EXT
+from tests.protocol.test_imds import get_mock_compute_response
+from tests.protocol.mockwiredata import WireProtocolData
+from tests.tools import ANY, MagicMock, Mock, patch, AgentTestCase
 
 data_with_bom = b'\xef\xbb\xbfhehe'
 testurl = 'http://foo'
