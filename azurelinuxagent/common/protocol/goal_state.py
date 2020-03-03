@@ -82,6 +82,8 @@ class GoalState(object):
             self.remote_access = None
             return
 
+        logger.info('Fetching new goal state [incarnation {0}]', self.incarnation)
+
         uri = findtext(xml_doc, "HostingEnvironmentConfig")
         xml_text = wire_client.fetch_config(uri, wire_client.get_header())
         self.hosting_env = HostingEnv(xml_text)

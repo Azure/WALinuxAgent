@@ -429,7 +429,7 @@ class ExtHandlersHandler(object):
 
             self.log_etag = True
 
-            ext_handler_i.logger.info("Target handler state: {0}", state)
+            ext_handler_i.logger.info("Target handler state: {0} [incarnation {1}]", state, etag)
             if state == u"enabled":
                 self.handle_enable(ext_handler_i)
             elif state == u"disabled":
