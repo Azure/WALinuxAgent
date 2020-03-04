@@ -31,6 +31,7 @@ from azurelinuxagent.common.event import add_event, WALAEventOperation, initiali
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.osutil import get_osutil
 from azurelinuxagent.common.protocol.util import get_protocol_util
+from azurelinuxagent.common.protocol.wire import WireProtocol
 from azurelinuxagent.common.rdma import setup_rdma_device
 from azurelinuxagent.common.version import AGENT_NAME, AGENT_LONG_NAME, \
     AGENT_VERSION, \
@@ -162,7 +163,11 @@ class DaemonHandler(object):
                 # - Changes to RDMA state may not increment the goal state
                 #   incarnation number. A forced update ensures the most
                 #   current values.
-                self.protocol_util.get_protocol().client.update_goal_state(forced=True)
+                protocol = self.protocol_util.get_protocol()
+                if type(protocol) is not WireProtocol:
+                    raise Exception("Attempt to setup RDMA without Wireserver")
+
+                protocol.client.update_goal_state(forced=True)
 
                 setup_rdma_device(nd_version, protocol.client.get_shared_conf())
             except Exception as e:
