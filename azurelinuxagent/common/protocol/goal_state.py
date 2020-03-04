@@ -121,6 +121,9 @@ class GoalState(object):
             else:
                 xml_text = wire_client.fetch_config(uri, wire_client.get_header_for_cert())
                 self.remote_access = RemoteAccess(xml_text)
+        except Exception as e:
+            logger.warn("Fetching the goal state failed: {0}", ustr(e))
+            raise
         finally:
             logger.info('Fetch goal state completed')
 
