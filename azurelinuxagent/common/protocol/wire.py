@@ -89,6 +89,7 @@ class WireProtocol(Protocol):
         cryptutil.gen_transport_cert(trans_prv_file, trans_cert_file)
 
         # Set the initial goal state
+        logger.info('Initializing goal state during protocol detection')
         self.client.update_goal_state(forced=True)
 
     def update_goal_state(self):
