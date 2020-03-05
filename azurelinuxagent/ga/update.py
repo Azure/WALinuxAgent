@@ -48,6 +48,7 @@ from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.osutil import get_osutil
 from azurelinuxagent.common.protocol.util import get_protocol_util
 from azurelinuxagent.common.protocol.hostplugin import HostPluginProtocol
+from azurelinuxagent.common.protocol.wire import WireProtocol
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
 from azurelinuxagent.common.version import AGENT_NAME, AGENT_VERSION, AGENT_DIR_PATTERN, \
                                             CURRENT_AGENT, CURRENT_VERSION, DISTRO_NAME, DISTRO_VERSION, \
@@ -526,8 +527,9 @@ class UpdateHandler(object):
             logger.warn(u"Exception occurred loading available agents: {0}", ustr(e))
         return
 
-    def _get_host_plugin(self, protocol):
-        return protocol.client.get_host_plugin() if protocol and protocol.client else None
+    def _get_host_plugin(self, protocol=None):
+        return protocol.client.get_host_plugin() \
+            if protocol and type(protocol) is WireProtocol and protocol.client else None
 
     def _get_pid_parts(self):
         pid_file = conf.get_agent_pid_file_path()
