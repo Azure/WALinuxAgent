@@ -11,8 +11,6 @@ from azurelinuxagent.ga.env import EnvHandler
 
 from azurelinuxagent.common.protocol.goal_state import ExtensionsConfig
 from azurelinuxagent.common.protocol.hostplugin import *
-from azurelinuxagent.common.protocol.metadata import *
-from azurelinuxagent.common.protocol.util import ProtocolUtil
 from azurelinuxagent.common.protocol.wire import *
 from azurelinuxagent.common.version import AGENT_PKG_GLOB, AGENT_DIR_GLOB
 from azurelinuxagent.ga.monitor import MonitorHandler
@@ -895,13 +893,6 @@ class TestUpdate(UpdateTestCase):
         print("mock_get_host call cound={0}".format(mock_get_host.call_count))
         self.assertEqual(1, mock_get_host.call_count)
         self.assertEqual("faux host", host)
-
-    @patch('azurelinuxagent.common.protocol.wire.WireClient.get_host_plugin')
-    def test_get_host_plugin_returns_none_otherwise(self, mock_get_host):
-        protocol = MetadataProtocol()
-        host = self.update_handler._get_host_plugin(protocol=protocol)
-        mock_get_host.assert_not_called()
-        self.assertEqual(None, host)
 
     def test_get_latest_agent(self):
         latest_version = self.prepare_agents()
