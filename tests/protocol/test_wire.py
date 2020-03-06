@@ -24,7 +24,7 @@ import uuid
 import contextlib
 
 from azurelinuxagent.common.exception import InvalidContainerError, ResourceGoneError, ProtocolError, \
-    ExtensionDownloadError
+    ExtensionDownloadError, HttpError
 from azurelinuxagent.common.future import httpclient
 from azurelinuxagent.common.protocol.hostplugin import HostPluginProtocol
 from azurelinuxagent.common.protocol.goal_state import ExtensionsConfig
@@ -209,26 +209,28 @@ class TestWireProtocol(AgentTestCase):
             self.assertEqual(goal_state.container_id, host_plugin.container_id)
             self.assertEqual(goal_state.role_config_name, host_plugin.role_config_name)
 
-    @skip_if_predicate_true(lambda: True, "Needs to be re-enabled before release 2.2.47")
-    def test_upload_status_blob_default(self, *args):
-        """
-        Default status blob method is HostPlugin.
-        """
-        with create_mock_protocol(status_upload_blob=testurl, status_upload_blob_type=testtype) as protocol:
-            protocol.client.status_blob.vm_status = VMStatus(message="Ready", status="Ready")
+    def test_upload_status_blob_should_use_the_host_channel_by_default(self, *_):
+        with mock_wire_protocol.create(mockwiredata.DATA_FILE) as protocol:
+            protocol.client.get_host_plugin()  # force initialization of the host plugin
 
-            with patch.object(WireClient, "get_goal_state") as patch_get_goal_state:
-                with patch.object(HostPluginProtocol, "put_vm_status") as patch_host_ga_plugin_upload:
-                    with patch.object(StatusBlob, "upload") as patch_default_upload:
-                        HostPluginProtocol.set_default_channel(False)
-                        protocol.client.upload_status_blob()
+            original_http_request = restutil.http_request
 
-                        # do not call the direct method unless host plugin fails
-                        patch_default_upload.assert_not_called()
-                        # host plugin always fetches a goal state
-                        patch_get_goal_state.assert_called_once_with()
-                        # host plugin uploads the status blob
-                        patch_host_ga_plugin_upload.assert_called_once_with(ANY, testurl, 'BlockBlob')
+            def http_request(method, url, *args, **kwargs):
+                if method == 'PUT':
+                    if protocol.get_endpoint() in url and url.endswith('/status'):
+                        http_request.urls.append(url)
+                        return MockResponse(body=b'', status_code=200)
+                    self.fail('The upload status request was sent to the wrong uri: {0}'.format(uri))
+                return original_http_request(method, url, *args, **kwargs)
+            http_request.urls = []
+
+            with patch("azurelinuxagent.common.utils.restutil.http_request", side_effect=http_request) as mock_request:
+                HostPluginProtocol.set_default_channel(False)
+                protocol.client.status_blob.vm_status = VMStatus(message="Ready", status="Ready")
+
+                protocol.client.upload_status_blob()
+
+                self.assertEqual(len(http_request.urls), 1, 'Expected one upload request to the host: [{0}]'.format(http_request.urls))
 
     def test_upload_status_blob_host_ga_plugin(self, *_):
         with create_mock_protocol(status_upload_blob=testurl, status_upload_blob_type=testtype) as protocol:
@@ -486,6 +488,9 @@ class TestWireProtocol(AgentTestCase):
 
 
 class TestWireClient(AgentTestCase):
+    @staticmethod
+    def _is_extension_artifact_host_request(expected_url, actual_url, **kwargs):
+        return actual_url.endswith('/extensionArtifact') and kwargs['headers']['x-ms-artifact-location'] == expected_url
 
     def test_get_ext_conf_without_uri(self, *args):
         with mock_wire_protocol.create(mockwiredata.DATA_FILE_NO_EXT) as protocol:
@@ -516,227 +521,235 @@ class TestWireClient(AgentTestCase):
                 self.assertEqual("BlockBlob", ext_conf.status_upload_blob_type)
                 self.assertEqual(None, ext_conf.artifacts_profile_blob)
 
-    @skip_if_predicate_true(lambda: True, "Needs to be re-enabled before release 2.2.47")
-    @patch("azurelinuxagent.common.protocol.wire.WireClient.get_goal_state")
-    @patch("azurelinuxagent.common.protocol.hostplugin.HostPluginProtocol.get_artifact_request")
-    def test_download_ext_handler_pkg_should_not_invoke_host_channel_when_direct_channel_succeeds(self,
-                                                                                                  mock_get_artifact_request,
-                                                                                                  *args):
-        mock_get_artifact_request.return_value = "dummy_url", "dummy_header"
-        protocol = WireProtocol("foo.bar")
-        HostPluginProtocol.set_default_channel(False)
+    def test_download_ext_handler_pkg_should_not_invoke_host_channel_when_direct_channel_succeeds(self):
+        extension_url = 'https://fake_host/fake_extension.zip'
+        target_file = os.path.join(self.tmp_dir, 'fake_extension.zip')
 
-        mock_successful_response = MockResponse(body=b"OK", status_code=200)
-        destination = os.path.join(self.tmp_dir, "tmp_file")
+        with mock_wire_protocol.create(mockwiredata.DATA_FILE) as protocol:
+            original_http_request = restutil.http_request
 
-        # Direct channel succeeds
-        with patch("azurelinuxagent.common.utils.restutil._http_request", return_value=mock_successful_response):
-            with patch("azurelinuxagent.common.protocol.wire.WireClient.update_goal_state") as mock_update_goal_state:
-                with patch("azurelinuxagent.common.protocol.wire.WireClient.stream", wraps=protocol.client.stream) \
-                        as patch_direct:
-                    with patch(
-                            "azurelinuxagent.common.protocol.wire.WireProtocol._download_ext_handler_pkg_through_host",
-                            wraps=protocol._download_ext_handler_pkg_through_host) as patch_host:
-                        ret = protocol.download_ext_handler_pkg("uri", destination)
-                        self.assertEquals(ret, True)
+            def http_request(method, url, *args, **kwargs):
+                if method == 'GET':
+                    if url == extension_url:
+                        http_request.urls.append(url)
+                        return MockResponse(body=b'', status_code=200)
+                    elif TestWireClient._is_extension_artifact_host_request(extension_url, url, **kwargs):
+                        self.fail('The host channel should not have been used')
+                return original_http_request(method, url, *args, **kwargs)
+            http_request.urls = []
 
-                        self.assertEquals(patch_host.call_count, 0)
-                        self.assertEquals(patch_direct.call_count, 1)
-                        self.assertEquals(mock_update_goal_state.call_count, 0)
+        with patch("azurelinuxagent.common.utils.restutil.http_request", side_effect=http_request):
+            HostPluginProtocol.set_default_channel(False)
 
-                        self.assertEquals(HostPluginProtocol.is_default_channel(), False)
+            success = protocol.download_ext_handler_pkg(extension_url, target_file)
 
-    @skip_if_predicate_true(lambda: True, "Needs to be re-enabled before release 2.2.47")
-    @patch("azurelinuxagent.common.protocol.wire.WireClient.get_goal_state")
-    @patch("azurelinuxagent.common.protocol.hostplugin.HostPluginProtocol.get_artifact_request")
-    def test_download_ext_handler_pkg_should_use_host_channel_when_direct_channel_fails(self, mock_get_artifact_request,
-                                                                                        *args):
-        mock_get_artifact_request.return_value = "dummy_url", "dummy_header"
-        protocol = WireProtocol("foo.bar")
-        HostPluginProtocol.set_default_channel(False)
+            self.assertEquals(success, True, 'The download should have succeeded')
+            self.assertEquals(len(http_request.urls), 1, "Unexpected number of HTTP requests: [{0}]".format(http_request.urls))
+            self.assertEquals(http_request.urls[0], extension_url, "The extension should have been downloaded over the direct channel")
+            self.assertTrue(os.path.exists(target_file), 'The extension package was not downloaded')
+            self.assertEquals(HostPluginProtocol.is_default_channel(), False, "The host channel should not have been set as the default")
 
-        mock_failed_response = MockResponse(body=b"", status_code=httpclient.GONE)
-        mock_successful_response = MockResponse(body=b"OK", status_code=200)
-        destination = os.path.join(self.tmp_dir, "tmp_file")
+    def test_download_ext_handler_pkg_should_use_host_channel_when_direct_channel_fails_and_set_host_as_default(self):
+        extension_url = 'https://fake_host/fake_extension.zip'
+        target_file = os.path.join(self.tmp_dir, 'fake_extension.zip')
 
-        # Direct channel fails, host channel succeeds. Goal state should not have been updated and host channel
-        # should have been set as default.
-        with patch("azurelinuxagent.common.utils.restutil._http_request",
-                   side_effect=[mock_failed_response, mock_successful_response]):
-            with patch("azurelinuxagent.common.protocol.wire.WireClient.update_goal_state") as mock_update_goal_state:
-                with patch("azurelinuxagent.common.protocol.wire.WireClient.stream", wraps=protocol.client.stream) \
-                        as patch_direct:
-                    with patch(
-                            "azurelinuxagent.common.protocol.wire.WireProtocol._download_ext_handler_pkg_through_host",
-                            wraps=protocol._download_ext_handler_pkg_through_host) as patch_host:
-                        ret = protocol.download_ext_handler_pkg("uri", destination)
-                        self.assertEquals(ret, True)
+        with mock_wire_protocol.create(mockwiredata.DATA_FILE) as protocol:
+            original_http_request = restutil.http_request
 
-                        self.assertEquals(patch_host.call_count, 1)
-                        # The host channel calls the direct function under the covers
-                        self.assertEquals(patch_direct.call_count, 1 + patch_host.call_count)
-                        self.assertEquals(mock_update_goal_state.call_count, 0)
+            def http_request(method, url, *args, **kwargs):
+                if method == 'GET':
+                    if url == extension_url:
+                        http_request.urls.append(url)
+                        raise HttpError("Exception to fake an error on the direct channel")
+                    elif TestWireClient._is_extension_artifact_host_request(extension_url, url, **kwargs):
+                        http_request.urls.append(url)
+                        return MockResponse(body=b'', status_code=200)
+                return original_http_request(method, url, *args, **kwargs)
+            http_request.urls = []
 
-                        self.assertEquals(HostPluginProtocol.is_default_channel(), True)
+        with patch("azurelinuxagent.common.utils.restutil.http_request", side_effect=http_request):
+            HostPluginProtocol.set_default_channel(False)
 
-    @skip_if_predicate_true(lambda: True, "Needs to be re-enabled before release 2.2.47")
-    @patch("azurelinuxagent.common.protocol.wire.WireClient.get_goal_state")
-    @patch("azurelinuxagent.common.protocol.hostplugin.HostPluginProtocol.get_artifact_request")
-    def test_download_ext_handler_pkg_should_retry_the_host_channel_after_refreshing_host_plugin(self,
-                                                                                                 mock_get_artifact_request,
-                                                                                                 *args):
-        mock_get_artifact_request.return_value = "dummy_url", "dummy_header"
-        protocol = WireProtocol("foo.bar")
-        HostPluginProtocol.set_default_channel(False)
+            success = protocol.download_ext_handler_pkg(extension_url, target_file)
 
-        mock_failed_response = MockResponse(body=b"", status_code=httpclient.GONE)
-        mock_successful_response = MockResponse(body=b"OK", status_code=200)
-        destination = os.path.join(self.tmp_dir, "tmp_file")
+            self.assertEquals(success, True, 'The download should have succeeded')
+            self.assertEquals(len(http_request.urls), 2, "Unexpected number of HTTP requests: [{0}]".format(http_request.urls))
+            self.assertEquals(http_request.urls[0], extension_url, "The first attempt should have been over the direct channel")
+            self.assertTrue(http_request.urls[1].endswith('/extensionArtifact'), "The retry attempt should have been over the host channel")
+            self.assertTrue(os.path.exists(target_file), 'The extension package was not downloaded')
+            self.assertEquals(HostPluginProtocol.is_default_channel(), True, "The host channel should have been set as the default")
 
-        # Direct channel fails, host channel fails due to stale goal state, host channel succeeds after refresh.
-        # As a consequence, goal state should have been updated and host channel should have been set as default.
-        with patch("azurelinuxagent.common.utils.restutil._http_request",
-                   side_effect=[mock_failed_response, mock_failed_response, mock_successful_response]):
-            with patch(
-                    "azurelinuxagent.common.protocol.wire.WireClient.update_host_plugin_from_goal_state") as mock_update_host_plugin_from_goal_state:
-                with patch("azurelinuxagent.common.protocol.wire.WireClient.stream", wraps=protocol.client.stream) \
-                        as patch_direct:
-                    with patch(
-                            "azurelinuxagent.common.protocol.wire.WireProtocol._download_ext_handler_pkg_through_host",
-                            wraps=protocol._download_ext_handler_pkg_through_host) as patch_host:
-                        ret = protocol.download_ext_handler_pkg("uri", destination)
-                        self.assertEquals(ret, True)
+    def test_download_ext_handler_pkg_should_retry_the_host_channel_after_refreshing_host_plugin(self):
+        extension_url = 'https://fake_host/fake_extension.zip'
+        target_file = os.path.join(self.tmp_dir, 'fake_extension.zip')
 
-                        self.assertEquals(patch_host.call_count, 2)
-                        # The host channel calls the direct function under the covers
-                        self.assertEquals(patch_direct.call_count, 1 + patch_host.call_count)
-                        self.assertEquals(mock_update_host_plugin_from_goal_state.call_count, 1)
+        with mock_wire_protocol.create(mockwiredata.DATA_FILE) as protocol:
+            protocol.client.get_host_plugin()  # force initialization of the host plugin
 
-                        self.assertEquals(HostPluginProtocol.is_default_channel(), True)
+            original_http_request = restutil.http_request
 
-    @skip_if_predicate_true(lambda: True, "Needs to be re-enabled before release 2.2.47")
-    @patch("azurelinuxagent.common.protocol.wire.WireClient.get_goal_state")
-    @patch("azurelinuxagent.common.protocol.hostplugin.HostPluginProtocol.get_artifact_request")
-    def test_download_ext_handler_pkg_should_not_change_default_channel_if_host_fails(self, mock_get_artifact_request,
-                                                                                      *args):
-        mock_get_artifact_request.return_value = "dummy_url", "dummy_header"
-        protocol = WireProtocol("foo.bar")
-        HostPluginProtocol.set_default_channel(False)
+            def http_request(method, url, *args, **kwargs):
+                if method == 'GET':
+                    if url == extension_url:
+                        http_request.urls.append(url)
+                        raise HttpError("Exception to fake an error on the direct channel")
+                    elif TestWireClient._is_extension_artifact_host_request(extension_url, url, **kwargs):
+                        http_request.urls.append(url)
+                        # fake a stale goal state then succeed once the goal state has been refreshed
+                        if not any(url.endswith('/machine/?comp=goalstate') for url in http_request.urls):
+                            raise ResourceGoneError("Exception to fake an error on the host channel")
+                        else:
+                            return MockResponse(body=b'', status_code=200)
+                    elif url.endswith('/machine/?comp=goalstate'):
+                        http_request.urls.append(url)
+                return original_http_request(method, url, *args, **kwargs)
+            http_request.urls = []
 
-        mock_failed_response = MockResponse(body=b"", status_code=httpclient.GONE)
-        destination = os.path.join(self.tmp_dir, "tmp_file")
+        with patch("azurelinuxagent.common.utils.restutil.http_request", side_effect=http_request):
+            HostPluginProtocol.set_default_channel(False)
 
-        # Everything fails. Goal state should have been updated and host channel should not have been set as default.
-        with patch("azurelinuxagent.common.utils.restutil._http_request", return_value=mock_failed_response):
-            with patch(
-                    "azurelinuxagent.common.protocol.wire.WireClient.update_host_plugin_from_goal_state") as mock_update_host_plugin_from_goal_state:
-                with patch("azurelinuxagent.common.protocol.wire.WireClient.stream", wraps=protocol.client.stream) \
-                        as patch_direct:
-                    with patch(
-                            "azurelinuxagent.common.protocol.wire.WireProtocol._download_ext_handler_pkg_through_host",
-                            wraps=protocol._download_ext_handler_pkg_through_host) as patch_host:
-                        ret = protocol.download_ext_handler_pkg("uri", destination)
-                        self.assertEquals(ret, False)
+            success = protocol.download_ext_handler_pkg(extension_url, target_file)
 
-                        self.assertEquals(patch_host.call_count, 2)
-                        # The host channel calls the direct function under the covers
-                        self.assertEquals(patch_direct.call_count, 1 + patch_host.call_count)
-                        self.assertEquals(mock_update_host_plugin_from_goal_state.call_count, 1)
+            self.assertEquals(success, True, 'The download should have succeeded')
+            self.assertEquals(len(http_request.urls), 4, "Unexpected number of HTTP requests: [{0}]".format(http_request.urls))
+            self.assertEquals(http_request.urls[0], extension_url, "The first attempt should have been over the direct channel")
+            self.assertTrue(http_request.urls[1].endswith('/extensionArtifact'), "The second attempt should have been over the host channel")
+            self.assertTrue(http_request.urls[2].endswith('/machine/?comp=goalstate'), "The host channel should have been refreshed the goal state")
+            self.assertTrue(http_request.urls[3].endswith('/extensionArtifact'), "The third attempt should have been over the host channel")
+            self.assertTrue(os.path.exists(target_file), 'The extension package was not downloaded')
+            self.assertEquals(HostPluginProtocol.is_default_channel(), True, "The host channel should have been set as the default")
 
-                        self.assertEquals(HostPluginProtocol.is_default_channel(), False)
+    def test_download_ext_handler_pkg_should_not_change_default_channel_when_all_channels_fail(self):
+        extension_url = 'https://fake_host/fake_extension.zip'
 
-    @skip_if_predicate_true(lambda: True, "Needs to be re-enabled before release 2.2.47")
-    @patch("azurelinuxagent.common.protocol.wire.WireClient.get_goal_state")
-    @patch("azurelinuxagent.common.protocol.hostplugin.HostPluginProtocol.get_artifact_request")
-    def test_fetch_manifest_should_not_invoke_host_channel_when_direct_channel_succeeds(self, mock_get_artifact_request,
-                                                                                        *args):
-        mock_get_artifact_request.return_value = "dummy_url", "dummy_header"
-        client = WireClient("foo.bar")
+        with mock_wire_protocol.create(mockwiredata.DATA_FILE) as protocol:
+            protocol.client.get_host_plugin()  # force initialization of the host plugin
 
-        HostPluginProtocol.set_default_channel(False)
-        mock_successful_response = MockResponse(body=b"OK", status_code=200)
+            original_http_request = restutil.http_request
 
-        # Direct channel succeeds
-        with patch("azurelinuxagent.common.utils.restutil._http_request", return_value=mock_successful_response):
-            with patch("azurelinuxagent.common.protocol.wire.WireClient.update_goal_state") as mock_update_goal_state:
-                with patch("azurelinuxagent.common.protocol.wire.WireClient.fetch", wraps=client.fetch) as patch_direct:
-                    with patch("azurelinuxagent.common.protocol.wire.WireClient.fetch_manifest_through_host",
-                               wraps=client.fetch_manifest_through_host) as patch_host:
-                        ret = client.fetch_manifest([VMAgentManifestUri(uri="uri1")])
-                        self.assertEquals(ret, "OK")
+            def http_request(method, url, *args, **kwargs):
+                if method == 'GET':
+                    if url == extension_url:
+                        http_request.urls.append(url)
+                        raise HttpError("Exception to fake error on direct channel")
+                    if TestWireClient._is_extension_artifact_host_request(extension_url, url, **kwargs):
+                        http_request.urls.append(url)
+                        raise ResourceGoneError("Exception to fake error on host channel")
+                    elif url.endswith('/machine/?comp=goalstate'):
+                        http_request.urls.append(url)
+                return original_http_request(method, url, *args, **kwargs)
+            http_request.urls = []
 
-                        self.assertEquals(patch_host.call_count, 0)
-                        # The host channel calls the direct function under the covers
-                        self.assertEquals(patch_direct.call_count, 1)
-                        self.assertEquals(mock_update_goal_state.call_count, 0)
+            with patch("azurelinuxagent.common.utils.restutil.http_request", side_effect=http_request):
+                HostPluginProtocol.set_default_channel(False)
 
-                        self.assertEquals(HostPluginProtocol.is_default_channel(), False)
+                success = protocol.download_ext_handler_pkg(extension_url, "/an-invalid-directory/an-invalid-file.zip")
 
-    @skip_if_predicate_true(lambda: True, "Needs to be re-enabled before release 2.2.47")
-    @patch("azurelinuxagent.common.protocol.wire.WireClient.get_goal_state")
-    @patch("azurelinuxagent.common.protocol.hostplugin.HostPluginProtocol.get_artifact_request")
-    def test_fetch_manifest_should_use_host_channel_when_direct_channel_fails(self, mock_get_artifact_request, *args):
-        mock_get_artifact_request.return_value = "dummy_url", "dummy_header"
-        client = WireClient("foo.bar")
+                self.assertEquals(success, False, "The download should have failed")
+                self.assertEquals(len(http_request.urls), 4, "Unexpected number of HTTP requests: [{0}]".format(http_request.urls))
+                self.assertEquals(http_request.urls[0], extension_url, "The first attempt should have been over the direct channel")
+                self.assertTrue(http_request.urls[1].endswith('/extensionArtifact'), "The second attempt should have been over the host channel")
+                self.assertTrue(http_request.urls[2].endswith('/machine/?comp=goalstate'), "The host channel should have been refreshed the goal state")
+                self.assertTrue(http_request.urls[3].endswith('/extensionArtifact'), "The third attempt should have been over the host channel")
+                self.assertEquals(HostPluginProtocol.is_default_channel(), False, "The host channel should not have been set as the default")
 
-        HostPluginProtocol.set_default_channel(False)
+    def test_fetch_manifest_should_not_invoke_host_channel_when_direct_channel_succeeds(self):
+        manifest_url = 'https://fake_host/fake_manifest.xml'
+        manifest_xml = '<?xml version="1.0" encoding="utf-8"?><PluginVersionManifest/>'
 
-        mock_failed_response = MockResponse(body=b"", status_code=httpclient.GONE)
-        mock_successful_response = MockResponse(body=b"OK", status_code=200)
+        with mock_wire_protocol.create(mockwiredata.DATA_FILE) as protocol:
+            original_http_request = restutil.http_request
 
-        # Direct channel fails, host channel succeeds. Goal state should not have been updated and host channel
-        # should have been set as default
-        with patch("azurelinuxagent.common.utils.restutil._http_request",
-                   side_effect=[mock_failed_response, mock_successful_response]):
-            with patch("azurelinuxagent.common.protocol.wire.WireClient.update_goal_state") as mock_update_goal_state:
-                with patch("azurelinuxagent.common.protocol.wire.WireClient.fetch", wraps=client.fetch) as patch_direct:
-                    with patch("azurelinuxagent.common.protocol.wire.WireClient.fetch_manifest_through_host",
-                               wraps=client.fetch_manifest_through_host) as patch_host:
-                        ret = client.fetch_manifest([VMAgentManifestUri(uri="uri1")])
-                        self.assertEquals(ret, "OK")
+            def http_request(method, url, *args, **kwargs):
+                if method == 'GET':
+                    if url == manifest_url:
+                        return MockResponse(body=manifest_xml.encode('utf-8'), status_code=200)
+                    elif url.endswith('/extensionArtifact'):
+                        self.fail('The Host GA Plugin should not have been invoked')
+                return original_http_request(method, url, *args, **kwargs)
 
-                        self.assertEquals(patch_host.call_count, 1)
-                        # The host channel calls the direct function under the covers
-                        self.assertEquals(patch_direct.call_count, 1 + patch_host.call_count)
-                        self.assertEquals(mock_update_goal_state.call_count, 0)
+            with patch("azurelinuxagent.common.utils.restutil.http_request", side_effect=http_request) as mock_request:
+                HostPluginProtocol.set_default_channel(False)
 
-                        self.assertEquals(HostPluginProtocol.is_default_channel(), True)
+                manifest = protocol.client.fetch_manifest([VMAgentManifestUri(uri=manifest_url)])
 
-        # Reset default channel
-        HostPluginProtocol.set_default_channel(False)
+                self.assertEquals(manifest, manifest_xml)
+                self.assertTrue(any(args[0][0] == 'GET' and args[0][1] == manifest_url for args in mock_request.call_args_list))  # direct channel
+                self.assertEquals(HostPluginProtocol.is_default_channel(), False, "The default channel should not have changed")
 
-    @skip_if_predicate_true(lambda: True, "Needs to be re-enabled before release 2.2.47")
-    @patch("azurelinuxagent.common.protocol.wire.WireClient.get_goal_state")
-    @patch("azurelinuxagent.common.protocol.hostplugin.HostPluginProtocol.get_artifact_request")
-    def test_fetch_manifest_should_retry_the_host_channel_after_refreshing_the_host_plugin(self,
-                                                                                           mock_get_artifact_request,
-                                                                                           *args):
-        mock_get_artifact_request.return_value = "dummy_url", "dummy_header"
-        client = WireClient("foo.bar")
+    def test_fetch_manifest_should_use_host_channel_when_direct_channel_fails_and_set_it_to_default(self):
+        manifest_url = 'https://fake_host/fake_manifest.xml'
+        manifest_xml = '<?xml version="1.0" encoding="utf-8"?><PluginVersionManifest/>'
 
-        HostPluginProtocol.set_default_channel(False)
+        with mock_wire_protocol.create(mockwiredata.DATA_FILE) as protocol:
+            original_http_request = restutil.http_request
 
-        mock_failed_response = MockResponse(body=b"", status_code=httpclient.GONE)
-        mock_successful_response = MockResponse(body=b"OK", status_code=200)
+            def http_request(method, url, *args, **kwargs):
+                if method == 'GET':
+                    if url == manifest_url:
+                        http_request.urls.append(url)
+                        raise ResourceGoneError("Exception to fake an error on the direct channel")
+                    elif TestWireClient._is_extension_artifact_host_request(manifest_url, url, **kwargs):
+                        http_request.urls.append(url)
+                        return MockResponse(body=manifest_xml.encode('utf-8'), status_code=200)
+                return original_http_request(method, url, *args, **kwargs)
+            http_request.urls = []
 
-        # Direct channel fails, host channel fails due to stale goal state, host channel succeeds after refresh.
-        # As a consequence, goal state should have been updated and host channel should have been set as default.
-        with patch("azurelinuxagent.common.utils.restutil._http_request",
-                   side_effect=[mock_failed_response, mock_failed_response, mock_successful_response]):
-            with patch(
-                    "azurelinuxagent.common.protocol.wire.WireClient.update_host_plugin_from_goal_state") as mock_update_host_plugin_from_goal_state:
-                with patch("azurelinuxagent.common.protocol.wire.WireClient.fetch", wraps=client.fetch) as patch_direct:
-                    with patch("azurelinuxagent.common.protocol.wire.WireClient.fetch_manifest_through_host",
-                               wraps=client.fetch_manifest_through_host) as patch_host:
-                        ret = client.fetch_manifest([VMAgentManifestUri(uri="uri1")])
-                        self.assertEquals(ret, "OK")
+            with patch("azurelinuxagent.common.utils.restutil.http_request", side_effect=http_request):
+                HostPluginProtocol.set_default_channel(False)
 
-                        self.assertEquals(patch_host.call_count, 2)
-                        # The host channel calls the direct function under the covers
-                        self.assertEquals(patch_direct.call_count, 1 + patch_host.call_count)
-                        self.assertEquals(mock_update_host_plugin_from_goal_state.call_count, 1)
+                try:
+                    manifest = protocol.client.fetch_manifest([VMAgentManifestUri(uri=manifest_url)])
 
-                        self.assertEquals(HostPluginProtocol.is_default_channel(), True)
+                    self.assertEquals(manifest, manifest_xml)
+                    self.assertEquals(len(http_request.urls), 2, "Unexpected number of HTTP requests: [{0}]".format(http_request.urls))
+                    self.assertEquals(http_request.urls[0], manifest_url, "The first attempt should have been over the direct channel")
+                    self.assertTrue(http_request.urls[1].endswith('/extensionArtifact'), "The retry should have been over the host channel")
+                    self.assertEquals(HostPluginProtocol.is_default_channel(), True, "The host should have been set as the default channel")
+                finally:
+                    HostPluginProtocol.set_default_channel(False)  # Reset default channel
+
+    def test_fetch_manifest_should_retry_the_host_channel_after_refreshing_the_host_plugin_and_set_the_host_as_default(self):
+        manifest_url = 'https://fake_host/fake_manifest.xml'
+        manifest_xml = '<?xml version="1.0" encoding="utf-8"?><PluginVersionManifest/>'
+
+        with mock_wire_protocol.create(mockwiredata.DATA_FILE) as protocol:
+            protocol.client.get_host_plugin()  # force initialization of the host plugin
+
+            original_http_request = restutil.http_request
+
+            def http_request(method, url, *args, **kwargs):
+                if method == 'GET':
+                    if url == manifest_url:
+                        http_request.urls.append(url)
+                        raise HttpError("Exception to fake an error on the direct channel")
+                    elif TestWireClient._is_extension_artifact_host_request(manifest_url, url, **kwargs):
+                        http_request.urls.append(url)
+                        # fake a stale goal state then succeed once the goal state has been refreshed
+                        if not any(url.endswith('/machine/?comp=goalstate') for url in http_request.urls):
+                            raise ResourceGoneError("Exception to fake an error on the host channel")
+                        else:
+                            return MockResponse(body=manifest_xml.encode('utf-8'), status_code=200)
+                    elif url.endswith('/machine/?comp=goalstate'):
+                        http_request.urls.append(url)
+                return original_http_request(method, url, *args, **kwargs)
+            http_request.urls = []
+
+            with patch("azurelinuxagent.common.utils.restutil.http_request", side_effect=http_request):
+                HostPluginProtocol.set_default_channel(False)
+
+                try:
+                    manifest = protocol.client.fetch_manifest([VMAgentManifestUri(uri=manifest_url)])
+
+                    self.assertEquals(manifest, manifest_xml)
+                    self.assertEquals(len(http_request.urls), 4, "Unexpected number of HTTP requests: [{0}]".format(http_request.urls))
+                    self.assertEquals(http_request.urls[0], manifest_url, "The first attempt should have been over the direct channel")
+                    self.assertTrue(http_request.urls[1].endswith('/extensionArtifact'), "The second attempt should have been over the host channel")
+                    self.assertTrue(http_request.urls[2].endswith('/machine/?comp=goalstate'), "The host channel should have been refreshed the goal state")
+                    self.assertTrue(http_request.urls[3].endswith('/extensionArtifact'), "The third attempt should have been over the host channel")
+                    self.assertEquals(HostPluginProtocol.is_default_channel(), True, "The host should have been set as the default channel")
+                finally:
+                    HostPluginProtocol.set_default_channel(False)  # Reset default channel
 
     @patch("azurelinuxagent.common.protocol.wire.WireClient.get_goal_state")
     @patch("azurelinuxagent.common.protocol.hostplugin.HostPluginProtocol.get_artifact_request")

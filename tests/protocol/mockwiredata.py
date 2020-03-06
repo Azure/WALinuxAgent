@@ -86,6 +86,7 @@ class WireProtocolData(object):
         self.call_counts = {
             "comp=versions": 0,
             "/versions": 0,
+            "/HealthService": 0,
             "goalstate": 0,
             "hostingenvuri": 0,
             "sharedconfiguri": 0,
@@ -135,13 +136,10 @@ class WireProtocolData(object):
         resp = MagicMock()
         resp.status = httpclient.OK
 
-        # wire server versions
-        if "comp=versions" in url:
+        if "comp=versions" in url:  # wire server versions
             content = self.version_info
             self.call_counts["comp=versions"] += 1
-
-        # HostPlugin versions
-        elif "/versions" in url:
+        elif "/versions" in url:  # HostPlugin versions
             content = '["2015-09-01"]'
             self.call_counts["/versions"] += 1
         elif "goalstate" in url:
@@ -197,6 +195,21 @@ class WireProtocolData(object):
                 return resp
             else:
                 raise Exception("Bad url {0}".format(url))
+
+        resp.read = Mock(return_value=content.encode("utf-8"))
+        return resp
+
+    def mock_http_post(self, url, *args, **kwargs):
+        content = None
+
+        resp = MagicMock()
+        resp.status = httpclient.OK
+
+        if url.endswith('/HealthService'):
+            self.call_counts['/HealthService'] += 1
+            content = ''
+        else:
+            raise Exception("Bad url {0}".format(url))
 
         resp.read = Mock(return_value=content.encode("utf-8"))
         return resp
