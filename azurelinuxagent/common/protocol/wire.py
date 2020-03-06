@@ -89,6 +89,7 @@ class WireProtocol(Protocol):
         cryptutil.gen_transport_cert(trans_prv_file, trans_cert_file)
 
         # Set the initial goal state
+        logger.info('Initializing goal state during protocol detection')
         self.client.update_goal_state(forced=True)
 
     def update_goal_state(self):
@@ -1128,7 +1129,7 @@ class WireClient(object):
 
     def get_host_plugin(self):
         if self._host_plugin is None:
-            goal_state = self.get_goal_state()
+            goal_state = GoalState.fetch_goal_state(self)
             self._set_host_plugin(HostPluginProtocol(self.get_endpoint(),
                                                      goal_state.container_id,
                                                      goal_state.role_config_name))

@@ -77,7 +77,7 @@ class ProvisionHandler(object):
             logger.info("Copying ovf-env.xml")
             ovf_env = self.protocol_util.copy_ovf_env()
 
-            self.protocol_util.get_protocol()
+            self.protocol_util.get_protocol(by_file=True)
             self.report_not_ready("Provisioning", "Starting")
             logger.info("Starting provisioning")
 
