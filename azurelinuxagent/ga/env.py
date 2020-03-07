@@ -45,6 +45,7 @@ MAXIMUM_CACHED_FILES = 50
 
 ARCHIVE_INTERVAL = datetime.timedelta(hours=24)
 
+METADATA_SERVER_ENDPOINT = '169.254.169.254'
 
 def get_env_handler():
     return EnvHandler()
@@ -70,7 +71,7 @@ class EnvHandler(object):
         self.last_archive = None
         self.archiver = StateArchiver(conf.get_lib_dir())
 
-    def run(self):
+    def run(self, firewall_set_event, remove_metadata_server_firewall_rule):
         if not self.stopped:
             logger.info("Stop existing env monitor service.")
             self.stop()
@@ -80,66 +81,77 @@ class EnvHandler(object):
         self.dhcp_handler.conf_routes()
         self.hostname = self.osutil.get_hostname_record()
         self.dhcp_id_list = self.get_dhcp_client_pid()
-        self.start()
+        self.start(firewall_set_event, remove_metadata_server_firewall_rule)
 
     def is_alive(self):
         return self.server_thread.is_alive()
 
-    def start(self):
-        self.server_thread = threading.Thread(target=self.monitor)
+    def start(self, firewall_set_event, remove_metadata_server_firewall_rule):
+        self.server_thread = threading.Thread(target=self.monitor, args=(firewall_set_event, remove_metadata_server_firewall_rule))
         self.server_thread.setDaemon(True)
         self.server_thread.setName("EnvHandler")
         self.server_thread.start()
 
-    def monitor(self):
+    def monitor(self, firewall_set_event, remove_metadata_server_firewall_rule):
         """
         Monitor firewall rules
         Monitor dhcp client pid and hostname.
         If dhcp client process re-start has occurred, reset routes.
         Purge unnecessary files from disk cache.
         """
+        try:
+            # The initialization of ProtocolUtil for the Environment thread should be done within the thread itself rather
+            # than initializing it in the ExtHandler thread. This is done to avoid any concurrency issues as each
+            # thread would now have its own ProtocolUtil object as per the SingletonPerThread model.
+            self.protocol_util = get_protocol_util()
+            protocol = self.protocol_util.get_protocol()
+            reset_firewall_fules = False
+            while not self.stopped:
+                self.osutil.remove_rules_files()
 
-        # The initialization of ProtocolUtil for the Environment thread should be done within the thread itself rather
-        # than initializing it in the ExtHandler thread. This is done to avoid any concurrency issues as each
-        # thread would now have its own ProtocolUtil object as per the SingletonPerThread model.
-        self.protocol_util = get_protocol_util()
-        protocol = self.protocol_util.get_protocol()
-        reset_firewall_fules = False
-        while not self.stopped:
-            self.osutil.remove_rules_files()
+                if conf.enable_firewall():
+                    # If the rules ever change we must reset all rules and start over again.
+                    #
+                    # There was a rule change at 2.2.26, which started dropping non-root traffic
+                    # to WireServer.  The previous rules allowed traffic.  Having both rules in
+                    # place negated the fix in 2.2.26.
+                    if not reset_firewall_fules:
+                        self.osutil.remove_firewall(dst_ip=protocol.get_endpoint(), uid=os.getuid())
+                        if remove_metadata_server_firewall_rule:
+                            self.osutil.remove_firewall(METADATA_SERVER_ENDPOINT, uid=os.getuid())
+                            remove_metadata_server_firewall_rule = False
+                        reset_firewall_fules = True
 
-            if conf.enable_firewall():
-                # If the rules ever change we must reset all rules and start over again.
-                #
-                # There was a rule change at 2.2.26, which started dropping non-root traffic
-                # to WireServer.  The previous rules allowed traffic.  Having both rules in
-                # place negated the fix in 2.2.26.
-                if not reset_firewall_fules:
-                    self.osutil.remove_firewall(dst_ip=protocol.get_endpoint(), uid=os.getuid())
-                    reset_firewall_fules = True
+                    success = self.osutil.enable_firewall(dst_ip=protocol.get_endpoint(), uid=os.getuid())
 
-                success = self.osutil.enable_firewall(dst_ip=protocol.get_endpoint(), uid=os.getuid())
+                    add_periodic(
+                        logger.EVERY_HOUR,
+                        AGENT_NAME,
+                        version=CURRENT_VERSION,
+                        op=WALAEventOperation.Firewall,
+                        is_success=success,
+                        log_event=False)
 
-                add_periodic(
-                    logger.EVERY_HOUR,
-                    AGENT_NAME,
-                    version=CURRENT_VERSION,
-                    op=WALAEventOperation.Firewall,
-                    is_success=success,
-                    log_event=False)
+                timeout = conf.get_root_device_scsi_timeout()
+                if timeout is not None:
+                    self.osutil.set_scsi_disks_timeout(timeout)
 
-            timeout = conf.get_root_device_scsi_timeout()
-            if timeout is not None:
-                self.osutil.set_scsi_disks_timeout(timeout)
+                if conf.get_monitor_hostname():
+                    self.handle_hostname_update()
 
-            if conf.get_monitor_hostname():
-                self.handle_hostname_update()
+                self.handle_dhclient_restart()
 
-            self.handle_dhclient_restart()
+                self.archive_history()
 
-            self.archive_history()
+                # signal that firewall has been set at least once
+                if not self.firewall_set_event.isSet():
+                    self.firewall_set_event.set()
 
-            time.sleep(5)
+                time.sleep(5)
+        finally:
+            # Ensure we set event to prevent deadlock
+            if not self.firewall_set_event.isSet():
+                self.firewall_set_event.set()
 
     def handle_hostname_update(self):
         curr_hostname = socket.gethostname()

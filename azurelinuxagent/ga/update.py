@@ -29,6 +29,7 @@ import stat
 import subprocess
 import sys
 import time
+import threading
 import traceback
 import uuid
 import zipfile
@@ -46,7 +47,8 @@ from azurelinuxagent.common.event import add_event, initialize_event_logger_vmin
 from azurelinuxagent.common.exception import ResourceGoneError, UpdateError
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.osutil import get_osutil
-from azurelinuxagent.common.protocol.util import get_protocol_util
+from azurelinuxagent.common.protocol.util import get_protocol_util, WIRE_PROTOCOL_NAME
+from azurelinuxagent.common.protocol.goal_state import TRANSPORT_CERT_FILE_NAME
 from azurelinuxagent.common.protocol.hostplugin import HostPluginProtocol
 from azurelinuxagent.common.protocol.wire import WireProtocol
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
@@ -82,6 +84,11 @@ READONLY_FILE_GLOBS = [
     "ovf-env.xml"
 ]
 
+# MetadataServer Legacy Certificates for Cleanup
+LEGACY_TRANSPORT_PRV_FILE_NAME = "V2TransportPrivate.pem"
+LEGACY_TRANSPORT_CERT_FILE_NAME = "V2TransportCert.pem"
+LEGACY_P7B_FILE_NAME = "Certificates.p7b"
+
 
 def get_update_handler():
     return UpdateHandler()
@@ -115,6 +122,10 @@ class UpdateHandler(object):
         self.last_telemetry_heartbeat = None
         self.heartbeat_id = str(uuid.uuid4()).upper()
         self.heartbeat_counter = 0
+
+    def is_migrating_protocol(self):
+        transport_cert_file = os.path.join(conf.get_lib_dir(), TRANSPORT_CERT_FILE_NAME)
+        return not os.path.isfile(transport_cert_file)
 
     def run_latest(self, child_args=None):
         """
@@ -251,12 +262,36 @@ class UpdateHandler(object):
         try:
             logger.info(u"Agent {0} is running as the goal state agent", CURRENT_AGENT)
 
+            # Check if Agent is migrating from MetadataServer Protocol to WireServer Protocol
+            is_migrating_protocol = self.is_migrating_protocol()
+
+            #
+            # Ensure firewall rules are set before initial goal state fetch.
+            # MetadataServer VM's migrating to WireServer will not have WireServer
+            # firewall rules initially.
+            #
+            from azurelinuxagent.ga.env import get_env_handler
+            firewall_set_event = threading.Event()
+            env_thread = get_env_handler()
+            env_thread.run(firewall_set_event, is_migrating_protocol)
+            firewall_set_event.wait()
+
             #
             # Fetch the goal state one time; some components depend on information provided by the goal state and this
             # call ensures the required info is initialized (e.g telemetry depends on the container ID.)
             #
             protocol = self.protocol_util.get_protocol()
-            protocol.update_goal_state()
+            if is_migrating_protocol:
+                #
+                # Generate transport certificates if it is missing. This handles the case
+                # where MetadataServer VM's migrate over to WireServer.
+                # Also cleanup old MetadataServer certificates and update protocol file.
+                #
+                protocol.detect()
+                self._cleanup_legacy_certificates()
+                self.protocol_util.save_protocol(WIRE_PROTOCOL_NAME)
+            else:
+                protocol.update_goal_state()
 
             initialize_event_logger_vminfo_common_parameters(protocol)
 
@@ -272,10 +307,6 @@ class UpdateHandler(object):
             from azurelinuxagent.ga.monitor import get_monitor_handler
             monitor_thread = get_monitor_handler()
             monitor_thread.run()
-
-            from azurelinuxagent.ga.env import get_env_handler
-            env_thread = get_env_handler()
-            env_thread.run()
 
             from azurelinuxagent.ga.exthandlers import get_exthandlers_handler, migrate_handler_state
             exthandlers_handler = get_exthandlers_handler(protocol)
@@ -410,6 +441,20 @@ class UpdateHandler(object):
                             and agent.version > FlexibleVersion(AGENT_VERSION)]
 
         return available_agents[0] if len(available_agents) >= 1 else None
+
+    def _cleanup_legacy_certificates(self):
+        """
+        Deletes legacy certificates used in the MetadataServer protocol.
+        """
+        lib_directory = conf.get_lib_dir()
+        self._ensure_file_removed(lib_directory, LEGACY_TRANSPORT_PRV_FILE_NAME)
+        self._ensure_file_removed(lib_directory, LEGACY_TRANSPORT_CERT_FILE_NAME)
+        self._ensure_file_removed(lib_directory, LEGACY_P7B_FILE_NAME)
+
+    def _ensure_file_removed(self, directory, file_name):
+        path = os.path.join(directory, file_name)
+        if os.path.isfile(path):
+            os.remove(path)
 
     def _emit_restart_event(self):
         try:

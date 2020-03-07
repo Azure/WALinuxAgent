@@ -121,7 +121,7 @@ class TestProtocolUtil(AgentTestCase):
         protocol_util = get_protocol_util()
         protocol_util.get_wireserver_endpoint = Mock()
         protocol_util._detect_protocol = MagicMock()
-        protocol_util._save_protocol("WireProtocol")
+        protocol_util.save_protocol("WireProtocol")
 
         protocol = protocol_util.get_protocol()
 
