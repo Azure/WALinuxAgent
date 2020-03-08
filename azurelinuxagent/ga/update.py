@@ -29,7 +29,6 @@ import stat
 import subprocess
 import sys
 import time
-import threading
 import traceback
 import uuid
 import zipfile
@@ -277,10 +276,8 @@ class UpdateHandler(object):
             # firewall rules initially.
             #
             from azurelinuxagent.ga.env import get_env_handler
-            firewall_set_event = threading.Event()
             env_thread = get_env_handler()
-            env_thread.run(firewall_set_event, is_migrating_protocol)
-            firewall_set_event.wait()
+            env_thread.run(is_migrating_protocol)
 
             #
             # Fetch the goal state one time; some components depend on information provided by the goal state and this
