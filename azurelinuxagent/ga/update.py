@@ -52,6 +52,7 @@ from azurelinuxagent.common.protocol.goal_state import TRANSPORT_CERT_FILE_NAME
 from azurelinuxagent.common.protocol.hostplugin import HostPluginProtocol
 from azurelinuxagent.common.protocol.wire import WireProtocol
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
+from azurelinuxagent.common.utils.restutil import KNOWN_WIRESERVER_IP
 from azurelinuxagent.common.version import AGENT_NAME, AGENT_VERSION, AGENT_DIR_PATTERN, \
                                             CURRENT_AGENT, CURRENT_VERSION, DISTRO_NAME, DISTRO_VERSION, \
                                             is_current_agent_installed
@@ -286,10 +287,12 @@ class UpdateHandler(object):
                 # Generate transport certificates if it is missing. This handles the case
                 # where MetadataServer VM's migrate over to WireServer.
                 # Also cleanup old MetadataServer certificates and update protocol file.
+                # Create WireServerEndpoint file
                 #
                 protocol.detect()
                 self._cleanup_legacy_certificates()
                 self.protocol_util.save_protocol(WIRE_PROTOCOL_NAME)
+                self.protocol_util.set_wireserver_endpoint(KNOWN_WIRESERVER_IP)
             else:
                 protocol.update_goal_state()
 

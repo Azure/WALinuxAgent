@@ -158,7 +158,7 @@ class ProtocolUtil(SingletonPerThread):
 
         return self.endpoint
 
-    def _set_wireserver_endpoint(self, endpoint):
+    def set_wireserver_endpoint(self, endpoint):
         try:
             self.endpoint = endpoint
             file_path = self._get_wireserver_endpoint_file_path()
@@ -212,7 +212,7 @@ class ProtocolUtil(SingletonPerThread):
                 try:
                     protocol = WireProtocol(endpoint)
                     protocol.detect()
-                    self._set_wireserver_endpoint(endpoint)
+                    self.set_wireserver_endpoint(endpoint)
                     return protocol
 
                 except ProtocolError as e:

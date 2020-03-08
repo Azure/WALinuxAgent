@@ -144,14 +144,14 @@ class EnvHandler(object):
                 self.archive_history()
 
                 # signal that firewall has been set at least once
-                if not self.firewall_set_event.isSet():
-                    self.firewall_set_event.set()
+                if not firewall_set_event.isSet():
+                    firewall_set_event.set()
 
                 time.sleep(5)
         finally:
             # Ensure we set event to prevent deadlock
-            if not self.firewall_set_event.isSet():
-                self.firewall_set_event.set()
+            if not firewall_set_event.isSet():
+                firewall_set_event.set()
 
     def handle_hostname_update(self):
         curr_hostname = socket.gethostname()
