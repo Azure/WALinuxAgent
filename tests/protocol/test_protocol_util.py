@@ -159,7 +159,7 @@ class TestProtocolUtil(AgentTestCase):
         mock_fileutil.write_file.side_effect = IOError()
 
         ep = protocol_util.get_wireserver_endpoint()
-        self.assertRaises(OSUtilError, protocol_util._set_wireserver_endpoint('abc'))
+        self.assertRaises(OSUtilError, protocol_util.set_wireserver_endpoint('abc'))
 
         # Test clear endpoint for io error
         with open(endpoint_file, "w+") as ep_fd:
