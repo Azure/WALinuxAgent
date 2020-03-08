@@ -125,8 +125,13 @@ class UpdateHandler(object):
         self.heartbeat_counter = 0
 
     def is_migrating_protocol(self):
+        """
+        Migrating away from Metadata Server protocol if Metadata Server transport
+        certificate is present or Wire Server transport certificate is missing.
+        """
         transport_cert_file = os.path.join(conf.get_lib_dir(), TRANSPORT_CERT_FILE_NAME)
-        return not os.path.isfile(transport_cert_file)
+        legacy_transport_cert_file = os.path.join(conf.get_lib_dir(), LEGACY_TRANSPORT_CERT_FILE_NAME)
+        return os.path.isfile(legacy_transport_cert_file) or not os.path.isfile(transport_cert_file)
 
     def run_latest(self, child_args=None):
         """
