@@ -28,7 +28,8 @@ from azurelinuxagent.common.event import add_event, add_periodic, add_log_event,
     WALAEventOperation, parse_xml_event, parse_json_event, AGENT_EVENT_FILE_EXTENSION, EVENTS_DIRECTORY
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.protocol.goal_state import GoalState
-from tests.protocol import mockwiredata, mock_wire_protocol
+from tests.protocol import mockwiredata
+from tests.protocol.mocks import mock_wire_protocol
 from azurelinuxagent.common.version import CURRENT_AGENT, CURRENT_VERSION, AGENT_EXECUTION_MODE
 from azurelinuxagent.common.osutil import get_osutil
 from tests.tools import AgentTestCase, data_dir, load_data, Mock, patch, skip_if_predicate_true
@@ -98,7 +99,7 @@ class TestEvent(AgentTestCase):
 
             self.fail("Could not find Contained ID on event")
 
-        with mock_wire_protocol.create(mockwiredata.DATA_FILE) as protocol:
+        with mock_wire_protocol(mockwiredata.DATA_FILE) as protocol:
             contained_id = create_event_and_return_container_id()
             # The expect value comes from DATA_FILE
             self.assertEquals(contained_id, 'c6d5526c-5ac2-4200-b6e2-56f2b70c5ab2', "Incorrect container ID")
