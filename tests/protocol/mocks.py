@@ -68,12 +68,12 @@ def mock_wire_protocol(mock_wire_data_file):
 
         original_http_request = restutil.http_request
 
-        def http_request(method, url, data, headers=None, use_proxy=False, max_retry=restutil.DEFAULT_RETRIES, retry_codes=restutil.RETRY_CODES, retry_delay=restutil.DELAY_IN_SECONDS):
+        def http_request(method, url, data, **kwargs):
             if method == 'GET' and mock_data_re.match(url) is not None:
-                return protocol.mock_wire_data.mock_http_get(url, headers, use_proxy, max_retry, retry_codes, retry_delay)
+                return protocol.mock_wire_data.mock_http_get(url, **kwargs)
             elif method == 'POST':
-                return protocol.mock_wire_data.mock_http_post(url, data, headers, use_proxy, max_retry, retry_codes, retry_delay)
-            return original_http_request(method, url, data, headers, use_proxy, max_retry, retry_codes, retry_delay)
+                return protocol.mock_wire_data.mock_http_post(url, data, **kwargs)
+            return original_http_request(method, url, data, **kwargs)
 
         patched = patch("azurelinuxagent.common.utils.restutil.http_request", side_effect=http_request)
         patched.start()
