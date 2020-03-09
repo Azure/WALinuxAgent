@@ -20,7 +20,8 @@ import platform
 import azurelinuxagent.common.event as event
 from azurelinuxagent.common.version import DISTRO_NAME, DISTRO_VERSION, DISTRO_CODE_NAME
 import tests.tools as tools
-from tests.protocol import mockwiredata, mock_wire_protocol
+from tests.protocol import mockwiredata
+from tests.protocol.mocks import mock_wire_protocol
 
 
 class EventLoggerTools(object):
@@ -52,7 +53,7 @@ class EventLoggerTools(object):
         mock_imds_client = tools.Mock()
         mock_imds_client.get_compute = tools.Mock(return_value=mock_imds_info)
 
-        with mock_wire_protocol.create(mockwiredata.DATA_FILE) as mock_protocol:
+        with mock_wire_protocol(mockwiredata.DATA_FILE) as mock_protocol:
             with tools.patch("azurelinuxagent.common.event.get_imds_client", return_value=mock_imds_client):
                 event.initialize_event_logger_vminfo_common_parameters(mock_protocol)
 

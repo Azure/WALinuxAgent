@@ -31,8 +31,8 @@ from azurelinuxagent.common.exception import HttpError, ResourceGoneError
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.protocol.hostplugin import API_VERSION
 from azurelinuxagent.common.utils import restutil
-from tests.protocol import mock_wire_protocol
-from tests.protocol.mockwiredata import WireProtocolData, DATA_FILE, DATA_FILE_NO_EXT
+from tests.protocol.mocks import mock_wire_protocol
+from tests.protocol.mockwiredata import DATA_FILE, DATA_FILE_NO_EXT
 from tests.protocol.test_wire import MockResponse as TestWireMockResponse
 from tests.tools import AgentTestCase, PY_VERSION_MAJOR, Mock, patch
 
@@ -65,7 +65,7 @@ if PY_VERSION_MAJOR > 2:
 class TestHostPlugin(AgentTestCase):
 
     def _init_host(self):
-        with mock_wire_protocol.create(DATA_FILE) as protocol:
+        with mock_wire_protocol(DATA_FILE) as protocol:
             test_goal_state = protocol.client.get_goal_state()
             host_plugin = wire.HostPluginProtocol(wireserver_url,
                                                   test_goal_state.container_id,
@@ -155,7 +155,7 @@ class TestHostPlugin(AgentTestCase):
     @staticmethod
     @contextlib.contextmanager
     def create_mock_protocol():
-        with mock_wire_protocol.create(DATA_FILE_NO_EXT) as protocol:
+        with mock_wire_protocol(DATA_FILE_NO_EXT) as protocol:
             # These tests use mock wire data that dont have any extensions (extension config will be empty).
             # Populate the upload blob and set an initial empty status before returning the protocol.
             ext_conf = protocol.client._goal_state.ext_conf
@@ -401,7 +401,7 @@ class TestHostPlugin(AgentTestCase):
     def test_validate_http_request(self):
         """Validate correct set of data is sent to HostGAPlugin when reporting VM status"""
 
-        with mock_wire_protocol.create(DATA_FILE) as protocol:
+        with mock_wire_protocol(DATA_FILE) as protocol:
             test_goal_state = protocol.client._goal_state
             plugin = protocol.client.get_host_plugin()
 
@@ -435,7 +435,7 @@ class TestHostPlugin(AgentTestCase):
                     self.assertEqual(health_service_url, patch_http.call_args_list[1][0][1])
 
     def test_validate_block_blob(self):
-        with mock_wire_protocol.create(DATA_FILE) as protocol:
+        with mock_wire_protocol(DATA_FILE) as protocol:
             test_goal_state = protocol.client._goal_state
 
             host_client = wire.HostPluginProtocol(wireserver_url,
@@ -478,7 +478,7 @@ class TestHostPlugin(AgentTestCase):
 
     def test_validate_page_blobs(self):
         """Validate correct set of data is sent for page blobs"""
-        with mock_wire_protocol.create(DATA_FILE) as protocol:
+        with mock_wire_protocol(DATA_FILE) as protocol:
             test_goal_state = protocol.client._goal_state
 
             host_client = wire.HostPluginProtocol(wireserver_url,
@@ -537,7 +537,7 @@ class TestHostPlugin(AgentTestCase):
                         exp_method, exp_url, exp_data)
 
     def test_validate_get_extension_artifacts(self):
-        with mock_wire_protocol.create(DATA_FILE) as protocol:
+        with mock_wire_protocol(DATA_FILE) as protocol:
             test_goal_state = protocol.client._goal_state
 
             expected_url = hostplugin.URI_FORMAT_GET_EXTENSION_ARTIFACT.format(wireserver_url, hostplugin.HOST_PLUGIN_PORT)

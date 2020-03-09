@@ -29,28 +29,20 @@ from nose.plugins.attrib import attr
 
 from azurelinuxagent.common import event, logger
 from azurelinuxagent.common.cgroup import CGroup, CpuCgroup, MemoryCgroup
-from azurelinuxagent.common.cgroupconfigurator import CGroupConfigurator
 from azurelinuxagent.common.cgroupstelemetry import CGroupsTelemetry, MetricValue
 from azurelinuxagent.common.datacontract import get_properties
-from azurelinuxagent.common.event import EventLogger, WALAEventOperation, EVENTS_DIRECTORY
+from azurelinuxagent.common.event import WALAEventOperation, EVENTS_DIRECTORY
 from azurelinuxagent.common.exception import HttpError
-from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.logger import Logger
 from azurelinuxagent.common.osutil import get_osutil
-from azurelinuxagent.common.osutil.default import BASE_CGROUPS, DefaultOSUtil
-from azurelinuxagent.common.protocol.wire import ExtHandler, ExtHandlerProperties
 from azurelinuxagent.common.protocol.wire import WireProtocol
 from azurelinuxagent.common.telemetryevent import TelemetryEvent, TelemetryEventParam
 from azurelinuxagent.common.utils import fileutil, restutil
 from azurelinuxagent.common.version import AGENT_VERSION, CURRENT_VERSION, CURRENT_AGENT, DISTRO_NAME, DISTRO_VERSION, DISTRO_CODE_NAME
-from azurelinuxagent.ga.exthandlers import ExtHandlerInstance
-from azurelinuxagent.ga.monitor import generate_extension_metrics_telemetry_dictionary, get_monitor_handler, \
-    MonitorHandler
-from tests.common.test_cgroupstelemetry import make_new_cgroup
+from azurelinuxagent.ga.monitor import generate_extension_metrics_telemetry_dictionary, get_monitor_handler, MonitorHandler
 from tests.protocol.mockwiredata import DATA_FILE
-from tests.protocol import mock_wire_protocol
-from tests.tools import Mock, MagicMock, patch, AgentTestCase, data_dir, are_cgroups_enabled, i_am_root, \
-    skip_if_predicate_false, is_trusty_in_travis, skip_if_predicate_true, clear_singleton_instances, PropertyMock
+from tests.protocol.mocks import mock_wire_protocol
+from tests.tools import Mock, MagicMock, patch, AgentTestCase, clear_singleton_instances, PropertyMock
 from tests.utils.event_logger_tools import EventLoggerTools
 
 
@@ -339,7 +331,7 @@ class TestEventMonitoring(AgentTestCase):
     def test_collect_and_send_events(self, mock_lib_dir, patch_send_event, *_):
         mock_lib_dir.return_value = self.lib_dir
 
-        with mock_wire_protocol.create(DATA_FILE) as protocol:
+        with mock_wire_protocol(DATA_FILE) as protocol:
             monitor_handler = TestEventMonitoring._create_monitor_handler(protocol)
 
             self._create_extension_event(message="Message-Test")
@@ -406,7 +398,7 @@ class TestEventMonitoring(AgentTestCase):
     def test_collect_and_send_events_with_small_events(self, mock_lib_dir, patch_send_event, *_):
         mock_lib_dir.return_value = self.lib_dir
 
-        with mock_wire_protocol.create(DATA_FILE) as protocol:
+        with mock_wire_protocol(DATA_FILE) as protocol:
             monitor_handler = TestEventMonitoring._create_monitor_handler(protocol)
 
             sizes = [15, 15, 15, 15]  # get the powers of 2 - 2**16 is the limit
@@ -425,7 +417,7 @@ class TestEventMonitoring(AgentTestCase):
     def test_collect_and_send_events_with_large_events(self, mock_lib_dir, patch_send_event, *_):
         mock_lib_dir.return_value = self.lib_dir
 
-        with mock_wire_protocol.create(DATA_FILE) as protocol:
+        with mock_wire_protocol(DATA_FILE) as protocol:
             monitor_handler = TestEventMonitoring._create_monitor_handler(protocol)
 
             sizes = [17, 17, 17]  # get the powers of 2
@@ -446,7 +438,7 @@ class TestEventMonitoring(AgentTestCase):
         mock_lib_dir.return_value = self.lib_dir
         fileutil.mkdir(self.event_dir)
 
-        with mock_wire_protocol.create(DATA_FILE) as protocol:
+        with mock_wire_protocol(DATA_FILE) as protocol:
             monitor_handler = TestEventMonitoring._create_monitor_handler(protocol)
 
             sizes = [1, 2, 3]  # get the powers of 2, and multiple by 1024.
@@ -472,7 +464,7 @@ class TestEventMonitoring(AgentTestCase):
         mock_lib_dir.return_value = self.lib_dir
         fileutil.mkdir(self.event_dir)
 
-        with mock_wire_protocol.create(DATA_FILE) as protocol:
+        with mock_wire_protocol(DATA_FILE) as protocol:
             monitor_handler = TestEventMonitoring._create_monitor_handler(protocol)
 
             sizes = [1, 2, 3]  # get the powers of 2, and multiple by 1024.
@@ -496,7 +488,7 @@ class TestEventMonitoring(AgentTestCase):
         mock_lib_dir.return_value = self.lib_dir
         fileutil.mkdir(self.event_dir)
 
-        with mock_wire_protocol.create(DATA_FILE) as protocol:
+        with mock_wire_protocol(DATA_FILE) as protocol:
             monitor_handler = TestEventMonitoring._create_monitor_handler(protocol)
 
             sizes = [1, 2, 3]  # get the powers of 2, and multiple by 1024.
