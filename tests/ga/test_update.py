@@ -1621,34 +1621,6 @@ class MonitorThreadTest(AgentTestCase):
         self.assertEqual(True, mock_env_thread.is_alive.called)
         self.assertEqual(True, mock_env_thread.start.called)
 
-    @skip_if_predicate_true(lambda: True, "Test hangs stopping the monitor handler")
-    @patch("time.sleep", lambda *_: mock_sleep(0.01))
-    @patch("azurelinuxagent.common.protocol.util.ProtocolUtil.get_protocol")
-    @patch("azurelinuxagent.ga.monitor.get_imds_client")
-    @patch('azurelinuxagent.ga.monitor.get_monitor_handler')
-    @patch('azurelinuxagent.ga.env.get_env_handler')
-    def test_each_thread_should_have_separate_protocol_util(self, mock_env, mock_monitor, *args):
-
-        self.assertTrue(self.update_handler.running)
-        env_handler = EnvHandler()
-        monitor_handler = MonitorHandler()
-        mock_env.return_value = env_handler
-        mock_monitor.return_value = monitor_handler
-
-        self._test_run(invocations=0)
-        env_handler.stop()
-        monitor_handler.stop()
-
-        singleton_instances = {}
-        for inst in ProtocolUtil._instances:
-            if ProtocolUtil.__name__ in inst:
-                singleton_instances[inst] = ProtocolUtil._instances[inst]
-
-        self.assertEqual(3, len(singleton_instances))
-        self.assertIn("ProtocolUtil__MonitorHandler", singleton_instances)
-        self.assertIn("ProtocolUtil__EnvHandler", singleton_instances)
-        self.assertIn("ProtocolUtil__ExtHandler", singleton_instances)
-
 
 class ChildMock(Mock):
     def __init__(self, return_value=0, side_effect=None):
