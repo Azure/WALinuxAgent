@@ -37,6 +37,7 @@ from azurelinuxagent.common.dhcp import get_dhcp_handler
 from azurelinuxagent.common.protocol.ovfenv import OvfEnv
 from azurelinuxagent.common.protocol.wire import WireProtocol
 from azurelinuxagent.common.protocol.metadata import MetadataProtocol
+from azurelinuxagent.common.types import AttributeEnum
 from azurelinuxagent.common.utils.restutil import KNOWN_WIRESERVER_IP, \
                                                   IOErrorCounter
 
@@ -50,21 +51,7 @@ PASSWORD_PATTERN = "<UserPassword>.*?<"
 PASSWORD_REPLACEMENT = "<UserPassword>*<"
 
 
-class _nameset(set):
-    def __getattr__(self, name):
-        if name in self:
-            return name
-        raise AttributeError("%s not a valid value" % name)
-
-
-prots = _nameset(("WireProtocol", "MetadataProtocol"))
-
-
-class NamedSet(set):
-    def __getattr__(self, name):
-        if name in self:
-            return name
-        raise AttributeError("%s not a valid value" % name)
+prots = AttributeEnum(("WireProtocol", "MetadataProtocol"))
 
 
 def get_protocol_util():

@@ -104,12 +104,12 @@ class ExtensionStatusError(ExtensionError):
     """
     When extension failed to provide a valid status file
     """
-    Unknown = -1
     StatusFileNotFound = 1
-    StatusFileMalformed = 2
-    MaxSizeExceeded = 3
+    InvalidJsonFile = 2
+    StatusFileMalformed = 3
+    MaxSizeExceeded = 4
 
-    def __init__(self, msg=None, inner=None, code=Unknown):
+    def __init__(self, code, msg=None, inner=None):
         super(ExtensionStatusError, self).__init__(msg, inner, code)
 
 
