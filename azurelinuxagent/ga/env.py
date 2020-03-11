@@ -32,6 +32,7 @@ from azurelinuxagent.common.event import add_periodic, WALAEventOperation
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.osutil import get_osutil
 from azurelinuxagent.common.protocol.util import get_protocol_util
+from azurelinuxagent.common.protocol.migration_util import METADATA_SERVER_ENDPOINT, is_migrating_protocol
 from azurelinuxagent.common.utils.archive import StateArchiver
 from azurelinuxagent.common.version import AGENT_NAME, CURRENT_VERSION
 
@@ -44,8 +45,6 @@ CACHE_PATTERNS = [
 MAXIMUM_CACHED_FILES = 50
 
 ARCHIVE_INTERVAL = datetime.timedelta(hours=24)
-
-METADATA_SERVER_ENDPOINT = '169.254.169.254'
 
 def get_env_handler():
     return EnvHandler()
@@ -72,7 +71,7 @@ class EnvHandler(object):
         self.archiver = StateArchiver(conf.get_lib_dir())
         self.has_reset_firewall_rules = False
 
-    def run(self, remove_metadata_server_firewall_rule):
+    def run(self):
         if not self.stopped:
             logger.info("Stop existing env monitor service.")
             self.stop()
@@ -86,7 +85,7 @@ class EnvHandler(object):
         # before we query goal state (for agents migrating from MDS protocol WS rule is not set)
         # We are setting firewall rules before thread is spun off to avoid race condition
         # where we query goal state in update before setting firewall rules.
-        if conf.enable_firewall() and remove_metadata_server_firewall_rule:
+        if conf.enable_firewall() and is_migrating_protocol():
             self.osutil.remove_firewall(METADATA_SERVER_ENDPOINT, uid=os.getuid())
         self.set_firewall_rules(get_protocol_util().get_protocol().get_endpoint())
         self.start()
