@@ -1462,11 +1462,11 @@ class ExtHandlerInstance(object):
         if failed_to_read:
             msg = u"We couldn't find any status for {0}-{1} extension, for the sequence number {2}. It failed due to " \
                   u"{3}".format(ext.name, self.ext_handler.properties.version, seq_no, raised_exception)
-            raise ExtensionStatusError(ExtensionStatusError.StatusFileNotFound, msg)
+            raise ExtensionStatusError(msg=msg, code=ExtensionStatusError.StatusFileNotFound)
         elif failed_to_parse_json:
             msg = u"Failed to read any status for extension - {0}-{1}, Sequence number {2}. Failed due to {3}" \
                 .format(ext.name, self.ext_handler.properties.version, seq_no, raised_exception)
-            raise ExtensionStatusError(ExtensionStatusError.InvalidJsonFile, msg)
+            raise ExtensionStatusError(msg=msg, code=ExtensionStatusError.InvalidJsonFile)
         else:
             return data_str, data
 

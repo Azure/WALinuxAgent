@@ -109,7 +109,7 @@ class ExtensionStatusError(ExtensionError):
     StatusFileMalformed = 3
     MaxSizeExceeded = 4
 
-    def __init__(self, code, msg=None, inner=None):
+    def __init__(self, msg=None, inner=None, code=-1):
         super(ExtensionStatusError, self).__init__(msg, inner, code)
 
 
