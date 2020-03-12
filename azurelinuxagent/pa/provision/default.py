@@ -219,13 +219,16 @@ class ProvisionHandler(object):
     def provision(self, ovfenv):
         logger.info("Handle ovf-env.xml.")
         try:
-            logger.info("Set hostname [{0}]".format(ovfenv.hostname))
-            self.osutil.set_hostname(ovfenv.hostname)
 
-            logger.info("Publish hostname [{0}]".format(ovfenv.hostname))
-            self.osutil.publish_hostname(ovfenv.hostname)
+            if conf.get_provisioning_hostname_set:
+                logger.info("Set hostname [{0}]".format(ovfenv.hostname))
+                self.osutil.set_hostname(ovfenv.hostname)
 
-            self.config_user_account(ovfenv)
+                logger.info("Publish hostname [{0}]".format(ovfenv.hostname))
+                self.osutil.publish_hostname(ovfenv.hostname)
+
+            if conf.get_provisioning_user_account_set:
+                self.config_user_account(ovfenv)
 
             self.save_customdata(ovfenv)
 
@@ -246,7 +249,7 @@ class ProvisionHandler(object):
             self.osutil.chpasswd(ovfenv.username, ovfenv.user_password,
                                  crypt_id=crypt_id, salt_len=salt_len)
 
-        logger.info("Configure sudoer")
+        logger.info("Configure sudoers")
         self.osutil.conf_sudoer(ovfenv.username,
                                 nopasswd=ovfenv.user_password is None)
 
@@ -266,19 +269,20 @@ class ProvisionHandler(object):
             logger.info("Decode custom data")
             customdata = self.osutil.decode_customdata(customdata)
 
-        logger.info("Save custom data")
-        customdata_file = os.path.join(lib_dir, CUSTOM_DATA_FILE)
-        fileutil.write_file(customdata_file, customdata)
+        if conf.get_save_customdata():
+            logger.info("Save custom data")
+            customdata_file = os.path.join(lib_dir, CUSTOM_DATA_FILE)
+            fileutil.write_file(customdata_file, customdata)
 
-        if conf.get_execute_customdata():
-            start = time.time()
-            logger.info("Execute custom data")
-            os.chmod(customdata_file, 0o700)
-            shellutil.run(customdata_file)
-            add_event(name=AGENT_NAME,
-                        duration=int(time.time() - start),
-                        is_success=True,
-                        op=WALAEventOperation.CustomData)
+            if conf.get_execute_customdata():
+                start = time.time()
+                logger.info("Execute custom data")
+                os.chmod(customdata_file, 0o700)
+                shellutil.run(customdata_file)
+                add_event(name=AGENT_NAME,
+                            duration=int(time.time() - start),
+                            is_success=True,
+                            op=WALAEventOperation.CustomData)
 
     def deploy_ssh_pubkeys(self, ovfenv):
         for pubkey in ovfenv.ssh_pubkeys:

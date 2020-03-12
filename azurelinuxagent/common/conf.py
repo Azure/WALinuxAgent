@@ -103,7 +103,10 @@ __SWITCH_OPTIONS__ = {
     "Provisioning.DeleteRootPassword": False,
     "Provisioning.DecodeCustomData": False,
     "Provisioning.ExecuteCustomData": False,
+    "Provisioning.SaveCustomData": True,
     "Provisioning.MonitorHostName": False,
+    "Provisioning.SetHostName": True,
+    "Provisioning.UserAccounts": True,
     "DetectScvmmEnv": False,
     "ResourceDisk.Format": False,
     "ResourceDisk.EnableSwap": False,
@@ -291,6 +294,10 @@ def get_decode_customdata(conf=__conf__):
     return conf.get_switch("Provisioning.DecodeCustomData", False)
 
 
+def get_save_customdata(conf=__conf__):
+    return conf.get_switch("Provisioning.SaveCustomData", True)
+
+
 def get_execute_customdata(conf=__conf__):
     return conf.get_switch("Provisioning.ExecuteCustomData", False)
 
@@ -320,6 +327,14 @@ def get_password_crypt_salt_len(conf=__conf__):
 
 def get_monitor_hostname(conf=__conf__):
     return conf.get_switch("Provisioning.MonitorHostName", False)
+
+
+def get_provisioning_hostname_set(conf=__conf__):
+    return conf.get_switch("Provisioning.SetHostName", True)
+
+
+def get_provisioning_user_account_set(conf=__conf__):
+    return conf.get_switch("Provisioning.UserAccounts", True)
 
 
 def get_httpproxy_host(conf=__conf__):
