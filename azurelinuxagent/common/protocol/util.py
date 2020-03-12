@@ -32,6 +32,8 @@ from azurelinuxagent.common.exception import ProtocolError, OSUtilError, \
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.osutil import get_osutil
 from azurelinuxagent.common.dhcp import get_dhcp_handler
+from azurelinuxagent.common.protocol.metadata_server_migration_util import cleanup_metadata_server_artifacts, \
+                                                                           is_metadata_server_artifact_present
 from azurelinuxagent.common.protocol.ovfenv import OvfEnv
 from azurelinuxagent.common.protocol.wire import WireProtocol
 from azurelinuxagent.common.utils.restutil import KNOWN_WIRESERVER_IP, \
@@ -46,11 +48,8 @@ PASSWORD_PATTERN = "<UserPassword>.*?<"
 PASSWORD_REPLACEMENT = "<UserPassword>*<"
 WIRE_PROTOCOL_NAME = "WireProtocol"
 
-
-
 def get_protocol_util():
     return ProtocolUtil()
-
 
 class ProtocolUtil(SingletonPerThread):
     """
@@ -233,16 +232,6 @@ class ProtocolUtil(SingletonPerThread):
                 logger.info("Retry detect protocol: retry={0}", retry)
                 time.sleep(PROBE_INTERVAL)
         raise ProtocolNotFoundError("No protocol found.")
-
-    def _get_protocol(self):
-        """
-        Get protocol instance based on previous detecting result.
-        """
-        protocol_file_path = self._get_protocol_file_path()
-        if not os.path.isfile(protocol_file_path):
-            raise ProtocolNotFoundError("No protocol found")
-        endpoint = self.get_wireserver_endpoint()
-        return WireProtocol(endpoint)
     
     def _save_protocol(self, protocol_name):
         """
@@ -278,15 +267,21 @@ class ProtocolUtil(SingletonPerThread):
         Detect protocol by endpoint.
         :returns: protocol instance
         """
-
         if self._protocol is not None:
             return self._protocol
 
-        try:
-            self._protocol = self._get_protocol()
+        # If metadataserver certificates is present we clean certificates
+        # and remove MetadataServer firewall rule. It is possible
+        # Wire Protocol is being used due to a previous intermediate upgrade
+        # before 2.2.47 but metadata artifacts were not cleaned up.
+        if is_metadata_server_artifact_present():
+            cleanup_metadata_server_artifacts(self.osutil)
+
+        protocol_file_path = self._get_protocol_file_path()
+        if os.path.isfile(protocol_file_path) and fileutil.read_file(protocol_file_path) == WIRE_PROTOCOL_NAME:
+            endpoint = self.get_wireserver_endpoint()
+            self._protocol = WireProtocol(endpoint)
             return self._protocol
-        except ProtocolNotFoundError:
-            pass
 
         logger.info("Detect protocol endpoint")
 
