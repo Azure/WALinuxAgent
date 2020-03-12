@@ -22,6 +22,7 @@ from threading import Thread
 
 from tests.tools import AgentTestCase, MagicMock, Mock, patch, clear_singleton_instances
 from azurelinuxagent.common.exception import *
+from azurelinuxagent.common.protocol.metadata_server_migration_util import METADATA_PROTOCOL_NAME
 from azurelinuxagent.common.protocol.util import get_protocol_util
 from azurelinuxagent.common.utils.restutil import KNOWN_WIRESERVER_IP
 from azurelinuxagent.common.protocol.util import ProtocolUtil
@@ -127,6 +128,18 @@ class TestProtocolUtil(AgentTestCase):
 
         self.assertEquals(WireProtocol.return_value, protocol)
         protocol_util.get_wireserver_endpoint.assert_any_call()
+
+    @patch("os.path.isfile")
+    @patch("azurelinuxagent.common.utils.fileutil.read_file")
+    @patch("azurelinuxagent.common.protocol.util.cleanup_for_protocol_migration")
+    def test_get_metadata_protocol_calls_migration_utils(self, cleanup_util, mock_read_file, mock_isfile, _):
+        mock_isfile.return_value = True
+        mock_read_file.return_value = METADATA_PROTOCOL_NAME
+        cleanup_util.return_value = None
+        protocol_util = get_protocol_util()
+        protocol_util._detect_protocol = MagicMock()
+        protocol_util.get_protocol()
+        cleanup_util.assert_called_once()
 
     @patch("azurelinuxagent.common.utils.fileutil")
     @patch("azurelinuxagent.common.conf.get_lib_dir")

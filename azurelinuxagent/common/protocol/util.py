@@ -32,6 +32,8 @@ from azurelinuxagent.common.exception import ProtocolError, OSUtilError, \
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.osutil import get_osutil
 from azurelinuxagent.common.dhcp import get_dhcp_handler
+from azurelinuxagent.common.protocol.metadata_server_migration_util import METADATA_PROTOCOL_NAME, \
+                                                                           cleanup_for_protocol_migration
 from azurelinuxagent.common.protocol.ovfenv import OvfEnv
 from azurelinuxagent.common.protocol.wire import WireProtocol
 from azurelinuxagent.common.utils.restutil import KNOWN_WIRESERVER_IP, \
@@ -46,11 +48,16 @@ PASSWORD_PATTERN = "<UserPassword>.*?<"
 PASSWORD_REPLACEMENT = "<UserPassword>*<"
 WIRE_PROTOCOL_NAME = "WireProtocol"
 
+class _nameset(set):
+    def __getattr__(self, name):
+        if name in self:
+            return name
+        raise AttributeError("%s not a valid value" % name)
 
+prots = _nameset((WIRE_PROTOCOL_NAME, METADATA_PROTOCOL_NAME))
 
 def get_protocol_util():
     return ProtocolUtil()
-
 
 class ProtocolUtil(SingletonPerThread):
     """
@@ -233,16 +240,6 @@ class ProtocolUtil(SingletonPerThread):
                 logger.info("Retry detect protocol: retry={0}", retry)
                 time.sleep(PROBE_INTERVAL)
         raise ProtocolNotFoundError("No protocol found.")
-
-    def _get_protocol(self):
-        """
-        Get protocol instance based on previous detecting result.
-        """
-        protocol_file_path = self._get_protocol_file_path()
-        if not os.path.isfile(protocol_file_path):
-            raise ProtocolNotFoundError("No protocol found")
-        endpoint = self.get_wireserver_endpoint()
-        return WireProtocol(endpoint)
     
     def _save_protocol(self, protocol_name):
         """
@@ -282,11 +279,17 @@ class ProtocolUtil(SingletonPerThread):
         if self._protocol is not None:
             return self._protocol
 
-        try:
-            self._protocol = self._get_protocol()
-            return self._protocol
-        except ProtocolNotFoundError:
-            pass
+        protocol_file_path = self._get_protocol_file_path()
+        if os.path.isfile(protocol_file_path):
+            protocol_name = fileutil.read_file(protocol_file_path)
+            if protocol_name == prots.WireProtocol:
+                endpoint = self.get_wireserver_endpoint()
+                self._protocol = WireProtocol(endpoint)
+                return self._protocol
+            elif protocol_name == prots.MetadataProtocol:
+                # Migrating from MetadataServer to WireServer protocol,
+                # reset firewall rules and cleanup Metadata certificates.
+                cleanup_for_protocol_migration(self.osutil)
 
         logger.info("Detect protocol endpoint")
 
