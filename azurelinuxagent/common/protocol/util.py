@@ -183,11 +183,6 @@ class ProtocolUtil(SingletonPerThread):
                 return
             logger.error("Failed to clear wiresever endpoint: {0}", e)
 
-    def _detect_metadata_protocol(self):
-        protocol = MetadataProtocol()
-        protocol.detect()
-        return protocol
-
     def _detect_protocol(self):
         """
         Probe protocol endpoints in turn.
@@ -273,10 +268,12 @@ class ProtocolUtil(SingletonPerThread):
         # If metadataserver certificates is present we clean certificates
         # and remove MetadataServer firewall rule. It is possible
         # Wire Protocol is being used due to a previous intermediate upgrade
-        # before 2.2.47 but metadata artifacts were not cleaned up.
+        # before 2.2.48 but metadata artifacts were not cleaned up.
         if is_metadata_server_artifact_present():
             cleanup_metadata_server_artifacts(self.osutil)
 
+        # If the protocol file contains MetadataProtocol we need to fall through to 
+        # _detect_protocol so that we can generate the WireServer transport certificates.
         protocol_file_path = self._get_protocol_file_path()
         if os.path.isfile(protocol_file_path) and fileutil.read_file(protocol_file_path) == WIRE_PROTOCOL_NAME:
             endpoint = self.get_wireserver_endpoint()
