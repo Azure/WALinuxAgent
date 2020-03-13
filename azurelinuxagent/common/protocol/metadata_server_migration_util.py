@@ -22,12 +22,12 @@ import os
 import azurelinuxagent.common.conf as conf
 import azurelinuxagent.common.logger as logger
 
-from azurelinuxagent.common.event import add_periodic, WALAEventOperation
+from azurelinuxagent.common.event import add_event, WALAEventOperation
 from azurelinuxagent.common.utils.restutil import KNOWN_WIRESERVER_IP
 from azurelinuxagent.common.version import AGENT_NAME, CURRENT_VERSION
 
 # Name for Metadata Server Protocol
-METADATA_PROTOCOL_NAME = "MetadataProtocol"
+_METADATA_PROTOCOL_NAME = "MetadataProtocol"
 
 # MetadataServer Certificates for Cleanup
 _LEGACY_METADATA_SERVER_TRANSPORT_PRV_FILE_NAME = "V2TransportPrivate.pem"
@@ -64,8 +64,7 @@ def _reset_firewall_rules(osutil):
     osutil.remove_firewall(dst_ip=_KNOWN_METADATASERVER_IP, uid=os.getuid())
     if conf.enable_firewall():
         success = osutil.enable_firewall(dst_ip=KNOWN_WIRESERVER_IP, uid=os.getuid())
-        add_periodic(
-            logger.EVERY_HOUR,
+        add_event(
             AGENT_NAME,
             version=CURRENT_VERSION,
             op=WALAEventOperation.Firewall,

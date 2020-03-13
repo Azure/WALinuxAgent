@@ -183,11 +183,6 @@ class ProtocolUtil(SingletonPerThread):
                 return
             logger.error("Failed to clear wiresever endpoint: {0}", e)
 
-    def _detect_metadata_protocol(self):
-        protocol = MetadataProtocol()
-        protocol.detect()
-        return protocol
-
     def _detect_protocol(self):
         """
         Probe protocol endpoints in turn.
@@ -270,17 +265,20 @@ class ProtocolUtil(SingletonPerThread):
         if self._protocol is not None:
             return self._protocol
 
-        # If metadataserver certificates is present we clean certificates
-        # and remove MetadataServer firewall rule. It is possible
-        # Wire Protocol is being used due to a previous intermediate upgrade
-        # before 2.2.47 but metadata artifacts were not cleaned up.
-        if is_metadata_server_artifact_present():
-            cleanup_metadata_server_artifacts(self.osutil)
-
+        # If the protocol file contains MetadataProtocol we need to fall through to 
+        # _detect_protocol so that we can generate the WireServer transport certificates.
         protocol_file_path = self._get_protocol_file_path()
         if os.path.isfile(protocol_file_path) and fileutil.read_file(protocol_file_path) == WIRE_PROTOCOL_NAME:
             endpoint = self.get_wireserver_endpoint()
             self._protocol = WireProtocol(endpoint)
+
+            # If metadataserver certificates are present we clean certificates
+            # and remove MetadataServer firewall rule. It is possible
+            # there was a previous intermediate upgrade before 2.2.48 but metadata artifacts 
+            # were not cleaned up (intermediate updated agent does not have cleanup 
+            # logic but we transitioned from Metadata to Wire protocol)
+            if is_metadata_server_artifact_present():
+                cleanup_metadata_server_artifacts(self.osutil)
             return self._protocol
 
         logger.info("Detect protocol endpoint")
@@ -291,4 +289,11 @@ class ProtocolUtil(SingletonPerThread):
         self._save_protocol(WIRE_PROTOCOL_NAME)
 
         self._protocol = protocol
+
+        # Need to clean up MDS artifacts only after _detect_protocol so that we don't
+        # delete MDS certificates if we can't reach WireServer and have to roll back
+        # the update
+        if is_metadata_server_artifact_present():
+            cleanup_metadata_server_artifacts(self.osutil)
+
         return self._protocol

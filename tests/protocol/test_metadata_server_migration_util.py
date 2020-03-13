@@ -27,59 +27,105 @@ from azurelinuxagent.common.protocol.metadata_server_migration_util import _LEGA
                                                                            _LEGACY_METADATA_SERVER_P7B_FILE_NAME, \
                                                                            _KNOWN_METADATASERVER_IP
 from azurelinuxagent.common.utils.restutil import KNOWN_WIRESERVER_IP
-from tests.tools import AgentTestCase, patch, call
+from tests.tools import AgentTestCase, patch, MagicMock
 
 class TestMetadataServerMigrationUtil(AgentTestCase):
-    def test_ensure_file_removed(self):
-        fp = tempfile.NamedTemporaryFile(delete=False)
-        path = fp.name
-        directory = os.path.dirname(path)
-        file_name = os.path.basename(path)
-        migration_util._ensure_file_removed(directory, file_name)
-        assert not os.path.exists(path)
-
-    @patch('azurelinuxagent.common.osutil.default.DefaultOSUtil')
-    @patch('azurelinuxagent.common.conf.enable_firewall')
-    @patch('os.getuid')
-    def test_reset_firewall_rules_firewall_enabled(self, get_guid, enable_firewall, osutil):
-        enable_firewall.return_value = True
-        test_uid = 42
-        get_guid.return_value = test_uid
-        migration_util._reset_firewall_rules(osutil)
-        osutil.remove_rules_files.assert_called_once()
-        osutil.remove_firewall.assert_called_once_with(dst_ip=_KNOWN_METADATASERVER_IP, uid=test_uid)
-        osutil.enable_firewall.assert_called_once_with(dst_ip=KNOWN_WIRESERVER_IP, uid=test_uid)
-
-    @patch('azurelinuxagent.common.osutil.default.DefaultOSUtil')
-    @patch('azurelinuxagent.common.conf.enable_firewall')
-    @patch('os.getuid')
-    def test_reset_firewall_rules_firewall_disabled(self, get_guid, enable_firewall, osutil):
-        enable_firewall.return_value = False
-        test_uid = 42
-        get_guid.return_value = test_uid
-        migration_util._reset_firewall_rules(osutil)
-        osutil.remove_rules_files.assert_called_once()
-        osutil.remove_firewall.assert_called_once_with(dst_ip=_KNOWN_METADATASERVER_IP, uid=test_uid)
-        osutil.enable_firewall.assert_not_called()
+    @patch('azurelinuxagent.common.conf.get_lib_dir')
+    def test_is_metadata_server_artifact_not_present(self, mock_get_lib_dir):
+        dir = tempfile.gettempdir()
+        metadata_server_transport_cert_file = os.path.join(dir, _LEGACY_METADATA_SERVER_TRANSPORT_CERT_FILE_NAME)
+        open(metadata_server_transport_cert_file, 'w').close()
+        mock_get_lib_dir.return_value = dir
+        assert migration_util.is_metadata_server_artifact_present()
 
     @patch('azurelinuxagent.common.conf.get_lib_dir')
-    @patch('azurelinuxagent.common.protocol.metadata_server_migration_util._ensure_file_removed')
-    def test_cleanup_metadata_protocol_certificates(self, ensure_file_removed, get_lib_dir):
-        dir_val = "foo"
-        get_lib_dir.return_value = dir_val
-        migration_util._cleanup_metadata_protocol_certificates()
-        calls = [call(dir_val, _LEGACY_METADATA_SERVER_TRANSPORT_PRV_FILE_NAME),
-                 call(dir_val, _LEGACY_METADATA_SERVER_TRANSPORT_CERT_FILE_NAME),
-                 call(dir_val, _LEGACY_METADATA_SERVER_P7B_FILE_NAME)]
-        ensure_file_removed.assert_has_calls(calls, any_order=True)
+    def test_is_metadata_server_artifact_present(self, mock_get_lib_dir):
+        mock_get_lib_dir.return_value = tempfile.gettempdir()
+        assert not migration_util.is_metadata_server_artifact_present()
 
-    @patch('azurelinuxagent.common.osutil.default.DefaultOSUtil')
-    @patch('azurelinuxagent.common.protocol.metadata_server_migration_util._cleanup_metadata_protocol_certificates')
-    @patch('azurelinuxagent.common.protocol.metadata_server_migration_util._reset_firewall_rules')
-    def test_cleanup_metadata_server_artifacts(self, reset_firewall_rules, cleanup_certificates, osutil):
+    @patch('azurelinuxagent.common.conf.enable_firewall')
+    @patch('azurelinuxagent.common.conf.get_lib_dir')
+    def test_cleanup_metadata_server_artifacts_does_not_throw_with_no_metadata_certs(self, mock_get_lib_dir, mock_enable_firewall):
+        mock_get_lib_dir.return_value = tempfile.gettempdir()
+        mock_enable_firewall.return_value = False
+        osutil = MagicMock()
         migration_util.cleanup_metadata_server_artifacts(osutil)
-        reset_firewall_rules.assert_called_once_with(osutil)
-        cleanup_certificates.assert_called_once()
+
+    @patch('azurelinuxagent.common.conf.enable_firewall')
+    @patch('azurelinuxagent.common.conf.get_lib_dir')
+    @patch('os.getuid')
+    def test_cleanup_metadata_server_artifacts_firewall_enabled(self, mock_os_getuid, mock_get_lib_dir, mock_enable_firewall):
+        # Setup Certificate Files
+        dir = tempfile.gettempdir()
+        metadata_server_transport_prv_file = os.path.join(dir, _LEGACY_METADATA_SERVER_TRANSPORT_PRV_FILE_NAME)
+        metadata_server_transport_cert_file = os.path.join(dir, _LEGACY_METADATA_SERVER_TRANSPORT_CERT_FILE_NAME)
+        metadata_server_p7b_file = os.path.join(dir, _LEGACY_METADATA_SERVER_P7B_FILE_NAME)
+        open(metadata_server_transport_prv_file, 'w').close()
+        open(metadata_server_transport_cert_file, 'w').close()
+        open(metadata_server_p7b_file, 'w').close()
+
+        # Setup Mocks
+        mock_get_lib_dir.return_value = dir
+        mock_enable_firewall.return_value = True
+        fixed_uid = 0
+        mock_os_getuid.return_value = fixed_uid
+        osutil = MagicMock()
+
+        # Run
+        migration_util.cleanup_metadata_server_artifacts(osutil)
+
+        # Assert files deleted
+        assert not os.path.exists(metadata_server_transport_prv_file)
+        assert not os.path.exists(metadata_server_transport_cert_file)
+        assert not os.path.exists(metadata_server_p7b_file)
+
+        # Assert Firewall rule calls
+        osutil.remove_rules_files.assert_called_once()
+        osutil.remove_firewall.assert_called_once_with(dst_ip=_KNOWN_METADATASERVER_IP, uid=fixed_uid)
+        osutil.enable_firewall.assert_called_once_with(dst_ip=KNOWN_WIRESERVER_IP, uid=fixed_uid)
+
+    @patch('azurelinuxagent.common.conf.enable_firewall')
+    @patch('azurelinuxagent.common.conf.get_lib_dir')
+    @patch('os.getuid')
+    def test_cleanup_metadata_server_artifacts_firewall_disabled(self, mock_os_getuid, mock_get_lib_dir, mock_enable_firewall):
+        # Setup Certificate Files
+        dir = tempfile.gettempdir()
+        metadata_server_transport_prv_file = os.path.join(dir, _LEGACY_METADATA_SERVER_TRANSPORT_PRV_FILE_NAME)
+        metadata_server_transport_cert_file = os.path.join(dir, _LEGACY_METADATA_SERVER_TRANSPORT_CERT_FILE_NAME)
+        metadata_server_p7b_file = os.path.join(dir, _LEGACY_METADATA_SERVER_P7B_FILE_NAME)
+        open(metadata_server_transport_prv_file, 'w').close()
+        open(metadata_server_transport_cert_file, 'w').close()
+        open(metadata_server_p7b_file, 'w').close()
+
+        # Setup Mocks
+        mock_get_lib_dir.return_value = dir
+        mock_enable_firewall.return_value = False
+        fixed_uid = 0
+        mock_os_getuid.return_value = fixed_uid
+        osutil = MagicMock()
+
+        # Run
+        migration_util.cleanup_metadata_server_artifacts(osutil)
+
+        # Assert files deleted
+        assert not os.path.exists(metadata_server_transport_prv_file)
+        assert not os.path.exists(metadata_server_transport_cert_file)
+        assert not os.path.exists(metadata_server_p7b_file)
+
+        # Assert Firewall rule calls
+        osutil.remove_rules_files.assert_called_once()
+        osutil.remove_firewall.assert_called_once_with(dst_ip=_KNOWN_METADATASERVER_IP, uid=fixed_uid)
+        osutil.enable_firewall.assert_not_called()
+
+    # Cleanup certificate files
+    def tearDown(self):
+        dir = tempfile.gettempdir()
+        for file in [_LEGACY_METADATA_SERVER_TRANSPORT_PRV_FILE_NAME, \
+                     _LEGACY_METADATA_SERVER_TRANSPORT_CERT_FILE_NAME, \
+                     _LEGACY_METADATA_SERVER_P7B_FILE_NAME]:
+            path = os.path.join(dir, file)
+            if os.path.exists(path):
+                os.remove(path)
 
 if __name__ == '__main__':
     unittest.main()
