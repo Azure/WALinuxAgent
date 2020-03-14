@@ -279,7 +279,7 @@ class TestProtocolUtil(AgentTestCase):
         protocol_util.osutil.enable_firewall.assert_not_called()
 
         # Check Protocol File is updated to WireProtocol
-        with open(protocol_filename, "r") as f:
+        with open(os.path.join(dir, PROTOCOL_FILE_NAME), "r") as f:
             assert f.read() == WIRE_PROTOCOL_NAME
         
         # Check Endpoint file is updated to WireServer IP
