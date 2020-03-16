@@ -4,56 +4,56 @@
         <Plugin>
             <Version>1.0.0</Version>
             <Uris>
-                <Uri>http://foo.bar/zar/OSTCExtensions.WALinuxAgent__1.0.0</Uri>
+                <Uri>http://mock-goal-state/foo.bar/zar/OSTCExtensions.WALinuxAgent__1.0.0</Uri>
             </Uris>
         </Plugin>
         <Plugin>
             <Version>1.1.0</Version>
             <Uris>
-                <Uri>http://foo.bar/zar/OSTCExtensions.WALinuxAgent__1.1.0</Uri>
+                <Uri>http://mock-goal-state/foo.bar/zar/OSTCExtensions.WALinuxAgent__1.1.0</Uri>
             </Uris>
         </Plugin>
         <Plugin>
             <Version>1.1.1</Version>
             <Uris>
-                <Uri>http://foo.bar/zar/OSTCExtensions.WALinuxAgent__1.1.1</Uri>
+                <Uri>http://mock-goal-state/foo.bar/zar/OSTCExtensions.WALinuxAgent__1.1.1</Uri>
             </Uris>
         </Plugin>
         <Plugin>
             <Version>1.2.0</Version>
             <Uris>
-                <Uri>http://foo.bar/zar/OSTCExtensions.WALinuxAgent__1.2.0</Uri>
+                <Uri>http://mock-goal-state/foo.bar/zar/OSTCExtensions.WALinuxAgent__1.2.0</Uri>
             </Uris>
         </Plugin>
         <Plugin>
-            <Version>2.0.0</Version><Uris><Uri>http://host/OSTCExtensions.WALinuxAgent__2.0.0</Uri></Uris>
+            <Version>2.0.0</Version><Uris><Uri>http://mock-goal-state/host/OSTCExtensions.WALinuxAgent__2.0.0</Uri></Uris>
         </Plugin>
         <Plugin>
-            <Version>2.1.0</Version><Uris><Uri>http://host/OSTCExtensions.WALinuxAgent__2.1.0</Uri></Uris>
+            <Version>2.1.0</Version><Uris><Uri>http://mock-goal-state/host/OSTCExtensions.WALinuxAgent__2.1.0</Uri></Uris>
         </Plugin>
         <Plugin>
-            <Version>2.1.1</Version><Uris><Uri>http://host/OSTCExtensions.WALinuxAgent__2.1.1</Uri></Uris>
+            <Version>2.1.1</Version><Uris><Uri>http://mock-goal-state/host/OSTCExtensions.WALinuxAgent__2.1.1</Uri></Uris>
         </Plugin>
         <Plugin>
-            <Version>2.2.0</Version><Uris><Uri>http://host/OSTCExtensions.WALinuxAgent__2.2.0</Uri></Uris>
+            <Version>2.2.0</Version><Uris><Uri>http://mock-goal-state/host/OSTCExtensions.WALinuxAgent__2.2.0</Uri></Uris>
         </Plugin>
         <Plugin>
-            <Version>3.0</Version><Uris><Uri>http://host/OSTCExtensions.WALinuxAgent__3.0</Uri></Uris>
+            <Version>3.0</Version><Uris><Uri>http://mock-goal-state/host/OSTCExtensions.WALinuxAgent__3.0</Uri></Uris>
         </Plugin>
         <Plugin>
-            <Version>3.1</Version><Uris><Uri>http://host/OSTCExtensions.WALinuxAgent__3.1</Uri></Uris>
+            <Version>3.1</Version><Uris><Uri>http://mock-goal-state/host/OSTCExtensions.WALinuxAgent__3.1</Uri></Uris>
         </Plugin>
         <Plugin>
-            <Version>4.0.0.0</Version><Uris><Uri>http://host/OSTCExtensions.WALinuxAgent__3.0</Uri></Uris>
+            <Version>4.0.0.0</Version><Uris><Uri>http://mock-goal-state/host/OSTCExtensions.WALinuxAgent__3.0</Uri></Uris>
         </Plugin>
         <Plugin>
-            <Version>4.0.0.1</Version><Uris><Uri>http://host/OSTCExtensions.WALinuxAgent__3.1</Uri></Uris>
+            <Version>4.0.0.1</Version><Uris><Uri>http://mock-goal-state/host/OSTCExtensions.WALinuxAgent__3.1</Uri></Uris>
         </Plugin>
         <Plugin>
-            <Version>4.1.0.0</Version><Uris><Uri>http://host/OSTCExtensions.WALinuxAgent__3.1</Uri></Uris>
+            <Version>4.1.0.0</Version><Uris><Uri>http://mock-goal-state/host/OSTCExtensions.WALinuxAgent__3.1</Uri></Uris>
         </Plugin>
         <Plugin>
-            <Version>99999.0.0.0</Version><Uris><Uri>http://host/OSTCExtensions.WALinuxAgent__99999.0.0.0</Uri></Uris>
+            <Version>99999.0.0.0</Version><Uris><Uri>http://mock-goal-state/host/OSTCExtensions.WALinuxAgent__99999.0.0.0</Uri></Uris>
         </Plugin>
     </Plugins>
 </PluginVersionManifest>

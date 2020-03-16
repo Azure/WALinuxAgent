@@ -23,9 +23,8 @@ import json
 
 from azurelinuxagent.common import logger
 from azurelinuxagent.common.errorstate import ErrorState, ERROR_STATE_HOST_PLUGIN_FAILURE
-from azurelinuxagent.common.exception import HttpError, ProtocolError, \
-                                            ResourceGoneError
-from azurelinuxagent.common.future import ustr, httpclient
+from azurelinuxagent.common.exception import HttpError, ProtocolError
+from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.protocol.healthservice import HealthService
 from azurelinuxagent.common.utils import restutil
 from azurelinuxagent.common.utils import textutil
@@ -78,6 +77,15 @@ class HostPluginProtocol(object):
     def set_default_channel(is_default):
         HostPluginProtocol._is_default_channel = is_default
 
+    def update_container_id(self, new_container_id):
+        self.container_id = new_container_id
+
+    def update_role_config_name(self, new_role_config_name):
+        self.role_config_name = new_role_config_name
+
+    def update_manifest_uri(self, new_manifest_uri):
+        self.manifest_uri = new_manifest_uri
+
     def ensure_initialized(self):
         if not self.is_initialized:
             self.api_versions = self.get_api_versions()
@@ -110,6 +118,7 @@ class HostPluginProtocol(object):
         try:
             headers = {HEADER_CONTAINER_ID: self.container_id}
             response = restutil.http_get(url, headers)
+
             if restutil.request_failed(response):
                 error_response = restutil.read_response_error(response)
                 logger.error("HostGAPlugin: Failed Get API versions: {0}".format(error_response))

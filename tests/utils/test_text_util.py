@@ -16,9 +16,11 @@
 #
 
 from distutils.version import LooseVersion as Version
-from tests.tools import *
+from tests.tools import AgentTestCase
 
 import hashlib
+import os
+import unittest
 
 import azurelinuxagent.common.utils.textutil as textutil
 

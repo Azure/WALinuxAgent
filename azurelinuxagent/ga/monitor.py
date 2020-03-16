@@ -16,74 +16,23 @@
 #
 
 import datetime
-import json
-import os
-import platform
 import threading
 import time
 import uuid
 
-import azurelinuxagent.common.conf as conf
 import azurelinuxagent.common.logger as logger
 import azurelinuxagent.common.utils.networkutil as networkutil
-
 from azurelinuxagent.common.cgroupstelemetry import CGroupsTelemetry
 from azurelinuxagent.common.errorstate import ErrorState
-from azurelinuxagent.common.event import add_event, WALAEventOperation
-from azurelinuxagent.common.exception import EventError, ProtocolError, OSUtilError, HttpError
+from azurelinuxagent.common.event import add_event, WALAEventOperation, report_metric, collect_events
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.osutil import get_osutil
-from azurelinuxagent.common.protocol import get_protocol_util
+from azurelinuxagent.common.protocol.util import get_protocol_util
 from azurelinuxagent.common.protocol.healthservice import HealthService
 from azurelinuxagent.common.protocol.imds import get_imds_client
-from azurelinuxagent.common.protocol.restapi import TelemetryEventParam, \
-    TelemetryEventList, TelemetryEvent, set_properties
 from azurelinuxagent.common.utils.restutil import IOErrorCounter
-from azurelinuxagent.common.utils.textutil import parse_doc, findall, find, getattrib, hash_strings
-from azurelinuxagent.common.version import DISTRO_NAME, DISTRO_VERSION, \
-    DISTRO_CODE_NAME, AGENT_NAME, CURRENT_AGENT, CURRENT_VERSION
-
-
-def parse_event(data_str):
-    try:
-        return parse_json_event(data_str)
-    except ValueError:
-        return parse_xml_event(data_str)
-
-
-def parse_xml_param(param_node):
-    name = getattrib(param_node, "Name")
-    value_str = getattrib(param_node, "Value")
-    attr_type = getattrib(param_node, "T")
-    value = value_str
-    if attr_type == 'mt:uint64':
-        value = int(value_str)
-    elif attr_type == 'mt:bool':
-        value = bool(value_str)
-    elif attr_type == 'mt:float64':
-        value = float(value_str)
-    return TelemetryEventParam(name, value)
-
-
-def parse_xml_event(data_str):
-    try:
-        xml_doc = parse_doc(data_str)
-        event_id = getattrib(find(xml_doc, "Event"), 'id')
-        provider_id = getattrib(find(xml_doc, "Provider"), 'id')
-        event = TelemetryEvent(event_id, provider_id)
-        param_nodes = findall(xml_doc, 'Param')
-        for param_node in param_nodes:
-            event.parameters.append(parse_xml_param(param_node))
-        return event
-    except Exception as e:
-        raise ValueError(ustr(e))
-
-
-def parse_json_event(data_str):
-    data = json.loads(data_str)
-    event = TelemetryEvent()
-    set_properties("TelemetryEvent", event, data)
-    return event
+from azurelinuxagent.common.utils.textutil import hash_strings
+from azurelinuxagent.common.version import AGENT_NAME, CURRENT_VERSION
 
 
 def generate_extension_metrics_telemetry_dictionary(schema_version=1.0,
@@ -114,12 +63,15 @@ class MonitorHandler(object):
     IMDS_HEARTBEAT_PERIOD = datetime.timedelta(minutes=1)
     IMDS_HEALTH_PERIOD = datetime.timedelta(minutes=3)
 
+    # Resetting loggers period
+    RESET_LOGGERS_PERIOD = datetime.timedelta(hours=12)
+
     def __init__(self):
         self.osutil = get_osutil()
-        self.protocol_util = get_protocol_util()
-        self.imds_client = get_imds_client()
+        self.imds_client = None
 
         self.event_thread = None
+        self.last_reset_loggers_time = None
         self.last_event_collection = None
         self.last_telemetry_heartbeat = None
         self.last_cgroup_polling_telemetry = None
@@ -127,21 +79,18 @@ class MonitorHandler(object):
         self.last_host_plugin_heartbeat = None
         self.last_imds_heartbeat = None
         self.protocol = None
+        self.protocol_util = None
         self.health_service = None
         self.last_route_table_hash = b''
         self.last_nic_state = {}
 
-        self.counter = 0
-        self.sysinfo = []
         self.should_run = True
         self.heartbeat_id = str(uuid.uuid4()).upper()
         self.host_plugin_errorstate = ErrorState(min_timedelta=MonitorHandler.HOST_PLUGIN_HEALTH_PERIOD)
         self.imds_errorstate = ErrorState(min_timedelta=MonitorHandler.IMDS_HEALTH_PERIOD)
 
     def run(self):
-        self.init_protocols()
-        self.init_sysinfo()
-        self.start()
+        self.start(init_data=True)
 
     def stop(self):
         self.should_run = False
@@ -149,120 +98,53 @@ class MonitorHandler(object):
             self.event_thread.join()
 
     def init_protocols(self):
+        # The initialization of ProtocolUtil for the Monitor thread should be done within the thread itself rather
+        # than initializing it in the ExtHandler thread. This is done to avoid any concurrency issues as each
+        # thread would now have its own ProtocolUtil object as per the SingletonPerThread model.
+        self.protocol_util = get_protocol_util()
         self.protocol = self.protocol_util.get_protocol()
-        self.health_service = HealthService(self.protocol.endpoint)
+        self.health_service = HealthService(self.protocol.get_endpoint())
+
+    def init_imds_client(self):
+        wireserver_endpoint = self.protocol_util.get_wireserver_endpoint()
+        self.imds_client = get_imds_client(wireserver_endpoint)
 
     def is_alive(self):
         return self.event_thread is not None and self.event_thread.is_alive()
 
-    def start(self):
-        self.event_thread = threading.Thread(target=self.daemon)
+    def start(self, init_data=False):
+        self.event_thread = threading.Thread(target=self.daemon, args=(init_data,))
         self.event_thread.setDaemon(True)
+        self.event_thread.setName("MonitorHandler")
         self.event_thread.start()
 
-    def init_sysinfo(self):
-        osversion = "{0}:{1}-{2}-{3}:{4}".format(platform.system(),
-                                                 DISTRO_NAME,
-                                                 DISTRO_VERSION,
-                                                 DISTRO_CODE_NAME,
-                                                 platform.release())
-        self.sysinfo.append(TelemetryEventParam("OSVersion", osversion))
-        self.sysinfo.append(
-            TelemetryEventParam("GAVersion", CURRENT_AGENT))
-
-        try:
-            ram = self.osutil.get_total_mem()
-            processors = self.osutil.get_processor_cores()
-            self.sysinfo.append(TelemetryEventParam("RAM", ram))
-            self.sysinfo.append(TelemetryEventParam("Processors", processors))
-        except OSUtilError as e:
-            logger.warn("Failed to get system info: {0}", ustr(e))
-
-        try:
-            vminfo = self.protocol.get_vminfo()
-            self.sysinfo.append(TelemetryEventParam("VMName",
-                                                    vminfo.vmName))
-            self.sysinfo.append(TelemetryEventParam("TenantName",
-                                                    vminfo.tenantName))
-            self.sysinfo.append(TelemetryEventParam("RoleName",
-                                                    vminfo.roleName))
-            self.sysinfo.append(TelemetryEventParam("RoleInstanceName",
-                                                    vminfo.roleInstanceName))
-            self.sysinfo.append(TelemetryEventParam("ContainerId",
-                                                    vminfo.containerId))
-        except ProtocolError as e:
-            logger.warn("Failed to get system info: {0}", ustr(e))
-
-        try:
-            vminfo = self.imds_client.get_compute()
-            self.sysinfo.append(TelemetryEventParam('Location',
-                                                    vminfo.location))
-            self.sysinfo.append(TelemetryEventParam('SubscriptionId',
-                                                    vminfo.subscriptionId))
-            self.sysinfo.append(TelemetryEventParam('ResourceGroupName',
-                                                    vminfo.resourceGroupName))
-            self.sysinfo.append(TelemetryEventParam('VMId',
-                                                    vminfo.vmId))
-            self.sysinfo.append(TelemetryEventParam('ImageOrigin',
-                                                    vminfo.image_origin))
-        except (HttpError, ValueError) as e:
-            logger.warn("failed to get IMDS info: {0}", ustr(e))
-
-    @staticmethod
-    def collect_event(evt_file_name):
-        try:
-            logger.verbose("Found event file: {0}", evt_file_name)
-            with open(evt_file_name, "rb") as evt_file:
-                # if fail to open or delete the file, throw exception
-                data_str = evt_file.read().decode("utf-8")
-            logger.verbose("Processed event file: {0}", evt_file_name)
-            os.remove(evt_file_name)
-            return data_str
-        except (IOError, UnicodeDecodeError) as e:
-            os.remove(evt_file_name)
-            msg = "Failed to process {0}, {1}".format(evt_file_name, e)
-            raise EventError(msg)
-
     def collect_and_send_events(self):
-        if self.last_event_collection is None:
-            self.last_event_collection = datetime.datetime.utcnow() - MonitorHandler.EVENT_COLLECTION_PERIOD
+        """
+        Periodically send any events located in the events folder
+        """
+        try:
+            if self.last_event_collection is None:
+                self.last_event_collection = datetime.datetime.utcnow() - MonitorHandler.EVENT_COLLECTION_PERIOD
 
-        if datetime.datetime.utcnow() >= (self.last_event_collection + MonitorHandler.EVENT_COLLECTION_PERIOD):
-            try:
-                event_list = TelemetryEventList()
-                event_dir = os.path.join(conf.get_lib_dir(), "events")
-                event_files = os.listdir(event_dir)
-                for event_file in event_files:
-                    if not event_file.endswith(".tld"):
-                        continue
-                    event_file_path = os.path.join(event_dir, event_file)
-                    try:
-                        data_str = self.collect_event(event_file_path)
-                    except EventError as e:
-                        logger.error("{0}", ustr(e))
-                        continue
-
-                    try:
-                        event = parse_event(data_str)
-                        self.add_sysinfo(event)
-                        event_list.events.append(event)
-                    except (ValueError, ProtocolError) as e:
-                        logger.warn("Failed to decode event file: {0}", ustr(e))
-                        continue
-
-                if len(event_list.events) == 0:
-                    return
-
+            if datetime.datetime.utcnow() >= (self.last_event_collection + MonitorHandler.EVENT_COLLECTION_PERIOD):
                 try:
-                    self.protocol.report_event(event_list)
-                except ProtocolError as e:
-                    logger.error("{0}", ustr(e))
-            except Exception as e:
-                logger.warn("Failed to send events: {0}", ustr(e))
+                    event_list = collect_events()
 
-            self.last_event_collection = datetime.datetime.utcnow()
+                    if len(event_list.events) > 0:
+                        self.protocol.report_event(event_list)
+                except Exception as e:
+                    logger.warn("{0}", ustr(e))
+        except Exception as e:
+            logger.warn("Failed to send events: {0}", ustr(e))
 
-    def daemon(self):
+        self.last_event_collection = datetime.datetime.utcnow()
+
+    def daemon(self, init_data=False):
+
+        if init_data:
+            self.init_protocols()
+            self.init_imds_client()
+
         min_delta = min(MonitorHandler.TELEMETRY_HEARTBEAT_PERIOD,
                         MonitorHandler.CGROUP_TELEMETRY_POLLING_PERIOD,
                         MonitorHandler.CGROUP_TELEMETRY_REPORTING_PERIOD,
@@ -270,22 +152,40 @@ class MonitorHandler(object):
                         MonitorHandler.HOST_PLUGIN_HEARTBEAT_PERIOD,
                         MonitorHandler.IMDS_HEARTBEAT_PERIOD).seconds
         while self.should_run:
-            self.send_telemetry_heartbeat()
-            self.poll_telemetry_metrics()
-            self.send_telemetry_metrics()
-            self.collect_and_send_events()
-            self.send_host_plugin_heartbeat()
-            self.send_imds_heartbeat()
-            self.log_altered_network_configuration()
+            try:
+                self.protocol.update_host_plugin_from_goal_state()
+                self.send_telemetry_heartbeat()
+                self.poll_telemetry_metrics()
+                # This will be removed in favor of poll_telemetry_metrics() and it'll directly send the perf data for
+                # each cgroup.
+                self.send_telemetry_metrics()
+                self.collect_and_send_events()
+                self.send_host_plugin_heartbeat()
+                self.send_imds_heartbeat()
+                self.log_altered_network_configuration()
+                self.reset_loggers()
+            except Exception as e:
+                logger.warn("An error occurred in the monitor thread main loop; will skip the current iteration.\n{0}", ustr(e))
             time.sleep(min_delta)
 
-    def add_sysinfo(self, event):
-        sysinfo_names = [v.name for v in self.sysinfo]
-        for param in event.parameters:
-            if param.name in sysinfo_names:
-                logger.verbose("Remove existing event parameter: [{0}:{1}]", param.name, param.value)
-                event.parameters.remove(param)
-        event.parameters.extend(self.sysinfo)
+    def reset_loggers(self):
+        """
+        The loggers maintain hash-tables in memory and they need to be cleaned up from time to time.
+        For reference, please check azurelinuxagent.common.logger.Logger and
+        azurelinuxagent.common.event.EventLogger classes
+        """
+        try:
+            time_now = datetime.datetime.utcnow()
+            if not self.last_reset_loggers_time:
+                self.last_reset_loggers_time = time_now
+
+            if time_now >= (self.last_reset_loggers_time + MonitorHandler.RESET_LOGGERS_PERIOD):
+                logger.reset_periodic()
+
+        except Exception as e:
+            logger.warn("Failed to clear periodic loggers: {0}", ustr(e))
+
+        self.last_reset_loggers_time = time_now
 
     def send_imds_heartbeat(self):
         """
@@ -293,11 +193,11 @@ class MonitorHandler(object):
         successfully called and validated a response in the last IMDS_HEALTH_PERIOD.
         """
 
-        if self.last_imds_heartbeat is None:
-            self.last_imds_heartbeat = datetime.datetime.utcnow() - MonitorHandler.IMDS_HEARTBEAT_PERIOD
+        try:
+            if self.last_imds_heartbeat is None:
+                self.last_imds_heartbeat = datetime.datetime.utcnow() - MonitorHandler.IMDS_HEARTBEAT_PERIOD
 
-        if datetime.datetime.utcnow() >= (self.last_imds_heartbeat + MonitorHandler.IMDS_HEARTBEAT_PERIOD):
-            try:
+            if datetime.datetime.utcnow() >= (self.last_imds_heartbeat + MonitorHandler.IMDS_HEARTBEAT_PERIOD):
                 is_currently_healthy, response = self.imds_client.validate()
 
                 if is_currently_healthy:
@@ -310,29 +210,29 @@ class MonitorHandler(object):
 
                 self.health_service.report_imds_status(is_healthy, response)
 
-            except Exception as e:
-                msg = "Exception sending imds heartbeat: {0}".format(ustr(e))
-                add_event(
-                    name=AGENT_NAME,
-                    version=CURRENT_VERSION,
-                    op=WALAEventOperation.ImdsHeartbeat,
-                    is_success=False,
-                    message=msg,
-                    log_event=False)
+        except Exception as e:
+            msg = "Exception sending imds heartbeat: {0}".format(ustr(e))
+            add_event(
+                name=AGENT_NAME,
+                version=CURRENT_VERSION,
+                op=WALAEventOperation.ImdsHeartbeat,
+                is_success=False,
+                message=msg,
+                log_event=False)
 
-            self.last_imds_heartbeat = datetime.datetime.utcnow()
+        self.last_imds_heartbeat = datetime.datetime.utcnow()
 
     def send_host_plugin_heartbeat(self):
         """
         Send a health signal every HOST_PLUGIN_HEARTBEAT_PERIOD. The signal is 'Healthy' when we have been able to
         communicate with HostGAPlugin at least once in the last HOST_PLUGIN_HEALTH_PERIOD.
         """
-        if self.last_host_plugin_heartbeat is None:
-            self.last_host_plugin_heartbeat = datetime.datetime.utcnow() - MonitorHandler.HOST_PLUGIN_HEARTBEAT_PERIOD
+        try:
+            if self.last_host_plugin_heartbeat is None:
+                self.last_host_plugin_heartbeat = datetime.datetime.utcnow() - MonitorHandler.HOST_PLUGIN_HEARTBEAT_PERIOD
 
-        if datetime.datetime.utcnow() >= (
+            if datetime.datetime.utcnow() >= (
                 self.last_host_plugin_heartbeat + MonitorHandler.HOST_PLUGIN_HEARTBEAT_PERIOD):
-            try:
                 host_plugin = self.protocol.client.get_host_plugin()
                 host_plugin.ensure_initialized()
                 is_currently_healthy = host_plugin.get_health()
@@ -356,47 +256,31 @@ class MonitorHandler(object):
                         message='{0} since successful heartbeat'.format(self.host_plugin_errorstate.fail_time),
                         log_event=False)
 
-            except Exception as e:
-                msg = "Exception sending host plugin heartbeat: {0}".format(ustr(e))
-                add_event(
-                    name=AGENT_NAME,
-                    version=CURRENT_VERSION,
-                    op=WALAEventOperation.HostPluginHeartbeat,
-                    is_success=False,
-                    message=msg,
-                    log_event=False)
+        except Exception as e:
+            msg = "Exception sending host plugin heartbeat: {0}".format(ustr(e))
+            add_event(
+                name=AGENT_NAME,
+                version=CURRENT_VERSION,
+                op=WALAEventOperation.HostPluginHeartbeat,
+                is_success=False,
+                message=msg,
+                log_event=False)
 
             self.last_host_plugin_heartbeat = datetime.datetime.utcnow()
 
     def send_telemetry_heartbeat(self):
+        try:
+            if self.last_telemetry_heartbeat is None:
+                self.last_telemetry_heartbeat = datetime.datetime.utcnow() - MonitorHandler.TELEMETRY_HEARTBEAT_PERIOD
 
-        if self.last_telemetry_heartbeat is None:
-            self.last_telemetry_heartbeat = datetime.datetime.utcnow() - MonitorHandler.TELEMETRY_HEARTBEAT_PERIOD
-
-        if datetime.datetime.utcnow() >= (self.last_telemetry_heartbeat + MonitorHandler.TELEMETRY_HEARTBEAT_PERIOD):
-            try:
-                incarnation = self.protocol.get_incarnation()
-                dropped_packets = self.osutil.get_firewall_dropped_packets(self.protocol.endpoint)
-                msg = "{0};{1};{2};{3}".format(incarnation, self.counter, self.heartbeat_id, dropped_packets)
-
-                add_event(
-                    name=AGENT_NAME,
-                    version=CURRENT_VERSION,
-                    op=WALAEventOperation.HeartBeat,
-                    is_success=True,
-                    message=msg,
-                    log_event=False)
-
-                self.counter += 1
-
+            if datetime.datetime.utcnow() >= (self.last_telemetry_heartbeat + MonitorHandler.TELEMETRY_HEARTBEAT_PERIOD):
                 io_errors = IOErrorCounter.get_and_reset()
                 hostplugin_errors = io_errors.get("hostplugin")
                 protocol_errors = io_errors.get("protocol")
                 other_errors = io_errors.get("other")
 
                 if hostplugin_errors > 0 or protocol_errors > 0 or other_errors > 0:
-                    msg = "hostplugin:{0};protocol:{1};other:{2}".format(hostplugin_errors,
-                                                                         protocol_errors,
+                    msg = "hostplugin:{0};protocol:{1};other:{2}".format(hostplugin_errors, protocol_errors,
                                                                          other_errors)
                     add_event(
                         name=AGENT_NAME,
@@ -405,40 +289,62 @@ class MonitorHandler(object):
                         is_success=True,
                         message=msg,
                         log_event=False)
-            except Exception as e:
-                logger.warn("Failed to send heartbeat: {0}", ustr(e))
+        except Exception as e:
+            logger.warn("Failed to send heartbeat: {0}", ustr(e))
 
-            self.last_telemetry_heartbeat = datetime.datetime.utcnow()
+        self.last_telemetry_heartbeat = datetime.datetime.utcnow()
 
     def poll_telemetry_metrics(self):
-        time_now = datetime.datetime.utcnow()
-        if not self.last_cgroup_polling_telemetry:
-            self.last_cgroup_polling_telemetry = time_now
+        """
+        This method polls the tracked cgroups to get data from the cgroups filesystem and send the data directly.
 
-        if time_now >= (self.last_cgroup_polling_telemetry +
-                        MonitorHandler.CGROUP_TELEMETRY_POLLING_PERIOD):
-            CGroupsTelemetry.poll_all_tracked()
-            self.last_cgroup_polling_telemetry = time_now
+        :return: List of Metrics (which would be sent to PerfCounterMetrics directly.
+        """
+        try:  # If there is an issue in reporting, it should not take down whole monitor thread.
+            time_now = datetime.datetime.utcnow()
+            if not self.last_cgroup_polling_telemetry:
+                self.last_cgroup_polling_telemetry = time_now
+
+            if time_now >= (self.last_cgroup_polling_telemetry +
+                            MonitorHandler.CGROUP_TELEMETRY_POLLING_PERIOD):
+                metrics = CGroupsTelemetry.poll_all_tracked()
+
+                if metrics:
+                    for metric in metrics:
+                        report_metric(metric.category, metric.counter, metric.instance, metric.value)
+        except Exception as e:
+            logger.warn("Could not poll all the tracked telemetry due to {0}", ustr(e))
+
+        self.last_cgroup_polling_telemetry = datetime.datetime.utcnow()
 
     def send_telemetry_metrics(self):
-        time_now = datetime.datetime.utcnow()
+        """
+        The send_telemetry_metrics would soon be removed in favor of sending performance metrics directly.
 
-        if not self.last_cgroup_report_telemetry:
-            self.last_cgroup_report_telemetry = time_now
+        :return:
+        """
+        try:  # If there is an issue in reporting, it should not take down whole monitor thread.
+            time_now = datetime.datetime.utcnow()
 
-        if time_now >= (self.last_cgroup_report_telemetry + MonitorHandler.CGROUP_TELEMETRY_REPORTING_PERIOD):
-            performance_metrics = CGroupsTelemetry.report_all_tracked()
-            self.last_cgroup_report_telemetry = time_now
+            if not self.last_cgroup_report_telemetry:
+                self.last_cgroup_report_telemetry = time_now
 
-            if performance_metrics:
-                message = generate_extension_metrics_telemetry_dictionary(schema_version=1.0,
-                                                                          performance_metrics=performance_metrics)
-                add_event(name=AGENT_NAME,
-                          version=CURRENT_VERSION,
-                          op=WALAEventOperation.ExtensionMetricsData,
-                          is_success=True,
-                          message=ustr(message),
-                          log_event=False)
+            if time_now >= (self.last_cgroup_report_telemetry + MonitorHandler.CGROUP_TELEMETRY_REPORTING_PERIOD):
+                performance_metrics = CGroupsTelemetry.report_all_tracked()
+
+                if performance_metrics:
+                    message = generate_extension_metrics_telemetry_dictionary(schema_version=1.0,
+                                                                              performance_metrics=performance_metrics)
+                    add_event(name=AGENT_NAME,
+                              version=CURRENT_VERSION,
+                              op=WALAEventOperation.ExtensionMetricsData,
+                              is_success=True,
+                              message=ustr(message),
+                              log_event=False)
+        except Exception as e:
+            logger.warn("Could not report all the tracked telemetry due to {0}", ustr(e))
+
+        self.last_cgroup_report_telemetry = datetime.datetime.utcnow()
 
     def log_altered_network_configuration(self):
         """

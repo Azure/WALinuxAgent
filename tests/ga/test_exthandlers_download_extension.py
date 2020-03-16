@@ -1,13 +1,13 @@
 # Copyright (c) Microsoft Corporation. All rights reserved.
 # Licensed under the Apache License.
 
-import zipfile, time
+import zipfile, time, os
 
 from azurelinuxagent.common.protocol.restapi import ExtHandler, ExtHandlerProperties, ExtHandlerPackage, ExtHandlerVersionUri
 from azurelinuxagent.common.protocol.wire import WireProtocol
 from azurelinuxagent.ga.exthandlers import ExtHandlerInstance, NUMBER_OF_DOWNLOAD_RETRIES
 from azurelinuxagent.common.exception import ExtensionDownloadError, ExtensionErrorCodes
-from tests.tools import *
+from tests.tools import AgentTestCase, patch
 
 
 class DownloadExtensionTestCase(AgentTestCase):
@@ -86,7 +86,7 @@ class DownloadExtensionTestCase(AgentTestCase):
             file.write("An invalid ZIP file\n")
 
     def _get_extension_package_file(self):
-        return os.path.join(self.agent_dir, os.path.basename(self.pkg.uris[0].uri) + ".zip")
+        return os.path.join(self.agent_dir, self.ext_handler_instance.get_extension_package_zipfile_name())
 
     def _get_extension_command_file(self):
         return os.path.join(self.extension_dir, DownloadExtensionTestCase._extension_command)

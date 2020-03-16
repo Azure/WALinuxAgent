@@ -19,15 +19,20 @@ import socket
 import glob
 import mock
 import traceback
+import os
+import tempfile
+import unittest
 
 import azurelinuxagent.common.osutil.default as osutil
 import azurelinuxagent.common.utils.shellutil as shellutil
 import azurelinuxagent.common.utils.textutil as textutil
+import azurelinuxagent.common.conf as conf
 from azurelinuxagent.common.exception import OSUtilError
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.osutil import get_osutil
-from tests.tools import *
-
+from azurelinuxagent.common.utils import fileutil
+from tests.tools import AgentTestCase, call, patch, open_patch, load_data, \
+    running_under_travis, skip_if_predicate_true
 
 actual_get_proc_net_route = 'azurelinuxagent.common.osutil.default.DefaultOSUtil._get_proc_net_route'
 
@@ -910,6 +915,74 @@ Chain OUTPUT (policy ACCEPT 104 packets, 43628 bytes)
         name = list(another_state.keys())[0]
         another_state[name].add_ipv4("xyzzy")
         self.assertNotEqual(state, another_state)
+
+    def test_get_dhcp_pid_should_return_a_list_of_pids(self):
+        osutil_get_dhcp_pid_should_return_a_list_of_pids(self, osutil.DefaultOSUtil())
+
+    def test_get_dhcp_pid_should_return_an_empty_list_when_the_dhcp_client_is_not_running(self):
+        original_run_command = shellutil.run_command
+
+        def mock_run_command(cmd):
+            return original_run_command(["pidof", "non-existing-process"])
+
+        with patch("azurelinuxagent.common.utils.shellutil.run_command", side_effect=mock_run_command):
+            pid_list = osutil.DefaultOSUtil().get_dhcp_pid()
+
+        self.assertTrue(len(pid_list) == 0, "the return value is not an empty list: {0}".format(pid_list))
+
+    @patch('os.walk', return_value=[('host3/target3:0:1/3:0:1:0/block', ['sdb'], [])])
+    @patch('azurelinuxagent.common.utils.fileutil.read_file', return_value='{00000000-0001-8899-0000-000000000000}')
+    @patch('os.listdir', return_value=['00000000-0001-8899-0000-000000000000'])
+    @patch('os.path.exists', return_value=True)
+    def test_device_for_ide_port_gen1_success(
+            self,
+            os_path_exists,
+            os_listdir,
+            fileutil_read_file,
+            os_walk):
+        dev = osutil.DefaultOSUtil().device_for_ide_port(1)
+        self.assertEqual(dev, 'sdb', 'The returned device should be the resource disk')
+
+    @patch('os.walk', return_value=[('host0/target0:0:0/0:0:0:1/block', ['sdb'], [])])
+    @patch('azurelinuxagent.common.utils.fileutil.read_file', return_value='{f8b3781a-1e82-4818-a1c3-63d806ec15bb}')
+    @patch('os.listdir', return_value=['f8b3781a-1e82-4818-a1c3-63d806ec15bb'])
+    @patch('os.path.exists', return_value=True)
+    def test_device_for_ide_port_gen2_success(
+            self,
+            os_path_exists,
+            os_listdir,
+            fileutil_read_file,
+            os_walk):
+        dev = osutil.DefaultOSUtil().device_for_ide_port(1)
+        self.assertEqual(dev, 'sdb', 'The returned device should be the resource disk')
+
+    @patch('os.listdir', return_value=['00000000-0000-0000-0000-000000000000'])
+    @patch('os.path.exists', return_value=True)
+    def test_device_for_ide_port_none(
+            self,
+            os_path_exists,
+            os_listdir):
+        dev = osutil.DefaultOSUtil().device_for_ide_port(1)
+        self.assertIsNone(dev, 'None should be returned if no resource disk found')
+
+def osutil_get_dhcp_pid_should_return_a_list_of_pids(test_instance, osutil_instance):
+    """
+    This is a very basic test for osutil.get_dhcp_pid. It is simply meant to exercise the implementation of that method
+    in case there are any basic errors, such as a typos, etc. The test does not verify that the implementation returns
+    the PID for the actual dhcp client; in fact, it uses a mock that invokes pidof to return the PID of an arbitrary
+    process (the pidof process itself). Most implementations of get_dhcp_pid use pidof with the appropriate name for
+    the dhcp client.
+    The test is defined as a global function to make it easily accessible from the test suites for each distro.
+    """
+    original_run_command = shellutil.run_command
+
+    def mock_run_command(cmd):
+        return original_run_command(["pidof", "pidof"])
+
+    with patch("azurelinuxagent.common.utils.shellutil.run_command", side_effect=mock_run_command):
+        pid = osutil_instance.get_dhcp_pid()
+
+    test_instance.assertTrue(len(pid) != 0, "get_dhcp_pid did not return a PID")
 
 
 if __name__ == '__main__':

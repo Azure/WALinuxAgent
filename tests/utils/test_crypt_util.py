@@ -15,9 +15,14 @@
 # Requires Python 2.6+ and Openssl 1.0+
 #
 
+import os
+import sys
+import unittest
+
+import azurelinuxagent.common.conf as conf
 from azurelinuxagent.common.exception import CryptError
 from azurelinuxagent.common.utils.cryptutil import CryptUtil
-from tests.tools import *
+from tests.tools import AgentTestCase, data_dir, load_data, skip_if_predicate_true
 
 
 def is_python_version_26():

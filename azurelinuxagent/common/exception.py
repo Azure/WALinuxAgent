@@ -16,6 +16,7 @@
 #
 # Requires Python 2.6+ and Openssl 1.0+
 #
+
 """
 Defines all exceptions
 """
@@ -44,7 +45,7 @@ class AgentConfigError(AgentError):
 
 class AgentNetworkError(AgentError):
     """
-    When network is not available\.
+    When network is not available.
     """
 
     def __init__(self, msg=None, inner=None):
@@ -52,9 +53,12 @@ class AgentNetworkError(AgentError):
 
 
 class CGroupsException(AgentError):
+    """
+    Exception to classify any cgroups related issue.
+    """
 
-    def __init__(self, msg, inner=None):
-        super(AgentError, self).__init__(msg, inner)
+    def __init__(self, msg=None, inner=None):
+        super(CGroupsException, self).__init__(msg, inner)
 
 
 class ExtensionError(AgentError):
@@ -67,6 +71,26 @@ class ExtensionError(AgentError):
         self.code = code
 
 
+class ExtensionOperationError(ExtensionError):
+    """
+    When the command times out or returns with a non-zero exit_code
+    """
+
+    def __init__(self, msg=None, inner=None, code=-1, exit_code=-1):
+        super(ExtensionOperationError, self).__init__(msg, inner)
+        self.code = code
+        self.exit_code = exit_code
+
+
+class ExtensionUpdateError(ExtensionError):
+    """
+    When failed to update an extension
+    """
+
+    def __init__(self, msg=None, inner=None, code=-1):
+        super(ExtensionUpdateError, self).__init__(msg, inner, code)
+
+
 class ExtensionDownloadError(ExtensionError):
     """
     When failed to download and setup an extension
@@ -74,15 +98,6 @@ class ExtensionDownloadError(ExtensionError):
 
     def __init__(self, msg=None, inner=None, code=-1):
         super(ExtensionDownloadError, self).__init__(msg, inner, code)
-
-
-class ExtensionOperationError(ExtensionError):
-    """
-    When failed to execute an extension
-    """
-
-    def __init__(self, msg=None, inner=None, code=-1):
-        super(ExtensionOperationError, self).__init__(msg, inner, code)
 
 
 class ProvisionError(AgentError):
@@ -146,6 +161,15 @@ class HttpError(AgentError):
 
     def __init__(self, msg=None, inner=None):
         super(HttpError, self).__init__(msg, inner)
+
+
+class InvalidContainerError(HttpError):
+    """
+    Container id sent in the header is invalid
+    """
+
+    def __init__(self, msg=None, inner=None):
+        super(InvalidContainerError, self).__init__(msg, inner)
 
 
 class EventError(AgentError):

@@ -1,11 +1,13 @@
 # Microsoft Azure Linux Agent
 
-## Master branch status
+## Develop branch status
 
 [![Travis CI](https://travis-ci.org/Azure/WALinuxAgent.svg?branch=develop)](https://travis-ci.org/Azure/WALinuxAgent/branches)
 [![CodeCov](https://codecov.io/gh/Azure/WALinusAgent/branch/develop/graph/badge.svg)](https://codecov.io/gh/Azure/WALinuxAgent/branch/develop)
 
 Each badge below represents our basic validation tests for an image, which are executed several times each day. These include provisioning, user account, disk, extension and networking scenarios.
+
+Note: These badges represent testing to our develop branch which might not be stable. For a stable build please use master branch instead. 
 
 Image | Status |
 ------|--------|
@@ -183,8 +185,7 @@ A sample configuration file is shown below:
 
 ```yml
 Extensions.Enabled=y
-Provisioning.Enabled=y
-Provisioning.UseCloudInit=n
+Provisioning.Agent=auto
 Provisioning.DeleteRootPassword=n
 Provisioning.RegenerateSshHostKeyPair=y
 Provisioning.SshHostKeyPairType=rsa
@@ -237,9 +238,18 @@ without the agent. In order to do that, the `provisionVMAgent` flag must be set 
 provisioning time, via whichever API is being used. We will provide more details on
 this on our wiki when it is generally available. 
 
-#### __Provisioning.Enabled__
+#### __Provisioning.Agent__
 
-_Type: Boolean_  
+_Type: String_
+_Default: auto_
+
+Choose which provisioning agent to use (or allow waagent to figure it out by
+specifying "auto"). Possible options are "auto" (default), "waagent", "cloud-init",
+or "disabled".
+
+#### __Provisioning.Enabled__ (*removed in 2.2.45*)
+
+_Type: Boolean_ 
 _Default: y_
 
 This allows the user to enable or disable the provisioning functionality in the
@@ -247,9 +257,13 @@ agent. Valid values are "y" or "n". If provisioning is disabled, SSH host and
 user keys in the image are preserved and any configuration specified in the
 Azure provisioning API is ignored.
 
-#### __Provisioning.UseCloudInit__
-  
-_Type: Boolean_  
+_Note_: This configuration option has been removed and has no effect. waagent
+now auto-detects cloud-init as a provisioning agent (with an option to override
+with `Provisioning.Agent`).
+
+#### __Provisioning.UseCloudInit__ (*removed in 2.2.45*)
+
+_Type: Boolean_ 
 _Default: n_
 
 This options enables / disables support for provisioning by means of cloud-init.
@@ -257,6 +271,10 @@ When true ("y"), the agent will wait for cloud-init to complete before installin
 extensions and processing the latest goal state. _Provisioning.Enabled_ must be
 disabled ("n") for this option to have an effect. Setting _Provisioning.Enabled_ to
 true ("y") overrides this option and runs the built-in agent provisioning code.
+
+_Note_: This configuration option has been removed and has no effect. waagent
+now auto-detects cloud-init as a provisioning agent (with an option to override
+with `Provisioning.Agent`).
 
 #### __Provisioning.DeleteRootPassword__  
 
@@ -379,7 +397,7 @@ system swap space.
 _Type: Boolean_  
 _Default: n_
 
-If set, the swap file (/swapfile) is mounted as an encrypted filesystem.
+If set, the swap file (/swapfile) is mounted as an encrypted filesystem (flag supported only on FreeBSD.)
 
 #### __ResourceDisk.SwapSizeMB__
 
@@ -401,11 +419,10 @@ leverages the system logrotate functionality to rotate logs.
 _Type: Boolean_  
 _Default: n_
 
-If set to `y` and SSL support is not compiled into Python, the agent will fall-back to
-use HTTP. Otherwise, if SSL support is not compiled into Python, the agent will fail
-all HTTPS requests.
+If SSL support is not compiled into Python, the agent will fail all HTTPS requests.
+You can set this option to 'y' to make the agent fall-back to HTTP, instead of failing the requests.
 
-Note: Allowing HTTP may unintentionally expose secure data.
+NOTE: Allowing HTTP may unintentionally expose secure data.
 
 #### __OS.EnableRDMA__
 

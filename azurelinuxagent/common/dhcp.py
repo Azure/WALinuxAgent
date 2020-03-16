@@ -19,8 +19,6 @@ import socket
 import array
 import time
 import azurelinuxagent.common.logger as logger
-import azurelinuxagent.common.utils.shellutil as shellutil
-from azurelinuxagent.common.utils import fileutil
 from azurelinuxagent.common.utils.textutil import hex_dump, hex_dump2, \
     hex_dump3, \
     compare_bytes, str_to_ord, \
@@ -29,9 +27,10 @@ from azurelinuxagent.common.utils.textutil import hex_dump, hex_dump2, \
 from azurelinuxagent.common.exception import DhcpError
 from azurelinuxagent.common.osutil import get_osutil
 
+
 # the kernel routing table representation of 168.63.129.16
 KNOWN_WIRESERVER_IP_ENTRY = '10813FA8'
-KNOWN_WIRESERVER_IP = '168.63.129.16'
+from azurelinuxagent.common.utils.restutil import KNOWN_WIRESERVER_IP
 
 
 def get_dhcp_handler():
@@ -86,9 +85,8 @@ class DhcpHandler(object):
         route_exists = False
         logger.info("Test for route to {0}".format(KNOWN_WIRESERVER_IP))
         try:
-            route_file = '/proc/net/route'
-            if os.path.exists(route_file) and \
-                    KNOWN_WIRESERVER_IP_ENTRY in open(route_file).read():
+            route_table = self.osutil.read_route_table()
+            if any([(KNOWN_WIRESERVER_IP_ENTRY in route) for route in route_table]):
                 # reset self.gateway and self.routes
                 # we do not need to alter the routing table
                 self.endpoint = KNOWN_WIRESERVER_IP
@@ -102,7 +100,7 @@ class DhcpHandler(object):
             logger.error(
                 "Could not determine whether route exists to {0}: {1}".format(
                     KNOWN_WIRESERVER_IP, e))
-
+                    
         return route_exists
 
     @property
@@ -153,10 +151,10 @@ class DhcpHandler(object):
         """
         Check if DHCP is available
         """
-        (dhcp_available, endpoint) =  self.osutil.is_dhcp_available()
+        dhcp_available =  self.osutil.is_dhcp_available()
         if not dhcp_available:
             logger.info("send_dhcp_req: DHCP not available")
-            self.endpoint = endpoint
+            self.endpoint = KNOWN_WIRESERVER_IP
             return
 
         """

@@ -26,27 +26,27 @@ import shutil
 import stat
 import sys
 import tempfile
+import time
 import unittest
 from functools import wraps
+from threading import currentThread
 
-import time
-
-from azurelinuxagent.common.cgroupconfigurator import CGroupConfigurator
-import azurelinuxagent.common.event as event
 import azurelinuxagent.common.conf as conf
+import azurelinuxagent.common.event as event
 import azurelinuxagent.common.logger as logger
+from azurelinuxagent.common.cgroupconfigurator import CGroupConfigurator
 from azurelinuxagent.common.osutil.factory import _get_osutil
 from azurelinuxagent.common.osutil.ubuntu import Ubuntu14OSUtil, Ubuntu16OSUtil
 from azurelinuxagent.common.utils import fileutil
 from azurelinuxagent.common.version import PY_VERSION_MAJOR
 
 try:
-    from unittest.mock import Mock, patch, MagicMock, ANY, DEFAULT, call
+    from unittest.mock import Mock, patch, MagicMock, ANY, DEFAULT, call, PropertyMock
 
     # Import mock module for Python2 and Python3
     from bin.waagent2 import Agent
 except ImportError:
-    from mock import Mock, patch, MagicMock, ANY, DEFAULT, call
+    from mock import Mock, patch, MagicMock, ANY, DEFAULT, call, PropertyMock
 
 test_dir = os.path.dirname(os.path.abspath(__file__))
 data_dir = os.path.join(test_dir, "data")
@@ -63,6 +63,17 @@ if debug:
 _MAX_LENGTH = 120
 
 _MAX_LENGTH_SAFE_REPR = 80
+
+# Mock sleep to reduce test execution time
+_SLEEP = time.sleep
+
+
+def mock_sleep(sec=0.01):
+    """
+    Mocks the time.sleep method to reduce unit test time
+    :param sec: Time to replace the sleep call with, default = 0.01sec
+    """
+    _SLEEP(sec)
 
 
 def safe_repr(obj, short=False):
@@ -140,6 +151,23 @@ def are_cgroups_enabled():
     return ret
 
 
+def is_trusty_in_travis():
+    # In Travis, Trusty (Ubuntu 14.04) is missing the cpuacct.stat file,
+    # possibly because the accounting is not enabled by default.
+    if not running_under_travis():
+        return False
+
+    return type(get_osutil_for_travis()) == Ubuntu14OSUtil
+
+
+def is_systemd_present():
+    return os.path.exists("/run/systemd/system")
+
+
+def i_am_root():
+    return os.geteuid() == 0
+
+
 class AgentTestCase(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -178,6 +206,7 @@ class AgentTestCase(unittest.TestCase):
             # keep a pointer to the original implementation to use when a context manager is not requested.
             cls.original_assertRaises = unittest.TestCase.assertRaises
             cls.assertRaises = cls.emulate_assertRaises
+            cls.assertDictEqual = cls.emulate_assertDictEqual
 
     @classmethod
     def tearDownClass(cls):
@@ -305,6 +334,20 @@ class AgentTestCase(unittest.TestCase):
                     exception_type, regex, str(e)))
         self.fail("No exception was thrown.  Expected exception {0} matching {1}".format(exception_type, regex))
 
+    def emulate_assertDictEqual(self, first, second, msg=None):
+        def fail(message):
+            self.fail(self._formatMessage(msg, message))
+
+        for k in first.keys():
+            if k not in second:
+                fail("'{0}' is missing from second".format(k))
+            if first[k] != second[k]:
+                fail("'{0}' != '{1}' (key: {2})".format(first[k], second[k], k))
+
+        for k in second.keys():
+            if k not in first:
+                fail("'{0}' is missing from first".format(k))
+
     def emulate_assertListEqual(self, seq1, seq2, msg=None, seq_type=None):
         """An equality assertion for ordered sequences (like lists and tuples).
 
@@ -421,12 +464,21 @@ class AgentTestCase(unittest.TestCase):
             fileutil.write_file(f, "faux content")
             time.sleep(with_sleep)
 
-    def _create_script(self, file_name, contents):
+    def create_script(self, file_name, contents, file_path=None):
         """
         Creates an executable script with the given contents.
         If file_name ends with ".py", it creates a Python3 script, otherwise it creates a bash script
+        :param file_name: The name of the file to create the script with
+        :param contents: Contents of the script file
+        :param file_path: The path of the file where to create it in (we use /tmp/ by default)
+        :return:
         """
-        file_path = os.path.join(self.tmp_dir, file_name)
+        if not file_path:
+            file_path = os.path.join(self.tmp_dir, file_name)
+
+        directory = os.path.dirname(file_path)
+        if not os.path.exists(directory):
+            os.mkdir(directory)
 
         with open(file_path, "w") as script:
             if file_name.endswith(".py"):
@@ -507,3 +559,9 @@ def distros(distro_name=".*", distro_version=".*", distro_full_name=".*"):
     return decorator
 
 
+def clear_singleton_instances(cls):
+    # Adding this lock to avoid any race conditions
+    with cls._lock:
+        obj_name = "%s__%s" % (cls.__name__, currentThread().getName())  # Object Name = className__threadName
+        if obj_name in cls._instances:
+            del cls._instances[obj_name]

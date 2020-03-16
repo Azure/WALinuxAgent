@@ -27,6 +27,7 @@ import os
 import sys
 import re
 import subprocess
+import threading
 import traceback
 
 import azurelinuxagent.common.logger as logger
@@ -38,6 +39,7 @@ from azurelinuxagent.common.version import AGENT_NAME, AGENT_LONG_VERSION, \
                                      PY_VERSION_MICRO, GOAL_STATE_AGENT_VERSION
 from azurelinuxagent.common.osutil import get_osutil
 from azurelinuxagent.common.utils import fileutil
+
 
 class Agent(object):
     def __init__(self, verbose, conf_file_path=None):
@@ -65,10 +67,11 @@ class Agent(object):
         if conf.get_logs_console():
             logger.add_logger_appender(logger.AppenderType.CONSOLE, level,
                     path="/dev/console")
-        # See issue #1035
-        # logger.add_logger_appender(logger.AppenderType.TELEMETRY,
-        #                            logger.LogLevel.WARNING,
-        #                            path=event.add_log_event)
+
+        if event.send_logs_to_telemetry():
+            logger.add_logger_appender(logger.AppenderType.TELEMETRY,
+                                       logger.LogLevel.WARNING,
+                                       path=event.add_log_event)
 
         ext_log_dir = conf.get_ext_log_dir()
         try:
@@ -81,9 +84,14 @@ class Agent(object):
                 "Exception occurred while creating extension "
                 "log directory {0}: {1}".format(ext_log_dir, e))
 
-        #Init event reporter
+        # Init event reporter
+        # Note that the reporter is not fully initialized here yet. Some telemetry fields are filled with data
+        # originating from the goal state or IMDS, which requires a WireProtocol instance. Once a protocol
+        # has been established, those fields must be explicitly initialized using
+        # initialize_event_logger_vminfo_common_parameters(). Any events created before that initialization
+        # will contain dummy values on those fields.
         event.init_event_status(conf.get_lib_dir())
-        event_dir = os.path.join(conf.get_lib_dir(), "events")
+        event_dir = os.path.join(conf.get_lib_dir(), event.EVENTS_DIRECTORY)
         event.init_event_logger(event_dir)
         event.enable_unhandled_err_dump("WALA")
 
@@ -92,6 +100,7 @@ class Agent(object):
         Run agent daemon
         """
         logger.set_prefix("Daemon")
+        threading.current_thread().setName("Daemon")
         child_args = None \
             if self.conf_file_path is None \
                 else "-configuration-path:{0}".format(self.conf_file_path)
@@ -132,6 +141,7 @@ class Agent(object):
         Run the update and extension handler
         """
         logger.set_prefix("ExtHandler")
+        threading.current_thread().setName("ExtHandler")
         from azurelinuxagent.ga.update import get_update_handler
         update_handler = get_update_handler()
         update_handler.run(debug)
@@ -140,6 +150,7 @@ class Agent(object):
         configuration = conf.get_configuration()
         for k in sorted(configuration.keys()):
             print("{0} = {1}".format(k, configuration[k]))
+
 
 def main(args=[]):
     """

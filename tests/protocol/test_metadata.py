@@ -15,16 +15,14 @@
 # Requires Python 2.6+ and Openssl 1.0+
 #
 
-import json
-
-from azurelinuxagent.common.future import ustr
-
-from azurelinuxagent.common.utils.restutil import httpclient
 from azurelinuxagent.common.protocol.metadata import *
 from azurelinuxagent.common.protocol.restapi import *
+from azurelinuxagent.common.telemetryevent import TelemetryEventList, TelemetryEvent
+from azurelinuxagent.common.utils import restutil
 
 from tests.protocol.mockmetadata import *
-from tests.tools import *
+from tests.tools import AgentTestCase, patch
+
 
 class TestMetadataProtocolGetters(AgentTestCase):
     def load_json(self, path):
@@ -49,8 +47,7 @@ class TestMetadataProtocolGetters(AgentTestCase):
         test_data = MetadataProtocolData(DATA_FILE_NO_EXT)
         self._test_getters(test_data, *args)
 
-
-    @patch("azurelinuxagent.common.protocol.metadata.MetadataProtocol.update_goal_state")
+    @patch("azurelinuxagent.common.protocol.metadata.MetadataProtocol._update_certs_with_retry")
     @patch("azurelinuxagent.common.protocol.metadata.MetadataProtocol._get_data")
     def test_get_vmagents_manifests(self, mock_get, mock_update):
         data = self.load_json("metadata/vmagent_manifests.json")
@@ -88,7 +85,7 @@ class TestMetadataProtocolGetters(AgentTestCase):
         mock_get.return_value = data, 43
         self.assertRaises(ProtocolError, protocol.get_vmagent_manifests)
 
-    @patch("azurelinuxagent.common.protocol.metadata.MetadataProtocol.update_goal_state")
+    @patch("azurelinuxagent.common.protocol.metadata.MetadataProtocol._update_certs_with_retry")
     @patch("azurelinuxagent.common.protocol.metadata.MetadataProtocol._get_data")
     def test_get_vmagents_manifests_raises(self, mock_get, mock_update):
         data = self.load_json("metadata/vmagent_manifests_invalid1.json")
@@ -101,7 +98,7 @@ class TestMetadataProtocolGetters(AgentTestCase):
         mock_get.return_value = data, 43
         self.assertRaises(ProtocolError, protocol.get_vmagent_manifests)
 
-    @patch("azurelinuxagent.common.protocol.metadata.MetadataProtocol.update_goal_state")
+    @patch("azurelinuxagent.common.protocol.metadata.MetadataProtocol._update_certs_with_retry")
     @patch("azurelinuxagent.common.protocol.metadata.MetadataProtocol._get_data")
     def test_get_vmagent_pkgs(self, mock_get, mock_update):
         data = self.load_json("metadata/vmagent_manifests.json")

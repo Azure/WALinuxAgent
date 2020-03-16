@@ -16,7 +16,8 @@
 #
 
 from azurelinuxagent.common.osutil.default import DefaultOSUtil, shellutil
-from tests.tools import *
+from tests.tools import AgentTestCase, patch
+import os
 
 
 class DefaultOsUtilTestCase(AgentTestCase):

@@ -38,7 +38,7 @@ from azurelinuxagent.common.exception import ProvisionError, ProtocolError, \
     OSUtilError
 from azurelinuxagent.common.osutil import get_osutil
 from azurelinuxagent.common.protocol.restapi import ProvisionStatus
-from azurelinuxagent.common.protocol import get_protocol_util
+from azurelinuxagent.common.protocol.util import get_protocol_util
 from azurelinuxagent.common.version import AGENT_NAME
 
 CUSTOM_DATA_FILE = "CustomData"

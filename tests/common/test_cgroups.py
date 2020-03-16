@@ -17,11 +17,14 @@
 
 from __future__ import print_function
 
+import errno
+import os
 import random
 
 from azurelinuxagent.common.cgroup import CpuCgroup, MemoryCgroup, CGroup
 from azurelinuxagent.common.exception import CGroupsException
-from tests.tools import *
+from azurelinuxagent.common.utils import fileutil
+from tests.tools import AgentTestCase, patch, data_dir
 
 
 def consume_cpu_time():
@@ -31,22 +34,25 @@ def consume_cpu_time():
     return waste
 
 
-def i_am_root():
-    return os.geteuid() == 0
-
-
 class TestCGroup(AgentTestCase):
-
-    def setUp(self):
-        AgentTestCase.setUp(self)
-
-    def tearDown(self):
-        AgentTestCase.tearDown(self)
-
+    @staticmethod
+    def _clean_up_test_files():
         with open(os.path.join(data_dir, "cgroups", "cpu_mount", "tasks"), mode="wb") as tasks:
             tasks.truncate(0)
         with open(os.path.join(data_dir, "cgroups", "memory_mount", "tasks"), mode="wb") as tasks:
             tasks.truncate(0)
+        with open(os.path.join(data_dir, "cgroups", "cpu_mount", "cgroup.procs"), mode="wb") as procs:
+            procs.truncate(0)
+        with open(os.path.join(data_dir, "cgroups", "memory_mount", "cgroup.procs"), mode="wb") as procs:
+            procs.truncate(0)
+
+    def setUp(self):
+        AgentTestCase.setUp(self)
+        TestCGroup._clean_up_test_files()
+
+    def tearDown(self):
+        AgentTestCase.tearDown(self)
+        TestCGroup._clean_up_test_files()
 
     def test_correct_creation(self):
         test_cgroup = CGroup.create("dummy_path", "cpu", "test_extension")
@@ -78,6 +84,23 @@ class TestCGroup(AgentTestCase):
 
         self.assertEqual(True, test_cgroup.is_active())
 
+    def test_get_tracked_processes(self):
+        test_cgroup = CGroup.create(os.path.join(data_dir, "cgroups", "cpu_mount"), "cpu", "test_extension")
+        self.assertListEqual(test_cgroup.get_tracked_processes(), [])
+
+        with open(os.path.join(data_dir, "cgroups", "cpu_mount", "cgroup.procs"), mode="wb") as tasks:
+            tasks.write(str(1000).encode())
+
+        self.assertEqual(['1000'], test_cgroup.get_tracked_processes())
+
+        test_cgroup = CGroup.create(os.path.join(data_dir, "cgroups", "memory_mount"), "memory", "test_extension")
+        self.assertListEqual(test_cgroup.get_tracked_processes(), [])
+
+        with open(os.path.join(data_dir, "cgroups", "memory_mount", "cgroup.procs"), mode="wb") as tasks:
+            tasks.write(str(1000).encode())
+
+        self.assertEqual(['1000'], test_cgroup.get_tracked_processes())
+
     @patch("azurelinuxagent.common.logger.periodic_warn")
     def test_is_active_file_not_present(self, patch_periodic_warn):
         test_cgroup = CGroup.create(os.path.join(data_dir, "cgroups", "not_cpu_mount"), "cpu", "test_extension")
@@ -94,50 +117,121 @@ class TestCGroup(AgentTestCase):
         self.assertEqual(False, test_cgroup.is_active())
         self.assertEqual(1, patch_periodic_warn.call_count)
 
-        test_cgroup = CGroup.create(os.path.join(data_dir, "cgroups", "memory_mount", "tasks"), "memory", "test_extension")
-        self.assertEqual(False, test_cgroup.is_active())
+        test_cgp = CGroup.create(os.path.join(data_dir, "cgroups", "memory_mount", "tasks"), "memory", "test_extension")
+        self.assertEqual(False, test_cgp.is_active())
         self.assertEqual(2, patch_periodic_warn.call_count)
 
 
 class TestCpuCgroup(AgentTestCase):
+    @classmethod
+    def setUpClass(cls):
+        AgentTestCase.setUpClass()
+
+        original_read_file = fileutil.read_file
+
+        #
+        # Tests that need to mock the contents of /proc/stat or */cpuacct/stat can set this map from
+        # the file that needs to be mocked to the mock file (each test starts with an empty map). If
+        # an Exception is given instead of a path, the exception is raised
+        #
+        cls.mock_read_file_map = {}
+
+        def mock_read_file(filepath, **args):
+            if filepath in cls.mock_read_file_map:
+                mapped_value = cls.mock_read_file_map[filepath]
+                if isinstance(mapped_value, Exception):
+                    raise mapped_value
+                filepath = mapped_value
+            return original_read_file(filepath, **args)
+
+        cls.mock_read_file = patch("azurelinuxagent.common.utils.fileutil.read_file", side_effect=mock_read_file)
+        cls.mock_read_file.start()
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.mock_read_file.stop()
+        AgentTestCase.tearDownClass()
+
     def setUp(self):
         AgentTestCase.setUp(self)
+        TestCpuCgroup.mock_read_file_map.clear()
 
-    @patch("azurelinuxagent.common.osutil.default.DefaultOSUtil._get_proc_stat")
-    def test_cpu_cgroup_create(self, patch_get_proc_stat):
-        patch_get_proc_stat.return_value = fileutil.read_file(os.path.join(data_dir, "cgroups", "dummy_proc_stat"))
-        test_cpu_cg = CpuCgroup("test_extension", "dummy_path")
+    def test_initialize_cpu_usage_should_set_current_cpu_usage(self):
+        cgroup = CpuCgroup("test", "/sys/fs/cgroup/cpu/system.slice/test")
 
-        self.assertEqual(398488, test_cpu_cg._current_system_cpu)
-        self.assertEqual(0, test_cpu_cg._current_cpu_total)
-        self.assertEqual(0, test_cpu_cg._previous_cpu_total)
-        self.assertEqual(0, test_cpu_cg._previous_system_cpu)
+        TestCpuCgroup.mock_read_file_map = {
+            "/proc/stat": os.path.join(data_dir, "cgroups", "proc_stat_t0"),
+            os.path.join(cgroup.path, "cpuacct.stat"): os.path.join(data_dir, "cgroups", "cpuacct.stat_t0")
+        }
 
-        self.assertEqual("cpu", test_cpu_cg.controller)
+        cgroup.initialize_cpu_usage()
 
-    @patch("azurelinuxagent.common.osutil.default.DefaultOSUtil.get_processor_cores", return_value=1)
-    @patch("azurelinuxagent.common.osutil.default.DefaultOSUtil._get_proc_stat")
-    def test_collect(self, patch_get_proc_stat, *args):
-        patch_get_proc_stat.return_value = fileutil.read_file(os.path.join(data_dir, "cgroups", "dummy_proc_stat"))
-        test_cpu_cg = CpuCgroup("test_extension", os.path.join(data_dir, "cgroups", "cpu_mount"))
+        self.assertEquals(cgroup._current_cgroup_cpu, 63763)
+        self.assertEquals(cgroup._current_system_cpu, 5496872)
 
-        # Mocking CPU consumption
-        patch_get_proc_stat.return_value = fileutil.read_file(os.path.join(data_dir, "cgroups",
-                                                                           "dummy_proc_stat_updated"))
+    def test_get_cpu_usage_should_return_the_cpu_usage_since_its_last_invocation(self):
+        cgroup = CpuCgroup("test", "/sys/fs/cgroup/cpu/system.slice/test")
 
-        collected_metric = test_cpu_cg.collect()[0]
+        TestCpuCgroup.mock_read_file_map = {
+            "/proc/stat": os.path.join(data_dir, "cgroups", "proc_stat_t0"),
+            os.path.join(cgroup.path, "cpuacct.stat"): os.path.join(data_dir, "cgroups", "cpuacct.stat_t0")
+        }
 
-        self.assertEqual("cpu", collected_metric.controller)
-        self.assertEqual("% Processor Time", collected_metric.metric_name)
-        self.assertEqual(5.114, collected_metric.value)
+        cgroup.initialize_cpu_usage()
 
-    def test_get_current_cpu_total_exception_handling(self):
-        test_cpu_cg = CpuCgroup("test_extension", "dummy_path")
-        self.assertRaises(IOError, test_cpu_cg._get_current_cpu_total)
+        TestCpuCgroup.mock_read_file_map = {
+            "/proc/stat": os.path.join(data_dir, "cgroups", "proc_stat_t1"),
+            os.path.join(cgroup.path, "cpuacct.stat"): os.path.join(data_dir, "cgroups", "cpuacct.stat_t1")
+        }
 
-        # Trying to raise ERRNO 20.
-        test_cpu_cg = CpuCgroup("test_extension", os.path.join(data_dir, "cgroups", "cpu_mount", "cpuacct.stat"))
-        self.assertRaises(CGroupsException, test_cpu_cg._get_current_cpu_total)
+        cpu_usage = cgroup.get_cpu_usage()
+
+        self.assertEquals(cpu_usage, 0.031)
+
+        TestCpuCgroup.mock_read_file_map = {
+            "/proc/stat": os.path.join(data_dir, "cgroups", "proc_stat_t2"),
+            os.path.join(cgroup.path, "cpuacct.stat"): os.path.join(data_dir, "cgroups", "cpuacct.stat_t2")
+        }
+
+        cpu_usage = cgroup.get_cpu_usage()
+
+        self.assertEquals(cpu_usage, 0.045)
+
+    def test_initialie_cpu_usage_should_set_the_cgroup_usage_to_0_when_the_cgroup_does_not_exist(self):
+        cgroup = CpuCgroup("test", "/sys/fs/cgroup/cpu/system.slice/test")
+
+        io_error_2 = IOError()
+        io_error_2.errno = errno.ENOENT  # "No such directory"
+
+        TestCpuCgroup.mock_read_file_map = {
+            "/proc/stat": os.path.join(data_dir, "cgroups", "proc_stat_t0"),
+            os.path.join(cgroup.path, "cpuacct.stat"): io_error_2
+        }
+
+        cgroup.initialize_cpu_usage()
+
+        self.assertEquals(cgroup._current_cgroup_cpu, 0)
+        self.assertEquals(cgroup._current_system_cpu, 5496872)  # check the system usage just for test sanity
+
+
+    def test_initialize_cpu_usage_should_raise_an_exception_when_called_more_than_once(self):
+        cgroup = CpuCgroup("test", "/sys/fs/cgroup/cpu/system.slice/test")
+
+        TestCpuCgroup.mock_read_file_map = {
+            "/proc/stat": os.path.join(data_dir, "cgroups", "proc_stat_t0"),
+            os.path.join(cgroup.path, "cpuacct.stat"): os.path.join(data_dir, "cgroups", "cpuacct.stat_t0")
+        }
+
+        cgroup.initialize_cpu_usage()
+
+        with self.assertRaises(CGroupsException):
+            cgroup.initialize_cpu_usage()
+
+    def test_get_cpu_usage_should_raise_an_exception_when_initialize_cpu_usage_has_not_been_invoked(self):
+        cgroup = CpuCgroup("test", "/sys/fs/cgroup/cpu/system.slice/test")
+
+        with self.assertRaises(CGroupsException):
+            cpu_usage = cgroup.get_cpu_usage()
 
 
 class TestMemoryCgroup(AgentTestCase):
@@ -145,34 +239,24 @@ class TestMemoryCgroup(AgentTestCase):
         test_mem_cg = MemoryCgroup("test_extension", os.path.join(data_dir, "cgroups", "memory_mount"))
         self.assertEqual("memory", test_mem_cg.controller)
 
-    def test_collect(self):
+    def test_get_metrics(self):
         test_mem_cg = MemoryCgroup("test_extension", os.path.join(data_dir, "cgroups", "memory_mount"))
-        metrics = test_mem_cg.collect()
 
-        current_mem_collected_metric = metrics[0]
+        memory_usage = test_mem_cg.get_memory_usage()
+        self.assertEqual(100000, memory_usage)
 
-        self.assertEqual("memory", current_mem_collected_metric.controller)
-        self.assertEqual("Total Memory Usage", current_mem_collected_metric.metric_name)
-        self.assertEqual(100000, current_mem_collected_metric.value)
+        max_memory_usage = test_mem_cg.get_max_memory_usage()
+        self.assertEqual(1000000, max_memory_usage)
 
-        max_mem_collected_metric = metrics[1]
-
-        self.assertEqual("memory", max_mem_collected_metric.controller)
-        self.assertEqual("Max Memory Usage", max_mem_collected_metric.metric_name)
-        self.assertEqual(1000000, max_mem_collected_metric.value)
-
-    def test_collect_when_files_not_present(self):
+    def test_get_metrics_when_files_not_present(self):
         test_mem_cg = MemoryCgroup("test_extension", os.path.join(data_dir, "cgroups"))
-        metrics = test_mem_cg.collect()
 
-        current_mem_collected_metric = metrics[0]
+        with self.assertRaises(IOError) as e:
+            test_mem_cg.get_memory_usage()
 
-        self.assertEqual("memory", current_mem_collected_metric.controller)
-        self.assertEqual("Total Memory Usage", current_mem_collected_metric.metric_name)
-        self.assertEqual(0, current_mem_collected_metric.value)
+        self.assertEqual(e.exception.errno, errno.ENOENT)
 
-        max_mem_collected_metric = metrics[1]
+        with self.assertRaises(IOError) as e:
+            test_mem_cg.get_max_memory_usage()
 
-        self.assertEqual("memory", max_mem_collected_metric.controller)
-        self.assertEqual("Max Memory Usage", max_mem_collected_metric.metric_name)
-        self.assertEqual(0, max_mem_collected_metric.value)
+        self.assertEqual(e.exception.errno, errno.ENOENT)

@@ -98,8 +98,6 @@ __SWITCH_OPTIONS__ = {
     "Logs.Verbose": False,
     "Logs.Console": True,
     "Extensions.Enabled": True,
-    "Provisioning.Enabled": True,
-    "Provisioning.UseCloudInit": False,
     "Provisioning.AllowResetSysUser": False,
     "Provisioning.RegenerateSshHostKeyPair": False,
     "Provisioning.DeleteRootPassword": False,
@@ -127,6 +125,7 @@ __STRING_OPTIONS__ = {
     "OS.PasswordPath": "/etc/shadow",
     "OS.SudoersDir": "/etc/sudoers.d",
     "OS.RootDeviceScsiTimeout": None,
+    "Provisioning.Agent": "auto",
     "Provisioning.SshHostKeyPairType": "rsa",
     "Provisioning.PasswordCryptId": "6",
     "HttpProxy.Host": None,
@@ -174,14 +173,18 @@ def enable_rdma(conf=__conf__):
 def enable_rdma_update(conf=__conf__):
     return conf.get_switch("OS.UpdateRdmaDriver", False)
 
+
 def enable_check_rdma_driver(conf=__conf__):
     return conf.get_switch("OS.CheckRdmaDriver", True)
+
 
 def get_logs_verbose(conf=__conf__):
     return conf.get_switch("Logs.Verbose", False)
 
+
 def get_logs_console(conf=__conf__):
     return conf.get_switch("Logs.Console", True)
+
 
 def get_lib_dir(conf=__conf__):
     return conf.get("Lib.Dir", "/var/lib/waagent")
@@ -268,16 +271,8 @@ def get_ssh_host_keypair_mode(conf=__conf__):
     return conf.get("Provisioning.SshHostKeyPairType", "rsa")
 
 
-def get_provision_enabled(conf=__conf__):
-    return conf.get_switch("Provisioning.Enabled", True)
-
-
 def get_extensions_enabled(conf=__conf__):
     return conf.get_switch("Extensions.Enabled", True)
-
-
-def get_provision_cloudinit(conf=__conf__):
-    return conf.get_switch("Provisioning.UseCloudInit", False)
 
 
 def get_allow_reset_sys_user(conf=__conf__):
@@ -302,6 +297,21 @@ def get_execute_customdata(conf=__conf__):
 
 def get_password_cryptid(conf=__conf__):
     return conf.get("Provisioning.PasswordCryptId", "6")
+
+
+def get_provisioning_agent(conf=__conf__):
+    return conf.get("Provisioning.Agent", "auto")
+
+
+def get_provision_enabled(conf=__conf__):
+    """
+    Provisioning (as far as waagent is concerned) is enabled if either the
+    agent is set to 'auto' or 'waagent'. This wraps logic that was introduced
+    for flexible provisioning agent configuration and detection. The replaces
+    the older bool setting to turn provisioning on or off.
+    """
+
+    return get_provisioning_agent(conf) in ("auto", "waagent")
 
 
 def get_password_crypt_salt_len(conf=__conf__):

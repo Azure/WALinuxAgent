@@ -63,9 +63,7 @@ class OpenWRTOSUtil(DefaultOSUtil):
                                "output:{2}").format(username, retcode, out))
 
     def get_dhcp_pid(self):
-        cmd = "pidof {0}".format(self.dhclient_name)
-        ret= shellutil.run_get_output(cmd, chk_err=False)
-        return ret[1] if ret[0] == 0 else None
+        return self._get_dhcp_pid(["pidof", self.dhclient_name])
 
     def get_nic_state(self):
         """

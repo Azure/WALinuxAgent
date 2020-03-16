@@ -15,12 +15,12 @@
 # Requires Python 2.6+ and Openssl 1.0+
 #
 
-import mock
 import os.path
 
 from azurelinuxagent.common.conf import *
+import azurelinuxagent.common.conf as conf
 
-from tests.tools import *
+from tests.tools import AgentTestCase, data_dir, patch
 
 
 class TestConf(AgentTestCase):
@@ -28,8 +28,7 @@ class TestConf(AgentTestCase):
     # -- These values *MUST* match those from data/test_waagent.conf
     EXPECTED_CONFIGURATION = {
         "Extensions.Enabled": True,
-        "Provisioning.Enabled": True,
-        "Provisioning.UseCloudInit": True,
+        "Provisioning.Agent": "auto",
         "Provisioning.DeleteRootPassword": True,
         "Provisioning.RegenerateSshHostKeyPair": True,
         "Provisioning.SshHostKeyPairType": "rsa",
@@ -106,8 +105,8 @@ class TestConf(AgentTestCase):
     def test_get_fips_enabled(self):
         self.assertTrue(get_fips_enabled(self.conf))
 
-    def test_get_provision_cloudinit(self):
-        self.assertTrue(get_provision_cloudinit(self.conf))
+    def test_get_provision_agent(self):
+        self.assertTrue(get_provisioning_agent(self.conf) == 'auto')
 
     def test_get_configuration(self):
         configuration = conf.get_configuration(self.conf)

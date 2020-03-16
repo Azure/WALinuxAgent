@@ -1,18 +1,48 @@
-# Copyright (c) Microsoft Corporation. All rights reserved.
-# Licensed under the Apache License.
-import json
-import stat
+# Copyright 2020 Microsoft Corporation
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+# Requires Python 2.6+ and Openssl 1.0+
+#
 
-from azurelinuxagent.common.protocol.restapi import ExtensionStatus, Extension, ExtHandler, ExtHandlerProperties
-from azurelinuxagent.ga.exthandlers import parse_ext_status, ExtHandlerInstance, get_exthandlers_handler
-from azurelinuxagent.common.exception import ProtocolError, ExtensionError, ExtensionErrorCodes
-from azurelinuxagent.common.event import WALAEventOperation
-from azurelinuxagent.common.utils.processutil import TELEMETRY_MESSAGE_MAX_LEN, format_stdout_stderr
+import json
+import os
+import subprocess
+import time
+
+from azurelinuxagent.common.protocol.util import ProtocolUtil
+
 from azurelinuxagent.common.cgroupconfigurator import CGroupConfigurator
-from tests.tools import *
+from azurelinuxagent.common.event import WALAEventOperation, AGENT_EVENT_FILE_EXTENSION
+from azurelinuxagent.common.exception import ProtocolError, ExtensionError, ExtensionErrorCodes
+from azurelinuxagent.common.protocol.restapi import ExtensionStatus, Extension, ExtHandler, ExtHandlerProperties
+from azurelinuxagent.common.utils.extensionprocessutil import TELEMETRY_MESSAGE_MAX_LEN, format_stdout_stderr, \
+    read_output
+from mock import MagicMock
+from azurelinuxagent.common.protocol.wire import WireProtocol
+from azurelinuxagent.ga.exthandlers import parse_ext_status, ExtHandlerInstance, get_exthandlers_handler, \
+    ExtCommandEnvVariable
+from tests.tools import AgentTestCase, patch, mock_sleep, clear_singleton_instances
 
 
 class TestExtHandlers(AgentTestCase):
+
+    def setUp(self):
+        super(TestExtHandlers, self).setUp()
+        # Since ProtocolUtil is a singleton per thread, we need to clear it to ensure that the test cases do not
+        # reuse a previous state
+        clear_singleton_instances(ProtocolUtil)
+
     def test_parse_extension_status00(self):
         """
         Parse a status report for a successful execution of an extension.
@@ -191,14 +221,15 @@ class TestExtHandlers(AgentTestCase):
 
     @patch("azurelinuxagent.ga.exthandlers.add_event")
     @patch("azurelinuxagent.common.errorstate.ErrorState.is_triggered")
-    @patch("azurelinuxagent.common.protocol.util.ProtocolUtil.get_protocol")
-    def test_it_should_report_an_error_if_the_wireserver_cannot_be_reached(self, patch_get_protocol, patch_is_triggered, patch_add_event):
+    def test_it_should_report_an_error_if_the_wireserver_cannot_be_reached(self, patch_is_triggered, patch_add_event):
         test_message = "TEST MESSAGE"
 
-        patch_get_protocol.side_effect = ProtocolError(test_message) # get_protocol will throw if the wire server cannot be reached
         patch_is_triggered.return_value = True # protocol errors are reported only after a delay; force the error to be reported now
 
-        get_exthandlers_handler().run()
+        protocol = WireProtocol("foo.bar")
+        protocol.get_ext_handlers = MagicMock(side_effect=ProtocolError(test_message))
+
+        get_exthandlers_handler(protocol).run()
 
         self.assertEquals(patch_add_event.call_count, 2)
 
@@ -233,6 +264,9 @@ class LaunchCommandTestCase(AgentTestCase):
         self.mock_get_log_dir = patch("azurelinuxagent.ga.exthandlers.ExtHandlerInstance.get_log_dir", lambda *_: self.log_dir)
         self.mock_get_log_dir.start()
 
+        self.mock_sleep = patch("time.sleep", lambda *_: mock_sleep(0.01))
+        self.mock_sleep.start()
+
         self.cgroups_enabled = CGroupConfigurator.get_instance().enabled()
         CGroupConfigurator.get_instance().disable()
 
@@ -244,6 +278,7 @@ class LaunchCommandTestCase(AgentTestCase):
 
         self.mock_get_log_dir.stop()
         self.mock_get_base_dir.stop()
+        self.mock_sleep.stop()
 
         AgentTestCase.tearDown(self)
 
@@ -267,7 +302,7 @@ class LaunchCommandTestCase(AgentTestCase):
         stdout = "stdout" * 5
         stderr = "stderr" * 5
 
-        command = self._create_script("produce_output.py", '''
+        command = self.create_script("produce_output.py", '''
 import sys
 
 sys.stdout.write("{0}")
@@ -277,7 +312,7 @@ sys.stderr.write("{1}")
 
         def list_directory():
             base_dir = self.ext_handler_instance.get_base_dir()
-            return [i for i in os.listdir(base_dir) if not i.endswith(".tld")] # ignore telemetry files
+            return [i for i in os.listdir(base_dir) if not i.endswith(AGENT_EVENT_FILE_EXTENSION)] # ignore telemetry files
 
         files_before = list_directory()
 
@@ -298,7 +333,7 @@ sys.stderr.write("{1}")
         signal_file = os.path.join(self.tmp_dir, "signal_file.txt")
 
         # the test command produces some output then goes into an infinite loop
-        command = self._create_script("produce_output_then_hang.py", '''
+        command = self.create_script("produce_output_then_hang.py", '''
 import sys
 import time
 
@@ -333,7 +368,8 @@ with open("{2}", "w") as file:
 
             # the command name and its output should be part of the message
             message = str(context_manager.exception)
-            self.assertRegex(message, r"Timeout\(\d+\):\s+{0}\s+{1}".format(command, LaunchCommandTestCase._output_regex(stdout, stderr)))
+            command_full_path = os.path.join(self.tmp_dir, command.lstrip(os.path.sep))
+            self.assertRegex(message, r"Timeout\(\d+\):\s+{0}\s+{1}".format(command_full_path, LaunchCommandTestCase._output_regex(stdout, stderr)))
 
             # the exception code should be as specified in the call to launch_command
             self.assertEquals(context_manager.exception.code, extension_error_code)
@@ -353,7 +389,7 @@ with open("{2}", "w") as file:
         stderr = "stderr" * 3
         exit_code = 99
 
-        command = self._create_script("fail.py", '''
+        command = self.create_script("fail.py", '''
 import sys
 
 sys.stdout.write("{0}")
@@ -375,7 +411,7 @@ exit({2})
         stdout = "stdout"
         stderr = "stderr"
 
-        command = self._create_script("start_child_process.py", '''
+        command = self.create_script("start_child_process.py", '''
 import os
 import sys
 import time
@@ -410,7 +446,7 @@ else:
         # the child process uses the signal file to indicate it has produced output
         signal_file = os.path.join(self.tmp_dir, "signal_file.txt")
 
-        command = self._create_script("start_child_with_output.py", '''
+        command = self.create_script("start_child_with_output.py", '''
 import os
 import sys
 import time
@@ -451,7 +487,7 @@ else:
         child_stdout = "CHILD STDOUT"
         child_stderr = "CHILD STDERR"
 
-        command = self._create_script("start_child_that_fails.py", '''
+        command = self.create_script("start_child_that_fails.py", '''
 import os
 import sys
 import time
@@ -480,7 +516,7 @@ else:
         # file used to verify the command completed successfully
         signal_file = os.path.join(self.tmp_dir, "signal_file.txt")
 
-        command = self._create_script("create_file.py", '''
+        command = self.create_script("create_file.py", '''
 open("{0}", "w").close()
 
 '''.format(signal_file))
@@ -497,7 +533,7 @@ open("{0}", "w").close()
         stderr = "STDERR"
 
         # the test script mimics the redirection done by the Custom Script extension
-        command = self._create_script("produce_output", '''
+        command = self.create_script("produce_output", '''
 exec &> {0}
 echo {1}
 >&2 echo {2}
@@ -516,7 +552,7 @@ echo {1}
         stdout = "STDOUT"
         stderr = "STDERR"
 
-        command = self._create_script("produce_long_output.py", '''
+        command = self.create_script("produce_long_output.py", '''
 import sys
 
 sys.stdout.write( "{0}" * {1})
@@ -530,7 +566,7 @@ sys.stderr.write( "{2}" * {3})
         self.assertIn(stderr, output)
 
     def test_it_should_read_only_the_head_of_large_outputs(self):
-        command = self._create_script("produce_long_output.py", '''
+        command = self.create_script("produce_long_output.py", '''
 import sys
 
 sys.stdout.write("O" * 5 * 1024 * 1024)
@@ -540,7 +576,7 @@ sys.stderr.write("E" * 5 * 1024 * 1024)
         # Mocking the call to file.read() is difficult, so instead we mock the call to format_stdout_stderr, which takes the
         # return value of the calls to file.read(). The intention of the test is to verify we never read (and load in memory)
         # more than a few KB of data from the files used to capture stdout/stderr
-        with patch('azurelinuxagent.common.utils.processutil.format_stdout_stderr', side_effect=format_stdout_stderr) as mock_format:
+        with patch('azurelinuxagent.common.utils.extensionprocessutil.format_stdout_stderr', side_effect=format_stdout_stderr) as mock_format:
             output = self.ext_handler_instance.launch_command(command)
 
         self.assertGreaterEqual(len(output), 1024)
@@ -558,21 +594,46 @@ sys.stderr.write("E" * 5 * 1024 * 1024)
         self.assertLessEqual(len(stderr), TELEMETRY_MESSAGE_MAX_LEN)
 
     def test_it_should_handle_errors_while_reading_the_command_output(self):
-        command = self._create_script("produce_output.py", '''
+        command = self.create_script("produce_output.py", '''
 import sys
 
 sys.stdout.write("STDOUT")
 sys.stderr.write("STDERR")
 ''')
+        # Mocking the call to file.read() is difficult, so instead we mock the call to_capture_process_output,
+        # which will call file.read() and we force stdout/stderr to be None; this will produce an exception when
+        # trying to use these files.
+        original_capture_process_output = read_output
 
-        # Mocking the call to file.read() is difficult, so instead we mock the call to _capture_process_output, which will
-        # call file.read() and we force stdout/stderr to be None; this will produce an exception when trying to use these files.
-        original_capture_process_output = ExtHandlerInstance._capture_process_output
+        def capture_process_output(stdout_file, stderr_file):
+            return original_capture_process_output(None, None)
 
-        def capture_process_output(process, stdout_file, stderr_file, cmd, timeout, code):
-            return original_capture_process_output(process, None, None, cmd, timeout, code)
-
-        with patch('azurelinuxagent.ga.exthandlers.ExtHandlerInstance._capture_process_output', side_effect=capture_process_output):
+        with patch('azurelinuxagent.common.utils.extensionprocessutil.read_output', side_effect=capture_process_output):
             output = self.ext_handler_instance.launch_command(command)
 
         self.assertIn("[stderr]\nCannot read stdout/stderr:", output)
+
+    def test_it_should_contain_all_helper_environment_variables(self):
+
+        helper_env_vars = {ExtCommandEnvVariable.ExtensionSeqNumber: self.ext_handler_instance.get_seq_no(),
+                           ExtCommandEnvVariable.ExtensionPath: self.tmp_dir,
+                           ExtCommandEnvVariable.ExtensionVersion: self.ext_handler_instance.ext_handler.properties.version}
+
+        command = """
+            printenv | grep -E '(%s)'
+        """ % '|'.join(helper_env_vars.keys())
+
+        test_file = self.create_script('printHelperEnvironments.sh', command)
+
+        with patch("subprocess.Popen", wraps=subprocess.Popen) as patch_popen:
+            output = self.ext_handler_instance.launch_command(test_file)
+
+            args, kwagrs = patch_popen.call_args
+            without_os_env = dict((k, v) for (k, v) in kwagrs['env'].items() if k not in os.environ)
+
+            # This check will fail if any helper environment variables are added/removed later on
+            self.assertEqual(helper_env_vars, without_os_env)
+
+            # This check is checking if the expected values are set for the extension commands
+            for helper_var in helper_env_vars:
+                self.assertIn("%s=%s" % (helper_var, helper_env_vars[helper_var]), output)

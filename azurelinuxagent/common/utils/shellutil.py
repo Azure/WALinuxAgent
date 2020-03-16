@@ -79,6 +79,9 @@ def run_get_output(cmd, chk_err=True, log_cmd=True, expected_errors=[]):
     Execute 'cmd'.  Returns return code and STDOUT, trapping expected
     exceptions.
     Reports exceptions to Error if chk_err parameter is True
+
+    For new callers, consider using run_command instead as it separates stdout from stderr,
+    returns only stdout on success, logs both outputs and return code on error and raises an exception.
     """
     if log_cmd:
         logger.verbose(u"Command: [{0}]", cmd)
@@ -86,21 +89,18 @@ def run_get_output(cmd, chk_err=True, log_cmd=True, expected_errors=[]):
         output = subprocess.check_output(cmd,
                                          stderr=subprocess.STDOUT,
                                          shell=True)
-        output = ustr(output,
-                      encoding='utf-8',
-                      errors="backslashreplace")
+        output = _encode_command_output(output)
     except subprocess.CalledProcessError as e:
-        output = ustr(e.output,
-                      encoding='utf-8',
-                      errors="backslashreplace")
+        output = _encode_command_output(e.output)
+
         if chk_err:
             msg = u"Command: [{0}], " \
                   u"return code: [{1}], " \
                   u"result: [{2}]".format(cmd, e.returncode, output)
             if e.returncode in expected_errors:
-                logger.periodic_info(logger.EVERY_FIFTEEN_MINUTES, msg)
+                logger.info(msg)
             else:
-                logger.periodic_error(logger.EVERY_FIFTEEN_MINUTES, msg)
+                logger.error(msg)
         return e.returncode, output
     except Exception as e:
         if chk_err:
@@ -108,6 +108,60 @@ def run_get_output(cmd, chk_err=True, log_cmd=True, expected_errors=[]):
                          .format(cmd, ustr(e)))
         return -1, ustr(e)
     return 0, output
+
+
+def _encode_command_output(output):
+    return ustr(output, encoding='utf-8', errors="backslashreplace")
+
+
+class CommandError(Exception):
+    """
+    Exception raised by run_command when the command returns an error
+    """
+    @staticmethod
+    def _get_message(command, returncode):
+        command_name = command[0] if isinstance(command, list) and len(command) > 0 else command
+        return "'{0}' failed: {1}".format(command_name, returncode)
+
+    def __init__(self, command, returncode, stdout, stderr):
+        super(Exception, self).__init__(CommandError._get_message(command, returncode))
+        self.command = command
+        self.returncode = returncode
+        self.stdout = stdout
+        self.stderr = stderr
+
+
+def run_command(command, log_error=False):
+    """
+    Executes the given command and returns its stdout as a string.
+    If there are any errors executing the command it logs details about the failure and raises a RunCommandException;
+    if 'log_error' is True, it also logs details about the error.
+    """
+    def format_command(cmd):
+        return " ".join(cmd) if isinstance(cmd, list) else command
+
+    try:
+        process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=False)
+        stdout, stderr = process.communicate()
+        returncode = process.returncode
+    except Exception as e:
+        if log_error:
+            logger.error(u"Command [{0}] raised unexpected exception: [{1}]", format_command(command), ustr(e))
+        raise
+
+    if returncode != 0:
+        encoded_stdout = _encode_command_output(stdout)
+        encoded_stderr = _encode_command_output(stderr)
+        if log_error:
+            logger.error(
+                "Command: [{0}], return code: [{1}], stdout: [{2}] stderr: [{3}]",
+                format_command(command),
+                returncode,
+                encoded_stdout,
+                encoded_stderr)
+        raise CommandError(command=command, returncode=returncode, stdout=encoded_stdout, stderr=encoded_stderr)
+
+    return _encode_command_output(stdout)
 
 
 def quote(word_list):

@@ -195,7 +195,7 @@ class ResourceDiskHandler(object):
 
             self.reread_partition_table(device)
 
-            ret, output = shellutil.run_get_output(mount_string)
+            ret, output = shellutil.run_get_output(mount_string, chk_err=False)
             if ret:
                 logger.warn("Failed to mount resource disk. "
                             "Attempting to format and retry mount. [{0}]",
@@ -249,14 +249,20 @@ class ResourceDiskHandler(object):
 
         return err_code, output
 
-    @staticmethod
-    def get_mount_string(mount_options, partition, mount_point):
+    def get_mount_string(self, mount_options, partition, mount_point):
         if mount_options is not None:
-            return 'mount -o {0} {1} {2}'.format(mount_options,
-                                                 partition,
-                                                 mount_point)
+            return 'mount -t {0} -o {1} {2} {3}'.format(
+                self.fs,
+                mount_options,
+                partition,
+                mount_point
+            )
         else:
-            return 'mount {0} {1}'.format(partition, mount_point)
+            return 'mount -t {0} {1} {2}'.format(
+                self.fs,
+                partition,
+                mount_point
+            )
 
     @staticmethod
     def check_existing_swap_file(swapfile, swaplist, size):
@@ -286,7 +292,7 @@ class ResourceDiskHandler(object):
 
         if os.path.isfile(swapfile) and os.path.getsize(swapfile) != size:
             logger.info("Remove old swap file")
-            shellutil.run("swapoff -a", chk_err=False)
+            shellutil.run("swapoff {0}".format(swapfile), chk_err=False)
             os.remove(swapfile)
 
         if not os.path.isfile(swapfile):

@@ -18,46 +18,19 @@
 #
 
 import datetime
-import glob
-import json
-import operator
 import os
 import os.path
-import pwd
-import random
-import re
-import shutil
-import stat
-import subprocess
-import textwrap
-import time
 import traceback
-import zipfile
 
 import azurelinuxagent.common.conf as conf
 import azurelinuxagent.common.logger as logger
-import azurelinuxagent.common.utils.fileutil as fileutil
-import azurelinuxagent.common.version as version
-import azurelinuxagent.common.protocol.wire
-import azurelinuxagent.common.protocol.metadata as metadata
 
 from datetime import datetime, timedelta
-from pwd import getpwall
-from azurelinuxagent.common.errorstate import ErrorState
 
-from azurelinuxagent.common.event import add_event, WALAEventOperation, elapsed_milliseconds
-from azurelinuxagent.common.exception import ExtensionError, ProtocolError, RemoteAccessError
+from azurelinuxagent.common.event import add_event, WALAEventOperation
+from azurelinuxagent.common.exception import RemoteAccessError, ProtocolError
 from azurelinuxagent.common.future import ustr
-from azurelinuxagent.common.protocol.restapi import ExtHandlerStatus, \
-                                                    ExtensionStatus, \
-                                                    ExtensionSubStatus, \
-                                                    VMStatus, ExtHandler, \
-                                                    get_properties, \
-                                                    set_properties
-from azurelinuxagent.common.protocol.metadata import MetadataProtocol
 from azurelinuxagent.common.utils.cryptutil import CryptUtil
-from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
-from azurelinuxagent.common.protocol import get_protocol_util
 from azurelinuxagent.common.version import AGENT_NAME, CURRENT_VERSION
 from azurelinuxagent.common.osutil import get_osutil
 
@@ -68,14 +41,15 @@ REMOTE_ACCESS_ACCOUNT_COMMENT = "JIT_Account"
 MAX_TRY_ATTEMPT = 5
 FAILED_ATTEMPT_THROTTLE = 1
 
-def get_remote_access_handler():
-    return RemoteAccessHandler()
+
+def get_remote_access_handler(protocol):
+    return RemoteAccessHandler(protocol)
+
 
 class RemoteAccessHandler(object):
-    def __init__(self):
+    def __init__(self, protocol):
         self.os_util = get_osutil()
-        self.protocol_util = get_protocol_util()
-        self.protocol = None
+        self.protocol = protocol
         self.cryptUtil = CryptUtil(conf.get_openssl_cmd())
         self.remote_access = None
         self.incarnation = 0
@@ -84,7 +58,6 @@ class RemoteAccessHandler(object):
     def run(self):
         try:
             if self.os_util.jit_enabled:
-                self.protocol = self.protocol_util.get_protocol()
                 current_incarnation = self.protocol.get_incarnation()
                 if self.incarnation != current_incarnation:
                     # something changed. Handle remote access if any.

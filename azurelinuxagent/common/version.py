@@ -119,7 +119,7 @@ def get_distro():
 
 AGENT_NAME = "WALinuxAgent"
 AGENT_LONG_NAME = "Azure Linux Agent"
-AGENT_VERSION = '2.2.41'
+AGENT_VERSION = '2.2.47'
 AGENT_LONG_VERSION = "{0}-{1}".format(AGENT_NAME, AGENT_VERSION)
 AGENT_DESCRIPTION = """
 The Azure Linux Agent supports the provisioning and running of Linux
@@ -134,6 +134,9 @@ AGENT_PATTERN = "{0}-(.*)".format(AGENT_NAME)
 AGENT_NAME_PATTERN = re.compile(AGENT_PATTERN)
 AGENT_PKG_PATTERN = re.compile(AGENT_PATTERN+"\.zip")
 AGENT_DIR_PATTERN = re.compile(".*/{0}".format(AGENT_PATTERN))
+
+# The execution mode of the VM - IAAS or PAAS. Linux VMs are only executed in IAAS mode.
+AGENT_EXECUTION_MODE = "IAAS"
 
 EXT_HANDLER_PATTERN = b".*/WALinuxAgent-(\d+.\d+.\d+[.\d+]*).*-run-exthandlers"
 EXT_HANDLER_REGEX = re.compile(EXT_HANDLER_PATTERN)
@@ -208,19 +211,3 @@ GOAL_STATE_AGENT_VERSION = set_goal_state_agent()
 
 def is_current_agent_installed():
     return CURRENT_AGENT == AGENT_LONG_VERSION
-
-
-def is_snappy():
-    """
-    Add this workaround for detecting Snappy Ubuntu Core temporarily,
-    until ubuntu fixed this bug: https://bugs.launchpad.net/snappy/+bug/1481086
-    """
-    if os.path.exists("/etc/motd"):
-        motd = fileutil.read_file("/etc/motd")
-        if "snappy" in motd:
-            return True
-    return False
-
-
-if is_snappy():
-    DISTRO_FULL_NAME = "Snappy Ubuntu Core"

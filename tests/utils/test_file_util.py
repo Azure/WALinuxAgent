@@ -21,11 +21,14 @@ import random
 import string
 import tempfile
 import uuid
+import os
+import shutil
+import unittest
 
 import azurelinuxagent.common.utils.fileutil as fileutil
 
 from azurelinuxagent.common.future import ustr
-from tests.tools import *
+from tests.tools import AgentTestCase, patch
 
 
 class TestFileOperations(AgentTestCase):
@@ -323,6 +326,7 @@ DHCP_HOSTNAME=test\n"
             fileutil.clean_ioerror(e, paths=[d])
             self.assertFalse(os.path.isdir(d))
             self.assertFalse(os.path.isfile(d))
+
 
 if __name__ == '__main__':
     unittest.main()

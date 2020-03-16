@@ -18,13 +18,17 @@
 import os
 import socket
 import time
+import unittest
 
 import azurelinuxagent.common.osutil.bigip as osutil
 import azurelinuxagent.common.osutil.default as default
 import azurelinuxagent.common.utils.shellutil as shellutil
 
 from azurelinuxagent.common.exception import OSUtilError
-from tests.tools import *
+import azurelinuxagent.common.logger as logger
+from azurelinuxagent.common.osutil.bigip import BigIpOSUtil
+from .test_default import osutil_get_dhcp_pid_should_return_a_list_of_pids
+from tests.tools import AgentTestCase, patch
 
 
 class TestBigIpOSUtil_wait_until_mcpd_is_initialized(AgentTestCase):
@@ -67,19 +71,6 @@ class TestBigIpOSUtil_save_sys_config(AgentTestCase):
         result = osutil.BigIpOSUtil._save_sys_config(osutil.BigIpOSUtil())
         self.assertEqual(result, 1)
         self.assertEqual(args[0].call_count, 1)
-
-
-class TestBigIpOSUtil_get_dhcp_pid(AgentTestCase):
-
-    @patch.object(shellutil, "run_get_output", return_value=(0, 8623))
-    def test_success(self, *args):
-        result = osutil.BigIpOSUtil.get_dhcp_pid(osutil.BigIpOSUtil())
-        self.assertEqual(result, 8623)
-
-    @patch.object(shellutil, "run_get_output", return_value=(1, 'foo'))
-    def test_failure(self, *args):
-        result = osutil.BigIpOSUtil.get_dhcp_pid(osutil.BigIpOSUtil())
-        self.assertEqual(result, None)
 
 
 class TestBigIpOSUtil_useradd(AgentTestCase):
@@ -317,6 +308,17 @@ class TestBigIpOSUtil_device_for_ide_port(AgentTestCase):
         self.assertEqual(args[0].call_count, 1)
         self.assertEqual(args[1].call_count, 1)
         self.assertEqual(args[2].call_count, 0)
+
+
+class TestBigIpOSUtil(AgentTestCase):
+    def setUp(self):
+        AgentTestCase.setUp(self)
+
+    def tearDown(self):
+        AgentTestCase.tearDown(self)
+
+    def test_get_dhcp_pid_should_return_a_list_of_pids(self):
+        osutil_get_dhcp_pid_should_return_a_list_of_pids(self, BigIpOSUtil())
 
 
 if __name__ == '__main__':
