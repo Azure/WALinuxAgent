@@ -74,6 +74,7 @@ class ProtocolUtil(SingletonPerThread):
     """
 
     def __init__(self):
+        self._lock = threading.RLock()  # protects the files on disk created during protocol detection
         self._protocol = None
         self.endpoint = None
         self.osutil = get_osutil()
@@ -162,29 +163,32 @@ class ProtocolUtil(SingletonPerThread):
             TAG_FILE_NAME)
 
     def get_wireserver_endpoint(self):
+        self._lock.acquire()
+        try:
+            if self.endpoint:
+                return self.endpoint
 
-        if self.endpoint:
+            file_path = self._get_wireserver_endpoint_file_path()
+            if os.path.isfile(file_path):
+                try:
+                    self.endpoint = fileutil.read_file(file_path)
+
+                    if self.endpoint:
+                        logger.info("WireServer endpoint {0} read from file", self.endpoint)
+                        return self.endpoint
+
+                    logger.error("[GetWireserverEndpoint] Unexpected empty file {0}", file_path)
+                except (IOError, OSError) as e:
+                    logger.error("[GetWireserverEndpoint] Error reading file {0}: {1}", file_path, str(e))
+            else:
+                logger.error("[GetWireserverEndpoint] Missing file {0}", file_path)
+
+            self.endpoint = KNOWN_WIRESERVER_IP
+            logger.info("Using hardcoded Wireserver endpoint {0}", self.endpoint)
+
             return self.endpoint
-
-        file_path = self._get_wireserver_endpoint_file_path()
-        if os.path.isfile(file_path):
-            try:
-                self.endpoint = fileutil.read_file(file_path)
-
-                if self.endpoint:
-                    logger.info("WireServer endpoint {0} read from file", self.endpoint)
-                    return self.endpoint
-
-                logger.error("[GetWireserverEndpoint] Unexpected empty file {0}", file_path)
-            except (IOError, OSError) as e:
-                logger.error("[GetWireserverEndpoint] Error reading file {0}: {1}", file_path, str(e))
-        else:
-            logger.error("[GetWireserverEndpoint] Missing file {0}", file_path)
-
-        self.endpoint = KNOWN_WIRESERVER_IP
-        logger.info("Using hardcoded Wireserver endpoint {0}", self.endpoint)
-
-        return self.endpoint
+        finally:
+            self._lock.release()
 
     def _set_wireserver_endpoint(self, endpoint):
         try:
@@ -302,20 +306,24 @@ class ProtocolUtil(SingletonPerThread):
         """
         Cleanup previous saved protocol endpoint.
         """
-        logger.info("Clean protocol and wireserver endpoint")
-        self._clear_wireserver_endpoint()
-        self._protocol = None
-        protocol_file_path = self._get_protocol_file_path()
-        if not os.path.isfile(protocol_file_path):
-            return
-
+        self._lock.acquire()
         try:
-            os.remove(protocol_file_path)
-        except (IOError, OSError) as e:
-            # Ignore file-not-found errors (since the file is being removed)
-            if e.errno == errno.ENOENT:
+            logger.info("Clean protocol and wireserver endpoint")
+            self._clear_wireserver_endpoint()
+            self._protocol = None
+            protocol_file_path = self._get_protocol_file_path()
+            if not os.path.isfile(protocol_file_path):
                 return
-            logger.error("Failed to clear protocol endpoint: {0}", e)
+
+            try:
+                os.remove(protocol_file_path)
+            except (IOError, OSError) as e:
+                # Ignore file-not-found errors (since the file is being removed)
+                if e.errno == errno.ENOENT:
+                    return
+                logger.error("Failed to clear protocol endpoint: {0}", e)
+        finally:
+            self._lock.release()
 
     def get_protocol(self, by_file=False):
         """
@@ -323,28 +331,31 @@ class ProtocolUtil(SingletonPerThread):
         detect MetadataProtocol in priority.
         :returns: protocol instance
         """
-
-        if self._protocol is not None:
-            return self._protocol
-
+        self._lock.acquire()
         try:
-            self._protocol = self._get_protocol()
+            if self._protocol is not None:
+                return self._protocol
+
+            try:
+                self._protocol = self._get_protocol()
+                return self._protocol
+            except ProtocolNotFoundError:
+                pass
+            logger.info("Detect protocol endpoints")
+            protocols = [prots.WireProtocol]
+
+            if by_file:
+                tag_file_path = self._get_tag_file_path()
+                if os.path.isfile(tag_file_path):
+                    protocols.insert(0, prots.MetadataProtocol)
+            else:
+                protocols.append(prots.MetadataProtocol)
+            protocol_name, protocol = self._detect_protocol(protocols)
+
+            IOErrorCounter.set_protocol_endpoint(endpoint=protocol.get_endpoint())
+            self._save_protocol(protocol_name)
+
+            self._protocol = protocol
             return self._protocol
-        except ProtocolNotFoundError:
-            pass
-        logger.info("Detect protocol endpoints")
-        protocols = [prots.WireProtocol]
-
-        if by_file:
-            tag_file_path = self._get_tag_file_path()
-            if os.path.isfile(tag_file_path):
-                protocols.insert(0, prots.MetadataProtocol)
-        else:
-            protocols.append(prots.MetadataProtocol)
-        protocol_name, protocol = self._detect_protocol(protocols)
-
-        IOErrorCounter.set_protocol_endpoint(endpoint=protocol.get_endpoint())
-        self._save_protocol(protocol_name)
-
-        self._protocol = protocol
-        return self._protocol
+        finally:
+            self._lock.release()
