@@ -105,15 +105,15 @@ class WireProtocol(Protocol):
 
             if self._last_try_update_goal_state_failed:
                 self._last_try_update_goal_state_failed = False
-                message = u"Fail to retrieve the goal state: {0}".format(ustr(traceback.format_exc()))
+                message = u"Fetch goal state recovered from previous errors"
                 add_event(AGENT_NAME, op=WALAEventOperation.FetchGoalState, version=CURRENT_VERSION, is_success=True, message=message, log_event=False)
-                logger.warn(message)
+                logger.info(message)
         except Exception as e:
             message = u"Exception retrieving the goal state: {0}".format(ustr(traceback.format_exc()))
             if not self._last_try_update_goal_state_failed:
                 self._last_try_update_goal_state_failed = True
                 add_event(AGENT_NAME, op=WALAEventOperation.FetchGoalState, version=CURRENT_VERSION, is_success=False, message=message, log_event=False)
-                logger.info(message)
+                logger.warn(message)
             logger.periodic_warn(logger.EVERY_SIX_HOURS, message)
             return False
         return True
