@@ -116,6 +116,7 @@ __SWITCH_OPTIONS__ = {
 
 __STRING_OPTIONS__ = {
     "Lib.Dir": "/var/lib/waagent",
+    "AzureProvisioning.Dir": "/var/lib/azure-provisioning",
     "DVD.MountPoint": "/mnt/cdrom/secure",
     "Pid.File": "/var/run/waagent.pid",
     "Extension.LogDir": "/var/log/azure",
@@ -188,6 +189,10 @@ def get_logs_console(conf=__conf__):
 
 def get_lib_dir(conf=__conf__):
     return conf.get("Lib.Dir", "/var/lib/waagent")
+
+
+def get_azprov_dir(conf=__conf__):
+    return conf.get("AzureProvisioning.Dir", "/var/lib/azure-provisioning")
 
 
 def get_published_hostname(conf=__conf__):

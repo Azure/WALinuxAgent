@@ -87,7 +87,7 @@ class ProtocolUtil(SingletonPerThread):
         dvd_mount_point = conf.get_dvd_mount_point()
         ovf_file_path_on_dvd = os.path.join(dvd_mount_point, OVF_FILE_NAME)
         tag_file_path_on_dvd = os.path.join(dvd_mount_point, TAG_FILE_NAME)
-        ovf_file_path = os.path.join(conf.get_lib_dir(), OVF_FILE_NAME)
+        ovf_file_path = os.path.join(conf.get_azprov_dir(), OVF_FILE_NAME)
         tag_file_path = self._get_tag_file_path()
 
         try:
@@ -138,7 +138,7 @@ class ProtocolUtil(SingletonPerThread):
         """
         Load saved ovf-env.xml
         """
-        ovf_file_path = os.path.join(conf.get_lib_dir(), OVF_FILE_NAME)
+        ovf_file_path = os.path.join(conf.get_azprov_dir(), OVF_FILE_NAME)
         if os.path.isfile(ovf_file_path):
             xml_text = fileutil.read_file(ovf_file_path)
             return OvfEnv(xml_text)

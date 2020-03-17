@@ -775,7 +775,7 @@ class TestUpdate(UpdateTestCase):
             os.path.join(conf.get_lib_dir(), "faux_certificate.p7m"),
             os.path.join(conf.get_lib_dir(), "faux_certificate.pem"),
             os.path.join(conf.get_lib_dir(), "faux_certificate.prv"),
-            os.path.join(conf.get_lib_dir(), "ovf-env.xml")
+            os.path.join(conf.get_azprov_dir(), "ovf-env.xml")
         ]
         for path in test_files:
             fileutil.write_file(path, "Faux content")

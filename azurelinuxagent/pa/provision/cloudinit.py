@@ -73,7 +73,7 @@ class CloudInitProvisionHandler(ProvisionHandler):
         """
         Wait for cloud-init to copy ovf-env.xml file from provision ISO
         """
-        ovf_file_path = os.path.join(conf.get_lib_dir(), OVF_FILE_NAME)
+        ovf_file_path = os.path.join(conf.get_azprov_dir(), OVF_FILE_NAME)
         for retry in range(0, max_retry):
             if os.path.isfile(ovf_file_path):
                 try:

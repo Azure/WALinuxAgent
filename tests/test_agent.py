@@ -36,6 +36,7 @@ Extensions.Enabled = True
 HttpProxy.Host = None
 HttpProxy.Port = None
 Lib.Dir = /var/lib/waagent
+AzureProvisioning.Dir = /var/lib/azure-provisioning
 Logs.Console = True
 Logs.Verbose = False
 OS.AllowHTTP = False
