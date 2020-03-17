@@ -61,7 +61,7 @@ class TestProtocolUtil(AgentTestCase):
         t2.join()
 
         self.assertEqual(len(protocol_util_instances), 2, "Could not create the expected number of protocols. Errors: [{0}]".format(errors))
-        self.assertNotEqual(protocol_util_instances[0], protocol_util_instances[1])
+        self.assertNotEqual(protocol_util_instances[0], protocol_util_instances[1], "The instances created by different threads should be different")
     
     @patch("azurelinuxagent.common.protocol.util.MetadataProtocol")
     @patch("azurelinuxagent.common.protocol.util.WireProtocol")
