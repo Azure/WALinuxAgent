@@ -41,7 +41,7 @@ from azurelinuxagent.common.datacontract import get_properties, set_properties
 from azurelinuxagent.common.errorstate import ERROR_STATE_DELTA_INSTALL, ErrorState
 from azurelinuxagent.common.event import add_event, elapsed_milliseconds, report_event, WALAEventOperation, add_periodic
 from azurelinuxagent.common.exception import ExtensionDownloadError, ExtensionError, ExtensionErrorCodes, \
-    ExtensionOperationError, ExtensionUpdateError, ProtocolError, ProtocolNotFoundError, ExtensionStatusError
+    ExtensionOperationError, ExtensionUpdateError, ProtocolError, ProtocolNotFoundError
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.protocol.restapi import ExtensionStatus, ExtensionSubStatus, ExtHandler, ExtHandlerStatus, \
     VMStatus
@@ -58,8 +58,8 @@ _DEFAULT_EXT_TIMEOUT_MINUTES = 90
 # HandlerEnvironment.json schema version
 _HANDLER_ENVIRONMENT_VERSION = 1.0
 
-VALID_EXTENSION_STATUS = AttributeEnum(('transitioning', 'warning', 'error', 'success'))
-_EXTENSION_TERMINAL_STATUSES = [VALID_EXTENSION_STATUS.error, VALID_EXTENSION_STATUS.success]
+_VALID_EXTENSION_STATUS = AttributeEnum(('transitioning', 'warning', 'error', 'success'))
+_EXTENSION_TERMINAL_STATUSES = [_VALID_EXTENSION_STATUS.error, _VALID_EXTENSION_STATUS.success]
 
 _VALID_HANDLER_STATUS = ['Ready', 'NotReady', "Installing", "Unresponsive"]
 
@@ -77,8 +77,9 @@ NOT_RUN = "NOT_RUN"
 _MAX_STATUS_FILE_SIZE_IN_BYTES = 128 * 1024  # 128K
 
 # Truncating length of fields.
-_MAX_FIELD_LENGTH = 200
-_TRUNCATED_SUFFIX = " ... [TRUNCATED]"
+_MAX_STATUS_MESSAGE_LENGTH = 1024  # 1k message allowed to be shown in the portal.
+_MAX_SUBSTATUS_FIELD_LENGTH = 10 * 1024  # Making 10K; allowing fields to have enough debugging information..
+_TRUNCATED_SUFFIX = u" ... [TRUNCATED]"
 
 # Status file specific retries and delays.
 _NUM_OF_STATUS_FILE_RETRIES = 5
@@ -126,7 +127,7 @@ def parse_formatted_message(formatted_message):
 def parse_ext_substatus(substatus):
     # Check extension sub status format
     validate_has_key(substatus, 'status', 'substatus/status')
-    validate_in_range(substatus['status'], VALID_EXTENSION_STATUS, 'substatus/status')
+    validate_in_range(substatus['status'], _VALID_EXTENSION_STATUS, 'substatus/status')
     status = ExtensionSubStatus()
     status.name = substatus.get('name')
     status.status = substatus.get('status')
@@ -137,7 +138,7 @@ def parse_ext_substatus(substatus):
 
 
 def parse_ext_status(ext_status, data):
-    if data is None or len(data) is None:
+    if data is None or len(data) == 0:
         return
     # Currently, only the first status will be reported
     data = data[0]
@@ -147,8 +148,8 @@ def parse_ext_status(ext_status, data):
     validate_has_key(status_data, 'status', 'status/status')
 
     status = status_data['status']
-    if status not in VALID_EXTENSION_STATUS:
-        status = VALID_EXTENSION_STATUS.error
+    if status not in _VALID_EXTENSION_STATUS:
+        status = _VALID_EXTENSION_STATUS.error
 
     applied_time = status_data.get('configurationAppliedTime')
     ext_status.configurationAppliedTime = applied_time
@@ -401,7 +402,7 @@ class ExtHandlersHandler(object):
                           message=msg)
                 return False
 
-            if status != VALID_EXTENSION_STATUS.success:
+            if status != _VALID_EXTENSION_STATUS.success:
                 msg = "Extension {0} did not succeed. Status was {1}".format(ext.name, status)
                 logger.warn(msg)
                 add_event(AGENT_NAME,
@@ -1108,14 +1109,14 @@ class ExtHandlerInstance(object):
                          log_event=False)
 
             ext_status.message = ustr(e)
-            ext_status.status = VALID_EXTENSION_STATUS.error
+            ext_status.status = _VALID_EXTENSION_STATUS.error
             ext_status.code = ExtensionErrorCodes.PluginSettingsStatusInvalid if \
                 e.code == ExtensionStatusError.InvalidJsonFile else \
                 ExtensionErrorCodes.PluginUnknownFailure
 
             return ext_status
 
-        # We did not encounter InvalidJsonFile/StatusFileNotFound and thus the status file was correctly written and has
+        # We did not encounter InvalidJsonFile/CouldNotReadStatusFile and thus the status file was correctly written and has
         # valid json.
         try:
             parse_ext_status(ext_status, data)
@@ -1134,19 +1135,15 @@ class ExtHandlerInstance(object):
                          op=WALAEventOperation.StatusProcessing, is_success=False, message=msg, log_event=False)
 
             if e.code == ExtensionStatusError.MaxSizeExceeded:
-                ext_status.message = self._truncate_message(ext_status.message)
-
-                # Truncating the substatus to reduce the size, and preserve other fields of the text
-                for substatus in ext_status.substatusList:
-                    substatus.name = self._truncate_message(substatus.name)
-                    substatus.message = self._truncate_message(substatus.message)
+                ext_status.message, field_size = self._truncate_message(ext_status.message, _MAX_STATUS_MESSAGE_LENGTH)
+                ext_status.substatusList = self._process_substatus_list(ext_status.substatusList, field_size)
 
             elif e.code == ExtensionStatusError.StatusFileMalformed:
                 ext_status.message = "Could not get a valid status from the extension {0}-{1}. Encountered the " \
                                      "following error: {2}".format(ext.name, self.ext_handler.properties.version,
                                                                    ustr(e))
                 ext_status.code = ExtensionErrorCodes.PluginSettingsStatusInvalid
-                ext_status.status = VALID_EXTENSION_STATUS.error
+                ext_status.status = _VALID_EXTENSION_STATUS.error
 
         return ext_status
 
@@ -1454,27 +1451,48 @@ class ExtHandlerInstance(object):
             except IOError as e:
                 failed_to_read = True
                 raised_exception = e
-            except ValueError as e:
+            except (ValueError, TypeError) as e:
                 failed_to_parse_json = True
                 raised_exception = e
             time.sleep(_STATUS_FILE_RETRY_DELAY)
 
         if failed_to_read:
-            msg = u"We couldn't find any status for {0}-{1} extension, for the sequence number {2}. It failed due to " \
+            msg = u"We couldn't read any status for {0}-{1} extension, for the sequence number {2}. It failed due to " \
                   u"{3}".format(ext.name, self.ext_handler.properties.version, seq_no, raised_exception)
-            raise ExtensionStatusError(msg=msg, code=ExtensionStatusError.StatusFileNotFound)
+            raise ExtensionStatusError(msg=msg, code=ExtensionStatusError.CouldNotReadStatusFile)
         elif failed_to_parse_json:
-            msg = u"Failed to read any status for extension - {0}-{1}, Sequence number {2}. Failed due to {3}" \
-                .format(ext.name, self.ext_handler.properties.version, seq_no, raised_exception)
+            msg = u"The status reported by the extension {0}-{1}(Sequence number {2}), was in an incorrect format and " \
+                  u"the agent could not parse it correctly. Failed due to {3}" \
+                  .format(ext.name, self.ext_handler.properties.version, seq_no, raised_exception)
             raise ExtensionStatusError(msg=msg, code=ExtensionStatusError.InvalidJsonFile)
         else:
             return data_str, data
 
-    def _truncate_message(self, field):
+    def _process_substatus_list(self, substatus_list, current_status_size=0):
+        processed_substatus = []
+
+        # Truncating the substatus to reduce the size, and preserve other fields of the text
+        for substatus in substatus_list:
+            substatus.name, field_size = self._truncate_message(substatus.name, _MAX_SUBSTATUS_FIELD_LENGTH)
+            current_status_size += field_size
+
+            substatus.message, field_size = self._truncate_message(substatus.message, _MAX_SUBSTATUS_FIELD_LENGTH)
+            current_status_size += field_size
+
+            if current_status_size <= _MAX_STATUS_FILE_SIZE_IN_BYTES:
+                processed_substatus.append(substatus)
+            else:
+                break
+
+        return processed_substatus
+
+    @staticmethod
+    def _truncate_message(field, truncate_size=_MAX_SUBSTATUS_FIELD_LENGTH):
         if field is None:
             return
         else:
-            return field if len(field) < _MAX_FIELD_LENGTH else field[:_MAX_FIELD_LENGTH] + _TRUNCATED_SUFFIX
+            truncated_field = field if len(field) < truncate_size else field[:truncate_size] + _TRUNCATED_SUFFIX
+            return truncated_field, len(truncated_field)
 
 
 class HandlerEnvironment(object):
@@ -1535,3 +1553,16 @@ class HandlerManifest(object):
 
     def is_continue_on_update_failure(self):
         return self.data['handlerManifest'].get('continueOnUpdateFailure', False)
+
+
+class ExtensionStatusError(ExtensionError):
+    """
+    When extension failed to provide a valid status file
+    """
+    CouldNotReadStatusFile = 1
+    InvalidJsonFile = 2
+    StatusFileMalformed = 3
+    MaxSizeExceeded = 4
+
+    def __init__(self, msg=None, inner=None, code=-1):
+        super(ExtensionStatusError, self).__init__(msg, inner, code)
