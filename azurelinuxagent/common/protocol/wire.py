@@ -21,6 +21,7 @@ import json
 import os
 import random
 import time
+import traceback
 import xml.sax.saxutils as saxutils
 from datetime import datetime
 
@@ -28,13 +29,12 @@ import azurelinuxagent.common.conf as conf
 import azurelinuxagent.common.logger as logger
 import azurelinuxagent.common.utils.textutil as textutil
 from azurelinuxagent.common.datacontract import validate_param
-from azurelinuxagent.common.event import add_periodic, WALAEventOperation, EVENTS_DIRECTORY
+from azurelinuxagent.common.event import add_event, add_periodic, WALAEventOperation, EVENTS_DIRECTORY
 from azurelinuxagent.common.exception import ProtocolNotFoundError, \
     ResourceGoneError, ExtensionDownloadError, InvalidContainerError, ProtocolError, HttpError
 from azurelinuxagent.common.future import httpclient, bytebuffer
 from azurelinuxagent.common.protocol.goal_state import GoalState, TRANSPORT_CERT_FILE_NAME, TRANSPORT_PRV_FILE_NAME
 from azurelinuxagent.common.protocol.hostplugin import HostPluginProtocol
-from azurelinuxagent.common.protocol.imds import ComputeInfo
 from azurelinuxagent.common.protocol.restapi import *
 from azurelinuxagent.common.telemetryevent import TelemetryEventList
 from azurelinuxagent.common.utils import fileutil, restutil
@@ -77,6 +77,7 @@ class WireProtocol(Protocol):
         if endpoint is None:
             raise ProtocolError("WireProtocol endpoint is None")
         self.client = WireClient(endpoint)
+        self._last_try_update_goal_state_failed = False
 
     def detect(self):
         self.client.check_wire_protocol_version()
@@ -94,6 +95,28 @@ class WireProtocol(Protocol):
 
     def update_goal_state(self):
         self.client.update_goal_state()
+
+    def try_update_goal_state(self):
+        """
+        Attempts to update the goal state and returns True on success or False on failure, sending telemetry events about the failures.
+        """
+        try:
+            self.update_goal_state()
+
+            if self._last_try_update_goal_state_failed:
+                self._last_try_update_goal_state_failed = False
+                message = u"Fail to retrieve the goal state: {0}".format(ustr(traceback.format_exc()))
+                add_event(AGENT_NAME, op=WALAEventOperation.FetchGoalState, version=CURRENT_VERSION, is_success=True, message=message, log_event=False)
+                logger.warn(message)
+        except Exception as e:
+            message = u"Exception retrieving the goal state: {0}".format(ustr(traceback.format_exc()))
+            if not self._last_try_update_goal_state_failed:
+                self._last_try_update_goal_state_failed = True
+                add_event(AGENT_NAME, op=WALAEventOperation.FetchGoalState, version=CURRENT_VERSION, is_success=False, message=message, log_event=False)
+                logger.info(message)
+            logger.periodic_warn(logger.EVERY_SIX_HOURS, message)
+            return False
+        return True
 
     def update_host_plugin_from_goal_state(self):
         self.client.update_host_plugin_from_goal_state()
