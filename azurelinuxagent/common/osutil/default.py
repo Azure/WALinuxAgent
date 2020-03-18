@@ -60,21 +60,21 @@ IPTABLES_VERSION_PATTERN = re.compile("^[^\d\.]*([\d\.]+).*$")
 IPTABLES_VERSION = "iptables --version"
 IPTABLES_LOCKING_VERSION = FlexibleVersion('1.4.21')
 
-FIREWALL_ACCEPT = "iptables {0} -t security -{1} OUTPUT -d {2} -p tcp -m owner --uid-owner {3} -j ACCEPT"
+FIREWALL_ACCEPT = "iptables {0} -t waagent -{1} OUTPUT -d {2} -p tcp -m owner --uid-owner {3} -j ACCEPT"
 # Note:
 # -- Initially "flight" the change to ACCEPT packets and develop a metric baseline
 #    A subsequent release will convert the ACCEPT to DROP
-# FIREWALL_DROP = "iptables {0} -t security -{1} OUTPUT -d {2} -p tcp -m conntrack --ctstate INVALID,NEW -j ACCEPT"
-FIREWALL_DROP = "iptables {0} -t security -{1} OUTPUT -d {2} -p tcp -m conntrack --ctstate INVALID,NEW -j DROP"
-FIREWALL_LIST = "iptables {0} -t security -L -nxv"
-FIREWALL_PACKETS = "iptables {0} -t security -L OUTPUT --zero OUTPUT -nxv"
-FIREWALL_FLUSH = "iptables {0} -t security --flush"
+# FIREWALL_DROP = "iptables {0} -t waagent -{1} OUTPUT -d {2} -p tcp -m conntrack --ctstate INVALID,NEW -j ACCEPT"
+FIREWALL_DROP = "iptables {0} -t waagent -{1} OUTPUT -d {2} -p tcp -m conntrack --ctstate INVALID,NEW -j DROP"
+FIREWALL_LIST = "iptables {0} -t waagent -L -nxv"
+FIREWALL_PACKETS = "iptables {0} -t waagent -L OUTPUT --zero OUTPUT -nxv"
+FIREWALL_FLUSH = "iptables {0} -t waagent --flush"
 
 # Precisely delete the rules created by the agent.
 # this rule was used <= 2.2.25.  This rule helped to validate our change, and determine impact.
-FIREWALL_DELETE_CONNTRACK_ACCEPT = "iptables {0} -t security -D OUTPUT -d {1} -p tcp -m conntrack --ctstate INVALID,NEW -j ACCEPT"
-FIREWALL_DELETE_OWNER_ACCEPT = "iptables {0} -t security -D OUTPUT -d {1} -p tcp -m owner --uid-owner {2} -j ACCEPT"
-FIREWALL_DELETE_CONNTRACK_DROP = "iptables {0} -t security -D OUTPUT -d {1} -p tcp -m conntrack --ctstate INVALID,NEW -j DROP"
+FIREWALL_DELETE_CONNTRACK_ACCEPT = "iptables {0} -t waagent -D OUTPUT -d {1} -p tcp -m conntrack --ctstate INVALID,NEW -j ACCEPT"
+FIREWALL_DELETE_OWNER_ACCEPT = "iptables {0} -t waagent -D OUTPUT -d {1} -p tcp -m owner --uid-owner {2} -j ACCEPT"
+FIREWALL_DELETE_CONNTRACK_DROP = "iptables {0} -t waagent -D OUTPUT -d {1} -p tcp -m conntrack --ctstate INVALID,NEW -j DROP"
 
 PACKET_PATTERN = "^\s*(\d+)\s+(\d+)\s+DROP\s+.*{0}[^\d]*$"
 ALL_CPUS_REGEX = re.compile('^cpu .*')
