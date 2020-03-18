@@ -44,29 +44,24 @@ class TestProtocolUtil(AgentTestCase):
         self.assertEqual(protocol_util1, protocol_util2)
 
     def test_get_protocol_util_should_return_different_object_for_different_thread(self, _):
-        def get_util_obj(q, err):
-            try:
-                q.put(get_protocol_util())
-            except Exception as e:
-                err.put(str(e))
+        protocol_util_instances = []
+        errors = []
 
-        queue = Queue()
-        errors = Queue()
-        t1 = Thread(target=get_util_obj, args=(queue, errors))
-        t2 = Thread(target=get_util_obj, args=(queue, errors))
+        def get_protocol_util_instance():
+            try:
+                protocol_util_instances.append(get_protocol_util())
+            except Exception as e:
+                errors.append(e)
+
+        t1 = Thread(target=get_protocol_util_instance)
+        t2 = Thread(target=get_protocol_util_instance)
         t1.start()
         t2.start()
         t1.join()
         t2.join()
 
-        errs = []
-        while not errors.empty():
-            errs.append(errors.get())
-        if len(errs) > 0:
-            raise Exception("Unable to fetch protocol_util. Errors: %s" % ' , '.join(errs))
-
-        self.assertEqual(2, queue.qsize())  # Assert that there are 2 objects in the queue
-        self.assertNotEqual(queue.get(), queue.get())
+        self.assertEqual(len(protocol_util_instances), 2, "Could not create the expected number of protocols. Errors: [{0}]".format(errors))
+        self.assertNotEqual(protocol_util_instances[0], protocol_util_instances[1], "The instances created by different threads should be different")
     
     @patch("azurelinuxagent.common.protocol.util.MetadataProtocol")
     @patch("azurelinuxagent.common.protocol.util.WireProtocol")
