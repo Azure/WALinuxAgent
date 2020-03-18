@@ -180,6 +180,10 @@ class MetadataProtocol(Protocol):
         # Metadata doesn't cache the goal state; nothing to do here...
         pass
 
+    def update_goal_state(self):
+        # Metadata doesn't cache the goal state; nothing to do here...
+        return True
+
     def get_endpoint(self):
         return self.endpoint
 

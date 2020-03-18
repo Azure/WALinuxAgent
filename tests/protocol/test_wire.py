@@ -16,12 +16,13 @@
 # Requires Python 2.6+ and Openssl 1.0+
 #
 
+import contextlib
 import json
 import os
+import re
 import time
 import unittest
 import uuid
-import contextlib
 
 from azurelinuxagent.common.exception import InvalidContainerError, ResourceGoneError, ProtocolError, \
     ExtensionDownloadError, HttpError
@@ -1056,6 +1057,109 @@ class UpdateGoalStateTestCase(AgentTestCase):
 
             self.assertEqual(protocol.client.get_host_plugin().container_id, new_container_id)
             self.assertEqual(protocol.client.get_host_plugin().role_config_name, new_role_config_name)
+
+
+class TryUpdateGoalStateTestCase(AgentTestCase):
+    """
+    Tests for WireClient.try_update_goal_state()
+    """
+    def test_it_should_return_true_on_success(self):
+        with mock_wire_protocol(mockwiredata.DATA_FILE) as protocol:
+            self.assertTrue(protocol.client.try_update_goal_state(), "try_update_goal_state should have succeeded")
+
+    def test_it_should_return_false_on_failure(self):
+        with mock_wire_protocol(mockwiredata.DATA_FILE) as protocol:
+            def http_get_handler(url, *_, **__):
+                if url.endswith('/machine/?comp=goalstate'):
+                    return HttpError('Exception to fake an error retrieving the goal state')
+                return None
+
+            with mock_http_request(http_get_handler=http_get_handler):
+                self.assertFalse(protocol.client.try_update_goal_state(), "try_update_goal_state should have failed")
+
+    def test_it_should_log_errors_only_when_the_error_state_changes(self):
+        def http_get_handler(url, *_, **__):
+            if url.endswith('/machine/?comp=goalstate'):
+                if fail_goal_state_request:
+                    return HttpError('Exception to fake an error retrieving the goal state')
+            return None
+
+        with mock_wire_protocol(mockwiredata.DATA_FILE) as protocol:
+            with mock_http_request(http_get_handler=http_get_handler):
+                @contextlib.contextmanager
+                def create_log_and_telemetry_mocks():
+                    with patch("azurelinuxagent.common.protocol.wire.logger", autospec=True) as logger_patcher:
+                        with patch("azurelinuxagent.common.protocol.wire.add_event") as add_event_patcher:
+                            yield logger_patcher, add_event_patcher
+
+                calls_to_strings = lambda calls: (str(c) for c in calls)
+                filter_calls = lambda calls, regex=None: (c for c in calls_to_strings(calls) if regex is None or re.match(regex, c))
+                logger_calls = lambda regex=None: [m for m in filter_calls(logger.method_calls, regex)]
+                warnings = lambda: logger_calls(r'call.warn\(.*An error occurred while retrieving the goal state.*')
+                periodic_warnings = lambda: logger_calls(r'call.periodic_warn\(.*Attempts to retrieve the goal state are failing.*')
+                success_messages = lambda: logger_calls(r'call.info\(.*Retrieving the goal state recovered from previous errors.*')
+                telemetry_calls = lambda regex=None: [m for m in filter_calls(add_event.mock_calls, regex)]
+                goal_state_events = lambda: telemetry_calls(r".*op='FetchGoalState'.*")
+
+                #
+                # Initially calls to retrieve the goal state are successful...
+                #
+                fail_goal_state_request = False
+                with create_log_and_telemetry_mocks() as (logger, add_event):
+                    protocol.client.try_update_goal_state()
+
+                    lc = logger_calls()
+                    self.assertTrue(len(lc) == 0, "A successful call should not produce any log messages: [{0}]".format(lc))
+
+                    tc = telemetry_calls()
+                    self.assertTrue(len(tc) == 0, "A successful call should not produce any telemetry events: [{0}]".format(tc))
+
+                #
+                # ... then an error happens...
+                #
+                fail_goal_state_request = True
+                with create_log_and_telemetry_mocks() as (logger, add_event):
+                    protocol.client.try_update_goal_state()
+
+                    w = warnings()
+                    pw = periodic_warnings()
+                    self.assertEquals(len(w), 1, "A failure should have produced a warning: [{0}]".format(w))
+                    self.assertEquals(len(pw), 1, "A failure should have produced a periodic warning: [{0}]".format(pw))
+
+                    gs = goal_state_events()
+                    self.assertTrue(len(gs) == 1 and 'is_success=False' in gs[0], "A failure should produce a telemetry event (success=false): [{0}]".format(gs))
+
+                #
+                # ... and errors continue happening...
+                #
+                with create_log_and_telemetry_mocks() as (logger, add_event):
+                    protocol.client.try_update_goal_state()
+                    protocol.client.try_update_goal_state()
+                    protocol.client.try_update_goal_state()
+
+                    w = warnings()
+                    pw = periodic_warnings()
+                    self.assertTrue(len(w) == 0, "Subsequent failures should not produce warnings: [{0}]".format(w))
+                    self.assertEquals(len(pw), 3, "Subsequent failures should produce periodic warnings: [{0}]".format(pw))
+
+                    tc = telemetry_calls()
+                    self.assertTrue(len(tc) == 0, "Subsequent failures should not produce any telemetry events: [{0}]".format(tc))
+
+                #
+                # ... until we finally succeed
+                #
+                fail_goal_state_request = False
+                with create_log_and_telemetry_mocks() as (logger, add_event):
+                    protocol.client.try_update_goal_state()
+
+                    s = success_messages()
+                    w = warnings()
+                    pw = periodic_warnings()
+                    self.assertEquals(len(s), 1, "Recovering after failures should have produced an info message: [{0}]".format(s))
+                    self.assertTrue(len(w) == 0 and len(pw) == 0, "Recovering after failures should have not produced any warnings: [{0}] [{1}]".format(w, pw))
+
+                    gs = goal_state_events()
+                    self.assertTrue(len(gs) == 1 and 'is_success=True' in gs[0], "Recovering after failures should produce a telemetry event (success=true): [{0}]".format(gs))
 
 
 class UpdateHostPluginFromGoalStateTestCase(AgentTestCase):
