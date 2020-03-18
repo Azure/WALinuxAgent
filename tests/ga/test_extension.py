@@ -41,7 +41,8 @@ from azurelinuxagent.ga.exthandlers import ExtHandlerState, ExtHandlersHandler, 
 
 from azurelinuxagent.ga.monitor import get_monitor_handler
 from nose.plugins.attrib import attr
-from tests.protocol import mockwiredata, mock_wire_protocol
+from tests.protocol import mockwiredata
+from tests.protocol.mocks import mock_wire_protocol
 from tests.protocol.mockwiredata import DATA_FILE
 from tests.tools import are_cgroups_enabled, AgentTestCase, data_dir, i_am_root, MagicMock, Mock, \
     skip_if_predicate_false, patch, is_trusty_in_travis, skip_if_predicate_true
