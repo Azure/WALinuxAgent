@@ -24,7 +24,6 @@ import azurelinuxagent.common.conf as conf
 from azurelinuxagent.daemon import *
 from azurelinuxagent.daemon.main import OPENSSL_FIPS_ENVIRONMENT
 from azurelinuxagent.pa.provision.default import ProvisionHandler
-from tests.protocol import mock_wire_protocol, mockwiredata
 from tests.tools import AgentTestCase, Mock, patch
 
 

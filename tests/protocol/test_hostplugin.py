@@ -31,9 +31,9 @@ from azurelinuxagent.common.exception import HttpError, ResourceGoneError
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.protocol.hostplugin import API_VERSION
 from azurelinuxagent.common.utils import restutil
-from tests.protocol import mock_wire_protocol
-from tests.protocol.mockwiredata import WireProtocolData, DATA_FILE, DATA_FILE_NO_EXT
-from tests.protocol.test_wire import MockResponse
+from tests.protocol.mocks import mock_wire_protocol
+from tests.protocol.mockwiredata import DATA_FILE, DATA_FILE_NO_EXT
+from tests.protocol.test_wire import MockResponse as TestWireMockResponse
 from tests.tools import AgentTestCase, PY_VERSION_MAJOR, Mock, patch
 
 if sys.version_info[0] == 3:
@@ -65,7 +65,7 @@ if PY_VERSION_MAJOR > 2:
 class TestHostPlugin(AgentTestCase):
 
     def _init_host(self):
-        with mock_wire_protocol.create(DATA_FILE) as protocol:
+        with mock_wire_protocol(DATA_FILE) as protocol:
             test_goal_state = protocol.client.get_goal_state()
             host_plugin = wire.HostPluginProtocol(wireserver_url,
                                                   test_goal_state.container_id,
@@ -155,7 +155,7 @@ class TestHostPlugin(AgentTestCase):
     @staticmethod
     @contextlib.contextmanager
     def create_mock_protocol():
-        with mock_wire_protocol.create(DATA_FILE_NO_EXT) as protocol:
+        with mock_wire_protocol(DATA_FILE_NO_EXT) as protocol:
             # These tests use mock wire data that dont have any extensions (extension config will be empty).
             # Populate the upload blob and set an initial empty status before returning the protocol.
             ext_conf = protocol.client._goal_state.ext_conf
@@ -401,8 +401,9 @@ class TestHostPlugin(AgentTestCase):
     def test_validate_http_request(self):
         """Validate correct set of data is sent to HostGAPlugin when reporting VM status"""
 
-        with mock_wire_protocol.create(DATA_FILE) as protocol:
+        with mock_wire_protocol(DATA_FILE) as protocol:
             test_goal_state = protocol.client._goal_state
+            plugin = protocol.client.get_host_plugin()
 
             status_blob = protocol.client.status_blob
             status_blob.data = faux_status
@@ -416,9 +417,6 @@ class TestHostPlugin(AgentTestCase):
 
             with patch.object(restutil, "http_request") as patch_http:
                 patch_http.return_value = Mock(status=httpclient.OK)
-
-                protocol.client.get_goal_state = Mock(return_value=test_goal_state)
-                plugin = protocol.client.get_host_plugin()
 
                 with patch.object(plugin, 'get_api_versions') as patch_api:
                     patch_api.return_value = API_VERSION
@@ -437,7 +435,7 @@ class TestHostPlugin(AgentTestCase):
                     self.assertEqual(health_service_url, patch_http.call_args_list[1][0][1])
 
     def test_validate_block_blob(self):
-        with mock_wire_protocol.create(DATA_FILE) as protocol:
+        with mock_wire_protocol(DATA_FILE) as protocol:
             test_goal_state = protocol.client._goal_state
 
             host_client = wire.HostPluginProtocol(wireserver_url,
@@ -480,7 +478,7 @@ class TestHostPlugin(AgentTestCase):
 
     def test_validate_page_blobs(self):
         """Validate correct set of data is sent for page blobs"""
-        with mock_wire_protocol.create(DATA_FILE) as protocol:
+        with mock_wire_protocol(DATA_FILE) as protocol:
             test_goal_state = protocol.client._goal_state
 
             host_client = wire.HostPluginProtocol(wireserver_url,
@@ -539,7 +537,7 @@ class TestHostPlugin(AgentTestCase):
                         exp_method, exp_url, exp_data)
 
     def test_validate_get_extension_artifacts(self):
-        with mock_wire_protocol.create(DATA_FILE) as protocol:
+        with mock_wire_protocol(DATA_FILE) as protocol:
             test_goal_state = protocol.client._goal_state
 
             expected_url = hostplugin.URI_FORMAT_GET_EXTENSION_ARTIFACT.format(wireserver_url, hostplugin.HOST_PLUGIN_PORT)
@@ -564,151 +562,153 @@ class TestHostPlugin(AgentTestCase):
                     self.assertTrue(k in actual_headers)
                     self.assertEqual(expected_headers[k], actual_headers[k])
 
-    @patch("azurelinuxagent.common.utils.restutil.http_get")
-    def test_health(self, patch_http_get):
+    def test_health(self):
         host_plugin = self._init_host()
 
-        patch_http_get.return_value = MockResponse('', 200)
-        result = host_plugin.get_health()
-        self.assertEqual(1, patch_http_get.call_count)
-        self.assertTrue(result)
+        with patch("azurelinuxagent.common.utils.restutil.http_get") as patch_http_get:
+            patch_http_get.return_value = MockResponse('', 200)
+            result = host_plugin.get_health()
+            self.assertEqual(1, patch_http_get.call_count)
+            self.assertTrue(result)
 
-        patch_http_get.return_value = MockResponse('', 500)
-        result = host_plugin.get_health()
-        self.assertFalse(result)
+            patch_http_get.return_value = MockResponse('', 500)
+            result = host_plugin.get_health()
+            self.assertFalse(result)
 
-        patch_http_get.side_effect = IOError('client IO error')
-        try:
-            host_plugin.get_health()
-            self.fail('IO error expected to be raised')
-        except IOError:
-            # expected
-            pass
+            patch_http_get.side_effect = IOError('client IO error')
+            try:
+                host_plugin.get_health()
+                self.fail('IO error expected to be raised')
+            except IOError:
+                # expected
+                pass
 
-    @patch("azurelinuxagent.common.utils.restutil.http_get",
-           return_value=MockResponse(status_code=200, body=b''))
-    @patch("azurelinuxagent.common.protocol.healthservice.HealthService.report_host_plugin_versions")
-    def test_ensure_health_service_called(self, patch_http_get, patch_report_versions):
+    def test_ensure_health_service_called(self):
         host_plugin = self._init_host()
 
-        host_plugin.get_api_versions()
-        self.assertEqual(1, patch_http_get.call_count)
-        self.assertEqual(1, patch_report_versions.call_count)
+        with patch("azurelinuxagent.common.utils.restutil.http_get", return_value=TestWireMockResponse(status_code=200, body=b'')) as patch_http_get:
+            with patch("azurelinuxagent.common.protocol.healthservice.HealthService.report_host_plugin_versions") as patch_report_versions:
+                host_plugin.get_api_versions()
+                self.assertEqual(1, patch_http_get.call_count)
+                self.assertEqual(1, patch_report_versions.call_count)
 
-    @patch("azurelinuxagent.common.utils.restutil.http_get")
-    @patch("azurelinuxagent.common.utils.restutil.http_post")
-    @patch("azurelinuxagent.common.utils.restutil.http_put")
-    def test_put_status_healthy_signal(self, patch_http_put, patch_http_post, patch_http_get):
+    def test_put_status_healthy_signal(self):
         host_plugin = self._init_host()
-        status_blob = self._init_status_blob()
-        # get_api_versions
-        patch_http_get.return_value = MockResponse(api_versions, 200)
-        # put status blob
-        patch_http_put.return_value = MockResponse(None, 201)
 
-        host_plugin.put_vm_status(status_blob=status_blob, sas_url=sas_url)
-        self.assertEqual(1, patch_http_get.call_count)
-        self.assertEqual(hostplugin_versions_url, patch_http_get.call_args[0][0])
+        with patch("azurelinuxagent.common.utils.restutil.http_get") as patch_http_get:
+            with patch("azurelinuxagent.common.utils.restutil.http_post") as patch_http_post:
+                with patch("azurelinuxagent.common.utils.restutil.http_put") as patch_http_put:
+                    status_blob = self._init_status_blob()
+                    # get_api_versions
+                    patch_http_get.return_value = MockResponse(api_versions, 200)
+                    # put status blob
+                    patch_http_put.return_value = MockResponse(None, 201)
 
-        self.assertEqual(2, patch_http_put.call_count)
-        self.assertEqual(hostplugin_status_url, patch_http_put.call_args_list[0][0][0])
-        self.assertEqual(hostplugin_status_url, patch_http_put.call_args_list[1][0][0])
+                    host_plugin.put_vm_status(status_blob=status_blob, sas_url=sas_url)
+                    self.assertEqual(1, patch_http_get.call_count)
+                    self.assertEqual(hostplugin_versions_url, patch_http_get.call_args[0][0])
 
-        self.assertEqual(2, patch_http_post.call_count)
+                    self.assertEqual(2, patch_http_put.call_count)
+                    self.assertEqual(hostplugin_status_url, patch_http_put.call_args_list[0][0][0])
+                    self.assertEqual(hostplugin_status_url, patch_http_put.call_args_list[1][0][0])
 
-        # signal for /versions
-        self.assertEqual(health_service_url, patch_http_post.call_args_list[0][0][0])
-        jstr = patch_http_post.call_args_list[0][0][1]
-        obj = json.loads(jstr)
-        self.assertEqual(1, len(obj['Observations']))
-        self.assertTrue(obj['Observations'][0]['IsHealthy'])
-        self.assertEqual('GuestAgentPluginVersions', obj['Observations'][0]['ObservationName'])
+                    self.assertEqual(2, patch_http_post.call_count)
 
-        # signal for /status
-        self.assertEqual(health_service_url, patch_http_post.call_args_list[1][0][0])
-        jstr = patch_http_post.call_args_list[1][0][1]
-        obj = json.loads(jstr)
-        self.assertEqual(1, len(obj['Observations']))
-        self.assertTrue(obj['Observations'][0]['IsHealthy'])
-        self.assertEqual('GuestAgentPluginStatus', obj['Observations'][0]['ObservationName'])
+                    # signal for /versions
+                    self.assertEqual(health_service_url, patch_http_post.call_args_list[0][0][0])
+                    jstr = patch_http_post.call_args_list[0][0][1]
+                    obj = json.loads(jstr)
+                    self.assertEqual(1, len(obj['Observations']))
+                    self.assertTrue(obj['Observations'][0]['IsHealthy'])
+                    self.assertEqual('GuestAgentPluginVersions', obj['Observations'][0]['ObservationName'])
 
-    @patch("azurelinuxagent.common.utils.restutil.http_get")
-    @patch("azurelinuxagent.common.utils.restutil.http_post")
-    @patch("azurelinuxagent.common.utils.restutil.http_put")
-    def test_put_status_unhealthy_signal_transient(self, patch_http_put, patch_http_post, patch_http_get):
+                    # signal for /status
+                    self.assertEqual(health_service_url, patch_http_post.call_args_list[1][0][0])
+                    jstr = patch_http_post.call_args_list[1][0][1]
+                    obj = json.loads(jstr)
+                    self.assertEqual(1, len(obj['Observations']))
+                    self.assertTrue(obj['Observations'][0]['IsHealthy'])
+                    self.assertEqual('GuestAgentPluginStatus', obj['Observations'][0]['ObservationName'])
+
+    def test_put_status_unhealthy_signal_transient(self):
         host_plugin = self._init_host()
-        status_blob = self._init_status_blob()
-        # get_api_versions
-        patch_http_get.return_value = MockResponse(api_versions, 200)
-        # put status blob
-        patch_http_put.return_value = MockResponse(None, 500)
 
-        with self.assertRaises(HttpError):
-            host_plugin.put_vm_status(status_blob=status_blob, sas_url=sas_url)
+        with patch("azurelinuxagent.common.utils.restutil.http_get") as patch_http_get:
+            with patch("azurelinuxagent.common.utils.restutil.http_post") as patch_http_post:
+                with patch("azurelinuxagent.common.utils.restutil.http_put") as patch_http_put:
+                    status_blob = self._init_status_blob()
+                    # get_api_versions
+                    patch_http_get.return_value = MockResponse(api_versions, 200)
+                    # put status blob
+                    patch_http_put.return_value = MockResponse(None, 500)
 
-        self.assertEqual(1, patch_http_get.call_count)
-        self.assertEqual(hostplugin_versions_url, patch_http_get.call_args[0][0])
+                    with self.assertRaises(HttpError):
+                        host_plugin.put_vm_status(status_blob=status_blob, sas_url=sas_url)
 
-        self.assertEqual(1, patch_http_put.call_count)
-        self.assertEqual(hostplugin_status_url, patch_http_put.call_args[0][0])
+                    self.assertEqual(1, patch_http_get.call_count)
+                    self.assertEqual(hostplugin_versions_url, patch_http_get.call_args[0][0])
 
-        self.assertEqual(2, patch_http_post.call_count)
+                    self.assertEqual(1, patch_http_put.call_count)
+                    self.assertEqual(hostplugin_status_url, patch_http_put.call_args[0][0])
 
-        # signal for /versions
-        self.assertEqual(health_service_url, patch_http_post.call_args_list[0][0][0])
-        jstr = patch_http_post.call_args_list[0][0][1]
-        obj = json.loads(jstr)
-        self.assertEqual(1, len(obj['Observations']))
-        self.assertTrue(obj['Observations'][0]['IsHealthy'])
-        self.assertEqual('GuestAgentPluginVersions', obj['Observations'][0]['ObservationName'])
+                    self.assertEqual(2, patch_http_post.call_count)
 
-        # signal for /status
-        self.assertEqual(health_service_url, patch_http_post.call_args_list[1][0][0])
-        jstr = patch_http_post.call_args_list[1][0][1]
-        obj = json.loads(jstr)
-        self.assertEqual(1, len(obj['Observations']))
-        self.assertTrue(obj['Observations'][0]['IsHealthy'])
-        self.assertEqual('GuestAgentPluginStatus', obj['Observations'][0]['ObservationName'])
+                    # signal for /versions
+                    self.assertEqual(health_service_url, patch_http_post.call_args_list[0][0][0])
+                    jstr = patch_http_post.call_args_list[0][0][1]
+                    obj = json.loads(jstr)
+                    self.assertEqual(1, len(obj['Observations']))
+                    self.assertTrue(obj['Observations'][0]['IsHealthy'])
+                    self.assertEqual('GuestAgentPluginVersions', obj['Observations'][0]['ObservationName'])
 
-    @patch("azurelinuxagent.common.utils.restutil.http_get")
-    @patch("azurelinuxagent.common.utils.restutil.http_post")
-    @patch("azurelinuxagent.common.utils.restutil.http_put")
-    def test_put_status_unhealthy_signal_permanent(self, patch_http_put, patch_http_post, patch_http_get):
+                    # signal for /status
+                    self.assertEqual(health_service_url, patch_http_post.call_args_list[1][0][0])
+                    jstr = patch_http_post.call_args_list[1][0][1]
+                    obj = json.loads(jstr)
+                    self.assertEqual(1, len(obj['Observations']))
+                    self.assertTrue(obj['Observations'][0]['IsHealthy'])
+                    self.assertEqual('GuestAgentPluginStatus', obj['Observations'][0]['ObservationName'])
+
+    def test_put_status_unhealthy_signal_permanent(self):
         host_plugin = self._init_host()
-        status_blob = self._init_status_blob()
-        # get_api_versions
-        patch_http_get.return_value = MockResponse(api_versions, 200)
-        # put status blob
-        patch_http_put.return_value = MockResponse(None, 500)
 
-        host_plugin.status_error_state.is_triggered = Mock(return_value=True)
+        with patch("azurelinuxagent.common.utils.restutil.http_get") as patch_http_get:
+            with patch("azurelinuxagent.common.utils.restutil.http_post") as patch_http_post:
+                with patch("azurelinuxagent.common.utils.restutil.http_put") as patch_http_put:
+                    status_blob = self._init_status_blob()
+                    # get_api_versions
+                    patch_http_get.return_value = MockResponse(api_versions, 200)
+                    # put status blob
+                    patch_http_put.return_value = MockResponse(None, 500)
 
-        with self.assertRaises(HttpError):
-            host_plugin.put_vm_status(status_blob=status_blob, sas_url=sas_url)
+                    host_plugin.status_error_state.is_triggered = Mock(return_value=True)
 
-        self.assertEqual(1, patch_http_get.call_count)
-        self.assertEqual(hostplugin_versions_url, patch_http_get.call_args[0][0])
+                    with self.assertRaises(HttpError):
+                        host_plugin.put_vm_status(status_blob=status_blob, sas_url=sas_url)
 
-        self.assertEqual(1, patch_http_put.call_count)
-        self.assertEqual(hostplugin_status_url, patch_http_put.call_args[0][0])
+                    self.assertEqual(1, patch_http_get.call_count)
+                    self.assertEqual(hostplugin_versions_url, patch_http_get.call_args[0][0])
 
-        self.assertEqual(2, patch_http_post.call_count)
+                    self.assertEqual(1, patch_http_put.call_count)
+                    self.assertEqual(hostplugin_status_url, patch_http_put.call_args[0][0])
 
-        # signal for /versions
-        self.assertEqual(health_service_url, patch_http_post.call_args_list[0][0][0])
-        jstr = patch_http_post.call_args_list[0][0][1]
-        obj = json.loads(jstr)
-        self.assertEqual(1, len(obj['Observations']))
-        self.assertTrue(obj['Observations'][0]['IsHealthy'])
-        self.assertEqual('GuestAgentPluginVersions', obj['Observations'][0]['ObservationName'])
+                    self.assertEqual(2, patch_http_post.call_count)
 
-        # signal for /status
-        self.assertEqual(health_service_url, patch_http_post.call_args_list[1][0][0])
-        jstr = patch_http_post.call_args_list[1][0][1]
-        obj = json.loads(jstr)
-        self.assertEqual(1, len(obj['Observations']))
-        self.assertFalse(obj['Observations'][0]['IsHealthy'])
-        self.assertEqual('GuestAgentPluginStatus', obj['Observations'][0]['ObservationName'])
+                    # signal for /versions
+                    self.assertEqual(health_service_url, patch_http_post.call_args_list[0][0][0])
+                    jstr = patch_http_post.call_args_list[0][0][1]
+                    obj = json.loads(jstr)
+                    self.assertEqual(1, len(obj['Observations']))
+                    self.assertTrue(obj['Observations'][0]['IsHealthy'])
+                    self.assertEqual('GuestAgentPluginVersions', obj['Observations'][0]['ObservationName'])
+
+                    # signal for /status
+                    self.assertEqual(health_service_url, patch_http_post.call_args_list[1][0][0])
+                    jstr = patch_http_post.call_args_list[1][0][1]
+                    obj = json.loads(jstr)
+                    self.assertEqual(1, len(obj['Observations']))
+                    self.assertFalse(obj['Observations'][0]['IsHealthy'])
+                    self.assertEqual('GuestAgentPluginStatus', obj['Observations'][0]['ObservationName'])
 
     @patch("azurelinuxagent.common.protocol.hostplugin.HostPluginProtocol.should_report", return_value=True)
     @patch("azurelinuxagent.common.protocol.healthservice.HealthService.report_host_plugin_extension_artifact")

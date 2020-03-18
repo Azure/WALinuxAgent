@@ -520,11 +520,6 @@ class WireClient(object):
         logger.info("Wire server endpoint:{0}", endpoint)
         self._endpoint = endpoint
         self._goal_state = None
-        self._hosting_env = None
-        self._shared_conf = None
-        self._remote_access = None
-        self._certs = None
-        self._ext_conf = None
         self._host_plugin = None
         self.status_blob = StatusBlob(self)
         self.goal_state_flusher = StateFlusher(conf.get_lib_dir())
