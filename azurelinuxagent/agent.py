@@ -62,11 +62,14 @@ class Agent(object):
         #Init log
         verbose = verbose or conf.get_logs_verbose()
         level = logger.LogLevel.VERBOSE if verbose else logger.LogLevel.INFO
-        logger.add_logger_appender(logger.AppenderType.FILE, level,
-                                 path="/var/log/waagent.log")
+
+        if conf.get_logs_file():
+            logger.add_logger_appender(logger.AppenderType.FILE, level,
+                                       path="/var/log/waagent.log")
+
         if conf.get_logs_console():
             logger.add_logger_appender(logger.AppenderType.CONSOLE, level,
-                    path="/dev/console")
+                                       path="/dev/console")
 
         if event.send_logs_to_telemetry():
             logger.add_logger_appender(logger.AppenderType.TELEMETRY,
