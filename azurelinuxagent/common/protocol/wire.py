@@ -77,7 +77,6 @@ class WireProtocol(Protocol):
         if endpoint is None:
             raise ProtocolError("WireProtocol endpoint is None")
         self.client = WireClient(endpoint)
-        self._last_try_update_goal_state_failed = False
 
     def detect(self):
         self.client.check_wire_protocol_version()
@@ -97,26 +96,7 @@ class WireProtocol(Protocol):
         self.client.update_goal_state()
 
     def try_update_goal_state(self):
-        """
-        Attempts to update the goal state and returns True on success or False on failure, sending telemetry events about the failures.
-        """
-        try:
-            self.update_goal_state()
-
-            if self._last_try_update_goal_state_failed:
-                self._last_try_update_goal_state_failed = False
-                message = u"Fetch goal state recovered from previous errors"
-                add_event(AGENT_NAME, op=WALAEventOperation.FetchGoalState, version=CURRENT_VERSION, is_success=True, message=message, log_event=False)
-                logger.info(message)
-        except Exception as e:
-            message = u"Exception retrieving the goal state: {0}".format(ustr(traceback.format_exc()))
-            if not self._last_try_update_goal_state_failed:
-                self._last_try_update_goal_state_failed = True
-                add_event(AGENT_NAME, op=WALAEventOperation.FetchGoalState, version=CURRENT_VERSION, is_success=False, message=message, log_event=False)
-                logger.warn(message)
-            logger.periodic_warn(logger.EVERY_SIX_HOURS, message)
-            return False
-        return True
+        return self.client.try_update_goal_state()
 
     def update_host_plugin_from_goal_state(self):
         self.client.update_host_plugin_from_goal_state()
@@ -543,6 +523,7 @@ class WireClient(object):
         logger.info("Wire server endpoint:{0}", endpoint)
         self._endpoint = endpoint
         self._goal_state = None
+        self._last_try_update_goal_state_failed = False
         self._host_plugin = None
         self.status_blob = StatusBlob(self)
         self.goal_state_flusher = StateFlusher(conf.get_lib_dir())
@@ -725,6 +706,29 @@ class WireClient(object):
         """
         self._update_from_goal_state(
             WireClient._UpdateType.GoalStateForced if forced else WireClient._UpdateType.GoalState)
+
+    def try_update_goal_state(self):
+        """
+        Attempts to update the goal state and returns True on success or False on failure, sending telemetry events about the failures.
+        """
+        try:
+            self.update_goal_state()
+
+            if self._last_try_update_goal_state_failed:
+                self._last_try_update_goal_state_failed = False
+                message = u"Retrieving the goal state recovered from previous errors"
+                add_event(AGENT_NAME, op=WALAEventOperation.FetchGoalState, version=CURRENT_VERSION, is_success=True, message=message, log_event=False)
+                logger.info(message)
+        except Exception as e:
+            if not self._last_try_update_goal_state_failed:
+                message = u"An error occurred while retrieving the goal state: {0}".format(ustr(traceback.format_exc()))
+                self._last_try_update_goal_state_failed = True
+                add_event(AGENT_NAME, op=WALAEventOperation.FetchGoalState, version=CURRENT_VERSION, is_success=False, message=message, log_event=False)
+                logger.warn(message)
+            message = u"Attempts to retrieve the goal state are failing: {0}".format(ustr(e))
+            logger.periodic_warn(logger.EVERY_SIX_HOURS, message)
+            return False
+        return True
 
     def _update_from_goal_state(self, refresh_type):
         """
