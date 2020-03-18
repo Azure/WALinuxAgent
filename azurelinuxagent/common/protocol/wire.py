@@ -721,12 +721,13 @@ class WireClient(object):
                 logger.info(message)
         except Exception as e:
             if not self._last_try_update_goal_state_failed:
-                message = u"An error occurred while retrieving the goal state: {0}".format(ustr(traceback.format_exc()))
                 self._last_try_update_goal_state_failed = True
+                message = u"An error occurred while retrieving the goal state: {0}".format(ustr(e))
                 add_event(AGENT_NAME, op=WALAEventOperation.FetchGoalState, version=CURRENT_VERSION, is_success=False, message=message, log_event=False)
+                message = u"An error occurred while retrieving the goal state: {0}".format(ustr(traceback.format_exc()))
                 logger.warn(message)
             message = u"Attempts to retrieve the goal state are failing: {0}".format(ustr(e))
-            logger.periodic_warn(logger.EVERY_SIX_HOURS, message)
+            logger.periodic_warn(logger.EVERY_SIX_HOURS, "[PERIODIC] {0}".format(message))
             return False
         return True
 
