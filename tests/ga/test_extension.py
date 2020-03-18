@@ -36,8 +36,8 @@ from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
 from azurelinuxagent.common.version import PY_VERSION_MAJOR, PY_VERSION_MINOR, PY_VERSION_MICRO, AGENT_NAME, \
     GOAL_STATE_AGENT_VERSION, CURRENT_VERSION, DISTRO_NAME, DISTRO_VERSION
 from azurelinuxagent.ga.exthandlers import ExtHandlerState, ExtHandlersHandler, ExtHandlerInstance, HANDLER_PKG_EXT, \
-    migrate_handler_state, get_exthandlers_handler, AGENT_STATUS_FILE, _VALID_EXTENSION_STATUS, ExtCommandEnvVariable, \
-    HandlerManifest, NOT_RUN
+    migrate_handler_state, get_exthandlers_handler, AGENT_STATUS_FILE, ExtCommandEnvVariable, \
+    HandlerManifest, NOT_RUN, ValidHandlerStatus
 
 from azurelinuxagent.ga.monitor import get_monitor_handler
 from nose.plugins.attrib import attr
@@ -1095,7 +1095,7 @@ class TestExtension(ExtensionTestCase):
 
         exthandlers_handler.run()
         self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.0.0")
-        self._assert_ext_status(protocol.report_ext_status, _VALID_EXTENSION_STATUS.error, 0)
+        self._assert_ext_status(protocol.report_ext_status, ValidHandlerStatus.error, 0)
 
     def test_wait_for_handler_successful_completion_empty_exts(self, *args):
         '''
@@ -1235,13 +1235,13 @@ class TestExtension(ExtensionTestCase):
         self.assertEqual(ext_status.sequenceNumber, 0)
         self.assertEqual(ext_status.message, "Aenean semper nunc nisl, vitae sollicitudin felis consequat at. In "
                                              "lobortis elementum sapien, non commodo odio semper ac.")
-        self.assertEqual(ext_status.status, _VALID_EXTENSION_STATUS.success)
+        self.assertEqual(ext_status.status, ValidHandlerStatus.success)
 
         self.assertEqual(len(ext_status.substatusList), 1)
         sub_status = ext_status.substatusList[0]
         self.assertEqual(sub_status.code, "0")
         self.assertEqual(sub_status.message, None)
-        self.assertEqual(sub_status.status, _VALID_EXTENSION_STATUS.success)
+        self.assertEqual(sub_status.status, ValidHandlerStatus.success)
 
     @patch("azurelinuxagent.common.conf.get_lib_dir")
     def test_collect_ext_status_very_large_status_message(self, mock_lib_dir, *args):
@@ -1260,7 +1260,7 @@ class TestExtension(ExtensionTestCase):
         self.assertEqual(ext_status.sequenceNumber, 0)
         self.assertRegex(ext_status.message, "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Vestibulum non lacinia urna, sit .*")
         self.maxDiff = None
-        self.assertEqual(ext_status.status, _VALID_EXTENSION_STATUS.success)
+        self.assertEqual(ext_status.status, ValidHandlerStatus.success)
         self.assertEqual(len(ext_status.substatusList), 1) # NUM OF SUBSTATUS PARSED
         for sub_status in ext_status.substatusList:
             self.assertRegex(sub_status.name, '\[\{"status"\: \{"status": "success", "code": "1", "snapshotInfo": '
@@ -1268,7 +1268,7 @@ class TestExtension(ExtensionTestCase):
             self.assertEqual(0, sub_status.code)
             self.assertRegex(sub_status.message, "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Vestibulum "
                                                  "non lacinia urna, sit amet venenatis orci.*")
-            self.assertEqual(_VALID_EXTENSION_STATUS.success, sub_status.status)
+            self.assertEqual(sub_status.status, ValidHandlerStatus.success)
 
     @patch("azurelinuxagent.common.conf.get_lib_dir")
     def test_collect_ext_status_very_large_status_file_with_multiple_substatus_nodes(self, mock_lib_dir, *args):
@@ -1287,7 +1287,7 @@ class TestExtension(ExtensionTestCase):
         self.assertEqual(ext_status.sequenceNumber, 0)
         self.assertRegex(ext_status.message, "Lorem ipsum dolor sit amet, consectetur adipiscing elit. "
                                              "Vestibulum non lacinia urna, sit .*")
-        self.assertEqual(ext_status.status, _VALID_EXTENSION_STATUS.success)
+        self.assertEqual(ext_status.status, ValidHandlerStatus.success)
         self.assertEqual(len(ext_status.substatusList), 12)  # The original file has 41 substatus nodes.
         for sub_status in ext_status.substatusList:
             self.assertRegex(sub_status.name, '\[\{"status"\: \{"status": "success", "code": "1", "snapshotInfo": '
@@ -1295,7 +1295,7 @@ class TestExtension(ExtensionTestCase):
             self.assertEqual(0, sub_status.code)
             self.assertRegex(sub_status.message, "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Vestibulum "
                                                  "non lacinia urna, sit amet venenatis orci.*")
-            self.assertEqual(_VALID_EXTENSION_STATUS.success, sub_status.status)
+            self.assertEqual(ValidHandlerStatus.success, sub_status.status)
 
     @patch("azurelinuxagent.common.conf.get_lib_dir")
     def test_collect_ext_status_read_file_read_exceptions(self, mock_lib_dir, *args):
@@ -1326,7 +1326,7 @@ class TestExtension(ExtensionTestCase):
             self.assertRegex(ext_status.message, r".*We couldn't read any status for {0}-{1} extension, for the "
                                                  r"sequence number {2}. It failed due to".
                              format("TestHandler", "1.0.0", 0))
-            self.assertEqual(ext_status.status, _VALID_EXTENSION_STATUS.error)
+            self.assertEqual(ext_status.status, ValidHandlerStatus.error)
             self.assertEqual(len(ext_status.substatusList), 0)
 
     @patch("azurelinuxagent.common.conf.get_lib_dir")
@@ -1346,7 +1346,7 @@ class TestExtension(ExtensionTestCase):
                                              "was in an incorrect format and the agent could not parse it correctly."
                                              " Failed due to.*".
                          format("TestHandler", "1.0.0", 0))
-        self.assertEqual(ext_status.status, _VALID_EXTENSION_STATUS.error)
+        self.assertEqual(ext_status.status, ValidHandlerStatus.error)
         self.assertEqual(len(ext_status.substatusList), 0)
 
     @patch("azurelinuxagent.common.conf.get_lib_dir")
@@ -1364,7 +1364,7 @@ class TestExtension(ExtensionTestCase):
         self.assertEqual(ext_status.sequenceNumber, 0)
         self.assertRegex(ext_status.message, "Could not get a valid status from the extension {0}-{1}. "
                                              "Encountered the following error".format("TestHandler", "1.0.0"))
-        self.assertEqual(ext_status.status, _VALID_EXTENSION_STATUS.error)
+        self.assertEqual(ext_status.status, ValidHandlerStatus.error)
         self.assertEqual(len(ext_status.substatusList), 0)
 
     def test_is_ext_handling_complete(self, *args):

@@ -45,7 +45,6 @@ from azurelinuxagent.common.exception import ExtensionDownloadError, ExtensionEr
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.protocol.restapi import ExtensionStatus, ExtensionSubStatus, ExtHandler, ExtHandlerStatus, \
     VMStatus
-from azurelinuxagent.common.types import AttributeEnum
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
 from azurelinuxagent.common.version import AGENT_NAME, CURRENT_VERSION, DISTRO_NAME, DISTRO_VERSION, \
     GOAL_STATE_AGENT_VERSION, PY_VERSION_MAJOR, PY_VERSION_MICRO, PY_VERSION_MINOR
@@ -57,9 +56,6 @@ _DEFAULT_EXT_TIMEOUT_MINUTES = 90
 
 # HandlerEnvironment.json schema version
 _HANDLER_ENVIRONMENT_VERSION = 1.0
-
-_VALID_EXTENSION_STATUS = AttributeEnum(('transitioning', 'warning', 'error', 'success'))
-_EXTENSION_TERMINAL_STATUSES = [_VALID_EXTENSION_STATUS.error, _VALID_EXTENSION_STATUS.success]
 
 _VALID_HANDLER_STATUS = ['Ready', 'NotReady', "Installing", "Unresponsive"]
 
@@ -84,6 +80,17 @@ _TRUNCATED_SUFFIX = u" ... [TRUNCATED]"
 # Status file specific retries and delays.
 _NUM_OF_STATUS_FILE_RETRIES = 5
 _STATUS_FILE_RETRY_DELAY = 2  # seconds
+
+
+class ValidHandlerStatus(object):
+    transitioning = "transitioning"
+    warning = "warning"
+    error = "error"
+    success = "success"
+    STRINGS = ['transitioning', 'warning', 'error', 'success']
+
+
+_EXTENSION_TERMINAL_STATUSES = [ValidHandlerStatus.error, ValidHandlerStatus.success]
 
 
 class ExtCommandEnvVariable(object):
@@ -127,7 +134,7 @@ def parse_formatted_message(formatted_message):
 def parse_ext_substatus(substatus):
     # Check extension sub status format
     validate_has_key(substatus, 'status', 'substatus/status')
-    validate_in_range(substatus['status'], _VALID_EXTENSION_STATUS, 'substatus/status')
+    validate_in_range(substatus['status'], ValidHandlerStatus.STRINGS, 'substatus/status')
     status = ExtensionSubStatus()
     status.name = substatus.get('name')
     status.status = substatus.get('status')
@@ -148,8 +155,8 @@ def parse_ext_status(ext_status, data):
     validate_has_key(status_data, 'status', 'status/status')
 
     status = status_data['status']
-    if status not in _VALID_EXTENSION_STATUS:
-        status = _VALID_EXTENSION_STATUS.error
+    if status not in ValidHandlerStatus.STRINGS:
+        status = ValidHandlerStatus.error
 
     applied_time = status_data.get('configurationAppliedTime')
     ext_status.configurationAppliedTime = applied_time
@@ -402,7 +409,7 @@ class ExtHandlersHandler(object):
                           message=msg)
                 return False
 
-            if status != _VALID_EXTENSION_STATUS.success:
+            if status != ValidHandlerStatus.success:
                 msg = "Extension {0} did not succeed. Status was {1}".format(ext.name, status)
                 logger.warn(msg)
                 add_event(AGENT_NAME,
@@ -1101,23 +1108,35 @@ class ExtHandlerInstance(object):
         ext_status = ExtensionStatus(seq_no=seq_no)
 
         try:
-            data_str, data = self._read_and_parse_json_status_file(ext, seq_no, ext_status_file)
+            data_str, data = self._read_and_parse_json_status_file(ext_status_file)
         except ExtensionStatusError as e:
-            logger.periodic_warn(logger.EVERY_HALF_HOUR, u"[PERIODIC] " + ustr(e))
+            msg = ""
+            if e.code == ExtensionStatusError.CouldNotReadStatusFile:
+                ext_status.code = ExtensionErrorCodes.PluginUnknownFailure
+                msg = u"We couldn't read any status for {0}-{1} extension, for the sequence number {2}. It failed due" \
+                      u" to {3}".format(ext.name, self.ext_handler.properties.version, seq_no, e)
+            elif ExtensionStatusError.InvalidJsonFile:
+                ext_status.code = ExtensionErrorCodes.PluginSettingsStatusInvalid
+                msg = u"The status reported by the extension {0}-{1}(Sequence number {2}), was in an " \
+                      u"incorrect format and the agent could not parse it correctly. Failed due to {3}" \
+                      .format(ext.name, self.ext_handler.properties.version, seq_no, e)
+
+            # This log is periodic due to the verbose nature of the status check. Please make sure that the message
+            # constructed above does not change very frequently and includes important info such as sequence number,
+            # extension name to make sure that the log reflects changes in the extension sequence for which the
+            # status is being sent.
+            logger.periodic_warn(logger.EVERY_HALF_HOUR, u"[PERIODIC] " + msg)
             add_periodic(delta=logger.EVERY_HALF_HOUR, name=ext.name, version=self.ext_handler.properties.version,
-                         op=WALAEventOperation.StatusProcessing, is_success=False, message=ustr(e),
+                         op=WALAEventOperation.StatusProcessing, is_success=False, message=msg,
                          log_event=False)
 
-            ext_status.message = ustr(e)
-            ext_status.status = _VALID_EXTENSION_STATUS.error
-            ext_status.code = ExtensionErrorCodes.PluginSettingsStatusInvalid if \
-                e.code == ExtensionStatusError.InvalidJsonFile else \
-                ExtensionErrorCodes.PluginUnknownFailure
+            ext_status.message = msg
+            ext_status.status = ValidHandlerStatus.error
 
             return ext_status
 
-        # We did not encounter InvalidJsonFile/CouldNotReadStatusFile and thus the status file was correctly written and has
-        # valid json.
+        # We did not encounter InvalidJsonFile/CouldNotReadStatusFile and thus the status file was correctly written
+        # and has valid json.
         try:
             parse_ext_status(ext_status, data)
             if len(data_str) > _MAX_STATUS_FILE_SIZE_IN_BYTES:
@@ -1143,7 +1162,7 @@ class ExtHandlerInstance(object):
                                      "following error: {2}".format(ext.name, self.ext_handler.properties.version,
                                                                    ustr(e))
                 ext_status.code = ExtensionErrorCodes.PluginSettingsStatusInvalid
-                ext_status.status = _VALID_EXTENSION_STATUS.error
+                ext_status.status = ValidHandlerStatus.error
 
         return ext_status
 
@@ -1436,7 +1455,8 @@ class ExtHandlerInstance(object):
         # Will have to revisit once the feature to enable multiple runtime settings is rolled out by CRP
         return self.ext_handler.properties.extensions[0].sequenceNumber
 
-    def _read_and_parse_json_status_file(self, ext, seq_no, ext_status_file):
+    @staticmethod
+    def _read_and_parse_json_status_file(ext_status_file):
         failed_to_read = False
         failed_to_parse_json = False
         raised_exception = None
@@ -1457,14 +1477,11 @@ class ExtHandlerInstance(object):
             time.sleep(_STATUS_FILE_RETRY_DELAY)
 
         if failed_to_read:
-            msg = u"We couldn't read any status for {0}-{1} extension, for the sequence number {2}. It failed due to " \
-                  u"{3}".format(ext.name, self.ext_handler.properties.version, seq_no, raised_exception)
-            raise ExtensionStatusError(msg=msg, code=ExtensionStatusError.CouldNotReadStatusFile)
+            raise ExtensionStatusError(msg=ustr(raised_exception), inner=raised_exception,
+                                       code=ExtensionStatusError.CouldNotReadStatusFile)
         elif failed_to_parse_json:
-            msg = u"The status reported by the extension {0}-{1}(Sequence number {2}), was in an incorrect format and " \
-                  u"the agent could not parse it correctly. Failed due to {3}" \
-                  .format(ext.name, self.ext_handler.properties.version, seq_no, raised_exception)
-            raise ExtensionStatusError(msg=msg, code=ExtensionStatusError.InvalidJsonFile)
+            raise ExtensionStatusError(msg=ustr(raised_exception), inner=raised_exception,
+                                       code=ExtensionStatusError.InvalidJsonFile)
         else:
             return data_str, data
 
