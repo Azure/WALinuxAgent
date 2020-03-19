@@ -2786,7 +2786,9 @@ class TestCollectExtensionStatus(ExtensionTestCase):
         self.assertEqual(ext_status.configurationAppliedTime, None)
         self.assertEqual(ext_status.operation, "Enable")
         self.assertEqual(ext_status.sequenceNumber, 0)
-        self.assertRegex(ext_status.message, "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Vestibulum non lacinia urna, sit .*")
+        # [TRUNCATED] comes from azurelinuxagent.ga.exthandlers._TRUNCATED_SUFFIX
+        self.assertRegex(ext_status.message, r"Lorem ipsum dolor sit amet, consectetur adipiscing elit. Vestibulum non "
+                                             r"lacinia urna, sit .*\[TRUNCATED\]")
         self.maxDiff = None
         self.assertEqual(ext_status.status, ValidHandlerStatus.success)
         self.assertEqual(len(ext_status.substatusList), 1) # NUM OF SUBSTATUS PARSED
