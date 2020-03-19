@@ -14,29 +14,51 @@
 #
 # Requires Python 2.6+ and Openssl 1.0+
 #
-
+import glob
+import json
 import os.path
+import shutil
 import subprocess
+import tempfile
+import time
 import unittest
+import zipfile
 
-from datetime import timedelta
+import datetime
 
+from azurelinuxagent.common import conf
+from azurelinuxagent.common.cgroupconfigurator import CGroupConfigurator
+from azurelinuxagent.common.datacontract import get_properties
 from azurelinuxagent.common.protocol.util import get_protocol_util
+from azurelinuxagent.common.utils import fileutil
+from azurelinuxagent.common.utils.fileutil import read_file
+from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
+from azurelinuxagent.common.version import PY_VERSION_MAJOR, PY_VERSION_MINOR, PY_VERSION_MICRO, AGENT_NAME, \
+    GOAL_STATE_AGENT_VERSION, CURRENT_VERSION, DISTRO_NAME, DISTRO_VERSION
+from azurelinuxagent.ga.exthandlers import ExtHandlerState, ExtHandlersHandler, ExtHandlerInstance, HANDLER_PKG_EXT, \
+    migrate_handler_state, get_exthandlers_handler, AGENT_STATUS_FILE, ExtCommandEnvVariable, \
+    HandlerManifest, NOT_RUN, ValidHandlerStatus
 
 from azurelinuxagent.ga.monitor import get_monitor_handler
 from nose.plugins.attrib import attr
 from tests.protocol import mockwiredata
+from tests.protocol.mocks import mock_wire_protocol
+from tests.protocol.mockwiredata import DATA_FILE
 from tests.tools import are_cgroups_enabled, AgentTestCase, data_dir, i_am_root, MagicMock, Mock, \
     skip_if_predicate_false, patch, is_trusty_in_travis, skip_if_predicate_true
 
-from azurelinuxagent.common.exception import ResourceGoneError
-from azurelinuxagent.common.protocol.restapi import Extension, ExtHandlerProperties
-from azurelinuxagent.ga.exthandlers import *
+from azurelinuxagent.common.exception import ResourceGoneError, ExtensionDownloadError, ProtocolError, \
+    ExtensionErrorCodes, ExtensionError, ExtensionUpdateError
+from azurelinuxagent.common.protocol.restapi import Extension, ExtHandlerProperties, ExtHandler, ExtHandlerStatus, \
+    ExtensionStatus
 from azurelinuxagent.common.protocol.wire import WireProtocol, InVMArtifactsProfile
 from azurelinuxagent.common.utils.restutil import KNOWN_WIRESERVER_IP
 
 # Mocking the original sleep to reduce test execution time
 SLEEP = time.sleep
+
+
+SUCCESS_CODE_FROM_STATUS_FILE = 1
 
 
 def mock_sleep(sec=0.01):
@@ -313,6 +335,8 @@ class ExtensionTestCase(AgentTestCase):
 @patch("azurelinuxagent.common.protocol.wire.CryptUtil")
 @patch("azurelinuxagent.common.utils.restutil.http_get")
 class TestExtension(ExtensionTestCase):
+    def setUp(self):
+        AgentTestCase.setUp(self)
 
     def _assert_handler_status(self, report_vm_status, expected_status,
                                expected_ext_count, version,
@@ -386,6 +410,11 @@ class TestExtension(ExtensionTestCase):
         patch_command.return_value = "exit 1"
 
         return test_data, exthandlers_handler, protocol
+
+    @staticmethod
+    def _create_extension_handlers_handler(protocol):
+        handler = get_exthandlers_handler(protocol)
+        return handler
 
     def test_ext_handler(self, *args):
         # Test enable scenario.
@@ -1047,7 +1076,7 @@ class TestExtension(ExtensionTestCase):
 
         exthandlers_handler.run()
         self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.0.0")
-        self._assert_ext_status(protocol.report_ext_status, "error", 0)
+        self._assert_ext_status(protocol.report_ext_status, ValidHandlerStatus.error, 0)
 
     def test_wait_for_handler_successful_completion_empty_exts(self, *args):
         '''
@@ -1172,10 +1201,10 @@ class TestExtension(ExtensionTestCase):
         os.path.exists = orig_state
 
     def test_is_ext_handling_complete(self, *args):
-        '''
+        """
         Testing is_ext_handling_complete() with various input and
         verifying against the expected output values.
-        '''
+        """
         test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE)
         exthandlers_handler, protocol = self._create_mock(test_data, *args)
 
@@ -1522,7 +1551,7 @@ class TestExtension(ExtensionTestCase):
                                         if patch_get_update_command.return_value in extension_call])
             enable_command_count = len([extension_call for extension_call in extension_calls
                                         if "-enable" in extension_call])
-            
+
             self.assertEquals(1, update_command_count)
             self.assertEquals(0, enable_command_count)
 
@@ -2691,6 +2720,182 @@ class TestExtensionUpdateOnFailure(ExtensionTestCase):
                 ExtCommandEnvVariable.UninstallReturnCode, exit_code) in install_kwargs['message'])
             self.assertTrue(test_env_file_name + " -u" in update_kwargs['message'] and "%s=%s" % (
                 ExtCommandEnvVariable.DisableReturnCode, exit_code) in update_kwargs['message'])
+
+
+@patch('time.sleep', side_effect=lambda _: mock_sleep(0.001))
+class TestCollectExtensionStatus(ExtensionTestCase):
+    def setUp(self):
+        ExtensionTestCase.setUp(self)
+        self.lib_dir = tempfile.mkdtemp()
+
+    def _setup_extension_for_validating_collect_ext_status(self, mock_lib_dir, status_file, *args):
+        handler_name = "TestHandler"
+        handler_version = "1.0.0"
+        mock_lib_dir.return_value = self.lib_dir
+        fileutil.mkdir(os.path.join(self.lib_dir, handler_name + "-" + handler_version, "config"))
+        fileutil.mkdir(os.path.join(self.lib_dir, handler_name + "-" + handler_version, "status"))
+        shutil.copy(os.path.join(data_dir, "ext", status_file),
+                    os.path.join(self.lib_dir, handler_name + "-" + handler_version, "status", "0.status"))
+        shutil.copy(tempfile.mkstemp(prefix="test-file")[1],
+                    os.path.join(self.lib_dir, handler_name + "-" + handler_version, "config", "0.settings"))
+
+        with mock_wire_protocol(DATA_FILE) as protocol:
+            exthandler = ExtHandler(name=handler_name)
+            exthandler.properties.version = handler_version
+            extension = Extension(name=handler_name, sequenceNumber=0)
+            exthandler.properties.extensions.append(extension)
+
+            return ExtHandlerInstance(exthandler, protocol), extension
+
+    @patch("azurelinuxagent.common.conf.get_lib_dir")
+    def test_collect_ext_status(self, mock_lib_dir, *args):
+        """
+        This test validates that collect_ext_status correctly picks up the status file (sample-status.json) and then
+        parses it correctly.
+        """
+        ext_handler_i, extension = self._setup_extension_for_validating_collect_ext_status(mock_lib_dir,
+                                                                                           "sample-status.json", *args)
+        ext_status = ext_handler_i.collect_ext_status(extension)
+
+        self.assertEqual(ext_status.code, SUCCESS_CODE_FROM_STATUS_FILE)
+        self.assertEqual(ext_status.configurationAppliedTime, None)
+        self.assertEqual(ext_status.operation, "Enable")
+        self.assertEqual(ext_status.sequenceNumber, 0)
+        self.assertEqual(ext_status.message, "Aenean semper nunc nisl, vitae sollicitudin felis consequat at. In "
+                                             "lobortis elementum sapien, non commodo odio semper ac.")
+        self.assertEqual(ext_status.status, ValidHandlerStatus.success)
+
+        self.assertEqual(len(ext_status.substatusList), 1)
+        sub_status = ext_status.substatusList[0]
+        self.assertEqual(sub_status.code, "0")
+        self.assertEqual(sub_status.message, None)
+        self.assertEqual(sub_status.status, ValidHandlerStatus.success)
+
+    @patch("azurelinuxagent.common.conf.get_lib_dir")
+    def test_collect_ext_status_very_large_status_message(self, mock_lib_dir, *args):
+        """
+        Testing collect_ext_status() with a very large status file (>128K) to see if it correctly parses the status
+        without generating a really large message.
+        """
+        ext_handler_i, extension = self._setup_extension_for_validating_collect_ext_status(mock_lib_dir,
+                                                                                           "sample-status-very-large.json",
+                                                                                           *args)
+        ext_status = ext_handler_i.collect_ext_status(extension)
+
+        self.assertEqual(ext_status.code, SUCCESS_CODE_FROM_STATUS_FILE)
+        self.assertEqual(ext_status.configurationAppliedTime, None)
+        self.assertEqual(ext_status.operation, "Enable")
+        self.assertEqual(ext_status.sequenceNumber, 0)
+        # [TRUNCATED] comes from azurelinuxagent.ga.exthandlers._TRUNCATED_SUFFIX
+        self.assertRegex(ext_status.message, r"Lorem ipsum dolor sit amet, consectetur adipiscing elit. Vestibulum non "
+                                             r"lacinia urna, sit .*\[TRUNCATED\]")
+        self.maxDiff = None
+        self.assertEqual(ext_status.status, ValidHandlerStatus.success)
+        self.assertEqual(len(ext_status.substatusList), 1) # NUM OF SUBSTATUS PARSED
+        for sub_status in ext_status.substatusList:
+            self.assertRegex(sub_status.name, '\[\{"status"\: \{"status": "success", "code": "1", "snapshotInfo": '
+                                              '\[\{"snapshotUri":.*')
+            self.assertEqual(0, sub_status.code)
+            self.assertRegex(sub_status.message, "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Vestibulum "
+                                                 "non lacinia urna, sit amet venenatis orci.*")
+            self.assertEqual(sub_status.status, ValidHandlerStatus.success)
+
+    @patch("azurelinuxagent.common.conf.get_lib_dir")
+    def test_collect_ext_status_very_large_status_file_with_multiple_substatus_nodes(self, mock_lib_dir, *args):
+        """
+        Testing collect_ext_status() with a very large status file (>128K) to see if it correctly parses the status
+        without generating a really large message. This checks if the multiple substatus messages are correctly parsed
+        and truncated.
+        """
+        ext_handler_i, extension = self._setup_extension_for_validating_collect_ext_status(
+            mock_lib_dir, "sample-status-very-large-multiple-substatuses.json", *args)  # ~470K bytes.
+        ext_status = ext_handler_i.collect_ext_status(extension)
+
+        self.assertEqual(ext_status.code, SUCCESS_CODE_FROM_STATUS_FILE)
+        self.assertEqual(ext_status.configurationAppliedTime, None)
+        self.assertEqual(ext_status.operation, "Enable")
+        self.assertEqual(ext_status.sequenceNumber, 0)
+        self.assertRegex(ext_status.message, "Lorem ipsum dolor sit amet, consectetur adipiscing elit. "
+                                             "Vestibulum non lacinia urna, sit .*")
+        self.assertEqual(ext_status.status, ValidHandlerStatus.success)
+        self.assertEqual(len(ext_status.substatusList), 12)  # The original file has 41 substatus nodes.
+        for sub_status in ext_status.substatusList:
+            self.assertRegex(sub_status.name, '\[\{"status"\: \{"status": "success", "code": "1", "snapshotInfo": '
+                                              '\[\{"snapshotUri":.*')
+            self.assertEqual(0, sub_status.code)
+            self.assertRegex(sub_status.message, "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Vestibulum "
+                                                 "non lacinia urna, sit amet venenatis orci.*")
+            self.assertEqual(ValidHandlerStatus.success, sub_status.status)
+
+    @patch("azurelinuxagent.common.conf.get_lib_dir")
+    def test_collect_ext_status_read_file_read_exceptions(self, mock_lib_dir, *args):
+        """
+        Testing collect_ext_status to validate the readfile exceptions.
+        """
+        ext_handler_i, extension = self._setup_extension_for_validating_collect_ext_status(mock_lib_dir,
+                                                                                           "sample-status.json", *args)
+        original_read_file = read_file
+
+        def mock_read_file(file, *args, **kwargs):
+            expected_status_file_path = os.path.join(self.lib_dir,
+                                                     ext_handler_i.ext_handler.name + "-" +
+                                                     ext_handler_i.ext_handler. properties.version,
+                                                     "status", "0.status")
+            if file == expected_status_file_path:
+                raise IOError("No such file or directory: {0}".format(expected_status_file_path))
+            else:
+                original_read_file(file, *args, **kwargs)
+
+        with patch('azurelinuxagent.common.utils.fileutil.read_file', mock_read_file) as patch_read_file:
+            ext_status = ext_handler_i.collect_ext_status(extension)
+
+            self.assertEqual(ext_status.code, ExtensionErrorCodes.PluginUnknownFailure)
+            self.assertEqual(ext_status.configurationAppliedTime, None)
+            self.assertEqual(ext_status.operation, None)
+            self.assertEqual(ext_status.sequenceNumber, 0)
+            self.assertRegex(ext_status.message, r".*We couldn't read any status for {0}-{1} extension, for the "
+                                                 r"sequence number {2}. It failed due to".
+                             format("TestHandler", "1.0.0", 0))
+            self.assertEqual(ext_status.status, ValidHandlerStatus.error)
+            self.assertEqual(len(ext_status.substatusList), 0)
+
+    @patch("azurelinuxagent.common.conf.get_lib_dir")
+    def test_collect_ext_status_json_exceptions(self, mock_lib_dir, *args):
+        """
+        Testing collect_ext_status() with a malformed json status file.
+        """
+        ext_handler_i, extension = self._setup_extension_for_validating_collect_ext_status(mock_lib_dir,
+                                        "sample-status-invalid-format-emptykey-line7.json", *args)
+        ext_status = ext_handler_i.collect_ext_status(extension)
+
+        self.assertEqual(ext_status.code, ExtensionErrorCodes.PluginSettingsStatusInvalid)
+        self.assertEqual(ext_status.configurationAppliedTime, None)
+        self.assertEqual(ext_status.operation, None)
+        self.assertEqual(ext_status.sequenceNumber, 0)
+        self.assertRegex(ext_status.message, r".*The status reported by the extension {0}-{1}\(Sequence number {2}\), "
+                                             "was in an incorrect format and the agent could not parse it correctly."
+                                             " Failed due to.*".
+                         format("TestHandler", "1.0.0", 0))
+        self.assertEqual(ext_status.status, ValidHandlerStatus.error)
+        self.assertEqual(len(ext_status.substatusList), 0)
+
+    @patch("azurelinuxagent.common.conf.get_lib_dir")
+    def test_collect_ext_status_parse_ext_status_exceptions(self, mock_lib_dir, *args):
+        """
+        Testing collect_ext_status() with a malformed json status file.
+        """
+        ext_handler_i, extension = self._setup_extension_for_validating_collect_ext_status(mock_lib_dir,
+                                        "sample-status-invalid-status-no-status-status-key.json", *args)
+        ext_status = ext_handler_i.collect_ext_status(extension)
+
+        self.assertEqual(ext_status.code, ExtensionErrorCodes.PluginSettingsStatusInvalid)
+        self.assertEqual(ext_status.configurationAppliedTime, None)
+        self.assertEqual(ext_status.operation, None)
+        self.assertEqual(ext_status.sequenceNumber, 0)
+        self.assertRegex(ext_status.message, "Could not get a valid status from the extension {0}-{1}. "
+                                             "Encountered the following error".format("TestHandler", "1.0.0"))
+        self.assertEqual(ext_status.status, ValidHandlerStatus.error)
+        self.assertEqual(len(ext_status.substatusList), 0)
 
 
 if __name__ == '__main__':
