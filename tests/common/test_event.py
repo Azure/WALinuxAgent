@@ -670,7 +670,7 @@ class TestEvent(HttpRequestPredicates, AgentTestCase):
         """
         def get_event_message_from_event_file(event_file):
             with open(event_file, "rb") as fd:
-                event_data = fd.read().decode("utf-8")  # this is the same way that event.collect_events reads event files
+                event_data = fd.read().decode("utf-8")  # event files are UTF-8 encoded
             telemetry_event = json.loads(event_data)
 
             for p in telemetry_event['parameters']:
