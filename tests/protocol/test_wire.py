@@ -421,8 +421,9 @@ class TestWireProtocol(AgentTestCase):
 
 class TestWireClient(HttpRequestPredicates, AgentTestCase):
     def test_get_ext_conf_without_extensions_should_retrieve_vmagent_manifests_info(self, *args):
-        # Asserts that WireClient correctly populates the extension config values given in the XML file when extensions
-        # are not present.
+        # Basic test for get_ext_conf() when extensions are not present in the config. The test verifies that
+        # get_ext_conf() fetches the correct data by comparing the returned data with the test data provided the
+        # mock_wire_protocol.
         with mock_wire_protocol(mockwiredata.DATA_FILE_NO_EXT) as protocol:
             ext_conf = protocol.client.get_ext_conf()
 
@@ -432,13 +433,16 @@ class TestWireClient(HttpRequestPredicates, AgentTestCase):
             vmagent_manifests = [manifest.family for manifest in ext_conf.vmagent_manifests.vmAgentManifests]
             self.assertEqual(0, len(ext_conf.vmagent_manifests.vmAgentManifests),
                              "Unexpected number of vmagent manifests in the extension config: [{0}]".format(vmagent_manifests))
-            self.assertIsNone(ext_conf.status_upload_blob)
-            self.assertIsNone(ext_conf.status_upload_blob_type)
-            self.assertIsNone(ext_conf.artifacts_profile_blob)
+            self.assertIsNone(ext_conf.status_upload_blob,
+                              "Status upload blob in the extension config is expected to be None")
+            self.assertIsNone(ext_conf.status_upload_blob_type,
+                              "Type of status upload blob in the extension config is expected to be None")
+            self.assertIsNone(ext_conf.artifacts_profile_blob,
+                              "Artifacts profile blob in the extensions config is expected to be None")
 
     def test_get_ext_conf_with_extensions_should_retrieve_ext_handlers_and_vmagent_manifests_info(self):
-        # Asserts that WireClient correctly populates the extension config values given in the XML file when extensions
-        # are present.
+        # Basic test for get_ext_conf() when extensions are present in the config. The test verifies that get_ext_conf()
+        # fetches the correct data by comparing the returned data with the test data provided the mock_wire_protocol.
         with mock_wire_protocol(mockwiredata.DATA_FILE) as protocol:
             wire_protocol_client = protocol.client
             ext_conf = wire_protocol_client.get_ext_conf()
@@ -454,7 +458,8 @@ class TestWireClient(HttpRequestPredicates, AgentTestCase):
                              ext_conf.status_upload_blob, "Unexpected value for status upload blob URI")
             self.assertEqual("BlockBlob", ext_conf.status_upload_blob_type,
                              "Unexpected status upload blob type in the extension config")
-            self.assertEqual(None, ext_conf.artifacts_profile_blob, "Artifacts profile blob should have been None")
+            self.assertEqual(None, ext_conf.artifacts_profile_blob,
+                             "Artifacts profile blob in the extension config should have been None")
 
     def test_download_ext_handler_pkg_should_not_invoke_host_channel_when_direct_channel_succeeds(self):
         extension_url = 'https://fake_host/fake_extension.zip'
