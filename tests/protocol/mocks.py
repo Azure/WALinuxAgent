@@ -155,6 +155,10 @@ class HttpRequestPredicates(object):
         return url.lower() == 'http://{0}/machine/?comp=goalstate'.format(restutil.KNOWN_WIRESERVER_IP)
 
     @staticmethod
+    def is_telemetry_request(url):
+        return url.lower() == 'http://{0}/machine?comp=telemetrydata'.format(restutil.KNOWN_WIRESERVER_IP)
+
+    @staticmethod
     def is_in_vm_artifacts_profile_request(url):
         return re.match(r'https://.+\.blob\.core\.windows\.net/\$system/.+\.(vmSettings|settings)\?.+', url) is not None
 
@@ -185,3 +189,11 @@ class HttpRequestPredicates(object):
         artifact_location = HttpRequestPredicates._get_host_plugin_request_artifact_location(url, request_kwargs)
         return HttpRequestPredicates.is_in_vm_artifacts_profile_request(artifact_location)
 
+
+class MockHttpResponse:
+    def __init__(self, status, body=''):
+        self.body = body
+        self.status = status
+
+    def read(self, *_):
+        return self.body

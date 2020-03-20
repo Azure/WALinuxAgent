@@ -17,26 +17,28 @@
 #
 from __future__ import print_function
 
+import json
 import os
 import re
 import shutil
 import threading
+import xml.dom
 from datetime import datetime, timedelta
-
+import azurelinuxagent.common.utils.textutil as textutil
 from azurelinuxagent.common import event, logger
 from azurelinuxagent.common.event import add_event, add_periodic, add_log_event, elapsed_milliseconds, report_metric, \
     WALAEventOperation, parse_xml_event, parse_json_event, AGENT_EVENT_FILE_EXTENSION, EVENTS_DIRECTORY
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.protocol.goal_state import GoalState
 from tests.protocol import mockwiredata
-from tests.protocol.mocks import mock_wire_protocol
+from tests.protocol.mocks import mock_wire_protocol, HttpRequestPredicates, MockHttpResponse
 from azurelinuxagent.common.version import CURRENT_AGENT, CURRENT_VERSION, AGENT_EXECUTION_MODE
 from azurelinuxagent.common.osutil import get_osutil
 from tests.tools import AgentTestCase, data_dir, load_data, Mock, patch, skip_if_predicate_true
 from tests.utils.event_logger_tools import EventLoggerTools
 
 
-class TestEvent(AgentTestCase):
+class TestEvent(HttpRequestPredicates, AgentTestCase):
     def setUp(self):
         AgentTestCase.setUp(self)
 
@@ -659,6 +661,71 @@ class TestEvent(AgentTestCase):
 
     def test_collect_events_should_ignore_extra_parameters_in_extension_events(self):
         self._assert_extension_event_includes_all_parameters_in_the_telemetry_schema('custom_script_extra_parameters.tld')
+
+    def test_report_event_should_encode_call_stack_correctly(self):
+        """
+        The Message in some telemetry events that include call stacks are being truncated in Kusto. While the issue doesn't seem
+        to be in the agent itself, this test verifies that the Message of the event we send in the HTTP request matches the
+        Message we read from the event's file.
+        """
+        def get_event_message_from_event_file(event_file):
+            with open(event_file, "rb") as fd:
+                event_data = fd.read().decode("utf-8")  # event files are UTF-8 encoded
+            telemetry_event = json.loads(event_data)
+
+            for p in telemetry_event['parameters']:
+                if p['name'] == 'Message':
+                    return p['value']
+
+            raise ValueError('Could not find the Message for the telemetry event in {0}'.format(path))
+
+        def get_event_message_from_http_request_body(http_request_body):
+            # The XML for the event is sent over as a CDATA element ("Event") in the request's body
+            request_body_xml_doc = textutil.parse_doc(http_request_body)
+
+            event_node = textutil.find(request_body_xml_doc, "Event")
+            if event_node is None:
+                raise ValueError('Could not find the Event node in the XML document')
+            if len(event_node.childNodes) != 1:
+                raise ValueError('The Event node in the XML document should have exactly 1 child')
+
+            event_node_first_child = event_node.childNodes[0]
+            if event_node_first_child.nodeType != xml.dom.Node.CDATA_SECTION_NODE:
+                raise ValueError('The Event node contents should be CDATA')
+
+            event_node_cdata = event_node_first_child.nodeValue
+
+            # The CDATA will contain a sequence of "<Param Name='foo' Value='bar'/>" nodes, which
+            # correspond to the parameters of the telemetry event.  Wrap those into a "Helper" node
+            # and extract the "Message"
+            event_xml_text = '<?xml version="1.0"?><Helper>{0}</Helper>'.format(event_node_cdata)
+            event_xml_doc = textutil.parse_doc(event_xml_text)
+            helper_node = textutil.find(event_xml_doc, "Helper")
+
+            for child in helper_node.childNodes:
+                if child.getAttribute('Name') == 'Message':
+                    return child.getAttribute('Value')
+
+            raise ValueError('Could not find the Message for the telemetry event. Request body: {0}'.format(http_request_body))
+
+        def http_post_handler(url, body, **__):
+            if self.is_telemetry_request(url):
+                http_post_handler.request_body = body
+                return MockHttpResponse(status=200)
+            return None
+        http_post_handler.request_body = None
+
+        with mock_wire_protocol(mockwiredata.DATA_FILE, http_post_handler=http_post_handler) as protocol:
+            event_file_path = self._create_test_event_file("event_with_callstack.waagent.tld")
+            expected_message = get_event_message_from_event_file(event_file_path)
+
+            event_list = event.collect_events()
+
+            protocol.client.report_event(event_list)
+
+            event_message = get_event_message_from_http_request_body(http_post_handler.request_body)
+
+            self.assertEquals(event_message, expected_message, "The Message in the HTTP request does not match the Message in the event's *.tld file")
 
 
 class TestMetrics(AgentTestCase):
