@@ -42,21 +42,15 @@ import azurelinuxagent.common.utils.restutil as restutil
 import azurelinuxagent.common.utils.textutil as textutil
 from azurelinuxagent.common.cgroupconfigurator import CGroupConfigurator
 
-from azurelinuxagent.common.event import add_event, add_periodic, \
-                                    elapsed_milliseconds, \
-                                    WALAEventOperation
-from azurelinuxagent.common.exception import ProtocolError, \
-                                            ResourceGoneError, \
-                                            UpdateError
+from azurelinuxagent.common.event import add_event, initialize_event_logger_vminfo_common_parameters, elapsed_milliseconds, WALAEventOperation
+from azurelinuxagent.common.exception import ResourceGoneError, UpdateError
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.osutil import get_osutil
 from azurelinuxagent.common.protocol.util import get_protocol_util
 from azurelinuxagent.common.protocol.hostplugin import HostPluginProtocol
 from azurelinuxagent.common.protocol.wire import WireProtocol
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
-from azurelinuxagent.common.version import AGENT_NAME, AGENT_VERSION, AGENT_LONG_VERSION, \
-                                            AGENT_DIR_GLOB, AGENT_PKG_GLOB, \
-                                            AGENT_PATTERN, AGENT_NAME_PATTERN, AGENT_DIR_PATTERN, \
+from azurelinuxagent.common.version import AGENT_NAME, AGENT_VERSION, AGENT_DIR_PATTERN, \
                                             CURRENT_AGENT, CURRENT_VERSION, DISTRO_NAME, DISTRO_VERSION, \
                                             is_current_agent_installed
 
@@ -118,9 +112,10 @@ class UpdateHandler(object):
 
         self.signal_handler = None
 
-        self.last_telemetry_heartbeat = None
-        self.heartbeat_id = str(uuid.uuid4()).upper()
-        self.heartbeat_counter = 0
+        self._last_telemetry_heartbeat = None
+        self._heartbeat_id = str(uuid.uuid4()).upper()
+        self._heartbeat_counter = 0
+        self._heartbeat_update_goal_state_error_count = 0
 
     def run_latest(self, child_args=None):
         """
@@ -264,6 +259,8 @@ class UpdateHandler(object):
             protocol = self.protocol_util.get_protocol()
             protocol.update_goal_state()
 
+            initialize_event_logger_vminfo_common_parameters(protocol)
+
             # Log OS-specific info.
             os_info_msg = u"Distro info: {0} {1}, osutil class being used: {2}, agent service name: {3}"\
                 .format(DISTRO_NAME, DISTRO_VERSION, type(self.osutil).__name__, self.osutil.service_name)
@@ -318,15 +315,9 @@ class UpdateHandler(object):
                 #
                 # Process the goal state
                 #
-                goal_state_fetched = False
-                try:
-                    protocol.update_goal_state()
-                    goal_state_fetched = True
-                except Exception as e:
-                    msg = u"Exception retrieving the goal state: {0}".format(ustr(traceback.format_exc()))
-                    add_event(AGENT_NAME, op=WALAEventOperation.FetchGoalState, version=CURRENT_VERSION, is_success=False, message=msg)
-
-                if goal_state_fetched:
+                if not protocol.try_update_goal_state():
+                    self._heartbeat_update_goal_state_error_count += 1
+                else:
                     if self._upgrade_available(protocol):
                         available_agent = self.get_latest_agent()
                         if available_agent is None:
@@ -531,8 +522,9 @@ class UpdateHandler(object):
             logger.warn(u"Exception occurred loading available agents: {0}", ustr(e))
         return
 
-    def _get_host_plugin(self, protocol):
-        return protocol.client.get_host_plugin() if protocol and protocol.client else None
+    def _get_host_plugin(self, protocol=None):
+        return protocol.client.get_host_plugin() \
+            if protocol and type(protocol) is WireProtocol and protocol.client else None
 
     def _get_pid_parts(self):
         pid_file = conf.get_agent_pid_file_path()
@@ -675,7 +667,7 @@ class UpdateHandler(object):
             return False
 
         family = conf.get_autoupdate_gafamily()
-        logger.verbose("Checking for agent family {0} updates", family)
+        logger.info("Checking for agent updates (family: {0})", family)
 
         self.last_attempt_time = now
 
@@ -741,19 +733,19 @@ class UpdateHandler(object):
         return pid_files, pid_file
 
     def _send_heartbeat_telemetry(self, protocol):
-        if self.last_telemetry_heartbeat is None:
-            self.last_telemetry_heartbeat = datetime.utcnow() - UpdateHandler.TELEMETRY_HEARTBEAT_PERIOD
+        if self._last_telemetry_heartbeat is None:
+            self._last_telemetry_heartbeat = datetime.utcnow() - UpdateHandler.TELEMETRY_HEARTBEAT_PERIOD
 
-        if datetime.utcnow() >= (self.last_telemetry_heartbeat + UpdateHandler.TELEMETRY_HEARTBEAT_PERIOD):
+        if datetime.utcnow() >= (self._last_telemetry_heartbeat + UpdateHandler.TELEMETRY_HEARTBEAT_PERIOD):
             dropped_packets = self.osutil.get_firewall_dropped_packets(protocol.get_endpoint())
-            msg = "{0};{1};{2}".format(self.heartbeat_counter, self.heartbeat_id, dropped_packets)
+            msg = "{0};{1};{2};{3}".format(self._heartbeat_counter, self._heartbeat_id, dropped_packets, self._heartbeat_update_goal_state_error_count)
 
-            add_event(name=AGENT_NAME, version=CURRENT_VERSION, op=WALAEventOperation.HeartBeat, is_success=True,
-                      message=msg, log_event=False)
-            self.heartbeat_counter += 1
+            add_event(name=AGENT_NAME, version=CURRENT_VERSION, op=WALAEventOperation.HeartBeat, is_success=True, message=msg, log_event=False)
+            self._heartbeat_counter += 1
+            self._heartbeat_update_goal_state_error_count = 0
 
             logger.info(u"[HEARTBEAT] Agent {0} is running as the goal state agent", CURRENT_AGENT)
-            self.last_telemetry_heartbeat = datetime.utcnow()
+            self._last_telemetry_heartbeat = datetime.utcnow()
 
 
 class GuestAgent(object):

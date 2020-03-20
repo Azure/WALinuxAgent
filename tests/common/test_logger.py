@@ -21,7 +21,7 @@ import tempfile
 from datetime import datetime, timedelta
 
 from azurelinuxagent.common.event import __event_logger__, add_log_event, MAX_NUMBER_OF_EVENTS, TELEMETRY_LOG_EVENT_ID,\
-    TELEMETRY_LOG_PROVIDER_ID
+    TELEMETRY_LOG_PROVIDER_ID, EVENTS_DIRECTORY
 import azurelinuxagent.common.logger as logger
 from azurelinuxagent.common.utils import fileutil
 from tests.tools import AgentTestCase, MagicMock, patch, skip_if_predicate_true
@@ -38,7 +38,7 @@ class TestLogger(AgentTestCase):
         AgentTestCase.setUp(self)
 
         self.lib_dir = tempfile.mkdtemp()
-        self.event_dir = os.path.join(self.lib_dir, "events")
+        self.event_dir = os.path.join(self.lib_dir, EVENTS_DIRECTORY)
         fileutil.mkdir(self.event_dir)
 
         self.log_file = tempfile.mkstemp(prefix="logfile-")[1]
@@ -236,35 +236,6 @@ class TestLogger(AgentTestCase):
             appender.write(logger.LogLevel.INFO, "--unit-test-INFO--")
 
         self.assertEqual(5, mock.call_count)  # Only ERROR should be called.
-
-    @patch("azurelinuxagent.common.event.send_logs_to_telemetry", return_value=True)
-    @patch('azurelinuxagent.common.event.EventLogger.save_event')
-    def test_telemetry_logger_sending_correct_fields(self, mock_save, patch_conf_get_logs_to_telemetry):
-        appender = logger.TelemetryAppender(logger.LogLevel.WARNING, add_log_event)
-        appender.write(logger.LogLevel.WARNING, 'Cgroup controller "memory" is not mounted. '
-                                                'Failed to create a cgroup for extension '
-                                                'Microsoft.OSTCExtensions.DummyExtension-1.2.3.4')
-
-        self.assertEqual(1, mock_save.call_count)
-        telemetry_json = json.loads(mock_save.call_args[0][0])
-
-        self.assertEqual(TELEMETRY_LOG_PROVIDER_ID, telemetry_json['providerId'])
-        self.assertEqual(TELEMETRY_LOG_EVENT_ID, telemetry_json['eventId'])
-
-        self.assertEqual(12, len(telemetry_json['parameters']))
-        for x in telemetry_json['parameters']:
-            if x['name'] == 'EventName':
-                self.assertEqual(x['value'], 'Log')
-            elif x['name'] == 'CapabilityUsed':
-                self.assertEqual(x['value'], 'WARNING')
-            elif x['name'] == 'Context1':
-                self.assertEqual(x['value'], 'Cgroup controller "memory" is not mounted. '
-                                             'Failed to create a cgroup for extension '
-                                             'Microsoft.OSTCExtensions.DummyExtension-1.2.3.4')
-            elif x['name'] == 'Context2':
-                self.assertEqual(x['value'], '')
-            elif x['name'] == 'Context3':
-                self.assertEqual(x['value'], '')
 
     @patch('azurelinuxagent.common.event.EventLogger.save_event')
     def test_telemetry_logger_not_on_by_default(self, mock_save):
@@ -492,7 +463,7 @@ class TestAppender(AgentTestCase):
         AgentTestCase.setUp(self)
 
         self.lib_dir = tempfile.mkdtemp()
-        self.event_dir = os.path.join(self.lib_dir, "events")
+        self.event_dir = os.path.join(self.lib_dir, EVENTS_DIRECTORY)
         fileutil.mkdir(self.event_dir)
 
         self.log_file = tempfile.mkstemp(prefix="logfile-")[1]

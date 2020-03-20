@@ -16,12 +16,13 @@
 #
 
 import unittest
+import os
 from multiprocessing import Queue
 from threading import Thread
 
 from tests.tools import AgentTestCase, MagicMock, Mock, patch, clear_singleton_instances
 from azurelinuxagent.common.exception import *
-from azurelinuxagent.common.protocol.util import get_protocol_util
+from azurelinuxagent.common.protocol.util import get_protocol_util, TAG_FILE_NAME
 from azurelinuxagent.common.utils.restutil import KNOWN_WIRESERVER_IP
 from azurelinuxagent.common.protocol.util import ProtocolUtil
 from errno import ENOENT
@@ -43,33 +44,30 @@ class TestProtocolUtil(AgentTestCase):
         self.assertEqual(protocol_util1, protocol_util2)
 
     def test_get_protocol_util_should_return_different_object_for_different_thread(self, _):
-        def get_util_obj(q, err):
-            try:
-                q.put(get_protocol_util())
-            except Exception as e:
-                err.put(str(e))
+        protocol_util_instances = []
+        errors = []
 
-        queue = Queue()
-        errors = Queue()
-        t1 = Thread(target=get_util_obj, args=(queue, errors))
-        t2 = Thread(target=get_util_obj, args=(queue, errors))
+        def get_protocol_util_instance():
+            try:
+                protocol_util_instances.append(get_protocol_util())
+            except Exception as e:
+                errors.append(e)
+
+        t1 = Thread(target=get_protocol_util_instance)
+        t2 = Thread(target=get_protocol_util_instance)
         t1.start()
         t2.start()
         t1.join()
         t2.join()
 
-        errs = []
-        while not errors.empty():
-            errs.append(errors.get())
-        if len(errs) > 0:
-            raise Exception("Unable to fetch protocol_util. Errors: %s" % ' , '.join(errs))
-
-        self.assertEqual(2, queue.qsize())  # Assert that there are 2 objects in the queue
-        self.assertNotEqual(queue.get(), queue.get())
+        self.assertEqual(len(protocol_util_instances), 2, "Could not create the expected number of protocols. Errors: [{0}]".format(errors))
+        self.assertNotEqual(protocol_util_instances[0], protocol_util_instances[1], "The instances created by different threads should be different")
     
+    @patch("azurelinuxagent.common.protocol.util.MetadataProtocol")
     @patch("azurelinuxagent.common.protocol.util.WireProtocol")
-    def test_detect_protocol(self, WireProtocol, _):
+    def test_detect_protocol(self, WireProtocol, MetadataProtocol, _):
         WireProtocol.return_value = MagicMock()
+        MetadataProtocol.return_value = MagicMock()
 
         protocol_util = get_protocol_util()
         
@@ -84,11 +82,42 @@ class TestProtocolUtil(AgentTestCase):
         protocol_util.clear_protocol()
         WireProtocol.return_value.detect.side_effect = ProtocolError()
 
+        protocol = protocol_util.get_protocol()
+        self.assertEquals(MetadataProtocol.return_value, protocol)
+
+        # Test no protocol is available
+        protocol_util.clear_protocol()
+        WireProtocol.return_value.detect.side_effect = ProtocolError()
+        MetadataProtocol.return_value.detect.side_effect = ProtocolError()
+
         self.assertRaises(ProtocolError, protocol_util.get_protocol)
+
+    def test_detect_protocol_by_file(self, _):
+        protocol_util = get_protocol_util()
+        protocol_util._detect_wire_protocol = Mock()
+        protocol_util._detect_metadata_protocol = Mock()
+
+        tag_file = os.path.join(self.tmp_dir, TAG_FILE_NAME)
+
+        # Test tag file doesn't exist
+        protocol_util.get_protocol(by_file=True)
+        protocol_util._detect_wire_protocol.assert_any_call()
+        protocol_util._detect_metadata_protocol.assert_not_called()
+
+        # Test tag file exists
+        protocol_util.clear_protocol()
+        protocol_util._detect_wire_protocol.reset_mock()
+        protocol_util._detect_metadata_protocol.reset_mock()
+        with open(tag_file, "w+") as tag_fd:
+            tag_fd.write("")
+
+        protocol_util.get_protocol(by_file=True)
+        protocol_util._detect_metadata_protocol.assert_any_call()
+        protocol_util._detect_wire_protocol.assert_not_called()
 
     @patch("azurelinuxagent.common.conf.get_lib_dir")
     @patch("azurelinuxagent.common.protocol.util.WireProtocol")
-    def test_detect_protocol_no_dhcp(self, WireProtocol, mock_get_lib_dir, _):
+    def test_detect_wire_protocol_no_dhcp(self, WireProtocol, mock_get_lib_dir, _):
         WireProtocol.return_value.detect = Mock()
         mock_get_lib_dir.return_value = self.tmp_dir
 
@@ -104,27 +133,64 @@ class TestProtocolUtil(AgentTestCase):
         endpoint_file = protocol_util._get_wireserver_endpoint_file_path()
 
         # Test wire protocol when no endpoint file has been written
-        protocol_util._detect_protocol()
+        protocol_util._detect_wire_protocol()
         self.assertEqual(KNOWN_WIRESERVER_IP, protocol_util.get_wireserver_endpoint())
 
+        # Test wire protocol when endpoint was previously detected
+        protocol_util.clear_protocol()
+        with open(endpoint_file, "w+") as endpoint_fd:
+            endpoint_fd.write("baz.qux")
+
+        protocol_util._detect_wire_protocol()
+        self.assertEqual("baz.qux", protocol_util.get_wireserver_endpoint())
+
         # Test wire protocol on dhcp failure
+        protocol_util.clear_protocol()
         protocol_util.osutil.is_dhcp_available.return_value = True
         protocol_util.dhcp_handler.run.side_effect = DhcpError()
 
-        self.assertRaises(ProtocolError, protocol_util._detect_protocol)
+        self.assertRaises(ProtocolError, protocol_util._detect_wire_protocol)
 
+    @patch("azurelinuxagent.common.protocol.util.MetadataProtocol")
     @patch("azurelinuxagent.common.protocol.util.WireProtocol")
-    def test_get_protocol(self, WireProtocol, _):
+    def test_get_protocol(self, WireProtocol, MetadataProtocol, _):
         WireProtocol.return_value = MagicMock()
+        MetadataProtocol.return_value = MagicMock()
+
         protocol_util = get_protocol_util()
         protocol_util.get_wireserver_endpoint = Mock()
         protocol_util._detect_protocol = MagicMock()
+
+        # Test for wire protocol
         protocol_util._save_protocol("WireProtocol")
 
         protocol = protocol_util.get_protocol()
-
         self.assertEquals(WireProtocol.return_value, protocol)
         protocol_util.get_wireserver_endpoint.assert_any_call()
+
+        # Test to ensure protocol persists
+        protocol_util.get_wireserver_endpoint.reset_mock()
+        protocol_util._save_protocol("MetadataProtocol")
+
+        protocol = protocol_util.get_protocol()
+        self.assertEquals(WireProtocol.return_value, protocol)
+        protocol_util.get_wireserver_endpoint.assert_not_called()
+
+        # Test for metadata protocol
+        protocol_util.clear_protocol()
+        protocol_util._save_protocol("MetadataProtocol")
+
+        protocol = protocol_util.get_protocol()
+        self.assertEquals(MetadataProtocol.return_value, protocol)
+        protocol_util.get_wireserver_endpoint.assert_not_called()
+
+        # Test for unknown protocol
+        protocol_util.clear_protocol()
+        protocol_util._save_protocol("Not_a_Protocol")
+        protocol_util._detect_protocol.side_effect = NotImplementedError()
+
+        self.assertRaises(NotImplementedError, protocol_util.get_protocol)
+        protocol_util.get_wireserver_endpoint.assert_not_called()
 
     @patch("azurelinuxagent.common.utils.fileutil")
     @patch("azurelinuxagent.common.conf.get_lib_dir")

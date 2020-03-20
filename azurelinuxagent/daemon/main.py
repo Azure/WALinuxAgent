@@ -27,7 +27,7 @@ import azurelinuxagent.common.logger as logger
 import azurelinuxagent.common.utils.fileutil as fileutil
 
 from azurelinuxagent.common.cgroupconfigurator import CGroupConfigurator
-from azurelinuxagent.common.event import add_event, WALAEventOperation
+from azurelinuxagent.common.event import add_event, WALAEventOperation, initialize_event_logger_vminfo_common_parameters
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.osutil import get_osutil
 from azurelinuxagent.common.protocol.util import get_protocol_util
@@ -119,6 +119,10 @@ class DaemonHandler(object):
             fileutil.mkdir(conf.get_lib_dir(), mode=0o700)
             os.chdir(conf.get_lib_dir())
 
+    def _initialize_telemetry(self):
+        protocol = self.protocol_util.get_protocol()
+        initialize_event_logger_vminfo_common_parameters(protocol)
+
     def daemon(self, child_args=None):
         logger.info("Run daemon")
 
@@ -141,6 +145,10 @@ class DaemonHandler(object):
 
         self.provision_handler.run()
 
+        # Once we have the protocol, complete initialization of the telemetry fields
+        # that require the goal state and IMDS
+        self._initialize_telemetry()
+
         # Initialize the agent cgroup
         CGroupConfigurator.get_instance().create_agent_cgroups(track_cgroups=False)
 
@@ -158,6 +166,7 @@ class DaemonHandler(object):
                 protocol = self.protocol_util.get_protocol()
                 if type(protocol) is not WireProtocol:
                     raise Exception("Attempt to setup RDMA without Wireserver")
+
                 protocol.client.update_goal_state(forced=True)
 
                 setup_rdma_device(nd_version, protocol.client.get_shared_conf())

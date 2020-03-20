@@ -5,15 +5,16 @@ from __future__ import print_function
 
 import tempfile
 import unittest
-import uuid
 from threading import currentThread
 
 from azurelinuxagent.ga.env import EnvHandler
 
 from azurelinuxagent.common.protocol.goal_state import ExtensionsConfig
 from azurelinuxagent.common.protocol.hostplugin import *
+from azurelinuxagent.common.protocol.metadata import *
 from azurelinuxagent.common.protocol.util import ProtocolUtil
 from azurelinuxagent.common.protocol.wire import *
+from azurelinuxagent.common.version import AGENT_PKG_GLOB, AGENT_DIR_GLOB
 from azurelinuxagent.ga.monitor import MonitorHandler
 from azurelinuxagent.ga.update import *
 from tests.tools import AgentTestCase, call, data_dir, DEFAULT, patch, load_bin_data, load_data, Mock, MagicMock, \
@@ -895,6 +896,13 @@ class TestUpdate(UpdateTestCase):
         self.assertEqual(1, mock_get_host.call_count)
         self.assertEqual("faux host", host)
 
+    @patch('azurelinuxagent.common.protocol.wire.WireClient.get_host_plugin')
+    def test_get_host_plugin_returns_none_otherwise(self, mock_get_host):
+        protocol = MetadataProtocol()
+        host = self.update_handler._get_host_plugin(protocol=protocol)
+        mock_get_host.assert_not_called()
+        self.assertEqual(None, host)
+
     def test_get_latest_agent(self):
         latest_version = self.prepare_agents()
 
@@ -1232,24 +1240,25 @@ class TestUpdate(UpdateTestCase):
             with patch('azurelinuxagent.ga.remoteaccess.get_remote_access_handler') as mock_ra_handler:
                 with patch('azurelinuxagent.ga.monitor.get_monitor_handler') as mock_monitor:
                     with patch('azurelinuxagent.ga.env.get_env_handler') as mock_env:
-                        with patch('time.sleep', side_effect=iterator) as mock_sleep:
-                            with patch('sys.exit') as mock_exit:
-                                if isinstance(os.getppid, MagicMock):
-                                    self.update_handler.run()
-                                else:
-                                    with patch('os.getppid', return_value=42):
+                        with patch('azurelinuxagent.ga.update.initialize_event_logger_vminfo_common_parameters'):
+                            with patch('time.sleep', side_effect=iterator) as mock_sleep:
+                                with patch('sys.exit') as mock_exit:
+                                    if isinstance(os.getppid, MagicMock):
                                         self.update_handler.run()
+                                    else:
+                                        with patch('os.getppid', return_value=42):
+                                            self.update_handler.run()
 
-                                self.assertEqual(1, mock_handler.call_count)
-                                self.assertEqual(mock_handler.return_value.method_calls, calls)
-                                self.assertEqual(1, mock_ra_handler.call_count)
-                                self.assertEqual(mock_ra_handler.return_value.method_calls, calls)
-                                self.assertEqual(invocations, mock_sleep.call_count)
-                                if invocations > 0:
-                                    self.assertEqual(sleep_interval, mock_sleep.call_args[0])
-                                self.assertEqual(1, mock_monitor.call_count)
-                                self.assertEqual(1, mock_env.call_count)
-                                self.assertEqual(1, mock_exit.call_count)
+                                    self.assertEqual(1, mock_handler.call_count)
+                                    self.assertEqual(mock_handler.return_value.method_calls, calls)
+                                    self.assertEqual(1, mock_ra_handler.call_count)
+                                    self.assertEqual(mock_ra_handler.return_value.method_calls, calls)
+                                    self.assertEqual(invocations, mock_sleep.call_count)
+                                    if invocations > 0:
+                                        self.assertEqual(sleep_interval, mock_sleep.call_args[0])
+                                    self.assertEqual(1, mock_monitor.call_count)
+                                    self.assertEqual(1, mock_env.call_count)
+                                    self.assertEqual(1, mock_exit.call_count)
 
     def test_run(self):
         self._test_run()
@@ -1463,7 +1472,6 @@ class TestUpdate(UpdateTestCase):
             "The heartbeat was not written to the agent's log"
         )
 
-
 class MonitorThreadTest(AgentTestCase):
     def setUp(self):
         AgentTestCase.setUp(self)
@@ -1485,11 +1493,12 @@ class MonitorThreadTest(AgentTestCase):
         with patch('os.getpid', return_value=42):
             with patch.object(UpdateHandler, '_is_orphaned') as mock_is_orphaned:
                 mock_is_orphaned.__get__ = Mock(return_value=False)
-                with patch('azurelinuxagent.ga.exthandlers.get_exthandlers_handler') as mock_handler:
-                    with patch('azurelinuxagent.ga.remoteaccess.get_remote_access_handler') as mock_ra_handler:
-                        with patch('time.sleep', side_effect=iterator) as mock_sleep:
-                            with patch('sys.exit') as mock_exit:
-                                self.update_handler.run()
+                with patch('azurelinuxagent.ga.exthandlers.get_exthandlers_handler'):
+                    with patch('azurelinuxagent.ga.remoteaccess.get_remote_access_handler'):
+                        with patch('azurelinuxagent.ga.update.initialize_event_logger_vminfo_common_parameters'):
+                            with patch('time.sleep', side_effect=iterator):
+                                with patch('sys.exit'):
+                                    self.update_handler.run()
 
     @patch('azurelinuxagent.ga.monitor.get_monitor_handler')
     @patch('azurelinuxagent.ga.env.get_env_handler')
@@ -1611,34 +1620,6 @@ class MonitorThreadTest(AgentTestCase):
         self.assertEqual(True, mock_env_thread.run.called)
         self.assertEqual(True, mock_env_thread.is_alive.called)
         self.assertEqual(True, mock_env_thread.start.called)
-
-    @skip_if_predicate_true(lambda: True, "Test hangs stopping the monitor handler")
-    @patch("time.sleep", lambda *_: mock_sleep(0.01))
-    @patch("azurelinuxagent.common.protocol.util.ProtocolUtil.get_protocol")
-    @patch("azurelinuxagent.ga.monitor.get_imds_client")
-    @patch('azurelinuxagent.ga.monitor.get_monitor_handler')
-    @patch('azurelinuxagent.ga.env.get_env_handler')
-    def test_each_thread_should_have_separate_protocol_util(self, mock_env, mock_monitor, *args):
-
-        self.assertTrue(self.update_handler.running)
-        env_handler = EnvHandler()
-        monitor_handler = MonitorHandler()
-        mock_env.return_value = env_handler
-        mock_monitor.return_value = monitor_handler
-
-        self._test_run(invocations=0)
-        env_handler.stop()
-        monitor_handler.stop()
-
-        singleton_instances = {}
-        for inst in ProtocolUtil._instances:
-            if ProtocolUtil.__name__ in inst:
-                singleton_instances[inst] = ProtocolUtil._instances[inst]
-
-        self.assertEqual(3, len(singleton_instances))
-        self.assertIn("ProtocolUtil__MonitorHandler", singleton_instances)
-        self.assertIn("ProtocolUtil__EnvHandler", singleton_instances)
-        self.assertIn("ProtocolUtil__ExtHandler", singleton_instances)
 
 
 class ChildMock(Mock):

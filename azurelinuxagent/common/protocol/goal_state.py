@@ -23,7 +23,6 @@ import re
 import azurelinuxagent.common.conf as conf
 import azurelinuxagent.common.logger as logger
 from azurelinuxagent.common.datacontract import set_properties, DataContract, DataContractList
-from azurelinuxagent.common.event import CONTAINER_ID_ENV_VARIABLE
 from azurelinuxagent.common.utils import fileutil
 from azurelinuxagent.common.utils.cryptutil import CryptUtil
 from azurelinuxagent.common.utils.textutil import parse_doc, findall, find, findtext, getattrib, gettext
@@ -36,11 +35,14 @@ PEM_FILE_NAME = "Certificates.pem"
 TRANSPORT_CERT_FILE_NAME = "TransportCert.pem"
 TRANSPORT_PRV_FILE_NAME = "TransportPrivate.pem"
 
-# Store the last retrieved container id as an environment variable to be shared between threads for telemetry purposes
-CONTAINER_ID_ENV_VARIABLE = "AZURE_GUEST_AGENT_CONTAINER_ID"
-
 
 class GoalState(object):
+    #
+    # Some modules (e.g. telemetry) require an up-to-date container ID. We update this variable each time we
+    # fetch the goal state.
+    #
+    ContainerID = "00000000-0000-0000-0000-000000000000"
+
     def __init__(self, wire_client, full_goal_state=False, base_incarnation=None):
         """
         Fetches the goal state using the given wire client.
@@ -70,9 +72,17 @@ class GoalState(object):
         lbprobe_ports = find(xml_doc, "LBProbePorts")
         self.load_balancer_probe_port = findtext(lbprobe_ports, "Port")
 
-        os.environ[CONTAINER_ID_ENV_VARIABLE] = self.container_id
+        GoalState.ContainerID = self.container_id
 
-        if not (full_goal_state or base_incarnation is not None and self.incarnation != base_incarnation):
+        fetch_full_goal_state = False
+        if full_goal_state:
+            fetch_full_goal_state = True
+            reason = 'force update'
+        elif base_incarnation is not None and self.incarnation != base_incarnation:
+            fetch_full_goal_state = True
+            reason = 'new incarnation'
+
+        if not fetch_full_goal_state:
             self.hosting_env = None
             self.shared_conf = None
             self.certs = None
@@ -80,34 +90,42 @@ class GoalState(object):
             self.remote_access = None
             return
 
-        uri = findtext(xml_doc, "HostingEnvironmentConfig")
-        xml_text = wire_client.fetch_config(uri, wire_client.get_header())
-        self.hosting_env = HostingEnv(xml_text)
+        logger.info('Fetching new goal state [incarnation {0} ({1})]', self.incarnation, reason)
 
-        uri = findtext(xml_doc, "SharedConfig")
-        xml_text = wire_client.fetch_config(uri, wire_client.get_header())
-        self.shared_conf = SharedConfig(xml_text)
-
-        uri = findtext(xml_doc, "Certificates")
-        if uri is None:
-            self.certs = None
-        else:
-            xml_text = wire_client.fetch_config(uri, wire_client.get_header_for_cert())
-            self.certs = Certificates(xml_text)
-
-        uri = findtext(xml_doc, "ExtensionsConfig")
-        if uri is None:
-            self.ext_conf = ExtensionsConfig(None)
-        else:
+        try:
+            uri = findtext(xml_doc, "HostingEnvironmentConfig")
             xml_text = wire_client.fetch_config(uri, wire_client.get_header())
-            self.ext_conf = ExtensionsConfig(xml_text)
+            self.hosting_env = HostingEnv(xml_text)
 
-        uri = findtext(container, "RemoteAccessInfo")
-        if uri is None:
-            self.remote_access = None
-        else:
-            xml_text = wire_client.fetch_config(uri, wire_client.get_header_for_cert())
-            self.remote_access = RemoteAccess(xml_text)
+            uri = findtext(xml_doc, "SharedConfig")
+            xml_text = wire_client.fetch_config(uri, wire_client.get_header())
+            self.shared_conf = SharedConfig(xml_text)
+
+            uri = findtext(xml_doc, "Certificates")
+            if uri is None:
+                self.certs = None
+            else:
+                xml_text = wire_client.fetch_config(uri, wire_client.get_header_for_cert())
+                self.certs = Certificates(xml_text)
+
+            uri = findtext(xml_doc, "ExtensionsConfig")
+            if uri is None:
+                self.ext_conf = ExtensionsConfig(None)
+            else:
+                xml_text = wire_client.fetch_config(uri, wire_client.get_header())
+                self.ext_conf = ExtensionsConfig(xml_text)
+
+            uri = findtext(container, "RemoteAccessInfo")
+            if uri is None:
+                self.remote_access = None
+            else:
+                xml_text = wire_client.fetch_config(uri, wire_client.get_header_for_cert())
+                self.remote_access = RemoteAccess(xml_text)
+        except Exception as e:
+            logger.warn("Fetching the goal state failed: {0}", ustr(e))
+            raise
+        finally:
+            logger.info('Fetch goal state completed')
 
     @staticmethod
     def fetch_goal_state(wire_client):

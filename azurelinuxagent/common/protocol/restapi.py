@@ -27,13 +27,11 @@ class VMInfo(DataContract):
     def __init__(self,
                  subscriptionId=None,
                  vmName=None,
-                 containerId=None,
                  roleName=None,
                  roleInstanceName=None,
                  tenantName=None):
         self.subscriptionId = subscriptionId
         self.vmName = vmName
-        self.containerId = containerId
         self.roleName = roleName
         self.roleInstanceName = roleInstanceName
         self.tenantName = tenantName
@@ -238,6 +236,9 @@ class Protocol(DataContract):
         raise NotImplementedError()
 
     def update_goal_state(self):
+        raise NotImplementedError()
+
+    def try_update_goal_state(self):
         raise NotImplementedError()
 
     def update_host_plugin_from_goal_state(self):

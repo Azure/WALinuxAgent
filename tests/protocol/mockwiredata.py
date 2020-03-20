@@ -34,8 +34,13 @@ DATA_FILE = {
         "trans_prv": "wire/trans_prv",
         "trans_cert": "wire/trans_cert",
         "test_ext": "ext/sample_ext-1.3.0.zip",
-        "remote_access": None
+        "remote_access": None,
+        "in_vm_artifacts_profile": None
 }
+
+DATA_FILE_IN_VM_ARTIFACTS_PROFILE = DATA_FILE.copy()
+DATA_FILE_IN_VM_ARTIFACTS_PROFILE["ext_conf"] = "wire/ext_conf_in_vm_artifacts_profile.xml"
+DATA_FILE_IN_VM_ARTIFACTS_PROFILE["in_vm_artifacts_profile"] = "wire/in_vm_artifacts_profile.json"
 
 DATA_FILE_NO_EXT = DATA_FILE.copy()
 DATA_FILE_NO_EXT["goal_state"] = "wire/goal_state_no_ext.xml"
@@ -86,6 +91,7 @@ class WireProtocolData(object):
         self.call_counts = {
             "comp=versions": 0,
             "/versions": 0,
+            "/HealthService": 0,
             "goalstate": 0,
             "hostingenvuri": 0,
             "sharedconfiguri": 0,
@@ -95,7 +101,8 @@ class WireProtocolData(object):
             "extensionArtifact": 0,
             "manifest.xml": 0,
             "manifest_of_ga.xml": 0,
-            "ExampleHandlerLinux": 0
+            "ExampleHandlerLinux": 0,
+            "in_vm_artifacts_profile": 0
         }
         self.data_files = data_files
         self.version_info = None
@@ -110,6 +117,7 @@ class WireProtocolData(object):
         self.trans_cert = None
         self.ext = None
         self.remote_access = None
+        self.in_vm_artifacts_profile = None
 
         self.reload()
 
@@ -125,9 +133,14 @@ class WireProtocolData(object):
         self.trans_prv = load_data(self.data_files.get("trans_prv"))
         self.trans_cert = load_data(self.data_files.get("trans_cert"))
         self.ext = load_bin_data(self.data_files.get("test_ext"))
+
         remote_access_data_file = self.data_files.get("remote_access")
         if remote_access_data_file is not None:
             self.remote_access = load_data(remote_access_data_file)
+
+        in_vm_artifacts_profile_file = self.data_files.get("in_vm_artifacts_profile")
+        if in_vm_artifacts_profile_file is not None:
+            self.in_vm_artifacts_profile = load_data(in_vm_artifacts_profile_file)
 
     def mock_http_get(self, url, *args, **kwargs):
         content = None
@@ -135,13 +148,10 @@ class WireProtocolData(object):
         resp = MagicMock()
         resp.status = httpclient.OK
 
-        # wire server versions
-        if "comp=versions" in url:
+        if "comp=versions" in url:  # wire server versions
             content = self.version_info
             self.call_counts["comp=versions"] += 1
-
-        # HostPlugin versions
-        elif "/versions" in url:
+        elif "/versions" in url:  # HostPlugin versions
             content = '["2015-09-01"]'
             self.call_counts["/versions"] += 1
         elif "goalstate" in url:
@@ -162,6 +172,9 @@ class WireProtocolData(object):
         elif "remoteaccessinfouri" in url:
             content = self.remote_access
             self.call_counts["remoteaccessinfouri"] += 1
+        elif ".vmSettings" in url or ".settings" in url:
+            content = self.in_vm_artifacts_profile
+            self.call_counts["in_vm_artifacts_profile"] += 1
 
         else:
             # A stale GoalState results in a 400 from the HostPlugin
@@ -178,10 +191,10 @@ class WireProtocolData(object):
             # via the x-ms-artifact-location header
             if "extensionArtifact" in url:
                 self.call_counts["extensionArtifact"] += 1
-                if "headers" not in kwargs or \
-                    "x-ms-artifact-location" not in kwargs["headers"]:
-                    raise Exception("Bad HEADERS passed to HostPlugin: {0}",
-                            kwargs)
+                if "headers" not in kwargs:
+                    raise ValueError("HostPlugin request is missing the HTTP headers: {0}", kwargs)
+                if "x-ms-artifact-location" not in kwargs["headers"]:
+                    raise ValueError("HostPlugin request is missing the x-ms-artifact-location header: {0}", kwargs)
                 url = kwargs["headers"]["x-ms-artifact-location"]
 
             if "manifest.xml" in url:
@@ -195,8 +208,26 @@ class WireProtocolData(object):
                 self.call_counts["ExampleHandlerLinux"] += 1
                 resp.read = Mock(return_value=content)
                 return resp
+            elif ".vmSettings" in url or ".settings" in url:
+                content = self.in_vm_artifacts_profile
+                self.call_counts["in_vm_artifacts_profile"] += 1
             else:
                 raise Exception("Bad url {0}".format(url))
+
+        resp.read = Mock(return_value=content.encode("utf-8"))
+        return resp
+
+    def mock_http_post(self, url, *args, **kwargs):
+        content = None
+
+        resp = MagicMock()
+        resp.status = httpclient.OK
+
+        if url.endswith('/HealthService'):
+            self.call_counts['/HealthService'] += 1
+            content = ''
+        else:
+            raise Exception("Bad url {0}".format(url))
 
         resp.read = Mock(return_value=content.encode("utf-8"))
         return resp

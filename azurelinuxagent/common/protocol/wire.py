@@ -21,6 +21,7 @@ import json
 import os
 import random
 import time
+import traceback
 import xml.sax.saxutils as saxutils
 from datetime import datetime
 
@@ -29,7 +30,7 @@ import azurelinuxagent.common.logger as logger
 import azurelinuxagent.common.utils.textutil as textutil
 from azurelinuxagent.common.datacontract import validate_param
 from azurelinuxagent.common.protocol.wire import ExtensionsConfig
-from azurelinuxagent.common.event import add_periodic, WALAEventOperation
+from azurelinuxagent.common.event import add_event, add_periodic, WALAEventOperation, EVENTS_DIRECTORY
 from azurelinuxagent.common.exception import ProtocolNotFoundError, \
     ResourceGoneError, ExtensionDownloadError, InvalidContainerError, ProtocolError, HttpError
 from azurelinuxagent.common.future import httpclient, bytebuffer
@@ -91,10 +92,14 @@ class WireProtocol(Protocol):
         cryptutil.gen_transport_cert(trans_prv_file, trans_cert_file)
 
         # Set the initial goal state
+        logger.info('Initializing goal state during protocol detection')
         self.client.update_goal_state(forced=True)
 
     def update_goal_state(self):
         self.client.update_goal_state()
+
+    def try_update_goal_state(self):
+        return self.client.try_update_goal_state()
 
     def update_host_plugin_from_goal_state(self):
         self.client.update_host_plugin_from_goal_state()
@@ -192,7 +197,7 @@ class WireProtocol(Protocol):
         self.client.status_blob.set_ext_status(ext_handler_name, ext_status)
 
     def report_event(self, events):
-        validate_param("events", events, TelemetryEventList)
+        validate_param(EVENTS_DIRECTORY, events, TelemetryEventList)
         self.client.report_event(events)
 
 
@@ -532,11 +537,7 @@ class WireClient(object):
         logger.info("Wire server endpoint:{0}", endpoint)
         self._endpoint = endpoint
         self._goal_state = None
-        self._hosting_env = None
-        self._shared_conf = None
-        self._remote_access = None
-        self._certs = None
-        self._ext_conf = None
+        self._last_try_update_goal_state_failed = False
         self._host_plugin = None
         self.vm_artifacts_profile_etag = None
         self.status_blob = StatusBlob(self)
@@ -745,6 +746,30 @@ class WireClient(object):
         """
         self._update_from_goal_state(
             WireClient._UpdateType.GoalStateForced if forced else WireClient._UpdateType.GoalState)
+
+    def try_update_goal_state(self):
+        """
+        Attempts to update the goal state and returns True on success or False on failure, sending telemetry events about the failures.
+        """
+        try:
+            self.update_goal_state()
+
+            if self._last_try_update_goal_state_failed:
+                self._last_try_update_goal_state_failed = False
+                message = u"Retrieving the goal state recovered from previous errors"
+                add_event(AGENT_NAME, op=WALAEventOperation.FetchGoalState, version=CURRENT_VERSION, is_success=True, message=message, log_event=False)
+                logger.info(message)
+        except Exception as e:
+            if not self._last_try_update_goal_state_failed:
+                self._last_try_update_goal_state_failed = True
+                message = u"An error occurred while retrieving the goal state: {0}".format(ustr(e))
+                add_event(AGENT_NAME, op=WALAEventOperation.FetchGoalState, version=CURRENT_VERSION, is_success=False, message=message, log_event=False)
+                message = u"An error occurred while retrieving the goal state: {0}".format(ustr(traceback.format_exc()))
+                logger.warn(message)
+            message = u"Attempts to retrieve the goal state are failing: {0}".format(ustr(e))
+            logger.periodic_warn(logger.EVERY_SIX_HOURS, "[PERIODIC] {0}".format(message))
+            return False
+        return True
 
     def _update_from_goal_state(self, refresh_type):
         """
@@ -1200,7 +1225,7 @@ class WireClient(object):
 
     def get_host_plugin(self):
         if self._host_plugin is None:
-            goal_state = self.get_goal_state()
+            goal_state = GoalState.fetch_goal_state(self)
             self._set_host_plugin(HostPluginProtocol(self.get_endpoint(),
                                                      goal_state.container_id,
                                                      goal_state.role_config_name))
