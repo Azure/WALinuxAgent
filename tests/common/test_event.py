@@ -668,10 +668,10 @@ class TestEvent(HttpRequestPredicates, AgentTestCase):
         to be in the agent itself, this test verifies that the Message of the event we send in the HTTP request matches the
         Message we read from the event's file.
         """
-        def get_event_message_from_event_file(path):
-            with open(path, 'rb') as f:
-                data = f.read()
-            telemetry_event = json.loads(data)
+        def get_event_message_from_event_file(event_file):
+            with open(event_file, "rb") as fd:
+                event_data = fd.read().decode("utf-8")  # this is the same way that event.collect_events reads event files
+            telemetry_event = json.loads(event_data)
 
             for p in telemetry_event['parameters']:
                 if p['name'] == 'Message':
