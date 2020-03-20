@@ -420,29 +420,40 @@ class TestWireProtocol(AgentTestCase):
 
 
 class TestWireClient(HttpRequestPredicates, AgentTestCase):
-    def test_get_ext_conf_without_uri(self, *args):
+    def test_get_ext_conf_without_extensions_should_retrieve_vmagent_manifests_info(self, *args):
+        # Asserts that WireClient correctly populates the extension config values given in the XML file when extensions
+        # are not present.
         with mock_wire_protocol(mockwiredata.DATA_FILE_NO_EXT) as protocol:
             ext_conf = protocol.client.get_ext_conf()
 
-            self.assertEqual(0, len(ext_conf.ext_handlers.extHandlers))
-            self.assertEqual(0, len(ext_conf.vmagent_manifests.vmAgentManifests))
+            ext_handlers_names = [ext_handler.name for ext_handler in ext_conf.ext_handlers.extHandlers]
+            self.assertEqual(0, len(ext_conf.ext_handlers.extHandlers),
+                             "Unexpected number of extension handlers in the extension config: [{0}]".format(ext_handlers_names))
+            vmagent_manifests = [manifest.family for manifest in ext_conf.vmagent_manifests.vmAgentManifests]
+            self.assertEqual(0, len(ext_conf.vmagent_manifests.vmAgentManifests),
+                             "Unexpected number of vmagent manifests in the extension config: [{0}]".format(vmagent_manifests))
             self.assertIsNone(ext_conf.status_upload_blob)
             self.assertIsNone(ext_conf.status_upload_blob_type)
             self.assertIsNone(ext_conf.artifacts_profile_blob)
 
-    def test_get_ext_conf_with_uri(self):
+    def test_get_ext_conf_with_extensions_should_retrieve_ext_handlers_and_vmagent_manifests_info(self):
+        # Asserts that WireClient correctly populates the extension config values given in the XML file when extensions
+        # are present.
         with mock_wire_protocol(mockwiredata.DATA_FILE) as protocol:
-            protocol.detect()
             wire_protocol_client = protocol.client
             ext_conf = wire_protocol_client.get_ext_conf()
 
-            self.assertEqual(1, len(ext_conf.ext_handlers.extHandlers), "Unexpected number of extension handlers")
+            ext_handlers_names = [ext_handler.name for ext_handler in ext_conf.ext_handlers.extHandlers]
+            self.assertEqual(1, len(ext_conf.ext_handlers.extHandlers),
+                             "Unexpected number of extension handlers in the extension config: [{0}]".format(ext_handlers_names))
+            vmagent_manifests = [manifest.family for manifest in ext_conf.vmagent_manifests.vmAgentManifests]
             self.assertEqual(2, len(ext_conf.vmagent_manifests.vmAgentManifests),
-                             "Unexpected number of vmagent manifests")
+                             "Unexpected number of vmagent manifests in the extension config: [{0}]".format(vmagent_manifests))
             self.assertEqual("https://test.blob.core.windows.net/vhds/test-cs12.test-cs12.test-cs12.status?sr=b&sp=rw"
                              "&se=9999-01-01&sk=key1&sv=2014-02-14&sig=hfRh7gzUE7sUtYwke78IOlZOrTRCYvkec4hGZ9zZzXo",
                              ext_conf.status_upload_blob, "Unexpected value for status upload blob URI")
-            self.assertEqual("BlockBlob", ext_conf.status_upload_blob_type, "Unexpected status upload blob type")
+            self.assertEqual("BlockBlob", ext_conf.status_upload_blob_type,
+                             "Unexpected status upload blob type in the extension config")
             self.assertEqual(None, ext_conf.artifacts_profile_blob, "Artifacts profile blob should have been None")
 
     def test_download_ext_handler_pkg_should_not_invoke_host_channel_when_direct_channel_succeeds(self):
