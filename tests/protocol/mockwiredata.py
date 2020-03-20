@@ -85,6 +85,7 @@ DATA_FILE_REMOTE_ACCESS = DATA_FILE.copy()
 DATA_FILE_REMOTE_ACCESS["goal_state"] = "wire/goal_state_remote_access.xml"
 DATA_FILE_REMOTE_ACCESS["remote_access"] = "wire/remote_access_single_account.xml"
 
+
 class WireProtocolData(object):
     def __init__(self, data_files=DATA_FILE):
         self.emulate_stale_goal_state = False
