@@ -140,10 +140,12 @@ class DeprovisionHandler(object):
 
     def del_lib_dir_files(self, warnings, actions):
         known_files = [
+            'GoalStateSource',
             'HostingEnvironmentConfig.xml',
             'Incarnation',
             'partition',
             'Protocol',
+            'SequenceNumber',
             'SharedConfig.xml',
             'WireServerEndpoint'
         ]

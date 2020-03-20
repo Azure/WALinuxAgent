@@ -533,7 +533,7 @@ def http_delete(url,
 
 
 def request_failed(resp, ok_codes=OK_CODES):
-    return not request_succeeded(resp, ok_codes=ok_codes)
+    return not request_succeeded(resp, ok_codes=ok_codes) and not request_not_modified(resp)
 
 
 def request_succeeded(resp, ok_codes=OK_CODES):

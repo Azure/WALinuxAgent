@@ -45,6 +45,12 @@ HEADER_ARTIFACT_LOCATION = "x-ms-artifact-location"
 HEADER_ARTIFACT_MANIFEST_LOCATION = "x-ms-artifact-manifest-location"
 MAXIMUM_PAGEBLOB_PAGE_SIZE = 4 * 1024 * 1024  # Max page size: 4MB
 
+# Indicates HostGAPlugin should download the VMArtifactsProfile blob
+# if it hasn't already done so to check if the manifest url is whitelisted
+HEADER_VERIFY_FROM_ARTIFACTS_BLOB = "x-ms-verify-from-artifacts-blob"
+
+# RFC 7232, section 3.2
+HEADER_IF_NONE_MATCH = "if-none-match"
 
 class HostPluginProtocol(object):
     _is_default_channel = False
@@ -133,7 +139,7 @@ class HostPluginProtocol(object):
 
         return return_val
 
-    def get_artifact_request(self, artifact_url, artifact_manifest_url=None):
+    def get_artifact_request(self, artifact_url, artifact_manifest_url=None, etag=None):
         if not self.ensure_initialized():
             raise ProtocolError("HostGAPlugin: Host plugin channel is not available")
 
@@ -145,10 +151,14 @@ class HostPluginProtocol(object):
         headers = {HEADER_VERSION: API_VERSION,
                    HEADER_CONTAINER_ID: self.container_id,
                    HEADER_HOST_CONFIG_NAME: self.role_config_name,
-                   HEADER_ARTIFACT_LOCATION: artifact_url}
+                   HEADER_ARTIFACT_LOCATION: artifact_url,
+                   HEADER_VERIFY_FROM_ARTIFACTS_BLOB: "true"}
 
         if artifact_manifest_url is not None:
             headers[HEADER_ARTIFACT_MANIFEST_LOCATION] = artifact_manifest_url
+
+        if etag is not None:
+            headers[HEADER_IF_NONE_MATCH] = etag
 
         return url, headers
 

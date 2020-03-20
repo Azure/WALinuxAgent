@@ -28,6 +28,7 @@ import azurelinuxagent.common.conf as conf
 import azurelinuxagent.common.logger as logger
 import azurelinuxagent.common.utils.textutil as textutil
 from azurelinuxagent.common.datacontract import validate_param
+from azurelinuxagent.common.protocol.wire import ExtensionsConfig
 from azurelinuxagent.common.event import add_periodic, WALAEventOperation
 from azurelinuxagent.common.exception import ProtocolNotFoundError, \
     ResourceGoneError, ExtensionDownloadError, InvalidContainerError, ProtocolError, HttpError
@@ -59,6 +60,8 @@ MANIFEST_FILE_NAME = "{0}.{1}.manifest.xml"
 
 PROTOCOL_VERSION = "2012-11-30"
 ENDPOINT_FINE_NAME = "WireServer"
+
+HEADER_ETAG = "etag"
 
 SHORT_WAITING_INTERVAL = 1  # 1 second
 
@@ -128,6 +131,10 @@ class WireProtocol(Protocol):
         ga_manifest = self.client.get_gafamily_manifest(vmagent_manifest, goal_state)
         valid_pkg_list = ga_manifest.pkg_list
         return valid_pkg_list
+
+    def get_goal_state(self):
+        goal_state = self.client.get_goal_state()
+        return goal_state
 
     def get_ext_handlers(self):
         logger.verbose("Get extension handler config")
@@ -339,9 +346,10 @@ def ext_handler_status_to_v1(handler_status, ext_statuses, timestamp):
     return v1_handler_status
 
 
-def vm_status_to_v1(vm_status, ext_statuses):
+def vm_status_to_v1(vm_status, ext_statuses, extensions_fast_track_enabled):
     timestamp = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
 
+    v1_supported_features = None
     v1_ga_guest_info = ga_status_to_guest_info(vm_status.vmAgent)
     v1_ga_status = ga_status_to_v1(vm_status.vmAgent)
     v1_handler_status_list = []
@@ -351,6 +359,11 @@ def vm_status_to_v1(vm_status, ext_statuses):
         if v1_handler_status is not None:
             v1_handler_status_list.append(v1_handler_status)
 
+    # Inform CRP that we support FastTrack, which allows us to retrieve goal state
+    # from the VMArtifactsProfile blob instead of from wire server
+    if extensions_fast_track_enabled:
+        v1_supported_features = [{'Key': 'FastTrack', 'Value': '1.0'}]
+
     v1_agg_status = {
         'guestAgentStatus': v1_ga_status,
         'handlerAggregateStatus': v1_handler_status_list
@@ -359,7 +372,8 @@ def vm_status_to_v1(vm_status, ext_statuses):
         'version': '1.1',
         'timestampUTC': timestamp,
         'aggregateStatus': v1_agg_status,
-        'guestOSInfo': v1_ga_guest_info
+        'guestOSInfo': v1_ga_guest_info,
+        'supportedFeatures': v1_supported_features
     }
     return v1_vm_status
 
@@ -380,15 +394,15 @@ class StatusBlob(object):
         validate_param("extensionStatus", ext_status, ExtensionStatus)
         self.ext_statuses[ext_handler_name] = ext_status
 
-    def to_json(self):
-        report = vm_status_to_v1(self.vm_status, self.ext_statuses)
+    def to_json(self, extensions_fast_track_enabled):
+        report = vm_status_to_v1(self.vm_status, self.ext_statuses, extensions_fast_track_enabled)
         return json.dumps(report)
 
     __storage_version__ = "2014-02-14"
 
-    def prepare(self, blob_type):
+    def prepare(self, blob_type, extensions_fast_track_enabled):
         logger.verbose("Prepare status blob")
-        self.data = self.to_json()
+        self.data = self.to_json(extensions_fast_track_enabled)
         self.type = blob_type
 
     def upload(self, url):
@@ -524,6 +538,7 @@ class WireClient(object):
         self._certs = None
         self._ext_conf = None
         self._host_plugin = None
+        self.vm_artifacts_profile_etag = None
         self.status_blob = StatusBlob(self)
         self.goal_state_flusher = StateFlusher(conf.get_lib_dir())
 
@@ -551,6 +566,11 @@ class WireClient(object):
                 ustr(e)))
 
         return resp
+
+    def hostgaplugin_supports_fast_track(self):
+        if self.vm_artifacts_profile_etag is None:
+            return False
+        return True
 
     def decode_config(self, data):
         if data is None:
@@ -643,6 +663,23 @@ class WireClient(object):
 
         return success
 
+    def fetch_content_and_etag(self, uri, headers=None, use_proxy=None, decode=True):
+        logger.verbose("Fetch [{0}] with headers [{1}]", uri, headers)
+        content = None
+        etag = None
+        not_modified = False
+        response = self._fetch_response(uri, headers, use_proxy)
+        if response is not None or restutil.request_not_modified(response):
+            if restutil.request_not_modified(response):
+                not_modified = True
+                logger.verbose('Received not-modified response')
+            else:
+                etag = response.getheader(HEADER_ETAG, None)
+                logger.verbose('Received etag of {0}', etag)
+                response_content = response.read()
+                content = self.decode_config(response_content) if decode else response_content
+        return content, etag, not_modified
+
     def fetch(self, uri, headers=None, use_proxy=None, decode=True):
         logger.verbose("Fetch [{0}] with headers [{1}]", uri, headers)
         content = None
@@ -663,7 +700,10 @@ class WireClient(object):
 
             host_plugin = self.get_host_plugin()
 
-            if restutil.request_failed(resp):
+            if restutil.request_not_modified(resp):
+                if self.host_plugin is not None:
+                    self.host_plugin.report_fetch_health(uri, source='WireClient')
+            elif restutil.request_failed(resp):
                 error_response = restutil.read_response_error(resp)
                 msg = "Fetch failed from [{0}]: {1}".format(uri, error_response)
                 logger.warn(msg)
@@ -853,6 +893,37 @@ class WireClient(object):
                      "advised by Fabric.").format(PROTOCOL_VERSION)
             raise ProtocolNotFoundError(error)
 
+    def send_request_hostplugin_first(self, direct_func, host_func):
+        # For certain calls we want them to go through the HostGAPlugin first, since it
+        # supports the If-None-Match header that reduces how often we need to parse
+
+        # note that this method requires a lambda that returns two values
+        ret = None
+        etag = None
+        not_modified = False
+        try:
+            ret, etag, not_modified = host_func()
+
+            # Different direct channel functions report failure in different ways: by returning None, False,
+            # or raising ResourceGone or InvalidContainer exceptions.
+            if not ret and not not_modified:
+                logger.periodic_info(logger.EVERY_HOUR, "Request failed using the HostGAPlugin. switching to direct.")
+        except (ResourceGoneError, InvalidContainerError) as e:
+            msg = "Request failed with the current host plugin configuration." \
+                  "ContainerId: {0}, role config file: {1}." \
+                  "Error: {2}".format(self.host_plugin.container_id, self.host_plugin.role_config_name, ustr(e))
+            logger.periodic_info(logger.EVERY_HOUR, msg)
+
+        if ret or not_modified:
+            return ret, etag
+
+        try:
+            ret = direct_func()
+        except (ResourceGoneError, InvalidContainerError) as e:
+            logger.periodic_info(logger.EVERY_HOUR, "Request failed with direct. Error: {0}".format(ustr(e)))
+
+        return ret, etag
+
     def send_request_using_appropriate_channel(self, direct_func, host_func):
         # A wrapper method for all function calls that send HTTP requests. The purpose of the method is to
         # define which channel to use, direct or through the host plugin. For the host plugin channel,
@@ -961,7 +1032,9 @@ class WireClient(object):
             logger.verbose("Status Blob type is unspecified, assuming BlockBlob")
 
         try:
-            self.status_blob.prepare(blob_type)
+            extensions_fast_track_enabled = conf.get_extensions_fast_track_enabled() and \
+                                            self.hostgaplugin_supports_fast_track()
+            self.status_blob.prepare(blob_type, extensions_fast_track_enabled)
         except Exception as e:
             raise ProtocolError("Exception creating status blob: {0}", ustr(e))
 
@@ -1138,11 +1211,11 @@ class WireClient(object):
         return ext_conf and not \
             textutil.is_str_none_or_whitespace(ext_conf.artifacts_profile_blob)
 
-    def get_artifacts_profile_through_host(self, blob):
+    def get_artifacts_profile_through_host(self, blob, etag=None):
         host = self.get_host_plugin()
-        uri, headers = host.get_artifact_request(blob)
-        profile = self.fetch(uri, headers, use_proxy=False)
-        return profile
+        uri, headers = host.get_artifact_request(blob, etag=etag)
+        profile, etag, not_modified = self.fetch_content_and_etag(uri, headers, use_proxy=False)
+        return profile, etag, not_modified
 
     def get_artifacts_profile(self):
         artifacts_profile = None
@@ -1152,12 +1225,13 @@ class WireClient(object):
             direct_func = lambda: self.fetch(blob)
             # NOTE: the host_func may be called after refreshing the goal state, be careful about any goal state data
             # in the lambda.
-            host_func = lambda: self.get_artifacts_profile_through_host(blob)
+            host_func = lambda: self.get_artifacts_profile_through_host(
+                blob, self.vm_artifacts_profile_etag)
 
             logger.verbose("Retrieving the artifacts profile")
 
             try:
-                profile = self.send_request_using_appropriate_channel(direct_func, host_func)
+                profile, etag = self.send_request_hostplugin_first(direct_func, host_func)
             except Exception as e:
                 logger.warn("Exception retrieving artifacts profile: {0}".format(ustr(e)))
                 return None
@@ -1176,6 +1250,9 @@ class WireClient(object):
                                  is_success=False,
                                  message=msg,
                                  log_event=False)
+            if etag is not None:
+                logger.info("Received a new etag for the VMArtifactsProfile blob: {0}", etag)
+                self.vm_artifacts_profile_etag = etag
 
         return artifacts_profile
 
@@ -1267,6 +1344,7 @@ class InVMArtifactsProfile(object):
     * certificateThumbprint (optional)
     * encryptedHealthChecks (optional)
     * encryptedApplicationProfile (optional)
+    * extensionGoalStates (optional)
     """
 
     def __init__(self, artifacts_profile):
@@ -1278,3 +1356,78 @@ class InVMArtifactsProfile(object):
         if 'onHold' in self.__dict__:
             return str(self.onHold).lower() == 'true'
         return False
+
+    def get_sequence_number(self):
+        if 'inVMArtifactsProfileBlobSeqNo' in self.__dict__:
+            return int(self.inVMArtifactsProfileBlobSeqNo)
+        return None
+
+    def transform_to_extensions_config(self, flush_func=None):
+        """
+        We need to convert the json from the InVmArtifactsProfile blob to the following
+        format for the ExtensionsConfig:
+        <Extensions version="1.0.0.0" goalStateIncarnation="9">
+        <Plugins>
+            <Plugin name="MyExtension.Blah" version="1.0.0"
+                    location="http://somewhere.xml"
+                    config="" state="enabled" autoUpgrade="false"
+                    failoverlocation="http://somewherelese.xml"
+                    runAsStartupTask="false" isJson="true"/>
+            <Plugin name="Microsoft.Flipperdoodle" version="1.0.0"
+                    location="https://somewhere_two.xml"
+                    state="enabled" autoUpgrade="true"
+                    failoverlocation="https://somewhereelse_two.xml"
+                    runAsStartupTask="false" isJson="true" useExactVersion="false"/>
+        </Plugins>
+        <PluginSettings>
+            <Plugin name="MyExtension.Blah" version="1.0.0">
+                <RuntimeSettings seqNo="0">{"runtimeSettings":[{"handlerSettings":{"protectedSettingsCertThumbprint":"4037FBF5F1F3014F99B5D6C7799E9B20E6871CB3","protectedSettings":"MIICWgYJK","publicSettings":{"foo":"bar"}}}]}</RuntimeSettings>
+            </Plugin>
+            <Plugin name="Microsoft.Flipperdoodle" version="1.0.0">
+                <RuntimeSettings seqNo="0">{"runtimeSettings":[{"handlerSettings":{"protectedSettingsCertThumbprint":"4037FBF5F1F3014F99B5D6C7799E9B20E6871CB3","protectedSettings":"MIICWgYJK","publicSettings":{"foo":"bar"}}}]}</RuntimeSettings>
+            </Plugin>
+        </PluginSettings>
+        <StatusUploadBlob statusBlobType="BlockBlob">https://putblobhere</StatusUploadBlob>
+        </Extensions>
+        """
+        if 'extensionGoalStates' in self.__dict__:
+            import xml.etree.ElementTree as xml
+            root = xml.Element("Extensions")
+            root.set('version', '1.0.0.0')
+            root.set('goalStateIncarnation', str(self.inVMArtifactsProfileBlobSeqNo))
+
+            # Some properties such as state are required and will generate an exception if not there
+            # Others such as autoUpgrade are optional so we'll check first
+            plugins = xml.SubElement(root, 'Plugins')
+            for extensionGoalState in self.extensionGoalStates:
+                plugin = xml.SubElement(plugins, 'Plugin')
+                plugin.set('name', extensionGoalState['name'])
+                plugin.set('version', extensionGoalState['version'])
+                plugin.set('location', extensionGoalState['location'])
+                plugin.set('state', extensionGoalState['state'])
+                plugin.set('autoUpgrade', str(extensionGoalState.get('autoUpgrade')))
+                plugin.set('failoverlocation', str(extensionGoalState.get('failoverlocation')))
+                plugin.set('runAsStartupTask', str(extensionGoalState.get('runAsStartupTask')))
+                plugin.set('isJson', 'true')
+                plugin.set('useExactVersion', str(extensionGoalState.get('useExactVersion')))
+
+            plugin_settings = xml.SubElement(root, 'PluginSettings')
+            for extensionGoalState in self.extensionGoalStates:
+                plugin = xml.SubElement(plugin_settings, 'Plugin')
+                plugin.set('name', extensionGoalState['name'])
+                plugin.set('version', extensionGoalState['version'])
+                runtime_settings = xml.SubElement(plugin, 'RuntimeSettings')
+                runtime_settings.set('seqNo', str(extensionGoalState['settingsSeqNo']))
+
+                # CRP may send multiple settings but this agent only supports one
+                handler_settings = extensionGoalState['settings'][0]
+                json_settings = json.dumps({"runtimeSettings": [{"handlerSettings": handler_settings}]})
+                runtime_settings.text = json_settings
+
+            config_xml = xml.tostring(root).decode()
+            if flush_func is not None:
+                flush_func(datetime.utcnow())
+            extensions_config = ExtensionsConfig(config_xml)
+
+            return extensions_config
+        return None

@@ -274,6 +274,8 @@ def get_ssh_host_keypair_mode(conf=__conf__):
 def get_extensions_enabled(conf=__conf__):
     return conf.get_switch("Extensions.Enabled", True)
 
+def get_extensions_fast_track_enabled(conf=__conf__):
+    return conf.get_switch("Extensions.FastTrackEnabled", True)
 
 def get_allow_reset_sys_user(conf=__conf__):
     return conf.get_switch("Provisioning.AllowResetSysUser", False)

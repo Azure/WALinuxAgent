@@ -43,6 +43,7 @@ from azurelinuxagent.common.event import add_event, WALAEventOperation, elapsed_
 from azurelinuxagent.common.exception import ExtensionError, ProtocolError, ProtocolNotFoundError, \
     ExtensionDownloadError, ExtensionErrorCodes, ExtensionUpdateError, ExtensionOperationError
 from azurelinuxagent.common.future import ustr
+from azurelinuxagent.common.protocol.goal_state import GoalStateRetriever, GenericExtensionsConfig
 from azurelinuxagent.common.protocol.restapi import ExtHandlerStatus, \
     ExtensionStatus, \
     ExtensionSubStatus, \
@@ -212,19 +213,19 @@ def get_exthandlers_handler(protocol):
 class ExtHandlersHandler(object):
     def __init__(self, protocol):
         self.protocol = protocol
-        self.ext_handlers = None
-        self.last_etag = None
+        self.goal_state_retriever = GoalStateRetriever(protocol)
+        self.ext_config = None
         self.log_report = False
-        self.log_etag = True
+        self.log_not_changed = True
         self.log_process = False
 
         self.report_status_error_state = ErrorState()
         self.get_artifact_error_state = ErrorState(min_timedelta=ERROR_STATE_DELTA_INSTALL)
 
     def run(self):
-        self.ext_handlers, etag = None, None
+        self.ext_config = None
         try:
-            self.ext_handlers, etag = self.protocol.get_ext_handlers()
+            self.ext_config = self.goal_state_retriever.get_ext_config()
             self.get_artifact_error_state.reset()
         except Exception as e:
             msg = u"Exception retrieving extension handlers: {0}".format(ustr(e))
@@ -245,14 +246,11 @@ class ExtHandlersHandler(object):
             return
 
         try:
-            msg = u"Handle extensions updates for incarnation {0}".format(etag)
-            logger.verbose(msg)
             # Log status report success on new config
             self.log_report = True
 
             if self._extension_processing_allowed():
-                self.handle_ext_handlers(etag)
-                self.last_etag = etag
+                self.handle_ext_handlers()
 
             self.report_ext_handlers_status()
             self._cleanup_outdated_handlers()
@@ -341,18 +339,21 @@ class ExtHandlersHandler(object):
 
         return True
 
-    def handle_ext_handlers(self, etag=None):
-        if self.ext_handlers.extHandlers is None or \
-                len(self.ext_handlers.extHandlers) == 0:
+    def handle_ext_handlers(self):
+        if self.ext_config is None or \
+                self.ext_config.extensions_config is None or \
+                self.ext_config.extensions_config.extHandlers is None or \
+                len(self.ext_config.extensions_config.extHandlers) == 0:
             logger.verbose("No extension handler config found")
             return
 
         wait_until = datetime.datetime.utcnow() + datetime.timedelta(minutes=DEFAULT_EXT_TIMEOUT_MINUTES)
         max_dep_level = max([handler.sort_key() for handler in self.ext_handlers.extHandlers])
 
-        self.ext_handlers.extHandlers.sort(key=operator.methodcaller('sort_key'))
-        for ext_handler in self.ext_handlers.extHandlers:
-            self.handle_ext_handler(ext_handler, etag)
+        extHandlers = self.ext_config.extensions_config.extHandlers
+        extHandlers.sort(key=operator.methodcaller('sort_key'))
+        for ext_handler in extHandlers:
+            self.handle_ext_handler(ext_handler)
 
             # Wait for the extension installation until it is handled.
             # This is done for the install and enable. Not for the uninstallation.
@@ -404,7 +405,7 @@ class ExtHandlersHandler(object):
 
         return True
 
-    def handle_ext_handler(self, ext_handler, etag):
+    def handle_ext_handler(self, ext_handler):
         ext_handler_i = ExtHandlerInstance(ext_handler, self.protocol)
 
         try:
@@ -419,15 +420,16 @@ class ExtHandlersHandler(object):
                 return
 
             self.get_artifact_error_state.reset()
-            if self.last_etag == etag:
-                if self.log_etag:
-                    ext_handler_i.logger.verbose("Version {0} is current for etag {1}",
+            if self.ext_config.changed == False:
+                if self.log_not_changed:
+                    ext_handler_i.logger.verbose("Version {0} is current for incarnation {1} and seqNo",
                                                  ext_handler_i.pkg.version,
-                                                 etag)
-                    self.log_etag = False
+                                                 self.goal_state_retriever.last_incarnation,
+                                                 self.goal_state_retriever.last_seqNo)
+                    self.log_not_changed = False
                 return
 
-            self.log_etag = True
+            self.log_not_changed = True
 
             ext_handler_i.logger.info("Target handler state: {0}", state)
             if state == u"enabled":
