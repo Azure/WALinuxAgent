@@ -725,7 +725,7 @@ class TestEvent(HttpRequestPredicates, AgentTestCase):
 
             event_message = get_event_message_from_http_request_body(http_post_handler.request_body)
 
-            self.assertEquals(event_message, expected_message)
+            self.assertEquals(event_message, expected_message, "The Message in the HTTP request does not match the Message in the event's *.tld file")
 
 
 class TestMetrics(AgentTestCase):
