@@ -159,8 +159,38 @@ class TestExtHandlers(AgentTestCase):
         self.assertTrue(isinstance(extension_status.substatusList, list), 'substatus was not parsed correctly')
         self.assertEqual(0, len(extension_status.substatusList))
 
+    def test_parse_extension_status_with_empty_status(self):
+        """
+        Parse a status report for a successful execution of an extension.
+        """
+
+        # Validating empty status case
+        s = '''[]'''
+        ext_status = ExtensionStatus(seq_no=0)
+        parse_ext_status(ext_status, json.loads(s))
+
+        self.assertEqual(None, ext_status.code)
+        self.assertEqual(None, ext_status.configurationAppliedTime)
+        self.assertEqual(None, ext_status.message)
+        self.assertEqual(None, ext_status.operation)
+        self.assertEqual(None, ext_status.status)
+        self.assertEqual(0, ext_status.sequenceNumber)
+        self.assertEqual(0, len(ext_status.substatusList))
+
+        # Validating None case
+        ext_status = ExtensionStatus(seq_no=0)
+        parse_ext_status(ext_status, None)
+
+        self.assertEqual(None, ext_status.code)
+        self.assertEqual(None, ext_status.configurationAppliedTime)
+        self.assertEqual(None, ext_status.message)
+        self.assertEqual(None, ext_status.operation)
+        self.assertEqual(None, ext_status.status)
+        self.assertEqual(0, ext_status.sequenceNumber)
+        self.assertEqual(0, len(ext_status.substatusList))
+
     @patch('azurelinuxagent.common.event.EventLogger.add_event')
-    @patch('azurelinuxagent.ga.exthandlers.ExtHandlerInstance.get_largest_seq_no')
+    @patch('azurelinuxagent.ga.exthandlers.ExtHandlerInstance._get_largest_seq_no')
     def assert_extension_sequence_number(self,
                                          patch_get_largest_seq,
                                          patch_add_event,
