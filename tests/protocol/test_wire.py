@@ -30,7 +30,8 @@ from azurelinuxagent.common.future import httpclient
 from azurelinuxagent.common.protocol.hostplugin import HostPluginProtocol
 from azurelinuxagent.common.protocol.goal_state import ExtensionsConfig
 from azurelinuxagent.common.protocol.wire import WireProtocol, WireClient, \
-    InVMArtifactsProfile, VMAgentManifestUri, StatusBlob, VMStatus, ExtHandlerVersionUri, DataContractList, socket
+    InVMArtifactsProfile, VMAgentManifestUri, StatusBlob, VMStatus, ExtHandlerVersionUri, DataContractList, socket, \
+    HEADER_ETAG
 from azurelinuxagent.common.telemetryevent import TelemetryEvent, TelemetryEventParam, TelemetryEventList
 from azurelinuxagent.common.utils import restutil
 from azurelinuxagent.common.version import CURRENT_VERSION, DISTRO_NAME, DISTRO_VERSION
@@ -291,7 +292,7 @@ class TestWireProtocol(AgentTestCase):
                                  'If artifacts_profile_blob has empty json dictionary, in_vm_artifacts_profile '
                                  'should contain nothing')
 
-                host_plugin_get_artifact_url_and_headers.assert_called_with(testurl)
+                host_plugin_get_artifact_url_and_headers.assert_called_with(testurl, etag=None)
 
     @patch("azurelinuxagent.common.event.add_event")
     def test_artifacts_profile_json_parsing(self, patch_event, *args):
@@ -303,8 +304,8 @@ class TestWireProtocol(AgentTestCase):
             # ensure response is empty
             self.assertEqual(None, in_vm_artifacts_profile)
 
-            # ensure event is logged
-            self.assertEqual(1, patch_event.call_count)
+            # ensure event is logged. First call is to initialize hostGAPlugin
+            self.assertEqual(2, patch_event.call_count)
             self.assertFalse(patch_event.call_args[1]['is_success'])
             self.assertTrue('invalid json' in patch_event.call_args[1]['message'])
             self.assertEqual('ArtifactsProfileBlob', patch_event.call_args[1]['op'])
@@ -346,13 +347,22 @@ class TestWireProtocol(AgentTestCase):
             'guestAgentStatus': v1_ga_status,
             'handlerAggregateStatus': []
         }
+        v1_vm_status_fast_track = {
+            'version': '1.1',
+            'timestampUTC': timestamp,
+            'aggregateStatus': v1_agg_status,
+            'guestOSInfo': v1_ga_guest_info,
+            'supportedFeatures': [{"Key": "FastTrack", "Value": "1.0"}]
+        }
         v1_vm_status = {
             'version': '1.1',
             'timestampUTC': timestamp,
             'aggregateStatus': v1_agg_status,
-            'guestOSInfo': v1_ga_guest_info
+            'guestOSInfo': v1_ga_guest_info,
+            'supportedFeatures': None
         }
-        self.assertEqual(json.dumps(v1_vm_status), actual.to_json())
+        self.assertEqual(json.dumps(v1_vm_status_fast_track), actual.to_json(extensions_fast_track_enabled=True))
+        self.assertEqual(json.dumps(v1_vm_status), actual.to_json(extensions_fast_track_enabled=False))
 
     @patch("azurelinuxagent.common.utils.restutil.http_request")
     def test_send_event(self, mock_http_request, *args):
@@ -704,28 +714,32 @@ class TestWireClient(HttpRequestPredicates, AgentTestCase):
 
             self.assertEquals(HostPluginProtocol.is_default_channel(), False)
 
-    def test_get_artifacts_profile_should_not_invoke_host_channel_when_direct_channel_succeeds(self):
-        def http_get_handler(url, *_, **__):
+    def test_get_artifacts_profile_should_not_invoke_direct_channel_when_host_channel_succeeds(self):
+        def http_get_handler(url, *_, **kwargs):
             if self.is_in_vm_artifacts_profile_request(url):
+                return HttpError("Exception to fake an error on the direct channel")
+            if self.is_host_plugin_in_vm_artifacts_profile_request(url, kwargs):
                 protocol.track_url(url)
             return None
 
         with mock_wire_protocol(mockwiredata.DATA_FILE_IN_VM_ARTIFACTS_PROFILE, http_get_handler=http_get_handler) as protocol:
             HostPluginProtocol.set_default_channel(False)
 
+            protocol.set_http_handlers(http_get_handler=http_get_handler)
             return_value = protocol.client.get_artifacts_profile()
 
             self.assertIsInstance(return_value, InVMArtifactsProfile, 'The request did not return a valid artifacts profile: {0}'.format(return_value))
             urls = protocol.get_tracked_urls()
             self.assertEquals(len(urls), 1, "Unexpected HTTP requests: [{0}]".format(urls))
-            self.assertEquals(HostPluginProtocol.is_default_channel(), False)
+            self.assertTrue(self.is_host_plugin_extension_artifact_request(urls[0]),
+                            "The request should have been over the host channel")
 
-    def test_get_artifacts_profile_should_use_host_channel_when_direct_channel_fails(self):
+    def test_get_artifacts_profile_should_use_direct_channel_when_host_channel_fails(self):
         def http_get_handler(url, *_, **kwargs):
             if self.is_in_vm_artifacts_profile_request(url):
-                return HttpError("Exception to fake an error on the direct channel")
-            if self.is_host_plugin_in_vm_artifacts_profile_request(url, kwargs):
                 protocol.track_url(url)
+            if self.is_host_plugin_in_vm_artifacts_profile_request(url, kwargs):
+                return HttpError("Exception to fake an error on the HostGAPlugin channel")
             return None
 
         with mock_wire_protocol(mockwiredata.DATA_FILE_IN_VM_ARTIFACTS_PROFILE) as protocol:
@@ -741,13 +755,13 @@ class TestWireClient(HttpRequestPredicates, AgentTestCase):
                 self.assertTrue(return_value.onHold, 'The OnHold property should be True')
                 urls = protocol.get_tracked_urls()
                 self.assertEquals(len(urls), 2, "Invalid number of requests: [{0}]".format(urls))
-                self.assertTrue(self.is_in_vm_artifacts_profile_request(urls[0]), "The first request should have been over the direct channel")
-                self.assertTrue(self.is_host_plugin_extension_artifact_request(urls[1]), "The second request should have been over the host channel")
-                self.assertEquals(HostPluginProtocol.is_default_channel(), True, "The default channel should have changed to the host")
+                self.assertTrue(self.is_host_plugin_extension_artifact_request(urls[0]), "The first request should have been over the host channel")
+                self.assertTrue(self.is_in_vm_artifacts_profile_request(urls[1]), "The second request should have been over the direct channel")
+                self.assertEquals(HostPluginProtocol.is_default_channel(), False, "The default channel should not be changed")
             finally:
                 HostPluginProtocol.set_default_channel(False)
 
-    def test_get_artifacts_profile_should_retry_the_host_channel_after_refreshing_the_host_plugin(self):
+    def test_get_artifacts_profile_should_not_retry_the_host_channel_after_reloading_goal_state(self):
         def http_get_handler(url, *_, **kwargs):
             if self.is_in_vm_artifacts_profile_request(url):
                 return HttpError("Exception to fake an error on the direct channel")
@@ -772,16 +786,12 @@ class TestWireClient(HttpRequestPredicates, AgentTestCase):
 
                 return_value = protocol.client.get_artifacts_profile()
 
-                self.assertIsNotNone(return_value, "The artifacts profile request should have succeeded")
-                self.assertIsInstance(return_value, InVMArtifactsProfile, 'The request did not return a valid artifacts profile: {0}'.format(return_value))
-                self.assertTrue(return_value.onHold, 'The OnHold property should be True')
+                self.assertIsNone(return_value, "The artifacts profile request should not have succeeded")
                 urls = protocol.get_tracked_urls()
-                self.assertEquals(len(urls), 4, "Invalid number of requests: [{0}]".format(urls))
-                self.assertTrue(self.is_in_vm_artifacts_profile_request(urls[0]), "The first request should have been over the direct channel")
-                self.assertTrue(self.is_host_plugin_extension_artifact_request(urls[1]), "The second request should have been over the host channel")
-                self.assertTrue(self.is_goal_state_request(urls[2]), "The goal state should have been refreshed before retrying the host channel")
-                self.assertTrue(self.is_host_plugin_extension_artifact_request(urls[3]), "The retry request should have been over the host channel")
-                self.assertEquals(HostPluginProtocol.is_default_channel(), True, "The default channel should have changed to the host")
+                self.assertEquals(len(urls), 1, "Invalid number of requests: [{0}]".format(urls))
+
+                self.assertTrue(self.is_host_plugin_extension_artifact_request(urls[0]), "The first request should have been over the host channel")
+                self.assertEquals(HostPluginProtocol.is_default_channel(), False, "The default channel should not have changed to the host")
             finally:
                 HostPluginProtocol.set_default_channel(False)
 
@@ -807,12 +817,71 @@ class TestWireClient(HttpRequestPredicates, AgentTestCase):
 
             self.assertIsNone(return_value, "The artifacts profile request should have failed")
             urls = protocol.get_tracked_urls()
-            self.assertEquals(len(urls), 4, "Invalid number of requests: [{0}]".format(urls))
-            self.assertTrue(self.is_in_vm_artifacts_profile_request(urls[0]), "The first request should have been over the direct channel")
-            self.assertTrue(self.is_host_plugin_extension_artifact_request(urls[1]), "The second request should have been over the host channel")
-            self.assertTrue(self.is_goal_state_request(urls[2]), "The goal state should have been refreshed before retrying the host channel")
-            self.assertTrue(self.is_host_plugin_extension_artifact_request(urls[3]), "The retry request should have been over the host channel")
-            self.assertEquals(HostPluginProtocol.is_default_channel(), False, "The default channel should not have changed")
+            self.assertEquals(len(urls), 1, "Invalid number of requests: [{0}]".format(urls))
+            self.assertTrue(self.is_host_plugin_extension_artifact_request(urls[0]), "The first request should have been over the host channel")
+
+    def test_send_request_hostplugin_first_should_invoke_hostplugin_when_not_default(self, *args):
+        with mock_wire_protocol(mockwiredata.DATA_FILE) as protocol:
+            protocol.client.get_host_plugin().set_default_channel(False)
+
+            def direct_func(*args):
+                direct_func.counter += 1
+                return 42
+
+            def host_func(*args):
+                host_func.counter += 1
+                return 43, None, False
+
+            direct_func.counter = 0
+            host_func.counter = 0
+
+            # Assert we've only called the host channel function since it succeeds
+            ret, _ = protocol.client.send_request_hostplugin_first(direct_func, host_func)
+            self.assertEquals(43, ret)
+            self.assertEquals(0, direct_func.counter)
+            self.assertEquals(1, host_func.counter)
+
+    def test_send_request_hostplugin_first_no_direct_on_not_modified(self, *args):
+        with mock_wire_protocol(mockwiredata.DATA_FILE) as protocol:
+            protocol.client.get_host_plugin().set_default_channel(False)
+
+            def direct_func(*args):
+                direct_func.counter += 1
+                return 42
+
+            def host_func(*args):
+                host_func.counter += 1
+                return None, None, True
+
+            direct_func.counter = 0
+            host_func.counter = 0
+
+            # Assert we've only called the host channel function since it succeeds
+            ret, _ = protocol.client.send_request_hostplugin_first(direct_func, host_func)
+            self.assertEquals(None, ret)
+            self.assertEquals(0, direct_func.counter)
+            self.assertEquals(1, host_func.counter)
+
+    def test_send_request_hostplugin_first_should_go_direct_when_hostplugin_fails(self, *args):
+        with mock_wire_protocol(mockwiredata.DATA_FILE) as protocol:
+            protocol.client.get_host_plugin().set_default_channel(False)
+
+            def direct_func(*args):
+                direct_func.counter += 1
+                return 42
+
+            def host_func(*args):
+                host_func.counter += 1
+                return 43, None, False
+
+            direct_func.counter = 0
+            host_func.counter = 0
+
+            # Assert we've only called the host channel function since it succeeds
+            ret, _ = protocol.client.send_request_hostplugin_first(direct_func, host_func)
+            self.assertEquals(43, ret)
+            self.assertEquals(0, direct_func.counter)
+            self.assertEquals(1, host_func.counter)
 
     def test_send_request_using_appropriate_channel_should_not_invoke_host_channel_when_direct_channel_succeeds(self):
         with mock_wire_protocol(mockwiredata.DATA_FILE) as protocol:
@@ -908,6 +977,21 @@ class TestWireClient(HttpRequestPredicates, AgentTestCase):
                 self.assertEquals(1, mock_update_host_plugin_from_goal_state.call_count)
                 self.assertEquals(True, protocol.client.get_host_plugin().is_default_channel())
 
+    @patch("azurelinuxagent.common.protocol.hostplugin.HostPluginProtocol.get_artifact_request")
+    def test_fetch_artifacts_profile_returns_empty_when_not_modified(self, mock_get_artifact_request, *args):
+        mock_get_artifact_request.return_value = "dummy_url", "dummy_header"
+        client = WireProtocol("foo.bar")
+        client.client._goal_state = Mock()
+        client.client._goal_state.ext_conf = ExtensionsConfig(None)
+        client.client._goal_state.ext_conf.artifacts_profile_blob = "testurl"
+
+        mock_not_modified_response = MockResponse(body="b", status_code=304)
+
+        with patch("azurelinuxagent.common.utils.restutil._http_request", return_value=mock_not_modified_response):
+            with patch("azurelinuxagent.common.protocol.wire.WireClient.has_artifacts_profile_blob",
+                       return_value=True):
+                ret = client.get_artifacts_profile()
+                self.assertEquals(ret, None)
 
 class UpdateGoalStateTestCase(AgentTestCase):
     """
@@ -1162,12 +1246,18 @@ class UpdateHostPluginFromGoalStateTestCase(AgentTestCase):
 
 
 class MockResponse:
-    def __init__(self, body, status_code):
+    def __init__(self, body, status_code, etag=None):
         self.body = body
         self.status = status_code
+        self.etag = etag
 
     def read(self, *_):
         return self.body
+
+    def getheader(self, header_name, *_):
+        if header_name == HEADER_ETAG:
+            return self.etag
+        return None
 
 
 if __name__ == '__main__':

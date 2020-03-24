@@ -126,33 +126,83 @@ class TestGoalState(AgentTestCase):
         retriever.set_fast_track(1)
         retriever.set_fabric(0)
         ext_conf = retriever.get_ext_config()
-        self.assertEqual(GOAL_STATE_SOURCE_FABRIC, retriever.last_mode)
         self.assertTrue(ext_conf.changed)
         self.assertIsNotNone(ext_conf.extensions_config)
         self.assertEqual("Fabric stuff", ext_conf.extensions_config)
+        retriever.commit_processed()
+        self.assertEqual(GOAL_STATE_SOURCE_FABRIC, retriever.last_mode)
 
         # Fabric goal state, not changed
         ext_conf = retriever.get_ext_config()
-        self.assertEqual(GOAL_STATE_SOURCE_FABRIC, retriever.last_mode)
         self.assertFalse(ext_conf.changed)
         self.assertIsNotNone(ext_conf.extensions_config)
         self.assertEqual("Fabric stuff", ext_conf.extensions_config)
+        retriever.commit_processed()
+        self.assertEqual(GOAL_STATE_SOURCE_FABRIC, retriever.last_mode)
 
         # Fast Track goal state, changed
         retriever.set_fast_track(0)
         retriever.set_fabric(1)
         ext_conf = retriever.get_ext_config()
+        self.assertTrue(ext_conf.changed)
+        self.assertIsNotNone(ext_conf.extensions_config)
+        self.assertNotEqual("Fabric stuff", ext_conf.extensions_config)
+        retriever.commit_processed()
         self.assertEqual(GOAL_STATE_SOURCE_FASTTRACK, retriever.last_mode)
+
+        # Fast Track goal state, not changed
+        ext_conf = retriever.get_ext_config()
+        self.assertFalse(ext_conf.changed)
+        self.assertIsNotNone(ext_conf.extensions_config)
+        self.assertNotEqual("Fabric stuff", ext_conf.extensions_config)
+        retriever.commit_processed()
+        self.assertEqual(GOAL_STATE_SOURCE_FASTTRACK, retriever.last_mode)
+
+    def test_commit_processed(self):
+        test_data = WireProtocolData(DATA_FILE)
+        profile = InVMArtifactsProfile(test_data.vm_artifacts_profile)
+        wire_client = MockWireClient(test_data.goal_state)
+        goal_state = GoalState(wire_client)
+        goal_state.ext_conf = "Fabric stuff"
+        protocol = MockProtocol(goal_state=goal_state, profile=profile)
+        retriever = GoalStateRetriever(protocol=protocol)
+
+        # Fabric goal state, changed
+        retriever.set_fabric(0)
+        retriever.set_fast_track(1)
+        ext_conf = retriever.get_ext_config()
+        self.assertTrue(ext_conf.changed)
+        self.assertIsNotNone(ext_conf.extensions_config)
+        self.assertEqual("Fabric stuff", ext_conf.extensions_config)
+
+        # Verify nothing changes before the commit
+        self.assertIsNone(retriever.last_mode)
+        self.assertIsNone(retriever.last_incarnation)
+        self.assertIsNone(retriever.last_seqNo)
+
+        # Now commit and verify
+        retriever.commit_processed()
+        self.assertEqual(GOAL_STATE_SOURCE_FABRIC, retriever.last_mode)
+        self.assertEqual(1, retriever.last_incarnation)
+        self.assertIsNone(retriever.last_seqNo)
+
+        # FastTrack goal state, changed
+        retriever.set_fast_track(0)
+        ext_conf = retriever.get_ext_config()
         self.assertTrue(ext_conf.changed)
         self.assertIsNotNone(ext_conf.extensions_config)
         self.assertNotEqual("Fabric stuff", ext_conf.extensions_config)
 
-        # Fast Track goal state, not changed
-        ext_conf = retriever.get_ext_config()
+        # Verify nothing changes before the commit
+        self.assertEqual(GOAL_STATE_SOURCE_FABRIC, retriever.last_mode)
+        self.assertEqual(1, retriever.last_incarnation)
+        self.assertIsNone(retriever.last_seqNo)
+
+        # Now commit and verify
+        retriever.commit_processed()
         self.assertEqual(GOAL_STATE_SOURCE_FASTTRACK, retriever.last_mode)
-        self.assertFalse(ext_conf.changed)
-        self.assertIsNotNone(ext_conf.extensions_config)
-        self.assertNotEqual("Fabric stuff", ext_conf.extensions_config)
+        self.assertEqual(1, retriever.last_incarnation)
+        self.assertEqual(1, retriever.last_seqNo)
 
 class TestExtHandlers(AgentTestCase):
 

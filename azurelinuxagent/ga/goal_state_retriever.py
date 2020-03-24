@@ -52,6 +52,9 @@ class GoalStateRetriever(object):
         self.last_seqNo = None
         self.last_fast_track_extensionsConfig = None
         self.last_mode = None
+        self.pending_mode = None
+        self.pending_seqNo = None
+        self.pending_incarnation = None
 
     def get_ext_config(self):
         # Get the Fabric goal state and whether it changed
@@ -65,14 +68,13 @@ class GoalStateRetriever(object):
             artifacts_profile = self.protocol.get_artifacts_profile()
             fast_track_changed = self.get_fast_track_changed(artifacts_profile)
 
-        mode = self.decide_what_to_process(fabric_changed, fast_track_changed)
-        if mode != self.last_mode:
-            logger.info("Previous mode was {0}. New mode is {1}", self.last_mode, mode)
-            self.last_mode = mode
+        self.pending_mode = self.decide_what_to_process(fabric_changed, fast_track_changed)
+        if self.pending_mode  != self.last_mode:
+            logger.info("Processing from previous mode {0}. New mode is {1}", self.last_mode, self.pending_mode)
 
         extensions_config = None
         changed = False
-        if mode == GOAL_STATE_SOURCE_FABRIC:
+        if self.pending_mode  == GOAL_STATE_SOURCE_FABRIC:
             extensions_config = goal_state.ext_conf
             changed = fabric_changed
         else:
@@ -87,18 +89,25 @@ class GoalStateRetriever(object):
             self.last_fast_track_extensionsConfig = extensions_config
 
         if changed:
-            if mode == GOAL_STATE_SOURCE_FABRIC:
-                self.last_incarnation = goal_state.incarnation
-                self.set_fabric(self.last_incarnation)
+            if self.pending_mode  == GOAL_STATE_SOURCE_FABRIC:
                 msg = u"Handle extensions updates for incarnation {0}".format(goal_state.incarnation)
                 logger.verbose(msg)
             else:
-                self.last_seqNo = artifacts_profile.get_sequence_number()
-                self.set_fast_track(self.last_seqNo)
                 msg = u"Handle extensions updates for seqNo {0}".format(artifacts_profile.get_sequence_number())
                 logger.verbose(msg)
 
         return GenericExtensionsConfig(extensions_config, changed)
+
+    def commit_processed(self):
+        if self.pending_mode  != self.last_mode:
+            logger.info("Committing from previous mode {0}. New mode is {1}", self.last_mode, self.pending_mode)
+            self.last_mode = self.pending_mode
+        if self.pending_mode == GOAL_STATE_SOURCE_FABRIC:
+            self.last_incarnation = self.pending_incarnation
+            self.set_fabric(self.last_incarnation)
+        else:
+            self.last_seqNo = self.pending_seqNo
+            self.set_fast_track(self.last_seqNo)
 
     def decide_what_to_process(self, fabric_changed, fast_track_changed):
         """
@@ -120,8 +129,9 @@ class GoalStateRetriever(object):
             return False
         sequence_number = self.last_seqNo
         if sequence_number is None:
-            sequence_number = self.get_sequence_number()
+            sequence_number= self.get_sequence_number()
         if sequence_number is not None and sequence_number < artifacts_profile.get_sequence_number():
+            self.pending_seqNo = artifacts_profile.get_sequence_number()
             return True
         return False
 
@@ -132,6 +142,7 @@ class GoalStateRetriever(object):
         if incarnation is None:
             incarnation = self.get_incarnation()
         if incarnation is not None and int(incarnation) < int(goal_state.incarnation):
+            self.pending_incarnation = int(goal_state.incarnation)
             return True;
         return False
 

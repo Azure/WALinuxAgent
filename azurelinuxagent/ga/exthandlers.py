@@ -231,6 +231,7 @@ class ExtHandlersHandler(object):
         self.protocol = protocol
         self.goal_state_retriever = GoalStateRetriever(protocol)
         self.ext_config = None
+        self.ext_handlers = None
         self.log_report = False
         self.log_not_changed = True
         self.log_process = False
@@ -267,6 +268,7 @@ class ExtHandlersHandler(object):
 
             if self._extension_processing_allowed():
                 self.handle_ext_handlers()
+                self.goal_state_retriever.commit_processed()
 
             self.report_ext_handlers_status()
             self._cleanup_outdated_handlers()
@@ -358,15 +360,17 @@ class ExtHandlersHandler(object):
     def handle_ext_handlers(self):
         if self.ext_config is None or \
                 self.ext_config.extensions_config is None or \
-                self.ext_config.extensions_config.extHandlers is None or \
-                len(self.ext_config.extensions_config.extHandlers) == 0:
+                self.ext_config.extensions_config.ext_handlers is None or \
+                self.ext_config.extensions_config.ext_handlers.extHandlers is None or \
+                len(self.ext_config.extensions_config.ext_handlers.extHandlers) == 0:
             logger.verbose("No extension handler config found")
             return
 
         wait_until = datetime.datetime.utcnow() + datetime.timedelta(minutes=_DEFAULT_EXT_TIMEOUT_MINUTES)
-        max_dep_level = max([handler.sort_key() for handler in self.ext_handlers.extHandlers])
+        self.ext_handlers = self.ext_config.extensions_config.ext_handlers
+        extHandlers = self.ext_handlers.extHandlers
+        max_dep_level = max([handler.sort_key() for handler in extHandlers])
 
-        extHandlers = self.ext_config.extensions_config.extHandlers
         extHandlers.sort(key=operator.methodcaller('sort_key'))
         for ext_handler in extHandlers:
             self.handle_ext_handler(ext_handler)
@@ -447,7 +451,7 @@ class ExtHandlersHandler(object):
 
             self.log_not_changed = True
 
-            ext_handler_i.logger.info("Target handler state: {0} [incarnation {1}]", state, etag)
+            ext_handler_i.logger.info("Target handler state: {0}", state)
             if state == u"enabled":
                 self.handle_enable(ext_handler_i)
             elif state == u"disabled":
