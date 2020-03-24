@@ -65,7 +65,7 @@ class TestDHCP(AgentTestCase):
         self.assertTrue(dhcp_handler.gateway is None)
 
         # execute
-        self.assertFalse(dhcp_handler.wireserver_route_exists)
+        self.assertFalse(dhcp_handler.wireserver_route_exists, 'This will fail on an Azure VM')
 
         # test
         self.assertTrue(dhcp_handler.endpoint is None)

@@ -18,6 +18,9 @@
 #
 
 import os
+
+from azurelinuxagent.common.future import ustr
+
 import azurelinuxagent.common.conf as conf
 import azurelinuxagent.common.logger as logger
 from azurelinuxagent.common.utils import fileutil, restutil
@@ -85,9 +88,13 @@ class GoalStateRetriever(object):
 
         if changed:
             if mode == GOAL_STATE_SOURCE_FABRIC:
+                self.last_incarnation = goal_state.incarnation
+                self.set_fabric(self.last_incarnation)
                 msg = u"Handle extensions updates for incarnation {0}".format(goal_state.incarnation)
                 logger.verbose(msg)
             else:
+                self.last_seqNo = artifacts_profile.get_sequence_number()
+                self.set_fast_track(self.last_seqNo)
                 msg = u"Handle extensions updates for seqNo {0}".format(artifacts_profile.get_sequence_number())
                 logger.verbose(msg)
 
@@ -114,7 +121,7 @@ class GoalStateRetriever(object):
         sequence_number = self.last_seqNo
         if sequence_number is None:
             sequence_number = self.get_sequence_number()
-        if sequence_number is not None and sequence_number > artifacts_profile.get_sequence_number():
+        if sequence_number is not None and sequence_number < artifacts_profile.get_sequence_number():
             return True
         return False
 
@@ -124,19 +131,23 @@ class GoalStateRetriever(object):
         incarnation = self.last_incarnation
         if incarnation is None:
             incarnation = self.get_incarnation()
-        if incarnation is not None and incarnation > goal_state.incarnation:
+        if incarnation is not None and int(incarnation) < int(goal_state.incarnation):
             return True;
         return False
 
-    def set_fast_track(self, fast_track, vm_artifacts_seq_no=None):
+    def set_fast_track(self, vm_artifacts_seq_no=None):
         path = os.path.join(conf.get_lib_dir(), GOAL_STATE_SOURCE_FILE_NAME)
-        if fast_track:
-            self.save_cache(path, GOAL_STATE_SOURCE_FASTTRACK)
-            if vm_artifacts_seq_no is not None:
-                sequence_number_file_path = os.path.join(conf.get_lib_dir(), SEQUENCE_NUMBER_FILE_NAME)
-                self.save_cache(sequence_number_file_path, ustr(vm_artifacts_seq_no))
-        else:
-            self.save_cache(path, GOAL_STATE_SOURCE_FABRIC)
+        self.save_cache(path, GOAL_STATE_SOURCE_FASTTRACK)
+        if vm_artifacts_seq_no is not None:
+            sequence_number_file_path = os.path.join(conf.get_lib_dir(), SEQUENCE_NUMBER_FILE_NAME)
+            self.save_cache(sequence_number_file_path, ustr(vm_artifacts_seq_no))
+
+    def set_fabric(self, incarnation=None):
+        path = os.path.join(conf.get_lib_dir(), GOAL_STATE_SOURCE_FILE_NAME)
+        self.save_cache(path, GOAL_STATE_SOURCE_FABRIC)
+        if incarnation is not None:
+            incarnation_file_path = os.path.join(conf.get_lib_dir(), INCARNATION_FILE_NAME)
+            self.save_cache(incarnation_file_path, ustr(incarnation))
 
     def save_cache(self, local_file, data):
         try:

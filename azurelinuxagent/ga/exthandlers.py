@@ -43,13 +43,12 @@ from azurelinuxagent.common.event import add_event, elapsed_milliseconds, report
 from azurelinuxagent.common.exception import ExtensionDownloadError, ExtensionError, ExtensionErrorCodes, \
     ExtensionOperationError, ExtensionUpdateError, ProtocolError, ProtocolNotFoundError
 from azurelinuxagent.common.future import ustr
-from azurelinuxagent.common.protocol.goal_state import GoalStateRetriever, GenericExtensionsConfig
 from azurelinuxagent.common.protocol.restapi import ExtensionStatus, ExtensionSubStatus, ExtHandler, ExtHandlerStatus, \
     VMStatus
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
 from azurelinuxagent.common.version import AGENT_NAME, CURRENT_VERSION, DISTRO_NAME, DISTRO_VERSION, \
     GOAL_STATE_AGENT_VERSION, PY_VERSION_MAJOR, PY_VERSION_MICRO, PY_VERSION_MINOR
-
+from azurelinuxagent.ga.goal_state_retriever import GoalStateRetriever, GenericExtensionsConfig
 
 _HANDLER_PATTERN = r'^([^-]+)-(\d+(?:\.\d+)*)'
 _HANDLER_PKG_PATTERN = re.compile(_HANDLER_PATTERN + r'\.zip$', re.IGNORECASE)

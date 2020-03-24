@@ -35,7 +35,9 @@ DATA_FILE = {
         "trans_cert": "wire/trans_cert",
         "test_ext": "ext/sample_ext-1.3.0.zip",
         "remote_access": None,
-        "in_vm_artifacts_profile": None
+        "in_vm_artifacts_profile": None,
+        "vm_artifacts_profile": "wire/in_vm_artifacts_profile_blob.json",
+        "vm_artifacts_profile_install": "wire/in_vm_artifacts_profile_blob_install.json"
 }
 
 DATA_FILE_IN_VM_ARTIFACTS_PROFILE = DATA_FILE.copy()
@@ -118,6 +120,8 @@ class WireProtocolData(object):
         self.ext = None
         self.remote_access = None
         self.in_vm_artifacts_profile = None
+        self.vm_artifacts_profile = None
+        self.vm_artifacts_profile_install = None
 
         self.reload()
 
@@ -133,6 +137,8 @@ class WireProtocolData(object):
         self.trans_prv = load_data(self.data_files.get("trans_prv"))
         self.trans_cert = load_data(self.data_files.get("trans_cert"))
         self.ext = load_bin_data(self.data_files.get("test_ext"))
+        self.vm_artifacts_profile = load_data(self.data_files.get("vm_artifacts_profile"))
+        self.vm_artifacts_profile_install = load_data(self.data_files.get("vm_artifacts_profile_install"))
 
         remote_access_data_file = self.data_files.get("remote_access")
         if remote_access_data_file is not None:

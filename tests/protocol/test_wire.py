@@ -249,7 +249,7 @@ class TestWireProtocol(AgentTestCase):
                     HostPluginProtocol.set_default_channel(False)
                     protocol.client.upload_status_blob()
 
-                    patch_prepare.assert_called_once_with("BlockBlob")
+                    patch_prepare.assert_called_once_with("BlockBlob", False)
                     patch_default_upload.assert_called_once_with(testurl)
 
     def test_upload_status_blob_reports_prepare_error(self, *_):

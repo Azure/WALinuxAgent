@@ -27,7 +27,8 @@ _USE_MOCK_WIRE_DATA_RE = re.compile(
 
 
 @contextlib.contextmanager
-def mock_wire_protocol(mock_wire_data_file, http_get_handler=None, http_post_handler=None, http_put_handler=None, fail_on_unknown_request=True):
+def mock_wire_protocol(mock_wire_data_file, http_get_handler=None, http_post_handler=None, http_put_handler=None,
+                       fail_on_unknown_request=True):
     """
     Creates a WireProtocol object that handles requests to the WireServer and the Host GA Plugin (i.e requests on the WireServer endpoint), plus
     some requests to storage (requests on the fake server 'mock-goal-state').
@@ -65,6 +66,7 @@ def mock_wire_protocol(mock_wire_data_file, http_get_handler=None, http_post_han
         http_handlers.post = post
         http_handlers.put = put
         del tracked_urls[:]
+
     http_handlers(get=http_get_handler, post=http_post_handler, put=http_put_handler)
 
     #
@@ -113,9 +115,11 @@ def mock_wire_protocol(mock_wire_data_file, http_get_handler=None, http_post_han
         patched.start()
         start.http_request_patch = patched
 
-        patched = patch("azurelinuxagent.common.protocol.wire.CryptUtil", side_effect=protocol.mock_wire_data.mock_crypt_util)
+        patched = patch("azurelinuxagent.common.protocol.wire.CryptUtil",
+                        side_effect=protocol.mock_wire_data.mock_crypt_util)
         patched.start()
         start.crypt_util_patch = patched
+
     start.http_request_patch = None
     start.crypt_util_patch = None
 
@@ -134,7 +138,7 @@ def mock_wire_protocol(mock_wire_data_file, http_get_handler=None, http_post_han
     protocol.stop = stop
     protocol.track_url = lambda url: tracked_urls.append(url)
     protocol.get_tracked_urls = lambda: tracked_urls
-    protocol.set_http_handlers = lambda http_get_handler=None, http_post_handler=None, http_put_handler=None:\
+    protocol.set_http_handlers = lambda http_get_handler=None, http_post_handler=None, http_put_handler=None: \
         http_handlers(get=http_get_handler, post=http_post_handler, put=http_put_handler)
 
     # go do it
@@ -150,6 +154,7 @@ class HttpRequestPredicates(object):
     """
     Utility functions to check the urls used by tests
     """
+
     @staticmethod
     def is_goal_state_request(url):
         return url.lower() == 'http://{0}/machine/?comp=goalstate'.format(restutil.KNOWN_WIRESERVER_IP)
@@ -173,13 +178,15 @@ class HttpRequestPredicates(object):
 
     @staticmethod
     def is_host_plugin_extension_artifact_request(url):
-        return url.lower() == 'http://{0}:{1}/extensionartifact'.format(restutil.KNOWN_WIRESERVER_IP, restutil.HOST_PLUGIN_PORT)
+        return url.lower() == 'http://{0}:{1}/extensionartifact'.format(restutil.KNOWN_WIRESERVER_IP,
+                                                                        restutil.HOST_PLUGIN_PORT)
 
     @staticmethod
     def is_host_plugin_extension_request(request_url, request_kwargs, extension_url):
         if not HttpRequestPredicates.is_host_plugin_extension_artifact_request(request_url):
             return False
-        artifact_location = HttpRequestPredicates._get_host_plugin_request_artifact_location(request_url, request_kwargs)
+        artifact_location = HttpRequestPredicates._get_host_plugin_request_artifact_location(request_url,
+                                                                                             request_kwargs)
         return artifact_location == extension_url
 
     @staticmethod
@@ -197,3 +204,31 @@ class MockHttpResponse:
 
     def read(self, *_):
         return self.body
+
+
+class MockWireClient:
+
+    def __init__(self, goal_state=None):
+        self.return_goal_state = goal_state
+
+    def get_header(self):
+        return None
+
+    def fetch_config(self, uri, header):
+        return self.return_goal_state
+
+    def get_endpoint(self):
+        return "http://www.blahblahblah.lu"
+
+
+class MockProtocol:
+
+    def __init__(self, goal_state=None, profile=None):
+        self.return_goal_state = goal_state
+        self.return_profile = profile
+
+    def get_goal_state(self):
+        return self.return_goal_state
+
+    def get_artifacts_profile(self):
+        return self.return_profile
