@@ -34,7 +34,7 @@ from azurelinuxagent.common.osutil.default import DefaultOSUtil
 
 
 class SUSE11OSUtil(DefaultOSUtil):
-
+    # TODO: Remove this class after March 31 2022, EOL of SLES 11
     def __init__(self):
         super(SUSE11OSUtil, self).__init__()
         self.jit_enabled = True
@@ -81,6 +81,11 @@ class SUSEOSUtil(SUSE11OSUtil):
     def __init__(self):
         super(SUSEOSUtil, self).__init__()
         self.dhclient_name = 'wickedd-dhcp4'
+
+    def set_hostname(self, hostname):
+        shellutil.run(
+            "hostnamectl set-hostname {0}".format(hostname), chk_err=False
+        )
 
     def stop_dhcp_service(self):
         cmd = "systemctl stop {0}".format(self.dhclient_name)
