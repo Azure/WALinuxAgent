@@ -642,8 +642,7 @@ class UpdateHandler(object):
 
     def _upgrade_available(self, protocol, base_version=CURRENT_VERSION):
         # Emit an event expressing the state of AutoUpdate
-        # Note:
-        # - Duplicate events get suppressed; state transitions always emit
+        # Note: Duplicate events get suppressed; state transitions always emit
         add_event(
             AGENT_NAME,
             version=CURRENT_VERSION,
