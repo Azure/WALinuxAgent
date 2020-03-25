@@ -247,6 +247,7 @@ class ExtHandlersHandler(object):
         except Exception as e:
             msg = u"Exception retrieving extension handlers: {0}".format(ustr(e))
             detailed_msg = '{0} {1}'.format(msg, traceback.extract_tb(get_traceback(e)))
+            logger.warn(msg)
 
             self.get_artifact_error_state.incr()
 
@@ -282,6 +283,14 @@ class ExtHandlersHandler(object):
                       is_success=False,
                       message=detailed_msg)
             return
+
+    def changed(self):
+        if self.ext_config is None or not self._extension_processing_allowed():
+            return False
+        return self.ext_config.changed()
+
+    def goal_state_description(self):
+        return self.goal_state_retriever.get_description()
 
     def _cleanup_outdated_handlers(self):
         handlers = []

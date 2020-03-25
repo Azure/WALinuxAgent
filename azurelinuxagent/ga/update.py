@@ -333,22 +333,22 @@ class UpdateHandler(object):
 
                     utc_start = datetime.utcnow()
 
-                    last_etag = exthandlers_handler.last_etag
                     exthandlers_handler.run()
 
                     remote_access_handler.run()
 
-                    if last_etag != exthandlers_handler.last_etag:
+                    if exthandlers_handler.changed():
                         self._ensure_readonly_files()
                         duration = elapsed_milliseconds(utc_start)
-                        logger.info('ProcessGoalState completed [incarnation {0}; {1} ms]',
-                                    exthandlers_handler.last_etag,
+                        description = exthandlers_handler.goal_state_description()
+                        logger.info('ProcessGoalState completed [{0}; {1} ms]',
+                                    description,
                                     duration)
                         add_event(
                             AGENT_NAME,
                             op=WALAEventOperation.ProcessGoalState,
                             duration=duration,
-                            message="Incarnation {0}".format(exthandlers_handler.last_etag))
+                            message=description)
 
                 self._send_heartbeat_telemetry(protocol)
 

@@ -113,6 +113,44 @@ class TestGoalState(AgentTestCase):
         retriever.set_fabric()
         self.assertEqual(GOAL_STATE_SOURCE_FABRIC, retriever.decide_what_to_process(False, False))
 
+    def test_startup_fabric(self):
+        # Set the previous goal state as Fabric
+        test_data = WireProtocolData(DATA_FILE)
+        profile = InVMArtifactsProfile(test_data.vm_artifacts_profile)
+        wire_client = MockWireClient(test_data.goal_state)
+        goal_state = GoalState(wire_client)
+        goal_state.ext_conf = "Fabric stuff"
+        protocol = MockProtocol(goal_state=goal_state, profile=profile)
+        retriever = GoalStateRetriever(protocol=protocol)
+        retriever.set_fast_track(1)
+        retriever.set_fabric(1)
+
+        # Now recreate the retriever and verify the first ExtensionsConfig
+        retriever = GoalStateRetriever(protocol=protocol)
+        ext_conf = retriever.get_ext_config()
+        self.assertIsNotNone(ext_conf)
+        self.assertTrue(ext_conf.changed)
+        self.assertEqual(GOAL_STATE_SOURCE_FABRIC, retriever.pending_mode)
+
+    def test_startup_fasttrack(self):
+        # Set the previous goal state as FastTrack
+        test_data = WireProtocolData(DATA_FILE)
+        profile = InVMArtifactsProfile(test_data.vm_artifacts_profile)
+        wire_client = MockWireClient(test_data.goal_state)
+        goal_state = GoalState(wire_client)
+        goal_state.ext_conf = "Fabric stuff"
+        protocol = MockProtocol(goal_state=goal_state, profile=profile)
+        retriever = GoalStateRetriever(protocol=protocol)
+        retriever.set_fabric(1)
+        retriever.set_fast_track(1)
+
+        # Now recreate the retriever and verify the first ExtensionsConfig
+        retriever = GoalStateRetriever(protocol=protocol)
+        ext_conf = retriever.get_ext_config()
+        self.assertIsNotNone(ext_conf)
+        self.assertTrue(ext_conf.changed)
+        self.assertEqual(GOAL_STATE_SOURCE_FASTTRACK, retriever.pending_mode)
+
     def test_get_ext_config(self):
         test_data = WireProtocolData(DATA_FILE)
         profile = InVMArtifactsProfile(test_data.vm_artifacts_profile)

@@ -1209,7 +1209,8 @@ class TestUpdate(UpdateTestCase):
         self._test_run_latest()
         self.assertEqual(0, mock_signal.call_count)
 
-    def _test_run(self, invocations=1, calls=[call.run()], enable_updates=False, sleep_interval=(3,)):
+    def _test_run(self, invocations=1, calls=[call.run(), call.changed(), call.goal_state_description()], ra_calls=[call.run()],
+                  enable_updates=False, sleep_interval=(3,)):
         conf.get_autoupdate_enabled = Mock(return_value=enable_updates)
 
         # Note:
@@ -1244,7 +1245,7 @@ class TestUpdate(UpdateTestCase):
                                     self.assertEqual(1, mock_handler.call_count)
                                     self.assertEqual(mock_handler.return_value.method_calls, calls)
                                     self.assertEqual(1, mock_ra_handler.call_count)
-                                    self.assertEqual(mock_ra_handler.return_value.method_calls, calls)
+                                    self.assertEqual(mock_ra_handler.return_value.method_calls, ra_calls)
                                     self.assertEqual(invocations, mock_sleep.call_count)
                                     if invocations > 0:
                                         self.assertEqual(sleep_interval, mock_sleep.call_args[0])
@@ -1256,15 +1257,15 @@ class TestUpdate(UpdateTestCase):
         self._test_run()
 
     def test_run_keeps_running(self):
-        self._test_run(invocations=15, calls=[call.run()] * 15)
+        self._test_run(invocations=15, calls=[call.run(), call.changed(), call.goal_state_description()] * 15, ra_calls=[call.run()] * 15)
 
     def test_run_stops_if_update_available(self):
         self.update_handler._upgrade_available = Mock(return_value=True)
-        self._test_run(invocations=0, calls=[], enable_updates=True)
+        self._test_run(invocations=0, calls=[], ra_calls=[], enable_updates=True)
 
     def test_run_stops_if_orphaned(self):
         with patch('os.getppid', return_value=1):
-            self._test_run(invocations=0, calls=[], enable_updates=True)
+            self._test_run(invocations=0, calls=[], ra_calls=[], enable_updates=True)
 
     def test_run_clears_sentinel_on_successful_exit(self):
         self._test_run()
@@ -1272,7 +1273,7 @@ class TestUpdate(UpdateTestCase):
 
     def test_run_leaves_sentinel_on_unsuccessful_exit(self):
         self.update_handler._upgrade_available = Mock(side_effect=Exception)
-        self._test_run(invocations=0, calls=[], enable_updates=True)
+        self._test_run(invocations=0, calls=[], ra_calls=[], enable_updates=True)
         self.assertTrue(os.path.isfile(self.update_handler._sentinel_file_path()))
 
     def test_run_emits_restart_event(self):
@@ -1440,7 +1441,7 @@ class TestUpdate(UpdateTestCase):
         behavior never changes.
         """
         self.update_handler._upgrade_available = Mock(return_value=True)
-        self._test_run(invocations=0, calls=[], enable_updates=True, sleep_interval=(300,))
+        self._test_run(invocations=0, calls=[], ra_calls=[], enable_updates=True, sleep_interval=(300,))
 
     @patch('azurelinuxagent.common.conf.get_extensions_enabled', return_value=False)
     def test_interval_changes_when_extensions_disabled(self, _):
@@ -1448,7 +1449,8 @@ class TestUpdate(UpdateTestCase):
         When extension processing is disabled, the goal state interval should be larger.
         """
         self.update_handler._upgrade_available = Mock(return_value=False)
-        self._test_run(invocations=15, calls=[call.run()] * 15, sleep_interval=(300,))
+        self._test_run(invocations=15, calls=[call.run(), call.changed(), call.goal_state_description()] * 15,
+                       ra_calls=[call.run()] * 15, sleep_interval=(300,))
 
     @patch("azurelinuxagent.common.logger.info")
     @patch("azurelinuxagent.ga.update.add_event")
