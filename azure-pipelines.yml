@@ -6,7 +6,7 @@
 trigger:
   branches:
     include:
-    - '*'
+    - 'master'
 
 pool:
   vmImage: 'ubuntu-latest'
@@ -38,6 +38,7 @@ steps:
   inputs:
     versionSpec: '$(python.version)'
   displayName: 'Use Python $(python.version)'
+  continueOnError: false
 
 - script: |
     python -m pip install --upgrade pip
@@ -46,8 +47,22 @@ steps:
   displayName: 'Install dependencies'
 
 - script: |
+   which python
+   which python3
    echo $PATH
    nosetests $NOSEOPTS --attr '!requires_sudo' tests
    sudo env "PATH=$PATH" nosetests $NOSEOPTS --verbose --attr 'requires_sudo' tests
    if [ ! -z "$SETUPOPTS" ]; then /usr/bin/env python setup.py $SETUPOPTS; fi
   displayName: 'nosetest'
+
+- task: PublishTestResults@2
+  condition: succeededOrFailed()
+  inputs:
+    testResultsFiles: '**/test-*.xml'
+    testRunTitle: 'Publish test results for Python $(python.version)'
+
+- task: PublishCodeCoverageResults@1
+  inputs:
+    codeCoverageTool: Cobertura
+    summaryFileLocation: '$(System.DefaultWorkingDirectory)/**/coverage.xml'
+    reportDirectory: '$(System.DefaultWorkingDirectory)/**/htmlcov'
