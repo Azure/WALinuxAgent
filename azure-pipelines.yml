@@ -18,19 +18,19 @@ strategy:
     #  SETUPOPTS: ""
     Python27:
       python.version: '2.7'
-      NOSEOPTS: "--verbose --with-timer"
+      NOSEOPTS: "--verbose --with-timer --with-xunit"
       SETUPOPTS: ""
     Python35:
       python.version: '3.5'
-      NOSEOPTS: "--verbose --with-timer"
+      NOSEOPTS: "--verbose --with-timer --with-xunit"
       SETUPOPTS: ""
     Python36:
       python.version: '3.6'
-      NOSEOPTS: "--verbose --with-timer"
+      NOSEOPTS: "--verbose --with-timer --with-xunit"
       SETUPOPTS: ""
     Python37:
       python.version: '3.7'
-      NOSEOPTS: "--verbose --with-coverage --with-timer --cover-inclusive --cover-min-percentage=60 --cover-branches --cover-package=azurelinuxagent --cover-xml"
+      NOSEOPTS: "--verbose --with-xunit --with-coverage --with-timer --cover-inclusive --cover-min-percentage=60 --cover-branches --cover-package=azurelinuxagent --cover-xml"
       SETUPOPTS: ""
 
 steps:
@@ -58,6 +58,8 @@ steps:
 - task: PublishTestResults@2
   condition: succeededOrFailed()
   inputs:
+    testResultsFormat: XUnit
+    testResultsFiles: "**/nosetests.xml"
     testRunTitle: 'Publish test results for Python $(python.version)'
     failTaskOnFailedTests: true
 
