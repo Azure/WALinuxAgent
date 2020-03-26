@@ -12,10 +12,10 @@ pool:
   vmImage: 'ubuntu-latest'
 strategy:
   matrix:
-    Python26:
-      python.version: '2.6'
-      NOSEOPTS: "--verbose"
-      SETUPOPTS: ""
+    #Python26:
+    #  python.version: '2.6'
+    #  NOSEOPTS: "--verbose"
+    #  SETUPOPTS: ""
     Python27:
       python.version: '2.7'
       NOSEOPTS: "--verbose --with-timer"
@@ -46,6 +46,7 @@ steps:
   displayName: 'Install dependencies'
 
 - script: |
+   echo $PATH
    nosetests $NOSEOPTS --attr '!requires_sudo' tests
    sudo env "PATH=$PATH" nosetests $NOSEOPTS --verbose --attr 'requires_sudo' tests
    if [ ! -z "$SETUPOPTS" ]; then /usr/bin/env python setup.py $SETUPOPTS; fi
