@@ -131,7 +131,7 @@ class CommandError(Exception):
         self.stderr = stderr
 
 
-def run_command(command, log_error=False):
+def run_command(command, log_error=False, shell=False):
     """
     Executes the given command and returns its stdout as a string.
     If there are any errors executing the command it logs details about the failure and raises a RunCommandException;
@@ -141,7 +141,7 @@ def run_command(command, log_error=False):
         return " ".join(cmd) if isinstance(cmd, list) else command
 
     try:
-        process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=False)
+        process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=shell)
         stdout, stderr = process.communicate()
         returncode = process.returncode
     except Exception as e:
