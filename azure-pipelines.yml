@@ -10,6 +10,9 @@ trigger:
 
 pool:
   vmImage: 'ubuntu-latest'
+variables:
+  verbose: "" #--verbose
+  xunit-vars: "--with-xunit --xunit-file=nosetests_$(python.version).xml"
 strategy:
   matrix:
     #Python26:
@@ -18,19 +21,19 @@ strategy:
     #  SETUPOPTS: ""
     Python27:
       python.version: '2.7'
-      NOSEOPTS: "--verbose --with-timer --with-xunit"
+      NOSEOPTS: "$(verbose) --with-timer $(xunit-vars)"
       SETUPOPTS: ""
     Python35:
       python.version: '3.5'
-      NOSEOPTS: "--verbose --with-timer --with-xunit"
+      NOSEOPTS: " $(verbose) --with-timer $(xunit-vars)"
       SETUPOPTS: ""
     Python36:
       python.version: '3.6'
-      NOSEOPTS: "--verbose --with-timer --with-xunit --xunit-file=nosetests.xml"
+      NOSEOPTS: "$(verbose) --with-timer $(xunit-vars)"
       SETUPOPTS: ""
     Python37:
       python.version: '3.7'
-      NOSEOPTS: "--verbose --with-xunit --with-coverage --with-timer --cover-inclusive --cover-min-percentage=60 --cover-branches --cover-package=azurelinuxagent --cover-xml"
+      NOSEOPTS: "$(verbose) $(xunit-vars) --with-coverage --with-timer --cover-inclusive --cover-min-percentage=60 --cover-branches --cover-package=azurelinuxagent --cover-xml"
       SETUPOPTS: ""
 
 steps:
@@ -59,10 +62,10 @@ steps:
   condition: succeededOrFailed()
   inputs:
     testResultsFormat: XUnit
-    testResultsFiles: "**/nosetests.xml"
+    testResultsFiles: "**/nosetests*.xml"
     testRunTitle: 'Publish test results for Python $(python.version)'
     failTaskOnFailedTests: true
-    publishRunAttachments: false
+    publishRunAttachments: true
 
 - task: PublishCodeCoverageResults@1
   inputs:
