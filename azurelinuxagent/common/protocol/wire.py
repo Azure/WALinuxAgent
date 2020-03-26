@@ -1387,6 +1387,12 @@ class InVMArtifactsProfile(object):
             return int(self.inVMArtifactsProfileBlobSeqNo)
         return None
 
+    def has_extensions(self):
+        if 'extensionGoalStates' in self.__dict__:
+            if len(self.extensionGoalStates) > 0:
+                return True
+        return False
+
     def transform_to_extensions_config(self, flush_func=None):
         """
         We need to convert the json from the InVmArtifactsProfile blob to the following

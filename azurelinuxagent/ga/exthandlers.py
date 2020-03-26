@@ -287,7 +287,7 @@ class ExtHandlersHandler(object):
     def changed(self):
         if self.ext_config is None or not self._extension_processing_allowed():
             return False
-        return self.ext_config.changed()
+        return self.ext_config.changed
 
     def goal_state_description(self):
         return self.goal_state_retriever.get_description()

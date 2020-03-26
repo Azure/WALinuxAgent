@@ -70,7 +70,9 @@ class GoalStateRetriever(object):
             fast_track_changed = self.get_fast_track_changed(artifacts_profile)
 
         self.pending_mode = self.decide_what_to_process(fabric_changed, fast_track_changed)
-        if self.pending_mode != self.last_mode:
+        if self.last_mode is None:
+            logger.info("Processing first mode {0}", self.pending_mode)
+        elif self.pending_mode != self.last_mode:
             logger.info("Processing from previous mode {0}. New mode is {1}", self.last_mode, self.pending_mode)
 
         extensions_config = None
@@ -103,9 +105,12 @@ class GoalStateRetriever(object):
         return GenericExtensionsConfig(extensions_config, changed)
 
     def commit_processed(self):
-        if self.pending_mode != self.last_mode:
+        if self.last_mode is None:
+            logger.info("Committing first mode {0}.", self.pending_mode)
+        elif self.pending_mode != self.last_mode:
             logger.info("Committing from previous mode {0}. New mode is {1}", self.last_mode, self.pending_mode)
-            self.last_mode = self.pending_mode
+
+        self.last_mode = self.pending_mode
         if self.pending_mode == GOAL_STATE_SOURCE_FABRIC:
             self.last_incarnation = self.pending_incarnation
             self.set_fabric(self.last_incarnation)
@@ -131,6 +136,9 @@ class GoalStateRetriever(object):
     def get_fast_track_changed(self, artifacts_profile):
         if artifacts_profile is None:
             return False
+        if not artifacts_profile.has_extensions():
+            return False
+
         sequence_number = self.last_seqNo
         if sequence_number is None:
             sequence_number = self.get_sequence_number()

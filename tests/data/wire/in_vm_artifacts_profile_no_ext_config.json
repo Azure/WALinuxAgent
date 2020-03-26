@@ -1,0 +1,39 @@
+{
+  "inVMArtifactsProfileBlobSeqNo": 1,
+  "inVMMetadata": {
+    "subscriptionId": "00000000-0000-0000-0000-000000000000",
+    "resourceGroupName": "TestRG",
+    "vmName": "vm1",
+    "location": "location",
+    "vmId": "00000000-0000-0000-0000-000000000000",
+    "vmSize": "Standard_A3",
+    "osType": "Windows",
+    "vmImage": {
+      "publisher": "publisher",
+      "offer": "offer",
+      "sku": "sku",
+      "version": "version"
+    },
+    "placement": {
+      "platformUpdateDomain": 1,
+      "platformFaultDomain": 1
+    },
+    "tags": {
+      "tag_key": "tag_value"
+    }
+  },
+  "VM": {
+    "id": "resourceId",
+    "properties": {
+      "sourceVirtualMachine": "sourceVirtualMachine",
+      "storageProfile": {
+        "osDisk": {
+          "osState": "osState",
+          "osType": "osType"
+        },
+        "dataDisks": []
+      },
+      "provisioningState": "provisioningState"
+    }
+  }
+}

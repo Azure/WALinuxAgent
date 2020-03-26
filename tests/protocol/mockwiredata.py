@@ -37,7 +37,9 @@ DATA_FILE = {
         "remote_access": None,
         "in_vm_artifacts_profile": None,
         "vm_artifacts_profile": "wire/in_vm_artifacts_profile_blob.json",
-        "vm_artifacts_profile_install": "wire/in_vm_artifacts_profile_blob_install.json"
+        "vm_artifacts_profile_install": "wire/in_vm_artifacts_profile_blob_install.json",
+        "vm_artifacts_profile_no_extensions": "wire/in_vm_artifacts_profile_no_extensions.json",
+        "vm_artifacts_profile_no_ext_config": "wire/in_vm_artifacts_profile_no_ext_config.json"
 }
 
 DATA_FILE_IN_VM_ARTIFACTS_PROFILE = DATA_FILE.copy()
@@ -123,6 +125,8 @@ class WireProtocolData(object):
         self.in_vm_artifacts_profile = None
         self.vm_artifacts_profile = None
         self.vm_artifacts_profile_install = None
+        self.vm_artifacts_profile_no_extensions = None
+        self.vm_artifacts_profile_no_ext_config = None
 
         self.reload()
 
@@ -140,6 +144,8 @@ class WireProtocolData(object):
         self.ext = load_bin_data(self.data_files.get("test_ext"))
         self.vm_artifacts_profile = load_data(self.data_files.get("vm_artifacts_profile"))
         self.vm_artifacts_profile_install = load_data(self.data_files.get("vm_artifacts_profile_install"))
+        self.vm_artifacts_profile_no_extensions = load_data(self.data_files.get("vm_artifacts_profile_no_extensions"))
+        self.vm_artifacts_profile_no_ext_config = load_data(self.data_files.get("vm_artifacts_profile_no_ext_config"))
 
         remote_access_data_file = self.data_files.get("remote_access")
         if remote_access_data_file is not None:
