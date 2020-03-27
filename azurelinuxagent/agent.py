@@ -41,6 +41,9 @@ from azurelinuxagent.common.osutil import get_osutil
 from azurelinuxagent.common.utils import fileutil
 
 
+WAAGENT_LOG_FILE = "waagent.log"
+
+
 class Agent(object):
     def __init__(self, verbose, conf_file_path=None):
         """
@@ -72,16 +75,15 @@ class Agent(object):
             logger.error(
                 "Exception occurred while creating "
                 "log directory {0}: {1}".format(log_dir, e))
-        log_file = os.path.join(log_dir, "waagent.log")
-        log_max_bytes = self.osutil.get_agent_log_rotation_maxbytes()
-        log_backup_count = self.osutil.get_agent_log_rotation_backupcount()
+        log_file = os.path.join(log_dir, WAAGENT_LOG_FILE)
         logger.add_logger_appender(logger.AppenderType.FILE, level,
                                    path=log_file,
-                                   max_bytes=log_max_bytes,
-                                   backup_count=log_backup_count)
+                                   max_bytes=self.osutil.get_agent_log_rotation_maxbytes(),
+                                   backup_count=self.osutil.get_agent_log_rotation_backupcount(),
+                                   logrotate_supported=self.osutil.supports_logrotate())
         if conf.get_logs_console():
             logger.add_logger_appender(logger.AppenderType.CONSOLE, level,
-                    path="/dev/console")
+                                       path="/dev/console")
 
         if event.send_logs_to_telemetry():
             logger.add_logger_appender(logger.AppenderType.TELEMETRY,

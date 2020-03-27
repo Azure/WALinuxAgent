@@ -61,6 +61,7 @@ MAX_NUMBER_OF_EVENTS = 1000
 AGENT_EVENT_FILE_EXTENSION = '.waagent.tld'
 EVENT_FILE_REGEX = re.compile(r'(?P<agent_event>\.waagent)?\.tld$')
 
+
 def send_logs_to_telemetry():
     return SEND_LOGS_TO_TELEMETRY
 

@@ -23,6 +23,7 @@ from datetime import datetime, timedelta
 from azurelinuxagent.common.event import __event_logger__, add_log_event, MAX_NUMBER_OF_EVENTS, TELEMETRY_LOG_EVENT_ID,\
     TELEMETRY_LOG_PROVIDER_ID, EVENTS_DIRECTORY
 import azurelinuxagent.common.logger as logger
+from azurelinuxagent.common.osutil import get_osutil
 from azurelinuxagent.common.utils import fileutil
 from tests.tools import AgentTestCase, MagicMock, patch, skip_if_predicate_true
 
@@ -466,7 +467,8 @@ class TestAppender(AgentTestCase):
         self.event_dir = os.path.join(self.lib_dir, EVENTS_DIRECTORY)
         fileutil.mkdir(self.event_dir)
 
-        self.log_file = tempfile.mkstemp(prefix="logfile-")[1]
+        self.log_folder = tempfile.mkdtemp()
+        self.log_file = tempfile.mkstemp(prefix="logfile-", dir=self.log_folder)[1]
 
         logger.reset_periodic()
 
@@ -540,6 +542,49 @@ class TestAppender(AgentTestCase):
             self.assertRegex(logcontent[0], r"(.*INFO\s\w+\s*test-info.*)")
             self.assertRegex(logcontent[1], r"(.*WARNING\s\w+\s*test-warn.*)")
             self.assertRegex(logcontent[2], r"(.*ERROR\s\w+\s*test-error.*)")
+
+    def test_file_appender_with_logrotate_supported(self):
+        logger.add_logger_appender(logger.AppenderType.FILE,
+                                   logger.LogLevel.INFO,
+                                   path=self.log_file,
+                                   max_bytes=4, backup_count=10,
+                                   logrotate_supported=True)
+        # Do some dummy logging
+        for i in range(10):
+            logger.info("test-info-{0}".format(i))
+
+        log_files = sorted(os.listdir(self.log_folder), reverse=True)
+        self.assertEqual(len(log_files), 1)  # No rotation expected as logrotate is passed as true.
+
+        # Verifying if all the logs are written on that single file.
+        with open(self.log_file) as logfile:
+            logcontent = logfile.readlines()
+            self.assertEqual(10, len(logcontent))
+            for logline in logcontent:
+                self.assertRegex(logline, r"(.*INFO\s\w+\s*test-info.*)")
+
+    def test_file_appender_with_logrotate_not_supported(self):
+        logger.add_logger_appender(logger.AppenderType.FILE, logger.LogLevel.INFO, path=self.log_file,
+                                   max_bytes=50,  # approx length of one log line.
+                                   backup_count=4,
+                                   logrotate_supported=False)
+        # Do some dummy logging
+        for i in range(10):
+            logger.info("test-info-{0}".format(i))
+
+        log_files = sorted(os.listdir(self.log_folder), reverse=True)
+        self.assertEqual(len(log_files), 5)   # 4 backup + 1 active log file.
+
+        # With 10 logs written, and 5 files on the disk, the expected files should be the last written log statements.
+        starting_log_suffix = 5
+        for log_file in log_files:
+            log_file_path = os.path.join(self.log_folder, log_file)
+
+            with open(log_file_path) as logfile:
+                logcontent = logfile.readlines()[0]
+                self.assertRegex(logcontent, r".*INFO\s\w+\s*test-info-{0}.*".format(starting_log_suffix))
+
+            starting_log_suffix += 1
 
     @patch("azurelinuxagent.common.event.send_logs_to_telemetry", return_value=True)
     @patch("azurelinuxagent.common.event.EventLogger.add_log_event")

@@ -159,8 +159,9 @@ class Logger(object):
                 # TODO: call write_log instead (see comment above)
                 #
 
-    def add_appender(self, appender_type, level, path, max_bytes=0, backup_count=0):
-        appender = _create_logger_appender(appender_type, level, path, max_bytes=max_bytes, backup_count=backup_count)
+    def add_appender(self, appender_type, level, path, max_bytes=0, backup_count=0, logrotate_supported=True):
+        appender = _create_logger_appender(appender_type, level, path, max_bytes=max_bytes, backup_count=backup_count,
+                                           logrotate_supported=logrotate_supported)
         self.appenders.append(appender)
 
 
@@ -188,17 +189,18 @@ class ConsoleAppender(Appender):
 
 
 class FileAppender(Appender):
-    def __init__(self, level, path, max_bytes, backup_count):
+    def __init__(self, level, path, max_bytes, backup_count, logrotate_supported):
         self.path = path
-        self.max_bytes = max_bytes
-        self.backup_count = backup_count
+        self._max_bytes = max_bytes
+        self._backup_count = backup_count
+        self._logrotate_supported = logrotate_supported
         super(FileAppender, self).__init__(level)
 
     def write(self, level, msg):
         if self.level <= level:
 
-            if self.shouldRollover(msg):
-                self.doRollover()
+            if self._should_rollover(msg):
+                self._do_rollover()
 
             try:
                 with open(self.path, "a+") as log_file:
@@ -206,18 +208,22 @@ class FileAppender(Appender):
             except IOError:
                 pass
 
-    def shouldRollover(self, msg):
-        if self.backup_count == 0:
+    def _should_rollover(self, msg):
+        if self._logrotate_supported:
+            # Making it explicit for not to rotate if logrotate takes care of it.
             return False
 
-        if os.path.exists(self.path) and os.stat(self.path).st_size + len(msg) > self.max_bytes:
+        if self._backup_count == 0:
+            return False
+
+        if os.path.exists(self.path) and os.stat(self.path).st_size + len(msg) > self._max_bytes:
             return True
 
         return False
 
-    def doRollover(self):
-        if self.backup_count > 0:
-            for i in range(self.backup_count-1, 0, -1):
+    def _do_rollover(self):
+        if self._backup_count > 0:
+            for i in range(self._backup_count - 1, 0, -1):
                 src = "%s.%d" % (self.path, i)
                 dst = "%s.%d" % (self.path, i + 1)
                 if os.path.exists(src):
@@ -279,8 +285,10 @@ class AppenderType(object):
     TELEMETRY = 3
 
 
-def add_logger_appender(appender_type, level=LogLevel.INFO, path=None, max_bytes=0, backup_count=0):
-    DEFAULT_LOGGER.add_appender(appender_type, level, path, max_bytes=max_bytes, backup_count=backup_count)
+def add_logger_appender(appender_type, level=LogLevel.INFO, path=None, max_bytes=0, backup_count=0,
+                        logrotate_supported=True):
+    DEFAULT_LOGGER.add_appender(appender_type, level, path, max_bytes=max_bytes, backup_count=backup_count,
+                                logrotate_supported=logrotate_supported)
 
 
 def reset_periodic():
@@ -343,11 +351,12 @@ def log(level, msg_format, *args):
     DEFAULT_LOGGER.log(level, msg_format, args)
 
 
-def _create_logger_appender(appender_type, level=LogLevel.INFO, path=None, max_bytes=0, backup_count=0):
+def _create_logger_appender(appender_type, level=LogLevel.INFO, path=None, max_bytes=0, backup_count=0,
+                            logrotate_supported=True):
     if appender_type == AppenderType.CONSOLE:
         return ConsoleAppender(level, path)
     elif appender_type == AppenderType.FILE:
-        return FileAppender(level, path, max_bytes=max_bytes, backup_count=backup_count)
+        return FileAppender(level, path, max_bytes=max_bytes, backup_count=backup_count, logrotate_supported=logrotate_supported)
     elif appender_type == AppenderType.STDOUT:
         return StdoutAppender(level)
     elif appender_type == AppenderType.TELEMETRY:

@@ -47,8 +47,8 @@ from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
 from azurelinuxagent.common.utils.networkutil import RouteEntry, NetworkInterfaceCard
 from azurelinuxagent.common.utils.shellutil import CommandError
 
-__RULES_FILES__ = [ "/lib/udev/rules.d/75-persistent-net-generator.rules",
-                    "/etc/udev/rules.d/70-persistent-net.rules" ]
+__RULES_FILES__ = ["/lib/udev/rules.d/75-persistent-net-generator.rules",
+                   "/etc/udev/rules.d/70-persistent-net.rules"]
 
 """
 Define distro specific behavior. OSUtil class defines default behavior
@@ -56,7 +56,7 @@ for all distros. Each concrete distro classes could overwrite default behavior
 if needed.
 """
 
-IPTABLES_VERSION_PATTERN = re.compile("^[^\d\.]*([\d\.]+).*$")
+IPTABLES_VERSION_PATTERN = re.compile(r"^[^\d\.]*([\d\.]+).*$")
 IPTABLES_VERSION = "iptables --version"
 IPTABLES_LOCKING_VERSION = FlexibleVersion('1.4.21')
 
@@ -76,8 +76,8 @@ FIREWALL_DELETE_CONNTRACK_ACCEPT = "iptables {0} -t security -D OUTPUT -d {1} -p
 FIREWALL_DELETE_OWNER_ACCEPT = "iptables {0} -t security -D OUTPUT -d {1} -p tcp -m owner --uid-owner {2} -j ACCEPT"
 FIREWALL_DELETE_CONNTRACK_DROP = "iptables {0} -t security -D OUTPUT -d {1} -p tcp -m conntrack --ctstate INVALID,NEW -j DROP"
 
-PACKET_PATTERN = "^\s*(\d+)\s+(\d+)\s+DROP\s+.*{0}[^\d]*$"
-ALL_CPUS_REGEX = re.compile('^cpu .*')
+PACKET_PATTERN = r"^\s*(\d+)\s+(\d+)\s+DROP\s+.*{0}[^\d]*$"
+ALL_CPUS_REGEX = re.compile(r'^cpu .*')
 
 
 _enable_firewall = True
@@ -93,23 +93,27 @@ IOCTL_SIOCGIFFLAGS = 0x8913
 IOCTL_SIOCGIFHWADDR = 0x8927
 IFNAMSIZ = 16
 
-IP_COMMAND_OUTPUT = re.compile('^\d+:\s+(\w+):\s+(.*)$')
+IP_COMMAND_OUTPUT = re.compile(r'^\d+:\s+(\w+):\s+(.*)$')
 
 BASE_CGROUPS = '/sys/fs/cgroup'
 
 STORAGE_DEVICE_PATH = '/sys/bus/vmbus/devices/'
 GEN2_DEVICE_ID = 'f8b3781a-1e82-4818-a1c3-63d806ec15bb'
 
+
 class DefaultOSUtil(object):
     def __init__(self):
         self.agent_conf_file_path = '/etc/waagent.conf'
-        self.agent_log_dir = '/var/log'
-        self.agent_log_rotation_maxbytes = 0
-        self.agent_log_rotation_backupcount = 0
         self.selinux = None
         self.disable_route_warning = False
         self.jit_enabled = False
         self.service_name = self.get_service_name()
+
+        # Log-related OS configurations.
+        # self.agent_log_dir = self.get_agent_log_dir()
+        # self.agent_log_rotation_maxbytes = self.get_agent_log_rotation_maxbytes()
+        # self.agent_log_rotation_backupcount = self.get_agent_log_rotation_backupcount()
+        # self._logrotate_supported = self.supports_logrotate()
 
     @staticmethod
     def get_service_name():
@@ -1424,11 +1428,36 @@ class DefaultOSUtil(object):
                 else:
                     logger.error("Interface {0} has {1} but no link state".format(interface_name, description))
 
+    def supports_logrotate(self):
+        """
+        logrotate is allows automatic rotation, compression, removal, and mailing of log files.
+
+        :return: bool: Does the OS support logrotate
+        """
+        return True
+    
     def get_agent_log_dir(self):
-        return self.agent_log_dir
+        """
+        Default location of the log files. Make sure if there are any changes to this, the log-fetch utility needs to
+        change as well.
+
+        :return: bool: Does the OS support logrotate
+        """
+        return '/var/log'
 
     def get_agent_log_rotation_maxbytes(self):
-        return self.agent_log_rotation_maxbytes
+        """
+        For cases where logrotate isn't available, we need to specify the maxbytes of the current log file before
+        rotation.
+
+        :return: bool: Does the OS support logrotate
+        """
+        return 0
 
     def get_agent_log_rotation_backupcount(self):
-        return self.agent_log_rotation_backupcount
+        """
+        For cases where logrotate isn't available, specify the number of log backups are preserved.
+
+        :return: bool: Does the OS support logrotate
+        """
+        return 0
