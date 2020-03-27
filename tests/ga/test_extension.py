@@ -977,10 +977,6 @@ class TestExtension(ExtensionTestCase):
 
             # enable overprovisioning in configuration
             with patch.object(conf, "get_enable_overprovisioning", return_value=True):
-                # disable protocol support for over-provisioning
-                with patch.object(exthandlers_handler.protocol, 'supports_overprovisioning', return_value=False):
-                    self.assertTrue(exthandlers_handler._extension_processing_allowed())
-
                 with patch.object(exthandlers_handler.protocol.get_artifacts_profile(), "is_on_hold",
                                   side_effect=[True, False]):
                     # Enable on_hold property in artifact_blob
