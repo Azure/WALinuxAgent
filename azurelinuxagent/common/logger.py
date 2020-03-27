@@ -209,11 +209,8 @@ class FileAppender(Appender):
                 pass
 
     def _should_rollover(self, msg):
-        if self._logrotate_supported:
+        if self._logrotate_supported or self._backup_count == 0:
             # Making it explicit for not to rotate if logrotate takes care of it.
-            return False
-
-        if self._backup_count == 0:
             return False
 
         if os.path.exists(self.path) and os.stat(self.path).st_size + len(msg) > self._max_bytes:
