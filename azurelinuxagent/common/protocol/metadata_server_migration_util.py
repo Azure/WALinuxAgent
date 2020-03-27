@@ -60,7 +60,6 @@ def _reset_firewall_rules(osutil):
     Removes MetadataServer firewall rule so IMDS can be used. Enables
     WireServer firewall rule based on if firewall is configured to be on.
     """
-    osutil.remove_rules_files()
     osutil.remove_firewall(dst_ip=_KNOWN_METADATASERVER_IP, uid=os.getuid())
     if conf.enable_firewall():
         success = osutil.enable_firewall(dst_ip=KNOWN_WIRESERVER_IP, uid=os.getuid())

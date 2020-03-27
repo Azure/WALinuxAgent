@@ -184,7 +184,6 @@ class TestProtocolUtil(AgentTestCase):
             self.assertFalse(os.path.exists(mds_cert_path))
 
         # Check firewall rules was reset
-        protocol_util.osutil.remove_rules_files.assert_called_once()
         protocol_util.osutil.remove_firewall.assert_called_once()
         protocol_util.osutil.enable_firewall.assert_called_once()
 
@@ -230,7 +229,6 @@ class TestProtocolUtil(AgentTestCase):
             self.assertTrue(os.path.isfile(ws_cert_path))
 
         # Check firewall rules was reset
-        protocol_util.osutil.remove_rules_files.assert_called_once()
         protocol_util.osutil.remove_firewall.assert_called_once()
         protocol_util.osutil.enable_firewall.assert_called_once()
 
@@ -269,7 +267,6 @@ class TestProtocolUtil(AgentTestCase):
             self.assertTrue(os.path.isfile(ws_cert_path))
 
         # Check firewall rules were not reset
-        protocol_util.osutil.remove_rules_files.assert_not_called()
         protocol_util.osutil.remove_firewall.assert_not_called()
         protocol_util.osutil.enable_firewall.assert_not_called()
 
