@@ -48,7 +48,7 @@ from azurelinuxagent.common.protocol.restapi import ExtensionStatus, ExtensionSu
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
 from azurelinuxagent.common.version import AGENT_NAME, CURRENT_VERSION, DISTRO_NAME, DISTRO_VERSION, \
     GOAL_STATE_AGENT_VERSION, PY_VERSION_MAJOR, PY_VERSION_MICRO, PY_VERSION_MINOR
-from azurelinuxagent.ga.goal_state_retriever import GoalStateRetriever, GenericExtensionsConfig
+from azurelinuxagent.ga.goal_state_retriever import ExtensionsConfigRetriever, GenericExtensionsConfig
 
 _HANDLER_PATTERN = r'^([^-]+)-(\d+(?:\.\d+)*)'
 _HANDLER_PKG_PATTERN = re.compile(_HANDLER_PATTERN + r'\.zip$', re.IGNORECASE)
@@ -229,7 +229,7 @@ def get_exthandlers_handler(protocol):
 class ExtHandlersHandler(object):
     def __init__(self, protocol):
         self.protocol = protocol
-        self.goal_state_retriever = GoalStateRetriever(protocol)
+        self.goal_state_retriever = ExtensionsConfigRetriever(protocol)
         self.ext_config = None
         self.ext_handlers = None
         self.log_report = False
@@ -451,10 +451,9 @@ class ExtHandlersHandler(object):
             self.get_artifact_error_state.reset()
             if self.ext_config.changed == False:
                 if self.log_not_changed:
-                    ext_handler_i.logger.verbose("Version {0} is current for incarnation {1} and seqNo",
+                    ext_handler_i.logger.verbose("Version {0} is current for {1}",
                                                  ext_handler_i.pkg.version,
-                                                 self.goal_state_retriever.last_incarnation,
-                                                 self.goal_state_retriever.last_seqNo)
+                                                 self.goal_state_retriever.get_description())
                     self.log_not_changed = False
                 return
 

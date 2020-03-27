@@ -39,7 +39,7 @@ from azurelinuxagent.common.version import PY_VERSION_MAJOR, PY_VERSION_MINOR, P
 from azurelinuxagent.ga.exthandlers import ExtHandlerState, ExtHandlersHandler, ExtHandlerInstance, HANDLER_PKG_EXT, \
     migrate_handler_state, get_exthandlers_handler, AGENT_STATUS_FILE, ExtCommandEnvVariable, \
     HandlerManifest, NOT_RUN, ValidHandlerStatus
-from azurelinuxagent.ga.goal_state_retriever import GenericExtensionsConfig
+from azurelinuxagent.ga.goal_state_retriever import GenericExtensionsConfig, ExtensionsConfigRetriever
 
 from azurelinuxagent.ga.monitor import get_monitor_handler
 from nose.plugins.attrib import attr
@@ -336,8 +336,8 @@ class ExtensionTestCase(AgentTestCase):
 @patch('time.sleep', side_effect=lambda _: mock_sleep(0.001))
 @patch("azurelinuxagent.common.protocol.wire.CryptUtil")
 @patch("azurelinuxagent.common.utils.restutil.http_get")
-@patch('azurelinuxagent.ga.goal_state_retriever.GoalStateRetriever.get_incarnation', MagicMock(return_value=0))
-@patch('azurelinuxagent.ga.goal_state_retriever.GoalStateRetriever.get_sequence_number', MagicMock(return_value=1))
+@patch('azurelinuxagent.ga.goal_state_retriever.ExtensionsConfigRetriever._get_incarnation', MagicMock(return_value=0))
+@patch('azurelinuxagent.ga.goal_state_retriever.ExtensionsConfigRetriever._get_sequence_number', MagicMock(return_value=1))
 class TestExtension(ExtensionTestCase):
     def setUp(self):
         AgentTestCase.setUp(self)
@@ -1054,11 +1054,11 @@ class TestExtension(ExtensionTestCase):
         # Disable extension handling blocking in the first run and enable in the 2nd run
         with patch.object(exthandlers_handler, '_extension_processing_allowed', side_effect=[False, True]):
             exthandlers_handler.run()
-            self.assertIsNone(exthandlers_handler.goal_state_retriever.last_incarnation,
+            self.assertIsNone(exthandlers_handler.goal_state_retriever._last_incarnation,
                         "Last incarnation should not be populated if extension processing is disabled")
             mock_in_vm_artifacts_profile.is_on_hold = Mock(return_value=False)
             exthandlers_handler.run()
-            self.assertEqual(1, exthandlers_handler.goal_state_retriever.last_incarnation,
+            self.assertEqual(1, exthandlers_handler.goal_state_retriever._last_incarnation,
                              "Last incarnation should be populated if extension processing is enabled")
 
     def _assert_ext_status(self, report_ext_status, expected_status,
@@ -2073,8 +2073,8 @@ class TestExtensionSequencing(AgentTestCase):
         self.assertListEqual(expected_sequence, installed_extensions,
                              "Expected and actual list of extensions are not equal")
 
-    @patch('azurelinuxagent.ga.goal_state_retriever.GoalStateRetriever.get_incarnation', MagicMock(return_value=0))
-    @patch('azurelinuxagent.ga.goal_state_retriever.GoalStateRetriever.get_sequence_number', MagicMock(return_value=1))
+    @patch('azurelinuxagent.ga.goal_state_retriever.ExtensionsConfigRetriever._get_incarnation', MagicMock(return_value=0))
+    @patch('azurelinuxagent.ga.goal_state_retriever.ExtensionsConfigRetriever._get_sequence_number', MagicMock(return_value=1))
     def _run_test(self, extensions_to_be_failed, expected_sequence, exthandlers_handler):
         '''
         Mocks get_ext_handling_status() to mimic error status for a given extension.

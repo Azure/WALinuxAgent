@@ -35,7 +35,7 @@ from mock import MagicMock
 from azurelinuxagent.common.protocol.wire import WireProtocol, InVMArtifactsProfile
 from azurelinuxagent.ga.exthandlers import parse_ext_status, ExtHandlerInstance, get_exthandlers_handler, \
     ExtCommandEnvVariable
-from azurelinuxagent.ga.goal_state_retriever import GoalStateRetriever, GOAL_STATE_SOURCE_FABRIC, \
+from azurelinuxagent.ga.goal_state_retriever import ExtensionsConfigRetriever, GOAL_STATE_SOURCE_FABRIC, \
     GOAL_STATE_SOURCE_FASTTRACK, GOAL_STATE_SOURCE_FILE_NAME, SEQUENCE_NUMBER_FILE_NAME, INCARNATION_FILE_NAME
 from tests.protocol.mocks import MockWireClient, MockProtocol
 from tests.protocol.mockwiredata import WireProtocolData, DATA_FILE
@@ -50,96 +50,96 @@ class TestGoalState(AgentTestCase):
         clear_singleton_instances(ProtocolUtil)
 
     def test_set_fabric(self):
-        retriever = GoalStateRetriever(protocol=None)
-        retriever.set_fabric(5)
-        self.assertEqual(GOAL_STATE_SOURCE_FABRIC, retriever.get_mode())
-        self.assertEqual(5, retriever.get_incarnation())
+        retriever = ExtensionsConfigRetriever(protocol=None)
+        retriever._set_fabric(5)
+        self.assertEqual(GOAL_STATE_SOURCE_FABRIC, retriever._get_mode())
+        self.assertEqual(5, retriever._get_incarnation())
 
-        retriever.set_fast_track()
-        self.assertEqual(GOAL_STATE_SOURCE_FASTTRACK, retriever.get_mode())
-        retriever.set_fabric()
-        self.assertEqual(GOAL_STATE_SOURCE_FABRIC, retriever.get_mode())
-        self.assertEqual(5, retriever.get_incarnation())
+        retriever._set_fast_track()
+        self.assertEqual(GOAL_STATE_SOURCE_FASTTRACK, retriever._get_mode())
+        retriever._set_fabric()
+        self.assertEqual(GOAL_STATE_SOURCE_FABRIC, retriever._get_mode())
+        self.assertEqual(5, retriever._get_incarnation())
 
     def test_set_fasttrack(self):
-        retriever = GoalStateRetriever(protocol=None)
-        retriever.set_fast_track(42)
-        self.assertEqual(GOAL_STATE_SOURCE_FASTTRACK, retriever.get_mode())
-        self.assertEqual(42, retriever.get_sequence_number())
+        retriever = ExtensionsConfigRetriever(protocol=None)
+        retriever._set_fast_track(42)
+        self.assertEqual(GOAL_STATE_SOURCE_FASTTRACK, retriever._get_mode())
+        self.assertEqual(42, retriever._get_sequence_number())
 
-        retriever.set_fabric()
-        self.assertEqual(GOAL_STATE_SOURCE_FABRIC, retriever.get_mode())
-        retriever.set_fast_track()
-        self.assertEqual(GOAL_STATE_SOURCE_FASTTRACK, retriever.get_mode())
-        self.assertEqual(42, retriever.get_sequence_number())
+        retriever._set_fabric()
+        self.assertEqual(GOAL_STATE_SOURCE_FABRIC, retriever._get_mode())
+        retriever._set_fast_track()
+        self.assertEqual(GOAL_STATE_SOURCE_FASTTRACK, retriever._get_mode())
+        self.assertEqual(42, retriever._get_sequence_number())
 
     def test_get_fabric_changed(self):
-        retriever = GoalStateRetriever(protocol=None)
-        self.assertFalse(retriever.get_fabric_changed(goal_state=None))
+        retriever = ExtensionsConfigRetriever(protocol=None)
+        self.assertFalse(retriever._get_fabric_changed(goal_state=None))
 
         # Incarnation of test goal state is 1
         test_data = WireProtocolData(DATA_FILE)
         wire_client = MockWireClient(test_data.goal_state)
         goal_state = GoalState(wire_client)
-        retriever.set_fabric(0)
-        retriever.last_incarnation = None
-        self.assertTrue(retriever.get_fabric_changed(goal_state))
+        retriever._set_fabric(0)
+        retriever._last_incarnation = None
+        self.assertTrue(retriever._get_fabric_changed(goal_state))
 
-        retriever.last_incarnation = 2
-        self.assertFalse(retriever.get_fabric_changed(goal_state))
-        retriever.last_incarnation = 1
-        self.assertFalse(retriever.get_fabric_changed(goal_state))
+        retriever._last_incarnation = 2
+        self.assertFalse(retriever._get_fabric_changed(goal_state))
+        retriever._last_incarnation = 1
+        self.assertFalse(retriever._get_fabric_changed(goal_state))
 
     def test_get_fabric_changed_no_extensions(self):
         test_data = WireProtocolData(DATA_FILE)
         profile = InVMArtifactsProfile(test_data.vm_artifacts_profile_no_extensions)
-        retriever = GoalStateRetriever(protocol=None)
-        retriever.last_mode = GOAL_STATE_SOURCE_FASTTRACK
-        retriever.last_seqNo = 0
-        self.assertFalse(retriever.get_fast_track_changed(profile))
+        retriever = ExtensionsConfigRetriever(protocol=None)
+        retriever._last_mode = GOAL_STATE_SOURCE_FASTTRACK
+        retriever._last_seqNo = 0
+        self.assertFalse(retriever._get_fast_track_changed(profile))
 
     def test_get_fabric_changed_no_ext_config(self):
         test_data = WireProtocolData(DATA_FILE)
         profile = InVMArtifactsProfile(test_data.vm_artifacts_profile_no_ext_config)
-        retriever = GoalStateRetriever(protocol=None)
-        retriever.last_mode = GOAL_STATE_SOURCE_FASTTRACK
-        retriever.last_seqNo = 0
-        self.assertFalse(retriever.get_fast_track_changed(profile))
+        retriever = ExtensionsConfigRetriever(protocol=None)
+        retriever._last_mode = GOAL_STATE_SOURCE_FASTTRACK
+        retriever._last_seqNo = 0
+        self.assertFalse(retriever._get_fast_track_changed(profile))
 
     def test_get_fast_track_changed(self):
-        retriever = GoalStateRetriever(protocol=None)
-        self.assertFalse(retriever.get_fast_track_changed(artifacts_profile=None))
+        retriever = ExtensionsConfigRetriever(protocol=None)
+        self.assertFalse(retriever._get_fast_track_changed(artifacts_profile=None))
 
         # sequence number of test artifacts profile is 1
         test_data = WireProtocolData(DATA_FILE)
         profile = InVMArtifactsProfile(test_data.vm_artifacts_profile)
-        retriever.set_fast_track(0)
-        retriever.last_seqNo = None
-        self.assertTrue(retriever.get_fast_track_changed(profile))
+        retriever._set_fast_track(0)
+        retriever._last_seqNo = None
+        self.assertTrue(retriever._get_fast_track_changed(profile))
 
-        retriever.last_seqNo = 2
-        self.assertFalse(retriever.get_fast_track_changed(profile))
-        retriever.last_seqNo = 1
-        self.assertFalse(retriever.get_fast_track_changed(profile))
+        retriever._last_seqNo = 2
+        self.assertFalse(retriever._get_fast_track_changed(profile))
+        retriever._last_seqNo = 1
+        self.assertFalse(retriever._get_fast_track_changed(profile))
 
     def test_decide_what_to_process(self):
-        retriever = GoalStateRetriever(protocol=None)
-        self.assertEqual(GOAL_STATE_SOURCE_FABRIC, retriever.decide_what_to_process(True, False))
-        self.assertEqual(GOAL_STATE_SOURCE_FABRIC, retriever.decide_what_to_process(True, True))
-        self.assertEqual(GOAL_STATE_SOURCE_FASTTRACK, retriever.decide_what_to_process(False, True))
-        retriever.set_fast_track()
-        self.assertEqual(GOAL_STATE_SOURCE_FASTTRACK, retriever.decide_what_to_process(False, False))
-        retriever.set_fabric()
-        self.assertEqual(GOAL_STATE_SOURCE_FABRIC, retriever.decide_what_to_process(False, False))
+        retriever = ExtensionsConfigRetriever(protocol=None)
+        self.assertEqual(GOAL_STATE_SOURCE_FABRIC, retriever._decide_what_to_process(True, False))
+        self.assertEqual(GOAL_STATE_SOURCE_FABRIC, retriever._decide_what_to_process(True, True))
+        self.assertEqual(GOAL_STATE_SOURCE_FASTTRACK, retriever._decide_what_to_process(False, True))
+        retriever._set_fast_track()
+        self.assertEqual(GOAL_STATE_SOURCE_FASTTRACK, retriever._decide_what_to_process(False, False))
+        retriever._set_fabric()
+        self.assertEqual(GOAL_STATE_SOURCE_FABRIC, retriever._decide_what_to_process(False, False))
 
     def test_get_description(self):
-        retriever = GoalStateRetriever(protocol=None)
-        retriever.pending_mode = GOAL_STATE_SOURCE_FASTTRACK
-        retriever.pending_seqNo = 3
+        retriever = ExtensionsConfigRetriever(protocol=None)
+        retriever._pending_mode = GOAL_STATE_SOURCE_FASTTRACK
+        retriever._pending_seqNo = 3
         retriever.commit_processed()
         self.assertEqual("FastTrack: SeqNo=3", retriever.get_description())
-        retriever.pending_mode = GOAL_STATE_SOURCE_FABRIC
-        retriever.pending_incarnation = 5
+        retriever._pending_mode = GOAL_STATE_SOURCE_FABRIC
+        retriever._pending_incarnation = 5
         retriever.commit_processed()
         self.assertEqual("Fabric: Incarnation=5", retriever.get_description())
 
@@ -150,7 +150,7 @@ class TestGoalState(AgentTestCase):
         goal_state = GoalState(wire_client)
         goal_state.ext_conf = "Fabric stuff"
         protocol = MockProtocol(goal_state=goal_state, profile=profile)
-        retriever = GoalStateRetriever(protocol=protocol)
+        retriever = ExtensionsConfigRetriever(protocol=protocol)
 
         # Delete any state files
         goal_state_file = os.path.join(conf.get_lib_dir(), GOAL_STATE_SOURCE_FILE_NAME)
@@ -167,8 +167,8 @@ class TestGoalState(AgentTestCase):
         ext_conf = retriever.get_ext_config()
         self.assertIsNotNone(ext_conf)
         self.assertTrue(ext_conf.changed)
-        self.assertEqual(GOAL_STATE_SOURCE_FABRIC, retriever.pending_mode)
-        self.assertEqual(1, retriever.pending_incarnation)
+        self.assertEqual(GOAL_STATE_SOURCE_FABRIC, retriever._pending_mode)
+        self.assertEqual(1, retriever._pending_incarnation)
 
     def test_startup_fabric(self):
         # Set the previous goal state as Fabric
@@ -178,16 +178,16 @@ class TestGoalState(AgentTestCase):
         goal_state = GoalState(wire_client)
         goal_state.ext_conf = "Fabric stuff"
         protocol = MockProtocol(goal_state=goal_state, profile=profile)
-        retriever = GoalStateRetriever(protocol=protocol)
-        retriever.set_fast_track(1)
-        retriever.set_fabric(1)
+        retriever = ExtensionsConfigRetriever(protocol=protocol)
+        retriever._set_fast_track(1)
+        retriever._set_fabric(1)
 
         # Now recreate the retriever and verify the first ExtensionsConfig
-        retriever = GoalStateRetriever(protocol=protocol)
+        retriever = ExtensionsConfigRetriever(protocol=protocol)
         ext_conf = retriever.get_ext_config()
         self.assertIsNotNone(ext_conf)
         self.assertTrue(ext_conf.changed)
-        self.assertEqual(GOAL_STATE_SOURCE_FABRIC, retriever.pending_mode)
+        self.assertEqual(GOAL_STATE_SOURCE_FABRIC, retriever._pending_mode)
 
     def test_startup_fasttrack(self):
         # Set the previous goal state as FastTrack
@@ -197,16 +197,16 @@ class TestGoalState(AgentTestCase):
         goal_state = GoalState(wire_client)
         goal_state.ext_conf = "Fabric stuff"
         protocol = MockProtocol(goal_state=goal_state, profile=profile)
-        retriever = GoalStateRetriever(protocol=protocol)
-        retriever.set_fabric(1)
-        retriever.set_fast_track(1)
+        retriever = ExtensionsConfigRetriever(protocol=protocol)
+        retriever._set_fabric(1)
+        retriever._set_fast_track(1)
 
         # Now recreate the retriever and verify the first ExtensionsConfig
-        retriever = GoalStateRetriever(protocol=protocol)
+        retriever = ExtensionsConfigRetriever(protocol=protocol)
         ext_conf = retriever.get_ext_config()
         self.assertIsNotNone(ext_conf)
         self.assertTrue(ext_conf.changed)
-        self.assertEqual(GOAL_STATE_SOURCE_FASTTRACK, retriever.pending_mode)
+        self.assertEqual(GOAL_STATE_SOURCE_FASTTRACK, retriever._pending_mode)
 
     def test_get_ext_config(self):
         test_data = WireProtocolData(DATA_FILE)
@@ -215,17 +215,17 @@ class TestGoalState(AgentTestCase):
         goal_state = GoalState(wire_client)
         goal_state.ext_conf = "Fabric stuff"
         protocol = MockProtocol(goal_state=goal_state, profile=profile)
-        retriever = GoalStateRetriever(protocol=protocol)
+        retriever = ExtensionsConfigRetriever(protocol=protocol)
 
         # Fabric goal state, changed
-        retriever.set_fast_track(1)
-        retriever.set_fabric(0)
+        retriever._set_fast_track(1)
+        retriever._set_fabric(0)
         ext_conf = retriever.get_ext_config()
         self.assertTrue(ext_conf.changed)
         self.assertIsNotNone(ext_conf.extensions_config)
         self.assertEqual("Fabric stuff", ext_conf.extensions_config)
         retriever.commit_processed()
-        self.assertEqual(GOAL_STATE_SOURCE_FABRIC, retriever.last_mode)
+        self.assertEqual(GOAL_STATE_SOURCE_FABRIC, retriever._last_mode)
 
         # Fabric goal state, not changed
         ext_conf = retriever.get_ext_config()
@@ -233,17 +233,17 @@ class TestGoalState(AgentTestCase):
         self.assertIsNotNone(ext_conf.extensions_config)
         self.assertEqual("Fabric stuff", ext_conf.extensions_config)
         retriever.commit_processed()
-        self.assertEqual(GOAL_STATE_SOURCE_FABRIC, retriever.last_mode)
+        self.assertEqual(GOAL_STATE_SOURCE_FABRIC, retriever._last_mode)
 
         # Fast Track goal state, changed
-        retriever.set_fast_track(0)
-        retriever.set_fabric(1)
+        retriever._set_fast_track(0)
+        retriever._set_fabric(1)
         ext_conf = retriever.get_ext_config()
         self.assertTrue(ext_conf.changed)
         self.assertIsNotNone(ext_conf.extensions_config)
         self.assertNotEqual("Fabric stuff", ext_conf.extensions_config)
         retriever.commit_processed()
-        self.assertEqual(GOAL_STATE_SOURCE_FASTTRACK, retriever.last_mode)
+        self.assertEqual(GOAL_STATE_SOURCE_FASTTRACK, retriever._last_mode)
 
         # Fast Track goal state, not changed
         ext_conf = retriever.get_ext_config()
@@ -251,7 +251,7 @@ class TestGoalState(AgentTestCase):
         self.assertIsNotNone(ext_conf.extensions_config)
         self.assertNotEqual("Fabric stuff", ext_conf.extensions_config)
         retriever.commit_processed()
-        self.assertEqual(GOAL_STATE_SOURCE_FASTTRACK, retriever.last_mode)
+        self.assertEqual(GOAL_STATE_SOURCE_FASTTRACK, retriever._last_mode)
 
     def test_commit_processed(self):
         test_data = WireProtocolData(DATA_FILE)
@@ -260,44 +260,44 @@ class TestGoalState(AgentTestCase):
         goal_state = GoalState(wire_client)
         goal_state.ext_conf = "Fabric stuff"
         protocol = MockProtocol(goal_state=goal_state, profile=profile)
-        retriever = GoalStateRetriever(protocol=protocol)
+        retriever = ExtensionsConfigRetriever(protocol=protocol)
 
         # Fabric goal state, changed
-        retriever.set_fabric(0)
-        retriever.set_fast_track(1)
+        retriever._set_fabric(0)
+        retriever._set_fast_track(1)
         ext_conf = retriever.get_ext_config()
         self.assertTrue(ext_conf.changed)
         self.assertIsNotNone(ext_conf.extensions_config)
         self.assertEqual("Fabric stuff", ext_conf.extensions_config)
 
         # Verify nothing changes before the commit
-        self.assertIsNone(retriever.last_mode)
-        self.assertIsNone(retriever.last_incarnation)
-        self.assertIsNone(retriever.last_seqNo)
+        self.assertIsNone(retriever._last_mode)
+        self.assertIsNone(retriever._last_incarnation)
+        self.assertIsNone(retriever._last_seqNo)
 
         # Now commit and verify
         retriever.commit_processed()
-        self.assertEqual(GOAL_STATE_SOURCE_FABRIC, retriever.last_mode)
-        self.assertEqual(1, retriever.last_incarnation)
-        self.assertIsNone(retriever.last_seqNo)
+        self.assertEqual(GOAL_STATE_SOURCE_FABRIC, retriever._last_mode)
+        self.assertEqual(1, retriever._last_incarnation)
+        self.assertIsNone(retriever._last_seqNo)
 
         # FastTrack goal state, changed
-        retriever.set_fast_track(0)
+        retriever._set_fast_track(0)
         ext_conf = retriever.get_ext_config()
         self.assertTrue(ext_conf.changed)
         self.assertIsNotNone(ext_conf.extensions_config)
         self.assertNotEqual("Fabric stuff", ext_conf.extensions_config)
 
         # Verify nothing changes before the commit
-        self.assertEqual(GOAL_STATE_SOURCE_FABRIC, retriever.last_mode)
-        self.assertEqual(1, retriever.last_incarnation)
-        self.assertIsNone(retriever.last_seqNo)
+        self.assertEqual(GOAL_STATE_SOURCE_FABRIC, retriever._last_mode)
+        self.assertEqual(1, retriever._last_incarnation)
+        self.assertIsNone(retriever._last_seqNo)
 
         # Now commit and verify
         retriever.commit_processed()
-        self.assertEqual(GOAL_STATE_SOURCE_FASTTRACK, retriever.last_mode)
-        self.assertEqual(1, retriever.last_incarnation)
-        self.assertEqual(1, retriever.last_seqNo)
+        self.assertEqual(GOAL_STATE_SOURCE_FASTTRACK, retriever._last_mode)
+        self.assertEqual(1, retriever._last_incarnation)
+        self.assertEqual(1, retriever._last_seqNo)
 
 class TestExtHandlers(AgentTestCase):
 
