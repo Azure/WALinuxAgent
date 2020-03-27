@@ -30,28 +30,33 @@ from tests.ga.test_update import ResponseMock
 from tests.tools import AgentTestCase, data_dir, MagicMock, Mock, patch
 
 
+def get_mock_compute_response():
+    return ResponseMock(response='''{
+    "location": "westcentralus",
+    "name": "unit_test",
+    "offer": "UnitOffer",
+    "osType": "Linux",
+    "placementGroupId": "",
+    "platformFaultDomain": "0",
+    "platformUpdateDomain": "0",
+    "publisher": "UnitPublisher",
+    "resourceGroupName": "UnitResourceGroupName",
+    "sku": "UnitSku",
+    "subscriptionId": "e4402c6c-2804-4a0a-9dee-d61918fc4d28",
+    "tags": "Key1:Value1;Key2:Value2",
+    "vmId": "f62f23fb-69e2-4df0-a20b-cb5c201a3e7a",
+    "version": "UnitVersion",
+    "vmSize": "Standard_D1_v2"
+    }'''.encode('utf-8'))
+
+
 class TestImds(AgentTestCase):
+
     @patch("azurelinuxagent.ga.update.restutil.http_get")
     def test_get(self, mock_http_get):
-        mock_http_get.return_value = ResponseMock(response='''{
-        "location": "westcentralus",
-        "name": "unit_test",
-        "offer": "UnitOffer",
-        "osType": "Linux",
-        "placementGroupId": "",
-        "platformFaultDomain": "0",
-        "platformUpdateDomain": "0",
-        "publisher": "UnitPublisher",
-        "resourceGroupName": "UnitResourceGroupName",
-        "sku": "UnitSku",
-        "subscriptionId": "e4402c6c-2804-4a0a-9dee-d61918fc4d28",
-        "tags": "Key1:Value1;Key2:Value2",
-        "vmId": "f62f23fb-69e2-4df0-a20b-cb5c201a3e7a",
-        "version": "UnitVersion",
-        "vmSize": "Standard_D1_v2"
-        }'''.encode('utf-8'))
+        mock_http_get.return_value = get_mock_compute_response()
 
-        test_subject = imds.ImdsClient()
+        test_subject = imds.ImdsClient(restutil.KNOWN_WIRESERVER_IP)
         test_subject.get_compute()
 
         self.assertEqual(1, mock_http_get.call_count)
@@ -66,21 +71,21 @@ class TestImds(AgentTestCase):
     def test_get_bad_request(self, mock_http_get):
         mock_http_get.return_value = ResponseMock(status=restutil.httpclient.BAD_REQUEST)
 
-        test_subject = imds.ImdsClient()
+        test_subject = imds.ImdsClient(restutil.KNOWN_WIRESERVER_IP)
         self.assertRaises(HttpError, test_subject.get_compute)
 
     @patch("azurelinuxagent.ga.update.restutil.http_get")
     def test_get_internal_service_error(self, mock_http_get):
         mock_http_get.return_value = ResponseMock(status=restutil.httpclient.INTERNAL_SERVER_ERROR)
 
-        test_subject = imds.ImdsClient()
+        test_subject = imds.ImdsClient(restutil.KNOWN_WIRESERVER_IP)
         self.assertRaises(HttpError, test_subject.get_compute)
 
     @patch("azurelinuxagent.ga.update.restutil.http_get")
     def test_get_empty_response(self, mock_http_get):
         mock_http_get.return_value = ResponseMock(response=''.encode('utf-8'))
 
-        test_subject = imds.ImdsClient()
+        test_subject = imds.ImdsClient(restutil.KNOWN_WIRESERVER_IP)
         self.assertRaises(ValueError, test_subject.get_compute)
 
     def test_deserialize_ComputeInfo(self):
@@ -354,7 +359,7 @@ class TestImds(AgentTestCase):
             return fh.read()
 
     def _assert_validation(self, http_status_code, http_response, expected_valid, expected_response):
-        test_subject = imds.ImdsClient()
+        test_subject = imds.ImdsClient(restutil.KNOWN_WIRESERVER_IP)
         with patch("azurelinuxagent.common.utils.restutil.http_get") as mock_http_get:
             mock_http_get.return_value = ResponseMock(status=http_status_code,
                                                       reason='reason',
@@ -375,15 +380,13 @@ class TestImds(AgentTestCase):
                         "Expected: '{0}', Actual: '{1}'"
                         .format(expected_response, validate_response[1]))
 
-    @patch("azurelinuxagent.common.protocol.util.ProtocolUtil")
-    def test_endpoint_fallback(self, ProtocolUtil):
+    def test_endpoint_fallback(self):
         # http error status codes are tested in test_response_validation, none of which
         # should trigger a fallback. This is confirmed as _assert_validation will count
         # http GET calls and enforces a single GET call (fallback would cause 2) and
         # checks the url called.
 
-        test_subject = imds.ImdsClient()
-        ProtocolUtil().get_wireserver_endpoint.return_value = "foo.bar"
+        test_subject = imds.ImdsClient("foo.bar")
 
         # ensure user-agent gets set correctly
         for is_health, expected_useragent in [(False, restutil.HTTP_USER_AGENT), (True, restutil.HTTP_USER_AGENT_HEALTH)]:

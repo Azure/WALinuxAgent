@@ -16,8 +16,10 @@
 #
 import xml
 
-from tests.tools import AgentTestCase, load_data, patch
-from azurelinuxagent.common.protocol.wire import *
+from azurelinuxagent.common.protocol.goal_state import GoalState, RemoteAccess
+from tests.tools import AgentTestCase, load_data, patch, Mock
+from tests.protocol import mockwiredata
+from tests.protocol.mocks import mock_wire_protocol
 
 
 class TestRemoteAccess(AgentTestCase):
@@ -31,12 +33,9 @@ class TestRemoteAccess(AgentTestCase):
         self.assertEquals("encryptedPasswordString", remote_access.user_list.users[0].encrypted_password, "Encrypted password does not match.")
         self.assertEquals("2019-01-01", remote_access.user_list.users[0].expiration, "Expiration does not match.")
 
-    @patch('azurelinuxagent.common.protocol.wire.WireClient.get_goal_state',
-    return_value=GoalState(load_data('wire/goal_state.xml')))
-    def test_update_remote_access_conf_no_remote_access(self, _):
-        protocol = WireProtocol('12.34.56.78')
-        goal_state = protocol.client.get_goal_state()
-        protocol.client.update_remote_access_conf(goal_state)
+    def test_goal_state_with_no_remote_access(self):
+        with mock_wire_protocol(mockwiredata.DATA_FILE) as protocol:
+            self.assertIsNone(protocol.client.get_remote_access())
 
     def test_parse_two_remote_access_accounts(self):
         data_str = load_data('wire/remote_access_two_accounts.xml')
@@ -56,7 +55,7 @@ class TestRemoteAccess(AgentTestCase):
         remote_access = RemoteAccess(data_str)
         self.assertNotEquals(None, remote_access)
         self.assertEquals(10, len(remote_access.user_list.users), "User count does not match.")
-    
+
     def test_parse_duplicate_remote_access_accounts(self):
         data_str = load_data('wire/remote_access_duplicate_accounts.xml')
         remote_access = RemoteAccess(data_str)
@@ -75,19 +74,12 @@ class TestRemoteAccess(AgentTestCase):
         self.assertNotEquals(None, remote_access)
         self.assertEquals(0, len(remote_access.user_list.users), "User count does not match.")
 
-    @patch('azurelinuxagent.common.protocol.wire.WireClient.get_goal_state',
-    return_value=GoalState(load_data('wire/goal_state_remote_access.xml')))
-    @patch('azurelinuxagent.common.protocol.wire.WireClient.fetch_config',
-    return_value=load_data('wire/remote_access_single_account.xml'))
-    @patch('azurelinuxagent.common.protocol.wire.WireClient.get_header_for_cert')
-    def test_update_remote_access_conf_remote_access(self, _1, _2, _3):
-        protocol = WireProtocol('12.34.56.78')
-        goal_state = protocol.client.get_goal_state()
-        protocol.client.update_remote_access_conf(goal_state)
-        self.assertNotEquals(None, protocol.client.remote_access)
-        self.assertEquals(1, len(protocol.client.remote_access.user_list.users))
-        self.assertEquals('testAccount', protocol.client.remote_access.user_list.users[0].name)
-        self.assertEquals('encryptedPasswordString', protocol.client.remote_access.user_list.users[0].encrypted_password)
+    def test_update_remote_access_conf_remote_access(self):
+        with mock_wire_protocol(mockwiredata.DATA_FILE_REMOTE_ACCESS) as protocol:
+            self.assertIsNotNone(protocol.client.get_remote_access())
+            self.assertEquals(1, len(protocol.client.get_remote_access().user_list.users))
+            self.assertEquals('testAccount', protocol.client.get_remote_access().user_list.users[0].name)
+            self.assertEquals('encryptedPasswordString', protocol.client.get_remote_access().user_list.users[0].encrypted_password)
 
     def test_parse_bad_remote_access_data(self):
         data = "foobar"

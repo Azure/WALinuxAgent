@@ -17,12 +17,15 @@
 
 from datetime import timedelta
 
+from mock import Mock, MagicMock
+from azurelinuxagent.common.protocol.util import ProtocolUtil
+
 from azurelinuxagent.common.exception import RemoteAccessError
+from azurelinuxagent.common.protocol.goal_state import RemoteAccess
 from azurelinuxagent.common.protocol.wire import *
 from azurelinuxagent.ga.remoteaccess import RemoteAccessHandler
 from tests.common.osutil.mock_osutil import MockOSUtil
-from tests.tools import AgentTestCase, load_data, patch
-
+from tests.tools import AgentTestCase, load_data, patch, clear_singleton_instances
 
 info_messages = []
 error_messages = []
@@ -52,6 +55,9 @@ class TestRemoteAccessHandler(AgentTestCase):
 
     def setUp(self):
         super(TestRemoteAccessHandler, self).setUp()
+        # Since ProtocolUtil is a singleton per thread, we need to clear it to ensure that the test cases do not
+        # reuse a previous state
+        clear_singleton_instances(ProtocolUtil)
         del info_messages[:]
         del error_messages[:]
         for data in TestRemoteAccessHandler.eventing_data:
@@ -62,7 +68,7 @@ class TestRemoteAccessHandler(AgentTestCase):
     @patch('azurelinuxagent.common.logger.Logger.error', side_effect=log_error)
     @patch('azurelinuxagent.common.utils.cryptutil.CryptUtil.decrypt_secret', return_value="]aPPEv}uNg1FPnl?")
     def test_add_user(self, _1, _2, _3):
-        rah = RemoteAccessHandler()
+        rah = RemoteAccessHandler(Mock())
         rah.os_util = MockOSUtil()
         tstpassword = "]aPPEv}uNg1FPnl?"
         tstuser = "foobar"
@@ -84,7 +90,7 @@ class TestRemoteAccessHandler(AgentTestCase):
     @patch('azurelinuxagent.common.logger.Logger.error', side_effect=log_error)
     @patch('azurelinuxagent.common.utils.cryptutil.CryptUtil.decrypt_secret', return_value="]aPPEv}uNg1FPnl?")
     def test_add_user_bad_creation_data(self, _1, _2, _3):
-        rah = RemoteAccessHandler()
+        rah = RemoteAccessHandler(Mock())
         rah.os_util = MockOSUtil()
         tstpassword = "]aPPEv}uNg1FPnl?"
         tstuser = ""
@@ -100,7 +106,7 @@ class TestRemoteAccessHandler(AgentTestCase):
     @patch('azurelinuxagent.common.logger.Logger.error', side_effect=log_error)
     @patch('azurelinuxagent.common.utils.cryptutil.CryptUtil.decrypt_secret', return_value="")
     def test_add_user_bad_password_data(self, _1, _2, _3):
-        rah = RemoteAccessHandler()
+        rah = RemoteAccessHandler(Mock())
         rah.os_util = MockOSUtil()
         tstpassword = ""
         tstuser = "foobar"
@@ -117,7 +123,7 @@ class TestRemoteAccessHandler(AgentTestCase):
     @patch('azurelinuxagent.common.utils.cryptutil.CryptUtil.decrypt_secret',
            return_value="]aPPEv}uNg1FPnl?")
     def test_add_user_already_existing(self, _):
-        rah = RemoteAccessHandler()
+        rah = RemoteAccessHandler(Mock())
         rah.os_util = MockOSUtil()
         tstpassword = "]aPPEv}uNg1FPnl?"
         tstuser = "foobar"
@@ -146,7 +152,7 @@ class TestRemoteAccessHandler(AgentTestCase):
     @patch('azurelinuxagent.common.logger.Logger.error', side_effect=log_error)
     @patch('azurelinuxagent.common.utils.cryptutil.CryptUtil.decrypt_secret', return_value="]aPPEv}uNg1FPnl?")
     def test_delete_user(self, _1, _2, _3):
-        rah = RemoteAccessHandler()
+        rah = RemoteAccessHandler(Mock())
         rah.os_util = MockOSUtil()
         tstpassword = "]aPPEv}uNg1FPnl?"
         tstuser = "foobar"
@@ -170,7 +176,7 @@ class TestRemoteAccessHandler(AgentTestCase):
         mock_os_util = MockOSUtil()
         testusr = "foobar"
         mock_os_util.all_users[testusr] = (testusr, None, None, None, None, None, None, None)
-        rah = RemoteAccessHandler()
+        rah = RemoteAccessHandler(Mock())
         rah.os_util = mock_os_util
         self.assertRaises(RemoteAccessError, rah.handle_failed_create, "")
         users = get_user_dictionary(rah.os_util.get_users())
@@ -183,7 +189,7 @@ class TestRemoteAccessHandler(AgentTestCase):
         mock_os_util = MockOSUtil()
         testusr = "foobar"
         mock_os_util.all_users[testusr] = (testusr, None, None, None, None, None, None, None)
-        rah = RemoteAccessHandler()
+        rah = RemoteAccessHandler(Mock())
         rah.os_util = mock_os_util
         testuser = "Carl"
         error = "Failed to clean up after account creation for {0}.\n" \
@@ -198,7 +204,7 @@ class TestRemoteAccessHandler(AgentTestCase):
     @patch('azurelinuxagent.common.utils.cryptutil.CryptUtil.decrypt_secret',
            return_value="]aPPEv}uNg1FPnl?")
     def test_handle_new_user(self, _):
-        rah = RemoteAccessHandler()
+        rah = RemoteAccessHandler(Mock())
         rah.os_util = MockOSUtil()
         data_str = load_data('wire/remote_access_single_account.xml')
         remote_access = RemoteAccess(data_str)
@@ -216,7 +222,7 @@ class TestRemoteAccessHandler(AgentTestCase):
         self.assertEqual(actual_user[4], "JIT_Account")
 
     def test_do_not_add_expired_user(self):
-        rah = RemoteAccessHandler()
+        rah = RemoteAccessHandler(Mock())
         rah.os_util = MockOSUtil()      
         data_str = load_data('wire/remote_access_single_account.xml')
         remote_access = RemoteAccess(data_str)
@@ -230,7 +236,7 @@ class TestRemoteAccessHandler(AgentTestCase):
     @patch('azurelinuxagent.common.logger.Logger.info', side_effect=log_info)
     @patch('azurelinuxagent.common.logger.Logger.error', side_effect=log_error)
     def test_error_add_user(self, _1, _2):
-        rah = RemoteAccessHandler()
+        rah = RemoteAccessHandler(Mock())
         rah.os_util = MockOSUtil()
         tstuser = "foobar"
         expiration = datetime.utcnow() + timedelta(days=1)
@@ -246,7 +252,7 @@ class TestRemoteAccessHandler(AgentTestCase):
         self.assertEqual("User deleted {0}".format(tstuser), info_messages[0])
 
     def test_handle_remote_access_no_users(self):
-        rah = RemoteAccessHandler()
+        rah = RemoteAccessHandler(Mock())
         rah.os_util = MockOSUtil()
         data_str = load_data('wire/remote_access_no_accounts.xml')
         remote_access = RemoteAccess(data_str)
@@ -256,13 +262,13 @@ class TestRemoteAccessHandler(AgentTestCase):
         self.assertEqual(0, len(users.keys()))
 
     def test_handle_remote_access_validate_jit_user_valid(self):
-        rah = RemoteAccessHandler()
+        rah = RemoteAccessHandler(Mock())
         comment = "JIT_Account"
         result = rah.validate_jit_user(comment)
         self.assertTrue(result, "Did not identify '{0}' as a JIT_Account".format(comment))
 
     def test_handle_remote_access_validate_jit_user_invalid(self):
-        rah = RemoteAccessHandler()
+        rah = RemoteAccessHandler(Mock())
         test_users = ["John Doe", None, "", " "]
         failed_results = ""
         for user in test_users:
@@ -274,7 +280,7 @@ class TestRemoteAccessHandler(AgentTestCase):
     @patch('azurelinuxagent.common.utils.cryptutil.CryptUtil.decrypt_secret',
            return_value="]aPPEv}uNg1FPnl?")
     def test_handle_remote_access_multiple_users(self, _):
-        rah = RemoteAccessHandler()
+        rah = RemoteAccessHandler(Mock())
         rah.os_util = MockOSUtil()
         data_str = load_data('wire/remote_access_two_accounts.xml')
         remote_access = RemoteAccess(data_str)
@@ -297,7 +303,7 @@ class TestRemoteAccessHandler(AgentTestCase):
            return_value="]aPPEv}uNg1FPnl?")
     # max fabric supports in the Goal State
     def test_handle_remote_access_ten_users(self, _):
-        rah = RemoteAccessHandler()
+        rah = RemoteAccessHandler(Mock())
         rah.os_util = MockOSUtil()
         data_str = load_data('wire/remote_access_10_accounts.xml')
         remote_access = RemoteAccess(data_str)
@@ -315,7 +321,7 @@ class TestRemoteAccessHandler(AgentTestCase):
     @patch('azurelinuxagent.common.utils.cryptutil.CryptUtil.decrypt_secret',
            return_value="]aPPEv}uNg1FPnl?")
     def test_handle_remote_access_user_removed(self, _):
-        rah = RemoteAccessHandler()
+        rah = RemoteAccessHandler(Mock())
         rah.os_util = MockOSUtil()
         data_str = load_data('wire/remote_access_10_accounts.xml')
         remote_access = RemoteAccess(data_str)
@@ -335,7 +341,7 @@ class TestRemoteAccessHandler(AgentTestCase):
     @patch('azurelinuxagent.common.utils.cryptutil.CryptUtil.decrypt_secret',
            return_value="]aPPEv}uNg1FPnl?")
     def test_handle_remote_access_bad_data_and_good_data(self, _):
-        rah = RemoteAccessHandler()
+        rah = RemoteAccessHandler(Mock())
         rah.os_util = MockOSUtil()
         data_str = load_data('wire/remote_access_10_accounts.xml')
         remote_access = RemoteAccess(data_str)
@@ -355,7 +361,7 @@ class TestRemoteAccessHandler(AgentTestCase):
     @patch('azurelinuxagent.common.utils.cryptutil.CryptUtil.decrypt_secret',
            return_value="]aPPEv}uNg1FPnl?")
     def test_handle_remote_access_deleted_user_readded(self, _):
-        rah = RemoteAccessHandler()
+        rah = RemoteAccessHandler(Mock())
         rah.os_util = MockOSUtil()
         data_str = load_data('wire/remote_access_single_account.xml')
         remote_access = RemoteAccess(data_str)
@@ -389,7 +395,7 @@ class TestRemoteAccessHandler(AgentTestCase):
     @patch('azurelinuxagent.common.protocol.wire.WireClient.get_remote_access',
            return_value="asdf")
     def test_remote_access_handler_run_bad_data(self, _1, _2, _3, _4, _5):
-        rah = RemoteAccessHandler()
+        rah = RemoteAccessHandler(Mock())
         rah.os_util = MockOSUtil()
         tstpassword = "]aPPEv}uNg1FPnl?"
         tstuser = "foobar"
@@ -404,7 +410,7 @@ class TestRemoteAccessHandler(AgentTestCase):
     @patch('azurelinuxagent.common.utils.cryptutil.CryptUtil.decrypt_secret',
            return_value="]aPPEv}uNg1FPnl?")
     def test_handle_remote_access_multiple_users_one_removed(self, _):
-        rah = RemoteAccessHandler()
+        rah = RemoteAccessHandler(Mock())
         rah.os_util = MockOSUtil()
         data_str = load_data('wire/remote_access_10_accounts.xml')
         remote_access = RemoteAccess(data_str)
@@ -429,7 +435,7 @@ class TestRemoteAccessHandler(AgentTestCase):
     @patch('azurelinuxagent.common.utils.cryptutil.CryptUtil.decrypt_secret',
            return_value="]aPPEv}uNg1FPnl?")
     def test_handle_remote_access_multiple_users_null_remote_access(self, _):
-        rah = RemoteAccessHandler()
+        rah = RemoteAccessHandler(Mock())
         rah.os_util = MockOSUtil()
         data_str = load_data('wire/remote_access_10_accounts.xml')
         remote_access = RemoteAccess(data_str)
@@ -452,7 +458,7 @@ class TestRemoteAccessHandler(AgentTestCase):
     @patch('azurelinuxagent.common.utils.cryptutil.CryptUtil.decrypt_secret',
            return_value="]aPPEv}uNg1FPnl?")
     def test_handle_remote_access_multiple_users_error_with_null_remote_access(self, _):
-        rah = RemoteAccessHandler()
+        rah = RemoteAccessHandler(Mock())
         rah.os_util = MockOSUtil()
         data_str = load_data('wire/remote_access_10_accounts.xml')
         remote_access = RemoteAccess(data_str)
@@ -473,13 +479,13 @@ class TestRemoteAccessHandler(AgentTestCase):
         self.assertEqual(0, len(users))
 
     def test_remove_user_error(self):
-        rah = RemoteAccessHandler()
+        rah = RemoteAccessHandler(Mock())
         rah.os_util = MockOSUtil()
         error = "Failed to delete user {0}\nInner error: test exception, bad data".format("")
         self.assertRaisesRegex(RemoteAccessError, error, rah.remove_user, "")
 
     def test_remove_user_not_exists(self):
-        rah = RemoteAccessHandler()
+        rah = RemoteAccessHandler(Mock())
         rah.os_util = MockOSUtil()
         user = "bob"
         error = "Failed to delete user {0}\n" \
@@ -489,7 +495,7 @@ class TestRemoteAccessHandler(AgentTestCase):
     @patch('azurelinuxagent.common.utils.cryptutil.CryptUtil.decrypt_secret',
            return_value="]aPPEv}uNg1FPnl?")
     def test_handle_remote_access_remove_and_add(self, _):
-        rah = RemoteAccessHandler()
+        rah = RemoteAccessHandler(Mock())
         rah.os_util = MockOSUtil()
         data_str = load_data('wire/remote_access_10_accounts.xml')
         remote_access = RemoteAccess(data_str)
@@ -514,9 +520,11 @@ class TestRemoteAccessHandler(AgentTestCase):
         self.assertEqual(10, len(users))
 
     @patch('azurelinuxagent.ga.remoteaccess.add_event', side_effect=mock_add_event)
-    @patch('azurelinuxagent.common.protocol.util.ProtocolUtil.get_protocol', side_effect=RemoteAccessError("foobar!"))
-    def test_remote_access_handler_run_error(self, _1, _2):
-        rah = RemoteAccessHandler()
+    def test_remote_access_handler_run_error(self, _):
+        mock_protocol = WireProtocol("foo.bar")
+        mock_protocol.get_incarnation = MagicMock(side_effect=RemoteAccessError("foobar!"))
+
+        rah = RemoteAccessHandler(mock_protocol)
         rah.os_util = MockOSUtil()
         rah.run()
         print(TestRemoteAccessHandler.eventing_data)

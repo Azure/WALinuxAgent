@@ -5,30 +5,36 @@ from __future__ import print_function
 
 import tempfile
 import unittest
+from threading import currentThread
 
+from azurelinuxagent.ga.env import EnvHandler
+
+from azurelinuxagent.common.protocol.goal_state import ExtensionsConfig
 from azurelinuxagent.common.protocol.hostplugin import *
-from azurelinuxagent.common.protocol.metadata import *
+from azurelinuxagent.common.protocol.util import ProtocolUtil
 from azurelinuxagent.common.protocol.wire import *
+from azurelinuxagent.common.version import AGENT_PKG_GLOB, AGENT_DIR_GLOB
+from azurelinuxagent.ga.monitor import MonitorHandler
 from azurelinuxagent.ga.update import *
-from tests.tools import AgentTestCase, call, data_dir, DEFAULT, patch, load_bin_data, load_data, Mock, MagicMock
-
+from tests.tools import AgentTestCase, call, data_dir, DEFAULT, patch, load_bin_data, load_data, Mock, MagicMock, \
+    mock_sleep, clear_singleton_instances, skip_if_predicate_true
 
 NO_ERROR = {
-    "last_failure" : 0.0,
-    "failure_count" : 0,
-    "was_fatal" : False
+    "last_failure": 0.0,
+    "failure_count": 0,
+    "was_fatal": False
 }
 
 FATAL_ERROR = {
-    "last_failure" : 42.42,
-    "failure_count" : 2,
-    "was_fatal" : True
+    "last_failure": 42.42,
+    "failure_count": 2,
+    "was_fatal": True
 }
 
 WITH_ERROR = {
-    "last_failure" : 42.42,
-    "failure_count" : 2,
-    "was_fatal" : False
+    "last_failure": 42.42,
+    "failure_count": 2,
+    "was_fatal": False
 }
 
 EMPTY_MANIFEST = {
@@ -91,7 +97,7 @@ class UpdateTestCase(AgentTestCase):
         src_bin = glob.glob(os.path.join(path, self.agent_bin(src_v, '*')))[0]
         dst_bin = os.path.join(path, self.agent_bin(dst_v, ''))
         shutil.move(src_bin, dst_bin)
-    
+
     def agents(self):
         return [GuestAgent(path=path) for path in self.agent_dirs()]
 
@@ -179,7 +185,7 @@ class UpdateTestCase(AgentTestCase):
         # Create agent packages and directories
         return self.replicate_agents(
             src_v=src_v,
-            count=count-agent_count,
+            count=count - agent_count,
             is_available=is_available)
 
     def remove_agents(self):
@@ -486,7 +492,7 @@ class TestGuestAgent(UpdateTestCase):
         self.assertFalse(os.path.isdir(self.agent_path))
 
         agent_pkg = load_bin_data(os.path.join("ga", get_agent_file_name()))
-        mock_http_get.return_value= ResponseMock(response=agent_pkg)
+        mock_http_get.return_value = ResponseMock(response=agent_pkg)
 
         pkg = ExtHandlerPackage(version=str(get_agent_version()))
         pkg.uris.append(ExtHandlerPackageUri())
@@ -502,7 +508,7 @@ class TestGuestAgent(UpdateTestCase):
         self.remove_agents()
         self.assertFalse(os.path.isdir(self.agent_path))
 
-        mock_http_get.return_value= ResponseMock(status=restutil.httpclient.SERVICE_UNAVAILABLE)
+        mock_http_get.return_value = ResponseMock(status=restutil.httpclient.SERVICE_UNAVAILABLE)
 
         pkg = ExtHandlerPackage(version=str(get_agent_version()))
         pkg.uris.append(ExtHandlerPackageUri())
@@ -579,7 +585,7 @@ class TestGuestAgent(UpdateTestCase):
         self.assertFalse(os.path.isdir(self.agent_path))
 
         agent_pkg = load_bin_data(os.path.join("ga", get_agent_file_name()))
-        mock_http_get.return_value= ResponseMock(response=agent_pkg)
+        mock_http_get.return_value = ResponseMock(response=agent_pkg)
 
         pkg = ExtHandlerPackage(version=str(get_agent_version()))
         pkg.uris.append(ExtHandlerPackageUri())
@@ -657,6 +663,10 @@ class TestUpdate(UpdateTestCase):
         self.update_handler = get_update_handler()
         self.update_handler.protocol_util = Mock()
 
+        # Since ProtocolUtil is a singleton per thread, we need to clear it to ensure that the test cases do not reuse
+        # a previous state
+        clear_singleton_instances(ProtocolUtil)
+
     def test_creation(self):
         self.assertTrue(self.update_handler.running)
 
@@ -696,6 +706,7 @@ class TestUpdate(UpdateTestCase):
             #   which the code has a reference.
             #   See http://stackoverflow.com/questions/26408941/python-nested-functions-and-variable-scope
             iterations = [0]
+
             def iterator(*args, **kwargs):
                 iterations[0] += 1
                 return iterations[0] < invocations
@@ -733,9 +744,9 @@ class TestUpdate(UpdateTestCase):
         fileutil.write_file(os.path.join(self.tmp_dir, "0_waagent.pid"), ustr(41))
         with patch('os.kill') as mock_kill:
             calls, sleeps = self._test_ensure_no_orphans(
-                                        invocations=4,
-                                        interval=3*GOAL_STATE_INTERVAL,
-                                        pid_count=1)
+                invocations=4,
+                interval=3 * GOAL_STATE_INTERVAL,
+                pid_count=1)
             self.assertEqual(3, calls)
             self.assertEqual(2, sleeps)
             self.assertEqual(1, mock_kill.call_count)
@@ -747,8 +758,8 @@ class TestUpdate(UpdateTestCase):
 
         self.assertFalse(os.path.exists(path))
 
-        for n in range(0,99):
-            mock_time.utcnow.return_value = Mock(microsecond=n* 10000)
+        for n in range(0, 99):
+            mock_time.utcnow.return_value = Mock(microsecond=n * 10000)
 
             self.update_handler._ensure_partition_assigned()
 
@@ -768,7 +779,7 @@ class TestUpdate(UpdateTestCase):
         for path in test_files:
             fileutil.write_file(path, "Faux content")
             os.chmod(path,
-                stat.S_IRUSR | stat.S_IWUSR | stat.S_IRGRP | stat.S_IROTH)
+                     stat.S_IRUSR | stat.S_IWUSR | stat.S_IRGRP | stat.S_IROTH)
 
         self.update_handler._ensure_readonly_files()
 
@@ -787,7 +798,7 @@ class TestUpdate(UpdateTestCase):
         for path in test_files:
             fileutil.write_file(path, "Faux content")
             os.chmod(path,
-                stat.S_IRUSR | stat.S_IWUSR | stat.S_IRGRP | stat.S_IROTH)
+                     stat.S_IRUSR | stat.S_IWUSR | stat.S_IRGRP | stat.S_IROTH)
 
         self.update_handler._ensure_readonly_files()
 
@@ -884,13 +895,6 @@ class TestUpdate(UpdateTestCase):
         self.assertEqual(1, mock_get_host.call_count)
         self.assertEqual("faux host", host)
 
-    @patch('azurelinuxagent.common.protocol.wire.WireClient.get_host_plugin')
-    def test_get_host_plugin_returns_none_otherwise(self, mock_get_host):
-        protocol = MetadataProtocol()
-        host = self.update_handler._get_host_plugin(protocol=protocol)
-        mock_get_host.assert_not_called()
-        self.assertEqual(None, host)
-
     def test_get_latest_agent(self):
         latest_version = self.prepare_agents()
 
@@ -901,8 +905,8 @@ class TestUpdate(UpdateTestCase):
     def test_get_latest_agent_excluded(self):
         self.prepare_agent(AGENT_VERSION)
         self.assertFalse(self._test_upgrade_available(
-                                versions=self.agent_versions(),
-                                count=1))
+            versions=self.agent_versions(),
+            count=1))
         self.assertEqual(None, self.update_handler.get_latest_agent())
 
     def test_get_latest_agent_no_updates(self):
@@ -916,7 +920,7 @@ class TestUpdate(UpdateTestCase):
         self.prepare_agents()
         prior_agent = self.update_handler.get_latest_agent()
 
-        latest_version = self.prepare_agents(count=self.agent_count()+1, is_available=False)
+        latest_version = self.prepare_agents(count=self.agent_count() + 1, is_available=False)
         latest_path = os.path.join(self.tmp_dir, "{0}-{1}".format(AGENT_NAME, latest_version))
         self.assertFalse(GuestAgent(latest_path).is_available)
 
@@ -930,7 +934,7 @@ class TestUpdate(UpdateTestCase):
 
     def test_get_pid_files_returns_previous(self):
         for n in range(1250):
-            fileutil.write_file(os.path.join(self.tmp_dir, str(n)+"_waagent.pid"), ustr(n+1))
+            fileutil.write_file(os.path.join(self.tmp_dir, str(n) + "_waagent.pid"), ustr(n + 1))
         pid_files = self.update_handler._get_pid_files()
         self.assertEqual(1250, len(pid_files))
 
@@ -1062,7 +1066,7 @@ class TestUpdate(UpdateTestCase):
         self.assertEqual(args, cmds)
         self.assertTrue(len(args) > 1)
         self.assertTrue(args[0].startswith("python"))
-        self.assertEqual("-run-exthandlers", args[len(args)-1])
+        self.assertEqual("-run-exthandlers", args[len(args) - 1])
         self.assertEqual(True, 'cwd' in kwargs)
         self.assertEqual(agent.get_agent_dir(), kwargs['cwd'])
         self.assertEqual(False, '\x00' in cmds[0])
@@ -1076,18 +1080,18 @@ class TestUpdate(UpdateTestCase):
 
         self.assertTrue(len(args) > 1)
         self.assertTrue(args[0].startswith("python"))
-        self.assertEqual("AnArgument", args[len(args)-1])
+        self.assertEqual("AnArgument", args[len(args) - 1])
 
     def test_run_latest_polls_and_waits_for_success(self):
         mock_child = ChildMock(return_value=None)
-        mock_time = TimeMock(time_increment=CHILD_HEALTH_INTERVAL/3)
+        mock_time = TimeMock(time_increment=CHILD_HEALTH_INTERVAL / 3)
         self._test_run_latest(mock_child=mock_child, mock_time=mock_time)
         self.assertEqual(2, mock_child.poll.call_count)
         self.assertEqual(1, mock_child.wait.call_count)
 
     def test_run_latest_polling_stops_at_success(self):
         mock_child = ChildMock(return_value=0)
-        mock_time = TimeMock(time_increment=CHILD_HEALTH_INTERVAL/3)
+        mock_time = TimeMock(time_increment=CHILD_HEALTH_INTERVAL / 3)
         self._test_run_latest(mock_child=mock_child, mock_time=mock_time)
         self.assertEqual(1, mock_child.poll.call_count)
         self.assertEqual(0, mock_child.wait.call_count)
@@ -1101,14 +1105,14 @@ class TestUpdate(UpdateTestCase):
 
     def test_run_latest_polls_frequently_if_installed_is_latest(self):
         mock_child = ChildMock(return_value=0)
-        mock_time = TimeMock(time_increment=CHILD_HEALTH_INTERVAL/2)
+        mock_time = TimeMock(time_increment=CHILD_HEALTH_INTERVAL / 2)
         self._test_run_latest(mock_time=mock_time)
         self.assertEqual(1, mock_time.sleep_interval)
 
     def test_run_latest_polls_every_second_if_installed_not_latest(self):
         self.prepare_agents()
 
-        mock_time = TimeMock(time_increment=CHILD_HEALTH_INTERVAL/2)
+        mock_time = TimeMock(time_increment=CHILD_HEALTH_INTERVAL / 2)
         self._test_run_latest(mock_time=mock_time)
         self.assertEqual(1, mock_time.sleep_interval)
 
@@ -1215,6 +1219,7 @@ class TestUpdate(UpdateTestCase):
         #   which the code has a reference.
         #   See http://stackoverflow.com/questions/26408941/python-nested-functions-and-variable-scope
         iterations = [0]
+
         def iterator(*args, **kwargs):
             iterations[0] += 1
             if iterations[0] >= invocations:
@@ -1227,30 +1232,31 @@ class TestUpdate(UpdateTestCase):
             with patch('azurelinuxagent.ga.remoteaccess.get_remote_access_handler') as mock_ra_handler:
                 with patch('azurelinuxagent.ga.monitor.get_monitor_handler') as mock_monitor:
                     with patch('azurelinuxagent.ga.env.get_env_handler') as mock_env:
-                        with patch('time.sleep', side_effect=iterator) as mock_sleep:
-                            with patch('sys.exit') as mock_exit:
-                                if isinstance(os.getppid, MagicMock):
-                                    self.update_handler.run()
-                                else:
-                                    with patch('os.getppid', return_value=42):
+                        with patch('azurelinuxagent.ga.update.initialize_event_logger_vminfo_common_parameters'):
+                            with patch('time.sleep', side_effect=iterator) as mock_sleep:
+                                with patch('sys.exit') as mock_exit:
+                                    if isinstance(os.getppid, MagicMock):
                                         self.update_handler.run()
+                                    else:
+                                        with patch('os.getppid', return_value=42):
+                                            self.update_handler.run()
 
-                                self.assertEqual(1, mock_handler.call_count)
-                                self.assertEqual(mock_handler.return_value.method_calls, calls)
-                                self.assertEqual(1, mock_ra_handler.call_count)
-                                self.assertEqual(mock_ra_handler.return_value.method_calls, calls)
-                                self.assertEqual(invocations, mock_sleep.call_count)
-                                if invocations > 0:
-                                    self.assertEqual(sleep_interval, mock_sleep.call_args[0])
-                                self.assertEqual(1, mock_monitor.call_count)
-                                self.assertEqual(1, mock_env.call_count)
-                                self.assertEqual(1, mock_exit.call_count)
+                                    self.assertEqual(1, mock_handler.call_count)
+                                    self.assertEqual(mock_handler.return_value.method_calls, calls)
+                                    self.assertEqual(1, mock_ra_handler.call_count)
+                                    self.assertEqual(mock_ra_handler.return_value.method_calls, calls)
+                                    self.assertEqual(invocations, mock_sleep.call_count)
+                                    if invocations > 0:
+                                        self.assertEqual(sleep_interval, mock_sleep.call_args[0])
+                                    self.assertEqual(1, mock_monitor.call_count)
+                                    self.assertEqual(1, mock_env.call_count)
+                                    self.assertEqual(1, mock_exit.call_count)
 
     def test_run(self):
         self._test_run()
 
     def test_run_keeps_running(self):
-        self._test_run(invocations=15, calls=[call.run()]*15)
+        self._test_run(invocations=15, calls=[call.run()] * 15)
 
     def test_run_stops_if_update_available(self):
         self.update_handler._upgrade_available = Mock(return_value=True)
@@ -1336,7 +1342,7 @@ class TestUpdate(UpdateTestCase):
         self.update_handler.protocol_util = protocol
         conf.get_autoupdate_gafamily = Mock(return_value=protocol.family)
 
-        return self.update_handler._upgrade_available(base_version=base_version)
+        return self.update_handler._upgrade_available(protocol, base_version=base_version)
 
     def test_upgrade_available_returns_true_on_first_use(self):
         self.assertTrue(self._test_upgrade_available())
@@ -1349,7 +1355,7 @@ class TestUpdate(UpdateTestCase):
         self.update_handler.protocol_util = protocol
         with patch('azurelinuxagent.common.logger.warn') as mock_logger:
             with patch('tests.ga.test_update.ProtocolMock.get_vmagent_pkgs', side_effect=ProtocolError):
-                self.assertFalse(self.update_handler._upgrade_available(base_version=CURRENT_VERSION))
+                self.assertFalse(self.update_handler._upgrade_available(protocol, base_version=CURRENT_VERSION))
                 self.assertEqual(0, mock_logger.call_count)
 
     def test_upgrade_available_includes_old_agents(self):
@@ -1411,7 +1417,7 @@ class TestUpdate(UpdateTestCase):
 
     def test_write_pid_file(self):
         for n in range(1112):
-            fileutil.write_file(os.path.join(self.tmp_dir, str(n)+"_waagent.pid"), ustr(n+1))
+            fileutil.write_file(os.path.join(self.tmp_dir, str(n) + "_waagent.pid"), ustr(n + 1))
         with patch('os.getpid', return_value=1112):
             pid_files, pid_file = self.update_handler._write_pid_file()
             self.assertEqual(1112, len(pid_files))
@@ -1425,64 +1431,6 @@ class TestUpdate(UpdateTestCase):
                 pid_files, pid_file = self.update_handler._write_pid_file()
                 self.assertEqual(0, len(pid_files))
                 self.assertEqual(None, pid_file)
-
-    @patch('azurelinuxagent.common.protocol.wire.WireClient.get_goal_state',
-           return_value=GoalState(load_data('wire/goal_state.xml')))
-    def test_package_filter_for_agent_manifest(self, _):
-
-        protocol = WireProtocol('12.34.56.78')
-        extension_config = ExtensionsConfig(load_data('wire/ext_conf.xml'))
-        agent_manifest = extension_config.vmagent_manifests.vmAgentManifests[0]
-
-        # has agent versions 13, 14
-        ga_manifest_1 = ExtensionManifest(load_data('wire/ga_manifest_1.xml'))
-
-        # has agent versions 13, 14, 15
-        ga_manifest_2 = ExtensionManifest(load_data('wire/ga_manifest_2.xml'))
-
-        goal_state = protocol.client.get_goal_state()
-        disk_cache = os.path.join(conf.get_lib_dir(),
-                                  AGENTS_MANIFEST_FILE_NAME.format(
-                                      agent_manifest.family,
-                                      goal_state.incarnation))
-
-        self.assertFalse(os.path.exists(disk_cache))
-        self.assertTrue(ga_manifest_1.allowed_versions is None)
-
-        with patch(
-                'azurelinuxagent.common.protocol.wire.WireClient'
-                '.get_gafamily_manifest',
-                return_value=ga_manifest_1):
-
-            pkg_list_1 = protocol.get_vmagent_pkgs(agent_manifest)
-            self.assertTrue(pkg_list_1 is not None)
-            self.assertTrue(len(pkg_list_1.versions) == 2)
-            self.assertTrue(pkg_list_1.versions[0].version == '2.2.13')
-            self.assertTrue(pkg_list_1.versions[0].uris[0].uri == 'url1_13')
-            self.assertTrue(pkg_list_1.versions[1].version == '2.2.14')
-            self.assertTrue(pkg_list_1.versions[1].uris[0].uri == 'url1_14')
-
-        self.assertTrue(os.path.exists(disk_cache))
-
-        with patch(
-                'azurelinuxagent.common.protocol.wire.WireClient'
-                '.get_gafamily_manifest',
-                return_value=ga_manifest_2):
-
-            pkg_list_2 = protocol.get_vmagent_pkgs(agent_manifest)
-            self.assertTrue(pkg_list_2 is not None)
-            self.assertTrue(len(pkg_list_2.versions) == 2)
-            self.assertTrue(pkg_list_2.versions[0].version == '2.2.13')
-            self.assertTrue(pkg_list_2.versions[0].uris[0].uri == 'url2_13')
-            self.assertTrue(pkg_list_2.versions[1].version == '2.2.14')
-            self.assertTrue(pkg_list_2.versions[1].uris[0].uri == 'url2_14')
-            # does not contain 2.2.15
-
-        self.assertTrue(os.path.exists(disk_cache))
-        self.assertTrue(ga_manifest_2.allowed_versions is not None)
-        self.assertTrue(len(ga_manifest_2.allowed_versions) == 2)
-        self.assertTrue(ga_manifest_2.allowed_versions[0] == '2.2.13')
-        self.assertTrue(ga_manifest_2.allowed_versions[1] == '2.2.14')
 
     @patch('azurelinuxagent.common.conf.get_extensions_enabled', return_value=False)
     def test_update_happens_when_extensions_disabled(self, _):
@@ -1502,16 +1450,32 @@ class TestUpdate(UpdateTestCase):
         self.update_handler._upgrade_available = Mock(return_value=False)
         self._test_run(invocations=15, calls=[call.run()] * 15, sleep_interval=(300,))
 
+    @patch("azurelinuxagent.common.logger.info")
+    @patch("azurelinuxagent.ga.update.add_event")
+    def test_telemetry_heartbeat_creates_event(self, patch_add_event, patch_info, *_):
+        update_handler = get_update_handler()
+        mock_protocol = WireProtocol("foo.bar")
+
+        update_handler.last_telemetry_heartbeat = datetime.utcnow() - timedelta(hours=1)
+        update_handler._send_heartbeat_telemetry(mock_protocol)
+        self.assertEqual(1, patch_add_event.call_count)
+        self.assertTrue(
+            any(call_args[0] == "[HEARTBEAT] Agent {0} is running as the goal state agent" for call_args in patch_info.call_args),
+            "The heartbeat was not written to the agent's log"
+        )
 
 class MonitorThreadTest(AgentTestCase):
     def setUp(self):
         AgentTestCase.setUp(self)
         self.event_patch = patch('azurelinuxagent.common.event.add_event')
+        currentThread().setName("ExtHandler")
         self.update_handler = get_update_handler()
         self.update_handler.protocol_util = Mock()
+        clear_singleton_instances(ProtocolUtil)
 
     def _test_run(self, invocations=1):
         iterations = [0]
+
         def iterator(*args, **kwargs):
             iterations[0] += 1
             if iterations[0] >= invocations:
@@ -1521,11 +1485,12 @@ class MonitorThreadTest(AgentTestCase):
         with patch('os.getpid', return_value=42):
             with patch.object(UpdateHandler, '_is_orphaned') as mock_is_orphaned:
                 mock_is_orphaned.__get__ = Mock(return_value=False)
-                with patch('azurelinuxagent.ga.exthandlers.get_exthandlers_handler') as mock_handler:
-                    with patch('azurelinuxagent.ga.remoteaccess.get_remote_access_handler') as mock_ra_handler:
-                        with patch('time.sleep', side_effect=iterator) as mock_sleep:
-                            with patch('sys.exit') as mock_exit:
-                                self.update_handler.run()
+                with patch('azurelinuxagent.ga.exthandlers.get_exthandlers_handler'):
+                    with patch('azurelinuxagent.ga.remoteaccess.get_remote_access_handler'):
+                        with patch('azurelinuxagent.ga.update.initialize_event_logger_vminfo_common_parameters'):
+                            with patch('time.sleep', side_effect=iterator):
+                                with patch('sys.exit'):
+                                    self.update_handler.run()
 
     @patch('azurelinuxagent.ga.monitor.get_monitor_handler')
     @patch('azurelinuxagent.ga.env.get_env_handler')
@@ -1662,12 +1627,11 @@ class ProtocolMock(object):
         self.family = family
         self.client = client
         self.call_counts = {
-            "get_vmagent_manifests" : 0,
-            "get_vmagent_pkgs" : 0,
-            "update_goal_state" : 0
+            "get_vmagent_manifests": 0,
+            "get_vmagent_pkgs": 0,
+            "update_goal_state": 0
         }
         self.goal_state_is_stale = False
-        self.goal_state_forced = False
         self.etag = etag
         self.versions = versions if versions is not None else []
         self.create_manifests()
@@ -1683,7 +1647,7 @@ class ProtocolMock(object):
 
         if self.family is not None:
             manifest = VMAgentManifest(family=self.family)
-            for i in range(0,10):
+            for i in range(0, 10):
                 manifest_uri = "https://nowhere.msft/agent/{0}".format(i)
                 manifest.versionsManifestUris.append(VMAgentManifestUri(uri=manifest_uri))
             self.agent_manifests.vmAgentManifests.append(manifest)
@@ -1695,7 +1659,7 @@ class ProtocolMock(object):
 
         for version in self.versions:
             package = ExtHandlerPackage(str(version))
-            for i in range(0,5):
+            for i in range(0, 5):
                 package_uri = "https://nowhere.msft/agent_pkg/{0}".format(i)
                 package.uris.append(ExtHandlerPackageUri(uri=package_uri))
             self.agent_packages.versions.append(package)
@@ -1717,9 +1681,8 @@ class ProtocolMock(object):
             raise ResourceGoneError()
         return self.agent_packages
 
-    def update_goal_state(self, forced=False, max_retry=3):
+    def update_goal_state(self):
         self.call_counts["update_goal_state"] += 1
-        self.goal_state_forced = self.goal_state_forced or forced
 
 
 class ResponseMock(Mock):

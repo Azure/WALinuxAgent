@@ -22,6 +22,7 @@ import os
 import textwrap
 
 import azurelinuxagent.common.conf as conf
+from azurelinuxagent.common.event import EVENTS_DIRECTORY
 from azurelinuxagent.common.version import set_current_agent, \
     AGENT_LONG_VERSION, AGENT_VERSION, AGENT_NAME, AGENT_NAME_PATTERN, \
     get_f5_platform, get_distro
@@ -115,7 +116,7 @@ class TestCurrentAgentName(AgentTestCase):
 
     @patch("os.getcwd")
     def test_extract_name_in_path_finds_installed(self, mock_cwd):
-        path = os.path.join(conf.get_lib_dir(), "events")
+        path = os.path.join(conf.get_lib_dir(), EVENTS_DIRECTORY)
         mock_cwd.return_value = path
         current_agent, current_version = set_current_agent()
         self.assertEqual(AGENT_LONG_VERSION, current_agent)

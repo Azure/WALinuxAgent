@@ -15,26 +15,81 @@
 # Requires Python 2.6+ and Openssl 1.0+
 #
 
-import os
 import unittest
+import os
+import tempfile
+from multiprocessing import Queue
+from threading import Thread
 
-from tests.tools import AgentTestCase, MagicMock, Mock, patch
+from tests.tools import AgentTestCase, MagicMock, Mock, patch, clear_singleton_instances
 from azurelinuxagent.common.exception import *
-from azurelinuxagent.common.protocol import get_protocol_util, \
-                                            TAG_FILE_NAME
+from azurelinuxagent.common.protocol.metadata_server_migration_util import _METADATA_PROTOCOL_NAME, \
+                                                                           _LEGACY_METADATA_SERVER_TRANSPORT_PRV_FILE_NAME, \
+                                                                           _LEGACY_METADATA_SERVER_TRANSPORT_CERT_FILE_NAME, \
+                                                                           _LEGACY_METADATA_SERVER_P7B_FILE_NAME
+from azurelinuxagent.common.protocol.goal_state import TRANSPORT_CERT_FILE_NAME, TRANSPORT_PRV_FILE_NAME
+from azurelinuxagent.common.protocol.util import get_protocol_util, ProtocolUtil, PROTOCOL_FILE_NAME, WIRE_PROTOCOL_NAME, ENDPOINT_FILE_NAME
 from azurelinuxagent.common.utils.restutil import KNOWN_WIRESERVER_IP
-from azurelinuxagent.common.protocol.util import ENDPOINT_FILE_NAME
 from errno import ENOENT
-
 
 @patch("time.sleep")
 class TestProtocolUtil(AgentTestCase):
+    MDS_CERTIFICATES = [_LEGACY_METADATA_SERVER_TRANSPORT_PRV_FILE_NAME, \
+                        _LEGACY_METADATA_SERVER_TRANSPORT_CERT_FILE_NAME, \
+                        _LEGACY_METADATA_SERVER_P7B_FILE_NAME]
+    WIRESERVER_CERTIFICATES = [TRANSPORT_CERT_FILE_NAME, TRANSPORT_PRV_FILE_NAME]
+
+    def setUp(self):
+        super(TestProtocolUtil, self).setUp()
+        # Since ProtocolUtil is a singleton per thread, we need to clear it to ensure that the test cases do not
+        # reuse a previous state
+        clear_singleton_instances(ProtocolUtil)
+
+    # Cleanup certificate files, protocol file, and endpoint files
+    def tearDown(self):
+        dir = tempfile.gettempdir()
+        for path in [os.path.join(dir, mds_cert) for mds_cert in TestProtocolUtil.MDS_CERTIFICATES]:
+            if os.path.exists(path):
+                os.remove(path)
+        for path in [os.path.join(dir, ws_cert) for ws_cert in TestProtocolUtil.WIRESERVER_CERTIFICATES]:
+            if os.path.exists(path):
+                os.remove(path)
+        protocol_path = os.path.join(dir, PROTOCOL_FILE_NAME)
+        if os.path.exists(protocol_path):
+            os.remove(protocol_path)
+        endpoint_path = os.path.join(dir, ENDPOINT_FILE_NAME)
+        if os.path.exists(endpoint_path):
+            os.remove(endpoint_path)
+
+    def test_get_protocol_util_should_return_same_object_for_same_thread(self, _):
+        protocol_util1 = get_protocol_util()
+        protocol_util2 = get_protocol_util()
+
+        self.assertEqual(protocol_util1, protocol_util2)
+
+    def test_get_protocol_util_should_return_different_object_for_different_thread(self, _):
+        protocol_util_instances = []
+        errors = []
+
+        def get_protocol_util_instance():
+            try:
+                protocol_util_instances.append(get_protocol_util())
+            except Exception as e:
+                errors.append(e)
+
+        t1 = Thread(target=get_protocol_util_instance)
+        t2 = Thread(target=get_protocol_util_instance)
+        t1.start()
+        t2.start()
+        t1.join()
+        t2.join()
+
+        self.assertEqual(len(protocol_util_instances), 2, "Could not create the expected number of protocols. Errors: [{0}]".format(errors))
+        self.assertNotEqual(protocol_util_instances[0], protocol_util_instances[1], "The instances created by different threads should be different")
     
-    @patch("azurelinuxagent.common.protocol.util.MetadataProtocol")
     @patch("azurelinuxagent.common.protocol.util.WireProtocol")
-    def test_detect_protocol(self, WireProtocol, MetadataProtocol, _):
+    def test_detect_protocol(self, WireProtocol, _):
         WireProtocol.return_value = MagicMock()
-        MetadataProtocol.return_value = MagicMock()
 
         protocol_util = get_protocol_util()
         
@@ -49,42 +104,11 @@ class TestProtocolUtil(AgentTestCase):
         protocol_util.clear_protocol()
         WireProtocol.return_value.detect.side_effect = ProtocolError()
 
-        protocol = protocol_util.get_protocol()
-        self.assertEquals(MetadataProtocol.return_value, protocol)
-
-        # Test no protocol is available
-        protocol_util.clear_protocol()
-        WireProtocol.return_value.detect.side_effect = ProtocolError()
-        MetadataProtocol.return_value.detect.side_effect = ProtocolError()
-
         self.assertRaises(ProtocolError, protocol_util.get_protocol)
-
-    def test_detect_protocol_by_file(self, _):
-        protocol_util = get_protocol_util()
-        protocol_util._detect_wire_protocol = Mock()
-        protocol_util._detect_metadata_protocol = Mock()
-
-        tag_file = os.path.join(self.tmp_dir, TAG_FILE_NAME)
-
-        # Test tag file doesn't exist
-        protocol_util.get_protocol(by_file=True)
-        protocol_util._detect_wire_protocol.assert_any_call()
-        protocol_util._detect_metadata_protocol.assert_not_called()
-
-        # Test tag file exists
-        protocol_util.clear_protocol()
-        protocol_util._detect_wire_protocol.reset_mock()
-        protocol_util._detect_metadata_protocol.reset_mock()
-        with open(tag_file, "w+") as tag_fd:
-            tag_fd.write("")
-
-        protocol_util.get_protocol(by_file=True)
-        protocol_util._detect_metadata_protocol.assert_any_call()
-        protocol_util._detect_wire_protocol.assert_not_called()
 
     @patch("azurelinuxagent.common.conf.get_lib_dir")
     @patch("azurelinuxagent.common.protocol.util.WireProtocol")
-    def test_detect_wire_protocol_no_dhcp(self, WireProtocol, mock_get_lib_dir, _):
+    def test_detect_protocol_no_dhcp(self, WireProtocol, mock_get_lib_dir, _):
         WireProtocol.return_value.detect = Mock()
         mock_get_lib_dir.return_value = self.tmp_dir
 
@@ -100,64 +124,162 @@ class TestProtocolUtil(AgentTestCase):
         endpoint_file = protocol_util._get_wireserver_endpoint_file_path()
 
         # Test wire protocol when no endpoint file has been written
-        protocol_util._detect_wire_protocol()
+        protocol_util._detect_protocol()
         self.assertEqual(KNOWN_WIRESERVER_IP, protocol_util.get_wireserver_endpoint())
 
-        # Test wire protocol when endpoint was previously detected
-        protocol_util.clear_protocol()
-        with open(endpoint_file, "w+") as endpoint_fd:
-            endpoint_fd.write("baz.qux")
-
-        protocol_util._detect_wire_protocol()
-        self.assertEqual("baz.qux", protocol_util.get_wireserver_endpoint())
-
         # Test wire protocol on dhcp failure
-        protocol_util.clear_protocol()
         protocol_util.osutil.is_dhcp_available.return_value = True
         protocol_util.dhcp_handler.run.side_effect = DhcpError()
 
-        self.assertRaises(ProtocolError, protocol_util._detect_wire_protocol)
+        self.assertRaises(ProtocolError, protocol_util._detect_protocol)
 
-    @patch("azurelinuxagent.common.protocol.util.MetadataProtocol")
     @patch("azurelinuxagent.common.protocol.util.WireProtocol")
-    def test_get_protocol(self, WireProtocol, MetadataProtocol, _):
+    def test_get_protocol(self, WireProtocol, _):
         WireProtocol.return_value = MagicMock()
-        MetadataProtocol.return_value = MagicMock()
 
         protocol_util = get_protocol_util()
         protocol_util.get_wireserver_endpoint = Mock()
         protocol_util._detect_protocol = MagicMock()
-
-        # Test for wire protocol
         protocol_util._save_protocol("WireProtocol")
 
         protocol = protocol_util.get_protocol()
+
         self.assertEquals(WireProtocol.return_value, protocol)
         protocol_util.get_wireserver_endpoint.assert_any_call()
 
-        # Test to ensure protocol persists
-        protocol_util.get_wireserver_endpoint.reset_mock()
-        protocol_util._save_protocol("MetadataProtocol")
+    @patch('azurelinuxagent.common.conf.get_lib_dir')
+    @patch('azurelinuxagent.common.conf.enable_firewall')
+    def test_get_protocol_wireserver_to_wireserver_update_removes_metadataserver_artifacts(self, mock_enable_firewall, mock_get_lib_dir, _):
+        """
+        This is for testing that agent upgrade from WireServer to WireServer protocol
+        will clean up leftover MDS Certificates (from a previous Metadata Server to Wireserver
+        update, intermediate updated agent does not clean up MDS certificates) and reset firewall rules.
+        We don't test that WireServer certificates, protocol file, or endpoint file were created
+        because we already expect them to be created since we are updating from a WireServer agent.
+        """
+        # Setup Protocol file with WireProtocol
+        dir = tempfile.gettempdir()
+        filename = os.path.join(dir, PROTOCOL_FILE_NAME)
+        with open(filename, "w") as f:
+            f.write(WIRE_PROTOCOL_NAME)
 
-        protocol = protocol_util.get_protocol()
-        self.assertEquals(WireProtocol.return_value, protocol)
-        protocol_util.get_wireserver_endpoint.assert_not_called()
+        # Setup MDS Certificates
+        mds_cert_paths = [os.path.join(dir, mds_cert) for mds_cert in TestProtocolUtil.MDS_CERTIFICATES]
+        for mds_cert_path in mds_cert_paths:
+            open(mds_cert_path, "w").close()
 
-        # Test for metadata protocol
-        protocol_util.clear_protocol()
-        protocol_util._save_protocol("MetadataProtocol")
+        # Setup mocks
+        mock_get_lib_dir.return_value = dir
+        mock_enable_firewall.return_value = True
+        protocol_util = get_protocol_util()
+        protocol_util.osutil = MagicMock()
+        protocol_util.dhcp_handler = MagicMock()
+        protocol_util.dhcp_handler.endpoint = KNOWN_WIRESERVER_IP
 
-        protocol = protocol_util.get_protocol()
-        self.assertEquals(MetadataProtocol.return_value, protocol)
-        protocol_util.get_wireserver_endpoint.assert_not_called()
+        # Run
+        protocol_util.get_protocol()
 
-        # Test for unknown protocol
-        protocol_util.clear_protocol()
-        protocol_util._save_protocol("Not_a_Protocol")
-        protocol_util._detect_protocol.side_effect = NotImplementedError()
+        # Check MDS Certs do not exist
+        for mds_cert_path in mds_cert_paths:
+            self.assertFalse(os.path.exists(mds_cert_path))
 
-        self.assertRaises(NotImplementedError, protocol_util.get_protocol)
-        protocol_util.get_wireserver_endpoint.assert_not_called()
+        # Check firewall rules was reset
+        protocol_util.osutil.remove_rules_files.assert_called_once()
+        protocol_util.osutil.remove_firewall.assert_called_once()
+        protocol_util.osutil.enable_firewall.assert_called_once()
+
+    @patch('azurelinuxagent.common.conf.get_lib_dir')
+    @patch('azurelinuxagent.common.conf.enable_firewall')
+    @patch('azurelinuxagent.common.protocol.wire.WireClient')
+    def test_get_protocol_metadataserver_to_wireserver_update_removes_metadataserver_artifacts(self, mock_wire_client, mock_enable_firewall, mock_get_lib_dir, _):
+        """
+        This is for testing that agent upgrade from MetadataServer to WireServer protocol
+        will clean up leftover MDS Certificates and reset firewall rules. Also check that
+        WireServer certificates are present, and protocol/endpoint files are written to appropriately.
+        """
+        # Setup Protocol file with MetadataProtocol
+        dir = tempfile.gettempdir()
+        protocol_filename = os.path.join(dir, PROTOCOL_FILE_NAME)
+        with open(protocol_filename, "w") as f:
+            f.write(_METADATA_PROTOCOL_NAME)
+
+        # Setup MDS Certificates
+        mds_cert_paths = [os.path.join(dir, mds_cert) for mds_cert in TestProtocolUtil.MDS_CERTIFICATES]
+        for mds_cert_path in mds_cert_paths:
+            open(mds_cert_path, "w").close()
+
+        # Setup mocks
+        mock_get_lib_dir.return_value = dir
+        mock_enable_firewall.return_value = True
+        protocol_util = get_protocol_util()
+        protocol_util.osutil = MagicMock()
+        mock_wire_client.return_value = MagicMock()
+        protocol_util.dhcp_handler = MagicMock()
+        protocol_util.dhcp_handler.endpoint = KNOWN_WIRESERVER_IP
+
+        # Run
+        protocol_util.get_protocol()
+
+        # Check MDS Certs do not exist
+        for mds_cert_path in mds_cert_paths:
+            self.assertFalse(os.path.exists(mds_cert_path))
+
+        # Check that WireServer Certs exist
+        ws_cert_paths = [os.path.join(dir, ws_cert) for ws_cert in TestProtocolUtil.WIRESERVER_CERTIFICATES]
+        for ws_cert_path in ws_cert_paths:
+            self.assertTrue(os.path.isfile(ws_cert_path))
+
+        # Check firewall rules was reset
+        protocol_util.osutil.remove_rules_files.assert_called_once()
+        protocol_util.osutil.remove_firewall.assert_called_once()
+        protocol_util.osutil.enable_firewall.assert_called_once()
+
+        # Check Protocol File is updated to WireProtocol
+        with open(os.path.join(dir, PROTOCOL_FILE_NAME), "r") as f:
+            self.assertEquals(f.read(), WIRE_PROTOCOL_NAME)
+        
+        # Check Endpoint file is updated to WireServer IP
+        with open(os.path.join(dir, ENDPOINT_FILE_NAME), 'r') as f:
+            self.assertEquals(f.read(), KNOWN_WIRESERVER_IP)
+
+    @patch('azurelinuxagent.common.conf.get_lib_dir')
+    @patch('azurelinuxagent.common.conf.enable_firewall')
+    @patch('azurelinuxagent.common.protocol.wire.WireClient')
+    def test_get_protocol_new_wireserver_agent_generates_certificates(self, mock_wire_client, mock_enable_firewall, mock_get_lib_dir, _):
+        """
+        This is for testing that a new WireServer Linux Agent generates appropriate certificates,
+        protocol file, and endpoint file.
+        """
+        # Setup mocks
+        dir = tempfile.gettempdir()
+        mock_get_lib_dir.return_value = dir
+        mock_enable_firewall.return_value = True
+        protocol_util = get_protocol_util()
+        protocol_util.osutil = MagicMock()
+        mock_wire_client.return_value = MagicMock()
+        protocol_util.dhcp_handler = MagicMock()
+        protocol_util.dhcp_handler.endpoint = KNOWN_WIRESERVER_IP
+
+        # Run
+        protocol_util.get_protocol()
+
+        # Check that WireServer Certs exist
+        ws_cert_paths = [os.path.join(dir, ws_cert) for ws_cert in TestProtocolUtil.WIRESERVER_CERTIFICATES]
+        for ws_cert_path in ws_cert_paths:
+            self.assertTrue(os.path.isfile(ws_cert_path))
+
+        # Check firewall rules were not reset
+        protocol_util.osutil.remove_rules_files.assert_not_called()
+        protocol_util.osutil.remove_firewall.assert_not_called()
+        protocol_util.osutil.enable_firewall.assert_not_called()
+
+        # Check Protocol File is updated to WireProtocol
+        with open(os.path.join(dir, PROTOCOL_FILE_NAME), "r") as f:
+            self.assertEquals(f.read(), WIRE_PROTOCOL_NAME)
+        
+        # Check Endpoint file is updated to WireServer IP
+        with open(os.path.join(dir, ENDPOINT_FILE_NAME), 'r') as f:
+            self.assertEquals(f.read(), KNOWN_WIRESERVER_IP)
 
     @patch("azurelinuxagent.common.utils.fileutil")
     @patch("azurelinuxagent.common.conf.get_lib_dir")

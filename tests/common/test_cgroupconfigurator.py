@@ -203,15 +203,18 @@ class CGroupConfiguratorTestCase(AgentTestCase):
             self.assertEqual(mock_start_extension_command.call_count, 1)
 
     def test_start_extension_command_should_start_tracking_the_extension_cgroups(self):
-        CGroupConfigurator.get_instance().start_extension_command(
-            extension_name="Microsoft.Compute.TestExtension-1.2.3",
-            command="date",
-            timeout=300,
-            shell=False,
-            cwd=self.tmp_dir,
-            env={},
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE)
+        # CPU usage is initialized when we begin tracking a CPU cgroup; since this test does not retrieve the
+        # CPU usage, there is no need for initialization
+        with patch("azurelinuxagent.common.cgroup.CpuCgroup.initialize_cpu_usage"):
+            CGroupConfigurator.get_instance().start_extension_command(
+                extension_name="Microsoft.Compute.TestExtension-1.2.3",
+                command="date",
+                timeout=300,
+                shell=False,
+                cwd=self.tmp_dir,
+                env={},
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE)
 
         self.assertTrue(CGroupsTelemetry.is_tracked(os.path.join(
             self.cgroups_file_system_root, "cpu", "walinuxagent.extensions/Microsoft.Compute.TestExtension_1.2.3")))
@@ -254,7 +257,7 @@ class CGroupConfiguratorTestCase(AgentTestCase):
         def mock_append_file(filepath, contents, **kwargs):
             if re.match(r'/.*/cpu/.*/cgroup.procs', filepath):
                 raise OSError(errno.ENOSPC, os.strerror(errno.ENOSPC))
-            fileutil.append_file(filepath, controller, **kwargs)
+            fileutil.append_file(filepath, contents, **kwargs)
 
         # Start tracking a couple of dummy cgroups
         CGroupsTelemetry.track_cgroup(CGroup("dummy", "/sys/fs/cgroup/memory/system.slice/dummy.service", "cpu"))

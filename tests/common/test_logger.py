@@ -21,10 +21,10 @@ import tempfile
 from datetime import datetime, timedelta
 
 from azurelinuxagent.common.event import __event_logger__, add_log_event, MAX_NUMBER_OF_EVENTS, TELEMETRY_LOG_EVENT_ID,\
-    TELEMETRY_LOG_PROVIDER_ID
+    TELEMETRY_LOG_PROVIDER_ID, EVENTS_DIRECTORY
 import azurelinuxagent.common.logger as logger
 from azurelinuxagent.common.utils import fileutil
-from tests.tools import AgentTestCase, MagicMock, patch
+from tests.tools import AgentTestCase, MagicMock, patch, skip_if_predicate_true
 
 _MSG_INFO = "This is our test info logging message {0} {1}"
 _MSG_WARN = "This is our test warn logging message {0} {1}"
@@ -38,7 +38,7 @@ class TestLogger(AgentTestCase):
         AgentTestCase.setUp(self)
 
         self.lib_dir = tempfile.mkdtemp()
-        self.event_dir = os.path.join(self.lib_dir, "events")
+        self.event_dir = os.path.join(self.lib_dir, EVENTS_DIRECTORY)
         fileutil.mkdir(self.event_dir)
 
         self.log_file = tempfile.mkstemp(prefix="logfile-")[1]
@@ -191,6 +191,30 @@ class TestLogger(AgentTestCase):
             # If the time difference is > 5secs, there's a high probability that the time_in_file is in different TZ
             self.assertTrue((time_in_file-before_write_utc) <= timedelta(seconds=5))
 
+    @patch("azurelinuxagent.common.logger.datetime")
+    def test_logger_should_log_micro_seconds(self, mock_dt):
+        # datetime.isoformat() skips ms if ms=0, this test ensures that ms is always set
+
+        file_name = "test.log"
+        file_path = os.path.join(self.tmp_dir, file_name)
+        test_logger = logger.Logger()
+        test_logger.add_appender(logger.AppenderType.FILE, logger.LogLevel.INFO, path=file_path)
+
+        ts_with_no_ms = datetime.utcnow().replace(microsecond=0)
+        mock_dt.utcnow = MagicMock(return_value=ts_with_no_ms)
+
+        test_logger.info("The time should contain milli-seconds")
+
+        with open(file_path, "r") as log_file:
+            log = log_file.read()
+            try:
+                time_in_file = datetime.strptime(log.split(logger.LogLevel.STRINGS[logger.LogLevel.INFO])[0].strip()
+                                                 , u'%Y-%m-%dT%H:%M:%S.%fZ')
+            except ValueError:
+                self.fail("Ensure timestamp follows ISO-8601 format and has micro seconds in it")
+
+            self.assertEqual(ts_with_no_ms, time_in_file, "Timestamps dont match")
+
     def test_telemetry_logger(self):
         mock = MagicMock()
         appender = logger.TelemetryAppender(logger.LogLevel.WARNING, mock)
@@ -212,35 +236,6 @@ class TestLogger(AgentTestCase):
             appender.write(logger.LogLevel.INFO, "--unit-test-INFO--")
 
         self.assertEqual(5, mock.call_count)  # Only ERROR should be called.
-
-    @patch("azurelinuxagent.common.event.send_logs_to_telemetry", return_value=True)
-    @patch('azurelinuxagent.common.event.EventLogger.save_event')
-    def test_telemetry_logger_sending_correct_fields(self, mock_save, patch_conf_get_logs_to_telemetry):
-        appender = logger.TelemetryAppender(logger.LogLevel.WARNING, add_log_event)
-        appender.write(logger.LogLevel.WARNING, 'Cgroup controller "memory" is not mounted. '
-                                                'Failed to create a cgroup for extension '
-                                                'Microsoft.OSTCExtensions.DummyExtension-1.2.3.4')
-
-        self.assertEqual(1, mock_save.call_count)
-        telemetry_json = json.loads(mock_save.call_args[0][0])
-
-        self.assertEqual(TELEMETRY_LOG_PROVIDER_ID, telemetry_json['providerId'])
-        self.assertEqual(TELEMETRY_LOG_EVENT_ID, telemetry_json['eventId'])
-
-        self.assertEqual(12, len(telemetry_json['parameters']))
-        for x in telemetry_json['parameters']:
-            if x['name'] == 'EventName':
-                self.assertEqual(x['value'], 'Log')
-            elif x['name'] == 'CapabilityUsed':
-                self.assertEqual(x['value'], 'WARNING')
-            elif x['name'] == 'Context1':
-                self.assertEqual(x['value'], 'Cgroup controller "memory" is not mounted. '
-                                             'Failed to create a cgroup for extension '
-                                             'Microsoft.OSTCExtensions.DummyExtension-1.2.3.4')
-            elif x['name'] == 'Context2':
-                self.assertEqual(x['value'], '')
-            elif x['name'] == 'Context3':
-                self.assertEqual(x['value'], '')
 
     @patch('azurelinuxagent.common.event.EventLogger.save_event')
     def test_telemetry_logger_not_on_by_default(self, mock_save):
@@ -392,6 +387,7 @@ class TestLogger(AgentTestCase):
             self.assertFalse(True, "The log file looks like it isn't correctly setup for this test. Take a look. "
                                    "{0}".format(e))
 
+    @skip_if_predicate_true(lambda: True, "Enable this test when SEND_LOGS_TO_TELEMETRY is enabled")
     @patch("azurelinuxagent.common.logger.StdoutAppender.write")
     @patch("azurelinuxagent.common.logger.ConsoleAppender.write")
     @patch("azurelinuxagent.common.event.send_logs_to_telemetry", return_value=True)
@@ -416,6 +412,7 @@ class TestLogger(AgentTestCase):
 
         self.assertFalse(exception_caught, msg="Caught a Runtime Error. This should not have been raised.")
 
+    @skip_if_predicate_true(lambda: True, "Enable this test when SEND_LOGS_TO_TELEMETRY is enabled")
     @patch("azurelinuxagent.common.logger.StdoutAppender.write")
     @patch("azurelinuxagent.common.logger.ConsoleAppender.write")
     @patch("azurelinuxagent.common.event.send_logs_to_telemetry", return_value=True)
@@ -466,7 +463,7 @@ class TestAppender(AgentTestCase):
         AgentTestCase.setUp(self)
 
         self.lib_dir = tempfile.mkdtemp()
-        self.event_dir = os.path.join(self.lib_dir, "events")
+        self.event_dir = os.path.join(self.lib_dir, EVENTS_DIRECTORY)
         fileutil.mkdir(self.event_dir)
 
         self.log_file = tempfile.mkstemp(prefix="logfile-")[1]
@@ -520,14 +517,14 @@ class TestAppender(AgentTestCase):
         with open(self.log_file) as logfile:
             logcontent = logfile.readlines()
             self.assertEqual(1, len(logcontent))
-            self.assertRegex(logcontent[0], r"(.*WARNING\s*test-warn.*)")
+            self.assertRegex(logcontent[0], r"(.*WARNING\s\w+\s*test-warn.*)")
 
         logger.error("test-error")
         with open(self.log_file) as logfile:
             logcontent = logfile.readlines()
             # Levels are honored and Info, Verbose should not be written.
             self.assertEqual(1, len(logcontent))
-            self.assertRegex(logcontent[0], r"(.*ERROR\s*test-error.*)")
+            self.assertRegex(logcontent[0], r"(.*ERROR\s\w+\s*test-error.*)")
 
     def test_file_appender(self):
         logger.add_logger_appender(logger.AppenderType.FILE, logger.LogLevel.INFO, path=self.log_file)
@@ -540,9 +537,9 @@ class TestAppender(AgentTestCase):
             logcontent = logfile.readlines()
             # Levels are honored and Verbose should not be written.
             self.assertEqual(3, len(logcontent))
-            self.assertRegex(logcontent[0], r"(.*INFO\s*test-info.*)")
-            self.assertRegex(logcontent[1], r"(.*WARNING\s*test-warn.*)")
-            self.assertRegex(logcontent[2], r"(.*ERROR\s*test-error.*)")
+            self.assertRegex(logcontent[0], r"(.*INFO\s\w+\s*test-info.*)")
+            self.assertRegex(logcontent[1], r"(.*WARNING\s\w+\s*test-warn.*)")
+            self.assertRegex(logcontent[2], r"(.*ERROR\s\w+\s*test-error.*)")
 
     @patch("azurelinuxagent.common.event.send_logs_to_telemetry", return_value=True)
     @patch("azurelinuxagent.common.event.EventLogger.add_log_event")

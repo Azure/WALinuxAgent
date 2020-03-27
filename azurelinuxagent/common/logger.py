@@ -20,6 +20,7 @@ Log utils
 import sys
 from datetime import datetime, timedelta
 import os
+from threading import currentThread
 
 from azurelinuxagent.common.future import ustr
 
@@ -128,22 +129,35 @@ class Logger(object):
         else:
             msg = msg_format
             # This format is based on ISO-8601, Z represents UTC (Zero offset)
-        time = datetime.utcnow().isoformat() + "Z"
+        time = datetime.utcnow().strftime(u'%Y-%m-%dT%H:%M:%S.%fZ')
         level_str = LogLevel.STRINGS[level]
+        thread_name = currentThread().getName()
         if self.prefix is not None:
-            log_item = u"{0} {1} {2} {3}\n".format(time, level_str, self.prefix,
-                                                   msg)
+            log_item = u"{0} {1} {2} {3} {4}\n".format(time, level_str, thread_name, self.prefix, msg)
         else:
-            log_item = u"{0} {1} {2}\n".format(time, level_str, msg)
+            log_item = u"{0} {1} {2} {3}\n".format(time, level_str, thread_name, msg)
 
         log_item = ustr(log_item.encode('ascii', "backslashreplace"), 
                         encoding="ascii")
 
         for appender in self.appenders:
-            write_log(appender)
+            appender.write(level, log_item)
+            #
+            # TODO: we should actually call
+            #
+            #     write_log(appender)
+            #
+            # (see PR #1659). Before doing that, write_log needs to be thread-safe.
+            #
+            # This needs to be done when SEND_LOGS_TO_TELEMETRY is enabled.
+            #
+
         if self.logger != self:
             for appender in self.logger.appenders:
-                write_log(appender)
+                appender.write(level, log_item)
+                #
+                # TODO: call write_log instead (see comment above)
+                #
 
     def add_appender(self, appender_type, level, path, max_bytes=0, backup_count=0):
         appender = _create_logger_appender(appender_type, level, path, max_bytes=max_bytes, backup_count=backup_count)

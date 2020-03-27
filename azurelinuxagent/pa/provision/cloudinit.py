@@ -32,7 +32,7 @@ import azurelinuxagent.common.utils.shellutil as shellutil
 from azurelinuxagent.common.event import elapsed_milliseconds, WALAEventOperation
 from azurelinuxagent.common.exception import ProvisionError, ProtocolError
 from azurelinuxagent.common.future import ustr
-from azurelinuxagent.common.protocol import OVF_FILE_NAME
+from azurelinuxagent.common.protocol.util import OVF_FILE_NAME
 from azurelinuxagent.common.protocol.ovfenv import OvfEnv
 from azurelinuxagent.pa.provision.default import ProvisionHandler
 
