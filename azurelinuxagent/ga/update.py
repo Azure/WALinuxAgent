@@ -262,12 +262,10 @@ class UpdateHandler(object):
             initialize_event_logger_vminfo_common_parameters(protocol)
 
             # Log OS-specific info.
-            os_info_msg = u"Distro info: {0} {1}, osutil class being used: {2}, agent service name: {3}; " \
-                          u"Python version: {4}.{5}.{6}".format(DISTRO_NAME, DISTRO_VERSION, type(self.osutil).__name__,
-                                                                self.osutil.service_name, PY_VERSION_MAJOR,
-                                                                PY_VERSION_MINOR, PY_VERSION_MICRO)
+            os_info_msg = u"Distro: {0}-{1}; OSUtil: {2}; AgentService: {3}; Python: {4}.{5}.{6}".format(
+                DISTRO_NAME, DISTRO_VERSION, type(self.osutil).__name__, self.osutil.service_name, PY_VERSION_MAJOR,
+                PY_VERSION_MINOR, PY_VERSION_MICRO)
             logger.info(os_info_msg)
-
             add_event(AGENT_NAME, op=WALAEventOperation.OSInfo, message=os_info_msg)
 
             # Launch monitoring threads
