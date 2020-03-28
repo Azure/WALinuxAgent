@@ -689,6 +689,7 @@ def report_metric(category, counter, instance, value, log_event=False, reporter=
 def initialize_event_logger_vminfo_common_parameters(protocol, reporter=__event_logger__):
     reporter.initialize_vminfo_common_parameters(protocol)
 
+
 def add_event(name, op=WALAEventOperation.Unknown, is_success=True, duration=0, version=str(CURRENT_VERSION),
               message="", log_event=True, reporter=__event_logger__):
     if reporter.event_dir is None:
