@@ -18,22 +18,37 @@
 #
 
 import glob
+from heapq import heappush, heappop
 import os
 
-from azurelinuxagent.common.utils.fileutil import read_file, rm_files, rm_dirs, append_file
+from azurelinuxagent.common.future import ustr
+from azurelinuxagent.common.utils.fileutil import read_file, rm_files, rm_dirs, append_file, mkdir
 from azurelinuxagent.common.utils.shellutil import run_command
 import azurelinuxagent.common.logger as logger
 
 level = logger.LogLevel.INFO
-# logger.add_logger_appender(logger.AppenderType.FILE, level, path="/home/pagombar/waagent.log")log
 
 NORMAL_COLLECTION_MANIFEST_PATH = '/home/paula/manifest-normal'
 FULL_COLLECTION_MANIFEST_PATH = '/home/paula/manifest-full'
 OUTPUT_ARCHIVE_PATH = '/home/paula/archive.zip'
 OUTPUT_RESULTS_FILE_PATH = '/home/paula/results.txt'
-TEMPORARY_DIR = '/home/paula/log-tmp'
+TEMPORARY_DIR = '/home/paula/log-tmp-truncated'
+
+MUST_COLLECT_FILES_REGEX = [
+    '/var/log/waagent*',
+    '/var/lib/waagent/GoalState.*.xml',
+    '/var/lib/waagent/waagent_status.json',
+    '/var/lib/waagent/history/*.zip',
+    '/var/log/azure/*/*',
+    '/var/log/azure/*/*/*',
+    '/var/lib/waagent/ExtensionsConfig.*.xml',
+    '/var/lib/waagent/HostingEnvironmentConfig.xml',
+    '/var/lib/waagent/error.json'
+]
 
 FILE_SIZE_LIMIT = 30 * 1024 * 1024  # 30 MB
+
+# TODO: determine uncompressed archive size
 ARCHIVE_SIZE_LIMIT = 150 * 1024 * 1024  # 150 MB
 
 
@@ -43,14 +58,31 @@ class LogCollector(object):
         self.collection_mode = collection_mode
         self.manifest_file_path = FULL_COLLECTION_MANIFEST_PATH if collection_mode == "full" else \
             NORMAL_COLLECTION_MANIFEST_PATH
+        self.must_collect_files = self._expand_must_collect_files()
+
+    def _expand_must_collect_files(self):
+        manifest = []
+        for path in MUST_COLLECT_FILES_REGEX:
+            expanded_paths = self._expand_path(path)
+            manifest.extend(expanded_paths)
+
+        return manifest
 
     def _read_manifest_file(self):
         return read_file(self.manifest_file_path).splitlines()
 
     @staticmethod
-    def _clear_file(file_path):
-        if os.path.exists(file_path):
-            os.remove(file_path)
+    def _expand_path(path):
+        # The path either needs expanding, e.g. '/var/log/azure/*',
+        # or points ot a file, e.g. '/var/lib/waagent/HostingEnvironmentConfig.xml'
+        expanded = []
+        if os.path.exists(path):
+            expanded.append(path)
+        else:
+            paths = glob.glob(path)
+            if len(paths) > 0:
+                expanded.extend(paths)
+        return expanded
 
     @staticmethod
     def _parse_ll_command(folder):
@@ -64,22 +96,12 @@ class LogCollector(object):
 
     @staticmethod
     def _parse_copy_command(path):
-        # The entry either needs expanding, e.g. '/var/log/azure/*',
-        # or points ot a file, e.g. '/var/lib/waagent/HostingEnvironmentConfig.xml'
-        files = set()
-
-        if os.path.exists(path):
-            files.add(path)
-        else:
-            paths = glob.glob(path)
-            if len(paths) > 0:
-                files.update(paths)
-
+        files = LogCollector._expand_path(path)
         LogCollector._append_entries_to_file(files, OUTPUT_RESULTS_FILE_PATH)
         return files
 
     def _parse_manifest_file(self):
-        self._clear_file(OUTPUT_RESULTS_FILE_PATH)
+        rm_files(OUTPUT_RESULTS_FILE_PATH)
 
         files_to_collect = set()
         manifest_entries = self._read_manifest_file()
@@ -107,34 +129,36 @@ class LogCollector(object):
         return files_to_collect
 
     @staticmethod
-    def _keep_file_entry(file_path):
-        # TODO: add exception handling here
-        # try:
-        # except OSError
-        return os.path.exists(file_path) and os.path.getsize(
-            file_path) <= FILE_SIZE_LIMIT and file_path != OUTPUT_ARCHIVE_PATH
-
-    @staticmethod
     def _truncate_large_file(file_path):
         # Truncate large file to size limit (keep freshest entries), copy file to a temporary location and update
         # file path in list of files to collect
+        if os.path.getsize(file_path) <= FILE_SIZE_LIMIT:
+            return file_path
 
-        # tail -c N will output the last N bytes of a file
-        pass
+        try:
+            # Binary filed cannot be truncated
+            if os.path.splitext(file_path)[1] == ".gz":
+                return None
 
-    @staticmethod
-    def _reduce_archive_size():
-        # Remove low priority files iteratively while archive size is too large
-        # idea: old waagent logs first? syslog? sort by (size, age) and start from the top?
-        pass
+            print("file too big: {0}".format(file_path))
+
+            new_file_name = file_path.replace(os.path.sep, "_")
+            truncated_file_path = os.path.join(TEMPORARY_DIR, new_file_name)
+            mkdir(truncated_file_path)
+            print("truncated file path: {0}".format(truncated_file_path))
+
+            run_command("tail -c {0} {1} > {2}".format(FILE_SIZE_LIMIT, file_path, truncated_file_path),
+                        shell=True)
+            return truncated_file_path
+        except OSError as e:
+            print("EXCEPTION: {0}".format(ustr(e)))
+            return None
 
     def _get_list_of_files_to_collect(self):
-        files_to_collect = self._parse_manifest_file()
-
-        # handle large files here
-
-        files_to_collect.add(OUTPUT_RESULTS_FILE_PATH)
-        return filter(self._keep_file_entry, files_to_collect)
+        parsed_file_paths = self._parse_manifest_file()
+        prioritized_file_paths = self._get_priority_file_queue(parsed_file_paths)
+        final_files_to_collect = self._get_final_list_for_archive(prioritized_file_paths)
+        return final_files_to_collect
 
     @staticmethod
     def _append_entries_to_file(entries, file_path):
@@ -147,14 +171,47 @@ class LogCollector(object):
     @staticmethod
     def _create_list_file(files_to_collect):
         # save to a file to use as input for zip
-        tmp_file_path = os.path.join('/var/lib/waagent', 'files.lst')
-        LogCollector._clear_file(tmp_file_path)
+        tmp_file_path = os.path.join('/home/paula', 'files.lst')
+        rm_files(tmp_file_path)
         LogCollector._append_entries_to_file(files_to_collect, tmp_file_path)
         return tmp_file_path
 
     @staticmethod
     def _cleanup():
         rm_dirs(TEMPORARY_DIR)
+
+    def _get_file_priority(self, file):
+        if file in self.must_collect_files:
+            return self.must_collect_files.index(file)
+        else:
+            return 999999999
+
+    def _get_priority_file_queue(self, file_list):
+        priority_file_queue = []
+        for file in file_list:
+            priority = self._get_file_priority(file)
+            heappush(priority_file_queue, (priority, file))
+
+        return priority_file_queue
+
+    def _get_final_list_for_archive(self, priority_file_queue):
+        total_uncompressed_size = 0
+        files_to_collect = []
+
+        while priority_file_queue:
+            file_path = heappop(priority_file_queue)[1]  # (priority, file_path)
+            file_size = min(os.path.getsize(file_path), FILE_SIZE_LIMIT)
+
+            if total_uncompressed_size + file_size > ARCHIVE_SIZE_LIMIT:
+                print("Archive too big, done with adding files.")
+                break
+
+            final_file_path = self._truncate_large_file(file_path)
+
+            if final_file_path:
+                files_to_collect.append(final_file_path)
+
+        return files_to_collect
 
     def collect_logs(self):
         try:
@@ -170,6 +227,7 @@ class LogCollector(object):
             logger.info("success")
             return OUTPUT_ARCHIVE_PATH
         finally:
+            print("cleanup")
             self._cleanup()
 
 
