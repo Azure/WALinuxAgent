@@ -40,8 +40,7 @@ from azurelinuxagent.common.version import AGENT_NAME, AGENT_LONG_VERSION, \
 from azurelinuxagent.common.osutil import get_osutil
 from azurelinuxagent.common.utils import fileutil
 
-
-WAAGENT_LOG_FILE = "waagent.log"
+from azurelinuxagent.common.osutil.default import DEFAULT_LOG_DIR, WAAGENT_LOG_FILE
 
 
 class Agent(object):
@@ -66,21 +65,25 @@ class Agent(object):
         verbose = verbose or conf.get_logs_verbose()
         level = logger.LogLevel.VERBOSE if verbose else logger.LogLevel.INFO
         log_dir = self.osutil.get_agent_log_dir()
+
+        if os.path.isfile(log_dir):
+            # The passed log-dir was incorrect and we are defaulting to DEFAULT_LOG_DIR.
+            log_dir = DEFAULT_LOG_DIR
+            logger.error("{0} is a file, overriding the log directory with {1}".format(self.osutil.get_agent_log_dir(),
+                                                                                       log_dir))
         try:
-            if os.path.isfile(log_dir):
-                raise Exception("{0} is a file".format(log_dir))
             if not os.path.isdir(log_dir):
                 fileutil.mkdir(log_dir, mode=0o755, owner="root")
         except Exception as e:
-            logger.error(
-                "Exception occurred while creating "
-                "log directory {0}: {1}".format(log_dir, e))
+            logger.error("Exception occurred while creating log directory {0}: {1}".format(log_dir, e))
+
         log_file = os.path.join(log_dir, WAAGENT_LOG_FILE)
         logger.add_logger_appender(logger.AppenderType.FILE, level,
                                    path=log_file,
                                    max_bytes=self.osutil.get_agent_log_rotation_maxbytes(),
                                    backup_count=self.osutil.get_agent_log_rotation_backupcount(),
                                    logrotate_supported=self.osutil.supports_logrotate())
+
         if conf.get_logs_console():
             logger.add_logger_appender(logger.AppenderType.CONSOLE, level,
                                        path="/dev/console")

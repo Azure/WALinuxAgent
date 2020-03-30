@@ -100,6 +100,9 @@ BASE_CGROUPS = '/sys/fs/cgroup'
 STORAGE_DEVICE_PATH = '/sys/bus/vmbus/devices/'
 GEN2_DEVICE_ID = 'f8b3781a-1e82-4818-a1c3-63d806ec15bb'
 
+DEFAULT_LOG_DIR = '/var/log'
+WAAGENT_LOG_FILE = "waagent.log"
+
 
 class DefaultOSUtil(object):
     def __init__(self):
@@ -108,12 +111,6 @@ class DefaultOSUtil(object):
         self.disable_route_warning = False
         self.jit_enabled = False
         self.service_name = self.get_service_name()
-
-        # Log-related OS configurations.
-        # self.agent_log_dir = self.get_agent_log_dir()
-        # self.agent_log_rotation_maxbytes = self.get_agent_log_rotation_maxbytes()
-        # self.agent_log_rotation_backupcount = self.get_agent_log_rotation_backupcount()
-        # self._logrotate_supported = self.supports_logrotate()
 
     @staticmethod
     def get_service_name():
@@ -1438,12 +1435,12 @@ class DefaultOSUtil(object):
     
     def get_agent_log_dir(self):
         """
-        Default location of the log files. Make sure if there are any changes to this, the log-fetch utility needs to
-        change as well.
+        Default location of the log files. This should always be a folder. Make sure if there are any changes to this,
+        the log-fetch utility needs to change as well.
 
         :return: bool: Does the OS support logrotate
         """
-        return '/var/log'
+        return DEFAULT_LOG_DIR
 
     def get_agent_log_rotation_maxbytes(self):
         """

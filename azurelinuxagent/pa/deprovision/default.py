@@ -33,6 +33,8 @@ from azurelinuxagent.common.osutil import get_osutil
 from azurelinuxagent.common.protocol.util import get_protocol_util
 from azurelinuxagent.ga.exthandlers import HANDLER_NAME_PATTERN
 
+from azurelinuxagent.common.osutil.default import WAAGENT_LOG_FILE, DEFAULT_LOG_DIR
+
 
 def read_input(message):
     if sys.version_info[0] >= 3:
@@ -77,7 +79,6 @@ class DeprovisionHandler(object):
         actions.append(DeprovisionAction(self.osutil.del_account, 
                                          [username]))
 
-
     def regen_ssh_host_key(self, warnings, actions):
         warnings.append("WARNING! All SSH host key pairs will be deleted.")
         actions.append(DeprovisionAction(fileutil.rm_files,
@@ -92,7 +93,13 @@ class DeprovisionHandler(object):
         actions.append(DeprovisionAction(fileutil.rm_dirs, dirs))
 
     def del_files(self, warnings, actions):
-        log_file = os.path.join(self.osutil.get_agent_log_dir(), "waagent.log*")
+        # The passed log-dir was incorrect and we defaulted to DEFAULT_LOG_DIR during the setup of log. Check
+        # azurelinuxagent.agent.Agent.__init__ to see the _Init log_ section, which changes the log_dir if the passed
+        # log_dir is a file and not a directory
+        log_file = os.path.join(self.osutil.get_agent_log_dir(), WAAGENT_LOG_FILE + "*") \
+            if not os.path.isfile(self.osutil.get_agent_log_dir()) \
+            else os.path.join(DEFAULT_LOG_DIR, WAAGENT_LOG_FILE + "*")
+
         files = ['/root/.bash_history', log_file]
         actions.append(DeprovisionAction(fileutil.rm_files, files))
 
