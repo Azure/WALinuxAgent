@@ -93,7 +93,15 @@ class DeprovisionHandler(object):
         actions.append(DeprovisionAction(fileutil.rm_dirs, dirs))
 
     def del_files(self, warnings, actions):
-        # The passed log-dir was incorrect and we defaulted to DEFAULT_LOG_DIR during the setup of log. Check
+        """
+        Clean up files agent related files during deprovisioning - the log files and root's bash_history file.
+
+        :param warnings:
+        :param actions:
+        """
+
+        # We do the following check for isfile(get_agent_log_dir()) as a precaution in case the passed log-dir was
+        # incorrect and we defaulted to DEFAULT_LOG_DIR during the setup of log. Check
         # azurelinuxagent.agent.Agent.__init__ to see the _Init log_ section, which changes the log_dir if the passed
         # log_dir is a file and not a directory
         log_file = os.path.join(self.osutil.get_agent_log_dir(), WAAGENT_LOG_FILE + "*") \
