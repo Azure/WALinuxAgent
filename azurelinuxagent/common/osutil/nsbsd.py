@@ -101,7 +101,7 @@ class NSBSDOSUtil(FreeBSDOSUtil):
         """
         path, thumbprint, value = pubkey
 
-        # overide parameters
+        # override parameters
         super(NSBSDOSUtil, self).deploy_ssh_pubkey('admin',
                                                    ["/usr/Firewall/.ssh/authorized_keys", thumbprint, value])
 

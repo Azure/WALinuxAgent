@@ -1427,7 +1427,7 @@ class DefaultOSUtil(object):
 
     def supports_logrotate(self):
         """
-        logrotate is allows automatic rotation, compression, removal, and mailing of log files.
+        logrotate allows automatic rotation, compression, removal, and mailing of log files.
 
         :return: bool: Does the OS support logrotate
         """
@@ -1438,23 +1438,23 @@ class DefaultOSUtil(object):
         Default location of the log files. This should always be a folder. Make sure if there are any changes to this,
         the log-fetch utility needs to change as well.
 
-        :return: bool: Does the OS support logrotate
+        :return: str: Default log directory path.
         """
         return DEFAULT_LOG_DIR
 
     def get_agent_log_rotation_maxbytes(self):
         """
-        For cases where logrotate isn't available, we need to specify the maxbytes of the current log file before
+        For cases where logrotate isn't available, we need to specify the max bytes of the current log file before
         rotation.
 
-        :return: bool: Does the OS support logrotate
+        :return: int: max size of the log file before rotating the log file
         """
         return 0
 
     def get_agent_log_rotation_backupcount(self):
         """
-        For cases where logrotate isn't available, specify the number of log backups are preserved.
+        For cases where logrotate isn't available, specify the number of log backups that are preserved.
 
-        :return: bool: Does the OS support logrotate
+        :return: int: Number of log file backups
         """
         return 0

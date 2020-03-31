@@ -94,7 +94,7 @@ class DeprovisionHandler(object):
 
     def del_files(self, warnings, actions):
         """
-        Clean up files agent related files during deprovisioning - the log files and root's bash_history file.
+        Clean up agent related files during deprovisioning - the log files and root's bash_history file.
 
         :param warnings:
         :param actions:
@@ -105,7 +105,7 @@ class DeprovisionHandler(object):
         # azurelinuxagent.agent.Agent.__init__ to see the _Init log_ section, which changes the log_dir if the passed
         # log_dir is a file and not a directory
         log_file = os.path.join(self.osutil.get_agent_log_dir(), WAAGENT_LOG_FILE + "*") \
-            if not os.path.isfile(self.osutil.get_agent_log_dir()) \
+            if os.path.exists(self.osutil.get_agent_log_dir()) and os.path.isdir(self.osutil.get_agent_log_dir()) \
             else os.path.join(DEFAULT_LOG_DIR, WAAGENT_LOG_FILE + "*")
 
         files = ['/root/.bash_history', log_file]

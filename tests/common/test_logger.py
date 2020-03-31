@@ -475,7 +475,11 @@ class TestAppender(AgentTestCase):
     def tearDown(self):
         AgentTestCase.tearDown(self)
         logger.reset_periodic()
+
         fileutil.rm_dirs(self.event_dir)
+        fileutil.rm_dirs(self.lib_dir)
+        fileutil.rm_dirs(self.log_folder)
+
         logger.DEFAULT_LOGGER.appenders *= 0
 
     @patch("azurelinuxagent.common.event.send_logs_to_telemetry", return_value=True)
