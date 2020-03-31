@@ -1397,6 +1397,7 @@ class TestExtension(ExtensionTestCase):
         # Ensure initial install is successful, but enable fails
         patch_get_enable_command.call_count = 0
         patch_get_enable_command.return_value = "exit.sh 1"
+        # Do something more here
         exthandlers_handler.run()
 
         self.assertEqual(1, patch_get_enable_command.call_count)
