@@ -23,6 +23,7 @@ from azurelinuxagent.common.future import ustr
 
 import azurelinuxagent.common.conf as conf
 import azurelinuxagent.common.logger as logger
+from azurelinuxagent.common.protocol.goal_state import ExtensionsConfig
 from azurelinuxagent.common.utils import fileutil, restutil
 from azurelinuxagent.common.exception import ProtocolError
 
@@ -41,13 +42,23 @@ consumers should not worry from where the ExtensionsConfig came. They should als
 of sequence numbers or incarnations, which are specific to FastTrack and Fabric respectfully
 """
 class GenericExtensionsConfig(object):
-    def __init__(self, extensions_config, changed):
+    def __init__(self, extensions_config, changed, ext_conf_retriever):
         self.extensions_config = extensions_config
         self.changed = changed
+        self._ext_conf_retriever = ext_conf_retriever
+
+        # Copy all properties from extensions_config to make this look like one
+        self.__dict__.update(extensions_config.__dict__)
+
+    def commit_processed(self):
+        self._ext_conf_retriever.commit_processed()
+
+    def get_description(self):
+        return self._ext_conf_retriever.get_description()
 
 class ExtensionsConfigRetriever(object):
-    def __init__(self, protocol):
-        self._protocol = protocol
+    def __init__(self, wire_client):
+        self._wire_client = wire_client
         self._last_incarnation = None
         self._last_seqNo = None
         self._last_fast_track_extensionsConfig = None
@@ -57,16 +68,19 @@ class ExtensionsConfigRetriever(object):
         self._pending_incarnation = None
         self._is_startup = True
 
-    def get_ext_config(self):
+    def get_ext_config(self, incarnation, ext_conf_uri):
+        # If we don't have a uri, return an empty extensions config
+        if ext_conf_uri is None:
+            return GenericExtensionsConfig(ExtensionsConfig(None), False, self)
+
         # Get the Fabric goal state and whether it changed
-        goal_state = self._protocol.get_goal_state()
-        fabric_changed = self._get_fabric_changed(goal_state)
+        fabric_changed = self._get_fabric_changed(incarnation)
 
         # Get the VmArtifactsProfile and whether fast track changed, if enabled
         artifacts_profile = None
         fast_track_changed = False
         if conf.get_extensions_fast_track_enabled():
-            artifacts_profile = self._protocol.get_artifacts_profile()
+            artifacts_profile = self._wire_client.get_artifacts_profile()
             fast_track_changed = self._get_fast_track_changed(artifacts_profile)
 
         self._pending_mode = self._decide_what_to_process(fabric_changed, fast_track_changed)
@@ -78,7 +92,8 @@ class ExtensionsConfigRetriever(object):
         extensions_config = None
         changed = False
         if self._pending_mode == GOAL_STATE_SOURCE_FABRIC:
-            extensions_config = goal_state.ext_conf
+            xml_text = self._wire_client.fetch_config(ext_conf_uri, self._wire_client.get_header())
+            extensions_config = ExtensionsConfig(xml_text)
             changed = fabric_changed | self._is_startup
         else:
             if artifacts_profile is None:
@@ -92,7 +107,7 @@ class ExtensionsConfigRetriever(object):
 
         if changed:
             if self._pending_mode == GOAL_STATE_SOURCE_FABRIC:
-                self._pending_incarnation = int(goal_state.incarnation)
+                self._pending_incarnation = int(incarnation)
                 msg = u"Handle extensions updates for incarnation {0}".format(self._pending_incarnation)
                 logger.verbose(msg)
             else:
@@ -102,7 +117,7 @@ class ExtensionsConfigRetriever(object):
 
         self._is_startup = False
 
-        return GenericExtensionsConfig(extensions_config, changed)
+        return GenericExtensionsConfig(extensions_config, changed, self)
 
     def commit_processed(self):
         if self._last_mode is None:
@@ -142,17 +157,18 @@ class ExtensionsConfigRetriever(object):
         sequence_number = self._last_seqNo
         if sequence_number is None:
             sequence_number = self._get_sequence_number()
-        if sequence_number is None or sequence_number < artifacts_profile.get_sequence_number():
+        if sequence_number is None or sequence_number != artifacts_profile.get_sequence_number():
             return True
         return False
 
-    def _get_fabric_changed(self, goal_state):
-        if goal_state is None:
-            return False
+    def _get_fabric_changed(self, goal_state_incarnation):
+        if goal_state_incarnation is None:
+            return True
+
         incarnation = self._last_incarnation
         if incarnation is None:
             incarnation = self._get_incarnation()
-        if incarnation is None or int(incarnation) < int(goal_state.incarnation):
+        if incarnation is None or int(incarnation) != int(goal_state_incarnation):
             return True
         return False
 

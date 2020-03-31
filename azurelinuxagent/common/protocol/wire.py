@@ -33,6 +33,7 @@ from azurelinuxagent.common.event import add_event, add_periodic, WALAEventOpera
 from azurelinuxagent.common.exception import ProtocolNotFoundError, \
     ResourceGoneError, ExtensionDownloadError, InvalidContainerError, ProtocolError, HttpError
 from azurelinuxagent.common.future import httpclient, bytebuffer
+from azurelinuxagent.common.protocol.extensions_config_retriever import ExtensionsConfigRetriever
 from azurelinuxagent.common.protocol.goal_state import GoalState, TRANSPORT_CERT_FILE_NAME, TRANSPORT_PRV_FILE_NAME, \
     ExtensionsConfig
 from azurelinuxagent.common.protocol.hostplugin import HostPluginProtocol
@@ -51,7 +52,6 @@ ROLE_PROP_URI = "http://{0}/machine?comp=roleProperties"
 TELEMETRY_URI = "http://{0}/machine?comp=telemetrydata"
 
 WIRE_SERVER_ADDR_FILE_NAME = "WireServer"
-INCARNATION_FILE_NAME = "Incarnation"
 GOAL_STATE_FILE_NAME = "GoalState.{0}.xml"
 HOSTING_ENV_FILE_NAME = "HostingEnvironmentConfig.xml"
 SHARED_CONF_FILE_NAME = "SharedConfig.xml"
@@ -137,16 +137,10 @@ class WireProtocol(Protocol):
         valid_pkg_list = ga_manifest.pkg_list
         return valid_pkg_list
 
-    def get_goal_state(self):
-        goal_state = self.client.get_goal_state()
-        return goal_state
-
-    def get_ext_handlers(self):
+    def get_ext_config(self):
         logger.verbose("Get extension handler config")
-        goal_state = self.client.get_goal_state()
         ext_conf = self.client.get_ext_conf()
-        # In wire protocol, incarnation is equivalent to ETag
-        return ext_conf.ext_handlers, goal_state.incarnation
+        return ext_conf
 
     def get_ext_handler_pkgs(self, ext_handler):
         logger.verbose("Get extension handler package")
@@ -542,6 +536,7 @@ class WireClient(object):
         self.vm_artifacts_profile_etag = None
         self.status_blob = StatusBlob(self)
         self.goal_state_flusher = StateFlusher(conf.get_lib_dir())
+        self.ext_config_retriever = ExtensionsConfigRetriever(self)
 
     def get_endpoint(self):
         return self._endpoint
@@ -780,14 +775,15 @@ class WireClient(object):
         for retry in range(1, max_retry + 1):
             try:
                 if refresh_type == WireClient._UpdateType.HostPlugin:
-                    goal_state = GoalState.fetch_goal_state(self)
+                    goal_state = GoalState.fetch_goal_state(self, self.ext_config_retriever)
                     self._update_host_plugin(goal_state.container_id, goal_state.role_config_name)
                     return
 
                 if self._goal_state is None or refresh_type == WireClient._UpdateType.GoalStateForced:
-                    new_goal_state = GoalState.fetch_full_goal_state(self)
+                    new_goal_state = GoalState.fetch_full_goal_state(self, self.ext_config_retriever)
                 else:
-                    new_goal_state = GoalState.fetch_full_goal_state_if_incarnation_different_than(self, self._goal_state.incarnation)
+                    new_goal_state = GoalState.fetch_full_goal_state_if_changed(self, self.ext_config_retriever,
+                                                                                self._goal_state.incarnation)
 
                 if new_goal_state is not None:
                     self._goal_state = new_goal_state
@@ -823,9 +819,6 @@ class WireClient(object):
             logger.warn("Failed to save the previous goal state to the history folder: {0}", ustr(e))
 
         try:
-            local_file = os.path.join(conf.get_lib_dir(), INCARNATION_FILE_NAME)
-            self.save_cache(local_file, self._goal_state.incarnation)
-
             def save_if_not_none(goal_state_property, file_name):
                 file_path = os.path.join(conf.get_lib_dir(), file_name)
 
@@ -1225,7 +1218,7 @@ class WireClient(object):
 
     def get_host_plugin(self):
         if self._host_plugin is None:
-            goal_state = GoalState.fetch_goal_state(self)
+            goal_state = GoalState.fetch_goal_state(self, self.ext_config_retriever)
             self._set_host_plugin(HostPluginProtocol(self.get_endpoint(),
                                                      goal_state.container_id,
                                                      goal_state.role_config_name))
@@ -1244,6 +1237,9 @@ class WireClient(object):
 
     def get_artifacts_profile(self):
         artifacts_profile = None
+
+        if self._goal_state is None:
+            return None
 
         if self.has_artifacts_profile_blob():
             blob = self.get_ext_conf().artifacts_profile_blob

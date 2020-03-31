@@ -43,7 +43,7 @@ class GoalState(object):
     #
     ContainerID = "00000000-0000-0000-0000-000000000000"
 
-    def __init__(self, wire_client, full_goal_state=False, base_incarnation=None):
+    def __init__(self, wire_client, ext_config_retriever, full_goal_state=False, base_incarnation=None):
         """
         Fetches the goal state using the given wire client.
 
@@ -82,11 +82,19 @@ class GoalState(object):
             fetch_full_goal_state = True
             reason = 'new incarnation'
 
+        # We always need to retrieve the extensions config because this may be a FastTrack config,
+        # and the only way we'll know is to retrieve it.
+        try:
+            uri = findtext(xml_doc, "ExtensionsConfig")
+            self.ext_conf = ext_config_retriever.get_ext_config(self.incarnation, uri)
+        except Exception as e:
+            logger.warn("Fetching the extensions config failed: {0}", ustr(e))
+            raise
+
         if not fetch_full_goal_state:
             self.hosting_env = None
             self.shared_conf = None
             self.certs = None
-            self.ext_conf = None
             self.remote_access = None
             return
 
@@ -108,13 +116,6 @@ class GoalState(object):
                 xml_text = wire_client.fetch_config(uri, wire_client.get_header_for_cert())
                 self.certs = Certificates(xml_text)
 
-            uri = findtext(xml_doc, "ExtensionsConfig")
-            if uri is None:
-                self.ext_conf = ExtensionsConfig(None)
-            else:
-                xml_text = wire_client.fetch_config(uri, wire_client.get_header())
-                self.ext_conf = ExtensionsConfig(xml_text)
-
             uri = findtext(container, "RemoteAccessInfo")
             if uri is None:
                 self.remote_access = None
@@ -128,26 +129,31 @@ class GoalState(object):
             logger.info('Fetch goal state completed')
 
     @staticmethod
-    def fetch_goal_state(wire_client):
+    def fetch_goal_state(wire_client, ext_config_retriever):
         """
         Fetches the goal state, not including any nested properties (such as extension config).
         """
-        return GoalState(wire_client)
+        return GoalState(wire_client, ext_config_retriever)
 
     @staticmethod
-    def fetch_full_goal_state(wire_client):
+    def fetch_full_goal_state(wire_client, ext_config_retriever):
         """
         Fetches the full goal state, including nested properties (such as extension config).
         """
-        return GoalState(wire_client, full_goal_state=True)
+        return GoalState(wire_client, ext_config_retriever, full_goal_state=True)
 
     @staticmethod
-    def fetch_full_goal_state_if_incarnation_different_than(wire_client, incarnation):
+    def fetch_full_goal_state_if_changed(wire_client, ext_config_retriever, incarnation):
         """
-        Fetches the full goal state if the new incarnation is different than 'incarnation', otherwise returns None.
+        Fetches the full goal state if the new incarnation is different than 'incarnation' or if the extensions config
+        has changed (FastTrack), otherwise returns None.
         """
-        goal_state = GoalState(wire_client, base_incarnation=incarnation)
-        return goal_state if goal_state.incarnation != incarnation else None
+        goal_state = GoalState(wire_client, ext_config_retriever, base_incarnation=incarnation)
+        if goal_state.incarnation != incarnation:
+            return goal_state
+        elif goal_state.ext_conf.changed:
+            return goal_state
+        return None
 
 
 class HostingEnv(object):

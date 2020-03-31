@@ -48,7 +48,6 @@ from azurelinuxagent.common.protocol.restapi import ExtensionStatus, ExtensionSu
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
 from azurelinuxagent.common.version import AGENT_NAME, CURRENT_VERSION, DISTRO_NAME, DISTRO_VERSION, \
     GOAL_STATE_AGENT_VERSION, PY_VERSION_MAJOR, PY_VERSION_MICRO, PY_VERSION_MINOR
-from azurelinuxagent.ga.goal_state_retriever import ExtensionsConfigRetriever, GenericExtensionsConfig
 
 _HANDLER_PATTERN = r'^([^-]+)-(\d+(?:\.\d+)*)'
 _HANDLER_PKG_PATTERN = re.compile(_HANDLER_PATTERN + r'\.zip$', re.IGNORECASE)
@@ -229,7 +228,6 @@ def get_exthandlers_handler(protocol):
 class ExtHandlersHandler(object):
     def __init__(self, protocol):
         self.protocol = protocol
-        self.goal_state_retriever = ExtensionsConfigRetriever(protocol)
         self.ext_config = None
         self.ext_handlers = None
         self.log_report = False
@@ -240,9 +238,9 @@ class ExtHandlersHandler(object):
         self.get_artifact_error_state = ErrorState(min_timedelta=ERROR_STATE_DELTA_INSTALL)
 
     def run(self):
-        self.ext_config = None
         try:
-            self.ext_config = self.goal_state_retriever.get_ext_config()
+            self.ext_config = self.protocol.get_ext_config()
+            self.ext_handlers = self.ext_config.ext_handlers
             self.get_artifact_error_state.reset()
         except Exception as e:
             msg = u"Exception retrieving extension handlers: {0}".format(ustr(e))
@@ -269,7 +267,7 @@ class ExtHandlersHandler(object):
 
             if self._extension_processing_allowed():
                 self.handle_ext_handlers()
-                self.goal_state_retriever.commit_processed()
+                self.ext_config.commit_processed()
 
             self.report_ext_handlers_status()
             self._cleanup_outdated_handlers()
@@ -290,7 +288,7 @@ class ExtHandlersHandler(object):
         return self.ext_config.changed
 
     def goal_state_description(self):
-        return self.goal_state_retriever.get_description()
+        return self.ext_config.get_description()
 
     def _cleanup_outdated_handlers(self):
         handlers = []
@@ -367,16 +365,12 @@ class ExtHandlersHandler(object):
         return True
 
     def handle_ext_handlers(self):
-        if self.ext_config is None or \
-                self.ext_config.extensions_config is None or \
-                self.ext_config.extensions_config.ext_handlers is None or \
-                self.ext_config.extensions_config.ext_handlers.extHandlers is None or \
-                len(self.ext_config.extensions_config.ext_handlers.extHandlers) == 0:
+        if self.ext_handlers is None or \
+                  len(self.ext_handlers.extHandlers) == 0:
             logger.verbose("No extension handler config found")
             return
 
         wait_until = datetime.datetime.utcnow() + datetime.timedelta(minutes=_DEFAULT_EXT_TIMEOUT_MINUTES)
-        self.ext_handlers = self.ext_config.extensions_config.ext_handlers
         extHandlers = self.ext_handlers.extHandlers
         max_dep_level = max([handler.sort_key() for handler in extHandlers])
 
@@ -453,7 +447,7 @@ class ExtHandlersHandler(object):
                 if self.log_not_changed:
                     ext_handler_i.logger.verbose("Version {0} is current for {1}",
                                                  ext_handler_i.pkg.version,
-                                                 self.goal_state_retriever.get_description())
+                                                 self.ext_config.get_description())
                     self.log_not_changed = False
                 return
 
