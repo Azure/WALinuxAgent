@@ -996,7 +996,8 @@ class TestExtension(ExtensionTestCase):
     def test_handle_ext_handlers_on_hold_true(self, *args):
         test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE)
         exthandlers_handler, protocol = self._create_mock(test_data, *args)
-        exthandlers_handler.ext_handlers= protocol.get_ext_handlers()
+        exthandlers_handler.ext_config = protocol.get_ext_config()
+        exthandlers_handler.ext_handlers = exthandlers_handler.ext_config.ext_handlers
         mock_in_vm_artifacts_profile = InVMArtifactsProfile(MagicMock())
         mock_in_vm_artifacts_profile.is_on_hold = Mock(return_value=True)
         mock_in_vm_artifacts_profile.get_sequence_number = Mock(return_value=1)
@@ -1012,13 +1013,15 @@ class TestExtension(ExtensionTestCase):
         # enable extension handling blocking
         exthandlers_handler._extension_processing_allowed = Mock(return_value=True)
         with patch.object(ExtHandlersHandler, 'handle_ext_handlers') as patch_handle_ext_handlers:
+            protocol.update_goal_state()
             exthandlers_handler.run()
             self.assertEqual(1, patch_handle_ext_handlers.call_count)
 
     def test_handle_ext_handlers_on_hold_false(self, *args):
         test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE)
         exthandlers_handler, protocol = self._create_mock(test_data, *args)
-        exthandlers_handler.ext_handlers = protocol.get_ext_handlers()
+        exthandlers_handler.ext_config = protocol.get_ext_config()
+        exthandlers_handler.ext_handlers = exthandlers_handler.ext_config.ext_handlers
         exthandlers_handler.protocol = protocol
 
         # enable extension handling blocking
@@ -1037,6 +1040,7 @@ class TestExtension(ExtensionTestCase):
         # Test when in_vm_artifacts_profile is not available
         protocol.get_artifacts_profile = Mock(return_value=None)
         with patch.object(ExtHandlersHandler, 'handle_ext_handler') as patch_handle_ext_handler:
+            protocol.update_goal_state()
             exthandlers_handler.run()
             self.assertEqual(1, patch_handle_ext_handler.call_count)
 
@@ -1052,11 +1056,12 @@ class TestExtension(ExtensionTestCase):
         # Disable extension handling blocking in the first run and enable in the 2nd run
         with patch.object(exthandlers_handler, '_extension_processing_allowed', side_effect=[False, True]):
             exthandlers_handler.run()
-            self.assertIsNone(exthandlers_handler.goal_state_retriever._last_incarnation,
+            self.assertIsNone(protocol.client.ext_config_retriever._last_incarnation,
                         "Last incarnation should not be populated if extension processing is disabled")
             mock_in_vm_artifacts_profile.is_on_hold = Mock(return_value=False)
+            protocol.update_goal_state()
             exthandlers_handler.run()
-            self.assertEqual(1, exthandlers_handler.goal_state_retriever._last_incarnation,
+            self.assertEqual("1", protocol.client.ext_config_retriever._last_incarnation,
                              "Last incarnation should be populated if extension processing is enabled")
 
     def _assert_ext_status(self, report_ext_status, expected_status,
@@ -1080,6 +1085,7 @@ class TestExtension(ExtensionTestCase):
         self.assertTrue(os.path.isfile(status_file))
         os.remove(status_file)
 
+        protocol.update_goal_state()
         exthandlers_handler.run()
         self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.0.0")
         self._assert_ext_status(protocol.report_ext_status, ValidHandlerStatus.error, 0)
@@ -1261,9 +1267,9 @@ class TestExtension(ExtensionTestCase):
                         datafile = mockwiredata.DATA_FILE
 
                 _, protocol = self._create_mock(mockwiredata.WireProtocolData(datafile), *args)
-                ext_handlers = protocol.get_ext_handlers()
-                self.assertEqual(1, len(ext_handlers.extHandlers))
-                ext_handler = ext_handlers.extHandlers[0]
+                ext_config = protocol.get_ext_config()
+                self.assertEqual(1, len(ext_config.ext_handlers.extHandlers))
+                ext_handler = ext_config.ext_handlers.extHandlers[0]
                 self.assertEqual('OSTCExtensions.ExampleHandlerLinux', ext_handler.name)
                 self.assertEqual(config_version, ext_handler.properties.version, "config version.")
                 ExtHandlerInstance(ext_handler, protocol).decide_version()
@@ -1365,6 +1371,7 @@ class TestExtension(ExtensionTestCase):
         self._assert_handler_status(protocol.report_vm_status, "NotReady", expected_ext_count=0, version="1.0.0")
 
         # Ensure subsequent no further retries are made
+        protocol.update_goal_state()
         exthandlers_handler.run()
         self.assertEqual(1, patch_install.call_count)
         self.assertEqual(2, protocol.report_vm_status.call_count)
@@ -1397,13 +1404,13 @@ class TestExtension(ExtensionTestCase):
         # Ensure initial install is successful, but enable fails
         patch_get_enable_command.call_count = 0
         patch_get_enable_command.return_value = "exit.sh 1"
-        # Do something more here
         exthandlers_handler.run()
 
         self.assertEqual(1, patch_get_enable_command.call_count)
         self.assertEqual(1, protocol.report_vm_status.call_count)
         self._assert_handler_status(protocol.report_vm_status, "NotReady", expected_ext_count=1, version="1.0.0")
 
+        protocol.update_goal_state()
         exthandlers_handler.run()
         self.assertEqual(1, patch_get_enable_command.call_count)
         self.assertEqual(2, protocol.report_vm_status.call_count)
@@ -1457,6 +1464,7 @@ class TestExtension(ExtensionTestCase):
         self._assert_handler_status(protocol.report_vm_status, "NotReady", expected_ext_count=1, version="1.0.0")
 
         # Ensure there are no further retries
+        protocol.update_goal_state()
         exthandlers_handler.run()
 
         self.assertEqual(1, patch_get_disable_command.call_count)
@@ -1568,6 +1576,7 @@ class TestExtension(ExtensionTestCase):
             # Ensure we are processing the same goal state only once
             loop_run = 5
             for x in range(loop_run):
+                protocol.update_goal_state()
                 exthandlers_handler.run()
 
             update_command_count = len([extension_call for extension_call in extension_calls
@@ -1610,6 +1619,7 @@ class TestExtension(ExtensionTestCase):
             # Ensure we are processing the same goal state only once
             loop_run = 5
             for x in range(loop_run):
+                protocol.update_goal_state()
                 exthandlers_handler.run()
 
             self.assertEqual(1, patch_get_disable_command.call_count)
@@ -1633,6 +1643,7 @@ class TestExtension(ExtensionTestCase):
             # Ensure we are processing the same goal state only once
             loop_run = 5
             for x in range(loop_run):
+                protocol.update_goal_state()
                 exthandlers_handler.run()
 
             self.assertEqual(1, patch_get_disable_command.call_count)
@@ -2032,7 +2043,8 @@ class TestExtensionSequencing(AgentTestCase):
         protocol.get_artifacts_profile = MagicMock()
 
         handler = get_exthandlers_handler(protocol)
-        handler.ext_handlers = protocol.get_ext_handlers()
+        handler.ext_config = protocol.get_ext_config()
+        handler.ext_handlers = handler.ext_config.ext_handlers
         conf.get_enable_overprovisioning = Mock(return_value=False)
 
         def wait_for_handler_successful_completion(prev_handler, wait_until):

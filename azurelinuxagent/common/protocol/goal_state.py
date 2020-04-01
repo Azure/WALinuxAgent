@@ -43,7 +43,7 @@ class GoalState(object):
     #
     ContainerID = "00000000-0000-0000-0000-000000000000"
 
-    def __init__(self, wire_client, ext_config_retriever, full_goal_state=False, base_incarnation=None):
+    def __init__(self, wire_client, ext_config_retriever, current_goal_state=None):
         """
         Fetches the goal state using the given wire client.
 
@@ -58,102 +58,143 @@ class GoalState(object):
 
         """
         uri = GOAL_STATE_URI.format(wire_client.get_endpoint())
-        self.xml_text = wire_client.fetch_config(uri, wire_client.get_header())
-        xml_doc = parse_doc(self.xml_text)
+        xml_text = wire_client.fetch_config(uri, wire_client.get_header())
+        self._xml_doc = parse_doc(xml_text)
 
-        self.incarnation = findtext(xml_doc, "Incarnation")
-        self.expected_state = findtext(xml_doc, "ExpectedState")
-        role_instance = find(xml_doc, "RoleInstance")
+        self._ext_config_retriever = ext_config_retriever
+        self._wire_client = wire_client
+
+        # Cached properties
+        # Implementation note: cached_property was not used because it considers a None value to mean the property
+        # wasn't retrieved
+        self._ext_conf = None
+        self._ext_conf_retrieved = False
+        self._hosting_env = None
+        self._hosting_env_retrieved = False
+        self._shared_conf = None
+        self._shared_conf_retrieved = False
+        self._certs = None
+        self._certs_retrieved = False
+        self._remote_access = None
+        self._remote_access_retrieved = False
+        self._artifacts_profile_blob_url = None
+        self._artifacts_profile_blob_url_retrieved = False
+
+        self.incarnation = findtext(self._xml_doc, "Incarnation")
+        self.expected_state = findtext(self._xml_doc, "ExpectedState")
+        role_instance = find(self._xml_doc, "RoleInstance")
         self.role_instance_id = findtext(role_instance, "InstanceId")
         role_config = find(role_instance, "Configuration")
         self.role_config_name = findtext(role_config, "ConfigName")
-        container = find(xml_doc, "Container")
+        container = find(self._xml_doc, "Container")
         self.container_id = findtext(container, "ContainerId")
-        lbprobe_ports = find(xml_doc, "LBProbePorts")
+        lbprobe_ports = find(self._xml_doc, "LBProbePorts")
         self.load_balancer_probe_port = findtext(lbprobe_ports, "Port")
 
         GoalState.ContainerID = self.container_id
 
-        fetch_full_goal_state = False
-        if full_goal_state:
-            fetch_full_goal_state = True
-            reason = 'force update'
-        elif base_incarnation is not None and self.incarnation != base_incarnation:
-            fetch_full_goal_state = True
-            reason = 'new incarnation'
-
-        # We always need to retrieve the extensions config because this may be a FastTrack config,
-        # and the only way we'll know is to retrieve it.
-        try:
-            uri = findtext(xml_doc, "ExtensionsConfig")
-            self.ext_conf = ext_config_retriever.get_ext_config(self.incarnation, uri)
-        except Exception as e:
-            logger.warn("Fetching the extensions config failed: {0}", ustr(e))
-            raise
-
-        if not fetch_full_goal_state:
-            self.hosting_env = None
-            self.shared_conf = None
-            self.certs = None
-            self.remote_access = None
-            return
-
-        logger.info('Fetching new goal state [incarnation {0} ({1})]', self.incarnation, reason)
-
-        try:
-            uri = findtext(xml_doc, "HostingEnvironmentConfig")
-            xml_text = wire_client.fetch_config(uri, wire_client.get_header())
-            self.hosting_env = HostingEnv(xml_text)
-
-            uri = findtext(xml_doc, "SharedConfig")
-            xml_text = wire_client.fetch_config(uri, wire_client.get_header())
-            self.shared_conf = SharedConfig(xml_text)
-
-            uri = findtext(xml_doc, "Certificates")
-            if uri is None:
-                self.certs = None
-            else:
-                xml_text = wire_client.fetch_config(uri, wire_client.get_header_for_cert())
-                self.certs = Certificates(xml_text)
-
-            uri = findtext(container, "RemoteAccessInfo")
-            if uri is None:
-                self.remote_access = None
-            else:
-                xml_text = wire_client.fetch_config(uri, wire_client.get_header_for_cert())
-                self.remote_access = RemoteAccess(xml_text)
-        except Exception as e:
-            logger.warn("Fetching the goal state failed: {0}", ustr(e))
-            raise
-        finally:
-            logger.info('Fetch goal state completed')
+        # The changed property on GoalState indicates only if the incarnation changed
+        # There's also a changed property on ext_config that indicates if they changed
+        self.changed = False
+        if current_goal_state is None:
+            self.changed = True
+        elif current_goal_state is not None and self.incarnation != current_goal_state.incarnation:
+            self.changed = True
 
     @staticmethod
-    def fetch_goal_state(wire_client, ext_config_retriever):
+    def fetch_goal_state(wire_client, ext_config_retriever, current_goal_state=None):
         """
         Fetches the goal state, not including any nested properties (such as extension config).
         """
-        return GoalState(wire_client, ext_config_retriever)
+        return GoalState(wire_client, ext_config_retriever, current_goal_state)
 
-    @staticmethod
-    def fetch_full_goal_state(wire_client, ext_config_retriever):
-        """
-        Fetches the full goal state, including nested properties (such as extension config).
-        """
-        return GoalState(wire_client, ext_config_retriever, full_goal_state=True)
+    @property
+    def hosting_env(self):
+        if not self._hosting_env_retrieved:
+            try:
+                uri = findtext(self._xml_doc, "HostingEnvironmentConfig")
+                xml_text = self._wire_client.fetch_config(uri, self._wire_client.get_header())
+                self._hosting_env = HostingEnv(xml_text)
+                self._hosting_env_retrieved = True
+            except Exception as e:
+                logger.warn("Fetching the hosting environment failed: {0}", ustr(e))
+                raise
+        return self._hosting_env
 
-    @staticmethod
-    def fetch_full_goal_state_if_changed(wire_client, ext_config_retriever, incarnation):
-        """
-        Fetches the full goal state if the new incarnation is different than 'incarnation' or if the extensions config
-        has changed (FastTrack), otherwise returns None.
-        """
-        goal_state = GoalState(wire_client, ext_config_retriever, base_incarnation=incarnation)
-        if goal_state.incarnation != incarnation:
-            return goal_state
-        elif goal_state.ext_conf.changed:
-            return goal_state
-        return None
+    @property
+    def shared_conf(self):
+        if not self._shared_conf_retrieved:
+            try:
+                uri = findtext(self._xml_doc, "SharedConfig")
+                xml_text = self._wire_client.fetch_config(uri, self._wire_client.get_header())
+                self._shared_conf = SharedConfig(xml_text)
+                self._shared_conf_retrieved = True
+            except Exception as e:
+                logger.warn("Fetching the shared config failed: {0}", ustr(e))
+                raise
+        return self._shared_conf
+
+    @property
+    def certs(self):
+        if not self._certs_retrieved:
+            try:
+                uri = findtext(self._xml_doc, "Certificates")
+                if uri is None:
+                    self._certs = None
+                else:
+                    xml_text = self._wire_client.fetch_config(uri, self._wire_client.get_header_for_cert())
+                    self._certs = Certificates(xml_text)
+                self._certs_retrieved = True
+            except Exception as e:
+                logger.warn("Fetching the certificates failed: {0}", ustr(e))
+                raise
+        return self._certs
+
+    @property
+    def remote_access(self):
+        if not self._remote_access_retrieved:
+            try:
+                container = find(self._xml_doc, "Container")
+                uri = findtext(container, "RemoteAccessInfo")
+                if uri is None:
+                    self._remote_access = None
+                else:
+                    xml_text = self._wire_client.fetch_config(uri, self._wire_client.get_header_for_cert())
+                    self._remote_access = RemoteAccess(xml_text)
+                self._remote_access_retrieved = True
+            except Exception as e:
+                logger.warn("Fetching the remote access failed: {0}", ustr(e))
+                raise
+        return self._remote_access
+
+    @property
+    def ext_conf(self):
+        if not self._ext_conf_retrieved:
+            try:
+                uri = findtext(self._xml_doc, "ExtensionsConfig")
+                self._ext_conf = self._ext_config_retriever.get_ext_config(self.incarnation, uri)
+                self._ext_conf_retrieved = True
+            except Exception as e:
+                logger.warn("Fetching the extensions config failed: {0}", ustr(e))
+                raise
+        return self._ext_conf
+
+    @property
+    def artifacts_profile_blob_url(self):
+        if not self._artifacts_profile_blob_url_retrieved:
+            try:
+                # The artifacts profile blob url is only in the Fabric goal state
+                # We need it to retrieve the FastTrack goal state, so retrieve it here
+                # to avoid a chicken and egg scenario
+                uri = findtext(self._xml_doc, "ExtensionsConfig")
+                if uri is not None:
+                    fabric_ext_conf = ExtensionsConfig(self._wire_client.fetch_config(uri, self._wire_client.get_header()))
+                    self._artifacts_profile_blob_url = fabric_ext_conf.artifacts_profile_blob
+                self._artifacts_profile_blob_url_retrieved = True
+            except Exception as e:
+                logger.warn("Fetching the artifacts profile blob url failed: {0}", ustr(e))
+                raise
+        return self._artifacts_profile_blob_url
 
 
 class HostingEnv(object):

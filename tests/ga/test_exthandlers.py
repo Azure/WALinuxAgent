@@ -54,13 +54,13 @@ class TestGoalState(AgentTestCase):
         retriever = ExtensionsConfigRetriever(wire_client=None)
         retriever._set_fabric(5)
         self.assertEqual(GOAL_STATE_SOURCE_FABRIC, retriever._get_mode())
-        self.assertEqual(5, retriever._get_incarnation())
+        self.assertEqual("5", retriever._get_incarnation())
 
         retriever._set_fast_track()
         self.assertEqual(GOAL_STATE_SOURCE_FASTTRACK, retriever._get_mode())
         retriever._set_fabric()
         self.assertEqual(GOAL_STATE_SOURCE_FABRIC, retriever._get_mode())
-        self.assertEqual(5, retriever._get_incarnation())
+        self.assertEqual("5", retriever._get_incarnation())
 
     def test_set_fasttrack(self):
         retriever = ExtensionsConfigRetriever(wire_client=None)
@@ -166,7 +166,7 @@ class TestGoalState(AgentTestCase):
         self.assertIsNotNone(ext_conf)
         self.assertTrue(ext_conf.changed)
         self.assertEqual(GOAL_STATE_SOURCE_FABRIC, retriever._pending_mode)
-        self.assertEqual(1, retriever._pending_incarnation)
+        self.assertEqual("1", retriever._pending_incarnation)
 
     def test_get_ext_config_no_uri(self):
         retriever = ExtensionsConfigRetriever(wire_client=None)
@@ -270,7 +270,7 @@ class TestGoalState(AgentTestCase):
         # Now commit and verify
         retriever.commit_processed()
         self.assertEqual(GOAL_STATE_SOURCE_FABRIC, retriever._last_mode)
-        self.assertEqual(1, retriever._last_incarnation)
+        self.assertEqual("1", retriever._last_incarnation)
         self.assertIsNone(retriever._last_seqNo)
 
         # FastTrack goal state, changed
@@ -281,13 +281,13 @@ class TestGoalState(AgentTestCase):
 
         # Verify nothing changes before the commit
         self.assertEqual(GOAL_STATE_SOURCE_FABRIC, retriever._last_mode)
-        self.assertEqual(1, retriever._last_incarnation)
+        self.assertEqual("1", retriever._last_incarnation)
         self.assertIsNone(retriever._last_seqNo)
 
         # Now commit and verify
         retriever.commit_processed()
         self.assertEqual(GOAL_STATE_SOURCE_FASTTRACK, retriever._last_mode)
-        self.assertEqual(1, retriever._last_incarnation)
+        self.assertEqual("1", retriever._last_incarnation)
         self.assertEqual(1, retriever._last_seqNo)
 
 class TestExtHandlers(AgentTestCase):
@@ -512,7 +512,7 @@ class TestExtHandlers(AgentTestCase):
         patch_is_triggered.return_value = True # protocol errors are reported only after a delay; force the error to be reported now
 
         protocol = WireProtocol("foo.bar")
-        protocol.get_ext_handlers = MagicMock(side_effect=ProtocolError(test_message))
+        protocol.get_ext_config= MagicMock(side_effect=ProtocolError(test_message))
 
         get_exthandlers_handler(protocol).run()
 

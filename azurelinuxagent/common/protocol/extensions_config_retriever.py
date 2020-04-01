@@ -107,7 +107,7 @@ class ExtensionsConfigRetriever(object):
 
         if changed:
             if self._pending_mode == GOAL_STATE_SOURCE_FABRIC:
-                self._pending_incarnation = int(incarnation)
+                self._pending_incarnation = str(incarnation)
                 msg = u"Handle extensions updates for incarnation {0}".format(self._pending_incarnation)
                 logger.verbose(msg)
             else:
@@ -168,7 +168,7 @@ class ExtensionsConfigRetriever(object):
         incarnation = self._last_incarnation
         if incarnation is None:
             incarnation = self._get_incarnation()
-        if incarnation is None or int(incarnation) != int(goal_state_incarnation):
+        if incarnation is None or str(incarnation) != str(goal_state_incarnation):
             return True
         return False
 
@@ -206,7 +206,7 @@ class ExtensionsConfigRetriever(object):
         if os.path.exists(path):
             incarnation = fileutil.read_file(path)
             if incarnation is not None:
-                return int(incarnation)
+                return str(incarnation)
         return -1
 
     def _get_mode(self):

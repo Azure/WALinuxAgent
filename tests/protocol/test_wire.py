@@ -27,6 +27,7 @@ import uuid
 from azurelinuxagent.common.exception import InvalidContainerError, ResourceGoneError, ProtocolError, \
     ExtensionDownloadError, HttpError
 from azurelinuxagent.common.future import httpclient
+from azurelinuxagent.common.protocol.extensions_config_retriever import GenericExtensionsConfig
 from azurelinuxagent.common.protocol.hostplugin import HostPluginProtocol
 from azurelinuxagent.common.protocol.goal_state import ExtensionsConfig
 from azurelinuxagent.common.protocol.wire import WireProtocol, WireClient, \
@@ -67,11 +68,14 @@ def create_mock_protocol(artifacts_profile_blob=None, status_upload_blob=None, s
     with mock_wire_protocol(DATA_FILE_NO_EXT) as protocol:
         # These tests use mock wire data that dont have any extensions (extension config will be empty).
         # Populate the upload blob and artifacts profile blob.
-        ext_conf = ExtensionsConfig(None)
+        ext_conf = GenericExtensionsConfig(ExtensionsConfig(None), False, None)
         ext_conf.artifacts_profile_blob = artifacts_profile_blob
         ext_conf.status_upload_blob = status_upload_blob
         ext_conf.status_upload_blob_type = status_upload_blob_type
-        protocol.client._goal_state.ext_conf = ext_conf
+        protocol.client._goal_state._ext_conf = ext_conf
+        protocol.client._goal_state._ext_conf_retrieved = True
+        protocol.client._goal_state._artifacts_profile_blob_url = artifacts_profile_blob
+        protocol.client._goal_state._artifacts_profile_blob_url_retrieved = True
 
         yield protocol
 
@@ -93,7 +97,8 @@ class TestWireProtocol(AgentTestCase):
             protocol.detect()
             protocol.get_vminfo()
             protocol.get_certs()
-            ext_handlers = protocol.get_ext_handlers()
+            ext_conf = protocol.get_ext_config()
+            ext_handlers = ext_conf.ext_handlers
             for ext_handler in ext_handlers.extHandlers:
                 protocol.get_ext_handler_pkgs(ext_handler)
 
@@ -264,7 +269,8 @@ class TestWireProtocol(AgentTestCase):
     def test_get_in_vm_artifacts_profile_blob_not_available(self, *_):
         # Test when artifacts_profile_blob is null/None
         with mock_wire_protocol(DATA_FILE_NO_EXT) as protocol:
-            protocol.client._goal_state.ext_conf = ExtensionsConfig(None)
+            protocol.client._goal_state._ext_conf = ExtensionsConfig(None)
+            protocol.client._goal_state._ext_conf_retrieved = True
 
             self.assertEqual(None, protocol.client.get_artifacts_profile())
 
@@ -982,8 +988,10 @@ class TestWireClient(HttpRequestPredicates, AgentTestCase):
         mock_get_artifact_request.return_value = "dummy_url", "dummy_header"
         client = WireProtocol("foo.bar")
         client.client._goal_state = Mock()
-        client.client._goal_state.ext_conf = ExtensionsConfig(None)
-        client.client._goal_state.ext_conf.artifacts_profile_blob = "testurl"
+        client.client._goal_state._ext_conf = ExtensionsConfig(None)
+        client.client._goal_state._ext_conf_retrieved = True
+        client.client._goal_state._artifacts_profile_blob_url = "testurl"
+        client.client._goal_state._artifacts_profile_blob_url_retrieved = True
 
         mock_not_modified_response = MockResponse(body="b", status_code=304)
 
@@ -1059,25 +1067,37 @@ class UpdateGoalStateTestCase(AgentTestCase):
         with mock_wire_protocol(mockwiredata.DATA_FILE) as protocol:
             protocol.client.get_host_plugin()
 
-            # The container id, role config name and shared config can change without the incarnation changing; capture the initial
-            # goal state and then change those fields.
-            goal_state = protocol.client.get_goal_state().xml_text
-            shared_conf = protocol.client.get_shared_conf().xml_text
-            container_id = protocol.client.get_host_plugin().container_id
-            role_config_name = protocol.client.get_host_plugin().role_config_name
-
             protocol.mock_wire_data.set_container_id(str(uuid.uuid4()))
             protocol.mock_wire_data.set_role_config_name(str(uuid.uuid4()))
             protocol.mock_wire_data.shared_config = WireProtocolData.replace_xml_attribute_value(
                 protocol.mock_wire_data.shared_config, "Deployment", "name", str(uuid.uuid4()))
 
-            protocol.client.update_goal_state()
+            # First run - old ext config changed = False, new ext config changed = True, so we'll update shared conf
+            # Second run - old ext config changed = True, new ext config changed = False, so we'll update shared conf
+            # Third run - old ext config changed = False, new ext config changed = False, so we won't update shared conf
+            for expect_change in [True, True, False]:
+                # The container id, role config name and shared config can change without the incarnation changing;
+                # capture the initial goal state and then change those fields.
+                old_shared_conf = protocol.client.get_shared_conf().xml_text
+                container_id = protocol.client.get_host_plugin().container_id
+                role_config_name = protocol.client.get_host_plugin().role_config_name
 
-            self.assertEqual(protocol.client.get_goal_state().xml_text, goal_state)
-            self.assertEqual(protocol.client.get_shared_conf().xml_text, shared_conf)
+                new_shared_conf = WireProtocolData.replace_xml_attribute_value(
+                    protocol.mock_wire_data.shared_config, "Deployment", "name", str(uuid.uuid4()))
 
-            self.assertEqual(protocol.client.get_host_plugin().container_id, container_id)
-            self.assertEqual(protocol.client.get_host_plugin().role_config_name, role_config_name)
+                protocol.mock_wire_data.set_container_id(str(uuid.uuid4()))
+                protocol.mock_wire_data.set_role_config_name(str(uuid.uuid4()))
+                protocol.mock_wire_data.shared_config = new_shared_conf
+
+                protocol.client.ext_config_retriever.commit_processed()
+                protocol.client.update_goal_state()
+
+                self.assertEqual(protocol.client.get_host_plugin().container_id, container_id)
+                self.assertEqual(protocol.client.get_host_plugin().role_config_name, role_config_name)
+                if expect_change:
+                    self.assertEqual(protocol.client.get_shared_conf().xml_text, new_shared_conf)
+                else:
+                    self.assertEqual(protocol.client.get_shared_conf().xml_text, old_shared_conf)
 
     def test_forced_update_should_update_the_goal_state_and_the_host_plugin_when_the_incarnation_does_not_change(self):
         with mock_wire_protocol(mockwiredata.DATA_FILE) as protocol:
@@ -1224,7 +1244,6 @@ class UpdateHostPluginFromGoalStateTestCase(AgentTestCase):
                 new_container_id = str(uuid.uuid4())
                 new_role_config_name = str(uuid.uuid4())
 
-                goal_state_xml_text = protocol.mock_wire_data.goal_state
                 shared_conf_xml_text = protocol.mock_wire_data.shared_config
 
                 if incarnation_change:
@@ -1232,6 +1251,7 @@ class UpdateHostPluginFromGoalStateTestCase(AgentTestCase):
 
                 protocol.mock_wire_data.set_container_id(new_container_id)
                 protocol.mock_wire_data.set_role_config_name(new_role_config_name)
+                self.assertEqual(protocol.client.get_shared_conf().xml_text, shared_conf_xml_text)
                 protocol.mock_wire_data.shared_config = WireProtocolData.replace_xml_attribute_value(
                     protocol.mock_wire_data.shared_config, "Deployment", "name", str(uuid.uuid4()))
 
@@ -1241,7 +1261,6 @@ class UpdateHostPluginFromGoalStateTestCase(AgentTestCase):
                 self.assertEqual(protocol.client.get_host_plugin().role_config_name, new_role_config_name)
 
                 # it should not update the goal state
-                self.assertEqual(protocol.client.get_goal_state().xml_text, goal_state_xml_text)
                 self.assertEqual(protocol.client.get_shared_conf().xml_text, shared_conf_xml_text)
 
 

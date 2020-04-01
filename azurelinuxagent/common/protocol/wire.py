@@ -775,21 +775,13 @@ class WireClient(object):
         for retry in range(1, max_retry + 1):
             try:
                 if refresh_type == WireClient._UpdateType.HostPlugin:
-                    goal_state = GoalState.fetch_goal_state(self, self.ext_config_retriever)
+                    goal_state = GoalState.fetch_goal_state(self, self.ext_config_retriever, self._goal_state)
                     self._update_host_plugin(goal_state.container_id, goal_state.role_config_name)
                     return
 
-                if self._goal_state is None or refresh_type == WireClient._UpdateType.GoalStateForced:
-                    new_goal_state = GoalState.fetch_full_goal_state(self, self.ext_config_retriever)
-                else:
-                    new_goal_state = GoalState.fetch_full_goal_state_if_changed(self, self.ext_config_retriever,
-                                                                                self._goal_state.incarnation)
+                new_goal_state = GoalState.fetch_goal_state(self, self.ext_config_retriever, self._goal_state)
 
-                if new_goal_state is not None:
-                    self._goal_state = new_goal_state
-                    self._save_goal_state()
-                    self._update_host_plugin(new_goal_state.container_id, new_goal_state.role_config_name)
-
+                self._save_goal_state_if_necessary(new_goal_state, refresh_type)
                 return
 
             except IOError as e:
@@ -805,6 +797,35 @@ class WireClient(object):
                 logger.verbose("Exception processing goal state (attempt {0}/{1}) [{2}]", retry, max_retry, ustr(e))
 
         raise ProtocolError("Exceeded max retry updating goal state")
+
+    def _save_goal_state_if_necessary(self, new_goal_state, refresh_type):
+        # We cache the goal state if one of the following is true
+        # 1) We didn't previously have a goal state
+        # 2) The incarnation changed
+        # 3) The extensions config changed
+        # 4) The extensions config did not change, but previously it did
+        # 5) We have an update type of GoalStateForced
+        save_goal_state = False
+        if new_goal_state is None:
+            return
+        if self._goal_state is None or new_goal_state.changed:
+            save_goal_state = True
+            self._goal_state = new_goal_state
+        elif refresh_type == WireClient._UpdateType.GoalStateForced:
+            save_goal_state = True
+            self._goal_state = new_goal_state
+        elif new_goal_state.ext_conf is not None and (new_goal_state.ext_conf.changed or
+                                              (self._goal_state.ext_conf is not None and
+                                               self._goal_state.ext_conf.changed != new_goal_state.ext_conf.changed)):
+            self._goal_state = new_goal_state
+
+        # We save the goal state and update the host plugin only if one of the following is true
+        # 1) We didn't previously have a goal state
+        # 2) The incarnation changed
+        # 3) We have an update type of GoalStateForced
+        if save_goal_state:
+            self._save_goal_state()
+            self._update_host_plugin(new_goal_state.container_id, new_goal_state.role_config_name)
 
     def _update_host_plugin(self, container_id, role_config_name):
         if self._host_plugin is not None:
@@ -1225,9 +1246,8 @@ class WireClient(object):
         return self._host_plugin
 
     def has_artifacts_profile_blob(self):
-        ext_conf = self.get_ext_conf()
-        return ext_conf and not \
-            textutil.is_str_none_or_whitespace(ext_conf.artifacts_profile_blob)
+        return self._goal_state is not None and not \
+            textutil.is_str_none_or_whitespace(self._goal_state.artifacts_profile_blob_url)
 
     def get_artifacts_profile_through_host(self, blob, etag=None):
         host = self.get_host_plugin()
@@ -1242,7 +1262,7 @@ class WireClient(object):
             return None
 
         if self.has_artifacts_profile_blob():
-            blob = self.get_ext_conf().artifacts_profile_blob
+            blob = self._goal_state.artifacts_profile_blob_url
             direct_func = lambda: self.fetch(blob)
             # NOTE: the host_func may be called after refreshing the goal state, be careful about any goal state data
             # in the lambda.
