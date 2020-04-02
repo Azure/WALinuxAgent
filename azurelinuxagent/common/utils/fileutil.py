@@ -242,3 +242,9 @@ def clean_ioerror(e, paths=[]):
             except Exception:
                 # swallow exception
                 pass
+
+
+def append_items_to_file(file_path, iterable):
+    with open(file_path, 'a+') as fh:
+        for item in iterable:
+            fh.write(item + "\n")

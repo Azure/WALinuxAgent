@@ -111,7 +111,10 @@ def run_get_output(cmd, chk_err=True, log_cmd=True, expected_errors=[]):
 
 
 def _encode_command_output(output):
-    return ustr(output, encoding='utf-8', errors="backslashreplace")
+    if output:
+        return ustr(output, encoding='utf-8', errors="backslashreplace")
+    else:
+        return None
 
 
 class CommandError(Exception):
@@ -131,7 +134,7 @@ class CommandError(Exception):
         self.stderr = stderr
 
 
-def run_command(command, log_error=False, shell=False):
+def run_command(command, log_error=False, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE):
     """
     Executes the given command and returns its stdout as a string.
     If there are any errors executing the command it logs details about the failure and raises a RunCommandException;
@@ -141,7 +144,7 @@ def run_command(command, log_error=False, shell=False):
         return " ".join(cmd) if isinstance(cmd, list) else command
 
     try:
-        process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=shell)
+        process = subprocess.Popen(command, stdin=stdin, stdout=stdout, stderr=stderr, shell=False)
         stdout, stderr = process.communicate()
         returncode = process.returncode
     except Exception as e:
