@@ -126,12 +126,12 @@ class ExtensionsConfigRetriever(object):
             logger.info("Committing from previous mode {0}. New mode is {1}", self._last_mode, self._pending_mode)
 
         self._last_mode = self._pending_mode
-        if self._pending_mode == GOAL_STATE_SOURCE_FABRIC:
-            self._last_incarnation = self._pending_incarnation
-            self._set_fabric(self._last_incarnation)
-        else:
+        if self._pending_mode == GOAL_STATE_SOURCE_FASTTRACK:
             self._last_seqNo = self._pending_seqNo
             self._set_fast_track(self._last_seqNo)
+        else:
+            self._last_incarnation = self._pending_incarnation
+            self._set_fabric(self._last_incarnation)
 
     def _decide_what_to_process(self, fabric_changed, fast_track_changed):
         """

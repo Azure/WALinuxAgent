@@ -1356,6 +1356,82 @@ class GoalStateConstructionTestCase(AgentTestCase):
             self.assertEqual(expected_ext_conf, protocol.client.get_ext_conf().xml_text)
 
 
+class SaveGoalStateIfNecessaryTestCase(AgentTestCase):
+    DEFAULT_INCARNATION = "1"
+    DEFAULT_SEQUENCE_NUMBER = 1
+    DEFAULT_CONTAINER_ID = "c6d5526c-5ac2-4200-b6e2-56f2b70c5ab2"
+    NEW_INCARNATION = "42"
+    NEW_CONTAINER_ID = "2F9126CB-C933-4473-B26E-957CB6685D2A"
+
+    def test_save_goal_state_new_is_none(self):
+        with mock_wire_protocol(mockwiredata.DATA_FILE) as protocol:
+            # Call the method directly, since a goal state of None will otherwise cause an exception
+            # Really we just verify that no exception is thrown
+            protocol.client._save_goal_state_if_necessary(new_goal_state=None, refresh_type=None)
+
+    def test_save_goal_state_current_is_none(self):
+        with mock_wire_protocol(mockwiredata.DATA_FILE) as protocol:
+            protocol.client.get_host_plugin()
+            protocol.client.update_goal_state()
+            self.assertEqual(self.DEFAULT_INCARNATION, protocol.client._goal_state.incarnation)
+            self.assertEqual(self.DEFAULT_CONTAINER_ID, protocol.client._host_plugin.container_id)
+
+    def test_save_goal_state_new_changed(self):
+        with mock_wire_protocol(mockwiredata.DATA_FILE) as protocol:
+            # Set the current goal state
+            protocol.client.get_host_plugin()
+            protocol.client.update_goal_state()
+            protocol.mock_wire_data.set_container_id(self.NEW_CONTAINER_ID)
+            protocol.mock_wire_data.set_incarnation(self.NEW_INCARNATION)
+
+            # We update and save the goal state because it changed
+            protocol.client.update_goal_state()
+            self.assertEqual(self.NEW_INCARNATION, protocol.client._goal_state.incarnation)
+            self.assertEqual(self.NEW_CONTAINER_ID, protocol.client._host_plugin.container_id)
+
+    def test_save_goal_state_goal_state_forced(self):
+        with mock_wire_protocol(mockwiredata.DATA_FILE) as protocol:
+            # Set the current goal state
+            protocol.client.get_host_plugin()
+            protocol.client.update_goal_state()
+            protocol.mock_wire_data.set_container_id(self.NEW_CONTAINER_ID)
+
+            # We update and save the goal state because we forced it even though the incarnation didn't change
+            protocol.client.update_goal_state(forced=True)
+            self.assertEqual(self.DEFAULT_INCARNATION, protocol.client._goal_state.incarnation)
+            self.assertEqual(self.NEW_CONTAINER_ID, protocol.client._host_plugin.container_id)
+
+    def test_save_goal_state_new_ext_config_changed(self):
+        with mock_wire_protocol(mockwiredata.DATA_FILE_FAST_TRACK) as protocol:
+            # Set the current goal state
+            protocol.client.get_host_plugin()
+            protocol.client.update_goal_state()
+            protocol.mock_wire_data.set_container_id(self.NEW_CONTAINER_ID)
+
+            # Next goal state will be FastTrack and will be changed
+            protocol.client.update_goal_state()
+            protocol.client.ext_config_retriever.commit_processed()
+            self.assertEqual(self.DEFAULT_INCARNATION, protocol.client._goal_state.incarnation)
+            self.assertEqual(self.DEFAULT_CONTAINER_ID, protocol.client._host_plugin.container_id)
+            self.assertIsNotNone(protocol.client._goal_state.ext_conf)
+            self.assertTrue(protocol.client._goal_state.ext_conf.changed)
+
+            # Next goal state will be FastTrack, but will not have changed
+            protocol.client.update_goal_state()
+            protocol.client.ext_config_retriever.commit_processed()
+            self.assertEqual(self.DEFAULT_INCARNATION, protocol.client._goal_state.incarnation)
+            self.assertEqual(self.DEFAULT_CONTAINER_ID, protocol.client._host_plugin.container_id)
+            self.assertIsNotNone(protocol.client._goal_state.ext_conf)
+            self.assertFalse(protocol.client._goal_state.ext_conf.changed)
+
+            # Next goal state will still be FastTrack, but now neither will have changed
+            protocol.client.update_goal_state()
+            self.assertEqual(self.DEFAULT_INCARNATION, protocol.client._goal_state.incarnation)
+            self.assertEqual(self.DEFAULT_CONTAINER_ID, protocol.client._host_plugin.container_id)
+            self.assertIsNotNone(protocol.client._goal_state.ext_conf)
+            self.assertFalse(protocol.client._goal_state.ext_conf.changed)
+
+
 class UpdateHostPluginFromGoalStateTestCase(AgentTestCase):
     """
     Tests for WireClient.update_host_plugin_from_goal_state()
