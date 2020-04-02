@@ -25,6 +25,7 @@ from azurelinuxagent.common.utils.cryptutil import CryptUtil
 DATA_FILE = {
         "version_info": "wire/version_info.xml",
         "goal_state": "wire/goal_state.xml",
+        "goal_state_remote_access": "wire/goal_state_remote_access.xml",
         "hosting_env": "wire/hosting_env.xml",
         "shared_config": "wire/shared_config.xml",
         "certs": "wire/certs.xml",
@@ -98,6 +99,7 @@ class WireProtocolData(object):
             "/versions": 0,
             "/HealthService": 0,
             "goalstate": 0,
+            "goalstateremoteaccess": 0,
             "hostingenvuri": 0,
             "sharedconfiguri": 0,
             "certificatesuri": 0,
@@ -112,6 +114,7 @@ class WireProtocolData(object):
         self.data_files = data_files
         self.version_info = None
         self.goal_state = None
+        self.goal_state_remote_access = None
         self.hosting_env = None
         self.shared_config = None
         self.certs = None
@@ -133,6 +136,7 @@ class WireProtocolData(object):
     def reload(self):
         self.version_info = load_data(self.data_files.get("version_info"))
         self.goal_state = load_data(self.data_files.get("goal_state"))
+        self.goal_state_remote_access = load_data(self.data_files.get("goal_state_remote_access"))
         self.hosting_env = load_data(self.data_files.get("hosting_env"))
         self.shared_config = load_data(self.data_files.get("shared_config"))
         self.certs = load_data(self.data_files.get("certs"))
@@ -170,6 +174,9 @@ class WireProtocolData(object):
         elif "goalstate" in url:
             content = self.goal_state
             self.call_counts["goalstate"] += 1
+        elif "goalstatermoteaccess" in url:
+            content = self.goal_state_remote_access
+            self.call_counts["goalstateremoteaccess"] += 1
         elif "hostingenvuri" in url:
             content = self.hosting_env
             self.call_counts["hostingenvuri"] += 1

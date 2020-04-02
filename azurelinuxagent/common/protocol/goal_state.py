@@ -113,8 +113,11 @@ class GoalState(object):
         if not self._hosting_env_retrieved:
             try:
                 uri = findtext(self._xml_doc, "HostingEnvironmentConfig")
-                xml_text = self._wire_client.fetch_config(uri, self._wire_client.get_header())
-                self._hosting_env = HostingEnv(xml_text)
+                if uri is None:
+                    logger.warn("HostingEnvironmentConfig url doesn't exist in goal state")
+                else:
+                    xml_text = self._wire_client.fetch_config(uri, self._wire_client.get_header())
+                    self._hosting_env = HostingEnv(xml_text)
                 self._hosting_env_retrieved = True
             except Exception as e:
                 logger.warn("Fetching the hosting environment failed: {0}", ustr(e))
@@ -126,8 +129,11 @@ class GoalState(object):
         if not self._shared_conf_retrieved:
             try:
                 uri = findtext(self._xml_doc, "SharedConfig")
-                xml_text = self._wire_client.fetch_config(uri, self._wire_client.get_header())
-                self._shared_conf = SharedConfig(xml_text)
+                if uri is None:
+                    logger.warn("SharedConfig url doesn't exist in goal state")
+                else:
+                    xml_text = self._wire_client.fetch_config(uri, self._wire_client.get_header())
+                    self._shared_conf = SharedConfig(xml_text)
                 self._shared_conf_retrieved = True
             except Exception as e:
                 logger.warn("Fetching the shared config failed: {0}", ustr(e))

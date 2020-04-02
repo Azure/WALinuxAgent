@@ -1228,6 +1228,134 @@ class TryUpdateGoalStateTestCase(HttpRequestPredicates, AgentTestCase):
                 self.assertTrue(len(gs) == 1 and 'is_success=True' in gs[0], "Recovering after failures should produce a telemetry event (success=true): [{0}]".format(gs))
 
 
+class GoalStateConstructionTestCase(AgentTestCase):
+    """
+    Tests for the GoalState constructor and properties
+    """
+    def test_goal_state_hosting_env_empty_url(self):
+        with mock_wire_protocol(mockwiredata.DATA_FILE) as protocol:
+            protocol.mock_wire_data.goal_state = WireProtocolData.replace_xml_element_value(
+                protocol.mock_wire_data.goal_state, "HostingEnvironmentConfig", "")
+            protocol.client.update_goal_state()
+            hosting_env = protocol.client.get_hosting_env()
+            self.assertIsNone(hosting_env)
+
+    def test_goal_state_hosting_env_cannot_retrieve(self):
+        with mock_wire_protocol(mockwiredata.DATA_FILE) as protocol:
+            protocol.mock_wire_data.goal_state = WireProtocolData.replace_xml_element_value(
+                protocol.mock_wire_data.goal_state, "HostingEnvironmentConfig", "invalid_url")
+            protocol.client.update_goal_state()
+            self.assertRaises(Exception, protocol.client.get_hosting_env)
+
+    def test_goal_state_hosting_env_load(self):
+        with mock_wire_protocol(mockwiredata.DATA_FILE) as protocol:
+            protocol.client.update_goal_state()
+            expected_hosting_env = protocol.mock_wire_data.hosting_env
+            self.assertEqual(expected_hosting_env, protocol.client.get_hosting_env().xml_text)
+
+            # Change the wire protocol data, but verify we don't reload it
+            protocol.mock_wire_data.hosting_env = "some invalid xml"
+            self.assertEqual(expected_hosting_env, protocol.client.get_hosting_env().xml_text)
+
+    def test_goal_state_shared_conf_empty_url(self):
+        with mock_wire_protocol(mockwiredata.DATA_FILE) as protocol:
+            protocol.mock_wire_data.goal_state = WireProtocolData.replace_xml_element_value(
+                protocol.mock_wire_data.goal_state, "SharedConfig", "")
+            protocol.client.update_goal_state()
+            shared_conf = protocol.client.get_shared_conf()
+            self.assertIsNone(shared_conf)
+
+    def test_goal_state_shared_conf_cannot_retrieve(self):
+        with mock_wire_protocol(mockwiredata.DATA_FILE) as protocol:
+            protocol.mock_wire_data.goal_state = WireProtocolData.replace_xml_element_value(
+                protocol.mock_wire_data.goal_state, "SharedConfig", "invalid_url")
+            protocol.client.update_goal_state()
+            self.assertRaises(Exception, protocol.client.get_shared_conf)
+
+    def test_goal_state_shared_conf_load(self):
+        with mock_wire_protocol(mockwiredata.DATA_FILE) as protocol:
+            protocol.client.update_goal_state()
+            expected_shared_conf = protocol.mock_wire_data.shared_config
+            self.assertEqual(expected_shared_conf, protocol.client.get_shared_conf().xml_text)
+
+            # Change the wire protocol data, but verify we don't reload it
+            protocol.mock_wire_data.shared_conf = "some invalid xml"
+            self.assertEqual(expected_shared_conf, protocol.client.get_shared_conf().xml_text)
+
+    def test_goal_state_certs_empty_url(self):
+        with mock_wire_protocol(mockwiredata.DATA_FILE) as protocol:
+            protocol.mock_wire_data.goal_state = WireProtocolData.replace_xml_element_value(
+                protocol.mock_wire_data.goal_state, "Certificates", "")
+            protocol.client.update_goal_state()
+            certs = protocol.client.get_certs()
+            self.assertIsNone(certs)
+
+    def test_goal_state_certs_cannot_retrieve(self):
+        with mock_wire_protocol(mockwiredata.DATA_FILE) as protocol:
+            protocol.mock_wire_data.goal_state = WireProtocolData.replace_xml_element_value(
+                protocol.mock_wire_data.goal_state, "Certificates", "invalid_url")
+            protocol.client.update_goal_state()
+            self.assertRaises(Exception, protocol.client.get_certs)
+
+    def test_goal_state_certs_load(self):
+        with mock_wire_protocol(mockwiredata.DATA_FILE) as protocol:
+            protocol.client.update_goal_state()
+            self.assertEqual(2, len(protocol.client.get_certs().cert_list.certificates))
+
+            # Change the wire protocol data, but verify we don't reload it
+            protocol.mock_wire_data.shared_conf = "some invalid xml"
+            self.assertEqual(2, len(protocol.client.get_certs().cert_list.certificates))
+
+    def test_goal_state_remote_access_empty_url(self):
+        with mock_wire_protocol(mockwiredata.DATA_FILE_REMOTE_ACCESS) as protocol:
+            protocol.mock_wire_data.goal_state = WireProtocolData.replace_xml_element_value(
+                protocol.mock_wire_data.goal_state_remote_access, "RemoteAccessInfo", "")
+            protocol.client.update_goal_state()
+            remote_access = protocol.client.get_remote_access()
+            self.assertIsNone(remote_access)
+
+    def test_goal_state_remote_access_cannot_retrieve(self):
+        with mock_wire_protocol(mockwiredata.DATA_FILE_REMOTE_ACCESS) as protocol:
+            protocol.mock_wire_data.goal_state = WireProtocolData.replace_xml_element_value(
+                protocol.mock_wire_data.goal_state_remote_access, "RemoteAccessInfo", "invalid_url")
+            protocol.client.update_goal_state()
+            self.assertRaises(Exception, protocol.client.get_remote_access)
+
+    def test_goal_state_remote_access_load(self):
+        with mock_wire_protocol(mockwiredata.DATA_FILE_REMOTE_ACCESS) as protocol:
+            protocol.client.update_goal_state()
+            expected_remote_access = protocol.mock_wire_data.remote_access
+            self.assertEqual(expected_remote_access, protocol.client.get_remote_access().xml_text)
+
+            # Change the wire protocol data, but verify we don't reload it
+            protocol.mock_wire_data.remote_access = "some invalid xml"
+            self.assertEqual(expected_remote_access, protocol.client.get_remote_access().xml_text)
+
+    def test_goal_state_ext_conf_empty_url(self):
+        with mock_wire_protocol(mockwiredata.DATA_FILE) as protocol:
+            protocol.mock_wire_data.goal_state = WireProtocolData.replace_xml_element_value(
+                protocol.mock_wire_data.goal_state, "ExtensionsConfig", "")
+            protocol.client.update_goal_state()
+            ext_conf = protocol.client.get_ext_conf()
+            self.assertIsNone(ext_conf.xml_text)
+
+    def test_goal_state_ext_conf_cannot_retrieve(self):
+        with mock_wire_protocol(mockwiredata.DATA_FILE) as protocol:
+            protocol.mock_wire_data.goal_state = WireProtocolData.replace_xml_element_value(
+                protocol.mock_wire_data.goal_state, "ExtensionsConfig", "invalid_url")
+            self.assertRaises(Exception, protocol.client.update_goal_state)
+
+    def test_goal_state_ext_conf_load(self):
+        with mock_wire_protocol(mockwiredata.DATA_FILE) as protocol:
+            protocol.client.update_goal_state()
+            expected_ext_conf = protocol.mock_wire_data.ext_conf
+            self.assertEqual(expected_ext_conf, protocol.client.get_ext_conf().xml_text)
+
+            # Change the wire protocol data, but verify we don't reload it
+            protocol.mock_wire_data.shared_conf = "some invalid xml"
+            self.assertEqual(expected_ext_conf, protocol.client.get_ext_conf().xml_text)
+
+
 class UpdateHostPluginFromGoalStateTestCase(AgentTestCase):
     """
     Tests for WireClient.update_host_plugin_from_goal_state()
