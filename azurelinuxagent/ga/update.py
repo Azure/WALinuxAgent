@@ -54,7 +54,7 @@ from azurelinuxagent.common.version import AGENT_NAME, AGENT_VERSION, AGENT_DIR_
                                             CURRENT_AGENT, CURRENT_VERSION, DISTRO_NAME, DISTRO_VERSION, \
                                             is_current_agent_installed
 
-from azurelinuxagent.ga.exthandlers import HandlerManifest
+from azurelinuxagent.ga.exthandlers import HandlerManifest, get_traceback
 
 AGENT_ERROR_FILE = "error.json" # File name for agent error record
 AGENT_MANIFEST_FILE = "HandlerManifest.json"
@@ -791,13 +791,14 @@ class GuestAgent(object):
 
             msg = u"Agent {0} install failed with exception: {1}".format(
                         self.name, ustr(e))
+            detailed_msg = '{0} {1}'.format(msg, traceback.extract_tb(get_traceback(e)))
             logger.warn(msg)
             add_event(
                 AGENT_NAME,
                 version=self.version,
                 op=WALAEventOperation.Install,
                 is_success=False,
-                message=msg)
+                message=detailed_msg)
 
     @property
     def name(self):
