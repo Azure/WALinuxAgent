@@ -22,18 +22,15 @@ from heapq import heappush, heappop
 import os
 
 from azurelinuxagent.common.future import ustr
-from azurelinuxagent.common.utils.fileutil import mkdir, read_file, rm_files, rm_dirs, append_file, append_items_to_file
+from azurelinuxagent.common.utils.fileutil import mkdir, read_file, rm_files, append_file, append_items_to_file
 from azurelinuxagent.common.utils.shellutil import run_command, CommandError
 from azurelinuxagent.common.utils.textutil import safe_shlex_split
 import azurelinuxagent.common.logger as logger
 
 level = logger.LogLevel.INFO
 
-NORMAL_COLLECTION_MANIFEST_PATH = '/home/paula/manifest-normal'
-FULL_COLLECTION_MANIFEST_PATH = '/home/paula/manifest-full'
-
-LOG_COLLECTOR_DIR = '/home/paula/logcollector'  # /var/lib/waagent/logcollector
-TRUNCATED_FILES_DIR = '/home/paula/truncated'  # /tmp?
+LOG_COLLECTOR_DIR = '/var/lib/waagent/logcollector'
+TRUNCATED_FILES_DIR = '/var/truncated'
 
 OUTPUT_ARCHIVE_PATH = os.path.join(LOG_COLLECTOR_DIR, "logs.zip")
 OUTPUT_RESULTS_FILE_PATH = os.path.join(LOG_COLLECTOR_DIR, "results.txt")
@@ -50,7 +47,6 @@ MUST_COLLECT_FILES_REGEX = [
     '/var/lib/waagent/error.json'
 ]
 
-# TODO: change back to 30 MB
 FILE_SIZE_LIMIT = 30 * 1024 * 1024  # 30 MB
 
 # TODO: determine uncompressed archive size
@@ -59,10 +55,8 @@ ARCHIVE_SIZE_LIMIT = 150 * 1024 * 1024  # 150 MB
 
 class LogCollector(object):
 
-    def __init__(self, collection_mode="normal"):
-        self.collection_mode = collection_mode
-        self.manifest_file_path = FULL_COLLECTION_MANIFEST_PATH if collection_mode == "full" else \
-            NORMAL_COLLECTION_MANIFEST_PATH
+    def __init__(self, manifest_file_path):
+        self.manifest_file_path = manifest_file_path
         self.must_collect_files = self._expand_must_collect_files()
 
     def _expand_must_collect_files(self):
@@ -79,7 +73,6 @@ class LogCollector(object):
     @staticmethod
     def _cleanup():
         pass
-        # rm_dirs(LOG_COLLECTOR_DIR)
 
     @staticmethod
     def log_to_results_file(entry):
@@ -90,15 +83,15 @@ class LogCollector(object):
 
     @staticmethod
     def _expand_path(path):
-        # The path either needs expanding, e.g. '/var/log/azure/*',
-        # or points ot a file, e.g. '/var/lib/waagent/HostingEnvironmentConfig.xml'
+        # If the path needs expanding, e.g. '/var/log/azure/*', add all file matches, sorted by name.
+        # Otherwise, add the already expanded path, e.g. '/var/lib/waagent/HostingEnvironmentConfig.xml'
         expanded = []
         if os.path.exists(path):
             expanded.append(path)
         else:
             paths = glob.glob(path)
             if len(paths) > 0:
-                expanded.extend(paths)
+                expanded.extend(sorted(paths))
         return expanded
 
     @staticmethod
@@ -145,8 +138,8 @@ class LogCollector(object):
 
     @staticmethod
     def _truncate_large_file(file_path):
-        # Truncate large file to size limit (keep freshest entries), copy file to a temporary location and update
-        # file path in list of files to collect
+        # Truncate large file to size limit (keep freshest entries of the file), copy file to a temporary location
+        # and update file path in list of files to collect
         try:
             # Binary files cannot be truncated, don't include large binary files
             if os.path.splitext(file_path)[1] == ".gz":
@@ -165,6 +158,7 @@ class LogCollector(object):
                 if original_file_mtime < truncated_file_mtime:
                     return truncated_file_path
 
+            # Get the last N bytes of the file
             with open(truncated_file_path, "w+") as fh:
                 command_string = "tail -c {0} {1}".format(FILE_SIZE_LIMIT, file_path)
                 command = safe_shlex_split(command_string)
@@ -183,12 +177,17 @@ class LogCollector(object):
         return tmp_file_path
 
     def _get_file_priority(self, file):
+        # The sooner the file appears in the must collect list, the bigger its priority.
+        # Priority is higher the lower the number (0 is highest priority).
         if file in self.must_collect_files:
             return self.must_collect_files.index(file)
         else:
+            # Doesn't matter, file is not in the must collect list, assign a low priority
             return 999999999
 
     def _get_priority_files_list(self, file_list):
+        # Given a list of files to collect, determine if they show up in the must collect list and build a priority
+        # queue. The queue will determine the order in which the files are collected, highest priority files first.
         priority_file_queue = []
         for file in file_list:
             priority = self._get_file_priority(file)
@@ -197,6 +196,8 @@ class LogCollector(object):
         return priority_file_queue
 
     def _get_final_list_for_archive(self, priority_file_queue):
+        # Given a priority queue of files to collect, add one by one while the archive size is under the size limit.
+        # If a single file is over the file size limit, truncate it before adding it to the archive.
         self.log_to_results_file("\n### Preparing list of files to add to archive ###")
         total_uncompressed_size = 0
         final_files_to_collect = []
@@ -223,6 +224,11 @@ class LogCollector(object):
         return final_files_to_collect
 
     def _create_list_of_files_to_collect(self):
+        # The final list of files to be collected by zip is created in three steps:
+        # 1) Parse given manifest file, expanding wildcards and keeping a list of files that exist on disk
+        # 2) Assign those files a priority depending on whether they are in the must collect file list.
+        # 3) In priority order, add files to the final list to be collected, until the size of the archive is under
+        #    the size limit.
         parsed_file_paths = self._parse_manifest_file()
         prioritized_file_paths = self._get_priority_files_list(parsed_file_paths)
         files_to_collect = self._get_final_list_for_archive(prioritized_file_paths)
@@ -232,6 +238,7 @@ class LogCollector(object):
 
     def collect_logs(self):
         try:
+            # Clear previous run's output and make base directories if they do not exist already
             rm_files(OUTPUT_RESULTS_FILE_PATH)
             mkdir(TRUNCATED_FILES_DIR)
             mkdir(LOG_COLLECTOR_DIR)
@@ -239,6 +246,8 @@ class LogCollector(object):
             files_list = self._create_list_of_files_to_collect()
             self.log_to_results_file("\n### Creating archive ###")
 
+            # The --filesync flag of zip synchronizes the contents of an archive with the files on the OS.
+            # New files are added, changed files are updated, and removed files are deleted from the archive.
             with open(files_list, "r+") as fh:
                 command_string = "zip --filesync {0} -@".format(OUTPUT_ARCHIVE_PATH)
                 command = safe_shlex_split(command_string)
@@ -251,11 +260,5 @@ class LogCollector(object):
             stderr = "stderr: {0}".format(e.stderr) if isinstance(e, CommandError) else ""
             msg = "Failed to collect logs: {0} {1}".format(ustr(e), stderr)
             self.log_to_results_file(msg)
+
             return None
-        finally:
-            self._cleanup()
-
-
-# lc = LogCollector("full")
-# archive = lc.collect_logs()
-# print(archive)

@@ -1,0 +1,31 @@
+echo,### Probing Directories ###
+ll,/var/log
+ll,/var/lib/waagent
+
+echo,### Gathering Configuration Files ###
+copy,/etc/*-release
+copy,/etc/HOSTNAME
+copy,/etc/hostname
+copy,/etc/waagent.conf
+echo,
+
+echo,### Gathering Log Files ###
+copy,/var/log/waagent*
+copy,/var/log/dmesg*
+copy,/var/log/syslog*
+copy,/var/log/auth*
+copy,/var/log/azure/*/*
+copy,/var/log/azure/*/*/*
+copy,/var/log/azure/custom-script/handler.log
+echo,
+
+echo,### Gathering Extension Files ###
+copy,/var/lib/waagent/*.xml
+copy,/var/lib/waagent/waagent_status.json
+copy,/var/lib/waagent/*/status/*.status
+copy,/var/lib/waagent/*/config/*.settings
+copy,/var/lib/waagent/*.agentsManifest
+copy,/var/lib/waagent/error.json
+copy,/var/lib/waagent/Incarnation
+copy,/var/lib/waagent/history/*.zip
+echo,
