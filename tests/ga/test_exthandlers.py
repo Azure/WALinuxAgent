@@ -52,15 +52,17 @@ class TestGoalState(AgentTestCase):
 
     def test_set_fabric(self):
         retriever = ExtensionsConfigRetriever(wire_client=None)
-        retriever._set_fabric(5)
+        retriever._set_fabric(5, 42)
         self.assertEqual(GOAL_STATE_SOURCE_FABRIC, retriever._get_mode())
         self.assertEqual("5", retriever._get_incarnation())
+        self.assertEqual(42, retriever._get_svd_seqNo())
 
         retriever._set_fast_track()
         self.assertEqual(GOAL_STATE_SOURCE_FASTTRACK, retriever._get_mode())
         retriever._set_fabric()
         self.assertEqual(GOAL_STATE_SOURCE_FABRIC, retriever._get_mode())
         self.assertEqual("5", retriever._get_incarnation())
+        self.assertEqual(42, retriever._get_svd_seqNo())
 
     def test_set_fasttrack(self):
         retriever = ExtensionsConfigRetriever(wire_client=None)

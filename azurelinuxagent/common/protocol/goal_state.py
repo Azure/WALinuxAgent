@@ -335,6 +335,7 @@ class ExtensionsConfig(object):
         self.status_upload_blob = None
         self.status_upload_blob_type = None
         self.artifacts_profile_blob = None
+        self.svd_seqNo = None
 
         if xml_text is None:
             return
@@ -371,6 +372,11 @@ class ExtensionsConfig(object):
         status_upload_node = find(xml_doc, "StatusUploadBlob")
         self.status_upload_blob_type = getattrib(status_upload_node, "statusBlobType")
         logger.verbose("Extension config shows status blob type as [{0}]", self.status_upload_blob_type)
+
+        goal_state_metadata_node = find(xml_doc, "InVMGoalStateMetaData")
+        if goal_state_metadata_node is not None:
+            self.svd_seqNo = getattrib(goal_state_metadata_node, "inSvdSeqNo")
+            logger.verbose("Read inSvdSeqNo of {0}", self.svd_seqNo)
 
     @staticmethod
     def _parse_plugin(plugin):

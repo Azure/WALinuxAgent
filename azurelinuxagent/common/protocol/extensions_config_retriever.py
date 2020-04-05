@@ -29,6 +29,7 @@ from azurelinuxagent.common.exception import ProtocolError
 
 INCARNATION_FILE_NAME = "Incarnation"
 SEQUENCE_NUMBER_FILE_NAME = "ArtifactProfileSequenceNumber"
+SVD_SEQNO_FILE_NAME = "SvdSeqNo"
 GOAL_STATE_SOURCE_FILE_NAME = "GoalStateSource"
 EXT_CONF_FILE_NAME = "ExtensionsConfig.{0}.xml"
 EXT_CONFIG_FAST_TRACK_FILE_NAME = "FastTrackExtensionsConfig.{0}.xml"
@@ -60,11 +61,13 @@ class ExtensionsConfigRetriever(object):
     def __init__(self, wire_client):
         self._wire_client = wire_client
         self._last_incarnation = None
+        self._last_svd_seqNo = None
         self._last_seqNo = None
         self._last_fast_track_extensionsConfig = None
         self._last_mode = None
         self._pending_mode = None
         self._pending_seqNo = None
+        self._pending_svd_seqNo = None
         self._pending_incarnation = None
         self._is_startup = True
 
@@ -107,6 +110,7 @@ class ExtensionsConfigRetriever(object):
 
         if changed:
             if self._pending_mode == GOAL_STATE_SOURCE_FABRIC:
+                self._remove_extensions_if_necessary(extensions_config)
                 self._pending_incarnation = str(incarnation)
                 msg = u"Handle extensions updates for incarnation {0}".format(self._pending_incarnation)
                 logger.verbose(msg)
@@ -131,7 +135,24 @@ class ExtensionsConfigRetriever(object):
             self._set_fast_track(self._last_seqNo)
         else:
             self._last_incarnation = self._pending_incarnation
-            self._set_fabric(self._last_incarnation)
+            self._last_svd_seqNo = self._pending_svd_seqNo
+            self._set_fabric(self._last_incarnation, self._last_svd_seqNo)
+
+    def _remove_extensions_if_necessary(self, extensions_config):
+        """
+        If this is a Fabric GS, but the InSvdSeqNo did NOT change, then the goal state was
+        created directly by Fabric and bypassed CRP. A common scenario is remote access.
+        Another is when wire server restarts and uses a new incarnation.
+        The problem is any extensions contained here may be out of date, because they were
+        more recently updated via a FastTrack GS. Therefore, we remove them here in that case.
+        """
+        if self._pending_mode == GOAL_STATE_SOURCE_FABRIC:
+            svd_seqNo = self._get_svd_seqNo()
+            if extensions_config.svd_seqNo == svd_seqNo:
+                logger.info("SvdSeqNo did not change. Removing extensions from goal state")
+                extensions_config.ext_handlers = None
+            else:
+                self._pending_svd_seqNo = svd_seqNo
 
     def _decide_what_to_process(self, fabric_changed, fast_track_changed):
         """
@@ -179,12 +200,15 @@ class ExtensionsConfigRetriever(object):
             sequence_number_file_path = os.path.join(conf.get_lib_dir(), SEQUENCE_NUMBER_FILE_NAME)
             self._save_cache(sequence_number_file_path, ustr(vm_artifacts_seq_no))
 
-    def _set_fabric(self, incarnation=None):
+    def _set_fabric(self, incarnation=None, svd_seqNo = None):
         path = os.path.join(conf.get_lib_dir(), GOAL_STATE_SOURCE_FILE_NAME)
         self._save_cache(path, GOAL_STATE_SOURCE_FABRIC)
         if incarnation is not None:
             incarnation_file_path = os.path.join(conf.get_lib_dir(), INCARNATION_FILE_NAME)
             self._save_cache(incarnation_file_path, ustr(incarnation))
+        if svd_seqNo is not None:
+            svd_seqNo_file_path = os.path.join(conf.get_lib_dir(), SVD_SEQNO_FILE_NAME)
+            self._save_cache(svd_seqNo_file_path, ustr(svd_seqNo))
 
     def _save_cache(self, local_file, data):
         try:
@@ -199,6 +223,14 @@ class ExtensionsConfigRetriever(object):
             sequence_number = fileutil.read_file(path)
             if sequence_number is not None:
                 return int(sequence_number)
+        return -1
+
+    def _get_svd_seqNo(self):
+        path = os.path.join(conf.get_lib_dir(), SVD_SEQNO_FILE_NAME)
+        if os.path.exists(path):
+            svd_seqno = fileutil.read_file(path)
+            if svd_seqno is not None:
+                return int(svd_seqno)
         return -1
 
     def _get_incarnation(self):
