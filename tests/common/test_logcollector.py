@@ -162,7 +162,7 @@ class TestLogCollector(AgentTestCase):
 
     def _get_uncompressed_file_size(self, file):
         with tarfile.open(self.output_archive_path, "r") as archive:
-            return archive.getinfo(file.lstrip(os.path.sep)).size
+            return archive.getmember(file.lstrip(os.path.sep)).size
 
     def _get_number_of_files_in_archive(self):
         with tarfile.open(self.output_archive_path, "r") as archive:

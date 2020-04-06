@@ -163,27 +163,37 @@ class LogCollector(object):
                 LogCollector._delete_file_from_archive(file_name.lstrip(os.path.sep))
 
     @staticmethod
-    def _update_files_in_archive(final_list_of_files):
+    def _add_file_to_archive(file_name, archive_file_name):
         with tarfile.open(OUTPUT_ARCHIVE_PATH, "a") as archive:
-            for file_name in final_list_of_files:
-                archive_file_name = LogCollector._convert_file_name_to_archive(file_name)
-                archive_file = None
-                try:
-                    archive_file = archive.getmember(archive_file_name)
-                except KeyError:
-                    pass
+            archive.add(file_name, arcname=archive_file_name)
 
-                if archive_file:
-                    if LogCollector._is_file_updated(file_name, archive_file):
-                        LogCollector._log_to_results_file("Updating archive, updating file {0}".format(archive_file))
-                        LogCollector._delete_file_from_archive(archive_file)
-                        archive.add(file_name, arcname=archive_file_name)
-                    else:
-                        pass  # nothing to be done, file is archive is the same as file on disk
+    @staticmethod
+    def _get_file_from_archive(archive_file_name):
+        with tarfile.open(OUTPUT_ARCHIVE_PATH, "r") as archive:
+            try:
+                return archive.getmember(archive_file_name)
+            except KeyError:
+                return None
+
+    @staticmethod
+    def _update_files_in_archive(final_list_of_files):
+        # with tarfile.open(OUTPUT_ARCHIVE_PATH, "a") as archive:
+        for file_name in final_list_of_files:
+            archive_file_name = LogCollector._convert_file_name_to_archive(file_name)
+            archive_file = LogCollector._get_file_from_archive(archive_file_name)
+
+            if archive_file:
+                # If file is present in the archive, update it if needed (if time last modified or size is different)
+                if LogCollector._is_file_updated(file_name, archive_file):
+                    LogCollector._log_to_results_file("Updating archive, updating file {0}".format(archive_file_name))
+                    LogCollector._delete_file_from_archive(archive_file_name)
+                    LogCollector._add_file_to_archive(file_name, archive_file_name)
                 else:
-                    # File is not present in the archive, add it
-                    LogCollector._log_to_results_file("Updating archive, adding new file {0}".format(archive_file_name))
-                    archive.add(file_name, arcname=archive_file_name)
+                    pass  # nothing to be done, file is archive is the same as file on disk
+            else:
+                # File is not present in the archive, add it
+                LogCollector._log_to_results_file("Updating archive, adding new file {0}".format(archive_file_name))
+                LogCollector._add_file_to_archive(file_name, archive_file_name)
 
     def _parse_manifest_file(self):
         files_to_collect = set()
@@ -329,5 +339,5 @@ class LogCollector(object):
 
             return None
 
-# lc = LogCollector("/home/paula/WALinuxAgent/config/logcollector_manifest_full")
-# lc.collect_logs()
+lc = LogCollector("/home/paula/WALinuxAgent/config/logcollector_manifest_full")
+lc.collect_logs()
