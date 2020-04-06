@@ -17,13 +17,15 @@
 # Requires Python 2.6+ and Openssl 1.0+
 #
 
+from datetime import datetime
 import glob
 from heapq import heappush, heappop
 import os
+import tarfile
 
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.utils.fileutil import mkdir, read_file, rm_files, append_file, append_items_to_file
-from azurelinuxagent.common.utils.shellutil import run_command, CommandError
+from azurelinuxagent.common.utils.shellutil import run_command
 from azurelinuxagent.common.utils.textutil import safe_shlex_split
 import azurelinuxagent.common.logger as logger
 
@@ -32,7 +34,7 @@ level = logger.LogLevel.INFO
 LOG_COLLECTOR_DIR = '/var/lib/waagent/logcollector'
 TRUNCATED_FILES_DIR = '/var/truncated'
 
-OUTPUT_ARCHIVE_PATH = os.path.join(LOG_COLLECTOR_DIR, "logs.zip")
+OUTPUT_ARCHIVE_PATH = os.path.join(LOG_COLLECTOR_DIR, "logs.tar")
 OUTPUT_RESULTS_FILE_PATH = os.path.join(LOG_COLLECTOR_DIR, "results.txt")
 
 MUST_COLLECT_FILES_REGEX = [
@@ -48,8 +50,6 @@ MUST_COLLECT_FILES_REGEX = [
 ]
 
 FILE_SIZE_LIMIT = 30 * 1024 * 1024  # 30 MB
-
-# TODO: determine uncompressed archive size
 ARCHIVE_SIZE_LIMIT = 150 * 1024 * 1024  # 150 MB
 
 
@@ -71,11 +71,7 @@ class LogCollector(object):
         return read_file(self.manifest_file_path).splitlines()
 
     @staticmethod
-    def _cleanup():
-        pass
-
-    @staticmethod
-    def log_to_results_file(entry):
+    def _log_to_results_file(entry):
         if type(entry) == ustr or type(entry) == str:
             append_file(OUTPUT_RESULTS_FILE_PATH, entry + "\n")
         else:
@@ -98,17 +94,96 @@ class LogCollector(object):
     def _parse_ll_command(folder):
         output = run_command(["ls", "-alF", folder])
         header = "Output of \"ll {0}\":\n".format(folder)
-        LogCollector.log_to_results_file(header + output)
+        LogCollector._log_to_results_file(header + output)
 
     @staticmethod
     def _parse_echo_command(message):
-        LogCollector.log_to_results_file(message)
+        LogCollector._log_to_results_file(message)
 
     @staticmethod
     def _parse_copy_command(path):
         file_paths = LogCollector._expand_path(path)
-        LogCollector.log_to_results_file(file_paths)
+        LogCollector._log_to_results_file(file_paths)
         return file_paths
+
+    @staticmethod
+    def _convert_file_name_to_archive(file_name):
+        if file_name.startswith(TRUNCATED_FILES_DIR):
+            # /var/truncated/var/log/syslog.1 becomes truncated_var_log_syslog.1
+            original_file_path = file_name[len(TRUNCATED_FILES_DIR):].lstrip(os.path.sep)
+            archive_file_name = "truncated_" + original_file_path.replace(os.path.sep, "_")
+            return archive_file_name
+        else:
+            return file_name.lstrip(os.path.sep)
+
+    @staticmethod
+    def _convert_archive_name_to_file_name(archive_name):
+        truncated_prefix = "truncated_"
+        if archive_name.startswith(truncated_prefix):
+            # truncated_var_log_syslog.1 becomes /var/truncated/var/log/syslog.1
+            file_name = archive_name[len(truncated_prefix):].replace("_", os.path.sep)
+            original_file_name = os.path.join(TRUNCATED_FILES_DIR, file_name.lstrip(os.path.sep))
+            return original_file_name
+        else:
+            return os.path.join(os.path.sep, archive_name)
+
+    @staticmethod
+    def _is_file_updated(file_name, archive_file):
+        mtime_tarball = datetime.fromtimestamp(archive_file.mtime).replace(microsecond=0)
+        mtime_disk = datetime.fromtimestamp(os.path.getmtime(file_name)).replace(microsecond=0)
+
+        file_size_archive = archive_file.size  # uncompressed file size
+        file_size_disk = os.path.getsize(file_name)
+
+        return not (mtime_disk == mtime_tarball and file_size_disk == file_size_archive)
+
+    @staticmethod
+    def _get_list_of_files_in_archive():
+        with tarfile.open(OUTPUT_ARCHIVE_PATH, "a") as tarball:
+            return tarball.getnames()
+
+    @staticmethod
+    def _delete_file_from_archive(file):
+        try:
+            command_string = "tar --file {0} --delete {1}".format(OUTPUT_ARCHIVE_PATH, file)
+            command = safe_shlex_split(command_string)
+            run_command(command)
+        except Exception as e:
+            LogCollector._log_to_results_file("Failed to delete file {0} from archive: {1}".format(file, ustr(e)))
+
+    @staticmethod
+    def _remove_deleted_files_from_archive(final_list_of_files):
+        archive_files = LogCollector._get_list_of_files_in_archive()
+
+        for archive_file in archive_files:
+            file_name = LogCollector._convert_archive_name_to_file_name(archive_file)
+
+            if file_name not in final_list_of_files and file_name.lstrip(os.path.sep) not in final_list_of_files:
+                LogCollector._log_to_results_file("Updating archive, removing deleted file {0}".format(archive_file))
+                LogCollector._delete_file_from_archive(file_name.lstrip(os.path.sep))
+
+    @staticmethod
+    def _update_files_in_archive(final_list_of_files):
+        with tarfile.open(OUTPUT_ARCHIVE_PATH, "a") as archive:
+            for file_name in final_list_of_files:
+                archive_file_name = LogCollector._convert_file_name_to_archive(file_name)
+                archive_file = None
+                try:
+                    archive_file = archive.getmember(archive_file_name)
+                except KeyError:
+                    pass
+
+                if archive_file:
+                    if LogCollector._is_file_updated(file_name, archive_file):
+                        LogCollector._log_to_results_file("Updating archive, updating file {0}".format(archive_file))
+                        LogCollector._delete_file_from_archive(archive_file)
+                        archive.add(file_name, arcname=archive_file_name)
+                    else:
+                        pass  # nothing to be done, file is archive is the same as file on disk
+                else:
+                    # File is not present in the archive, add it
+                    LogCollector._log_to_results_file("Updating archive, adding new file {0}".format(archive_file_name))
+                    archive.add(file_name, arcname=archive_file_name)
 
     def _parse_manifest_file(self):
         files_to_collect = set()
@@ -143,12 +218,10 @@ class LogCollector(object):
         try:
             # Binary files cannot be truncated, don't include large binary files
             if os.path.splitext(file_path)[1] == ".gz":
-                LogCollector.log_to_results_file("Discarding large binary file {0}".format(file_path))
+                LogCollector._log_to_results_file("Discarding large binary file {0}".format(file_path))
                 return None
 
-            new_file_name = os.path.basename(file_path)
-            truncated_file_path = os.path.join(TRUNCATED_FILES_DIR, new_file_name)
-
+            truncated_file_path = os.path.join(TRUNCATED_FILES_DIR, file_path.replace(os.path.sep, "_"))
             if os.path.exists(truncated_file_path):
                 original_file_mtime = os.path.getmtime(file_path)
                 truncated_file_mtime = os.path.getmtime(truncated_file_path)
@@ -166,7 +239,7 @@ class LogCollector(object):
 
             return truncated_file_path
         except OSError as e:
-            LogCollector.log_to_results_file("Failed to truncate large file: {0}".format(ustr(e)))
+            LogCollector._log_to_results_file("Failed to truncate large file: {0}".format(ustr(e)))
             return None
 
     @staticmethod
@@ -198,7 +271,7 @@ class LogCollector(object):
     def _get_final_list_for_archive(self, priority_file_queue):
         # Given a priority queue of files to collect, add one by one while the archive size is under the size limit.
         # If a single file is over the file size limit, truncate it before adding it to the archive.
-        self.log_to_results_file("\n### Preparing list of files to add to archive ###")
+        self._log_to_results_file("\n### Preparing list of files to add to archive ###")
         total_uncompressed_size = 0
         final_files_to_collect = []
 
@@ -207,16 +280,16 @@ class LogCollector(object):
             file_size = min(os.path.getsize(file_path), FILE_SIZE_LIMIT)
 
             if total_uncompressed_size + file_size > ARCHIVE_SIZE_LIMIT:
-                self.log_to_results_file("Archive too big, done with adding files.")
+                self._log_to_results_file("Archive too big, done with adding files.")
                 break
 
             if os.path.getsize(file_path) <= FILE_SIZE_LIMIT:
                 final_files_to_collect.append(file_path)
-                self.log_to_results_file("Adding file {0}, size {1}b".format(file_path, file_size))
+                self._log_to_results_file("Adding file {0}, size {1}b".format(file_path, file_size))
             else:
                 truncated_file_path = self._truncate_large_file(file_path)
                 if truncated_file_path:
-                    self.log_to_results_file("Adding truncated file {0}, size {1}b".format(truncated_file_path, file_size))
+                    self._log_to_results_file("Adding truncated file {0}, size {1}b".format(truncated_file_path, file_size))
                     final_files_to_collect.append(truncated_file_path)
 
             total_uncompressed_size += file_size
@@ -233,8 +306,8 @@ class LogCollector(object):
         prioritized_file_paths = self._get_priority_files_list(parsed_file_paths)
         files_to_collect = self._get_final_list_for_archive(prioritized_file_paths)
 
-        files_list = self._create_list_file(files_to_collect, 'files.lst')
-        return files_list
+        # files_list = self._create_list_file(files_to_collect, 'files.lst')
+        return files_to_collect
 
     def collect_logs(self):
         try:
@@ -243,22 +316,18 @@ class LogCollector(object):
             mkdir(TRUNCATED_FILES_DIR)
             mkdir(LOG_COLLECTOR_DIR)
 
-            files_list = self._create_list_of_files_to_collect()
-            self.log_to_results_file("\n### Creating archive ###")
+            files_to_collect = self._create_list_of_files_to_collect()
+            self._log_to_results_file("\n### Creating archive ###")
 
-            # The --filesync flag of zip synchronizes the contents of an archive with the files on the OS.
-            # New files are added, changed files are updated, and removed files are deleted from the archive.
-            with open(files_list, "r+") as fh:
-                command_string = "zip --filesync {0} -@".format(OUTPUT_ARCHIVE_PATH)
-                command = safe_shlex_split(command_string)
-                output = run_command(command, stdin=fh)
-
-            LogCollector.log_to_results_file(output)
+            self._remove_deleted_files_from_archive(files_to_collect)
+            self._update_files_in_archive(files_to_collect)
 
             return OUTPUT_ARCHIVE_PATH
         except Exception as e:
-            stderr = "stderr: {0}".format(e.stderr) if isinstance(e, CommandError) else ""
-            msg = "Failed to collect logs: {0} {1}".format(ustr(e), stderr)
-            self.log_to_results_file(msg)
+            msg = "Failed to collect logs: {0}".format(ustr(e))
+            self._log_to_results_file(msg)
 
             return None
+
+# lc = LogCollector("/home/paula/WALinuxAgent/config/logcollector_manifest_full")
+# lc.collect_logs()

@@ -17,11 +17,10 @@
 # Requires Python 2.6+ and Openssl 1.0+
 #
 
-import contextlib
 import os
 import shutil
+import tarfile
 import tempfile
-import zipfile
 
 from azurelinuxagent.common.utils.fileutil import rm_dirs, mkdir, rm_files, write_file
 from azurelinuxagent.common.logcollector import LogCollector
@@ -55,7 +54,7 @@ class TestLogCollector(AgentTestCase):
         cls.mock_truncated_files_dir = patch("azurelinuxagent.common.logcollector.TRUNCATED_FILES_DIR",
                                              cls.truncated_files_dir)
 
-        cls.output_archive_path = os.path.join(cls.log_collector_dir, "logs.zip")
+        cls.output_archive_path = os.path.join(cls.log_collector_dir, "logs.tar")
         cls.mock_output_archive_path = patch("azurelinuxagent.common.logcollector.OUTPUT_ARCHIVE_PATH",
                                              cls.output_archive_path)
 
@@ -86,7 +85,7 @@ class TestLogCollector(AgentTestCase):
 
     def tearDown(self):
         rm_dirs(self.root_collect_dir)
-
+        rm_files(self.output_archive_path)
         AgentTestCase.tearDown(self)
 
     @classmethod
@@ -137,10 +136,13 @@ class TestLogCollector(AgentTestCase):
             fh.seek(file_size - 1)
             fh.write(data)
 
+    @staticmethod
+    def _truncated_path(normal_path):
+        return "truncated_" + normal_path.replace(os.path.sep, "_")
+
     def _assert_files_are_in_archive(self, expected_files):
-        # Note: need to use contextlib.closing with ZipFile objects because __exit__ is not implemented in Py2.6
-        with contextlib.closing(zipfile.ZipFile(self.output_archive_path, "r")) as archive:
-            archive_files = archive.namelist()
+        with tarfile.open(self.output_archive_path, "r") as archive:
+            archive_files = archive.getnames()
 
             for file in expected_files:
                 if file.lstrip(os.path.sep) not in archive_files:
@@ -149,8 +151,8 @@ class TestLogCollector(AgentTestCase):
         self.assertTrue(True)
 
     def _assert_files_are_not_in_archive(self, unexpected_files):
-        with contextlib.closing(zipfile.ZipFile(self.output_archive_path, "r")) as archive:
-            archive_files = archive.namelist()
+        with tarfile.open(self.output_archive_path, "r") as archive:
+            archive_files = archive.getnames()
 
             for file in unexpected_files:
                 if file.lstrip(os.path.sep) in archive_files:
@@ -159,12 +161,12 @@ class TestLogCollector(AgentTestCase):
         self.assertTrue(True)
 
     def _get_uncompressed_file_size(self, file):
-        with contextlib.closing(zipfile.ZipFile(self.output_archive_path, "r")) as archive:
-            return archive.getinfo(file.lstrip(os.path.sep)).file_size
+        with tarfile.open(self.output_archive_path, "r") as archive:
+            return archive.getinfo(file.lstrip(os.path.sep)).size
 
     def _get_number_of_files_in_archive(self):
-        with contextlib.closing(zipfile.ZipFile(self.output_archive_path, "r")) as archive:
-            return len(archive.infolist())
+        with tarfile.open(self.output_archive_path, "r") as archive:
+            return len(archive.getnames())
 
     def test_log_collector_parses_commands_in_manifest(self):
         # Ensure familiar commands are parsed and unknowns are ignored (like diskinfo)
@@ -225,7 +227,7 @@ diskinfo,""".format(folder_to_list, file_to_collect)
 
         expected_files = [
             os.path.join(self.root_collect_dir, "waagent.log"),
-            os.path.join(self.truncated_files_dir, "waagent.log.1"),  # this file should be truncated
+            self._truncated_path(os.path.join(self.root_collect_dir, "waagent.log.1")),  # this file should be truncated
             os.path.join(self.root_collect_dir, "waagent.log.2.gz"),
             os.path.join(self.root_collect_dir, "less_important_file"),
             os.path.join(self.root_collect_dir, "another_dir", "least_important_file")
@@ -298,7 +300,7 @@ diskinfo,""".format(folder_to_list, file_to_collect)
         self.assertIsNotNone(second_archive)
 
         no_files = self._get_number_of_files_in_archive()
-        self.assertEquals(5, no_files, "Expected 5 file in archive, found {0}!".format(no_files))
+        self.assertEquals(5, no_files, "Expected 5 files in archive, found {0}!".format(no_files))
 
     def test_log_collector_should_update_archive_when_files_are_new_or_modified_or_deleted(self):
         # Ensure the archive reflects the state of files on the disk at collection time. If a file was updated, it
@@ -319,7 +321,7 @@ diskinfo,""".format(folder_to_list, file_to_collect)
         self.assertIsNotNone(first_archive)
 
         no_files = self._get_number_of_files_in_archive()
-        self.assertEquals(6, no_files, "Expected 6 file in archive, found {0}!".format(no_files))
+        self.assertEquals(6, no_files, "Expected 6 files in archive, found {0}!".format(no_files))
 
         # Update a file, create a new one (that is covered by the manifest and will be collected) and delete one
         self._create_file_of_specific_size(os.path.join(self.root_collect_dir, "waagent.log"),
