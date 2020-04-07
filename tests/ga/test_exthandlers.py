@@ -143,6 +143,7 @@ class TestGoalState(AgentTestCase):
         self.assertEqual("FastTrack: SeqNo=3", retriever.get_description())
         retriever._pending_mode = GOAL_STATE_SOURCE_FABRIC
         retriever._pending_incarnation = 5
+        retriever._pending_svd_seqNo = 42
         retriever.commit_processed()
         self.assertEqual("Fabric: Incarnation=5", retriever.get_description())
 
@@ -224,6 +225,48 @@ class TestGoalState(AgentTestCase):
         self.assertIsNotNone(ext_conf)
         self.assertTrue(ext_conf.changed)
         self.assertEqual(GOAL_STATE_SOURCE_FASTTRACK, retriever._pending_mode)
+
+    def test_get_ext_config_no_svd_change(self):
+        test_data = WireProtocolData(DATA_FILE)
+        profile = InVMArtifactsProfile(test_data.vm_artifacts_profile)
+        wire_client = MockWireClient(test_data.ext_conf, profile)
+        retriever = ExtensionsConfigRetriever(wire_client=wire_client)
+
+        # Pretend the last mode was FastTrack so we can verify it doesn't change
+        retriever._last_mode = GOAL_STATE_SOURCE_FASTTRACK
+
+        # Fabric goal state, no svd change
+        retriever._set_fast_track(1)
+        retriever._set_fabric(incarnation=0, svd_seqNo=1)
+        ext_conf = retriever.get_ext_config(incarnation=1, ext_conf_uri="blah")
+        self.assertTrue(ext_conf.changed)
+        self.assertIsNotNone(ext_conf.extensions_config)
+
+        # We'll remove the extensions because the svd didn't change
+        self.assertIsNone(ext_conf.extensions_config.ext_handlers)
+        retriever.commit_processed()
+        self.assertEqual(GOAL_STATE_SOURCE_FASTTRACK, retriever._last_mode)
+
+    def test_get_ext_config_svd_change(self):
+        test_data = WireProtocolData(DATA_FILE)
+        profile = InVMArtifactsProfile(test_data.vm_artifacts_profile)
+        wire_client = MockWireClient(test_data.ext_conf, profile)
+        retriever = ExtensionsConfigRetriever(wire_client=wire_client)
+
+        # Pretend the last mode was FastTrack so we can verify it doesn't change
+        retriever._last_mode = GOAL_STATE_SOURCE_FASTTRACK
+
+        # Fabric goal state, no svd change
+        retriever._set_fast_track(1)
+        retriever._set_fabric(incarnation=0, svd_seqNo=0)
+        ext_conf = retriever.get_ext_config(incarnation=1, ext_conf_uri="blah")
+        self.assertTrue(ext_conf.changed)
+        self.assertIsNotNone(ext_conf.extensions_config)
+
+        # We'll remove the extensions because the svd didn't change
+        self.assertIsNotNone(ext_conf.extensions_config.ext_handlers)
+        retriever.commit_processed()
+        self.assertEqual(GOAL_STATE_SOURCE_FABRIC, retriever._last_mode)
 
     def test_get_ext_config(self):
         test_data = WireProtocolData(DATA_FILE)

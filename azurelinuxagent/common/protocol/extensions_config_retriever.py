@@ -129,14 +129,18 @@ class ExtensionsConfigRetriever(object):
         elif self._pending_mode != self._last_mode:
             logger.info("Committing from previous mode {0}. New mode is {1}", self._last_mode, self._pending_mode)
 
-        self._last_mode = self._pending_mode
         if self._pending_mode == GOAL_STATE_SOURCE_FASTTRACK:
             self._last_seqNo = self._pending_seqNo
             self._set_fast_track(self._last_seqNo)
+            self._last_mode = self._pending_mode
         else:
             self._last_incarnation = self._pending_incarnation
-            self._last_svd_seqNo = self._pending_svd_seqNo
-            self._set_fabric(self._last_incarnation, self._last_svd_seqNo)
+
+            # Don't record the last goal state as Fabric if we didn't process the extensions
+            if self._last_svd_seqNo != self._pending_svd_seqNo:
+                self._last_svd_seqNo = self._pending_svd_seqNo
+                self._last_mode = self._pending_mode
+                self._set_fabric(self._last_incarnation, self._last_svd_seqNo)
 
     def _remove_extensions_if_necessary(self, extensions_config):
         """
@@ -148,9 +152,11 @@ class ExtensionsConfigRetriever(object):
         """
         if self._pending_mode == GOAL_STATE_SOURCE_FABRIC:
             svd_seqNo = self._get_svd_seqNo()
-            if extensions_config.svd_seqNo == svd_seqNo:
+            if str(extensions_config.svd_seqNo) == str(svd_seqNo):
                 logger.info("SvdSeqNo did not change. Removing extensions from goal state")
                 extensions_config.ext_handlers = None
+                self._last_svd_seqNo = extensions_config.svd_seqNo
+                self._pending_svd_seqNo = extensions_config.svd_seqNo
             else:
                 self._pending_svd_seqNo = svd_seqNo
 
