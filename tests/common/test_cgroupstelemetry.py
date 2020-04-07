@@ -159,17 +159,16 @@ class TestCGroupsTelemetry(AgentTestCase):
         if not proc_ids:
             proc_ids = TestCGroupsTelemetry.TestProcessIds
 
-        processes_instances = [CGroupsTelemetry.get_process_info_summary(pid) for pid in proc_ids]
-        for _, cgroup_metric in CGroupsTelemetry._cgroup_metrics.items():
+        for name, cgroup_metric in CGroupsTelemetry._cgroup_metrics.items():
             self.assertListEqual(cgroup_metric.get_memory_metrics()._data, memory_usage)
             self.assertListEqual(cgroup_metric.get_max_memory_metrics()._data, max_memory_usage)
             self.assertListEqual(cgroup_metric.get_cpu_metrics()._data, cpu_usage)
             for kv_pair in cgroup_metric.get_proc_statm_memory_metrics():
-                self.assertIn(kv_pair.pid_name_cmdline, processes_instances)
+                self.assertIn(kv_pair.pid_name_cmdline, [CGroupsTelemetry.get_process_info_summary(pid, name) for pid in proc_ids])
                 self.assertListEqual(kv_pair.resource_metric._data, memory_statm_memory_usage)
 
     def _assert_polled_metrics_equal(self, metrics, cpu_metric_value, memory_metric_value,
-                                     max_memory_metric_value, proc_stat_memory_usage_value, pids=None):
+                                     max_memory_metric_value, proc_stat_memory_usage_value, cgroup_names, pids=None):
         for metric in metrics:
             self.assertIn(metric.category, ["Process", "Memory"])
             if metric.category == "Process":
@@ -183,11 +182,11 @@ class TestCGroupsTelemetry(AgentTestCase):
                     self.assertEqual(metric.value, max_memory_metric_value)
                 elif metric.counter == "Memory Used by Process":
                     if pids:
-                        processes_instances = [CGroupsTelemetry.get_process_info_summary(pid) for pid in
-                                               pids]
+                        processes_instances = [CGroupsTelemetry.get_process_info_summary(pid, cgroup) + ","
+                                               for pid in pids for cgroup in cgroup_names]
                     else:
-                        processes_instances = [CGroupsTelemetry.get_process_info_summary(pid) for pid in
-                                               TestCGroupsTelemetry.TestProcessIds]
+                        processes_instances = [CGroupsTelemetry.get_process_info_summary(pid, cgroup) for pid
+                                               in TestCGroupsTelemetry.TestProcessIds for cgroup in cgroup_names]
                     self.assertIn(metric.instance, processes_instances)
                     self.assertEqual(metric.value, proc_stat_memory_usage_value)
 
@@ -265,7 +264,7 @@ class TestCGroupsTelemetry(AgentTestCase):
                                                                            memory_statm_memory_usage=[current_proc_statm] * data_count)
                             self.assertEqual(len(metrics), num_extensions * num_of_metrics_per_extn_expected)
                             self._assert_polled_metrics_equal(metrics, current_cpu, current_memory, current_max_memory,
-                                                              current_proc_statm)
+                                                              current_proc_statm, cgroup_names=CGroupsTelemetry._cgroup_metrics.keys())
 
         collected_metrics = CGroupsTelemetry.report_all_tracked()
 
@@ -449,7 +448,7 @@ class TestCGroupsTelemetry(AgentTestCase):
             self.assertEqual(len(metrics), 6 * num_extensions)
             self._assert_polled_metrics_equal(metrics, cpu_percent_values[i], memory_usage_values[i],
                                               max_memory_usage_values[i],
-                                              proc_stat_memory_usage_values[i])
+                                              proc_stat_memory_usage_values[i], CGroupsTelemetry._cgroup_metrics.keys())
 
         collected_metrics = CGroupsTelemetry.report_all_tracked()
         self._assert_extension_metrics_data(collected_metrics, num_extensions,
@@ -523,7 +522,7 @@ class TestCGroupsTelemetry(AgentTestCase):
                                                                    , max_memory_usage=[], proc_ids=[],
                                                                    memory_statm_memory_usage=[])
                     self.assertEqual(len(metrics), num_extensions * 1)  # Only CPU populated
-                    self._assert_polled_metrics_equal(metrics, current_cpu, 0, 0, 0)
+                    self._assert_polled_metrics_equal(metrics, current_cpu, 0, 0, 0, [])
 
                 CGroupsTelemetry.report_all_tracked()
 
@@ -557,7 +556,8 @@ class TestCGroupsTelemetry(AgentTestCase):
                         # Memory is only populated, CPU is not. Thus 5 metrics per cgroup.
                         self.assertEqual(len(metrics), num_extensions * 5)
                         self._assert_polled_metrics_equal(metrics, 0, current_memory, current_max_memory,
-                                                          TestCGroupsTelemetry.TestProcStatmMemoryUsed)
+                                                          TestCGroupsTelemetry.TestProcStatmMemoryUsed,
+                                                          CGroupsTelemetry._cgroup_metrics.keys())
 
                     collected_metrics = CGroupsTelemetry.report_all_tracked()
                     self._assert_extension_metrics_data(collected_metrics, num_extensions,

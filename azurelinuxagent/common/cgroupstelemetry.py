@@ -53,7 +53,7 @@ class CGroupsTelemetry(object):
     _rlock = threading.RLock()
 
     @staticmethod
-    def get_process_info_summary(process_id):
+    def get_process_info_summary(process_id, cgroup_name):
         process_cmdline = DEFAULT_PROCESS_COMMANDLINE
         process_name = DEFAULT_PROCESS_NAME
 
@@ -70,7 +70,7 @@ class CGroupsTelemetry(object):
         except Exception as e:
             logger.periodic_info(EVERY_SIX_HOURS, "[PERIODIC] {0}", ustr(e))
 
-        return process_id + DELIM + process_name + DELIM + process_cmdline
+        return process_id + DELIM + process_name + DELIM + cgroup_name + DELIM + process_cmdline
 
     @staticmethod
     def _get_metrics_list(metric):
@@ -205,11 +205,12 @@ class CGroupsTelemetry(object):
                         for pid in pids:
                             try:
                                 mem_usage_from_procstatm = MemoryResourceUsage.get_memory_usage_from_proc_statm(pid)
-                                metrics.append(MetricValue(MetricsCategory.MEMORY_CATEGORY, MetricsCounter.
-                                                           MEM_USED_BY_PROCESS, CGroupsTelemetry.get_process_info_summary(pid),
-                                                           mem_usage_from_procstatm))
+                                metrics.append(
+                                    MetricValue(MetricsCategory.MEMORY_CATEGORY, MetricsCounter. MEM_USED_BY_PROCESS,
+                                                CGroupsTelemetry.get_process_info_summary(pid, cgroup.name),
+                                                mem_usage_from_procstatm))
                                 CGroupsTelemetry._cgroup_metrics[cgroup.name].add_proc_statm_memory(
-                                    CGroupsTelemetry.get_process_info_summary(pid), mem_usage_from_procstatm)
+                                    CGroupsTelemetry.get_process_info_summary(pid, cgroup.name), mem_usage_from_procstatm)
                             except Exception as e:
                                 if not isinstance(e, (IOError, OSError)) or e.errno != errno.ENOENT:
                                     logger.periodic_warn(logger.EVERY_HOUR, "[PERIODIC] Could not collect proc_statm "
