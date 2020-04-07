@@ -247,8 +247,9 @@ class FileAppender(Appender):
                     os.remove(dst)
 
                 # Archive the current log file.
-                with gzip.open(dst, 'wb') as archive, open(self.path, 'rb') as logfile:
-                    archive.writelines(logfile)
+                with gzip.open(dst, 'wb') as archive:
+                    with open(self.path, 'rb') as logfile:
+                        archive.writelines(logfile)
 
                 # Removing the plain log file as already archived.
                 os.remove(self.path)
