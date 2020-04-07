@@ -54,25 +54,31 @@ class TestLogCollector(AgentTestCase):
         cls.mock_truncated_files_dir = patch("azurelinuxagent.common.logcollector.TRUNCATED_FILES_DIR",
                                              cls.truncated_files_dir)
 
-        cls.output_archive_path = os.path.join(cls.log_collector_dir, "logs.tar")
-        cls.mock_output_archive_path = patch("azurelinuxagent.common.logcollector.OUTPUT_ARCHIVE_PATH",
-                                             cls.output_archive_path)
-
         cls.output_results_file_path = os.path.join(cls.log_collector_dir, "results.txt")
         cls.mock_output_results_file_path = patch("azurelinuxagent.common.logcollector.OUTPUT_RESULTS_FILE_PATH",
                                                   cls.output_results_file_path)
 
+        cls.output_archive_path = os.path.join(cls.log_collector_dir, "logs.tar")
+        cls.mock_output_archive_path = patch("azurelinuxagent.common.logcollector.OUTPUT_ARCHIVE_PATH",
+                                             cls.output_archive_path)
+
+        cls.compressed_archive_path = os.path.join(cls.log_collector_dir, "logs.zip")
+        cls.mock_compressed_archive_path = patch("azurelinuxagent.common.logcollector.COMPRESSED_ARCHIVE_PATH",
+                                                 cls.compressed_archive_path)
+
         cls.mock_log_collector_dir.start()
         cls.mock_truncated_files_dir.start()
-        cls.mock_output_archive_path.start()
         cls.mock_output_results_file_path.start()
+        cls.mock_output_archive_path.start()
+        cls.mock_compressed_archive_path.start()
 
     @classmethod
     def tearDownClass(cls):
         cls.mock_log_collector_dir.stop()
         cls.mock_truncated_files_dir.stop()
-        cls.mock_output_archive_path.stop()
         cls.mock_output_results_file_path.stop()
+        cls.mock_output_archive_path.stop()
+        cls.mock_compressed_archive_path.stop()
 
         shutil.rmtree(cls.tmp_dir)
 
@@ -160,6 +166,18 @@ class TestLogCollector(AgentTestCase):
 
         self.assertTrue(True)
 
+    def _assert_archive_sizes(self):
+        archive_size = os.path.getsize(self.output_archive_path)
+        compressed_archive_size = os.path.getsize(self.compressed_archive_path)
+        self.assertTrue(archive_size >= compressed_archive_size,
+                        "Compressed archive size {0} is not smaller than uncompressed "
+                        "archive size {1}!".format(compressed_archive_size, archive_size))
+
+    def _assert_archive_created(self, archive):
+        with open(self.output_results_file_path, "r") as out:
+            error_message = out.readlines()[-1]
+            self.assertTrue(archive, "Failed to collect logs, error message: {0}".format(error_message))
+
     def _get_uncompressed_file_size(self, file):
         with tarfile.open(self.output_archive_path, "r") as archive:
             return archive.getmember(file.lstrip(os.path.sep)).size
@@ -193,11 +211,12 @@ diskinfo,""".format(folder_to_list, file_to_collect)
         # Assert ll was parsed
         self.assertTrue("ll {0}".format(folder_to_list) in results[1])
         # Assert copy was parsed
-        self.assertIsNotNone(archive)
+        self._assert_archive_created(archive)
         self._assert_files_are_in_archive(expected_files=[file_to_collect])
 
         no_files = self._get_number_of_files_in_archive()
         self.assertEquals(1, no_files, "Expected 1 file in archive, found {0}!".format(no_files))
+        self._assert_archive_sizes()
 
     def test_log_collector_should_collect_all_files(self):
         # All files in the manifest should be collected, since none of them are over the individual file size limit,
@@ -214,10 +233,11 @@ diskinfo,""".format(folder_to_list, file_to_collect)
             os.path.join(self.root_collect_dir, "another_dir", "least_important_file")
         ]
         self._assert_files_are_in_archive(expected_files)
-        self.assertIsNotNone(archive)
+        self._assert_archive_created(archive)
 
         no_files = self._get_number_of_files_in_archive()
         self.assertEquals(6, no_files, "Expected 6 files in archive, found {0}!".format(no_files))
+        self._assert_archive_sizes()
 
     def test_log_collector_should_truncate_large_text_files_and_ignore_large_binary_files(self):
         # Set the size limit so that some files are too large to collect in full.
@@ -238,10 +258,11 @@ diskinfo,""".format(folder_to_list, file_to_collect)
         self._assert_files_are_in_archive(expected_files)
         self._assert_files_are_not_in_archive(unexpected_files)
 
-        self.assertIsNotNone(archive)
+        self._assert_archive_created(archive)
 
         no_files = self._get_number_of_files_in_archive()
         self.assertEquals(5, no_files, "Expected 5 files in archive, found {0}!".format(no_files))
+        self._assert_archive_sizes()
 
     def test_log_collector_should_prioritize_important_files_if_archive_too_big(self):
         # Set the archive size limit so that not all files can be collected. In that case, files will be added to the
@@ -254,7 +275,7 @@ diskinfo,""".format(folder_to_list, file_to_collect)
         ]
 
         with patch("azurelinuxagent.common.logcollector.ARCHIVE_SIZE_LIMIT", 10 * 1024 * 1024):
-            with patch("azurelinuxagent.common.logcollector.MUST_COLLECT_FILES_REGEX", must_collect_files):
+            with patch("azurelinuxagent.common.logcollector.MUST_COLLECT_FILES", must_collect_files):
                 lc = LogCollector(self.manifest_path)
                 archive = lc.collect_logs()
 
@@ -271,7 +292,7 @@ diskinfo,""".format(folder_to_list, file_to_collect)
         self._assert_files_are_in_archive(expected_files)
         self._assert_files_are_not_in_archive(unexpected_files)
 
-        self.assertIsNotNone(archive)
+        self._assert_archive_created(archive)
 
         no_files = self._get_number_of_files_in_archive()
         self.assertEquals(3, no_files, "Expected 3 files in archive, found {0}!".format(no_files))
@@ -281,7 +302,7 @@ diskinfo,""".format(folder_to_list, file_to_collect)
         rm_files(os.path.join(self.root_collect_dir, "waagent.log.3.gz"))
 
         with patch("azurelinuxagent.common.logcollector.ARCHIVE_SIZE_LIMIT", 10 * 1024 * 1024):
-            with patch("azurelinuxagent.common.logcollector.MUST_COLLECT_FILES_REGEX", must_collect_files):
+            with patch("azurelinuxagent.common.logcollector.MUST_COLLECT_FILES", must_collect_files):
                 second_archive = lc.collect_logs()
 
         expected_files = [
@@ -297,10 +318,11 @@ diskinfo,""".format(folder_to_list, file_to_collect)
         self._assert_files_are_in_archive(expected_files)
         self._assert_files_are_not_in_archive(unexpected_files)
 
-        self.assertIsNotNone(second_archive)
+        self._assert_archive_created(second_archive)
 
         no_files = self._get_number_of_files_in_archive()
         self.assertEquals(5, no_files, "Expected 5 files in archive, found {0}!".format(no_files))
+        self._assert_archive_sizes()
 
     def test_log_collector_should_update_archive_when_files_are_new_or_modified_or_deleted(self):
         # Ensure the archive reflects the state of files on the disk at collection time. If a file was updated, it
@@ -318,7 +340,7 @@ diskinfo,""".format(folder_to_list, file_to_collect)
             os.path.join(self.root_collect_dir, "another_dir", "least_important_file")
         ]
         self._assert_files_are_in_archive(expected_files)
-        self.assertIsNotNone(first_archive)
+        self.assertTrue(first_archive)
 
         no_files = self._get_number_of_files_in_archive()
         self.assertEquals(6, no_files, "Expected 6 files in archive, found {0}!".format(no_files))
@@ -350,7 +372,67 @@ diskinfo,""".format(folder_to_list, file_to_collect)
         self.assertEquals(LARGE_FILE_SIZE, new_file_size, "File {0} hasn't been updated! New size is {0}, but "
                                                           "should be {1}.".format(file, new_file_size, LARGE_FILE_SIZE))
 
-        self.assertIsNotNone(second_archive)
+        self._assert_archive_created(second_archive)
 
         no_files = self._get_number_of_files_in_archive()
         self.assertEquals(6, no_files, "Expected 6 files in archive, found {0}!".format(no_files))
+        self._assert_archive_sizes()
+
+    def test_log_collector_should_clean_up_uncollected_truncated_files(self):
+        # Make sure that truncated files that are no longer needed are cleaned up. If an existing truncated file
+        # from a previous run is not collected in the current run, it should be deleted to free up space.
+
+        # Specify files that have priority. The list is ordered, where the first entry has the highest priority.
+        must_collect_files = [
+            os.path.join(self.root_collect_dir, "waagent*")
+        ]
+
+        # Set the archive size limit so that not all files can be collected. In that case, files will be added to the
+        # archive according to their priority.
+        # Set the size limit so that only two files can be collected, of which one needs to be truncated.
+        with patch("azurelinuxagent.common.logcollector.ARCHIVE_SIZE_LIMIT", 2 * SMALL_FILE_SIZE):
+            with patch("azurelinuxagent.common.logcollector.MUST_COLLECT_FILES", must_collect_files):
+                with patch("azurelinuxagent.common.logcollector.FILE_SIZE_LIMIT", SMALL_FILE_SIZE):
+                    lc = LogCollector(self.manifest_path)
+                    archive = lc.collect_logs()
+
+        expected_files = [
+            os.path.join(self.root_collect_dir, "waagent.log"),
+            self._truncated_path(os.path.join(self.root_collect_dir, "waagent.log.1")),  # this file should be truncated
+        ]
+        self._assert_files_are_in_archive(expected_files)
+
+        self._assert_archive_created(archive)
+
+        no_files = self._get_number_of_files_in_archive()
+        self.assertEquals(2, no_files, "Expected 2 files in archive, found {0}!".format(no_files))
+        self._assert_archive_sizes()
+
+        # Remove the original file so it is not collected anymore. In the next collection, the truncated file should be
+        # removed both from the archive and from the filesystem.
+        rm_files(os.path.join(self.root_collect_dir, "waagent.log.1"))
+
+        with patch("azurelinuxagent.common.logcollector.ARCHIVE_SIZE_LIMIT", 2 * SMALL_FILE_SIZE):
+            with patch("azurelinuxagent.common.logcollector.MUST_COLLECT_FILES", must_collect_files):
+                with patch("azurelinuxagent.common.logcollector.FILE_SIZE_LIMIT", SMALL_FILE_SIZE):
+                    lc = LogCollector(self.manifest_path)
+                    second_archive = lc.collect_logs()
+
+        expected_files = [
+            os.path.join(self.root_collect_dir, "waagent.log"),
+            os.path.join(self.root_collect_dir, "waagent.log.2.gz"),
+        ]
+        unexpected_files = [
+            self._truncated_path(os.path.join(self.root_collect_dir, "waagent.log.1"))
+        ]
+        self._assert_files_are_in_archive(expected_files)
+        self._assert_files_are_not_in_archive(unexpected_files)
+
+        self._assert_archive_created(second_archive)
+
+        no_files = self._get_number_of_files_in_archive()
+        self.assertEquals(2, no_files, "Expected 2 files in archive, found {0}!".format(no_files))
+        self._assert_archive_sizes()
+
+        truncated_files = os.listdir(self.truncated_files_dir)
+        self.assertEquals(0, len(truncated_files), "Uncollected truncated file waagent.log.1 should have been deleted!")

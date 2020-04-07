@@ -22,6 +22,7 @@ import glob
 from heapq import heappush, heappop
 import os
 import tarfile
+import zipfile
 
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.utils.fileutil import mkdir, read_file, rm_files, append_file, append_items_to_file
@@ -34,10 +35,11 @@ level = logger.LogLevel.INFO
 LOG_COLLECTOR_DIR = '/var/lib/waagent/logcollector'
 TRUNCATED_FILES_DIR = '/var/truncated'
 
-OUTPUT_ARCHIVE_PATH = os.path.join(LOG_COLLECTOR_DIR, "logs.tar")
 OUTPUT_RESULTS_FILE_PATH = os.path.join(LOG_COLLECTOR_DIR, "results.txt")
+OUTPUT_ARCHIVE_PATH = os.path.join(LOG_COLLECTOR_DIR, "logs.tar")
+COMPRESSED_ARCHIVE_PATH = os.path.join(LOG_COLLECTOR_DIR, "logs.zip")
 
-MUST_COLLECT_FILES_REGEX = [
+MUST_COLLECT_FILES = [
     '/var/log/waagent*',
     '/var/lib/waagent/GoalState.*.xml',
     '/var/lib/waagent/waagent_status.json',
@@ -60,8 +62,9 @@ class LogCollector(object):
         self.must_collect_files = self._expand_must_collect_files()
 
     def _expand_must_collect_files(self):
+        # Match the regexes from the MUST_COLLECT_FILES list to existing file paths on disk.
         manifest = []
-        for path in MUST_COLLECT_FILES_REGEX:
+        for path in MUST_COLLECT_FILES:
             expanded_paths = self._expand_path(path)
             manifest.extend(expanded_paths)
 
@@ -128,7 +131,20 @@ class LogCollector(object):
             return os.path.join(os.path.sep, archive_name)
 
     @staticmethod
+    def _remove_uncollected_truncated_files(files_to_collect):
+        # After log collection is completed, see if there are any old truncated files which were not collected
+        # and remove them since they probably won't be collected in the future. This is possible when the
+        # original file got deleted, so there is no need to keep its truncated version anymore.
+        truncated_files = os.listdir(TRUNCATED_FILES_DIR)
+
+        for file_path in truncated_files:
+            full_path = os.path.join(TRUNCATED_FILES_DIR, file_path)
+            if full_path not in files_to_collect:
+                rm_files(full_path)
+
+    @staticmethod
     def _is_file_updated(file_name, archive_file):
+        # A file is updated if either its size or last modified time changed.
         mtime_tarball = datetime.fromtimestamp(archive_file.mtime).replace(microsecond=0)
         mtime_disk = datetime.fromtimestamp(os.path.getmtime(file_name)).replace(microsecond=0)
 
@@ -160,7 +176,7 @@ class LogCollector(object):
 
             if file_name not in final_list_of_files and file_name.lstrip(os.path.sep) not in final_list_of_files:
                 LogCollector._log_to_results_file("Updating archive, removing deleted file {0}".format(archive_file))
-                LogCollector._delete_file_from_archive(file_name.lstrip(os.path.sep))
+                LogCollector._delete_file_from_archive(archive_file)
 
     @staticmethod
     def _add_file_to_archive(file_name, archive_file_name):
@@ -177,7 +193,6 @@ class LogCollector(object):
 
     @staticmethod
     def _update_files_in_archive(final_list_of_files):
-        # with tarfile.open(OUTPUT_ARCHIVE_PATH, "a") as archive:
         for file_name in final_list_of_files:
             archive_file_name = LogCollector._convert_file_name_to_archive(file_name)
             archive_file = LogCollector._get_file_from_archive(archive_file_name)
@@ -252,13 +267,6 @@ class LogCollector(object):
             LogCollector._log_to_results_file("Failed to truncate large file: {0}".format(ustr(e)))
             return None
 
-    @staticmethod
-    def _create_list_file(files_to_collect, file_name):
-        tmp_file_path = os.path.join(LOG_COLLECTOR_DIR, file_name)
-        rm_files(tmp_file_path)
-        append_items_to_file(tmp_file_path, files_to_collect)
-        return tmp_file_path
-
     def _get_file_priority(self, file):
         # The sooner the file appears in the must collect list, the bigger its priority.
         # Priority is higher the lower the number (0 is highest priority).
@@ -315,13 +323,16 @@ class LogCollector(object):
         parsed_file_paths = self._parse_manifest_file()
         prioritized_file_paths = self._get_priority_files_list(parsed_file_paths)
         files_to_collect = self._get_final_list_for_archive(prioritized_file_paths)
-
-        # files_list = self._create_list_file(files_to_collect, 'files.lst')
         return files_to_collect
 
     def collect_logs(self):
+        """
+        Public method that collects necessary log files in a tarball that is updated each time this method is invoked.
+        The tarball is then compressed into a zip.
+        :return: Returns True if the log collection succeeded
+        """
         try:
-            # Clear previous run's output and make base directories if they do not exist already
+            # Clear previous run's output and create base directories if they don't exist already
             rm_files(OUTPUT_RESULTS_FILE_PATH)
             mkdir(TRUNCATED_FILES_DIR)
             mkdir(LOG_COLLECTOR_DIR)
@@ -332,12 +343,20 @@ class LogCollector(object):
             self._remove_deleted_files_from_archive(files_to_collect)
             self._update_files_in_archive(files_to_collect)
 
-            return OUTPUT_ARCHIVE_PATH
+            self._log_to_results_file("\n### Compressing archive ###")
+            with zipfile.ZipFile(COMPRESSED_ARCHIVE_PATH, "w", compression=zipfile.ZIP_DEFLATED) as compressed_archive:
+                compressed_archive.write(OUTPUT_ARCHIVE_PATH, arcname="logs.tar")
+
+            tar_size = os.path.getsize(OUTPUT_ARCHIVE_PATH)
+            zip_size = os.path.getsize(COMPRESSED_ARCHIVE_PATH)
+            self._log_to_results_file("Uncompressed archive {0} size: {1}b".format(OUTPUT_ARCHIVE_PATH, tar_size))
+            self._log_to_results_file("Compressed archive {0} size: {1}b".format(COMPRESSED_ARCHIVE_PATH, zip_size))
+
+            self._remove_uncollected_truncated_files(files_to_collect)
+
+            return True
         except Exception as e:
             msg = "Failed to collect logs: {0}".format(ustr(e))
             self._log_to_results_file(msg)
 
-            return None
-
-lc = LogCollector("/home/paula/WALinuxAgent/config/logcollector_manifest_full")
-lc.collect_logs()
+            return False

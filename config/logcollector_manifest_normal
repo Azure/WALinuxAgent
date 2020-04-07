@@ -24,6 +24,8 @@ copy,/var/lib/waagent/*.xml
 copy,/var/lib/waagent/waagent_status.json
 copy,/var/lib/waagent/*/status/*.status
 copy,/var/lib/waagent/*/config/*.settings
+copy,/var/lib/waagent/*/config/HandlerState
+copy,/var/lib/waagent/*/config/HandlerStatus
 copy,/var/lib/waagent/*.agentsManifest
 copy,/var/lib/waagent/error.json
 copy,/var/lib/waagent/Incarnation
