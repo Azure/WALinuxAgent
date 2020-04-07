@@ -621,11 +621,14 @@ class TestAppender(AgentTestCase):
             log_file_path = os.path.join(self.log_folder, log_file)
 
             # If the files are not gzip, the gzip library throws an OSError: Not a gzipped file.
-            with gzip.open(log_file_path, 'rb') as logfile:
-                logcontent = map(lambda x: x.strip(), logfile.readlines())
-                for logline in logcontent:
-                    # Only 7-13 are in the logs. Others shouldn't be in the logs.
-                    self.assertRegex(logline.decode('utf-8'), r".*INFO\s\w+\s*test-info-1?[0-9]")
+            logfile = gzip.open(log_file_path, 'rb')
+            logcontent = map(lambda x: x.strip(), logfile.readlines())
+
+            for logline in logcontent:
+                # Only suffix: 6-13 are in the logs. Others shouldn't be in the logs.
+                self.assertRegex(logline.decode('utf-8'), r".*INFO\s\w+\s*test-info-([6-9]|1?[0-3])")
+
+            logfile.close()
 
     @patch("azurelinuxagent.common.event.send_logs_to_telemetry", return_value=True)
     @patch("azurelinuxagent.common.event.EventLogger.add_log_event")

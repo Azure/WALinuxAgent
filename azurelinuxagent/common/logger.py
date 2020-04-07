@@ -246,10 +246,16 @@ class FileAppender(Appender):
                 if os.path.exists(dst):
                     os.remove(dst)
 
-                # Archive the current log file.
-                with gzip.open(dst, 'wb') as archive:
+                # Archive the current log file. Surrounding by try:except to safegaurd against gzip exceptions, if any.
+                try:
+                    archive = gzip.open(dst, 'wb')
                     with open(self.path, 'rb') as logfile:
                         archive.writelines(logfile)
+
+                    archive.close()
+                except Exception:
+                    pass  # Didn't add warning here as we are in the process of rotating logs while logging, and
+                    # we don't want to add burden
 
                 # Removing the plain log file as already archived.
                 os.remove(self.path)
