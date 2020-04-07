@@ -1355,6 +1355,22 @@ class GoalStateConstructionTestCase(AgentTestCase):
             protocol.mock_wire_data.shared_conf = "some invalid xml"
             self.assertEqual(expected_ext_conf, protocol.client.get_ext_conf().xml_text)
 
+    def test_ext_config_construction_dependencies(self):
+        with mock_wire_protocol(mockwiredata.DATA_FILE) as protocol:
+            profile = InVMArtifactsProfile(protocol.mock_wire_data.vm_artifacts_profile_dependencies)
+            ext_conf = profile.transform_to_extensions_config()
+            self.assertEqual(2, len(ext_conf.ext_handlers.extHandlers))
+            self.assertEqual(0, ext_conf.ext_handlers.extHandlers[0].properties.extensions[0].dependencyLevel)
+            self.assertEqual(1, ext_conf.ext_handlers.extHandlers[1].properties.extensions[0].dependencyLevel)
+
+    def test_ext_config_construction_multiple_dependencies(self):
+        with mock_wire_protocol(mockwiredata.DATA_FILE) as protocol:
+            profile = InVMArtifactsProfile(protocol.mock_wire_data.vm_artifacts_profile_multiple_dependencies)
+            ext_conf = profile.transform_to_extensions_config()
+            self.assertEqual(2, len(ext_conf.ext_handlers.extHandlers))
+            self.assertEqual(0, ext_conf.ext_handlers.extHandlers[0].properties.extensions[0].dependencyLevel)
+            self.assertEqual(42, ext_conf.ext_handlers.extHandlers[1].properties.extensions[0].dependencyLevel)
+
 
 class SaveGoalStateIfNecessaryTestCase(AgentTestCase):
     DEFAULT_INCARNATION = "1"

@@ -1471,6 +1471,10 @@ class InVMArtifactsProfile(object):
                 json_settings = json.dumps({"runtimeSettings": [{"handlerSettings": handler_settings}]})
                 runtime_settings.text = json_settings
 
+                # In this agent, we pay attention to only the dependencyLevel for dependencies
+                depends_on = xml.SubElement(runtime_settings, 'DependsOn')
+                self._set_depends_on(depends_on, extensionGoalState)
+
             config_xml = xml.tostring(root).decode()
             if flush_func is not None:
                 flush_func(datetime.utcnow())
@@ -1478,3 +1482,14 @@ class InVMArtifactsProfile(object):
 
             return extensions_config
         return None
+
+    def _set_depends_on(self, depends_on, extensionGoalState):
+        # dependsOn is a list, so we need to take the highest dependencyLevel of any of them
+        set_dependency_level = 0
+        ext_depends_on = extensionGoalState.get('dependsOn')
+        if ext_depends_on is not None:
+            for dependency in ext_depends_on:
+                dependency_level = dependency.get('dependencyLevel')
+                if dependency_level is not None and dependency_level > set_dependency_level:
+                    set_dependency_level = dependency_level
+            depends_on.set('dependencyLevel', str(set_dependency_level))

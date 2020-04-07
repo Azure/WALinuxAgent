@@ -177,6 +177,21 @@ class TestGoalState(AgentTestCase):
         self.assertIsNotNone(ext_conf)
         self.assertFalse(ext_conf.changed)
 
+    def test_reset(self):
+        test_data = WireProtocolData(DATA_FILE)
+        profile = InVMArtifactsProfile(test_data.vm_artifacts_profile)
+        wire_client = MockWireClient(test_data.ext_conf, profile)
+        retriever = ExtensionsConfigRetriever(wire_client=wire_client)
+        retriever._set_fabric(incarnation=42, svd_seqNo=79)
+        retriever._set_fast_track(vm_artifacts_seq_no=97)
+
+        # Now cleanup and verify the state is removed
+        retriever.reset()
+        self.assertEqual(GOAL_STATE_SOURCE_FABRIC, retriever._get_mode())
+        self.assertEqual(-1, retriever._get_incarnation())
+        self.assertEqual(-1, retriever._get_svd_seqNo())
+        self.assertEqual(-1, retriever._get_sequence_number())
+
     def test_startup_fabric(self):
         # Set the previous goal state as Fabric
         test_data = WireProtocolData(DATA_FILE)

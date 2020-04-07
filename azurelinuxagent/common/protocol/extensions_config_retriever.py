@@ -142,6 +142,22 @@ class ExtensionsConfigRetriever(object):
                 self._last_mode = self._pending_mode
                 self._set_fabric(self._last_incarnation, self._last_svd_seqNo)
 
+    def reset(self):
+        """
+        Removes all cache files and resets all cached goal state information
+        This is necessary if a VM image is deployed from this one so we start fresh
+        TODO: when reset is implemented call this
+        """
+        self._remove_cache(INCARNATION_FILE_NAME)
+        self._remove_cache(SEQUENCE_NUMBER_FILE_NAME)
+        self._remove_cache(SVD_SEQNO_FILE_NAME)
+        self._remove_cache(GOAL_STATE_SOURCE_FILE_NAME)
+        self._last_svd_seqNo = None
+        self._last_mode = None
+        self._last_incarnation = None
+        self._last_fast_track_extensionsConfig = None
+        self._last_seqNo = None
+
     def _remove_extensions_if_necessary(self, extensions_config):
         """
         If this is a Fabric GS, but the InSvdSeqNo did NOT change, then the goal state was
@@ -215,6 +231,15 @@ class ExtensionsConfigRetriever(object):
         if svd_seqNo is not None:
             svd_seqNo_file_path = os.path.join(conf.get_lib_dir(), SVD_SEQNO_FILE_NAME)
             self._save_cache(svd_seqNo_file_path, ustr(svd_seqNo))
+
+    def _remove_cache(self, file_name):
+        try:
+            path = os.path.join(conf.get_lib_dir(), file_name)
+            if os.path.exists(path):
+                os.remove(path)
+        except IOError as e:
+            fileutil.clean_ioerror(e, paths=path)
+            raise ProtocolError("Failed to remove cache: {0}".format(e))
 
     def _save_cache(self, local_file, data):
         try:

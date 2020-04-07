@@ -1,0 +1,88 @@
+{
+  "inVMArtifactsProfileBlobSeqNo": 3,
+  "inVMMetadata": {
+    "subscriptionId": "00000000-0000-0000-0000-000000000000",
+    "resourceGroupName": "TestRG",
+    "vmName": "vm1",
+    "location": "location",
+    "vmId": "00000000-0000-0000-0000-000000000000",
+    "vmSize": "Standard_A3",
+    "osType": "Windows",
+    "vmImage": {
+      "publisher": "publisher",
+      "offer": "offer",
+      "sku": "sku",
+      "version": "version"
+    },
+    "placement": {
+      "platformUpdateDomain": 1,
+      "platformFaultDomain": 1
+    },
+    "tags": {
+      "tag_key": "tag_value"
+    }
+  },
+  "extensionGoalStates": [
+  {
+      "name": "OSTCExtensions.ExampleHandlerLinux",
+      "version": "1.0.0",
+      "location": "http://rdfepirv2hknprdstr03.blob.core.windows.net/b01058962be54ceca550a390fa5ff064/Microsoft.OSTCExtensions_ExampleHandlerLinux_asiaeast_manifest.xml",
+      "state": "enabled",
+      "autoUpgrade": false,
+      "failoverlocation": "http://rdfepirv2hknprdstr04.blob.core.windows.net/b01058962be54ceca550a390fa5ff064/Microsoft.OSTCExtensions_ExampleHandlerLinux_asiaeast_manifest.xml",
+      "runAsStartupTask": false,
+      "useExactVersion": false,
+      "settingsSeqNo": 1,
+      "settings": [
+        {
+          "protectedSettingsCertThumbprint": "4037FBF5F1F3014F99B5D6C7799E9B20E6871CB3",
+          "protectedSettings": "MIICWgYJK",
+          "publicSettings": { "foo": "bar" }
+        }
+      ]
+    },
+      {
+      "name": "Microsoft.CPlat.Core.ExampleExtensionLinux",
+      "version": "1.1.1",
+      "location": "https://zrdfepirv2sn4prdstr09a.blob.core.windows.net/f72653efd9e349ed9842c8b99e4c1712/Microsoft.CPlat.Core_ExampleExtensionLinux_ussouth_manifest.xml",
+      "state": "enabled",
+      "autoUpgrade": false,
+      "failoverlocation": "https://ardfepirv2sn3prdstr05.blob.core.windows.net/f72653efd9e349ed9842c8b99e4c1712/Microsoft.CPlat.Core_ExampleExtensionLinux_ussouth_manifest.xml",
+      "runAsStartupTask": false,
+      "useExactVersion": false,
+      "settingsSeqNo": 1,
+      "settings": [
+        {
+          "protectedSettingsCertThumbprint": "4037FBF5F1F3014F99B5D6C7799E9B20E6871CB3",
+          "protectedSettings": "MIICWgYJK",
+          "publicSettings": { "foo": "bar" }
+        }
+      ],
+      "dependsOn": [
+        {
+          "DependsOnExtension": [
+            {
+              "handler": "OSTCExtensions.ExampleHandlerLinux"
+            }
+          ],
+          "dependencyLevel": 1,
+          "name": "Microsoft.CPlat.Core.ExampleExtensionLinux"
+        }
+      ]
+    }
+  ],
+  "VM": {
+    "id": "resourceId",
+    "properties": {
+      "sourceVirtualMachine": "sourceVirtualMachine",
+      "storageProfile": {
+        "osDisk": {
+          "osState": "osState",
+          "osType": "osType"
+        },
+        "dataDisks": []
+      },
+      "provisioningState": "provisioningState"
+    }
+  }
+}

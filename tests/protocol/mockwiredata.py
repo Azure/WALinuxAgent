@@ -40,7 +40,9 @@ DATA_FILE = {
         "vm_artifacts_profile": "wire/in_vm_artifacts_profile_blob.json",
         "vm_artifacts_profile_install": "wire/in_vm_artifacts_profile_blob_install.json",
         "vm_artifacts_profile_no_extensions": "wire/in_vm_artifacts_profile_no_extensions.json",
-        "vm_artifacts_profile_no_ext_config": "wire/in_vm_artifacts_profile_no_ext_config.json"
+        "vm_artifacts_profile_no_ext_config": "wire/in_vm_artifacts_profile_no_ext_config.json",
+        "vm_artifacts_profile_dependencies": "wire/in_vm_artifacts_profile_dependencies.json",
+        "vm_artifacts_profile_multiple_dependencies": "wire/in_vm_artifacts_profile_multiple_dependencies.json"
 }
 
 DATA_FILE_IN_VM_ARTIFACTS_PROFILE = DATA_FILE.copy()
@@ -93,6 +95,9 @@ DATA_FILE_REMOTE_ACCESS["remote_access"] = "wire/remote_access_single_account.xm
 DATA_FILE_FAST_TRACK = DATA_FILE.copy()
 DATA_FILE_FAST_TRACK["in_vm_artifacts_profile"] = "wire/in_vm_artifacts_profile_blob.json"
 
+DATA_FILE_FAST_TRACK_DEPENDENCIES = DATA_FILE.copy()
+DATA_FILE_FAST_TRACK_DEPENDENCIES["in_vm_artifacts_profile"] = "wire/in_vm_artifacts_profile_dependencies.json"
+
 class WireProtocolData(object):
     def __init__(self, data_files=DATA_FILE):
         self.emulate_stale_goal_state = False
@@ -132,6 +137,8 @@ class WireProtocolData(object):
         self.vm_artifacts_profile_install = None
         self.vm_artifacts_profile_no_extensions = None
         self.vm_artifacts_profile_no_ext_config = None
+        self.vm_artifacts_profile_dependencies = None
+        self.vm_artifacts_profile_multiple_dependencies = None
 
         self.reload()
 
@@ -152,6 +159,8 @@ class WireProtocolData(object):
         self.vm_artifacts_profile_install = load_data(self.data_files.get("vm_artifacts_profile_install"))
         self.vm_artifacts_profile_no_extensions = load_data(self.data_files.get("vm_artifacts_profile_no_extensions"))
         self.vm_artifacts_profile_no_ext_config = load_data(self.data_files.get("vm_artifacts_profile_no_ext_config"))
+        self.vm_artifacts_profile_dependencies = load_data(self.data_files.get("vm_artifacts_profile_dependencies"))
+        self.vm_artifacts_profile_multiple_dependencies = load_data(self.data_files.get("vm_artifacts_profile_multiple_dependencies"))
 
         remote_access_data_file = self.data_files.get("remote_access")
         if remote_access_data_file is not None:
