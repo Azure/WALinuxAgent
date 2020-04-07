@@ -24,13 +24,15 @@ import tempfile
 
 from azurelinuxagent.common.utils.fileutil import rm_dirs, mkdir, rm_files, write_file
 from azurelinuxagent.common.logcollector import LogCollector
-from tests.tools import AgentTestCase, patch
+from tests.tools import AgentTestCase, is_python_version_26, patch, skip_if_predicate_true
 
 
 SMALL_FILE_SIZE = 1 * 1024 * 1024  # 1 MB
 LARGE_FILE_SIZE = 5 * 1024 * 1024  # 5 MB
 
 
+# TODO: make tests work on py2.6
+@skip_if_predicate_true(is_python_version_26, "Disabled on Python 2.6")
 class TestLogCollector(AgentTestCase):
 
     @classmethod

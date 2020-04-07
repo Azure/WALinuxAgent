@@ -28,9 +28,7 @@ from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.utils.fileutil import mkdir, read_file, rm_files, append_file, append_items_to_file
 from azurelinuxagent.common.utils.shellutil import run_command
 from azurelinuxagent.common.utils.textutil import safe_shlex_split
-import azurelinuxagent.common.logger as logger
 
-level = logger.LogLevel.INFO
 
 LOG_COLLECTOR_DIR = '/var/lib/waagent/logcollector'
 TRUNCATED_FILES_DIR = '/var/truncated'
