@@ -164,3 +164,6 @@ class NSBSDOSUtil(FreeBSDOSUtil):
 
     def get_agent_log_rotation_backupcount(self):
         return 1
+
+    def to_archive_agent_log_rotation_backupfile(self):
+        return False

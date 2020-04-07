@@ -17,6 +17,7 @@
 """
 Log utils
 """
+import gzip
 import sys
 from datetime import datetime, timedelta
 import os
@@ -159,9 +160,11 @@ class Logger(object):
                 # TODO: call write_log instead (see comment above)
                 #
 
-    def add_appender(self, appender_type, level, path, max_bytes=0, backup_count=0, logrotate_supported=True):
+    def add_appender(self, appender_type, level, path, max_bytes=0, backup_count=0, logrotate_supported=True,
+                     should_archive_backup_files=True):
         appender = _create_logger_appender(appender_type, level, path, max_bytes=max_bytes, backup_count=backup_count,
-                                           logrotate_supported=logrotate_supported)
+                                           logrotate_supported=logrotate_supported,
+                                           should_archive_backup_files=should_archive_backup_files)
         self.appenders.append(appender)
 
 
@@ -189,11 +192,13 @@ class ConsoleAppender(Appender):
 
 
 class FileAppender(Appender):
-    def __init__(self, level, path, max_bytes, backup_count, logrotate_supported):
+    def __init__(self, level, path, max_bytes, backup_count, logrotate_supported, should_archive_backup_files):
         self.path = path
         self._max_bytes = max_bytes
         self._backup_count = backup_count
         self._logrotate_supported = logrotate_supported
+        self._should_archive_backup_files = should_archive_backup_files
+
         super(FileAppender, self).__init__(level)
 
     def write(self, level, msg):
@@ -219,18 +224,55 @@ class FileAppender(Appender):
         return False
 
     def _do_rollover(self):
+        gz_extension = "gz"
+
         if self._backup_count > 0:
-            for i in range(self._backup_count - 1, 0, -1):
-                src = "%s.%d" % (self.path, i)
-                dst = "%s.%d" % (self.path, i + 1)
-                if os.path.exists(src):
-                    if os.path.exists(dst):
-                        os.remove(dst)
-                    os.rename(src, dst)
-            dst = "%s.1" % self.path
-            if os.path.exists(dst):
-                os.remove(dst)
-            os.rename(self.path, dst)
+            if self._should_archive_backup_files:
+                # Rotating the backup files to make space for the current log file.
+                for i in range(self._backup_count - 1, 0, -1):
+                    src = "%s.%d.%s" % (self.path, i, gz_extension)
+                    dst = "%s.%d.%s" % (self.path, i + 1, gz_extension)
+
+                    # Moving n -> n+1
+                    if os.path.exists(src):
+                        if os.path.exists(dst):
+                            os.remove(dst)
+                        os.rename(src, dst)
+
+                # Backing up the current logging file to logfile.1
+                dst = "%s.1.%s" % (self.path, gz_extension)
+
+                # Removing the logfile.1 that exists already. Already moved above, if needed.
+                if os.path.exists(dst):
+                    os.remove(dst)
+
+                # Archive the current log file.
+                with gzip.open(dst, 'wb') as archive, open(self.path, 'rb') as logfile:
+                    archive.writelines(logfile)
+
+                # Removing the plain log file as already archived.
+                os.remove(self.path)
+            else:
+                # Rotating the backup files to make space for the current log file.
+                for i in range(self._backup_count - 1, 0, -1):
+                    src = "%s.%d" % (self.path, i)
+                    dst = "%s.%d" % (self.path, i + 1)
+
+                    # Moving n -> n+1
+                    if os.path.exists(src):
+                        if os.path.exists(dst):
+                            os.remove(dst)
+                        os.rename(src, dst)
+
+                # Backing up the current logging file
+                dst = "%s.1" % self.path
+
+                # Removing the logfile.1 that exists already.
+                if os.path.exists(dst):
+                    os.remove(dst)
+
+                # Renaming logfile to logfile.1.
+                os.rename(self.path, dst)
 
 
 class StdoutAppender(Appender):
@@ -283,9 +325,10 @@ class AppenderType(object):
 
 
 def add_logger_appender(appender_type, level=LogLevel.INFO, path=None, max_bytes=0, backup_count=0,
-                        logrotate_supported=True):
+                        logrotate_supported=True, should_archive_backup_files=True):
     DEFAULT_LOGGER.add_appender(appender_type, level, path, max_bytes=max_bytes, backup_count=backup_count,
-                                logrotate_supported=logrotate_supported)
+                                logrotate_supported=logrotate_supported,
+                                should_archive_backup_files=should_archive_backup_files)
 
 
 def reset_periodic():
@@ -349,11 +392,13 @@ def log(level, msg_format, *args):
 
 
 def _create_logger_appender(appender_type, level=LogLevel.INFO, path=None, max_bytes=0, backup_count=0,
-                            logrotate_supported=True):
+                            logrotate_supported=True, should_archive_backup_files=True):
     if appender_type == AppenderType.CONSOLE:
         return ConsoleAppender(level, path)
     elif appender_type == AppenderType.FILE:
-        return FileAppender(level, path, max_bytes=max_bytes, backup_count=backup_count, logrotate_supported=logrotate_supported)
+        return FileAppender(level, path, max_bytes=max_bytes, backup_count=backup_count,
+                            logrotate_supported=logrotate_supported,
+                            should_archive_backup_files=should_archive_backup_files)
     elif appender_type == AppenderType.STDOUT:
         return StdoutAppender(level)
     elif appender_type == AppenderType.TELEMETRY:

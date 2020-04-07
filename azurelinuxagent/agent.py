@@ -78,11 +78,11 @@ class Agent(object):
             logger.error("Exception occurred while creating log directory {0}: {1}".format(log_dir, e))
 
         log_file = os.path.join(log_dir, WAAGENT_LOG_FILE)
-        logger.add_logger_appender(logger.AppenderType.FILE, level,
-                                   path=log_file,
+        logger.add_logger_appender(logger.AppenderType.FILE, level, path=log_file,
                                    max_bytes=self.osutil.get_agent_log_rotation_maxbytes(),
                                    backup_count=self.osutil.get_agent_log_rotation_backupcount(),
-                                   logrotate_supported=self.osutil.supports_logrotate())
+                                   logrotate_supported=self.osutil.supports_logrotate(),
+                                   should_archive_backup_files=self.osutil.to_archive_agent_log_rotation_backupfile())
 
         if conf.get_logs_console():
             logger.add_logger_appender(logger.AppenderType.CONSOLE, level,

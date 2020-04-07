@@ -1458,3 +1458,12 @@ class DefaultOSUtil(object):
         :return: int: Number of log file backups
         """
         return 0
+
+    def to_archive_agent_log_rotation_backupfile(self):
+        """
+        For cases where logrotate isn't available, specify if the log backups need to be archived or not. This will work
+        only when # of backupcount > 0.
+
+        :return: bool: To archive or not to archive
+        """
+        return True

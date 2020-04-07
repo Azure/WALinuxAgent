@@ -14,7 +14,7 @@
 #
 # Requires Python 2.6+ and Openssl 1.0+
 #
-
+import gzip
 import json
 import os
 import tempfile
@@ -476,9 +476,9 @@ class TestAppender(AgentTestCase):
         AgentTestCase.tearDown(self)
         logger.reset_periodic()
 
-        fileutil.rm_dirs(self.event_dir)
-        fileutil.rm_dirs(self.lib_dir)
-        fileutil.rm_dirs(self.log_folder)
+        for temp_dir in [self.lib_dir, self.log_folder]:
+            fileutil.rm_dirs(temp_dir)
+            os.removedirs(temp_dir)
 
         logger.DEFAULT_LOGGER.appenders *= 0
 
@@ -571,7 +571,8 @@ class TestAppender(AgentTestCase):
         logger.add_logger_appender(logger.AppenderType.FILE, logger.LogLevel.INFO, path=self.log_file,
                                    max_bytes=50,  # approx length of one log line.
                                    backup_count=4,
-                                   logrotate_supported=False)
+                                   logrotate_supported=False,
+                                   should_archive_backup_files=False)
         # Do some dummy logging
         for i in range(10):
             logger.info("test-info-{0}".format(i))
@@ -589,6 +590,42 @@ class TestAppender(AgentTestCase):
                 self.assertRegex(logcontent, r".*INFO\s\w+\s*test-info-{0}.*".format(starting_log_suffix))
 
             starting_log_suffix += 1
+
+    def test_file_appender_with_logrotate_not_supported_archiving_backup(self):
+        logger.add_logger_appender(logger.AppenderType.FILE, logger.LogLevel.INFO, path=self.log_file, max_bytes=120,
+                                   backup_count=4, logrotate_supported=False, should_archive_backup_files=True)
+        # Do some dummy logging
+        for i in range(15):
+            # approx length of one log line is 50 bytes.
+            logger.info("test-info-{0}".format(i))
+
+        current_log_file = os.path.join(self.log_folder, self.log_file)
+
+        # make sure that the current log file still exists and did not get deleted in all the rotation.
+        self.assertTrue(os.path.exists(current_log_file))
+
+        # get all the archived backup.
+        archived_backup_files = sorted(list(filter(lambda x: x.endswith("gz"), os.listdir(self.log_folder))))
+
+        # check if there are _backup_count_ number of archives created
+        self.assertEqual(4, len(archived_backup_files))
+
+        # read all the lines from the current log file
+        with open(current_log_file) as logfile:
+            for logline in logfile.readlines():
+                # Only one line should be in the logs, as others got rotated.
+                self.assertRegex(logline, r".*INFO\s\w+\s*test-info-{0}.*".format(14))
+
+        # open up each archive file and read the log lines in it
+        for log_file in archived_backup_files:
+            log_file_path = os.path.join(self.log_folder, log_file)
+
+            # If the files are not gzip, the gzip library throws an OSError: Not a gzipped file.
+            with gzip.open(log_file_path, 'rb') as logfile:
+                logcontent = map(lambda x: x.strip(), logfile.readlines())
+                for logline in logcontent:
+                    # Only 7-13 are in the logs. Others shouldn't be in the logs.
+                    self.assertRegex(logline.decode('utf-8'), r".*INFO\s\w+\s*test-info-1?[0-9]")
 
     @patch("azurelinuxagent.common.event.send_logs_to_telemetry", return_value=True)
     @patch("azurelinuxagent.common.event.EventLogger.add_log_event")
