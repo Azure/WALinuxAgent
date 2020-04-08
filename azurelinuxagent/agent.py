@@ -81,7 +81,7 @@ class Agent(object):
         logger.add_logger_appender(logger.AppenderType.FILE, level, path=log_file,
                                    max_bytes=self.osutil.get_agent_log_rotation_maxbytes(),
                                    backup_count=self.osutil.get_agent_log_rotation_backupcount(),
-                                   logrotate_supported=self.osutil.supports_logrotate(),
+                                   agent_controlled_log_rotation=self.osutil.agent_controlled_log_rotation(),
                                    should_archive_backup_files=self.osutil.to_archive_agent_log_rotation_backupfile())
 
         if conf.get_logs_console():

@@ -14,6 +14,7 @@
 #
 # Requires Python 2.6+ and Openssl 1.0+
 #
+import contextlib
 import gzip
 import json
 import os
@@ -547,12 +548,12 @@ class TestAppender(AgentTestCase):
             self.assertRegex(logcontent[1], r"(.*WARNING\s\w+\s*test-warn.*)")
             self.assertRegex(logcontent[2], r"(.*ERROR\s\w+\s*test-error.*)")
 
-    def test_file_appender_with_logrotate_supported(self):
+    def test_file_appender_with_external_logrotate_supported(self):
         logger.add_logger_appender(logger.AppenderType.FILE,
                                    logger.LogLevel.INFO,
                                    path=self.log_file,
                                    max_bytes=4, backup_count=10,
-                                   logrotate_supported=True)
+                                   agent_controlled_log_rotation=False)
         # Do some dummy logging
         for i in range(10):
             logger.info("test-info-{0}".format(i))
@@ -567,11 +568,11 @@ class TestAppender(AgentTestCase):
             for logline in logcontent:
                 self.assertRegex(logline, r"(.*INFO\s\w+\s*test-info.*)")
 
-    def test_file_appender_with_logrotate_not_supported(self):
+    def test_file_appender_with_agent_controlled_logrotate_not_archiving_backups(self):
         logger.add_logger_appender(logger.AppenderType.FILE, logger.LogLevel.INFO, path=self.log_file,
                                    max_bytes=50,  # approx length of one log line.
                                    backup_count=4,
-                                   logrotate_supported=False,
+                                   agent_controlled_log_rotation=True,
                                    should_archive_backup_files=False)
         # Do some dummy logging
         for i in range(10):
@@ -591,9 +592,9 @@ class TestAppender(AgentTestCase):
 
             starting_log_suffix += 1
 
-    def test_file_appender_with_logrotate_not_supported_archiving_backup(self):
+    def test_file_appender_with_agent_controlled_logrotate_archiving_backup(self):
         logger.add_logger_appender(logger.AppenderType.FILE, logger.LogLevel.INFO, path=self.log_file, max_bytes=120,
-                                   backup_count=4, logrotate_supported=False, should_archive_backup_files=True)
+                                   backup_count=4, agent_controlled_log_rotation=True, should_archive_backup_files=True)
         # Do some dummy logging
         for i in range(15):
             # approx length of one log line is 50 bytes.
@@ -621,14 +622,12 @@ class TestAppender(AgentTestCase):
             log_file_path = os.path.join(self.log_folder, log_file)
 
             # If the files are not gzip, the gzip library throws an OSError: Not a gzipped file.
-            logfile = gzip.open(log_file_path, 'rb')
-            logcontent = map(lambda x: x.strip(), logfile.readlines())
+            with contextlib.closing(gzip.open(log_file_path, 'rb')) as logfile:
+                logcontent = map(lambda x: x.strip(), logfile.readlines())
 
             for logline in logcontent:
                 # Only suffix: 6-13 are in the logs. Others shouldn't be in the logs.
                 self.assertRegex(logline.decode('utf-8'), r".*INFO\s\w+\s*test-info-([6-9]|1?[0-3])")
-
-            logfile.close()
 
     @patch("azurelinuxagent.common.event.send_logs_to_telemetry", return_value=True)
     @patch("azurelinuxagent.common.event.EventLogger.add_log_event")

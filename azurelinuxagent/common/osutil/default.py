@@ -1425,13 +1425,19 @@ class DefaultOSUtil(object):
                 else:
                     logger.error("Interface {0} has {1} but no link state".format(interface_name, description))
 
-    def supports_logrotate(self):
+    def agent_controlled_log_rotation(self):
         """
-        logrotate allows automatic rotation, compression, removal, and mailing of log files.
+        Does the agent control log rotation or not.
 
-        :return: bool: Does the OS support logrotate
+        True: To enable rotation of logs - also set the following values to configure the rotation details.
+                get_agent_log_rotation_maxbytes,
+                get_agent_log_rotation_backupcount, and
+                to_archive_agent_log_rotation_backupfile
+        False: an external tool does automatic rotation, compression, removal of log files.
+
+        :return: bool: Does the agent control its own log rotation or not.
         """
-        return True
+        return False
     
     def get_agent_log_dir(self):
         """

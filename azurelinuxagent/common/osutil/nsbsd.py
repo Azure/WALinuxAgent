@@ -153,8 +153,8 @@ class NSBSDOSUtil(FreeBSDOSUtil):
         # disable iptables methods
         return True
 
-    def supports_logrotate(self):
-        return False
+    def agent_controlled_log_rotation(self):
+        return True
 
     def get_agent_log_dir(self):
         return "/log/azure"

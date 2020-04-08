@@ -17,6 +17,7 @@
 """
 Log utils
 """
+import contextlib
 import gzip
 import sys
 from datetime import datetime, timedelta
@@ -160,10 +161,10 @@ class Logger(object):
                 # TODO: call write_log instead (see comment above)
                 #
 
-    def add_appender(self, appender_type, level, path, max_bytes=0, backup_count=0, logrotate_supported=True,
+    def add_appender(self, appender_type, level, path, max_bytes=0, backup_count=0, agent_controlled_log_rotation=False,
                      should_archive_backup_files=True):
         appender = _create_logger_appender(appender_type, level, path, max_bytes=max_bytes, backup_count=backup_count,
-                                           logrotate_supported=logrotate_supported,
+                                           agent_controlled_log_rotation=agent_controlled_log_rotation,
                                            should_archive_backup_files=should_archive_backup_files)
         self.appenders.append(appender)
 
@@ -192,11 +193,11 @@ class ConsoleAppender(Appender):
 
 
 class FileAppender(Appender):
-    def __init__(self, level, path, max_bytes, backup_count, logrotate_supported, should_archive_backup_files):
+    def __init__(self, level, path, max_bytes, backup_count, agent_controlled_log_rotation, should_archive_backup_files):
         self.path = path
         self._max_bytes = max_bytes
         self._backup_count = backup_count
-        self._logrotate_supported = logrotate_supported
+        self._agent_controlled_log_rotation = agent_controlled_log_rotation
         self._should_archive_backup_files = should_archive_backup_files
 
         super(FileAppender, self).__init__(level)
@@ -214,8 +215,9 @@ class FileAppender(Appender):
                 pass
 
     def _should_rollover(self, msg):
-        if self._logrotate_supported or self._backup_count == 0:
-            # Making it explicit for not to rotate if logrotate takes care of it.
+        if not self._agent_controlled_log_rotation or self._backup_count == 0:
+            # If true, then it won't invoke the rollover
+            # False only in case when _agent_controlled_log_rotation is True and backup_count != 0
             return False
 
         if os.path.exists(self.path) and os.stat(self.path).st_size + len(msg) > self._max_bytes:
@@ -246,13 +248,11 @@ class FileAppender(Appender):
                 if os.path.exists(dst):
                     os.remove(dst)
 
-                # Archive the current log file. Surrounding by try:except to safegaurd against gzip exceptions, if any.
+                # Archive the current log file. Surrounding by try:except to safeguard against gzip exceptions, if any.
                 try:
-                    archive = gzip.open(dst, 'wb')
-                    with open(self.path, 'rb') as logfile:
-                        archive.writelines(logfile)
-
-                    archive.close()
+                    with contextlib.closing(gzip.open(dst, 'wb')) as archive:
+                        with open(self.path, 'rb') as logfile:
+                            archive.writelines(logfile)
                 except Exception:
                     pass  # Didn't add warning here as we are in the process of rotating logs while logging, and
                     # we don't want to add burden
@@ -332,9 +332,9 @@ class AppenderType(object):
 
 
 def add_logger_appender(appender_type, level=LogLevel.INFO, path=None, max_bytes=0, backup_count=0,
-                        logrotate_supported=True, should_archive_backup_files=True):
+                        agent_controlled_log_rotation=False, should_archive_backup_files=True):
     DEFAULT_LOGGER.add_appender(appender_type, level, path, max_bytes=max_bytes, backup_count=backup_count,
-                                logrotate_supported=logrotate_supported,
+                                agent_controlled_log_rotation=agent_controlled_log_rotation,
                                 should_archive_backup_files=should_archive_backup_files)
 
 
@@ -399,12 +399,12 @@ def log(level, msg_format, *args):
 
 
 def _create_logger_appender(appender_type, level=LogLevel.INFO, path=None, max_bytes=0, backup_count=0,
-                            logrotate_supported=True, should_archive_backup_files=True):
+                            agent_controlled_log_rotation=False, should_archive_backup_files=True):
     if appender_type == AppenderType.CONSOLE:
         return ConsoleAppender(level, path)
     elif appender_type == AppenderType.FILE:
         return FileAppender(level, path, max_bytes=max_bytes, backup_count=backup_count,
-                            logrotate_supported=logrotate_supported,
+                            agent_controlled_log_rotation=agent_controlled_log_rotation,
                             should_archive_backup_files=should_archive_backup_files)
     elif appender_type == AppenderType.STDOUT:
         return StdoutAppender(level)
