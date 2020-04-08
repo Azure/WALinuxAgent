@@ -65,7 +65,7 @@ def has_command(cmd):
 
 def run(cmd, chk_err=True, expected_errors=[]):
     """
-    Note: Deprecating in favour of `run_command()` function.
+    Note: Deprecating in favour of `azurelinuxagent.common.utils.shellutil.run_command` function.
     Calls run_get_output on 'cmd', returning only the return code.
     If chk_err=True then errors will be reported in the log.
     If chk_err=False then errors will be suppressed from the log.
@@ -137,6 +137,8 @@ def run_command(command, log_error=False):
     Executes the given command and returns its stdout as a string.
     If there are any errors executing the command it logs details about the failure and raises a RunCommandException;
     if 'log_error' is True, it also logs details about the error.
+
+    Note: This is the preferred method to execute shell commands over `azurelinuxagent.common.utils.shellutil.run` function.
     """
     def format_command(cmd):
         return " ".join(cmd) if isinstance(cmd, list) else command
