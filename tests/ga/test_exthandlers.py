@@ -20,6 +20,8 @@ import os
 import subprocess
 import time
 
+from nose.plugins.attrib import attr
+
 from azurelinuxagent.common import conf
 
 from azurelinuxagent.common.protocol.goal_state import GoalState
@@ -40,7 +42,8 @@ from azurelinuxagent.common.protocol.extensions_config_retriever import Extensio
     INCARNATION_FILE_NAME
 from tests.protocol.mocks import MockWireClient, MockProtocol
 from tests.protocol.mockwiredata import WireProtocolData, DATA_FILE
-from tests.tools import AgentTestCase, patch, mock_sleep, clear_singleton_instances
+from tests.tools import AgentTestCase, patch, mock_sleep, clear_singleton_instances, i_am_root
+
 
 class TestGoalState(AgentTestCase):
 
@@ -75,6 +78,14 @@ class TestGoalState(AgentTestCase):
         retriever._set_fast_track()
         self.assertEqual(GOAL_STATE_SOURCE_FASTTRACK, retriever._get_mode())
         self.assertEqual(42, retriever._get_sequence_number())
+
+    def test_get_cached_vm_id(self):
+        retriever = ExtensionsConfigRetriever(wire_client=None)
+        self.assertIsNone(retriever._get_cached_vm_id())
+        retriever._set_cached_vm_id("Flarbaglarf")
+        self.assertEqual("Flarbaglarf", retriever._get_cached_vm_id())
+        retriever._reset()
+        self.assertIsNone(retriever._get_cached_vm_id())
 
     def test_get_fabric_changed(self):
         retriever = ExtensionsConfigRetriever(wire_client=None)
@@ -186,11 +197,49 @@ class TestGoalState(AgentTestCase):
         retriever._set_fast_track(vm_artifacts_seq_no=97)
 
         # Now cleanup and verify the state is removed
-        retriever.reset()
+        retriever._reset()
         self.assertEqual(GOAL_STATE_SOURCE_FABRIC, retriever._get_mode())
         self.assertEqual(-1, retriever._get_incarnation())
         self.assertEqual(-1, retriever._get_svd_seqNo())
         self.assertEqual(-1, retriever._get_sequence_number())
+
+    @patch("azurelinuxagent.common.protocol.extensions_config_retriever.ExtensionsConfigRetriever._get_vm_id")
+    def test_reset_if_necessary(self, get_vm_id):
+        # The first time we'll cache the VmId
+        get_vm_id.return_value = "MyOldVm"
+        retriever = ExtensionsConfigRetriever(wire_client=None)
+        self.assertEqual("MyOldVm", retriever._get_cached_vm_id())
+        retriever._set_fast_track(vm_artifacts_seq_no=102)
+
+        # Restart with None. We won't reset because we failed to retrieve the VmId
+        get_vm_id.return_value = None
+        retriever = ExtensionsConfigRetriever(wire_client=None)
+        self.assertEqual("MyOldVm", retriever._get_cached_vm_id())
+        self.assertEqual(102, retriever._get_sequence_number())
+
+        # Restart with the same VmId. We won't reset because nothing changed
+        # Restart with None. We won't reset because we failed to retrieve the VmId
+        get_vm_id.return_value = "MyOldVm"
+        retriever = ExtensionsConfigRetriever(wire_client=None)
+        self.assertEqual("MyOldVm", retriever._get_cached_vm_id())
+        self.assertEqual(102, retriever._get_sequence_number())
+
+        # Now restart with a new VmId and verify we reset
+        get_vm_id.return_value = "MyNewVm"
+        retriever = ExtensionsConfigRetriever(wire_client=None)
+        self.assertEqual("MyNewVm", retriever._get_cached_vm_id())
+        self.assertEqual(-1, retriever._get_sequence_number())
+
+    @attr('requires_sudo')
+    def test_get_vmId(self):
+        self.assertTrue(i_am_root(), "Test does not run when non-root")
+        test_data = WireProtocolData(DATA_FILE)
+        profile = InVMArtifactsProfile(test_data.vm_artifacts_profile)
+        wire_client = MockWireClient(test_data.ext_conf, profile)
+        retriever = ExtensionsConfigRetriever(wire_client=wire_client)
+        vm_id = retriever._get_vm_id()
+        self.assertIsNotNone(vm_id)
+        self.assertEqual(36, len(vm_id))
 
     def test_startup_fabric(self):
         # Set the previous goal state as Fabric

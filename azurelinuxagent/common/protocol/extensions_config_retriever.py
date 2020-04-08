@@ -18,6 +18,7 @@
 #
 
 import os
+import re
 
 from azurelinuxagent.common.future import ustr
 
@@ -26,16 +27,19 @@ import azurelinuxagent.common.logger as logger
 from azurelinuxagent.common.protocol.goal_state import ExtensionsConfig
 from azurelinuxagent.common.utils import fileutil, restutil
 from azurelinuxagent.common.exception import ProtocolError
+from azurelinuxagent.common.utils.shellutil import run_command
+from azurelinuxagent.common.utils.textutil import safe_shlex_split
 
 INCARNATION_FILE_NAME = "Incarnation"
 SEQUENCE_NUMBER_FILE_NAME = "ArtifactProfileSequenceNumber"
 SVD_SEQNO_FILE_NAME = "SvdSeqNo"
 GOAL_STATE_SOURCE_FILE_NAME = "GoalStateSource"
-EXT_CONF_FILE_NAME = "ExtensionsConfig.{0}.xml"
-EXT_CONFIG_FAST_TRACK_FILE_NAME = "FastTrackExtensionsConfig.{0}.xml"
+VM_ID_FILE_NAME = "VmId"
 
 GOAL_STATE_SOURCE_FABRIC = "Fabric"
 GOAL_STATE_SOURCE_FASTTRACK = "FastTrack"
+
+DMIDECODE_CALL = "dmidecode"
 
 """ 
 GenericExtensionsConfig abstracts whether we pulled the goal state from Fabric or from FastTrack
@@ -70,6 +74,7 @@ class ExtensionsConfigRetriever(object):
         self._pending_svd_seqNo = None
         self._pending_incarnation = None
         self._is_startup = True
+        self._reset_if_necessary()
 
     def get_ext_config(self, incarnation, ext_conf_uri):
         # If we don't have a uri, return an empty extensions config
@@ -142,21 +147,29 @@ class ExtensionsConfigRetriever(object):
                 self._last_mode = self._pending_mode
                 self._set_fabric(self._last_incarnation, self._last_svd_seqNo)
 
-    def reset(self):
+    def _reset(self):
         """
         Removes all cache files and resets all cached goal state information
         This is necessary if a VM image is deployed from this one so we start fresh
-        TODO: when reset is implemented call this
         """
         self._remove_cache(INCARNATION_FILE_NAME)
         self._remove_cache(SEQUENCE_NUMBER_FILE_NAME)
         self._remove_cache(SVD_SEQNO_FILE_NAME)
         self._remove_cache(GOAL_STATE_SOURCE_FILE_NAME)
-        self._last_svd_seqNo = None
-        self._last_mode = None
-        self._last_incarnation = None
-        self._last_fast_track_extensionsConfig = None
-        self._last_seqNo = None
+        self._remove_cache(VM_ID_FILE_NAME)
+
+    def _reset_if_necessary(self):
+        cached_vm_id = self._get_cached_vm_id()
+        current_vm_id = self._get_vm_id()
+        if current_vm_id is None:
+            logger.warn("Unable to retrieve the current vm id. Skipping reset")
+        elif cached_vm_id is None:
+            logger.info("Remembering current vm id is {0}".format(current_vm_id))
+            self._set_cached_vm_id(current_vm_id)
+        elif current_vm_id != cached_vm_id:
+            logger.warn("The vm id has changed from {0} to {1}. Resetting cached state".format(cached_vm_id, current_vm_id))
+            self._reset()
+            self._set_cached_vm_id(current_vm_id)
 
     def _remove_extensions_if_necessary(self, extensions_config):
         """
@@ -241,6 +254,10 @@ class ExtensionsConfigRetriever(object):
             fileutil.clean_ioerror(e, paths=path)
             raise ProtocolError("Failed to remove cache: {0}".format(e))
 
+    def _set_cached_vm_id(self, cached_vm_id):
+        path = os.path.join(conf.get_lib_dir(), VM_ID_FILE_NAME)
+        self._save_cache(path, cached_vm_id)
+
     def _save_cache(self, local_file, data):
         try:
             fileutil.write_file(local_file, data)
@@ -280,8 +297,28 @@ class ExtensionsConfigRetriever(object):
         else:
             return GOAL_STATE_SOURCE_FABRIC
 
+    def _get_cached_vm_id(self):
+        cached_vm_id = None
+        path = os.path.join(conf.get_lib_dir(), VM_ID_FILE_NAME)
+        if os.path.exists(path):
+            cached_vm_id = fileutil.read_file(path)
+        return cached_vm_id
+
     def get_description(self):
         if self._last_mode == GOAL_STATE_SOURCE_FASTTRACK:
             return "FastTrack: SeqNo={0}".format(self._last_seqNo)
         else:
             return "Fabric: Incarnation={0}".format(self._last_incarnation)
+
+    def _get_vm_id(self):
+        vm_id = None
+        try:
+            tokenized = safe_shlex_split(DMIDECODE_CALL)
+            result = run_command(tokenized, log_error=True)
+            uuid_pos = result.find("UUID:")
+            uuid_len = len("UUID: ")
+            new_line_pos = result.find('\n', uuid_pos)
+            vm_id = result[uuid_pos + uuid_len : new_line_pos]
+        except Exception as e:
+            logger.warn("Unable to retrieve VmId: {0}".format(e))
+        return vm_id
