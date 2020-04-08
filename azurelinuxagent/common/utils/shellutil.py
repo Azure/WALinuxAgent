@@ -65,7 +65,7 @@ def has_command(cmd):
 
 def run(cmd, chk_err=True, expected_errors=[]):
     """
-    Note: Depracating in favour of `run_command()` function.
+    Note: Deprecating in favour of `run_command()` function.
     Calls run_get_output on 'cmd', returning only the return code.
     If chk_err=True then errors will be reported in the log.
     If chk_err=False then errors will be suppressed from the log.
