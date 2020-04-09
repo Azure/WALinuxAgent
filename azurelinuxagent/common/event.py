@@ -697,7 +697,7 @@ def add_event(name, op=WALAEventOperation.Unknown, is_success=True, duration=0, 
     if should_emit_event(name, version, op, is_success):
         mark_event_status(name, version, op, is_success)
         reporter.add_event(name, op=op, is_success=is_success, duration=duration, version=str(version),
-                           message=message.replace('"', '\''),
+                           message=message,
                            log_event=log_event)
 
 

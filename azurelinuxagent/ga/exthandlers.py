@@ -39,7 +39,7 @@ import azurelinuxagent.common.version as version
 from azurelinuxagent.common.cgroupconfigurator import CGroupConfigurator
 from azurelinuxagent.common.datacontract import get_properties, set_properties
 from azurelinuxagent.common.errorstate import ErrorState, ERROR_STATE_DELTA_INSTALL
-from azurelinuxagent.common.event import add_event, WALAEventOperation, elapsed_milliseconds, report_event
+from azurelinuxagent.common.event import add_event, WALAEventOperation, elapsed_milliseconds, report_event, add_periodic
 from azurelinuxagent.common.exception import ExtensionError, ProtocolError, ProtocolNotFoundError, \
     ExtensionDownloadError, ExtensionErrorCodes, ExtensionUpdateError, ExtensionOperationError
 from azurelinuxagent.common.future import ustr
@@ -220,13 +220,6 @@ class ExtHandlersHandler(object):
 
         self.report_status_error_state = ErrorState()
         self.get_artifact_error_state = ErrorState(min_timedelta=ERROR_STATE_DELTA_INSTALL)
-        self._last_get_handler_status_error = None
-
-    def get_last_handler_status_error_time(self):
-        return self._last_get_handler_status_error
-
-    def set_last_handler_status_error_time(self, error_time):
-        self._last_get_handler_status_error = error_time
 
     def run(self):
         self.ext_handlers, etag = None, None
@@ -655,8 +648,7 @@ class ExtHandlersHandler(object):
     def report_ext_handler_status(self, vm_status, ext_handler):
         ext_handler_i = ExtHandlerInstance(ext_handler, self.protocol)
 
-        handler_status = ext_handler_i.get_handler_status(lambda: self.get_last_handler_status_error_time,
-                                                          lambda: self.set_last_handler_status_error_time)
+        handler_status = ext_handler_i.get_handler_status()
         if handler_status is None:
             return
 
@@ -1352,7 +1344,7 @@ class ExtHandlerInstance(object):
             fileutil.clean_ioerror(e, paths=[status_file])
             self.logger.error("Failed to save handler status: {0}, {1}", ustr(e), traceback.format_exc())
 
-    def get_handler_status(self, get_last_error_reported, set_last_error_reported):
+    def get_handler_status(self):
         state_dir = self.get_conf_dir()
         status_file = os.path.join(state_dir, "HandlerStatus")
         if not os.path.isfile(status_file):
@@ -1368,18 +1360,15 @@ class ExtHandlerInstance(object):
         except (IOError, ValueError) as e:
             self.logger.error("Failed to get handler status: {0}", e)
         except Exception as e:
-            error_reporting_delta = datetime.timedelta(minutes=2)
-            last_error_reported = get_last_error_reported()
-
-            if last_error_reported is None or datetime.datetime.utcnow() >= (last_error_reported + error_reporting_delta):
-                error_msg = "Failed to get handler status message: {0}.\n Contents of file: {1}".format(
-                    ustr(e), handler_status_contents)
-                add_event(AGENT_NAME,
-                          version=CURRENT_VERSION,
-                          op=WALAEventOperation.ExtensionProcessing,
-                          is_success=False,
-                          message=error_msg)
-                set_last_error_reported(datetime.datetime.utcnow())
+            error_msg = "Failed to get handler status message: {0}.\n Contents of file: {1}".format(
+                ustr(e), handler_status_contents).replace('"', '\'')
+            add_periodic(
+                delta=logger.EVERY_HOUR,
+                name=AGENT_NAME,
+                version=CURRENT_VERSION,
+                op=WALAEventOperation.ExtensionProcessing,
+                is_success=False,
+                message=error_msg)
             raise
 
     def get_extension_package_zipfile_name(self):
