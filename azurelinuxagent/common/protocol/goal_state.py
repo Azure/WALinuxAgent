@@ -58,8 +58,8 @@ class GoalState(object):
 
         """
         uri = GOAL_STATE_URI.format(wire_client.get_endpoint())
-        xml_text = wire_client.fetch_config(uri, wire_client.get_header())
-        self._xml_doc = parse_doc(xml_text)
+        self.xml_text = wire_client.fetch_config(uri, wire_client.get_header())
+        self._xml_doc = parse_doc(self.xml_text)
 
         self._ext_config_retriever = ext_config_retriever
         self._wire_client = wire_client

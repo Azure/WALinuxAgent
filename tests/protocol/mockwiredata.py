@@ -96,6 +96,7 @@ DATA_FILE_FAST_TRACK = DATA_FILE.copy()
 DATA_FILE_FAST_TRACK["in_vm_artifacts_profile"] = "wire/in_vm_artifacts_profile_blob.json"
 
 DATA_FILE_FAST_TRACK_DEPENDENCIES = DATA_FILE.copy()
+DATA_FILE_FAST_TRACK_DEPENDENCIES["ext_conf"] = "wire/ext_conf_in_vm_artifacts_profile.xml"
 DATA_FILE_FAST_TRACK_DEPENDENCIES["in_vm_artifacts_profile"] = "wire/in_vm_artifacts_profile_dependencies.json"
 
 class WireProtocolData(object):

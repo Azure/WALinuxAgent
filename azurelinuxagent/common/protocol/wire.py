@@ -697,8 +697,8 @@ class WireClient(object):
             host_plugin = self.get_host_plugin()
 
             if restutil.request_not_modified(resp):
-                if self.host_plugin is not None:
-                    self.host_plugin.report_fetch_health(uri, source='WireClient')
+                if self._host_plugin is not None:
+                    self._host_plugin.report_fetch_health(uri, source='WireClient')
             elif restutil.request_failed(resp):
                 error_response = restutil.read_response_error(resp)
                 msg = "Fetch failed from [{0}]: {1}".format(uri, error_response)
@@ -950,7 +950,7 @@ class WireClient(object):
         except (ResourceGoneError, InvalidContainerError) as e:
             msg = "Request failed with the current host plugin configuration." \
                   "ContainerId: {0}, role config file: {1}." \
-                  "Error: {2}".format(self.host_plugin.container_id, self.host_plugin.role_config_name, ustr(e))
+                  "Error: {2}".format(self._host_plugin.container_id, self._host_plugin.role_config_name, ustr(e))
             logger.periodic_info(logger.EVERY_HOUR, msg)
 
         if ret or not_modified:

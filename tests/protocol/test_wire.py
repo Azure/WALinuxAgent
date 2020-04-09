@@ -767,7 +767,7 @@ class TestWireClient(HttpRequestPredicates, AgentTestCase):
             finally:
                 HostPluginProtocol.set_default_channel(False)
 
-    def test_get_artifacts_profile_should_not_retry_the_host_channel_after_reloading_goal_state(self):
+    def test_get_artifacts_profile_should_retry_the_host_channel_after_reloading_goal_state(self):
         def http_get_handler(url, *_, **kwargs):
             if self.is_in_vm_artifacts_profile_request(url):
                 return HttpError("Exception to fake an error on the direct channel")
@@ -794,14 +794,14 @@ class TestWireClient(HttpRequestPredicates, AgentTestCase):
 
                 self.assertIsNone(return_value, "The artifacts profile request should not have succeeded")
                 urls = protocol.get_tracked_urls()
-                self.assertEquals(len(urls), 1, "Invalid number of requests: [{0}]".format(urls))
+                self.assertEquals(len(urls), 2, "Invalid number of requests: [{0}]".format(urls))
 
                 self.assertTrue(self.is_host_plugin_extension_artifact_request(urls[0]), "The first request should have been over the host channel")
                 self.assertEquals(HostPluginProtocol.is_default_channel(), False, "The default channel should not have changed to the host")
             finally:
                 HostPluginProtocol.set_default_channel(False)
 
-    def test_get_artifacts_profile_should_refresh_the_host_plugin_and_not_change_default_channel_if_host_plugin_fails(self):
+    def test_get_artifacts_profile_should_not_refresh_the_host_plugin_and_not_change_default_channel_if_host_plugin_fails(self):
         def http_get_handler(url, *_, **kwargs):
             if self.is_in_vm_artifacts_profile_request(url):
                 return HttpError("Exception to fake an error on the direct channel")
@@ -823,7 +823,7 @@ class TestWireClient(HttpRequestPredicates, AgentTestCase):
 
             self.assertIsNone(return_value, "The artifacts profile request should have failed")
             urls = protocol.get_tracked_urls()
-            self.assertEquals(len(urls), 1, "Invalid number of requests: [{0}]".format(urls))
+            self.assertEquals(len(urls), 2, "Invalid number of requests: [{0}]".format(urls))
             self.assertTrue(self.is_host_plugin_extension_artifact_request(urls[0]), "The first request should have been over the host channel")
 
     def test_send_request_hostplugin_first_should_invoke_hostplugin_when_not_default(self, *args):
@@ -1064,7 +1064,7 @@ class UpdateGoalStateTestCase(AgentTestCase):
                 self.assertEqual(protocol.client.get_host_plugin().role_config_name, new_role_config_name)
 
     def test_non_forced_update_should_not_update_the_goal_state_nor_the_host_plugin_when_the_incarnation_does_not_change(self):
-        with mock_wire_protocol(mockwiredata.DATA_FILE) as protocol:
+        with mock_wire_protocol(mockwiredata.DATA_FILE_FAST_TRACK_DEPENDENCIES) as protocol:
             protocol.client.get_host_plugin()
 
             protocol.mock_wire_data.set_container_id(str(uuid.uuid4()))
@@ -1100,7 +1100,7 @@ class UpdateGoalStateTestCase(AgentTestCase):
                     self.assertEqual(protocol.client.get_shared_conf().xml_text, old_shared_conf)
 
     def test_forced_update_should_update_the_goal_state_and_the_host_plugin_when_the_incarnation_does_not_change(self):
-        with mock_wire_protocol(mockwiredata.DATA_FILE) as protocol:
+        with mock_wire_protocol(mockwiredata.DATA_FILE_FAST_TRACK_DEPENDENCIES) as protocol:
             protocol.client.get_host_plugin()
 
             # The container id, role config name and shared config can change without the incarnation changing
