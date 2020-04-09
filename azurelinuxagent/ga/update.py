@@ -792,7 +792,6 @@ class GuestAgent(object):
             msg = u"Agent {0} install failed with exception: {1}".format(
                         self.name, ustr(e))
             detailed_msg = '{0} {1}'.format(msg, traceback.extract_tb(get_traceback(e)))
-            logger.warn(msg)
             add_event(
                 AGENT_NAME,
                 version=self.version,
