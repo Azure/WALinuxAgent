@@ -39,7 +39,7 @@ import azurelinuxagent.common.version as version
 from azurelinuxagent.common.cgroupconfigurator import CGroupConfigurator
 from azurelinuxagent.common.datacontract import get_properties, set_properties
 from azurelinuxagent.common.errorstate import ErrorState, ERROR_STATE_DELTA_INSTALL
-from azurelinuxagent.common.event import add_event, WALAEventOperation, elapsed_milliseconds, report_event
+from azurelinuxagent.common.event import add_event, WALAEventOperation, elapsed_milliseconds, report_event, add_periodic
 from azurelinuxagent.common.exception import ExtensionError, ProtocolError, ProtocolNotFoundError, \
     ExtensionDownloadError, ExtensionErrorCodes, ExtensionUpdateError, ExtensionOperationError
 from azurelinuxagent.common.future import ustr
@@ -1350,13 +1350,26 @@ class ExtHandlerInstance(object):
         if not os.path.isfile(status_file):
             return None
 
+        handler_status_contents = ""
         try:
-            data = json.loads(fileutil.read_file(status_file))
+            handler_status_contents = fileutil.read_file(status_file)
+            data = json.loads(handler_status_contents)
             handler_status = ExtHandlerStatus()
             set_properties("ExtHandlerStatus", handler_status, data)
             return handler_status
         except (IOError, ValueError) as e:
             self.logger.error("Failed to get handler status: {0}", e)
+        except Exception as e:
+            error_msg = "Failed to get handler status message: {0}.\n Contents of file: {1}".format(
+                ustr(e), handler_status_contents).replace('"', '\'')
+            add_periodic(
+                delta=logger.EVERY_HOUR,
+                name=AGENT_NAME,
+                version=CURRENT_VERSION,
+                op=WALAEventOperation.ExtensionProcessing,
+                is_success=False,
+                message=error_msg)
+            raise
 
     def get_extension_package_zipfile_name(self):
         return "{0}__{1}{2}".format(self.ext_handler.name,
