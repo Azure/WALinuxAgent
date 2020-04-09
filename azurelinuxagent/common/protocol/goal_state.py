@@ -78,7 +78,9 @@ class GoalState(object):
         self._remote_access = None
         self._remote_access_retrieved = False
         self._artifacts_profile_blob_url = None
-        self._artifacts_profile_blob_url_retrieved = False
+        self._status_upload_blob_url = None
+        self._status_upload_blob_type = None
+        self._ext_conf_properties_retrieved = False
 
         self.incarnation = findtext(self._xml_doc, "Incarnation")
         self.expected_state = findtext(self._xml_doc, "ExpectedState")
@@ -187,20 +189,41 @@ class GoalState(object):
 
     @property
     def artifacts_profile_blob_url(self):
-        if not self._artifacts_profile_blob_url_retrieved:
-            try:
-                # The artifacts profile blob url is only in the Fabric goal state
-                # We need it to retrieve the FastTrack goal state, so retrieve it here
-                # to avoid a chicken and egg scenario
-                uri = findtext(self._xml_doc, "ExtensionsConfig")
-                if uri is not None:
-                    fabric_ext_conf = ExtensionsConfig(self._wire_client.fetch_config(uri, self._wire_client.get_header()))
-                    self._artifacts_profile_blob_url = fabric_ext_conf.artifacts_profile_blob
-                self._artifacts_profile_blob_url_retrieved = True
-            except Exception as e:
-                logger.warn("Fetching the artifacts profile blob url failed: {0}", ustr(e))
-                raise
+        if not self._ext_conf_properties_retrieved:
+            self._retrieve_fabric_ext_conf_properties()
         return self._artifacts_profile_blob_url
+
+    @property
+    def status_upload_blob_url(self):
+        if not self._ext_conf_properties_retrieved:
+            self._retrieve_fabric_ext_conf_properties()
+        return self._status_upload_blob_url
+
+    @property
+    def status_upload_blob_type(self):
+        if not self._ext_conf_properties_retrieved:
+            self._retrieve_fabric_ext_conf_properties()
+        return self._status_upload_blob_type
+
+    def _retrieve_fabric_ext_conf_properties(self):
+        try:
+            # The artifacts profile blob url and status blob url are only in the Fabric goal state
+            # We need the artifacts profile blob url to retrieve the FastTrack goal state, so retrieve it here
+            # to avoid a chicken and egg scenario
+            uri = findtext(self._xml_doc, "ExtensionsConfig")
+            if uri is not None:
+                fabric_ext_conf_xml = self._wire_client.fetch_config(uri, self._wire_client.get_header())
+                xml_doc = parse_doc(fabric_ext_conf_xml)
+                self._status_upload_blob_url = findtext(xml_doc, "StatusUploadBlob")
+                self._artifacts_profile_blob_url = findtext(xml_doc, "InVMArtifactsProfileBlob")
+
+                status_upload_node = find(xml_doc, "StatusUploadBlob")
+                self._status_upload_blob_type = getattrib(status_upload_node, "statusBlobType")
+                logger.verbose("Extension config shows status blob type as [{0}]", self._status_upload_blob_type)
+            self._ext_conf_properties_retrieved = True
+        except Exception as e:
+            logger.warn("Fetching the artifacts profile blob url failed: {0}", ustr(e))
+            raise
 
 
 class HostingEnv(object):
@@ -332,9 +355,6 @@ class ExtensionsConfig(object):
         self.xml_text = xml_text
         self.ext_handlers = ExtHandlerList()
         self.vmagent_manifests = VMAgentManifestList()
-        self.status_upload_blob = None
-        self.status_upload_blob_type = None
-        self.artifacts_profile_blob = None
         self.svd_seqNo = None
 
         if xml_text is None:
@@ -365,13 +385,6 @@ class ExtensionsConfig(object):
             ext_handler = ExtensionsConfig._parse_plugin(plugin)
             self.ext_handlers.extHandlers.append(ext_handler)
             ExtensionsConfig._parse_plugin_settings(ext_handler, plugin_settings)
-
-        self.status_upload_blob = findtext(xml_doc, "StatusUploadBlob")
-        self.artifacts_profile_blob = findtext(xml_doc, "InVMArtifactsProfileBlob")
-
-        status_upload_node = find(xml_doc, "StatusUploadBlob")
-        self.status_upload_blob_type = getattrib(status_upload_node, "statusBlobType")
-        logger.verbose("Extension config shows status blob type as [{0}]", self.status_upload_blob_type)
 
         goal_state_metadata_node = find(xml_doc, "InVMGoalStateMetaData")
         if goal_state_metadata_node is not None:

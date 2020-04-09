@@ -605,6 +605,7 @@ class ExtHandlersHandler(object):
                         message=ustr(e))
 
         logger.verbose("Report vm agent status")
+        last_failure = None
         try:
             self.protocol.report_vm_status(vm_status)
             if self.log_report:
@@ -612,10 +613,12 @@ class ExtHandlersHandler(object):
             self.report_status_error_state.reset()
         except ProtocolNotFoundError as e:
             self.report_status_error_state.incr()
+            last_failure = e
             message = "Failed to report vm agent status: {0}".format(e)
             logger.verbose(message)
         except ProtocolError as e:
             self.report_status_error_state.incr()
+            last_failure = e
             message = "Failed to report vm agent status: {0}".format(e)
             add_event(AGENT_NAME,
                       version=CURRENT_VERSION,
@@ -624,8 +627,8 @@ class ExtHandlersHandler(object):
                       message=message)
 
         if self.report_status_error_state.is_triggered():
-            message = "Failed to report vm agent status for more than {0}" \
-                .format(self.report_status_error_state.min_timedelta)
+            message = "Failed to report vm agent status for more than {0}. Last failure: {1}" \
+                .format(self.report_status_error_state.min_timedelta, last_failure)
 
             add_event(AGENT_NAME,
                       version=CURRENT_VERSION,

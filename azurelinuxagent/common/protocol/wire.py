@@ -1055,17 +1055,14 @@ class WireClient(object):
         return ret
 
     def upload_status_blob(self):
-        ext_conf = self.get_ext_conf()
-
-        if ext_conf.status_upload_blob is None:
+        if self._goal_state.status_upload_blob_url is None:
             # the status upload blob is in ExtensionsConfig so force a full goal state refresh
             self.update_goal_state(forced=True)
-            ext_conf = self.get_ext_conf()
 
-        if ext_conf.status_upload_blob is None:
+        if self._goal_state.status_upload_blob_url is None:
             raise ProtocolNotFoundError("Status upload uri is missing")
 
-        blob_type = ext_conf.status_upload_blob_type
+        blob_type = self._goal_state.status_upload_blob_type
         if blob_type not in ["BlockBlob", "PageBlob"]:
             blob_type = "BlockBlob"
             logger.verbose("Status Blob type is unspecified, assuming BlockBlob")
@@ -1088,7 +1085,7 @@ class WireClient(object):
         # wrong. This is why we try HostPlugin then direct.
         try:
             host = self.get_host_plugin()
-            host.put_vm_status(self.status_blob, ext_conf.status_upload_blob, ext_conf.status_upload_blob_type)
+            host.put_vm_status(self.status_blob, self._goal_state.status_upload_blob_url, self._goal_state.status_upload_blob_type)
             return
         except ResourceGoneError:
             # refresh the host plugin client and try again on the next iteration of the main loop
@@ -1100,7 +1097,7 @@ class WireClient(object):
             self.report_status_event(msg, is_success=True)
 
         try:
-            if self.status_blob.upload(ext_conf.status_upload_blob):
+            if self.status_blob.upload(self._goal_state.status_upload_blob_url):
                 return
         except Exception as e:
             msg = "Exception uploading status blob: {0}".format(ustr(e))
