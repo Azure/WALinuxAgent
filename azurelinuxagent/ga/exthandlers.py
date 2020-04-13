@@ -348,13 +348,10 @@ class ExtHandlersHandler(object):
             return False
 
         if conf.get_enable_overprovisioning():
-            if not self.protocol.supports_overprovisioning():
-                logger.verbose("Overprovisioning is enabled but protocol does not support it.")
-            else:
-                artifacts_profile = self.protocol.get_artifacts_profile()
-                if artifacts_profile and artifacts_profile.is_on_hold():
-                    logger.info("Extension handling is on hold")
-                    return False
+            artifacts_profile = self.protocol.get_artifacts_profile()
+            if artifacts_profile and artifacts_profile.is_on_hold():
+                logger.info("Extension handling is on hold")
+                return False
 
         return True
 
