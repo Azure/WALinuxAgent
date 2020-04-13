@@ -228,26 +228,29 @@ class FileAppender(Appender):
     def _do_rollover(self):
         gz_extension = "gz"
 
+        def _rortate_files(archived_files=False):
+            for i in range(self._backup_count - 1, 0, -1):
+                src = "%s.%d.%s" % (self.path, i, gz_extension) if archived_files else "%s.%d" % (self.path, i)
+                dest = "%s.%d.%s" % (self.path, i + 1, gz_extension) if archived_files else "%s.%d" % (self.path, i + 1)
+
+                # Moving n -> n+1
+                if os.path.exists(src):
+                    if os.path.exists(dest):
+                        os.remove(dest)
+                    os.rename(src, dest)
+
         if self._backup_count > 0:
+            # Rotating the backup files to make space for the current log file.
+            _rortate_files(archived_files=self._should_archive_backup_files)
+
+            # Backing up the current logging file
+            dst = "%s.1.%s" % (self.path, gz_extension) if self._should_archive_backup_files else "%s.1" % self.path
+
+            # Removing the logfile.1 that exists already. Already moved above, if needed.
+            if os.path.exists(dst):
+                os.remove(dst)
+
             if self._should_archive_backup_files:
-                # Rotating the backup files to make space for the current log file.
-                for i in range(self._backup_count - 1, 0, -1):
-                    src = "%s.%d.%s" % (self.path, i, gz_extension)
-                    dst = "%s.%d.%s" % (self.path, i + 1, gz_extension)
-
-                    # Moving n -> n+1
-                    if os.path.exists(src):
-                        if os.path.exists(dst):
-                            os.remove(dst)
-                        os.rename(src, dst)
-
-                # Backing up the current logging file to logfile.1
-                dst = "%s.1.%s" % (self.path, gz_extension)
-
-                # Removing the logfile.1 that exists already. Already moved above, if needed.
-                if os.path.exists(dst):
-                    os.remove(dst)
-
                 # Archive the current log file. Surrounding by try:except to safeguard against gzip exceptions, if any.
                 try:
                     with contextlib.closing(gzip.open(dst, 'wb')) as archive:
@@ -260,24 +263,6 @@ class FileAppender(Appender):
                 # Removing the plain log file as already archived.
                 os.remove(self.path)
             else:
-                # Rotating the backup files to make space for the current log file.
-                for i in range(self._backup_count - 1, 0, -1):
-                    src = "%s.%d" % (self.path, i)
-                    dst = "%s.%d" % (self.path, i + 1)
-
-                    # Moving n -> n+1
-                    if os.path.exists(src):
-                        if os.path.exists(dst):
-                            os.remove(dst)
-                        os.rename(src, dst)
-
-                # Backing up the current logging file
-                dst = "%s.1" % self.path
-
-                # Removing the logfile.1 that exists already.
-                if os.path.exists(dst):
-                    os.remove(dst)
-
                 # Renaming logfile to logfile.1.
                 os.rename(self.path, dst)
 
