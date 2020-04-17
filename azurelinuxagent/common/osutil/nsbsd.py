@@ -87,14 +87,10 @@ class NSBSDOSUtil(FreeBSDOSUtil):
 
     def chpasswd(self, username, password, crypt_id=6, salt_len=10):
         cmd = "/usr/Firewall/sbin/fwpasswd -p {0}".format(password)
-        ret, output = shellutil.run_get_output(cmd, log_cmd=False)
-        if ret != 0:
-            raise OSUtilError(("Failed to set password for admin: {0}"
-                               "").format(output))
+        self._run_command_raising_OSUtilError(cmd, err_msg="Failed to set password for admin")
 
         # password set, activate webadmin and ssh access
-        shellutil.run('setconf /usr/Firewall/ConfigFiles/webadmin ACL any && ensl',
-                      chk_err=False)
+        self._run_command_without_raising('setconf /usr/Firewall/ConfigFiles/webadmin ACL any && ensl', log_error=False)
 
     def deploy_ssh_pubkey(self, username, pubkey):
         """

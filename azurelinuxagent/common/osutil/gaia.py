@@ -37,12 +37,21 @@ class GaiaOSUtil(DefaultOSUtil):
     def __init__(self):
         super(GaiaOSUtil, self).__init__()
 
-    def _run_clish(self, cmd, log_cmd=True):
+    def _run_clish(self, cmd):
+        ret = 0
+        out = ""
         for i in xrange(10):
-            ret, out = shellutil.run_get_output(
-                "/bin/clish -s -c '" + cmd + "'", log_cmd=log_cmd)
-            if not ret:
+            try:
+                out = shellutil.run_command(textutil.safe_shlex_split("/bin/clish -s -c '" + cmd + "'"), log_error=True)
+                ret = 0
                 break
+            except shellutil.CommandError as e:
+                ret = e.returncode
+                out = e.stdout
+            except Exception as e:
+                ret = -1
+                out = ustr(e)
+
             if 'NMSHST0025' in out:  # Entry for [hostname] already present
                 ret = 0
                 break
@@ -56,7 +65,7 @@ class GaiaOSUtil(DefaultOSUtil):
         logger.info('chpasswd')
         passwd_hash = textutil.gen_password_hash(password, crypt_id, salt_len)
         ret, out = self._run_clish(
-            'set user admin password-hash ' + passwd_hash, log_cmd=False)
+            'set user admin password-hash ' + passwd_hash)
         if ret != 0:
             raise OSUtilError(("Failed to set password for {0}: {1}"
                                "").format('admin', out))
