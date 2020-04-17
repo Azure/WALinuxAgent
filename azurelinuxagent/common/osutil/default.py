@@ -423,28 +423,30 @@ class DefaultOSUtil(object):
             return
 
         if expiration is not None:
-            cmd = "useradd -m {0} -e {1}".format(username, expiration)
+            cmd = ["useradd", "-m", username, "-e", expiration]
         else:
-            cmd = "useradd -m {0}".format(username)
+            cmd = ["useradd", "-m", username]
         
         if comment is not None:
-            cmd += " -c {0}".format(comment)
-        retcode, out = shellutil.run_get_output(cmd)
-        if retcode != 0:
+            cmd.extend(["-c", comment])
+
+        try:
+            shellutil.run_command(cmd, log_error=True)
+        except CommandError as e:
             raise OSUtilError(("Failed to create user account:{0}, "
                                "retcode:{1}, "
-                               "output:{2}").format(username, retcode, out))
+                               "output:{2}").format(username, e.returncode, e.stderr))
 
     def chpasswd(self, username, password, crypt_id=6, salt_len=10):
         if self.is_sys_user(username):
             raise OSUtilError(("User {0} is a system user, "
                                "will not set password.").format(username))
         passwd_hash = textutil.gen_password_hash(password, crypt_id, salt_len)
-        cmd = "usermod -p '{0}' {1}".format(passwd_hash, username)
-        ret, output = shellutil.run_get_output(cmd, log_cmd=False)
-        if ret != 0:
-            raise OSUtilError(("Failed to set password for {0}: {1}"
-                               "").format(username, output))
+        cmd = ["usermod", "-p", passwd_hash, username]
+        try:
+            shellutil.run_command(cmd, log_error=True)
+        except CommandError as e:
+            raise OSUtilError("Failed to set password for {0}: {1}".format(username, e.stderr))
     
     def get_users(self):
         return getpwall()
