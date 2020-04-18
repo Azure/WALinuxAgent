@@ -1288,7 +1288,7 @@ class DefaultOSUtil(object):
         if self.is_sys_user(username):
             logger.error("{0} is a system user. Will not delete it.", username)
 
-        self._run_command_without_raising("> /var/run/utmp")
+        self._run_command_without_raising("touch /var/run/utmp")
         self._run_command_without_raising("userdel -f -r " + username)
         self.conf_sudoer(username, remove=True)
 

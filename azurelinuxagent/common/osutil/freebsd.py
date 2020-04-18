@@ -65,7 +65,7 @@ class FreeBSDOSUtil(DefaultOSUtil):
     def del_account(self, username):
         if self.is_sys_user(username):
             logger.error("{0} is a system user. Will not delete it.", username)
-        self._run_command_without_raising('> /var/run/utx.active')
+        self._run_command_without_raising('touch /var/run/utx.active')
         self._run_command_without_raising('rmuser -y ' + username)
         self.conf_sudoer(username, remove=True)
 

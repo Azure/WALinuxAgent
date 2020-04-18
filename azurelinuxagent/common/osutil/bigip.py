@@ -199,7 +199,7 @@ class BigIpOSUtil(DefaultOSUtil):
         :param username:
         :return:
         """
-        self._run_command_without_raising("> /var/run/utmp")
+        self._run_command_without_raising("touch /var/run/utmp")
         self._run_command_without_raising("/usr/bin/tmsh delete auth user " + username)
 
     def get_dvd_device(self, dev_dir='/dev'):
