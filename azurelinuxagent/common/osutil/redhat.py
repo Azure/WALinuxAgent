@@ -81,7 +81,7 @@ class Redhat6xOSUtil(DefaultOSUtil):
         fileutil.update_conf_file('/etc/sysconfig/network',
                                   'HOSTNAME',
                                   'HOSTNAME={0}'.format(hostname))
-        shellutil.run("hostname {0}".format(hostname), chk_err=False)
+        self._run_command_without_raising("hostname {0}".format(hostname), log_error=False)
 
     def set_dhcp_hostname(self, hostname):
         ifname = self.get_if_name()
@@ -106,7 +106,7 @@ class RedhatOSUtil(Redhat6xOSUtil):
         to hostname.
         """
         hostnamectl_cmd = "hostnamectl set-hostname {0} --static".format(hostname)
-        if shellutil.run(hostnamectl_cmd, chk_err=False) != 0:
+        if self._run_command_without_raising(hostnamectl_cmd, log_error=False) != 0:
             logger.warn("[{0}] failed, attempting fallback".format(hostnamectl_cmd))
             DefaultOSUtil.set_hostname(self, hostname)
 

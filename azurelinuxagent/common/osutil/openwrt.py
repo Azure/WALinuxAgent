@@ -142,7 +142,7 @@ class OpenWRTOSUtil(DefaultOSUtil):
 
     def set_hostname(self, hostname):
         fileutil.write_file('/etc/hostname', hostname)
-        shellutil.run("uci set system.@system[0].hostname='{0}' && uci commit system && /etc/init.d/system reload".format(hostname), chk_err=False)
+        self._run_command_without_raising("uci set system.@system[0].hostname='{0}' && uci commit system && /etc/init.d/system reload".format(hostname), log_error=False)
 
     def remove_rules_files(self, rules_files=""):
         pass

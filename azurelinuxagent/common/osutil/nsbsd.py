@@ -51,11 +51,11 @@ class NSBSDOSUtil(FreeBSDOSUtil):
             dns.resolver.override_system_resolver(self.resolver)
 
     def set_hostname(self, hostname):
-        shellutil.run("/usr/Firewall/sbin/setconf /usr/Firewall/System/global SystemName {0}".format(hostname))
-        shellutil.run("/usr/Firewall/sbin/enlog")
-        shellutil.run("/usr/Firewall/sbin/enproxy -u")
-        shellutil.run("/usr/Firewall/sbin/ensl -u")
-        shellutil.run("/usr/Firewall/sbin/ennetwork -f")
+        self._run_command_without_raising("/usr/Firewall/sbin/setconf /usr/Firewall/System/global SystemName {0}".format(hostname))
+        self._run_command_without_raising("/usr/Firewall/sbin/enlog")
+        self._run_command_without_raising("/usr/Firewall/sbin/enproxy -u")
+        self._run_command_without_raising("/usr/Firewall/sbin/ensl -u")
+        self._run_command_without_raising("/usr/Firewall/sbin/ennetwork -f")
 
     def restart_ssh_service(self):
         return shellutil.run('/usr/Firewall/sbin/enservice', chk_err=False)

@@ -51,7 +51,7 @@ class OpenBSDOSUtil(DefaultOSUtil):
 
     def set_hostname(self, hostname):
         fileutil.write_file("/etc/myname", "{}\n".format(hostname))
-        shellutil.run("hostname {0}".format(hostname), chk_err=False)
+        self._run_command_without_raising("hostname {0}".format(hostname), log_error=False)
 
     def restart_ssh_service(self):
         return shellutil.run('rcctl restart sshd', chk_err=False)

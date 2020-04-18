@@ -274,7 +274,10 @@ class ProvisionHandler(object):
             start = time.time()
             logger.info("Execute custom data")
             os.chmod(customdata_file, 0o700)
-            shellutil.run(customdata_file)
+            try:
+                shellutil.run_command(customdata_file)
+            except Exception as e:
+                logger.warn("OVF CustomData threw error: {0}".format(ustr(e)))
             add_event(name=AGENT_NAME,
                         duration=int(time.time() - start),
                         is_success=True,

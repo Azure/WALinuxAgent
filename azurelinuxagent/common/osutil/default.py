@@ -1119,7 +1119,7 @@ class DefaultOSUtil(object):
 
     def set_hostname(self, hostname):
         fileutil.write_file('/etc/hostname', hostname)
-        shellutil.run("hostname {0}".format(hostname), chk_err=False)
+        self._run_command_without_raising("hostname {0}".format(hostname), log_error=False)
 
     def set_dhcp_hostname(self, hostname):
         autosend = r'^[^#]*?send\s*host-name.*?(<hostname>|gethostname[(,)])'

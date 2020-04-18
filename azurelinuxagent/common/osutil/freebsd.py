@@ -40,7 +40,7 @@ class FreeBSDOSUtil(DefaultOSUtil):
         conf_file = fileutil.read_file(rc_file_path).split("\n")
         textutil.set_ini_config(conf_file, "hostname", hostname)
         fileutil.write_file(rc_file_path, "\n".join(conf_file))
-        shellutil.run("hostname {0}".format(hostname), chk_err=False)
+        self._run_command_without_raising("hostname {0}".format(hostname), log_error=False)
 
     def restart_ssh_service(self):
         return shellutil.run('service sshd restart', chk_err=False)
