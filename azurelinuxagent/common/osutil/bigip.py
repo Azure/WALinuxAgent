@@ -149,7 +149,8 @@ class BigIpOSUtil(DefaultOSUtil):
             logger.info("User {0} already exists, skip useradd", username)
             return None
 
-        cmd = "/usr/bin/tmsh create auth user %s partition-access add { all-partitions { role admin } } shell bash" % (username)
+        cmd = ['/usr/bin/tmsh', 'create', 'auth', 'user', username, 'partition-access', 'add', '{', 'all-partitions',
+               '{', 'role', 'admin', '}', '}', 'shell', 'bash']
         self._run_command_raising_OSUtilError(cmd, err_msg="Failed to create user account:{0}".format(username))
         self._save_sys_config()
         return 0
@@ -173,8 +174,9 @@ class BigIpOSUtil(DefaultOSUtil):
         """
 
         # Start by setting the password of the user provided account
-        cmd = "/usr/bin/tmsh modify auth user {0} password '{1}'".format(username, password)
-        self._run_command_raising_OSUtilError(cmd, err_msg="Failed to set password for {0}".format(username))
+        self._run_command_raising_OSUtilError(
+            ['/usr/bin/tmsh', 'modify', 'auth', 'user', username, 'password', password],
+            err_msg="Failed to set password for {0}".format(username))
 
         # Next, set the password of the built-in 'admin' account to be have
         # the same password as the user provided account
@@ -182,8 +184,9 @@ class BigIpOSUtil(DefaultOSUtil):
         if userentry is None:
             raise OSUtilError("The 'admin' user account was not found!")
 
-        cmd = "/usr/bin/tmsh modify auth user 'admin' password '{0}'".format(password)
-        self._run_command_raising_OSUtilError(cmd, err_msg="Failed to set password for admin")
+        self._run_command_raising_OSUtilError(
+            ['/usr/bin/tmsh', 'modify', 'auth', 'user', 'admin', 'password', password],
+            err_msg="Failed to set password for admin")
         self._save_sys_config()
         return 0
 
@@ -199,8 +202,8 @@ class BigIpOSUtil(DefaultOSUtil):
         :param username:
         :return:
         """
-        self._run_command_without_raising("touch /var/run/utmp")
-        self._run_command_without_raising("/usr/bin/tmsh delete auth user " + username)
+        self._run_command_without_raising(["touch", "/var/run/utmp"])
+        self._run_command_without_raising(['/usr/bin/tmsh', 'delete', 'auth', 'user', username])
 
     def get_dvd_device(self, dev_dir='/dev'):
         """Find BIG-IP's CD/DVD device

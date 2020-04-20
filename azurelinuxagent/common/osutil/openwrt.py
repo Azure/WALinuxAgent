@@ -47,15 +47,15 @@ class OpenWRTOSUtil(DefaultOSUtil):
             return
 
         if expiration is not None:
-            cmd = "useradd -m {0} -s /bin/ash -e {1}".format(username, expiration)
+            cmd = ["useradd", "-m", username, "-s", "/bin/ash", "-e", expiration]
         else:
-            cmd = "useradd -m {0} -s /bin/ash".format(username)
+            cmd = ["useradd", "-m", username, "-s", "/bin/ash"]
         
         if not os.path.exists("/home"):
             os.mkdir("/home")
 
         if comment is not None:
-            cmd += " -c {0}".format(comment)
+            cmd.extend(["-c", comment])
         self._run_command_raising_OSUtilError(cmd, err_msg="Failed to create user account:{0}".format(username))
 
     def get_dhcp_pid(self):
@@ -142,7 +142,7 @@ class OpenWRTOSUtil(DefaultOSUtil):
 
     def set_hostname(self, hostname):
         fileutil.write_file('/etc/hostname', hostname)
-        self._run_command_without_raising("uci set system.@system[0].hostname='{0}' && uci commit system && /etc/init.d/system reload".format(hostname), log_error=False)
+        self._run_command_without_raising(['uci', 'set', 'system.@system[0].hostname={0}'.format(hostname), '&&', 'uci', 'commit', 'system', '&&', '/etc/init.d/system', 'reload'], log_error=False)
 
     def remove_rules_files(self, rules_files=""):
         pass

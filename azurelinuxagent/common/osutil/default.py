@@ -423,12 +423,12 @@ class DefaultOSUtil(object):
             return
 
         if expiration is not None:
-            cmd = "useradd -m {0} -e {1}".format(username, expiration)
+            cmd = ["useradd", "-m", username, "-e", expiration]
         else:
-            cmd = "useradd -m {0}".format(username)
+            cmd = ["useradd", "-m", username]
         
         if comment is not None:
-            cmd += " -c {0}".format(comment)
+            cmd.extend(["-c", comment])
 
         self._run_command_raising_OSUtilError(cmd, err_msg="Failed to create user account:{0}".format(username))
 
@@ -437,9 +437,9 @@ class DefaultOSUtil(object):
             raise OSUtilError(("User {0} is a system user, "
                                "will not set password.").format(username))
         passwd_hash = textutil.gen_password_hash(password, crypt_id, salt_len)
-        cmd = "usermod -p '{0}' {1}".format(passwd_hash, username)
 
-        self._run_command_raising_OSUtilError(cmd, err_msg="Failed to set password for {0}".format(username))
+        self._run_command_raising_OSUtilError(["usermod", "-p", passwd_hash, username],
+                                              err_msg="Failed to set password for {0}".format(username))
     
     def get_users(self):
         return getpwall()
@@ -1119,7 +1119,7 @@ class DefaultOSUtil(object):
 
     def set_hostname(self, hostname):
         fileutil.write_file('/etc/hostname', hostname)
-        self._run_command_without_raising("hostname {0}".format(hostname), log_error=False)
+        self._run_command_without_raising(["hostname", hostname], log_error=False)
 
     def set_dhcp_hostname(self, hostname):
         autosend = r'^[^#]*?send\s*host-name.*?(<hostname>|gethostname[(,)])'
@@ -1288,8 +1288,8 @@ class DefaultOSUtil(object):
         if self.is_sys_user(username):
             logger.error("{0} is a system user. Will not delete it.", username)
 
-        self._run_command_without_raising("touch /var/run/utmp")
-        self._run_command_without_raising("userdel -f -r " + username)
+        self._run_command_without_raising(["touch", "/var/run/utmp"])
+        self._run_command_without_raising(['userdel', '-f', '-r', username])
         self.conf_sudoer(username, remove=True)
 
     def decode_customdata(self, data):
@@ -1420,7 +1420,7 @@ class DefaultOSUtil(object):
     @staticmethod
     def _run_command_without_raising(cmd, log_error=True):
         try:
-            shellutil.run_command(textutil.safe_shlex_split(cmd), log_error=log_error)
+            shellutil.run_command(cmd, log_error=log_error)
         # Original implementation of run() does a blanket catch, so mimicking the behaviour here
         except Exception:
             pass
@@ -1429,7 +1429,7 @@ class DefaultOSUtil(object):
     def _run_command_raising_OSUtilError(cmd, err_msg):
         # This method runs shell command using the new secure shellutil.run_command and raises OSUtilErrors on failures.
         try:
-            return shellutil.run_command(textutil.safe_shlex_split(cmd), log_error=True)
+            return shellutil.run_command(cmd, log_error=True)
         except shellutil.CommandError as e:
             raise OSUtilError(
                 "{0}, Retcode: {1}, Output: {2}, Error: {3}".format(err_msg, e.returncode, e.stdout, e.stderr))

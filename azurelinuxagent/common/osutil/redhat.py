@@ -81,7 +81,7 @@ class Redhat6xOSUtil(DefaultOSUtil):
         fileutil.update_conf_file('/etc/sysconfig/network',
                                   'HOSTNAME',
                                   'HOSTNAME={0}'.format(hostname))
-        self._run_command_without_raising("hostname {0}".format(hostname), log_error=False)
+        self._run_command_without_raising(["hostname", hostname], log_error=False)
 
     def set_dhcp_hostname(self, hostname):
         ifname = self.get_if_name()
@@ -105,9 +105,9 @@ class RedhatOSUtil(Redhat6xOSUtil):
         Due to a bug in systemd in Centos-7.0, if this call fails, fallback
         to hostname.
         """
-        hostnamectl_cmd = "hostnamectl set-hostname {0} --static".format(hostname)
+        hostnamectl_cmd = ['hostnamectl', 'set-hostname', hostname, '--static']
         if self._run_command_without_raising(hostnamectl_cmd, log_error=False) != 0:
-            logger.warn("[{0}] failed, attempting fallback".format(hostnamectl_cmd))
+            logger.warn("[{0}] failed, attempting fallback".format(' '.join(hostnamectl_cmd)))
             DefaultOSUtil.set_hostname(self, hostname)
 
     def publish_hostname(self, hostname):

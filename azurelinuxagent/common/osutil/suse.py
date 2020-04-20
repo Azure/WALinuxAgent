@@ -42,7 +42,7 @@ class SUSE11OSUtil(DefaultOSUtil):
 
     def set_hostname(self, hostname):
         fileutil.write_file('/etc/HOSTNAME', hostname)
-        self._run_command_without_raising("hostname {0}".format(hostname), log_error=False)
+        self._run_command_without_raising(["hostname", hostname], log_error=False)
 
     def get_dhcp_pid(self):
         return self._get_dhcp_pid(["pidof", self.dhclient_name])

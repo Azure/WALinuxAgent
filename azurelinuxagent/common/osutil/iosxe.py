@@ -43,11 +43,11 @@ class IosxeOSUtil(DefaultOSUtil):
         Due to a bug in systemd in Centos-7.0, if this call fails, fallback
         to hostname.
         """
-        hostnamectl_cmd = "hostnamectl set-hostname {0} --static".format(hostname)
+        hostnamectl_cmd = ["hostnamectl", "set-hostname", hostname, "--static"]
         try:
-            shellutil.run_command(textutil.safe_shlex_split(hostnamectl_cmd))
+            shellutil.run_command(hostnamectl_cmd)
         except Exception as e:
-            logger.warn("[{0}] failed with error: {1}, attempting fallback".format(hostnamectl_cmd, ustr(e)))
+            logger.warn("[{0}] failed with error: {1}, attempting fallback".format(' '.join(hostnamectl_cmd), ustr(e)))
             DefaultOSUtil.set_hostname(self, hostname)
 
     def publish_hostname(self, hostname):

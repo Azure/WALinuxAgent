@@ -42,7 +42,8 @@ class GaiaOSUtil(DefaultOSUtil):
         out = ""
         for i in xrange(10):
             try:
-                out = shellutil.run_command(textutil.safe_shlex_split("/bin/clish -s -c '" + cmd + "'"), log_error=True)
+                final_command = ["/bin/clish", "-s", "-c", "'{0}'".format(cmd)]
+                out = shellutil.run_command(final_command, log_error=True)
                 ret = 0
                 break
             except shellutil.CommandError as e:
