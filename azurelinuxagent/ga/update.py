@@ -49,6 +49,7 @@ from azurelinuxagent.common.exception import ProtocolError, \
                                             UpdateError
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.osutil import get_osutil
+from azurelinuxagent.common.osutil.factory import get_python_symlink_path_if_ubuntu_20_04_image
 from azurelinuxagent.common.protocol import get_protocol_util
 from azurelinuxagent.common.protocol.hostplugin import HostPluginProtocol
 from azurelinuxagent.common.protocol.wire import WireProtocol
@@ -87,8 +88,6 @@ READONLY_FILE_GLOBS = [
     "ovf-env.xml"
 ]
 
-UBUNTU_20_04_IMAGE_PATH = "/etc/os-release"
-
 
 def get_update_handler():
     return UpdateHandler()
@@ -97,13 +96,6 @@ def get_update_handler():
 def get_python_cmd():
     major_version = platform.python_version_tuple()[0]
     return "python" if int(major_version) <= 2 else "python{0}".format(major_version)
-
-
-def get_agent_dir_python_symlink_path_if_ub_20_04():
-    if not os.path.exists(UBUNTU_20_04_IMAGE_PATH):
-        return None
-
-    return os.path.join(conf.get_lib_dir(), "python")
 
 
 class UpdateHandler(object):
@@ -741,7 +733,7 @@ class UpdateHandler(object):
     @staticmethod
     def _add_sym_link_for_ub20_04():
         # Function to create a symlink for the python interpreter that the agent is running by
-        agent_dir_python_symlink_path = get_agent_dir_python_symlink_path_if_ub_20_04()
+        agent_dir_python_symlink_path = get_python_symlink_path_if_ubuntu_20_04_image()
         if agent_dir_python_symlink_path is None:
             # Not an Ubuntu 20.04 machine, skipping creating a symlink
             return
