@@ -110,6 +110,7 @@ class WALAEventOperation:
     Unknown = "Unknown"
     Upgrade = "Upgrade"
     Update = "Update"
+    Ubuntu2004_Image = "Ubuntu2004_Image"
 
 
 SHOULD_ENCODE_MESSAGE_LEN = 80

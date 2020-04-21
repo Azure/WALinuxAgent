@@ -87,6 +87,8 @@ READONLY_FILE_GLOBS = [
     "ovf-env.xml"
 ]
 
+UBUNTU_20_04_IMAGE_PATH = "/etc/os-release"
+
 
 def get_update_handler():
     return UpdateHandler()
@@ -95,6 +97,13 @@ def get_update_handler():
 def get_python_cmd():
     major_version = platform.python_version_tuple()[0]
     return "python" if int(major_version) <= 2 else "python{0}".format(major_version)
+
+
+def get_agent_dir_python_symlink_path_if_ub_20_04():
+    if not os.path.exists(UBUNTU_20_04_IMAGE_PATH):
+        return None
+
+    return os.path.join(conf.get_lib_dir(), "python")
 
 
 class UpdateHandler(object):
@@ -285,6 +294,7 @@ class UpdateHandler(object):
             self._ensure_partition_assigned()
             self._ensure_readonly_files()
             self._ensure_cgroups_initialized()
+            self._add_sym_link_for_ub20_04()
 
             # Send OS-specific info as a telemetry event after the monitoring thread has been initialized, and with
             # it the container id too.
@@ -727,6 +737,36 @@ class UpdateHandler(object):
                 ustr(e))
 
         return pid_files, pid_file
+
+    @staticmethod
+    def _add_sym_link_for_ub20_04():
+        # Function to create a symlink for the python interpreter that the agent is running by
+        agent_dir_python_symlink_path = get_agent_dir_python_symlink_path_if_ub_20_04()
+        if agent_dir_python_symlink_path is None:
+            # Not an Ubuntu 20.04 machine, skipping creating a symlink
+            return
+
+        add_event(
+            AGENT_NAME,
+            op=WALAEventOperation.Ubuntu2004_Image,
+            version=CURRENT_VERSION,
+            is_success=True,
+            message="Agent running on Ubuntu20.04, setting a python symlink in agent directory")
+
+        if os.path.islink(agent_dir_python_symlink_path):
+            logger.info("Symlink to python interpreter already exists in agent dir {0}".format(agent_dir_python_symlink_path))
+            return
+
+        try:
+            # Create a symlink in agent directory which points to the Python interpreter path that the agent is running on
+            os.symlink(sys.executable, agent_dir_python_symlink_path)
+        except OSError as e:
+            add_event(
+                AGENT_NAME,
+                op=WALAEventOperation.Ubuntu2004_Image,
+                version=CURRENT_VERSION,
+                is_success=False,
+                message="Error while setting up a symlink: {0}".format(ustr(e)))
 
 
 class GuestAgent(object):
