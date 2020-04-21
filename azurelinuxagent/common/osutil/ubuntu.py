@@ -15,14 +15,22 @@
 #
 # Requires Python 2.6+ and Openssl 1.0+
 #
-
+import os
 import time
 
 import azurelinuxagent.common.logger as logger
 import azurelinuxagent.common.utils.shellutil as shellutil
+from azurelinuxagent.common import conf
 
 from azurelinuxagent.common.osutil.default import DefaultOSUtil
 
+
+UBUNTU_20_04_IMAGE_PATH = "/etc/os-release/ub20-image"
+
+def get_python_symlink_path_if_ubuntu_20_04_image():
+    if not os.path.exists(UBUNTU_20_04_IMAGE_PATH):
+        return None
+    return os.path.join(conf.get_lib_dir(), "python")
 
 class Ubuntu14OSUtil(DefaultOSUtil):
 

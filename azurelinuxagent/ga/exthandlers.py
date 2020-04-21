@@ -43,7 +43,7 @@ from azurelinuxagent.common.event import add_event, WALAEventOperation, elapsed_
 from azurelinuxagent.common.exception import ExtensionError, ProtocolError, ProtocolNotFoundError, \
     ExtensionDownloadError, ExtensionErrorCodes, ExtensionUpdateError, ExtensionOperationError
 from azurelinuxagent.common.future import ustr
-from azurelinuxagent.common.osutil.factory import get_python_symlink_path_if_ubuntu_20_04_image
+from azurelinuxagent.common.osutil.ubuntu import get_python_symlink_path_if_ubuntu_20_04_image
 from azurelinuxagent.common.protocol import get_protocol_util
 from azurelinuxagent.common.protocol.restapi import ExtHandlerStatus, \
     ExtensionStatus, \
