@@ -1942,7 +1942,7 @@ class TestExtension(ExtensionTestCase):
                 self.assertIn("%s=%s" % (ExtCommandEnvVariable.UninstallReturnCode, exit_code), install_kwargs['message'])
                 self.assertIn("%s=%s" % (ExtCommandEnvVariable.UninstallReturnCode, exit_code), enable_kwargs['message'])
 
-    def test_path_should_contain_symlink_path_if_ub_20(self, *args):
+    def test_path_should_contain_symlink_path_only_if_ub_20(self, *args):
 
         test_file_name = "testfile.sh"
         handler_json = {
@@ -1986,11 +1986,11 @@ class TestExtension(ExtensionTestCase):
                             python_symlink_path = get_python_symlink_path_if_ubuntu_20_04_image()
                             if python_symlink_path is not None:
                                 self.assertEqual(file, file_that_exists_in_fs, "File should exist in Filesystem if ubuntu image exists")
-                                self.assertIn("[stdout]\nPATH={0}".format(conf.get_lib_dir()), kwargs['message'], "Agent lib directory should be prepended to path")
+                                self.assertIn("\nPATH={0}".format(conf.get_lib_dir()), kwargs['message'], "Agent lib directory should be prepended to path")
                             else:
                                 self.assertEqual(file, file_that_does_not_exist_in_fs,
                                                  "File should not exist in Filesystem if is_ubuntu_20_04_image is False")
-                                self.assertNotIn("[stdout]\nPATH={0}".format(conf.get_lib_dir()), kwargs['message'], "Agent lib directory should not be prepended to path")
+                                self.assertNotIn("\nPATH={0}".format(conf.get_lib_dir()), kwargs['message'], "Agent lib directory should not be prepended to path")
 
             # Update goal state incarnation
             test_data.goal_state = test_data.goal_state.replace("<Incarnation>1<", "<Incarnation>2<")
