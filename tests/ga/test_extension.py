@@ -1972,7 +1972,7 @@ class TestExtension(ExtensionTestCase):
         file_that_does_not_exist_in_fs = "some/random/file"
 
         for file in [file_that_exists_in_fs, file_that_does_not_exist_in_fs]:
-            with patch("azurelinuxagent.common.osutil.factory.UBUNTU_20_04_IMAGE_PATH", file):
+            with patch("azurelinuxagent.common.osutil.ubuntu.UBUNTU_20_04_IMAGE_PATH", file):
 
                 with patch.object(ExtHandlerInstance, "load_manifest", return_value=manifest):
                     with patch.object(ExtHandlerInstance, 'report_event') as mock_report_event:

@@ -49,7 +49,7 @@ from azurelinuxagent.common.exception import ProtocolError, \
                                             UpdateError
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.osutil import get_osutil
-from azurelinuxagent.common.osutil.factory import get_python_symlink_path_if_ubuntu_20_04_image
+from azurelinuxagent.common.osutil.ubuntu import get_python_symlink_path_if_ubuntu_20_04_image
 from azurelinuxagent.common.protocol import get_protocol_util
 from azurelinuxagent.common.protocol.hostplugin import HostPluginProtocol
 from azurelinuxagent.common.protocol.wire import WireProtocol
@@ -738,21 +738,23 @@ class UpdateHandler(object):
             # Not an Ubuntu 20.04 machine, skipping creating a symlink
             return
 
+        msg = "Agent running on Ubuntu20.04, setting a python symlink in agent directory"
+        logger.info(msg)
         add_event(
             AGENT_NAME,
             op=WALAEventOperation.Ubuntu2004_Image,
             version=CURRENT_VERSION,
             is_success=True,
-            message="Agent running on Ubuntu20.04, setting a python symlink in agent directory")
+            message=msg)
 
-        if os.path.islink(agent_dir_python_symlink_path):
+        if os.path.exists(agent_dir_python_symlink_path):
             logger.info("Symlink to python interpreter already exists in agent dir {0}".format(agent_dir_python_symlink_path))
             return
 
         try:
             # Create a symlink in agent directory which points to the Python interpreter path that the agent is running on
             os.symlink(sys.executable, agent_dir_python_symlink_path)
-        except OSError as e:
+        except Exception as e:
             add_event(
                 AGENT_NAME,
                 op=WALAEventOperation.Ubuntu2004_Image,
