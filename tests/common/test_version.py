@@ -25,8 +25,8 @@ import azurelinuxagent.common.conf as conf
 from azurelinuxagent.common.event import EVENTS_DIRECTORY
 from azurelinuxagent.common.version import set_current_agent, \
     AGENT_LONG_VERSION, AGENT_VERSION, AGENT_NAME, AGENT_NAME_PATTERN, \
-    get_f5_platform, get_distro
-from tests.tools import AgentTestCase, open_patch, patch
+    get_f5_platform, get_distro, PY_VERSION_MAJOR, PY_VERSION_MINOR
+from tests.tools import AgentTestCase, open_patch, patch, skip_if_predicate_false
 
 
 def freebsd_system():
@@ -57,6 +57,13 @@ def default_system_exception():
     raise Exception
 
 
+def is_platform_supported():
+    # platform.dist() and platform.linux_distribution() is deprecated from Python 3.7+
+    if PY_VERSION_MAJOR == 3 and PY_VERSION_MINOR >= 7:
+        return False
+    else:
+        return True
+
 class TestAgentVersion(AgentTestCase):
     def setUp(self):
         AgentTestCase.setUp(self)
@@ -78,6 +85,7 @@ class TestAgentVersion(AgentTestCase):
         self.assertListEqual(openbsd_list, osinfo)
         return
 
+    @skip_if_predicate_false(is_platform_supported, "platform.dist() is deprecated in Python 3.7+")
     @mock.patch('platform.system', side_effect=default_system)
     @mock.patch('platform.dist', side_effect=default_system_no_linux_distro)
     def test_distro_is_correct_format_when_default_case(self, platform_system_name, default_system_no_linux):
@@ -86,6 +94,7 @@ class TestAgentVersion(AgentTestCase):
         self.assertListEqual(default_list, osinfo)
         return
 
+    @skip_if_predicate_false(is_platform_supported, "platform.dist() is deprecated in Python 3.7+")
     @mock.patch('platform.system', side_effect=default_system)
     @mock.patch('platform.dist', side_effect=default_system_exception)
     def test_distro_is_correct_for_exception_case(self, platform_system_name, default_system_no_linux):
