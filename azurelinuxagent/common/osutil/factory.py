@@ -38,6 +38,13 @@ from .openwrt import OpenWRTOSUtil
 
 from distutils.version import LooseVersion as Version
 
+UBUNTU_20_04_IMAGE_PATH = "/etc/os-release/ub20-image"
+
+def get_python_symlink_path_if_ubuntu_20_04_image():
+    if not os.path.exists(UBUNTU_20_04_IMAGE_PATH):
+        return None
+    return os.path.join(conf.get_lib_dir(), "python")
+
 
 def get_osutil(distro_name=DISTRO_NAME,
                distro_code_name=DISTRO_CODE_NAME,

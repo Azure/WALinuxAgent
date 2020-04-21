@@ -1942,6 +1942,58 @@ class TestExtension(ExtensionTestCase):
                 self.assertIn("%s=%s" % (ExtCommandEnvVariable.UninstallReturnCode, exit_code), install_kwargs['message'])
                 self.assertIn("%s=%s" % (ExtCommandEnvVariable.UninstallReturnCode, exit_code), enable_kwargs['message'])
 
+    def test_path_should_contain_symlink_path_if_ub_20(self, *args):
+
+        test_file_name = "testfile.sh"
+        handler_json = {
+            "installCommand": test_file_name,
+            "uninstallCommand": test_file_name,
+            "updateCommand": test_file_name,
+            "enableCommand": test_file_name,
+            "disableCommand": test_file_name,
+            "rebootAfterInstall": False,
+            "reportHeartbeat": False,
+            "continueOnUpdateFailure": False
+        }
+        manifest = HandlerManifest({'handlerManifest': handler_json})
+
+        # Script prints env variables passed to this process and prints all starting with ConfigSequenceNumber
+        test_file = """
+                printenv | grep PATH
+                """
+
+        base_dir = os.path.join(conf.get_lib_dir(), 'OSTCExtensions.ExampleHandlerLinux-1.0.0', test_file_name)
+        self.create_script(test_file_name, test_file, base_dir)
+
+        test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE_EXT_SINGLE)
+        exthandlers_handler, protocol = self._create_mock(test_data, *args)
+
+        file_that_exists_in_fs = base_dir
+        file_that_does_not_exist_in_fs = "some/random/file"
+
+        for file in [file_that_exists_in_fs, file_that_does_not_exist_in_fs]:
+            with patch("azurelinuxagent.common.osutil.factory.UBUNTU_20_04_IMAGE_PATH", file):
+
+                with patch.object(ExtHandlerInstance, "load_manifest", return_value=manifest):
+                    with patch.object(ExtHandlerInstance, 'report_event') as mock_report_event:
+                        exthandlers_handler.run()
+
+                        for _, kwargs in mock_report_event.call_args_list:
+                            # The output is of the format - 'testfile.sh\n[stdout]PATH=N\n[stderr]'
+                            if test_file_name not in kwargs['message']:
+                                continue
+
+                            python_symlink_path = get_python_symlink_path_if_ubuntu_20_04_image()
+                            if python_symlink_path is not None:
+                                self.assertEqual(file, file_that_exists_in_fs, "File should exist in Filesystem if ubuntu image exists")
+                                self.assertIn("[stdout]\nPATH={0}".format(conf.get_lib_dir()), kwargs['message'], "Agent lib directory should be prepended to path")
+                            else:
+                                self.assertEqual(file, file_that_does_not_exist_in_fs,
+                                                 "File should not exist in Filesystem if is_ubuntu_20_04_image is False")
+                                self.assertNotIn("[stdout]\nPATH={0}".format(conf.get_lib_dir()), kwargs['message'], "Agent lib directory should not be prepended to path")
+
+            # Update goal state incarnation
+            test_data.goal_state = test_data.goal_state.replace("<Incarnation>1<", "<Incarnation>2<")
 
 @patch("azurelinuxagent.common.protocol.wire.CryptUtil")
 @patch("azurelinuxagent.common.utils.restutil.http_get")

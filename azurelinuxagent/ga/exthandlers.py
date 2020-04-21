@@ -43,6 +43,7 @@ from azurelinuxagent.common.event import add_event, WALAEventOperation, elapsed_
 from azurelinuxagent.common.exception import ExtensionError, ProtocolError, ProtocolNotFoundError, \
     ExtensionDownloadError, ExtensionErrorCodes, ExtensionUpdateError, ExtensionOperationError
 from azurelinuxagent.common.future import ustr
+from azurelinuxagent.common.osutil.factory import get_python_symlink_path_if_ubuntu_20_04_image
 from azurelinuxagent.common.protocol import get_protocol_util
 from azurelinuxagent.common.protocol.restapi import ExtHandlerStatus, \
     ExtensionStatus, \
@@ -53,7 +54,6 @@ from azurelinuxagent.common.version import AGENT_NAME, CURRENT_VERSION, GOAL_STA
     DISTRO_NAME, DISTRO_VERSION, PY_VERSION_MAJOR, PY_VERSION_MINOR, PY_VERSION_MICRO
 
 # HandlerEnvironment.json schema version
-from azurelinuxagent.ga.update import get_agent_dir_python_symlink_path_if_ub_20_04
 
 HANDLER_ENVIRONMENT_VERSION = 1.0
 
@@ -1217,10 +1217,10 @@ class ExtHandlerInstance(object):
                             ExtCommandEnvVariable.ExtensionVersion: str(self.ext_handler.properties.version),
                             ExtCommandEnvVariable.ExtensionSeqNumber: str(self.get_seq_no())})
 
-                agent_dir_python_symlink_path = get_agent_dir_python_symlink_path_if_ub_20_04()
-                if agent_dir_python_symlink_path is not None:
-                    # Prepend the path of the Agent Python symlink for the extensions to use
-                    env['PATH'] = "{0}:{1}".format(os.path.dirname(agent_dir_python_symlink_path), env['PATH'])
+                python_symlink_path = get_python_symlink_path_if_ubuntu_20_04_image()
+                if python_symlink_path is not None:
+                    # If its a Ub20.04 image, prepend the path of the Agent Python symlink for the extensions to use
+                    env['PATH'] = "{0}:{1}".format(os.path.dirname(python_symlink_path), env['PATH'])
 
                 try:
                     # Some extensions erroneously begin cmd with a slash; don't interpret those
