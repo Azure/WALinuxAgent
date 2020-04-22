@@ -25,7 +25,7 @@ from azurelinuxagent.common import conf
 from azurelinuxagent.common.osutil.default import DefaultOSUtil
 
 
-UBUNTU_20_04_IMAGE_PATH = "/etc/os-release/ub20-image"
+UBUNTU_20_04_IMAGE_PATH = "/etc/ub20-image"
 
 def get_python_symlink_path_if_ubuntu_20_04_image():
     if not os.path.exists(UBUNTU_20_04_IMAGE_PATH):
