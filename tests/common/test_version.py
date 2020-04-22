@@ -58,8 +58,8 @@ def default_system_exception():
 
 
 def is_platform_dist_supported():
-    # platform.dist() and platform.linux_distribution() is deprecated from Python 3.7+
-    if PY_VERSION_MAJOR == 3 and PY_VERSION_MINOR >= 7:
+    # platform.dist() and platform.linux_distribution() is deprecated from Python 3.8+
+    if PY_VERSION_MAJOR == 3 and PY_VERSION_MINOR >= 8:
         return False
     else:
         return True

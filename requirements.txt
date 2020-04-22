@@ -1,2 +1,2 @@
-distro; python_version >= '3.7'
+distro; python_version >= '3.8'
 pyasn1
