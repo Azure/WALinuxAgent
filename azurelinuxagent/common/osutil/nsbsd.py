@@ -90,8 +90,9 @@ class NSBSDOSUtil(FreeBSDOSUtil):
                                               err_msg="Failed to set password for admin")
 
         # password set, activate webadmin and ssh access
-        self._run_command_without_raising(['setconf', '/usr/Firewall/ConfigFiles/webadmin', 'ACL', 'any', '&&', 'ensl'],
-                                          log_error=False)
+        commands = [['setconf', '/usr/Firewall/ConfigFiles/webadmin', 'ACL', 'any'], ['ensl']]
+        self._run_multiple_commands_without_raising(commands, log_error=False, continue_on_error=False)
+
 
     def deploy_ssh_pubkey(self, username, pubkey):
         """

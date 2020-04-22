@@ -106,7 +106,7 @@ class OpenBSDOSUtil(DefaultOSUtil):
         if self.is_sys_user(username):
             raise OSUtilError(("User {0} is a system user. "
                                "Will not set passwd.").format(username))
-        output = self._run_command_raising_OSUtilError(['echo', '-n', '{0}|encrypt'.format(password)],
+        output = self._run_command_raising_OSUtilError(['encrypt'], cmd_input=password,
                                                        err_msg="Failed to encrypt password for {0}".format(username))
         passwd_hash = output.strip()
         self._run_command_raising_OSUtilError(['usermod', '-p', passwd_hash, username],

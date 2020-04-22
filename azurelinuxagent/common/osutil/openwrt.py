@@ -142,7 +142,9 @@ class OpenWRTOSUtil(DefaultOSUtil):
 
     def set_hostname(self, hostname):
         fileutil.write_file('/etc/hostname', hostname)
-        self._run_command_without_raising(['uci', 'set', 'system.@system[0].hostname={0}'.format(hostname), '&&', 'uci', 'commit', 'system', '&&', '/etc/init.d/system', 'reload'], log_error=False)
+        commands = [['uci', 'set', 'system.@system[0].hostname={0}'.format(hostname)], ['uci', 'commit', 'system'],
+                    ['/etc/init.d/system', 'reload']]
+        self._run_multiple_commands_without_raising(commands, log_error=False, continue_on_error=False)
 
     def remove_rules_files(self, rules_files=""):
         pass

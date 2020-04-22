@@ -1426,10 +1426,21 @@ class DefaultOSUtil(object):
             pass
 
     @staticmethod
-    def _run_command_raising_OSUtilError(cmd, err_msg):
+    def _run_multiple_commands_without_raising(commands, log_error=True, continue_on_error=False):
+        for cmd in commands:
+            try:
+                shellutil.run_command(cmd, log_error=log_error)
+            # Original implementation of run() does a blanket catch, so mimicking the behaviour here
+            except Exception:
+                if continue_on_error:
+                    continue
+                break
+
+    @staticmethod
+    def _run_command_raising_OSUtilError(cmd, err_msg, cmd_input=None):
         # This method runs shell command using the new secure shellutil.run_command and raises OSUtilErrors on failures.
         try:
-            return shellutil.run_command(cmd, log_error=True)
+            return shellutil.run_command(cmd, log_error=True, cmd_input=cmd_input)
         except shellutil.CommandError as e:
             raise OSUtilError(
                 "{0}, Retcode: {1}, Output: {2}, Error: {3}".format(err_msg, e.returncode, e.stdout, e.stderr))
