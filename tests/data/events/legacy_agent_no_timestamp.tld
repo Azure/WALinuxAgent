@@ -1,0 +1,62 @@
+{
+    "eventId": 1,
+    "providerId": "69B669B9-4AF8-4C50-BDC4-6006FA76E975",
+    "parameters": [
+        {
+            "name": "Name",
+            "value": "WALinuxAgent"
+        },
+        {
+            "name": "Version",
+            "value": "9.9.9"
+        },
+        {
+            "name": "IsInternal",
+            "value": false
+        },
+        {
+            "name": "Operation",
+            "value": "InitializeCGroups"
+        },
+        {
+            "name": "OperationSuccess",
+            "value": true
+        },
+        {
+            "name": "Message",
+            "value": "The cgroup filesystem is ready to use"
+        },
+        {
+            "name": "Duration",
+            "value": 1234
+        },
+        {
+            "name": "ExtensionType",
+            "value": "ALegacyExtensionType"
+        },
+        {
+            "name": "GAVersion",
+            "value": "WALinuxAgent-1.1.1"
+        },
+        {
+            "name": "ContainerId",
+            "value": "AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE"
+        },
+        {
+            "name": "EventTid",
+            "value": 98765
+        },
+        {
+            "name": "EventPid",
+            "value": 4321
+        },
+        {
+            "name": "TaskName",
+            "value": "ALegacyTask"
+        },
+        {
+            "name": "KeywordName",
+            "value": "ALegacyKeywordName"
+        }
+    ]
+}

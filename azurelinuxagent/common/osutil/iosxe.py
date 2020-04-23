@@ -63,7 +63,7 @@ class IosxeOSUtil(DefaultOSUtil):
         DefaultOSUtil.openssl_to_openssh(self, input_file, output_file)
 
     def is_dhcp_available(self):
-        return (False, '168.63.129.16')
+        return False
 
     def get_instance_id(self):
         '''

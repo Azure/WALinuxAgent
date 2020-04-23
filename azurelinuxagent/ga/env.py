@@ -31,7 +31,7 @@ from azurelinuxagent.common.dhcp import get_dhcp_handler
 from azurelinuxagent.common.event import add_periodic, WALAEventOperation
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.osutil import get_osutil
-from azurelinuxagent.common.protocol import get_protocol_util
+from azurelinuxagent.common.protocol.util import get_protocol_util
 from azurelinuxagent.common.utils.archive import StateArchiver
 from azurelinuxagent.common.version import AGENT_NAME, CURRENT_VERSION
 
@@ -61,7 +61,7 @@ class EnvHandler(object):
     def __init__(self):
         self.osutil = get_osutil()
         self.dhcp_handler = get_dhcp_handler()
-        self.protocol_util = get_protocol_util()
+        self.protocol_util = None
         self.stopped = True
         self.hostname = None
         self.dhcp_id_list = []
@@ -98,6 +98,11 @@ class EnvHandler(object):
         If dhcp client process re-start has occurred, reset routes.
         Purge unnecessary files from disk cache.
         """
+
+        # The initialization of ProtocolUtil for the Environment thread should be done within the thread itself rather
+        # than initializing it in the ExtHandler thread. This is done to avoid any concurrency issues as each
+        # thread would now have its own ProtocolUtil object as per the SingletonPerThread model.
+        self.protocol_util = get_protocol_util()
         protocol = self.protocol_util.get_protocol()
         reset_firewall_fules = False
         while not self.stopped:
@@ -110,10 +115,10 @@ class EnvHandler(object):
                 # to WireServer.  The previous rules allowed traffic.  Having both rules in
                 # place negated the fix in 2.2.26.
                 if not reset_firewall_fules:
-                    self.osutil.remove_firewall(dst_ip=protocol.endpoint, uid=os.getuid())
+                    self.osutil.remove_firewall(dst_ip=protocol.get_endpoint(), uid=os.getuid())
                     reset_firewall_fules = True
 
-                success = self.osutil.enable_firewall(dst_ip=protocol.endpoint, uid=os.getuid())
+                success = self.osutil.enable_firewall(dst_ip=protocol.get_endpoint(), uid=os.getuid())
 
                 add_periodic(
                     logger.EVERY_HOUR,

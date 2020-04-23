@@ -15,13 +15,20 @@
 # Requires Python 2.6+ and Openssl 1.0+
 #
 
+import os
+import re
+import tempfile
+import unittest
+
+import azurelinuxagent.common.conf as conf
 from azurelinuxagent.common.exception import ProvisionError
 from azurelinuxagent.common.osutil.default import DefaultOSUtil
-from azurelinuxagent.common.protocol import OVF_FILE_NAME
+from azurelinuxagent.common.protocol.util import OVF_FILE_NAME
 from azurelinuxagent.pa.provision import get_provision_handler
 from azurelinuxagent.pa.provision.cloudinit import CloudInitProvisionHandler
 from azurelinuxagent.pa.provision.default import ProvisionHandler
-from tests.tools import *
+from azurelinuxagent.common.utils import fileutil
+from tests.tools import AgentTestCase, distros, load_data, MagicMock, Mock, patch
 
 
 class TestProvision(AgentTestCase):
@@ -371,6 +378,7 @@ class TestProvision(AgentTestCase):
             patch_get_provisioning_agent):
         provisioning_handler = get_provision_handler()
         self.assertIsInstance(provisioning_handler, CloudInitProvisionHandler, 'Provisioning handler should be cloud-init if agent is set to cloud-init')
+
 
 if __name__ == '__main__':
     unittest.main()

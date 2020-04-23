@@ -20,14 +20,16 @@ from __future__ import print_function
 import subprocess
 
 import errno
+import os
+import re
 from azurelinuxagent.common.cgroup import CGroup
-from azurelinuxagent.common.cgroupapi import VM_AGENT_CGROUP_NAME
 from azurelinuxagent.common.cgroupconfigurator import CGroupConfigurator
 from azurelinuxagent.common.cgroupstelemetry import CGroupsTelemetry
 from azurelinuxagent.common.exception import CGroupsException
 from azurelinuxagent.common.osutil.default import DefaultOSUtil
+from azurelinuxagent.common.utils import fileutil
 from tests.utils.cgroups_tools import CGroupsTools
-from tests.tools import *
+from tests.tools import AgentTestCase, patch
 
 
 class CGroupConfiguratorTestCase(AgentTestCase):
@@ -102,6 +104,18 @@ class CGroupConfiguratorTestCase(AgentTestCase):
             with self.assertRaises(CGroupsException) as context_manager:
                 CGroupConfigurator.get_instance().enable()
             self.assertIn("cgroups are not supported", str(context_manager.exception))
+
+    def test_disable_should_reset_tracked_cgroups(self):
+        configurator = CGroupConfigurator.get_instance()
+
+        # Start tracking a couple of dummy cgroups
+        CGroupsTelemetry.track_cgroup(CGroup("dummy", "/sys/fs/cgroup/memory/system.slice/dummy.service", "cpu"))
+        CGroupsTelemetry.track_cgroup(CGroup("dummy", "/sys/fs/cgroup/memory/system.slice/dummy.service", "memory"))
+
+        configurator.disable()
+
+        self.assertFalse(configurator.enabled())
+        self.assertEquals(len(CGroupsTelemetry._tracked), 0)
 
     def test_cgroup_operations_should_not_invoke_the_cgroup_api_when_cgroups_are_not_enabled(self):
         configurator = CGroupConfigurator.get_instance()
@@ -189,15 +203,18 @@ class CGroupConfiguratorTestCase(AgentTestCase):
             self.assertEqual(mock_start_extension_command.call_count, 1)
 
     def test_start_extension_command_should_start_tracking_the_extension_cgroups(self):
-        CGroupConfigurator.get_instance().start_extension_command(
-            extension_name="Microsoft.Compute.TestExtension-1.2.3",
-            command="date",
-            timeout=300,
-            shell=False,
-            cwd=self.tmp_dir,
-            env={},
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE)
+        # CPU usage is initialized when we begin tracking a CPU cgroup; since this test does not retrieve the
+        # CPU usage, there is no need for initialization
+        with patch("azurelinuxagent.common.cgroup.CpuCgroup.initialize_cpu_usage"):
+            CGroupConfigurator.get_instance().start_extension_command(
+                extension_name="Microsoft.Compute.TestExtension-1.2.3",
+                command="date",
+                timeout=300,
+                shell=False,
+                cwd=self.tmp_dir,
+                env={},
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE)
 
         self.assertTrue(CGroupsTelemetry.is_tracked(os.path.join(
             self.cgroups_file_system_root, "cpu", "walinuxagent.extensions/Microsoft.Compute.TestExtension_1.2.3")))
@@ -240,7 +257,7 @@ class CGroupConfiguratorTestCase(AgentTestCase):
         def mock_append_file(filepath, contents, **kwargs):
             if re.match(r'/.*/cpu/.*/cgroup.procs', filepath):
                 raise OSError(errno.ENOSPC, os.strerror(errno.ENOSPC))
-            fileutil.append_file(filepath, controller, **kwargs)
+            fileutil.append_file(filepath, contents, **kwargs)
 
         # Start tracking a couple of dummy cgroups
         CGroupsTelemetry.track_cgroup(CGroup("dummy", "/sys/fs/cgroup/memory/system.slice/dummy.service", "cpu"))
@@ -289,7 +306,7 @@ class CGroupConfiguratorTestCase(AgentTestCase):
         self.assertFalse(kwargs['is_success'])
         self.assertEquals(
             kwargs['message'],
-            "Failed to process legacy cgroups. Collection of resource usage data will be disabled. The daemon's PID ({0}) was already added to the legacy cgroup; this invalidates resource usage data.".format(daemon_pid))
+            "Failed to process legacy cgroups. Collection of resource usage data will be disabled. [CGroupsException] The daemon's PID ({0}) was already added to the legacy cgroup; this invalidates resource usage data.".format(daemon_pid))
 
         self.assertFalse(cgroup_configurator.enabled())
         self.assertEquals(len(CGroupsTelemetry._tracked), 0)

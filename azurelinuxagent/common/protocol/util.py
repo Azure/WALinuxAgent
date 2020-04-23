@@ -20,58 +20,51 @@
 import errno
 import os
 import re
-import shutil
-import threading
 import time
+import threading
 
 import azurelinuxagent.common.conf as conf
 import azurelinuxagent.common.logger as logger
 import azurelinuxagent.common.utils.fileutil as fileutil
+from azurelinuxagent.common.singletonperthread import SingletonPerThread
 
 from azurelinuxagent.common.exception import ProtocolError, OSUtilError, \
                                       ProtocolNotFoundError, DhcpError
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.osutil import get_osutil
 from azurelinuxagent.common.dhcp import get_dhcp_handler
+from azurelinuxagent.common.protocol.metadata_server_migration_util import cleanup_metadata_server_artifacts, \
+                                                                           is_metadata_server_artifact_present
 from azurelinuxagent.common.protocol.ovfenv import OvfEnv
 from azurelinuxagent.common.protocol.wire import WireProtocol
-from azurelinuxagent.common.protocol.metadata import MetadataProtocol, \
-                                                     METADATA_ENDPOINT
-from azurelinuxagent.common.utils.restutil import IOErrorCounter
+from azurelinuxagent.common.utils.restutil import KNOWN_WIRESERVER_IP, \
+                                                  IOErrorCounter
 
 OVF_FILE_NAME = "ovf-env.xml"
-TAG_FILE_NAME = "useMetadataEndpoint.tag"
 PROTOCOL_FILE_NAME = "Protocol"
 MAX_RETRY = 360
 PROBE_INTERVAL = 10
 ENDPOINT_FILE_NAME = "WireServerEndpoint"
 PASSWORD_PATTERN = "<UserPassword>.*?<"
 PASSWORD_REPLACEMENT = "<UserPassword>*<"
-
-
-class _nameset(set):
-    def __getattr__(self, name):
-        if name in self:
-            return name
-        raise AttributeError("%s not a valid value" % name)
-
-
-prots = _nameset(("WireProtocol", "MetadataProtocol"))
-
+WIRE_PROTOCOL_NAME = "WireProtocol"
 
 def get_protocol_util():
     return ProtocolUtil()
 
-
-class ProtocolUtil(object):
-
+class ProtocolUtil(SingletonPerThread):
     """
     ProtocolUtil handles initialization for protocol instance. 2 protocol types
     are invoked, wire protocol and metadata protocols.
+
+    Note: ProtocolUtil is a sub class of SingletonPerThread, this basically means that there would only be 1 single
+    instance of ProtocolUtil object per thread.
     """
+
     def __init__(self):
-        self.lock = threading.Lock()
-        self.protocol = None
+        self._lock = threading.RLock()  # protects the files on disk created during protocol detection
+        self._protocol = None
+        self.endpoint = None
         self.osutil = get_osutil()
         self.dhcp_handler = get_dhcp_handler()
 
@@ -82,9 +75,7 @@ class ProtocolUtil(object):
         """
         dvd_mount_point = conf.get_dvd_mount_point()
         ovf_file_path_on_dvd = os.path.join(dvd_mount_point, OVF_FILE_NAME)
-        tag_file_path_on_dvd = os.path.join(dvd_mount_point, TAG_FILE_NAME)
         ovf_file_path = os.path.join(conf.get_lib_dir(), OVF_FILE_NAME)
-        tag_file_path = self._get_tag_file_path()
 
         try:
             self.osutil.mount_dvd()
@@ -95,7 +86,7 @@ class ProtocolUtil(object):
         try:
             ovfxml = fileutil.read_file(ovf_file_path_on_dvd, remove_bom=True)
             ovfenv = OvfEnv(ovfxml)
-        except IOError as e:
+        except (IOError, OSError) as e:
             raise ProtocolError("[CopyOvfEnv] Error reading file "
                                 "{0}: {1}".format(ovf_file_path_on_dvd,
                                                   ustr(e)))
@@ -105,20 +96,11 @@ class ProtocolUtil(object):
                             PASSWORD_REPLACEMENT,
                             ovfxml)
             fileutil.write_file(ovf_file_path, ovfxml)
-        except IOError as e:
+        except (IOError, OSError) as e:
             raise ProtocolError("[CopyOvfEnv] Error writing file "
                                 "{0}: {1}".format(ovf_file_path,
                                                   ustr(e)))
 
-        try:
-            if os.path.isfile(tag_file_path_on_dvd):
-                logger.info("Found {0} in provisioning ISO", TAG_FILE_NAME)
-                shutil.copyfile(tag_file_path_on_dvd, tag_file_path)
-        except IOError as e:
-            raise ProtocolError("[CopyOvfEnv] Error copying file "
-                                "{0} to {1}: {2}".format(tag_file_path,
-                                                         tag_file_path,
-                                                         ustr(e)))
         self._cleanup_ovf_dvd()
 
         return ovfenv
@@ -147,106 +129,110 @@ class ProtocolUtil(object):
             conf.get_lib_dir(),
             PROTOCOL_FILE_NAME)
 
-    def _get_tag_file_path(self):
+    def _get_wireserver_endpoint_file_path(self):
         return os.path.join(
             conf.get_lib_dir(),
-            TAG_FILE_NAME)
+            ENDPOINT_FILE_NAME)
 
     def get_wireserver_endpoint(self):
+        self._lock.acquire()
         try:
-            file_path = os.path.join(conf.get_lib_dir(), ENDPOINT_FILE_NAME)
-            return fileutil.read_file(file_path)
-        except IOError as e:
-            raise OSUtilError(ustr(e))
+            if self.endpoint:
+                return self.endpoint
+
+            file_path = self._get_wireserver_endpoint_file_path()
+            if os.path.isfile(file_path):
+                try:
+                    self.endpoint = fileutil.read_file(file_path)
+
+                    if self.endpoint:
+                        logger.info("WireServer endpoint {0} read from file", self.endpoint)
+                        return self.endpoint
+
+                    logger.error("[GetWireserverEndpoint] Unexpected empty file {0}", file_path)
+                except (IOError, OSError) as e:
+                    logger.error("[GetWireserverEndpoint] Error reading file {0}: {1}", file_path, str(e))
+            else:
+                logger.error("[GetWireserverEndpoint] Missing file {0}", file_path)
+
+            self.endpoint = KNOWN_WIRESERVER_IP
+            logger.info("Using hardcoded Wireserver endpoint {0}", self.endpoint)
+
+            return self.endpoint
+        finally:
+            self._lock.release()
 
     def _set_wireserver_endpoint(self, endpoint):
         try:
-            file_path = os.path.join(conf.get_lib_dir(), ENDPOINT_FILE_NAME)
+            self.endpoint = endpoint
+            file_path = self._get_wireserver_endpoint_file_path()
             fileutil.write_file(file_path, endpoint)
-        except IOError as e:
+        except (IOError, OSError) as e:
             raise OSUtilError(ustr(e))
 
-    def _detect_wire_protocol(self):
-        endpoint = self.dhcp_handler.endpoint
-        if endpoint is None:
-            '''
-            Check if DHCP can be used to get the wire protocol endpoint
-            '''
-            (dhcp_available, conf_endpoint) =  self.osutil.is_dhcp_available()
-            if dhcp_available:
-                logger.info("WireServer endpoint is not found. Rerun dhcp handler")
-                try:
-                    self.dhcp_handler.run()
-                except DhcpError as e:
-                    raise ProtocolError(ustr(e))
-                endpoint = self.dhcp_handler.endpoint
-            else:
-                logger.info("_detect_wire_protocol: DHCP not available")
-                endpoint = self.get_wireserver_endpoint()
-                if endpoint == None:
-                    endpoint = conf_endpoint
-                    logger.info("Using hardcoded WireServer endpoint {0}", endpoint)
-                else:
-                    logger.info("WireServer endpoint {0} read from file", endpoint)
+    def _clear_wireserver_endpoint(self):
+        """
+        Cleanup previous saved wireserver endpoint.
+        """
+
+        self.endpoint = None
+        endpoint_file_path = self._get_wireserver_endpoint_file_path()
+        if not os.path.isfile(endpoint_file_path):
+            return
 
         try:
-            protocol = WireProtocol(endpoint)
-            protocol.detect()
-            self._set_wireserver_endpoint(endpoint)
-            return protocol
-        except ProtocolError as e:
-            logger.info("WireServer is not responding. Reset endpoint")
-            self.dhcp_handler.endpoint = None
-            self.dhcp_handler.skip_cache = True
-            raise e
+            os.remove(endpoint_file_path)
+        except (IOError, OSError) as e:
+            # Ignore file-not-found errors (since the file is being removed)
+            if e.errno == errno.ENOENT:
+                return
+            logger.error("Failed to clear wiresever endpoint: {0}", e)
 
-    def _detect_metadata_protocol(self):
-        protocol = MetadataProtocol()
-        protocol.detect()
-        return protocol
-
-    def _detect_protocol(self, protocols):
+    def _detect_protocol(self):
         """
         Probe protocol endpoints in turn.
         """
         self.clear_protocol()
 
         for retry in range(0, MAX_RETRY):
-            for protocol_name in protocols:
-                try:
-                    protocol = self._detect_wire_protocol() \
-                                if protocol_name == prots.WireProtocol \
-                                else self._detect_metadata_protocol()
+            try:
+                endpoint = self.dhcp_handler.endpoint
+                if endpoint is None:
+                    '''
+                    Check if DHCP can be used to get the wire protocol endpoint
+                    '''
+                    dhcp_available = self.osutil.is_dhcp_available()
+                    if dhcp_available:
+                        logger.info("WireServer endpoint is not found. Rerun dhcp handler")
+                        try:
+                            self.dhcp_handler.run()
+                        except DhcpError as e:
+                            raise ProtocolError(ustr(e))
+                        endpoint = self.dhcp_handler.endpoint
+                    else:
+                        logger.info("_detect_protocol: DHCP not available")
+                        endpoint = self.get_wireserver_endpoint()
 
-                    return (protocol_name, protocol)
+                try:
+                    protocol = WireProtocol(endpoint)
+                    protocol.detect()
+                    self._set_wireserver_endpoint(endpoint)
+                    return protocol
 
                 except ProtocolError as e:
-                    logger.info("Protocol endpoint not found: {0}, {1}",
-                                protocol_name, e)
+                    logger.info("WireServer is not responding. Reset dhcp endpoint")
+                    self.dhcp_handler.endpoint = None
+                    self.dhcp_handler.skip_cache = True
+                    raise e
+    
+            except ProtocolError as e:
+                logger.info("Protocol endpoint not found: {0}", e)
 
             if retry < MAX_RETRY - 1:
-                logger.info("Retry detect protocols: retry={0}", retry)
+                logger.info("Retry detect protocol: retry={0}", retry)
                 time.sleep(PROBE_INTERVAL)
         raise ProtocolNotFoundError("No protocol found.")
-
-    def _get_protocol(self):
-        """
-        Get protocol instance based on previous detecting result.
-        """
-        protocol_file_path = self._get_protocol_file_path()
-        if not os.path.isfile(protocol_file_path):
-            raise ProtocolNotFoundError("No protocol found")
-
-        protocol_name = fileutil.read_file(protocol_file_path)
-        if protocol_name == prots.WireProtocol:
-            endpoint = self.get_wireserver_endpoint()
-            return WireProtocol(endpoint)
-        elif protocol_name == prots.MetadataProtocol:
-            return MetadataProtocol()
-        else:
-            raise ProtocolNotFoundError(("Unknown protocol: {0}"
-                                         "").format(protocol_name))
-
+    
     def _save_protocol(self, protocol_name):
         """
         Save protocol endpoint
@@ -254,60 +240,73 @@ class ProtocolUtil(object):
         protocol_file_path = self._get_protocol_file_path()
         try:
             fileutil.write_file(protocol_file_path, protocol_name)
-        except IOError as e:
+        except (IOError, OSError) as e:
             logger.error("Failed to save protocol endpoint: {0}", e)
 
     def clear_protocol(self):
         """
-        Cleanup previous saved endpoint.
+        Cleanup previous saved protocol endpoint.
         """
-        logger.info("Clean protocol")
-        self.protocol = None
-        protocol_file_path = self._get_protocol_file_path()
-        if not os.path.isfile(protocol_file_path):
-            return
-
+        self._lock.acquire()
         try:
-            os.remove(protocol_file_path)
-        except IOError as e:
-            # Ignore file-not-found errors (since the file is being removed)
-            if e.errno == errno.ENOENT:
+            logger.info("Clean protocol and wireserver endpoint")
+            self._clear_wireserver_endpoint()
+            self._protocol = None
+            protocol_file_path = self._get_protocol_file_path()
+            if not os.path.isfile(protocol_file_path):
                 return
-            logger.error("Failed to clear protocol endpoint: {0}", e)
-
-    def get_protocol(self, by_file=False):
-        """
-        Detect protocol by endpoints, if by_file is True,
-        detect MetadataProtocol in priority.
-        :returns: protocol instance
-        """
-        self.lock.acquire()
-
-        try:
-            if self.protocol is not None:
-                return self.protocol
 
             try:
-                self.protocol = self._get_protocol()
-                return self.protocol
-            except ProtocolNotFoundError:
-                pass
-            logger.info("Detect protocol endpoints")
-            protocols = [prots.WireProtocol]
-
-            if by_file:
-                tag_file_path = self._get_tag_file_path()
-                if os.path.isfile(tag_file_path):
-                    protocols.insert(0, prots.MetadataProtocol)
-            else:
-                protocols.append(prots.MetadataProtocol)
-            protocol_name, protocol = self._detect_protocol(protocols)
-
-            IOErrorCounter.set_protocol_endpoint(endpoint=protocol.endpoint)
-            self._save_protocol(protocol_name)
-
-            self.protocol = protocol
-            return self.protocol
-
+                os.remove(protocol_file_path)
+            except (IOError, OSError) as e:
+                # Ignore file-not-found errors (since the file is being removed)
+                if e.errno == errno.ENOENT:
+                    return
+                logger.error("Failed to clear protocol endpoint: {0}", e)
         finally:
-            self.lock.release()
+            self._lock.release()
+
+    def get_protocol(self):
+        """
+        Detect protocol by endpoint.
+        :returns: protocol instance
+        """
+        self._lock.acquire()
+        try:
+            if self._protocol is not None:
+                return self._protocol
+
+            # If the protocol file contains MetadataProtocol we need to fall through to 
+            # _detect_protocol so that we can generate the WireServer transport certificates.
+            protocol_file_path = self._get_protocol_file_path()
+            if os.path.isfile(protocol_file_path) and fileutil.read_file(protocol_file_path) == WIRE_PROTOCOL_NAME:
+                endpoint = self.get_wireserver_endpoint()
+                self._protocol = WireProtocol(endpoint)
+
+                # If metadataserver certificates are present we clean certificates
+                # and remove MetadataServer firewall rule. It is possible
+                # there was a previous intermediate upgrade before 2.2.48 but metadata artifacts 
+                # were not cleaned up (intermediate updated agent does not have cleanup 
+                # logic but we transitioned from Metadata to Wire protocol)
+                if is_metadata_server_artifact_present():
+                    cleanup_metadata_server_artifacts(self.osutil)
+                return self._protocol
+
+            logger.info("Detect protocol endpoint")
+
+            protocol = self._detect_protocol()
+
+            IOErrorCounter.set_protocol_endpoint(endpoint=protocol.get_endpoint())
+            self._save_protocol(WIRE_PROTOCOL_NAME)
+
+            self._protocol = protocol
+
+            # Need to clean up MDS artifacts only after _detect_protocol so that we don't
+            # delete MDS certificates if we can't reach WireServer and have to roll back
+            # the update
+            if is_metadata_server_artifact_present():
+                cleanup_metadata_server_artifacts(self.osutil)
+
+            return self._protocol
+        finally:
+            self._lock.release()

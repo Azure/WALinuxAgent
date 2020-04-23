@@ -28,10 +28,9 @@ import azurelinuxagent.common.logger as logger
 from datetime import datetime, timedelta
 
 from azurelinuxagent.common.event import add_event, WALAEventOperation
-from azurelinuxagent.common.exception import RemoteAccessError
+from azurelinuxagent.common.exception import RemoteAccessError, ProtocolError
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.utils.cryptutil import CryptUtil
-from azurelinuxagent.common.protocol import get_protocol_util
 from azurelinuxagent.common.version import AGENT_NAME, CURRENT_VERSION
 from azurelinuxagent.common.osutil import get_osutil
 
@@ -43,15 +42,14 @@ MAX_TRY_ATTEMPT = 5
 FAILED_ATTEMPT_THROTTLE = 1
 
 
-def get_remote_access_handler():
-    return RemoteAccessHandler()
+def get_remote_access_handler(protocol):
+    return RemoteAccessHandler(protocol)
 
 
 class RemoteAccessHandler(object):
-    def __init__(self):
+    def __init__(self, protocol):
         self.os_util = get_osutil()
-        self.protocol_util = get_protocol_util()
-        self.protocol = None
+        self.protocol = protocol
         self.cryptUtil = CryptUtil(conf.get_openssl_cmd())
         self.remote_access = None
         self.incarnation = 0
@@ -60,7 +58,6 @@ class RemoteAccessHandler(object):
     def run(self):
         try:
             if self.os_util.jit_enabled:
-                self.protocol = self.protocol_util.get_protocol()
                 current_incarnation = self.protocol.get_incarnation()
                 if self.incarnation != current_incarnation:
                     # something changed. Handle remote access if any.

@@ -29,19 +29,16 @@ import azurelinuxagent.common.utils.fileutil as fileutil
 import azurelinuxagent.common.utils.shellutil as shellutil
 from azurelinuxagent.common.utils.textutil import parse_doc, find, getattrib
 
-
-from azurelinuxagent.common.protocol.wire import SHARED_CONF_FILE_NAME
-
 dapl_config_paths = [
     '/etc/dat.conf',
     '/etc/rdma/dat.conf',
     '/usr/local/etc/dat.conf'
 ]
 
-def setup_rdma_device(nd_version):
+
+def setup_rdma_device(nd_version, shared_conf):
     logger.verbose("Parsing SharedConfig XML contents for RDMA details")
-    xml_doc = parse_doc(
-        fileutil.read_file(os.path.join(conf.get_lib_dir(), SHARED_CONF_FILE_NAME)))
+    xml_doc = parse_doc(shared_conf.xml_text)
     if xml_doc is None:
         logger.error("Could not parse SharedConfig XML document")
         return
@@ -64,7 +61,7 @@ def setup_rdma_device(nd_version):
 
     # add colons to the MAC address (e.g. 00155D33FF1D ->
     # 00:15:5D:33:FF:1D)
-    rdma_mac_addr = ':'.join([rdma_mac_addr[i:i+2]
+    rdma_mac_addr = ':'.join([rdma_mac_addr[i:i + 2]
                               for i in range(0, len(rdma_mac_addr), 2)])
     logger.info("Found RDMA details. IPv4={0} MAC={1}".format(
         rdma_ipv4_addr, rdma_mac_addr))

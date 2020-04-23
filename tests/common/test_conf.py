@@ -15,12 +15,12 @@
 # Requires Python 2.6+ and Openssl 1.0+
 #
 
-import mock
 import os.path
 
 from azurelinuxagent.common.conf import *
+import azurelinuxagent.common.conf as conf
 
-from tests.tools import *
+from tests.tools import AgentTestCase, data_dir, patch
 
 
 class TestConf(AgentTestCase):

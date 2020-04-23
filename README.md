@@ -1,11 +1,13 @@
 # Microsoft Azure Linux Agent
 
-## Master branch status
+## Develop branch status
 
 [![Travis CI](https://travis-ci.org/Azure/WALinuxAgent.svg?branch=develop)](https://travis-ci.org/Azure/WALinuxAgent/branches)
 [![CodeCov](https://codecov.io/gh/Azure/WALinusAgent/branch/develop/graph/badge.svg)](https://codecov.io/gh/Azure/WALinuxAgent/branch/develop)
 
 Each badge below represents our basic validation tests for an image, which are executed several times each day. These include provisioning, user account, disk, extension and networking scenarios.
+
+Note: These badges represent testing to our develop branch which might not be stable. For a stable build please use master branch instead. 
 
 Image | Status |
 ------|--------|
@@ -16,14 +18,12 @@ Canonical UbuntuServer 16.04-DAILY-LTS|![badge](https://dcrbadges.blob.core.wind
 Canonical UbuntuServer 18.04-LTS|![badge](https://dcrbadges.blob.core.windows.net/scenarios/Canonical_UbuntuServer_18.04-LTS__agent--bvt.svg)
 Canonical UbuntuServer 18.04-DAILY-LTS|![badge](https://dcrbadges.blob.core.windows.net/scenarios/Canonical_UbuntuServer_18.04-DAILY-LTS__agent--bvt.svg)
 Credativ Debian 8|![badge](https://dcrbadges.blob.core.windows.net/scenarios/Credativ_Debian_8__agent--bvt.svg)
-Credativ Debian 8-DAILY|![badge](https://dcrbadges.blob.core.windows.net/scenarios/Credativ_Debian_8-DAILY__agent--bvt.svg)
 Credativ Debian 9|![badge](https://dcrbadges.blob.core.windows.net/scenarios/Credativ_Debian_9__agent--bvt.svg)
-Credativ Debian 9-DAILY|![badge](https://dcrbadges.blob.core.windows.net/scenarios/Credativ_Debian_9-DAILY__agent--bvt.svg)
 OpenLogic CentOS 6.9|![badge](https://dcrbadges.blob.core.windows.net/scenarios/OpenLogic_CentOS_6.9__agent--bvt.svg)
 OpenLogic CentOS 7.4|![badge](https://dcrbadges.blob.core.windows.net/scenarios/OpenLogic_CentOS_7.4__agent--bvt.svg)
 RedHat RHEL 6.9|![badge](https://dcrbadges.blob.core.windows.net/scenarios/RedHat_RHEL_6.9__agent--bvt.svg)
 RedHat RHEL 7-RAW|![badge](https://dcrbadges.blob.core.windows.net/scenarios/RedHat_RHEL_7-RAW__agent--bvt.svg)
-SUSE SLES 12-SP3|![badge](https://dcrbadges.blob.core.windows.net/scenarios/SUSE_SLES_12-SP3__agent--bvt.svg)
+SUSE SLES 12-SP5|![badge](https://dcrbadges.blob.core.windows.net/scenarios/SUSE_SLES_12-SP5__agent--bvt.svg)
 
 ## Introduction
 
@@ -245,7 +245,7 @@ Choose which provisioning agent to use (or allow waagent to figure it out by
 specifying "auto"). Possible options are "auto" (default), "waagent", "cloud-init",
 or "disabled".
 
-#### __Provisioning.Enabled__ (*removed in VERSION*)
+#### __Provisioning.Enabled__ (*removed in 2.2.45*)
 
 _Type: Boolean_ 
 _Default: y_
@@ -259,7 +259,7 @@ _Note_: This configuration option has been removed and has no effect. waagent
 now auto-detects cloud-init as a provisioning agent (with an option to override
 with `Provisioning.Agent`).
 
-#### __Provisioning.UseCloudInit__ (*removed in VERSION*)
+#### __Provisioning.UseCloudInit__ (*removed in 2.2.45*)
 
 _Type: Boolean_ 
 _Default: n_
@@ -395,7 +395,7 @@ system swap space.
 _Type: Boolean_  
 _Default: n_
 
-If set, the swap file (/swapfile) is mounted as an encrypted filesystem.
+If set, the swap file (/swapfile) is mounted as an encrypted filesystem (flag supported only on FreeBSD.)
 
 #### __ResourceDisk.SwapSizeMB__
 

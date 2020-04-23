@@ -14,12 +14,14 @@
 #
 # Requires Python 2.6+ and Openssl 1.0+
 #
-import mock
 
 from azurelinuxagent.common.osutil.freebsd import FreeBSDOSUtil
 import azurelinuxagent.common.utils.shellutil as shellutil
 from .test_default import osutil_get_dhcp_pid_should_return_a_list_of_pids
-from tests.tools import *
+from tests.tools import AgentTestCase, patch
+import traceback
+import unittest
+
 
 class TestFreeBSDOSUtil(AgentTestCase):
     def setUp(self):
