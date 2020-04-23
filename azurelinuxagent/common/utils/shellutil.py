@@ -148,8 +148,11 @@ def run_command(command, log_error=False, cmd_input=None):
     # PIPE, an existing file descriptor (a positive integer), an existing file object, and None
     stdin = subprocess.PIPE if cmd_input else None
     try:
+        # Starting Python 3.4+, you need to encode the string, i.e. you need to pass Bytes to the input rather than string to process.communicate()
+        process_input = cmd_input.encode() if cmd_input else None
+
         process = subprocess.Popen(command, stdin=stdin, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=False)
-        stdout, stderr = process.communicate(input=cmd_input)
+        stdout, stderr = process.communicate(input=process_input)
         returncode = process.returncode
     except Exception as e:
         if log_error:
