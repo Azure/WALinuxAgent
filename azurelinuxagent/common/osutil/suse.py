@@ -16,25 +16,14 @@
 # Requires Python 2.6+ and Openssl 1.0+
 #
 
-import os
-import re
-import pwd
-import shutil
-import socket
-import array
-import struct
-import fcntl
-import time
-import azurelinuxagent.common.logger as logger
 import azurelinuxagent.common.utils.fileutil as fileutil
 import azurelinuxagent.common.utils.shellutil as shellutil
-import azurelinuxagent.common.utils.textutil as textutil
-from azurelinuxagent.common.version import DISTRO_NAME, DISTRO_VERSION, DISTRO_FULL_NAME
+from azurelinuxagent.common.exception import OSUtilError
+from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.osutil.default import DefaultOSUtil
 
 
 class SUSE11OSUtil(DefaultOSUtil):
-    # TODO: Remove this class after March 31 2022, EOL of SLES 11
     def __init__(self):
         super(SUSE11OSUtil, self).__init__()
         self.jit_enabled = True
@@ -42,7 +31,12 @@ class SUSE11OSUtil(DefaultOSUtil):
 
     def set_hostname(self, hostname):
         fileutil.write_file('/etc/HOSTNAME', hostname)
-        shellutil.run("hostname {0}".format(hostname), chk_err=False)
+        try: 
+            shellutil.run_command(["hostname", hostname])
+        except Exception as e:
+            raise OSUtilError(
+                "Failed to set hostname. Error: {}".format(ustr(e))
+            )
 
     def get_dhcp_pid(self):
         return self._get_dhcp_pid(["pidof", self.dhclient_name])
@@ -51,30 +45,92 @@ class SUSE11OSUtil(DefaultOSUtil):
         return True
 
     def stop_dhcp_service(self):
-        cmd = "/sbin/service {0} stop".format(self.dhclient_name)
-        return shellutil.run(cmd, chk_err=False)
+        try:
+            shellutil.run_command(
+                ["/sbin/service", self.dhclient_name, "stop"]
+            )
+        except Exception as e:
+            raise OSUtilError(
+                "Failed to stop dhcp client {}. Error {}".format(
+                    self.dhclient_name, ustr(e))
+                )
 
     def start_dhcp_service(self):
-        cmd = "/sbin/service {0} start".format(self.dhclient_name)
-        return shellutil.run(cmd, chk_err=False)
+        try:
+            shellutil.run_command(
+                ["/sbin/service", self.dhclient_name, "start"]
+            )
+        except Exception as e:
+            raise OSUtilError(
+                "Failed to start dhcp client {}. Error {}".format(
+                    self.dhclient_name, ustr(e))
+                )
 
     def start_network(self) :
-        return shellutil.run("/sbin/service start network", chk_err=False)
+        try:
+            shellutil.run_command(
+                ["/sbin/service", "network", "start"]
+            )
+        except Exception as e:
+            raise OSUtilError(
+                "Failed to start network client {}. Error {}".format(
+                    self.dhclient_name, ustr(e))
+                )
 
     def restart_ssh_service(self):
-        return shellutil.run("/sbin/service sshd restart", chk_err=False)
+        try:
+            shellutil.run_command(
+                ["/sbin/service", "sshd", "restart"]
+            )
+        except Exception as e:
+            raise OSUtilError(
+                "Failed to restart sshd client {}. Error {}".format(
+                    self.dhclient_name, ustr(e))
+                )
 
     def stop_agent_service(self):
-        return shellutil.run("/sbin/service {0} stop".format(self.service_name), chk_err=False)
+        try:
+            shellutil.run_command(
+                ["/sbin/service", self.service_name, "stop"]
+            )
+        except Exception as e:
+            raise OSUtilError(
+                "Failed to stop {}. Error {}".format(
+                    self.service_name, ustr(e))
+            )
 
     def start_agent_service(self):
-        return shellutil.run("/sbin/service {0} start".format(self.service_name), chk_err=False)
+        try:
+            shellutil.run_command(
+                ["/sbin/service", self.service_name, "start"]
+            )
+        except Exception as e:
+            raise OSUtilError(
+                "Failed to start {}. Error {}".format(
+                    self.service_name, ustr(e))
+            )
 
     def register_agent_service(self):
-        return shellutil.run("/sbin/insserv {0}".format(self.service_name), chk_err=False)
+        try:
+            shellutil.run_command(
+                ["/sbin/insserv", self.service_name]
+            )
+        except Exception as e:
+            raise OSUtilError(
+                "Failed to enable {}. Error {}".format(
+                    self.service_name, ustr(e))
+            )
 
     def unregister_agent_service(self):
-        return shellutil.run("/sbin/insserv -r {0}".format(self.service_name), chk_err=False)
+        try:
+            shellutil.run_command(
+                ["/sbin/insserv", "-r", self.service_name]
+            )
+        except Exception as e:
+            raise OSUtilError(
+                "Failed to remove {}. Error {}".format(
+                    self.service_name, ustr(e))
+            )
 
 
 class SUSEOSUtil(SUSE11OSUtil):
@@ -83,32 +139,96 @@ class SUSEOSUtil(SUSE11OSUtil):
         self.dhclient_name = 'wickedd-dhcp4'
 
     def set_hostname(self, hostname):
-        shellutil.run(
-            "hostnamectl set-hostname {0}".format(hostname), chk_err=False
-        )
+        try: 
+            shellutil.run_command(["hostnamectl", "set-hostname", hostname])
+        except Exception as e:
+            raise OSUtilError(
+                "Failed to set hostname. Error: {}".format(ustr(e))
+            )
 
     def stop_dhcp_service(self):
-        cmd = "systemctl stop {0}".format(self.dhclient_name)
-        return shellutil.run(cmd, chk_err=False)
+        try:
+            shellutil.run_command(
+                ["systemctl", "stop", "{}.service".format(self.dhclient_name)]
+            )
+        except Exception as e:
+            raise OSUtilError(
+                "Failed to stop dhcp client {}. Error {}".format(
+                    self.dhclient_name, ustr(e))
+                )
 
     def start_dhcp_service(self):
-        cmd = "systemctl start {0}".format(self.dhclient_name)
-        return shellutil.run(cmd, chk_err=False)
+        try:
+            shellutil.run_command(
+                ["systemctl", "start", "{}.service".format(self.dhclient_name)]
+            )
+        except Exception as e:
+            raise OSUtilError(
+                "Failed to start dhcp client {}. Error {}".format(
+                    self.dhclient_name, ustr(e))
+                )
 
     def start_network(self) :
-        return shellutil.run("systemctl start network", chk_err=False)
+        try:
+            shellutil.run_command(
+                ["systemctl", "start", "network.service"]
+            )
+        except Exception as e:
+            raise OSUtilError(
+                "Failed to start network. Error: {}".format(ustr(e))
+            )
 
     def restart_ssh_service(self):
-        return shellutil.run("systemctl restart sshd", chk_err=False)
+        try:
+            shellutil.run_command(
+                ["systemctl", "restart", "sshd.service"]
+            )
+        except Exception as e:
+            raise OSUtilError(
+                "Failed to restart sshd. Error: {}".format(ustr(e))
+            )
 
     def stop_agent_service(self):
-        return shellutil.run("systemctl stop {0}".format(self.service_name), chk_err=False)
+        try:
+            shellutil.run_command(
+                ["systemctl", "stop", "{}.service".format(self.service_name)]
+            )
+        except Exception as e:
+            raise OSUtilError(
+                "Failed to stop {}. Error {}".format(
+                    self.service_name, ustr(e))
+            )
 
     def start_agent_service(self):
-        return shellutil.run("systemctl start {0}".format(self.service_name), chk_err=False)
+        try:
+            shellutil.run_command(
+                ["systemctl", "start", "{}.service".format(self.service_name)]
+            )
+        except Exception as e:
+            raise OSUtilError(
+                "Failed to start {}. Error {}".format(
+                    self.service_name, ustr(e))
+            )
 
     def register_agent_service(self):
-        return shellutil.run("systemctl enable {0}".format(self.service_name), chk_err=False)
+        try:
+            shellutil.run_command(
+                ["systemctl", "enable", "{}.service".format(self.service_name)]
+            )
+        except Exception as e:
+            raise OSUtilError(
+                "Failed to enable {}. Error {}".format(
+                    self.service_name, ustr(e))
+            )
 
     def unregister_agent_service(self):
-        return shellutil.run("systemctl disable {0}".format(self.service_name), chk_err=False)
+        try:
+            shellutil.run_command(
+                ["systemctl", "disable", "{}.service".format(self.service_name)]
+            )
+        except Exception as e:
+            raise OSUtilError(
+                "Failed to disable {}. Error {}".format(
+                    self.service_name, ustr(e))
+            )
+
