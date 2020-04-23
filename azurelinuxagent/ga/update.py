@@ -50,9 +50,9 @@ from azurelinuxagent.common.protocol.util import get_protocol_util
 from azurelinuxagent.common.protocol.hostplugin import HostPluginProtocol
 from azurelinuxagent.common.protocol.wire import WireProtocol
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
-from azurelinuxagent.common.version import AGENT_NAME, AGENT_VERSION, AGENT_DIR_PATTERN, \
-                                            CURRENT_AGENT, CURRENT_VERSION, DISTRO_NAME, DISTRO_VERSION, \
-                                            is_current_agent_installed
+from azurelinuxagent.common.version import AGENT_NAME, AGENT_VERSION, AGENT_DIR_PATTERN, CURRENT_AGENT,\
+    CURRENT_VERSION, DISTRO_NAME, DISTRO_VERSION, is_current_agent_installed, PY_VERSION_MAJOR, PY_VERSION_MINOR, \
+    PY_VERSION_MICRO
 
 from azurelinuxagent.ga.exthandlers import HandlerManifest
 
@@ -262,11 +262,10 @@ class UpdateHandler(object):
             initialize_event_logger_vminfo_common_parameters(protocol)
 
             # Log OS-specific info.
-            os_info_msg = u"Distro info: {0} {1}, osutil class being used: {2}, agent service name: {3}"\
-                .format(DISTRO_NAME, DISTRO_VERSION, type(self.osutil).__name__, self.osutil.service_name)
-
+            os_info_msg = u"Distro: {0}-{1}; OSUtil: {2}; AgentService: {3}; Python: {4}.{5}.{6}".format(
+                DISTRO_NAME, DISTRO_VERSION, type(self.osutil).__name__, self.osutil.service_name, PY_VERSION_MAJOR,
+                PY_VERSION_MINOR, PY_VERSION_MICRO)
             logger.info(os_info_msg)
-
             add_event(AGENT_NAME, op=WALAEventOperation.OSInfo, message=os_info_msg)
 
             # Launch monitoring threads
@@ -642,8 +641,7 @@ class UpdateHandler(object):
 
     def _upgrade_available(self, protocol, base_version=CURRENT_VERSION):
         # Emit an event expressing the state of AutoUpdate
-        # Note:
-        # - Duplicate events get suppressed; state transitions always emit
+        # Note: Duplicate events get suppressed; state transitions always emit
         add_event(
             AGENT_NAME,
             version=CURRENT_VERSION,
