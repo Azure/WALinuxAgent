@@ -1420,3 +1420,11 @@ class DefaultOSUtil(object):
                     handler(state[interface_name], result.group(2))
                 else:
                     logger.error("Interface {0} has {1} but no link state".format(interface_name, description))
+
+    @staticmethod
+    def _run_command_without_raising(cmd, log_error=True):
+        try:
+            shellutil.run_command(cmd, log_error=log_error)
+        # Original implementation of run() does a blanket catch, so mimicking the behaviour here
+        except Exception:
+            pass
