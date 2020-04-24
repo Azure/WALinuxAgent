@@ -67,7 +67,7 @@ class BigIpOSUtil(DefaultOSUtil):
                 break
             time.sleep(30)
 
-        if rc is 0:
+        if rc == 0:
             return True
 
         raise OSUtilError(
