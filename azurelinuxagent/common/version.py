@@ -87,7 +87,7 @@ def get_distro():
         osinfo = ['nsbsd', release, '', 'nsbsd']
     else:
         try:
-            # dist() removed in Python 3.7
+            # dist() removed in Python 3.8
             osinfo = list(platform.dist()) + ['']
         except:
             osinfo = ['UNKNOWN', 'FFFF', '', '']

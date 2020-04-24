@@ -278,11 +278,10 @@ class TestProtocolUtil(AgentTestCase):
         with open(os.path.join(dir, ENDPOINT_FILE_NAME), 'r') as f:
             self.assertEquals(f.read(), KNOWN_WIRESERVER_IP)
 
-    @patch("azurelinuxagent.common.utils.fileutil")
+    @patch("azurelinuxagent.common.protocol.util.fileutil")
     @patch("azurelinuxagent.common.conf.get_lib_dir")
     def test_endpoint_file_states(self, mock_get_lib_dir, mock_fileutil, _):
         mock_get_lib_dir.return_value = self.tmp_dir
-        mock_fileutil = MagicMock()
 
         protocol_util = get_protocol_util()
         endpoint_file = protocol_util._get_wireserver_endpoint_file_path()
@@ -309,7 +308,7 @@ class TestProtocolUtil(AgentTestCase):
         mock_fileutil.write_file.side_effect = IOError()
 
         ep = protocol_util.get_wireserver_endpoint()
-        self.assertRaises(OSUtilError, protocol_util._set_wireserver_endpoint('abc'))
+        self.assertRaises(OSUtilError, protocol_util._set_wireserver_endpoint, 'abc')
 
         # Test clear endpoint for io error
         with open(endpoint_file, "w+") as ep_fd:
