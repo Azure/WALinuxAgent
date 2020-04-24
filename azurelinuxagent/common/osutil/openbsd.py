@@ -51,7 +51,7 @@ class OpenBSDOSUtil(DefaultOSUtil):
 
     def set_hostname(self, hostname):
         fileutil.write_file("/etc/myname", "{}\n".format(hostname))
-        shellutil.run("hostname {0}".format(hostname), chk_err=False)
+        self._run_command_without_raising(["hostname", hostname], log_error=False)
 
     def restart_ssh_service(self):
         return shellutil.run('rcctl restart sshd', chk_err=False)
@@ -71,10 +71,9 @@ class OpenBSDOSUtil(DefaultOSUtil):
 
     def del_account(self, username):
         if self.is_sys_user(username):
-            logger.error("{0} is a system user. Will not delete it.",
-                         username)
-        shellutil.run("> /var/run/utmp")
-        shellutil.run("userdel -r " + username)
+            logger.error("{0} is a system user. Will not delete it.", username)
+        self._run_command_without_raising(["touch", "/var/run/utmp"])
+        self._run_command_without_raising(["userdel", "-r", username])
         self.conf_sudoer(username, remove=True)
 
     def conf_sudoer(self, username, nopasswd=False, remove=False):
@@ -107,17 +106,11 @@ class OpenBSDOSUtil(DefaultOSUtil):
         if self.is_sys_user(username):
             raise OSUtilError(("User {0} is a system user. "
                                "Will not set passwd.").format(username))
-        cmd = "echo -n {0}|encrypt".format(password)
-        ret, output = shellutil.run_get_output(cmd, log_cmd=False)
-        if ret != 0:
-            raise OSUtilError(("Failed to encrypt password for {0}: {1}"
-                               "").format(username, output))
+        output = self._run_command_raising_OSUtilError(['encrypt'], cmd_input=password,
+                                                       err_msg="Failed to encrypt password for {0}".format(username))
         passwd_hash = output.strip()
-        cmd = "usermod -p '{0}' {1}".format(passwd_hash, username)
-        ret, output = shellutil.run_get_output(cmd, log_cmd=False)
-        if ret != 0:
-            raise OSUtilError(("Failed to set password for {0}: {1}"
-                               "").format(username, output))
+        self._run_command_raising_OSUtilError(['usermod', '-p', passwd_hash, username],
+                                              err_msg="Failed to set password for {0}".format(username))
 
     def del_root_password(self):
         ret, output = shellutil.run_get_output('usermod -p "*" root')
