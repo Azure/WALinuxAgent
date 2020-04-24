@@ -185,6 +185,8 @@ def get_logs_verbose(conf=__conf__):
 def get_logs_console(conf=__conf__):
     return conf.get_switch("Logs.Console", True)
 
+def get_logs_file(conf=__conf__):
+    return conf.get_switch("Logs.File", True)
 
 def get_lib_dir(conf=__conf__):
     return conf.get("Lib.Dir", "/var/lib/waagent")
