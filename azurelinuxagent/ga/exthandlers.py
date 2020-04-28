@@ -1407,8 +1407,6 @@ class ExtHandlerInstance(object):
         try:
             handler_status_json = json.dumps(get_properties(handler_status))
             if handler_status_json is not None:
-                if not os.path.exists(state_dir):
-                    fileutil.mkdir(state_dir, mode=0o700)
                 fileutil.write_file(status_file, handler_status_json)
             else:
                 self.logger.error("Failed to create JSON document of handler status for {0} version {1}".format(
