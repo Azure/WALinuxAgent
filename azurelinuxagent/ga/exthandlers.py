@@ -31,6 +31,7 @@ import tempfile
 import time
 import traceback
 import zipfile
+from distutils.dir_util import copy_tree
 
 import azurelinuxagent.common.conf as conf
 import azurelinuxagent.common.logger as logger
@@ -842,14 +843,32 @@ class ExtHandlerInstance(object):
 
     def _unzip_extension_package(self, source_file, target_directory):
         self.logger.info("Unzipping extension package: {0}", source_file)
+        # Unzip the extension first in the temporary directory and then copy over to the target_directory
+        temp_dir = tempfile.mkdtemp(prefix=self.get_full_name())
         try:
-            zipfile.ZipFile(source_file).extractall(target_directory)
+            zipfile.ZipFile(source_file).extractall(temp_dir)
         except Exception as exception:
-            logger.info("Error while unzipping extension package: {0}", ustr(exception))
+            err_msg = "Error while unzipping extension package: {0}".format(ustr(exception))
+            self.logger.warn(err_msg)
+            self.report_event(message=err_msg, is_success=False, log_event=False)
             os.remove(source_file)
-            if os.path.exists(target_directory):
-                shutil.rmtree(target_directory)
+            if os.path.exists(temp_dir):
+                shutil.rmtree(temp_dir)
             return False
+
+        try:
+            copy_tree(temp_dir, target_directory)
+        # Blanket exception catch to capture any errors during copying the extension files
+        except Exception as e:
+            # Incase there is an error while copying, we want to clean the directory to avoid inconsistent state
+            fileutil.clean_ioerror(e, paths=[target_directory])
+            err_msg = "Failed to copy files from temp directory to extension directory: {0}".format(ustr(e))
+            self.logger.warn(err_msg)
+            self.report_event(message=err_msg, is_success=False, log_event=False)
+            # If we delete the directory, we want to ensure that the extension state is not lost in transition
+            self.set_handler_state(ExtHandlerState.NotInstalled)
+            return False
+
         return True
 
     def download(self):
@@ -1388,6 +1407,8 @@ class ExtHandlerInstance(object):
         try:
             handler_status_json = json.dumps(get_properties(handler_status))
             if handler_status_json is not None:
+                if not os.path.exists(state_dir):
+                    fileutil.mkdir(state_dir, mode=0o700)
                 fileutil.write_file(status_file, handler_status_json)
             else:
                 self.logger.error("Failed to create JSON document of handler status for {0} version {1}".format(
