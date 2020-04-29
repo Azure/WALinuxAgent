@@ -488,6 +488,36 @@ class TestExtension(ExtensionTestCase):
         exthandlers_handler.run()
         self._assert_no_handler_status(protocol.report_vm_status)
 
+    def test_it_should_only_download_extension_manifest_once_per_goal_state(self, *args):
+
+        def _assert_handler_status_and_manifest_download_count(protocol, test_data, manifest_count):
+            self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.0.0")
+            self._assert_ext_status(protocol.report_ext_status, "success", 0)
+            self.assertEqual(test_data.call_counts['manifest.xml'], manifest_count,
+                             "We should have downloaded extension manifest {0} times".format(manifest_count))
+
+        test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE)
+        exthandlers_handler, protocol = self._create_mock(test_data, *args)
+        exthandlers_handler.run()
+        _assert_handler_status_and_manifest_download_count(protocol, test_data, 1)
+
+        for _ in range(5):
+            exthandlers_handler.run()
+            # The extension manifest should only be downloaded once as incarnation did not change
+            _assert_handler_status_and_manifest_download_count(protocol, test_data, 1)
+
+        # Update Incarnation
+        test_data.set_incarnation(2)
+        protocol.update_goal_state()
+
+        exthandlers_handler.run()
+        _assert_handler_status_and_manifest_download_count(protocol, test_data, 2)
+
+        for _ in range(5):
+            exthandlers_handler.run()
+            # The extension manifest should be downloaded twice now as incarnation changed once
+            _assert_handler_status_and_manifest_download_count(protocol, test_data, 2)
+
     def test_ext_zip_file_packages_removed_in_update_case(self, *args):
         # Test enable scenario.
         test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE)

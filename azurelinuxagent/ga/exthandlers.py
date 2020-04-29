@@ -423,6 +423,14 @@ class ExtHandlersHandler(object):
 
         try:
             state = ext_handler.properties.state
+
+            self.get_artifact_error_state.reset()
+            if self.last_etag == etag:
+                if self.log_etag:
+                    ext_handler_i.logger.verbose("Incarnation {0} did not change, not processing GoalState", etag)
+                    self.log_etag = False
+                return
+
             if ext_handler_i.decide_version(target_state=state) is None:
                 version = ext_handler_i.ext_handler.properties.version
                 name = ext_handler_i.ext_handler.name
@@ -430,15 +438,6 @@ class ExtHandlersHandler(object):
                 ext_handler_i.set_operation(WALAEventOperation.Download)
                 ext_handler_i.set_handler_status(message=ustr(err_msg), code=-1)
                 ext_handler_i.report_event(message=ustr(err_msg), is_success=False)
-                return
-
-            self.get_artifact_error_state.reset()
-            if self.last_etag == etag:
-                if self.log_etag:
-                    ext_handler_i.logger.verbose("Version {0} is current for etag {1}",
-                                                 ext_handler_i.pkg.version,
-                                                 etag)
-                    self.log_etag = False
                 return
 
             self.log_etag = True
