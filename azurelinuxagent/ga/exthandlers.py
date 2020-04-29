@@ -866,6 +866,9 @@ class ExtHandlerInstance(object):
             self.logger.warn(err_msg)
             self.report_event(message=err_msg, is_success=False, log_event=False)
             return False
+        finally:
+            if os.path.exists(temp_dir):
+                shutil.rmtree(temp_dir)
 
         return True
 
