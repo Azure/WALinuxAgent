@@ -61,6 +61,7 @@ _VALID_HANDLER_STATUS = ['Ready', 'NotReady', "Installing", "Unresponsive"]
 
 HANDLER_NAME_PATTERN = re.compile(_HANDLER_PATTERN + r'$', re.IGNORECASE)
 HANDLER_PKG_EXT = ".zip"
+HANDLER_STATE_FILE = "HandlerState"
 
 AGENT_STATUS_FILE = "waagent_status.json"
 NUMBER_OF_DOWNLOAD_RETRIES = 5
@@ -312,7 +313,7 @@ class ExtHandlersHandler(object):
                     handler = ExtHandlerInstance(eh, self.protocol)
                 except Exception:
                     continue
-                if handler.get_handler_state() != ExtHandlerState.NotInstalled:
+                if os.path.exists(os.path.join(handler.get_conf_dir(), HANDLER_STATE_FILE)):
                     continue
                 handlers.append(handler)
 
@@ -330,8 +331,8 @@ class ExtHandlersHandler(object):
             except OSError as e:
                 logger.warn("Failed to remove orphaned package {0}: {1}".format(pkg, e.strerror))
 
-        # Finally, remove the directories and packages of the
-        # uninstalled handlers
+        # Finally, remove the directories and packages of the orphaned handlers, i.e. Any extension directory that
+        # did not complete setting up environment or the agent was unable to write a state file for it
         for handler in handlers:
             handler.remove_ext_handler()
             pkg = os.path.join(conf.get_lib_dir(), handler.get_full_name() + HANDLER_PKG_EXT)
@@ -492,10 +493,13 @@ class ExtHandlersHandler(object):
         # We go through the entire process of downloading and initializing the extension if it's either a fresh
         # extension or if it's a retry of a previously failed upgrade.
         if handler_state == ExtHandlerState.NotInstalled or handler_state == ExtHandlerState.FailedUpgrade:
-            ext_handler_i.set_handler_state(ExtHandlerState.NotInstalled)
+            # Setup the extension environment
             ext_handler_i.download()
             ext_handler_i.initialize()
             ext_handler_i.update_settings()
+
+            # Setting the current handler state to NotInstalled as the extension environment is now set
+            ext_handler_i.set_handler_state(ExtHandlerState.NotInstalled)
             if old_ext_handler_i is None:
                 ext_handler_i.install()
             elif ext_handler_i.version_ne(old_ext_handler_i):
@@ -789,7 +793,7 @@ class ExtHandlerInstance(object):
 
             separator = path.rfind('-')
             version_from_path = FlexibleVersion(path[separator + 1:])
-            state_path = os.path.join(path, 'config', 'HandlerState')
+            state_path = os.path.join(path, 'config', HANDLER_STATE_FILE)
 
             if not os.path.exists(state_path) or fileutil.read_file(state_path) == ExtHandlerState.NotInstalled \
                     or fileutil.read_file(state_path) == ExtHandlerState.FailedUpgrade:
@@ -925,6 +929,9 @@ class ExtHandlerInstance(object):
             status_dir = self.get_status_dir()
             fileutil.mkdir(status_dir, mode=0o700)
 
+            conf_dir = self.get_conf_dir()
+            fileutil.mkdir(conf_dir, mode=0o700)
+
             seq_no, status_path = self.get_status_file_path()
             if status_path is not None:
                 now = datetime.datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
@@ -939,9 +946,6 @@ class ExtHandlerInstance(object):
                     }
                 }
                 fileutil.write_file(status_path, json.dumps(status))
-
-            conf_dir = self.get_conf_dir()
-            fileutil.mkdir(conf_dir, mode=0o700)
 
         except IOError as e:
             fileutil.clean_ioerror(e, paths=[self.get_base_dir(), self.pkg_file])
@@ -1353,10 +1357,10 @@ class ExtHandlerInstance(object):
 
     def set_handler_state(self, handler_state):
         state_dir = self.get_conf_dir()
-        state_file = os.path.join(state_dir, "HandlerState")
+        state_file = os.path.join(state_dir, HANDLER_STATE_FILE)
         try:
-            if not os.path.exists(state_dir):
-                fileutil.mkdir(state_dir, mode=0o700)
+            # if not os.path.exists(state_dir):
+            #     fileutil.mkdir(state_dir, mode=0o700)
             fileutil.write_file(state_file, handler_state)
         except IOError as e:
             fileutil.clean_ioerror(e, paths=[state_file])
@@ -1364,7 +1368,7 @@ class ExtHandlerInstance(object):
 
     def get_handler_state(self):
         state_dir = self.get_conf_dir()
-        state_file = os.path.join(state_dir, "HandlerState")
+        state_file = os.path.join(state_dir, HANDLER_STATE_FILE)
         if not os.path.isfile(state_file):
             return ExtHandlerState.NotInstalled
 

@@ -37,7 +37,7 @@ from azurelinuxagent.common.version import PY_VERSION_MAJOR, PY_VERSION_MINOR, P
     GOAL_STATE_AGENT_VERSION, CURRENT_VERSION, DISTRO_NAME, DISTRO_VERSION
 from azurelinuxagent.ga.exthandlers import ExtHandlerState, ExtHandlersHandler, ExtHandlerInstance, HANDLER_PKG_EXT, \
     migrate_handler_state, get_exthandlers_handler, AGENT_STATUS_FILE, ExtCommandEnvVariable, \
-    HandlerManifest, NOT_RUN, ValidHandlerStatus
+    HandlerManifest, NOT_RUN, ValidHandlerStatus, HANDLER_STATE_FILE
 
 from azurelinuxagent.ga.monitor import get_monitor_handler
 from nose.plugins.attrib import attr
@@ -124,7 +124,7 @@ class TestExtensionCleanup(AgentTestCase):
                     if os.path.isdir(p) and not self._is_installed(p)])
 
     def _is_installed(self, path):
-        path = os.path.join(path, 'config', 'HandlerState')
+        path = os.path.join(path, 'config', HANDLER_STATE_FILE)
         return fileutil.read_file(path) != "NotInstalled"
 
     @patch("azurelinuxagent.common.conf.get_lib_dir")
@@ -237,7 +237,7 @@ class TestHandlerStateMigration(AgentTestCase):
         migrate_handler_state()
 
         self.assertFalse(
-            os.path.isfile(os.path.join(self.ext_handler_i.get_conf_dir(), "HandlerState")))
+            os.path.isfile(os.path.join(self.ext_handler_i.get_conf_dir(), HANDLER_STATE_FILE)))
         self.assertFalse(
             os.path.isfile(os.path.join(self.ext_handler_i.get_conf_dir(), "HandlerStatus")))
         return
