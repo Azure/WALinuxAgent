@@ -865,8 +865,6 @@ class ExtHandlerInstance(object):
             err_msg = "Failed to copy files from temp directory to extension directory: {0}".format(ustr(e))
             self.logger.warn(err_msg)
             self.report_event(message=err_msg, is_success=False, log_event=False)
-            # If we delete the directory, we want to ensure that the extension state is not lost in transition
-            self.set_handler_state(ExtHandlerState.NotInstalled)
             return False
 
         return True
@@ -944,6 +942,9 @@ class ExtHandlerInstance(object):
             status_dir = self.get_status_dir()
             fileutil.mkdir(status_dir, mode=0o700)
 
+            conf_dir = self.get_conf_dir()
+            fileutil.mkdir(conf_dir, mode=0o700)
+
             seq_no, status_path = self.get_status_file_path()
             if status_path is not None:
                 now = datetime.datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
@@ -958,9 +959,6 @@ class ExtHandlerInstance(object):
                     }
                 }
                 fileutil.write_file(status_path, json.dumps(status))
-
-            conf_dir = self.get_conf_dir()
-            fileutil.mkdir(conf_dir, mode=0o700)
 
         except IOError as e:
             fileutil.clean_ioerror(e, paths=[self.get_base_dir(), self.pkg_file])
