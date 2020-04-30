@@ -327,6 +327,16 @@ DHCP_HOSTNAME=test\n"
             self.assertFalse(os.path.isdir(d))
             self.assertFalse(os.path.isfile(d))
 
+    def test_append_items_to_file(self):
+        test_file = os.path.join(self.tmp_dir, self.test_file)
+        iterable = [ustr(uuid.uuid4()) for i in range(5)]
+        fileutil.append_items_to_file(test_file, iterable)
+
+        content_expected = "\n".join(iterable) + "\n"
+        content_read = fileutil.read_file(test_file)
+        self.assertEquals(content_read, content_expected)
+
+        os.remove(test_file)
 
 if __name__ == '__main__':
     unittest.main()
