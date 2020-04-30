@@ -342,10 +342,10 @@ diskinfo,""".format(folder_to_list, file_to_collect)
 
         # Update a file and its last modified time to ensure the last modified time and last collection time are not
         # the same in this test
-        self._create_file_of_specific_size(os.path.join(self.root_collect_dir, "waagent.log"),
-                                           LARGE_FILE_SIZE)  # update existing file
-        new_time = (datetime.utcnow() + timedelta(seconds=5)).timestamp()
-        os.utime(os.path.join(self.root_collect_dir, "waagent.log"), (new_time, new_time))
+        file_to_update = os.path.join(self.root_collect_dir, "waagent.log")
+        self._create_file_of_specific_size(file_to_update, LARGE_FILE_SIZE)  # update existing file
+        new_time = os.path.getmtime(file_to_update) + 5
+        os.utime(file_to_update, (new_time, new_time))
 
         # Create a new file (that is covered by the manifest and will be collected) and delete a file
         self._create_file_of_specific_size(os.path.join(self.root_collect_dir, "less_important_file.1"),
