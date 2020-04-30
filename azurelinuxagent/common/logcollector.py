@@ -17,12 +17,10 @@
 # Requires Python 2.6+ and Openssl 1.0+
 #
 
-from datetime import datetime
 import glob
 from heapq import heappush, heappop
 import os
 import subprocess
-import tarfile
 import zipfile
 
 from azurelinuxagent.common.future import ustr
@@ -33,7 +31,6 @@ _LOG_COLLECTOR_DIR = '/var/lib/waagent/logcollector'
 _TRUNCATED_FILES_DIR = '/var/truncated'
 
 _OUTPUT_RESULTS_FILE_PATH = os.path.join(_LOG_COLLECTOR_DIR, "results.txt")
-_OUTPUT_ARCHIVE_PATH = os.path.join(_LOG_COLLECTOR_DIR, "logs.tar")
 COMPRESSED_ARCHIVE_PATH = os.path.join(_LOG_COLLECTOR_DIR, "logs.zip")
 
 _MUST_COLLECT_FILES = [
@@ -138,15 +135,6 @@ class LogCollector(object):
             return file_name.lstrip(os.path.sep)
 
     @staticmethod
-    def _convert_archive_name_to_file_name(archive_name):
-        if archive_name.startswith(LogCollector._TRUNCATED_FILE_PREFIX):
-            file_name = archive_name[len(LogCollector._TRUNCATED_FILE_PREFIX):].replace("_", os.path.sep)
-            original_file_name = os.path.join(_TRUNCATED_FILES_DIR, file_name.lstrip(os.path.sep))
-            return original_file_name
-        else:
-            return os.path.join(os.path.sep, archive_name)
-
-    @staticmethod
     def _remove_uncollected_truncated_files(files_to_collect):
         # After log collection is completed, see if there are any old truncated files which were not collected
         # and remove them since they probably won't be collected in the future. This is possible when the
@@ -157,69 +145,6 @@ class LogCollector(object):
             full_path = os.path.join(_TRUNCATED_FILES_DIR, file_path)
             if full_path not in files_to_collect:
                 rm_files(full_path)
-
-    @staticmethod
-    def _is_file_updated_on_disk(file_name, archive_file):
-        # A file is updated if its last modified time changed.
-        mtime_archive = datetime.fromtimestamp(archive_file.mtime).replace(microsecond=0)
-        mtime_disk = datetime.fromtimestamp(os.path.getmtime(file_name)).replace(microsecond=0)
-
-        return mtime_disk > mtime_archive
-
-    @staticmethod
-    def _get_list_of_files_in_archive():
-        with tarfile.open(_OUTPUT_ARCHIVE_PATH, "a") as tarball:
-            return tarball.getnames()
-
-    @staticmethod
-    def _delete_file_from_archive(file):
-        try:
-            LogCollector.run_shell_command(["tar", "--file", _OUTPUT_ARCHIVE_PATH, "--delete", file])
-        except Exception as e:
-            LogCollector._log_to_results_file("Failed to delete file {0} from archive: {1}".format(file, ustr(e)))
-
-    @staticmethod
-    def _remove_deleted_files_from_archive(final_list_of_files):
-        archive_files = LogCollector._get_list_of_files_in_archive()
-
-        for archive_file in archive_files:
-            file_name = LogCollector._convert_archive_name_to_file_name(archive_file)
-
-            if file_name not in final_list_of_files and file_name.lstrip(os.path.sep) not in final_list_of_files:
-                LogCollector._log_to_results_file("Updating archive, removing deleted file {0}".format(archive_file))
-                LogCollector._delete_file_from_archive(archive_file)
-
-    @staticmethod
-    def _add_file_to_archive(file_name, archive_file_name):
-        with tarfile.open(_OUTPUT_ARCHIVE_PATH, "a") as archive:
-            archive.add(file_name, arcname=archive_file_name)
-
-    @staticmethod
-    def _get_file_from_archive(archive_file_name):
-        with tarfile.open(_OUTPUT_ARCHIVE_PATH, "r") as archive:
-            try:
-                return archive.getmember(archive_file_name)
-            except KeyError:
-                return None
-
-    @staticmethod
-    def _update_files_in_archive(final_list_of_files):
-        for file_name in final_list_of_files:
-            archive_file_name = LogCollector._convert_file_name_to_archive_name(file_name)
-            archive_file = LogCollector._get_file_from_archive(archive_file_name)
-
-            if archive_file:
-                # If file is present in the archive, update it if needed (if time last modified or size is different)
-                if LogCollector._is_file_updated_on_disk(file_name, archive_file):
-                    LogCollector._log_to_results_file("Updating archive, updating file {0}".format(archive_file_name))
-                    LogCollector._delete_file_from_archive(archive_file_name)
-                    LogCollector._add_file_to_archive(file_name, archive_file_name)
-                else:
-                    pass  # nothing to be done, file is archive is the same as file on disk
-            else:
-                # File is not present in the archive, add it
-                LogCollector._log_to_results_file("Updating archive, adding new file {0}".format(archive_file_name))
-                LogCollector._add_file_to_archive(file_name, archive_file_name)
 
     def _parse_manifest_file(self):
         files_to_collect = set()
@@ -325,6 +250,8 @@ class LogCollector(object):
 
             total_uncompressed_size += file_size
 
+        self._log_to_results_file("Uncompressed archive size is {0}b".format(total_uncompressed_size))
+
         return final_files_to_collect
 
     def _create_list_of_files_to_collect(self):
@@ -353,21 +280,17 @@ class LogCollector(object):
             mkdir(_LOG_COLLECTOR_DIR)
 
             files_to_collect = self._create_list_of_files_to_collect()
-            self._log_to_results_file("\n### Creating archive ###")
+            self._log_to_results_file("\n### Creating compressed archive ###")
 
-            self._remove_deleted_files_from_archive(files_to_collect)
-            self._update_files_in_archive(files_to_collect)
-
-            self._log_to_results_file("\n### Compressing archive ###")
             with zipfile.ZipFile(COMPRESSED_ARCHIVE_PATH, "w", compression=zipfile.ZIP_DEFLATED) as compressed_archive:
-                compressed_archive.write(_OUTPUT_ARCHIVE_PATH, arcname="logs.tar")
+                for file in files_to_collect:
+                    archive_file_name = LogCollector._convert_file_name_to_archive_name(file)
+                    compressed_archive.write(file, arcname=archive_file_name)
 
-            tar_size = os.path.getsize(_OUTPUT_ARCHIVE_PATH)
-            zip_size = os.path.getsize(COMPRESSED_ARCHIVE_PATH)
-            self._log_to_results_file("Uncompressed archive {0} size: {1}b".format(_OUTPUT_ARCHIVE_PATH, tar_size))
-            self._log_to_results_file("Compressed archive {0} size: {1}b".format(COMPRESSED_ARCHIVE_PATH, zip_size))
-
-            self._add_file_to_archive(_OUTPUT_RESULTS_FILE_PATH, "results.txt")
+                compressed_archive_size = os.path.getsize(COMPRESSED_ARCHIVE_PATH)
+                self._log_to_results_file("Successfully compressed files. "
+                                          "Compressed archive size is {0}b".format(compressed_archive_size))
+                compressed_archive.write(_OUTPUT_RESULTS_FILE_PATH, arcname="results.txt")
 
             return True
         except Exception as e:
