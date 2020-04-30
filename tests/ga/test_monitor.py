@@ -51,6 +51,18 @@ def random_generator(size=6, chars=string.ascii_uppercase + string.digits + stri
 
 @contextlib.contextmanager
 def _create_monitor_handler(enabled_operations=[], iterations=1):
+    """
+    Creates an instance of MonitorHandler that
+        * Uses a mock_wire_protocol for network requests,
+        * Executes only the operations given in the 'enabled_operations' parameter,
+        * Runs its main loop only the number of times give in the 'iterations' parameter, and
+        * Does not sleep at the end of each iteration
+
+    The returned MonitorHandler is augmented with 2 methods:
+        * get_mock_wire_protocol() - returns the mock protocol
+        * run_and_wait() - invokes run() and wait() on the MonitorHandler
+
+    """
     def run(self):
         if len(enabled_operations) == 0 or self._name in enabled_operations:
             run.original_definition(self)

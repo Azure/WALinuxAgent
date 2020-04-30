@@ -22,6 +22,12 @@ from azurelinuxagent.common.future import ustr
 
 
 class PeriodicOperation(object):
+    '''
+    Instances of PeriodicOperation are tasks that are executed only after the given
+    time period has elapsed.
+    '''
+
+    # To prevent flooding the log with error messages we report failures at most every hour
     _LOG_WARNING_PERIOD = datetime.timedelta(minutes=60)
 
     def __init__(self, name, operation, period):
@@ -40,6 +46,6 @@ class PeriodicOperation(object):
                     self._last_run = datetime.datetime.utcnow()
         except Exception as e:
             if self._last_log_warning is None or datetime.datetime.utcnow() >= self._last_log_warning + self._LOG_WARNING_PERIOD:
-                logger.warn("Failed to {0}: {1}", self._name, ustr(e))
+                logger.warn("[PERIODIC] Failed to {0}: {1}", self._name, ustr(e))
                 self._last_log_warning = datetime.datetime.utcnow()
 
