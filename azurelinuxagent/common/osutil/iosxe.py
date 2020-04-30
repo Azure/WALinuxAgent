@@ -19,8 +19,10 @@
 
 import azurelinuxagent.common.logger as logger
 import azurelinuxagent.common.utils.shellutil as shellutil
+from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.osutil.default import DefaultOSUtil
 from azurelinuxagent.common.osutil.redhat import Redhat6xOSUtil
+from azurelinuxagent.common.utils import textutil
 
 '''
 The IOSXE distribution is a variant of the Centos distribution, 
@@ -41,9 +43,11 @@ class IosxeOSUtil(DefaultOSUtil):
         Due to a bug in systemd in Centos-7.0, if this call fails, fallback
         to hostname.
         """
-        hostnamectl_cmd = "hostnamectl set-hostname {0} --static".format(hostname)
-        if shellutil.run(hostnamectl_cmd, chk_err=False) != 0:
-            logger.warn("[{0}] failed, attempting fallback".format(hostnamectl_cmd))
+        hostnamectl_cmd = ["hostnamectl", "set-hostname", hostname, "--static"]
+        try:
+            shellutil.run_command(hostnamectl_cmd)
+        except Exception as e:
+            logger.warn("[{0}] failed with error: {1}, attempting fallback".format(' '.join(hostnamectl_cmd), ustr(e)))
             DefaultOSUtil.set_hostname(self, hostname)
 
     def publish_hostname(self, hostname):

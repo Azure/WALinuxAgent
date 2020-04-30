@@ -83,8 +83,15 @@ class TestOsUtilFactory(AgentTestCase):
         self.assertEquals(ret.get_service_name(), "walinuxagent")
 
         ret = _get_osutil(distro_name="ubuntu",
-                          distro_code_name="",
+                          distro_code_name="bionic",
                           distro_version="18.04",
+                          distro_full_name="")
+        self.assertTrue(type(ret) == Ubuntu18OSUtil)
+        self.assertEquals(ret.get_service_name(), "walinuxagent")
+
+        ret = _get_osutil(distro_name="ubuntu",
+                          distro_code_name="focal",
+                          distro_version="20.04",
                           distro_full_name="")
         self.assertTrue(type(ret) == Ubuntu18OSUtil)
         self.assertEquals(ret.get_service_name(), "walinuxagent")

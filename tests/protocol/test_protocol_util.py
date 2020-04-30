@@ -184,7 +184,6 @@ class TestProtocolUtil(AgentTestCase):
             self.assertFalse(os.path.exists(mds_cert_path))
 
         # Check firewall rules was reset
-        protocol_util.osutil.remove_rules_files.assert_called_once()
         protocol_util.osutil.remove_firewall.assert_called_once()
         protocol_util.osutil.enable_firewall.assert_called_once()
 
@@ -230,7 +229,6 @@ class TestProtocolUtil(AgentTestCase):
             self.assertTrue(os.path.isfile(ws_cert_path))
 
         # Check firewall rules was reset
-        protocol_util.osutil.remove_rules_files.assert_called_once()
         protocol_util.osutil.remove_firewall.assert_called_once()
         protocol_util.osutil.enable_firewall.assert_called_once()
 
@@ -269,7 +267,6 @@ class TestProtocolUtil(AgentTestCase):
             self.assertTrue(os.path.isfile(ws_cert_path))
 
         # Check firewall rules were not reset
-        protocol_util.osutil.remove_rules_files.assert_not_called()
         protocol_util.osutil.remove_firewall.assert_not_called()
         protocol_util.osutil.enable_firewall.assert_not_called()
 
@@ -281,11 +278,10 @@ class TestProtocolUtil(AgentTestCase):
         with open(os.path.join(dir, ENDPOINT_FILE_NAME), 'r') as f:
             self.assertEquals(f.read(), KNOWN_WIRESERVER_IP)
 
-    @patch("azurelinuxagent.common.utils.fileutil")
+    @patch("azurelinuxagent.common.protocol.util.fileutil")
     @patch("azurelinuxagent.common.conf.get_lib_dir")
     def test_endpoint_file_states(self, mock_get_lib_dir, mock_fileutil, _):
         mock_get_lib_dir.return_value = self.tmp_dir
-        mock_fileutil = MagicMock()
 
         protocol_util = get_protocol_util()
         endpoint_file = protocol_util._get_wireserver_endpoint_file_path()
@@ -312,7 +308,7 @@ class TestProtocolUtil(AgentTestCase):
         mock_fileutil.write_file.side_effect = IOError()
 
         ep = protocol_util.get_wireserver_endpoint()
-        self.assertRaises(OSUtilError, protocol_util._set_wireserver_endpoint('abc'))
+        self.assertRaises(OSUtilError, protocol_util._set_wireserver_endpoint, 'abc')
 
         # Test clear endpoint for io error
         with open(endpoint_file, "w+") as ep_fd:

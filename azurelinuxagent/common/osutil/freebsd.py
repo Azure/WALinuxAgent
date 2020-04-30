@@ -40,7 +40,7 @@ class FreeBSDOSUtil(DefaultOSUtil):
         conf_file = fileutil.read_file(rc_file_path).split("\n")
         textutil.set_ini_config(conf_file, "hostname", hostname)
         fileutil.write_file(rc_file_path, "\n".join(conf_file))
-        shellutil.run("hostname {0}".format(hostname), chk_err=False)
+        self._run_command_without_raising(["hostname", hostname], log_error=False)
 
     def restart_ssh_service(self):
         return shellutil.run('service sshd restart', chk_err=False)
@@ -54,22 +54,19 @@ class FreeBSDOSUtil(DefaultOSUtil):
             logger.warn("User {0} already exists, skip useradd", username)
             return
         if expiration is not None:
-            cmd = "pw useradd {0} -e {1} -m".format(username, expiration)
+            cmd = ["pw", "useradd", username, "-e", expiration, "-m"]
         else:
-            cmd = "pw useradd {0} -m".format(username)
+            cmd = ["pw", "useradd", username, "-m"]
         if comment is not None:
-            cmd += " -c {0}".format(comment)
-        retcode, out = shellutil.run_get_output(cmd)
-        if retcode != 0:
-            raise OSUtilError(("Failed to create user account:{0}, "
-                               "retcode:{1}, "
-                               "output:{2}").format(username, retcode, out))
+            cmd.extend(["-c", comment])
+
+        self._run_command_raising_OSUtilError(cmd, err_msg="Failed to create user account:{0}".format(username))
 
     def del_account(self, username):
         if self.is_sys_user(username):
             logger.error("{0} is a system user. Will not delete it.", username)
-        shellutil.run('> /var/run/utx.active')
-        shellutil.run('rmuser -y ' + username)
+        self._run_command_without_raising(['touch', '/var/run/utx.active'])
+        self._run_command_without_raising(['rmuser', '-y', username])
         self.conf_sudoer(username, remove=True)
 
     def chpasswd(self, username, password, crypt_id=6, salt_len=10):
@@ -77,11 +74,8 @@ class FreeBSDOSUtil(DefaultOSUtil):
             raise OSUtilError(("User {0} is a system user, "
                                "will not set password.").format(username))
         passwd_hash = textutil.gen_password_hash(password, crypt_id, salt_len)
-        cmd = "echo '{0}'|pw usermod {1} -H 0 ".format(passwd_hash, username)
-        ret, output = shellutil.run_get_output(cmd, log_cmd=False)
-        if ret != 0:
-            raise OSUtilError(("Failed to set password for {0}: {1}"
-                               "").format(username, output))
+        self._run_command_raising_OSUtilError(['pw', 'usermod', username, '-H', '0'], cmd_input=passwd_hash,
+                                              err_msg="Failed to set password for {0}".format(username))
 
     def del_root_password(self):
         err = shellutil.run('pw usermod root -h -')

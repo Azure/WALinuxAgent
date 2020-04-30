@@ -87,7 +87,7 @@ def get_distro():
         osinfo = ['nsbsd', release, '', 'nsbsd']
     else:
         try:
-            # dist() removed in Python 3.7
+            # dist() removed in Python 3.8
             osinfo = list(platform.dist()) + ['']
         except:
             osinfo = ['UNKNOWN', 'FFFF', '', '']
@@ -119,7 +119,7 @@ def get_distro():
 
 AGENT_NAME = "WALinuxAgent"
 AGENT_LONG_NAME = "Azure Linux Agent"
-AGENT_VERSION = '2.2.47.2'
+AGENT_VERSION = '2.2.48'
 AGENT_LONG_VERSION = "{0}-{1}".format(AGENT_NAME, AGENT_VERSION)
 AGENT_DESCRIPTION = """
 The Azure Linux Agent supports the provisioning and running of Linux
