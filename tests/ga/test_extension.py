@@ -14,9 +14,11 @@
 #
 # Requires Python 2.6+ and Openssl 1.0+
 #
+import contextlib
 import glob
 import json
 import os.path
+import re
 import shutil
 import subprocess
 import tempfile
@@ -37,7 +39,7 @@ from azurelinuxagent.common.version import PY_VERSION_MAJOR, PY_VERSION_MINOR, P
     GOAL_STATE_AGENT_VERSION, CURRENT_VERSION, DISTRO_NAME, DISTRO_VERSION
 from azurelinuxagent.ga.exthandlers import ExtHandlerState, ExtHandlersHandler, ExtHandlerInstance, HANDLER_PKG_EXT, \
     migrate_handler_state, get_exthandlers_handler, AGENT_STATUS_FILE, ExtCommandEnvVariable, \
-    HandlerManifest, NOT_RUN, ValidHandlerStatus, HANDLER_STATE_FILE
+    HandlerManifest, NOT_RUN, ValidHandlerStatus, HANDLER_STATE_FILE, HANDLER_NAME_PATTERN
 
 from azurelinuxagent.ga.monitor import get_monitor_handler
 from nose.plugins.attrib import attr
@@ -78,6 +80,86 @@ def raise_ioerror(*args):
     from errno import EIO
     e.errno = EIO
     raise e
+
+class TestCleanup(AgentTestCase):
+
+    def setUp(self):
+        AgentTestCase.setUp(self)
+        self.mock_sleep = patch("time.sleep", lambda *_: mock_sleep(0.0001))
+        self.mock_sleep.start()
+
+    def tearDown(self):
+        AgentTestCase.tearDown(self)
+        self.mock_sleep.stop()
+
+    @staticmethod
+    def _count_packages():
+        return len(glob.glob(os.path.join(conf.get_lib_dir(), "*.zip")))
+
+    @staticmethod
+    def _count_extension_directories():
+        paths = [os.path.join(conf.get_lib_dir(), p) for p in os.listdir(conf.get_lib_dir())]
+        return len([p for p in paths
+                    if os.path.isdir(p) and TestCleanup._is_extension_dir(p)])
+
+    @staticmethod
+    def _is_extension_dir(path):
+        return re.match(HANDLER_NAME_PATTERN, os.path.basename(path))
+
+
+    def _assert_ext_handler_status(self, report_vm_status, expected_status, version, expected_ext_hanlder_count=0):
+        self.assertTrue(report_vm_status.called)
+        args, kw = report_vm_status.call_args
+        vm_status = args[0]
+        self.assertEqual(expected_ext_hanlder_count, len(vm_status.vmAgent.extensionHandlers))
+        for ext_handler in vm_status.vmAgent.extensionHandlers:
+
+            self.assertEquals(expected_status, ext_handler.status)
+            self.assertEquals(version, ext_handler.version)
+            # self.assertEquals(expected_handler_name, handler_status.name)
+        return
+
+    @contextlib.contextmanager
+    def _setup_test_env(self, test_data):
+        with mock_wire_protocol(test_data) as protocol:
+            protocol.report_vm_status = MagicMock()
+            no_of_extensions = protocol.mock_wire_data.get_no_of_plugins_in_extension_config()
+            exthandlers_handler = get_exthandlers_handler(protocol)
+            yield exthandlers_handler, protocol, no_of_extensions
+
+    def test_cleanup_leaves_installed_extensions(self):
+        with self._setup_test_env(mockwiredata.DATA_FILE_MULTIPLE_EXT) as (exthandlers_handler, protocol, no_of_exts):
+            exthandlers_handler.run()
+            self.assertEqual(no_of_exts, TestCleanup._count_packages(),
+                             "No of extensions in config doesn't match the packages")
+            self.assertEqual(no_of_exts, TestCleanup._count_extension_directories(),
+                             "No of extension directories doesnt match the no of extensions in GS")
+            self._assert_ext_handler_status(protocol.report_vm_status, "Ready", expected_ext_hanlder_count=no_of_exts,
+                                            version="1.0.0")
+
+    def test_cleanup_removes_uninstalled_extensions(self):
+        with self._setup_test_env(mockwiredata.DATA_FILE_MULTIPLE_EXT) as (exthandlers_handler, protocol, no_of_exts):
+            exthandlers_handler.run()
+            self.assertEqual(no_of_exts, TestCleanup._count_packages(),
+                             "No of extensions in config doesn't match the packages")
+            self._assert_ext_handler_status(protocol.report_vm_status, "Ready", expected_ext_hanlder_count=no_of_exts,
+                                            version="1.0.0")
+
+            # Update incarnation and extension config
+            protocol.mock_wire_data.set_incarnation(2)
+            protocol.mock_wire_data.set_extensions_config_sequence_number(1)
+            protocol.mock_wire_data.set_extensions_config_state("uninstall")
+
+            protocol.client.update_goal_state()
+            exthandlers_handler.run()
+
+            self.assertEqual(0, TestCleanup._count_packages(), "All packages must be deleted")
+            self._assert_ext_handler_status(protocol.report_vm_status, "Ready", expected_ext_hanlder_count=0,
+                                            version="1.0.0")
+            self.assertEqual(0, TestCleanup._count_extension_directories(), "All extension directories should be removed")
+
+    def test_cleanup_removes_orphaned_packages(self):
+        pass
 
 
 class TestExtensionCleanup(AgentTestCase):

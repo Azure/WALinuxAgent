@@ -17,6 +17,7 @@
 
 import re
 
+from azurelinuxagent.common.utils.textutil import parse_doc, find, findall
 from tests.tools import load_bin_data, load_data, MagicMock, Mock
 from azurelinuxagent.common.exception import HttpError, ResourceGoneError
 from azurelinuxagent.common.future import httpclient
@@ -246,6 +247,11 @@ class WireProtocolData(object):
         with open(trans_cert_file, 'w+') as cert_file:
             cert_file.write(self.trans_cert)
 
+    def get_no_of_plugins_in_extension_config(self):
+        ext_config_doc = parse_doc(self.ext_conf)
+        plugins_list = find(ext_config_doc, "Plugins")
+        return len(findall(plugins_list, "Plugin"))
+
     #
     # Having trouble reading the regular expressions below? you are not alone!
     #
@@ -268,7 +274,7 @@ class WireProtocolData(object):
     def replace_xml_attribute_value(xml_document, element_name, attribute_name, attribute_value):
         new_xml_document = re.sub(r'(?<=<{0} )(.*{1}=")[^"]+(?="[^>]*>)'.format(element_name, attribute_name), r'\g<1>{0}'.format(attribute_value), xml_document)
         if new_xml_document == xml_document:
-            raise Exception("Could not match attribute '{0}' of element '{1}'", attribute_name, element_name)
+            raise Exception("Could not match attribute '{0}' of element '{1}'".format(attribute_name, element_name))
         return new_xml_document
 
     def set_incarnation(self, incarnation):

@@ -493,13 +493,10 @@ class ExtHandlersHandler(object):
         # We go through the entire process of downloading and initializing the extension if it's either a fresh
         # extension or if it's a retry of a previously failed upgrade.
         if handler_state == ExtHandlerState.NotInstalled or handler_state == ExtHandlerState.FailedUpgrade:
-            # Setup the extension environment
+            ext_handler_i.set_handler_state(ExtHandlerState.NotInstalled)
             ext_handler_i.download()
             ext_handler_i.initialize()
             ext_handler_i.update_settings()
-
-            # Setting the current handler state to NotInstalled as the extension environment is now set
-            ext_handler_i.set_handler_state(ExtHandlerState.NotInstalled)
             if old_ext_handler_i is None:
                 ext_handler_i.install()
             elif ext_handler_i.version_ne(old_ext_handler_i):
