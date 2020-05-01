@@ -55,7 +55,6 @@ class MonitorHandler(object):
     TELEMETRY_HEARTBEAT_PERIOD = datetime.timedelta(minutes=30)
     # extension metrics period
     CGROUP_TELEMETRY_POLLING_PERIOD = datetime.timedelta(minutes=5)
-    CGROUP_TELEMETRY_REPORTING_PERIOD = datetime.timedelta(minutes=30)
     # host plugin
     HOST_PLUGIN_HEARTBEAT_PERIOD = datetime.timedelta(minutes=1)
     HOST_PLUGIN_HEALTH_PERIOD = datetime.timedelta(minutes=5)
@@ -75,7 +74,6 @@ class MonitorHandler(object):
         self.last_event_collection = None
         self.last_telemetry_heartbeat = None
         self.last_cgroup_polling_telemetry = None
-        self.last_cgroup_report_telemetry = None
         self.last_host_plugin_heartbeat = None
         self.last_imds_heartbeat = None
         self.protocol = None
@@ -147,7 +145,6 @@ class MonitorHandler(object):
 
         min_delta = min(MonitorHandler.TELEMETRY_HEARTBEAT_PERIOD,
                         MonitorHandler.CGROUP_TELEMETRY_POLLING_PERIOD,
-                        MonitorHandler.CGROUP_TELEMETRY_REPORTING_PERIOD,
                         MonitorHandler.EVENT_COLLECTION_PERIOD,
                         MonitorHandler.HOST_PLUGIN_HEARTBEAT_PERIOD,
                         MonitorHandler.IMDS_HEARTBEAT_PERIOD).seconds
@@ -156,9 +153,6 @@ class MonitorHandler(object):
                 self.protocol.update_host_plugin_from_goal_state()
                 self.send_telemetry_heartbeat()
                 self.poll_telemetry_metrics()
-                # This will be removed in favor of poll_telemetry_metrics() and it'll directly send the perf data for
-                # each cgroup.
-                self.send_telemetry_metrics()
                 self.collect_and_send_events()
                 self.send_host_plugin_heartbeat()
                 self.send_imds_heartbeat()
@@ -296,17 +290,15 @@ class MonitorHandler(object):
 
     def poll_telemetry_metrics(self):
         """
-        This method polls the tracked cgroups to get data from the cgroups filesystem and send the data directly.
+        This method polls the tracked cgroups to get data from the cgroups filesystem and send it to the performance counters database.
 
         :return: List of Metrics (which would be sent to PerfCounterMetrics directly.
         """
-        try:  # If there is an issue in reporting, it should not take down whole monitor thread.
-            time_now = datetime.datetime.utcnow()
-            if not self.last_cgroup_polling_telemetry:
-                self.last_cgroup_polling_telemetry = time_now
+        try:
+            if self.last_cgroup_polling_telemetry is None:
+                self.last_cgroup_polling_telemetry = datetime.datetime.utcnow() - MonitorHandler.CGROUP_TELEMETRY_POLLING_PERIOD
 
-            if time_now >= (self.last_cgroup_polling_telemetry +
-                            MonitorHandler.CGROUP_TELEMETRY_POLLING_PERIOD):
+            if datetime.datetime.utcnow() >= (self.last_cgroup_polling_telemetry + MonitorHandler.CGROUP_TELEMETRY_POLLING_PERIOD):
                 metrics = CGroupsTelemetry.poll_all_tracked()
 
                 if metrics:
@@ -317,34 +309,6 @@ class MonitorHandler(object):
 
         self.last_cgroup_polling_telemetry = datetime.datetime.utcnow()
 
-    def send_telemetry_metrics(self):
-        """
-        The send_telemetry_metrics would soon be removed in favor of sending performance metrics directly.
-
-        :return:
-        """
-        try:  # If there is an issue in reporting, it should not take down whole monitor thread.
-            time_now = datetime.datetime.utcnow()
-
-            if not self.last_cgroup_report_telemetry:
-                self.last_cgroup_report_telemetry = time_now
-
-            if time_now >= (self.last_cgroup_report_telemetry + MonitorHandler.CGROUP_TELEMETRY_REPORTING_PERIOD):
-                performance_metrics = CGroupsTelemetry.report_all_tracked()
-
-                if performance_metrics:
-                    message = generate_extension_metrics_telemetry_dictionary(schema_version=1.0,
-                                                                              performance_metrics=performance_metrics)
-                    add_event(name=AGENT_NAME,
-                              version=CURRENT_VERSION,
-                              op=WALAEventOperation.ExtensionMetricsData,
-                              is_success=True,
-                              message=ustr(message),
-                              log_event=False)
-        except Exception as e:
-            logger.warn("Could not report all the tracked telemetry due to {0}", ustr(e))
-
-        self.last_cgroup_report_telemetry = datetime.datetime.utcnow()
 
     def log_altered_network_configuration(self):
         """
