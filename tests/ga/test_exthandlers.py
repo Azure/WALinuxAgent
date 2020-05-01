@@ -151,12 +151,12 @@ class TestGoalState(AgentTestCase):
         retriever._pending_mode = GOAL_STATE_SOURCE_FASTTRACK
         retriever._pending_seqNo = 3
         retriever.commit_processed()
-        self.assertEqual("FastTrack: SeqNo=3", retriever.get_description())
+        self.assertEqual("FastTrack: SeqNo=3, Reason=None", retriever.get_description())
         retriever._pending_mode = GOAL_STATE_SOURCE_FABRIC
         retriever._pending_incarnation = 5
         retriever._pending_svd_seqNo = 42
         retriever.commit_processed()
-        self.assertEqual("Fabric: Incarnation=5", retriever.get_description())
+        self.assertEqual("Fabric: Incarnation=5, Reason=None", retriever.get_description())
 
     def test_startup_first_time(self):
         test_data = WireProtocolData(DATA_FILE)

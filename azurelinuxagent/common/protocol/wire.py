@@ -58,6 +58,7 @@ SHARED_CONF_FILE_NAME = "SharedConfig.xml"
 REMOTE_ACCESS_FILE_NAME = "RemoteAccess.{0}.xml"
 EXT_CONF_FILE_NAME = "ExtensionsConfig.{0}.xml"
 MANIFEST_FILE_NAME = "{0}.{1}.manifest.xml"
+FEATURES_FILE_NAME = "Features"
 
 PROTOCOL_VERSION = "2012-11-30"
 ENDPOINT_FINE_NAME = "WireServer"
@@ -1054,6 +1055,22 @@ class WireClient(object):
 
         return ret
 
+    def get_extensions_fast_track_enabled(self):
+        # Eventually we'll need to generalize this method to write all features
+        # but for now we only have one
+        fast_track_enabled = False
+        if conf.get_extensions_fast_track_enabled():
+            if self.hostgaplugin_supports_fast_track():
+                features = "fast_track_enabled=True"
+                fast_track_enabled = True
+            else:
+                features = "fast_track_enabled=False (HostGAPlugin not supported)"
+        else:
+            features = "fast_track_enabled=False (disabled)"
+
+        self.save_cache(FEATURES_FILE_NAME, features)
+        return fast_track_enabled
+
     def upload_status_blob(self):
         if self._goal_state.status_upload_blob_url is None:
             # the status upload blob is in ExtensionsConfig so force a full goal state refresh
@@ -1068,9 +1085,7 @@ class WireClient(object):
             logger.verbose("Status Blob type is unspecified, assuming BlockBlob")
 
         try:
-            extensions_fast_track_enabled = conf.get_extensions_fast_track_enabled() and \
-                                            self.hostgaplugin_supports_fast_track()
-            self.status_blob.prepare(blob_type, extensions_fast_track_enabled)
+            self.status_blob.prepare(blob_type, self.get_extensions_fast_track_enabled())
         except Exception as e:
             raise ProtocolError("Exception creating status blob: {0}", ustr(e))
 
