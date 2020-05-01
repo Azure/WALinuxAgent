@@ -1892,6 +1892,20 @@ class TestExtension(ExtensionTestCase):
         self._assert_handler_status(protocol.report_vm_status, "Ready", expected_ext_count=1, version="1.0.0")
 
     @patch("azurelinuxagent.common.cgroupconfigurator.handle_process_completion", side_effect="Process Successful")
+    def test_ext_handler_calls_certs_if_changed(self, _, *args):
+        test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE_MULTIPLE_EXT)
+        exthandlers_handler, protocol = self._create_mock(test_data, *args)
+
+        with patch("subprocess.Popen") as patch_popen:
+            exthandlers_handler.run()
+            found_open_ssl = False
+            for arg_list, kwargs in patch_popen.call_args_list:
+                if 'openssl' in arg_list[0]:
+                    found_open_ssl = True
+                    break
+            self.assertTrue(found_open_ssl)
+
+    @patch("azurelinuxagent.common.cgroupconfigurator.handle_process_completion", side_effect="Process Successful")
     def test_ext_sequence_no_should_be_set_for_every_command_call(self, _, *args):
         test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE_MULTIPLE_EXT)
         exthandlers_handler, protocol = self._create_mock(test_data, *args)
@@ -1899,9 +1913,10 @@ class TestExtension(ExtensionTestCase):
         with patch("subprocess.Popen") as patch_popen:
             exthandlers_handler.run()
 
-            for _, kwargs in patch_popen.call_args_list:
-                self.assertIn(ExtCommandEnvVariable.ExtensionSeqNumber, kwargs['env'])
-                self.assertEqual(kwargs['env'][ExtCommandEnvVariable.ExtensionSeqNumber], "0")
+            for arg_list, kwargs in patch_popen.call_args_list:
+                if 'openssl' not in arg_list[0]:
+                    self.assertIn(ExtCommandEnvVariable.ExtensionSeqNumber, kwargs['env'])
+                    self.assertEqual(kwargs['env'][ExtCommandEnvVariable.ExtensionSeqNumber], "0")
 
         self._assert_handler_status(protocol.report_vm_status, "Ready", expected_ext_count=1, version="1.0.0")
 
@@ -1915,9 +1930,10 @@ class TestExtension(ExtensionTestCase):
         with patch("subprocess.Popen") as patch_popen:
             exthandlers_handler.run()
 
-            for _, kwargs in patch_popen.call_args_list:
-                self.assertIn(ExtCommandEnvVariable.ExtensionSeqNumber, kwargs['env'])
-                self.assertEqual(kwargs['env'][ExtCommandEnvVariable.ExtensionSeqNumber], "1")
+            for arg_list, kwargs in patch_popen.call_args_list:
+                if 'openssl' not in arg_list[0]:
+                    self.assertIn(ExtCommandEnvVariable.ExtensionSeqNumber, kwargs['env'])
+                    self.assertEqual(kwargs['env'][ExtCommandEnvVariable.ExtensionSeqNumber], "1")
 
         self._assert_handler_status(protocol.report_vm_status, "Ready", expected_ext_count=1, version="1.0.1")
 

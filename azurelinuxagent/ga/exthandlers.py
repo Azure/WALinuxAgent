@@ -370,6 +370,15 @@ class ExtHandlersHandler(object):
             logger.verbose("No extension handler config found")
             return
 
+        # If the extensions config changed, then retrieve the certificates, which will save the certs
+        # from the retrieved goal state to disk
+        if self.ext_config.changed:
+            try:
+                _ = self.protocol.get_certs()
+            except Exception as e:
+                msg = u"Exception retrieving certificates: {0}".format(ustr(e))
+                logger.warn(msg)
+
         wait_until = datetime.datetime.utcnow() + datetime.timedelta(minutes=_DEFAULT_EXT_TIMEOUT_MINUTES)
         extHandlers = self.ext_handlers.extHandlers
         max_dep_level = max([handler.sort_key() for handler in extHandlers])
@@ -443,7 +452,7 @@ class ExtHandlersHandler(object):
                 return
 
             self.get_artifact_error_state.reset()
-            if self.ext_config.changed == False:
+            if self.ext_config.changed is False:
                 if self.log_not_changed:
                     ext_handler_i.logger.verbose("Version {0} is current for {1}",
                                                  ext_handler_i.pkg.version,
