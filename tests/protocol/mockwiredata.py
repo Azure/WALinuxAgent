@@ -92,6 +92,7 @@ class WireProtocolData(object):
         self.call_counts = {
             "comp=versions": 0,
             "/versions": 0,
+            "/health": 0,
             "/HealthService": 0,
             "goalstate": 0,
             "hostingenvuri": 0,
@@ -155,6 +156,9 @@ class WireProtocolData(object):
         elif "/versions" in url:  # HostPlugin versions
             content = '["2015-09-01"]'
             self.call_counts["/versions"] += 1
+        elif url.endswith("/health"):  # HostPlugin health
+            content = ''
+            self.call_counts["/health"] += 1
         elif "goalstate" in url:
             content = self.goal_state
             self.call_counts["goalstate"] += 1
