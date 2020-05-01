@@ -265,22 +265,11 @@ class MonitorHandler(object):
 
         :return: List of Metrics (which would be sent to PerfCounterMetrics directly.
         """
-        try:  # If there is an issue in reporting, it should not take down whole monitor thread.
-            time_now = datetime.datetime.utcnow()
-            if not self.last_cgroup_polling_telemetry:
-                self.last_cgroup_polling_telemetry = time_now
+        metrics = CGroupsTelemetry.poll_all_tracked()
 
-            if time_now >= (self.last_cgroup_polling_telemetry +
-                            MonitorHandler.CGROUP_TELEMETRY_POLLING_PERIOD):
-                metrics = CGroupsTelemetry.poll_all_tracked()
-
-                if metrics:
-                    for metric in metrics:
-                        report_metric(metric.category, metric.counter, metric.instance, metric.value)
-        except Exception as e:
-            logger.warn("Could not poll all the tracked telemetry due to {0}", ustr(e))
-
-        self.last_cgroup_polling_telemetry = datetime.datetime.utcnow()
+        if metrics:
+            for metric in metrics:
+                report_metric(metric.category, metric.counter, metric.instance, metric.value)
 
     def send_telemetry_metrics(self):
         """

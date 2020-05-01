@@ -25,6 +25,8 @@ class PeriodicOperation(object):
     '''
     Instances of PeriodicOperation are tasks that are executed only after the given
     time period has elapsed.
+
+    NOTE: the run() method catches any exceptions raised by the operation and logs them as warnings.
     '''
 
     # To prevent flooding the log with error messages we report failures at most every hour

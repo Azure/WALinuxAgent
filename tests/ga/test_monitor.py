@@ -55,7 +55,7 @@ def _create_monitor_handler(enabled_operations=[], iterations=1):
     Creates an instance of MonitorHandler that
         * Uses a mock_wire_protocol for network requests,
         * Executes only the operations given in the 'enabled_operations' parameter,
-        * Runs its main loop only the number of times give in the 'iterations' parameter, and
+        * Runs its main loop only the number of times given in the 'iterations' parameter, and
         * Does not sleep at the end of each iteration
 
     The returned MonitorHandler is augmented with 2 methods:
