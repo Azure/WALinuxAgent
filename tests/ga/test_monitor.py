@@ -332,9 +332,8 @@ class TestEventMonitoring(AgentTestCase, HttpRequestPredicates):
             with patch("azurelinuxagent.common.logger.warn") as mock_warn:
                 monitor_handler.run_and_wait()
                 self.assertEqual(1, mock_warn.call_count)
-                self.assertEqual("[ProtocolError] [Wireserver Exception] [ProtocolError] [Wireserver Failed] "
-                                 "URI http://{0}/machine?comp=telemetrydata  [HTTP Failed] Status Code 503".format(protocol.get_endpoint()),
-                                 mock_warn.call_args[0][2])
+                message = "[ProtocolError] [Wireserver Exception] [ProtocolError] [Wireserver Failed] URI http://{0}/machine?comp=telemetrydata  [HTTP Failed] Status Code 503".format(protocol.get_endpoint())
+                self.assertIn(message, mock_warn.call_args[0][0])
                 self.assertEqual(0, len(os.listdir(self.event_dir)))
 
     @patch("azurelinuxagent.common.conf.get_lib_dir")

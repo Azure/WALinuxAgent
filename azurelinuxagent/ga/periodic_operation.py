@@ -37,7 +37,8 @@ class PeriodicOperation(object):
         self._operation = operation
         self._period = period
         self._last_run = None
-        self._last_log_warning = None
+        self._last_warning = None
+        self._last_warning_time = None
 
     def run(self):
         try:
@@ -47,7 +48,9 @@ class PeriodicOperation(object):
                 finally:
                     self._last_run = datetime.datetime.utcnow()
         except Exception as e:
-            if self._last_log_warning is None or datetime.datetime.utcnow() >= self._last_log_warning + self._LOG_WARNING_PERIOD:
-                logger.warn("[PERIODIC] Failed to {0}: {1}", self._name, ustr(e))
-                self._last_log_warning = datetime.datetime.utcnow()
+            warning = "Failed to {0}: {1} --- [NOTE: Will not log the same error for the next hour]".format(self._name, ustr(e))
+            if warning != self._last_warning or self._last_warning_time is None or datetime.datetime.utcnow() >= self._last_warning_time + self._LOG_WARNING_PERIOD:
+                logger.warn(warning)
+                self._last_warning_time = datetime.datetime.utcnow()
+                self._last_warning = warning
 

@@ -59,8 +59,8 @@ class TestPeriodicOperation(AgentTestCase):
         raise Exception("A test exception")
 
     @staticmethod
-    def _get_number_of_warnings(warn_patcher):
-        return len([args for args, _ in warn_patcher.call_args_list if "A test exception" in args])
+    def _get_number_of_warnings(warn_patcher, message="A test exception"):
+        return len([args for args, _ in warn_patcher.call_args_list if any(message in a for a in args)])
 
     def test_it_should_log_a_warning_if_the_operation_fails(self):
         with patch("azurelinuxagent.common.logger.warn") as warn_patcher:
@@ -85,3 +85,16 @@ class TestPeriodicOperation(AgentTestCase):
                     time.sleep(0.001)
 
             self.assertEqual(self._get_number_of_warnings(warn_patcher), 5, "The error in the operation was not reported the expected number of times")
+
+    def test_it_should_log_warnings_if_they_are_different(self):
+        with patch("azurelinuxagent.common.logger.warn") as warn_patcher:
+            for i in range(2):
+                def operation():
+                    raise Exception("WARNING {0}".format(i))
+
+                pop = PeriodicOperation("test_operation", operation, period=datetime.timedelta(hours=1))
+                for _ in range(5):
+                    pop.run()
+
+            self.assertEqual(self._get_number_of_warnings(warn_patcher, "WARNING 0"), 1, "The first error should have been reported exactly 1 time")
+            self.assertEqual(self._get_number_of_warnings(warn_patcher, "WARNING 1"), 1, "The second error should have been reported exactly 1 time")
