@@ -41,7 +41,6 @@ class MetricsCounter(object):
     PROCESSOR_PERCENT_TIME = "% Processor Time"
     TOTAL_MEM_USAGE = "Total Memory Usage"
     MAX_MEM_USAGE = "Max Memory Usage"
-    MEM_USED_BY_PROCESS = "Memory Used by Process"
 
 
 class CGroupsTelemetry(object):
