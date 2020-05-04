@@ -424,7 +424,6 @@ class ExtHandlersHandler(object):
         try:
             state = ext_handler.properties.state
 
-            self.get_artifact_error_state.reset()
             if self.last_etag == etag:
                 if self.log_etag:
                     ext_handler_i.logger.verbose("Incarnation {0} did not change, not processing GoalState", etag)
@@ -473,12 +472,8 @@ class ExtHandlersHandler(object):
         msg = ustr(e)
         ext_handler_i.set_handler_status(message=msg, code=code)
 
-        self.get_artifact_error_state.incr()
-        if self.get_artifact_error_state.is_triggered():
-            report_event(op=WALAEventOperation.Download, is_success=False, log_event=True,
-                         message="Failed to get artifact for over "
-                                 "{0}: {1}".format(self.get_artifact_error_state.min_timedelta, msg))
-            self.get_artifact_error_state.reset()
+        report_event(op=WALAEventOperation.Download, is_success=False, log_event=True,
+                     message="Failed to download artifacts: {0}".format(msg))
 
     def handle_enable(self, ext_handler_i):
         self.log_process = True
