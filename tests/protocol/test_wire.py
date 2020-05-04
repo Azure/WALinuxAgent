@@ -29,7 +29,7 @@ from azurelinuxagent.common.exception import InvalidContainerError, ResourceGone
 from azurelinuxagent.common.future import httpclient
 from azurelinuxagent.common.protocol.extensions_config_retriever import GenericExtensionsConfig
 from azurelinuxagent.common.protocol.hostplugin import HostPluginProtocol
-from azurelinuxagent.common.protocol.goal_state import ExtensionsConfig
+from azurelinuxagent.common.protocol.goal_state import ExtensionsConfig, GoalState
 from azurelinuxagent.common.protocol.wire import WireProtocol, WireClient, \
     InVMArtifactsProfile, VMAgentManifestUri, StatusBlob, VMStatus, ExtHandlerVersionUri, DataContractList, socket, \
     HEADER_ETAG
@@ -93,6 +93,7 @@ class TestWireProtocol(AgentTestCase):
         MockCryptUtil.side_effect = test_data.mock_crypt_util
 
         with patch.object(restutil, 'http_get', test_data.mock_http_get):
+            GoalState._IncarnationForCerts = None
             protocol = WireProtocol(WIRESERVER_URL)
             protocol.detect()
             protocol.get_vminfo()
@@ -1292,15 +1293,9 @@ class GoalStateConstructionTestCase(AgentTestCase):
             certs = protocol.client.get_certs()
             self.assertIsNone(certs)
 
-    def test_goal_state_certs_cannot_retrieve(self):
-        with mock_wire_protocol(mockwiredata.DATA_FILE) as protocol:
-            protocol.mock_wire_data.goal_state = WireProtocolData.replace_xml_element_value(
-                protocol.mock_wire_data.goal_state, "Certificates", "invalid_url")
-            protocol.client.update_goal_state()
-            self.assertRaises(Exception, protocol.client.get_certs)
-
     def test_goal_state_certs_load(self):
         with mock_wire_protocol(mockwiredata.DATA_FILE) as protocol:
+            GoalState._IncarnationForCerts = None
             protocol.client.update_goal_state()
             self.assertEqual(2, len(protocol.client.get_certs().cert_list.certificates))
 

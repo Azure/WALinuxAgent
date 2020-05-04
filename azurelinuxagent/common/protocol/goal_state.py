@@ -42,6 +42,8 @@ class GoalState(object):
     # fetch the goal state.
     #
     ContainerID = "00000000-0000-0000-0000-000000000000"
+    _IncarnationForCerts = None
+    _Certs = None
 
     def __init__(self, wire_client, ext_config_retriever, current_goal_state=None):
         """
@@ -73,8 +75,7 @@ class GoalState(object):
         self._hosting_env_retrieved = False
         self._shared_conf = None
         self._shared_conf_retrieved = False
-        self._certs = None
-        self._certs_retrieved = False
+        self.certs = None
         self._remote_access = None
         self._remote_access_retrieved = False
         self._artifacts_profile_blob_url = None
@@ -92,6 +93,18 @@ class GoalState(object):
         self.container_id = findtext(container, "ContainerId")
         lbprobe_ports = find(self._xml_doc, "LBProbePorts")
         self.load_balancer_probe_port = findtext(lbprobe_ports, "Port")
+
+        # Nothing retrieves certificates, so we need to keep this logic the same for now
+        # Limit retrieving certificates to only once per incarnation
+        uri = findtext(self._xml_doc, "Certificates")
+        if uri is None:
+            GoalState._Certs = None
+        elif GoalState._IncarnationForCerts is None or GoalState._IncarnationForCerts != self.incarnation:
+            GoalState._IncarnationForCerts = self.incarnation
+            xml_text = wire_client.fetch_config(uri, wire_client.get_header_for_cert())
+            GoalState._Certs = Certificates(xml_text)
+
+        self.certs = GoalState._Certs
 
         GoalState.ContainerID = self.container_id
 
@@ -141,22 +154,6 @@ class GoalState(object):
                 logger.warn("Fetching the shared config failed: {0}", ustr(e))
                 raise
         return self._shared_conf
-
-    @property
-    def certs(self):
-        if not self._certs_retrieved:
-            try:
-                uri = findtext(self._xml_doc, "Certificates")
-                if uri is None:
-                    self._certs = None
-                else:
-                    xml_text = self._wire_client.fetch_config(uri, self._wire_client.get_header_for_cert())
-                    self._certs = Certificates(xml_text)
-                self._certs_retrieved = True
-            except Exception as e:
-                logger.warn("Fetching the certificates failed: {0}", ustr(e))
-                raise
-        return self._certs
 
     @property
     def remote_access(self):
