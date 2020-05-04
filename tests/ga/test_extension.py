@@ -81,7 +81,7 @@ def raise_ioerror(*args):
     e.errno = EIO
     raise e
 
-class TestCleanup(AgentTestCase):
+class TestExtensionCleanup(AgentTestCase):
 
     def setUp(self):
         AgentTestCase.setUp(self)
@@ -100,7 +100,7 @@ class TestCleanup(AgentTestCase):
     def _count_extension_directories():
         paths = [os.path.join(conf.get_lib_dir(), p) for p in os.listdir(conf.get_lib_dir())]
         return len([p for p in paths
-                    if os.path.isdir(p) and TestCleanup._is_extension_dir(p)])
+                    if os.path.isdir(p) and TestExtensionCleanup._is_extension_dir(p)])
 
     @staticmethod
     def _is_extension_dir(path):
@@ -130,9 +130,9 @@ class TestCleanup(AgentTestCase):
     def test_cleanup_leaves_installed_extensions(self):
         with self._setup_test_env(mockwiredata.DATA_FILE_MULTIPLE_EXT) as (exthandlers_handler, protocol, no_of_exts):
             exthandlers_handler.run()
-            self.assertEqual(no_of_exts, TestCleanup._count_packages(),
+            self.assertEqual(no_of_exts, TestExtensionCleanup._count_packages(),
                              "No of extensions in config doesn't match the packages")
-            self.assertEqual(no_of_exts, TestCleanup._count_extension_directories(),
+            self.assertEqual(no_of_exts, TestExtensionCleanup._count_extension_directories(),
                              "No of extension directories doesnt match the no of extensions in GS")
             self._assert_ext_handler_status(protocol.report_vm_status, "Ready", expected_ext_hanlder_count=no_of_exts,
                                             version="1.0.0")
@@ -140,124 +140,70 @@ class TestCleanup(AgentTestCase):
     def test_cleanup_removes_uninstalled_extensions(self):
         with self._setup_test_env(mockwiredata.DATA_FILE_MULTIPLE_EXT) as (exthandlers_handler, protocol, no_of_exts):
             exthandlers_handler.run()
-            self.assertEqual(no_of_exts, TestCleanup._count_packages(),
+            self.assertEqual(no_of_exts, TestExtensionCleanup._count_packages(),
                              "No of extensions in config doesn't match the packages")
             self._assert_ext_handler_status(protocol.report_vm_status, "Ready", expected_ext_hanlder_count=no_of_exts,
                                             version="1.0.0")
 
             # Update incarnation and extension config
             protocol.mock_wire_data.set_incarnation(2)
-            protocol.mock_wire_data.set_extensions_config_sequence_number(1)
             protocol.mock_wire_data.set_extensions_config_state("uninstall")
 
             protocol.client.update_goal_state()
             exthandlers_handler.run()
 
-            self.assertEqual(0, TestCleanup._count_packages(), "All packages must be deleted")
+            self.assertEqual(0, TestExtensionCleanup._count_packages(), "All packages must be deleted")
             self._assert_ext_handler_status(protocol.report_vm_status, "Ready", expected_ext_hanlder_count=0,
                                             version="1.0.0")
-            self.assertEqual(0, TestCleanup._count_extension_directories(), "All extension directories should be removed")
+            self.assertEqual(0, TestExtensionCleanup._count_extension_directories(), "All extension directories should be removed")
 
     def test_cleanup_removes_orphaned_packages(self):
-        pass
+        no_of_orphaned_packages = 5
+        with self._setup_test_env(mockwiredata.DATA_FILE_NO_EXT) as (exthandlers_handler, protocol, no_of_exts):
+            self.assertEqual(no_of_exts, 0, "Test setup error - Extensions found in ExtConfig")
 
+            # Create random extension directories
+            for i in range(no_of_orphaned_packages):
+                eh = ExtHandler(name='Random.Extension.ShouldNot.Be.There')
+                eh.properties.version = FlexibleVersion("9.9.0") + i
+                handler = ExtHandlerInstance(eh, "unused")
+                os.mkdir(handler.get_base_dir())
 
-class TestExtensionCleanup(AgentTestCase):
-    def setUp(self):
-        AgentTestCase.setUp(self)
-        self.ext_handlers = ExtHandlersHandler(Mock())
-        self.lib_dir = tempfile.mkdtemp()
+            self.assertEqual(no_of_orphaned_packages, TestExtensionCleanup._count_extension_directories(),
+                             "Test Setup error - Not enough extension directories")
+            exthandlers_handler.run()
+            self.assertEqual(no_of_exts, TestExtensionCleanup._count_extension_directories(),
+                             "There should be no extension directories in FS")
+            self._assert_ext_handler_status(protocol.report_vm_status, "Ready", expected_ext_hanlder_count=no_of_exts,
+                                            version="1.0.0")
 
-    def _install_handlers(self, start=0, count=1,
-                          handler_state=ExtHandlerState.Installed):
-        src = os.path.join(data_dir, "ext", "sample_ext-1.3.0.zip")
-        version = FlexibleVersion("1.3.0")
-        version += start - version.patch
+    def test_cleanup_leaves_failed_extensions(self):
+        original_popen = subprocess.Popen
 
-        for i in range(start, start + count):
-            eh = ExtHandler()
-            eh.name = "sample_ext"
-            eh.properties.version = str(version)
-            handler = ExtHandlerInstance(eh, "unused")
+        def mock_popen(*args, **kwargs):
+            return original_popen("fail_this_command", **kwargs)
 
-            dst = os.path.join(self.lib_dir,
-                               handler.get_full_name() + HANDLER_PKG_EXT)
-            shutil.copy(src, dst)
+        with self._setup_test_env(mockwiredata.DATA_FILE_EXT_SINGLE) as (exthandlers_handler, protocol, no_of_exts):
+            with patch("azurelinuxagent.common.cgroupapi.subprocess.Popen", mock_popen):
+                exthandlers_handler.run()
+                self._assert_ext_handler_status(protocol.report_vm_status, "NotReady",
+                                                expected_ext_hanlder_count=no_of_exts,
+                                                version="1.0.0")
+                self.assertEqual(no_of_exts, TestExtensionCleanup._count_extension_directories(),
+                                 "There should still be 1 extension directory in FS")
 
-            if not handler_state is None:
-                zipfile.ZipFile(dst).extractall(handler.get_base_dir())
-                handler.set_handler_state(handler_state)
+            # Update incarnation and extension config to uninstall the extension, this should delete the extension
+            protocol.mock_wire_data.set_incarnation(2)
+            protocol.mock_wire_data.set_extensions_config_state("uninstall")
 
-            version += 1
+            protocol.client.update_goal_state()
+            exthandlers_handler.run()
 
-    def _count_packages(self):
-        return len(glob.glob(os.path.join(self.lib_dir, "*.zip")))
-
-    def _count_installed(self):
-        paths = os.listdir(self.lib_dir)
-        paths = [os.path.join(self.lib_dir, p) for p in paths]
-        return len([p for p in paths
-                    if os.path.isdir(p) and self._is_installed(p)])
-
-    def _count_uninstalled(self):
-        paths = os.listdir(self.lib_dir)
-        paths = [os.path.join(self.lib_dir, p) for p in paths]
-        return len([p for p in paths
-                    if os.path.isdir(p) and not self._is_installed(p)])
-
-    def _is_installed(self, path):
-        path = os.path.join(path, 'config', HANDLER_STATE_FILE)
-        return fileutil.read_file(path) != "NotInstalled"
-
-    @patch("azurelinuxagent.common.conf.get_lib_dir")
-    def test_cleanup_leaves_installed_extensions(self, mock_conf):
-        mock_conf.return_value = self.lib_dir
-
-        self._install_handlers(start=0, count=5, handler_state=ExtHandlerState.Installed)
-        self._install_handlers(start=5, count=5, handler_state=ExtHandlerState.Enabled)
-
-        self.assertEqual(self._count_packages(), 10)
-        self.assertEqual(self._count_installed(), 10)
-
-        self.ext_handlers._cleanup_outdated_handlers()
-
-        self.assertEqual(self._count_packages(), 10)
-        self.assertEqual(self._count_installed(), 10)
-        self.assertEqual(self._count_uninstalled(), 0)
-
-    @patch("azurelinuxagent.common.conf.get_lib_dir")
-    def test_cleanup_removes_uninstalled_extensions(self, mock_conf):
-        mock_conf.return_value = self.lib_dir
-
-        self._install_handlers(start=0, count=5, handler_state=ExtHandlerState.Installed)
-        self._install_handlers(start=5, count=5, handler_state=ExtHandlerState.NotInstalled)
-
-        self.assertEqual(self._count_packages(), 10)
-        self.assertEqual(self._count_installed(), 5)
-        self.assertEqual(self._count_uninstalled(), 5)
-
-        self.ext_handlers._cleanup_outdated_handlers()
-
-        self.assertEqual(self._count_packages(), 5)
-        self.assertEqual(self._count_installed(), 5)
-        self.assertEqual(self._count_uninstalled(), 0)
-
-    @patch("azurelinuxagent.common.conf.get_lib_dir")
-    def test_cleanup_removes_orphaned_packages(self, mock_conf):
-        mock_conf.return_value = self.lib_dir
-
-        self._install_handlers(start=0, count=5, handler_state=ExtHandlerState.Installed)
-        self._install_handlers(start=5, count=5, handler_state=None)
-
-        self.assertEqual(self._count_packages(), 10)
-        self.assertEqual(self._count_installed(), 5)
-        self.assertEqual(self._count_uninstalled(), 0)
-
-        self.ext_handlers._cleanup_outdated_handlers()
-
-        self.assertEqual(self._count_packages(), 5)
-        self.assertEqual(self._count_installed(), 5)
-        self.assertEqual(self._count_uninstalled(), 0)
+            self.assertEqual(0, TestExtensionCleanup._count_packages(), "All packages must be deleted")
+            self.assertEqual(0, TestExtensionCleanup._count_extension_directories(),
+                             "All extension directories should be removed")
+            self._assert_ext_handler_status(protocol.report_vm_status, "Ready", expected_ext_hanlder_count=0,
+                                            version="1.0.0")
 
 
 class TestHandlerStateMigration(AgentTestCase):

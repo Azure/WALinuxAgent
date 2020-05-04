@@ -303,19 +303,19 @@ class ExtHandlersHandler(object):
                 if re.match(HANDLER_NAME_PATTERN, item) is None:
                     continue
                 try:
-                    eh = ExtHandler()
-
                     separator = item.rfind('-')
+                    handler_name = item[0:separator]
+                    if any([handler_name == ext_handler.name for ext_handler in self.ext_handlers.extHandlers]):
+                        # Handler in GS, keeping it
+                        continue
 
-                    eh.name = item[0:separator]
+                    eh = ExtHandler(name=handler_name)
                     eh.properties.version = str(FlexibleVersion(item[separator + 1:]))
 
-                    handler = ExtHandlerInstance(eh, self.protocol)
+                    # Since this handler name doesn't exist in the GS, marking it for deletion
+                    handlers.append(ExtHandlerInstance(eh, self.protocol))
                 except Exception:
                     continue
-                if os.path.exists(os.path.join(handler.get_conf_dir(), HANDLER_STATE_FILE)):
-                    continue
-                handlers.append(handler)
 
             elif os.path.isfile(path) and \
                     not os.path.isdir(path[0:-len(HANDLER_PKG_EXT)]):

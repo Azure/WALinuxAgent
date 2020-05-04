@@ -45,6 +45,7 @@ DATA_FILE_IN_VM_ARTIFACTS_PROFILE["in_vm_artifacts_profile"] = "wire/in_vm_artif
 
 DATA_FILE_NO_EXT = DATA_FILE.copy()
 DATA_FILE_NO_EXT["goal_state"] = "wire/goal_state_no_ext.xml"
+DATA_FILE_NO_EXT["ext_conf"] = None
 
 DATA_FILE_EXT_NO_SETTINGS = DATA_FILE.copy()
 DATA_FILE_EXT_NO_SETTINGS["ext_conf"] = "wire/ext_conf_no_settings.xml"
@@ -129,7 +130,9 @@ class WireProtocolData(object):
         self.hosting_env = load_data(self.data_files.get("hosting_env"))
         self.shared_config = load_data(self.data_files.get("shared_config"))
         self.certs = load_data(self.data_files.get("certs"))
-        self.ext_conf = load_data(self.data_files.get("ext_conf"))
+        self.ext_conf = self.data_files.get("ext_conf")
+        if self.ext_conf is not None:
+            self.ext_conf = load_data(self.ext_conf)
         self.manifest = load_data(self.data_files.get("manifest"))
         self.ga_manifest = load_data(self.data_files.get("ga_manifest"))
         self.trans_prv = load_data(self.data_files.get("trans_prv"))
@@ -248,6 +251,8 @@ class WireProtocolData(object):
             cert_file.write(self.trans_cert)
 
     def get_no_of_plugins_in_extension_config(self):
+        if self.ext_conf is None:
+            return 0
         ext_config_doc = parse_doc(self.ext_conf)
         plugins_list = find(ext_config_doc, "Plugins")
         return len(findall(plugins_list, "Plugin"))
