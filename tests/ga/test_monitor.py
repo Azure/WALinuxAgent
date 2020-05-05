@@ -39,7 +39,7 @@ from azurelinuxagent.common.protocol.wire import WireProtocol
 from azurelinuxagent.common.telemetryevent import TelemetryEvent, TelemetryEventParam
 from azurelinuxagent.common.utils import fileutil, restutil
 from azurelinuxagent.common.version import AGENT_VERSION, CURRENT_VERSION, CURRENT_AGENT, DISTRO_NAME, DISTRO_VERSION, DISTRO_CODE_NAME
-from azurelinuxagent.ga.monitor import generate_extension_metrics_telemetry_dictionary, get_monitor_handler, MonitorHandler, PeriodicOperation
+from azurelinuxagent.ga.monitor import get_monitor_handler, MonitorHandler, PeriodicOperation
 from tests.protocol.mockwiredata import DATA_FILE
 from tests.protocol.mocks import mock_wire_protocol, HttpRequestPredicates, MockHttpResponse
 from tests.tools import Mock, MagicMock, patch, AgentTestCase, clear_singleton_instances, PropertyMock
@@ -403,42 +403,26 @@ class TestExtensionMetricsDataTelemetry(AgentTestCase):
     @patch('azurelinuxagent.common.event.EventLogger.add_metric')
     @patch('azurelinuxagent.common.event.EventLogger.add_event')
     @patch("azurelinuxagent.common.cgroupstelemetry.CGroupsTelemetry.poll_all_tracked")
-    @patch("azurelinuxagent.common.cgroupstelemetry.CGroupsTelemetry.report_all_tracked")
-    def test_send_extension_metrics_telemetry(self, patch_report_all_tracked, patch_poll_all_tracked, patch_add_event,
+    def test_send_extension_metrics_telemetry(self, patch_poll_all_tracked, patch_add_event,
                                               patch_add_metric, *args):
         patch_poll_all_tracked.return_value = [MetricValue("Process", "% Processor Time", 1, 1),
                                                MetricValue("Memory", "Total Memory Usage", 1, 1),
                                                MetricValue("Memory", "Max Memory Usage", 1, 1)]
-
-        patch_report_all_tracked.return_value = {
-            "memory": {
-                "cur_mem": [1, 1, 1, 1, 1, str(datetime.datetime.utcnow()), str(datetime.datetime.utcnow())],
-                "max_mem": [1, 1, 1, 1, 1, str(datetime.datetime.utcnow()), str(datetime.datetime.utcnow())]
-            },
-            "cpu": {
-                "cur_cpu": [1, 1, 1, 1, 1, str(datetime.datetime.utcnow()), str(datetime.datetime.utcnow())]
-            }
-        }
 
         monitor_handler = get_monitor_handler()
         monitor_handler.init_protocols()
         monitor_handler.last_cgroup_polling_telemetry = datetime.datetime.utcnow() - timedelta(hours=1)
         monitor_handler.last_cgroup_report_telemetry = datetime.datetime.utcnow() - timedelta(hours=1)
         monitor_handler.poll_telemetry_metrics()
-        monitor_handler.send_telemetry_metrics()
         self.assertEqual(1, patch_poll_all_tracked.call_count)
-        self.assertEqual(1, patch_report_all_tracked.call_count)
-        self.assertEqual(1, patch_add_event.call_count)
         self.assertEqual(3, patch_add_metric.call_count)  # Three metrics being sent.
         monitor_handler.stop()
 
     @patch('azurelinuxagent.common.event.EventLogger.add_metric')
     @patch('azurelinuxagent.common.event.EventLogger.add_event')
     @patch("azurelinuxagent.common.cgroupstelemetry.CGroupsTelemetry.poll_all_tracked")
-    @patch("azurelinuxagent.common.cgroupstelemetry.CGroupsTelemetry.report_all_tracked", return_value={})
-    def test_send_extension_metrics_telemetry_for_empty_cgroup(self, patch_report_all_tracked, patch_poll_all_tracked,
+    def test_send_extension_metrics_telemetry_for_empty_cgroup(self, patch_poll_all_tracked,
                                                                patch_add_event, patch_add_metric,*args):
-        patch_report_all_tracked.return_value = {}
         patch_poll_all_tracked.return_value = []
 
         monitor_handler = get_monitor_handler()
@@ -446,9 +430,7 @@ class TestExtensionMetricsDataTelemetry(AgentTestCase):
         monitor_handler.last_cgroup_polling_telemetry = datetime.datetime.utcnow() - timedelta(hours=1)
         monitor_handler.last_cgroup_report_telemetry = datetime.datetime.utcnow() - timedelta(hours=1)
         monitor_handler.poll_telemetry_metrics()
-        monitor_handler.send_telemetry_metrics()
         self.assertEqual(1, patch_poll_all_tracked.call_count)
-        self.assertEqual(1, patch_report_all_tracked.call_count)
         self.assertEqual(0, patch_add_event.call_count)
         self.assertEqual(0, patch_add_metric.call_count)
         monitor_handler.stop()
@@ -543,54 +525,6 @@ class TestExtensionMetricsDataTelemetry(AgentTestCase):
                             patch_get_memory_usage.return_value = memory_usage_values[i]  # example 200 MB
                             patch_get_memory_max_usage.return_value = max_memory_usage_values[i]  # example 450 MB
                             CGroupsTelemetry.poll_all_tracked()
-
-        performance_metrics = CGroupsTelemetry.report_all_tracked()
-
-        message_json = generate_extension_metrics_telemetry_dictionary(schema_version=1.0,
-                                                                       performance_metrics=performance_metrics)
-
-        for i in range(num_extensions):
-            self.assertTrue(CGroupsTelemetry.is_tracked("dummy_cpu_path_{0}".format(i)))
-            self.assertTrue(CGroupsTelemetry.is_tracked("dummy_memory_path_{0}".format(i)))
-
-        self.assertIn("SchemaVersion", message_json)
-        self.assertIn("PerfMetrics", message_json)
-
-        collected_metrics = message_json["PerfMetrics"]
-
-        for i in range(num_extensions):
-            extn_name = "dummy_extension_{0}".format(i)
-
-            self.assertIn("memory", collected_metrics[extn_name])
-            self.assertIn("cur_mem", collected_metrics[extn_name]["memory"])
-            self.assertIn("max_mem", collected_metrics[extn_name]["memory"])
-            self.assertEqual(len(collected_metrics[extn_name]["memory"]["cur_mem"]), num_summarization_values)
-            self.assertEqual(len(collected_metrics[extn_name]["memory"]["max_mem"]), num_summarization_values)
-
-            self.assertIsInstance(collected_metrics[extn_name]["memory"]["cur_mem"][5], str)
-            self.assertIsInstance(collected_metrics[extn_name]["memory"]["cur_mem"][6], str)
-            self.assertIsInstance(collected_metrics[extn_name]["memory"]["max_mem"][5], str)
-            self.assertIsInstance(collected_metrics[extn_name]["memory"]["max_mem"][6], str)
-
-            self.assertIn("cpu", collected_metrics[extn_name])
-            self.assertIn("cur_cpu", collected_metrics[extn_name]["cpu"])
-            self.assertEqual(len(collected_metrics[extn_name]["cpu"]["cur_cpu"]), num_summarization_values)
-
-            self.assertIsInstance(collected_metrics[extn_name]["cpu"]["cur_cpu"][5], str)
-            self.assertIsInstance(collected_metrics[extn_name]["cpu"]["cur_cpu"][6], str)
-
-        message_json = generate_extension_metrics_telemetry_dictionary(schema_version=1.0,
-                                                                       performance_metrics=None)
-        self.assertIn("SchemaVersion", message_json)
-        self.assertNotIn("PerfMetrics", message_json)
-
-        message_json = generate_extension_metrics_telemetry_dictionary(schema_version=2.0,
-                                                                       performance_metrics=None)
-        self.assertEqual(message_json, None)
-
-        message_json = generate_extension_metrics_telemetry_dictionary(schema_version="z",
-                                                                       performance_metrics=None)
-        self.assertEqual(message_json, None)
 
 
 @patch("azurelinuxagent.common.utils.restutil.http_post")

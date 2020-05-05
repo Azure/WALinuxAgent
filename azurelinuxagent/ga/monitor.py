@@ -58,7 +58,6 @@ class MonitorHandler(object):
     TELEMETRY_HEARTBEAT_PERIOD = datetime.timedelta(minutes=30)
     # cgroup data period
     CGROUP_TELEMETRY_POLLING_PERIOD = datetime.timedelta(minutes=5)
-    CGROUP_TELEMETRY_REPORTING_PERIOD = datetime.timedelta(minutes=30)
     # host plugin
     HOST_PLUGIN_HEARTBEAT_PERIOD = datetime.timedelta(minutes=1)
     HOST_PLUGIN_HEALTH_PERIOD = datetime.timedelta(minutes=5)
@@ -79,7 +78,6 @@ class MonitorHandler(object):
         self._collect_and_send_events_op = PeriodicOperation("collect_and_send_events", self.collect_and_send_events, self.EVENT_COLLECTION_PERIOD)
         self._send_telemetry_heartbeat_op = PeriodicOperation("send_telemetry_heartbeat", self.send_telemetry_heartbeat, self.TELEMETRY_HEARTBEAT_PERIOD)
         self._poll_telemetry_metrics_op = PeriodicOperation("poll_telemetry_metrics usage", self.poll_telemetry_metrics, self.CGROUP_TELEMETRY_POLLING_PERIOD)
-        self._send_telemetry_metrics_op = PeriodicOperation("send_telemetry_metrics usage", self.send_telemetry_metrics, self.CGROUP_TELEMETRY_REPORTING_PERIOD)
         self._send_host_plugin_heartbeat_op = PeriodicOperation("send_host_plugin_heartbeat", self.send_host_plugin_heartbeat, self.HOST_PLUGIN_HEARTBEAT_PERIOD)
         self._send_imds_heartbeat_op = PeriodicOperation("send_imds_heartbeat", self.send_imds_heartbeat, self.IMDS_HEARTBEAT_PERIOD)
         self._log_altered_network_configuration_op = PeriodicOperation("log_altered_network_configuration", self.log_altered_network_configuration, self.LOG_NETWORK_CONFIGURATION_PERIOD)
@@ -146,7 +144,6 @@ class MonitorHandler(object):
 
         min_delta = min(MonitorHandler.TELEMETRY_HEARTBEAT_PERIOD,
                         MonitorHandler.CGROUP_TELEMETRY_POLLING_PERIOD,
-                        MonitorHandler.CGROUP_TELEMETRY_REPORTING_PERIOD,
                         MonitorHandler.EVENT_COLLECTION_PERIOD,
                         MonitorHandler.HOST_PLUGIN_HEARTBEAT_PERIOD,
                         MonitorHandler.IMDS_HEARTBEAT_PERIOD).seconds
@@ -155,9 +152,6 @@ class MonitorHandler(object):
                 self.protocol.update_host_plugin_from_goal_state()
                 self._send_telemetry_heartbeat_op.run()
                 self._poll_telemetry_metrics_op.run()
-                # This will be removed in favor of poll_telemetry_metrics() and it'll directly send the perf data for
-                # each cgroup.
-                self._send_telemetry_metrics_op.run()
                 self._collect_and_send_events_op.run()
                 self._send_host_plugin_heartbeat_op.run()
                 self._send_imds_heartbeat_op.run()
@@ -261,31 +255,14 @@ class MonitorHandler(object):
 
     def poll_telemetry_metrics(self):
         """
-        This method polls the tracked cgroups to get data from the cgroups filesystem and send the data directly.
+        This method polls the tracked cgroups to get data from the cgroups filesystem and send it to the performance counters database.
 
         :return: List of Metrics (which would be sent to PerfCounterMetrics directly.
         """
         metrics = CGroupsTelemetry.poll_all_tracked()
 
-        if metrics:
-            for metric in metrics:
-                report_metric(metric.category, metric.counter, metric.instance, metric.value)
-
-    def send_telemetry_metrics(self):
-        """
-        The send_telemetry_metrics would soon be removed in favor of sending performance metrics directly.
-        """
-        performance_metrics = CGroupsTelemetry.report_all_tracked()
-
-        if performance_metrics:
-            message = generate_extension_metrics_telemetry_dictionary(schema_version=1.0,
-                                                                      performance_metrics=performance_metrics)
-            add_event(name=AGENT_NAME,
-                      version=CURRENT_VERSION,
-                      op=WALAEventOperation.ExtensionMetricsData,
-                      is_success=True,
-                      message=ustr(message),
-                      log_event=False)
+        for metric in metrics:
+            report_metric(metric.category, metric.counter, metric.instance, metric.value)
 
     def log_altered_network_configuration(self):
         """
