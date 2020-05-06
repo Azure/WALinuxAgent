@@ -67,7 +67,7 @@ class BigIpOSUtil(DefaultOSUtil):
                 break
             time.sleep(30)
 
-        if rc is 0:
+        if rc == 0:
             return True
 
         raise OSUtilError(
@@ -149,14 +149,11 @@ class BigIpOSUtil(DefaultOSUtil):
             logger.info("User {0} already exists, skip useradd", username)
             return None
 
-        cmd = "/usr/bin/tmsh create auth user %s partition-access add { all-partitions { role admin } } shell bash" % (username)
-        retcode, out = shellutil.run_get_output(cmd, log_cmd=True, chk_err=True)
-        if retcode != 0:
-            raise OSUtilError(
-                "Failed to create user account:{0}, retcode:{1}, output:{2}".format(username, retcode, out)
-            )
+        cmd = ['/usr/bin/tmsh', 'create', 'auth', 'user', username, 'partition-access', 'add', '{', 'all-partitions',
+               '{', 'role', 'admin', '}', '}', 'shell', 'bash']
+        self._run_command_raising_OSUtilError(cmd, err_msg="Failed to create user account:{0}".format(username))
         self._save_sys_config()
-        return retcode
+        return 0
 
     def chpasswd(self, username, password, crypt_id=6, salt_len=10):
         """Change a user's password with tmsh
@@ -177,12 +174,9 @@ class BigIpOSUtil(DefaultOSUtil):
         """
 
         # Start by setting the password of the user provided account
-        cmd = "/usr/bin/tmsh modify auth user {0} password '{1}'".format(username, password)
-        ret, output = shellutil.run_get_output(cmd, log_cmd=False, chk_err=True)
-        if ret != 0:
-            raise OSUtilError(
-                "Failed to set password for {0}: {1}".format(username, output)
-            )
+        self._run_command_raising_OSUtilError(
+            ['/usr/bin/tmsh', 'modify', 'auth', 'user', username, 'password', password],
+            err_msg="Failed to set password for {0}".format(username))
 
         # Next, set the password of the built-in 'admin' account to be have
         # the same password as the user provided account
@@ -190,14 +184,11 @@ class BigIpOSUtil(DefaultOSUtil):
         if userentry is None:
             raise OSUtilError("The 'admin' user account was not found!")
 
-        cmd = "/usr/bin/tmsh modify auth user 'admin' password '{0}'".format(password)
-        ret, output = shellutil.run_get_output(cmd, log_cmd=False, chk_err=True)
-        if ret != 0:
-            raise OSUtilError(
-                "Failed to set password for 'admin': {0}".format(output)
-            )
+        self._run_command_raising_OSUtilError(
+            ['/usr/bin/tmsh', 'modify', 'auth', 'user', 'admin', 'password', password],
+            err_msg="Failed to set password for admin")
         self._save_sys_config()
-        return ret
+        return 0
 
     def del_account(self, username):
         """Deletes a user account.
@@ -211,8 +202,8 @@ class BigIpOSUtil(DefaultOSUtil):
         :param username:
         :return:
         """
-        shellutil.run("> /var/run/utmp")
-        shellutil.run("/usr/bin/tmsh delete auth user " + username)
+        self._run_command_without_raising(["touch", "/var/run/utmp"])
+        self._run_command_without_raising(['/usr/bin/tmsh', 'delete', 'auth', 'user', username])
 
     def get_dvd_device(self, dev_dir='/dev'):
         """Find BIG-IP's CD/DVD device

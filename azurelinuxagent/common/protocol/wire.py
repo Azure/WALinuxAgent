@@ -74,9 +74,7 @@ class UploadError(HttpError):
     pass
 
 
-class WireProtocol(Protocol):
-    """Slim layer to adapt wire protocol data to metadata protocol interface"""
-
+class WireProtocol(DataContract):
     def __init__(self, endpoint):
         if endpoint is None:
             raise ProtocolError("WireProtocol endpoint is None")

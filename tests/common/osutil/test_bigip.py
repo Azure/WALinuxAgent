@@ -76,7 +76,7 @@ class TestBigIpOSUtil_save_sys_config(AgentTestCase):
 class TestBigIpOSUtil_useradd(AgentTestCase):
 
     @patch.object(osutil.BigIpOSUtil, 'get_userentry', return_value=None)
-    @patch.object(shellutil, "run_get_output")
+    @patch.object(shellutil, "run_command")
     def test_success(self, *args):
         args[0].return_value = (0, None)
         result = osutil.BigIpOSUtil.useradd(
@@ -103,7 +103,7 @@ class TestBigIpOSUtil_useradd(AgentTestCase):
 
 class TestBigIpOSUtil_chpasswd(AgentTestCase):
 
-    @patch.object(shellutil, "run_get_output", return_value=(0, None))
+    @patch.object(shellutil, "run_command")
     @patch.object(osutil.BigIpOSUtil, 'get_userentry', return_value=True)
     @patch.object(osutil.BigIpOSUtil, 'is_sys_user', return_value=False)
     @patch.object(osutil.BigIpOSUtil, '_save_sys_config', return_value=None)

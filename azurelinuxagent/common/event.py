@@ -74,7 +74,6 @@ class WALAEventOperation:
     CustomData = "CustomData"
     CGroupsCleanUp = "CGroupsCleanUp"
     CGroupsLimitsCrossed = "CGroupsLimitsCrossed"
-    ExtensionMetricsData = "ExtensionMetricsData"
     Deploy = "Deploy"
     Disable = "Disable"
     Downgrade = "Downgrade"
@@ -688,6 +687,7 @@ def report_metric(category, counter, instance, value, log_event=False, reporter=
 def initialize_event_logger_vminfo_common_parameters(protocol, reporter=__event_logger__):
     reporter.initialize_vminfo_common_parameters(protocol)
 
+
 def add_event(name, op=WALAEventOperation.Unknown, is_success=True, duration=0, version=str(CURRENT_VERSION),
               message="", log_event=True, reporter=__event_logger__):
     if reporter.event_dir is None:
@@ -697,7 +697,8 @@ def add_event(name, op=WALAEventOperation.Unknown, is_success=True, duration=0, 
 
     if should_emit_event(name, version, op, is_success):
         mark_event_status(name, version, op, is_success)
-        reporter.add_event(name, op=op, is_success=is_success, duration=duration, version=str(version), message=message,
+        reporter.add_event(name, op=op, is_success=is_success, duration=duration, version=str(version),
+                           message=message,
                            log_event=log_event)
 
 

@@ -65,6 +65,7 @@ def has_command(cmd):
 
 def run(cmd, chk_err=True, expected_errors=[]):
     """
+    Note: Deprecating in favour of `azurelinuxagent.common.utils.shellutil.run_command` function.
     Calls run_get_output on 'cmd', returning only the return code.
     If chk_err=True then errors will be reported in the log.
     If chk_err=False then errors will be suppressed from the log.
@@ -131,18 +132,27 @@ class CommandError(Exception):
         self.stderr = stderr
 
 
-def run_command(command, log_error=False):
+def run_command(command, log_error=False, cmd_input=None):
     """
-    Executes the given command and returns its stdout as a string.
-    If there are any errors executing the command it logs details about the failure and raises a RunCommandException;
-    if 'log_error' is True, it also logs details about the error.
+        Executes the given command and returns its stdout as a string. If cmd_input is specified, then we pass the cmd_input
+        to stdin and execute the command. Currently we only support string input for stdin.
+        If there are any errors executing the command it logs details about the failure and raises a RunCommandException;
+        if 'log_error' is True, it also logs details about the error.
+
+        Note: This is the preferred method to execute shell commands over `azurelinuxagent.common.utils.shellutil.run` function.
     """
     def format_command(cmd):
         return " ".join(cmd) if isinstance(cmd, list) else command
 
+    # Currently we only support PIPE for stdin/stdout/stderr, but acceptable options as per python docs are -
+    # PIPE, an existing file descriptor (a positive integer), an existing file object, and None
+    stdin = subprocess.PIPE if cmd_input else None
     try:
-        process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=False)
-        stdout, stderr = process.communicate()
+        # Starting Python 3.4+, you need to encode the string, i.e. you need to pass Bytes to the input rather than string to process.communicate()
+        process_input = cmd_input.encode() if cmd_input else None
+
+        process = subprocess.Popen(command, stdin=stdin, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=False)
+        stdout, stderr = process.communicate(input=process_input)
         returncode = process.returncode
     except Exception as e:
         if log_error:

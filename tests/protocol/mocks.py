@@ -164,6 +164,10 @@ class HttpRequestPredicates(object):
         return url.lower() == 'http://{0}/machine?comp=telemetrydata'.format(restutil.KNOWN_WIRESERVER_IP)
 
     @staticmethod
+    def is_health_service_request(url):
+        return url.lower() == 'http://{0}:80/healthservice'.format(restutil.KNOWN_WIRESERVER_IP)
+
+    @staticmethod
     def is_in_vm_artifacts_profile_request(url):
         return re.match(r'https://.+\.blob\.core\.windows\.net/\$system/.+\.(vmSettings|settings)\?.+', url) is not None
 
@@ -175,6 +179,10 @@ class HttpRequestPredicates(object):
         if 'x-ms-artifact-location' not in headers:
             raise ValueError('Host plugin request is missing the x-ms-artifact-location header ({0})'.format(url))
         return headers['x-ms-artifact-location']
+
+    @staticmethod
+    def is_host_plugin_health_request(url):
+        return url.lower() == 'http://{0}:{1}/health'.format(restutil.KNOWN_WIRESERVER_IP, restutil.HOST_PLUGIN_PORT)
 
     @staticmethod
     def is_host_plugin_extension_artifact_request(url):
