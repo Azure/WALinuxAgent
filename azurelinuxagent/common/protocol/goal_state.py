@@ -19,6 +19,7 @@
 import json
 import os
 import re
+import traceback
 
 import azurelinuxagent.common.conf as conf
 import azurelinuxagent.common.logger as logger
@@ -135,7 +136,7 @@ class GoalState(object):
                     self._hosting_env = HostingEnv(xml_text)
                 self._hosting_env_retrieved = True
             except Exception as e:
-                logger.warn("Fetching the hosting environment failed: {0}", ustr(e))
+                logger.warn("Fetching the hosting environment failed: {0}, {1}", ustr(e), traceback.format_exc())
                 raise
         return self._hosting_env
 
@@ -151,7 +152,7 @@ class GoalState(object):
                     self._shared_conf = SharedConfig(xml_text)
                 self._shared_conf_retrieved = True
             except Exception as e:
-                logger.warn("Fetching the shared config failed: {0}", ustr(e))
+                logger.warn("Fetching the shared config failed: {0}, {1}", ustr(e), traceback.format_exc())
                 raise
         return self._shared_conf
 
@@ -168,7 +169,7 @@ class GoalState(object):
                     self._remote_access = RemoteAccess(xml_text)
                 self._remote_access_retrieved = True
             except Exception as e:
-                logger.warn("Fetching the remote access failed: {0}", ustr(e))
+                logger.warn("Fetching the remote access failed: {0}, {1}", ustr(e), traceback.format_exc())
                 raise
         return self._remote_access
 
@@ -180,7 +181,7 @@ class GoalState(object):
                 self._ext_conf = self._ext_config_retriever.get_ext_config(self.incarnation, uri)
                 self._ext_conf_retrieved = True
             except Exception as e:
-                logger.warn("Fetching the extensions config failed: {0}", ustr(e))
+                logger.warn("Fetching the extensions config failed: {0}, {1}", ustr(e), traceback.format_exc())
                 raise
         return self._ext_conf
 
