@@ -422,11 +422,12 @@ class ExtensionsConfig(object):
         runtime_settings_node = find(settings[0], "RuntimeSettings")
         seqNo = getattrib(runtime_settings_node, "seqNo")
         runtime_settings_str = gettext(runtime_settings_node)
-        try:
-            runtime_settings = json.loads(runtime_settings_str)
-        except ValueError as e:
-            logger.error("Invalid extension settings")
-            return
+        if runtime_settings_str is not None:
+            try:
+                runtime_settings = json.loads(runtime_settings_str)
+            except ValueError as e:
+                logger.error("Invalid extension settings")
+                return
 
         depends_on_level = 0
         depends_on_node = find(settings[0], "DependsOn")
@@ -437,20 +438,21 @@ class ExtensionsConfig(object):
                 logger.warn("Could not parse dependencyLevel for handler {0}. Setting it to 0".format(name))
                 depends_on_level = 0
 
-        for plugin_settings_list in runtime_settings["runtimeSettings"]:
-            handler_settings = plugin_settings_list["handlerSettings"]
-            ext = Extension()
-            # There is no "extension name" in wire protocol.
-            # Put
-            ext.name = ext_handler.name
-            ext.sequenceNumber = seqNo
-            ext.publicSettings = handler_settings.get("publicSettings")
-            ext.protectedSettings = handler_settings.get("protectedSettings")
-            ext.dependencyLevel = depends_on_level
-            thumbprint = handler_settings.get(
-                "protectedSettingsCertThumbprint")
-            ext.certificateThumbprint = thumbprint
-            ext_handler.properties.extensions.append(ext)
+        if runtime_settings is not None:
+            for plugin_settings_list in runtime_settings["runtimeSettings"]:
+                handler_settings = plugin_settings_list["handlerSettings"]
+                ext = Extension()
+                # There is no "extension name" in wire protocol.
+                # Put
+                ext.name = ext_handler.name
+                ext.sequenceNumber = seqNo
+                ext.publicSettings = handler_settings.get("publicSettings")
+                ext.protectedSettings = handler_settings.get("protectedSettings")
+                ext.dependencyLevel = depends_on_level
+                thumbprint = handler_settings.get(
+                    "protectedSettingsCertThumbprint")
+                ext.certificateThumbprint = thumbprint
+                ext_handler.properties.extensions.append(ext)
 
 
 class RemoteAccess(object):

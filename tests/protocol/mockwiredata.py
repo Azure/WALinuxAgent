@@ -99,6 +99,9 @@ DATA_FILE_FAST_TRACK_DEPENDENCIES = DATA_FILE.copy()
 DATA_FILE_FAST_TRACK_DEPENDENCIES["ext_conf"] = "wire/ext_conf_in_vm_artifacts_profile.xml"
 DATA_FILE_FAST_TRACK_DEPENDENCIES["in_vm_artifacts_profile"] = "wire/in_vm_artifacts_profile_dependencies.json"
 
+DATA_FILE_FAST_TRACK_NO_SETTINGS = DATA_FILE.copy()
+DATA_FILE_FAST_TRACK_NO_SETTINGS["vm_artifacts_profile"] = "wire/in_vm_artifacts_profile_no_settings.json"
+
 class WireProtocolData(object):
     def __init__(self, data_files=DATA_FILE):
         self.emulate_stale_goal_state = False

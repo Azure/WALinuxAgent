@@ -41,7 +41,7 @@ from azurelinuxagent.common.protocol.extensions_config_retriever import Extensio
     GOAL_STATE_SOURCE_FABRIC, GOAL_STATE_SOURCE_FASTTRACK, GOAL_STATE_SOURCE_FILE_NAME, SEQUENCE_NUMBER_FILE_NAME, \
     INCARNATION_FILE_NAME
 from tests.protocol.mocks import MockWireClient, MockProtocol
-from tests.protocol.mockwiredata import WireProtocolData, DATA_FILE
+from tests.protocol.mockwiredata import WireProtocolData, DATA_FILE, DATA_FILE_FAST_TRACK_NO_SETTINGS
 from tests.tools import AgentTestCase, patch, mock_sleep, clear_singleton_instances, i_am_root
 
 
@@ -240,6 +240,18 @@ class TestGoalState(AgentTestCase):
         vm_id = retriever._get_vm_id()
         self.assertIsNotNone(vm_id)
         self.assertEqual(36, len(vm_id))
+
+    def test_fast_track_no_settings(self, *_):
+        test_data = WireProtocolData(DATA_FILE_FAST_TRACK_NO_SETTINGS)
+        profile = InVMArtifactsProfile(test_data.vm_artifacts_profile)
+        wire_client = MockWireClient(test_data.ext_conf, profile)
+        retriever = ExtensionsConfigRetriever(wire_client=wire_client)
+        retriever._set_fabric(1)
+        retriever._set_fast_track(0)
+
+        retriever = ExtensionsConfigRetriever(wire_client=wire_client)
+        ext_conf = retriever.get_ext_config(incarnation=1, ext_conf_uri="blah")
+        self.assertIsNotNone(ext_conf)
 
     def test_startup_fabric(self):
         # Set the previous goal state as Fabric

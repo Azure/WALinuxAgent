@@ -1475,13 +1475,15 @@ class InVMArtifactsProfile(object):
                 runtime_settings.set('seqNo', str(extensionGoalState['settingsSeqNo']))
 
                 # CRP may send multiple settings but this agent only supports one
-                handler_settings = extensionGoalState['settings'][0]
-                json_settings = json.dumps({"runtimeSettings": [{"handlerSettings": handler_settings}]})
-                runtime_settings.text = json_settings
+                settings = extensionGoalState.get('settings')
+                if settings is not None and len(settings) > 0:
+                    handler_settings = settings[0]
+                    json_settings = json.dumps({"runtimeSettings": [{"handlerSettings": handler_settings}]})
+                    runtime_settings.text = json_settings
 
-                # In this agent, we pay attention to only the dependencyLevel for dependencies
-                depends_on = xml.SubElement(runtime_settings, 'DependsOn')
-                self._set_depends_on(depends_on, extensionGoalState)
+                    # In this agent, we pay attention to only the dependencyLevel for dependencies
+                    depends_on = xml.SubElement(runtime_settings, 'DependsOn')
+                    self._set_depends_on(depends_on, extensionGoalState)
 
             config_xml = xml.tostring(root).decode()
             if flush_func is not None:
