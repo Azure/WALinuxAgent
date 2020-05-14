@@ -950,39 +950,60 @@ class TestExtension(ExtensionTestCase):
         self.assertTrue("Failed to get ext handler pkgs" in kw['message'])
         self.assertTrue("ProtocolError" in kw['message'])
 
-    @patch('azurelinuxagent.common.errorstate.ErrorState.is_triggered')
-    @patch('azurelinuxagent.common.event.add_event')
-    def test_ext_handler_download_failure_permanent_with_ExtensionDownloadError_and_triggered(self, mock_add_event,
-                                                                                              mock_error_state, *args):
+    def test_ext_handler_download_errors_should_be_reported_only_on_new_goal_state(self, *args):
         test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE)
         exthandlers_handler, protocol = self._create_mock(test_data, *args)
         protocol.get_ext_handler_pkgs = Mock(side_effect=ExtensionDownloadError)
 
-        mock_error_state.return_value = True
-
         exthandlers_handler.run()
 
-        self.assertEquals(1, mock_add_event.call_count)
-        args, kw = mock_add_event.call_args_list[0]
-        self.assertEquals(False, kw['is_success'])
-        self.assertTrue("Failed to get artifact for over" in kw['message'])
-        self.assertTrue("ExtensionDownloadError" in kw['message'])
-        self.assertEquals("Download", kw['op'])
+        # self.assertEquals(1, mock_add_event.call_count)
+        # args, kw = mock_add_event.call_args_list[0]
+        # self.assertEquals(False, kw['is_success'])
+        # self.assertTrue("Failed to get artifact for over" in kw['message'])
+        # self.assertTrue("ExtensionDownloadError" in kw['message'])
+        # self.assertEquals("Download", kw['op'])
 
-    @patch('azurelinuxagent.common.errorstate.ErrorState.is_triggered')
-    @patch('azurelinuxagent.common.event.add_event')
-    def test_ext_handler_download_failure_permanent_with_ExtensionDownloadError_and_not_triggered(self, mock_add_event,
-                                                                                                  mock_error_state,
-                                                                                                  *args):
-        test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE)
-        exthandlers_handler, protocol = self._create_mock(test_data, *args)
-        protocol.get_ext_handler_pkgs = Mock(side_effect=ExtensionDownloadError)
+        self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.0.0")
+        self._assert_ext_status(protocol.report_ext_status, "success", 0)
 
-        mock_error_state.return_value = False
+        # Re-run exthandler.run and ensure we dont report error
+        # Change incarnation and then re-check we report error
 
-        exthandlers_handler.run()
 
-        self.assertEquals(0, mock_add_event.call_count)
+    # @patch('azurelinuxagent.common.errorstate.ErrorState.is_triggered')
+    # @patch('azurelinuxagent.common.event.add_event')
+    # def test_ext_handler_download_failure_permanent_with_ExtensionDownloadError_and_triggered(self, mock_add_event,
+    #                                                                                           mock_error_state, *args):
+    #     test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE)
+    #     exthandlers_handler, protocol = self._create_mock(test_data, *args)
+    #     protocol.get_ext_handler_pkgs = Mock(side_effect=ExtensionDownloadError)
+    #
+    #     mock_error_state.return_value = True
+    #
+    #     exthandlers_handler.run()
+    #
+    #     self.assertEquals(1, mock_add_event.call_count)
+    #     args, kw = mock_add_event.call_args_list[0]
+    #     self.assertEquals(False, kw['is_success'])
+    #     self.assertTrue("Failed to get artifact for over" in kw['message'])
+    #     self.assertTrue("ExtensionDownloadError" in kw['message'])
+    #     self.assertEquals("Download", kw['op'])
+
+    # @patch('azurelinuxagent.common.errorstate.ErrorState.is_triggered')
+    # @patch('azurelinuxagent.common.event.add_event')
+    # def test_ext_handler_download_failure_permanent_with_ExtensionDownloadError_and_not_triggered(self, mock_add_event,
+    #                                                                                               mock_error_state,
+    #                                                                                               *args):
+    #     test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE)
+    #     exthandlers_handler, protocol = self._create_mock(test_data, *args)
+    #     protocol.get_ext_handler_pkgs = Mock(side_effect=ExtensionDownloadError)
+    #
+    #     mock_error_state.return_value = False
+    #
+    #     exthandlers_handler.run()
+    #
+    #     self.assertEquals(0, mock_add_event.call_count)
 
     @patch('azurelinuxagent.ga.exthandlers.fileutil')
     def test_ext_handler_io_error(self, mock_fileutil, *args):

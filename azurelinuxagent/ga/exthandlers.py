@@ -236,30 +236,30 @@ class ExtHandlersHandler(object):
         self.log_process = False
 
         self.report_status_error_state = ErrorState()
-        self.get_artifact_error_state = ErrorState(min_timedelta=ERROR_STATE_DELTA_INSTALL)
+        # self.get_artifact_error_state = ErrorState(min_timedelta=ERROR_STATE_DELTA_INSTALL)
 
     def run(self):
-        self.ext_handlers, etag = None, None
-        try:
-            self.ext_handlers, etag = self.protocol.get_ext_handlers()
-            self.get_artifact_error_state.reset()
-        except Exception as e:
-            msg = u"Exception retrieving extension handlers: {0}".format(ustr(e))
-            detailed_msg = '{0} {1}'.format(msg, traceback.extract_tb(get_traceback(e)))
-
-            self.get_artifact_error_state.incr()
-
-            if self.get_artifact_error_state.is_triggered():
-                add_event(AGENT_NAME,
-                          version=CURRENT_VERSION,
-                          op=WALAEventOperation.GetArtifactExtended,
-                          is_success=False,
-                          message="Failed to get extension artifact for over "
-                                  "{0}: {1}".format(self.get_artifact_error_state.min_timedelta, msg))
-                self.get_artifact_error_state.reset()
-
-            add_event(AGENT_NAME, version=CURRENT_VERSION, op=WALAEventOperation.ExtensionProcessing, is_success=False, message=detailed_msg)
-            return
+        self.ext_handlers, etag = self.protocol.get_ext_handlers()# None, None
+        # try:
+        #     self.ext_handlers, etag = self.protocol.get_ext_handlers()
+        #     self.get_artifact_error_state.reset()
+        # except Exception as e:
+        #     msg = u"Exception retrieving extension handlers: {0}".format(ustr(e))
+        #     detailed_msg = '{0} {1}'.format(msg, traceback.extract_tb(get_traceback(e)))
+        #
+        #     self.get_artifact_error_state.incr()
+        #
+        #     if self.get_artifact_error_state.is_triggered():
+        #         add_event(AGENT_NAME,
+        #                   version=CURRENT_VERSION,
+        #                   op=WALAEventOperation.GetArtifactExtended,
+        #                   is_success=False,
+        #                   message="Failed to get extension artifact for over "
+        #                           "{0}: {1}".format(self.get_artifact_error_state.min_timedelta, msg))
+        #         self.get_artifact_error_state.reset()
+        #
+        #     add_event(AGENT_NAME, version=CURRENT_VERSION, op=WALAEventOperation.ExtensionProcessing, is_success=False, message=detailed_msg)
+        #     return
 
         try:
             msg = u"Handle extensions updates for incarnation {0}".format(etag)
@@ -1382,6 +1382,8 @@ class ExtHandlerInstance(object):
         try:
             handler_status_json = json.dumps(get_properties(handler_status))
             if handler_status_json is not None:
+                # if not os.path.exists(state_dir):
+                #     fileutil.mkdir(state_dir, mode=0o700)
                 fileutil.write_file(status_file, handler_status_json)
             else:
                 self.logger.error("Failed to create JSON document of handler status for {0} version {1}".format(
