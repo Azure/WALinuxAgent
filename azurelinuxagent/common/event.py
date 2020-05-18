@@ -74,7 +74,6 @@ class WALAEventOperation:
     CustomData = "CustomData"
     CGroupsCleanUp = "CGroupsCleanUp"
     CGroupsLimitsCrossed = "CGroupsLimitsCrossed"
-    ExtensionMetricsData = "ExtensionMetricsData"
     Deploy = "Deploy"
     Disable = "Disable"
     Downgrade = "Downgrade"

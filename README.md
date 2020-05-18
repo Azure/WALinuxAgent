@@ -3,7 +3,7 @@
 ## Develop branch status
 
 [![Travis CI](https://travis-ci.org/Azure/WALinuxAgent.svg?branch=develop)](https://travis-ci.org/Azure/WALinuxAgent/branches)
-[![CodeCov](https://codecov.io/gh/Azure/WALinusAgent/branch/develop/graph/badge.svg)](https://codecov.io/gh/Azure/WALinuxAgent/branch/develop)
+[![CodeCov](https://codecov.io/gh/Azure/WALinuxAgent/branch/develop/graph/badge.svg)](https://codecov.io/gh/Azure/WALinuxAgent/branch/develop)
 
 Each badge below represents our basic validation tests for an image, which are executed several times each day. These include provisioning, user account, disk, extension and networking scenarios.
 
