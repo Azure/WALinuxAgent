@@ -331,7 +331,7 @@ class ExtHandlersHandler(object):
                 logger.warn("Failed to remove orphaned package {0}: {1}".format(pkg, e.strerror))
 
         # Finally, remove the directories and packages of the orphaned handlers, i.e. Any extension directory that
-        # did not clean out properly on Extension Uninstall
+        # is still in the FileSystem but not in the GoalState
         for handler in handlers:
             handler.remove_ext_handler()
             pkg = os.path.join(conf.get_lib_dir(), handler.get_full_name() + HANDLER_PKG_EXT)
@@ -925,9 +925,6 @@ class ExtHandlerInstance(object):
             status_dir = self.get_status_dir()
             fileutil.mkdir(status_dir, mode=0o700)
 
-            conf_dir = self.get_conf_dir()
-            fileutil.mkdir(conf_dir, mode=0o700)
-
             seq_no, status_path = self.get_status_file_path()
             if status_path is not None:
                 now = datetime.datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
@@ -942,6 +939,9 @@ class ExtHandlerInstance(object):
                     }
                 }
                 fileutil.write_file(status_path, json.dumps(status))
+
+                conf_dir = self.get_conf_dir()
+                fileutil.mkdir(conf_dir, mode=0o700)
 
         except IOError as e:
             fileutil.clean_ioerror(e, paths=[self.get_base_dir(), self.pkg_file])
@@ -1355,8 +1355,8 @@ class ExtHandlerInstance(object):
         state_dir = self.get_conf_dir()
         state_file = os.path.join(state_dir, "HandlerState")
         try:
-            # if not os.path.exists(state_dir):
-            #     fileutil.mkdir(state_dir, mode=0o700)
+            if not os.path.exists(state_dir):
+                fileutil.mkdir(state_dir, mode=0o700)
             fileutil.write_file(state_file, handler_state)
         except IOError as e:
             fileutil.clean_ioerror(e, paths=[state_file])

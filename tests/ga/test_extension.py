@@ -180,11 +180,11 @@ class TestExtensionCleanup(AgentTestCase):
     def test_cleanup_leaves_failed_extensions(self):
         original_popen = subprocess.Popen
 
-        def mock_popen(*args, **kwargs):
+        def mock_fail_popen(*args, **kwargs):
             return original_popen("fail_this_command", **kwargs)
 
         with self._setup_test_env(mockwiredata.DATA_FILE_EXT_SINGLE) as (exthandlers_handler, protocol, no_of_exts):
-            with patch("azurelinuxagent.common.cgroupapi.subprocess.Popen", mock_popen):
+            with patch("azurelinuxagent.common.cgroupapi.subprocess.Popen", mock_fail_popen):
                 exthandlers_handler.run()
                 self._assert_ext_handler_status(protocol.report_vm_status, "NotReady",
                                                 expected_ext_hanlder_count=no_of_exts,
