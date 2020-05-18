@@ -61,7 +61,6 @@ _VALID_HANDLER_STATUS = ['Ready', 'NotReady', "Installing", "Unresponsive"]
 
 HANDLER_NAME_PATTERN = re.compile(_HANDLER_PATTERN + r'$', re.IGNORECASE)
 HANDLER_PKG_EXT = ".zip"
-HANDLER_STATE_FILE = "HandlerState"
 
 AGENT_STATUS_FILE = "waagent_status.json"
 NUMBER_OF_DOWNLOAD_RETRIES = 5
@@ -332,7 +331,7 @@ class ExtHandlersHandler(object):
                 logger.warn("Failed to remove orphaned package {0}: {1}".format(pkg, e.strerror))
 
         # Finally, remove the directories and packages of the orphaned handlers, i.e. Any extension directory that
-        # did not complete setting up environment or the agent was unable to write a state file for it
+        # did not clean out properly on Extension Uninstall
         for handler in handlers:
             handler.remove_ext_handler()
             pkg = os.path.join(conf.get_lib_dir(), handler.get_full_name() + HANDLER_PKG_EXT)
@@ -790,7 +789,7 @@ class ExtHandlerInstance(object):
 
             separator = path.rfind('-')
             version_from_path = FlexibleVersion(path[separator + 1:])
-            state_path = os.path.join(path, 'config', HANDLER_STATE_FILE)
+            state_path = os.path.join(path, 'config', 'HandlerState')
 
             if not os.path.exists(state_path) or fileutil.read_file(state_path) == ExtHandlerState.NotInstalled \
                     or fileutil.read_file(state_path) == ExtHandlerState.FailedUpgrade:
@@ -1354,7 +1353,7 @@ class ExtHandlerInstance(object):
 
     def set_handler_state(self, handler_state):
         state_dir = self.get_conf_dir()
-        state_file = os.path.join(state_dir, HANDLER_STATE_FILE)
+        state_file = os.path.join(state_dir, "HandlerState")
         try:
             # if not os.path.exists(state_dir):
             #     fileutil.mkdir(state_dir, mode=0o700)
@@ -1365,7 +1364,7 @@ class ExtHandlerInstance(object):
 
     def get_handler_state(self):
         state_dir = self.get_conf_dir()
-        state_file = os.path.join(state_dir, HANDLER_STATE_FILE)
+        state_file = os.path.join(state_dir, "HandlerState")
         if not os.path.isfile(state_file):
             return ExtHandlerState.NotInstalled
 
