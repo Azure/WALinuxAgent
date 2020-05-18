@@ -940,8 +940,8 @@ class ExtHandlerInstance(object):
                 }
                 fileutil.write_file(status_path, json.dumps(status))
 
-                conf_dir = self.get_conf_dir()
-                fileutil.mkdir(conf_dir, mode=0o700)
+            conf_dir = self.get_conf_dir()
+            fileutil.mkdir(conf_dir, mode=0o700)
 
         except IOError as e:
             fileutil.clean_ioerror(e, paths=[self.get_base_dir(), self.pkg_file])
