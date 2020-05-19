@@ -200,20 +200,20 @@ class ExtensionsConfigRetriever(object):
         If neither changed, then process whichever we used last (to keep with the current behavior)
         """
         if fabric_changed:
-            self._set_reason("Fabric changed")
+            self._set_reason("FabricChanged")
             return GOAL_STATE_SOURCE_FABRIC
         if fast_track_changed:
-            self._set_reason("FT changed")
+            self._set_reason("FTChanged")
             return GOAL_STATE_SOURCE_FASTTRACK
         if self._get_mode() == GOAL_STATE_SOURCE_FASTTRACK:
-            self._set_reason("Last FT")
+            self._set_reason("LastFT")
             return GOAL_STATE_SOURCE_FASTTRACK
 
-        self._set_reason("Last Fabric")
+        self._set_reason("LastFabric")
         return GOAL_STATE_SOURCE_FABRIC
 
     def _set_reason(self, reason):
-        self._reason = "{0}: FT={1}, F={2}".format(reason, self._ft_changed_detail, self._fabric_changed_detail)
+        self._reason = "{0}: FastTrack={1}, Fabric={2}".format(reason, self._ft_changed_detail, self._fabric_changed_detail)
 
     def _get_fast_track_changed(self, artifacts_profile):
         if artifacts_profile is None:
