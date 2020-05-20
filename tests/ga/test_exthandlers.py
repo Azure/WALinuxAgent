@@ -136,6 +136,51 @@ class TestGoalState(AgentTestCase):
         retriever._last_seqNo = 1
         self.assertFalse(retriever._get_fast_track_changed(profile))
 
+    def test_cached_fast_track_goal_state(self):
+        # Arrange so that both FastTrack and Fabric are changed
+        test_data = WireProtocolData(DATA_FILE)
+        profile = InVMArtifactsProfile(test_data.vm_artifacts_profile)
+        wire_client = MockWireClient(test_data.ext_conf, profile)
+        retriever = ExtensionsConfigRetriever(wire_client=wire_client)
+
+        # First goal state will be Fabric
+        ext_conf = retriever.get_ext_config(incarnation=1, ext_conf_uri="blah")
+        self.assertIsNotNone(ext_conf)
+        self.assertTrue(ext_conf.changed)
+        self.assertEqual(GOAL_STATE_SOURCE_FABRIC, retriever._pending_mode)
+        self.assertEqual("1", retriever._pending_incarnation)
+        retriever.commit_processed()
+
+        # Next will be FastTrack
+        wire_client.return_artifacts_profile = None
+        ext_conf = retriever.get_ext_config(incarnation=1, ext_conf_uri="blah")
+        self.assertIsNotNone(ext_conf)
+        self.assertTrue(ext_conf.changed)
+        self.assertEqual(GOAL_STATE_SOURCE_FASTTRACK, retriever._pending_mode)
+
+    def test_fast_track_not_cached_if_not_changed(self):
+        # Arrange so that only Fabric is changed
+        test_data = WireProtocolData(DATA_FILE)
+        profile = InVMArtifactsProfile(test_data.vm_artifacts_profile)
+        wire_client = MockWireClient(test_data.ext_conf, profile)
+        retriever = ExtensionsConfigRetriever(wire_client=wire_client)
+        retriever._last_seqNo = 1
+
+        # First goal state will be Fabric
+        ext_conf = retriever.get_ext_config(incarnation=1, ext_conf_uri="blah")
+        self.assertIsNotNone(ext_conf)
+        self.assertTrue(ext_conf.changed)
+        self.assertEqual(GOAL_STATE_SOURCE_FABRIC, retriever._pending_mode)
+        self.assertEqual("1", retriever._pending_incarnation)
+        retriever.commit_processed()
+
+        # Second goal state will be fabric
+        ext_conf = retriever.get_ext_config(incarnation=1, ext_conf_uri="blah")
+        self.assertIsNotNone(ext_conf)
+        self.assertFalse(ext_conf.changed)
+        self.assertEqual(GOAL_STATE_SOURCE_FABRIC, retriever._pending_mode)
+        self.assertEqual("1", retriever._pending_incarnation)
+
     def test_decide_what_to_process(self):
         retriever = ExtensionsConfigRetriever(wire_client=None)
         self.assertEqual(GOAL_STATE_SOURCE_FABRIC, retriever._decide_what_to_process(True, False))

@@ -67,7 +67,7 @@ class ExtensionsConfigRetriever(object):
         self._last_incarnation = None
         self._last_svd_seqNo = None
         self._last_seqNo = None
-        self._last_fast_track_extensionsConfig = None
+        self._saved_artifacts_profile = None
         self._last_mode = None
         self._pending_mode = None
         self._pending_seqNo = None
@@ -92,6 +92,8 @@ class ExtensionsConfigRetriever(object):
         fast_track_changed = False
         if conf.get_extensions_fast_track_enabled():
             artifacts_profile = self._wire_client.get_artifacts_profile()
+            if artifacts_profile is None:
+                artifacts_profile = self._saved_artifacts_profile
             fast_track_changed = self._get_fast_track_changed(artifacts_profile)
 
         self._pending_mode = self._decide_what_to_process(fabric_changed, fast_track_changed)
@@ -106,15 +108,13 @@ class ExtensionsConfigRetriever(object):
             xml_text = self._wire_client.fetch_config(ext_conf_uri, self._wire_client.get_header())
             extensions_config = ExtensionsConfig(xml_text)
             changed = fabric_changed | self._is_startup
+            if fast_track_changed:
+                # If FastTrack changed too, then save the artifacts profile because the next time
+                # we retrieve it, we'll receive a 304 because the etag didn't change
+                self._saved_artifacts_profile = artifacts_profile
         else:
-            if artifacts_profile is None:
-                # If the VmArtifactsProfile didn't change, we'll receive a 304 response
-                # we therefore need to cache the last copy for subsequent iterations
-                extensions_config = self._last_fast_track_extensionsConfig
-            else:
-                extensions_config = artifacts_profile.transform_to_extensions_config()
-                changed = fast_track_changed | self._is_startup
-                self._last_fast_track_extensionsConfig = extensions_config
+            extensions_config = artifacts_profile.transform_to_extensions_config()
+            changed = fast_track_changed | self._is_startup
 
         if changed:
             if self._pending_mode == GOAL_STATE_SOURCE_FABRIC:
