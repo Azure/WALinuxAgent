@@ -287,6 +287,7 @@ class ExtHandlersHandler(object):
     def _cleanup_outdated_handlers(self):
         handlers = []
         pkgs = []
+        ext_handlers_in_gs = [ext_handler.name for ext_handler in self.ext_handlers.extHandlers]
 
         # Build a collection of uninstalled handlers and orphaned packages
         # Note:
@@ -304,7 +305,7 @@ class ExtHandlersHandler(object):
                 try:
                     separator = item.rfind('-')
                     handler_name = item[0:separator]
-                    if any([handler_name == ext_handler.name for ext_handler in self.ext_handlers.extHandlers]):
+                    if handler_name in ext_handlers_in_gs:
                         # Handler in GS, keeping it
                         continue
 

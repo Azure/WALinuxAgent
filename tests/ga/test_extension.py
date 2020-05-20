@@ -107,16 +107,15 @@ class TestExtensionCleanup(AgentTestCase):
         return re.match(HANDLER_NAME_PATTERN, os.path.basename(path))
 
 
-    def _assert_ext_handler_status(self, report_vm_status, expected_status, version, expected_ext_hanlder_count=0):
+    def _assert_ext_handler_status(self, report_vm_status, expected_status, version, expected_ext_handler_count=0):
         self.assertTrue(report_vm_status.called)
         args, kw = report_vm_status.call_args
         vm_status = args[0]
-        self.assertEqual(expected_ext_hanlder_count, len(vm_status.vmAgent.extensionHandlers))
+        self.assertEqual(expected_ext_handler_count, len(vm_status.vmAgent.extensionHandlers))
         for ext_handler in vm_status.vmAgent.extensionHandlers:
 
             self.assertEquals(expected_status, ext_handler.status)
             self.assertEquals(version, ext_handler.version)
-            # self.assertEquals(expected_handler_name, handler_status.name)
         return
 
     @contextlib.contextmanager
@@ -134,7 +133,7 @@ class TestExtensionCleanup(AgentTestCase):
                              "No of extensions in config doesn't match the packages")
             self.assertEqual(no_of_exts, TestExtensionCleanup._count_extension_directories(),
                              "No of extension directories doesnt match the no of extensions in GS")
-            self._assert_ext_handler_status(protocol.report_vm_status, "Ready", expected_ext_hanlder_count=no_of_exts,
+            self._assert_ext_handler_status(protocol.report_vm_status, "Ready", expected_ext_handler_count=no_of_exts,
                                             version="1.0.0")
 
     def test_cleanup_removes_uninstalled_extensions(self):
@@ -142,7 +141,7 @@ class TestExtensionCleanup(AgentTestCase):
             exthandlers_handler.run()
             self.assertEqual(no_of_exts, TestExtensionCleanup._count_packages(),
                              "No of extensions in config doesn't match the packages")
-            self._assert_ext_handler_status(protocol.report_vm_status, "Ready", expected_ext_hanlder_count=no_of_exts,
+            self._assert_ext_handler_status(protocol.report_vm_status, "Ready", expected_ext_handler_count=no_of_exts,
                                             version="1.0.0")
 
             # Update incarnation and extension config
@@ -153,7 +152,7 @@ class TestExtensionCleanup(AgentTestCase):
             exthandlers_handler.run()
 
             self.assertEqual(0, TestExtensionCleanup._count_packages(), "All packages must be deleted")
-            self._assert_ext_handler_status(protocol.report_vm_status, "Ready", expected_ext_hanlder_count=0,
+            self._assert_ext_handler_status(protocol.report_vm_status, "Ready", expected_ext_handler_count=0,
                                             version="1.0.0")
             self.assertEqual(0, TestExtensionCleanup._count_extension_directories(), "All extension directories should be removed")
 
@@ -174,7 +173,7 @@ class TestExtensionCleanup(AgentTestCase):
             exthandlers_handler.run()
             self.assertEqual(no_of_exts, TestExtensionCleanup._count_extension_directories(),
                              "There should be no extension directories in FS")
-            self._assert_ext_handler_status(protocol.report_vm_status, "Ready", expected_ext_hanlder_count=no_of_exts,
+            self._assert_ext_handler_status(protocol.report_vm_status, "Ready", expected_ext_handler_count=no_of_exts,
                                             version="1.0.0")
 
     def test_cleanup_leaves_failed_extensions(self):
@@ -187,7 +186,7 @@ class TestExtensionCleanup(AgentTestCase):
             with patch("azurelinuxagent.common.cgroupapi.subprocess.Popen", mock_fail_popen):
                 exthandlers_handler.run()
                 self._assert_ext_handler_status(protocol.report_vm_status, "NotReady",
-                                                expected_ext_hanlder_count=no_of_exts,
+                                                expected_ext_handler_count=no_of_exts,
                                                 version="1.0.0")
                 self.assertEqual(no_of_exts, TestExtensionCleanup._count_extension_directories(),
                                  "There should still be 1 extension directory in FS")
@@ -202,7 +201,7 @@ class TestExtensionCleanup(AgentTestCase):
             self.assertEqual(0, TestExtensionCleanup._count_packages(), "All packages must be deleted")
             self.assertEqual(0, TestExtensionCleanup._count_extension_directories(),
                              "All extension directories should be removed")
-            self._assert_ext_handler_status(protocol.report_vm_status, "Ready", expected_ext_hanlder_count=0,
+            self._assert_ext_handler_status(protocol.report_vm_status, "Ready", expected_ext_handler_count=0,
                                             version="1.0.0")
 
 
