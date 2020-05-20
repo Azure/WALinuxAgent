@@ -48,7 +48,6 @@ from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.osutil import get_osutil
 from azurelinuxagent.common.protocol.util import get_protocol_util
 from azurelinuxagent.common.protocol.hostplugin import HostPluginProtocol
-from azurelinuxagent.common.protocol.wire import WireProtocol
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
 from azurelinuxagent.common.version import AGENT_NAME, AGENT_VERSION, AGENT_DIR_PATTERN, CURRENT_AGENT,\
     CURRENT_VERSION, DISTRO_NAME, DISTRO_VERSION, is_current_agent_installed, PY_VERSION_MAJOR, PY_VERSION_MINOR, \
@@ -67,9 +66,9 @@ CHILD_POLL_INTERVAL = 60
 
 MAX_FAILURE = 3 # Max failure allowed for agent before blacklisted
 
-GOAL_STATE_INTERVAL = 3
 GOAL_STATE_INTERVAL_DISABLED = 5 * 60
 
+ORPHAN_POLL_INTERVAL = 3
 ORPHAN_WAIT_INTERVAL = 15 * 60
 
 AGENT_SENTINEL_FILE = "current_version"
@@ -290,7 +289,7 @@ class UpdateHandler(object):
             self._ensure_readonly_files()
             self._ensure_cgroups_initialized()
 
-            goal_state_interval = GOAL_STATE_INTERVAL if conf.get_extensions_enabled() else GOAL_STATE_INTERVAL_DISABLED
+            goal_state_interval = conf.get_goal_state_period() if conf.get_extensions_enabled() else GOAL_STATE_INTERVAL_DISABLED
 
             while self.running:
                 #
@@ -430,7 +429,7 @@ class UpdateHandler(object):
                 wait_interval = orphan_wait_interval
 
                 while self.osutil.check_pid_alive(pid):
-                    wait_interval -= GOAL_STATE_INTERVAL
+                    wait_interval -= ORPHAN_POLL_INTERVAL
                     if wait_interval <= 0:
                         logger.warn(
                             u"{0} forcibly terminated orphan process {1}",
@@ -443,7 +442,7 @@ class UpdateHandler(object):
                         u"{0} waiting for orphan process {1} to terminate",
                         CURRENT_AGENT,
                         pid)
-                    time.sleep(GOAL_STATE_INTERVAL)
+                    time.sleep(ORPHAN_POLL_INTERVAL)
 
                 os.remove(pid_file)
 

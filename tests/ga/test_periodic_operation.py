@@ -21,6 +21,28 @@ from tests.tools import AgentTestCase, patch, PropertyMock
 
 
 class TestPeriodicOperation(AgentTestCase):
+    def test_it_should_take_a_timedelta_as_period(self):
+        def operation():
+            operation.run_time = datetime.datetime.utcnow()
+        operation.run_time = None
+
+        pop = PeriodicOperation("test_operation", operation, period=datetime.timedelta(hours=1))
+        pop.run()
+
+        expected = operation.run_time + datetime.timedelta(hours=1)
+        self.assertAlmostEqual((pop.next_run_time() - expected).total_seconds(), 0, 0, "The next run time is not correct")
+
+    def test_it_should_take_a_number_of_seconds_as_period(self):
+        def operation():
+            operation.run_time = datetime.datetime.utcnow()
+        operation.run_time = None
+
+        pop = PeriodicOperation("test_operation", operation, period=3600)
+        pop.run()
+
+        expected = operation.run_time + datetime.timedelta(hours=1)
+        self.assertAlmostEqual((pop.next_run_time() - expected).total_seconds(), 0, 0, "The next run time is not correct")
+
     def test_it_should_be_invoked_when_run_is_called_first_time(self):
         def operation():
             operation.invoked = True
@@ -76,7 +98,7 @@ class TestPeriodicOperation(AgentTestCase):
 
         self.assertEqual(self._get_number_of_warnings(warn_patcher), 1, "The error in the operation was should have been reported exactly once")
 
-    def test_it_should_not_multiple_warnings_when_the_period_has_elapsed(self):
+    def test_it_should_not_log_multiple_warnings_when_the_period_has_elapsed(self):
         with patch("azurelinuxagent.common.logger.warn") as warn_patcher:
             with patch("azurelinuxagent.ga.periodic_operation.PeriodicOperation._LOG_WARNING_PERIOD", new_callable=PropertyMock, return_value=datetime.timedelta(milliseconds=1)):
                 pop = PeriodicOperation("test_operation", self._operation_with_failure, period=datetime.timedelta(milliseconds=1))
@@ -98,3 +120,24 @@ class TestPeriodicOperation(AgentTestCase):
 
             self.assertEqual(self._get_number_of_warnings(warn_patcher, "WARNING 0"), 1, "The first error should have been reported exactly 1 time")
             self.assertEqual(self._get_number_of_warnings(warn_patcher, "WARNING 1"), 1, "The second error should have been reported exactly 1 time")
+
+    def test_sleep_until_next_operation_should_wait_for_the_closest_operation(self):
+        operations = [
+            PeriodicOperation("one", lambda: None, period=datetime.timedelta(seconds=60)),
+            PeriodicOperation("one", lambda: None, period=datetime.timedelta(hours=1)),
+            PeriodicOperation("one", lambda: None, period=datetime.timedelta(seconds=10)),  # closest operation
+            PeriodicOperation("one", lambda: None, period=datetime.timedelta(minutes=11)),
+            PeriodicOperation("one", lambda: None, period=datetime.timedelta(days=1))
+        ]
+        for op in operations:
+            op.run()
+
+        def mock_sleep(seconds):
+            mock_sleep.seconds = seconds
+        mock_sleep.seconds = 0
+
+        with patch("azurelinuxagent.ga.periodic_operation.time.sleep", side_effect=mock_sleep):
+            PeriodicOperation.sleep_until_next_operation(operations)
+            self.assertAlmostEqual(mock_sleep.seconds, 10, 0, "did not sleep for the expected time")
+
+

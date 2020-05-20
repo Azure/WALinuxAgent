@@ -74,13 +74,15 @@ class MonitorHandler(object):
         self.imds_client = None
 
         self.event_thread = None
-        self._reset_loggers_op = PeriodicOperation("reset_loggers", self.reset_loggers, self.RESET_LOGGERS_PERIOD)
-        self._collect_and_send_events_op = PeriodicOperation("collect_and_send_events", self.collect_and_send_events, self.EVENT_COLLECTION_PERIOD)
-        self._send_telemetry_heartbeat_op = PeriodicOperation("send_telemetry_heartbeat", self.send_telemetry_heartbeat, self.TELEMETRY_HEARTBEAT_PERIOD)
-        self._poll_telemetry_metrics_op = PeriodicOperation("poll_telemetry_metrics usage", self.poll_telemetry_metrics, self.CGROUP_TELEMETRY_POLLING_PERIOD)
-        self._send_host_plugin_heartbeat_op = PeriodicOperation("send_host_plugin_heartbeat", self.send_host_plugin_heartbeat, self.HOST_PLUGIN_HEARTBEAT_PERIOD)
-        self._send_imds_heartbeat_op = PeriodicOperation("send_imds_heartbeat", self.send_imds_heartbeat, self.IMDS_HEARTBEAT_PERIOD)
-        self._log_altered_network_configuration_op = PeriodicOperation("log_altered_network_configuration", self.log_altered_network_configuration, self.LOG_NETWORK_CONFIGURATION_PERIOD)
+        self._periodic_operations = [
+            PeriodicOperation("reset_loggers", self.reset_loggers, self.RESET_LOGGERS_PERIOD),
+            PeriodicOperation("collect_and_send_events", self.collect_and_send_events, self.EVENT_COLLECTION_PERIOD),
+            PeriodicOperation("send_telemetry_heartbeat", self.send_telemetry_heartbeat, self.TELEMETRY_HEARTBEAT_PERIOD),
+            PeriodicOperation("poll_telemetry_metrics usage", self.poll_telemetry_metrics, self.CGROUP_TELEMETRY_POLLING_PERIOD),
+            PeriodicOperation("send_host_plugin_heartbeat", self.send_host_plugin_heartbeat, self.HOST_PLUGIN_HEARTBEAT_PERIOD),
+            PeriodicOperation("send_imds_heartbeat", self.send_imds_heartbeat, self.IMDS_HEARTBEAT_PERIOD),
+            PeriodicOperation("log_altered_network_configuration", self.log_altered_network_configuration, self.LOG_NETWORK_CONFIGURATION_PERIOD),
+        ]
         self.protocol = None
         self.protocol_util = None
         self.health_service = None
@@ -142,24 +144,17 @@ class MonitorHandler(object):
             self.init_protocols()
             self.init_imds_client()
 
-        min_delta = min(MonitorHandler.TELEMETRY_HEARTBEAT_PERIOD,
-                        MonitorHandler.CGROUP_TELEMETRY_POLLING_PERIOD,
-                        MonitorHandler.EVENT_COLLECTION_PERIOD,
-                        MonitorHandler.HOST_PLUGIN_HEARTBEAT_PERIOD,
-                        MonitorHandler.IMDS_HEARTBEAT_PERIOD).seconds
         while not self.stopped():
             try:
                 self.protocol.update_host_plugin_from_goal_state()
-                self._send_telemetry_heartbeat_op.run()
-                self._poll_telemetry_metrics_op.run()
-                self._collect_and_send_events_op.run()
-                self._send_host_plugin_heartbeat_op.run()
-                self._send_imds_heartbeat_op.run()
-                self._log_altered_network_configuration_op.run()
-                self._reset_loggers_op.run()
+
+                for op in self._periodic_operations:
+                    op.run()
+
             except Exception as e:
                 logger.warn("An error occurred in the monitor thread main loop; will skip the current iteration.\n{0}", ustr(e))
-            time.sleep(min_delta)
+
+            PeriodicOperation.sleep_until_next_operation(self._periodic_operations)
 
     def reset_loggers(self):
         """

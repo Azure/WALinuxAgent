@@ -138,7 +138,14 @@ __STRING_OPTIONS__ = {
 
 
 __INTEGER_OPTIONS__ = {
+    "Extensions.GoalStatePeriod": 6,
+    "Extensions.GoalStateHistoryCleanupPeriod": 86400,
+    "OS.EnableFirewallPeriod": 30,
+    "OS.RemovePersistentNetRulesPeriod": 30,
+    "OS.RootDeviceScsiTimeoutPeriod": 30,
+    "OS.MonitorDhcpClientRestartPeriod": 30,
     "OS.SshClientAliveInterval": 180,
+    "Provisioning.MonitorHostNamePeriod": 30,
     "Provisioning.PasswordCryptSaltLength": 10,
     "HttpProxy.Port": None,
     "ResourceDisk.SwapSizeMB": 0,
@@ -162,6 +169,18 @@ def get_configuration(conf=__conf__):
 
 def enable_firewall(conf=__conf__):
     return conf.get_switch("OS.EnableFirewall", False)
+
+
+def get_enable_firewall_period(conf=__conf__):
+    return conf.get_int("OS.EnableFirewallPeriod", 30)
+
+
+def get_remove_persistent_net_rules_period(conf=__conf__):
+    return conf.get_int("OS.RemovePersistentNetRulesPeriod", 30)
+
+
+def get_monitor_dhcp_client_restart_period(conf=__conf__):
+    return conf.get_int("OS.MonitorDhcpClientRestartPeriod", 30)
 
 
 def enable_rdma(conf=__conf__):
@@ -256,6 +275,10 @@ def get_root_device_scsi_timeout(conf=__conf__):
     return conf.get("OS.RootDeviceScsiTimeout", None)
 
 
+def get_root_device_scsi_timeout_period(conf=__conf__):
+    return conf.get_int("OS.RootDeviceScsiTimeoutPeriod", 30)
+
+
 def get_ssh_host_keypair_type(conf=__conf__):
     keypair_type = conf.get("Provisioning.SshHostKeyPairType", "rsa")
     if keypair_type == "auto":
@@ -273,6 +296,14 @@ def get_ssh_host_keypair_mode(conf=__conf__):
 
 def get_extensions_enabled(conf=__conf__):
     return conf.get_switch("Extensions.Enabled", True)
+
+
+def get_goal_state_period(conf=__conf__):
+    return conf.get_int("Extensions.GoalStatePeriod", 6)
+
+
+def get_goal_state_history_cleanup_period(conf=__conf__):
+    return conf.get_int("Extensions.GoalStateHistoryCleanupPeriod", 86400)
 
 
 def get_allow_reset_sys_user(conf=__conf__):
@@ -321,6 +352,8 @@ def get_password_crypt_salt_len(conf=__conf__):
 def get_monitor_hostname(conf=__conf__):
     return conf.get_switch("Provisioning.MonitorHostName", False)
 
+def get_monitor_hostname_period(conf=__conf__):
+    return conf.get_int("Provisioning.MonitorHostNamePeriod", 30)
 
 def get_httpproxy_host(conf=__conf__):
     return conf.get("HttpProxy.Host", None)
