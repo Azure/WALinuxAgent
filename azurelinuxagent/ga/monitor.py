@@ -139,22 +139,24 @@ class MonitorHandler(object):
             self.protocol.report_event(event_list)
 
     def daemon(self, init_data=False):
+        try:
+            if init_data:
+                self.init_protocols()
+                self.init_imds_client()
 
-        if init_data:
-            self.init_protocols()
-            self.init_imds_client()
+            while not self.stopped():
+                try:
+                    self.protocol.update_host_plugin_from_goal_state()
 
-        while not self.stopped():
-            try:
-                self.protocol.update_host_plugin_from_goal_state()
+                    for op in self._periodic_operations:
+                        op.run()
 
-                for op in self._periodic_operations:
-                    op.run()
-
-            except Exception as e:
-                logger.warn("An error occurred in the monitor thread main loop; will skip the current iteration.\n{0}", ustr(e))
-
-            PeriodicOperation.sleep_until_next_operation(self._periodic_operations)
+                except Exception as e:
+                    logger.error("An error occurred in the monitor thread main loop; will skip the current iteration.\n{0}", ustr(e))
+                finally:
+                    PeriodicOperation.sleep_until_next_operation(self._periodic_operations)
+        except Exception as e:
+            logger.error("An error occurred in the monitor thread; will exit the thread.\n{0}", ustr(e))
 
     def reset_loggers(self):
         """

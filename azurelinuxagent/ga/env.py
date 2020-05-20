@@ -101,22 +101,22 @@ class EnvHandler(object):
         self.server_thread.start()
 
     def monitor(self):
-        """
-        Monitor firewall rules
-        Monitor dhcp client pid and hostname.
-        If dhcp client process re-start has occurred, reset routes.
-        Purge unnecessary files from disk cache.
-        """
-
-        # The initialization of ProtocolUtil for the Environment thread should be done within the thread itself rather
-        # than initializing it in the ExtHandler thread. This is done to avoid any concurrency issues as each
-        # thread would now have its own ProtocolUtil object as per the SingletonPerThread model.
-        self.protocol_util = get_protocol_util()
-        self._protocol = self.protocol_util.get_protocol()
-        while not self.stopped:
-            for op in self._periodic_operations:
-                op.run()
-            PeriodicOperation.sleep_until_next_operation(self._periodic_operations)
+        try:
+            # The initialization of ProtocolUtil for the Environment thread should be done within the thread itself rather
+            # than initializing it in the ExtHandler thread. This is done to avoid any concurrency issues as each
+            # thread would now have its own ProtocolUtil object as per the SingletonPerThread model.
+            self.protocol_util = get_protocol_util()
+            self._protocol = self.protocol_util.get_protocol()
+            while not self.stopped:
+                try:
+                    for op in self._periodic_operations:
+                        op.run()
+                except Exception as e:
+                    logger.error("An error occurred in the environment thread main loop; will skip the current iteration.\n{0}", ustr(e))
+                finally:
+                    PeriodicOperation.sleep_until_next_operation(self._periodic_operations)
+        except Exception as e:
+            logger.error("An error occurred in the environment thread; will exit the thread.\n{0}", ustr(e))
 
     def _remove_persistent_net_rules_period(self):
         self.osutil.remove_rules_files()
