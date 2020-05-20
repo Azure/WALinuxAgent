@@ -26,22 +26,26 @@ class TestPeriodicOperation(AgentTestCase):
             operation.run_time = datetime.datetime.utcnow()
         operation.run_time = None
 
-        pop = PeriodicOperation("test_operation", operation, period=datetime.timedelta(hours=1))
-        pop.run()
+        op = PeriodicOperation("test_operation", operation, period=datetime.timedelta(hours=1))
+        op.run()
 
         expected = operation.run_time + datetime.timedelta(hours=1)
-        self.assertAlmostEqual((pop.next_run_time() - expected).total_seconds(), 0, 0, "The next run time is not correct")
+        difference = op.next_run_time() - expected
+        self.assertTrue(difference < datetime.timedelta(seconds=1),
+            "The next run time exceeds the expected value by more than 1 second: {0} vs {1}".format(op.next_run_time(), expected))
 
     def test_it_should_take_a_number_of_seconds_as_period(self):
         def operation():
             operation.run_time = datetime.datetime.utcnow()
         operation.run_time = None
 
-        pop = PeriodicOperation("test_operation", operation, period=3600)
-        pop.run()
+        op = PeriodicOperation("test_operation", operation, period=3600)
+        op.run()
 
         expected = operation.run_time + datetime.timedelta(hours=1)
-        self.assertAlmostEqual((pop.next_run_time() - expected).total_seconds(), 0, 0, "The next run time is not correct")
+        difference = op.next_run_time() - expected
+        self.assertTrue(difference < datetime.timedelta(seconds=1),
+            "The next run time exceeds the expected value by more than 1 second: {0} vs {1}".format(op.next_run_time(), expected))
 
     def test_it_should_be_invoked_when_run_is_called_first_time(self):
         def operation():

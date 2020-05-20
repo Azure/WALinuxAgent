@@ -66,7 +66,10 @@ class PeriodicOperation(object):
         """
         next_operation_time = min([op.next_run_time() for op in operations])
 
-        sleep_time = (next_operation_time - datetime.datetime.utcnow()).total_seconds()
-        if sleep_time > 0:
-            time.sleep(sleep_time)
+        sleep_timedelta = next_operation_time - datetime.datetime.utcnow()
+        # timedelta.total_seconds() is not available on Python 2.6, do the computation manually
+        sleep_seconds = ((sleep_timedelta.days * 24 * 3600 + sleep_timedelta.seconds) * 10.0 ** 6 + sleep_timedelta.microseconds) / 10.0 ** 6
+
+        if sleep_seconds > 0:
+            time.sleep(sleep_seconds)
 
