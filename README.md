@@ -479,6 +479,14 @@ OpenSSL commands. This signals OpenSSL to use any installed FIPS-compliant libra
 Note that the agent itself has no FIPS-specific code. _If no FIPS-compliant certificates are
 installed, then enabling this option will cause all OpenSSL commands to fail._
 
+#### __OS.MonitorDhcpClientRestartPeriod__
+
+_Type: Integer_
+_Default: 30_
+
+The agent monitor restarts of the DHCP client and restores network rules when it happens. This
+setting determines how often (in seconds) to monitor for restarts.
+
 #### __OS.RootDeviceScsiTimeout__
 
 _Type: Integer_  
