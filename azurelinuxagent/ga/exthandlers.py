@@ -401,13 +401,13 @@ class ExtHandlersHandler(object):
         ext_handler_i = ExtHandlerInstance(ext_handler, self.protocol)
 
         try:
-            state = ext_handler.properties.state
-
             if self.last_etag == etag:
                 if self.log_etag:
                     ext_handler_i.logger.verbose("Incarnation {0} did not change, not processing GoalState", etag)
                     self.log_etag = False
                 return
+
+            state = ext_handler.properties.state
 
             if ext_handler_i.decide_version(target_state=state) is None:
                 version = ext_handler_i.ext_handler.properties.version

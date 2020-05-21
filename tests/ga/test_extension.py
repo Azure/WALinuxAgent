@@ -22,6 +22,7 @@ import subprocess
 import tempfile
 import time
 import unittest
+import uuid
 import zipfile
 
 import datetime
@@ -953,25 +954,26 @@ class TestExtension(ExtensionTestCase):
     @patch('azurelinuxagent.common.event.add_event')
     def test_ext_handler_download_errors_should_be_reported_only_on_new_goal_state(self, mock_add_event, *args):
 
-        def _assert_mock_add_event_call(expected_call_count):
-            self.assertEquals(expected_call_count, mock_add_event.call_count, "Call count do not match")
-            args, kw = mock_add_event.call_args
-            self.assertEquals(False, kw['is_success'], "The event should have failed")
-            self.assertTrue("Failed to download artifacts" in kw['message'], "Incorrect failure, it should have failed to download")
-            self.assertTrue("ExtensionDownloadError" in kw['message'], "Incorrect error, it should be a DownloadError")
-            self.assertEquals("Download", kw['op'], "Incorrect Operation, it should be a download error")
+        def _assert_mock_add_event_call(expected_download_failed_event_count, err_msg_guid):
+            event_occurrences = [kw for _, kw in mock_add_event.call_args_list if
+                          "Failed to download artifacts: [ExtensionDownloadError] {0}".format(err_msg_guid) in kw['message']]
+            self.assertEquals(expected_download_failed_event_count, len(event_occurrences), "Call count do not match")
+            self.assertFalse(any([kw['is_success'] for kw in event_occurrences]), "The events should have failed")
+            self.assertEqual(expected_download_failed_event_count, len([kw['op'] for kw in event_occurrences]),
+                             "Incorrect Operation, all events should be a download errors")
 
         test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE)
         exthandlers_handler, protocol = self._create_mock(test_data, *args)
-        protocol.get_ext_handler_pkgs = Mock(side_effect=ExtensionDownloadError)
+        unique_error_message_guid = str(uuid.uuid4())
+        protocol.get_ext_handler_pkgs = Mock(side_effect=ExtensionDownloadError(unique_error_message_guid))
 
         exthandlers_handler.run()
-        _assert_mock_add_event_call(expected_call_count=1)
+        _assert_mock_add_event_call(expected_download_failed_event_count=1, err_msg_guid=unique_error_message_guid)
         self._assert_handler_status(protocol.report_vm_status, "NotReady", 0, "1.0.0")
 
         # Re-run exthandler.run without updating the GS and ensure we dont report error
         exthandlers_handler.run()
-        _assert_mock_add_event_call(expected_call_count=1)
+        _assert_mock_add_event_call(expected_download_failed_event_count=1, err_msg_guid=unique_error_message_guid)
         self._assert_handler_status(protocol.report_vm_status, "NotReady", 0, "1.0.0")
 
         # Change incarnation and then re-check we report error
@@ -979,7 +981,7 @@ class TestExtension(ExtensionTestCase):
         protocol.update_goal_state()
 
         exthandlers_handler.run()
-        _assert_mock_add_event_call(expected_call_count=2)
+        _assert_mock_add_event_call(expected_download_failed_event_count=2, err_msg_guid=unique_error_message_guid)
         self._assert_handler_status(protocol.report_vm_status, "NotReady", 0, "1.0.0")
 
     @patch('azurelinuxagent.ga.exthandlers.fileutil')

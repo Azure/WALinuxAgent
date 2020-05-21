@@ -83,7 +83,6 @@ class WALAEventOperation:
     ExtensionProcessing = "ExtensionProcessing"
     FetchGoalState = "FetchGoalState"
     Firewall = "Firewall"
-    GetArtifactExtended = "GetArtifactExtended"
     HealthCheck = "HealthCheck"
     HealthObservation = "HealthObservation"
     HeartBeat = "HeartBeat"
