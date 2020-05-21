@@ -972,6 +972,7 @@ class TestExtension(ExtensionTestCase):
         # Re-run exthandler.run without updating the GS and ensure we dont report error
         exthandlers_handler.run()
         _assert_mock_add_event_call(expected_call_count=1)
+        self._assert_handler_status(protocol.report_vm_status, "NotReady", 0, "1.0.0")
 
         # Change incarnation and then re-check we report error
         test_data.set_incarnation(2)
