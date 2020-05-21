@@ -843,33 +843,14 @@ class ExtHandlerInstance(object):
 
     def _unzip_extension_package(self, source_file, target_directory):
         self.logger.info("Unzipping extension package: {0}", source_file)
-        # Unzip the extension first in the temporary directory and then copy over to the target_directory
-        temp_dir = tempfile.mkdtemp(prefix=self.get_full_name())
         try:
-            zipfile.ZipFile(source_file).extractall(temp_dir)
+            zipfile.ZipFile(source_file).extractall(target_directory)
         except Exception as exception:
-            err_msg = "Error while unzipping extension package: {0}".format(ustr(exception))
-            self.logger.warn(err_msg)
-            self.report_event(message=err_msg, is_success=False, log_event=False)
+            logger.info("Error while unzipping extension package: {0}", ustr(exception))
             os.remove(source_file)
-            if os.path.exists(temp_dir):
-                shutil.rmtree(temp_dir)
+            if os.path.exists(target_directory):
+                shutil.rmtree(target_directory)
             return False
-
-        try:
-            copy_tree(temp_dir, target_directory)
-        # Blanket exception catch to capture any errors during copying the extension files
-        except Exception as e:
-            # Incase there is an error while copying, we want to clean the directory to avoid inconsistent state
-            fileutil.clean_ioerror(e, paths=[target_directory])
-            err_msg = "Failed to copy files from temp directory to extension directory: {0}".format(ustr(e))
-            self.logger.warn(err_msg)
-            self.report_event(message=err_msg, is_success=False, log_event=False)
-            return False
-        finally:
-            if os.path.exists(temp_dir):
-                shutil.rmtree(temp_dir)
-
         return True
 
     def download(self):

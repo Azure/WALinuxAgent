@@ -160,8 +160,6 @@ class DownloadExtensionTestCase(AgentTestCase):
 
         mock_download_ext_handler_pkg.assert_called_once()
         self._assert_download_and_expand_succeeded()
-        self.assertTrue(os.path.exists(os.path.join(self.ext_handler_instance.get_conf_dir(), "HandlerState")),
-                        "Ensure that the HandlerState file exists on disk")
         self.assertEqual(self.ext_handler_instance.get_handler_state(), ExtHandlerState.NotInstalled,
                          "Ensure that the state is maintained for extension HandlerState")
 
@@ -182,34 +180,6 @@ class DownloadExtensionTestCase(AgentTestCase):
                         "The bad zip extension package should not be downloaded to the expected location")
         self.assertFalse(os.path.exists(self._get_extension_command_file()),
                         "The extension package should not expanded be to the expected location due to bad zip")
-        self.assertTrue(os.path.exists(os.path.join(self.ext_handler_instance.get_conf_dir(), "HandlerState")),
-                        "Ensure that the HandlerState file exists on disk")
-        self.assertEqual(self.ext_handler_instance.get_handler_state(), ExtHandlerState.NotInstalled,
-                         "Ensure that the state is maintained for extension HandlerState")
-
-    @patch('time.sleep', side_effect=lambda _: mock_sleep(0.001))
-    def test_it_should_maintain_extension_handler_state_for_good_zip_with_unknown_system_copy_issues(self, _):
-        def download_ext_handler_pkg(_uri, destination):
-            DownloadExtensionTestCase._create_zip_file(destination)
-            return True
-
-        def error_copy_tree():
-            raise Exception("Unknown exception when copying over files from temp to ExtensionDirectory")
-
-        self.ext_handler_instance.set_handler_state(ExtHandlerState.NotInstalled)
-
-        with patch("azurelinuxagent.common.protocol.wire.WireProtocol.download_ext_handler_pkg",
-                   side_effect=download_ext_handler_pkg):
-            with patch("azurelinuxagent.ga.exthandlers.copy_tree", side_effect=error_copy_tree):
-                with self.assertRaises(ExtensionDownloadError):
-                    self.ext_handler_instance.download()
-
-        self.assertTrue(os.path.exists(self._get_extension_package_file()),
-                        "The extension package should still be present as it was a good zip")
-        self.assertFalse(os.path.exists(self._get_extension_command_file()),
-                        "The extension package should be deleted as an unknown exception was caught")
-        self.assertTrue(os.path.exists(os.path.join(self.ext_handler_instance.get_conf_dir(), "HandlerState")),
-                        "Ensure that the HandlerState file exists on disk")
         self.assertEqual(self.ext_handler_instance.get_handler_state(), ExtHandlerState.NotInstalled,
                          "Ensure that the state is maintained for extension HandlerState")
 
