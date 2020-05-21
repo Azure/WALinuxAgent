@@ -31,7 +31,6 @@ import tempfile
 import time
 import traceback
 import zipfile
-from distutils.dir_util import copy_tree
 
 import azurelinuxagent.common.conf as conf
 import azurelinuxagent.common.logger as logger
