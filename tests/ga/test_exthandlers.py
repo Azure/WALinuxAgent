@@ -181,6 +181,29 @@ class TestGoalState(AgentTestCase):
         self.assertEqual(GOAL_STATE_SOURCE_FABRIC, retriever._pending_mode)
         self.assertEqual("1", retriever._pending_incarnation)
 
+    def test_artifacts_profile_not_changed_after_fast_track(self):
+        # First goal state is FastTrack
+        test_data = WireProtocolData(DATA_FILE)
+        profile = InVMArtifactsProfile(test_data.vm_artifacts_profile)
+        wire_client = MockWireClient(test_data.ext_conf, profile)
+        retriever = ExtensionsConfigRetriever(wire_client=wire_client)
+        retriever._last_seqNo = 0
+        retriever._last_incarnation = 1
+
+        # Process the FastTrack goal state
+        ext_conf = retriever.get_ext_config(incarnation=1, ext_conf_uri="blah")
+        self.assertIsNotNone(ext_conf)
+        self.assertTrue(ext_conf.changed)
+        self.assertEqual(GOAL_STATE_SOURCE_FASTTRACK, retriever._pending_mode)
+        retriever.commit_processed()
+
+        # Now process another goal state, which will be FastTrack - not changed
+        wire_client.return_artifacts_profile = None
+        ext_conf = retriever.get_ext_config(incarnation=1, ext_conf_uri="blah")
+        self.assertIsNotNone(ext_conf)
+        self.assertFalse(ext_conf.changed)
+        self.assertEqual(GOAL_STATE_SOURCE_FASTTRACK, retriever._pending_mode)
+
     def test_decide_what_to_process(self):
         retriever = ExtensionsConfigRetriever(wire_client=None)
         self.assertEqual(GOAL_STATE_SOURCE_FABRIC, retriever._decide_what_to_process(True, False))

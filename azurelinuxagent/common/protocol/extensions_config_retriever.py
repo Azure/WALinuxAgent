@@ -115,6 +115,7 @@ class ExtensionsConfigRetriever(object):
         else:
             extensions_config = artifacts_profile.transform_to_extensions_config()
             changed = fast_track_changed | self._is_startup
+            self._saved_artifacts_profile = artifacts_profile
 
         if changed:
             if self._pending_mode == GOAL_STATE_SOURCE_FABRIC:
