@@ -266,6 +266,7 @@ class ExtHandlersHandler(object):
     def _cleanup_outdated_handlers(self):
         handlers = []
         pkgs = []
+        ext_handlers_in_gs = [ext_handler.name for ext_handler in self.ext_handlers.extHandlers]
 
         # Build a collection of uninstalled handlers and orphaned packages
         # Note:
@@ -281,19 +282,19 @@ class ExtHandlersHandler(object):
                 if re.match(HANDLER_NAME_PATTERN, item) is None:
                     continue
                 try:
-                    eh = ExtHandler()
-
                     separator = item.rfind('-')
+                    handler_name = item[0:separator]
+                    if handler_name in ext_handlers_in_gs:
+                        # Handler in GS, keeping it
+                        continue
 
-                    eh.name = item[0:separator]
+                    eh = ExtHandler(name=handler_name)
                     eh.properties.version = str(FlexibleVersion(item[separator + 1:]))
 
-                    handler = ExtHandlerInstance(eh, self.protocol)
+                    # Since this handler name doesn't exist in the GS, marking it for deletion
+                    handlers.append(ExtHandlerInstance(eh, self.protocol))
                 except Exception:
                     continue
-                if handler.get_handler_state() != ExtHandlerState.NotInstalled:
-                    continue
-                handlers.append(handler)
 
             elif os.path.isfile(path) and \
                     not os.path.isdir(path[0:-len(HANDLER_PKG_EXT)]):
@@ -309,8 +310,8 @@ class ExtHandlersHandler(object):
             except OSError as e:
                 logger.warn("Failed to remove orphaned package {0}: {1}".format(pkg, e.strerror))
 
-        # Finally, remove the directories and packages of the
-        # uninstalled handlers
+        # Finally, remove the directories and packages of the orphaned handlers, i.e. Any extension directory that
+        # is still in the FileSystem but not in the GoalState
         for handler in handlers:
             handler.remove_ext_handler()
             pkg = os.path.join(conf.get_lib_dir(), handler.get_full_name() + HANDLER_PKG_EXT)
@@ -898,6 +899,9 @@ class ExtHandlerInstance(object):
             status_dir = self.get_status_dir()
             fileutil.mkdir(status_dir, mode=0o700)
 
+            conf_dir = self.get_conf_dir()
+            fileutil.mkdir(conf_dir, mode=0o700)
+
             seq_no, status_path = self.get_status_file_path()
             if status_path is not None:
                 now = datetime.datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
@@ -912,9 +916,6 @@ class ExtHandlerInstance(object):
                     }
                 }
                 fileutil.write_file(status_path, json.dumps(status))
-
-            conf_dir = self.get_conf_dir()
-            fileutil.mkdir(conf_dir, mode=0o700)
 
         except IOError as e:
             fileutil.clean_ioerror(e, paths=[self.get_base_dir(), self.pkg_file])
