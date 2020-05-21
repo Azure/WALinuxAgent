@@ -5,9 +5,9 @@ import zipfile, time, os
 
 from azurelinuxagent.common.protocol.restapi import ExtHandler, ExtHandlerProperties, ExtHandlerPackage, ExtHandlerVersionUri
 from azurelinuxagent.common.protocol.wire import WireProtocol
-from azurelinuxagent.ga.exthandlers import ExtHandlerInstance, NUMBER_OF_DOWNLOAD_RETRIES
+from azurelinuxagent.ga.exthandlers import ExtHandlerInstance, NUMBER_OF_DOWNLOAD_RETRIES, ExtHandlerState
 from azurelinuxagent.common.exception import ExtensionDownloadError, ExtensionErrorCodes
-from tests.tools import AgentTestCase, patch
+from tests.tools import AgentTestCase, patch, mock_sleep
 
 
 class DownloadExtensionTestCase(AgentTestCase):
@@ -135,6 +135,53 @@ class DownloadExtensionTestCase(AgentTestCase):
         mock_download_ext_handler_pkg.assert_called_once()
 
         self._assert_download_and_expand_succeeded()
+
+    def test_it_should_maintain_extension_handler_state_when_good_zip_exists(self):
+        DownloadExtensionTestCase._create_zip_file(self._get_extension_package_file())
+        self.ext_handler_instance.set_handler_state(ExtHandlerState.NotInstalled)
+        self.ext_handler_instance.download()
+        self._assert_download_and_expand_succeeded()
+        self.assertTrue(os.path.exists(os.path.join(self.ext_handler_instance.get_conf_dir(), "HandlerState")),
+                        "Ensure that the HandlerState file exists on disk")
+        self.assertEqual(self.ext_handler_instance.get_handler_state(), ExtHandlerState.NotInstalled,
+                         "Ensure that the state is maintained for extension HandlerState")
+
+    def test_it_should_maintain_extension_handler_state_when_bad_zip_exists_and_recovers_with_good_zip(self):
+        def download_ext_handler_pkg(_uri, destination):
+            DownloadExtensionTestCase._create_zip_file(destination)
+            return True
+
+        DownloadExtensionTestCase._create_invalid_zip_file(self._get_extension_package_file())
+        self.ext_handler_instance.set_handler_state(ExtHandlerState.NotInstalled)
+
+        with patch("azurelinuxagent.common.protocol.wire.WireProtocol.download_ext_handler_pkg",
+                   side_effect=download_ext_handler_pkg) as mock_download_ext_handler_pkg:
+            self.ext_handler_instance.download()
+
+        mock_download_ext_handler_pkg.assert_called_once()
+        self._assert_download_and_expand_succeeded()
+        self.assertEqual(self.ext_handler_instance.get_handler_state(), ExtHandlerState.NotInstalled,
+                         "Ensure that the state is maintained for extension HandlerState")
+
+    @patch('time.sleep', side_effect=lambda _: mock_sleep(0.001))
+    def test_it_should_maintain_extension_handler_state_when_it_downloads_bad_zips(self, _):
+        def download_ext_handler_pkg(_uri, destination):
+            DownloadExtensionTestCase._create_invalid_zip_file(destination)
+            return True
+
+        self.ext_handler_instance.set_handler_state(ExtHandlerState.NotInstalled)
+
+        with patch("azurelinuxagent.common.protocol.wire.WireProtocol.download_ext_handler_pkg",
+                   side_effect=download_ext_handler_pkg):
+            with self.assertRaises(ExtensionDownloadError):
+                self.ext_handler_instance.download()
+
+        self.assertFalse(os.path.exists(self._get_extension_package_file()),
+                        "The bad zip extension package should not be downloaded to the expected location")
+        self.assertFalse(os.path.exists(self._get_extension_command_file()),
+                        "The extension package should not expanded be to the expected location due to bad zip")
+        self.assertEqual(self.ext_handler_instance.get_handler_state(), ExtHandlerState.NotInstalled,
+                         "Ensure that the state is maintained for extension HandlerState")
 
     def test_it_should_use_alternate_uris_when_download_fails(self):
         self.download_failures = 0
