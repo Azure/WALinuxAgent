@@ -20,6 +20,10 @@ import json
 import os
 import re
 
+from azurelinuxagent.common.version import AGENT_NAME
+
+from azurelinuxagent.common.event import add_event, WALAEventOperation
+
 import azurelinuxagent.common.conf as conf
 import azurelinuxagent.common.logger as logger
 from azurelinuxagent.common.datacontract import set_properties, DataContract, DataContractList
@@ -341,12 +345,21 @@ class ExtensionsConfig(object):
 
         name = ext_handler.name
         version = ext_handler.properties.version
-        settings = [x for x in plugin_settings \
-                    if getattrib(x, "name") == name and \
-                    getattrib(x, "version") == version]
 
-        if settings is None or len(settings) == 0:
+        ext_handler_plugin_settings = [x for x in plugin_settings if getattrib(x, "name") == name]
+        if ext_handler_plugin_settings is None or len(ext_handler_plugin_settings) == 0:
             return
+
+        settings = [x for x in ext_handler_plugin_settings if getattrib(x, "version") == version]
+        if len(settings) != len(ext_handler_plugin_settings):
+            msg = "ExtHandler PluginSettings Version Mismatch! Expected PluginSettings version for Handler: " \
+                  "{0} is {1} but found {2}".format(name, version, ', '.join(
+                [getattrib(x, "version") for x in ext_handler_plugin_settings]))
+            logger.warn(msg)
+            add_event(AGENT_NAME, op=WALAEventOperation.PluginSettingsMismatch, message=msg, log_event=False,
+                      is_success=False)
+            if len(settings) == 0:
+                return
 
         runtime_settings = None
         runtime_settings_node = find(settings[0], "RuntimeSettings")
