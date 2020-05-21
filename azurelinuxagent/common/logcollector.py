@@ -19,34 +19,47 @@
 
 import glob
 from heapq import heappush, heappop
+import logging
 import os
 import subprocess
 import zipfile
 
+from azurelinuxagent.common.conf import get_lib_dir, get_ext_log_dir
 from azurelinuxagent.common.future import ustr
-from azurelinuxagent.common.utils.fileutil import mkdir, read_file, rm_files, append_file, append_items_to_file
+from azurelinuxagent.common.utils.fileutil import mkdir, read_file, write_file, rm_files
 
+_EXTENSION_LOG_DIR = get_ext_log_dir()
+_AGENT_LIB_DIR = get_lib_dir()
 
-_LOG_COLLECTOR_DIR = '/var/lib/waagent/logcollector'
-_TRUNCATED_FILES_DIR = '/var/truncated'
+_LOG_COLLECTOR_DIR = os.path.join(_AGENT_LIB_DIR, "logcollector")
+_TRUNCATED_FILES_DIR = "/var/truncated"
 
 _OUTPUT_RESULTS_FILE_PATH = os.path.join(_LOG_COLLECTOR_DIR, "results.txt")
-COMPRESSED_ARCHIVE_PATH = os.path.join(_LOG_COLLECTOR_DIR, "logs.zip")
+_COMPRESSED_ARCHIVE_PATH = os.path.join(_LOG_COLLECTOR_DIR, "logs.zip")
 
 _MUST_COLLECT_FILES = [
-    '/var/log/waagent.log',
-    '/var/lib/waagent/GoalState.*.xml',
-    '/var/lib/waagent/ExtensionsConfig.*.xml',
-    '/var/lib/waagent/waagent_status.json',
-    '/var/lib/waagent/history/*.zip',
-    '/var/log/azure/*/*',
-    '/var/log/azure/*/*/*',
-    '/var/lib/waagent/HostingEnvironmentConfig.xml',
-    '/var/log/waagent*',
+    "/var/log/waagent.log",
+    os.path.join(_AGENT_LIB_DIR, "GoalState.*.xml"),
+    os.path.join(_AGENT_LIB_DIR, "ExtensionsConfig.*.xml"),
+    os.path.join(_AGENT_LIB_DIR, "HostingEnvironmentConfig.*.xml"),
+    os.path.join(_AGENT_LIB_DIR, "SharedConfig.*.xml"),
+    os.path.join(_AGENT_LIB_DIR, "*manifest.xml"),
+    os.path.join(_AGENT_LIB_DIR, "waagent_status.json"),
+    os.path.join(_AGENT_LIB_DIR, "history", "*.zip"),
+    os.path.join(_EXTENSION_LOG_DIR, "*", "*"),
+    os.path.join(_EXTENSION_LOG_DIR, "*", "*", "*"),
+    "/var/log/waagent*",
 ]
 
 _FILE_SIZE_LIMIT = 30 * 1024 * 1024  # 30 MB
 _UNCOMPRESSED_ARCHIVE_SIZE_LIMIT = 150 * 1024 * 1024  # 150 MB
+
+_LOGGER = logging.getLogger(__name__)
+_f_handler = logging.FileHandler(_OUTPUT_RESULTS_FILE_PATH, encoding="utf-8")
+_f_format = logging.Formatter(fmt='%(asctime)s %(levelname)s %(message)s',
+                              datefmt='%Y-%m-%d %H:%M:%S')
+_f_handler.setFormatter(_f_format)
+_LOGGER.addHandler(_f_handler)
 
 
 class LogCollector(object):
@@ -54,16 +67,16 @@ class LogCollector(object):
     _TRUNCATED_FILE_PREFIX = "truncated_"
 
     def __init__(self, manifest_file_path):
-        self.manifest_file_path = manifest_file_path
-        self.must_collect_files = self._expand_must_collect_files()
+        self._manifest_file_path = manifest_file_path
+        self._must_collect_files = self._expand_must_collect_files()
 
     @staticmethod
-    def run_shell_command(command, stdout=subprocess.PIPE, output=False):
+    def _run_shell_command(command, stdout=subprocess.PIPE, output=False):
         def format_command(cmd):
             return " ".join(cmd) if isinstance(cmd, list) else command
 
         def _encode_command_output(output):
-            return ustr(output, encoding='utf-8', errors="backslashreplace")
+            return ustr(output, encoding="utf-8", errors="backslashreplace")
 
         try:
             process = subprocess.Popen(command, stdin=subprocess.PIPE, stdout=stdout, stderr=subprocess.PIPE, shell=False)
@@ -98,18 +111,21 @@ class LogCollector(object):
         return manifest
 
     def _read_manifest_file(self):
-        return read_file(self.manifest_file_path).splitlines()
+        return read_file(self._manifest_file_path).splitlines()
 
     @staticmethod
     def _log_to_results_file(entry):
         if isinstance(entry, list):
-            append_items_to_file(_OUTPUT_RESULTS_FILE_PATH, entry)
+            for line in entry:
+                _LOGGER.info(line)
+            # append_items_to_file(_OUTPUT_RESULTS_FILE_PATH, entry)
         else:
-            append_file(_OUTPUT_RESULTS_FILE_PATH, entry + "\n")
+            _LOGGER.info(entry)
+            # append_file(_OUTPUT_RESULTS_FILE_PATH, entry + "\n")
 
     @staticmethod
     def _process_ll_command(folder):
-        LogCollector.run_shell_command(["ls", "-alF", folder], output=True)
+        LogCollector._run_shell_command(["ls", "-alF", folder], output=True)
 
     @staticmethod
     def _process_echo_command(message):
@@ -146,7 +162,7 @@ class LogCollector(object):
             if full_path not in files_to_collect:
                 rm_files(full_path)
 
-    def _parse_manifest_file(self):
+    def _process_manifest_file(self):
         files_to_collect = set()
         manifest_entries = self._read_manifest_file()
 
@@ -198,7 +214,7 @@ class LogCollector(object):
 
             # Get the last N bytes of the file
             with open(truncated_file_path, "w+") as fh:
-                LogCollector.run_shell_command(["tail", "-c", str(_FILE_SIZE_LIMIT), file_path], stdout=fh)
+                LogCollector._run_shell_command(["tail", "-c", str(_FILE_SIZE_LIMIT), file_path], stdout=fh)
 
             return truncated_file_path
         except OSError as e:
@@ -208,9 +224,9 @@ class LogCollector(object):
     def _get_file_priority(self, file):
         # The sooner the file appears in the must collect list, the bigger its priority.
         # Priority is higher the lower the number (0 is highest priority).
-        if file in self.must_collect_files:
-            return self.must_collect_files.index(file)
-        else:
+        try:
+            return self._must_collect_files.index(file)
+        except ValueError:
             # Doesn't matter, file is not in the must collect list, assign a low priority
             return 999999999
 
@@ -260,7 +276,7 @@ class LogCollector(object):
         # 2) Assign those files a priority depending on whether they are in the must collect file list.
         # 3) In priority order, add files to the final list to be collected, until the size of the archive is under
         #    the size limit.
-        parsed_file_paths = self._parse_manifest_file()
+        parsed_file_paths = self._process_manifest_file()
         prioritized_file_paths = self._get_priority_files_list(parsed_file_paths)
         files_to_collect = self._get_final_list_for_archive(prioritized_file_paths)
         return files_to_collect
@@ -275,19 +291,19 @@ class LogCollector(object):
 
         try:
             # Clear previous run's output and create base directories if they don't exist already
-            rm_files(_OUTPUT_RESULTS_FILE_PATH)
             mkdir(_TRUNCATED_FILES_DIR)
             mkdir(_LOG_COLLECTOR_DIR)
+            write_file(_OUTPUT_RESULTS_FILE_PATH, "")
 
             files_to_collect = self._create_list_of_files_to_collect()
             self._log_to_results_file("\n### Creating compressed archive ###")
 
-            with zipfile.ZipFile(COMPRESSED_ARCHIVE_PATH, "w", compression=zipfile.ZIP_DEFLATED) as compressed_archive:
+            with zipfile.ZipFile(_COMPRESSED_ARCHIVE_PATH, "w", compression=zipfile.ZIP_DEFLATED) as compressed_archive:
                 for file in files_to_collect:
                     archive_file_name = LogCollector._convert_file_name_to_archive_name(file)
                     compressed_archive.write(file, arcname=archive_file_name)
 
-                compressed_archive_size = os.path.getsize(COMPRESSED_ARCHIVE_PATH)
+                compressed_archive_size = os.path.getsize(_COMPRESSED_ARCHIVE_PATH)
                 self._log_to_results_file("Successfully compressed files. "
                                           "Compressed archive size is {0}b".format(compressed_archive_size))
                 compressed_archive.write(_OUTPUT_RESULTS_FILE_PATH, arcname="results.txt")

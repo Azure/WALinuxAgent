@@ -18,6 +18,7 @@
 #
 
 from datetime import datetime, timedelta
+import logging
 import os
 import shutil
 import zipfile
@@ -48,33 +49,47 @@ class TestLogCollector(AgentTestCase):
     def _mock_constants(cls):
         cls.manifest_path = os.path.join(cls.tmp_dir, "logcollector_manifest")
 
+        cls.agent_lib_dir = os.path.join(cls.tmp_dir, "lib", "waagent")
+        cls.mock_agent_lib_dir = patch("azurelinuxagent.common.logcollector._AGENT_LIB_DIR", cls.agent_lib_dir)
+        cls.mock_agent_lib_dir.start()
+
         cls.log_collector_dir = os.path.join(cls.tmp_dir, "logcollector")
         cls.mock_log_collector_dir = patch("azurelinuxagent.common.logcollector._LOG_COLLECTOR_DIR",
                                            cls.log_collector_dir)
+        cls.mock_log_collector_dir.start()
 
         cls.truncated_files_dir = os.path.join(cls.tmp_dir, "truncated")
         cls.mock_truncated_files_dir = patch("azurelinuxagent.common.logcollector._TRUNCATED_FILES_DIR",
                                              cls.truncated_files_dir)
+        cls.mock_truncated_files_dir.start()
 
         cls.output_results_file_path = os.path.join(cls.log_collector_dir, "results.txt")
         cls.mock_output_results_file_path = patch("azurelinuxagent.common.logcollector._OUTPUT_RESULTS_FILE_PATH",
                                                   cls.output_results_file_path)
+        cls.mock_output_results_file_path.start()
 
         cls.compressed_archive_path = os.path.join(cls.log_collector_dir, "logs.zip")
-        cls.mock_compressed_archive_path = patch("azurelinuxagent.common.logcollector.COMPRESSED_ARCHIVE_PATH",
+        cls.mock_compressed_archive_path = patch("azurelinuxagent.common.logcollector._COMPRESSED_ARCHIVE_PATH",
                                                  cls.compressed_archive_path)
-
-        cls.mock_log_collector_dir.start()
-        cls.mock_truncated_files_dir.start()
-        cls.mock_output_results_file_path.start()
         cls.mock_compressed_archive_path.start()
+
+        mock_logger = logging.getLogger(__name__)
+        _f_handler = logging.FileHandler(cls.output_results_file_path)
+        _f_format = logging.Formatter(fmt='%(asctime)s %(levelname)s %(message)s',
+                                      datefmt='%Y-%m-%d %H:%M:%S')
+        _f_handler.setFormatter(_f_format)
+        mock_logger.addHandler(_f_handler)
+        cls.mock_logger = patch("azurelinuxagent.common.logcollector._LOGGER", mock_logger)
+        cls.mock_logger.start()
 
     @classmethod
     def tearDownClass(cls):
+        cls.mock_agent_lib_dir.stop()
         cls.mock_log_collector_dir.stop()
         cls.mock_truncated_files_dir.stop()
         cls.mock_output_results_file_path.stop()
         cls.mock_compressed_archive_path.stop()
+        cls.mock_logger.stop()
 
         shutil.rmtree(cls.tmp_dir)
 
