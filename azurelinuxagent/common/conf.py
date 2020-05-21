@@ -167,6 +167,24 @@ def get_configuration(conf=__conf__):
     return options
 
 
+def get_default_value(option):
+    if option in __STRING_OPTIONS__:
+        return __STRING_OPTIONS__[option]
+    raise ValueError("{0} is not a valid configuration parameter.".format(option))
+
+
+def get_int_default_value(option):
+    if option in __INTEGER_OPTIONS__:
+        return int(__INTEGER_OPTIONS__[option])
+    raise ValueError("{0} is not a valid configuration parameter.".format(option))
+
+
+def get_switch_default_value(option):
+    if option in __SWITCH_OPTIONS__:
+        return __SWITCH_OPTIONS__[option]
+    raise ValueError("{0} is not a valid configuration parameter.".format(option))
+
+
 def enable_firewall(conf=__conf__):
     return conf.get_switch("OS.EnableFirewall", False)
 

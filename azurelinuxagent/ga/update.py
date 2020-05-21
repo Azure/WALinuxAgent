@@ -285,6 +285,7 @@ class UpdateHandler(object):
 
             self._ensure_no_orphans()
             self._emit_restart_event()
+            self._emit_changes_in_default_configuration()
             self._ensure_partition_assigned()
             self._ensure_readonly_files()
             self._ensure_cgroups_initialized()
@@ -420,6 +421,28 @@ class UpdateHandler(object):
             pass
 
         return
+
+    @staticmethod
+    def _emit_changes_in_default_configuration():
+        try:
+            def log_if_int_changed_from_default(name, current):
+                default = conf.get_int_default_value(name)
+                if default != current:
+                    msg = "{0} changed from its default; new value: {1}".format(name, current)
+                    logger.info(msg)
+                    add_event(AGENT_NAME, op=WALAEventOperation.ConfigurationChange, message=msg)
+
+            log_if_int_changed_from_default("Extensions.GoalStatePeriod", conf.get_goal_state_period())
+
+            if not conf.enable_firewall():
+                message = "OS.EnableFirewall is False"
+                logger.info(message)
+                add_event(AGENT_NAME, op=WALAEventOperation.ConfigurationChange, message=message)
+            else:
+                log_if_int_changed_from_default("OS.EnableFirewallPeriod", conf.get_enable_firewall_period())
+
+        except Exception as e:
+            logger.warn("Failed to log changes in configuration: {0}", ustr(e))
 
     def _ensure_no_orphans(self, orphan_wait_interval=ORPHAN_WAIT_INTERVAL):
         pid_files, ignored = self._write_pid_file()
