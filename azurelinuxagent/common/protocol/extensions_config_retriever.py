@@ -130,7 +130,7 @@ class ExtensionsConfigRetriever(object):
         if conf.get_extensions_fast_track_enabled():
             artifacts_profile = self._wire_client.get_artifacts_profile()
             if artifacts_profile is None and self._saved_artifacts_profile is not None:
-                logger.info("Using previously cached artifacts profile")
+                logger.periodic_info(logger.EVERY_DAY, "Using previously cached artifacts profile")
                 artifacts_profile = self._saved_artifacts_profile
             fast_track_changed = self._get_fast_track_changed(artifacts_profile)
         return artifacts_profile, fast_track_changed
