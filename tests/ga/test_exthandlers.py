@@ -204,6 +204,37 @@ class TestGoalState(AgentTestCase):
         self.assertFalse(ext_conf.changed)
         self.assertEqual(GOAL_STATE_SOURCE_FASTTRACK, retriever._pending_mode)
 
+    def test_multiple_calls_changed_startup(self):
+        # Write files indicating we last run a FastTrack goal state
+        retriever = ExtensionsConfigRetriever(wire_client=None)
+        retriever._set_fabric(1, 1)
+        retriever._set_fast_track(1)
+
+        # Simulate a restart. First goal state will be FastTrack
+        # Sequence number hasn't changed, but the goal state will be marked as changed due to startup
+        test_data = WireProtocolData(DATA_FILE)
+        profile = InVMArtifactsProfile(test_data.vm_artifacts_profile)
+        wire_client = MockWireClient(test_data.ext_conf, profile)
+        retriever = ExtensionsConfigRetriever(wire_client=wire_client)
+
+        # Verify we receive a FastTrack goal state that's changed
+        ext_conf = retriever.get_ext_config(incarnation=1, ext_conf_uri="blah")
+        self.assertIsNotNone(ext_conf)
+        self.assertTrue(ext_conf.changed)
+        self.assertEqual(GOAL_STATE_SOURCE_FASTTRACK, retriever._pending_mode)
+
+        # Don't commit the goal state. Retrieve another one and verify we receive the same thing
+        ext_conf = retriever.get_ext_config(incarnation=1, ext_conf_uri="blah")
+        self.assertIsNotNone(ext_conf)
+        self.assertTrue(ext_conf.changed)
+        self.assertEqual(GOAL_STATE_SOURCE_FASTTRACK, retriever._pending_mode)
+
+        # One more time
+        ext_conf = retriever.get_ext_config(incarnation=1, ext_conf_uri="blah")
+        self.assertIsNotNone(ext_conf)
+        self.assertTrue(ext_conf.changed)
+        self.assertEqual(GOAL_STATE_SOURCE_FASTTRACK, retriever._pending_mode)
+
     def test_decide_what_to_process(self):
         retriever = ExtensionsConfigRetriever(wire_client=None)
         self.assertEqual(GOAL_STATE_SOURCE_FABRIC, retriever._decide_what_to_process(True, False))

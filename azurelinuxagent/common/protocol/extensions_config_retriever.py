@@ -73,7 +73,6 @@ class ExtensionsConfigRetriever(object):
         self._pending_seqNo = None
         self._pending_svd_seqNo = None
         self._pending_incarnation = None
-        self._is_startup = True
         self._ft_changed_detail = None
         self._fabric_changed_detail = None
         self._reason = None
@@ -81,6 +80,7 @@ class ExtensionsConfigRetriever(object):
 
     def get_ext_config(self, incarnation, ext_conf_uri):
         # If we don't have a uri, return an empty extensions config
+        is_startup = False
         if ext_conf_uri is None:
             return GenericExtensionsConfig(ExtensionsConfig(None), False, self)
 
@@ -92,6 +92,7 @@ class ExtensionsConfigRetriever(object):
 
         self._pending_mode = self._decide_what_to_process(fabric_changed, fast_track_changed)
         if self._last_mode is None:
+            is_startup = True
             logger.info("Processing first mode {0}. Reason={1}", self._pending_mode, self._reason)
         elif self._pending_mode != self._last_mode:
             logger.info("Processing from previous mode {0}. New mode is {1}. Reason={2}",
@@ -102,14 +103,14 @@ class ExtensionsConfigRetriever(object):
         if self._pending_mode == GOAL_STATE_SOURCE_FABRIC:
             xml_text = self._wire_client.fetch_config(ext_conf_uri, self._wire_client.get_header())
             extensions_config = ExtensionsConfig(xml_text)
-            changed = fabric_changed | self._is_startup
+            changed = fabric_changed | is_startup
             if fast_track_changed:
                 # If FastTrack changed too, then save the artifacts profile because the next time
                 # we retrieve it, we'll receive a 304 because the etag didn't change
                 self._saved_artifacts_profile = artifacts_profile
         else:
             extensions_config = artifacts_profile.transform_to_extensions_config()
-            changed = fast_track_changed | self._is_startup
+            changed = fast_track_changed | is_startup
             self._saved_artifacts_profile = artifacts_profile
 
         if changed:
@@ -118,8 +119,7 @@ class ExtensionsConfigRetriever(object):
                 self._pending_incarnation = str(incarnation)
             else:
                 self._pending_seqNo = artifacts_profile.get_sequence_number()
-            logger.info("Handle extensions updates for {0}, Startup={1}", self.get_description(), self._is_startup)
-            self._is_startup = False
+            logger.info("Handle extensions updates for {0}, Startup={1}", self._last_mode, is_startup)
 
         return GenericExtensionsConfig(extensions_config, changed, self)
 
