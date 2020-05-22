@@ -16,6 +16,7 @@
 #
 
 import datetime
+import time
 
 from azurelinuxagent.common import logger
 from azurelinuxagent.common.future import ustr
@@ -35,22 +36,40 @@ class PeriodicOperation(object):
     def __init__(self, name, operation, period):
         self._name = name
         self._operation = operation
-        self._period = period
-        self._last_run = None
+        self._period = period if isinstance(period, datetime.timedelta) else datetime.timedelta(seconds=period)
+        self._next_run_time = datetime.datetime.utcnow()
         self._last_warning = None
         self._last_warning_time = None
 
     def run(self):
         try:
-            if self._last_run is None or datetime.datetime.utcnow() >= self._last_run + self._period:
+            if self._next_run_time <= datetime.datetime.utcnow():
                 try:
                     self._operation()
                 finally:
-                    self._last_run = datetime.datetime.utcnow()
+                    self._next_run_time = datetime.datetime.utcnow() + self._period
         except Exception as e:
             warning = "Failed to {0}: {1} --- [NOTE: Will not log the same error for the next hour]".format(self._name, ustr(e))
             if warning != self._last_warning or self._last_warning_time is None or datetime.datetime.utcnow() >= self._last_warning_time + self._LOG_WARNING_PERIOD:
                 logger.warn(warning)
                 self._last_warning_time = datetime.datetime.utcnow()
                 self._last_warning = warning
+
+    def next_run_time(self):
+        return self._next_run_time
+
+    @staticmethod
+    def sleep_until_next_operation(operations):
+        """
+        Takes a list of operations, finds the operation that should be executed next (that with the closest next_run_time)
+        and sleeps until it is time to execute that operation.
+        """
+        next_operation_time = min([op.next_run_time() for op in operations])
+
+        sleep_timedelta = next_operation_time - datetime.datetime.utcnow()
+        # timedelta.total_seconds() is not available on Python 2.6, do the computation manually
+        sleep_seconds = ((sleep_timedelta.days * 24 * 3600 + sleep_timedelta.seconds) * 10.0 ** 6 + sleep_timedelta.microseconds) / 10.0 ** 6
+
+        if sleep_seconds > 0:
+            time.sleep(sleep_seconds)
 
