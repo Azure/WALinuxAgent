@@ -24,6 +24,7 @@ import subprocess
 import tempfile
 import time
 import unittest
+import uuid
 import zipfile
 
 import datetime
@@ -520,6 +521,36 @@ class TestExtension(ExtensionTestCase):
         exthandlers_handler.run()
         self._assert_no_handler_status(protocol.report_vm_status)
 
+    def test_it_should_only_download_extension_manifest_once_per_goal_state(self, *args):
+
+        def _assert_handler_status_and_manifest_download_count(protocol, test_data, manifest_count):
+            self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.0.0")
+            self._assert_ext_status(protocol.report_ext_status, "success", 0)
+            self.assertEqual(test_data.call_counts['manifest.xml'], manifest_count,
+                             "We should have downloaded extension manifest {0} times".format(manifest_count))
+
+        test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE)
+        exthandlers_handler, protocol = self._create_mock(test_data, *args)
+        exthandlers_handler.run()
+        _assert_handler_status_and_manifest_download_count(protocol, test_data, 1)
+
+        for _ in range(5):
+            exthandlers_handler.run()
+            # The extension manifest should only be downloaded once as incarnation did not change
+            _assert_handler_status_and_manifest_download_count(protocol, test_data, 1)
+
+        # Update Incarnation
+        test_data.set_incarnation(2)
+        protocol.update_goal_state()
+
+        exthandlers_handler.run()
+        _assert_handler_status_and_manifest_download_count(protocol, test_data, 2)
+
+        for _ in range(5):
+            exthandlers_handler.run()
+            # The extension manifest should be downloaded twice now as incarnation changed once
+            _assert_handler_status_and_manifest_download_count(protocol, test_data, 2)
+
     def test_ext_zip_file_packages_removed_in_update_case(self, *args):
         # Test enable scenario.
         test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE)
@@ -952,39 +983,38 @@ class TestExtension(ExtensionTestCase):
         self.assertTrue("Failed to get ext handler pkgs" in kw['message'])
         self.assertTrue("ProtocolError" in kw['message'])
 
-    @patch('azurelinuxagent.common.errorstate.ErrorState.is_triggered')
     @patch('azurelinuxagent.common.event.add_event')
-    def test_ext_handler_download_failure_permanent_with_ExtensionDownloadError_and_triggered(self, mock_add_event,
-                                                                                              mock_error_state, *args):
+    def test_ext_handler_download_errors_should_be_reported_only_on_new_goal_state(self, mock_add_event, *args):
+
+        def _assert_mock_add_event_call(expected_download_failed_event_count, err_msg_guid):
+            event_occurrences = [kw for _, kw in mock_add_event.call_args_list if
+                          "Failed to download artifacts: [ExtensionDownloadError] {0}".format(err_msg_guid) in kw['message']]
+            self.assertEquals(expected_download_failed_event_count, len(event_occurrences), "Call count do not match")
+            self.assertFalse(any([kw['is_success'] for kw in event_occurrences]), "The events should have failed")
+            self.assertEqual(expected_download_failed_event_count, len([kw['op'] for kw in event_occurrences]),
+                             "Incorrect Operation, all events should be a download errors")
+
         test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE)
         exthandlers_handler, protocol = self._create_mock(test_data, *args)
-        protocol.get_ext_handler_pkgs = Mock(side_effect=ExtensionDownloadError)
-
-        mock_error_state.return_value = True
-
-        exthandlers_handler.run()
-
-        self.assertEquals(1, mock_add_event.call_count)
-        args, kw = mock_add_event.call_args_list[0]
-        self.assertEquals(False, kw['is_success'])
-        self.assertTrue("Failed to get artifact for over" in kw['message'])
-        self.assertTrue("ExtensionDownloadError" in kw['message'])
-        self.assertEquals("Download", kw['op'])
-
-    @patch('azurelinuxagent.common.errorstate.ErrorState.is_triggered')
-    @patch('azurelinuxagent.common.event.add_event')
-    def test_ext_handler_download_failure_permanent_with_ExtensionDownloadError_and_not_triggered(self, mock_add_event,
-                                                                                                  mock_error_state,
-                                                                                                  *args):
-        test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE)
-        exthandlers_handler, protocol = self._create_mock(test_data, *args)
-        protocol.get_ext_handler_pkgs = Mock(side_effect=ExtensionDownloadError)
-
-        mock_error_state.return_value = False
+        unique_error_message_guid = str(uuid.uuid4())
+        protocol.get_ext_handler_pkgs = Mock(side_effect=ExtensionDownloadError(unique_error_message_guid))
 
         exthandlers_handler.run()
+        _assert_mock_add_event_call(expected_download_failed_event_count=1, err_msg_guid=unique_error_message_guid)
+        self._assert_handler_status(protocol.report_vm_status, "NotReady", 0, "1.0.0")
 
-        self.assertEquals(0, mock_add_event.call_count)
+        # Re-run exthandler.run without updating the GS and ensure we dont report error
+        exthandlers_handler.run()
+        _assert_mock_add_event_call(expected_download_failed_event_count=1, err_msg_guid=unique_error_message_guid)
+        self._assert_handler_status(protocol.report_vm_status, "NotReady", 0, "1.0.0")
+
+        # Change incarnation and then re-check we report error
+        test_data.set_incarnation(2)
+        protocol.update_goal_state()
+
+        exthandlers_handler.run()
+        _assert_mock_add_event_call(expected_download_failed_event_count=2, err_msg_guid=unique_error_message_guid)
+        self._assert_handler_status(protocol.report_vm_status, "NotReady", 0, "1.0.0")
 
     @patch('azurelinuxagent.ga.exthandlers.fileutil')
     def test_ext_handler_io_error(self, mock_fileutil, *args):
