@@ -7,17 +7,14 @@ import tempfile
 import unittest
 from threading import currentThread
 
-from azurelinuxagent.ga.env import EnvHandler
-
 from azurelinuxagent.common.protocol.goal_state import ExtensionsConfig
 from azurelinuxagent.common.protocol.hostplugin import *
 from azurelinuxagent.common.protocol.util import ProtocolUtil
 from azurelinuxagent.common.protocol.wire import *
 from azurelinuxagent.common.version import AGENT_PKG_GLOB, AGENT_DIR_GLOB
-from azurelinuxagent.ga.monitor import MonitorHandler
 from azurelinuxagent.ga.update import *
 from tests.tools import AgentTestCase, call, data_dir, DEFAULT, patch, load_bin_data, load_data, Mock, MagicMock, \
-    mock_sleep, clear_singleton_instances, skip_if_predicate_true
+    clear_singleton_instances
 
 NO_ERROR = {
     "last_failure": 0.0,
@@ -745,7 +742,7 @@ class TestUpdate(UpdateTestCase):
         with patch('os.kill') as mock_kill:
             calls, sleeps = self._test_ensure_no_orphans(
                 invocations=4,
-                interval=3 * GOAL_STATE_INTERVAL,
+                interval=3 * ORPHAN_POLL_INTERVAL,
                 pid_count=1)
             self.assertEqual(3, calls)
             self.assertEqual(2, sleeps)
@@ -1209,7 +1206,7 @@ class TestUpdate(UpdateTestCase):
         self._test_run_latest()
         self.assertEqual(0, mock_signal.call_count)
 
-    def _test_run(self, invocations=1, calls=[call.run()], enable_updates=False, sleep_interval=(3,)):
+    def _test_run(self, invocations=1, calls=[call.run()], enable_updates=False, sleep_interval=(6,)):
         conf.get_autoupdate_enabled = Mock(return_value=enable_updates)
 
         # Note:
