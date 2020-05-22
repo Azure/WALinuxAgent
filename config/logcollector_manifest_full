@@ -1,10 +1,10 @@
 echo,### Probing Directories ###
 ll,/var/log
-ll,/var/lib/waagent
+ll,$LIB_DIR
 ll,/etc/udev/rules.d
 
 echo,### Gathering Configuration Files ###
-copy,/var/lib/waagent/provisioned
+copy,$LIB_DIR/provisioned
 copy,/etc/fstab
 copy,/etc/ssh/sshd_config
 copy,/boot/grub*/grub.c*
@@ -46,27 +46,27 @@ copy,/var/log/cloud-init*
 copy,/var/log/boot*
 copy,/var/log/auth*
 copy,/var/log/secure*
-copy,/var/log/azure/*/*
-copy,/var/log/azure/*/*/*
-copy,/var/log/azure/custom-script/handler.log
-copy,/var/log/azure/run-command/handler.log
+copy,$LOG_DIR/*/*
+copy,$LOG_DIR/*/*/*
+copy,$LOG_DIR/custom-script/handler.log
+copy,$LOG_DIR/run-command/handler.log
 echo,
 
 echo,### Gathering Extension Files ###
-copy,/var/lib/waagent/ExtensionsConfig.*.xml
-copy,/var/lib/waagent/*/status/*.status
-copy,/var/lib/waagent/*/config/*.settings
-copy,/var/lib/waagent/*/config/HandlerState
-copy,/var/lib/waagent/*/config/HandlerStatus
-copy,/var/lib/waagent/GoalState.*.xml
-copy,/var/lib/waagent/HostingEnvironmentConfig.xml
-copy,/var/lib/waagent/*.manifest.xml
-copy,/var/lib/waagent/SharedConfig.xml
-copy,/var/lib/waagent/ManagedIdentity-*.json
-copy,/var/lib/waagent/error.json
-copy,/var/lib/waagent/Incarnation
-copy,/var/lib/waagent/waagent_status.json
-copy,/var/lib/waagent/history/*.zip
+copy,$LIB_DIR/ExtensionsConfig.*.xml
+copy,$LIB_DIR/*/status/*.status
+copy,$LIB_DIR/*/config/*.settings
+copy,$LIB_DIR/*/config/HandlerState
+copy,$LIB_DIR/*/config/HandlerStatus
+copy,$LIB_DIR/GoalState.*.xml
+copy,$LIB_DIR/HostingEnvironmentConfig.xml
+copy,$LIB_DIR/*.manifest.xml
+copy,$LIB_DIR/SharedConfig.xml
+copy,$LIB_DIR/ManagedIdentity-*.json
+copy,$LIB_DIR/error.json
+copy,$LIB_DIR/Incarnation
+copy,$LIB_DIR/waagent_status.json
+copy,$LIB_DIR/history/*.zip
 echo,
 
 echo,### Gathering Disk Info ###

@@ -200,11 +200,11 @@ diskinfo,""".format(folder_to_list, file_to_collect)
             results = fh.readlines()
 
         # Assert echo was parsed
-        self.assertTrue(results[0].endswith("### Test header ###\n"))
+        self.assertTrue(any([line.endswith("### Test header ###\n") for line in results]))
         # Assert unknown command was reported
-        self.assertTrue(results[1].endswith("ERROR Couldn\'t parse \"unknown command\"\n"))
+        self.assertTrue(any([line.endswith("ERROR Couldn\'t parse \"unknown command\"\n") for line in results]))
         # Assert ll was parsed
-        self.assertTrue("ls -alF {0}".format(folder_to_list) in results[2])
+        self.assertTrue(any(["ls -alF {0}".format(folder_to_list) in line for line in results]))
         # Assert copy was parsed
         self._assert_archive_created(archive)
         self._assert_files_are_in_archive(expected_files=[file_to_collect])

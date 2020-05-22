@@ -22,11 +22,14 @@ from heapq import heappush, heappop
 import logging
 import os
 import subprocess
+import time
 import zipfile
+
+# Please note: be careful when adding agent dependencies in this module.
+# This module uses its own logger and logs to its own file, not to the agent log.
 
 from azurelinuxagent.common.conf import get_lib_dir, get_ext_log_dir
 from azurelinuxagent.common.future import ustr
-from azurelinuxagent.common.utils.fileutil import mkdir, read_file, write_file, rm_files
 
 _EXTENSION_LOG_DIR = get_ext_log_dir()
 _AGENT_LIB_DIR = get_lib_dir()
@@ -68,15 +71,27 @@ class LogCollector(object):
         self._set_logger()
 
     @staticmethod
+    def mkdir(dirname):
+        if not os.path.isdir(dirname):
+            os.makedirs(dirname)
+
+    @staticmethod
+    def write_file(filepath, contents):
+        data = contents.encode("utf-8")
+        with open(filepath, "wb") as out_file:
+            out_file.write(data)
+
+    @staticmethod
     def _create_base_dirs():
-        mkdir(_TRUNCATED_FILES_DIR)
-        mkdir(_LOG_COLLECTOR_DIR)
+        LogCollector.mkdir(_TRUNCATED_FILES_DIR)
+        LogCollector.mkdir(_LOG_COLLECTOR_DIR)
 
     @staticmethod
     def _set_logger():
         _f_handler = logging.FileHandler(_OUTPUT_RESULTS_FILE_PATH, encoding="utf-8")
         _f_format = logging.Formatter(fmt='%(asctime)s %(levelname)s %(message)s',
-                                      datefmt='%Y-%m-%d %H:%M:%S')
+                                      datefmt=u'%Y-%m-%dT%H:%M:%SZ')
+        _f_format.converter = time.gmtime
         _f_handler.setFormatter(_f_format)
         _LOGGER.addHandler(_f_handler)
         _LOGGER.setLevel(logging.INFO)
@@ -134,7 +149,13 @@ class LogCollector(object):
             return path
 
     def _read_manifest_file(self):
-        return read_file(self._manifest_file_path).splitlines()
+        with open(self._manifest_file_path, "rb") as in_file:
+            data = in_file.read()
+            if data is None:
+                return None
+            else:
+                data = ustr(data, encoding="utf-8")
+                return data.splitlines()
 
     @staticmethod
     def _process_ll_command(folder):
@@ -176,18 +197,26 @@ class LogCollector(object):
         for file_path in truncated_files:
             full_path = os.path.join(_TRUNCATED_FILES_DIR, file_path)
             if full_path not in files_to_collect:
-                rm_files(full_path)
+                if os.path.isfile(full_path):
+                    os.remove(full_path)
+
+    @staticmethod
+    def _expand_parameters(manifest_data):
+        _LOGGER.info("Using {0} as $LIB_DIR".format(_AGENT_LIB_DIR))
+        _LOGGER.info("Using {0} as $LOG_DIR".format(_EXTENSION_LOG_DIR))
+
+        new_manifest = []
+        for line in manifest_data:
+            line.replace("$LIB_DIR", _AGENT_LIB_DIR)
+            line.replace("$LOG_DIR", _EXTENSION_LOG_DIR)
+            new_manifest.append(line)
+
+        return new_manifest
 
     def _process_manifest_file(self):
-        # Log if the actual lib dir and extension log dir are not the same as hardcoded values in the manifest.
-        if _AGENT_LIB_DIR != "/var/lib/waagent":
-            _LOGGER.info("Adjusting hardcoded lib dir from /var/lib/waagent to {0}".format(_AGENT_LIB_DIR))
-
-        if _EXTENSION_LOG_DIR != "/var/log/azure":
-            _LOGGER.info("Adjusting hardcoded extension log dir from /var/log/azure to {0}".format(_EXTENSION_LOG_DIR))
-
         files_to_collect = set()
-        manifest_entries = self._read_manifest_file()
+        data = self._read_manifest_file()
+        manifest_entries = LogCollector._expand_parameters(data)
 
         for entry in manifest_entries:
             # The entry can be one of the four flavours:
@@ -315,7 +344,7 @@ class LogCollector(object):
         try:
             # Clear previous run's output and create base directories if they don't exist already.
             self._create_base_dirs()
-            write_file(_OUTPUT_RESULTS_FILE_PATH, "")
+            LogCollector.write_file(_OUTPUT_RESULTS_FILE_PATH, "")
 
             files_to_collect = self._create_list_of_files_to_collect()
             _LOGGER.info("### Creating compressed archive ###")
