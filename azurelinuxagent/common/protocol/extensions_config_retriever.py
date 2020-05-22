@@ -88,19 +88,14 @@ class ExtensionsConfigRetriever(object):
         fabric_changed = self._get_fabric_changed(incarnation)
 
         # Get the VmArtifactsProfile and whether fast track changed, if enabled
-        artifacts_profile = None
-        fast_track_changed = False
-        if conf.get_extensions_fast_track_enabled():
-            artifacts_profile = self._wire_client.get_artifacts_profile()
-            if artifacts_profile is None:
-                artifacts_profile = self._saved_artifacts_profile
-            fast_track_changed = self._get_fast_track_changed(artifacts_profile)
+        artifacts_profile, fast_track_changed = self._get_fast_track_details()
 
         self._pending_mode = self._decide_what_to_process(fabric_changed, fast_track_changed)
         if self._last_mode is None:
-            logger.info("Processing first mode {0}", self._pending_mode)
+            logger.info("Processing first mode {0}. Reason={1}", self._pending_mode, self._reason)
         elif self._pending_mode != self._last_mode:
-            logger.info("Processing from previous mode {0}. New mode is {1}", self._last_mode, self._pending_mode)
+            logger.info("Processing from previous mode {0}. New mode is {1}. Reason={2}",
+                        self._last_mode, self._pending_mode, self._reason)
 
         extensions_config = None
         changed = False
@@ -121,16 +116,24 @@ class ExtensionsConfigRetriever(object):
             if self._pending_mode == GOAL_STATE_SOURCE_FABRIC:
                 self._remove_extensions_if_necessary(extensions_config)
                 self._pending_incarnation = str(incarnation)
-                msg = u"Handle extensions updates for incarnation {0}".format(self._pending_incarnation)
-                logger.verbose(msg)
             else:
                 self._pending_seqNo = artifacts_profile.get_sequence_number()
-                msg = u"Handle extensions updates for seqNo {0}".format(self._pending_seqNo)
-                logger.verbose(msg)
-
-        self._is_startup = False
+            logger.info("Handle extensions updates for {0}, Startup={1}", self.get_description(), self._is_startup)
+            self._is_startup = False
 
         return GenericExtensionsConfig(extensions_config, changed, self)
+
+    def _get_fast_track_details(self):
+        artifacts_profile = None
+        fast_track_changed = False
+        
+        if conf.get_extensions_fast_track_enabled():
+            artifacts_profile = self._wire_client.get_artifacts_profile()
+            if artifacts_profile is None and self._saved_artifacts_profile is not None:
+                logger.info("Using previously cached artifacts profile")
+                artifacts_profile = self._saved_artifacts_profile
+            fast_track_changed = self._get_fast_track_changed(artifacts_profile)
+        return artifacts_profile, fast_track_changed
 
     def commit_processed(self):
         if self._last_mode is None:
