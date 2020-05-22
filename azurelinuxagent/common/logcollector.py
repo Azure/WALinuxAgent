@@ -121,12 +121,25 @@ class LogCollector(object):
 
         return manifest
 
+    @staticmethod
+    def _parametrize_filepath(path):
+        hardcoded_lib_path = "/var/lib/waagent"
+        hardcoded_extension_log_path = "/var/log/azure"
+
+        if hardcoded_lib_path in path and hardcoded_lib_path != _AGENT_LIB_DIR:
+            return path.replace(hardcoded_lib_path, _AGENT_LIB_DIR)
+        elif hardcoded_extension_log_path in path and hardcoded_extension_log_path != _EXTENSION_LOG_DIR:
+            return path.replace(hardcoded_extension_log_path, _EXTENSION_LOG_DIR)
+        else:
+            return path
+
     def _read_manifest_file(self):
         return read_file(self._manifest_file_path).splitlines()
 
     @staticmethod
     def _process_ll_command(folder):
-        LogCollector._run_shell_command(["ls", "-alF", folder], output=True)
+        parametrized_folder = LogCollector._parametrize_filepath(folder)
+        LogCollector._run_shell_command(["ls", "-alF", parametrized_folder], output=True)
 
     @staticmethod
     def _process_echo_command(message):
@@ -134,7 +147,8 @@ class LogCollector(object):
 
     @staticmethod
     def _process_copy_command(path):
-        file_paths = glob.glob(path)
+        parametrized_path = LogCollector._parametrize_filepath(path)
+        file_paths = glob.glob(parametrized_path)
         for file_path in file_paths:
             _LOGGER.info(file_path)
         return file_paths
@@ -165,6 +179,13 @@ class LogCollector(object):
                 rm_files(full_path)
 
     def _process_manifest_file(self):
+        # Log if the actual lib dir and extension log dir are not the same as hardcoded values in the manifest.
+        if _AGENT_LIB_DIR != "/var/lib/waagent":
+            _LOGGER.info("Adjusting hardcoded lib dir from /var/lib/waagent to {0}".format(_AGENT_LIB_DIR))
+
+        if _EXTENSION_LOG_DIR != "/var/log/azure":
+            _LOGGER.info("Adjusting hardcoded extension log dir from /var/log/azure to {0}".format(_EXTENSION_LOG_DIR))
+
         files_to_collect = set()
         manifest_entries = self._read_manifest_file()
 

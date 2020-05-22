@@ -47,10 +47,6 @@ class TestLogCollector(AgentTestCase):
     def _mock_constants(cls):
         cls.manifest_path = os.path.join(cls.tmp_dir, "logcollector_manifest")
 
-        cls.agent_lib_dir = os.path.join(cls.tmp_dir, "lib", "waagent")
-        cls.mock_agent_lib_dir = patch("azurelinuxagent.common.logcollector._AGENT_LIB_DIR", cls.agent_lib_dir)
-        cls.mock_agent_lib_dir.start()
-
         cls.log_collector_dir = os.path.join(cls.tmp_dir, "logcollector")
         cls.mock_log_collector_dir = patch("azurelinuxagent.common.logcollector._LOG_COLLECTOR_DIR",
                                            cls.log_collector_dir)
@@ -73,7 +69,6 @@ class TestLogCollector(AgentTestCase):
 
     @classmethod
     def tearDownClass(cls):
-        cls.mock_agent_lib_dir.stop()
         cls.mock_log_collector_dir.stop()
         cls.mock_truncated_files_dir.stop()
         cls.mock_output_results_file_path.stop()
