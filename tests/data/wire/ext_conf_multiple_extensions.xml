@@ -16,31 +16,11 @@
         </GAFamilies>
     </GuestAgentExtension>
     <Plugins>
-        <Plugin name="OSTCExtensions.ExampleHandlerLinux" version="1.0.0"
-                location="http://mock-goal-state/rdfepirv2hknprdstr03.blob.core.windows.net/b01058962be54ceca550a390fa5ff064/Microsoft.OSTCExtensions_ExampleHandlerLinux_asiaeast_manifest.xml"
-                config="" state="enabled" autoUpgrade="false"
-                failoverlocation="http://mock-goal-state/rdfepirv2hknprdstr04.blob.core.windows.net/b01058962be54ceca550a390fa5ff064/Microsoft.OSTCExtensions_ExampleHandlerLinux_asiaeast_manifest.xml"
-                runAsStartupTask="false" isJson="true"/>
-        <Plugin name="Microsoft.Powershell.ExampleExtension" version="1.0.0"
-                location="https://mock-goal-state/zrdfepirv2sn3prdstr06.blob.core.windows.net/3055d769a0ed485d8c5ea8a7cd24073e/Microsoft.Powershell_ExampleExtension_ussouth_manifest.xml"
-                state="enabled" autoUpgrade="true"
-                failoverlocation="https://mock-goal-state/zrdfepirv2sn4prdstr02a.blob.core.windows.net/3055d769a0ed485d8c5ea8a7cd24073e/Microsoft.Powershell_ExampleExtension_ussouth_manifest.xml"
-                runAsStartupTask="false" isJson="true" useExactVersion="false"/>
-        <Plugin name="Microsoft.EnterpriseCloud.Monitoring.ExampleHandlerLinux" version="1.0.0"
-                location="https://mock-goal-state/rdfepirv2sn3prdstr01.blob.core.windows.net/8b23413e0ce64aa89889a295b6122112/Microsoft.EnterpriseCloud.Monitoring_ExampleHandlerLinux_ussouth_manifest.xml"
-                state="enabled" autoUpgrade="true"
-                failoverlocation="https://mock-goal-state/ardfepirv2sn3prdstr05.blob.core.windows.net/8b23413e0ce64aa89889a295b6122112/Microsoft.EnterpriseCloud.Monitoring_ExampleHandlerLinux_ussouth_manifest.xml"
-                runAsStartupTask="false" isJson="true" useExactVersion="false"/>
-        <Plugin name="Microsoft.CPlat.Core.ExampleExtensionLinux" version="1.0.0"
-                location="https://mock-goal-state/zrdfepirv2sn4prdstr09a.blob.core.windows.net/f72653efd9e349ed9842c8b99e4c1712/Microsoft.CPlat.Core_ExampleExtensionLinux_ussouth_manifest.xml"
-                state="enabled" autoUpgrade="true"
-                failoverlocation="https://mock-goal-state/ardfepirv2sn3prdstr05.blob.core.windows.net/f72653efd9e349ed9842c8b99e4c1712/Microsoft.CPlat.Core_ExampleExtensionLinux_ussouth_manifest.xml"
-                runAsStartupTask="false" isJson="true" useExactVersion="false"/>
-        <Plugin name="Microsoft.OSTCExtensions.Edp.ExampleExtensionLinuxInTest" version="1.0.0"
-                location="https://mock-goal-state/zrdfepirv2sn6prdstr05a.blob.core.windows.net/b01058962be54ceca550a390fa5ff064/Microsoft.OSTCExtensions.Edp_ExampleExtensionLinuxInTest_ussouth_manifest.xml"
-                state="enabled" autoUpgrade="true"
-                failoverlocation="https://mock-goal-state/rdfepirv2sn3prdstr01.blob.core.windows.net/b01058962be54ceca550a390fa5ff064/Microsoft.OSTCExtensions.Edp_ExampleExtensionLinuxInTest_ussouth_manifest.xml"
-                runAsStartupTask="false" isJson="true" useExactVersion="false"/>
+        <Plugin name="OSTCExtensions.ExampleHandlerLinux" version="1.0.0" location="http://mock-goal-state/rdfepirv2hknprdstr03.blob.core.windows.net/b01058962be54ceca550a390fa5ff064/Microsoft.OSTCExtensions_ExampleHandlerLinux_asiaeast_manifest.xml" config="" state="enabled" autoUpgrade="false" failoverlocation="http://mock-goal-state/rdfepirv2hknprdstr04.blob.core.windows.net/b01058962be54ceca550a390fa5ff064/Microsoft.OSTCExtensions_ExampleHandlerLinux_asiaeast_manifest.xml" runAsStartupTask="false" isJson="true"/>
+        <Plugin name="Microsoft.Powershell.ExampleExtension" version="1.0.0" location="https://mock-goal-state/zrdfepirv2sn3prdstr06.blob.core.windows.net/3055d769a0ed485d8c5ea8a7cd24073e/Microsoft.Powershell_ExampleExtension_ussouth_manifest.xml" state="enabled" autoUpgrade="true" failoverlocation="https://mock-goal-state/zrdfepirv2sn4prdstr02a.blob.core.windows.net/3055d769a0ed485d8c5ea8a7cd24073e/Microsoft.Powershell_ExampleExtension_ussouth_manifest.xml" runAsStartupTask="false" isJson="true" useExactVersion="false"/>
+        <Plugin name="Microsoft.EnterpriseCloud.Monitoring.ExampleHandlerLinux" version="1.0.0" location="https://mock-goal-state/rdfepirv2sn3prdstr01.blob.core.windows.net/8b23413e0ce64aa89889a295b6122112/Microsoft.EnterpriseCloud.Monitoring_ExampleHandlerLinux_ussouth_manifest.xml" state="enabled" autoUpgrade="true" failoverlocation="https://mock-goal-state/ardfepirv2sn3prdstr05.blob.core.windows.net/8b23413e0ce64aa89889a295b6122112/Microsoft.EnterpriseCloud.Monitoring_ExampleHandlerLinux_ussouth_manifest.xml" runAsStartupTask="false" isJson="true" useExactVersion="false"/>
+        <Plugin name="Microsoft.CPlat.Core.ExampleExtensionLinux" version="1.0.0" location="https://mock-goal-state/zrdfepirv2sn4prdstr09a.blob.core.windows.net/f72653efd9e349ed9842c8b99e4c1712/Microsoft.CPlat.Core_ExampleExtensionLinux_ussouth_manifest.xml" state="enabled" autoUpgrade="true" failoverlocation="https://mock-goal-state/ardfepirv2sn3prdstr05.blob.core.windows.net/f72653efd9e349ed9842c8b99e4c1712/Microsoft.CPlat.Core_ExampleExtensionLinux_ussouth_manifest.xml" runAsStartupTask="false" isJson="true" useExactVersion="false"/>
+        <Plugin name="Microsoft.OSTCExtensions.Edp.ExampleExtensionLinuxInTest" version="1.0.0" location="https://mock-goal-state/zrdfepirv2sn6prdstr05a.blob.core.windows.net/b01058962be54ceca550a390fa5ff064/Microsoft.OSTCExtensions.Edp_ExampleExtensionLinuxInTest_ussouth_manifest.xml" state="enabled" autoUpgrade="true" failoverlocation="https://mock-goal-state/rdfepirv2sn3prdstr01.blob.core.windows.net/b01058962be54ceca550a390fa5ff064/Microsoft.OSTCExtensions.Edp_ExampleExtensionLinuxInTest_ussouth_manifest.xml" runAsStartupTask="false" isJson="true" useExactVersion="false"/>
     </Plugins>
     <PluginSettings>
         <Plugin name="OSTCExtensions.ExampleHandlerLinux" version="1.0.0">
