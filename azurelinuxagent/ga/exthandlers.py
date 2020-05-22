@@ -236,32 +236,11 @@ class ExtHandlersHandler(object):
         self.log_process = False
 
         self.report_status_error_state = ErrorState()
-        self.get_artifact_error_state = ErrorState(min_timedelta=ERROR_STATE_DELTA_INSTALL)
 
     def run(self):
-        self.ext_handlers, etag = None, None
+
         try:
             self.ext_handlers, etag = self.protocol.get_ext_handlers()
-            self.get_artifact_error_state.reset()
-        except Exception as e:
-            msg = u"Exception retrieving extension handlers: {0}".format(ustr(e))
-            detailed_msg = '{0} {1}'.format(msg, traceback.extract_tb(get_traceback(e)))
-
-            self.get_artifact_error_state.incr()
-
-            if self.get_artifact_error_state.is_triggered():
-                add_event(AGENT_NAME,
-                          version=CURRENT_VERSION,
-                          op=WALAEventOperation.GetArtifactExtended,
-                          is_success=False,
-                          message="Failed to get extension artifact for over "
-                                  "{0}: {1}".format(self.get_artifact_error_state.min_timedelta, msg))
-                self.get_artifact_error_state.reset()
-
-            add_event(AGENT_NAME, version=CURRENT_VERSION, op=WALAEventOperation.ExtensionProcessing, is_success=False, message=detailed_msg)
-            return
-
-        try:
             msg = u"Handle extensions updates for incarnation {0}".format(etag)
             logger.verbose(msg)
             # Log status report success on new config
@@ -423,7 +402,14 @@ class ExtHandlersHandler(object):
         ext_handler_i = ExtHandlerInstance(ext_handler, self.protocol)
 
         try:
+            if self.last_etag == etag:
+                if self.log_etag:
+                    ext_handler_i.logger.verbose("Incarnation {0} did not change, not processing GoalState", etag)
+                    self.log_etag = False
+                return
+
             state = ext_handler.properties.state
+
             if ext_handler_i.decide_version(target_state=state) is None:
                 version = ext_handler_i.ext_handler.properties.version
                 name = ext_handler_i.ext_handler.name
@@ -431,15 +417,6 @@ class ExtHandlersHandler(object):
                 ext_handler_i.set_operation(WALAEventOperation.Download)
                 ext_handler_i.set_handler_status(message=ustr(err_msg), code=-1)
                 ext_handler_i.report_event(message=ustr(err_msg), is_success=False)
-                return
-
-            self.get_artifact_error_state.reset()
-            if self.last_etag == etag:
-                if self.log_etag:
-                    ext_handler_i.logger.verbose("Version {0} is current for etag {1}",
-                                                 ext_handler_i.pkg.version,
-                                                 etag)
-                    self.log_etag = False
                 return
 
             self.log_etag = True
@@ -475,12 +452,8 @@ class ExtHandlersHandler(object):
         msg = ustr(e)
         ext_handler_i.set_handler_status(message=msg, code=code)
 
-        self.get_artifact_error_state.incr()
-        if self.get_artifact_error_state.is_triggered():
-            report_event(op=WALAEventOperation.Download, is_success=False, log_event=True,
-                         message="Failed to get artifact for over "
-                                 "{0}: {1}".format(self.get_artifact_error_state.min_timedelta, msg))
-            self.get_artifact_error_state.reset()
+        report_event(op=WALAEventOperation.Download, is_success=False, log_event=True,
+                     message="Failed to download artifacts: {0}".format(msg))
 
     def handle_enable(self, ext_handler_i):
         self.log_process = True
@@ -1389,6 +1362,8 @@ class ExtHandlerInstance(object):
         try:
             handler_status_json = json.dumps(get_properties(handler_status))
             if handler_status_json is not None:
+                if not os.path.exists(state_dir):
+                    fileutil.mkdir(state_dir, mode=0o700)
                 fileutil.write_file(status_file, handler_status_json)
             else:
                 self.logger.error("Failed to create JSON document of handler status for {0} version {1}".format(
