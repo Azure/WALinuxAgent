@@ -17,8 +17,6 @@
 # Requires Python 2.6+ and Openssl 1.0+
 #
 
-from datetime import datetime, timedelta
-import logging
 import os
 import shutil
 import zipfile
@@ -73,15 +71,6 @@ class TestLogCollector(AgentTestCase):
                                                  cls.compressed_archive_path)
         cls.mock_compressed_archive_path.start()
 
-        mock_logger = logging.getLogger(__name__)
-        _f_handler = logging.FileHandler(cls.output_results_file_path)
-        _f_format = logging.Formatter(fmt='%(asctime)s %(levelname)s %(message)s',
-                                      datefmt='%Y-%m-%d %H:%M:%S')
-        _f_handler.setFormatter(_f_format)
-        mock_logger.addHandler(_f_handler)
-        cls.mock_logger = patch("azurelinuxagent.common.logcollector._LOGGER", mock_logger)
-        cls.mock_logger.start()
-
     @classmethod
     def tearDownClass(cls):
         cls.mock_agent_lib_dir.stop()
@@ -89,7 +78,6 @@ class TestLogCollector(AgentTestCase):
         cls.mock_truncated_files_dir.stop()
         cls.mock_output_results_file_path.stop()
         cls.mock_compressed_archive_path.stop()
-        cls.mock_logger.stop()
 
         shutil.rmtree(cls.tmp_dir)
 
@@ -217,9 +205,9 @@ diskinfo,""".format(folder_to_list, file_to_collect)
             results = fh.readlines()
 
         # Assert echo was parsed
-        self.assertEquals("### Test header ###\n", results[0])
+        self.assertTrue(results[0].endswith("### Test header ###\n"))
         # Assert unknown command was reported
-        self.assertEquals("Error: couldn\'t parse \"unknown command\"\n", results[1])
+        self.assertTrue(results[1].endswith("ERROR Couldn\'t parse \"unknown command\"\n"))
         # Assert ll was parsed
         self.assertTrue("ls -alF {0}".format(folder_to_list) in results[2])
         # Assert copy was parsed

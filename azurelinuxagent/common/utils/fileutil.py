@@ -242,13 +242,3 @@ def clean_ioerror(e, paths=[]):
             except Exception:
                 # swallow exception
                 pass
-
-
-def append_items_to_file(file_path, iterable, encoding='utf-8'):
-    """
-    Append each entry from `iterable` to its own line in the file `file_path`.
-    """
-    with open(file_path, 'ab+') as fh:
-        for item in iterable:
-            line = item + "\n"
-            fh.write(line.encode(encoding))
