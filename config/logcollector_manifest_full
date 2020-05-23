@@ -34,7 +34,7 @@ copy,/var/lib/wicked/lease-eth0-dhcp-ipv4.xml
 echo,
 
 echo,### Gathering Log Files ###
-copy,/var/log/waagent*
+copy,$AGENT_LOG*
 copy,/var/log/syslog*
 copy,/var/log/rsyslog*
 copy,/var/log/messages*

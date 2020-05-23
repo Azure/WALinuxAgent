@@ -33,15 +33,16 @@ from azurelinuxagent.common.future import ustr
 
 _EXTENSION_LOG_DIR = get_ext_log_dir()
 _AGENT_LIB_DIR = get_lib_dir()
+_AGENT_LOG = "/var/log/waagent.log"
 
 _LOG_COLLECTOR_DIR = os.path.join(_AGENT_LIB_DIR, "logcollector")
-_TRUNCATED_FILES_DIR = "/var/truncated"
+_TRUNCATED_FILES_DIR = os.path.join(_LOG_COLLECTOR_DIR, "truncated")
 
 _OUTPUT_RESULTS_FILE_PATH = os.path.join(_LOG_COLLECTOR_DIR, "results.txt")
 _COMPRESSED_ARCHIVE_PATH = os.path.join(_LOG_COLLECTOR_DIR, "logs.zip")
 
 _MUST_COLLECT_FILES = [
-    "/var/log/waagent.log",
+    _AGENT_LOG,
     os.path.join(_AGENT_LIB_DIR, "GoalState.*.xml"),
     os.path.join(_AGENT_LIB_DIR, "ExtensionsConfig.*.xml"),
     os.path.join(_AGENT_LIB_DIR, "HostingEnvironmentConfig.*.xml"),
@@ -51,7 +52,7 @@ _MUST_COLLECT_FILES = [
     os.path.join(_AGENT_LIB_DIR, "history", "*.zip"),
     os.path.join(_EXTENSION_LOG_DIR, "*", "*"),
     os.path.join(_EXTENSION_LOG_DIR, "*", "*", "*"),
-    "/var/log/waagent*",
+    "{0}*".format(_AGENT_LOG)
 ]
 
 _FILE_SIZE_LIMIT = 30 * 1024 * 1024  # 30 MB
@@ -71,20 +72,19 @@ class LogCollector(object):
         self._set_logger()
 
     @staticmethod
-    def mkdir(dirname):
+    def _mkdir(dirname):
         if not os.path.isdir(dirname):
             os.makedirs(dirname)
 
     @staticmethod
-    def write_file(filepath, contents):
-        data = contents.encode("utf-8")
-        with open(filepath, "wb") as out_file:
-            out_file.write(data)
+    def _reset_file(filepath):
+        with open(filepath, "w") as out_file:
+            out_file.write("")
 
     @staticmethod
     def _create_base_dirs():
-        LogCollector.mkdir(_TRUNCATED_FILES_DIR)
-        LogCollector.mkdir(_LOG_COLLECTOR_DIR)
+        LogCollector._mkdir(_LOG_COLLECTOR_DIR)
+        LogCollector._mkdir(_TRUNCATED_FILES_DIR)
 
     @staticmethod
     def _set_logger():
@@ -97,7 +97,14 @@ class LogCollector(object):
         _LOGGER.setLevel(logging.INFO)
 
     @staticmethod
-    def _run_shell_command(command, stdout=subprocess.PIPE, output=False):
+    def _run_shell_command(command, stdout=subprocess.PIPE, log_output=False):
+        """
+        Runs a shell command in a subprocess, logs any errors to the log file, enables changing the stdout stream,
+        and logs the output of the command to the log file if indicated by the `log_output` parameter.
+        :param command: Shell command to run
+        :param stdout: Where to write the output of the command
+        :param log_output: If true, log the command output to the log file
+        """
         def format_command(cmd):
             return " ".join(cmd) if isinstance(cmd, list) else command
 
@@ -123,7 +130,7 @@ class LogCollector(object):
             _LOGGER.error(error_msg)
             return
 
-        if output:
+        if log_output:
             msg = "Output of command [{0}]:\n{1}".format(format_command(command), _encode_command_output(stdout))
             _LOGGER.info(msg)
 
@@ -160,7 +167,7 @@ class LogCollector(object):
     @staticmethod
     def _process_ll_command(folder):
         parametrized_folder = LogCollector._parametrize_filepath(folder)
-        LogCollector._run_shell_command(["ls", "-alF", parametrized_folder], output=True)
+        LogCollector._run_shell_command(["ls", "-alF", parametrized_folder], log_output=True)
 
     @staticmethod
     def _process_echo_command(message):
@@ -204,6 +211,7 @@ class LogCollector(object):
     def _expand_parameters(manifest_data):
         _LOGGER.info("Using {0} as $LIB_DIR".format(_AGENT_LIB_DIR))
         _LOGGER.info("Using {0} as $LOG_DIR".format(_EXTENSION_LOG_DIR))
+        _LOGGER.info("Using {0} as $AGENT_LOG".format(_AGENT_LOG))
 
         new_manifest = []
         for line in manifest_data:
@@ -344,7 +352,7 @@ class LogCollector(object):
         try:
             # Clear previous run's output and create base directories if they don't exist already.
             self._create_base_dirs()
-            LogCollector.write_file(_OUTPUT_RESULTS_FILE_PATH, "")
+            LogCollector._reset_file(_OUTPUT_RESULTS_FILE_PATH)
 
             files_to_collect = self._create_list_of_files_to_collect()
             _LOGGER.info("### Creating compressed archive ###")

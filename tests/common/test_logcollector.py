@@ -254,7 +254,6 @@ diskinfo,""".format(folder_to_list, file_to_collect)
         self._assert_files_are_in_archive(expected_files)
         self._assert_files_are_not_in_archive(unexpected_files)
 
-
         no_files = self._get_number_of_files_in_archive()
         self.assertEquals(5, no_files, "Expected 5 files in archive, found {0}!".format(no_files))
 
