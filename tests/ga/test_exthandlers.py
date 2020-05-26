@@ -20,18 +20,16 @@ import os
 import subprocess
 import time
 
-from azurelinuxagent.common.protocol.util import ProtocolUtil
-
 from azurelinuxagent.common.cgroupconfigurator import CGroupConfigurator
-from azurelinuxagent.common.event import WALAEventOperation, AGENT_EVENT_FILE_EXTENSION
-from azurelinuxagent.common.exception import ProtocolError, ExtensionError, ExtensionErrorCodes
+from azurelinuxagent.common.event import AGENT_EVENT_FILE_EXTENSION, WALAEventOperation
+from azurelinuxagent.common.exception import ExtensionError, ExtensionErrorCodes
 from azurelinuxagent.common.protocol.restapi import ExtensionStatus, Extension, ExtHandler, ExtHandlerProperties
+from azurelinuxagent.common.protocol.util import ProtocolUtil
 from azurelinuxagent.common.utils.extensionprocessutil import TELEMETRY_MESSAGE_MAX_LEN, format_stdout_stderr, \
     read_output
-from mock import MagicMock
-from azurelinuxagent.common.protocol.wire import WireProtocol
-from azurelinuxagent.ga.exthandlers import parse_ext_status, ExtHandlerInstance, get_exthandlers_handler, \
-    ExtCommandEnvVariable
+from azurelinuxagent.ga.exthandlers import parse_ext_status, ExtHandlerInstance, ExtCommandEnvVariable
+from tests.protocol import mockwiredata
+from tests.protocol.mocks import mock_wire_protocol
 from tests.tools import AgentTestCase, patch, mock_sleep, clear_singleton_instances
 
 
@@ -249,11 +247,19 @@ class TestExtHandlers(AgentTestCase):
                                               disk_sequence_number=3,
                                               expected_sequence_number=-1)
 
-
-    @patch("azurelinuxagent.ga.exthandlers.add_event")
     def test_it_should_report_error_if_plugin_settings_version_mismatch(self):
-        pass
-
+        with mock_wire_protocol(mockwiredata.DATA_FILE_PLUGIN_SETTINGS_MISMATCH) as protocol:
+            with patch("azurelinuxagent.common.protocol.goal_state.add_event") as mock_add_event:
+                # Forcing update of GoalState to allow the ExtConfig to report an event
+                protocol.mock_wire_data.set_incarnation(2)
+                protocol.client.update_goal_state()
+                plugin_setting_mismatch_calls = [kw for _, kw in mock_add_event.call_args_list if
+                                                 kw['op'] == WALAEventOperation.PluginSettingsVersionMismatch]
+                self.assertEqual(1, len(plugin_setting_mismatch_calls),
+                                 "PluginSettingsMismatch event should be reported once")
+                self.assertIn("ExtHandler PluginSettings Version Mismatch!", plugin_setting_mismatch_calls[0]['message'],
+                              "Invalid error message detected for PluginSettingsVersionMismatch")
+                self.assertFalse(plugin_setting_mismatch_calls[0]['is_success'], "The event should be false")
 
 class LaunchCommandTestCase(AgentTestCase):
     """

@@ -98,7 +98,7 @@ class WALAEventOperation:
     Log = "Log"
     OSInfo = "OSInfo"
     Partition = "Partition"
-    PluginSettingsMismatch = "PluginSettingsMismatch"
+    PluginSettingsVersionMismatch = "PluginSettingsVersionMismatch"
     ProcessGoalState = "ProcessGoalState"
     Provision = "Provision"
     ProvisionGuestAgent = "ProvisionGuestAgent"

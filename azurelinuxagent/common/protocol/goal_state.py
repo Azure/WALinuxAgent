@@ -347,9 +347,9 @@ class ExtensionsConfig(object):
         settings = [x for x in ext_handler_plugin_settings if getattrib(x, "version") == version]
         if len(settings) != len(ext_handler_plugin_settings):
             msg = "ExtHandler PluginSettings Version Mismatch! Expected PluginSettings version: {0} for Handler: " \
-                  "{1} but found versions: {2}".format(version, name, ', '.join(
+                  "{1} but found versions: ({2})".format(version, name, ', '.join(
                 [getattrib(x, "version") for x in ext_handler_plugin_settings]))
-            add_event(AGENT_NAME, op=WALAEventOperation.PluginSettingsMismatch, message=msg, log_event=False,
+            add_event(AGENT_NAME, op=WALAEventOperation.PluginSettingsVersionMismatch, message=msg, log_event=False,
                       is_success=False)
             if len(settings) == 0:
                 # If there is no corresponding settings for the specific extension handler, we will not process it at all,
