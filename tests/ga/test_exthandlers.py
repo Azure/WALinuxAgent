@@ -249,28 +249,6 @@ class TestExtHandlers(AgentTestCase):
                                               disk_sequence_number=3,
                                               expected_sequence_number=-1)
 
-    @patch("azurelinuxagent.ga.exthandlers.add_event")
-    @patch("azurelinuxagent.common.errorstate.ErrorState.is_triggered")
-    def test_it_should_report_an_error_if_the_wireserver_cannot_be_reached(self, patch_is_triggered, patch_add_event):
-        test_message = "TEST MESSAGE"
-
-        patch_is_triggered.return_value = True # protocol errors are reported only after a delay; force the error to be reported now
-
-        protocol = WireProtocol("foo.bar")
-        protocol.get_ext_handlers = MagicMock(side_effect=ProtocolError(test_message))
-
-        get_exthandlers_handler(protocol).run()
-
-        self.assertEquals(patch_add_event.call_count, 2)
-
-        _, first_call_args = patch_add_event.call_args_list[0]
-        self.assertEquals(first_call_args['op'], WALAEventOperation.GetArtifactExtended)
-        self.assertEquals(first_call_args['is_success'], False)
-
-        _, second_call_args = patch_add_event.call_args_list[1]
-        self.assertEquals(second_call_args['op'], WALAEventOperation.ExtensionProcessing)
-        self.assertEquals(second_call_args['is_success'], False)
-        self.assertIn(test_message, second_call_args['message'])
 
     @patch("azurelinuxagent.ga.exthandlers.add_event")
     def test_it_should_report_error_if_plugin_settings_version_mismatch(self):
