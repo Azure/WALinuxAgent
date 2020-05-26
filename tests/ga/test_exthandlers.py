@@ -272,6 +272,10 @@ class TestExtHandlers(AgentTestCase):
         self.assertEquals(second_call_args['is_success'], False)
         self.assertIn(test_message, second_call_args['message'])
 
+    @patch("azurelinuxagent.ga.exthandlers.add_event")
+    def test_it_should_report_error_if_plugin_settings_version_mismatch(self):
+        pass
+
 
 class LaunchCommandTestCase(AgentTestCase):
     """
