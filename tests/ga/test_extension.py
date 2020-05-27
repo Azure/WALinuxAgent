@@ -14,14 +14,17 @@
 #
 # Requires Python 2.6+ and Openssl 1.0+
 #
+import contextlib
 import glob
 import json
 import os.path
+import re
 import shutil
 import subprocess
 import tempfile
 import time
 import unittest
+import uuid
 import zipfile
 
 import datetime
@@ -38,15 +41,15 @@ from azurelinuxagent.common.version import PY_VERSION_MAJOR, PY_VERSION_MINOR, P
     GOAL_STATE_AGENT_VERSION, CURRENT_VERSION, DISTRO_NAME, DISTRO_VERSION
 from azurelinuxagent.ga.exthandlers import ExtHandlerState, ExtHandlersHandler, ExtHandlerInstance, HANDLER_PKG_EXT, \
     migrate_handler_state, get_exthandlers_handler, AGENT_STATUS_FILE, ExtCommandEnvVariable, \
-    HandlerManifest, NOT_RUN, ValidHandlerStatus
+    HandlerManifest, NOT_RUN, ValidHandlerStatus, HANDLER_NAME_PATTERN
 
 from azurelinuxagent.ga.monitor import get_monitor_handler
 from nose.plugins.attrib import attr
 from tests.protocol import mockwiredata
-from tests.protocol.mocks import mock_wire_protocol
+from tests.protocol.mocks import mock_wire_protocol, HttpRequestPredicates
 from tests.protocol.mockwiredata import DATA_FILE
 from tests.tools import are_cgroups_enabled, AgentTestCase, data_dir, i_am_root, MagicMock, Mock, \
-    skip_if_predicate_false, patch, is_trusty_in_travis, skip_if_predicate_true
+    skip_if_predicate_false, patch
 
 from azurelinuxagent.common.exception import ResourceGoneError, ExtensionDownloadError, ProtocolError, \
     ExtensionErrorCodes, ExtensionError, ExtensionUpdateError
@@ -80,103 +83,133 @@ def raise_ioerror(*args):
     e.errno = EIO
     raise e
 
-
 class TestExtensionCleanup(AgentTestCase):
+
     def setUp(self):
         AgentTestCase.setUp(self)
-        self.ext_handlers = ExtHandlersHandler(Mock())
-        self.lib_dir = tempfile.mkdtemp()
+        self.mock_sleep = patch("time.sleep", lambda *_: mock_sleep(0.0001))
+        self.mock_sleep.start()
 
-    def _install_handlers(self, start=0, count=1,
-                          handler_state=ExtHandlerState.Installed):
-        src = os.path.join(data_dir, "ext", "sample_ext-1.3.0.zip")
-        version = FlexibleVersion("1.3.0")
-        version += start - version.patch
+    def tearDown(self):
+        self.mock_sleep.stop()
+        AgentTestCase.tearDown(self)
 
-        for i in range(start, start + count):
-            eh = ExtHandler()
-            eh.name = "sample_ext"
-            eh.properties.version = str(version)
-            handler = ExtHandlerInstance(eh, "unused")
+    @staticmethod
+    def _count_packages():
+        return len(glob.glob(os.path.join(conf.get_lib_dir(), "*.zip")))
 
-            dst = os.path.join(self.lib_dir,
-                               handler.get_full_name() + HANDLER_PKG_EXT)
-            shutil.copy(src, dst)
-
-            if not handler_state is None:
-                zipfile.ZipFile(dst).extractall(handler.get_base_dir())
-                handler.set_handler_state(handler_state)
-
-            version += 1
-
-    def _count_packages(self):
-        return len(glob.glob(os.path.join(self.lib_dir, "*.zip")))
-
-    def _count_installed(self):
-        paths = os.listdir(self.lib_dir)
-        paths = [os.path.join(self.lib_dir, p) for p in paths]
+    @staticmethod
+    def _count_extension_directories():
+        paths = [os.path.join(conf.get_lib_dir(), p) for p in os.listdir(conf.get_lib_dir())]
         return len([p for p in paths
-                    if os.path.isdir(p) and self._is_installed(p)])
+                    if os.path.isdir(p) and TestExtensionCleanup._is_extension_dir(p)])
 
-    def _count_uninstalled(self):
-        paths = os.listdir(self.lib_dir)
-        paths = [os.path.join(self.lib_dir, p) for p in paths]
-        return len([p for p in paths
-                    if os.path.isdir(p) and not self._is_installed(p)])
+    @staticmethod
+    def _is_extension_dir(path):
+        return re.match(HANDLER_NAME_PATTERN, os.path.basename(path)) is not None
 
-    def _is_installed(self, path):
-        path = os.path.join(path, 'config', 'HandlerState')
-        return fileutil.read_file(path) != "NotInstalled"
+    def _assert_ext_handler_status(self, aggregate_status, expected_status, version, expected_ext_handler_count=0):
+        self.assertIsNotNone(aggregate_status, "Aggregate status should not be None")
+        handler_statuses = aggregate_status['aggregateStatus']['handlerAggregateStatus']
+        self.assertEqual(expected_ext_handler_count, len(handler_statuses))
+        for ext_handler_status in handler_statuses:
+            self.assertEquals(expected_status, ext_handler_status['status'])
+            self.assertEquals(version, ext_handler_status['handlerVersion'])
+        return
 
-    @patch("azurelinuxagent.common.conf.get_lib_dir")
-    def test_cleanup_leaves_installed_extensions(self, mock_conf):
-        mock_conf.return_value = self.lib_dir
+    @contextlib.contextmanager
+    def _setup_test_env(self, test_data):
+        with mock_wire_protocol(test_data) as protocol:
 
-        self._install_handlers(start=0, count=5, handler_state=ExtHandlerState.Installed)
-        self._install_handlers(start=5, count=5, handler_state=ExtHandlerState.Enabled)
+            def mock_http_put(url, *args, **kwargs):
+                if HttpRequestPredicates.is_host_plugin_status_request(url):
+                    # Skip reading the HostGA request data as its encoded
+                    return None
+                protocol.aggregate_status = json.loads(args[0])
 
-        self.assertEqual(self._count_packages(), 10)
-        self.assertEqual(self._count_installed(), 10)
+            protocol.aggregate_status = None
+            protocol.set_http_handlers(http_put_handler=mock_http_put)
+            no_of_extensions = protocol.mock_wire_data.get_no_of_plugins_in_extension_config()
+            exthandlers_handler = get_exthandlers_handler(protocol)
+            yield exthandlers_handler, protocol, no_of_extensions
 
-        self.ext_handlers._cleanup_outdated_handlers()
+    def test_cleanup_leaves_installed_extensions(self):
+        with self._setup_test_env(mockwiredata.DATA_FILE_MULTIPLE_EXT) as (exthandlers_handler, protocol, no_of_exts):
+            exthandlers_handler.run()
+            self.assertEqual(no_of_exts, TestExtensionCleanup._count_packages(),
+                             "No of extensions in config doesn't match the packages")
+            self.assertEqual(no_of_exts, TestExtensionCleanup._count_extension_directories(),
+                             "No of extension directories doesnt match the no of extensions in GS")
+            self._assert_ext_handler_status(protocol.aggregate_status, "Ready", expected_ext_handler_count=no_of_exts,
+                                            version="1.0.0")
 
-        self.assertEqual(self._count_packages(), 10)
-        self.assertEqual(self._count_installed(), 10)
-        self.assertEqual(self._count_uninstalled(), 0)
+    def test_cleanup_removes_uninstalled_extensions(self):
+        with self._setup_test_env(mockwiredata.DATA_FILE_MULTIPLE_EXT) as (exthandlers_handler, protocol, no_of_exts):
+            exthandlers_handler.run()
+            self.assertEqual(no_of_exts, TestExtensionCleanup._count_packages(),
+                             "No of extensions in config doesn't match the packages")
+            self._assert_ext_handler_status(protocol.aggregate_status, "Ready", expected_ext_handler_count=no_of_exts,
+                                            version="1.0.0")
 
-    @patch("azurelinuxagent.common.conf.get_lib_dir")
-    def test_cleanup_removes_uninstalled_extensions(self, mock_conf):
-        mock_conf.return_value = self.lib_dir
+            # Update incarnation and extension config
+            protocol.mock_wire_data.set_incarnation(2)
+            protocol.mock_wire_data.set_extensions_config_state("uninstall")
 
-        self._install_handlers(start=0, count=5, handler_state=ExtHandlerState.Installed)
-        self._install_handlers(start=5, count=5, handler_state=ExtHandlerState.NotInstalled)
+            protocol.client.update_goal_state()
+            exthandlers_handler.run()
 
-        self.assertEqual(self._count_packages(), 10)
-        self.assertEqual(self._count_installed(), 5)
-        self.assertEqual(self._count_uninstalled(), 5)
+            self.assertEqual(0, TestExtensionCleanup._count_packages(), "All packages must be deleted")
+            self._assert_ext_handler_status(protocol.aggregate_status, "Ready", expected_ext_handler_count=0,
+                                            version="1.0.0")
+            self.assertEqual(0, TestExtensionCleanup._count_extension_directories(), "All extension directories should be removed")
 
-        self.ext_handlers._cleanup_outdated_handlers()
+    def test_cleanup_removes_orphaned_packages(self):
+        no_of_orphaned_packages = 5
+        with self._setup_test_env(mockwiredata.DATA_FILE_NO_EXT) as (exthandlers_handler, protocol, no_of_exts):
+            self.assertEqual(no_of_exts, 0, "Test setup error - Extensions found in ExtConfig")
 
-        self.assertEqual(self._count_packages(), 5)
-        self.assertEqual(self._count_installed(), 5)
-        self.assertEqual(self._count_uninstalled(), 0)
+            # Create random extension directories
+            for i in range(no_of_orphaned_packages):
+                eh = ExtHandler(name='Random.Extension.ShouldNot.Be.There')
+                eh.properties.version = FlexibleVersion("9.9.0") + i
+                handler = ExtHandlerInstance(eh, "unused")
+                os.mkdir(handler.get_base_dir())
 
-    @patch("azurelinuxagent.common.conf.get_lib_dir")
-    def test_cleanup_removes_orphaned_packages(self, mock_conf):
-        mock_conf.return_value = self.lib_dir
+            self.assertEqual(no_of_orphaned_packages, TestExtensionCleanup._count_extension_directories(),
+                             "Test Setup error - Not enough extension directories")
+            exthandlers_handler.run()
+            self.assertEqual(no_of_exts, TestExtensionCleanup._count_extension_directories(),
+                             "There should be no extension directories in FS")
+            self.assertIsNone(protocol.aggregate_status,
+                              "Since there's no ExtConfig, we shouldn't even report status as we pull status blob link from ExtConfig")
 
-        self._install_handlers(start=0, count=5, handler_state=ExtHandlerState.Installed)
-        self._install_handlers(start=5, count=5, handler_state=None)
+    def test_cleanup_leaves_failed_extensions(self):
+        original_popen = subprocess.Popen
 
-        self.assertEqual(self._count_packages(), 10)
-        self.assertEqual(self._count_installed(), 5)
-        self.assertEqual(self._count_uninstalled(), 0)
+        def mock_fail_popen(*args, **kwargs):
+            return original_popen("fail_this_command", **kwargs)
 
-        self.ext_handlers._cleanup_outdated_handlers()
+        with self._setup_test_env(mockwiredata.DATA_FILE_EXT_SINGLE) as (exthandlers_handler, protocol, no_of_exts):
+            with patch("azurelinuxagent.common.cgroupapi.subprocess.Popen", mock_fail_popen):
+                exthandlers_handler.run()
+                self._assert_ext_handler_status(protocol.aggregate_status, "NotReady",
+                                                expected_ext_handler_count=no_of_exts,
+                                                version="1.0.0")
+                self.assertEqual(no_of_exts, TestExtensionCleanup._count_extension_directories(),
+                                 "There should still be 1 extension directory in FS")
 
-        self.assertEqual(self._count_packages(), 5)
-        self.assertEqual(self._count_installed(), 5)
-        self.assertEqual(self._count_uninstalled(), 0)
+            # Update incarnation and extension config to uninstall the extension, this should delete the extension
+            protocol.mock_wire_data.set_incarnation(2)
+            protocol.mock_wire_data.set_extensions_config_state("uninstall")
+
+            protocol.client.update_goal_state()
+            exthandlers_handler.run()
+
+            self.assertEqual(0, TestExtensionCleanup._count_packages(), "All packages must be deleted")
+            self.assertEqual(0, TestExtensionCleanup._count_extension_directories(),
+                             "All extension directories should be removed")
+            self._assert_ext_handler_status(protocol.aggregate_status, "Ready", expected_ext_handler_count=0,
+                                            version="1.0.0")
 
 
 class TestHandlerStateMigration(AgentTestCase):
@@ -490,6 +523,38 @@ class TestExtension(ExtensionTestCase):
 
         exthandlers_handler.run()
         self._assert_no_handler_status(protocol.report_vm_status)
+
+    def test_it_should_only_download_extension_manifest_once_per_goal_state(self, *args):
+
+        def _assert_handler_status_and_manifest_download_count(protocol, test_data, manifest_count):
+            self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.0.0")
+            self._assert_ext_status(protocol.report_ext_status, "success", 0)
+            self.assertEqual(test_data.call_counts['manifest.xml'], manifest_count,
+                             "We should have downloaded extension manifest {0} times".format(manifest_count))
+
+        test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE)
+        exthandlers_handler, protocol = self._create_mock(test_data, *args)
+        exthandlers_handler.run()
+        _assert_handler_status_and_manifest_download_count(protocol, test_data, 1)
+
+        for _ in range(5):
+            protocol.update_goal_state()
+            exthandlers_handler.run()
+            # The extension manifest should only be downloaded once as incarnation did not change
+            _assert_handler_status_and_manifest_download_count(protocol, test_data, 1)
+
+        # Update Incarnation
+        test_data.set_incarnation(2)
+        protocol.update_goal_state()
+
+        exthandlers_handler.run()
+        _assert_handler_status_and_manifest_download_count(protocol, test_data, 2)
+
+        for _ in range(5):
+            protocol.update_goal_state()
+            exthandlers_handler.run()
+            # The extension manifest should be downloaded twice now as incarnation changed once
+            _assert_handler_status_and_manifest_download_count(protocol, test_data, 2)
 
     def test_ext_zip_file_packages_removed_in_update_case(self, *args):
         # Test enable scenario.
@@ -923,39 +988,39 @@ class TestExtension(ExtensionTestCase):
         self.assertTrue("Failed to get ext handler pkgs" in kw['message'])
         self.assertTrue("ProtocolError" in kw['message'])
 
-    @patch('azurelinuxagent.common.errorstate.ErrorState.is_triggered')
     @patch('azurelinuxagent.common.event.add_event')
-    def test_ext_handler_download_failure_permanent_with_ExtensionDownloadError_and_triggered(self, mock_add_event,
-                                                                                              mock_error_state, *args):
+    def test_ext_handler_download_errors_should_be_reported_only_on_new_goal_state(self, mock_add_event, *args):
+
+        def _assert_mock_add_event_call(expected_download_failed_event_count, err_msg_guid):
+            event_occurrences = [kw for _, kw in mock_add_event.call_args_list if
+                          "Failed to download artifacts: [ExtensionDownloadError] {0}".format(err_msg_guid) in kw['message']]
+            self.assertEquals(expected_download_failed_event_count, len(event_occurrences), "Call count do not match")
+            self.assertFalse(any([kw['is_success'] for kw in event_occurrences]), "The events should have failed")
+            self.assertEqual(expected_download_failed_event_count, len([kw['op'] for kw in event_occurrences]),
+                             "Incorrect Operation, all events should be a download errors")
+
         test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE)
         exthandlers_handler, protocol = self._create_mock(test_data, *args)
-        protocol.get_ext_handler_pkgs = Mock(side_effect=ExtensionDownloadError)
-
-        mock_error_state.return_value = True
-
-        exthandlers_handler.run()
-
-        self.assertEquals(1, mock_add_event.call_count)
-        args, kw = mock_add_event.call_args_list[0]
-        self.assertEquals(False, kw['is_success'])
-        self.assertTrue("Failed to get artifact for over" in kw['message'])
-        self.assertTrue("ExtensionDownloadError" in kw['message'])
-        self.assertEquals("Download", kw['op'])
-
-    @patch('azurelinuxagent.common.errorstate.ErrorState.is_triggered')
-    @patch('azurelinuxagent.common.event.add_event')
-    def test_ext_handler_download_failure_permanent_with_ExtensionDownloadError_and_not_triggered(self, mock_add_event,
-                                                                                                  mock_error_state,
-                                                                                                  *args):
-        test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE)
-        exthandlers_handler, protocol = self._create_mock(test_data, *args)
-        protocol.get_ext_handler_pkgs = Mock(side_effect=ExtensionDownloadError)
-
-        mock_error_state.return_value = False
+        unique_error_message_guid = str(uuid.uuid4())
+        protocol.get_ext_handler_pkgs = Mock(side_effect=ExtensionDownloadError(unique_error_message_guid))
 
         exthandlers_handler.run()
+        _assert_mock_add_event_call(expected_download_failed_event_count=1, err_msg_guid=unique_error_message_guid)
+        self._assert_handler_status(protocol.report_vm_status, "NotReady", 0, "1.0.0")
 
-        self.assertEquals(0, mock_add_event.call_count)
+        # Re-run exthandler.run without updating the GS and ensure we dont report error
+        protocol.update_goal_state()
+        exthandlers_handler.run()
+        _assert_mock_add_event_call(expected_download_failed_event_count=1, err_msg_guid=unique_error_message_guid)
+        self._assert_handler_status(protocol.report_vm_status, "NotReady", 0, "1.0.0")
+
+        # Change incarnation and then re-check we report error
+        test_data.set_incarnation(2)
+        protocol.update_goal_state()
+
+        exthandlers_handler.run()
+        _assert_mock_add_event_call(expected_download_failed_event_count=2, err_msg_guid=unique_error_message_guid)
+        self._assert_handler_status(protocol.report_vm_status, "NotReady", 0, "1.0.0")
 
     @patch('azurelinuxagent.ga.exthandlers.fileutil')
     def test_ext_handler_io_error(self, mock_fileutil, *args):

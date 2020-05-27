@@ -190,6 +190,10 @@ class HttpRequestPredicates(object):
                                                                         restutil.HOST_PLUGIN_PORT)
 
     @staticmethod
+    def is_host_plugin_status_request(url):
+        return url.lower() == 'http://{0}:{1}/status'.format(restutil.KNOWN_WIRESERVER_IP, restutil.HOST_PLUGIN_PORT)
+
+    @staticmethod
     def is_host_plugin_extension_request(request_url, request_kwargs, extension_url):
         if not HttpRequestPredicates.is_host_plugin_extension_artifact_request(request_url):
             return False

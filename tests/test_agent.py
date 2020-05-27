@@ -33,6 +33,8 @@ DetectScvmmEnv = False
 EnableOverProvisioning = True
 Extension.LogDir = /var/log/azure
 Extensions.Enabled = True
+Extensions.GoalStateHistoryCleanupPeriod = 86400
+Extensions.GoalStatePeriod = 6
 HttpProxy.Host = None
 HttpProxy.Port = None
 Lib.Dir = /var/lib/waagent
@@ -42,11 +44,15 @@ OS.AllowHTTP = False
 OS.CheckRdmaDriver = False
 OS.EnableFIPS = True
 OS.EnableFirewall = False
+OS.EnableFirewallPeriod = 30
 OS.EnableRDMA = False
 OS.HomeDir = /home
+OS.MonitorDhcpClientRestartPeriod = 30
 OS.OpensslPath = /usr/bin/openssl
 OS.PasswordPath = /etc/shadow
+OS.RemovePersistentNetRulesPeriod = 30
 OS.RootDeviceScsiTimeout = 300
+OS.RootDeviceScsiTimeoutPeriod = 30
 OS.SshClientAliveInterval = 42
 OS.SshDir = /notareal/path
 OS.SudoersDir = /etc/sudoers.d
@@ -58,6 +64,7 @@ Provisioning.DecodeCustomData = False
 Provisioning.DeleteRootPassword = True
 Provisioning.ExecuteCustomData = False
 Provisioning.MonitorHostName = True
+Provisioning.MonitorHostNamePeriod = 30
 Provisioning.PasswordCryptId = 6
 Provisioning.PasswordCryptSaltLength = 10
 Provisioning.RegenerateSshHostKeyPair = True
@@ -170,7 +177,7 @@ class TestAgent(AgentTestCase):
         configuration = conf.get_configuration()
         for k in sorted(configuration.keys()):
             actual_configuration.append("{0} = {1}".format(k, configuration[k]))
-        self.assertEqual(EXPECTED_CONFIGURATION, actual_configuration)
+        self.assertListEqual(EXPECTED_CONFIGURATION, actual_configuration)
 
     def test_agent_usage_message(self):
         message = usage()
