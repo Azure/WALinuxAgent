@@ -23,8 +23,7 @@ from azurelinuxagent.common.conf import *
 from tests.tools import AgentTestCase, data_dir, Mock, patch
 
 EXPECTED_CONFIGURATION = \
-"""Agent.Log = /var/log/waagent.log
-AutoUpdate.Enabled = True
+"""AutoUpdate.Enabled = True
 AutoUpdate.GAFamily = Prod
 Autoupdate.Frequency = 3600
 CGroups.EnforceLimits = False

@@ -52,7 +52,7 @@ _MUST_COLLECT_FILES = [
     os.path.join(_AGENT_LIB_DIR, "history", "*.zip"),
     os.path.join(_EXTENSION_LOG_DIR, "*", "*"),
     os.path.join(_EXTENSION_LOG_DIR, "*", "*", "*"),
-    "{0}.+".format(_AGENT_LOG)  # any additional waagent.log files (e.g., waagent.log.1.gz)
+    "{0}.*".format(_AGENT_LOG)  # any additional waagent.log files (e.g., waagent.log.1.gz)
 ]
 
 _FILE_SIZE_LIMIT = 30 * 1024 * 1024  # 30 MB
@@ -78,8 +78,8 @@ class LogCollector(object):
 
     @staticmethod
     def _reset_file(filepath):
-        with open(filepath, "w") as out_file:
-            out_file.write("")
+        with open(filepath, "wb") as out_file:
+            out_file.write("".encode("utf-8"))
 
     @staticmethod
     def _create_base_dirs():

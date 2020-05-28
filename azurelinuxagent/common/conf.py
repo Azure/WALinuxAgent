@@ -116,7 +116,6 @@ __SWITCH_OPTIONS__ = {
 
 __STRING_OPTIONS__ = {
     "Lib.Dir": "/var/lib/waagent",
-    "Agent.Log": "/var/log/waagent.log",
     "DVD.MountPoint": "/mnt/cdrom/secure",
     "Pid.File": "/var/run/waagent.pid",
     "Extension.LogDir": "/var/log/azure",
@@ -244,8 +243,8 @@ def get_ext_log_dir(conf=__conf__):
     return conf.get("Extension.LogDir", "/var/log/azure")
 
 
-def get_agent_log_file(conf=__conf__):
-    return conf.get("Agent.Log", "/var/log/waagent.log")
+def get_agent_log_file():
+    return "/var/log/waagent.log"
 
 
 def get_fips_enabled(conf=__conf__):
