@@ -26,10 +26,15 @@ from azurelinuxagent.common.cgroupconfigurator import CGroupConfigurator
 from azurelinuxagent.common.cgroupstelemetry import CGroupsTelemetry
 from azurelinuxagent.common.exception import CGroupsException
 from tests.common.mock_cgroup_commands import mock_cgroup_commands
-from tests.tools import AgentTestCase, patch, skip_if_predicate_true
+from tests.tools import AgentTestCase, patch
 
 
 class CGroupConfiguratorSystemdTestCase(AgentTestCase):
+    @classmethod
+    def tearDownClass(cls):
+        CGroupConfigurator._instance = None
+        AgentTestCase.tearDownClass()
+
     @staticmethod
     def _get_new_cgroup_configurator_instance(initialize=True):
         CGroupConfigurator._instance = None
