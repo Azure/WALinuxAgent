@@ -41,19 +41,39 @@ GOAL_STATE_SOURCE_FASTTRACK = "FastTrack"
 
 DMIDECODE_CALL = "dmidecode"
 
+
+class ExtensionsConfigReasons:
+    FABRIC_CHANGED = "FabricChanged"
+    FABRIC_LAST_CHANGE = "LastFabric"
+    FAST_TRACK_CHANGED = "FTChanged"
+    FAST_TRACK_LAST_CHANGE = "LastFT"
+
+
+class FastTrackChangeDetail:
+    NO_CHANGE = "NoChange"
+    NO_EXTENSIONS = "NoExtensions"
+    NO_PROFILE = "NoProfile"
+    SEQ_NO_CHANGED = "seqNoChanged"
+
+
+class FabricChangeDetail:
+    INCARNATION_CHANGED = "IncChanged"
+    NO_CHANGE = "NoChange"
+    NO_INCARNATION = "NoInc"
+
+
 """ 
 GenericExtensionsConfig abstracts whether we pulled the goal state from Fabric or from FastTrack
 consumers should not worry from where the ExtensionsConfig came. They should also have no knowledge
 of sequence numbers or incarnations, which are specific to FastTrack and Fabric respectfully
 """
-class GenericExtensionsConfig(object):
+class GenericExtensionsConfig(ExtensionsConfig):
     def __init__(self, extensions_config, changed, ext_conf_retriever):
         self.extensions_config = extensions_config
         self.changed = changed
         self._ext_conf_retriever = ext_conf_retriever
 
-        # Copy all properties from extensions_config to make this look like one
-        self.__dict__.update(extensions_config.__dict__)
+        ExtensionsConfig.__init__(self, extensions_config.xml_text)
 
     def commit_processed(self):
         self._ext_conf_retriever.commit_processed()
@@ -206,20 +226,20 @@ class ExtensionsConfigRetriever(object):
         If neither changed, then process whichever we used last (to keep with the current behavior)
         """
         if fabric_changed:
-            self._set_reason("FabricChanged")
+            self._set_reason(ExtensionsConfigReasons.FABRIC_CHANGED)
             return GOAL_STATE_SOURCE_FABRIC
         if fast_track_changed:
-            self._set_reason("FTChanged")
+            self._set_reason(ExtensionsConfigReasons.FAST_TRACK_CHANGED)
             return GOAL_STATE_SOURCE_FASTTRACK
 
         mode = self._last_mode
         if mode is None:
             mode = self._get_mode()
         if mode == GOAL_STATE_SOURCE_FASTTRACK:
-            self._set_reason("LastFT")
+            self._set_reason(ExtensionsConfigReasons.FAST_TRACK_LAST_CHANGE)
             return GOAL_STATE_SOURCE_FASTTRACK
 
-        self._set_reason("LastFabric")
+        self._set_reason(ExtensionsConfigReasons.FABRIC_LAST_CHANGE)
         return GOAL_STATE_SOURCE_FABRIC
 
     def _set_reason(self, reason):
@@ -227,35 +247,35 @@ class ExtensionsConfigRetriever(object):
 
     def _get_fast_track_changed(self, artifacts_profile):
         if artifacts_profile is None:
-            self._fast_track_changed_detail = "NoProfile"
+            self._fast_track_changed_detail = FastTrackChangeDetail.NO_PROFILE
             return False
         if not artifacts_profile.has_extensions():
-            self._fast_track_changed_detail = "NoExtensions"
+            self._fast_track_changed_detail = FastTrackChangeDetail.NO_EXTENSIONS
             return False
 
         sequence_number = self._last_fast_track_seq_no
         if sequence_number is None:
             sequence_number = self._get_sequence_number()
         if sequence_number is None or sequence_number != artifacts_profile.get_sequence_number():
-            self._fast_track_changed_detail = "seqNoChanged"
+            self._fast_track_changed_detail = FastTrackChangeDetail.SEQ_NO_CHANGED
             return True
 
-        self._fast_track_changed_detail = "NoChange"
+        self._fast_track_changed_detail = FastTrackChangeDetail.NO_CHANGE
         return False
 
     def _get_fabric_changed(self, goal_state_incarnation):
         if goal_state_incarnation is None:
-            self._fabric_changed_detail = "NoInc"
+            self._fabric_changed_detail = FabricChangeDetail.NO_INCARNATION
             return True
 
         incarnation = self._last_fabric_incarnation
         if incarnation is None:
             incarnation = self._get_incarnation()
         if incarnation is None or str(incarnation) != str(goal_state_incarnation):
-            self._fabric_changed_detail = "IncChanged"
+            self._fabric_changed_detail = FabricChangeDetail.INCARNATION_CHANGED
             return True
 
-        self._fabric_changed_detail = "NoChange"
+        self._fabric_changed_detail = FabricChangeDetail.NO_CHANGE
         return False
 
     def _set_fast_track(self, vm_artifacts_seq_no=None):
