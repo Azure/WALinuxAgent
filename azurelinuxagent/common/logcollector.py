@@ -28,12 +28,12 @@ import zipfile
 # Please note: be careful when adding agent dependencies in this module.
 # This module uses its own logger and logs to its own file, not to the agent log.
 
-from azurelinuxagent.common.conf import get_lib_dir, get_ext_log_dir
+from azurelinuxagent.common.conf import get_lib_dir, get_ext_log_dir, get_agent_log_file
 from azurelinuxagent.common.future import ustr
 
 _EXTENSION_LOG_DIR = get_ext_log_dir()
 _AGENT_LIB_DIR = get_lib_dir()
-_AGENT_LOG = "/var/log/waagent.log"
+_AGENT_LOG = get_agent_log_file()
 
 _LOG_COLLECTOR_DIR = os.path.join(_AGENT_LIB_DIR, "logcollector")
 _TRUNCATED_FILES_DIR = os.path.join(_LOG_COLLECTOR_DIR, "truncated")
@@ -52,7 +52,7 @@ _MUST_COLLECT_FILES = [
     os.path.join(_AGENT_LIB_DIR, "history", "*.zip"),
     os.path.join(_EXTENSION_LOG_DIR, "*", "*"),
     os.path.join(_EXTENSION_LOG_DIR, "*", "*", "*"),
-    "{0}*".format(_AGENT_LOG)
+    "{0}.+".format(_AGENT_LOG)  # any additional waagent.log files (e.g., waagent.log.1.gz)
 ]
 
 _FILE_SIZE_LIMIT = 30 * 1024 * 1024  # 30 MB
@@ -143,18 +143,6 @@ class LogCollector(object):
 
         return manifest
 
-    @staticmethod
-    def _parametrize_filepath(path):
-        hardcoded_lib_path = "/var/lib/waagent"
-        hardcoded_extension_log_path = "/var/log/azure"
-
-        if hardcoded_lib_path in path and hardcoded_lib_path != _AGENT_LIB_DIR:
-            return path.replace(hardcoded_lib_path, _AGENT_LIB_DIR)
-        elif hardcoded_extension_log_path in path and hardcoded_extension_log_path != _EXTENSION_LOG_DIR:
-            return path.replace(hardcoded_extension_log_path, _EXTENSION_LOG_DIR)
-        else:
-            return path
-
     def _read_manifest_file(self):
         with open(self._manifest_file_path, "rb") as in_file:
             data = in_file.read()
@@ -166,8 +154,7 @@ class LogCollector(object):
 
     @staticmethod
     def _process_ll_command(folder):
-        parametrized_folder = LogCollector._parametrize_filepath(folder)
-        LogCollector._run_shell_command(["ls", "-alF", parametrized_folder], log_output=True)
+        LogCollector._run_shell_command(["ls", "-alF", folder], log_output=True)
 
     @staticmethod
     def _process_echo_command(message):
@@ -175,8 +162,7 @@ class LogCollector(object):
 
     @staticmethod
     def _process_copy_command(path):
-        parametrized_path = LogCollector._parametrize_filepath(path)
-        file_paths = glob.glob(parametrized_path)
+        file_paths = glob.glob(path)
         for file_path in file_paths:
             _LOGGER.info(file_path)
         return file_paths
@@ -215,9 +201,10 @@ class LogCollector(object):
 
         new_manifest = []
         for line in manifest_data:
-            line.replace("$LIB_DIR", _AGENT_LIB_DIR)
-            line.replace("$LOG_DIR", _EXTENSION_LOG_DIR)
-            new_manifest.append(line)
+            new_line = line.replace("$LIB_DIR", _AGENT_LIB_DIR)
+            new_line = new_line.replace("$LOG_DIR", _EXTENSION_LOG_DIR)
+            new_line = new_line.replace("$AGENT_LOG", _AGENT_LOG)
+            new_manifest.append(new_line)
 
         return new_manifest
 

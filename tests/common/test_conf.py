@@ -55,6 +55,7 @@ class TestConf(AgentTestCase):
         "HttpProxy.Port": None,
         "DetectScvmmEnv": False,
         "Lib.Dir": "/var/lib/waagent",
+        "Agent.Log": "/var/log/waagent.log",
         "DVD.MountPoint": "/mnt/cdrom/secure",
         "Pid.File": "/var/run/waagent.pid",
         "Extension.LogDir": "/var/log/azure",
