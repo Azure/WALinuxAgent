@@ -180,7 +180,6 @@ class CGroupConfiguratorSystemdTestCase(AgentTestCase):
             self.assertEqual(len(command_calls), 1, "The test command should have been called exactly once [{0}]".format(command_calls))
             self.assertTrue(command_calls[0].startswith("systemd-run"), "The command should have been invoked using systemd [{0}]".format(command_calls))
 
-    @skip_if_predicate_true(lambda: True, "Currently we are not tracking extensions")
     def test_start_extension_command_should_start_tracking_the_extension_cgroups(self):
         # CPU usage is initialized when we begin tracking a CPU cgroup; since this test does not retrieve the
         # CPU usage, there is no need for initialization
@@ -195,10 +194,14 @@ class CGroupConfiguratorSystemdTestCase(AgentTestCase):
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE)
 
-        self.assertTrue(CGroupsTelemetry.is_tracked(os.path.join(
-            self.cgroups_file_system_root, "cpu", "walinuxagent.extensions/Microsoft.Compute.TestExtension_1.2.3")))
-        self.assertTrue(CGroupsTelemetry.is_tracked(os.path.join(
-            self.cgroups_file_system_root, "memory", "walinuxagent.extensions/Microsoft.Compute.TestExtension_1.2.3")))
+        tracked = CGroupsTelemetry._tracked
+
+        self.assertTrue(
+            any(cg for cg in tracked if cg.name == 'Microsoft.Compute.TestExtension-1.2.3' and 'cpu' in cg.path),
+            "The extension's CPU is not being tracked")
+        self.assertTrue(
+            any(cg for cg in tracked if cg.name == 'Microsoft.Compute.TestExtension-1.2.3' and 'memory' in cg.path),
+            "The extension's memory is not being tracked")
 
     def test_start_extension_command_should_raise_an_exception_when_the_command_cannot_be_started(self):
         configurator = CGroupConfiguratorSystemdTestCase._get_new_cgroup_configurator_instance()

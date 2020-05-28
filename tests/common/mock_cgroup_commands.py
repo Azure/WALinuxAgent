@@ -16,6 +16,7 @@
 #
 import contextlib
 import os
+import re
 import subprocess
 
 from azurelinuxagent.common.utils import fileutil
@@ -26,13 +27,13 @@ from tests.tools import patch, data_dir
 #
 # The output comes from an Ubuntu 18 system
 #
-_default_commands = {
-    "systemctl --version":
+_default_commands = [
+    (r"systemctl --version",
 '''systemd 237
 +PAM +AUDIT +SELINUX +IMA +APPARMOR +SMACK +SYSVINIT +UTMP +LIBCRYPTSETUP +GCRYPT +GNUTLS +ACL +XZ +LZ4 +SECCOMP +BLKID +ELFUTILS +KMOD -IDN2 +IDN -PCRE2 default-hierarchy=hybrid
-''',
+'''),
 
-    "mount -t cgroup":
+    (r"mount -t cgroup",
 '''cgroup on /sys/fs/cgroup/systemd type cgroup (rw,nosuid,nodev,noexec,relatime,xattr,name=systemd)
 cgroup on /sys/fs/cgroup/rdma type cgroup (rw,nosuid,nodev,noexec,relatime,rdma)
 cgroup on /sys/fs/cgroup/cpuset type cgroup (rw,nosuid,nodev,noexec,relatime,cpuset)
@@ -45,20 +46,26 @@ cgroup on /sys/fs/cgroup/pids type cgroup (rw,nosuid,nodev,noexec,relatime,pids)
 cgroup on /sys/fs/cgroup/devices type cgroup (rw,nosuid,nodev,noexec,relatime,devices)
 cgroup on /sys/fs/cgroup/cpu,cpuacct type cgroup (rw,nosuid,nodev,noexec,relatime,cpu,cpuacct)
 cgroup on /sys/fs/cgroup/blkio type cgroup (rw,nosuid,nodev,noexec,relatime,blkio)
-''',
+'''),
 
-    "mount -t cgroup2":
+    (r"mount -t cgroup2",
 '''cgroup on /sys/fs/cgroup/unified type cgroup2 (rw,nosuid,nodev,noexec,relatime)
-''',
+'''),
 
-    "systemctl show walinuxagent.service --property CPUAccounting":
+    (r"systemctl show walinuxagent\.service --property CPUAccounting",
 '''CPUAccounting=no
-''',
+'''),
 
-    "systemctl show walinuxagent.service --property MemoryAccounting":
+    (r"systemctl show walinuxagent\.service --property MemoryAccounting",
 '''MemoryAccounting=no
-''',
-}
+'''),
+
+    (r"systemd-run --unit=([^\s]+) --scope ([^\s]+)",
+'''
+Running scope as unit: TEST_UNIT.scope
+Thu 28 May 2020 07:25:55 AM PDT
+''')
+]
 
 _default_files = {
     "/proc/self/cgroup": os.path.join(data_dir, 'cgroups', 'proc_self_cgroup'),
@@ -73,9 +80,11 @@ def mock_cgroup_commands():
 
     def mock_popen(command, *args, **kwargs):
         if isinstance(command, list):
-            key = " ".join(command)
-            if key in _default_commands:
-                command = ["echo", _default_commands[key]]
+            command_string = " ".join(command)
+            for c in _default_commands:
+                match = re.match(c[0], command_string)
+                if match is not None:
+                    command = ["echo", c[1]]
         return original_popen(command, *args, **kwargs)
     
     def mock_read_file(filepath, **kwargs):
