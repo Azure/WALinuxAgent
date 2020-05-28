@@ -66,9 +66,9 @@ CHILD_POLL_INTERVAL = 60
 
 MAX_FAILURE = 3 # Max failure allowed for agent before blacklisted
 
-GOAL_STATE_INTERVAL = 3
 GOAL_STATE_INTERVAL_DISABLED = 5 * 60
 
+ORPHAN_POLL_INTERVAL = 3
 ORPHAN_WAIT_INTERVAL = 15 * 60
 
 AGENT_SENTINEL_FILE = "current_version"
@@ -285,11 +285,12 @@ class UpdateHandler(object):
 
             self._ensure_no_orphans()
             self._emit_restart_event()
+            self._emit_changes_in_default_configuration()
             self._ensure_partition_assigned()
             self._ensure_readonly_files()
             self._ensure_cgroups_initialized()
 
-            goal_state_interval = GOAL_STATE_INTERVAL if conf.get_extensions_enabled() else GOAL_STATE_INTERVAL_DISABLED
+            goal_state_interval = conf.get_goal_state_period() if conf.get_extensions_enabled() else GOAL_STATE_INTERVAL_DISABLED
 
             while self.running:
                 #
@@ -421,6 +422,28 @@ class UpdateHandler(object):
 
         return
 
+    @staticmethod
+    def _emit_changes_in_default_configuration():
+        try:
+            def log_if_int_changed_from_default(name, current):
+                default = conf.get_int_default_value(name)
+                if default != current:
+                    msg = "{0} changed from its default; new value: {1}".format(name, current)
+                    logger.info(msg)
+                    add_event(AGENT_NAME, op=WALAEventOperation.ConfigurationChange, message=msg)
+
+            log_if_int_changed_from_default("Extensions.GoalStatePeriod", conf.get_goal_state_period())
+
+            if not conf.enable_firewall():
+                message = "OS.EnableFirewall is False"
+                logger.info(message)
+                add_event(AGENT_NAME, op=WALAEventOperation.ConfigurationChange, message=message)
+            else:
+                log_if_int_changed_from_default("OS.EnableFirewallPeriod", conf.get_enable_firewall_period())
+
+        except Exception as e:
+            logger.warn("Failed to log changes in configuration: {0}", ustr(e))
+
     def _ensure_no_orphans(self, orphan_wait_interval=ORPHAN_WAIT_INTERVAL):
         pid_files, ignored = self._write_pid_file()
         for pid_file in pid_files:
@@ -429,7 +452,7 @@ class UpdateHandler(object):
                 wait_interval = orphan_wait_interval
 
                 while self.osutil.check_pid_alive(pid):
-                    wait_interval -= GOAL_STATE_INTERVAL
+                    wait_interval -= ORPHAN_POLL_INTERVAL
                     if wait_interval <= 0:
                         logger.warn(
                             u"{0} forcibly terminated orphan process {1}",
@@ -442,7 +465,7 @@ class UpdateHandler(object):
                         u"{0} waiting for orphan process {1} to terminate",
                         CURRENT_AGENT,
                         pid)
-                    time.sleep(GOAL_STATE_INTERVAL)
+                    time.sleep(ORPHAN_POLL_INTERVAL)
 
                 os.remove(pid_file)
 
