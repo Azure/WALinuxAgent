@@ -1116,12 +1116,12 @@ class TestExtension(ExtensionTestCase):
         # Disable extension handling blocking in the first run and enable in the 2nd run
         with patch.object(exthandlers_handler, '_extension_processing_allowed', side_effect=[False, True]):
             exthandlers_handler.run()
-            self.assertIsNone(protocol.client.ext_config_retriever._last_incarnation,
+            self.assertIsNone(protocol.client.ext_config_retriever._last_fabric_incarnation,
                         "Last incarnation should not be populated if extension processing is disabled")
             mock_in_vm_artifacts_profile.is_on_hold = Mock(return_value=False)
             protocol.update_goal_state()
             exthandlers_handler.run()
-            self.assertEqual("1", protocol.client.ext_config_retriever._last_incarnation,
+            self.assertEqual("1", protocol.client.ext_config_retriever._last_fabric_incarnation,
                              "Last incarnation should be populated if extension processing is enabled")
 
     def _assert_ext_status(self, report_ext_status, expected_status,

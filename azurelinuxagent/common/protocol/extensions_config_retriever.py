@@ -64,16 +64,16 @@ class GenericExtensionsConfig(object):
 class ExtensionsConfigRetriever(object):
     def __init__(self, wire_client):
         self._wire_client = wire_client
-        self._last_incarnation = None
-        self._last_svd_seqNo = None
-        self._last_seqNo = None
+        self._last_fabric_incarnation = None
+        self._last_svd_seq_no = None
+        self._last_fast_track_seq_no = None
         self._saved_artifacts_profile = None
         self._last_mode = None
         self._pending_mode = None
-        self._pending_seqNo = None
-        self._pending_svd_seqNo = None
-        self._pending_incarnation = None
-        self._ft_changed_detail = None
+        self._pending_fast_track_seq_no = None
+        self._pending_svd_seq_no = None
+        self._pending_fabric_incarnation = None
+        self._fast_track_changed_detail = None
         self._fabric_changed_detail = None
         self._reason = None
         self._reset_if_necessary()
@@ -103,22 +103,22 @@ class ExtensionsConfigRetriever(object):
         if self._pending_mode == GOAL_STATE_SOURCE_FABRIC:
             xml_text = self._wire_client.fetch_config(ext_conf_uri, self._wire_client.get_header())
             extensions_config = ExtensionsConfig(xml_text)
-            changed = fabric_changed | is_startup
+            changed = fabric_changed or is_startup
             if fast_track_changed:
                 # If FastTrack changed too, then save the artifacts profile because the next time
                 # we retrieve it, we'll receive a 304 because the etag didn't change
                 self._saved_artifacts_profile = artifacts_profile
         else:
             extensions_config = artifacts_profile.transform_to_extensions_config()
-            changed = fast_track_changed | is_startup
+            changed = fast_track_changed or is_startup
             self._saved_artifacts_profile = artifacts_profile
 
         if changed:
             if self._pending_mode == GOAL_STATE_SOURCE_FABRIC:
                 self._remove_extensions_if_necessary(extensions_config)
-                self._pending_incarnation = str(incarnation)
+                self._pending_fabric_incarnation = str(incarnation)
             else:
-                self._pending_seqNo = artifacts_profile.get_sequence_number()
+                self._pending_fast_track_seq_no = artifacts_profile.get_sequence_number()
             logger.info("Handle extensions updates for {0}, Startup={1}", self._last_mode, is_startup)
 
         return GenericExtensionsConfig(extensions_config, changed, self)
@@ -142,17 +142,17 @@ class ExtensionsConfigRetriever(object):
             logger.info("Committing from previous mode {0}. New mode is {1}", self._last_mode, self._pending_mode)
 
         if self._pending_mode == GOAL_STATE_SOURCE_FASTTRACK:
-            self._last_seqNo = self._pending_seqNo
-            self._set_fast_track(self._last_seqNo)
+            self._last_fast_track_seq_no = self._pending_fast_track_seq_no
+            self._set_fast_track(self._last_fast_track_seq_no)
             self._last_mode = self._pending_mode
         else:
-            self._last_incarnation = self._pending_incarnation
+            self._last_fabric_incarnation = self._pending_fabric_incarnation
 
             # Don't record the last goal state as Fabric if we didn't process the extensions
-            if self._last_svd_seqNo != self._pending_svd_seqNo:
-                self._last_svd_seqNo = self._pending_svd_seqNo
+            if self._last_svd_seq_no != self._pending_svd_seq_no:
+                self._last_svd_seq_no = self._pending_svd_seq_no
                 self._last_mode = self._pending_mode
-                self._set_fabric(self._last_incarnation, self._last_svd_seqNo)
+                self._set_fabric(self._last_fabric_incarnation, self._last_svd_seq_no)
 
     def _reset(self):
         """
@@ -187,14 +187,16 @@ class ExtensionsConfigRetriever(object):
         more recently updated via a FastTrack GS. Therefore, we remove them here in that case.
         """
         if self._pending_mode == GOAL_STATE_SOURCE_FABRIC:
-            svd_seqNo = self._get_svd_seqNo()
-            if str(extensions_config.svd_seqNo) == str(svd_seqNo):
+            svd_seq_no = self._last_svd_seq_no
+            if svd_seq_no is None:
+                svd_seq_no = self._get_svd_seqNo()
+            if str(extensions_config.svd_seqNo) == str(svd_seq_no):
                 logger.info("SvdSeqNo did not change. Removing extensions from goal state")
                 extensions_config.ext_handlers = None
-                self._last_svd_seqNo = extensions_config.svd_seqNo
-                self._pending_svd_seqNo = extensions_config.svd_seqNo
+                self._last_svd_seq_no = extensions_config.svd_seqNo
+                self._pending_svd_seq_no = extensions_config.svd_seqNo
             else:
-                self._pending_svd_seqNo = svd_seqNo
+                self._pending_svd_seq_no = svd_seq_no
 
     def _decide_what_to_process(self, fabric_changed, fast_track_changed):
         """
@@ -209,7 +211,11 @@ class ExtensionsConfigRetriever(object):
         if fast_track_changed:
             self._set_reason("FTChanged")
             return GOAL_STATE_SOURCE_FASTTRACK
-        if self._get_mode() == GOAL_STATE_SOURCE_FASTTRACK:
+
+        mode = self._last_mode
+        if mode is None:
+            mode = self._get_mode()
+        if mode == GOAL_STATE_SOURCE_FASTTRACK:
             self._set_reason("LastFT")
             return GOAL_STATE_SOURCE_FASTTRACK
 
@@ -217,24 +223,24 @@ class ExtensionsConfigRetriever(object):
         return GOAL_STATE_SOURCE_FABRIC
 
     def _set_reason(self, reason):
-        self._reason = "{0}: FastTrack={1}, Fabric={2}".format(reason, self._ft_changed_detail, self._fabric_changed_detail)
+        self._reason = "{0}: FastTrack={1}, Fabric={2}".format(reason, self._fast_track_changed_detail, self._fabric_changed_detail)
 
     def _get_fast_track_changed(self, artifacts_profile):
         if artifacts_profile is None:
-            self._ft_changed_detail = "NoProfile"
+            self._fast_track_changed_detail = "NoProfile"
             return False
         if not artifacts_profile.has_extensions():
-            self._ft_changed_detail = "NoExtensions"
+            self._fast_track_changed_detail = "NoExtensions"
             return False
 
-        sequence_number = self._last_seqNo
+        sequence_number = self._last_fast_track_seq_no
         if sequence_number is None:
             sequence_number = self._get_sequence_number()
         if sequence_number is None or sequence_number != artifacts_profile.get_sequence_number():
-            self._ft_changed_detail = "seqNoChanged"
+            self._fast_track_changed_detail = "seqNoChanged"
             return True
 
-        self._ft_changed_detail = "NoChange"
+        self._fast_track_changed_detail = "NoChange"
         return False
 
     def _get_fabric_changed(self, goal_state_incarnation):
@@ -242,7 +248,7 @@ class ExtensionsConfigRetriever(object):
             self._fabric_changed_detail = "NoInc"
             return True
 
-        incarnation = self._last_incarnation
+        incarnation = self._last_fabric_incarnation
         if incarnation is None:
             incarnation = self._get_incarnation()
         if incarnation is None or str(incarnation) != str(goal_state_incarnation):
@@ -330,9 +336,9 @@ class ExtensionsConfigRetriever(object):
 
     def get_description(self):
         if self._last_mode == GOAL_STATE_SOURCE_FASTTRACK:
-            return "FastTrack: SeqNo={0}, Reason={1}".format(self._last_seqNo, self._reason)
+            return "FastTrack: SeqNo={0}, Reason={1}".format(self._last_fast_track_seq_no, self._reason)
         else:
-            return "Fabric: Incarnation={0}, Reason={1}".format(self._last_incarnation, self._reason)
+            return "Fabric: Incarnation={0}, Reason={1}".format(self._last_fabric_incarnation, self._reason)
 
     def _get_vm_id(self):
         vm_id = None
