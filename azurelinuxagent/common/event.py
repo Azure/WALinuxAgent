@@ -28,6 +28,7 @@ from datetime import datetime
 
 import azurelinuxagent.common.conf as conf
 import azurelinuxagent.common.logger as logger
+from azurelinuxagent.common.AgentGlobals import AgentGlobals
 from azurelinuxagent.common.exception import EventError, OSUtilError
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.datacontract import get_properties, set_properties
@@ -37,7 +38,6 @@ from azurelinuxagent.common.utils import fileutil, textutil
 from azurelinuxagent.common.utils.textutil import parse_doc, findall, find, getattrib
 from azurelinuxagent.common.version import CURRENT_VERSION, CURRENT_AGENT, DISTRO_NAME, DISTRO_VERSION, DISTRO_CODE_NAME, AGENT_EXECUTION_MODE
 from azurelinuxagent.common.telemetryevent import TelemetryEventList
-from azurelinuxagent.common.protocol.goal_state import GoalState
 from azurelinuxagent.common.protocol.imds import get_imds_client
 
 EVENTS_DIRECTORY = "events"
@@ -98,6 +98,7 @@ class WALAEventOperation:
     Log = "Log"
     OSInfo = "OSInfo"
     Partition = "Partition"
+    PluginSettingsVersionMismatch = "PluginSettingsVersionMismatch"
     ProcessGoalState = "ProcessGoalState"
     Provision = "Provision"
     ProvisionGuestAgent = "ProvisionGuestAgent"
@@ -531,7 +532,7 @@ class EventLogger(object):
         Note that the event timestamp is saved in the OpcodeName field.
         """
         common_params = [TelemetryEventParam('GAVersion', CURRENT_AGENT),
-                         TelemetryEventParam('ContainerId', GoalState.ContainerID),
+                         TelemetryEventParam('ContainerId', AgentGlobals.get_container_id()),
                          TelemetryEventParam('OpcodeName', event_timestamp.strftime(u'%Y-%m-%dT%H:%M:%S.%fZ')),
                          TelemetryEventParam('EventTid', threading.current_thread().ident),
                          TelemetryEventParam('EventPid', os.getpid()),
