@@ -124,8 +124,8 @@ class CGroupConfigurator(object):
                 if memory_cgroup_relative_path is None:
                     log_cgroup_warn("The agent's process is not within a memory cgroup")
                 else:
-                    cpu_accounting = self._cgroups_api.get_unit_property(agent_unit_name, "MemoryAccounting")
-                    log_cgroup_info('MemoryAccounting: {0}', cpu_accounting)
+                    memory_accounting = self._cgroups_api.get_unit_property(agent_unit_name, "MemoryAccounting")
+                    log_cgroup_info('MemoryAccounting: {0}', memory_accounting)
 
                 #
                 # All good, enable cgroups and start monitoring the agent
