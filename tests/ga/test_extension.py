@@ -86,7 +86,7 @@ class TestExtensionCleanup(AgentTestCase):
 
     def setUp(self):
         AgentTestCase.setUp(self)
-        self.mock_sleep = patch("time.sleep", lambda *_: mock_sleep(0.0001))
+        self.mock_sleep = patch("time.sleep", lambda *_: mock_sleep(0.01))
         self.mock_sleep.start()
 
     def tearDown(self):
@@ -110,10 +110,14 @@ class TestExtensionCleanup(AgentTestCase):
     def _assert_ext_handler_status(self, aggregate_status, expected_status, version, expected_ext_handler_count=0):
         self.assertIsNotNone(aggregate_status, "Aggregate status should not be None")
         handler_statuses = aggregate_status['aggregateStatus']['handlerAggregateStatus']
-        self.assertEqual(expected_ext_handler_count, len(handler_statuses))
-        for ext_handler_status in handler_statuses:
-            self.assertEquals(expected_status, ext_handler_status['status'])
-            self.assertEquals(version, ext_handler_status['handlerVersion'])
+        try:
+            self.assertEqual(expected_ext_handler_count, len(handler_statuses))
+            for ext_handler_status in handler_statuses:
+                self.assertEquals(expected_status, ext_handler_status['status'])
+                self.assertEquals(version, ext_handler_status['handlerVersion'])
+        except Exception as e:
+            print("All ExtensionHandlers: {0}".format(handler_statuses))
+            raise
         return
 
     @contextlib.contextmanager
