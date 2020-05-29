@@ -16,17 +16,12 @@
 #
 
 import os
-import sys
 import unittest
 
 import azurelinuxagent.common.conf as conf
 from azurelinuxagent.common.exception import CryptError
 from azurelinuxagent.common.utils.cryptutil import CryptUtil
-from tests.tools import AgentTestCase, data_dir, load_data, skip_if_predicate_true
-
-
-def is_python_version_26():
-    return sys.version_info[0] == 2 and sys.version_info[1] == 6
+from tests.tools import AgentTestCase, data_dir, load_data, is_python_version_26, skip_if_predicate_true
 
 
 class TestCryptoUtilOperations(AgentTestCase):

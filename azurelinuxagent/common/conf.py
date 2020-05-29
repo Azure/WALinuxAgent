@@ -243,6 +243,10 @@ def get_ext_log_dir(conf=__conf__):
     return conf.get("Extension.LogDir", "/var/log/azure")
 
 
+def get_agent_log_file():
+    return "/var/log/waagent.log"
+
+
 def get_fips_enabled(conf=__conf__):
     return conf.get_switch("OS.EnableFIPS", False)
 
