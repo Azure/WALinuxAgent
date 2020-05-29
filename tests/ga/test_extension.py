@@ -110,14 +110,12 @@ class TestExtensionCleanup(AgentTestCase):
     def _assert_ext_handler_status(self, aggregate_status, expected_status, version, expected_ext_handler_count=0):
         self.assertIsNotNone(aggregate_status, "Aggregate status should not be None")
         handler_statuses = aggregate_status['aggregateStatus']['handlerAggregateStatus']
-        try:
-            self.assertEqual(expected_ext_handler_count, len(handler_statuses))
-            for ext_handler_status in handler_statuses:
-                self.assertEquals(expected_status, ext_handler_status['status'])
-                self.assertEquals(version, ext_handler_status['handlerVersion'])
-        except Exception as e:
-            print("All ExtensionHandlers: {0}".format(handler_statuses))
-            raise
+        self.assertEqual(expected_ext_handler_count, len(handler_statuses),
+                         "All ExtensionHandlers: {0}".format(handler_statuses))
+        for ext_handler_status in handler_statuses:
+            debug_info = "ExtensionHandler: {0}".format(ext_handler_status)
+            self.assertEquals(expected_status, ext_handler_status['status'], debug_info)
+            self.assertEquals(version, ext_handler_status['handlerVersion'], debug_info)
         return
 
     @contextlib.contextmanager
