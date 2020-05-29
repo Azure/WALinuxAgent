@@ -441,6 +441,11 @@ class UpdateHandler(object):
             else:
                 log_if_int_changed_from_default("OS.EnableFirewallPeriod", conf.get_enable_firewall_period())
 
+            if conf.get_lib_dir() != "/var/lib/waagent":
+                message = "lib dir is in an unexpected location: {0}".format(conf.get_lib_dir())
+                logger.info(message)
+                add_event(AGENT_NAME, op=WALAEventOperation.ConfigurationChange, message=message)
+
         except Exception as e:
             logger.warn("Failed to log changes in configuration: {0}", ustr(e))
 
