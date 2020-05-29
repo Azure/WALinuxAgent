@@ -92,7 +92,7 @@ class DeprovisionHandler(object):
         actions.append(DeprovisionAction(fileutil.rm_dirs, dirs))
 
     def del_files(self, warnings, actions):
-        files = ['/root/.bash_history', '/var/log/waagent.log']
+        files = ['/root/.bash_history', conf.get_agent_log_file()]
         actions.append(DeprovisionAction(fileutil.rm_files, files))
 
         # For OpenBSD
