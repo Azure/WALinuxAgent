@@ -168,6 +168,10 @@ def i_am_root():
     return os.geteuid() == 0
 
 
+def is_python_version_26():
+    return sys.version_info[0] == 2 and sys.version_info[1] == 6
+
+
 class AgentTestCase(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
