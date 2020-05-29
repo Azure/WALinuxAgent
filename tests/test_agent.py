@@ -17,9 +17,9 @@
 
 import os.path
 
-from azurelinuxagent.agent import *
-from azurelinuxagent.common.conf import *
-
+from azurelinuxagent.agent import parse_args, Agent, usage
+from azurelinuxagent.common import conf
+from azurelinuxagent.common.utils import fileutil
 from tests.tools import AgentTestCase, data_dir, Mock, patch
 
 EXPECTED_CONFIGURATION = \

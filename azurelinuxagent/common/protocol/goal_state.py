@@ -21,12 +21,15 @@ import os
 import re
 
 import azurelinuxagent.common.conf as conf
+from azurelinuxagent.common.future import ustr
 import azurelinuxagent.common.logger as logger
-from azurelinuxagent.common.datacontract import set_properties, DataContract, DataContractList
+from azurelinuxagent.common.datacontract import set_properties
+from azurelinuxagent.common.protocol.restapi import Cert, CertList, Extension, ExtHandler, ExtHandlerList, \
+    ExtHandlerVersionUri, RemoteAccessUser, RemoteAccessUsersList, \
+    VMAgentManifest, VMAgentManifestList, VMAgentManifestUri
 from azurelinuxagent.common.utils import fileutil
 from azurelinuxagent.common.utils.cryptutil import CryptUtil
 from azurelinuxagent.common.utils.textutil import parse_doc, findall, find, findtext, getattrib, gettext
-from azurelinuxagent.common.protocol.restapi import *
 
 GOAL_STATE_URI = "http://{0}/machine/?comp=goalstate"
 CERTS_FILE_NAME = "Certificates.xml"
