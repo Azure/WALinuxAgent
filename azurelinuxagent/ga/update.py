@@ -502,9 +502,7 @@ class UpdateHandler(object):
 
     def _ensure_cgroups_initialized(self):
         configurator = CGroupConfigurator.get_instance()
-        configurator.create_agent_cgroups(track_cgroups=True)
-        configurator.cleanup_legacy_cgroups()
-        configurator.create_extension_cgroups_root()
+        configurator.initialize()
 
     def _evaluate_agent_health(self, latest_agent):
         """

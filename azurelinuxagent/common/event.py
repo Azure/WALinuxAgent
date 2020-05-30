@@ -36,7 +36,7 @@ from azurelinuxagent.common.osutil import get_osutil
 from azurelinuxagent.common.telemetryevent import TelemetryEventParam, TelemetryEvent
 from azurelinuxagent.common.utils import fileutil, textutil
 from azurelinuxagent.common.utils.textutil import parse_doc, findall, find, getattrib
-from azurelinuxagent.common.version import CURRENT_VERSION, CURRENT_AGENT, DISTRO_NAME, DISTRO_VERSION, DISTRO_CODE_NAME, AGENT_EXECUTION_MODE
+from azurelinuxagent.common.version import CURRENT_VERSION, CURRENT_AGENT, AGENT_NAME, DISTRO_NAME, DISTRO_VERSION, DISTRO_CODE_NAME, AGENT_EXECUTION_MODE
 from azurelinuxagent.common.telemetryevent import TelemetryEventList
 from azurelinuxagent.common.protocol.imds import get_imds_client
 
@@ -72,6 +72,8 @@ class WALAEventOperation:
     ArtifactsProfileBlob = "ArtifactsProfileBlob"
     AutoUpdate = "AutoUpdate"
     CGroupsCleanUp = "CGroupsCleanUp"
+    CGroupsInfo = "CGroupsInfo"
+    CGroupsInitialize = "CGroupsInitialize"
     CGroupsLimitsCrossed = "CGroupsLimitsCrossed"
     ConfigurationChange = "ConfigurationChange"
     CustomData = "CustomData"
@@ -92,7 +94,6 @@ class WALAEventOperation:
     HttpErrors = "HttpErrors"
     ImdsHeartbeat = "ImdsHeartbeat"
     Install = "Install"
-    InitializeCGroups = "InitializeCGroups"
     InitializeHostPlugin = "InitializeHostPlugin"
     InvokeCommandUsingSystemd = "InvokeCommandUsingSystemd"
     Log = "Log"
@@ -689,7 +690,7 @@ def initialize_event_logger_vminfo_common_parameters(protocol, reporter=__event_
     reporter.initialize_vminfo_common_parameters(protocol)
 
 
-def add_event(name, op=WALAEventOperation.Unknown, is_success=True, duration=0, version=str(CURRENT_VERSION),
+def add_event(name=AGENT_NAME, op=WALAEventOperation.Unknown, is_success=True, duration=0, version=str(CURRENT_VERSION),
               message="", log_event=True, reporter=__event_logger__):
     if reporter.event_dir is None:
         logger.warn("Cannot add event -- Event reporter is not initialized.")
