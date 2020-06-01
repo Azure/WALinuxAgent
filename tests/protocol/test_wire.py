@@ -775,14 +775,14 @@ class TestWireClient(HttpRequestPredicates, AgentTestCase):
             if self.is_in_vm_artifacts_profile_request(url):
                 return HttpError("Exception to fake an error on the direct channel")
             if self.is_host_plugin_in_vm_artifacts_profile_request(url, kwargs):
-                if http_get_handler.host_plugin_calls == 0:
-                    http_get_handler.host_plugin_calls += 1
+                if http_get_handler.host_plugin_calls > 0:
+                    http_get_handler.host_plugin_calls -= 1
                     return ResourceGoneError("Exception to fake a stale goal state")
                 protocol.track_url(url)
             if self.is_goal_state_request(url):
                 protocol.track_url(url)
             return None
-        http_get_handler.host_plugin_calls = 0
+        http_get_handler.host_plugin_calls = 2
 
         with mock_wire_protocol(mockwiredata.DATA_FILE_IN_VM_ARTIFACTS_PROFILE) as protocol:
             HostPluginProtocol.set_default_channel(False)
@@ -797,9 +797,12 @@ class TestWireClient(HttpRequestPredicates, AgentTestCase):
 
                 self.assertIsNone(return_value, "The artifacts profile request should not have succeeded")
                 urls = protocol.get_tracked_urls()
-                self.assertEquals(len(urls), 2, "Invalid number of requests: [{0}]".format(urls))
+                self.assertEquals(len(urls), 3, "Invalid number of requests: [{0}]".format(urls))
 
-                self.assertTrue(self.is_host_plugin_extension_artifact_request(urls[0]), "The first request should have been over the host channel")
+                self.assertTrue(self.is_host_plugin_extension_artifact_request(urls[0]),
+                                "The first request should have been over the host channel")
+                self.assertTrue(self.is_host_plugin_extension_artifact_request(urls[2]),
+                                "The third request should have been over the host channel")
                 self.assertEquals(HostPluginProtocol.is_default_channel(), False, "The default channel should not have changed to the host")
             finally:
                 HostPluginProtocol.set_default_channel(False)
@@ -826,8 +829,11 @@ class TestWireClient(HttpRequestPredicates, AgentTestCase):
 
             self.assertIsNone(return_value, "The artifacts profile request should have failed")
             urls = protocol.get_tracked_urls()
-            self.assertEquals(len(urls), 2, "Invalid number of requests: [{0}]".format(urls))
-            self.assertTrue(self.is_host_plugin_extension_artifact_request(urls[0]), "The first request should have been over the host channel")
+            self.assertEquals(len(urls), 3, "Invalid number of requests: [{0}]".format(urls))
+            self.assertTrue(self.is_host_plugin_extension_artifact_request(urls[0]),
+                            "The first request should have been over the host channel")
+            self.assertTrue(self.is_host_plugin_extension_artifact_request(urls[2]),
+                            "The third request should have been over the host channel")
 
     def test_send_request_hostplugin_first_should_invoke_hostplugin_when_not_default(self, *args):
         with mock_wire_protocol(mockwiredata.DATA_FILE) as protocol:

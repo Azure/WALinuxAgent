@@ -930,27 +930,74 @@ class WireClient(object):
                      "advised by Fabric.").format(PROTOCOL_VERSION)
             raise ProtocolNotFoundError(error)
 
+    def call_hostplugin_with_container_check(self, host_func, uses_etag):
+        ret = None
+        etag = None
+        not_modified = False         # Corresponds to a 304 NOT MODIFIED response from the server
+
+        try:
+            if uses_etag:
+                ret, etag, not_modified = host_func()
+            else:
+                ret = host_func()
+        except (ResourceGoneError, InvalidContainerError) as e:
+            host_plugin = self.get_host_plugin()
+            old_container_id = host_plugin.container_id
+            old_role_config_name = host_plugin.role_config_name
+
+            msg = "[PERIODIC] Request failed with the current host plugin configuration. " \
+                  "ContainerId: {0}, role config file: {1}. Fetching new goal state and retrying the call." \
+                  "Error: {2}".format(old_container_id, old_role_config_name, ustr(e))
+            logger.periodic_info(logger.EVERY_SIX_HOURS, msg)
+
+            self.update_host_plugin_from_goal_state()
+
+            new_container_id = host_plugin.container_id
+            new_role_config_name = host_plugin.role_config_name
+            msg = "[PERIODIC] Host plugin reconfigured with new parameters. " \
+                  "ContainerId: {0}, role config file: {1}.".format(new_container_id, new_role_config_name)
+            logger.periodic_info(logger.EVERY_SIX_HOURS, msg)
+
+            try:
+                if uses_etag:
+                    ret, etag, not_modified = host_func()
+                else:
+                    ret = host_func()
+
+                if ret or not not_modified:
+                    msg = "[PERIODIC] Request succeeded using the host plugin channel after goal state refresh. " \
+                          "ContainerId changed from {0} to {1}, " \
+                          "role config file changed from {2} to {3}.".format(old_container_id, new_container_id,
+                                                                             old_role_config_name, new_role_config_name)
+                    add_periodic(delta=logger.EVERY_SIX_HOURS,
+                                 name=AGENT_NAME,
+                                 version=CURRENT_VERSION,
+                                 op=WALAEventOperation.HostPlugin,
+                                 is_success=True,
+                                 message=msg,
+                                 log_event=True)
+
+            except (ResourceGoneError, InvalidContainerError) as e:
+                msg = "[PERIODIC] Request failed using the host plugin channel after goal state refresh. " \
+                      "ContainerId changed from {0} to {1}, role config file changed from {2} to {3}. " \
+                      "Exception type: {4}.".format(old_container_id, new_container_id, old_role_config_name,
+                                                    new_role_config_name, type(e).__name__)
+                add_periodic(delta=logger.EVERY_SIX_HOURS,
+                             name=AGENT_NAME,
+                             version=CURRENT_VERSION,
+                             op=WALAEventOperation.HostPlugin,
+                             is_success=False,
+                             message=msg,
+                             log_event=True)
+                raise
+        return ret, etag, not_modified
+
     def send_request_hostplugin_first(self, direct_func, host_func):
         # For certain calls we want them to go through the HostGAPlugin first, since it
         # supports the If-None-Match header that reduces how often we need to parse
 
         # note that this method requires a lambda that returns two values
-        ret = None
-        etag = None
-        not_modified = False
-        try:
-            ret, etag, not_modified = host_func()
-
-            # Different direct channel functions report failure in different ways: by returning None, False,
-            # or raising ResourceGone or InvalidContainer exceptions.
-            if not ret and not not_modified:
-                logger.periodic_info(logger.EVERY_HOUR, "Request failed using the HostGAPlugin. switching to direct.")
-        except (ResourceGoneError, InvalidContainerError) as e:
-            msg = "Request failed with the current host plugin configuration." \
-                  "ContainerId: {0}, role config file: {1}." \
-                  "Error: {2}".format(self._host_plugin.container_id, self._host_plugin.role_config_name, ustr(e))
-            logger.periodic_info(logger.EVERY_HOUR, msg)
-
+        ret, etag, not_modified = self.call_hostplugin_with_container_check(host_func, uses_etag=True)
         if ret or not_modified:
             return ret, etag
 
@@ -996,54 +1043,7 @@ class WireClient(object):
         else:
             logger.periodic_info(logger.EVERY_HALF_DAY, "[PERIODIC] Using host plugin as default channel.")
 
-        try:
-            ret = host_func()
-        except (ResourceGoneError, InvalidContainerError) as e:
-            host_plugin = self.get_host_plugin()
-            old_container_id = host_plugin.container_id
-            old_role_config_name = host_plugin.role_config_name
-
-            msg = "[PERIODIC] Request failed with the current host plugin configuration. " \
-                  "ContainerId: {0}, role config file: {1}. Fetching new goal state and retrying the call." \
-                  "Error: {2}".format(old_container_id, old_role_config_name, ustr(e))
-            logger.periodic_info(logger.EVERY_SIX_HOURS, msg)
-
-            self.update_host_plugin_from_goal_state()
-
-            new_container_id = host_plugin.container_id
-            new_role_config_name = host_plugin.role_config_name
-            msg = "[PERIODIC] Host plugin reconfigured with new parameters. " \
-                  "ContainerId: {0}, role config file: {1}.".format(new_container_id, new_role_config_name)
-            logger.periodic_info(logger.EVERY_SIX_HOURS, msg)
-
-            try:
-                ret = host_func()
-                if ret:
-                    msg = "[PERIODIC] Request succeeded using the host plugin channel after goal state refresh. " \
-                          "ContainerId changed from {0} to {1}, " \
-                          "role config file changed from {2} to {3}.".format(old_container_id, new_container_id,
-                                                                             old_role_config_name, new_role_config_name)
-                    add_periodic(delta=logger.EVERY_SIX_HOURS,
-                                 name=AGENT_NAME,
-                                 version=CURRENT_VERSION,
-                                 op=WALAEventOperation.HostPlugin,
-                                 is_success=True,
-                                 message=msg,
-                                 log_event=True)
-
-            except (ResourceGoneError, InvalidContainerError) as e:
-                msg = "[PERIODIC] Request failed using the host plugin channel after goal state refresh. " \
-                      "ContainerId changed from {0} to {1}, role config file changed from {2} to {3}. " \
-                      "Exception type: {4}.".format(old_container_id, new_container_id, old_role_config_name,
-                                                    new_role_config_name, type(e).__name__)
-                add_periodic(delta=logger.EVERY_SIX_HOURS,
-                             name=AGENT_NAME,
-                             version=CURRENT_VERSION,
-                             op=WALAEventOperation.HostPlugin,
-                             is_success=False,
-                             message=msg,
-                             log_event=True)
-                raise
+        ret, _, _ = self.call_hostplugin_with_container_check(host_func, uses_etag=False)
 
         if not HostPluginProtocol.is_default_channel():
             logger.info("Setting host plugin as default channel from now on. "
