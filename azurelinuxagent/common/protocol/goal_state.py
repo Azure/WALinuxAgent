@@ -109,14 +109,6 @@ class GoalState(object):
 
         GoalState.ContainerID = self.container_id
 
-        # The changed property on GoalState indicates only if the incarnation changed
-        # There's also a changed property on ext_config that indicates if they changed
-        self.changed = False
-        if current_goal_state is None:
-            self.changed = True
-        elif current_goal_state is not None and self.incarnation != current_goal_state.incarnation:
-            self.changed = True
-
     @staticmethod
     def fetch_goal_state(wire_client, ext_config_retriever, current_goal_state=None):
         """

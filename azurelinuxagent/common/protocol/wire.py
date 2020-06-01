@@ -806,7 +806,7 @@ class WireClient(object):
         save_goal_state = False
         if new_goal_state is None:
             return
-        if self._goal_state is None or new_goal_state.changed:
+        if self._goal_state is None or new_goal_state.incarnation != self._goal_state.incarnation:
             save_goal_state = True
             self._goal_state = new_goal_state
         elif refresh_type == WireClient._UpdateType.GoalStateForced:
