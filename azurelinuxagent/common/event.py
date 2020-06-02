@@ -28,6 +28,7 @@ from datetime import datetime
 
 import azurelinuxagent.common.conf as conf
 import azurelinuxagent.common.logger as logger
+from azurelinuxagent.common.AgentGlobals import AgentGlobals
 from azurelinuxagent.common.exception import EventError, OSUtilError
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.datacontract import get_properties, set_properties
@@ -35,9 +36,8 @@ from azurelinuxagent.common.osutil import get_osutil
 from azurelinuxagent.common.telemetryevent import TelemetryEventParam, TelemetryEvent
 from azurelinuxagent.common.utils import fileutil, textutil
 from azurelinuxagent.common.utils.textutil import parse_doc, findall, find, getattrib
-from azurelinuxagent.common.version import CURRENT_VERSION, CURRENT_AGENT, DISTRO_NAME, DISTRO_VERSION, DISTRO_CODE_NAME, AGENT_EXECUTION_MODE
+from azurelinuxagent.common.version import CURRENT_VERSION, CURRENT_AGENT, AGENT_NAME, DISTRO_NAME, DISTRO_VERSION, DISTRO_CODE_NAME, AGENT_EXECUTION_MODE
 from azurelinuxagent.common.telemetryevent import TelemetryEventList
-from azurelinuxagent.common.protocol.goal_state import GoalState
 from azurelinuxagent.common.protocol.imds import get_imds_client
 
 EVENTS_DIRECTORY = "events"
@@ -72,6 +72,8 @@ class WALAEventOperation:
     ArtifactsProfileBlob = "ArtifactsProfileBlob"
     AutoUpdate = "AutoUpdate"
     CGroupsCleanUp = "CGroupsCleanUp"
+    CGroupsInfo = "CGroupsInfo"
+    CGroupsInitialize = "CGroupsInitialize"
     CGroupsLimitsCrossed = "CGroupsLimitsCrossed"
     ConfigurationChange = "ConfigurationChange"
     CustomData = "CustomData"
@@ -92,12 +94,12 @@ class WALAEventOperation:
     HttpErrors = "HttpErrors"
     ImdsHeartbeat = "ImdsHeartbeat"
     Install = "Install"
-    InitializeCGroups = "InitializeCGroups"
     InitializeHostPlugin = "InitializeHostPlugin"
     InvokeCommandUsingSystemd = "InvokeCommandUsingSystemd"
     Log = "Log"
     OSInfo = "OSInfo"
     Partition = "Partition"
+    PluginSettingsVersionMismatch = "PluginSettingsVersionMismatch"
     ProcessGoalState = "ProcessGoalState"
     Provision = "Provision"
     ProvisionGuestAgent = "ProvisionGuestAgent"
@@ -531,7 +533,7 @@ class EventLogger(object):
         Note that the event timestamp is saved in the OpcodeName field.
         """
         common_params = [TelemetryEventParam('GAVersion', CURRENT_AGENT),
-                         TelemetryEventParam('ContainerId', GoalState.ContainerID),
+                         TelemetryEventParam('ContainerId', AgentGlobals.get_container_id()),
                          TelemetryEventParam('OpcodeName', event_timestamp.strftime(u'%Y-%m-%dT%H:%M:%S.%fZ')),
                          TelemetryEventParam('EventTid', threading.current_thread().ident),
                          TelemetryEventParam('EventPid', os.getpid()),
@@ -688,7 +690,7 @@ def initialize_event_logger_vminfo_common_parameters(protocol, reporter=__event_
     reporter.initialize_vminfo_common_parameters(protocol)
 
 
-def add_event(name, op=WALAEventOperation.Unknown, is_success=True, duration=0, version=str(CURRENT_VERSION),
+def add_event(name=AGENT_NAME, op=WALAEventOperation.Unknown, is_success=True, duration=0, version=str(CURRENT_VERSION),
               message="", log_event=True, reporter=__event_logger__):
     if reporter.event_dir is None:
         logger.warn("Cannot add event -- Event reporter is not initialized.")

@@ -921,9 +921,6 @@ class ExtHandlerInstance(object):
             fileutil.clean_ioerror(e, paths=[self.get_base_dir(), self.pkg_file])
             raise ExtensionDownloadError(u"Failed to initialize extension '{0}'".format(self.get_full_name()), e)
 
-        # Create cgroups for the extension
-        CGroupConfigurator.get_instance().create_extension_cgroups(self.get_full_name())
-
         # Save HandlerEnvironment.json
         self.create_handler_env()
 
@@ -991,9 +988,6 @@ class ExtHandlerInstance(object):
             message = "Failed to remove extension handler directory: {0}".format(e)
             self.report_event(message=message, is_success=False)
             self.logger.warn(message)
-
-        # Also remove the cgroups for the extension
-        CGroupConfigurator.get_instance().remove_extension_cgroups(self.get_full_name())
 
     def update(self, version=None, disable_exit_code=None, updating_from_version=None):
         if version is None:

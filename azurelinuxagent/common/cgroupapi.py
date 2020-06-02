@@ -16,6 +16,7 @@
 
 import errno
 import os
+import re
 import shutil
 import subprocess
 import uuid
@@ -25,12 +26,13 @@ from azurelinuxagent.common.cgroup import CGroup
 from azurelinuxagent.common.cgroupstelemetry import CGroupsTelemetry
 from azurelinuxagent.common.conf import get_agent_pid_file_path
 from azurelinuxagent.common.event import add_event, WALAEventOperation
-from azurelinuxagent.common.exception import CGroupsException, ExtensionErrorCodes, ExtensionError, \
-    ExtensionOperationError
+from azurelinuxagent.common.exception import CGroupsException, ExtensionErrorCodes, ExtensionError, ExtensionOperationError
 from azurelinuxagent.common.future import ustr
+from azurelinuxagent.common.osutil import get_osutil
 from azurelinuxagent.common.utils import fileutil, shellutil
 from azurelinuxagent.common.utils.extensionprocessutil import handle_process_completion, read_output
-from azurelinuxagent.common.version import AGENT_NAME, CURRENT_VERSION
+from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
+from azurelinuxagent.common.version import get_distro
 
 CGROUPS_FILE_SYSTEM_ROOT = '/sys/fs/cgroup'
 CGROUP_CONTROLLERS = ["cpu", "memory"]
@@ -43,9 +45,6 @@ class CGroupsApi(object):
     """
     Interface for the cgroups API
     """
-    def create_agent_cgroups(self):
-        raise NotImplementedError()
-
     def create_extension_cgroups_root(self):
         raise NotImplementedError()
 
@@ -63,6 +62,16 @@ class CGroupsApi(object):
 
     def cleanup_legacy_cgroups(self):
         raise NotImplementedError()
+
+    @staticmethod
+    def cgroups_supported():
+        distro_info = get_distro()
+        distro_name = distro_info[0]
+        try:
+            distro_version = FlexibleVersion(distro_info[1])
+        except ValueError:
+            return False
+        return distro_name.lower() == 'ubuntu' and distro_version.major >= 16
 
     @staticmethod
     def track_cgroups(extension_cgroups):
@@ -146,6 +155,7 @@ class CGroupsApi(object):
             for _, cgroup in legacy_cgroups:
                 logger.info('Removing {0}', cgroup)
                 shutil.rmtree(cgroup, ignore_errors=True)
+        return len(legacy_cgroups)
 
 
 class FileSystemCgroupsApi(CGroupsApi):
@@ -202,6 +212,58 @@ class FileSystemCgroupsApi(CGroupsApi):
         fileutil.append_file(tasks_file, "{0}\n".format(pid))
         logger.info("Added PID {0} to cgroup {1}".format(pid, cgroup_path))
 
+    @staticmethod
+    def mount_cgroups():
+        def cgroup_path(tail=""):
+            return os.path.join(CGROUPS_FILE_SYSTEM_ROOT, tail).rstrip(os.path.sep)
+
+        try:
+            osutil = get_osutil()
+            path = cgroup_path()
+            if not os.path.exists(path):
+                fileutil.mkdir(path)
+                osutil.mount(device='cgroup_root',
+                           mount_point=path,
+                           option="-t tmpfs",
+                           chk_err=False)
+            elif not os.path.isdir(cgroup_path()):
+                logger.error("Could not mount cgroups: ordinary file at {0}", path)
+                return
+
+            controllers_to_mount = ['cpu,cpuacct', 'memory']
+            errors = 0
+            cpu_mounted = False
+            for controller in controllers_to_mount:
+                try:
+                    target_path = cgroup_path(controller)
+                    if not os.path.exists(target_path):
+                        fileutil.mkdir(target_path)
+                        osutil.mount(device=controller,
+                                   mount_point=target_path,
+                                   option="-t cgroup -o {0}".format(controller),
+                                   chk_err=False)
+                        if controller == 'cpu,cpuacct':
+                            cpu_mounted = True
+                except Exception as exception:
+                    errors += 1
+                    if errors == len(controllers_to_mount):
+                        raise
+                    logger.warn("Could not mount cgroup controller {0}: {1}", controller, ustr(exception))
+
+            if cpu_mounted:
+                for controller in ['cpu', 'cpuacct']:
+                    target_path = cgroup_path(controller)
+                    if not os.path.exists(target_path):
+                        os.symlink(cgroup_path('cpu,cpuacct'), target_path)
+
+        except OSError as oe:
+            # log a warning for read-only file systems
+            logger.warn("Could not mount cgroups: {0}", ustr(oe))
+            raise
+        except Exception as e:
+            logger.error("Could not mount cgroups: {0}", ustr(e))
+            raise
+
     def cleanup_legacy_cgroups(self):
         """
         Previous versions of the daemon (2.2.31-2.2.40) wrote their PID to /sys/fs/cgroup/{cpu,memory}/WALinuxAgent/WALinuxAgent;
@@ -213,9 +275,9 @@ class FileSystemCgroupsApi(CGroupsApi):
             logger.info("Writing daemon's PID ({0}) to {1}", daemon_pid, new_path)
             fileutil.append_file(os.path.join(new_path, "cgroup.procs"), daemon_pid)
             msg = "Moved daemon's PID from legacy cgroup to {0}".format(new_path)
-            add_event(AGENT_NAME, version=CURRENT_VERSION, op=WALAEventOperation.CGroupsCleanUp, is_success=True, message=msg)
+            add_event(op=WALAEventOperation.CGroupsCleanUp, is_success=True, message=msg)
 
-        CGroupsApi._foreach_legacy_cgroup(move_daemon_pid)
+        return CGroupsApi._foreach_legacy_cgroup(move_daemon_pid)
 
     def create_agent_cgroups(self):
         """
@@ -370,6 +432,96 @@ class SystemdCgroupsApi(CGroupsApi):
     """
 
     @staticmethod
+    def get_systemd_version():
+        # the output is similar to
+        #    $ systemctl --version
+        #    systemd 245 (245.4-4ubuntu3)
+        #    +PAM +AUDIT +SELINUX +IMA +APPARMOR +SMACK +SYSVINIT +UTMP etc
+        #
+        return shellutil.run_command(['systemctl', '--version'])
+
+    @staticmethod
+    def get_cpu_and_memory_mount_points():
+        """
+        Returns a tuple with the mount points for the cpu and memory controllers; the values can be None
+        if the corresponding controller is not mounted
+        """
+        # the output of mount is similar to
+        #     $ mount -t cgroup
+        #     cgroup on /sys/fs/cgroup/systemd type cgroup (rw,nosuid,nodev,noexec,relatime,xattr,name=systemd)
+        #     cgroup on /sys/fs/cgroup/cpu,cpuacct type cgroup (rw,nosuid,nodev,noexec,relatime,cpu,cpuacct)
+        #     cgroup on /sys/fs/cgroup/memory type cgroup (rw,nosuid,nodev,noexec,relatime,memory)
+        #     etc
+        #
+        cpu = None
+        memory = None
+        for line in shellutil.run_command(['mount', '-t', 'cgroup']).splitlines():
+            match = re.search(r'on\s+(?P<path>/\S+(memory|cpuacct))\s', line)
+            if match is not None:
+                path = match.group('path')
+                if 'cpuacct' in path:
+                    cpu = path
+                else:
+                    memory = path
+        return cpu, memory
+
+    @staticmethod
+    def get_cpu_and_memory_cgroup_relative_paths_for_process(process_id):
+        """
+        Returns a tuple with the path of the cpu and memory cgroups for the given process (relative to the mount point of the corresponding
+        controller).
+        The 'process_id' can be a numeric PID or the string "self" for the current process.
+        The values returned can be None if the process is not in a cgroup for that controller (e.g. the controller is not mounted).
+        """
+        # The contents of the file are similar to
+        #    # cat /proc/1218/cgroup
+        #    10:memory:/system.slice/walinuxagent.service
+        #    3:cpu,cpuacct:/system.slice/walinuxagent.service
+        #    etc
+        cpu_path = None
+        memory_path = None
+        for line in fileutil.read_file("/proc/{0}/cgroup".format(process_id)).splitlines():
+            match = re.match(r'\d+:(?P<controller>(memory|.*cpuacct.*)):(?P<path>.+)', line)
+            if match is not None:
+                controller = match.group('controller')
+                path = match.group('path').lstrip('/') if match.group('path') != '/' else None
+                if controller == 'memory':
+                    memory_path = path
+                else:
+                    cpu_path = path
+
+        return cpu_path, memory_path
+
+    @staticmethod
+    def get_cgroup2_controllers():
+        """
+        Returns a tuple with the mount point for the cgroups v2 controllers, and the currently mounted controllers;
+        either value can be None if cgroups v2 or its controllers are not mounted
+        """
+        # the output of mount is similar to
+        #     $ mount -t cgroup2
+        #     cgroup2 on /sys/fs/cgroup/unified type cgroup2 (rw,nosuid,nodev,noexec,relatime,nsdelegate)
+        #
+        for line in shellutil.run_command(['mount', '-t', 'cgroup2']).splitlines():
+            match = re.search(r'on\s+(?P<path>/\S+)\s', line)
+            if match is not None:
+                mount_point = match.group('path')
+                controllers = None
+                controllers_file = os.path.join(mount_point, 'cgroup.controllers')
+                if os.path.exists(controllers_file):
+                    controllers = fileutil.read_file(controllers_file)
+                return mount_point, controllers
+        return None, None
+
+    @staticmethod
+    def get_unit_property(unit_name, property_name):
+        output = shellutil.run_command(["systemctl", "show", unit_name, "--property", property_name])
+        match = re.match("[^=]+=(?P<value>.+)", output)
+        if match is None:
+            raise ValueError("Can't find property {0} of {1}", property_name, unit_name)
+        return match.group('value')
+
+    @staticmethod
     def create_and_start_unit(unit_filename, unit_contents):
         try:
             unit_path = os.path.join(UNIT_FILES_FILE_SYSTEM_PATH, unit_filename)
@@ -385,23 +537,6 @@ class SystemdCgroupsApi(CGroupsApi):
 
     def _get_extension_slice_name(self, extension_name):
         return "system-{0}-{1}.slice".format(EXTENSIONS_ROOT_CGROUP_NAME, self._get_extension_cgroup_name(extension_name))
-
-    def create_agent_cgroups(self):
-        try:
-            cgroup_unit = None
-            cgroup_paths = fileutil.read_file("/proc/self/cgroup")
-            for entry in cgroup_paths.splitlines():
-                fields = entry.split(':')
-                if fields[1] == "name=systemd":
-                    cgroup_unit = fields[2].lstrip(os.path.sep)
-
-            cpu_cgroup_path = os.path.join(CGROUPS_FILE_SYSTEM_ROOT, 'cpu', cgroup_unit)
-            memory_cgroup_path = os.path.join(CGROUPS_FILE_SYSTEM_ROOT, 'memory', cgroup_unit)
-
-            return [CGroup.create(cpu_cgroup_path, 'cpu', VM_AGENT_CGROUP_NAME),
-                    CGroup.create(memory_cgroup_path, 'memory', VM_AGENT_CGROUP_NAME)]
-        except Exception as e:
-            raise CGroupsException("Failed to get paths of agent's cgroups. Error: {0}".format(ustr(e)))
 
     def create_extension_cgroups_root(self):
         unit_contents = """
@@ -517,12 +652,7 @@ After=system-{1}.slice""".format(extension_name, EXTENSIONS_ROOT_CGROUP_NAME)
                 event_msg = 'Failed to run systemd-run for unit {0}.scope. ' \
                             'Will retry invoking the extension without systemd. ' \
                             'Systemd-run error: {1}'.format(scope_name, err_msg)
-                add_event(AGENT_NAME,
-                          version=CURRENT_VERSION,
-                          op=WALAEventOperation.InvokeCommandUsingSystemd,
-                          is_success=False,
-                          log_event=False,
-                          message=event_msg)
+                add_event(op=WALAEventOperation.InvokeCommandUsingSystemd, is_success=False, log_event=False, message=event_msg)
                 logger.warn(event_msg)
 
                 # Reset the stdout and stderr
@@ -556,11 +686,7 @@ After=system-{1}.slice""".format(extension_name, EXTENSIONS_ROOT_CGROUP_NAME)
         """
         Previous versions of the daemon (2.2.31-2.2.40) wrote their PID to /sys/fs/cgroup/{cpu,memory}/WALinuxAgent/WALinuxAgent;
         starting from version 2.2.41 we track the agent service in walinuxagent.service instead of WALinuxAgent/WALinuxAgent. If
-        we find that any of the legacy groups include the PID of the daemon then we disable data collection for this instance
-        (under systemd, moving PIDs across the cgroup file system can produce unpredictable results)
+        we find that any of the legacy groups include the PID of the daemon then we need to disable data collection for this
+        instance (under systemd, moving PIDs across the cgroup file system can produce unpredictable results)
         """
-        def report_error(_, daemon_pid):
-            raise CGroupsException(
-                "The daemon's PID ({0}) was already added to the legacy cgroup; this invalidates resource usage data.".format(daemon_pid))
-
-        CGroupsApi._foreach_legacy_cgroup(report_error)
+        return CGroupsApi._foreach_legacy_cgroup(lambda *_: None)
