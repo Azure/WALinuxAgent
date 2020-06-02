@@ -131,7 +131,7 @@ class CGroupConfiguratorSystemdTestCase(AgentTestCase):
                     self.assertIn("A TEST EXCEPTION", message)
 
     @patch('time.sleep', side_effect=lambda _: mock_sleep())
-    def test_start_extension_command_should_not_use_systemd_when_groups_are_not_enabled(self, _):
+    def test_start_extension_command_should_not_use_systemd_when_cgroups_are_not_enabled(self, _):
         configurator = CGroupConfiguratorSystemdTestCase._get_new_cgroup_configurator_instance()
         configurator.disable()
 
@@ -152,7 +152,7 @@ class CGroupConfiguratorSystemdTestCase(AgentTestCase):
             self.assertEqual(command_calls[0], "date", "The command line should not have been modified")
 
     @patch('time.sleep', side_effect=lambda _: mock_sleep())
-    def test_start_extension_command_should_use_systemd_run_when_groups_are_enabled(self, _):
+    def test_start_extension_command_should_use_systemd_run_when_cgroups_are_enabled(self, _):
         with mock_cgroup_commands():
             with patch("azurelinuxagent.common.cgroupapi.subprocess.Popen", wraps=subprocess.Popen) as popen_patch:
                 CGroupConfiguratorSystemdTestCase._get_new_cgroup_configurator_instance().start_extension_command(
