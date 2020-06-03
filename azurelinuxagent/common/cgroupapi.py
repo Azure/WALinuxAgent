@@ -22,7 +22,7 @@ import subprocess
 import uuid
 
 from azurelinuxagent.common import logger
-from azurelinuxagent.common.cgroup import CGroup
+from azurelinuxagent.common.cgroup import CGroup, CpuCgroup, MemoryCgroup
 from azurelinuxagent.common.cgroupstelemetry import CGroupsTelemetry
 from azurelinuxagent.common.conf import get_agent_pid_file_path
 from azurelinuxagent.common.event import add_event, WALAEventOperation
@@ -430,6 +430,8 @@ class SystemdCgroupsApi(CGroupsApi):
     """
     Cgroups interface via systemd
     """
+    def __init__(self):
+        self._cgroup_mountpoints = None
 
     @staticmethod
     def get_systemd_version():
@@ -440,8 +442,7 @@ class SystemdCgroupsApi(CGroupsApi):
         #
         return shellutil.run_command(['systemctl', '--version'])
 
-    @staticmethod
-    def get_cpu_and_memory_mount_points():
+    def get_cgroup_mount_points(self):
         """
         Returns a tuple with the mount points for the cpu and memory controllers; the values can be None
         if the corresponding controller is not mounted
@@ -453,20 +454,23 @@ class SystemdCgroupsApi(CGroupsApi):
         #     cgroup on /sys/fs/cgroup/memory type cgroup (rw,nosuid,nodev,noexec,relatime,memory)
         #     etc
         #
-        cpu = None
-        memory = None
-        for line in shellutil.run_command(['mount', '-t', 'cgroup']).splitlines():
-            match = re.search(r'on\s+(?P<path>/\S+(memory|cpuacct))\s', line)
-            if match is not None:
-                path = match.group('path')
-                if 'cpuacct' in path:
-                    cpu = path
-                else:
-                    memory = path
-        return cpu, memory
+        if self._cgroup_mountpoints is None:
+            cpu = None
+            memory = None
+            for line in shellutil.run_command(['mount', '-t', 'cgroup']).splitlines():
+                match = re.search(r'on\s+(?P<path>/\S+(memory|cpuacct))\s', line)
+                if match is not None:
+                    path = match.group('path')
+                    if 'cpuacct' in path:
+                        cpu = path
+                    else:
+                        memory = path
+            self._cgroup_mountpoints = {'cpu': cpu, 'memory': memory}
+
+        return self._cgroup_mountpoints['cpu'],  self._cgroup_mountpoints['memory']
 
     @staticmethod
-    def get_cpu_and_memory_cgroup_relative_paths_for_process(process_id):
+    def get_process_cgroup_relative_paths(process_id):
         """
         Returns a tuple with the path of the cpu and memory cgroups for the given process (relative to the mount point of the corresponding
         controller).
@@ -491,6 +495,23 @@ class SystemdCgroupsApi(CGroupsApi):
                     cpu_path = path
 
         return cpu_path, memory_path
+
+    def get_process_cgroup_paths(self, process_id):
+        """
+        Returns a tuple with the path of the cpu and memory cgroups for the given process. The 'process_id' can be a numeric PID or the string "self" for the current process.
+        The values returned can be None if the process is not in a cgroup for that controller (e.g. the controller is not mounted).
+        """
+        cpu_cgroup_relative_path, memory_cgroup_relative_path = self.get_process_cgroup_relative_paths(process_id)
+
+        cpu_mount_point, memory_mount_point = self.get_cgroup_mount_points()
+
+        cpu_cgroup_path = os.path.join(cpu_mount_point, cpu_cgroup_relative_path) \
+            if cpu_mount_point is not None and cpu_cgroup_relative_path is not None else None
+
+        memory_cgroup_path = os.path.join(memory_mount_point, memory_cgroup_relative_path) \
+            if memory_mount_point is not None and memory_cgroup_relative_path is not None else None
+
+        return cpu_cgroup_path, memory_cgroup_path
 
     @staticmethod
     def get_cgroup2_controllers():
@@ -606,10 +627,10 @@ After=system-{1}.slice""".format(extension_name, EXTENSIONS_ROOT_CGROUP_NAME)
 
     def start_extension_command(self, extension_name, command, timeout, shell, cwd, env, stdout, stderr,
                                 error_code=ExtensionErrorCodes.PluginUnknownFailure):
-        scope_name = "{0}_{1}".format(self._get_extension_cgroup_name(extension_name), uuid.uuid4())
+        scope = "{0}_{1}".format(self._get_extension_cgroup_name(extension_name), uuid.uuid4())
 
         process = subprocess.Popen(
-            "systemd-run --unit={0} --scope {1}".format(scope_name, command),
+            "systemd-run --unit={0} --scope {1}".format(scope, command),
             shell=shell,
             cwd=cwd,
             stdout=stdout,
@@ -617,16 +638,34 @@ After=system-{1}.slice""".format(extension_name, EXTENSIONS_ROOT_CGROUP_NAME)
             env=env,
             preexec_fn=os.setsid)
 
-        logger.info("Started extension using scope '{0}'", scope_name)
-        extension_cgroups = []
+        scope_name = scope + '.scope'
 
-        def create_cgroup(controller):
-            cgroup_path = os.path.join(CGROUPS_FILE_SYSTEM_ROOT, controller, 'system.slice', scope_name + ".scope")
-            extension_cgroups.append(CGroup.create(cgroup_path, controller, extension_name))
+        logger.info("Started extension in unit '{0}'", scope_name)
 
-        self._foreach_controller(create_cgroup, 'Cannot create cgroup for extension {0}; '
-                                                'resource usage will not be tracked.'.format(extension_name))
-        self.track_cgroups(extension_cgroups)
+        try:
+            # systemd-run creates the scope under the system slice by default
+            cgroup_relative_path = os.path.join('system.slice', scope_name)
+
+            cpu_cgroup_mountpoint, memory_cgroup_mountpoint = self.get_cgroup_mount_points()
+
+            if cpu_cgroup_mountpoint is None:
+                logger.info("The CPU controller is not mounted; will not track resource usage")
+            else:
+                cpu_cgroup_path = os.path.join(cpu_cgroup_mountpoint, cgroup_relative_path)
+                CGroupsTelemetry.track_cgroup(CpuCgroup(extension_name, cpu_cgroup_path))
+
+            if memory_cgroup_mountpoint is None:
+                logger.info("The memory controller is not mounted; will not track resource usage")
+            else:
+                memory_cgroup_path = os.path.join(memory_cgroup_mountpoint, cgroup_relative_path)
+                CGroupsTelemetry.track_cgroup(MemoryCgroup(extension_name, memory_cgroup_path))
+
+        except IOError as e:
+            if e.errno == 2:  # 'No such file or directory'
+                logger.info("The extension command already completed; will not track resource usage")
+            logger.info("Failed to start tracking resource usage for the extension: {0}", ustr(e))
+        except Exception as e:
+            logger.info("Failed to start tracking resource usage for the extension: {0}", ustr(e))
 
         # Wait for process completion or timeout
         try:
@@ -640,7 +679,7 @@ After=system-{1}.slice""".format(extension_name, EXTENSIONS_ROOT_CGROUP_NAME)
             # The extension didn't terminate successfully. Determine whether it was due to systemd errors or
             # extension errors.
             process_output = read_output(stdout, stderr)
-            systemd_failure = self._is_systemd_failure(scope_name, process_output)
+            systemd_failure = self._is_systemd_failure(scope, process_output)
 
             if not systemd_failure:
                 # There was an extension error; it either timed out or returned a non-zero exit code. Re-raise the error
@@ -651,7 +690,7 @@ After=system-{1}.slice""".format(extension_name, EXTENSIONS_ROOT_CGROUP_NAME)
                     if isinstance(e, ExtensionOperationError) else "Systemd timed-out, output: %s" % process_output
                 event_msg = 'Failed to run systemd-run for unit {0}.scope. ' \
                             'Will retry invoking the extension without systemd. ' \
-                            'Systemd-run error: {1}'.format(scope_name, err_msg)
+                            'Systemd-run error: {1}'.format(scope, err_msg)
                 add_event(op=WALAEventOperation.InvokeCommandUsingSystemd, is_success=False, log_event=False, message=event_msg)
                 logger.warn(event_msg)
 
@@ -680,7 +719,7 @@ After=system-{1}.slice""".format(extension_name, EXTENSIONS_ROOT_CGROUP_NAME)
                 return [], process_output
 
         # The process terminated in time and successfully
-        return extension_cgroups, process_output
+        return process_output
 
     def cleanup_legacy_cgroups(self):
         """

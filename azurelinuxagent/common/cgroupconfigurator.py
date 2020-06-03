@@ -91,7 +91,7 @@ class CGroupConfigurator(object):
                 #
                 # check v1 controllers
                 #
-                cpu_controller_root, memory_controller_root = self._cgroups_api.get_cpu_and_memory_mount_points()
+                cpu_controller_root, memory_controller_root = self._cgroups_api.get_cgroup_mount_points()
 
                 if cpu_controller_root is not None:
                     logger.info("The CPU cgroup controller is mounted at {0}", cpu_controller_root)
@@ -114,7 +114,7 @@ class CGroupConfigurator(object):
                 # check the cgroups for the agent
                 #
                 agent_unit_name = get_osutil().get_service_name() + ".service"
-                cpu_cgroup_relative_path, memory_cgroup_relative_path = self._cgroups_api.get_cpu_and_memory_cgroup_relative_paths_for_process("self")
+                cpu_cgroup_relative_path, memory_cgroup_relative_path = self._cgroups_api.get_process_cgroup_relative_paths("self")
                 if cpu_cgroup_relative_path is None:
                     log_cgroup_warn("The agent's process is not within a CPU cgroup")
                 else:
@@ -143,6 +143,8 @@ class CGroupConfigurator(object):
                 else:
                     memory_cgroup_path = os.path.join(memory_controller_root, memory_cgroup_relative_path)
                     CGroupsTelemetry.track_cgroup(MemoryCgroup(agent_unit_name, memory_cgroup_path))
+
+                log_cgroup_info("Agent cgroups: CPU: {0} -- MEMORY: {1}", cpu_cgroup_path, memory_cgroup_path)
 
             except Exception as e:
                 message = "Error initializing cgroups: {0}".format(ustr(e))
@@ -239,15 +241,15 @@ class CGroupConfigurator(object):
                                                            stderr=stderr,
                                                            error_code=error_code)
             else:
-                extension_cgroups, process_output = self._cgroups_api.start_extension_command(extension_name,
-                                                                                              command,
-                                                                                              timeout,
-                                                                                              shell=shell,
-                                                                                              cwd=cwd,
-                                                                                              env=env,
-                                                                                              stdout=stdout,
-                                                                                              stderr=stderr,
-                                                                                              error_code=error_code)
+                process_output = self._cgroups_api.start_extension_command(extension_name,
+                                                                          command,
+                                                                          timeout,
+                                                                          shell=shell,
+                                                                          cwd=cwd,
+                                                                          env=env,
+                                                                          stdout=stdout,
+                                                                          stderr=stderr,
+                                                                          error_code=error_code)
 
             return process_output
 

@@ -64,13 +64,14 @@ cgroup on /sys/fs/cgroup/blkio type cgroup (rw,nosuid,nodev,noexec,relatime,blki
 '''
 Running scope as unit: TEST_UNIT.scope
 Thu 28 May 2020 07:25:55 AM PDT
-''')
+'''),
 ]
 
-_default_files = {
-    "/proc/self/cgroup": os.path.join(data_dir, 'cgroups', 'proc_self_cgroup'),
-    "/sys/fs/cgroup/unified/cgroup.controllers": os.path.join(data_dir, 'cgroups', 'sys_fs_cgroup_unified_cgroup.controllers'),
-}
+_default_files = (
+    (r"/proc/self/cgroup", os.path.join(data_dir, 'cgroups', 'proc_self_cgroup')),
+    (r"/proc/[0-9]+/cgroup", os.path.join(data_dir, 'cgroups', 'proc_pid_cgroup')),
+    (r"/sys/fs/cgroup/unified/cgroup.controllers", os.path.join(data_dir, 'cgroups', 'sys_fs_cgroup_unified_cgroup.controllers')),
+)
 
 @contextlib.contextmanager
 def mock_cgroup_commands():
@@ -81,20 +82,28 @@ def mock_cgroup_commands():
     def mock_popen(command, *args, **kwargs):
         if isinstance(command, list):
             command_string = " ".join(command)
-            for c in _default_commands:
-                match = re.match(c[0], command_string)
-                if match is not None:
-                    command = ["echo", c[1]]
+        else:
+            command_string = command
+
+        for cmd in _default_commands:
+            match = re.match(cmd[0], command_string)
+            if match is not None:
+                command = ["echo", cmd[1]]
+
         return original_popen(command, *args, **kwargs)
     
     def mock_read_file(filepath, **kwargs):
-        if filepath in _default_files:
-            filepath = _default_files[filepath]
+        for file in _default_files:
+            match = re.match(file[0], filepath)
+            if match is not None:
+                filepath = file[1]
         return original_read_file(filepath, **kwargs)
 
     def mock_path_exists(path):
-        if path in _default_files:
-            return True
+        for file in _default_files:
+            match = re.match(file[0], path)
+            if match is not None:
+                return True
         return original_path_exists(path)
 
     with patch("azurelinuxagent.common.cgroupapi.subprocess.Popen", side_effect=mock_popen) as patcher:
