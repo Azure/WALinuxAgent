@@ -1,0 +1,66 @@
+{
+    "eventId": 1,
+    "providerId": "69B669B9-4AF8-4C50-BDC4-6006FA76E975",
+    "parameters": [
+        {
+            "name": "Name",
+            "value": "Microsoft.Azure.Extensions.CustomScript"
+        },
+        {
+            "name": "Version",
+            "value": "2.0.4"
+        },
+        {
+            "name": "Operation",
+            "value": "Scenario"
+        },
+        {
+            "name": "OperationSuccess",
+            "value": true
+        },
+        {
+            "name": "Message",
+            "value": "A test telemetry message."
+        },
+        {
+            "name": "Duration",
+            "value": 150000
+        },
+        {
+            "name": "IsInternal",
+            "value": true
+        },
+        {
+            "name": "ExtensionType",
+            "value": "XML"
+        },
+        {
+            "name": "GAVersion",
+            "value": "WALinuxAgent-9.9.99"
+        },
+        {
+            "name": "ContainerId",
+            "value": "11111111-2222-3333-4444-555555555555"
+        },
+        {
+            "name": "OpcodeName",
+            "value": "2099-12-31 11:59:59.505791"
+        },
+        {
+            "name": "EventTid",
+            "value": 54321
+        },
+        {
+            "name": "EventPid",
+            "value": 98765
+        },
+        {
+            "name": "TaskName",
+            "value": "NOT_A_VALID_TASK"
+        },
+        {
+            "name": "KeywordName",
+            "value": "NOT_A_VALID_KEYWORD"
+        }
+    ]
+}

@@ -27,13 +27,11 @@ class VMInfo(DataContract):
     def __init__(self,
                  subscriptionId=None,
                  vmName=None,
-                 containerId=None,
                  roleName=None,
                  roleInstanceName=None,
                  tenantName=None):
         self.subscriptionId = subscriptionId
         self.vmName = vmName
-        self.containerId = containerId
         self.roleName = roleName
         self.roleInstanceName = roleInstanceName
         self.tenantName = tenantName
@@ -232,49 +230,3 @@ class RemoteAccessUsersList(DataContract):
     def __init__(self):
         self.users = DataContractList(RemoteAccessUser)
 
-
-class Protocol(DataContract):
-    def detect(self):
-        raise NotImplementedError()
-
-    def get_vminfo(self):
-        raise NotImplementedError()
-
-    def get_certs(self):
-        raise NotImplementedError()
-
-    def get_incarnation(self):
-        raise NotImplementedError()
-
-    def get_vmagent_manifests(self):
-        raise NotImplementedError()
-
-    def get_vmagent_pkgs(self, manifest):
-        raise NotImplementedError()
-
-    def get_ext_handlers(self):
-        raise NotImplementedError()
-
-    def get_ext_handler_pkgs(self, extension):
-        raise NotImplementedError()
-
-    def get_artifacts_profile(self):
-        raise NotImplementedError()
-
-    def download_ext_handler_pkg(self, uri, destination, headers=None, use_proxy=True):
-        raise NotImplementedError()
-
-    def report_provision_status(self, provision_status):
-        raise NotImplementedError()
-
-    def report_vm_status(self, vm_status):
-        raise NotImplementedError()
-
-    def report_ext_status(self, ext_handler_name, ext_name, ext_status):
-        raise NotImplementedError()
-
-    def report_event(self, event):
-        raise NotImplementedError()
-
-    def supports_overprovisioning(self):
-        return True

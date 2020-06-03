@@ -1,21 +1,48 @@
-# Copyright (c) Microsoft Corporation. All rights reserved.
-# Licensed under the Apache License.
+# Copyright 2020 Microsoft Corporation
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+# Requires Python 2.6+ and Openssl 1.0+
+#
+
 import json
-import subprocess
 import os
+import subprocess
 import time
 
+from azurelinuxagent.common.protocol.util import ProtocolUtil
+
+from azurelinuxagent.common.cgroupconfigurator import CGroupConfigurator
+from azurelinuxagent.common.event import WALAEventOperation, AGENT_EVENT_FILE_EXTENSION
+from azurelinuxagent.common.exception import ProtocolError, ExtensionError, ExtensionErrorCodes
 from azurelinuxagent.common.protocol.restapi import ExtensionStatus, Extension, ExtHandler, ExtHandlerProperties
+from azurelinuxagent.common.utils.extensionprocessutil import TELEMETRY_MESSAGE_MAX_LEN, format_stdout_stderr, \
+    read_output
+from mock import MagicMock
+from azurelinuxagent.common.protocol.wire import WireProtocol
 from azurelinuxagent.ga.exthandlers import parse_ext_status, ExtHandlerInstance, get_exthandlers_handler, \
     ExtCommandEnvVariable
-from azurelinuxagent.common.cgroupconfigurator import CGroupConfigurator
-from azurelinuxagent.common.exception import ProtocolError, ExtensionError, ExtensionErrorCodes
-from azurelinuxagent.common.event import WALAEventOperation
-from azurelinuxagent.common.utils.extensionprocessutil import TELEMETRY_MESSAGE_MAX_LEN, format_stdout_stderr, read_output
-from tests.tools import AgentTestCase, patch, mock_sleep
+from tests.tools import AgentTestCase, patch, mock_sleep, clear_singleton_instances
 
 
 class TestExtHandlers(AgentTestCase):
+
+    def setUp(self):
+        super(TestExtHandlers, self).setUp()
+        # Since ProtocolUtil is a singleton per thread, we need to clear it to ensure that the test cases do not
+        # reuse a previous state
+        clear_singleton_instances(ProtocolUtil)
+
     def test_parse_extension_status00(self):
         """
         Parse a status report for a successful execution of an extension.
@@ -132,8 +159,38 @@ class TestExtHandlers(AgentTestCase):
         self.assertTrue(isinstance(extension_status.substatusList, list), 'substatus was not parsed correctly')
         self.assertEqual(0, len(extension_status.substatusList))
 
+    def test_parse_extension_status_with_empty_status(self):
+        """
+        Parse a status report for a successful execution of an extension.
+        """
+
+        # Validating empty status case
+        s = '''[]'''
+        ext_status = ExtensionStatus(seq_no=0)
+        parse_ext_status(ext_status, json.loads(s))
+
+        self.assertEqual(None, ext_status.code)
+        self.assertEqual(None, ext_status.configurationAppliedTime)
+        self.assertEqual(None, ext_status.message)
+        self.assertEqual(None, ext_status.operation)
+        self.assertEqual(None, ext_status.status)
+        self.assertEqual(0, ext_status.sequenceNumber)
+        self.assertEqual(0, len(ext_status.substatusList))
+
+        # Validating None case
+        ext_status = ExtensionStatus(seq_no=0)
+        parse_ext_status(ext_status, None)
+
+        self.assertEqual(None, ext_status.code)
+        self.assertEqual(None, ext_status.configurationAppliedTime)
+        self.assertEqual(None, ext_status.message)
+        self.assertEqual(None, ext_status.operation)
+        self.assertEqual(None, ext_status.status)
+        self.assertEqual(0, ext_status.sequenceNumber)
+        self.assertEqual(0, len(ext_status.substatusList))
+
     @patch('azurelinuxagent.common.event.EventLogger.add_event')
-    @patch('azurelinuxagent.ga.exthandlers.ExtHandlerInstance.get_largest_seq_no')
+    @patch('azurelinuxagent.ga.exthandlers.ExtHandlerInstance._get_largest_seq_no')
     def assert_extension_sequence_number(self,
                                          patch_get_largest_seq,
                                          patch_add_event,
@@ -194,14 +251,15 @@ class TestExtHandlers(AgentTestCase):
 
     @patch("azurelinuxagent.ga.exthandlers.add_event")
     @patch("azurelinuxagent.common.errorstate.ErrorState.is_triggered")
-    @patch("azurelinuxagent.common.protocol.util.ProtocolUtil.get_protocol")
-    def test_it_should_report_an_error_if_the_wireserver_cannot_be_reached(self, patch_get_protocol, patch_is_triggered, patch_add_event):
+    def test_it_should_report_an_error_if_the_wireserver_cannot_be_reached(self, patch_is_triggered, patch_add_event):
         test_message = "TEST MESSAGE"
 
-        patch_get_protocol.side_effect = ProtocolError(test_message) # get_protocol will throw if the wire server cannot be reached
         patch_is_triggered.return_value = True # protocol errors are reported only after a delay; force the error to be reported now
 
-        get_exthandlers_handler().run()
+        protocol = WireProtocol("foo.bar")
+        protocol.get_ext_handlers = MagicMock(side_effect=ProtocolError(test_message))
+
+        get_exthandlers_handler(protocol).run()
 
         self.assertEquals(patch_add_event.call_count, 2)
 
@@ -284,7 +342,7 @@ sys.stderr.write("{1}")
 
         def list_directory():
             base_dir = self.ext_handler_instance.get_base_dir()
-            return [i for i in os.listdir(base_dir) if not i.endswith(".tld")] # ignore telemetry files
+            return [i for i in os.listdir(base_dir) if not i.endswith(AGENT_EVENT_FILE_EXTENSION)] # ignore telemetry files
 
         files_before = list_directory()
 

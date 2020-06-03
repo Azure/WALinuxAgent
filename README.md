@@ -18,14 +18,12 @@ Canonical UbuntuServer 16.04-DAILY-LTS|![badge](https://dcrbadges.blob.core.wind
 Canonical UbuntuServer 18.04-LTS|![badge](https://dcrbadges.blob.core.windows.net/scenarios/Canonical_UbuntuServer_18.04-LTS__agent--bvt.svg)
 Canonical UbuntuServer 18.04-DAILY-LTS|![badge](https://dcrbadges.blob.core.windows.net/scenarios/Canonical_UbuntuServer_18.04-DAILY-LTS__agent--bvt.svg)
 Credativ Debian 8|![badge](https://dcrbadges.blob.core.windows.net/scenarios/Credativ_Debian_8__agent--bvt.svg)
-Credativ Debian 8-DAILY|![badge](https://dcrbadges.blob.core.windows.net/scenarios/Credativ_Debian_8-DAILY__agent--bvt.svg)
 Credativ Debian 9|![badge](https://dcrbadges.blob.core.windows.net/scenarios/Credativ_Debian_9__agent--bvt.svg)
-Credativ Debian 9-DAILY|![badge](https://dcrbadges.blob.core.windows.net/scenarios/Credativ_Debian_9-DAILY__agent--bvt.svg)
 OpenLogic CentOS 6.9|![badge](https://dcrbadges.blob.core.windows.net/scenarios/OpenLogic_CentOS_6.9__agent--bvt.svg)
 OpenLogic CentOS 7.4|![badge](https://dcrbadges.blob.core.windows.net/scenarios/OpenLogic_CentOS_7.4__agent--bvt.svg)
 RedHat RHEL 6.9|![badge](https://dcrbadges.blob.core.windows.net/scenarios/RedHat_RHEL_6.9__agent--bvt.svg)
 RedHat RHEL 7-RAW|![badge](https://dcrbadges.blob.core.windows.net/scenarios/RedHat_RHEL_7-RAW__agent--bvt.svg)
-SUSE SLES 12-SP3|![badge](https://dcrbadges.blob.core.windows.net/scenarios/SUSE_SLES_12-SP3__agent--bvt.svg)
+SUSE SLES 12-SP5|![badge](https://dcrbadges.blob.core.windows.net/scenarios/SUSE_SLES_12-SP5__agent--bvt.svg)
 
 ## Introduction
 
@@ -397,7 +395,7 @@ system swap space.
 _Type: Boolean_  
 _Default: n_
 
-If set, the swap file (/swapfile) is mounted as an encrypted filesystem.
+If set, the swap file (/swapfile) is mounted as an encrypted filesystem (flag supported only on FreeBSD.)
 
 #### __ResourceDisk.SwapSizeMB__
 

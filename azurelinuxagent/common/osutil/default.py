@@ -423,28 +423,23 @@ class DefaultOSUtil(object):
             return
 
         if expiration is not None:
-            cmd = "useradd -m {0} -e {1}".format(username, expiration)
+            cmd = ["useradd", "-m", username, "-e", expiration]
         else:
-            cmd = "useradd -m {0}".format(username)
+            cmd = ["useradd", "-m", username]
         
         if comment is not None:
-            cmd += " -c {0}".format(comment)
-        retcode, out = shellutil.run_get_output(cmd)
-        if retcode != 0:
-            raise OSUtilError(("Failed to create user account:{0}, "
-                               "retcode:{1}, "
-                               "output:{2}").format(username, retcode, out))
+            cmd.extend(["-c", comment])
+
+        self._run_command_raising_OSUtilError(cmd, err_msg="Failed to create user account:{0}".format(username))
 
     def chpasswd(self, username, password, crypt_id=6, salt_len=10):
         if self.is_sys_user(username):
             raise OSUtilError(("User {0} is a system user, "
                                "will not set password.").format(username))
         passwd_hash = textutil.gen_password_hash(password, crypt_id, salt_len)
-        cmd = "usermod -p '{0}' {1}".format(passwd_hash, username)
-        ret, output = shellutil.run_get_output(cmd, log_cmd=False)
-        if ret != 0:
-            raise OSUtilError(("Failed to set password for {0}: {1}"
-                               "").format(username, output))
+
+        self._run_command_raising_OSUtilError(["usermod", "-p", passwd_hash, username],
+                                              err_msg="Failed to set password for {0}".format(username))
     
     def get_users(self):
         return getpwall()
@@ -1124,7 +1119,7 @@ class DefaultOSUtil(object):
 
     def set_hostname(self, hostname):
         fileutil.write_file('/etc/hostname', hostname)
-        shellutil.run("hostname {0}".format(hostname), chk_err=False)
+        self._run_command_without_raising(["hostname", hostname], log_error=False)
 
     def set_dhcp_hostname(self, hostname):
         autosend = r'^[^#]*?send\s*host-name.*?(<hostname>|gethostname[(,)])'
@@ -1292,8 +1287,9 @@ class DefaultOSUtil(object):
     def del_account(self, username):
         if self.is_sys_user(username):
             logger.error("{0} is a system user. Will not delete it.", username)
-        shellutil.run("> /var/run/utmp")
-        shellutil.run("userdel -f -r " + username)
+
+        self._run_command_without_raising(["touch", "/var/run/utmp"])
+        self._run_command_without_raising(['userdel', '-f', '-r', username])
         self.conf_sudoer(username, remove=True)
 
     def decode_customdata(self, data):
@@ -1420,3 +1416,33 @@ class DefaultOSUtil(object):
                     handler(state[interface_name], result.group(2))
                 else:
                     logger.error("Interface {0} has {1} but no link state".format(interface_name, description))
+
+    @staticmethod
+    def _run_command_without_raising(cmd, log_error=True):
+        try:
+            shellutil.run_command(cmd, log_error=log_error)
+        # Original implementation of run() does a blanket catch, so mimicking the behaviour here
+        except Exception:
+            pass
+
+    @staticmethod
+    def _run_multiple_commands_without_raising(commands, log_error=True, continue_on_error=False):
+        for cmd in commands:
+            try:
+                shellutil.run_command(cmd, log_error=log_error)
+            # Original implementation of run() does a blanket catch, so mimicking the behaviour here
+            except Exception:
+                if continue_on_error:
+                    continue
+                break
+
+    @staticmethod
+    def _run_command_raising_OSUtilError(cmd, err_msg, cmd_input=None):
+        # This method runs shell command using the new secure shellutil.run_command and raises OSUtilErrors on failures.
+        try:
+            return shellutil.run_command(cmd, log_error=True, cmd_input=cmd_input)
+        except shellutil.CommandError as e:
+            raise OSUtilError(
+                "{0}, Retcode: {1}, Output: {2}, Error: {3}".format(err_msg, e.returncode, e.stdout, e.stderr))
+        except Exception as e:
+            raise OSUtilError("{0}, Retcode: {1}, Error: {2}".format(err_msg, -1, ustr(e)))

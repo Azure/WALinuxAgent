@@ -22,9 +22,10 @@ import os
 import textwrap
 
 import azurelinuxagent.common.conf as conf
+from azurelinuxagent.common.event import EVENTS_DIRECTORY
 from azurelinuxagent.common.version import set_current_agent, \
     AGENT_LONG_VERSION, AGENT_VERSION, AGENT_NAME, AGENT_NAME_PATTERN, \
-    get_f5_platform, get_distro
+    get_f5_platform, get_distro, PY_VERSION_MAJOR, PY_VERSION_MINOR
 from tests.tools import AgentTestCase, open_patch, patch
 
 
@@ -56,6 +57,13 @@ def default_system_exception():
     raise Exception
 
 
+def is_platform_dist_supported():
+    # platform.dist() and platform.linux_distribution() is deprecated from Python 3.8+
+    if PY_VERSION_MAJOR == 3 and PY_VERSION_MINOR >= 8:
+        return False
+    else:
+        return True
+
 class TestAgentVersion(AgentTestCase):
     def setUp(self):
         AgentTestCase.setUp(self)
@@ -78,18 +86,32 @@ class TestAgentVersion(AgentTestCase):
         return
 
     @mock.patch('platform.system', side_effect=default_system)
-    @mock.patch('platform.dist', side_effect=default_system_no_linux_distro)
-    def test_distro_is_correct_format_when_default_case(self, platform_system_name, default_system_no_linux):
-        osinfo = get_distro()
+    def test_distro_is_correct_format_when_default_case(self, *args):
         default_list = ['', '', '', '']
-        self.assertListEqual(default_list, osinfo)
+        unknown_list = ['unknown', 'FFFF', '', '']
+
+        if is_platform_dist_supported():
+            with patch('platform.dist', side_effect=default_system_no_linux_distro):
+                osinfo = get_distro()
+                self.assertListEqual(default_list, osinfo)
+        else:
+            # platform.dist() is deprecated in Python 3.7+ and would throw, resulting in unknown distro
+            osinfo = get_distro()
+            self.assertListEqual(unknown_list, osinfo)
         return
 
     @mock.patch('platform.system', side_effect=default_system)
-    @mock.patch('platform.dist', side_effect=default_system_exception)
-    def test_distro_is_correct_for_exception_case(self, platform_system_name, default_system_no_linux):
-        osinfo = get_distro()
+    def test_distro_is_correct_for_exception_case(self, *args):
         default_list = ['unknown', 'FFFF', '', '']
+
+        if is_platform_dist_supported():
+            with patch('platform.dist', side_effect=default_system_exception):
+                osinfo = get_distro()
+        else:
+            # platform.dist() is deprecated in Python 3.7+ so we can't patch it, but it would throw
+            # as well, resulting in the same unknown distro
+            osinfo = get_distro()
+
         self.assertListEqual(default_list, osinfo)
         return
 
@@ -115,7 +137,7 @@ class TestCurrentAgentName(AgentTestCase):
 
     @patch("os.getcwd")
     def test_extract_name_in_path_finds_installed(self, mock_cwd):
-        path = os.path.join(conf.get_lib_dir(), "events")
+        path = os.path.join(conf.get_lib_dir(), EVENTS_DIRECTORY)
         mock_cwd.return_value = path
         current_agent, current_version = set_current_agent()
         self.assertEqual(AGENT_LONG_VERSION, current_agent)
