@@ -16,8 +16,8 @@
 #
 
 import unittest
-from azurelinuxagent.common.datacontract import get_properties, set_properties
-from azurelinuxagent.common.protocol.restapi import *
+
+from azurelinuxagent.common.datacontract import get_properties, set_properties, DataContract, DataContractList
 
 
 class SampleDataContract(DataContract):

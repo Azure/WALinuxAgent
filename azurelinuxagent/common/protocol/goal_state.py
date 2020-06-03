@@ -25,7 +25,10 @@ import azurelinuxagent.common.logger as logger
 from azurelinuxagent.common.AgentGlobals import AgentGlobals
 from azurelinuxagent.common.datacontract import set_properties
 from azurelinuxagent.common.event import add_event, WALAEventOperation
-from azurelinuxagent.common.protocol.restapi import *
+from azurelinuxagent.common.future import ustr
+from azurelinuxagent.common.protocol.restapi import Cert, CertList, Extension, ExtHandler, ExtHandlerList, \
+    ExtHandlerVersionUri, RemoteAccessUser, RemoteAccessUsersList, \
+    VMAgentManifest, VMAgentManifestList, VMAgentManifestUri
 from azurelinuxagent.common.utils import fileutil
 from azurelinuxagent.common.utils.cryptutil import CryptUtil
 from azurelinuxagent.common.utils.textutil import parse_doc, findall, find, findtext, getattrib, gettext
