@@ -41,9 +41,54 @@ class TestArchive(AgentTestCase):
             fh.write(data)
             return full_name
 
+    def _verify_file_copied(self, f):
+        self._verify_file_locations(f, True, True)
+
+    def _verify_file_moved(self, f):
+        self._verify_file_locations(f, False, True)
+
+    def _verify_file_untouched(self, f):
+        self._verify_file_locations(f, True, False)
+
+    def _verify_file_locations(self, f, expect_original, expect_new):
+        timestamp_dirs = os.listdir(self.history_dir)
+        self.assertEqual(1, len(timestamp_dirs))
+
+        original_location = os.path.join(self.tmp_dir, f)
+        new_location = os.path.join(self.history_dir, timestamp_dirs[0], f)
+        self.assertEqual(expect_original, os.path.exists(original_location))
+        self.assertEqual(expect_new, os.path.exists(new_location))
+
     @property
     def history_dir(self):
         return os.path.join(self.tmp_dir, 'history')
+
+    def test_archive_move_copy_files(self):
+        temp_files = [
+            'ExtensionsConfig_fa.1.xml',
+            'ExtensionsConfig_ft.3.xml',
+            'Dont_care_about_this_file',
+            'Incarnation',
+            'ArtifactProfileSequenceNumber',
+            'SvdSeqNo',
+            'GoalStateSource',
+            'VmId'
+        ]
+
+        for f in temp_files:
+            self._write_file(f)
+
+        test_subject = StateFlusher(self.tmp_dir)
+        test_subject.flush(datetime.utcnow())
+
+        self._verify_file_moved('ExtensionsConfig_fa.1.xml')
+        self._verify_file_moved('ExtensionsConfig_ft.3.xml')
+        self._verify_file_untouched('Dont_care_about_this_file')
+        self._verify_file_copied('Incarnation')
+        self._verify_file_copied('ArtifactProfileSequenceNumber')
+        self._verify_file_copied('SvdSeqNo')
+        self._verify_file_copied('GoalStateSource')
+        self._verify_file_untouched('VmId')
 
     def test_archive00(self):
         """

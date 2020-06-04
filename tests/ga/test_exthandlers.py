@@ -250,12 +250,12 @@ class TestGoalState(AgentTestCase):
         retriever._pending_mode = GOAL_STATE_SOURCE_FASTTRACK
         retriever._pending_fast_track_seq_no = 3
         retriever.commit_processed()
-        self.assertEqual("FastTrack: SeqNo=3, Reason=None", retriever.get_description())
+        self.assertEqual("FastTrack Incarnation=None SeqNo=3 Reason=None", retriever.get_description())
         retriever._pending_mode = GOAL_STATE_SOURCE_FABRIC
         retriever._pending_fabric_incarnation = 5
         retriever._pending_svd_seq_no = 42
         retriever.commit_processed()
-        self.assertEqual("Fabric: Incarnation=5, Reason=None", retriever.get_description())
+        self.assertEqual("Fabric Incarnation=5 SeqNo=3 Reason=None", retriever.get_description())
 
     def test_startup_first_time(self):
         test_data = WireProtocolData(DATA_FILE)
@@ -457,6 +457,7 @@ class TestGoalState(AgentTestCase):
         self.assertIsNotNone(ext_conf.extensions_config)
         retriever.commit_processed()
         self.assertTrue("Fabric" in ext_conf.get_description())
+        self.assertEqual("ExtensionsConfig_fa.1.xml", ext_conf.get_file_name())
         self.assertEqual(GOAL_STATE_SOURCE_FABRIC, retriever._last_mode)
 
         # Fabric goal state, not changed
@@ -465,6 +466,7 @@ class TestGoalState(AgentTestCase):
         self.assertIsNotNone(ext_conf.extensions_config)
         retriever.commit_processed()
         self.assertTrue("Fabric" in ext_conf.get_description())
+        self.assertEqual("ExtensionsConfig_fa.1.xml", ext_conf.get_file_name())
         self.assertEqual(GOAL_STATE_SOURCE_FABRIC, retriever._last_mode)
 
         # Fast Track goal state, changed
@@ -476,6 +478,7 @@ class TestGoalState(AgentTestCase):
         self.assertIsNotNone(ext_conf.extensions_config)
         retriever.commit_processed()
         self.assertTrue("FastTrack" in ext_conf.get_description())
+        self.assertEqual("ExtensionsConfig_ft.1.xml", ext_conf.get_file_name())
         self.assertEqual(GOAL_STATE_SOURCE_FASTTRACK, retriever._last_mode)
 
         # Fast Track goal state, not changed
@@ -484,6 +487,7 @@ class TestGoalState(AgentTestCase):
         self.assertIsNotNone(ext_conf.extensions_config)
         retriever.commit_processed()
         self.assertTrue("FastTrack" in ext_conf.get_description())
+        self.assertEqual("ExtensionsConfig_ft.1.xml", ext_conf.get_file_name())
         self.assertEqual(GOAL_STATE_SOURCE_FASTTRACK, retriever._last_mode)
 
     def test_commit_processed(self):

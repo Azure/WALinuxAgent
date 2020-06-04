@@ -56,7 +56,6 @@ GOAL_STATE_FILE_NAME = "GoalState.{0}.xml"
 HOSTING_ENV_FILE_NAME = "HostingEnvironmentConfig.xml"
 SHARED_CONF_FILE_NAME = "SharedConfig.xml"
 REMOTE_ACCESS_FILE_NAME = "RemoteAccess.{0}.xml"
-EXT_CONF_FILE_NAME = "ExtensionsConfig.{0}.xml"
 MANIFEST_FILE_NAME = "{0}.{1}.manifest.xml"
 
 PROTOCOL_VERSION = "2012-11-30"
@@ -848,7 +847,7 @@ class WireClient(object):
             save_if_not_none(self._goal_state, GOAL_STATE_FILE_NAME.format(self._goal_state.incarnation))
             save_if_not_none(self._goal_state.hosting_env, HOSTING_ENV_FILE_NAME)
             save_if_not_none(self._goal_state.shared_conf, SHARED_CONF_FILE_NAME)
-            save_if_not_none(self._goal_state.ext_conf, EXT_CONF_FILE_NAME.format(self._goal_state.incarnation))
+            save_if_not_none(self._goal_state.ext_conf, self._goal_state.ext_conf.get_file_name())
             save_if_not_none(self._goal_state.remote_access, REMOTE_ACCESS_FILE_NAME.format(self._goal_state.incarnation))
 
         except Exception as e:
@@ -1058,7 +1057,7 @@ class WireClient(object):
         fast_track_enabled = False
         if conf.get_extensions_fast_track_enabled():
             if self.hostgaplugin_supports_fast_track():
-                logger.periodic_info(logger.EVERY_DAY, "FastTrack enabled")
+                logger.periodic_info(logger.EVERY_DAY, "FastTrack enabled because HostGAPlugin supports it")
                 fast_track_enabled = True
             else:
                 logger.periodic_info(logger.EVERY_DAY, "FastTrack not enabled because HostGAPlugin doesn't support it")
@@ -1421,7 +1420,7 @@ class InVMArtifactsProfile(object):
         """
         We need to convert the json from the InVmArtifactsProfile blob to the following
         format for the ExtensionsConfig:
-        <Extensions version="1.0.0.0" goalStateIncarnation="9">
+        <Extensions version="1.0.0.0" goalStateIncarnation="9" fastTrack="true">
         <Plugins>
             <Plugin name="MyExtension.Blah" version="1.0.0"
                     location="http://somewhere.xml"
@@ -1450,6 +1449,7 @@ class InVMArtifactsProfile(object):
             root = xml.Element("Extensions")
             root.set('version', '1.0.0.0')
             root.set('goalStateIncarnation', str(self.inVMArtifactsProfileBlobSeqNo))
+            root.set('fastTrack', 'true')
 
             # Some properties such as state are required and will generate an exception if not there
             # Others such as autoUpgrade are optional so we'll check first

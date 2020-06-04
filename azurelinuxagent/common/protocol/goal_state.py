@@ -423,12 +423,11 @@ class ExtensionsConfig(object):
 
         depends_on_level = 0
         depends_on_node = find(settings[0], "DependsOn")
-        if depends_on_node != None:
+        if depends_on_node is not None:
             try:
                 depends_on_level = int(getattrib(depends_on_node, "dependencyLevel"))
             except (ValueError, TypeError):
-                logger.periodic_warn(logger.EVERY_DAY,
-                                     "Could not parse dependencyLevel for handler {0}. Setting it to 0".format(name))
+                logger.warn("Could not parse dependencyLevel for handler {0}. Setting it to 0".format(name))
                 depends_on_level = 0
 
         if runtime_settings is not None:

@@ -45,6 +45,11 @@ class Logger(object):
     def reset_periodic(self):
         self.logger.periodic_messages = {}
 
+    def reset_periodic_msg(self, msg):
+        h = hash(msg)
+        if h in self.logger.periodic_messages:
+            del self.logger.periodic_messages[h]
+
     def set_prefix(self, prefix):
         self.prefix = prefix
 
@@ -255,6 +260,10 @@ def add_logger_appender(appender_type, level=LogLevel.INFO, path=None):
 
 def reset_periodic():
     DEFAULT_LOGGER.reset_periodic()
+
+
+def reset_periodic_msg(msg):
+    DEFAULT_LOGGER.reset_periodic_msg(msg)
 
 
 def set_prefix(prefix):

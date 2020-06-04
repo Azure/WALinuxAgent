@@ -231,7 +231,7 @@ class ExtHandlersHandler(object):
         self.ext_config = None
         self.ext_handlers = None
         self.log_report = False
-        self.log_not_changed = True
+        self.log_gs_not_changed = True
         self.log_process = False
 
         self.report_status_error_state = ErrorState()
@@ -412,13 +412,13 @@ class ExtHandlersHandler(object):
 
         try:
             if self.ext_config.changed is False:
-                if self.log_not_changed:
+                if self.log_gs_not_changed:
                     ext_handler_i.logger.verbose("{0} did not change, not processing GoalState",
                                                  self.ext_config.get_description())
-                    self.log_not_changed = False
+                    self.log_gs_not_changed = False
                 return
 
-            self.log_not_changed = True
+            self.log_gs_not_changed = True
             state = ext_handler.properties.state
 
             if ext_handler_i.decide_version(target_state=state) is None:

@@ -51,6 +51,36 @@ class TestLogger(AgentTestCase):
         logger.DEFAULT_LOGGER.appenders *= 0
         fileutil.rm_dirs(self.event_dir)
 
+    @patch('azurelinuxagent.common.logger.Logger.info')
+    def test_periodic_emits_after_removed(self, mock_info):
+        logger.periodic_info(logger.EVERY_DAY, _MSG_INFO, logger.LogLevel.INFO, *_DATA)
+        logger.periodic_info(logger.EVERY_DAY, _MSG_INFO, logger.LogLevel.INFO, *_DATA)
+        self.assertEqual(1, mock_info.call_count)
+
+        logger.reset_periodic_msg(_MSG_INFO)
+        logger.periodic_info(logger.EVERY_DAY, _MSG_INFO, logger.LogLevel.INFO, *_DATA)
+        logger.periodic_info(logger.EVERY_DAY, _MSG_INFO, logger.LogLevel.INFO, *_DATA)
+        self.assertEqual(2, mock_info.call_count)
+
+    @patch('azurelinuxagent.common.logger.Logger.info')
+    def test_periodic_reset_msg_already_removed(self, mock_info):
+        logger.periodic_info(logger.EVERY_DAY, _MSG_INFO, logger.LogLevel.INFO, *_DATA)
+        self.assertEqual(1, mock_info.call_count)
+
+        logger.reset_periodic_msg(_MSG_INFO)
+        logger.reset_periodic_msg(_MSG_INFO)
+        logger.periodic_info(logger.EVERY_DAY, _MSG_INFO, logger.LogLevel.INFO, *_DATA)
+        self.assertEqual(2, mock_info.call_count)
+
+    @patch('azurelinuxagent.common.logger.Logger.info')
+    def test_periodic_reset_msg_remove_other(self, mock_info):
+        logger.periodic_info(logger.EVERY_DAY, _MSG_INFO, logger.LogLevel.INFO, *_DATA)
+        self.assertEqual(1, mock_info.call_count)
+
+        logger.reset_periodic_msg(_MSG_ERROR)
+        logger.periodic_info(logger.EVERY_DAY, _MSG_INFO, logger.LogLevel.INFO, *_DATA)
+        self.assertEqual(1, mock_info.call_count)
+
     @patch('azurelinuxagent.common.logger.Logger.verbose')
     @patch('azurelinuxagent.common.logger.Logger.warn')
     @patch('azurelinuxagent.common.logger.Logger.error')
