@@ -72,7 +72,8 @@ class TestArchive(AgentTestCase):
             'ArtifactProfileSequenceNumber',
             'SvdSeqNo',
             'GoalStateSource',
-            'VmId'
+            'VmId',
+            'InVmArtifactsProfileBlob.52.json'
         ]
 
         for f in temp_files:
@@ -83,6 +84,7 @@ class TestArchive(AgentTestCase):
 
         self._verify_file_moved('ExtensionsConfig_fa.1.xml')
         self._verify_file_moved('ExtensionsConfig_ft.3.xml')
+        self._verify_file_moved('InVmArtifactsProfileBlob.52.json')
         self._verify_file_untouched('Dont_care_about_this_file')
         self._verify_file_copied('Incarnation')
         self._verify_file_copied('ArtifactProfileSequenceNumber')

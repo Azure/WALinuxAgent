@@ -42,7 +42,7 @@ CACHE_PATTERNS = [
     re.compile("^(.*)\.(\d+)\.(agentsManifest)$", re.IGNORECASE),
     re.compile("^(.*)\.(\d+)\.(manifest\.xml)$", re.IGNORECASE),
     re.compile("^(.*)\.(\d+)\.(xml)$", re.IGNORECASE),
-    re.compile("^(.*)_(.*)\.(\d+)\.(xml)$", re.IGNORECASE)
+    re.compile("^(.*)\.(\d+)\.(json)$", re.IGNORECASE),
 ]
 
 # 2018-04-06T08:21:37.142697
@@ -55,6 +55,7 @@ OTHER_FILES_TO_COPY = {
     "ArtifactProfileSequenceNumber",
     "SvdSeqNo",
     "GoalStateSource",
+    "InVmArtifactsProfileBlob.json"
 }
 
 

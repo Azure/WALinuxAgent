@@ -51,6 +51,7 @@ HEALTH_REPORT_URI = "http://{0}/machine?comp=health"
 ROLE_PROP_URI = "http://{0}/machine?comp=roleProperties"
 TELEMETRY_URI = "http://{0}/machine?comp=telemetrydata"
 
+ARTIFACTS_PROFILE_BLOB_FILE_NAME = "InVmArtifactsProfileBlob.{0}.json"
 WIRE_SERVER_ADDR_FILE_NAME = "WireServer"
 GOAL_STATE_FILE_NAME = "GoalState.{0}.xml"
 HOSTING_ENV_FILE_NAME = "HostingEnvironmentConfig.xml"
@@ -1298,6 +1299,13 @@ class WireClient(object):
                                  is_success=False,
                                  message=msg,
                                  log_event=False)
+
+                try:
+                    file_name = ARTIFACTS_PROFILE_BLOB_FILE_NAME.format(artifacts_profile.get_sequence_number())
+                    file_path = os.path.join(conf.get_lib_dir(), file_name)
+                    self.save_cache(file_path, profile)
+                except Exception:
+                    logger.warn("Could not save artifacts profile blob to disk")
             if etag is not None:
                 logger.info("Received a new etag for the VMArtifactsProfile blob: {0}", etag)
                 self.vm_artifacts_profile_etag = etag
