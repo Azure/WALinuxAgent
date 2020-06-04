@@ -256,7 +256,7 @@ class TestEventMonitoring(AgentTestCase, HttpRequestPredicates):
                              '<Param Name="VMName" Value="MachineRole_IN_0" T="mt:wstr" />' \
                              '<Param Name="TenantName" Value="db00a7755a5e4e8a8fe4b19bc3b330c3" T="mt:wstr" />' \
                              '<Param Name="RoleName" Value="MachineRole" T="mt:wstr" />' \
-                             '<Param Name="RoleInstanceName" Value="MachineRole_IN_0" T="mt:wstr" />' \
+                             '<Param Name="RoleInstanceName" Value="b61f93d0-e1ed-40b2-b067-22c243233448.MachineRole_IN_0" T="mt:wstr" />' \
                              '<Param Name="Location" Value="uswest" T="mt:wstr" />' \
                              '<Param Name="SubscriptionId" Value="AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE" T="mt:wstr" />' \
                              '<Param Name="ResourceGroupName" Value="test-rg" T="mt:wstr" />' \

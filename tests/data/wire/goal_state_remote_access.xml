@@ -14,7 +14,7 @@
      </RemoteAccessInfo>
      <RoleInstanceList>
        <RoleInstance>
-         <InstanceId>MachineRole_IN_0</InstanceId>
+         <InstanceId>b61f93d0-e1ed-40b2-b067-22c243233448.MachineRole_IN_0</InstanceId>
          <State>Started</State>
          <Configuration>
          <HostingEnvironmentConfig>http://168.63.129.16:80/hostingenvuri/</HostingEnvironmentConfig>
@@ -22,7 +22,7 @@
          <Certificates>http://168.63.129.16:80/certificatesuri/</Certificates>
          <ExtensionsConfig>http://168.63.129.16:80/extensionsconfiguri/</ExtensionsConfig>
          <FullConfig>http://168.63.129.16:80/fullconfiguri/</FullConfig>
-         <ConfigName>DummyRoleConfigName.xml</ConfigName>
+         <ConfigName>b61f93d0-e1ed-40b2-b067-22c243233448.1.b61f93d0-e1ed-40b2-b067-22c243233448.2.MachineRole_IN_0.xml</ConfigName>
          </Configuration>
        </RoleInstance>
      </RoleInstanceList>

@@ -815,6 +815,41 @@ class TestWireClient(HttpRequestPredicates, AgentTestCase):
             self.assertTrue(self.is_host_plugin_extension_artifact_request(urls[3]), "The retry request should have been over the host channel")
             self.assertEquals(HostPluginProtocol.is_default_channel(), False, "The default channel should not have changed")
 
+    def test_upload_logs_should_not_refresh_plugin_when_first_attempt_succeeds(self):
+        def http_put_handler(url, *_, **__):
+            if protocol.get_endpoint() in url and url.endswith('/vmAgentLog'):
+                return MockResponse(body=b'', status_code=200)
+            self.fail('The upload logs request was sent to the wrong url: {0}'.format(url))
+
+        with mock_wire_protocol(mockwiredata.DATA_FILE, http_put_handler=http_put_handler) as protocol:
+            content = b"test"
+            protocol.client.upload_logs(content)
+
+            urls = protocol.get_tracked_urls()
+            self.assertEqual(len(urls), 1, 'Expected one post request to the host: [{0}]'.format(urls))
+
+    def test_upload_logs_should_retry_the_host_channel_after_refreshing_the_host_plugin(self):
+        def http_put_handler(url, *_, **__):
+            if self.is_host_plugin_put_logs_request(url):
+                if http_put_handler.host_plugin_calls == 0:
+                    http_put_handler.host_plugin_calls += 1
+                    return ResourceGoneError("Exception to fake a stale goal state")
+                protocol.track_url(url)
+            return None
+        http_put_handler.host_plugin_calls = 0
+
+        with mock_wire_protocol(mockwiredata.DATA_FILE_IN_VM_ARTIFACTS_PROFILE, http_put_handler=http_put_handler) \
+                as protocol:
+            content = b"test"
+            protocol.client.upload_logs(content)
+
+            urls = protocol.get_tracked_urls()
+            self.assertEquals(len(urls), 2, "Invalid number of requests: [{0}]".format(urls))
+            self.assertTrue(self.is_host_plugin_put_logs_request(urls[0]),
+                            "The first request should have been over the host channel")
+            self.assertTrue(self.is_host_plugin_put_logs_request(urls[1]),
+                            "The second request should have been over the host channel")
+
     def test_send_request_using_appropriate_channel_should_not_invoke_host_channel_when_direct_channel_succeeds(self):
         with mock_wire_protocol(mockwiredata.DATA_FILE) as protocol:
             protocol.client.get_host_plugin().set_default_channel(False)

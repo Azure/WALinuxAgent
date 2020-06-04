@@ -29,7 +29,8 @@ import azurelinuxagent.common.conf as conf
 import azurelinuxagent.common.logger as logger
 import azurelinuxagent.common.utils.textutil as textutil
 from azurelinuxagent.common.datacontract import validate_param
-from azurelinuxagent.common.event import add_event, add_periodic, WALAEventOperation, EVENTS_DIRECTORY
+from azurelinuxagent.common.event import add_event, add_periodic, EVENTS_DIRECTORY
+from azurelinuxagent.common.event import report_event, WALAEventOperation
 from azurelinuxagent.common.exception import ProtocolNotFoundError, \
     ResourceGoneError, ExtensionDownloadError, InvalidContainerError, ProtocolError, HttpError
 from azurelinuxagent.common.future import httpclient, bytebuffer, ustr
@@ -191,6 +192,9 @@ class WireProtocol(DataContract):
     def report_event(self, events):
         validate_param(EVENTS_DIRECTORY, events, TelemetryEventList)
         self.client.report_event(events)
+
+    def upload_logs(self, logs):
+        self.client.upload_logs(logs)
 
 
 def _build_role_properties(container_id, role_instance_id, thumbprint):
@@ -1116,9 +1120,6 @@ class WireClient(object):
                 self.send_event(provider_id, buf[provider_id])
 
     def report_status_event(self, message, is_success):
-        from azurelinuxagent.common.event import report_event, \
-            WALAEventOperation
-
         report_event(op=WALAEventOperation.ReportStatus,
                      is_success=is_success,
                      message=message,
@@ -1195,13 +1196,72 @@ class WireClient(object):
                     msg = "Content: [{0}]".format(profile)
                     logger.verbose(msg)
 
-                    from azurelinuxagent.common.event import report_event, WALAEventOperation
                     report_event(op=WALAEventOperation.ArtifactsProfileBlob,
                                  is_success=False,
                                  message=msg,
                                  log_event=False)
 
         return artifacts_profile
+
+    def upload_logs(self, content):
+        try:
+            host_plugin = self.get_host_plugin()
+            host_plugin.put_vm_log(content)
+
+            msg = "Upload VM logs request succeeded using the host plugin channel for " \
+                  "container id {0} and role config file {1}".format(host_plugin.container_id,
+                                                                     host_plugin.role_config_name)
+            add_event(name=AGENT_NAME,
+                      version=CURRENT_VERSION,
+                      op=WALAEventOperation.HostPlugin,
+                      is_success=True,
+                      message=msg,
+                      log_event=True)
+        except (ResourceGoneError, InvalidContainerError) as e:
+            host_plugin = self.get_host_plugin()
+            old_container_id = host_plugin.container_id
+            old_role_config_name = host_plugin.role_config_name
+
+            msg = "Upload VM logs request failed with the current host plugin configuration. " \
+                  "ContainerId: {0}, role config file: {1}. Fetching new goal state and retrying the call." \
+                  "Error: {2}".format(old_container_id, old_role_config_name, ustr(e))
+            logger.info(msg)
+
+            self.update_host_plugin_from_goal_state()
+
+            new_container_id = host_plugin.container_id
+            new_role_config_name = host_plugin.role_config_name
+            msg = "Host plugin reconfigured with new parameters. " \
+                  "ContainerId: {0}, role config file: {1}.".format(new_container_id, new_role_config_name)
+            logger.info(msg)
+
+            try:
+                host = self.get_host_plugin()
+                host.put_vm_log(content)
+
+                msg = "Upload VM logs request succeeded using the host plugin channel after goal state refresh. " \
+                      "ContainerId changed from {0} to {1}, " \
+                      "role config file changed from {2} to {3}.".format(old_container_id, new_container_id,
+                                                                         old_role_config_name, new_role_config_name)
+                add_event(name=AGENT_NAME,
+                          version=CURRENT_VERSION,
+                          op=WALAEventOperation.HostPlugin,
+                          is_success=True,
+                          message=msg,
+                          log_event=True)
+
+            except (ResourceGoneError, InvalidContainerError) as e:
+                msg = "Upload VM logs request failed using the host plugin channel after goal state refresh. " \
+                      "ContainerId changed from {0} to {1}, role config file changed from {2} to {3}. " \
+                      "Exception type: {4}.".format(old_container_id, new_container_id, old_role_config_name,
+                                                    new_role_config_name, type(e).__name__)
+                add_event(name=AGENT_NAME,
+                          version=CURRENT_VERSION,
+                          op=WALAEventOperation.HostPlugin,
+                          is_success=False,
+                          message=msg,
+                          log_event=True)
+                raise
 
 
 class VersionInfo(object):
