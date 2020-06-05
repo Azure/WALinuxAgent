@@ -15,32 +15,16 @@
 # Requires Python 2.6+ and Openssl 1.0+
 import errno
 import threading
-from collections import namedtuple
 
 from azurelinuxagent.common import logger
-from azurelinuxagent.common.cgroup import CpuCgroup, CGroupContollers
-from azurelinuxagent.common.exception import CGroupsException
+from azurelinuxagent.common.cgroup import CpuCgroup
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.logger import EVERY_SIX_HOURS
 from azurelinuxagent.common.resourceusage import ProcessInfo
 
-MetricValue = namedtuple('Metric', ['category', 'counter', 'instance', 'value'])
-StatmMetricValue = namedtuple('StatmMetricValue', ['pid_name_cmdline', 'resource_metric'])
-
 DELIM = " | "
 DEFAULT_PROCESS_NAME = "NO_PROCESS_FOUND"
 DEFAULT_PROCESS_COMMANDLINE = "NO_CMDLINE_FOUND"
-
-
-class MetricsCategory(object):
-    MEMORY_CATEGORY = "Memory"
-    PROCESS_CATEGORY = "Process"
-
-
-class MetricsCounter(object):
-    PROCESSOR_PERCENT_TIME = "% Processor Time"
-    TOTAL_MEM_USAGE = "Total Memory Usage"
-    MAX_MEM_USAGE = "Max Memory Usage"
 
 
 class CGroupsTelemetry(object):
@@ -110,24 +94,9 @@ class CGroupsTelemetry(object):
         metrics = []
 
         with CGroupsTelemetry._rlock:
-            def new_cpu_metric(name, value):
-                return MetricValue(MetricsCategory.PROCESS_CATEGORY, MetricsCounter.PROCESSOR_PERCENT_TIME, name, value)
-
-            def new_memory_metric(name, value):
-                return MetricValue(MetricsCategory.MEMORY_CATEGORY, MetricsCounter.TOTAL_MEM_USAGE, name, value)
-
-            def new_max_memory_metric(name, value):
-                return MetricValue(MetricsCategory.MEMORY_CATEGORY, MetricsCounter.MAX_MEM_USAGE, name, value)
-
             for cgroup in CGroupsTelemetry._tracked[:]:
                 try:
-                    if cgroup.controller == CGroupContollers.CPU:
-                        metrics.append(new_cpu_metric(cgroup.name, cgroup.get_cpu_usage()))
-                    elif cgroup.controller == CGroupContollers.MEMORY:
-                        metrics.append(new_memory_metric(cgroup.name, cgroup.get_memory_usage()))
-                        metrics.append(new_max_memory_metric(cgroup.name, cgroup.get_max_memory_usage()))
-                    else:
-                        raise CGroupsException('CGroup controller {0} is not supported for cgroup {1}'.format(cgroup.controller, cgroup.name))
+                    metrics.extend(cgroup.get_tracked_metrics())
                 except Exception as e:
                     # There can be scenarios when the CGroup has been deleted by the time we are fetching the values
                     # from it. This would raise IOError with file entry not found (ERRNO: 2). We do not want to log

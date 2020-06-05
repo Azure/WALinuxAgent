@@ -13,6 +13,8 @@
 # limitations under the License.
 #
 # Requires Python 2.6+ and Openssl 1.0+
+from collections import namedtuple
+
 import errno
 import os
 import re
@@ -22,6 +24,21 @@ from azurelinuxagent.common.exception import CGroupsException
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.osutil import get_osutil
 from azurelinuxagent.common.utils import fileutil
+
+
+MetricValue = namedtuple('Metric', ['category', 'counter', 'instance', 'value'])
+
+
+class MetricsCategory(object):
+    MEMORY_CATEGORY = "Memory"
+    PROCESS_CATEGORY = "Process"
+
+
+class MetricsCounter(object):
+    PROCESSOR_PERCENT_TIME = "% Processor Time"
+    TOTAL_MEM_USAGE = "Total Memory Usage"
+    MAX_MEM_USAGE = "Max Memory Usage"
+
 
 re_user_system_times = re.compile(r'user (\d+)\nsystem (\d+)\n')
 
@@ -135,6 +152,12 @@ class CGroup(object):
                                  ' Internal error: {1}'.format(self.path, ustr(e)))
         return procs
 
+    def get_tracked_metrics(self):
+        """
+        Retrieves the current value of the metrics tracked for this cgroup and returns them as an array
+        """
+        raise NotImplementedError()
+
 
 class CpuCgroup(CGroup):
     def __init__(self, name, cgroup_path):
@@ -211,6 +234,11 @@ class CpuCgroup(CGroup):
 
         return round(100.0 * float(cgroup_delta) / float(system_delta), 3)
 
+    def get_tracked_metrics(self):
+        return [
+            MetricValue(MetricsCategory.PROCESS_CATEGORY, MetricsCounter.PROCESSOR_PERCENT_TIME, self.name, self.get_cpu_usage()),
+        ]
+
 
 class MemoryCgroup(CGroup):
     def __init__(self, name, cgroup_path):
@@ -259,3 +287,9 @@ class MemoryCgroup(CGroup):
             raise CGroupsException("Exception while attempting to read {0}".format("memory.usage_in_bytes"), e)
 
         return int(usage)
+
+    def get_tracked_metrics(self):
+        return [
+            MetricValue(MetricsCategory.MEMORY_CATEGORY, MetricsCounter.TOTAL_MEM_USAGE, self.name, self.get_memory_usage()),
+            MetricValue(MetricsCategory.MEMORY_CATEGORY, MetricsCounter.MAX_MEM_USAGE, self.name, self.get_max_memory_usage()),
+        ]
