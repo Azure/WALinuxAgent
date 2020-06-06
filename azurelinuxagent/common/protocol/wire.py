@@ -155,7 +155,7 @@ class WireProtocol(DataContract):
         success = self.client.stream(uri, destination, headers=headers, use_proxy=False)
         return success
 
-    def download_ext_handler_pkg(self, uri, destination, headers=None, use_proxy=True):
+    def download_ext_handler_pkg(self, uri, destination):
         direct_func = lambda: self.client.stream(uri, destination, headers=None, use_proxy=True)
         # NOTE: the host_func may be called after refreshing the goal state, be careful about any goal state data
         # in the lambda.
@@ -628,7 +628,7 @@ class WireClient(object):
         logger.verbose("Fetch [{0}] with headers [{1}] to file [{2}]", uri, headers, destination)
 
         response = self._fetch_response(uri, headers, use_proxy)
-        if response is not None:
+        if not restutil.request_failed(response):
             chunk_size = 1024 * 1024  # 1MB buffer
             try:
                 with open(destination, 'wb', chunk_size) as destination_fh:
@@ -647,7 +647,7 @@ class WireClient(object):
         logger.verbose("Fetch [{0}] with headers [{1}]", uri, headers)
         content = None
         response = self._fetch_response(uri, headers, use_proxy)
-        if response is not None:
+        if not restutil.request_failed(response):
             response_content = response.read()
             content = self.decode_config(response_content) if decode else response_content
         return content
@@ -961,7 +961,7 @@ class WireClient(object):
                              log_event=True)
                 raise
 
-        if not HostPluginProtocol.is_default_channel():
+        if ret and not HostPluginProtocol.is_default_channel():
             logger.info("Setting host plugin as default channel from now on. "
                         "Restart the agent to reset the default channel.")
             HostPluginProtocol.set_default_channel(True)
