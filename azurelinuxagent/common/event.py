@@ -83,6 +83,7 @@ class WALAEventOperation:
     Download = "Download"
     Enable = "Enable"
     ExtensionProcessing = "ExtensionProcessing"
+    ExtensionTelemetryEventProcessing = "ExtensionTelemetryEventProcessing"
     FetchGoalState = "FetchGoalState"
     Firewall = "Firewall"
     HealthCheck = "HealthCheck"
@@ -636,6 +637,17 @@ class EventLogger(object):
 
         event.parameters.extend(params_to_add)
 
+    def add_common_params_to_extension_event(self, event):
+        """
+            This method is called for all extension events and ensures all required telemetry fields for
+            GuestAgentGenericLogs table in Kusto are added before the event is sent out.
+            Existing data are not modified for ExtensionEvents.
+        """
+        # For now, adding the datetime.utcnow() as OpcodeName to avoid errors in the case where the extension event
+        # has an incorrect date format
+        self._add_common_event_parameters(event, datetime.utcnow())
+
+
 
 __event_logger__ = EventLogger()
 
@@ -740,6 +752,9 @@ def add_periodic(delta, name, op=WALAEventOperation.Unknown, is_success=True, du
 
 def collect_events(reporter=__event_logger__):
     return reporter.collect_events()
+
+def add_common_params_to_extension_event(event, reporter=__event_logger__):
+    reporter.add_common_params_to_extension_event(event)
 
 
 def mark_event_status(name, version, op, status):

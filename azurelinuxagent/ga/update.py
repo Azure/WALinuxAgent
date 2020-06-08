@@ -268,6 +268,8 @@ class UpdateHandler(object):
             add_event(AGENT_NAME, op=WALAEventOperation.OSInfo, message=os_info_msg)
 
             # Launch monitoring threads
+
+            # Make this code smaller, add all these in an array (possibly create an interface for the threads?)
             from azurelinuxagent.ga.monitor import get_monitor_handler
             monitor_thread = get_monitor_handler()
             monitor_thread.run()
@@ -275,6 +277,10 @@ class UpdateHandler(object):
             from azurelinuxagent.ga.env import get_env_handler
             env_thread = get_env_handler()
             env_thread.run()
+
+            from azurelinuxagent.ga.extension_telemetry import get_extension_telemetry_handler
+            extension_telemetry_thread = get_extension_telemetry_handler(self.protocol_util)
+            extension_telemetry_thread.run()
 
             from azurelinuxagent.ga.exthandlers import get_exthandlers_handler, migrate_handler_state
             exthandlers_handler = get_exthandlers_handler(protocol)
@@ -310,6 +316,10 @@ class UpdateHandler(object):
                 if not env_thread.is_alive():
                     logger.warn(u"Environment thread died, restarting")
                     env_thread.start()
+
+                if not extension_telemetry_thread.is_alive():
+                    logger.warn(u"Extension Telemetry thread died, restarting")
+                    extension_telemetry_thread.start()
 
                 #
                 # Process the goal state
