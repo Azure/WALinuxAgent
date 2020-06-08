@@ -33,7 +33,7 @@ from azurelinuxagent.common.exception import EventError, OSUtilError
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.datacontract import get_properties, set_properties
 from azurelinuxagent.common.osutil import get_osutil
-from azurelinuxagent.common.telemetryevent import TelemetryEventParam, TelemetryEvent
+from azurelinuxagent.common.telemetryevent import TelemetryEventParam, TelemetryEvent, TelemetryEventSchemaKeyNames
 from azurelinuxagent.common.utils import fileutil, textutil
 from azurelinuxagent.common.utils.textutil import parse_doc, findall, find, getattrib
 from azurelinuxagent.common.version import CURRENT_VERSION, CURRENT_AGENT, AGENT_NAME, DISTRO_NAME, DISTRO_VERSION, DISTRO_CODE_NAME, AGENT_EXECUTION_MODE
@@ -310,7 +310,7 @@ class EventLogger(object):
         self._common_parameters.append(TelemetryEventParam("Processors", int(EventLogger._get_processors(osutil))))
 
         # Parameters from goal state
-        self._common_parameters.append(TelemetryEventParam("VMName", "VMName_UNINITIALIZED"))
+        # self._common_parameters.append(TelemetryEventParam("VMName", "VMName_UNINITIALIZED"))
         self._common_parameters.append(TelemetryEventParam("TenantName", "TenantName_UNINITIALIZED"))
         self._common_parameters.append(TelemetryEventParam("RoleName", "RoleName_UNINITIALIZED"))
         self._common_parameters.append(TelemetryEventParam("RoleInstanceName", "RoleInstanceName_UNINITIALIZED"))
@@ -353,7 +353,7 @@ class EventLogger(object):
 
         try:
             vminfo = protocol.get_vminfo()
-            parameters["VMName"].value = vminfo.vmName
+            # parameters["VMName"].value = vminfo.vmName
             parameters["TenantName"].value = vminfo.tenantName
             parameters["RoleName"].value = vminfo.roleName
             parameters["RoleInstanceName"].value = vminfo.roleInstanceName
@@ -448,7 +448,7 @@ class EventLogger(object):
         event.parameters.append(TelemetryEventParam('EventName', WALAEventOperation.Log))
         event.parameters.append(TelemetryEventParam('CapabilityUsed', logger.LogLevel.STRINGS[level]))
         event.parameters.append(TelemetryEventParam('Context1', self._clean_up_message(message)))
-        event.parameters.append(TelemetryEventParam('Context2', ''))
+        event.parameters.append(TelemetryEventParam('Context2', datetime.utcnow().strftime(logger.Logger.LogTimeFormatInUTC)))
         event.parameters.append(TelemetryEventParam('Context3', ''))
         self._add_common_event_parameters(event, datetime.utcnow())
 
@@ -532,15 +532,21 @@ class EventLogger(object):
         This method is called for all events and ensures all telemetry fields are added before the event is sent out.
         Note that the event timestamp is saved in the OpcodeName field.
         """
-        common_params = [TelemetryEventParam('GAVersion', CURRENT_AGENT),
-                         TelemetryEventParam('ContainerId', AgentGlobals.get_container_id()),
-                         TelemetryEventParam('OpcodeName', event_timestamp.strftime(u'%Y-%m-%dT%H:%M:%S.%fZ')),
+        common_params = [TelemetryEventParam(TelemetryEventSchemaKeyNames.GAVersion, CURRENT_AGENT),
+                         TelemetryEventParam(TelemetryEventSchemaKeyNames.ContainerId, AgentGlobals.get_container_id()),
+                         TelemetryEventParam('OpcodeName', event_timestamp.strftime(logger.Logger.LogTimeFormatInUTC)),
                          TelemetryEventParam('EventTid', threading.current_thread().ident),
                          TelemetryEventParam('EventPid', os.getpid()),
                          TelemetryEventParam('TaskName', threading.current_thread().getName()),
-                         TelemetryEventParam('KeywordName', ''),
-                         TelemetryEventParam('ExtensionType', event.file_type),
-                         TelemetryEventParam('IsInternal', False)]
+                         TelemetryEventParam('KeywordName', '')]
+
+        if event.eventId in (None, TELEMETRY_EVENT_EVENT_ID) and event.providerId in (None, TELEMETRY_EVENT_PROVIDER_ID):
+            # Currently only the GuestAgentExtensionEvents has these columns, the other tables dont have them so skipping
+            # this data in those tables.
+            # By default, if no eventId/providerId is specified, add this data too.
+            common_params.extend([TelemetryEventParam('ExtensionType', event.file_type),
+                         TelemetryEventParam('IsInternal', False)])
+
 
         event.parameters.extend(common_params)
         event.parameters.extend(self._common_parameters)
