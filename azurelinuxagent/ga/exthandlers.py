@@ -39,7 +39,8 @@ import azurelinuxagent.common.version as version
 from azurelinuxagent.common.cgroupconfigurator import CGroupConfigurator
 from azurelinuxagent.common.datacontract import get_properties, set_properties
 from azurelinuxagent.common.errorstate import ERROR_STATE_DELTA_INSTALL, ErrorState
-from azurelinuxagent.common.event import add_event, elapsed_milliseconds, report_event, WALAEventOperation, add_periodic
+from azurelinuxagent.common.event import add_event, elapsed_milliseconds, report_event, WALAEventOperation, \
+    add_periodic, EVENTS_DIRECTORY
 from azurelinuxagent.common.exception import ExtensionDownloadError, ExtensionError, ExtensionErrorCodes, \
     ExtensionOperationError, ExtensionUpdateError, ProtocolError, ProtocolNotFoundError
 from azurelinuxagent.common.future import ustr
@@ -898,11 +899,15 @@ class ExtHandlerInstance(object):
 
         # Create status and config dir
         try:
+
+            # Create a smaller helper function for this
             status_dir = self.get_status_dir()
             fileutil.mkdir(status_dir, mode=0o700)
 
             conf_dir = self.get_conf_dir()
             fileutil.mkdir(conf_dir, mode=0o700)
+
+            fileutil.mkdir(self.get_extension_events_dir(), mode=0o700)
 
             seq_no, status_path = self.get_status_file_path()
             if status_path is not None:
@@ -1311,7 +1316,8 @@ class ExtHandlerInstance(object):
                 "logFolder": self.get_log_dir(),
                 "configFolder": self.get_conf_dir(),
                 "statusFolder": self.get_status_dir(),
-                "heartbeatFile": self.get_heartbeat_file()
+                "heartbeatFile": self.get_heartbeat_file(),
+                "eventsFolder": self.get_extension_events_dir()
             }
         }]
         try:
@@ -1413,6 +1419,9 @@ class ExtHandlerInstance(object):
 
     def get_conf_dir(self):
         return os.path.join(self.get_base_dir(), 'config')
+
+    def get_extension_events_dir(self):
+        return os.path.join(self.get_log_dir(), EVENTS_DIRECTORY)
 
     def get_heartbeat_file(self):
         return os.path.join(self.get_base_dir(), 'heartbeat.log')
