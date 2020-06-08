@@ -367,12 +367,8 @@ class ExtensionsConfigRetriever(object):
         return cached_vm_id
 
     def get_description(self):
-        if self._last_mode == GOAL_STATE_SOURCE_FASTTRACK:
-            return "FastTrack Incarnation={0} SeqNo={1} Reason={2}".format(
-                self._last_fabric_incarnation, self._last_fast_track_seq_no, self._reason)
-        else:
-            return "Fabric Incarnation={0} SeqNo={1} Reason={2}".format(
-                self._last_fabric_incarnation, self._last_fast_track_seq_no, self._reason)
+        return "{0} Incarnation={1} SeqNo={2} Reason={3}".format(
+            self._last_mode, self._last_fabric_incarnation, self._last_fast_track_seq_no, self._reason)
 
     def get_file_name(self):
         if self._last_mode == GOAL_STATE_SOURCE_FASTTRACK:
