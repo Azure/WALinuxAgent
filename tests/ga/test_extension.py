@@ -40,7 +40,7 @@ from azurelinuxagent.common.version import PY_VERSION_MAJOR, PY_VERSION_MINOR, P
     GOAL_STATE_AGENT_VERSION, CURRENT_VERSION, DISTRO_NAME, DISTRO_VERSION
 from azurelinuxagent.ga.exthandlers import ExtHandlerState, ExtHandlersHandler, ExtHandlerInstance, HANDLER_PKG_EXT, \
     migrate_handler_state, get_exthandlers_handler, AGENT_STATUS_FILE, ExtCommandEnvVariable, \
-    HandlerManifest, NOT_RUN, ValidHandlerStatus, HANDLER_NAME_PATTERN
+    HandlerManifest, NOT_RUN, ValidHandlerStatus, HANDLER_COMPLETE_NAME_PATTERN
 
 from azurelinuxagent.ga.monitor import get_monitor_handler
 from nose.plugins.attrib import attr
@@ -105,7 +105,7 @@ class TestExtensionCleanup(AgentTestCase):
 
     @staticmethod
     def _is_extension_dir(path):
-        return re.match(HANDLER_NAME_PATTERN, os.path.basename(path)) is not None
+        return re.match(HANDLER_COMPLETE_NAME_PATTERN, os.path.basename(path)) is not None
 
     def _assert_ext_handler_status(self, aggregate_status, expected_status, version, expected_ext_handler_count=0):
         self.assertIsNotNone(aggregate_status, "Aggregate status should not be None")
