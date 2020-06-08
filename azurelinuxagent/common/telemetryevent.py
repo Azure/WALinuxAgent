@@ -20,6 +20,17 @@
 from azurelinuxagent.common.datacontract import DataContract, DataContractList
 from azurelinuxagent.common.version import AGENT_NAME
 
+class TelemetryEventSchemaKeyNames(object):
+    EventName = "EventName"
+    CapabilityUsed = "CapabilityUsed"
+    Context1 = "Context1"
+    Context2 = "Context2"
+    Context3 = "Context3"
+    EventPid = "EventPid"
+    EventTid = "EventTid"
+    GAVersion = "GAVersion"
+    ContainerId = "ContainerId"
+    TaskName = "TaskName"
 
 class TelemetryEventParam(DataContract):
     def __init__(self, name=None, value=None):
