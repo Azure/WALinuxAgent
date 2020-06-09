@@ -198,7 +198,7 @@ class ExtensionsConfigRetriever(object):
         self._remove_cache(VM_ID_FILE_NAME)
 
     def _reset_if_necessary(self):
-        cached_vm_id = self._get_cached_vm_id()
+        cached_vm_id = self._get_saved_vm_id()
         current_vm_id = self._get_vm_id()
         if current_vm_id is None:
             logger.warn("Unable to retrieve the current vm id. Skipping reset")
@@ -221,7 +221,7 @@ class ExtensionsConfigRetriever(object):
         if self._pending_mode == GOAL_STATE_SOURCE_FABRIC:
             svd_seq_no = self._last_svd_seq_no
             if svd_seq_no is None:
-                svd_seq_no = self._get_svd_seqNo()
+                svd_seq_no = self._get_saved_svd_seqNo()
             if str(extensions_config.svd_seqNo) == str(svd_seq_no):
                 logger.info("SvdSeqNo did not change. Removing extensions from goal state")
                 extensions_config.ext_handlers = None
@@ -246,7 +246,7 @@ class ExtensionsConfigRetriever(object):
 
         mode = self._last_mode
         if mode is None:
-            mode = self._get_mode()
+            mode = self._get_saved_mode()
         if mode == GOAL_STATE_SOURCE_FASTTRACK:
             self._set_reason(ExtensionsConfigReasons.FAST_TRACK_LAST_CHANGE)
             return GOAL_STATE_SOURCE_FASTTRACK
@@ -265,9 +265,7 @@ class ExtensionsConfigRetriever(object):
             self._fast_track_changed_detail = FastTrackChangeDetail.NO_EXTENSIONS
             return False
 
-        sequence_number = self._last_fast_track_seq_no
-        if sequence_number is None:
-            sequence_number = self._get_sequence_number()
+        sequence_number = self._get_last_sequence_number()
         if sequence_number is None or sequence_number != artifacts_profile.get_sequence_number():
             self._fast_track_changed_detail = FastTrackChangeDetail.SEQ_NO_CHANGED
             return True
@@ -280,15 +278,25 @@ class ExtensionsConfigRetriever(object):
             self._fabric_changed_detail = FabricChangeDetail.NO_INCARNATION
             return True
 
-        incarnation = self._last_fabric_incarnation
-        if incarnation is None:
-            incarnation = self._get_incarnation()
+        incarnation = self._get_last_incarnation()
         if incarnation is None or str(incarnation) != str(goal_state_incarnation):
             self._fabric_changed_detail = FabricChangeDetail.INCARNATION_CHANGED
             return True
 
         self._fabric_changed_detail = FabricChangeDetail.NO_CHANGE
         return False
+
+    def _get_last_sequence_number(self):
+        sequence_number = self._last_fast_track_seq_no
+        if sequence_number is None:
+            sequence_number = self._get_saved_sequence_number()
+        return sequence_number
+
+    def _get_last_incarnation(self):
+        incarnation = self._last_fabric_incarnation
+        if incarnation is None:
+            incarnation = self._get_saved_incarnation()
+        return incarnation
 
     def _set_fast_track(self, vm_artifacts_seq_no=None):
         path = os.path.join(conf.get_lib_dir(), GOAL_STATE_SOURCE_FILE_NAME)
@@ -327,7 +335,7 @@ class ExtensionsConfigRetriever(object):
             fileutil.clean_ioerror(e, paths=[local_file])
             raise ProtocolError("Failed to write cache: {0}".format(e))
 
-    def _get_sequence_number(self):
+    def _get_saved_sequence_number(self):
         path = os.path.join(conf.get_lib_dir(), SEQUENCE_NUMBER_FILE_NAME)
         if os.path.exists(path):
             sequence_number = fileutil.read_file(path)
@@ -335,7 +343,7 @@ class ExtensionsConfigRetriever(object):
                 return int(sequence_number)
         return -1
 
-    def _get_svd_seqNo(self):
+    def _get_saved_svd_seqNo(self):
         path = os.path.join(conf.get_lib_dir(), SVD_SEQNO_FILE_NAME)
         if os.path.exists(path):
             svd_seqno = fileutil.read_file(path)
@@ -343,7 +351,7 @@ class ExtensionsConfigRetriever(object):
                 return int(svd_seqno)
         return -1
 
-    def _get_incarnation(self):
+    def _get_saved_incarnation(self):
         path = os.path.join(conf.get_lib_dir(), INCARNATION_FILE_NAME)
         if os.path.exists(path):
             incarnation = fileutil.read_file(path)
@@ -351,7 +359,7 @@ class ExtensionsConfigRetriever(object):
                 return str(incarnation)
         return -1
 
-    def _get_mode(self):
+    def _get_saved_mode(self):
         path = os.path.join(conf.get_lib_dir(), GOAL_STATE_SOURCE_FILE_NAME)
         if os.path.exists(path):
             goal_state_source = fileutil.read_file(path)
@@ -359,7 +367,7 @@ class ExtensionsConfigRetriever(object):
         else:
             return GOAL_STATE_SOURCE_FABRIC
 
-    def _get_cached_vm_id(self):
+    def _get_saved_vm_id(self):
         cached_vm_id = None
         path = os.path.join(conf.get_lib_dir(), VM_ID_FILE_NAME)
         if os.path.exists(path):
@@ -372,9 +380,9 @@ class ExtensionsConfigRetriever(object):
 
     def get_file_name(self):
         if self._last_mode == GOAL_STATE_SOURCE_FASTTRACK:
-            return EXT_CONF_FILE_NAME.format(EXT_CONFIG_FAST_TRACK, self._last_fast_track_seq_no)
+            return EXT_CONF_FILE_NAME.format(EXT_CONFIG_FAST_TRACK, self._get_last_sequence_number())
         else:
-            return EXT_CONF_FILE_NAME.format(EXT_CONFIG_FABRIC, self._last_fabric_incarnation)
+            return EXT_CONF_FILE_NAME.format(EXT_CONFIG_FABRIC, self._get_last_incarnation())
 
     def _get_vm_id(self):
         vm_id = None

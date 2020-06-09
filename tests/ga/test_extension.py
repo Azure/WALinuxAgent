@@ -368,8 +368,8 @@ class ExtensionTestCase(AgentTestCase):
 @patch('time.sleep', side_effect=lambda _: mock_sleep(0.001))
 @patch("azurelinuxagent.common.protocol.wire.CryptUtil")
 @patch("azurelinuxagent.common.utils.restutil.http_get")
-@patch('azurelinuxagent.common.protocol.extensions_config_retriever.ExtensionsConfigRetriever._get_incarnation', MagicMock(return_value=0))
-@patch('azurelinuxagent.common.protocol.extensions_config_retriever.ExtensionsConfigRetriever._get_sequence_number', MagicMock(return_value=1))
+@patch('azurelinuxagent.common.protocol.extensions_config_retriever.ExtensionsConfigRetriever._get_saved_incarnation', MagicMock(return_value=0))
+@patch('azurelinuxagent.common.protocol.extensions_config_retriever.ExtensionsConfigRetriever._get_saved_sequence_number', MagicMock(return_value=1))
 class TestExtension(ExtensionTestCase):
     def setUp(self):
         AgentTestCase.setUp(self)
@@ -2146,9 +2146,9 @@ class TestExtensionSequencing(AgentTestCase):
         self.assertListEqual(expected_sequence, installed_extensions,
                              "Expected and actual list of extensions are not equal")
 
-    @patch('azurelinuxagent.common.protocol.extensions_config_retriever.ExtensionsConfigRetriever._get_incarnation',
+    @patch('azurelinuxagent.common.protocol.extensions_config_retriever.ExtensionsConfigRetriever._get_saved_incarnation',
            MagicMock(return_value=0))
-    @patch('azurelinuxagent.common.protocol.extensions_config_retriever.ExtensionsConfigRetriever._get_sequence_number',
+    @patch('azurelinuxagent.common.protocol.extensions_config_retriever.ExtensionsConfigRetriever._get_saved_sequence_number',
            MagicMock(return_value=1))
     def _run_test(self, extensions_to_be_failed, expected_sequence, exthandlers_handler):
         '''

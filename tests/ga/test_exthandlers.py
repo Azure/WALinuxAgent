@@ -56,36 +56,36 @@ class TestGoalState(AgentTestCase):
     def test_set_fabric(self):
         retriever = ExtensionsConfigRetriever(wire_client=None)
         retriever._set_fabric(5, 42)
-        self.assertEqual(GOAL_STATE_SOURCE_FABRIC, retriever._get_mode())
-        self.assertEqual("5", retriever._get_incarnation())
-        self.assertEqual(42, retriever._get_svd_seqNo())
+        self.assertEqual(GOAL_STATE_SOURCE_FABRIC, retriever._get_saved_mode())
+        self.assertEqual("5", retriever._get_saved_incarnation())
+        self.assertEqual(42, retriever._get_saved_svd_seqNo())
 
         retriever._set_fast_track()
-        self.assertEqual(GOAL_STATE_SOURCE_FASTTRACK, retriever._get_mode())
+        self.assertEqual(GOAL_STATE_SOURCE_FASTTRACK, retriever._get_saved_mode())
         retriever._set_fabric()
-        self.assertEqual(GOAL_STATE_SOURCE_FABRIC, retriever._get_mode())
-        self.assertEqual("5", retriever._get_incarnation())
-        self.assertEqual(42, retriever._get_svd_seqNo())
+        self.assertEqual(GOAL_STATE_SOURCE_FABRIC, retriever._get_saved_mode())
+        self.assertEqual("5", retriever._get_saved_incarnation())
+        self.assertEqual(42, retriever._get_saved_svd_seqNo())
 
     def test_set_fasttrack(self):
         retriever = ExtensionsConfigRetriever(wire_client=None)
         retriever._set_fast_track(42)
-        self.assertEqual(GOAL_STATE_SOURCE_FASTTRACK, retriever._get_mode())
-        self.assertEqual(42, retriever._get_sequence_number())
+        self.assertEqual(GOAL_STATE_SOURCE_FASTTRACK, retriever._get_saved_mode())
+        self.assertEqual(42, retriever._get_saved_sequence_number())
 
         retriever._set_fabric()
-        self.assertEqual(GOAL_STATE_SOURCE_FABRIC, retriever._get_mode())
+        self.assertEqual(GOAL_STATE_SOURCE_FABRIC, retriever._get_saved_mode())
         retriever._set_fast_track()
-        self.assertEqual(GOAL_STATE_SOURCE_FASTTRACK, retriever._get_mode())
-        self.assertEqual(42, retriever._get_sequence_number())
+        self.assertEqual(GOAL_STATE_SOURCE_FASTTRACK, retriever._get_saved_mode())
+        self.assertEqual(42, retriever._get_saved_sequence_number())
 
     def test_get_cached_vm_id(self):
         retriever = ExtensionsConfigRetriever(wire_client=None)
-        self.assertIsNone(retriever._get_cached_vm_id())
+        self.assertIsNone(retriever._get_saved_vm_id())
         retriever._set_cached_vm_id("Flarbaglarf")
-        self.assertEqual("Flarbaglarf", retriever._get_cached_vm_id())
+        self.assertEqual("Flarbaglarf", retriever._get_saved_vm_id())
         retriever._reset()
-        self.assertIsNone(retriever._get_cached_vm_id())
+        self.assertIsNone(retriever._get_saved_vm_id())
 
     def test_get_fabric_changed(self):
         retriever = ExtensionsConfigRetriever(wire_client=None)
@@ -297,37 +297,37 @@ class TestGoalState(AgentTestCase):
 
         # Now cleanup and verify the state is removed
         retriever._reset()
-        self.assertEqual(GOAL_STATE_SOURCE_FABRIC, retriever._get_mode())
-        self.assertEqual(-1, retriever._get_incarnation())
-        self.assertEqual(-1, retriever._get_svd_seqNo())
-        self.assertEqual(-1, retriever._get_sequence_number())
+        self.assertEqual(GOAL_STATE_SOURCE_FABRIC, retriever._get_saved_mode())
+        self.assertEqual(-1, retriever._get_saved_incarnation())
+        self.assertEqual(-1, retriever._get_saved_svd_seqNo())
+        self.assertEqual(-1, retriever._get_saved_sequence_number())
 
     @patch("azurelinuxagent.common.protocol.extensions_config_retriever.ExtensionsConfigRetriever._get_vm_id")
     def test_reset_if_necessary(self, get_vm_id):
         # The first time we'll cache the VmId
         get_vm_id.return_value = "MyOldVm"
         retriever = ExtensionsConfigRetriever(wire_client=None)
-        self.assertEqual("MyOldVm", retriever._get_cached_vm_id())
+        self.assertEqual("MyOldVm", retriever._get_saved_vm_id())
         retriever._set_fast_track(vm_artifacts_seq_no=102)
 
         # Restart with None. We won't reset because we failed to retrieve the VmId
         get_vm_id.return_value = None
         retriever = ExtensionsConfigRetriever(wire_client=None)
-        self.assertEqual("MyOldVm", retriever._get_cached_vm_id())
-        self.assertEqual(102, retriever._get_sequence_number())
+        self.assertEqual("MyOldVm", retriever._get_saved_vm_id())
+        self.assertEqual(102, retriever._get_saved_sequence_number())
 
         # Restart with the same VmId. We won't reset because nothing changed
         # Restart with None. We won't reset because we failed to retrieve the VmId
         get_vm_id.return_value = "MyOldVm"
         retriever = ExtensionsConfigRetriever(wire_client=None)
-        self.assertEqual("MyOldVm", retriever._get_cached_vm_id())
-        self.assertEqual(102, retriever._get_sequence_number())
+        self.assertEqual("MyOldVm", retriever._get_saved_vm_id())
+        self.assertEqual(102, retriever._get_saved_sequence_number())
 
         # Now restart with a new VmId and verify we reset
         get_vm_id.return_value = "MyNewVm"
         retriever = ExtensionsConfigRetriever(wire_client=None)
-        self.assertEqual("MyNewVm", retriever._get_cached_vm_id())
-        self.assertEqual(-1, retriever._get_sequence_number())
+        self.assertEqual("MyNewVm", retriever._get_saved_vm_id())
+        self.assertEqual(-1, retriever._get_saved_sequence_number())
 
     @attr('requires_sudo')
     def test_get_vmId(self):
@@ -442,6 +442,25 @@ class TestGoalState(AgentTestCase):
         self.assertIsNotNone(ext_conf.extensions_config.ext_handlers)
         retriever.commit_processed()
         self.assertEqual(GOAL_STATE_SOURCE_FABRIC, retriever._last_mode)
+
+    def test_get_file_name_reads_saved(self):
+        test_data = WireProtocolData(DATA_FILE)
+        profile = InVMArtifactsProfile(test_data.vm_artifacts_profile)
+        wire_client = MockWireClient(test_data.ext_conf, profile)
+        retriever = ExtensionsConfigRetriever(wire_client=wire_client)
+
+        # Write out files with our state
+        retriever._set_fast_track(1)
+        retriever._set_fabric(2)
+
+        # Recreate the retriever to remove all current state
+        retriever = ExtensionsConfigRetriever(wire_client=wire_client)
+
+        # Verify we use the saved names
+        retriever._last_mode = GOAL_STATE_SOURCE_FASTTRACK
+        self.assertEqual("ExtensionsConfig_ft.1.xml", retriever.get_file_name())
+        retriever._last_mode = GOAL_STATE_SOURCE_FABRIC
+        self.assertEqual("ExtensionsConfig_fa.2.xml", retriever.get_file_name())
 
     def test_get_ext_config(self):
         test_data = WireProtocolData(DATA_FILE)

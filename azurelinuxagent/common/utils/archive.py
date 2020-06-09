@@ -54,8 +54,7 @@ OTHER_FILES_TO_COPY = {
     "Incarnation",
     "ArtifactProfileSequenceNumber",
     "SvdSeqNo",
-    "GoalStateSource",
-    "InVmArtifactsProfileBlob.json"
+    "GoalStateSource"
 }
 
 
