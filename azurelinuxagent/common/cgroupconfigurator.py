@@ -301,6 +301,13 @@ class CGroupConfigurator(object):
         patterns = [
             r".*waagent -daemon.*",
             r".*(WALinuxAgent-.+\.egg|waagent) -run-exthandlers",
+            # The processes in the agent's cgroup are listed using systemd-cgls
+            r"^systemd-cgls --unit walinuxagent.service$",
+            # Extensions are started using systemd-run
+            r"^systemd-run --unit=.+ --scope ",
+            # These commands are started by the environment thread
+            r".*dhclient",
+            r".*iptables",
         ]
         for p in patterns:
             if re.match(p, command_line) is not None:

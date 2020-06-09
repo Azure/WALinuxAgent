@@ -65,6 +65,7 @@ class PollResourceUsageOperation(PeriodicOperation):
 
             if len(foreign_processes) > 0:
                 message = "The agent's cgroup includes foreign processes: {0}".format(foreign_processes)
+                logger.info(message)
                 add_event(op=WALAEventOperation.CGroupsDebug, message=message)
 
         metrics = CGroupsTelemetry.poll_all_tracked()
@@ -75,7 +76,7 @@ class PollResourceUsageOperation(PeriodicOperation):
 
 class ResetPeriodicLogMessagesOperation(PeriodicOperation):
     """
-    Periodic operation to celan up the hash-tables maintained by the loggers. For reference, please check
+    Periodic operation to clean up the hash-tables maintained by the loggers. For reference, please check
     azurelinuxagent.common.logger.Logger and azurelinuxagent.common.event.EventLogger classes
     """
     def __init__(self):
