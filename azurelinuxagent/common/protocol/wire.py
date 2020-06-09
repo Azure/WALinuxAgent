@@ -773,11 +773,11 @@ class WireClient(object):
         for retry in range(1, max_retry + 1):
             try:
                 if refresh_type == WireClient._UpdateType.HostPlugin:
-                    goal_state = GoalState.fetch_goal_state(self, self.ext_config_retriever, self._goal_state)
+                    goal_state = GoalState.fetch_goal_state(self, self.ext_config_retriever)
                     self._update_host_plugin(goal_state.container_id, goal_state.role_config_name)
                     return
 
-                new_goal_state = GoalState.fetch_goal_state(self, self.ext_config_retriever, self._goal_state)
+                new_goal_state = GoalState.fetch_goal_state(self, self.ext_config_retriever)
 
                 self._save_goal_state_if_necessary(new_goal_state, refresh_type)
                 return
@@ -804,8 +804,6 @@ class WireClient(object):
         # 4) The extensions config did not change, but previously it did
         # 5) We have an update type of GoalStateForced
         save_goal_state = False
-        if new_goal_state is None:
-            return
         if self._goal_state is None or new_goal_state.incarnation != self._goal_state.incarnation:
             save_goal_state = True
             self._goal_state = new_goal_state

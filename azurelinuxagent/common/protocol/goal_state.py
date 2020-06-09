@@ -46,12 +46,9 @@ class GoalState(object):
     _IncarnationForCerts = None
     _Certs = None
 
-    def __init__(self, wire_client, ext_config_retriever, current_goal_state=None):
+    def __init__(self, wire_client, ext_config_retriever):
         """
         Fetches the goal state using the given wire client.
-
-        By default it fetches only the goal state itself; to fetch the entire goal state (that includes all the
-        nested components, such as the extension config) use the 'full_goal_state' parameter.
 
         If 'base_incarnation' is given, it fetches the full goal state if the new incarnation is different than
         the given value, otherwise it fetches only the goal state itself.
@@ -85,7 +82,6 @@ class GoalState(object):
         self._ext_conf_properties_retrieved = False
 
         self.incarnation = findtext(self._xml_doc, "Incarnation")
-        self.expected_state = findtext(self._xml_doc, "ExpectedState")
         role_instance = find(self._xml_doc, "RoleInstance")
         self.role_instance_id = findtext(role_instance, "InstanceId")
         role_config = find(role_instance, "Configuration")
@@ -110,11 +106,11 @@ class GoalState(object):
         GoalState.ContainerID = self.container_id
 
     @staticmethod
-    def fetch_goal_state(wire_client, ext_config_retriever, current_goal_state=None):
+    def fetch_goal_state(wire_client, ext_config_retriever):
         """
         Fetches the goal state, not including any nested properties (such as extension config).
         """
-        return GoalState(wire_client, ext_config_retriever, current_goal_state)
+        return GoalState(wire_client, ext_config_retriever)
 
     @property
     def hosting_env(self):

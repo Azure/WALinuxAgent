@@ -1382,12 +1382,6 @@ class SaveGoalStateIfNecessaryTestCase(AgentTestCase):
     NEW_INCARNATION = "42"
     NEW_CONTAINER_ID = "2F9126CB-C933-4473-B26E-957CB6685D2A"
 
-    def test_save_goal_state_new_is_none(self):
-        with mock_wire_protocol(mockwiredata.DATA_FILE) as protocol:
-            # Call the method directly, since a goal state of None will otherwise cause an exception
-            # Really we just verify that no exception is thrown
-            protocol.client._save_goal_state_if_necessary(new_goal_state=None, refresh_type=None)
-
     def test_save_goal_state_current_is_none(self):
         with mock_wire_protocol(mockwiredata.DATA_FILE) as protocol:
             protocol.client.get_host_plugin()
