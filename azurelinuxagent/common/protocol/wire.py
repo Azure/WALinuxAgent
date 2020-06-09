@@ -1490,8 +1490,9 @@ class InVMArtifactsProfile(object):
                     runtime_settings.text = json_settings
 
                     # In this agent, we pay attention to only the dependencyLevel for dependencies
-                    depends_on = xml.SubElement(runtime_settings, 'DependsOn')
-                    self._set_depends_on(depends_on, extensionGoalState)
+                    if extensionGoalState.get('dependsOn') is not None:
+                        depends_on = xml.SubElement(runtime_settings, 'DependsOn')
+                        self._set_depends_on(depends_on, extensionGoalState)
 
             config_xml = xml.tostring(root).decode()
             if flush_func is not None:
