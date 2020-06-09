@@ -70,7 +70,7 @@ class ExtensionTelemetryHandler(object):
     EXTENSION_EVENT_MAX_SIZE = 1024 * 6   # 6Kb or 6144 characters. Limit for the whole event. Prevent oversized events.
     EXTENSION_EVENT_MAX_MSG_LEN = 1024 * 3  # 3Kb or 3072 chars.
 
-    EXTENSION_EVENT_SCHEMA_FIELDS = [attr for attr in dir(ExtensionEventSchema) if
+    EXTENSION_EVENT_SCHEMA_FIELDS = [attr.lower() for attr in dir(ExtensionEventSchema) if
                                      not callable(getattr(ExtensionEventSchema, attr)) and not attr.startswith("__")]
 
     _THREAD_NAME = "ExtensionTelemetryHandler"
@@ -266,11 +266,11 @@ class ExtensionTelemetryHandler(object):
 
         return events_list
 
-    def _parse_telemetry_event(self, handler_name, extension_event):
+    def _parse_telemetry_event(self, handler_name, extension_unparsed_event):
 
         # Convert the dict to all lower keys to avoid schema confusion. Only pick the params that we care about and skip the rest
         # (Not sure if this is needed or not)
-        extension_event = {k.lower(): v.strip() for k, v in extension_event.items() if
+        extension_event = {k.lower(): v.strip() for k, v in extension_unparsed_event.items() if
                            k.lower() in self.EXTENSION_EVENT_SCHEMA_FIELDS}
 
         self._ensure_event_is_valid(extension_event)
@@ -300,14 +300,19 @@ class ExtensionTelemetryHandler(object):
     def _ensure_event_is_valid(event):
 
         event_size = 0
+        key_err_msg = "Expected keys not present in extension event. {0} not found"
 
         # Trim message and only pick the first 3k chars
-        event[ExtensionEventSchema.Message] = event[ExtensionEventSchema.Message][:ExtensionTelemetryHandler.EXTENSION_EVENT_MAX_MSG_LEN]
+        if ExtensionEventSchema.Message in event:
+            event[ExtensionEventSchema.Message] = event[ExtensionEventSchema.Message][
+                                                  :ExtensionTelemetryHandler.EXTENSION_EVENT_MAX_MSG_LEN]
+        else:
+            raise KeyError(key_err_msg.format(ExtensionEventSchema.Message))
 
         for required_key in ExtensionTelemetryHandler.EXTENSION_EVENT_SCHEMA_FIELDS:
             # If all required keys not in event then raise
             if not required_key in event:
-                raise KeyError("Expected keys not present in extension event")
+                raise KeyError(key_err_msg.format(required_key))
 
             # If the event_size > 6k, then raise
             if event_size > ExtensionTelemetryHandler.EXTENSION_EVENT_MAX_SIZE:
