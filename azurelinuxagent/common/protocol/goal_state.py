@@ -45,6 +45,7 @@ class GoalState(object):
     ContainerID = "00000000-0000-0000-0000-000000000000"
     _IncarnationForCerts = None
     _Certs = None
+    _HttpFailedIndicator = "[HTTP Failed]"
 
     def __init__(self, wire_client, ext_config_retriever):
         """
@@ -70,12 +71,12 @@ class GoalState(object):
         self._ext_conf = None
         self._ext_conf_retrieved = False
         self._hosting_env = None
-        self._hosting_env_retrieved = False
+        self.hosting_env_retrieved = False
         self._shared_conf = None
-        self._shared_conf_retrieved = False
+        self.shared_conf_retrieved = False
         self.certs = None
         self._remote_access = None
-        self._remote_access_retrieved = False
+        self.remote_access_retrieved = False
         self._artifacts_profile_blob_url = None
         self._status_upload_blob_url = None
         self._status_upload_blob_type = None
@@ -114,7 +115,7 @@ class GoalState(object):
 
     @property
     def hosting_env(self):
-        if not self._hosting_env_retrieved:
+        if not self.hosting_env_retrieved:
             try:
                 uri = findtext(self._xml_doc, "HostingEnvironmentConfig")
                 if uri is None:
@@ -122,15 +123,15 @@ class GoalState(object):
                 else:
                     xml_text = self._wire_client.fetch_config(uri, self._wire_client.get_header())
                     self._hosting_env = HostingEnv(xml_text)
-                self._hosting_env_retrieved = True
+                self.hosting_env_retrieved = True
             except Exception as e:
-                logger.warn("Fetching the hosting environment failed: {0}, {1}", ustr(e), traceback.format_exc())
+                self._log_document_retrieval_failure("hosting environment", e)
                 raise
         return self._hosting_env
 
     @property
     def shared_conf(self):
-        if not self._shared_conf_retrieved:
+        if not self.shared_conf_retrieved:
             try:
                 uri = findtext(self._xml_doc, "SharedConfig")
                 if uri is None:
@@ -138,15 +139,15 @@ class GoalState(object):
                 else:
                     xml_text = self._wire_client.fetch_config(uri, self._wire_client.get_header())
                     self._shared_conf = SharedConfig(xml_text)
-                self._shared_conf_retrieved = True
+                self.shared_conf_retrieved = True
             except Exception as e:
-                logger.warn("Fetching the shared config failed: {0}, {1}", ustr(e), traceback.format_exc())
+                self._log_document_retrieval_failure("shared config", e)
                 raise
         return self._shared_conf
 
     @property
     def remote_access(self):
-        if not self._remote_access_retrieved:
+        if not self.remote_access_retrieved:
             try:
                 container = find(self._xml_doc, "Container")
                 uri = findtext(container, "RemoteAccessInfo")
@@ -155,9 +156,9 @@ class GoalState(object):
                 else:
                     xml_text = self._wire_client.fetch_config(uri, self._wire_client.get_header_for_cert())
                     self._remote_access = RemoteAccess(xml_text)
-                self._remote_access_retrieved = True
+                self.remote_access_retrieved = True
             except Exception as e:
-                logger.warn("Fetching the remote access failed: {0}, {1}", ustr(e), traceback.format_exc())
+                self._log_document_retrieval_failure("remove access", e)
                 raise
         return self._remote_access
 
@@ -169,7 +170,7 @@ class GoalState(object):
                 self._ext_conf = self._ext_config_retriever.get_ext_config(self.incarnation, uri)
                 self._ext_conf_retrieved = True
             except Exception as e:
-                logger.warn("Fetching the extensions config failed: {0}, {1}", ustr(e), traceback.format_exc())
+                self._log_document_retrieval_failure("extensions config", e)
                 raise
         return self._ext_conf
 
@@ -190,6 +191,13 @@ class GoalState(object):
         if not self._ext_conf_properties_retrieved:
             self._retrieve_fabric_ext_conf_properties()
         return self._status_upload_blob_type
+
+    def _log_document_retrieval_failure(self, component_name, e):
+        estr = ustr(e)
+        if self._HttpFailedIndicator in estr:
+            logger.warn("Fetching the {0} failed: {1}", component_name, ustr(e))
+        else:
+            logger.warn("Fetching the {0} failed: {1}, {2}", component_name, ustr(e), traceback.format_exc())
 
     def _retrieve_fabric_ext_conf_properties(self):
         try:

@@ -844,10 +844,14 @@ class WireClient(object):
 
             # NOTE: Certificates are saved in Certificate.__init__
             save_if_not_none(self._goal_state, GOAL_STATE_FILE_NAME.format(self._goal_state.incarnation))
-            save_if_not_none(self._goal_state.hosting_env, HOSTING_ENV_FILE_NAME)
-            save_if_not_none(self._goal_state.shared_conf, SHARED_CONF_FILE_NAME)
+            if self._goal_state.hosting_env_retrieved:
+                save_if_not_none(self._goal_state.hosting_env, HOSTING_ENV_FILE_NAME)
+            if self._goal_state.shared_conf_retrieved:
+                save_if_not_none(self._goal_state.shared_conf, SHARED_CONF_FILE_NAME)
+            # Not necessary to check if ext_conf is retrieved because we needed it in _save_goal_state_if_necessary
             save_if_not_none(self._goal_state.ext_conf, self._goal_state.ext_conf.get_file_name())
-            save_if_not_none(self._goal_state.remote_access, REMOTE_ACCESS_FILE_NAME.format(self._goal_state.incarnation))
+            if self._goal_state.remote_access_retrieved:
+                save_if_not_none(self._goal_state.remote_access, REMOTE_ACCESS_FILE_NAME.format(self._goal_state.incarnation))
 
         except Exception as e:
             logger.warn("Failed to save the goal state to disk: {0}", ustr(e))

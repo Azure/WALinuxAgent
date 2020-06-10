@@ -240,7 +240,7 @@ class ExtHandlersHandler(object):
         try:
             self.ext_config = self.protocol.get_ext_config()
             self.ext_handlers = self.ext_config.ext_handlers
-            msg = u"Handle extensions updates for incarnation {0}".format(self.ext_config.get_description())
+            msg = u"Handle extensions updates for {0}".format(self.ext_config.get_description())
             logger.verbose(msg)
 
             # Log status report success on new config
