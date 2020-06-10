@@ -38,8 +38,8 @@ from azurelinuxagent.common.protocol.wire import WireProtocol, InVMArtifactsProf
 from azurelinuxagent.ga.exthandlers import parse_ext_status, ExtHandlerInstance, get_exthandlers_handler, \
     ExtCommandEnvVariable
 from azurelinuxagent.common.protocol.extensions_config_retriever import ExtensionsConfigRetriever, \
-    GOAL_STATE_SOURCE_FABRIC, GOAL_STATE_SOURCE_FASTTRACK, GOAL_STATE_SOURCE_FILE_NAME, SEQUENCE_NUMBER_FILE_NAME, \
-    INCARNATION_FILE_NAME
+    GOAL_STATE_SOURCE_FABRIC, GOAL_STATE_SOURCE_FASTTRACK, _GOAL_STATE_SOURCE_FILE_NAME, _SEQUENCE_NUMBER_FILE_NAME, \
+    _INCARNATION_FILE_NAME
 from tests.protocol.mocks import MockWireClient, MockProtocol
 from tests.protocol.mockwiredata import WireProtocolData, DATA_FILE, DATA_FILE_FAST_TRACK_NO_SETTINGS
 from tests.tools import AgentTestCase, patch, mock_sleep, clear_singleton_instances, i_am_root
@@ -264,9 +264,9 @@ class TestGoalState(AgentTestCase):
         retriever = ExtensionsConfigRetriever(wire_client=wire_client)
 
         # Delete any state files
-        goal_state_file = os.path.join(conf.get_lib_dir(), GOAL_STATE_SOURCE_FILE_NAME)
-        sequence_number_file = os.path.join(conf.get_lib_dir(), SEQUENCE_NUMBER_FILE_NAME)
-        incarnation_file = os.path.join(conf.get_lib_dir(), INCARNATION_FILE_NAME)
+        goal_state_file = os.path.join(conf.get_lib_dir(), _GOAL_STATE_SOURCE_FILE_NAME)
+        sequence_number_file = os.path.join(conf.get_lib_dir(), _SEQUENCE_NUMBER_FILE_NAME)
+        incarnation_file = os.path.join(conf.get_lib_dir(), _INCARNATION_FILE_NAME)
         if os.path.exists(goal_state_file):
             os.remove(goal_state_file)
         if os.path.exists(sequence_number_file):
@@ -415,10 +415,9 @@ class TestGoalState(AgentTestCase):
         retriever._set_fabric(incarnation=0, svd_seqNo=1)
         ext_conf = retriever.get_ext_config(incarnation=1, ext_conf_uri="blah")
         self.assertTrue(ext_conf.changed)
-        self.assertIsNotNone(ext_conf.extensions_config)
 
         # We'll remove the extensions because the svd didn't change
-        self.assertIsNone(ext_conf.extensions_config.ext_handlers)
+        self.assertIsNone(ext_conf.ext_handlers)
         retriever.commit_processed()
         self.assertEqual(GOAL_STATE_SOURCE_FASTTRACK, retriever._last_mode)
 
@@ -436,10 +435,9 @@ class TestGoalState(AgentTestCase):
         retriever._set_fabric(incarnation=0, svd_seqNo=0)
         ext_conf = retriever.get_ext_config(incarnation=1, ext_conf_uri="blah")
         self.assertTrue(ext_conf.changed)
-        self.assertIsNotNone(ext_conf.extensions_config)
 
         # We'll remove the extensions because the svd didn't change
-        self.assertIsNotNone(ext_conf.extensions_config.ext_handlers)
+        self.assertIsNotNone(ext_conf.ext_handlers)
         retriever.commit_processed()
         self.assertEqual(GOAL_STATE_SOURCE_FABRIC, retriever._last_mode)
 
@@ -473,7 +471,6 @@ class TestGoalState(AgentTestCase):
         retriever._set_fabric(0)
         ext_conf = retriever.get_ext_config(incarnation=1, ext_conf_uri="blah")
         self.assertTrue(ext_conf.changed)
-        self.assertIsNotNone(ext_conf.extensions_config)
         retriever.commit_processed()
         self.assertTrue("Fabric" in ext_conf.get_description())
         self.assertEqual("ExtensionsConfig_fa.1.xml", ext_conf.get_file_name())
@@ -482,7 +479,6 @@ class TestGoalState(AgentTestCase):
         # Fabric goal state, not changed
         ext_conf = retriever.get_ext_config(incarnation=1, ext_conf_uri="blah")
         self.assertFalse(ext_conf.changed)
-        self.assertIsNotNone(ext_conf.extensions_config)
         retriever.commit_processed()
         self.assertTrue("Fabric" in ext_conf.get_description())
         self.assertEqual("ExtensionsConfig_fa.1.xml", ext_conf.get_file_name())
@@ -494,7 +490,6 @@ class TestGoalState(AgentTestCase):
         retriever.commit_processed()
         ext_conf = retriever.get_ext_config(incarnation=1, ext_conf_uri="blah")
         self.assertTrue(ext_conf.changed)
-        self.assertIsNotNone(ext_conf.extensions_config)
         retriever.commit_processed()
         self.assertTrue("FastTrack" in ext_conf.get_description())
         self.assertEqual("ExtensionsConfig_ft.1.xml", ext_conf.get_file_name())
@@ -503,7 +498,6 @@ class TestGoalState(AgentTestCase):
         # Fast Track goal state, not changed
         ext_conf = retriever.get_ext_config(incarnation=1, ext_conf_uri="blah")
         self.assertFalse(ext_conf.changed)
-        self.assertIsNotNone(ext_conf.extensions_config)
         retriever.commit_processed()
         self.assertTrue("FastTrack" in ext_conf.get_description())
         self.assertEqual("ExtensionsConfig_ft.1.xml", ext_conf.get_file_name())
@@ -520,7 +514,6 @@ class TestGoalState(AgentTestCase):
         retriever._set_fast_track(1)
         ext_conf = retriever.get_ext_config(incarnation=1, ext_conf_uri="blah")
         self.assertTrue(ext_conf.changed)
-        self.assertIsNotNone(ext_conf.extensions_config)
 
         # Verify nothing changes before the commit
         self.assertIsNone(retriever._last_mode)
@@ -537,7 +530,6 @@ class TestGoalState(AgentTestCase):
         retriever._set_fast_track(0)
         ext_conf = retriever.get_ext_config(incarnation=1, ext_conf_uri="blah")
         self.assertTrue(ext_conf.changed)
-        self.assertIsNotNone(ext_conf.extensions_config)
 
         # Verify nothing changes before the commit
         self.assertEqual(GOAL_STATE_SOURCE_FABRIC, retriever._last_mode)

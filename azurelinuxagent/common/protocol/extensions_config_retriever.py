@@ -18,7 +18,6 @@
 #
 
 import os
-import re
 
 from azurelinuxagent.common.future import ustr
 
@@ -30,21 +29,21 @@ from azurelinuxagent.common.exception import ProtocolError
 from azurelinuxagent.common.utils.shellutil import run_command
 from azurelinuxagent.common.utils.textutil import safe_shlex_split
 
-INCARNATION_FILE_NAME = "Incarnation"
-SEQUENCE_NUMBER_FILE_NAME = "ArtifactProfileSequenceNumber"
-SVD_SEQNO_FILE_NAME = "SvdSeqNo"
-GOAL_STATE_SOURCE_FILE_NAME = "GoalStateSource"
-VM_ID_FILE_NAME = "VmId"
+_INCARNATION_FILE_NAME = "Incarnation"
+_SEQUENCE_NUMBER_FILE_NAME = "ArtifactProfileSequenceNumber"
+_SVD_SEQNO_FILE_NAME = "SvdSeqNo"
+_GOAL_STATE_SOURCE_FILE_NAME = "GoalStateSource"
+_VM_ID_FILE_NAME = "VmId"
 
 GOAL_STATE_SOURCE_FABRIC = "Fabric"
 GOAL_STATE_SOURCE_FASTTRACK = "FastTrack"
 
-DMIDECODE_CALL = "dmidecode"
-MSG_PREVIOUSLY_CACHED_PROFILE = "Using previously cached artifacts profile"
+_DMIDECODE_CALL = "dmidecode"
+_MSG_PREVIOUSLY_CACHED_PROFILE = "[PERIODIC] Using previously cached artifacts profile"
 
-EXT_CONF_FILE_NAME = "ExtensionsConfig_{0}.{1}.xml"
-EXT_CONFIG_FAST_TRACK = "ft"
-EXT_CONFIG_FABRIC = "fa"
+_EXT_CONF_FILE_NAME = "ExtensionsConfig_{0}.{1}.xml"
+_EXT_CONFIG_FAST_TRACK = "ft"
+_EXT_CONFIG_FABRIC = "fa"
 
 
 class ExtensionsConfigReasons:
@@ -58,7 +57,7 @@ class FastTrackChangeDetail:
     NO_CHANGE = "NoChange"
     NO_EXTENSIONS = "NoExtensions"
     NO_PROFILE = "NoProfile"
-    SEQ_NO_CHANGED = "seqNoChanged"
+    SEQ_NO_CHANGED = "SeqNoChanged"
 
 
 class FabricChangeDetail:
@@ -74,11 +73,13 @@ of sequence numbers or incarnations, which are specific to FastTrack and Fabric 
 """
 class GenericExtensionsConfig(ExtensionsConfig):
     def __init__(self, extensions_config, changed, ext_conf_retriever):
-        self.extensions_config = extensions_config
+        super(GenericExtensionsConfig, self).__init__(extensions_config.xml_text)
         self.changed = changed
         self._ext_conf_retriever = ext_conf_retriever
 
-        ExtensionsConfig.__init__(self, extensions_config.xml_text)
+        # Preserve ext_handlers being set to null when the SvdSeqNo didn't change
+        if extensions_config.ext_handlers is None:
+            self.ext_handlers = None
 
     def commit_processed(self):
         self._ext_conf_retriever.commit_processed()
@@ -159,11 +160,11 @@ class ExtensionsConfigRetriever(object):
         if conf.get_extensions_fast_track_enabled():
             artifacts_profile = self._wire_client.get_artifacts_profile()
             if artifacts_profile is None and self._saved_artifacts_profile is not None:
-                logger.periodic_info(logger.EVERY_DAY, MSG_PREVIOUSLY_CACHED_PROFILE)
+                logger.periodic_info(logger.EVERY_DAY, _MSG_PREVIOUSLY_CACHED_PROFILE)
                 artifacts_profile = self._saved_artifacts_profile
             else:
                 # If we use the cached profile again, we want to see that message
-                logger.reset_periodic_msg(MSG_PREVIOUSLY_CACHED_PROFILE)
+                logger.reset_periodic_msg(_MSG_PREVIOUSLY_CACHED_PROFILE)
             fast_track_changed = self._get_fast_track_changed(artifacts_profile)
         return artifacts_profile, fast_track_changed
 
@@ -191,11 +192,11 @@ class ExtensionsConfigRetriever(object):
         Removes all cache files and resets all cached goal state information
         This is necessary if a VM image is deployed from this one so we start fresh
         """
-        self._remove_cache(INCARNATION_FILE_NAME)
-        self._remove_cache(SEQUENCE_NUMBER_FILE_NAME)
-        self._remove_cache(SVD_SEQNO_FILE_NAME)
-        self._remove_cache(GOAL_STATE_SOURCE_FILE_NAME)
-        self._remove_cache(VM_ID_FILE_NAME)
+        self._remove_cache(_INCARNATION_FILE_NAME)
+        self._remove_cache(_SEQUENCE_NUMBER_FILE_NAME)
+        self._remove_cache(_SVD_SEQNO_FILE_NAME)
+        self._remove_cache(_GOAL_STATE_SOURCE_FILE_NAME)
+        self._remove_cache(_VM_ID_FILE_NAME)
 
     def _reset_if_necessary(self):
         cached_vm_id = self._get_saved_vm_id()
@@ -299,20 +300,20 @@ class ExtensionsConfigRetriever(object):
         return incarnation
 
     def _set_fast_track(self, vm_artifacts_seq_no=None):
-        path = os.path.join(conf.get_lib_dir(), GOAL_STATE_SOURCE_FILE_NAME)
+        path = os.path.join(conf.get_lib_dir(), _GOAL_STATE_SOURCE_FILE_NAME)
         self._save_cache(path, GOAL_STATE_SOURCE_FASTTRACK)
         if vm_artifacts_seq_no is not None:
-            sequence_number_file_path = os.path.join(conf.get_lib_dir(), SEQUENCE_NUMBER_FILE_NAME)
+            sequence_number_file_path = os.path.join(conf.get_lib_dir(), _SEQUENCE_NUMBER_FILE_NAME)
             self._save_cache(sequence_number_file_path, ustr(vm_artifacts_seq_no))
 
     def _set_fabric(self, incarnation=None, svd_seqNo = None):
-        path = os.path.join(conf.get_lib_dir(), GOAL_STATE_SOURCE_FILE_NAME)
+        path = os.path.join(conf.get_lib_dir(), _GOAL_STATE_SOURCE_FILE_NAME)
         self._save_cache(path, GOAL_STATE_SOURCE_FABRIC)
         if incarnation is not None:
-            incarnation_file_path = os.path.join(conf.get_lib_dir(), INCARNATION_FILE_NAME)
+            incarnation_file_path = os.path.join(conf.get_lib_dir(), _INCARNATION_FILE_NAME)
             self._save_cache(incarnation_file_path, ustr(incarnation))
         if svd_seqNo is not None:
-            svd_seqNo_file_path = os.path.join(conf.get_lib_dir(), SVD_SEQNO_FILE_NAME)
+            svd_seqNo_file_path = os.path.join(conf.get_lib_dir(), _SVD_SEQNO_FILE_NAME)
             self._save_cache(svd_seqNo_file_path, ustr(svd_seqNo))
 
     def _remove_cache(self, file_name):
@@ -325,7 +326,7 @@ class ExtensionsConfigRetriever(object):
             raise ProtocolError("Failed to remove cache: {0}".format(e))
 
     def _set_cached_vm_id(self, cached_vm_id):
-        path = os.path.join(conf.get_lib_dir(), VM_ID_FILE_NAME)
+        path = os.path.join(conf.get_lib_dir(), _VM_ID_FILE_NAME)
         self._save_cache(path, cached_vm_id)
 
     def _save_cache(self, local_file, data):
@@ -336,7 +337,7 @@ class ExtensionsConfigRetriever(object):
             raise ProtocolError("Failed to write cache: {0}".format(e))
 
     def _get_saved_sequence_number(self):
-        path = os.path.join(conf.get_lib_dir(), SEQUENCE_NUMBER_FILE_NAME)
+        path = os.path.join(conf.get_lib_dir(), _SEQUENCE_NUMBER_FILE_NAME)
         if os.path.exists(path):
             sequence_number = fileutil.read_file(path)
             if sequence_number is not None:
@@ -344,7 +345,7 @@ class ExtensionsConfigRetriever(object):
         return -1
 
     def _get_saved_svd_seqNo(self):
-        path = os.path.join(conf.get_lib_dir(), SVD_SEQNO_FILE_NAME)
+        path = os.path.join(conf.get_lib_dir(), _SVD_SEQNO_FILE_NAME)
         if os.path.exists(path):
             svd_seqno = fileutil.read_file(path)
             if svd_seqno is not None:
@@ -352,7 +353,7 @@ class ExtensionsConfigRetriever(object):
         return -1
 
     def _get_saved_incarnation(self):
-        path = os.path.join(conf.get_lib_dir(), INCARNATION_FILE_NAME)
+        path = os.path.join(conf.get_lib_dir(), _INCARNATION_FILE_NAME)
         if os.path.exists(path):
             incarnation = fileutil.read_file(path)
             if incarnation is not None:
@@ -360,7 +361,7 @@ class ExtensionsConfigRetriever(object):
         return -1
 
     def _get_saved_mode(self):
-        path = os.path.join(conf.get_lib_dir(), GOAL_STATE_SOURCE_FILE_NAME)
+        path = os.path.join(conf.get_lib_dir(), _GOAL_STATE_SOURCE_FILE_NAME)
         if os.path.exists(path):
             goal_state_source = fileutil.read_file(path)
             return goal_state_source
@@ -369,7 +370,7 @@ class ExtensionsConfigRetriever(object):
 
     def _get_saved_vm_id(self):
         cached_vm_id = None
-        path = os.path.join(conf.get_lib_dir(), VM_ID_FILE_NAME)
+        path = os.path.join(conf.get_lib_dir(), _VM_ID_FILE_NAME)
         if os.path.exists(path):
             cached_vm_id = fileutil.read_file(path)
         return cached_vm_id
@@ -380,14 +381,14 @@ class ExtensionsConfigRetriever(object):
 
     def get_file_name(self):
         if self._last_mode == GOAL_STATE_SOURCE_FASTTRACK:
-            return EXT_CONF_FILE_NAME.format(EXT_CONFIG_FAST_TRACK, self._get_last_sequence_number())
+            return _EXT_CONF_FILE_NAME.format(_EXT_CONFIG_FAST_TRACK, self._get_last_sequence_number())
         else:
-            return EXT_CONF_FILE_NAME.format(EXT_CONFIG_FABRIC, self._get_last_incarnation())
+            return _EXT_CONF_FILE_NAME.format(_EXT_CONFIG_FABRIC, self._get_last_incarnation())
 
     def _get_vm_id(self):
         vm_id = None
         try:
-            tokenized = safe_shlex_split(DMIDECODE_CALL)
+            tokenized = safe_shlex_split(_DMIDECODE_CALL)
             result = run_command(tokenized, log_error=True)
             uuid_pos = result.find("UUID:")
             uuid_len = len("UUID: ")
