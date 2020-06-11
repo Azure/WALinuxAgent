@@ -305,9 +305,23 @@ class CGroupConfigurator(object):
             r"^systemd-cgls --unit walinuxagent.service$",
             # Extensions are started using systemd-run
             r"^systemd-run --unit=.+ --scope ",
-            # These commands are started by the environment thread
-            r".*dhclient",
-            r".*iptables",
+            #
+            # The rest of the commands are started by the environment thread; many of them are distro-specific so this list may need
+            # additions as we add support for more distros.
+            #
+            # *** Monitor DHCP client restart
+            #
+            r"^pidof (dhclient|dhclient3|systemd-networkd)",
+            r"^ip route (show|add)",
+            #
+            # *** Enable firewall
+            #
+            r"^iptables --version$",
+            r"^iptables .+ -t security",
+            #
+            # *** Monitor host name changes
+            #
+            r"^ifdown .+ && ifup .+",
         ]
         for p in patterns:
             if re.match(p, command_line) is not None:

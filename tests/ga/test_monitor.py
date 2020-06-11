@@ -21,6 +21,7 @@ import json
 import os
 import platform
 import random
+import re
 import string
 import tempfile
 import time
@@ -523,6 +524,12 @@ class PollResourceUsageOperationTestCase(AgentTestCase):
 Unit walinuxagent.service (/system.slice/walinuxagent.service):
 ├─27519 /usr/bin/python3 -u /usr/sbin/waagent -daemon
 ├─27547 python3 -u bin/WALinuxAgent-2.2.48.1-py2.7.egg -run-exthandlers
+├─5821 pidof systemd-networkd
+├─5822 iptables --version
+├─5823 iptables -w -t security -D OUTPUT -d 168.63.129.16 -p tcp -m conntrack --ctstate INVALID,NEW -j ACCEPT
+├─5824 iptables -w -t security -D OUTPUT -d 168.63.129.16 -p tcp -m owner --uid-owner 0 -j ACCEPT
+├─5825 ip route show
+├─5826 ifdown eth0 && ifup eth0
 ├─5699 bash /var/lib/waagent/Microsoft.CPlat.Core.RunCommandLinux-1.0.1/bin/run-command-shim enable
 ├─5701 tee -ia /var/log/azure/run-command/handler.log
 ├─5719 /var/lib/waagent/Microsoft.CPlat.Core.RunCommandLinux-1.0.1/bin/run-command-extension enable
@@ -532,11 +539,11 @@ Unit walinuxagent.service (/system.slice/walinuxagent.service):
             with patch("azurelinuxagent.ga.monitor.add_event") as add_event_patcher:
                 PollResourceUsageOperation().run()
 
-                messages = [kwargs["message"] for (_, kwargs) in add_event_patcher.call_args_list if "The agent's cgroup includes foreign processes" in kwargs["message"]]
+                messages = [kwargs["message"] for (_, kwargs) in add_event_patcher.call_args_list if "The agent's cgroup includes unexpected processes" in kwargs["message"]]
 
                 self.assertEqual(1, len(messages), "Exactly 1 telemetry event should have been reported. Events: {0}".format(messages))
 
-                foreign_processes = [
+                unexpected_processes = [
                     'bash /var/lib/waagent/Microsoft.CPlat.Core.RunCommandLinux-1.0.1/bin/run-command-shim enable',
                     'tee -ia /var/log/azure/run-command/handler.log',
                     '/var/lib/waagent/Microsoft.CPlat.Core.RunCommandLinux-1.0.1/bin/run-command-extension enable',
@@ -544,8 +551,14 @@ Unit walinuxagent.service (/system.slice/walinuxagent.service):
                     '/bin/sh /var/lib/waagent/run-command/download/1/script.sh',
                 ]
 
-                for fp in foreign_processes:
-                    self.assertIn(fp, messages[0], "[{0}] was not reported as a foreign process. Events: {1}".format(fp, messages))
+                for fp in unexpected_processes:
+                    self.assertIn(fp, messages[0], "[{0}] was not reported as an unexpected process. Events: {1}".format(fp, messages))
+
+                # The list of processes in the message is an array of strings: "['foo', ..., 'bar']"
+                search = re.search(r'\[(?P<processes>.+)\]', messages[0])
+                self.assertIsNotNone(search, "The event message is not in the expected format: {0}".format(messages[0]))
+                processes = search.group('processes')
+                self.assertEquals(5, len(processes.split(',')), 'Extra processes were reported as unexpected: {0}'.format(processes))
 
 
 @patch("azurelinuxagent.common.utils.restutil.http_post")

@@ -49,25 +49,38 @@ class PollResourceUsageOperation(PeriodicOperation):
     def __init__(self):
         super(PollResourceUsageOperation, self).__init__(
             name="poll resource usage",
-            operation=PollResourceUsageOperation._operation_impl,
+            operation=self._operation_impl,
             period=datetime.timedelta(minutes=5))
+        self._last_error = None
+        self._error_count = 0
 
-    @staticmethod
-    def _operation_impl():
+    def _operation_impl(self):
+        #
+        # Check the processes in the agent cgroup
+        #
         processes = CGroupConfigurator.get_instance().get_processes_in_agent_cgroup()
 
         if processes is not None:
-            foreign_processes = []
+            unexpected_processes = []
 
             for (_, command_line) in processes:
                 if not CGroupConfigurator.is_agent_process(command_line):
-                    foreign_processes.append(command_line)
+                    unexpected_processes.append(command_line)
 
-            if len(foreign_processes) > 0:
-                message = "The agent's cgroup includes foreign processes: {0}".format(foreign_processes)
-                logger.info(message)
-                add_event(op=WALAEventOperation.CGroupsDebug, message=message)
+            # Report a small sample of unexpected processes
+            if len(unexpected_processes) > 0 and self._error_count < 5:
+                unexpected_processes.sort()
+                error = ustr(unexpected_processes)
+                if error != self._last_error:
+                    self._error_count += 1
+                    self._last_error = error
+                    message = "The agent's cgroup includes unexpected processes: {0}".format(error)
+                    logger.info(message)
+                    add_event(op=WALAEventOperation.CGroupsDebug, message=message)
 
+        #
+        # Report metrics
+        #
         metrics = CGroupsTelemetry.poll_all_tracked()
 
         for metric in metrics:
