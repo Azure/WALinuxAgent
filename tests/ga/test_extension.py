@@ -32,7 +32,6 @@ import datetime
 from azurelinuxagent.common import conf
 from azurelinuxagent.common.cgroupconfigurator import CGroupConfigurator
 from azurelinuxagent.common.datacontract import get_properties
-from azurelinuxagent.common.protocol.extensions_config_retriever import ExtensionsConfigRetriever
 from azurelinuxagent.common.protocol.util import get_protocol_util
 from azurelinuxagent.common.utils import fileutil
 from azurelinuxagent.common.utils.fileutil import read_file

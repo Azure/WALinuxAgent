@@ -26,7 +26,7 @@ import uuid
 
 from azurelinuxagent.common.exception import InvalidContainerError, ResourceGoneError, ProtocolError, \
     ExtensionDownloadError, HttpError
-from azurelinuxagent.common.future import httpclient
+from azurelinuxagent.common.protocol.extensions_config_retriever import ExtensionsConfigRetriever
 from azurelinuxagent.common.protocol.extensions_config_retriever import GenericExtensionsConfig
 from azurelinuxagent.common.protocol.hostplugin import HostPluginProtocol
 from azurelinuxagent.common.protocol.goal_state import ExtensionsConfig, GoalState
@@ -69,13 +69,10 @@ def create_mock_protocol(artifacts_profile_blob=None, status_upload_blob=None, s
         # These tests use mock wire data that dont have any extensions (extension config will be empty).
         # Populate the upload blob and artifacts profile blob.
         ext_conf = GenericExtensionsConfig(ExtensionsConfig(None), False, None)
-        protocol.client._goal_state._ext_conf = ext_conf
-        protocol.client._goal_state._ext_conf_retrieved = True
-        protocol.client._goal_state._artifacts_profile_blob_url = artifacts_profile_blob
-        protocol.client._goal_state._artifacts_profile_blob_url_retrieved = True
-        protocol.client._goal_state._status_upload_blob_url = status_upload_blob
-        protocol.client._goal_state._status_upload_blob_type = status_upload_blob_type
-        protocol.client._goal_state._ext_conf_properties_retrieved = True
+        protocol.client._goal_state.ext_conf = ext_conf
+        protocol.client._goal_state.artifacts_profile_blob_url = artifacts_profile_blob
+        protocol.client._goal_state.status_upload_blob_url = status_upload_blob
+        protocol.client._goal_state.status_upload_blob_type = status_upload_blob_type
 
         yield protocol
 
@@ -93,7 +90,6 @@ class TestWireProtocol(AgentTestCase):
         MockCryptUtil.side_effect = test_data.mock_crypt_util
 
         with patch.object(restutil, 'http_get', test_data.mock_http_get):
-            GoalState._IncarnationForCerts = None
             protocol = WireProtocol(WIRESERVER_URL)
             protocol.detect()
             protocol.get_vminfo()
@@ -1082,9 +1078,9 @@ class UpdateGoalStateTestCase(AgentTestCase):
                 protocol.mock_wire_data.shared_config, "Deployment", "name", str(uuid.uuid4()))
 
             # First run - old ext config changed = False, new ext config changed = True, so we'll update shared conf
-            # Second run - old ext config changed = True, new ext config changed = False, so we'll update shared conf
+            # Second run - old ext config changed = True, new ext config changed = False, so we won't update shared conf
             # Third run - old ext config changed = False, new ext config changed = False, so we won't update shared conf
-            for expect_change in [True, True, False]:
+            for expect_change in [True, False, False]:
                 # The container id, role config name and shared config can change without the incarnation changing;
                 # capture the initial goal state and then change those fields.
                 old_shared_conf = protocol.client.get_shared_conf().xml_text
@@ -1245,16 +1241,16 @@ class GoalStateConstructionTestCase(AgentTestCase):
         with mock_wire_protocol(mockwiredata.DATA_FILE) as protocol:
             protocol.mock_wire_data.goal_state = WireProtocolData.replace_xml_element_value(
                 protocol.mock_wire_data.goal_state, "HostingEnvironmentConfig", "")
-            protocol.client.update_goal_state()
-            hosting_env = protocol.client.get_hosting_env()
-            self.assertIsNone(hosting_env)
+            ext_conf_retriever = ExtensionsConfigRetriever(protocol.client)
+            goal_state = GoalState.fetch_full_goal_state(protocol.client, ext_conf_retriever)
+            self.assertIsNone(goal_state.hosting_env)
 
     def test_goal_state_hosting_env_cannot_retrieve(self):
         with mock_wire_protocol(mockwiredata.DATA_FILE) as protocol:
             protocol.mock_wire_data.goal_state = WireProtocolData.replace_xml_element_value(
                 protocol.mock_wire_data.goal_state, "HostingEnvironmentConfig", "invalid_url")
-            protocol.client.update_goal_state()
-            self.assertRaises(Exception, protocol.client.get_hosting_env)
+            ext_conf_retriever = ExtensionsConfigRetriever(protocol.client)
+            self.assertRaises(Exception, lambda: GoalState.fetch_full_goal_state(protocol.client, ext_conf_retriever))
 
     def test_goal_state_hosting_env_load(self):
         with mock_wire_protocol(mockwiredata.DATA_FILE) as protocol:
@@ -1270,16 +1266,16 @@ class GoalStateConstructionTestCase(AgentTestCase):
         with mock_wire_protocol(mockwiredata.DATA_FILE) as protocol:
             protocol.mock_wire_data.goal_state = WireProtocolData.replace_xml_element_value(
                 protocol.mock_wire_data.goal_state, "SharedConfig", "")
-            protocol.client.update_goal_state()
-            shared_conf = protocol.client.get_shared_conf()
-            self.assertIsNone(shared_conf)
+            ext_conf_retriever = ExtensionsConfigRetriever(protocol.client)
+            goal_state = GoalState.fetch_full_goal_state(protocol.client, ext_conf_retriever)
+            self.assertIsNone(goal_state.shared_conf)
 
     def test_goal_state_shared_conf_cannot_retrieve(self):
         with mock_wire_protocol(mockwiredata.DATA_FILE) as protocol:
             protocol.mock_wire_data.goal_state = WireProtocolData.replace_xml_element_value(
                 protocol.mock_wire_data.goal_state, "SharedConfig", "invalid_url")
-            protocol.client.update_goal_state()
-            self.assertRaises(Exception, protocol.client.get_shared_conf)
+            ext_conf_retriever = ExtensionsConfigRetriever(protocol.client)
+            self.assertRaises(Exception, lambda: GoalState.fetch_full_goal_state(protocol.client, ext_conf_retriever))
 
     def test_goal_state_shared_conf_load(self):
         with mock_wire_protocol(mockwiredata.DATA_FILE) as protocol:
@@ -1295,13 +1291,12 @@ class GoalStateConstructionTestCase(AgentTestCase):
         with mock_wire_protocol(mockwiredata.DATA_FILE) as protocol:
             protocol.mock_wire_data.goal_state = WireProtocolData.replace_xml_element_value(
                 protocol.mock_wire_data.goal_state, "Certificates", "")
-            protocol.client.update_goal_state()
-            certs = protocol.client.get_certs()
-            self.assertIsNone(certs)
+            ext_conf_retriever = ExtensionsConfigRetriever(protocol.client)
+            goal_state = GoalState.fetch_full_goal_state(protocol.client, ext_conf_retriever)
+            self.assertIsNone(goal_state.certs)
 
     def test_goal_state_certs_load(self):
         with mock_wire_protocol(mockwiredata.DATA_FILE) as protocol:
-            GoalState._IncarnationForCerts = None
             protocol.client.update_goal_state()
             self.assertEqual(2, len(protocol.client.get_certs().cert_list.certificates))
 
@@ -1321,8 +1316,8 @@ class GoalStateConstructionTestCase(AgentTestCase):
         with mock_wire_protocol(mockwiredata.DATA_FILE_REMOTE_ACCESS) as protocol:
             protocol.mock_wire_data.goal_state = WireProtocolData.replace_xml_element_value(
                 protocol.mock_wire_data.goal_state_remote_access, "RemoteAccessInfo", "invalid_url")
-            protocol.client.update_goal_state()
-            self.assertRaises(Exception, protocol.client.get_remote_access)
+            ext_conf_retriever = ExtensionsConfigRetriever(protocol.client)
+            self.assertRaises(Exception, lambda: GoalState.fetch_full_goal_state(protocol.client, ext_conf_retriever))
 
     def test_goal_state_remote_access_load(self):
         with mock_wire_protocol(mockwiredata.DATA_FILE_REMOTE_ACCESS) as protocol:
@@ -1338,8 +1333,9 @@ class GoalStateConstructionTestCase(AgentTestCase):
         with mock_wire_protocol(mockwiredata.DATA_FILE) as protocol:
             protocol.mock_wire_data.goal_state = WireProtocolData.replace_xml_element_value(
                 protocol.mock_wire_data.goal_state, "ExtensionsConfig", "")
-            protocol.client.update_goal_state()
-            ext_conf = protocol.client.get_ext_conf()
+            ext_conf_retriever = ExtensionsConfigRetriever(protocol.client)
+            goal_state = GoalState.fetch_full_goal_state(protocol.client, ext_conf_retriever)
+            ext_conf = goal_state.ext_conf
             self.assertIsNone(ext_conf.xml_text)
 
     def test_goal_state_ext_conf_cannot_retrieve(self):

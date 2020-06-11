@@ -75,6 +75,7 @@ class GenericExtensionsConfig(ExtensionsConfig):
     def __init__(self, extensions_config, changed, ext_conf_retriever):
         super(GenericExtensionsConfig, self).__init__(extensions_config.xml_text)
         self.changed = changed
+        self.is_fabric_change = False
         self._ext_conf_retriever = ext_conf_retriever
 
         # Preserve ext_handlers being set to null when the SvdSeqNo didn't change
@@ -151,7 +152,11 @@ class ExtensionsConfigRetriever(object):
                 self._pending_fast_track_seq_no = artifacts_profile.get_sequence_number()
             logger.info("Handling extension updates. LastMode={0}, IsStartup={1}", self._last_mode, is_startup)
 
-        return GenericExtensionsConfig(extensions_config, changed, self)
+        ext_conf = GenericExtensionsConfig(extensions_config, changed, self)
+        if self._pending_mode == GOAL_STATE_SOURCE_FABRIC:
+            # We only need to retrieve certs if the Fabric incarnation changes. FastTrack won't change them
+            ext_conf.is_fabric_change = True
+        return ext_conf
 
     def _get_fast_track_details(self):
         artifacts_profile = None

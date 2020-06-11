@@ -773,13 +773,16 @@ class WireClient(object):
         for retry in range(1, max_retry + 1):
             try:
                 if refresh_type == WireClient._UpdateType.HostPlugin:
-                    goal_state = GoalState.fetch_goal_state(self, self.ext_config_retriever)
+                    goal_state = GoalState.fetch_limited_goal_state(self, self.ext_config_retriever)
                     self._update_host_plugin(goal_state.container_id, goal_state.role_config_name)
                     return
 
-                new_goal_state = GoalState.fetch_goal_state(self, self.ext_config_retriever)
-
+                if self._goal_state is None or refresh_type == WireClient._UpdateType.GoalStateForced:
+                    new_goal_state = GoalState.fetch_full_goal_state(self, self.ext_config_retriever)
+                else:
+                    new_goal_state = GoalState.fetch_goal_state(self, self.ext_config_retriever)
                 self._save_goal_state_if_necessary(new_goal_state, refresh_type)
+
                 return
 
             except IOError as e:
@@ -801,8 +804,7 @@ class WireClient(object):
         # 1) We didn't previously have a goal state
         # 2) The incarnation changed
         # 3) The extensions config changed
-        # 4) The extensions config did not change, but previously it did
-        # 5) We have an update type of GoalStateForced
+        # 4) We have an update type of GoalStateForced
         save_goal_state = False
         if self._goal_state is None or new_goal_state.incarnation != self._goal_state.incarnation:
             save_goal_state = True
@@ -810,10 +812,13 @@ class WireClient(object):
         elif refresh_type == WireClient._UpdateType.GoalStateForced:
             save_goal_state = True
             self._goal_state = new_goal_state
-        elif new_goal_state.ext_conf is not None and (new_goal_state.ext_conf.changed or
-                                              (self._goal_state.ext_conf is not None and
-                                               self._goal_state.ext_conf.changed != new_goal_state.ext_conf.changed)):
-            self._goal_state = new_goal_state
+        elif new_goal_state.ext_conf is not None:
+            if new_goal_state.ext_conf.changed:
+                self._goal_state = new_goal_state
+            else:
+                # The actual goal state is the same, since changed == false
+                # However, we need to update the changed property or else we'll process the extensions again
+                self._goal_state.ext_conf.changed = new_goal_state.ext_conf.changed
 
         # We save the goal state and update the host plugin only if one of the following is true
         # 1) We didn't previously have a goal state
@@ -844,14 +849,10 @@ class WireClient(object):
 
             # NOTE: Certificates are saved in Certificate.__init__
             save_if_not_none(self._goal_state, GOAL_STATE_FILE_NAME.format(self._goal_state.incarnation))
-            if self._goal_state.hosting_env_retrieved:
-                save_if_not_none(self._goal_state.hosting_env, HOSTING_ENV_FILE_NAME)
-            if self._goal_state.shared_conf_retrieved:
-                save_if_not_none(self._goal_state.shared_conf, SHARED_CONF_FILE_NAME)
-            # Not necessary to check if ext_conf is retrieved because we needed it in _save_goal_state_if_necessary
+            save_if_not_none(self._goal_state.hosting_env, HOSTING_ENV_FILE_NAME)
+            save_if_not_none(self._goal_state.shared_conf, SHARED_CONF_FILE_NAME)
             save_if_not_none(self._goal_state.ext_conf, self._goal_state.ext_conf.get_file_name())
-            if self._goal_state.remote_access_retrieved:
-                save_if_not_none(self._goal_state.remote_access, REMOTE_ACCESS_FILE_NAME.format(self._goal_state.incarnation))
+            save_if_not_none(self._goal_state.remote_access, REMOTE_ACCESS_FILE_NAME.format(self._goal_state.incarnation))
 
         except Exception as e:
             logger.warn("Failed to save the goal state to disk: {0}", ustr(e))
@@ -1249,7 +1250,7 @@ class WireClient(object):
 
     def get_host_plugin(self):
         if self._host_plugin is None:
-            goal_state = GoalState.fetch_goal_state(self, self.ext_config_retriever)
+            goal_state = GoalState.fetch_limited_goal_state(self, self.ext_config_retriever)
             self._set_host_plugin(HostPluginProtocol(self.get_endpoint(),
                                                      goal_state.container_id,
                                                      goal_state.role_config_name))
