@@ -24,7 +24,6 @@ from nose.plugins.attrib import attr
 
 from azurelinuxagent.common import conf
 
-from azurelinuxagent.common.protocol.goal_state import GoalState
 from azurelinuxagent.common.protocol.util import ProtocolUtil
 
 from azurelinuxagent.common.cgroupconfigurator import CGroupConfigurator
@@ -33,7 +32,6 @@ from azurelinuxagent.common.exception import ProtocolError, ExtensionError, Exte
 from azurelinuxagent.common.protocol.restapi import ExtensionStatus, Extension, ExtHandler, ExtHandlerProperties
 from azurelinuxagent.common.utils.extensionprocessutil import TELEMETRY_MESSAGE_MAX_LEN, format_stdout_stderr, \
     read_output
-from mock import MagicMock
 from azurelinuxagent.common.protocol.wire import WireProtocol, InVMArtifactsProfile
 from azurelinuxagent.ga.exthandlers import parse_ext_status, ExtHandlerInstance, get_exthandlers_handler, \
     ExtCommandEnvVariable
@@ -41,7 +39,8 @@ from azurelinuxagent.common.protocol.extensions_config_retriever import Extensio
     GOAL_STATE_SOURCE_FABRIC, GOAL_STATE_SOURCE_FASTTRACK, _GOAL_STATE_SOURCE_FILE_NAME, _SEQUENCE_NUMBER_FILE_NAME, \
     _INCARNATION_FILE_NAME
 from tests.protocol.mocks import MockWireClient, MockProtocol
-from tests.protocol.mockwiredata import WireProtocolData, DATA_FILE, DATA_FILE_FAST_TRACK_NO_SETTINGS
+from tests.protocol.mockwiredata import WireProtocolData, DATA_FILE, DATA_FILE_FAST_TRACK_NO_SETTINGS, \
+    DATA_FILE_FAST_TRACK_NO_EXTENSIONS, DATA_FILE_FAST_TRACK_NO_EXT_CONFIG
 from tests.tools import AgentTestCase, patch, mock_sleep, clear_singleton_instances, i_am_root
 
 
@@ -82,7 +81,7 @@ class TestGoalState(AgentTestCase):
     def test_get_cached_vm_id(self):
         retriever = ExtensionsConfigRetriever(wire_client=None)
         self.assertIsNone(retriever._get_saved_vm_id())
-        retriever._set_cached_vm_id("Flarbaglarf")
+        retriever._set_saved_vm_id("Flarbaglarf")
         self.assertEqual("Flarbaglarf", retriever._get_saved_vm_id())
         retriever._reset()
         self.assertIsNone(retriever._get_saved_vm_id())
@@ -103,16 +102,16 @@ class TestGoalState(AgentTestCase):
         self.assertFalse(retriever._get_fabric_changed(1))
 
     def test_get_fabric_changed_no_extensions(self):
-        test_data = WireProtocolData(DATA_FILE)
-        profile = InVMArtifactsProfile(test_data.vm_artifacts_profile_no_extensions)
+        test_data = WireProtocolData(DATA_FILE_FAST_TRACK_NO_EXTENSIONS)
+        profile = InVMArtifactsProfile(test_data.vm_artifacts_profile)
         retriever = ExtensionsConfigRetriever(wire_client=None)
         retriever._last_mode = GOAL_STATE_SOURCE_FASTTRACK
         retriever._last_fast_track_seq_no = 0
         self.assertFalse(retriever._get_fast_track_changed(profile))
 
     def test_get_fabric_changed_no_ext_config(self):
-        test_data = WireProtocolData(DATA_FILE)
-        profile = InVMArtifactsProfile(test_data.vm_artifacts_profile_no_ext_config)
+        test_data = WireProtocolData(DATA_FILE_FAST_TRACK_NO_EXT_CONFIG)
+        profile = InVMArtifactsProfile(test_data.vm_artifacts_profile)
         retriever = ExtensionsConfigRetriever(wire_client=None)
         retriever._last_mode = GOAL_STATE_SOURCE_FASTTRACK
         retriever._last_fast_track_seq_no = 0
@@ -456,9 +455,9 @@ class TestGoalState(AgentTestCase):
 
         # Verify we use the saved names
         retriever._last_mode = GOAL_STATE_SOURCE_FASTTRACK
-        self.assertEqual("ExtensionsConfig_ft.1.xml", retriever.get_file_name())
+        self.assertEqual("ExtensionsConfig_ft.1.xml", retriever.get_ext_config_file_name())
         retriever._last_mode = GOAL_STATE_SOURCE_FABRIC
-        self.assertEqual("ExtensionsConfig_fa.2.xml", retriever.get_file_name())
+        self.assertEqual("ExtensionsConfig_fa.2.xml", retriever.get_ext_config_file_name())
 
     def test_get_ext_config(self):
         test_data = WireProtocolData(DATA_FILE)
@@ -473,7 +472,7 @@ class TestGoalState(AgentTestCase):
         self.assertTrue(ext_conf.changed)
         retriever.commit_processed()
         self.assertTrue("Fabric" in ext_conf.get_description())
-        self.assertEqual("ExtensionsConfig_fa.1.xml", ext_conf.get_file_name())
+        self.assertEqual("ExtensionsConfig_fa.1.xml", ext_conf.get_ext_config_file_name())
         self.assertEqual(GOAL_STATE_SOURCE_FABRIC, retriever._last_mode)
 
         # Fabric goal state, not changed
@@ -481,7 +480,7 @@ class TestGoalState(AgentTestCase):
         self.assertFalse(ext_conf.changed)
         retriever.commit_processed()
         self.assertTrue("Fabric" in ext_conf.get_description())
-        self.assertEqual("ExtensionsConfig_fa.1.xml", ext_conf.get_file_name())
+        self.assertEqual("ExtensionsConfig_fa.1.xml", ext_conf.get_ext_config_file_name())
         self.assertEqual(GOAL_STATE_SOURCE_FABRIC, retriever._last_mode)
 
         # Fast Track goal state, changed
@@ -492,7 +491,7 @@ class TestGoalState(AgentTestCase):
         self.assertTrue(ext_conf.changed)
         retriever.commit_processed()
         self.assertTrue("FastTrack" in ext_conf.get_description())
-        self.assertEqual("ExtensionsConfig_ft.1.xml", ext_conf.get_file_name())
+        self.assertEqual("ExtensionsConfig_ft.1.xml", ext_conf.get_ext_config_file_name())
         self.assertEqual(GOAL_STATE_SOURCE_FASTTRACK, retriever._last_mode)
 
         # Fast Track goal state, not changed
@@ -500,7 +499,7 @@ class TestGoalState(AgentTestCase):
         self.assertFalse(ext_conf.changed)
         retriever.commit_processed()
         self.assertTrue("FastTrack" in ext_conf.get_description())
-        self.assertEqual("ExtensionsConfig_ft.1.xml", ext_conf.get_file_name())
+        self.assertEqual("ExtensionsConfig_ft.1.xml", ext_conf.get_ext_config_file_name())
         self.assertEqual(GOAL_STATE_SOURCE_FASTTRACK, retriever._last_mode)
 
     def test_commit_processed(self):

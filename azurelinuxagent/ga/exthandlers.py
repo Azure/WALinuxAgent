@@ -430,7 +430,7 @@ class ExtHandlersHandler(object):
                 ext_handler_i.report_event(message=ustr(err_msg), is_success=False)
                 return
 
-            ext_handler_i.logger.info("Target handler state: {0}", state)
+            ext_handler_i.logger.info("Target handler state: {0} [{1}]", state, self.ext_config.get_description())
             if state == u"enabled":
                 self.handle_enable(ext_handler_i)
             elif state == u"disabled":

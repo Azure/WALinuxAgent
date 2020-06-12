@@ -851,7 +851,7 @@ class WireClient(object):
             save_if_not_none(self._goal_state, GOAL_STATE_FILE_NAME.format(self._goal_state.incarnation))
             save_if_not_none(self._goal_state.hosting_env, HOSTING_ENV_FILE_NAME)
             save_if_not_none(self._goal_state.shared_conf, SHARED_CONF_FILE_NAME)
-            save_if_not_none(self._goal_state.ext_conf, self._goal_state.ext_conf.get_file_name())
+            save_if_not_none(self._goal_state.ext_conf, self._goal_state.ext_conf.get_ext_config_file_name())
             save_if_not_none(self._goal_state.remote_access, REMOTE_ACCESS_FILE_NAME.format(self._goal_state.incarnation))
 
         except Exception as e:
@@ -999,7 +999,7 @@ class WireClient(object):
         # For certain calls we want them to go through the HostGAPlugin first, since it
         # supports the If-None-Match header that reduces how often we need to parse
 
-        # note that this method requires a lambda that returns two values
+        # note that this method requires a lambda that returns three values
         ret, etag, not_modified = self.call_hostplugin_with_container_check(host_func, uses_etag=True)
         if ret or not_modified:
             return ret, etag
@@ -1307,8 +1307,8 @@ class WireClient(object):
                     file_name = ARTIFACTS_PROFILE_BLOB_FILE_NAME.format(artifacts_profile.get_sequence_number())
                     file_path = os.path.join(conf.get_lib_dir(), file_name)
                     self.save_cache(file_path, profile)
-                except Exception:
-                    logger.warn("Could not save artifacts profile blob to disk")
+                except Exception as e:
+                    logger.warn("Could not save artifacts profile blob to disk due to: {0}", ustr(e))
             if etag is not None:
                 logger.info("Received a new etag for the VMArtifactsProfile blob: {0}", etag)
                 self.vm_artifacts_profile_etag = etag

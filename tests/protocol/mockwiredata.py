@@ -38,12 +38,7 @@ DATA_FILE = {
         "test_ext": "ext/sample_ext-1.3.0.zip",
         "remote_access": None,
         "in_vm_artifacts_profile": None,
-        "vm_artifacts_profile": "wire/in_vm_artifacts_profile_blob.json",
-        "vm_artifacts_profile_install": "wire/in_vm_artifacts_profile_blob_install.json",
-        "vm_artifacts_profile_no_extensions": "wire/in_vm_artifacts_profile_no_extensions.json",
-        "vm_artifacts_profile_no_ext_config": "wire/in_vm_artifacts_profile_no_ext_config.json",
-        "vm_artifacts_profile_dependencies": "wire/in_vm_artifacts_profile_dependencies.json",
-        "vm_artifacts_profile_multiple_dependencies": "wire/in_vm_artifacts_profile_multiple_dependencies.json"
+        "vm_artifacts_profile": "wire/in_vm_artifacts_profile_blob.json"
 }
 
 DATA_FILE_IN_VM_ARTIFACTS_PROFILE = DATA_FILE.copy()
@@ -104,6 +99,18 @@ DATA_FILE_FAST_TRACK_DEPENDENCIES["in_vm_artifacts_profile"] = "wire/in_vm_artif
 DATA_FILE_FAST_TRACK_NO_SETTINGS = DATA_FILE.copy()
 DATA_FILE_FAST_TRACK_NO_SETTINGS["vm_artifacts_profile"] = "wire/in_vm_artifacts_profile_no_settings.json"
 
+DATA_FILE_FAST_TRACK_NO_EXTENSIONS = DATA_FILE.copy()
+DATA_FILE_FAST_TRACK_NO_EXTENSIONS["vm_artifacts_profile"] = "wire/in_vm_artifacts_profile_no_extensions.json"
+
+DATA_FILE_FAST_TRACK_NO_EXT_CONFIG = DATA_FILE.copy()
+DATA_FILE_FAST_TRACK_NO_EXT_CONFIG["vm_artifacts_profile"] = "wire/in_vm_artifacts_profile_no_ext_config.json"
+
+DATA_FILE_FAST_TRACK_DEPENDENCY = DATA_FILE.copy()
+DATA_FILE_FAST_TRACK_DEPENDENCY["vm_artifacts_profile"] = "wire/in_vm_artifacts_profile_dependencies.json"
+
+DATA_FILE_FAST_TRACK_MULTIPLE_DEPENDENCIES = DATA_FILE.copy()
+DATA_FILE_FAST_TRACK_MULTIPLE_DEPENDENCIES["vm_artifacts_profile"] = "wire/in_vm_artifacts_profile_multiple_dependencies.json"
+
 class WireProtocolData(object):
     def __init__(self, data_files=DATA_FILE):
         self.emulate_stale_goal_state = False
@@ -141,11 +148,6 @@ class WireProtocolData(object):
         self.remote_access = None
         self.in_vm_artifacts_profile = None
         self.vm_artifacts_profile = None
-        self.vm_artifacts_profile_install = None
-        self.vm_artifacts_profile_no_extensions = None
-        self.vm_artifacts_profile_no_ext_config = None
-        self.vm_artifacts_profile_dependencies = None
-        self.vm_artifacts_profile_multiple_dependencies = None
 
         self.reload()
 
@@ -165,11 +167,6 @@ class WireProtocolData(object):
         self.trans_cert = load_data(self.data_files.get("trans_cert"))
         self.ext = load_bin_data(self.data_files.get("test_ext"))
         self.vm_artifacts_profile = load_data(self.data_files.get("vm_artifacts_profile"))
-        self.vm_artifacts_profile_install = load_data(self.data_files.get("vm_artifacts_profile_install"))
-        self.vm_artifacts_profile_no_extensions = load_data(self.data_files.get("vm_artifacts_profile_no_extensions"))
-        self.vm_artifacts_profile_no_ext_config = load_data(self.data_files.get("vm_artifacts_profile_no_ext_config"))
-        self.vm_artifacts_profile_dependencies = load_data(self.data_files.get("vm_artifacts_profile_dependencies"))
-        self.vm_artifacts_profile_multiple_dependencies = load_data(self.data_files.get("vm_artifacts_profile_multiple_dependencies"))
 
         remote_access_data_file = self.data_files.get("remote_access")
         if remote_access_data_file is not None:

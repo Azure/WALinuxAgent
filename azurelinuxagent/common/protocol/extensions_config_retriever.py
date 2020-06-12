@@ -66,12 +66,12 @@ class FabricChangeDetail:
     NO_INCARNATION = "NoInc"
 
 
-""" 
-GenericExtensionsConfig abstracts whether we pulled the goal state from Fabric or from FastTrack
-consumers should not worry from where the ExtensionsConfig came. They should also have no knowledge
-of sequence numbers or incarnations, which are specific to FastTrack and Fabric respectfully
-"""
 class GenericExtensionsConfig(ExtensionsConfig):
+    """
+    GenericExtensionsConfig abstracts whether we pulled the goal state from Fabric or from FastTrack
+    consumers should not worry from where the ExtensionsConfig came. They should also have no knowledge
+    of sequence numbers or incarnations, which are specific to FastTrack and Fabric respectively
+    """
     def __init__(self, extensions_config, changed, ext_conf_retriever):
         super(GenericExtensionsConfig, self).__init__(extensions_config.xml_text)
         self.changed = changed
@@ -88,8 +88,8 @@ class GenericExtensionsConfig(ExtensionsConfig):
     def get_description(self):
         return self._ext_conf_retriever.get_description()
 
-    def get_file_name(self):
-        return self._ext_conf_retriever.get_file_name()
+    def get_ext_config_file_name(self):
+        return self._ext_conf_retriever.get_ext_config_file_name()
 
 
 class ExtensionsConfigRetriever(object):
@@ -210,11 +210,11 @@ class ExtensionsConfigRetriever(object):
             logger.warn("Unable to retrieve the current vm id. Skipping reset")
         elif cached_vm_id is None:
             logger.info("Remembering current vm id is {0}".format(current_vm_id))
-            self._set_cached_vm_id(current_vm_id)
+            self._set_saved_vm_id(current_vm_id)
         elif current_vm_id != cached_vm_id:
             logger.warn("The vm id has changed from {0} to {1}. Resetting cached state".format(cached_vm_id, current_vm_id))
             self._reset()
-            self._set_cached_vm_id(current_vm_id)
+            self._set_saved_vm_id(current_vm_id)
 
     def _remove_extensions_if_necessary(self, extensions_config):
         """
@@ -330,7 +330,7 @@ class ExtensionsConfigRetriever(object):
             fileutil.clean_ioerror(e, paths=path)
             raise ProtocolError("Failed to remove cache: {0}".format(e))
 
-    def _set_cached_vm_id(self, cached_vm_id):
+    def _set_saved_vm_id(self, cached_vm_id):
         path = os.path.join(conf.get_lib_dir(), _VM_ID_FILE_NAME)
         self._save_cache(path, cached_vm_id)
 
@@ -384,7 +384,7 @@ class ExtensionsConfigRetriever(object):
         return "{0} Incarnation={1} SeqNo={2} Reason={3}".format(
             self._last_mode, self._last_fabric_incarnation, self._last_fast_track_seq_no, self._reason)
 
-    def get_file_name(self):
+    def get_ext_config_file_name(self):
         if self._last_mode == GOAL_STATE_SOURCE_FASTTRACK:
             return _EXT_CONF_FILE_NAME.format(_EXT_CONFIG_FAST_TRACK, self._get_last_sequence_number())
         else:
@@ -393,6 +393,7 @@ class ExtensionsConfigRetriever(object):
     def _get_vm_id(self):
         vm_id = None
         try:
+            # The command needs to be tokenized, since we are not using the shell parameter in subprocess.Popen
             tokenized = safe_shlex_split(_DMIDECODE_CALL)
             result = run_command(tokenized, log_error=True)
             uuid_pos = result.find("UUID:")
