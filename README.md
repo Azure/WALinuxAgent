@@ -47,7 +47,6 @@ functionality for Linux IaaS deployments:
 
 * Kernel
   * Configure virtual NUMA (disable for kernel <2.6.37)
-  * Consume Hyper-V entropy for /dev/random
   * Configure SCSI timeouts for the root device (which could be remote)
 
 * Diagnostics
