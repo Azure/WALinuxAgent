@@ -31,7 +31,7 @@ MetricValue = namedtuple('Metric', ['category', 'counter', 'instance', 'value'])
 
 class MetricsCategory(object):
     MEMORY_CATEGORY = "Memory"
-    PROCESS_CATEGORY = "Process"
+    CPU_CATEGORY = "CPU"
 
 
 class MetricsCounter(object):
@@ -236,7 +236,7 @@ class CpuCgroup(CGroup):
 
     def get_tracked_metrics(self):
         return [
-            MetricValue(MetricsCategory.PROCESS_CATEGORY, MetricsCounter.PROCESSOR_PERCENT_TIME, self.name, self.get_cpu_usage()),
+            MetricValue(MetricsCategory.CPU_CATEGORY, MetricsCounter.PROCESSOR_PERCENT_TIME, self.name, self.get_cpu_usage()),
         ]
 
 
