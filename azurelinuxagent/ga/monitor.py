@@ -17,11 +17,11 @@
 
 import datetime
 import threading
-import time
 import uuid
 
 import azurelinuxagent.common.logger as logger
 import azurelinuxagent.common.utils.networkutil as networkutil
+from azurelinuxagent.common.cgroupconfigurator import CGroupConfigurator
 from azurelinuxagent.common.cgroupstelemetry import CGroupsTelemetry
 from azurelinuxagent.common.errorstate import ErrorState
 from azurelinuxagent.common.event import add_event, WALAEventOperation, report_metric, collect_events
@@ -36,38 +36,130 @@ from azurelinuxagent.common.version import AGENT_NAME, CURRENT_VERSION
 from azurelinuxagent.ga.periodic_operation import PeriodicOperation
 
 
-def generate_extension_metrics_telemetry_dictionary(schema_version=1.0,
-                                                    performance_metrics=None):
-    if schema_version == 1.0:
-        telemetry_dict = {"SchemaVersion": 1.0}
-        if performance_metrics:
-            telemetry_dict["PerfMetrics"] = performance_metrics
-        return telemetry_dict
-    else:
-        return None
-
-
 def get_monitor_handler():
     return MonitorHandler()
+
+
+class PollResourceUsageOperation(PeriodicOperation):
+    """
+    Periodic operation to poll the tracked cgroups for resource usage data.
+
+    It also checks whether there are processes in the agent's cgroup that should not be there.
+    """
+    def __init__(self):
+        super(PollResourceUsageOperation, self).__init__(
+            name="poll resource usage",
+            operation=self._operation_impl,
+            period=datetime.timedelta(minutes=5))
+        self._last_error = None
+        self._error_count = 0
+
+    def _operation_impl(self):
+        #
+        # Check the processes in the agent cgroup
+        #
+        processes = CGroupConfigurator.get_instance().get_processes_in_agent_cgroup()
+
+        if processes is not None:
+            unexpected_processes = []
+
+            for (_, command_line) in processes:
+                if not CGroupConfigurator.is_agent_process(command_line):
+                    unexpected_processes.append(command_line)
+
+            # Report a small sample of unexpected processes
+            if len(unexpected_processes) > 0 and self._error_count < 5:
+                unexpected_processes.sort()
+                error = ustr(unexpected_processes)
+                if error != self._last_error:
+                    self._error_count += 1
+                    self._last_error = error
+                    message = "The agent's cgroup includes unexpected processes: {0}".format(error)
+                    logger.info(message)
+                    add_event(op=WALAEventOperation.CGroupsDebug, message=message)
+
+        #
+        # Report metrics
+        #
+        metrics = CGroupsTelemetry.poll_all_tracked()
+
+        for metric in metrics:
+            report_metric(metric.category, metric.counter, metric.instance, metric.value)
+
+
+class ResetPeriodicLogMessagesOperation(PeriodicOperation):
+    """
+    Periodic operation to clean up the hash-tables maintained by the loggers. For reference, please check
+    azurelinuxagent.common.logger.Logger and azurelinuxagent.common.event.EventLogger classes
+    """
+    def __init__(self):
+        super(ResetPeriodicLogMessagesOperation, self).__init__(
+            name="reset periodic log messages",
+            operation=ResetPeriodicLogMessagesOperation._operation_impl,
+            period=datetime.timedelta(hours=12))
+
+    @staticmethod
+    def _operation_impl():
+        logger.reset_periodic()
+
+
+class ReportNetworkErrorsOperation(PeriodicOperation):
+    def __init__(self):
+        super(ReportNetworkErrorsOperation, self).__init__(
+            name="report network errors",
+            operation=ReportNetworkErrorsOperation._operation_impl,
+            period=datetime.timedelta(minutes=30))
+
+    @staticmethod
+    def _operation_impl():
+        io_errors = IOErrorCounter.get_and_reset()
+        hostplugin_errors = io_errors.get("hostplugin")
+        protocol_errors = io_errors.get("protocol")
+        other_errors = io_errors.get("other")
+
+        if hostplugin_errors > 0 or protocol_errors > 0 or other_errors > 0:
+            msg = "hostplugin:{0};protocol:{1};other:{2}".format(hostplugin_errors, protocol_errors, other_errors)
+            add_event(op=WALAEventOperation.HttpErrors, message=msg)
+
+
+class ReportNetworkConfigurationChangesOperation(PeriodicOperation):
+    """
+    Periodic operation to check and log changes in network configuration.
+    """
+
+    def __init__(self):
+        super(ReportNetworkConfigurationChangesOperation, self).__init__(
+            name="report network configuration changes",
+            operation=self._operation_impl,
+            period=datetime.timedelta(minutes=1))
+        self.osutil = get_osutil()
+        self.last_route_table_hash = b''
+        self.last_nic_state = {}
+
+    def _operation_impl(self):
+        raw_route_list = self.osutil.read_route_table()
+        digest = hash_strings(raw_route_list)
+        if digest != self.last_route_table_hash:
+            self.last_route_table_hash = digest
+            route_list = self.osutil.get_list_of_routes(raw_route_list)
+            logger.info("Route table: [{0}]".format(",".join(map(networkutil.RouteEntry.to_json, route_list))))
+
+        nic_state = self.osutil.get_nic_state()
+        if nic_state != self.last_nic_state:
+            description = "Initial" if self.last_nic_state == {} else "Updated"
+            logger.info("{0} NIC state: [{1}]".format(description, ", ".join(map(str, nic_state.values()))))
+            self.last_nic_state = nic_state
 
 
 class MonitorHandler(object):
     # telemetry
     EVENT_COLLECTION_PERIOD = datetime.timedelta(minutes=1)
-    # host health
-    TELEMETRY_HEARTBEAT_PERIOD = datetime.timedelta(minutes=30)
-    # cgroup data period
-    CGROUP_TELEMETRY_POLLING_PERIOD = datetime.timedelta(minutes=5)
     # host plugin
     HOST_PLUGIN_HEARTBEAT_PERIOD = datetime.timedelta(minutes=1)
     HOST_PLUGIN_HEALTH_PERIOD = datetime.timedelta(minutes=5)
     # imds
     IMDS_HEARTBEAT_PERIOD = datetime.timedelta(minutes=1)
     IMDS_HEALTH_PERIOD = datetime.timedelta(minutes=3)
-    # log network configuration
-    LOG_NETWORK_CONFIGURATION_PERIOD = datetime.timedelta(minutes=1)
-    # Resetting loggers period
-    RESET_LOGGERS_PERIOD = datetime.timedelta(hours=12)
 
     def __init__(self):
         self.osutil = get_osutil()
@@ -75,19 +167,17 @@ class MonitorHandler(object):
 
         self.event_thread = None
         self._periodic_operations = [
-            PeriodicOperation("reset_loggers", self.reset_loggers, self.RESET_LOGGERS_PERIOD),
+            ResetPeriodicLogMessagesOperation(),
             PeriodicOperation("collect_and_send_events", self.collect_and_send_events, self.EVENT_COLLECTION_PERIOD),
-            PeriodicOperation("send_telemetry_heartbeat", self.send_telemetry_heartbeat, self.TELEMETRY_HEARTBEAT_PERIOD),
-            PeriodicOperation("poll_telemetry_metrics usage", self.poll_telemetry_metrics, self.CGROUP_TELEMETRY_POLLING_PERIOD),
+            ReportNetworkErrorsOperation(),
+            PollResourceUsageOperation(),
             PeriodicOperation("send_host_plugin_heartbeat", self.send_host_plugin_heartbeat, self.HOST_PLUGIN_HEARTBEAT_PERIOD),
             PeriodicOperation("send_imds_heartbeat", self.send_imds_heartbeat, self.IMDS_HEARTBEAT_PERIOD),
-            PeriodicOperation("log_altered_network_configuration", self.log_altered_network_configuration, self.LOG_NETWORK_CONFIGURATION_PERIOD),
+            ReportNetworkConfigurationChangesOperation(),
         ]
         self.protocol = None
         self.protocol_util = None
         self.health_service = None
-        self.last_route_table_hash = b''
-        self.last_nic_state = {}
 
         self.should_run = True
         self.heartbeat_id = str(uuid.uuid4()).upper()
@@ -129,15 +219,6 @@ class MonitorHandler(object):
         self.event_thread.setName("MonitorHandler")
         self.event_thread.start()
 
-    def collect_and_send_events(self):
-        """
-        Periodically send any events located in the events folder
-        """
-        event_list = collect_events()
-
-        if len(event_list.events) > 0:
-            self.protocol.report_event(event_list)
-
     def daemon(self, init_data=False):
         try:
             if init_data:
@@ -158,13 +239,14 @@ class MonitorHandler(object):
         except Exception as e:
             logger.error("An error occurred in the monitor thread; will exit the thread.\n{0}", ustr(e))
 
-    def reset_loggers(self):
+    def collect_and_send_events(self):
         """
-        The loggers maintain hash-tables in memory and they need to be cleaned up from time to time.
-        For reference, please check azurelinuxagent.common.logger.Logger and
-        azurelinuxagent.common.event.EventLogger classes
+        Periodically send any events located in the events folder
         """
-        logger.reset_periodic()
+        event_list = collect_events()
+
+        if len(event_list.events) > 0:
+            self.protocol.report_event(event_list)
 
     def send_imds_heartbeat(self):
         """
@@ -233,47 +315,3 @@ class MonitorHandler(object):
                 message=msg,
                 log_event=False)
 
-    def send_telemetry_heartbeat(self):
-        io_errors = IOErrorCounter.get_and_reset()
-        hostplugin_errors = io_errors.get("hostplugin")
-        protocol_errors = io_errors.get("protocol")
-        other_errors = io_errors.get("other")
-
-        if hostplugin_errors > 0 or protocol_errors > 0 or other_errors > 0:
-            msg = "hostplugin:{0};protocol:{1};other:{2}".format(hostplugin_errors, protocol_errors,
-                                                                 other_errors)
-            add_event(
-                name=AGENT_NAME,
-                version=CURRENT_VERSION,
-                op=WALAEventOperation.HttpErrors,
-                is_success=True,
-                message=msg,
-                log_event=False)
-
-    def poll_telemetry_metrics(self):
-        """
-        This method polls the tracked cgroups to get data from the cgroups filesystem and send it to the performance counters database.
-
-        :return: List of Metrics (which would be sent to PerfCounterMetrics directly.
-        """
-        metrics = CGroupsTelemetry.poll_all_tracked()
-
-        for metric in metrics:
-            report_metric(metric.category, metric.counter, metric.instance, metric.value)
-
-    def log_altered_network_configuration(self):
-        """
-        Check various pieces of network configuration and, if altered since the last check, log the new state.
-        """
-        raw_route_list = self.osutil.read_route_table()
-        digest = hash_strings(raw_route_list)
-        if digest != self.last_route_table_hash:
-            self.last_route_table_hash = digest
-            route_list = self.osutil.get_list_of_routes(raw_route_list)
-            logger.info("Route table: [{0}]".format(",".join(map(networkutil.RouteEntry.to_json, route_list))))
-
-        nic_state = self.osutil.get_nic_state()
-        if nic_state != self.last_nic_state:
-            description = "Initial" if self.last_nic_state == {} else "Updated"
-            logger.info("{0} NIC state: [{1}]".format(description, ", ".join(map(str, nic_state.values()))))
-            self.last_nic_state = nic_state

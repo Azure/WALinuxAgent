@@ -349,7 +349,7 @@ class TestRemoteAccessHandler(AgentTestCase):
         for user in remote_access.user_list.users:
             count += 1
             user.name = "tstuser{0}".format(count)
-            if count is 2:
+            if count == 2:
                 user.name = ""
             expiration_date = datetime.utcnow() + timedelta(days=count)
             user.expiration = expiration_date.strftime("%a, %d %b %Y %H:%M:%S ") + "UTC"
