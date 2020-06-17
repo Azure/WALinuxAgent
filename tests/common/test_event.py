@@ -551,6 +551,17 @@ class TestEvent(HttpRequestPredicates, AgentTestCase):
                 'Context3': '',
                 'ExtensionType': ''})
 
+    def test_add_log_event_should_always_create_events_when_forced(self):
+        self._test_create_event_function_should_create_events_that_have_all_the_parameters_in_the_telemetry_schema(
+            create_event_function=lambda: add_log_event(logger.LogLevel.WARNING, 'A test WARNING log event', forced=True),
+            expected_parameters={
+                'EventName': 'Log',
+                'CapabilityUsed': 'WARNING',
+                'Context1': 'A test WARNING log event',
+                'Context2': '',
+                'Context3': '',
+                'ExtensionType': ''})
+
     def test_report_metric_should_create_events_that_have_all_the_parameters_in_the_telemetry_schema(self):
         self._test_create_event_function_should_create_events_that_have_all_the_parameters_in_the_telemetry_schema(
             create_event_function=lambda: report_metric("cpu", "%idle", "total", 12.34),
