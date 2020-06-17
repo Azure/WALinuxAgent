@@ -208,6 +208,7 @@ class TestEventMonitoring(AgentTestCase, HttpRequestPredicates):
         data = get_properties(event)
         return json.dumps(data)
 
+    @patch("azurelinuxagent.common.event.TELEMETRY_EVENT_PROVIDER_ID", "XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX")
     @patch("azurelinuxagent.common.protocol.wire.WireClient.send_event")
     @patch("azurelinuxagent.common.conf.get_lib_dir")
     def test_collect_and_send_events(self, mock_lib_dir, patch_send_event, *_):
@@ -256,7 +257,6 @@ class TestEventMonitoring(AgentTestCase, HttpRequestPredicates):
                              '<Param Name="ExecutionMode" Value="IAAS" T="mt:wstr" />' \
                              '<Param Name="RAM" Value="{7}" T="mt:uint64" />' \
                              '<Param Name="Processors" Value="{8}" T="mt:uint64" />' \
-                             '<Param Name="VMName" Value="MachineRole_IN_0" T="mt:wstr" />' \
                              '<Param Name="TenantName" Value="db00a7755a5e4e8a8fe4b19bc3b330c3" T="mt:wstr" />' \
                              '<Param Name="RoleName" Value="MachineRole" T="mt:wstr" />' \
                              '<Param Name="RoleInstanceName" Value="MachineRole_IN_0" T="mt:wstr" />' \

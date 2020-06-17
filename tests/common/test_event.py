@@ -28,7 +28,8 @@ import azurelinuxagent.common.utils.textutil as textutil
 from azurelinuxagent.common import event, logger
 from azurelinuxagent.common.AgentGlobals import AgentGlobals
 from azurelinuxagent.common.event import add_event, add_periodic, add_log_event, elapsed_milliseconds, report_metric, \
-    WALAEventOperation, parse_xml_event, parse_json_event, AGENT_EVENT_FILE_EXTENSION, EVENTS_DIRECTORY
+    WALAEventOperation, parse_xml_event, parse_json_event, AGENT_EVENT_FILE_EXTENSION, EVENTS_DIRECTORY, \
+    TELEMETRY_EVENT_EVENT_ID, TELEMETRY_EVENT_PROVIDER_ID
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.telemetryevent import CommonTelemetryEventSchema, GuestAgentGenericLogsSchema, \
     GuestAgentExtensionEventsSchema
@@ -58,14 +59,12 @@ class TestEvent(HttpRequestPredicates, AgentTestCase):
             CommonTelemetryEventSchema.EventPid: os.getpid(),
             CommonTelemetryEventSchema.TaskName: threading.current_thread().getName(),
             CommonTelemetryEventSchema.KeywordName: '',
-            GuestAgentExtensionEventsSchema.IsInternal: False,
             # common parameters computed from the OS platform
             CommonTelemetryEventSchema.OSVersion: EventLoggerTools.get_expected_os_version(),
             CommonTelemetryEventSchema.ExecutionMode: AGENT_EXECUTION_MODE,
             CommonTelemetryEventSchema.RAM: int(osutil.get_total_mem()),
             CommonTelemetryEventSchema.Processors: osutil.get_processor_cores(),
             # common parameters from the goal state
-            "VMName": 'MachineRole_IN_0',
             CommonTelemetryEventSchema.TenantName: 'db00a7755a5e4e8a8fe4b19bc3b330c3',
             CommonTelemetryEventSchema.RoleName: 'MachineRole',
             CommonTelemetryEventSchema.RoleInstanceName: 'MachineRole_IN_0',
@@ -76,6 +75,16 @@ class TestEvent(HttpRequestPredicates, AgentTestCase):
             CommonTelemetryEventSchema.VMId: EventLoggerTools.mock_imds_data['vmId'],
             CommonTelemetryEventSchema.ImageOrigin: EventLoggerTools.mock_imds_data['image_origin'],
         }
+
+        self.expected_extension_events_params = {
+            GuestAgentExtensionEventsSchema.IsInternal: False,
+            GuestAgentExtensionEventsSchema.ExtensionType: ""
+        }
+
+    @staticmethod
+    def _is_guest_extension_event(event):
+        return event.eventId in (None, TELEMETRY_EVENT_EVENT_ID) and \
+               event.providerId in (None, TELEMETRY_EVENT_PROVIDER_ID)
 
     def test_parse_xml_event(self, *args):
         data_str = load_data('ext/event_from_extension.xml')
@@ -458,7 +467,11 @@ class TestEvent(HttpRequestPredicates, AgentTestCase):
     def _assert_event_includes_all_parameters_in_the_telemetry_schema(self, actual_event, expected_parameters, assert_timestamp):
         # add the common parameters to the set of expected parameters
         all_expected_parameters = self.expected_common_parameters.copy()
+        if self._is_guest_extension_event(actual_event):
+            all_expected_parameters.update(self.expected_extension_events_params.copy())
         all_expected_parameters.update(expected_parameters)
+
+
 
         # convert the event parameters to a dictionary; do not include the timestamp,
         # which is verified using assert_timestamp()
@@ -560,8 +573,8 @@ class TestEvent(HttpRequestPredicates, AgentTestCase):
                 'Category': 'cpu',
                 'Counter': '%idle',
                 'Instance': 'total',
-                'Value': 12.34,
-                'ExtensionType': ''})
+                'Value': 12.34
+            })
 
     def _create_test_event_file(self, source_file):
         source_file_path = os.path.join(data_dir, "events", source_file)
