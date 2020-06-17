@@ -20,17 +20,49 @@
 from azurelinuxagent.common.datacontract import DataContract, DataContractList
 from azurelinuxagent.common.version import AGENT_NAME
 
-class TelemetryEventSchemaKeyNames(object):
-    EventName = "EventName"
-    CapabilityUsed = "CapabilityUsed"
-    Context1 = "Context1"
-    Context2 = "Context2"
-    Context3 = "Context3"
+class CommonTelemetryEventSchema(object):
+
+    # Common schema keys for both tables
     EventPid = "EventPid"
     EventTid = "EventTid"
     GAVersion = "GAVersion"
     ContainerId = "ContainerId"
     TaskName = "TaskName"
+    OpcodeName = "OpcodeName"
+    KeywordName = "KeywordName"
+    OSVersion = "OSVersion"
+    ExecutionMode = "ExecutionMode"
+    RAM = "RAM"
+    Processors = "Processors"
+    TenantName = "TenantName"
+    RoleName = "RoleName"
+    RoleInstanceName = "RoleInstanceName"
+    Location = "Location"
+    SubscriptionId = "SubscriptionId"
+    ResourceGroupName = "ResourceGroupName"
+    VMId = "VMId"
+    ImageOrigin = "ImageOrigin"
+
+class GuestAgentGenericLogsSchema(CommonTelemetryEventSchema):
+
+    # GuestAgentGenericLogs table specific schema keys
+    EventName = "EventName"
+    CapabilityUsed = "CapabilityUsed"
+    Context1 = "Context1"
+    Context2 = "Context2"
+    Context3 = "Context3"
+
+class GuestAgentExtensionEventsSchema(CommonTelemetryEventSchema):
+
+    # GuestAgentExtensionEvents table specific schema keys
+    ExtensionType = "ExtensionType"
+    IsInternal = "IsInternal"
+    Name = "Name"
+    Version = "Version"
+    Operation = "Operation"
+    OperationSuccess = "OperationSuccess"
+    Message = "Message"
+    Duration = "Duration"
 
 class TelemetryEventParam(DataContract):
     def __init__(self, name=None, value=None):

@@ -30,6 +30,8 @@ from azurelinuxagent.common.AgentGlobals import AgentGlobals
 from azurelinuxagent.common.event import add_event, add_periodic, add_log_event, elapsed_milliseconds, report_metric, \
     WALAEventOperation, parse_xml_event, parse_json_event, AGENT_EVENT_FILE_EXTENSION, EVENTS_DIRECTORY
 from azurelinuxagent.common.future import ustr
+from azurelinuxagent.common.telemetryevent import CommonTelemetryEventSchema, GuestAgentGenericLogsSchema, \
+    GuestAgentExtensionEventsSchema
 from tests.protocol import mockwiredata
 from tests.protocol.mocks import mock_wire_protocol, HttpRequestPredicates, MockHttpResponse
 from azurelinuxagent.common.version import CURRENT_AGENT, CURRENT_VERSION, AGENT_EXECUTION_MODE
@@ -50,29 +52,29 @@ class TestEvent(HttpRequestPredicates, AgentTestCase):
         self.expected_common_parameters = {
             # common parameters computed at event creation; the timestamp (stored as the opcode name) is not included here and
             # is checked separately from these parameters
-            'GAVersion': CURRENT_AGENT,
-            'ContainerId': AgentGlobals.get_container_id(),
-            'EventTid': threading.current_thread().ident,
-            'EventPid': os.getpid(),
-            'TaskName': threading.current_thread().getName(),
-            'KeywordName': '',
-            'IsInternal': False,
+            CommonTelemetryEventSchema.GAVersion: CURRENT_AGENT,
+            CommonTelemetryEventSchema.ContainerId: AgentGlobals.get_container_id(),
+            CommonTelemetryEventSchema.EventTid: threading.current_thread().ident,
+            CommonTelemetryEventSchema.EventPid: os.getpid(),
+            CommonTelemetryEventSchema.TaskName: threading.current_thread().getName(),
+            CommonTelemetryEventSchema.KeywordName: '',
+            GuestAgentExtensionEventsSchema.IsInternal: False,
             # common parameters computed from the OS platform
-            'OSVersion': EventLoggerTools.get_expected_os_version(),
-            'ExecutionMode': AGENT_EXECUTION_MODE,
-            'RAM': int(osutil.get_total_mem()),
-            'Processors': osutil.get_processor_cores(),
+            CommonTelemetryEventSchema.OSVersion: EventLoggerTools.get_expected_os_version(),
+            CommonTelemetryEventSchema.ExecutionMode: AGENT_EXECUTION_MODE,
+            CommonTelemetryEventSchema.RAM: int(osutil.get_total_mem()),
+            CommonTelemetryEventSchema.Processors: osutil.get_processor_cores(),
             # common parameters from the goal state
-            'VMName': 'MachineRole_IN_0',
-            'TenantName': 'db00a7755a5e4e8a8fe4b19bc3b330c3',
-            'RoleName': 'MachineRole',
-            'RoleInstanceName': 'MachineRole_IN_0',
+            "VMName": 'MachineRole_IN_0',
+            CommonTelemetryEventSchema.TenantName: 'db00a7755a5e4e8a8fe4b19bc3b330c3',
+            CommonTelemetryEventSchema.RoleName: 'MachineRole',
+            CommonTelemetryEventSchema.RoleInstanceName: 'MachineRole_IN_0',
             # common parameters
-            'Location': EventLoggerTools.mock_imds_data['location'],
-            'SubscriptionId': EventLoggerTools.mock_imds_data['subscriptionId'],
-            'ResourceGroupName': EventLoggerTools.mock_imds_data['resourceGroupName'],
-            'VMId': EventLoggerTools.mock_imds_data['vmId'],
-            'ImageOrigin': EventLoggerTools.mock_imds_data['image_origin'],
+            CommonTelemetryEventSchema.Location: EventLoggerTools.mock_imds_data['location'],
+            CommonTelemetryEventSchema.SubscriptionId: EventLoggerTools.mock_imds_data['subscriptionId'],
+            CommonTelemetryEventSchema.ResourceGroupName: EventLoggerTools.mock_imds_data['resourceGroupName'],
+            CommonTelemetryEventSchema.VMId: EventLoggerTools.mock_imds_data['vmId'],
+            CommonTelemetryEventSchema.ImageOrigin: EventLoggerTools.mock_imds_data['image_origin'],
         }
 
     def test_parse_xml_event(self, *args):
@@ -96,7 +98,7 @@ class TestEvent(HttpRequestPredicates, AgentTestCase):
             self.assertEquals(len(event_list.events), 1, "Could not find the event created by add_event")
 
             for p in event_list.events[0].parameters:
-                if p.name == 'ContainerId':
+                if p.name == CommonTelemetryEventSchema.ContainerId:
                     return p.value
 
             self.fail("Could not find Contained ID on event")
@@ -348,7 +350,7 @@ class TestEvent(HttpRequestPredicates, AgentTestCase):
     @staticmethod
     def _get_event_message(evt):
         for p in evt.parameters:
-            if p.name == 'Message':
+            if p.name == GuestAgentExtensionEventsSchema.Message:
                 return p.value
         return None
 
@@ -463,7 +465,7 @@ class TestEvent(HttpRequestPredicates, AgentTestCase):
         event_parameters = {}
         timestamp = None
         for p in actual_event.parameters:
-            if p.name == 'OpcodeName':  # the timestamp is stored in the opcode name
+            if p.name == CommonTelemetryEventSchema.OpcodeName:  # the timestamp is stored in the opcode name
                 timestamp = p.value
             else:
                 event_parameters[p.name] = p.value
@@ -511,13 +513,13 @@ class TestEvent(HttpRequestPredicates, AgentTestCase):
                     version="1.2.3.4",
                     message="Test Message"),
             expected_parameters={
-                'Name': 'TestEvent',
-                'Version': '1.2.3.4',
-                'Operation': 'AgentEnabled',
-                'OperationSuccess': True,
-                'Message': 'Test Message',
-                'Duration': 1234,
-                'ExtensionType': ''})
+                GuestAgentExtensionEventsSchema.Name: 'TestEvent',
+                GuestAgentExtensionEventsSchema.Version: '1.2.3.4',
+                GuestAgentExtensionEventsSchema.Operation: 'AgentEnabled',
+                GuestAgentExtensionEventsSchema.OperationSuccess: True,
+                GuestAgentExtensionEventsSchema.Message: 'Test Message',
+                GuestAgentExtensionEventsSchema.Duration: 1234,
+                GuestAgentExtensionEventsSchema.ExtensionType: ''})
 
     def test_add_periodic_should_create_events_that_have_all_the_parameters_in_the_telemetry_schema(self):
         self._test_create_event_function_should_create_events_that_have_all_the_parameters_in_the_telemetry_schema(
@@ -531,25 +533,25 @@ class TestEvent(HttpRequestPredicates, AgentTestCase):
                     version="4.3.2.1",
                     message="Test Periodic Message"),
             expected_parameters={
-                'Name': 'TestPeriodicEvent',
-                'Version': '4.3.2.1',
-                'Operation': 'HostPlugin',
-                'OperationSuccess': False,
-                'Message': 'Test Periodic Message',
-                'Duration': 4321,
-                'ExtensionType': ''})
+                GuestAgentExtensionEventsSchema.Name: 'TestPeriodicEvent',
+                GuestAgentExtensionEventsSchema.Version: '4.3.2.1',
+                GuestAgentExtensionEventsSchema.Operation: 'HostPlugin',
+                GuestAgentExtensionEventsSchema.OperationSuccess: False,
+                GuestAgentExtensionEventsSchema.Message: 'Test Periodic Message',
+                GuestAgentExtensionEventsSchema.Duration: 4321,
+                GuestAgentExtensionEventsSchema.ExtensionType: ''})
 
     @skip_if_predicate_true(lambda: True, "Enable this test when SEND_LOGS_TO_TELEMETRY is enabled")
     def test_add_log_event_should_create_events_that_have_all_the_parameters_in_the_telemetry_schema(self):
         self._test_create_event_function_should_create_events_that_have_all_the_parameters_in_the_telemetry_schema(
             create_event_function=lambda: add_log_event(logger.LogLevel.INFO, 'A test INFO log event'),
             expected_parameters={
-                'EventName': 'Log',
-                'CapabilityUsed': 'INFO',
-                'Context1': 'A test INFO log event',
-                'Context2': '',
-                'Context3': '',
-                'ExtensionType': ''})
+                GuestAgentGenericLogsSchema.EventName: 'Log',
+                GuestAgentGenericLogsSchema.CapabilityUsed: 'INFO',
+                GuestAgentGenericLogsSchema.Context1: 'A test INFO log event',
+                GuestAgentGenericLogsSchema.Context2: '',
+                GuestAgentGenericLogsSchema.Context3: '',
+                GuestAgentExtensionEventsSchema.ExtensionType: ''})
 
     def test_report_metric_should_create_events_that_have_all_the_parameters_in_the_telemetry_schema(self):
         self._test_create_event_function_should_create_events_that_have_all_the_parameters_in_the_telemetry_schema(
@@ -583,20 +585,20 @@ class TestEvent(HttpRequestPredicates, AgentTestCase):
         self._assert_event_includes_all_parameters_in_the_telemetry_schema(
             event_list.events[0],
             expected_parameters={
-                "Name": "WALinuxAgent",
-                "Version": "9.9.9",
-                "IsInternal": False,
-                "Operation": "InitializeCGroups",
-                "OperationSuccess": True,
-                "Message": "The cgroup filesystem is ready to use",
-                "Duration": 1234,
-                "ExtensionType": "ALegacyExtensionType",
-                "GAVersion": "WALinuxAgent-1.1.1",
-                "ContainerId": "AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE",
-                "EventTid": 98765,
-                "EventPid": 4321,
-                "TaskName": "ALegacyTask",
-                "KeywordName": "ALegacyKeywordName"},
+                GuestAgentExtensionEventsSchema.Name: "WALinuxAgent",
+                GuestAgentExtensionEventsSchema.Version: "9.9.9",
+                GuestAgentExtensionEventsSchema.IsInternal: False,
+                GuestAgentExtensionEventsSchema.Operation: "InitializeCGroups",
+                GuestAgentExtensionEventsSchema.OperationSuccess: True,
+                GuestAgentExtensionEventsSchema.Message: "The cgroup filesystem is ready to use",
+                GuestAgentExtensionEventsSchema.Duration: 1234,
+                GuestAgentExtensionEventsSchema.ExtensionType: "ALegacyExtensionType",
+                CommonTelemetryEventSchema.GAVersion: "WALinuxAgent-1.1.1",
+                CommonTelemetryEventSchema.ContainerId: "AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE",
+                CommonTelemetryEventSchema.EventTid: 98765,
+                CommonTelemetryEventSchema.EventPid: 4321,
+                CommonTelemetryEventSchema.TaskName: "ALegacyTask",
+                CommonTelemetryEventSchema.KeywordName: "ALegacyKeywordName"},
             assert_timestamp=lambda timestamp:
                 self.assertEquals(timestamp, '1970-01-01 12:00:00', "The event timestamp (opcode) is incorrect")
         )
@@ -613,20 +615,20 @@ class TestEvent(HttpRequestPredicates, AgentTestCase):
         self._assert_event_includes_all_parameters_in_the_telemetry_schema(
             event_list.events[0],
             expected_parameters={
-                "Name": "WALinuxAgent",
-                "Version": "9.9.9",
-                "IsInternal": False,
-                "Operation": "InitializeCGroups",
-                "OperationSuccess": True,
-                "Message": "The cgroup filesystem is ready to use",
-                "Duration": 1234,
-                "ExtensionType": "ALegacyExtensionType",
-                "GAVersion": "WALinuxAgent-1.1.1",
-                "ContainerId": "AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE",
-                "EventTid": 98765,
-                "EventPid": 4321,
-                "TaskName": "ALegacyTask",
-                "KeywordName": "ALegacyKeywordName"},
+                GuestAgentExtensionEventsSchema.Name: "WALinuxAgent",
+                GuestAgentExtensionEventsSchema.Version: "9.9.9",
+                GuestAgentExtensionEventsSchema.IsInternal: False,
+                GuestAgentExtensionEventsSchema.Operation: "InitializeCGroups",
+                GuestAgentExtensionEventsSchema.OperationSuccess: True,
+                GuestAgentExtensionEventsSchema.Message: "The cgroup filesystem is ready to use",
+                GuestAgentExtensionEventsSchema.Duration: 1234,
+                GuestAgentExtensionEventsSchema.ExtensionType: "ALegacyExtensionType",
+                CommonTelemetryEventSchema.GAVersion: "WALinuxAgent-1.1.1",
+                CommonTelemetryEventSchema.ContainerId: "AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE",
+                CommonTelemetryEventSchema.EventTid: 98765,
+                CommonTelemetryEventSchema.EventPid: 4321,
+                CommonTelemetryEventSchema.TaskName: "ALegacyTask",
+                CommonTelemetryEventSchema.KeywordName: "ALegacyKeywordName"},
             assert_timestamp=lambda timestamp:
                 self.assertEquals(timestamp, event_creation_time, "The event timestamp (opcode) is incorrect")
         )
@@ -645,13 +647,13 @@ class TestEvent(HttpRequestPredicates, AgentTestCase):
         self._assert_event_includes_all_parameters_in_the_telemetry_schema(
             event_list.events[0],
             expected_parameters={
-                'Name': 'Microsoft.Azure.Extensions.CustomScript',
-                'Version': '2.0.4',
-                'Operation': 'Scenario',
-                'OperationSuccess': True,
-                'Message': 'A test telemetry message.',
-                'Duration': 150000,
-                'ExtensionType': 'json'},
+                GuestAgentExtensionEventsSchema.Name: 'Microsoft.Azure.Extensions.CustomScript',
+                GuestAgentExtensionEventsSchema.Version: '2.0.4',
+                GuestAgentExtensionEventsSchema.Operation: 'Scenario',
+                GuestAgentExtensionEventsSchema.OperationSuccess: True,
+                GuestAgentExtensionEventsSchema.Message: 'A test telemetry message.',
+                GuestAgentExtensionEventsSchema.Duration: 150000,
+                GuestAgentExtensionEventsSchema.ExtensionType: 'json'},
             assert_timestamp=lambda timestamp:
                 self.assertEquals(timestamp, event_creation_time, "The event timestamp (opcode) is incorrect")
             )
@@ -674,7 +676,7 @@ class TestEvent(HttpRequestPredicates, AgentTestCase):
             telemetry_event = json.loads(event_data)
 
             for p in telemetry_event['parameters']:
-                if p['name'] == 'Message':
+                if p['name'] == GuestAgentExtensionEventsSchema.Message:
                     return p['value']
 
             raise ValueError('Could not find the Message for the telemetry event in {0}'.format(path))
@@ -703,7 +705,7 @@ class TestEvent(HttpRequestPredicates, AgentTestCase):
             helper_node = textutil.find(event_xml_doc, "Helper")
 
             for child in helper_node.childNodes:
-                if child.getAttribute('Name') == 'Message':
+                if child.getAttribute('Name') == GuestAgentExtensionEventsSchema.Message:
                     return child.getAttribute('Value')
 
             raise ValueError('Could not find the Message for the telemetry event. Request body: {0}'.format(http_request_body))

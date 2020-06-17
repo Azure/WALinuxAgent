@@ -32,7 +32,8 @@ from azurelinuxagent.common.protocol.hostplugin import HostPluginProtocol
 from azurelinuxagent.common.protocol.restapi import VMAgentManifestUri
 from azurelinuxagent.common.protocol.wire import WireProtocol, WireClient, \
     InVMArtifactsProfile, StatusBlob, VMStatus
-from azurelinuxagent.common.telemetryevent import TelemetryEvent, TelemetryEventParam, TelemetryEventList
+from azurelinuxagent.common.telemetryevent import TelemetryEventList, GuestAgentExtensionEventsSchema, \
+    TelemetryEventParam, TelemetryEvent
 from azurelinuxagent.common.utils import restutil
 from azurelinuxagent.common.version import CURRENT_VERSION, DISTRO_NAME, DISTRO_VERSION
 from tests.ga.test_monitor import random_generator
@@ -51,14 +52,14 @@ WIRESERVER_URL = '168.63.129.16'
 def get_event(message, duration=30000, evt_type="", is_internal=False, is_success=True,
               name="", op="Unknown", version=CURRENT_VERSION, eventId=1):
     event = TelemetryEvent(eventId, "XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX")
-    event.parameters.append(TelemetryEventParam('Name', name))
-    event.parameters.append(TelemetryEventParam('Version', str(version)))
-    event.parameters.append(TelemetryEventParam('IsInternal', is_internal))
-    event.parameters.append(TelemetryEventParam('Operation', op))
-    event.parameters.append(TelemetryEventParam('OperationSuccess', is_success))
-    event.parameters.append(TelemetryEventParam('Message', message))
-    event.parameters.append(TelemetryEventParam('Duration', duration))
-    event.parameters.append(TelemetryEventParam('ExtensionType', evt_type))
+    event.parameters.append(TelemetryEventParam(GuestAgentExtensionEventsSchema.Name, name))
+    event.parameters.append(TelemetryEventParam(GuestAgentExtensionEventsSchema.Version, str(version)))
+    event.parameters.append(TelemetryEventParam(GuestAgentExtensionEventsSchema.IsInternal, is_internal))
+    event.parameters.append(TelemetryEventParam(GuestAgentExtensionEventsSchema.Operation, op))
+    event.parameters.append(TelemetryEventParam(GuestAgentExtensionEventsSchema.OperationSuccess, is_success))
+    event.parameters.append(TelemetryEventParam(GuestAgentExtensionEventsSchema.Message, message))
+    event.parameters.append(TelemetryEventParam(GuestAgentExtensionEventsSchema.Duration, duration))
+    event.parameters.append(TelemetryEventParam(GuestAgentExtensionEventsSchema.ExtensionType, evt_type))
     return event
 
 
