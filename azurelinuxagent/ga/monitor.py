@@ -58,25 +58,30 @@ class PollResourceUsageOperation(PeriodicOperation):
         #
         # Check the processes in the agent cgroup
         #
-        processes = CGroupConfigurator.get_instance().get_processes_in_agent_cgroup()
+        processes_check_error = None
+        try:
+            processes = CGroupConfigurator.get_instance().get_processes_in_agent_cgroup()
 
-        if processes is not None:
-            unexpected_processes = []
+            if processes is not None:
+                unexpected_processes = []
 
-            for (_, command_line) in processes:
-                if not CGroupConfigurator.is_agent_process(command_line):
-                    unexpected_processes.append(command_line)
+                for (_, command_line) in processes:
+                    if not CGroupConfigurator.is_agent_process(command_line):
+                        unexpected_processes.append(command_line)
 
-            # Report a small sample of unexpected processes
-            if len(unexpected_processes) > 0 and self._error_count < 5:
-                unexpected_processes.sort()
-                error = ustr(unexpected_processes)
-                if error != self._last_error:
-                    self._error_count += 1
-                    self._last_error = error
-                    message = "The agent's cgroup includes unexpected processes: {0}".format(error)
-                    logger.info(message)
-                    add_event(op=WALAEventOperation.CGroupsDebug, message=message)
+                if len(unexpected_processes) > 0:
+                    unexpected_processes.sort()
+                    processes_check_error = ustr(unexpected_processes)
+        except Exception as e:
+            processes_check_error = ustr(e)
+
+        # Report a small sample of errors
+        if processes_check_error != self._last_error and self._error_count < 5:
+            self._error_count += 1
+            self._last_error = processes_check_error
+            message = "The agent's cgroup includes unexpected processes: {0}".format(processes_check_error)
+            logger.info(message)
+            add_event(op=WALAEventOperation.CGroupsDebug, message=message)
 
         #
         # Report metrics

@@ -526,7 +526,7 @@ class SystemdCgroupsApiTestCase(AgentTestCase):
 
     def test_get_processes_in_cgroup_should_return_the_processes_within_the_cgroup(self):
         with mock_cgroup_commands():
-            processes = SystemdCgroupsApi.get_processes_in_cgroup("walinuxagent.service")
+            processes = SystemdCgroupsApi.get_processes_in_cgroup("/sys/fs/cgroup/cpu/system.slice/walinuxagent.service")
 
             self.assertTrue(len(processes) >= 2,
                 "The cgroup should contain at least 2 procceses (daemon and extension handler): [{0}]".format(processes))
