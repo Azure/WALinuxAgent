@@ -618,7 +618,7 @@ class TestWireClient(HttpRequestPredicates, AgentTestCase):
             success = protocol.download_ext_handler_pkg(extension_url, target_file)
 
             urls = protocol.get_tracked_urls()
-            self.assertEquals(success, False, "The download should have failed")
+            self.assertFalse(success, "The download should have failed")
             self.assertEquals(len(urls), 2, "Unexpected number of HTTP requests: [{0}]".format(urls))
             self.assertEquals(urls[0], extension_url, "The first attempt should have been over the direct channel")
             self.assertTrue(self.is_host_plugin_extension_artifact_request(urls[1]),
@@ -1063,11 +1063,13 @@ class TestWireClient(HttpRequestPredicates, AgentTestCase):
             with patch("azurelinuxagent.common.protocol.wire.WireClient.update_host_plugin_from_goal_state") \
                     as mock_update_host_plugin_from_goal_state:
                 ret = protocol.client.send_request_using_appropriate_channel(direct_func, host_func)
-                self.assertEquals(None, ret)
-                self.assertEquals(1, direct_func.counter)
-                self.assertEquals(2, host_func.counter)
-                self.assertEquals(1, mock_update_host_plugin_from_goal_state.call_count)
-                self.assertEquals(False, protocol.client.get_host_plugin().is_default_channel())
+                self.assertIsNone(ret, "The host function should have returned None!")
+                self.assertEquals(1, direct_func.counter, "The direct function should have been called once!")
+                self.assertEquals(2, host_func.counter, "The host function should have been called twice!")
+                self.assertEquals(1, mock_update_host_plugin_from_goal_state.call_count,
+                                  "The goal state should have been refreshed and host plugin updated!")
+                self.assertFalse(protocol.client.get_host_plugin().is_default_channel(), "The host channel shouldn't "
+                                                                                         "have been set as default!")
 
 
 class UpdateGoalStateTestCase(AgentTestCase):
