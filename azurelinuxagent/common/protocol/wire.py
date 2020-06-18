@@ -163,6 +163,9 @@ class WireProtocol(DataContract):
 
         try:
             success = self.client.send_request_using_appropriate_channel(direct_func, host_func)
+
+            if not success:
+                logger.warn("Failed to download extension handler package from URI {0}".format(uri))
         except Exception:
             success = False
 
@@ -618,6 +621,8 @@ class WireClient(object):
                     host = self.get_host_plugin()
                     host.update_manifest_uri(version.uri)
                     return response
+                else:
+                    logger.warn("Failed to fetch manifest from URI {0}".format(version.uri))
             except Exception as e:
                 logger.warn("Exception when fetching manifest. Error: {0}".format(ustr(e)))
 
@@ -1201,6 +1206,8 @@ class WireClient(object):
                                  is_success=False,
                                  message=msg,
                                  log_event=False)
+            else:
+                logger.warn("Failed to retrieve artifacts profile from blob {0}".format(blob))
 
         return artifacts_profile
 
