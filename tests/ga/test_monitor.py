@@ -220,7 +220,7 @@ class TestEventMonitoring(AgentTestCase, HttpRequestPredicates):
             self._create_extension_event(message="Message-Test")
 
             test_mtime = 1000  # epoch time, in ms
-            test_opcodename = datetime.datetime.fromtimestamp(test_mtime).strftime(u'%Y-%m-%dT%H:%M:%S.%fZ')
+            test_opcodename = datetime.datetime.fromtimestamp(test_mtime).strftime(logger.Logger.LogTimeFormatInUTC)
             test_eventtid = 42
             test_eventpid = 24
             test_taskname = "TEST_TaskName"
