@@ -53,11 +53,10 @@ class CloudInitProvisionHandler(ProvisionHandler):
             self.protocol_util.get_protocol()
             self.report_not_ready("Provisioning", "Starting")
 
-            thumbprint = self.wait_for_ssh_host_key()
             self.write_provisioned()
             logger.info("Finished provisioning")
 
-            self.report_ready(thumbprint)
+            self.report_ready()
             self.report_event("Provisioning with cloud-init succeeded ({0}s)".format(self._get_uptime_seconds()),
                 is_success=True,
                 duration=elapsed_milliseconds(utc_start))
@@ -97,34 +96,6 @@ class CloudInitProvisionHandler(ProvisionHandler):
                     time.sleep(sleep_time)
         raise ProvisionError("Giving up, ovf-env.xml was not copied to {0} "
                              "after {1}s".format(ovf_file_path,
-                                                 max_retry * sleep_time))
-
-    def wait_for_ssh_host_key(self, max_retry=1800, sleep_time=1):
-        """
-        Wait for cloud-init to generate ssh host key
-        """
-        keypair_type = conf.get_ssh_host_keypair_type()
-        path = conf.get_ssh_key_public_path()
-        for retry in range(0, max_retry):
-            if os.path.isfile(path):
-                logger.info("ssh host key found at: {0}".format(path))
-                try:
-                    thumbprint = self.get_ssh_host_key_thumbprint(chk_err=False)
-                    logger.info("Thumbprint obtained from : {0}".format(path))
-                    return thumbprint
-                except ProvisionError:
-                    logger.warn("Could not get thumbprint from {0}".format(path))
-            if retry < max_retry - 1:
-                logger.info("Waiting for ssh host key be generated at {0} "
-                            "[{1} attempts remaining, "
-                            "sleeping {2}s]".format(path,
-                                                    max_retry - retry,
-                                                    sleep_time))
-                if not self.validate_cloud_init():
-                    logger.warn("cloud-init does not appear to be running")
-                time.sleep(sleep_time)
-        raise ProvisionError("Giving up, ssh host key was not found at {0} "
-                             "after {1}s".format(path,
                                                  max_retry * sleep_time))
 
 def _cloud_init_is_enabled_systemd():
