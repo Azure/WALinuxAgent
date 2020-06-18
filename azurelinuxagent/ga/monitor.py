@@ -71,17 +71,16 @@ class PollResourceUsageOperation(PeriodicOperation):
 
                 if len(unexpected_processes) > 0:
                     unexpected_processes.sort()
-                    processes_check_error = ustr(unexpected_processes)
+                    processes_check_error = "The agent's cgroup includes unexpected processes: {0}".format(ustr(unexpected_processes))
         except Exception as e:
-            processes_check_error = ustr(e)
+            processes_check_error = "Failed to check the processes in the agent's cgroup: {0}".format(ustr(e))
 
         # Report a small sample of errors
         if processes_check_error != self._last_error and self._error_count < 5:
             self._error_count += 1
             self._last_error = processes_check_error
-            message = "The agent's cgroup includes unexpected processes: {0}".format(processes_check_error)
-            logger.info(message)
-            add_event(op=WALAEventOperation.CGroupsDebug, message=message)
+            logger.info(processes_check_error)
+            add_event(op=WALAEventOperation.CGroupsDebug, message=processes_check_error)
 
         #
         # Report metrics
