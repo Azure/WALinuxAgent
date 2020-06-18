@@ -29,7 +29,7 @@ from azurelinuxagent.common import event, logger
 from azurelinuxagent.common.AgentGlobals import AgentGlobals
 from azurelinuxagent.common.event import add_event, add_periodic, add_log_event, elapsed_milliseconds, report_metric, \
     WALAEventOperation, parse_xml_event, parse_json_event, AGENT_EVENT_FILE_EXTENSION, EVENTS_DIRECTORY, \
-    TELEMETRY_EVENT_EVENT_ID, TELEMETRY_EVENT_PROVIDER_ID
+    TELEMETRY_EVENT_EVENT_ID, TELEMETRY_EVENT_PROVIDER_ID, TELEMETRY_LOG_EVENT_ID, TELEMETRY_LOG_PROVIDER_ID
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.telemetryevent import CommonTelemetryEventSchema, GuestAgentGenericLogsSchema, \
     GuestAgentExtensionEventsSchema
@@ -85,6 +85,10 @@ class TestEvent(HttpRequestPredicates, AgentTestCase):
     def _is_guest_extension_event(event):
         return event.eventId in (None, TELEMETRY_EVENT_EVENT_ID) and \
                event.providerId in (None, TELEMETRY_EVENT_PROVIDER_ID)
+
+    @staticmethod
+    def _is_telemetry_log_event(event):
+        return event.eventId == TELEMETRY_LOG_EVENT_ID and event.providerId == TELEMETRY_LOG_PROVIDER_ID
 
     def test_parse_xml_event(self, *args):
         data_str = load_data('ext/event_from_extension.xml')
@@ -471,8 +475,6 @@ class TestEvent(HttpRequestPredicates, AgentTestCase):
             all_expected_parameters.update(self.expected_extension_events_params.copy())
         all_expected_parameters.update(expected_parameters)
 
-
-
         # convert the event parameters to a dictionary; do not include the timestamp,
         # which is verified using assert_timestamp()
         event_parameters = {}
@@ -482,6 +484,12 @@ class TestEvent(HttpRequestPredicates, AgentTestCase):
                 timestamp = p.value
             else:
                 event_parameters[p.name] = p.value
+
+        if self._is_telemetry_log_event(actual_event):
+            # Remove Context2 from event parameters and verify that the timestamp is correct
+            telemetry_log_event_timestamp = event_parameters.pop(GuestAgentGenericLogsSchema.Context2, None)
+            self.assertIsNotNone(telemetry_log_event_timestamp, "Context2 should be filled with a timestamp")
+            assert_timestamp(telemetry_log_event_timestamp)
 
         self.maxDiff = None  # the dictionary diffs can be quite large; display the whole thing
         self.assertDictEqual(event_parameters, all_expected_parameters)
@@ -561,10 +569,25 @@ class TestEvent(HttpRequestPredicates, AgentTestCase):
             expected_parameters={
                 GuestAgentGenericLogsSchema.EventName: 'Log',
                 GuestAgentGenericLogsSchema.CapabilityUsed: 'INFO',
-                GuestAgentGenericLogsSchema.Context1: 'A test INFO log event',
-                GuestAgentGenericLogsSchema.Context2: '',
-                GuestAgentGenericLogsSchema.Context3: '',
-                GuestAgentExtensionEventsSchema.ExtensionType: ''})
+                GuestAgentGenericLogsSchema.Context1: 'log event',
+                GuestAgentGenericLogsSchema.Context3: ''
+            })
+
+    def test_add_log_event_should_always_create_events_when_forced(self):
+        self._test_create_event_function_should_create_events_that_have_all_the_parameters_in_the_telemetry_schema(
+            create_event_function=lambda: add_log_event(logger.LogLevel.WARNING, 'A test WARNING log event',
+                                                        forced=True),
+            expected_parameters={
+                GuestAgentGenericLogsSchema.EventName: 'Log',
+                GuestAgentGenericLogsSchema.CapabilityUsed: 'WARNING',
+                GuestAgentGenericLogsSchema.Context1: 'log event',
+                GuestAgentGenericLogsSchema.Context3: ''
+            })
+
+    def test_add_log_event_should_not_create_event_if_not_allowed_and_not_forced(self):
+        add_log_event(logger.LogLevel.WARNING, 'A test WARNING log event')
+        event_list = event.collect_events()
+        self.assertEquals(len(event_list.events), 0, "No events should be created if not forced and not allowed")
 
     def test_report_metric_should_create_events_that_have_all_the_parameters_in_the_telemetry_schema(self):
         self._test_create_event_function_should_create_events_that_have_all_the_parameters_in_the_telemetry_schema(

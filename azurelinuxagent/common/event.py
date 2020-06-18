@@ -718,17 +718,19 @@ def add_event(name=AGENT_NAME, op=WALAEventOperation.Unknown, is_success=True, d
                            log_event=log_event)
 
 
-def add_log_event(level, message, reporter=__event_logger__):
+def add_log_event(level, message, forced=False, reporter=__event_logger__):
     """
     :param level: LoggerLevel of the log event
     :param message: Message
+    :param forced: Force write the event even if send_logs_to_telemetry() is disabled
+        (NOTE: Remove this flag once send_logs_to_telemetry() is enabled for all events)
     :param reporter:
     :return:
     """
     if reporter.event_dir is None:
         return
 
-    if not send_logs_to_telemetry():
+    if not (forced or send_logs_to_telemetry()):
         return
 
     if level >= logger.LogLevel.WARNING:
