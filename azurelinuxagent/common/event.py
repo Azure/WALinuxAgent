@@ -34,7 +34,7 @@ from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.datacontract import get_properties, set_properties
 from azurelinuxagent.common.osutil import get_osutil
 from azurelinuxagent.common.telemetryevent import TelemetryEventParam, TelemetryEvent, CommonTelemetryEventSchema, \
-    GuestAgentGenericLogsSchema, GuestAgentExtensionEventsSchema
+    GuestAgentGenericLogsSchema, GuestAgentExtensionEventsSchema, GuestAgentPerfCounterEventsSchema
 from azurelinuxagent.common.utils import fileutil, textutil
 from azurelinuxagent.common.utils.textutil import parse_doc, findall, find, getattrib
 from azurelinuxagent.common.version import CURRENT_VERSION, CURRENT_AGENT, AGENT_NAME, DISTRO_NAME, DISTRO_VERSION, DISTRO_CODE_NAME, AGENT_EXECUTION_MODE
@@ -476,10 +476,10 @@ class EventLogger(object):
             _log_event(AGENT_NAME, "METRIC", message, 0)
 
         event = TelemetryEvent(TELEMETRY_METRICS_EVENT_ID, TELEMETRY_EVENT_PROVIDER_ID)
-        event.parameters.append(TelemetryEventParam('Category', str(category)))
-        event.parameters.append(TelemetryEventParam('Counter', str(counter)))
-        event.parameters.append(TelemetryEventParam('Instance', str(instance)))
-        event.parameters.append(TelemetryEventParam('Value', float(value)))
+        event.parameters.append(TelemetryEventParam(GuestAgentPerfCounterEventsSchema.Category, str(category)))
+        event.parameters.append(TelemetryEventParam(GuestAgentPerfCounterEventsSchema.Counter, str(counter)))
+        event.parameters.append(TelemetryEventParam(GuestAgentPerfCounterEventsSchema.Instance, str(instance)))
+        event.parameters.append(TelemetryEventParam(GuestAgentPerfCounterEventsSchema.Value, float(value)))
         self._add_common_event_parameters(event, datetime.utcnow())
 
         data = get_properties(event)

@@ -32,7 +32,7 @@ from azurelinuxagent.common.event import add_event, add_periodic, add_log_event,
     TELEMETRY_EVENT_EVENT_ID, TELEMETRY_EVENT_PROVIDER_ID, TELEMETRY_LOG_EVENT_ID, TELEMETRY_LOG_PROVIDER_ID
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.telemetryevent import CommonTelemetryEventSchema, GuestAgentGenericLogsSchema, \
-    GuestAgentExtensionEventsSchema
+    GuestAgentExtensionEventsSchema, GuestAgentPerfCounterEventsSchema
 from tests.protocol import mockwiredata
 from tests.protocol.mocks import mock_wire_protocol, HttpRequestPredicates, MockHttpResponse
 from azurelinuxagent.common.version import CURRENT_AGENT, CURRENT_VERSION, AGENT_EXECUTION_MODE
@@ -593,10 +593,10 @@ class TestEvent(HttpRequestPredicates, AgentTestCase):
         self._test_create_event_function_should_create_events_that_have_all_the_parameters_in_the_telemetry_schema(
             create_event_function=lambda: report_metric("cpu", "%idle", "total", 12.34),
             expected_parameters={
-                'Category': 'cpu',
-                'Counter': '%idle',
-                'Instance': 'total',
-                'Value': 12.34
+                GuestAgentPerfCounterEventsSchema.Category: 'cpu',
+                GuestAgentPerfCounterEventsSchema.Counter: '%idle',
+                GuestAgentPerfCounterEventsSchema.Instance: 'total',
+                GuestAgentPerfCounterEventsSchema.Value: 12.34
             })
 
     def _create_test_event_file(self, source_file):
@@ -778,7 +778,7 @@ class TestMetrics(AgentTestCase):
         event_dictionary = json.loads(event_json)
         self.assertEqual(event_dictionary['providerId'], event.TELEMETRY_EVENT_PROVIDER_ID)
         for parameter in event_dictionary["parameters"]:
-            if parameter['name'] == 'Counter':
+            if parameter['name'] == GuestAgentPerfCounterEventsSchema.Counter:
                 self.assertEqual(parameter['value'], '%idle')
                 break
         else:

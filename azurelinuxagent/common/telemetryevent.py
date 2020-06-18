@@ -64,6 +64,14 @@ class GuestAgentExtensionEventsSchema(CommonTelemetryEventSchema):
     Message = "Message"
     Duration = "Duration"
 
+class GuestAgentPerfCounterEventsSchema(CommonTelemetryEventSchema):
+
+    # GuestAgentPerformanceCounterEvents table specific schema keys
+    Category = "Category"
+    Counter = "Counter"
+    Instance = "Instance"
+    Value = "Value"
+
 class TelemetryEventParam(DataContract):
     def __init__(self, name=None, value=None):
         self.name = name
@@ -89,13 +97,13 @@ class TelemetryEvent(DataContract):
         # parameter, in the case of log and metric events. So, in case the Name parameter exists and it is not
         # "WALinuxAgent", it is an extension event.
         for param in self.parameters:
-            if param.name == "Name":
+            if param.name == GuestAgentExtensionEventsSchema.Name:
                 return param.value != AGENT_NAME
         return False
 
     def get_version(self):
         for param in self.parameters:
-            if param.name == "Version":
+            if param.name == GuestAgentExtensionEventsSchema.Version:
                 return param.value
         return None
 
