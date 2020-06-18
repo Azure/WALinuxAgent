@@ -510,8 +510,13 @@ class ExtHandlersHandler(object):
                 logger.info("Continue on Update failure flag is set, proceeding with update")
             return exit_code
 
-        disable_exit_code = execute_old_handler_command_and_return_if_succeeds(
-            func=lambda: old_ext_handler_i.disable())
+        disable_exit_code = NOT_RUN
+        # We only want to disable the old handler if it is currently enabled; no
+        # other state makes sense.
+        if old_ext_handler_i.get_handler_state() == ExtHandlerState.Enabled:
+            disable_exit_code = execute_old_handler_command_and_return_if_succeeds(
+                func=lambda: old_ext_handler_i.disable())
+
         ext_handler_i.copy_status_files(old_ext_handler_i)
         if ext_handler_i.version_gt(old_ext_handler_i):
             ext_handler_i.update(disable_exit_code=disable_exit_code,
