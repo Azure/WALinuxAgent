@@ -940,6 +940,61 @@ class TestExtension(ExtensionTestCase):
 
         self.assertEquals(0, mock_add_event.call_count)
 
+    def test_it_should_create_extension_events_dir_and_set_handler_environment_only_if_extension_telemetry_enabled(self, *args):
+
+        for enable_extensions in [False, True]:
+            tmp_lib_dir = tempfile.mkdtemp(prefix="ExtensionEnabled{0}".format(enable_extensions))
+            with patch("azurelinuxagent.common.conf.get_lib_dir", return_value=tmp_lib_dir):
+                with patch('azurelinuxagent.ga.exthandlers.is_extension_telemetry_pipeline_enabled',
+                           return_value=enable_extensions):
+                    # Create new object for each run to force re-installation of extensions as we
+                    # only create handler_environment on installation
+                    test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE_MULTIPLE_EXT)
+                    exthandlers_handler, protocol = self._create_mock(test_data, *args)
+
+                    exthandlers_handler.run()
+                    self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.0.0")
+                    self._assert_ext_status(protocol.report_ext_status, "success", 0)
+
+                    for ext_handler in exthandlers_handler.ext_handlers.extHandlers:
+                        ehi = ExtHandlerInstance(ext_handler, protocol)
+                        self.assertEqual(enable_extensions, os.path.exists(ehi.get_extension_events_dir()),
+                                         "Events directory incorrectly set")
+                        handler_env_json = ehi.get_env_file()
+                        with open(handler_env_json, 'r') as env_json:
+                            env_data = json.load(env_json)
+
+                        self.assertEqual(enable_extensions, "eventsFolder" in env_data[0]['handlerEnvironment'],
+                                         "eventsFolder wrongfully set in HandlerEnvironment.json file")
+
+                        if enable_extensions:
+                            self.assertEqual(ehi.get_extension_events_dir(),
+                                             env_data[0]['handlerEnvironment']["eventsFolder"],
+                                             "Events directory dont match")
+
+            # Clean the File System for the next test run
+            if os.path.exists(tmp_lib_dir):
+                shutil.rmtree(tmp_lib_dir, ignore_errors=True)
+
+    def test_it_should_not_delete_extension_events_directory_on_extension_uninstall(self, *args):
+        test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE)
+        exthandlers_handler, protocol = self._create_mock(test_data, *args)
+
+        with patch('azurelinuxagent.ga.exthandlers.is_extension_telemetry_pipeline_enabled', return_value=True):
+            exthandlers_handler.run()
+            self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.0.0")
+            self._assert_ext_status(protocol.report_ext_status, "success", 0)
+
+            ehi = ExtHandlerInstance(exthandlers_handler.ext_handlers.extHandlers[0], protocol)
+            self.assertTrue(os.path.exists(ehi.get_extension_events_dir()), "Events directory should exist")
+
+            # Uninstall extensions now
+            test_data.set_extensions_config_state("uninstall")
+            test_data.set_incarnation(2)
+            protocol.update_goal_state()
+            exthandlers_handler.run()
+            self.assertTrue(os.path.exists(ehi.get_extension_events_dir()), "Events directory should still exist")
+
     @patch('azurelinuxagent.common.errorstate.ErrorState.is_triggered')
     @patch('azurelinuxagent.ga.exthandlers.add_event')
     def test_ext_handler_report_status_permanent(self, mock_add_event, mock_error_state, *args):
