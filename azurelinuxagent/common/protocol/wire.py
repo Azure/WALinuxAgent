@@ -961,7 +961,8 @@ class WireClient(object):
                              log_event=True)
                 raise
 
-        if ret is not None and not HostPluginProtocol.is_default_channel():
+        # Depending on the lambda, the unsuccessful return value can be None or False
+        if ret and not HostPluginProtocol.is_default_channel():
             logger.info("Setting host plugin as default channel from now on. "
                         "Restart the agent to reset the default channel.")
             HostPluginProtocol.set_default_channel(True)
