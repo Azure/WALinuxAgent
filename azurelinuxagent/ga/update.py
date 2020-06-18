@@ -446,6 +446,11 @@ class UpdateHandler(object):
                 logger.info(message)
                 add_event(AGENT_NAME, op=WALAEventOperation.ConfigurationChange, message=message)
 
+            # Always report the value of AutoUpdate
+            auto_update_enabled = conf.get_autoupdate_enabled()
+            logger.info("AutoUpdate.Enabled: {0}}", auto_update_enabled)
+            add_event(op=WALAEventOperation.AutoUpdate, is_success=auto_update_enabled, log_event=False)
+
         except Exception as e:
             logger.warn("Failed to log changes in configuration: {0}", ustr(e))
 
@@ -665,15 +670,6 @@ class UpdateHandler(object):
         return
 
     def _upgrade_available(self, protocol, base_version=CURRENT_VERSION):
-        # Emit an event expressing the state of AutoUpdate
-        # Note: Duplicate events get suppressed; state transitions always emit
-        add_event(
-            AGENT_NAME,
-            version=CURRENT_VERSION,
-            op=WALAEventOperation.AutoUpdate,
-            is_success=conf.get_autoupdate_enabled(),
-            log_event=False)
-
         # Ignore new agents if updating is disabled
         if not conf.get_autoupdate_enabled():
             logger.warn(u"Agent auto-update is disabled.")
