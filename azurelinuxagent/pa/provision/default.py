@@ -94,7 +94,7 @@ class ProvisionHandler(object):
 
             self.handle_provision_guest_agent(ovf_env.provision_guest_agent)
 
-            self.report_ready(thumbprint)
+            self.report_ready()
             logger.info("Provisioning complete")
 
         except (ProtocolError, ProvisionError) as e:
@@ -308,9 +308,8 @@ class ProvisionHandler(object):
             logger.error("Reporting NotReady failed: {0}", e)
             self.report_event(ustr(e))
 
-    def report_ready(self, thumbprint=None):
+    def report_ready(self):
         status = ProvisionStatus(status="Ready")
-        status.properties.certificateThumbprint = thumbprint
         try:
             protocol = self.protocol_util.get_protocol()
             protocol.report_provision_status(status)
