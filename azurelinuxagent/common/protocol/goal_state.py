@@ -38,7 +38,7 @@ TRANSPORT_PRV_FILE_NAME = "TransportPrivate.pem"
 
 
 class GoalStateRetrievalMode:
-    Default = 0
+    GoalStateChanged = 0
     Limited = 1
     Full = 2
 
@@ -51,7 +51,7 @@ class GoalState(object):
     ContainerID = "00000000-0000-0000-0000-000000000000"
     _HttpFailedIndicator = "[HTTP Failed]"
 
-    def __init__(self, wire_client, ext_config_retriever, retrieval_mode=GoalStateRetrievalMode.Default):
+    def __init__(self, wire_client, retrieval_mode):
         """
         Fetches the goal state using the given wire client.
 
@@ -66,7 +66,6 @@ class GoalState(object):
         self.xml_text = wire_client.fetch_config(uri, wire_client.get_header())
         self._xml_doc = parse_doc(self.xml_text)
 
-        self._ext_config_retriever = ext_config_retriever
         self._wire_client = wire_client
 
         self.ext_conf = None
@@ -74,9 +73,6 @@ class GoalState(object):
         self.shared_conf = None
         self.certs = None
         self.remote_access = None
-        self.artifacts_profile_blob_url = None
-        self.status_upload_blob_url = None
-        self.status_upload_blob_type = None
 
         # Retrieve goal state information
         self.incarnation = findtext(self._xml_doc, "Incarnation")
@@ -91,9 +87,6 @@ class GoalState(object):
         GoalState.ContainerID = self.container_id
 
         if retrieval_mode != GoalStateRetrievalMode.Limited:
-            # Read properties necessary to retrieve the FastTrack goal state
-            self._retrieve_fabric_ext_conf_properties()
-
             # Retrieve the extension config, which we need to determine if anything changed
             self._retrieve_ext_conf()
 
@@ -110,25 +103,25 @@ class GoalState(object):
                     self._retrieve_remote_access()
 
     @staticmethod
-    def fetch_goal_state(wire_client, ext_config_retriever):
+    def fetch_goal_state(wire_client):
         """
         Fetches the goal state, not including any nested properties (such as remote access).
         """
-        return GoalState(wire_client, ext_config_retriever)
+        return GoalState(wire_client, retrieval_mode=GoalStateRetrievalMode.GoalStateChanged)
 
     @staticmethod
-    def fetch_limited_goal_state(wire_client, ext_config_retriever):
+    def fetch_limited_goal_state(wire_client):
         """
         Fetches only the wire server GoalState object. Does not include the extensions config
         """
-        return GoalState(wire_client, ext_config_retriever, retrieval_mode=GoalStateRetrievalMode.Limited)
+        return GoalState(wire_client, retrieval_mode=GoalStateRetrievalMode.Limited)
 
     @staticmethod
-    def fetch_full_goal_state(wire_client, ext_config_retriever):
+    def fetch_full_goal_state(wire_client):
         """
         Fetches the full goal state, including nested properties (such as remote access).
         """
-        return GoalState(wire_client, ext_config_retriever, retrieval_mode=GoalStateRetrievalMode.Full)
+        return GoalState(wire_client, retrieval_mode=GoalStateRetrievalMode.Full)
 
     def _retrieve_hosting_env(self):
         try:
@@ -180,7 +173,7 @@ class GoalState(object):
     def _retrieve_ext_conf(self):
         try:
             uri = findtext(self._xml_doc, "ExtensionsConfig")
-            self.ext_conf = self._ext_config_retriever.get_ext_config(self.incarnation, uri)
+            self.ext_conf = self._wire_client.ext_config_retriever.get_ext_config(self.incarnation, uri)
         except Exception as e:
             self._log_document_retrieval_failure("extensions config", e)
             raise
@@ -191,25 +184,6 @@ class GoalState(object):
             logger.warn("Fetching the {0} failed: {1}", component_name, ustr(e))
         else:
             logger.warn("Fetching the {0} failed: {1}, {2}", component_name, ustr(e), traceback.format_exc())
-
-    def _retrieve_fabric_ext_conf_properties(self):
-        try:
-            # The artifacts profile blob url and status blob url are only in the Fabric goal state
-            # We need the artifacts profile blob url to retrieve the FastTrack goal state, so retrieve it here
-            # to avoid a chicken and egg scenario
-            uri = findtext(self._xml_doc, "ExtensionsConfig")
-            if uri is not None:
-                fabric_ext_conf_xml = self._wire_client.fetch_config(uri, self._wire_client.get_header())
-                xml_doc = parse_doc(fabric_ext_conf_xml)
-                self.status_upload_blob_url = findtext(xml_doc, "StatusUploadBlob")
-                self.artifacts_profile_blob_url = findtext(xml_doc, "InVMArtifactsProfileBlob")
-
-                status_upload_node = find(xml_doc, "StatusUploadBlob")
-                self.status_upload_blob_type = getattrib(status_upload_node, "statusBlobType")
-                logger.verbose("Extension config shows status blob type as [{0}]", self.status_upload_blob_type)
-        except Exception as e:
-            logger.warn("Fetching the artifacts profile blob url failed: {0}", ustr(e))
-            raise
 
 
 class HostingEnv(object):
@@ -342,11 +316,19 @@ class ExtensionsConfig(object):
         self.ext_handlers = ExtHandlerList()
         self.vmagent_manifests = VMAgentManifestList()
         self.svd_seqNo = None
+        self.created_on_ticks = None
 
         if xml_text is None:
             return
 
         xml_doc = parse_doc(self.xml_text)
+
+        self.status_upload_blob_url = findtext(xml_doc, "StatusUploadBlob")
+        self.artifacts_profile_blob_url = findtext(xml_doc, "InVMArtifactsProfileBlob")
+
+        status_upload_node = find(xml_doc, "StatusUploadBlob")
+        self.status_upload_blob_type = getattrib(status_upload_node, "statusBlobType")
+        logger.verbose("Extension config shows status blob type as [{0}]", self.status_upload_blob_type)
 
         ga_families_list = find(xml_doc, "GAFamilies")
         ga_families = findall(ga_families_list, "GAFamily")
@@ -375,7 +357,8 @@ class ExtensionsConfig(object):
         goal_state_metadata_node = find(xml_doc, "InVMGoalStateMetaData")
         if goal_state_metadata_node is not None:
             self.svd_seqNo = getattrib(goal_state_metadata_node, "inSvdSeqNo")
-            logger.verbose("Read inSvdSeqNo of {0}", self.svd_seqNo)
+            self.created_on_ticks = getattrib(goal_state_metadata_node, "createdOnTicks")
+            logger.verbose("Read inSvdSeqNo of {0} and createdOnTicks of {1}", self.svd_seqNo, self.created_on_ticks)
 
     @staticmethod
     def _parse_plugin(plugin):

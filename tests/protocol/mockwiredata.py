@@ -96,20 +96,6 @@ DATA_FILE_FAST_TRACK_DEPENDENCIES = DATA_FILE.copy()
 DATA_FILE_FAST_TRACK_DEPENDENCIES["ext_conf"] = "wire/ext_conf_in_vm_artifacts_profile.xml"
 DATA_FILE_FAST_TRACK_DEPENDENCIES["in_vm_artifacts_profile"] = "wire/in_vm_artifacts_profile_dependencies.json"
 
-DATA_FILE_FAST_TRACK_NO_SETTINGS = DATA_FILE.copy()
-DATA_FILE_FAST_TRACK_NO_SETTINGS["vm_artifacts_profile"] = "wire/in_vm_artifacts_profile_no_settings.json"
-
-DATA_FILE_FAST_TRACK_NO_EXTENSIONS = DATA_FILE.copy()
-DATA_FILE_FAST_TRACK_NO_EXTENSIONS["vm_artifacts_profile"] = "wire/in_vm_artifacts_profile_no_extensions.json"
-
-DATA_FILE_FAST_TRACK_NO_EXT_CONFIG = DATA_FILE.copy()
-DATA_FILE_FAST_TRACK_NO_EXT_CONFIG["vm_artifacts_profile"] = "wire/in_vm_artifacts_profile_no_ext_config.json"
-
-DATA_FILE_FAST_TRACK_DEPENDENCY = DATA_FILE.copy()
-DATA_FILE_FAST_TRACK_DEPENDENCY["vm_artifacts_profile"] = "wire/in_vm_artifacts_profile_dependencies.json"
-
-DATA_FILE_FAST_TRACK_MULTIPLE_DEPENDENCIES = DATA_FILE.copy()
-DATA_FILE_FAST_TRACK_MULTIPLE_DEPENDENCIES["vm_artifacts_profile"] = "wire/in_vm_artifacts_profile_multiple_dependencies.json"
 
 class WireProtocolData(object):
     def __init__(self, data_files=DATA_FILE):

@@ -367,8 +367,6 @@ class ExtensionTestCase(AgentTestCase):
 @patch('time.sleep', side_effect=lambda _: mock_sleep(0.001))
 @patch("azurelinuxagent.common.protocol.wire.CryptUtil")
 @patch("azurelinuxagent.common.utils.restutil.http_get")
-@patch('azurelinuxagent.common.protocol.extensions_config_retriever.ExtensionsConfigRetriever._get_saved_incarnation', MagicMock(return_value=0))
-@patch('azurelinuxagent.common.protocol.extensions_config_retriever.ExtensionsConfigRetriever._get_saved_sequence_number', MagicMock(return_value=1))
 class TestExtension(ExtensionTestCase):
     def setUp(self):
         AgentTestCase.setUp(self)

@@ -1,0 +1,23 @@
+<Extensions version="1.0.0.0" goalStateIncarnation="9"><GuestAgentExtension xmlns:i="http://www.w3.org/2001/XMLSchema-instance">
+  <GAFamilies>
+    <GAFamily>
+      <Name>Prod</Name>
+      <Uris>
+          <Uri>http://mock-goal-state/manifest_of_ga.xml</Uri>
+      </Uris>
+    </GAFamily>
+    <GAFamily>
+      <Name>Test</Name>
+      <Uris>
+          <Uri>http://mock-goal-state/manifest_of_ga.xml</Uri>
+        </Uris>
+    </GAFamily>
+  </GAFamilies>
+</GuestAgentExtension>
+<Plugins />
+<PluginSettings />
+<StatusUploadBlob statusBlobType="BlockBlob">https://test.blob.core.windows.net/vhds/test-cs12.test-cs12.test-cs12.status?sr=b&amp;sp=rw&amp;se=9999-01-01&amp;sk=key1&amp;sv=2014-02-14&amp;sig=hfRh7gzUE7sUtYwke78IOlZOrTRCYvkec4hGZ9zZzXo</StatusUploadBlob>
+<InVMGoalStateMetaData inSvdSeqNo="2" createdOnTicks="637282736549645575"/>
+<InVMArtifactsProfileBlob statusBlobType="BlockBlob">https://mock-goal-state/test.blob.core.windows.net/$system/test-cs12.test-cs12.test-cs12.vmSettings?sv=2016-05-31&amp;sr=b&amp;sk=system-1&amp;sig=saskey;se=9999-01-01T00%3a00%3a00Z&amp;sp=r</InVMArtifactsProfileBlob>
+</Extensions>
+

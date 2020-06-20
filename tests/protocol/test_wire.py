@@ -1242,7 +1242,7 @@ class GoalStateConstructionTestCase(AgentTestCase):
             protocol.mock_wire_data.goal_state = WireProtocolData.replace_xml_element_value(
                 protocol.mock_wire_data.goal_state, "HostingEnvironmentConfig", "")
             ext_conf_retriever = ExtensionsConfigRetriever(protocol.client)
-            goal_state = GoalState.fetch_full_goal_state(protocol.client, ext_conf_retriever)
+            goal_state = GoalState.fetch_full_goal_state(protocol.client)
             self.assertIsNone(goal_state.hosting_env)
 
     def test_goal_state_hosting_env_cannot_retrieve(self):
@@ -1250,7 +1250,7 @@ class GoalStateConstructionTestCase(AgentTestCase):
             protocol.mock_wire_data.goal_state = WireProtocolData.replace_xml_element_value(
                 protocol.mock_wire_data.goal_state, "HostingEnvironmentConfig", "invalid_url")
             ext_conf_retriever = ExtensionsConfigRetriever(protocol.client)
-            self.assertRaises(Exception, lambda: GoalState.fetch_full_goal_state(protocol.client, ext_conf_retriever))
+            self.assertRaises(Exception, lambda: GoalState.fetch_full_goal_state(protocol.client))
 
     def test_goal_state_hosting_env_load(self):
         with mock_wire_protocol(mockwiredata.DATA_FILE) as protocol:
@@ -1267,7 +1267,7 @@ class GoalStateConstructionTestCase(AgentTestCase):
             protocol.mock_wire_data.goal_state = WireProtocolData.replace_xml_element_value(
                 protocol.mock_wire_data.goal_state, "SharedConfig", "")
             ext_conf_retriever = ExtensionsConfigRetriever(protocol.client)
-            goal_state = GoalState.fetch_full_goal_state(protocol.client, ext_conf_retriever)
+            goal_state = GoalState.fetch_full_goal_state(protocol.client)
             self.assertIsNone(goal_state.shared_conf)
 
     def test_goal_state_shared_conf_cannot_retrieve(self):
@@ -1275,7 +1275,7 @@ class GoalStateConstructionTestCase(AgentTestCase):
             protocol.mock_wire_data.goal_state = WireProtocolData.replace_xml_element_value(
                 protocol.mock_wire_data.goal_state, "SharedConfig", "invalid_url")
             ext_conf_retriever = ExtensionsConfigRetriever(protocol.client)
-            self.assertRaises(Exception, lambda: GoalState.fetch_full_goal_state(protocol.client, ext_conf_retriever))
+            self.assertRaises(Exception, lambda: GoalState.fetch_full_goal_state(protocol.client))
 
     def test_goal_state_shared_conf_load(self):
         with mock_wire_protocol(mockwiredata.DATA_FILE) as protocol:
@@ -1292,7 +1292,7 @@ class GoalStateConstructionTestCase(AgentTestCase):
             protocol.mock_wire_data.goal_state = WireProtocolData.replace_xml_element_value(
                 protocol.mock_wire_data.goal_state, "Certificates", "")
             ext_conf_retriever = ExtensionsConfigRetriever(protocol.client)
-            goal_state = GoalState.fetch_full_goal_state(protocol.client, ext_conf_retriever)
+            goal_state = GoalState.fetch_full_goal_state(protocol.client)
             self.assertIsNone(goal_state.certs)
 
     def test_goal_state_certs_load(self):
@@ -1317,7 +1317,7 @@ class GoalStateConstructionTestCase(AgentTestCase):
             protocol.mock_wire_data.goal_state = WireProtocolData.replace_xml_element_value(
                 protocol.mock_wire_data.goal_state_remote_access, "RemoteAccessInfo", "invalid_url")
             ext_conf_retriever = ExtensionsConfigRetriever(protocol.client)
-            self.assertRaises(Exception, lambda: GoalState.fetch_full_goal_state(protocol.client, ext_conf_retriever))
+            self.assertRaises(Exception, lambda: GoalState.fetch_full_goal_state(protocol.client))
 
     def test_goal_state_remote_access_load(self):
         with mock_wire_protocol(mockwiredata.DATA_FILE_REMOTE_ACCESS) as protocol:
@@ -1334,7 +1334,7 @@ class GoalStateConstructionTestCase(AgentTestCase):
             protocol.mock_wire_data.goal_state = WireProtocolData.replace_xml_element_value(
                 protocol.mock_wire_data.goal_state, "ExtensionsConfig", "")
             ext_conf_retriever = ExtensionsConfigRetriever(protocol.client)
-            goal_state = GoalState.fetch_full_goal_state(protocol.client, ext_conf_retriever)
+            goal_state = GoalState.fetch_full_goal_state(protocol.client)
             ext_conf = goal_state.ext_conf
             self.assertIsNone(ext_conf.xml_text)
 
@@ -1355,7 +1355,10 @@ class GoalStateConstructionTestCase(AgentTestCase):
             self.assertEqual(expected_ext_conf, protocol.client.get_ext_conf().xml_text)
 
     def test_ext_config_construction_dependencies(self):
-        with mock_wire_protocol(mockwiredata.DATA_FILE_FAST_TRACK_DEPENDENCY) as protocol:
+        DATA_FILE_FAST_TRACK_DEPENDENCY = mockwiredata.DATA_FILE.copy()
+        DATA_FILE_FAST_TRACK_DEPENDENCY["vm_artifacts_profile"] = "wire/in_vm_artifacts_profile_dependencies.json"
+
+        with mock_wire_protocol(DATA_FILE_FAST_TRACK_DEPENDENCY) as protocol:
             profile = InVMArtifactsProfile(protocol.mock_wire_data.vm_artifacts_profile)
             ext_conf = profile.transform_to_extensions_config()
             self.assertEqual(2, len(ext_conf.ext_handlers.extHandlers))
@@ -1363,7 +1366,11 @@ class GoalStateConstructionTestCase(AgentTestCase):
             self.assertEqual(1, ext_conf.ext_handlers.extHandlers[1].properties.extensions[0].dependencyLevel)
 
     def test_ext_config_construction_multiple_dependencies(self):
-        with mock_wire_protocol(mockwiredata.DATA_FILE_FAST_TRACK_MULTIPLE_DEPENDENCIES) as protocol:
+        DATA_FILE_FAST_TRACK_MULTIPLE_DEPENDENCIES = mockwiredata.DATA_FILE.copy()
+        DATA_FILE_FAST_TRACK_MULTIPLE_DEPENDENCIES[
+            "vm_artifacts_profile"] = "wire/in_vm_artifacts_profile_multiple_dependencies.json"
+
+        with mock_wire_protocol(DATA_FILE_FAST_TRACK_MULTIPLE_DEPENDENCIES) as protocol:
             profile = InVMArtifactsProfile(protocol.mock_wire_data.vm_artifacts_profile)
             ext_conf = profile.transform_to_extensions_config()
             self.assertEqual(2, len(ext_conf.ext_handlers.extHandlers))

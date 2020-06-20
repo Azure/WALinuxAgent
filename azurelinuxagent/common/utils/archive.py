@@ -50,13 +50,6 @@ CACHE_PATTERNS = [
 ARCHIVE_PATTERNS_DIRECTORY = re.compile('^\d{4}\-\d{2}\-\d{2}T\d{2}:\d{2}:\d{2}\.\d+$')
 ARCHIVE_PATTERNS_ZIP       = re.compile('^\d{4}\-\d{2}\-\d{2}T\d{2}:\d{2}:\d{2}\.\d+\.zip$')
 
-OTHER_FILES_TO_COPY = {
-    "Incarnation",
-    "ArtifactProfileSequenceNumber",
-    "SvdSeqNo",
-    "GoalStateSource"
-}
-
 
 class StateFlusher(object):
     def __init__(self, lib_dir):
@@ -72,15 +65,12 @@ class StateFlusher(object):
 
     def flush(self, timestamp):
         files = self._get_files_to_archive()
-        copy_files = self._get_files_to_copy()
-        if len(files) == 0 and len(copy_files) == 0:
+        if len(files) == 0:
             return
 
         if self._mkdir(timestamp):
             if len(files) > 0:
                 self._archive(files, timestamp)
-            if len(copy_files) > 0:
-                self._copy(copy_files, timestamp)
         else:
             self._purge(files)
 
@@ -98,20 +88,6 @@ class StateFlusher(object):
                     break
 
         return files
-
-    def _get_files_to_copy(self):
-        files = []
-        for f in os.listdir(self._source):
-            if f in OTHER_FILES_TO_COPY:
-                full_path = os.path.join(self._source, f)
-                files.append(full_path)
-
-        return files
-
-    def _copy(self, files, timestamp):
-        for f in files:
-            dst = os.path.join(self.history_dir(timestamp), os.path.basename(f))
-            shutil.copy(f, dst)
 
     def _archive(self, files, timestamp):
         for f in files:

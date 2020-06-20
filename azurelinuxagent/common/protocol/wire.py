@@ -773,14 +773,14 @@ class WireClient(object):
         for retry in range(1, max_retry + 1):
             try:
                 if refresh_type == WireClient._UpdateType.HostPlugin:
-                    goal_state = GoalState.fetch_limited_goal_state(self, self.ext_config_retriever)
+                    goal_state = GoalState.fetch_limited_goal_state(self)
                     self._update_host_plugin(goal_state.container_id, goal_state.role_config_name)
                     return
 
                 if self._goal_state is None or refresh_type == WireClient._UpdateType.GoalStateForced:
-                    new_goal_state = GoalState.fetch_full_goal_state(self, self.ext_config_retriever)
+                    new_goal_state = GoalState.fetch_full_goal_state(self)
                 else:
-                    new_goal_state = GoalState.fetch_goal_state(self, self.ext_config_retriever)
+                    new_goal_state = GoalState.fetch_goal_state(self)
                 self._save_goal_state_if_necessary(new_goal_state, refresh_type)
 
                 return
@@ -1071,14 +1071,14 @@ class WireClient(object):
         return fast_track_enabled
 
     def upload_status_blob(self):
-        if self._goal_state.status_upload_blob_url is None:
+        if self.ext_config_retriever.status_upload_blob_url is None:
             # the status upload blob is in ExtensionsConfig so force a full goal state refresh
             self.update_goal_state(forced=True)
 
-        if self._goal_state.status_upload_blob_url is None:
+        if self.ext_config_retriever.status_upload_blob_url is None:
             raise ProtocolNotFoundError("Status upload uri is missing")
 
-        blob_type = self._goal_state.status_upload_blob_type
+        blob_type = self.ext_config_retriever.status_upload_blob_type
         if blob_type not in ["BlockBlob", "PageBlob"]:
             blob_type = "BlockBlob"
             logger.verbose("Status Blob type is unspecified, assuming BlockBlob")
@@ -1099,7 +1099,8 @@ class WireClient(object):
         # wrong. This is why we try HostPlugin then direct.
         try:
             host = self.get_host_plugin()
-            host.put_vm_status(self.status_blob, self._goal_state.status_upload_blob_url, self._goal_state.status_upload_blob_type)
+            host.put_vm_status(self.status_blob, self.ext_config_retriever.status_upload_blob_url,
+                               self.ext_config_retriever.status_upload_blob_type)
             return
         except ResourceGoneError:
             # refresh the host plugin client and try again on the next iteration of the main loop
@@ -1111,7 +1112,7 @@ class WireClient(object):
             self.report_status_event(msg, is_success=True)
 
         try:
-            if self.status_blob.upload(self._goal_state.status_upload_blob_url):
+            if self.status_blob.upload(self.ext_config_retriever.status_upload_blob_url):
                 return
         except Exception as e:
             msg = "Exception uploading status blob: {0}".format(ustr(e))
@@ -1250,15 +1251,11 @@ class WireClient(object):
 
     def get_host_plugin(self):
         if self._host_plugin is None:
-            goal_state = GoalState.fetch_limited_goal_state(self, self.ext_config_retriever)
+            goal_state = GoalState.fetch_limited_goal_state(self)
             self._set_host_plugin(HostPluginProtocol(self.get_endpoint(),
                                                      goal_state.container_id,
                                                      goal_state.role_config_name))
         return self._host_plugin
-
-    def has_artifacts_profile_blob(self):
-        return self._goal_state is not None and not \
-            textutil.is_str_none_or_whitespace(self._goal_state.artifacts_profile_blob_url)
 
     def get_artifacts_profile_through_host(self, blob, etag=None):
         host = self.get_host_plugin()
@@ -1266,19 +1263,15 @@ class WireClient(object):
         profile, etag, not_modified = self.fetch_content_and_etag(uri, headers, use_proxy=False)
         return profile, etag, not_modified
 
-    def get_artifacts_profile(self):
+    def get_artifacts_profile(self, artifacts_profile_blob_url):
         artifacts_profile = None
 
-        if self._goal_state is None:
-            return None
-
-        if self.has_artifacts_profile_blob():
-            blob = self._goal_state.artifacts_profile_blob_url
-            direct_func = lambda: self.fetch(blob)
+        if artifacts_profile_blob_url is not None:
+            direct_func = lambda: self.fetch(artifacts_profile_blob_url)
             # NOTE: the host_func may be called after refreshing the goal state, be careful about any goal state data
             # in the lambda.
             host_func = lambda: self.get_artifacts_profile_through_host(
-                blob, self.vm_artifacts_profile_etag)
+                artifacts_profile_blob_url, self.vm_artifacts_profile_etag)
 
             logger.verbose("Retrieving the artifacts profile")
 
@@ -1419,6 +1412,11 @@ class InVMArtifactsProfile(object):
     def get_sequence_number(self):
         if 'inVMArtifactsProfileBlobSeqNo' in self.__dict__:
             return int(self.inVMArtifactsProfileBlobSeqNo)
+        return None
+
+    def get_created_on_ticks(self):
+        if 'createdOnTicks' in self.__dict__:
+            return int(self.createdOnTicks)
         return None
 
     def has_extensions(self):

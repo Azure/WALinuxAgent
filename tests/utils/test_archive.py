@@ -41,9 +41,6 @@ class TestArchive(AgentTestCase):
             fh.write(data)
             return full_name
 
-    def _verify_file_copied(self, f):
-        self._verify_file_locations(f, True, True)
-
     def _verify_file_moved(self, f):
         self._verify_file_locations(f, False, True)
 
@@ -88,10 +85,10 @@ class TestArchive(AgentTestCase):
         self._verify_file_moved('InVmArtifactsProfileBlob_ft.52.json')
         self._verify_file_moved('GoalState_fa.5.xml')
         self._verify_file_untouched('Dont_care_about_this_file')
-        self._verify_file_copied('Incarnation')
-        self._verify_file_copied('ArtifactProfileSequenceNumber')
-        self._verify_file_copied('SvdSeqNo')
-        self._verify_file_copied('GoalStateSource')
+        self._verify_file_untouched('Incarnation')
+        self._verify_file_untouched('ArtifactProfileSequenceNumber')
+        self._verify_file_untouched('SvdSeqNo')
+        self._verify_file_untouched('GoalStateSource')
         self._verify_file_untouched('VmId')
 
     def test_archive00(self):
