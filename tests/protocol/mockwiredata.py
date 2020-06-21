@@ -309,6 +309,9 @@ class WireProtocolData(object):
         '''
         self.goal_state = WireProtocolData.replace_xml_element_value(self.goal_state, "Incarnation", str(incarnation))
 
+    def set_in_svd_seq_no(self, in_svd_seq_no):
+        self.ext_conf = WireProtocolData.replace_xml_attribute_value(self.ext_conf, "InVMGoalStateMetaData", "inSvdSeqNo", in_svd_seq_no)
+
     def set_container_id(self, container_id):
         self.goal_state = WireProtocolData.replace_xml_element_value(self.goal_state, "ContainerId", container_id)
 

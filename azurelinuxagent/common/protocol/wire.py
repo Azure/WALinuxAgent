@@ -145,10 +145,6 @@ class WireProtocol(DataContract):
         man = self.client.get_ext_manifest(ext_handler)
         return man.pkg_list
 
-    def get_artifacts_profile(self):
-        logger.verbose("Get In-VM Artifacts Profile")
-        return self.client.get_artifacts_profile()
-
     def _download_ext_handler_pkg_through_host(self, uri, destination):
         host = self.client.get_host_plugin()
         uri, headers = host.get_artifact_request(uri, host.manifest_uri)
@@ -812,13 +808,8 @@ class WireClient(object):
         elif refresh_type == WireClient._UpdateType.GoalStateForced:
             save_goal_state = True
             self._goal_state = new_goal_state
-        elif new_goal_state.ext_conf is not None:
-            if new_goal_state.ext_conf.changed:
-                self._goal_state = new_goal_state
-            else:
-                # The actual goal state is the same, since changed == false
-                # However, we need to update the changed property or else we'll process the extensions again
-                self._goal_state.ext_conf.changed = new_goal_state.ext_conf.changed
+        elif new_goal_state.ext_conf is not None and new_goal_state.ext_conf.changed:
+            self._goal_state = new_goal_state
 
         # We save the goal state and update the host plugin only if one of the following is true
         # 1) We didn't previously have a goal state

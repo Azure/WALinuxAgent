@@ -233,7 +233,7 @@ class MockWireClient:
     def get_endpoint(self):
         return "http://www.blahblahblah.lu"
 
-    def get_artifacts_profile(self):
+    def get_artifacts_profile(self, artifacts_profile_uri):
         return self.return_artifacts_profile
 
 

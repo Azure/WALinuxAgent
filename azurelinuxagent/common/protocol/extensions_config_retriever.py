@@ -88,6 +88,9 @@ class GenericExtensionsConfig(ExtensionsConfig):
     def get_ext_config_file_name(self):
         return self._ext_conf_retriever.get_ext_config_file_name()
 
+    def get_is_on_hold(self):
+        return self._ext_conf_retriever.get_is_on_hold()
+
 
 class ExtensionsConfigRetriever(object):
     def __init__(self, wire_client):
@@ -124,7 +127,7 @@ class ExtensionsConfigRetriever(object):
     def get_is_on_hold(self):
         if self._is_on_hold is None:
             # If FastTrack is disabled, we won't automatically retrieve the artifacts profile, so do that now
-            artifacts_profile = self._wire_client.get_artifacts_profile()
+            artifacts_profile = self._wire_client.get_artifacts_profile(self._artifacts_profile_uri)
             self._is_on_hold = artifacts_profile.is_on_hold()
         return self._is_on_hold
 
@@ -161,16 +164,10 @@ class ExtensionsConfigRetriever(object):
 
         logger.info("Using {0} for the first call to extensions. Reason={1}", self._pending_mode, self._reason)
 
-        extensions_config = None
-        if self._pending_mode == GOAL_STATE_SOURCE_FABRIC:
-            extensions_config = fabric_ext_conf
-        else:
-            extensions_config = artifacts_profile.transform_to_extensions_config()
-
+        extensions_config = self._create_ext_config(fabric_ext_conf, artifacts_profile)
         self._current_ext_conf = GenericExtensionsConfig(extensions_config, True, self)
-        if self._pending_mode == GOAL_STATE_SOURCE_FABRIC:
-            # We only need to retrieve certs if the Fabric incarnation changes. FastTrack won't change them
-            self._current_ext_conf.is_fabric_change = True
+        self._check_set_is_fabric_change()
+
         return self._current_ext_conf
 
     def _get_ext_config_after_startup(self, incarnation, fabric_ext_config_uri):
@@ -213,17 +210,24 @@ class ExtensionsConfigRetriever(object):
         else:
             logger.info("Processing extensions config: {0}. Reason={1}", self._pending_mode, self._reason)
 
-        extensions_config = None
-        if self._pending_mode == GOAL_STATE_SOURCE_FABRIC:
-            extensions_config = fabric_ext_conf
-        else:
-            extensions_config = artifacts_profile.transform_to_extensions_config()
+        extensions_config = self._create_ext_config(fabric_ext_conf, artifacts_profile)
+        self._current_ext_conf = GenericExtensionsConfig(extensions_config, True, self)
+        self._check_set_is_fabric_change()
 
-        ext_conf = GenericExtensionsConfig(extensions_config, True, self)
+        return self._current_ext_conf
+
+    def _create_ext_config(self, fabric_ext_conf, artifacts_profile):
+        if self._pending_mode == GOAL_STATE_SOURCE_FABRIC:
+            return fabric_ext_conf
+        else:
+            return artifacts_profile.transform_to_extensions_config()
+
+    def _check_set_is_fabric_change(self):
         if self._pending_mode == GOAL_STATE_SOURCE_FABRIC:
             # We only need to retrieve certs if the Fabric incarnation changes. FastTrack won't change them
-            ext_conf.is_fabric_change = True
-        return ext_conf
+            self._current_ext_conf.is_fabric_change = True
+        else:
+            self._current_ext_conf.is_fabric_change = False
 
     def _get_fabric_changed(self, incarnation, fabric_ext_config_uri):
         fabric_changed = False
@@ -262,7 +266,7 @@ class ExtensionsConfigRetriever(object):
         artifacts_profile = None
 
         if conf.get_extensions_fast_track_enabled():
-            artifacts_profile = self._wire_client.get_artifacts_profile()
+            artifacts_profile = self._wire_client.get_artifacts_profile(self._artifacts_profile_uri)
             if artifacts_profile is None:
                 self._fast_track_changed_detail = FastTrackChangeDetail.NO_PROFILE
             else:

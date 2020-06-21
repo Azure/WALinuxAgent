@@ -336,8 +336,7 @@ class ExtHandlersHandler(object):
             return False
 
         if conf.get_enable_overprovisioning():
-            artifacts_profile = self.protocol.get_artifacts_profile()
-            if artifacts_profile and artifacts_profile.is_on_hold():
+            if self.ext_config.get_is_on_hold():
                 logger.info("Extension handling is on hold")
                 return False
 
