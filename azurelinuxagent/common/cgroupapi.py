@@ -628,19 +628,19 @@ After=system-{1}.slice""".format(extension_name, EXTENSIONS_ROOT_CGROUP_NAME)
         return self._agent_unit_name
 
     @staticmethod
-    def get_processes_in_cgroup(unit_name):
+    def get_processes_in_cgroup(cgroup_path):
         """
         Returns an array of tuples with the PID and command line of the processes that are currently
-        within the cgroup for the given unit.
+        within the cgroup for the given path (which must be within the cgroup filesystem).
         """
         #
         # The output of the command is similar to
         #
-        #     Unit walinuxagent.service (/system.slice/walinuxagent.service):
+        #     Directory /sys/fs/cgroup/cpu/system.slice/walinuxagent.service:
         #     ├─27519 /usr/bin/python3 -u /usr/sbin/waagent -daemon
         #     └─27547 python3 -u bin/WALinuxAgent-2.2.48.1-py2.7.egg -run-exthandlers
         #
-        output = shellutil.run_command(['systemd-cgls', '--unit', unit_name])
+        output = shellutil.run_command(['systemd-cgls', cgroup_path])
 
         processes = []
 
