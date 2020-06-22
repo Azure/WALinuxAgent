@@ -41,6 +41,8 @@ class CGroupConfigurator(object):
             self._cgroups_supported = False
             self._cgroups_enabled = False
             self._cgroups_api = None
+            self._agent_cpu_cgroup_path = None
+            self._agent_memory_cgroup_path = None
             self._get_processes_in_agent_cgroup_last_error = None
             self._get_processes_in_agent_cgroup_error_count = 0
 
@@ -137,16 +139,16 @@ class CGroupConfigurator(object):
                 if cpu_controller_root is None or cpu_cgroup_relative_path is None:
                     logger.info("Will not track CPU for the agent's cgroup")
                 else:
-                    cpu_cgroup_path = os.path.join(cpu_controller_root, cpu_cgroup_relative_path)
-                    CGroupsTelemetry.track_cgroup(CpuCgroup(agent_unit_name, cpu_cgroup_path))
+                    self._agent_cpu_cgroup_path = os.path.join(cpu_controller_root, cpu_cgroup_relative_path)
+                    CGroupsTelemetry.track_cgroup(CpuCgroup(agent_unit_name, self._agent_cpu_cgroup_path))
 
                 if memory_controller_root is None or memory_cgroup_relative_path is None:
                     logger.info("Will not track memory for the agent's cgroup")
                 else:
-                    memory_cgroup_path = os.path.join(memory_controller_root, memory_cgroup_relative_path)
-                    CGroupsTelemetry.track_cgroup(MemoryCgroup(agent_unit_name, memory_cgroup_path))
+                    self._agent_memory_cgroup_path = os.path.join(memory_controller_root, memory_cgroup_relative_path)
+                    CGroupsTelemetry.track_cgroup(MemoryCgroup(agent_unit_name, self._agent_memory_cgroup_path))
 
-                log_cgroup_info("Agent cgroups: CPU: {0} -- MEMORY: {1}", cpu_cgroup_path, memory_cgroup_path)
+                log_cgroup_info("Agent cgroups: CPU: {0} -- MEMORY: {1}", self._agent_cpu_cgroup_path, self._agent_memory_cgroup_path)
 
             except Exception as e:
                 message = "Error initializing cgroups: {0}".format(ustr(e))
@@ -223,8 +225,9 @@ class CGroupConfigurator(object):
             The return value can be None if cgroups are not enabled or if an error occurs during the operation.
             """
             def __impl():
-                agent_unit = self._cgroups_api.get_agent_unit_name()
-                return self._cgroups_api.get_processes_in_cgroup(agent_unit)
+                if self._agent_cpu_cgroup_path is None:
+                    return []
+                return self._cgroups_api.get_processes_in_cgroup(self._agent_cpu_cgroup_path)
 
             def __on_error(exception):
                 #
@@ -302,7 +305,7 @@ class CGroupConfigurator(object):
             r".*waagent -daemon.*",
             r".*(WALinuxAgent-.+\.egg|waagent) -run-exthandlers",
             # The processes in the agent's cgroup are listed using systemd-cgls
-            r"^systemd-cgls --unit walinuxagent.service$",
+            r"^systemd-cgls.*walinuxagent.*$",
             # Extensions are started using systemd-run
             r"^systemd-run --unit=.+ --scope ",
             #
