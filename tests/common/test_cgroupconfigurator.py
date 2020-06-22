@@ -17,8 +17,7 @@
 
 from __future__ import print_function
 
-import contextlib
-import os
+import re
 import subprocess
 
 from azurelinuxagent.common.cgroup import CGroup
@@ -26,7 +25,7 @@ from azurelinuxagent.common.cgroupconfigurator import CGroupConfigurator
 from azurelinuxagent.common.cgroupstelemetry import CGroupsTelemetry
 from azurelinuxagent.common.exception import CGroupsException
 from tests.common.mock_cgroup_commands import mock_cgroup_commands
-from tests.tools import AgentTestCase, patch
+from tests.tools import AgentTestCase, patch, mock_sleep
 
 
 class CGroupConfiguratorSystemdTestCase(AgentTestCase):
@@ -40,10 +39,8 @@ class CGroupConfiguratorSystemdTestCase(AgentTestCase):
         CGroupConfigurator._instance = None
         configurator = CGroupConfigurator.get_instance()
         if initialize:
-            with patch('azurelinuxagent.common.cgroupapi.CGroupsApi.cgroups_supported', return_value=True):
-                with patch('azurelinuxagent.common.cgroupapi.CGroupsApi._is_systemd', return_value=True):
-                    with mock_cgroup_commands():
-                        configurator.initialize()
+            with mock_cgroup_commands():
+                configurator.initialize()
         return configurator
 
     def test_initialize_should_start_tracking_the_agent_cgroups(self):
@@ -130,7 +127,23 @@ class CGroupConfiguratorSystemdTestCase(AgentTestCase):
                     message = args[0]
                     self.assertIn("A TEST EXCEPTION", message)
 
-    def test_start_extension_command_should_not_use_systemd_when_groups_are_not_enabled(self):
+    def test_get_processes_in_agent_cgroup_should_return_the_processes_within_the_agent_cgroup(self):
+        with mock_cgroup_commands():
+            configurator = CGroupConfiguratorSystemdTestCase._get_new_cgroup_configurator_instance()
+
+            processes = configurator.get_processes_in_agent_cgroup()
+
+            self.assertTrue(len(processes) >= 2,
+                "The cgroup should contain at least 2 procceses (daemon and extension handler): [{0}]".format(processes))
+
+            daemon_present = any("waagent -daemon" in command for (pid, command) in processes)
+            self.assertTrue(daemon_present, "Could not find the daemon in the cgroup: [{0}]".format(processes))
+
+            extension_handler_present = any(re.search("(WALinuxAgent-.+\.egg|waagent) -run-exthandlers", command) for (pid, command) in processes)
+            self.assertTrue(extension_handler_present, "Could not find the extension handler in the cgroup: [{0}]".format(processes))
+
+    @patch('time.sleep', side_effect=lambda _: mock_sleep())
+    def test_start_extension_command_should_not_use_systemd_when_cgroups_are_not_enabled(self, _):
         configurator = CGroupConfiguratorSystemdTestCase._get_new_cgroup_configurator_instance()
         configurator.disable()
 
@@ -150,45 +163,30 @@ class CGroupConfiguratorSystemdTestCase(AgentTestCase):
             self.assertNotIn("systemd-run", command_calls[0], "The command should not have been invoked using systemd")
             self.assertEqual(command_calls[0], "date", "The command line should not have been modified")
 
-    @staticmethod
-    @contextlib.contextmanager
-    def _create_mock_popen(command):
-        """
-         Creates a mock for subprocess.Popen that replaces the given command with a dummy command (date); this allows
-        the tests below to run  on environments where systemd-run is not available
-        """
-        original_popen = subprocess.Popen
+    @patch('time.sleep', side_effect=lambda _: mock_sleep())
+    def test_start_extension_command_should_use_systemd_run_when_cgroups_are_enabled(self, _):
+        with mock_cgroup_commands():
+            with patch("azurelinuxagent.common.cgroupapi.subprocess.Popen", wraps=subprocess.Popen) as popen_patch:
+                CGroupConfiguratorSystemdTestCase._get_new_cgroup_configurator_instance().start_extension_command(
+                    extension_name="Microsoft.Compute.TestExtension-1.2.3",
+                    command="the-test-extension-command",
+                    timeout=300,
+                    shell=False,
+                    cwd=self.tmp_dir,
+                    env={},
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE)
 
-        def mock_popen(command_arg, *args, **kwargs):
-            if command in command_arg:
-                return original_popen("date", *args, **kwargs)
-            else:
-                return original_popen(command_arg, *args, **kwargs)
+                command_calls = [args[0] for (args, _) in popen_patch.call_args_list if "the-test-extension-command" in args[0]]
 
-        with patch("azurelinuxagent.common.cgroupapi.subprocess.Popen", side_effect=mock_popen) as patcher:
-            patcher.get_command_calls = lambda: [args[0] for args, _ in patcher.call_args_list if len(args) > 0 and command in args[0]]
-            yield patcher
+                self.assertEqual(len(command_calls), 1, "The test command should have been called exactly once [{0}]".format(command_calls))
+                self.assertIn("systemd-run --unit=Microsoft.Compute.TestExtension_1.2.3", command_calls[0], "The extension should have been invoked using systemd")
 
-    def test_start_extension_command_should_use_systemd_run_when_groups_are_enabled(self):
-        with CGroupConfiguratorSystemdTestCase._create_mock_popen("test command") as patch_popen:
-            CGroupConfiguratorSystemdTestCase._get_new_cgroup_configurator_instance().start_extension_command(
-                extension_name="Microsoft.Compute.TestExtension-1.2.3",
-                command="test command",
-                timeout=300,
-                shell=False,
-                cwd=self.tmp_dir,
-                env={},
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE)
-
-            command_calls = patch_popen.get_command_calls()
-            self.assertEqual(len(command_calls), 1, "The test command should have been called exactly once [{0}]".format(command_calls))
-            self.assertTrue(command_calls[0].startswith("systemd-run"), "The command should have been invoked using systemd [{0}]".format(command_calls))
-
-    def test_start_extension_command_should_start_tracking_the_extension_cgroups(self):
+    @patch('time.sleep', side_effect=lambda _: mock_sleep())
+    def test_start_extension_command_should_start_tracking_the_extension_cgroups(self, _):
         # CPU usage is initialized when we begin tracking a CPU cgroup; since this test does not retrieve the
         # CPU usage, there is no need for initialization
-        with CGroupConfiguratorSystemdTestCase._create_mock_popen("test command") as patch_popen:
+        with mock_cgroup_commands():
             CGroupConfiguratorSystemdTestCase._get_new_cgroup_configurator_instance().start_extension_command(
                 extension_name="Microsoft.Compute.TestExtension-1.2.3",
                 command="test command",

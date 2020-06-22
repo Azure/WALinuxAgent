@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 # Copyright 2020 Microsoft Corporation
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -28,12 +29,12 @@ from tests.tools import patch, data_dir
 # The output comes from an Ubuntu 18 system
 #
 _default_commands = [
-    (r"systemctl --version",
+    (r"^systemctl --version$",
 '''systemd 237
 +PAM +AUDIT +SELINUX +IMA +APPARMOR +SMACK +SYSVINIT +UTMP +LIBCRYPTSETUP +GCRYPT +GNUTLS +ACL +XZ +LZ4 +SECCOMP +BLKID +ELFUTILS +KMOD -IDN2 +IDN -PCRE2 default-hierarchy=hybrid
 '''),
 
-    (r"mount -t cgroup",
+    (r"^mount -t cgroup$",
 '''cgroup on /sys/fs/cgroup/systemd type cgroup (rw,nosuid,nodev,noexec,relatime,xattr,name=systemd)
 cgroup on /sys/fs/cgroup/rdma type cgroup (rw,nosuid,nodev,noexec,relatime,rdma)
 cgroup on /sys/fs/cgroup/cpuset type cgroup (rw,nosuid,nodev,noexec,relatime,cpuset)
@@ -48,29 +49,37 @@ cgroup on /sys/fs/cgroup/cpu,cpuacct type cgroup (rw,nosuid,nodev,noexec,relatim
 cgroup on /sys/fs/cgroup/blkio type cgroup (rw,nosuid,nodev,noexec,relatime,blkio)
 '''),
 
-    (r"mount -t cgroup2",
+    (r"^mount -t cgroup2$",
 '''cgroup on /sys/fs/cgroup/unified type cgroup2 (rw,nosuid,nodev,noexec,relatime)
 '''),
 
-    (r"systemctl show walinuxagent\.service --property CPUAccounting",
+    (r"^systemctl show walinuxagent\.service --property CPUAccounting$",
 '''CPUAccounting=no
 '''),
 
-    (r"systemctl show walinuxagent\.service --property MemoryAccounting",
+    (r"^systemctl show walinuxagent\.service --property MemoryAccounting$",
 '''MemoryAccounting=no
 '''),
 
-    (r"systemd-run --unit=([^\s]+) --scope ([^\s]+)",
+    (r"^systemd-run --unit=([^\s]+) --scope ([^\s]+)",
 '''
 Running scope as unit: TEST_UNIT.scope
 Thu 28 May 2020 07:25:55 AM PDT
-''')
+'''),
+
+    (r"^systemd-cgls.+/walinuxagent.service$",
+'''
+Directory /sys/fs/cgroup/cpu/system.slice/walinuxagent.service:
+├─27519 /usr/bin/python3 -u /usr/sbin/waagent -daemon
+└─27547 python3 -u bin/WALinuxAgent-2.2.48.1-py2.7.egg -run-exthandlers
+'''),
 ]
 
-_default_files = {
-    "/proc/self/cgroup": os.path.join(data_dir, 'cgroups', 'proc_self_cgroup'),
-    "/sys/fs/cgroup/unified/cgroup.controllers": os.path.join(data_dir, 'cgroups', 'sys_fs_cgroup_unified_cgroup.controllers'),
-}
+_default_files = [
+    (r"^/proc/self/cgroup$", os.path.join(data_dir, 'cgroups', 'proc_self_cgroup')),
+    (r"^/proc/[0-9]+/cgroup$", os.path.join(data_dir, 'cgroups', 'proc_pid_cgroup')),
+    (r"^/sys/fs/cgroup/unified/cgroup.controllers$", os.path.join(data_dir, 'cgroups', 'sys_fs_cgroup_unified_cgroup.controllers')),
+]
 
 @contextlib.contextmanager
 def mock_cgroup_commands():
@@ -78,27 +87,44 @@ def mock_cgroup_commands():
     original_read_file = fileutil.read_file
     original_path_exists = os.path.exists
 
+    def add_command(pattern, output):
+        patcher.commands.insert(0, (pattern, output))
+
     def mock_popen(command, *args, **kwargs):
         if isinstance(command, list):
             command_string = " ".join(command)
-            for c in _default_commands:
-                match = re.match(c[0], command_string)
-                if match is not None:
-                    command = ["echo", c[1]]
+        else:
+            command_string = command
+
+        for cmd in patcher.commands:
+            match = re.match(cmd[0], command_string)
+            if match is not None:
+                command = ["echo", cmd[1]]
+                break
+
         return original_popen(command, *args, **kwargs)
     
     def mock_read_file(filepath, **kwargs):
-        if filepath in _default_files:
-            filepath = _default_files[filepath]
+        for file in patcher.files:
+            match = re.match(file[0], filepath)
+            if match is not None:
+                filepath = file[1]
         return original_read_file(filepath, **kwargs)
 
     def mock_path_exists(path):
-        if path in _default_files:
-            return True
+        for file in patcher.files:
+            match = re.match(file[0], path)
+            if match is not None:
+                return True
         return original_path_exists(path)
 
     with patch("azurelinuxagent.common.cgroupapi.subprocess.Popen", side_effect=mock_popen) as patcher:
         with patch("azurelinuxagent.common.cgroupapi.os.path.exists", side_effect=mock_path_exists):
             with patch("azurelinuxagent.common.cgroupapi.fileutil.read_file", side_effect=mock_read_file):
-                yield patcher
+                with patch('azurelinuxagent.common.cgroupapi.CGroupsApi.cgroups_supported', return_value=True):
+                    with patch('azurelinuxagent.common.cgroupapi.CGroupsApi._is_systemd', return_value=True):
+                        patcher.commands = _default_commands[:]
+                        patcher.files = _default_files[:]
+                        patcher.add_command = add_command
+                        yield patcher
 

@@ -16,27 +16,27 @@
 #
 
 
+from distutils.version import LooseVersion as Version
+
 import azurelinuxagent.common.logger as logger
-from azurelinuxagent.common.version import *
-from .default import DefaultOSUtil
+from azurelinuxagent.common.version import DISTRO_NAME, DISTRO_CODE_NAME, DISTRO_VERSION, DISTRO_FULL_NAME
+from .alpine import AlpineOSUtil
 from .arch import ArchUtil
+from .bigip import BigIpOSUtil
 from .clearlinux import ClearLinuxUtil
 from .coreos import CoreOSUtil
 from .debian import DebianOSBaseUtil, DebianOSModernUtil
+from .default import DefaultOSUtil
 from .freebsd import FreeBSDOSUtil
+from .gaia import GaiaOSUtil
+from .iosxe import IosxeOSUtil
+from .nsbsd import NSBSDOSUtil
 from .openbsd import OpenBSDOSUtil
+from .openwrt import OpenWRTOSUtil
 from .redhat import RedhatOSUtil, Redhat6xOSUtil
 from .suse import SUSEOSUtil, SUSE11OSUtil
 from .ubuntu import UbuntuOSUtil, Ubuntu12OSUtil, Ubuntu14OSUtil, \
     UbuntuSnappyOSUtil, Ubuntu16OSUtil, Ubuntu18OSUtil
-from .alpine import AlpineOSUtil
-from .bigip import BigIpOSUtil
-from .gaia import GaiaOSUtil
-from .iosxe import IosxeOSUtil
-from .nsbsd import NSBSDOSUtil
-from .openwrt import OpenWRTOSUtil
-
-from distutils.version import LooseVersion as Version
 
 
 def get_osutil(distro_name=DISTRO_NAME,

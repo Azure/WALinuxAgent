@@ -72,6 +72,7 @@ class WALAEventOperation:
     ArtifactsProfileBlob = "ArtifactsProfileBlob"
     AutoUpdate = "AutoUpdate"
     CGroupsCleanUp = "CGroupsCleanUp"
+    CGroupsDebug = "CGroupsDebug"
     CGroupsInfo = "CGroupsInfo"
     CGroupsInitialize = "CGroupsInitialize"
     CGroupsLimitsCrossed = "CGroupsLimitsCrossed"

@@ -15,6 +15,7 @@
 # Requires Python 2.6+ and Openssl 1.0+
 
 import os
+import re
 import subprocess
 
 from azurelinuxagent.common import logger
@@ -23,7 +24,6 @@ from azurelinuxagent.common.cgroupapi import CGroupsApi, SystemdCgroupsApi
 from azurelinuxagent.common.cgroupstelemetry import CGroupsTelemetry
 from azurelinuxagent.common.exception import ExtensionErrorCodes, CGroupsException
 from azurelinuxagent.common.future import ustr
-from azurelinuxagent.common.osutil import get_osutil
 from azurelinuxagent.common.version import get_distro
 from azurelinuxagent.common.utils.extensionprocessutil import handle_process_completion
 from azurelinuxagent.common.event import add_event, WALAEventOperation
@@ -41,6 +41,10 @@ class CGroupConfigurator(object):
             self._cgroups_supported = False
             self._cgroups_enabled = False
             self._cgroups_api = None
+            self._agent_cpu_cgroup_path = None
+            self._agent_memory_cgroup_path = None
+            self._get_processes_in_agent_cgroup_last_error = None
+            self._get_processes_in_agent_cgroup_error_count = 0
 
         def initialize(self):
             try:
@@ -91,7 +95,7 @@ class CGroupConfigurator(object):
                 #
                 # check v1 controllers
                 #
-                cpu_controller_root, memory_controller_root = self._cgroups_api.get_cpu_and_memory_mount_points()
+                cpu_controller_root, memory_controller_root = self._cgroups_api.get_cgroup_mount_points()
 
                 if cpu_controller_root is not None:
                     logger.info("The CPU cgroup controller is mounted at {0}", cpu_controller_root)
@@ -113,8 +117,8 @@ class CGroupConfigurator(object):
                 #
                 # check the cgroups for the agent
                 #
-                agent_unit_name = get_osutil().get_service_name() + ".service"
-                cpu_cgroup_relative_path, memory_cgroup_relative_path = self._cgroups_api.get_cpu_and_memory_cgroup_relative_paths_for_process("self")
+                agent_unit_name = self._cgroups_api.get_agent_unit_name()
+                cpu_cgroup_relative_path, memory_cgroup_relative_path = self._cgroups_api.get_process_cgroup_relative_paths("self")
                 if cpu_cgroup_relative_path is None:
                     log_cgroup_warn("The agent's process is not within a CPU cgroup")
                 else:
@@ -135,14 +139,16 @@ class CGroupConfigurator(object):
                 if cpu_controller_root is None or cpu_cgroup_relative_path is None:
                     logger.info("Will not track CPU for the agent's cgroup")
                 else:
-                    cpu_cgroup_path = os.path.join(cpu_controller_root, cpu_cgroup_relative_path)
-                    CGroupsTelemetry.track_cgroup(CpuCgroup(agent_unit_name, cpu_cgroup_path))
+                    self._agent_cpu_cgroup_path = os.path.join(cpu_controller_root, cpu_cgroup_relative_path)
+                    CGroupsTelemetry.track_cgroup(CpuCgroup(agent_unit_name, self._agent_cpu_cgroup_path))
 
                 if memory_controller_root is None or memory_cgroup_relative_path is None:
                     logger.info("Will not track memory for the agent's cgroup")
                 else:
-                    memory_cgroup_path = os.path.join(memory_controller_root, memory_cgroup_relative_path)
-                    CGroupsTelemetry.track_cgroup(MemoryCgroup(agent_unit_name, memory_cgroup_path))
+                    self._agent_memory_cgroup_path = os.path.join(memory_controller_root, memory_cgroup_relative_path)
+                    CGroupsTelemetry.track_cgroup(MemoryCgroup(agent_unit_name, self._agent_memory_cgroup_path))
+
+                log_cgroup_info("Agent cgroups: CPU: {0} -- MEMORY: {1}", self._agent_cpu_cgroup_path, self._agent_memory_cgroup_path)
 
             except Exception as e:
                 message = "Error initializing cgroups: {0}".format(ustr(e))
@@ -153,6 +159,9 @@ class CGroupConfigurator(object):
 
         def enabled(self):
             return self._cgroups_enabled
+
+        def resource_limits_enforced(self):
+            return False
 
         def enable(self):
             if not self._cgroups_supported:
@@ -169,7 +178,7 @@ class CGroupConfigurator(object):
             Ensures the given operation is invoked only if cgroups are enabled and traps any errors on the operation.
             """
             if not self.enabled():
-                return
+                return None
 
             try:
                 return operation()
@@ -209,6 +218,30 @@ class CGroupConfigurator(object):
 
             self._invoke_cgroup_operation(__impl, "Failed to delete cgroups for extension '{0}'.".format(name))
 
+        def get_processes_in_agent_cgroup(self):
+            """
+            Returns an array of tuples with the PID and command line of the processes that are currently within the cgroup for the given unit.
+
+            The return value can be None if cgroups are not enabled or if an error occurs during the operation.
+            """
+            def __impl():
+                if self._agent_cpu_cgroup_path is None:
+                    return []
+                return self._cgroups_api.get_processes_in_cgroup(self._agent_cpu_cgroup_path)
+
+            def __on_error(exception):
+                #
+                # Send telemetry for a small sample of errors (if any)
+                #
+                self._get_processes_in_agent_cgroup_error_count = self._get_processes_in_agent_cgroup_error_count + 1
+                if self._get_processes_in_agent_cgroup_error_count <= 5:
+                    message = "Failed to list the processes in the agent's cgroup: {0}", ustr(exception)
+                    if message != self._get_processes_in_agent_cgroup_last_error:
+                        add_event(op=WALAEventOperation.CGroupsDebug, message=message)
+                    self._get_processes_in_agent_cgroup_last_error = message
+
+            return self._invoke_cgroup_operation(__impl, "Failed to list the processes in the agent's cgroup.", on_error=__on_error)
+
         def start_extension_command(self, extension_name, command, timeout, shell, cwd, env, stdout, stderr,
                                     error_code=ExtensionErrorCodes.PluginUnknownFailure):
             """
@@ -239,15 +272,15 @@ class CGroupConfigurator(object):
                                                            stderr=stderr,
                                                            error_code=error_code)
             else:
-                extension_cgroups, process_output = self._cgroups_api.start_extension_command(extension_name,
-                                                                                              command,
-                                                                                              timeout,
-                                                                                              shell=shell,
-                                                                                              cwd=cwd,
-                                                                                              env=env,
-                                                                                              stdout=stdout,
-                                                                                              stderr=stderr,
-                                                                                              error_code=error_code)
+                process_output = self._cgroups_api.start_extension_command(extension_name,
+                                                                          command,
+                                                                          timeout,
+                                                                          shell=shell,
+                                                                          cwd=cwd,
+                                                                          env=env,
+                                                                          stdout=stdout,
+                                                                          stderr=stderr,
+                                                                          error_code=error_code)
 
             return process_output
 
@@ -259,3 +292,41 @@ class CGroupConfigurator(object):
         if CGroupConfigurator._instance is None:
             CGroupConfigurator._instance = CGroupConfigurator.__impl()
         return CGroupConfigurator._instance
+
+    @staticmethod
+    def is_agent_process(command_line):
+        """
+        Returns true if the given command line corresponds to a process started by the agent.
+
+        NOTE: The function uses pattern matching to determine whether the process was spawned by the agent; this is more of a heuristic
+        than an exact check.
+        """
+        patterns = [
+            r".*waagent -daemon.*",
+            r".*(WALinuxAgent-.+\.egg|waagent) -run-exthandlers",
+            # The processes in the agent's cgroup are listed using systemd-cgls
+            r"^systemd-cgls.*walinuxagent.*$",
+            # Extensions are started using systemd-run
+            r"^systemd-run --unit=.+ --scope ",
+            #
+            # The rest of the commands are started by the environment thread; many of them are distro-specific so this list may need
+            # additions as we add support for more distros.
+            #
+            # *** Monitor DHCP client restart
+            #
+            r"^pidof (dhclient|dhclient3|systemd-networkd)",
+            r"^ip route (show|add)",
+            #
+            # *** Enable firewall
+            #
+            r"^iptables --version$",
+            r"^iptables .+ -t security",
+            #
+            # *** Monitor host name changes
+            #
+            r"^ifdown .+ && ifup .+",
+        ]
+        for p in patterns:
+            if re.match(p, command_line) is not None:
+                return True
+        return False

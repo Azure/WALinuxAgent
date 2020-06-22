@@ -32,10 +32,11 @@ from azurelinuxagent.common.datacontract import validate_param
 from azurelinuxagent.common.event import add_event, add_periodic, WALAEventOperation, EVENTS_DIRECTORY
 from azurelinuxagent.common.exception import ProtocolNotFoundError, \
     ResourceGoneError, ExtensionDownloadError, InvalidContainerError, ProtocolError, HttpError
-from azurelinuxagent.common.future import httpclient, bytebuffer
+from azurelinuxagent.common.future import httpclient, bytebuffer, ustr
 from azurelinuxagent.common.protocol.goal_state import GoalState, TRANSPORT_CERT_FILE_NAME, TRANSPORT_PRV_FILE_NAME
 from azurelinuxagent.common.protocol.hostplugin import HostPluginProtocol
-from azurelinuxagent.common.protocol.restapi import *
+from azurelinuxagent.common.protocol.restapi import DataContract, ExtensionStatus, ExtHandlerPackage, \
+    ExtHandlerPackageList, ExtHandlerVersionUri, ProvisionStatus, VMInfo, VMStatus
 from azurelinuxagent.common.telemetryevent import TelemetryEventList
 from azurelinuxagent.common.utils import fileutil, restutil
 from azurelinuxagent.common.utils.archive import StateFlusher

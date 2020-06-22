@@ -38,7 +38,7 @@ import azurelinuxagent.common.utils.fileutil as fileutil
 import azurelinuxagent.common.version as version
 from azurelinuxagent.common.cgroupconfigurator import CGroupConfigurator
 from azurelinuxagent.common.datacontract import get_properties, set_properties
-from azurelinuxagent.common.errorstate import ERROR_STATE_DELTA_INSTALL, ErrorState
+from azurelinuxagent.common.errorstate import ErrorState
 from azurelinuxagent.common.event import add_event, elapsed_milliseconds, report_event, WALAEventOperation, \
     add_periodic, EVENTS_DIRECTORY
 from azurelinuxagent.common.exception import ExtensionDownloadError, ExtensionError, ExtensionErrorCodes, \
@@ -83,6 +83,11 @@ _TRUNCATED_SUFFIX = u" ... [TRUNCATED]"
 # Status file specific retries and delays.
 _NUM_OF_STATUS_FILE_RETRIES = 5
 _STATUS_FILE_RETRY_DELAY = 2  # seconds
+
+_ENABLE_EXTENSION_TELEMETRY_PIPELINE = False
+
+def is_extension_telemetry_pipeline_enabled():
+    return _ENABLE_EXTENSION_TELEMETRY_PIPELINE
 
 
 class ValidHandlerStatus(object):
@@ -899,15 +904,14 @@ class ExtHandlerInstance(object):
 
         # Create status and config dir
         try:
-
-            # Create a smaller helper function for this
             status_dir = self.get_status_dir()
             fileutil.mkdir(status_dir, mode=0o700)
 
             conf_dir = self.get_conf_dir()
             fileutil.mkdir(conf_dir, mode=0o700)
 
-            fileutil.mkdir(self.get_extension_events_dir(), mode=0o700)
+            if is_extension_telemetry_pipeline_enabled():
+                fileutil.mkdir(self.get_extension_events_dir(), mode=0o700)
 
             seq_no, status_path = self.get_status_file_path()
             if status_path is not None:
@@ -1309,16 +1313,20 @@ class ExtHandlerInstance(object):
             self.update_settings_file(settings_file, json.dumps(ext_settings))
 
     def create_handler_env(self):
-        env = [{
-            "name": self.ext_handler.name,
-            "version": _HANDLER_ENVIRONMENT_VERSION,
-            "handlerEnvironment": {
+        handler_env = {
                 "logFolder": self.get_log_dir(),
                 "configFolder": self.get_conf_dir(),
                 "statusFolder": self.get_status_dir(),
-                "heartbeatFile": self.get_heartbeat_file(),
-                "eventsFolder": self.get_extension_events_dir()
+                "heartbeatFile": self.get_heartbeat_file()
             }
+
+        if is_extension_telemetry_pipeline_enabled():
+            handler_env["eventsFolder"] = self.get_extension_events_dir()
+
+        env = [{
+            "name": self.ext_handler.name,
+            "version": _HANDLER_ENVIRONMENT_VERSION,
+            "handlerEnvironment": handler_env
         }]
         try:
             fileutil.write_file(self.get_env_file(), json.dumps(env))
