@@ -268,7 +268,7 @@ for managing extensions and reporting VM status. The core functionality of the a
 is contained in the Extension Handler, and we encourage users to enable this option 
 in order to maintain an up to date version.
 
-On most distros the default to a value is 'y'.
+On most distros the default value is 'y'.
 
 For more information on the agent version, see our [FAQ](https://github.com/Azure/WALinuxAgent/wiki/FAQ#what-does-goal-state-agent-mean-in-waagent---version-output).
 
