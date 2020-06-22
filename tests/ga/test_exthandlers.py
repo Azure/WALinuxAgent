@@ -30,7 +30,7 @@ from azurelinuxagent.common.utils.extensionprocessutil import TELEMETRY_MESSAGE_
 from azurelinuxagent.ga.exthandlers import parse_ext_status, ExtHandlerInstance, ExtCommandEnvVariable
 from tests.protocol import mockwiredata
 from tests.protocol.mocks import mock_wire_protocol
-from tests.tools import AgentTestCase, patch, mock_sleep, clear_singleton_instances
+from tests.tools import AgentTestCase, patch, mock_sleep, clear_singleton_instances, Mock
 
 
 class TestExtHandlers(AgentTestCase):
@@ -263,6 +263,48 @@ class TestExtHandlers(AgentTestCase):
                 self.assertTrue("1.0.2" in plugin_setting_mismatch_calls[0]['message'] and "1.0.1" in plugin_setting_mismatch_calls[0]['message'],
                               "Error message should contain the incorrect versions")
                 self.assertFalse(plugin_setting_mismatch_calls[0]['is_success'], "The event should be false")
+
+
+class VersionUpdateTestCase(AgentTestCase):
+    """
+    Test cases for extension version updates
+    """
+    def setUp(self):
+        AgentTestCase.setUp(self)
+        self.cur_ext_handler = Mock()   # Create a blank Mock reference that we can edit in each test, but can still
+                                # be referenced by the updated handler right now.
+
+        from azurelinuxagent.ga.exthandlers import ExtHandlerState
+        self.updated_ext_handler = Mock(**{
+            'get_installed_ext_handler.return_value': self.cur_ext_handler,
+            "get_handler_state.return_value": ExtHandlerState.NotInstalled,
+            # It doesn't matter what the actual versions are; just that cur and updated are different.
+            "version_ne.side_effect": (lambda comp: comp == self.cur_ext_handler)
+        })
+
+        from azurelinuxagent.ga.exthandlers import ExtHandlersHandler
+        self.ext_handler = ExtHandlersHandler(Mock())
+
+    def tearDown(self):
+        AgentTestCase.tearDown(self)
+
+    def test_enabled_ext_should_be_disabled_at_ver_update(self):
+        from azurelinuxagent.ga.exthandlers import ExtHandlerState
+        self.cur_ext_handler.get_handler_state.return_value = ExtHandlerState.Enabled
+
+        self.ext_handler.handle_enable(self.updated_ext_handler)
+
+        # We set the mock to an enable state, so our "handlershandler" should have disabled it.
+        self.cur_ext_handler.disable.assert_called_once()
+
+    def test_non_enabled_ext_should_not_be_disabled_at_ver_update(self):
+        from azurelinuxagent.ga.exthandlers import ExtHandlerState
+        self.cur_ext_handler.get_handler_state.return_value = ExtHandlerState.Installed
+
+        self.ext_handler.handle_enable(self.updated_ext_handler)
+
+        # As the mock was not in an enabled state, it should not be disabled by the above call.
+        self.cur_ext_handler.disable.assert_not_called()
 
 class LaunchCommandTestCase(AgentTestCase):
     """
