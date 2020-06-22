@@ -312,7 +312,6 @@ class EventLogger(object):
         self._common_parameters.append(TelemetryEventParam(CommonTelemetryEventSchema.Processors, int(EventLogger._get_processors(osutil))))
 
         # Parameters from goal state
-        # self._common_parameters.append(TelemetryEventParam("VMName", "VMName_UNINITIALIZED"))
         self._common_parameters.append(TelemetryEventParam(CommonTelemetryEventSchema.TenantName, "TenantName_UNINITIALIZED"))
         self._common_parameters.append(TelemetryEventParam(CommonTelemetryEventSchema.RoleName, "RoleName_UNINITIALIZED"))
         self._common_parameters.append(TelemetryEventParam(CommonTelemetryEventSchema.RoleInstanceName, "RoleInstanceName_UNINITIALIZED"))
@@ -542,10 +541,9 @@ class EventLogger(object):
                          TelemetryEventParam(CommonTelemetryEventSchema.TaskName, threading.current_thread().getName()),
                          TelemetryEventParam(CommonTelemetryEventSchema.KeywordName, '')]
 
-        if event.eventId in (None, TELEMETRY_EVENT_EVENT_ID) and event.providerId in (None, TELEMETRY_EVENT_PROVIDER_ID):
+        if event.eventId == TELEMETRY_EVENT_EVENT_ID and event.providerId == TELEMETRY_EVENT_PROVIDER_ID:
             # Currently only the GuestAgentExtensionEvents has these columns, the other tables dont have them so skipping
             # this data in those tables.
-            # By default, if no eventId/providerId is specified, add this data too.
             common_params.extend([TelemetryEventParam(GuestAgentExtensionEventsSchema.ExtensionType, event.file_type),
                          TelemetryEventParam(GuestAgentExtensionEventsSchema.IsInternal, False)])
 
