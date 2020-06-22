@@ -499,7 +499,7 @@ class TestEvent(HttpRequestPredicates, AgentTestCase):
 
     @staticmethod
     def _datetime_to_event_timestamp(dt):
-        return dt.strftime(u'%Y-%m-%dT%H:%M:%S.%fZ')
+        return dt.strftime(logger.Logger.LogTimeFormatInUTC)
 
     def _test_create_event_function_should_create_events_that_have_all_the_parameters_in_the_telemetry_schema(self, create_event_function, expected_parameters):
         """
