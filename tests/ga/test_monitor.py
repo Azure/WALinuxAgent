@@ -39,7 +39,7 @@ from azurelinuxagent.common.exception import HttpError
 from azurelinuxagent.common.logger import Logger
 from azurelinuxagent.common.osutil import get_osutil
 from azurelinuxagent.common.protocol.wire import WireProtocol
-from azurelinuxagent.common.telemetryevent import TelemetryEvent, TelemetryEventParam
+from azurelinuxagent.common.telemetryevent import TelemetryEvent, TelemetryEventParam, GuestAgentExtensionEventsSchema
 from azurelinuxagent.common.utils import fileutil, restutil
 from azurelinuxagent.common.version import AGENT_VERSION, CURRENT_VERSION, CURRENT_AGENT, DISTRO_NAME, DISTRO_VERSION, DISTRO_CODE_NAME
 from azurelinuxagent.ga.monitor import get_monitor_handler, MonitorHandler, PeriodicOperation, ResetPeriodicLogMessagesOperation, PollResourceUsageOperation
@@ -198,12 +198,12 @@ class TestEventMonitoring(AgentTestCase, HttpRequestPredicates):
     @staticmethod
     def _get_event_data(duration, is_success, message, name, op, version, eventId=1):
         event = TelemetryEvent(eventId, "XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX")
-        event.parameters.append(TelemetryEventParam('Name', name))
-        event.parameters.append(TelemetryEventParam('Version', str(version)))
-        event.parameters.append(TelemetryEventParam('Operation', op))
-        event.parameters.append(TelemetryEventParam('OperationSuccess', is_success))
-        event.parameters.append(TelemetryEventParam('Message', message))
-        event.parameters.append(TelemetryEventParam('Duration', duration))
+        event.parameters.append(TelemetryEventParam(GuestAgentExtensionEventsSchema.Name, name))
+        event.parameters.append(TelemetryEventParam(GuestAgentExtensionEventsSchema.Version, str(version)))
+        event.parameters.append(TelemetryEventParam(GuestAgentExtensionEventsSchema.Operation, op))
+        event.parameters.append(TelemetryEventParam(GuestAgentExtensionEventsSchema.OperationSuccess, is_success))
+        event.parameters.append(TelemetryEventParam(GuestAgentExtensionEventsSchema.Message, message))
+        event.parameters.append(TelemetryEventParam(GuestAgentExtensionEventsSchema.Duration, duration))
 
         data = get_properties(event)
         return json.dumps(data)

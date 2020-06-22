@@ -17,7 +17,8 @@ from azurelinuxagent.common.exception import InvalidExtensionEventError
 from azurelinuxagent.common.logger import Logger
 from azurelinuxagent.common.protocol.util import ProtocolUtil
 from azurelinuxagent.common.protocol.wire import event_param_to_v1
-from azurelinuxagent.common.telemetryevent import TelemetryEventParam, TelemetryEventSchemaKeyNames
+from azurelinuxagent.common.telemetryevent import TelemetryEventParam, GuestAgentGenericLogsSchema, \
+    CommonTelemetryEventSchema
 from azurelinuxagent.common.utils import fileutil, textutil
 from azurelinuxagent.ga.extension_telemetry import get_extension_telemetry_handler, ExtensionEventSchema
 from tests.protocol.mocks import mock_wire_protocol, HttpRequestPredicates, MockHttpResponse
@@ -284,10 +285,10 @@ class TestExtensionTelemetryHandler(AgentTestCase, HttpRequestPredicates):
                 self._assert_handler_data_in_event_body(telemetry_events, ext_names_with_count,
                                                         expected_count=max_events)
                 self._assert_param_in_events(extension_telemetry_handler.event_body,
-                                             param_key=TelemetryEventSchemaKeyNames.Context1,
+                                             param_key=GuestAgentGenericLogsSchema.Context1,
                                              param_value="This is the latest event", min_count=no_of_extension*max_events)
                 self._assert_param_in_events(extension_telemetry_handler.event_body,
-                                             param_key=TelemetryEventSchemaKeyNames.Context3, param_value=test_guid,
+                                             param_key=GuestAgentGenericLogsSchema.Context3, param_value=test_guid,
                                              min_count=no_of_extension*max_events)
 
 
@@ -360,7 +361,7 @@ class TestExtensionTelemetryHandler(AgentTestCase, HttpRequestPredicates):
         with patch("azurelinuxagent.ga.extension_telemetry.ExtensionTelemetryHandler.EXTENSION_EVENT_MAX_MSG_LEN", max_len):
             handler_name_with_count, event_body = self._setup_and_assert_tests_for_max_sizes()
             context1_vals = self._get_param_value_from_event_body_if_exists(event_body,
-                                                                            TelemetryEventSchemaKeyNames.Context1)
+                                                                            GuestAgentGenericLogsSchema.Context1)
             self.assertEqual(no_of_extensions, len(context1_vals),
                              "There should be {0} Context1 values".format(no_of_extensions))
 
@@ -392,14 +393,14 @@ class TestExtensionTelemetryHandler(AgentTestCase, HttpRequestPredicates):
 
         # EventName maps to HandlerName + '-' + Version from event file
         expected_mapping = {
-            TelemetryEventSchemaKeyNames.EventName: ExtensionEventSchema.Version,
-            TelemetryEventSchemaKeyNames.CapabilityUsed: ExtensionEventSchema.EventLevel,
-            TelemetryEventSchemaKeyNames.TaskName: ExtensionEventSchema.TaskName,
-            TelemetryEventSchemaKeyNames.Context1: ExtensionEventSchema.Message,
-            TelemetryEventSchemaKeyNames.Context2: ExtensionEventSchema.Timestamp,
-            TelemetryEventSchemaKeyNames.Context3: ExtensionEventSchema.OperationId,
-            TelemetryEventSchemaKeyNames.EventPid: ExtensionEventSchema.EventPid,
-            TelemetryEventSchemaKeyNames.EventTid: ExtensionEventSchema.EventTid
+            GuestAgentGenericLogsSchema.EventName: ExtensionEventSchema.Version,
+            GuestAgentGenericLogsSchema.CapabilityUsed: ExtensionEventSchema.EventLevel,
+            GuestAgentGenericLogsSchema.TaskName: ExtensionEventSchema.TaskName,
+            GuestAgentGenericLogsSchema.Context1: ExtensionEventSchema.Message,
+            GuestAgentGenericLogsSchema.Context2: ExtensionEventSchema.Timestamp,
+            GuestAgentGenericLogsSchema.Context3: ExtensionEventSchema.OperationId,
+            CommonTelemetryEventSchema.EventPid: ExtensionEventSchema.EventPid,
+            CommonTelemetryEventSchema.EventTid: ExtensionEventSchema.EventTid
         }
 
         with self._create_extension_telemetry_handler() as extension_telemetry_handler:
@@ -426,7 +427,7 @@ class TestExtensionTelemetryHandler(AgentTestCase, HttpRequestPredicates):
 
                 # EventName = "HandlerName-Version" from Extensions
                 extension_data = ["{0}-{1}".format(handler_name, v) for v in extension_event_map[
-                    extension_event_key]] if telemetry_key == TelemetryEventSchemaKeyNames.EventName else \
+                    extension_event_key]] if telemetry_key == GuestAgentGenericLogsSchema.EventName else \
                 extension_event_map[extension_event_key]
 
                 self.assertEqual(telemetry_data, extension_data,

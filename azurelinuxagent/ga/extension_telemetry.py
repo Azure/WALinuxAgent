@@ -30,7 +30,7 @@ from azurelinuxagent.common.event import EVENTS_DIRECTORY, TELEMETRY_LOG_EVENT_I
 from azurelinuxagent.common.exception import InvalidExtensionEventError
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.telemetryevent import TelemetryEventList, TelemetryEvent, TelemetryEventParam, \
-    TelemetryEventSchemaKeyNames
+    GuestAgentGenericLogsSchema
 from azurelinuxagent.ga.exthandlers import HANDLER_NAME_PATTERN
 from azurelinuxagent.ga.periodic_operation import PeriodicOperation
 
@@ -297,15 +297,15 @@ class ExtensionTelemetryHandler(object):
         add_common_params_to_extension_event(event)
 
         replace_or_add_params = {
-            TelemetryEventSchemaKeyNames.EventName: "{0}-{1}".format(handler_name, extension_event[
+            GuestAgentGenericLogsSchema.EventName: "{0}-{1}".format(handler_name, extension_event[
                 ExtensionEventSchema.Version.lower()]),
-            TelemetryEventSchemaKeyNames.CapabilityUsed: extension_event[ExtensionEventSchema.EventLevel.lower()],
-            TelemetryEventSchemaKeyNames.TaskName: extension_event[ExtensionEventSchema.TaskName.lower()],
-            TelemetryEventSchemaKeyNames.Context1: extension_event[ExtensionEventSchema.Message.lower()],
-            TelemetryEventSchemaKeyNames.Context2: extension_event[ExtensionEventSchema.Timestamp.lower()],
-            TelemetryEventSchemaKeyNames.Context3: extension_event[ExtensionEventSchema.OperationId.lower()],
-            TelemetryEventSchemaKeyNames.EventPid: extension_event[ExtensionEventSchema.EventPid.lower()],
-            TelemetryEventSchemaKeyNames.EventTid: extension_event[ExtensionEventSchema.EventTid.lower()]
+            GuestAgentGenericLogsSchema.CapabilityUsed: extension_event[ExtensionEventSchema.EventLevel.lower()],
+            GuestAgentGenericLogsSchema.TaskName: extension_event[ExtensionEventSchema.TaskName.lower()],
+            GuestAgentGenericLogsSchema.Context1: extension_event[ExtensionEventSchema.Message.lower()],
+            GuestAgentGenericLogsSchema.Context2: extension_event[ExtensionEventSchema.Timestamp.lower()],
+            GuestAgentGenericLogsSchema.Context3: extension_event[ExtensionEventSchema.OperationId.lower()],
+            GuestAgentGenericLogsSchema.EventPid: extension_event[ExtensionEventSchema.EventPid.lower()],
+            GuestAgentGenericLogsSchema.EventTid: extension_event[ExtensionEventSchema.EventTid.lower()]
         }
         self._replace_or_add_param_in_event(event, replace_or_add_params)
         return event
