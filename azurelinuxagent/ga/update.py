@@ -53,7 +53,7 @@ from azurelinuxagent.common.version import AGENT_NAME, AGENT_VERSION, AGENT_DIR_
     CURRENT_VERSION, DISTRO_NAME, DISTRO_VERSION, is_current_agent_installed, PY_VERSION_MAJOR, PY_VERSION_MINOR, \
     PY_VERSION_MICRO
 
-from azurelinuxagent.ga.exthandlers import HandlerManifest, get_traceback
+from azurelinuxagent.ga.exthandlers import HandlerManifest, get_traceback, is_extension_telemetry_pipeline_enabled
 
 AGENT_ERROR_FILE = "error.json" # File name for agent error record
 AGENT_MANIFEST_FILE = "HandlerManifest.json"
@@ -278,9 +278,10 @@ class UpdateHandler(object):
             env_thread = get_env_handler()
             env_thread.run()
 
-            from azurelinuxagent.ga.extension_telemetry import get_extension_telemetry_handler
-            extension_telemetry_thread = get_extension_telemetry_handler(self.protocol_util)
-            extension_telemetry_thread.run()
+            if is_extension_telemetry_pipeline_enabled():
+                from azurelinuxagent.ga.extension_telemetry import get_extension_telemetry_handler
+                extension_telemetry_thread = get_extension_telemetry_handler(self.protocol_util)
+                extension_telemetry_thread.run()
 
             from azurelinuxagent.ga.exthandlers import get_exthandlers_handler, migrate_handler_state
             exthandlers_handler = get_exthandlers_handler(protocol)
@@ -317,7 +318,7 @@ class UpdateHandler(object):
                     logger.warn(u"Environment thread died, restarting")
                     env_thread.start()
 
-                if not extension_telemetry_thread.is_alive():
+                if is_extension_telemetry_pipeline_enabled() and not extension_telemetry_thread.is_alive():
                     logger.warn(u"Extension Telemetry thread died, restarting")
                     extension_telemetry_thread.start()
 

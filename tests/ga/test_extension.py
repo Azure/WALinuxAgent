@@ -48,7 +48,7 @@ from tests.protocol import mockwiredata
 from tests.protocol.mocks import mock_wire_protocol, HttpRequestPredicates
 from tests.protocol.mockwiredata import DATA_FILE
 from tests.tools import are_cgroups_enabled, AgentTestCase, data_dir, i_am_root, MagicMock, Mock, \
-    skip_if_predicate_false, patch
+    skip_if_predicate_false, patch, mock_sleep
 
 from azurelinuxagent.common.exception import ResourceGoneError, ExtensionDownloadError, ProtocolError, \
     ExtensionErrorCodes, ExtensionError, ExtensionUpdateError
@@ -62,10 +62,6 @@ SLEEP = time.sleep
 
 
 SUCCESS_CODE_FROM_STATUS_FILE = 1
-
-
-def mock_sleep(sec=0.01):
-    SLEEP(sec)
 
 
 def do_not_run_test():
