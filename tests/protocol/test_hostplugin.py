@@ -21,7 +21,6 @@ import datetime
 import json
 import sys
 import unittest
-import uuid
 
 import azurelinuxagent.common.protocol.hostplugin as hostplugin
 import azurelinuxagent.common.protocol.restapi as restapi
@@ -29,10 +28,11 @@ import azurelinuxagent.common.protocol.wire as wire
 from azurelinuxagent.common.errorstate import ErrorState
 from azurelinuxagent.common.exception import HttpError, ResourceGoneError
 from azurelinuxagent.common.future import ustr
+from azurelinuxagent.common.osutil.default import UUID_PATTERN
 from azurelinuxagent.common.protocol.hostplugin import API_VERSION
 from azurelinuxagent.common.utils import restutil
 from azurelinuxagent.common.version import AGENT_VERSION, AGENT_NAME
-from tests.protocol.mocks import mock_wire_protocol
+from tests.protocol.mocks import mock_wire_protocol, HttpRequestPredicates
 from tests.protocol.mockwiredata import DATA_FILE, DATA_FILE_NO_EXT
 from tests.protocol.test_wire import MockResponse as TestWireMockResponse
 from tests.tools import AgentTestCase, PY_VERSION_MAJOR, Mock, patch
@@ -64,7 +64,7 @@ if PY_VERSION_MAJOR > 2:
     faux_status_b64 = faux_status_b64.decode('utf-8')
 
 
-class TestHostPlugin(AgentTestCase):
+class TestHostPlugin(HttpRequestPredicates, AgentTestCase):
 
     def _init_host(self):
         with mock_wire_protocol(DATA_FILE) as protocol:
@@ -174,7 +174,7 @@ class TestHostPlugin(AgentTestCase):
 
     @patch("azurelinuxagent.common.protocol.healthservice.HealthService.report_host_plugin_versions")
     @patch("azurelinuxagent.ga.update.restutil.http_get")
-    @patch("azurelinuxagent.common.protocol.hostplugin.report_event")
+    @patch("azurelinuxagent.common.protocol.hostplugin.add_event")
     def assert_ensure_initialized(self, patch_event, patch_http_get, patch_report_health,
                                   response_body,
                                   response_status_code,
@@ -539,17 +539,23 @@ class TestHostPlugin(AgentTestCase):
                         exp_method, exp_url, exp_data)
 
     def test_validate_http_request_when_uploading_logs(self):
-        with mock_wire_protocol(DATA_FILE) as protocol:
-            test_goal_state = protocol.client._goal_state
-            correlation_id = str(uuid.uuid4())
+        def http_put_handler(url, *args, **kwargs):
+            if self.is_host_plugin_put_logs_request(url):
+                http_put_handler.args, http_put_handler.kwargs = args, kwargs
+                return MockResponse(body=b'', status_code=200)
+            self.fail('The upload logs request was sent to the wrong url: {0}'.format(url))
+
+        http_put_handler.args, http_put_handler.kwargs = [], {}
+
+        with mock_wire_protocol(DATA_FILE, http_put_handler=http_put_handler) as protocol:
+            test_goal_state = protocol.client.get_goal_state()
 
             expected_url = hostplugin.URI_FORMAT_PUT_LOG.format(wireserver_url, hostplugin.HOST_PLUGIN_PORT)
             expected_headers = {'x-ms-version': '2015-09-01',
                                 "x-ms-containerid": test_goal_state.container_id,
                                 "x-ms-vmagentlog-deploymentid": test_goal_state.role_config_name.split(".")[0],
                                 "x-ms-client-name": AGENT_NAME,
-                                "x-ms-client-version": AGENT_VERSION,
-                                "x-ms-client-correlationid": correlation_id}
+                                "x-ms-client-version": AGENT_VERSION}
 
             host_client = wire.HostPluginProtocol(wireserver_url,
                                                   test_goal_state.container_id,
@@ -557,24 +563,24 @@ class TestHostPlugin(AgentTestCase):
 
             self.assertFalse(host_client.is_initialized, "Host plugin should not be initialized!")
 
-            with patch.object(restutil, "http_request") as patch_http:
-                with patch.object(wire.HostPluginProtocol, "get_api_versions", return_value=api_versions):
-                    with patch("azurelinuxagent.common.protocol.hostplugin.uuid.uuid4", return_value=correlation_id):
-                        patch_http.return_value = Mock(status=httpclient.OK)
+            content = b"test"
+            host_client.put_vm_log(content)
+            self.assertTrue(host_client.is_initialized, "Host plugin is not initialized!")
 
-                        content = b"test"
-                        host_client.put_vm_log(content)
-                        self.assertTrue(host_client.is_initialized, "Host plugin is not initialized!")
+            urls = protocol.get_tracked_urls()
 
-                        args, kwargs = patch_http.call_args_list[0]
-                        self.assertEqual('PUT', args[0], "Expected HTTP request method PUT!")
-                        self.assertEqual(expected_url, args[1], "Unexpected request URL!")
-                        self.assertEqual(content, args[2], "Unexpected content for HTTP PUT request!")
+            self.assertEqual(expected_url, urls[0], "Unexpected request URL!")
+            self.assertEqual(content, http_put_handler.args[0], "Unexpected content for HTTP PUT request!")
 
-                        headers = kwargs['headers']
-                        for k in expected_headers:
-                            self.assertTrue(k in headers, "Header {0} not found in headers!".format(k))
-                            self.assertEqual(expected_headers[k], headers[k], "Request headers don't match!")
+            headers = http_put_handler.kwargs['headers']
+            for k in expected_headers:
+                self.assertTrue(k in headers, "Header {0} not found in headers!".format(k))
+                self.assertEqual(expected_headers[k], headers[k], "Request headers don't match!")
+
+            # Special check for correlation id header value, check for pattern, not exact value
+            self.assertTrue("x-ms-client-correlationid" in headers.keys(), "Correlation id not found in headers!")
+            self.assertTrue(UUID_PATTERN.match(headers["x-ms-client-correlationid"]),
+                            "Correlation id is not in GUID form!")
 
     def test_validate_get_extension_artifacts(self):
         with mock_wire_protocol(DATA_FILE) as protocol:

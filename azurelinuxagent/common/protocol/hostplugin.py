@@ -24,7 +24,7 @@ import uuid
 
 from azurelinuxagent.common import logger
 from azurelinuxagent.common.errorstate import ErrorState, ERROR_STATE_HOST_PLUGIN_FAILURE
-from azurelinuxagent.common.event import WALAEventOperation, report_event
+from azurelinuxagent.common.event import WALAEventOperation, add_event
 from azurelinuxagent.common.exception import HttpError, ProtocolError
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.protocol.healthservice import HealthService
@@ -43,15 +43,15 @@ URI_FORMAT_HEALTH = "http://{0}:{1}/health"
 
 API_VERSION = "2015-09-01"
 
-HEADER_CLIENT_NAME = "x-ms-client-name"
-HEADER_CLIENT_VERSION = "x-ms-client-version"
-HEADER_CORRELATION_ID = "x-ms-client-correlationid"
-HEADER_CONTAINER_ID = "x-ms-containerid"
-HEADER_DEPLOYMENT_ID = "x-ms-vmagentlog-deploymentid"
-HEADER_VERSION = "x-ms-version"
-HEADER_HOST_CONFIG_NAME = "x-ms-host-config-name"
-HEADER_ARTIFACT_LOCATION = "x-ms-artifact-location"
-HEADER_ARTIFACT_MANIFEST_LOCATION = "x-ms-artifact-manifest-location"
+_HEADER_CLIENT_NAME = "x-ms-client-name"
+_HEADER_CLIENT_VERSION = "x-ms-client-version"
+_HEADER_CORRELATION_ID = "x-ms-client-correlationid"
+_HEADER_CONTAINER_ID = "x-ms-containerid"
+_HEADER_DEPLOYMENT_ID = "x-ms-vmagentlog-deploymentid"
+_HEADER_VERSION = "x-ms-version"
+_HEADER_HOST_CONFIG_NAME = "x-ms-host-config-name"
+_HEADER_ARTIFACT_LOCATION = "x-ms-artifact-location"
+_HEADER_ARTIFACT_MANIFEST_LOCATION = "x-ms-artifact-manifest-location"
 
 MAXIMUM_PAGEBLOB_PAGE_SIZE = 4 * 1024 * 1024  # Max page size: 4MB
 
@@ -107,8 +107,8 @@ class HostPluginProtocol(object):
             self.api_versions = self.get_api_versions()
             self.is_available = API_VERSION in self.api_versions
             self.is_initialized = self.is_available
-            report_event(WALAEventOperation.InitializeHostPlugin,
-                         is_success=self.is_available)
+            add_event(WALAEventOperation.InitializeHostPlugin,
+                      is_success=self.is_available)
         return self.is_available
 
     def get_health(self):
@@ -131,7 +131,7 @@ class HostPluginProtocol(object):
         error_response = ''
         is_healthy = False
         try:
-            headers = {HEADER_CONTAINER_ID: self.container_id}
+            headers = {_HEADER_CONTAINER_ID: self.container_id}
             response = restutil.http_get(url, headers)
 
             if restutil.request_failed(response):
@@ -157,13 +157,13 @@ class HostPluginProtocol(object):
 
         url = URI_FORMAT_GET_EXTENSION_ARTIFACT.format(self.endpoint,
                                                        HOST_PLUGIN_PORT)
-        headers = {HEADER_VERSION: API_VERSION,
-                   HEADER_CONTAINER_ID: self.container_id,
-                   HEADER_HOST_CONFIG_NAME: self.role_config_name,
-                   HEADER_ARTIFACT_LOCATION: artifact_url}
+        headers = {_HEADER_VERSION: API_VERSION,
+                   _HEADER_CONTAINER_ID: self.container_id,
+                   _HEADER_HOST_CONFIG_NAME: self.role_config_name,
+                   _HEADER_ARTIFACT_LOCATION: artifact_url}
 
         if artifact_manifest_url is not None:
-            headers[HEADER_ARTIFACT_MANIFEST_LOCATION] = artifact_manifest_url
+            headers[_HEADER_ARTIFACT_MANIFEST_LOCATION] = artifact_manifest_url
 
         return url, headers
 
@@ -224,11 +224,8 @@ class HostPluginProtocol(object):
         if not self.ensure_initialized():
             raise ProtocolError("HostGAPlugin: HostGAPlugin is not available")
 
-        if content is None or self.container_id is None or self.deployment_id is None:
-            raise ProtocolError("HostGAPlugin: Invalid arguments passed to upload VM logs. "
-                                "Content: {0}, container id: {1}, deployment id: {2}".format(content,
-                                                                                             self.container_id,
-                                                                                             self.deployment_id))
+        if content is None:
+            raise ProtocolError("HostGAPlugin: Invalid argument passed to upload VM logs. Content was not provided.")
 
         url = URI_FORMAT_PUT_LOG.format(self.endpoint, HOST_PLUGIN_PORT)
         response = restutil.http_put(url,
@@ -359,20 +356,20 @@ class HostPluginProtocol(object):
     
     def _build_status_headers(self):
         return {
-            HEADER_VERSION: API_VERSION,
+            _HEADER_VERSION: API_VERSION,
             "Content-type": "application/json",
-            HEADER_CONTAINER_ID: self.container_id,
-            HEADER_HOST_CONFIG_NAME: self.role_config_name
+            _HEADER_CONTAINER_ID: self.container_id,
+            _HEADER_HOST_CONFIG_NAME: self.role_config_name
         }
 
     def _build_log_headers(self):
         return {
-            HEADER_VERSION: API_VERSION,
-            HEADER_CONTAINER_ID: self.container_id,
-            HEADER_DEPLOYMENT_ID: self.deployment_id,
-            HEADER_CLIENT_NAME: AGENT_NAME,
-            HEADER_CLIENT_VERSION: AGENT_VERSION,
-            HEADER_CORRELATION_ID: str(uuid.uuid4())
+            _HEADER_VERSION: API_VERSION,
+            _HEADER_CONTAINER_ID: self.container_id,
+            _HEADER_DEPLOYMENT_ID: self.deployment_id,
+            _HEADER_CLIENT_NAME: AGENT_NAME,
+            _HEADER_CLIENT_VERSION: AGENT_VERSION,
+            _HEADER_CORRELATION_ID: str(uuid.uuid4())
         }
 
     def _base64_encode(self, data):

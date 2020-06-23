@@ -817,7 +817,7 @@ class TestWireClient(HttpRequestPredicates, AgentTestCase):
 
     def test_upload_logs_should_not_refresh_plugin_when_first_attempt_succeeds(self):
         def http_put_handler(url, *_, **__):
-            if protocol.get_endpoint() in url and url.endswith('/vmAgentLog'):
+            if self.is_host_plugin_put_logs_request(url):
                 return MockResponse(body=b'', status_code=200)
             self.fail('The upload logs request was sent to the wrong url: {0}'.format(url))
 

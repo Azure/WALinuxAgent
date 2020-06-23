@@ -1208,15 +1208,17 @@ class WireClient(object):
             host_plugin = self.get_host_plugin()
             host_plugin.put_vm_log(content)
 
-            msg = "Upload VM logs request succeeded using the host plugin channel for " \
+            msg = "Upload VM logs request succeeded using the host plugin channel with " \
                   "container id {0} and role config file {1}".format(host_plugin.container_id,
                                                                      host_plugin.role_config_name)
+            logger.info(msg)
             add_event(name=AGENT_NAME,
                       version=CURRENT_VERSION,
                       op=WALAEventOperation.HostPlugin,
                       is_success=True,
                       message=msg,
-                      log_event=True)
+                      log_event=False)
+            return
         except (ResourceGoneError, InvalidContainerError) as e:
             host_plugin = self.get_host_plugin()
             old_container_id = host_plugin.container_id
@@ -1243,13 +1245,14 @@ class WireClient(object):
                       "ContainerId changed from {0} to {1}, " \
                       "role config file changed from {2} to {3}.".format(old_container_id, new_container_id,
                                                                          old_role_config_name, new_role_config_name)
+                logger.info(msg)
                 add_event(name=AGENT_NAME,
                           version=CURRENT_VERSION,
                           op=WALAEventOperation.HostPlugin,
                           is_success=True,
                           message=msg,
-                          log_event=True)
-
+                          log_event=False)
+                return
             except (ResourceGoneError, InvalidContainerError) as e:
                 msg = "Upload VM logs request failed using the host plugin channel after goal state refresh. " \
                       "ContainerId changed from {0} to {1}, role config file changed from {2} to {3}. " \
@@ -1262,6 +1265,8 @@ class WireClient(object):
                           message=msg,
                           log_event=True)
                 raise
+        except Exception as e:
+            raise ProtocolError("Failed to upload logs. Error: {0}".format(ustr(e)))
 
 
 class VersionInfo(object):
