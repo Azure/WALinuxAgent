@@ -330,8 +330,8 @@ class TestExtensionTelemetryHandler(AgentTestCase, HttpRequestPredicates):
 
         self.assertTrue(mock_event.called, "Even a single event not logged")
         patt = r'Extension:\s+(?P<name>Microsoft.OSTCExtensions.+?);.+\s*Reason:\s+\[InvalidExtensionEventError\](?P<reason>.+?):.+Dropped Count:\s*(?P<count>\d+)'
-        for call in mock_event.call_args_list:
-            msg = call.kwargs['message']
+        for _, kwargs in mock_event.call_args_list:
+            msg = kwargs['message']
             match = re.search(patt, msg, re.MULTILINE)
             if match is not None:
                 self.assertEqual(match.group("reason").strip(), error, "Incorrect error")
@@ -345,8 +345,8 @@ class TestExtensionTelemetryHandler(AgentTestCase, HttpRequestPredicates):
     def _assert_event_reported(self, mock_event, handler_name_with_count, pattern):
 
         self.assertTrue(mock_event.called, "Even a single event not logged")
-        for call in mock_event.call_args_list:
-            msg = call.kwargs['message']
+        for _, kwargs in mock_event.call_args_list:
+            msg = kwargs['message']
             match = re.search(pattern, msg, re.MULTILINE)
             if match is not None:
                 expected_handler_name = match.group("name")
@@ -489,13 +489,13 @@ class TestExtensionTelemetryHandler(AgentTestCase, HttpRequestPredicates):
                 self._assert_handler_data_in_event_body(telemetry_events, extensions_with_count, expected_count=0)
                 self.assertTrue(mock_event.called, "Even a single event not logged")
 
-                for call in mock_event.call_args_list:
+                for _, kwargs in mock_event.call_args_list:
                     # Example:
                     #['Dropped events for Extension: Microsoft.OSTCExtensions.ZJQRNqbKtP; Details:',
                     # 'Reason: [InvalidExtensionEventError] MissingKeyError: eventpid not found; Dropped Count: 2',
                     # 'Reason: [InvalidExtensionEventError] MissingKeyError: Message not found; Dropped Count: 2',
                     # 'Reason: [InvalidExtensionEventError] MissingKeyError: version not found; Dropped Count: 3']
-                    msg = call.kwargs['message'].split("\n")
+                    msg = kwargs['message'].split("\n")
                     ext_name = re.search(r'Dropped events for Extension:\s+(?P<name>Microsoft.OSTCExtensions.+?);.+', msg.pop(0))
                     if ext_name is not None:
                         ext_name = ext_name.group('name')
