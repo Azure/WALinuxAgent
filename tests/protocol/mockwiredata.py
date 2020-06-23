@@ -303,11 +303,13 @@ class WireProtocolData(object):
             raise Exception("Could not match attribute '{0}' of element '{1}'".format(attribute_name, element_name))
         return new_xml_document
 
-    def set_incarnation(self, incarnation):
+    def set_incarnation(self, incarnation, mirror_svd_seq_no=True):
         '''
         Sets the incarnation in the goal state, but not on its subcomponents (e.g. hosting env, shared config)
         '''
         self.goal_state = WireProtocolData.replace_xml_element_value(self.goal_state, "Incarnation", str(incarnation))
+        if mirror_svd_seq_no:
+            self.set_in_svd_seq_no(incarnation)
 
     def set_in_svd_seq_no(self, in_svd_seq_no):
         self.ext_conf = WireProtocolData.replace_xml_attribute_value(self.ext_conf, "InVMGoalStateMetaData", "inSvdSeqNo", in_svd_seq_no)

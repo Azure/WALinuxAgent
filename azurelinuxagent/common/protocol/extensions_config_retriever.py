@@ -125,11 +125,16 @@ class ExtensionsConfigRetriever(object):
             return self._get_ext_config_after_startup(incarnation, fabric_ext_config_uri)
 
     def get_is_on_hold(self):
-        if self._is_on_hold is None:
+        is_on_hold = self._is_on_hold
+        if is_on_hold is None:
             # If FastTrack is disabled, we won't automatically retrieve the artifacts profile, so do that now
+            # We don't want to cache is_on_hold here because we may then miss a change
             artifacts_profile = self._wire_client.get_artifacts_profile(self._artifacts_profile_uri)
-            self._is_on_hold = artifacts_profile.is_on_hold()
-        return self._is_on_hold
+            if artifacts_profile is None:
+                is_on_hold = False
+            else:
+                is_on_hold = artifacts_profile.is_on_hold()
+        return is_on_hold
 
     def _get_ext_config_startup(self, incarnation, fabric_ext_config_uri):
         # For startup, we choose the goal state based on:

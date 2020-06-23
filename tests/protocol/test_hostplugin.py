@@ -158,9 +158,8 @@ class TestHostPlugin(AgentTestCase):
         with mock_wire_protocol(DATA_FILE_NO_EXT) as protocol:
             # These tests use mock wire data that dont have any extensions (extension config will be empty).
             # Populate the upload blob and set an initial empty status before returning the protocol.
-            goal_state = protocol.client._goal_state
-            goal_state.status_upload_blob_url = sas_url
-            goal_state.status_upload_blob_type = page_blob_type
+            protocol.client.ext_config_retriever.status_upload_blob_url = sas_url
+            protocol.client.ext_config_retriever.status_upload_blob_type = page_blob_type
 
             status = restapi.VMStatus(status="Ready", message="Guest Agent is running")
             protocol.client.status_blob.set_vm_status(status)

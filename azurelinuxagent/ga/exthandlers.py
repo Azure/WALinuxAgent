@@ -336,7 +336,7 @@ class ExtHandlersHandler(object):
             return False
 
         if conf.get_enable_overprovisioning():
-            if self.ext_config.get_is_on_hold():
+            if self.ext_config is not None and self.ext_config.get_is_on_hold():
                 logger.info("Extension handling is on hold")
                 return False
 
