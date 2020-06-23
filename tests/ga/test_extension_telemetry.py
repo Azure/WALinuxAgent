@@ -405,7 +405,7 @@ class TestExtensionTelemetryHandler(AgentTestCase, HttpRequestPredicates):
 
         with self._create_extension_telemetry_handler() as extension_telemetry_handler:
             test_file = os.path.join(self._WELL_FORMED_FILES, "1592355539.json")
-            handler_name = self._create_random_extension_events_dir_with_events(1, test_file).keys()[0]
+            handler_name = list(self._create_random_extension_events_dir_with_events(1, test_file))[0]
             extension_telemetry_handler.collect_and_send_events()
 
             telemetry_event_map = defaultdict(list)
