@@ -34,7 +34,8 @@ class TestExtensionTelemetryHandler(AgentTestCase, HttpRequestPredicates):
     _MIX_FILES = os.path.join(_TEST_DATA_DIR, "mix_files")
 
     # To make tests more versatile, include this key in a test event to mark that event as a bad event.
-    # This event will then be skipped and will not be counted as a good event.
+    # This event will then be skipped and will not be counted as a good event. This is purely for testing purposes,
+    # we use the good_event_count to validate the no of events the agent actually sends to Wireserver.
     # Eg: {
     #         "EventLevel": "INFO",
     #         "Message": "Starting IaaS ScriptHandler Extension v1",
@@ -52,9 +53,6 @@ class TestExtensionTelemetryHandler(AgentTestCase, HttpRequestPredicates):
         AgentTestCase.setUp(self)
         prefix = "ExtensionTelemetryUnitTest"
         logger.DEFAULT_LOGGER = Logger(prefix=prefix)
-
-        # Since ProtocolUtil is a singleton per thread, we need to clear it to ensure that the test cases do not
-        # reuse a previous state
         clear_singleton_instances(ProtocolUtil)
 
         # Create the log directory if not exists
@@ -82,8 +80,8 @@ class TestExtensionTelemetryHandler(AgentTestCase, HttpRequestPredicates):
             print("Error parsing json file: {0}".format(e))
             return 0
 
-        return len([e for e in events if TestExtensionTelemetryHandler.BAD_EVENT_KEY not in e or not e[
-            TestExtensionTelemetryHandler.BAD_EVENT_KEY]])
+        bad_key = TestExtensionTelemetryHandler.BAD_EVENT_KEY
+        return len([e for e in events if bad_key not in e or not e[bad_key]])
 
     @staticmethod
     def _create_random_extension_events_dir_with_events(no_of_extensions, events_path, no_of_chars=10):

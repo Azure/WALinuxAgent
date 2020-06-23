@@ -36,6 +36,7 @@ from azurelinuxagent.ga.periodic_operation import PeriodicOperation
 
 
 def get_extension_telemetry_handler(protocol_util):
+    # Reuse the same protocol_util as the ExtHandler class
     return ExtensionTelemetryHandler(protocol_util)
 
 class ExtensionEventSchema(object):
@@ -62,12 +63,12 @@ class ExtensionTelemetryHandler(object):
 
     # Limits
     MAX_NUMBER_OF_EVENTS_PER_EXTENSION_PER_PERIOD = 300
-    EXTENSION_EVENT_FILE_MAX_SIZE = 4000000  # 4 MB = 4000000 Bytes (in decimal)
+    EXTENSION_EVENT_FILE_MAX_SIZE = 4 * 1024 * 1024  # 4 MB = 4 * 1,048,576 Bytes
     EXTENSION_EVENT_MAX_SIZE = 1024 * 6   # 6Kb or 6144 characters. Limit for the whole event. Prevent oversized events.
     EXTENSION_EVENT_MAX_MSG_LEN = 1024 * 3  # 3Kb or 3072 chars.
 
-    _EXTENSION_EVENT_SCHEMA_FIELDS = [attr.lower() for attr in dir(ExtensionEventSchema) if
-                                      not callable(getattr(ExtensionEventSchema, attr)) and not attr.startswith("__")]
+    _EXTENSION_EVENT_REQUIRED_FIELDS = [attr.lower() for attr in dir(ExtensionEventSchema) if
+                                        not callable(getattr(ExtensionEventSchema, attr)) and not attr.startswith("__")]
 
     _THREAD_NAME = "ExtensionTelemetryHandler"
 
@@ -126,20 +127,13 @@ class ExtensionTelemetryHandler(object):
             self._protocol.report_event(event_list)
 
     def _collect_extension_events(self):
-        """
-        1- Figure out all extension events directory exist in FS
-        2- Pick all events which match the REGEX and ensure no_of_events <= 300,
-            if not, sort by filename and delete the older ones
-        3-
-        :return:
-        """
         events_list = TelemetryEventList()
         extension_handler_with_event_dirs = []
 
         try:
             extension_handler_with_event_dirs = self._get_extension_events_dir_with_handler_name(conf.get_ext_log_dir())
 
-            if not extension_handler_with_event_dirs:
+            if len(extension_handler_with_event_dirs) == 0:
                 logger.info("No Extension events directory exist")
                 return events_list
 
@@ -158,6 +152,11 @@ class ExtensionTelemetryHandler(object):
 
     @staticmethod
     def _get_extension_events_dir_with_handler_name(extension_log_dir):
+        """
+        Get the full path to events directory for all extension handlers that have one
+        :param extension_log_dir: Base log directory for all extensions
+        :return: A list of full paths of existing events directory for all handlers
+        """
         extension_handler_with_event_dirs = []
 
         for ext_handler_name in os.listdir(extension_log_dir):
@@ -166,7 +165,7 @@ class ExtensionTelemetryHandler(object):
                     or re.match(HANDLER_NAME_PATTERN, ext_handler_name) is None:
                 continue
 
-            # Check if EVENTS_DIRECTORY (events) directory exists
+            # Check if EVENTS_DIRECTORY directory exists
             extension_event_dir = os.path.join(extension_log_dir, ext_handler_name, EVENTS_DIRECTORY)
             if os.path.exists(extension_event_dir):
                 extension_handler_with_event_dirs.append((ext_handler_name, extension_event_dir))
@@ -174,11 +173,16 @@ class ExtensionTelemetryHandler(object):
         return extension_handler_with_event_dirs
 
     def _capture_extension_events(self, handler_name, handler_event_dir_path, events_list):
-        # Eg: handler_name = Microsoft.CPlat.Core.RunCommandLinux
-        # handler_event_path = '/var/log/azure/Microsoft.CPlat.Core.RunCommandLinux/events'
+        """
+        Capture Extension events and add them to the events_list
+        :param handler_name: Complete Handler Name. Eg: Microsoft.CPlat.Core.RunCommandLinux
+        :param handler_event_dir_path: Full path. Eg: '/var/log/azure/Microsoft.CPlat.Core.RunCommandLinux/events'
+        :param events_list: List of captured extension events
+        """
 
         convert_to_mb = lambda x: (1.0 * x)/(1000 * 1000)
 
+        # Filter out the files that do not follow the pre-defined EXTENSION_EVENT_FILE_NAME_REGEX
         event_files = [event_file for event_file in os.listdir(handler_event_dir_path) if
                        re.match(self.EXTENSION_EVENT_FILE_NAME_REGEX, event_file) is not None]
         # Pick the latest files first, we'll discard older events if len(events) > MAX_EVENT_COUNT
@@ -193,6 +197,7 @@ class ExtensionTelemetryHandler(object):
             try:
                 logger.verbose("Processing event file: {0}", event_file_path)
 
+                # We only allow MAX_NUMBER_OF_EVENTS_PER_EXTENSION_PER_PERIOD=300 maximum events per period per handler
                 if captured_extension_events_count >= self.MAX_NUMBER_OF_EVENTS_PER_EXTENSION_PER_PERIOD:
                     msg = "Reached max count for the extension: {0}; Max Limit: {1}. Skipping the rest.".format(
                         handler_name, self.MAX_NUMBER_OF_EVENTS_PER_EXTENSION_PER_PERIOD)
@@ -224,7 +229,7 @@ class ExtensionTelemetryHandler(object):
             finally:
                 os.remove(event_file_path)
 
-        if dropped_events_with_error_count:
+        if dropped_events_with_error_count is not None and len(dropped_events_with_error_count) > 0:
             msg = "Dropped events for Extension: {0}; Details:\n {1}".format(handler_name,
                 '\n'.join(["Reason: {0}; Dropped Count: {1}".format(k, v) for k, v in dropped_events_with_error_count.items()]))
 
@@ -234,17 +239,23 @@ class ExtensionTelemetryHandler(object):
 
     @staticmethod
     def _ensure_all_events_directories_empty(extension_events_directories):
-        if not extension_events_directories:
+        if len(extension_events_directories) == 0:
             return
 
         for extension_handler_with_event_dir in extension_events_directories:
             event_dir_path = extension_handler_with_event_dir[1]
-            try:
-                # Delete any residue files in the events directory
-                for residue_file in os.listdir(event_dir_path):
+            if not os.path.exists(event_dir_path):
+                return
+
+            err = None
+            # Delete any residue files in the events directory
+            for residue_file in os.listdir(event_dir_path):
+                try:
                     os.remove(os.path.join(event_dir_path, residue_file))
-            except Exception as e:
-                logger.error("Failed to completely clear the {0} directory. Exception: {1}", event_dir_path, ustr(e))
+                except Exception as e:
+                    # Only log the first error once per handler per run if unable to clean off residue files
+                    err = ustr(e) if err is None else err
+                logger.error("Failed to completely clear the {0} directory. Exception: {1}", event_dir_path, err)
 
     def _parse_event_file_and_capture_events(self, handler_name, event_file_path, captured_events_count,
                                              dropped_events_with_error_count):
@@ -262,11 +273,6 @@ class ExtensionTelemetryHandler(object):
         if not isinstance(events, list):
             events = [events]
 
-        # Note: we can avoid reading string into memory and converting to JSON, instead we can directly convert to
-        # JSON using json.load() but unfortunately the open() and json.load() function have different signatures in py2 vs py3
-        # to encode to utf8 and to do it properly for both, this is the best way.
-        # If we depracate Py2, we can use the single way.
-
         for event in events:
             try:
                 events_list.append(self._parse_telemetry_event(handler_name, event))
@@ -278,7 +284,7 @@ class ExtensionTelemetryHandler(object):
             # end of each run to notify if there were any errors parsing events for the extension
                 dropped_events_with_error_count[ustr(e)] += 1
             except Exception as e:
-                logger.warn("Unable to parse and add event, error: {0}".format(e))
+                logger.warn("Unable to parse and transmit event, error: {0}".format(e))
 
             if captured_events_count >= self.MAX_NUMBER_OF_EVENTS_PER_EXTENSION_PER_PERIOD:
                 break
@@ -286,6 +292,10 @@ class ExtensionTelemetryHandler(object):
         return events_list
 
     def _parse_telemetry_event(self, handler_name, extension_unparsed_event):
+        """
+        Parse the Json event file and convert it to TelemetryEvent object with the required data.
+        :return: Complete TelemetryEvent with all required fields filled up properly. Raises if event breaches contract.
+        """
 
         extension_event = self._parse_event_and_ensure_it_is_valid(extension_unparsed_event)
 
@@ -311,15 +321,21 @@ class ExtensionTelemetryHandler(object):
         return event
 
     def _parse_event_and_ensure_it_is_valid(self, extension_event):
+        """
+        Parse the Json event from file. Raise InvalidExtensionEventError if the event breaches pre-set contract.
+        :param extension_event: The json event from file
+        :return: Verified Json event that qualifies the contract.
+        """
 
         clean_string = lambda x: x.strip() if x is not None else x
 
         event_size = 0
         key_err_msg = "{0}: {1} not found"
 
-        # Convert the dict to all lower keys to avoid schema confusion. Only pick the params that we care about and skip the rest
+        # Convert the dict to all lower keys to avoid schema confusion.
+        # Only pick the params that we care about and skip the rest.
         event = dict((k.lower(), clean_string(v)) for k, v in extension_event.items() if
-                     k.lower() in self._EXTENSION_EVENT_SCHEMA_FIELDS)
+                     k.lower() in self._EXTENSION_EVENT_REQUIRED_FIELDS)
 
         # Trim message and only pick the first 3k chars
         message_key = ExtensionEventSchema.Message.lower()
@@ -334,13 +350,13 @@ class ExtensionTelemetryHandler(object):
                 "{0}: {1} should not be empty".format(InvalidExtensionEventError.EmptyMessageError,
                                                      ExtensionEventSchema.Message))
 
-        for required_key in ExtensionTelemetryHandler._EXTENSION_EVENT_SCHEMA_FIELDS:
+        for required_key in ExtensionTelemetryHandler._EXTENSION_EVENT_REQUIRED_FIELDS:
             # If all required keys not in event then raise
             if not required_key in event:
                 raise InvalidExtensionEventError(
                     key_err_msg.format(InvalidExtensionEventError.MissingKeyError, required_key))
 
-            # If the event_size > 6k, then raise
+            # If the event_size > EXTENSION_EVENT_MAX_SIZE=6k, then raise
             if event_size > ExtensionTelemetryHandler.EXTENSION_EVENT_MAX_SIZE:
                 raise InvalidExtensionEventError(
                     "{0}: max event size allowed: {1}".format(InvalidExtensionEventError.OversizeEventError,

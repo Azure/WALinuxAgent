@@ -165,6 +165,12 @@ class MonitorHandler(object):
     IMDS_HEARTBEAT_PERIOD = datetime.timedelta(minutes=1)
     IMDS_HEALTH_PERIOD = datetime.timedelta(minutes=3)
 
+    _THREAD_NAME = "MonitorHandler"
+
+    @staticmethod
+    def get_thread_name():
+        return MonitorHandler._THREAD_NAME
+
     def __init__(self):
         self.osutil = get_osutil()
         self.imds_client = None
@@ -220,7 +226,7 @@ class MonitorHandler(object):
     def start(self, init_data=False):
         self.event_thread = threading.Thread(target=self.daemon, args=(init_data,))
         self.event_thread.setDaemon(True)
-        self.event_thread.setName("MonitorHandler")
+        self.event_thread.setName(self.get_thread_name())
         self.event_thread.start()
 
     def daemon(self, init_data=False):

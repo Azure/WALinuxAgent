@@ -52,8 +52,11 @@ from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
 from azurelinuxagent.common.version import AGENT_NAME, AGENT_VERSION, AGENT_DIR_PATTERN, CURRENT_AGENT,\
     CURRENT_VERSION, DISTRO_NAME, DISTRO_VERSION, is_current_agent_installed, PY_VERSION_MAJOR, PY_VERSION_MINOR, \
     PY_VERSION_MICRO
+from azurelinuxagent.ga.env import get_env_handler
+from azurelinuxagent.ga.extension_telemetry import get_extension_telemetry_handler
 
 from azurelinuxagent.ga.exthandlers import HandlerManifest, get_traceback, is_extension_telemetry_pipeline_enabled
+from azurelinuxagent.ga.monitor import get_monitor_handler
 
 AGENT_ERROR_FILE = "error.json" # File name for agent error record
 AGENT_MANIFEST_FILE = "HandlerManifest.json"
@@ -267,21 +270,18 @@ class UpdateHandler(object):
             logger.info(os_info_msg)
             add_event(AGENT_NAME, op=WALAEventOperation.OSInfo, message=os_info_msg)
 
-            # Launch monitoring threads
-
-            # Make this code smaller, add all these in an array (possibly create an interface for the threads?)
-            from azurelinuxagent.ga.monitor import get_monitor_handler
-            monitor_thread = get_monitor_handler()
-            monitor_thread.run()
-
-            from azurelinuxagent.ga.env import get_env_handler
-            env_thread = get_env_handler()
-            env_thread.run()
+            # Get all thread handlers
+            all_thread_handlers = [
+                get_monitor_handler(),
+                get_env_handler()
+            ]
 
             if is_extension_telemetry_pipeline_enabled():
-                from azurelinuxagent.ga.extension_telemetry import get_extension_telemetry_handler
-                extension_telemetry_thread = get_extension_telemetry_handler(self.protocol_util)
-                extension_telemetry_thread.run()
+                all_thread_handlers.append(get_extension_telemetry_handler(self.protocol_util))
+
+            # Launch all monitoring threads
+            for thread_handler in all_thread_handlers:
+                thread_handler.run()
 
             from azurelinuxagent.ga.exthandlers import get_exthandlers_handler, migrate_handler_state
             exthandlers_handler = get_exthandlers_handler(protocol)
@@ -310,17 +310,10 @@ class UpdateHandler(object):
                 #
                 # Check that all the threads are still running
                 #
-                if not monitor_thread.is_alive():
-                    logger.warn(u"Monitor thread died, restarting")
-                    monitor_thread.start()
-
-                if not env_thread.is_alive():
-                    logger.warn(u"Environment thread died, restarting")
-                    env_thread.start()
-
-                if is_extension_telemetry_pipeline_enabled() and not extension_telemetry_thread.is_alive():
-                    logger.warn(u"Extension Telemetry thread died, restarting")
-                    extension_telemetry_thread.start()
+                for thread_handler in all_thread_handlers:
+                    if not thread_handler.is_alive():
+                        logger.warn("{0} thread died, restarting".format(thread_handler.get_thread_name()))
+                        thread_handler.start()
 
                 #
                 # Process the goal state

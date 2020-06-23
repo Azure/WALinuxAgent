@@ -644,12 +644,10 @@ class EventLogger(object):
 
     def add_common_params_to_extension_event(self, event):
         """
-            This method is called for all extension events and ensures all required telemetry fields for
-            GuestAgentGenericLogs table in Kusto are added before the event is sent out.
-            Existing data are not modified for ExtensionEvents.
+            This method is called for all extension events and ensures all required common telemetry fields are added.
         """
         # For now, adding the datetime.utcnow() as OpcodeName to avoid errors in the case where the extension event
-        # has an incorrect date format
+        # has an incorrect date format and also to keep it consistent with the other Linux Agent events
         self._add_common_event_parameters(event, datetime.utcnow())
 
 
