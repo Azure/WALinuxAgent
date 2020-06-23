@@ -83,8 +83,7 @@ class TestEvent(HttpRequestPredicates, AgentTestCase):
 
     @staticmethod
     def _is_guest_extension_event(event):
-        return event.eventId in (None, TELEMETRY_EVENT_EVENT_ID) and \
-               event.providerId in (None, TELEMETRY_EVENT_PROVIDER_ID)
+        return event.eventId == TELEMETRY_EVENT_EVENT_ID and event.providerId == TELEMETRY_EVENT_PROVIDER_ID
 
     @staticmethod
     def _is_telemetry_log_event(event):
