@@ -22,7 +22,8 @@ from azurelinuxagent.common.version import AGENT_NAME
 
 class CommonTelemetryEventSchema(object):
 
-    # Common schema keys for both tables
+    # Common schema keys for GuestAgentExtensionEvents, GuestAgentGenericLogs
+    # and GuestAgentPerformanceCounterEvents tables in Kusto.
     EventPid = "EventPid"
     EventTid = "EventTid"
     GAVersion = "GAVersion"
