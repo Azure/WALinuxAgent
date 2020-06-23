@@ -318,8 +318,8 @@ class ExtensionTelemetryHandler(object):
         key_err_msg = "{0}: {1} not found"
 
         # Convert the dict to all lower keys to avoid schema confusion. Only pick the params that we care about and skip the rest
-        event = {k.lower(): clean_string(v) for k, v in extension_event.items() if
-                 k.lower() in self._EXTENSION_EVENT_SCHEMA_FIELDS}
+        event = dict((k.lower(), clean_string(v)) for k, v in extension_event.items() if
+                     k.lower() in self._EXTENSION_EVENT_SCHEMA_FIELDS)
 
         # Trim message and only pick the first 3k chars
         message_key = ExtensionEventSchema.Message.lower()
