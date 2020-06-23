@@ -218,33 +218,3 @@ class MockHttpResponse:
         return self.body
 
 
-class MockWireClient:
-
-    def __init__(self, ext_config=None, artifacts_profile=None):
-        self.return_ext_config = ext_config
-        self.return_artifacts_profile = artifacts_profile
-
-    def get_header(self):
-        return None
-
-    def fetch_config(self, uri, header):
-        return self.return_ext_config
-
-    def get_endpoint(self):
-        return "http://www.blahblahblah.lu"
-
-    def get_artifacts_profile(self, artifacts_profile_uri):
-        return self.return_artifacts_profile
-
-
-class MockProtocol:
-
-    def __init__(self, goal_state=None, profile=None):
-        self.return_goal_state = goal_state
-        self.return_profile = profile
-
-    def get_goal_state(self):
-        return self.return_goal_state
-
-    def get_artifacts_profile(self):
-        return self.return_profile

@@ -127,7 +127,7 @@ class GoalState(object):
         try:
             uri = findtext(self._xml_doc, "HostingEnvironmentConfig")
             if uri is None:
-                logger.warn("HostingEnvironmentConfig url doesn't exist in goal state")
+                logger.error("HostingEnvironmentConfig url doesn't exist in goal state")
             else:
                 xml_text = self._wire_client.fetch_config(uri, self._wire_client.get_header())
                 self.hosting_env = HostingEnv(xml_text)
@@ -149,7 +149,7 @@ class GoalState(object):
         try:
             uri = findtext(self._xml_doc, "SharedConfig")
             if uri is None:
-                logger.warn("SharedConfig url doesn't exist in goal state")
+                logger.error("SharedConfig url doesn't exist in goal state")
             else:
                 xml_text = self._wire_client.fetch_config(uri, self._wire_client.get_header())
                 self.shared_conf = SharedConfig(xml_text)

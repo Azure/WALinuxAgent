@@ -6,7 +6,6 @@ from azurelinuxagent.common.protocol.wire import WireProtocol, InVMArtifactsProf
 from azurelinuxagent.common.protocol.extensions_config_retriever import ExtensionsConfigRetriever, \
     GOAL_STATE_SOURCE_FABRIC, GOAL_STATE_SOURCE_FASTTRACK, ExtensionsConfigReasons, FastTrackChangeDetail, \
     FabricChangeDetail
-from tests.protocol.mocks import MockWireClient, MockProtocol
 from tests.protocol.mockwiredata import WireProtocolData, DATA_FILE
 from tests.tools import AgentTestCase, patch, clear_singleton_instances, i_am_root
 
@@ -450,3 +449,21 @@ class TestExtensionsConfigRetriever(AgentTestCase):
         wire_client = MockWireClient(test_data.ext_conf, profile)
         return ExtensionsConfigRetriever(wire_client=wire_client), wire_client
 
+
+class MockWireClient:
+
+    def __init__(self, ext_config=None, artifacts_profile=None):
+        self.return_ext_config = ext_config
+        self.return_artifacts_profile = artifacts_profile
+
+    def get_header(self):
+        return None
+
+    def fetch_config(self, uri, header):
+        return self.return_ext_config
+
+    def get_endpoint(self):
+        return "http://www.blahblahblah.lu"
+
+    def get_artifacts_profile(self, artifacts_profile_uri):
+        return self.return_artifacts_profile

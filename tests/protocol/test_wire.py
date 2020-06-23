@@ -1492,14 +1492,14 @@ class MockResponse:
     def __init__(self, body, status_code, etag=None):
         self.body = body
         self.status = status_code
-        self.etag = etag
+        self._etag = etag
 
     def read(self, *_):
         return self.body
 
     def getheader(self, header_name, *_):
         if header_name == HEADER_ETAG:
-            return self.etag
+            return self._etag
         return None
 
 
