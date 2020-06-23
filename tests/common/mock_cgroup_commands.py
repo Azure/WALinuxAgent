@@ -67,9 +67,9 @@ Running scope as unit: TEST_UNIT.scope
 Thu 28 May 2020 07:25:55 AM PDT
 '''),
 
-    (r"^systemd-cgls --unit walinuxagent.service$",
+    (r"^systemd-cgls.+/walinuxagent.service$",
 '''
-Unit walinuxagent.service (/system.slice/walinuxagent.service):
+Directory /sys/fs/cgroup/cpu/system.slice/walinuxagent.service:
 ├─27519 /usr/bin/python3 -u /usr/sbin/waagent -daemon
 └─27547 python3 -u bin/WALinuxAgent-2.2.48.1-py2.7.egg -run-exthandlers
 '''),

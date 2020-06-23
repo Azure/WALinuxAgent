@@ -521,11 +521,12 @@ class PollResourceUsageOperationTestCase(AgentTestCase):
 
     def test_it_should_report_processes_that_do_not_belong_to_the_agent_cgroup(self):
         with mock_cgroup_commands() as mock_commands:
-            mock_commands.add_command(r'^systemd-cgls --unit walinuxagent.service$',
+            mock_commands.add_command(r'^systemd-cgls.+/walinuxagent.service$',
 '''
-Unit walinuxagent.service (/system.slice/walinuxagent.service):
+Directory /sys/fs/cgroup/cpu/system.slice/walinuxagent.service:
 ├─27519 /usr/bin/python3 -u /usr/sbin/waagent -daemon
 ├─27547 python3 -u bin/WALinuxAgent-2.2.48.1-py2.7.egg -run-exthandlers
+├─6200 systemd-cgls /sys/fs/cgroup/cpu,cpuacct/system.slice/walinuxagent.service
 ├─5821 pidof systemd-networkd
 ├─5822 iptables --version
 ├─5823 iptables -w -t security -D OUTPUT -d 168.63.129.16 -p tcp -m conntrack --ctstate INVALID,NEW -j ACCEPT
