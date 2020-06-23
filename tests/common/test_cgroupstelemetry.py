@@ -124,8 +124,8 @@ class TestCGroupsTelemetry(AgentTestCase):
 
     def _assert_polled_metrics_equal(self, metrics, cpu_metric_value, memory_metric_value, max_memory_metric_value):
         for metric in metrics:
-            self.assertIn(metric.category, ["Process", "Memory"])
-            if metric.category == "Process":
+            self.assertIn(metric.category, ["CPU", "Memory"])
+            if metric.category == "CPU":
                 self.assertEqual(metric.counter, "% Processor Time")
                 self.assertEqual(metric.value, cpu_metric_value)
             if metric.category == "Memory":

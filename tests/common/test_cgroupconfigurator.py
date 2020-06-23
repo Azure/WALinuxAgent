@@ -17,8 +17,7 @@
 
 from __future__ import print_function
 
-import contextlib
-import os
+import re
 import subprocess
 
 from azurelinuxagent.common.cgroup import CGroup
@@ -40,10 +39,8 @@ class CGroupConfiguratorSystemdTestCase(AgentTestCase):
         CGroupConfigurator._instance = None
         configurator = CGroupConfigurator.get_instance()
         if initialize:
-            with patch('azurelinuxagent.common.cgroupapi.CGroupsApi.cgroups_supported', return_value=True):
-                with patch('azurelinuxagent.common.cgroupapi.CGroupsApi._is_systemd', return_value=True):
-                    with mock_cgroup_commands():
-                        configurator.initialize()
+            with mock_cgroup_commands():
+                configurator.initialize()
         return configurator
 
     def test_initialize_should_start_tracking_the_agent_cgroups(self):
@@ -129,6 +126,21 @@ class CGroupConfiguratorSystemdTestCase(AgentTestCase):
                     args, kwargs = mock_logger_warn.call_args
                     message = args[0]
                     self.assertIn("A TEST EXCEPTION", message)
+
+    def test_get_processes_in_agent_cgroup_should_return_the_processes_within_the_agent_cgroup(self):
+        with mock_cgroup_commands():
+            configurator = CGroupConfiguratorSystemdTestCase._get_new_cgroup_configurator_instance()
+
+            processes = configurator.get_processes_in_agent_cgroup()
+
+            self.assertTrue(len(processes) >= 2,
+                "The cgroup should contain at least 2 procceses (daemon and extension handler): [{0}]".format(processes))
+
+            daemon_present = any("waagent -daemon" in command for (pid, command) in processes)
+            self.assertTrue(daemon_present, "Could not find the daemon in the cgroup: [{0}]".format(processes))
+
+            extension_handler_present = any(re.search("(WALinuxAgent-.+\.egg|waagent) -run-exthandlers", command) for (pid, command) in processes)
+            self.assertTrue(extension_handler_present, "Could not find the extension handler in the cgroup: [{0}]".format(processes))
 
     @patch('time.sleep', side_effect=lambda _: mock_sleep())
     def test_start_extension_command_should_not_use_systemd_when_cgroups_are_not_enabled(self, _):
