@@ -184,8 +184,8 @@ class ExtensionsConfigRetriever(object):
         # 3) Otherwise, we return null, since nothing changed
 
         # Get individually whether FastTrack and Fabric have changed
-        fabric_changed, fabric_ext_conf = self._get_fabric_changed(incarnation, fabric_ext_config_uri)
-        fast_track_changed, artifacts_profile = self._get_fast_track_changed()
+        fabric_changed, fabric_ext_conf = self._determine_fabric_changed(incarnation, fabric_ext_config_uri)
+        fast_track_changed, artifacts_profile = self._determine_fast_track_changed()
 
         # Figure out what to process
         if fabric_changed:
@@ -234,7 +234,7 @@ class ExtensionsConfigRetriever(object):
         else:
             self._current_ext_conf.is_fabric_change = False
 
-    def _get_fabric_changed(self, incarnation, fabric_ext_config_uri):
+    def _determine_fabric_changed(self, incarnation, fabric_ext_config_uri):
         fabric_changed = False
         fabric_ext_conf = None
 
@@ -250,7 +250,7 @@ class ExtensionsConfigRetriever(object):
 
         return fabric_changed, fabric_ext_conf
 
-    def _get_fast_track_changed(self):
+    def _determine_fast_track_changed(self):
         fast_track_changed = False
 
         artifacts_profile = None

@@ -35,7 +35,7 @@ from azurelinuxagent.common.exception import ProtocolNotFoundError, \
 from azurelinuxagent.common.future import httpclient, bytebuffer
 from azurelinuxagent.common.protocol.extensions_config_retriever import ExtensionsConfigRetriever
 from azurelinuxagent.common.protocol.goal_state import GoalState, TRANSPORT_CERT_FILE_NAME, TRANSPORT_PRV_FILE_NAME, \
-    ExtensionsConfig
+    ExtensionsConfig, UpdateType
 from azurelinuxagent.common.protocol.hostplugin import HostPluginProtocol
 from azurelinuxagent.common.protocol.restapi import *
 from azurelinuxagent.common.telemetryevent import TelemetryEventList
@@ -71,6 +71,7 @@ MAX_EVENT_BUFFER_SIZE = 2 ** 16 - 2 ** 10
 
 class UploadError(HttpError):
     pass
+
 
 
 class WireProtocol(DataContract):
@@ -714,27 +715,17 @@ class WireClient(object):
                 raise
         return resp
 
-    # Type of update performed by _update_from_goal_state()
-    class _UpdateType(object):
-        # Update the Host GA Plugin client (Container ID and RoleConfigName)
-        HostPlugin = 0
-        # Update the full goal state only if the incarnation has changed
-        GoalState = 1
-        # Update the full goal state unconditionally
-        GoalStateForced = 2
-
     def update_host_plugin_from_goal_state(self):
         """
         Fetches a new goal state and updates the Container ID and Role Config Name of the host plugin client
         """
-        self._update_from_goal_state(WireClient._UpdateType.HostPlugin)
+        self._update_from_goal_state(UpdateType.HostPlugin)
 
     def update_goal_state(self, forced=False):
         """
         Updates the goal state if the incarnation changed or if 'forced' is True
         """
-        self._update_from_goal_state(
-            WireClient._UpdateType.GoalStateForced if forced else WireClient._UpdateType.GoalState)
+        self._update_from_goal_state(UpdateType.GoalStateForced if forced else UpdateType.GoalState)
 
     def try_update_goal_state(self):
         """
@@ -768,16 +759,16 @@ class WireClient(object):
 
         for retry in range(1, max_retry + 1):
             try:
-                if refresh_type == WireClient._UpdateType.HostPlugin:
+                if refresh_type == UpdateType.HostPlugin:
                     goal_state = GoalState.fetch_limited_goal_state(self)
                     self._update_host_plugin(goal_state.container_id, goal_state.role_config_name)
                     return
 
-                if self._goal_state is None or refresh_type == WireClient._UpdateType.GoalStateForced:
+                if self._goal_state is None or refresh_type == UpdateType.GoalStateForced:
                     new_goal_state = GoalState.fetch_full_goal_state(self)
                 else:
                     new_goal_state = GoalState.fetch_goal_state(self)
-                self._save_goal_state_if_necessary(new_goal_state, refresh_type)
+                self._cache_goal_state_and_update_host_plugin(new_goal_state, refresh_type)
 
                 return
 
@@ -795,7 +786,7 @@ class WireClient(object):
 
         raise ProtocolError("Exceeded max retry updating goal state")
 
-    def _save_goal_state_if_necessary(self, new_goal_state, refresh_type):
+    def _cache_goal_state_and_update_host_plugin(self, new_goal_state, refresh_type):
         # We cache the goal state if one of the following is true
         # 1) We didn't previously have a goal state
         # 2) The incarnation changed
@@ -805,7 +796,7 @@ class WireClient(object):
         if self._goal_state is None or new_goal_state.incarnation != self._goal_state.incarnation:
             save_goal_state = True
             self._goal_state = new_goal_state
-        elif refresh_type == WireClient._UpdateType.GoalStateForced:
+        elif refresh_type == UpdateType.GoalStateForced:
             save_goal_state = True
             self._goal_state = new_goal_state
         elif new_goal_state.ext_conf is not None and new_goal_state.ext_conf.changed:
