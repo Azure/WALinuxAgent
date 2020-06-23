@@ -354,7 +354,6 @@ class EventLogger(object):
 
         try:
             vminfo = protocol.get_vminfo()
-            # parameters["VMName"].value = vminfo.vmName
             parameters[CommonTelemetryEventSchema.TenantName].value = vminfo.tenantName
             parameters[CommonTelemetryEventSchema.RoleName].value = vminfo.roleName
             parameters[CommonTelemetryEventSchema.RoleInstanceName].value = vminfo.roleInstanceName
