@@ -52,11 +52,9 @@ from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
 from azurelinuxagent.common.version import AGENT_NAME, AGENT_VERSION, AGENT_DIR_PATTERN, CURRENT_AGENT,\
     CURRENT_VERSION, DISTRO_NAME, DISTRO_VERSION, is_current_agent_installed, PY_VERSION_MAJOR, PY_VERSION_MINOR, \
     PY_VERSION_MICRO
-from azurelinuxagent.ga.env import get_env_handler
 from azurelinuxagent.ga.extension_telemetry import get_extension_telemetry_handler
 
 from azurelinuxagent.ga.exthandlers import HandlerManifest, get_traceback, is_extension_telemetry_pipeline_enabled
-from azurelinuxagent.ga.monitor import get_monitor_handler
 
 AGENT_ERROR_FILE = "error.json" # File name for agent error record
 AGENT_MANIFEST_FILE = "HandlerManifest.json"
@@ -271,6 +269,9 @@ class UpdateHandler(object):
             add_event(AGENT_NAME, op=WALAEventOperation.OSInfo, message=os_info_msg)
 
             # Get all thread handlers
+            from azurelinuxagent.ga.monitor import get_monitor_handler
+            from azurelinuxagent.ga.env import get_env_handler
+
             all_thread_handlers = [
                 get_monitor_handler(),
                 get_env_handler()
