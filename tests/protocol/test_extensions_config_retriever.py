@@ -203,11 +203,12 @@ class TestExtensionsConfigRetriever(AgentTestCase):
 
         # Run with a new incarnation to read the uri
         ext_conf = retriever.get_ext_config(2, TestExtensionsConfigRetriever.SAMPLE_URL)
-        self.assertFalse(ext_conf.changed)
-        self.assertFalse(ext_conf.is_fabric_change)
+        self.assertTrue(ext_conf.changed)
+        self.assertTrue(ext_conf.is_fabric_change)
         self.assertEqual(1, len(ext_conf.ext_handlers.extHandlers))
-        self.assertTrue(ExtensionsConfigReasons.NOTHING_CHANGED in ext_conf.get_description())
+        self.assertTrue(ExtensionsConfigReasons.FABRIC_CHANGED in ext_conf.get_description())
         self.assertTrue(FastTrackChangeDetail.NO_PROFILE_URI in ext_conf.get_description())
+        self.assertTrue(FabricChangeDetail.INCARNATION_CHANGED in ext_conf.get_description())
 
     def test_ext_config_post_startup_fabric_no_extensions(self):
         # Run a FastTrack goal state
@@ -337,7 +338,7 @@ class TestExtensionsConfigRetriever(AgentTestCase):
         self.assertEqual("ExtensionsConfig_fa.2.xml", retriever.get_ext_config_file_name())
 
         # Then we'll run FastTrack
-        ext_conf = retriever.get_ext_config(1, TestExtensionsConfigRetriever.SAMPLE_URL)
+        ext_conf = retriever.get_ext_config(2, TestExtensionsConfigRetriever.SAMPLE_URL)
         self.assertTrue(ext_conf.changed)
         self.assertFalse(ext_conf.is_fabric_change)
         self.assertEqual(1, len(ext_conf.ext_handlers.extHandlers))
@@ -357,14 +358,14 @@ class TestExtensionsConfigRetriever(AgentTestCase):
 
         # Incarnation changes, but the sequence number does not
         ext_conf = retriever.get_ext_config(2, TestExtensionsConfigRetriever.SAMPLE_URL)
-        self.assertFalse(ext_conf.changed)
-        self.assertFalse(ext_conf.is_fabric_change)
+        self.assertTrue(ext_conf.changed)
+        self.assertTrue(ext_conf.is_fabric_change)
         self.assertEqual(1, len(ext_conf.ext_handlers.extHandlers))
-        self.assertTrue(ExtensionsConfigReasons.NOTHING_CHANGED in ext_conf.get_description())
+        self.assertTrue(ExtensionsConfigReasons.FABRIC_CHANGED in ext_conf.get_description())
         self.assertTrue(FastTrackChangeDetail.NO_CHANGE in ext_conf.get_description())
-        self.assertTrue(FabricChangeDetail.SVD_SEQ_NO_NOT_CHANGED in ext_conf.get_description())
+        self.assertTrue(FabricChangeDetail.INCARNATION_CHANGED in ext_conf.get_description())
 
-    def test_ext_config_post_startup_svd_seq_no_not_changed_fast_track_changed(self):
+    def test_ext_config_post_startup_svd_seq_no_not_changed_fast_track_changed_last_fabric(self):
         # Run a Fabric goal state
         test_data_file = self._get_test_data()
         retriever, wire_client = self._create_retriever(test_data_file)
@@ -377,14 +378,48 @@ class TestExtensionsConfigRetriever(AgentTestCase):
         new_test_data = WireProtocolData(new_test_data_file)
         wire_client.return_artifacts_profile = InVMArtifactsProfile(new_test_data.vm_artifacts_profile)
 
-        # The incarnation changed, but not the svdSeqNo
+        # Since the last GoalState was Fabric, we'll process that first
+        ext_conf = retriever.get_ext_config(2, TestExtensionsConfigRetriever.SAMPLE_URL)
+        self.assertTrue(ext_conf.changed)
+        self.assertTrue(ext_conf.is_fabric_change)
+        self.assertTrue(1, len(ext_conf.ext_handlers.extHandlers))
+        self.assertTrue(ExtensionsConfigReasons.FABRIC_CHANGED in ext_conf.get_description())
+        self.assertTrue(FastTrackChangeDetail.SEQ_NO_CHANGED in ext_conf.get_description())
+        self.assertTrue(FabricChangeDetail.INCARNATION_CHANGED in ext_conf.get_description())
+        retriever.commit_processed()
+
+        # Next we'll run FastTrack
         ext_conf = retriever.get_ext_config(2, TestExtensionsConfigRetriever.SAMPLE_URL)
         self.assertTrue(ext_conf.changed)
         self.assertFalse(ext_conf.is_fabric_change)
         self.assertEqual(1, len(ext_conf.ext_handlers.extHandlers))
         self.assertTrue(ExtensionsConfigReasons.FAST_TRACK_CHANGED in ext_conf.get_description())
         self.assertTrue(FastTrackChangeDetail.SEQ_NO_CHANGED in ext_conf.get_description())
+        self.assertTrue(FabricChangeDetail.NO_CHANGE in ext_conf.get_description())
+        retriever.commit_processed()
+
+    def test_ext_config_post_startup_svd_seq_no_not_changed_fast_track_changed_last_fast_track(self):
+        # Run a FastTrack goal state
+        test_data_file = self._get_test_data(artifacts_profile="wire/in_vm_artifacts_profile_blob_newer.json")
+        retriever, wire_client = self._create_retriever(test_data_file)
+        ext_conf = retriever.get_ext_config(1, TestExtensionsConfigRetriever.SAMPLE_URL)
+        self.assertTrue(ext_conf.changed)
+        retriever.commit_processed()
+
+        # Set FastTrack to changed
+        new_test_data_file = self._get_test_data(artifacts_profile="wire/in_vm_artifacts_profile_blob.json")
+        new_test_data = WireProtocolData(new_test_data_file)
+        wire_client.return_artifacts_profile = InVMArtifactsProfile(new_test_data.vm_artifacts_profile)
+
+        # We'll process the FastTrack GoalState since the svdSeqNo didn't change
+        ext_conf = retriever.get_ext_config(2, TestExtensionsConfigRetriever.SAMPLE_URL)
+        self.assertTrue(ext_conf.changed)
+        self.assertFalse(ext_conf.is_fabric_change)
+        self.assertTrue(1, len(ext_conf.ext_handlers.extHandlers))
+        self.assertTrue(ExtensionsConfigReasons.FAST_TRACK_CHANGED in ext_conf.get_description())
+        self.assertTrue(FastTrackChangeDetail.SEQ_NO_CHANGED in ext_conf.get_description())
         self.assertTrue(FabricChangeDetail.SVD_SEQ_NO_NOT_CHANGED in ext_conf.get_description())
+        retriever.commit_processed()
 
     def test_ext_config_post_startup_nothing_changed(self):
         # Run a Fabric goal state

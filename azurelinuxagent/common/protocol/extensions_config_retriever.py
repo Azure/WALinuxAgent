@@ -240,11 +240,14 @@ class ExtensionsConfigRetriever(object):
 
         if str(self._last_fabric_incarnation) != str(incarnation):
             fabric_ext_conf = self._retrieve_fabric_ext_conf(fabric_ext_config_uri)
-            if fabric_ext_conf.svd_seqNo != self._last_svd_seq_no:
+
+            # If our last GoalState was FastTrack, don't process the Fabric extensions if the SVD number
+            # didn't change. This may occur if WireServer restarts or for a JIT access
+            if fabric_ext_conf.svd_seqNo == self._last_svd_seq_no and self._last_mode == GOAL_STATE_SOURCE_FASTTRACK:
+                self._fabric_changed_detail = FabricChangeDetail.SVD_SEQ_NO_NOT_CHANGED
+            else:
                 self._fabric_changed_detail = FabricChangeDetail.INCARNATION_CHANGED
                 fabric_changed = True
-            else:
-                self._fabric_changed_detail = FabricChangeDetail.SVD_SEQ_NO_NOT_CHANGED
         else:
             self._fabric_changed_detail = FabricChangeDetail.NO_CHANGE
 
