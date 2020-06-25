@@ -109,6 +109,7 @@ class ExtensionTelemetryHandler(object):
     def daemon(self):
         op = PeriodicOperation("collect_and_send_events", self.collect_and_send_events,
                                self.EXTENSION_EVENT_COLLECTION_PERIOD)
+        logger.info("Successfully started the {0} thread".format(self.get_thread_name()))
         while not self.stopped():
             try:
                 op.run()
@@ -222,6 +223,14 @@ class ExtensionTelemetryHandler(object):
                 events_list.events.extend(parsed_events)
                 captured_extension_events_count += len(parsed_events)
 
+                # We only allow MAX_NUMBER_OF_EVENTS_PER_EXTENSION_PER_PERIOD=300 maximum events per period per handler
+                if captured_extension_events_count >= self.MAX_NUMBER_OF_EVENTS_PER_EXTENSION_PER_PERIOD:
+                    msg = "Reached max count for the extension: {0}; Max Limit: {1}. Skipping the rest.".format(
+                        handler_name, self.MAX_NUMBER_OF_EVENTS_PER_EXTENSION_PER_PERIOD)
+                    logger.warn(msg)
+                    add_log_event(level=logger.LogLevel.WARNING, message=msg, forced=True)
+                    break
+
             except Exception as e:
                 msg = "Failed to process event file {0}: {1}", event_file, ustr(e)
                 logger.warn(msg)
@@ -230,12 +239,13 @@ class ExtensionTelemetryHandler(object):
                 os.remove(event_file_path)
 
         if dropped_events_with_error_count is not None and len(dropped_events_with_error_count) > 0:
-            msg = "Dropped events for Extension: {0}; Details:\n {1}".format(handler_name,
-                '\n'.join(["Reason: {0}; Dropped Count: {1}".format(k, v) for k, v in dropped_events_with_error_count.items()]))
-
+            msg = "Dropped events for Extension: {0}; Details:\n\t{1}".format(handler_name, '\n\t'.join(
+                ["Reason: {0}; Dropped Count: {1}".format(k, v) for k, v in dropped_events_with_error_count.items()]))
+            logger.warn(msg)
             add_log_event(level=logger.LogLevel.WARNING, message=msg, forced=True)
 
-        logger.info("Collected {0} events for extension: {1}".format(len(events_list.events), handler_name))
+        if captured_extension_events_count > 0:
+            logger.info("Collected {0} events for extension: {1}".format(captured_extension_events_count, handler_name))
 
     @staticmethod
     def _ensure_all_events_directories_empty(extension_events_directories):
@@ -255,7 +265,9 @@ class ExtensionTelemetryHandler(object):
                 except Exception as e:
                     # Only log the first error once per handler per run if unable to clean off residue files
                     err = ustr(e) if err is None else err
-                logger.error("Failed to completely clear the {0} directory. Exception: {1}", event_dir_path, err)
+
+                if err is not None:
+                    logger.error("Failed to completely clear the {0} directory. Exception: {1}", event_dir_path, err)
 
     def _parse_event_file_and_capture_events(self, handler_name, event_file_path, captured_events_count,
                                              dropped_events_with_error_count):
