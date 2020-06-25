@@ -135,7 +135,7 @@ class ExtensionTelemetryHandler(object):
             extension_handler_with_event_dirs = self._get_extension_events_dir_with_handler_name(conf.get_ext_log_dir())
 
             if len(extension_handler_with_event_dirs) == 0:
-                logger.info("No Extension events directory exist")
+                logger.verbose("No Extension events directory exist")
                 return events_list
 
             for extension_handler_with_event_dir in extension_handler_with_event_dirs:
@@ -198,15 +198,7 @@ class ExtensionTelemetryHandler(object):
             try:
                 logger.verbose("Processing event file: {0}", event_file_path)
 
-                # We only allow MAX_NUMBER_OF_EVENTS_PER_EXTENSION_PER_PERIOD=300 maximum events per period per handler
-                if captured_extension_events_count >= self.MAX_NUMBER_OF_EVENTS_PER_EXTENSION_PER_PERIOD:
-                    msg = "Reached max count for the extension: {0}; Max Limit: {1}. Skipping the rest.".format(
-                        handler_name, self.MAX_NUMBER_OF_EVENTS_PER_EXTENSION_PER_PERIOD)
-                    logger.warn(msg)
-                    add_log_event(level=logger.LogLevel.WARNING, message=msg, forced=True)
-                    break
-
-                # We only support 4Mb max file size
+                # We only support EXTENSION_EVENT_FILE_MAX_SIZE=4Mb max file size
                 event_file_size = os.stat(event_file_path).st_size
                 if event_file_size > self.EXTENSION_EVENT_FILE_MAX_SIZE:
                     msg = "Skipping file: {0} as its size is {1:.2f} Mb > Max size allowed {2:.1f} Mb".format(
