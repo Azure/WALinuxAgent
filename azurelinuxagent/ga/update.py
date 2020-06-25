@@ -350,6 +350,7 @@ class UpdateHandler(object):
                             duration=duration,
                             message="Incarnation {0}".format(exthandlers_handler.last_etag))
 
+                self._send_heartbeat_telemetry(protocol)
                 time.sleep(goal_state_interval)
 
         except Exception as e:
