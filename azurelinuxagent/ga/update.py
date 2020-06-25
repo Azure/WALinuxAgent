@@ -350,6 +350,7 @@ class UpdateHandler(object):
                             duration=duration,
                             message="Incarnation {0}".format(exthandlers_handler.last_etag))
 
+                self._send_heartbeat_telemetry(protocol)
                 time.sleep(goal_state_interval)
 
         except Exception as e:
@@ -666,7 +667,6 @@ class UpdateHandler(object):
     def _upgrade_available(self, protocol, base_version=CURRENT_VERSION):
         # Ignore new agents if updating is disabled
         if not conf.get_autoupdate_enabled():
-            logger.warn(u"Agent auto-update is disabled.")
             return False
 
         now = time.time()
@@ -751,15 +751,20 @@ class UpdateHandler(object):
         if datetime.utcnow() >= (self._last_telemetry_heartbeat + UpdateHandler.TELEMETRY_HEARTBEAT_PERIOD):
             dropped_packets = self.osutil.get_firewall_dropped_packets(protocol.get_endpoint())
             auto_update_enabled = 1 if conf.get_autoupdate_enabled() else 0
-            msg = "{0};{1};{2};{3};{4}".format(self._heartbeat_counter, self._heartbeat_id, dropped_packets,
-                                               self._heartbeat_update_goal_state_error_count, auto_update_enabled)
+            telemetry_msg = "{0};{1};{2};{3};{4}".format(self._heartbeat_counter, self._heartbeat_id, dropped_packets,
+                                                         self._heartbeat_update_goal_state_error_count, auto_update_enabled)
 
             add_event(name=AGENT_NAME, version=CURRENT_VERSION, op=WALAEventOperation.HeartBeat, is_success=True,
-                      message=msg, log_event=False)
+                      message=telemetry_msg, log_event=False)
             self._heartbeat_counter += 1
             self._heartbeat_update_goal_state_error_count = 0
 
-            logger.info(u"[HEARTBEAT] Agent {0} is running as the goal state agent", CURRENT_AGENT)
+            debug_log_msg = "[DEBUG HeartbeatCounter: {0};HeartbeatId: {1};DroppedPackets: {2};" \
+                            "UpdateGSErrors: {3};AutoUpdate: {4}]".format(self._heartbeat_counter,
+                                                                          self._heartbeat_id, dropped_packets,
+                                                                          self._heartbeat_update_goal_state_error_count,
+                                                                          auto_update_enabled)
+            logger.info(u"[HEARTBEAT] Agent {0} is running as the goal state agent {1}", CURRENT_AGENT, debug_log_msg)
             self._last_telemetry_heartbeat = datetime.utcnow()
 
 
