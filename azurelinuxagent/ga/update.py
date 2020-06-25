@@ -259,6 +259,7 @@ class UpdateHandler(object):
             protocol.update_goal_state()
 
             initialize_event_logger_vminfo_common_parameters(protocol)
+            self._send_heartbeat_telemetry(protocol)
 
             # Log OS-specific info.
             os_info_msg = u"Distro: {0}-{1}; OSUtil: {2}; AgentService: {3}; Python: {4}.{5}.{6}".format(
@@ -266,7 +267,7 @@ class UpdateHandler(object):
                 PY_VERSION_MINOR, PY_VERSION_MICRO)
             logger.info(os_info_msg)
             add_event(AGENT_NAME, op=WALAEventOperation.OSInfo, message=os_info_msg)
-
+            
             # Launch monitoring threads
             from azurelinuxagent.ga.monitor import get_monitor_handler
             monitor_thread = get_monitor_handler()
@@ -348,8 +349,6 @@ class UpdateHandler(object):
                             op=WALAEventOperation.ProcessGoalState,
                             duration=duration,
                             message="Incarnation {0}".format(exthandlers_handler.last_etag))
-
-                self._send_heartbeat_telemetry(protocol)
 
                 time.sleep(goal_state_interval)
 
@@ -445,11 +444,6 @@ class UpdateHandler(object):
                 message = "lib dir is in an unexpected location: {0}".format(conf.get_lib_dir())
                 logger.info(message)
                 add_event(AGENT_NAME, op=WALAEventOperation.ConfigurationChange, message=message)
-
-            # Always report the value of AutoUpdate
-            auto_update_enabled = conf.get_autoupdate_enabled()
-            logger.info("AutoUpdate.Enabled: {0}}", auto_update_enabled)
-            add_event(op=WALAEventOperation.AutoUpdate, is_success=auto_update_enabled, log_event=False)
 
         except Exception as e:
             logger.warn("Failed to log changes in configuration: {0}", ustr(e))
@@ -756,9 +750,12 @@ class UpdateHandler(object):
 
         if datetime.utcnow() >= (self._last_telemetry_heartbeat + UpdateHandler.TELEMETRY_HEARTBEAT_PERIOD):
             dropped_packets = self.osutil.get_firewall_dropped_packets(protocol.get_endpoint())
-            msg = "{0};{1};{2};{3}".format(self._heartbeat_counter, self._heartbeat_id, dropped_packets, self._heartbeat_update_goal_state_error_count)
+            auto_update_enabled = 1 if conf.get_autoupdate_enabled() else 0
+            msg = "{0};{1};{2};{3};{4}".format(self._heartbeat_counter, self._heartbeat_id, dropped_packets,
+                                               self._heartbeat_update_goal_state_error_count, auto_update_enabled)
 
-            add_event(name=AGENT_NAME, version=CURRENT_VERSION, op=WALAEventOperation.HeartBeat, is_success=True, message=msg, log_event=False)
+            add_event(name=AGENT_NAME, version=CURRENT_VERSION, op=WALAEventOperation.HeartBeat, is_success=True,
+                      message=msg, log_event=False)
             self._heartbeat_counter += 1
             self._heartbeat_update_goal_state_error_count = 0
 
