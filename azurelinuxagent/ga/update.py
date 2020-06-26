@@ -259,7 +259,6 @@ class UpdateHandler(object):
             protocol.update_goal_state()
 
             initialize_event_logger_vminfo_common_parameters(protocol)
-            self._send_heartbeat_telemetry(protocol)
 
             # Log OS-specific info.
             os_info_msg = u"Distro: {0}-{1}; OSUtil: {2}; AgentService: {3}; Python: {4}.{5}.{6}".format(
