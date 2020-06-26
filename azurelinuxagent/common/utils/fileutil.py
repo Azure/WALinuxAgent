@@ -123,6 +123,14 @@ def chmod(path, mode):
         os.chmod(path, mode)
 
 
+def umount(*args):
+    for paths in args:
+        # find all possible mounts
+            for path in glob.glob(paths):
+                if os.path.ismount(path):
+                    os.unmount(path)
+
+
 def rm_files(*args):
     for paths in args:
         # find all possible file paths
