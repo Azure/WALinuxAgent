@@ -70,7 +70,6 @@ class WALAEventOperation:
     AgentBlacklisted = "AgentBlacklisted"
     AgentEnabled = "AgentEnabled"
     ArtifactsProfileBlob = "ArtifactsProfileBlob"
-    AutoUpdate = "AutoUpdate"
     CGroupsCleanUp = "CGroupsCleanUp"
     CGroupsDebug = "CGroupsDebug"
     CGroupsInfo = "CGroupsInfo"
@@ -180,7 +179,6 @@ class EventStatus(object):
 
 __event_status__ = EventStatus()
 __event_status_operations__ = [
-        WALAEventOperation.AutoUpdate,
         WALAEventOperation.ReportStatus
     ]
 
