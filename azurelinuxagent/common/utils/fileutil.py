@@ -30,6 +30,7 @@ import shutil
 
 import azurelinuxagent.common.logger as logger
 import azurelinuxagent.common.utils.textutil as textutil
+import azurelinuxagent.common.utils.shellutil as shellutil
 
 from azurelinuxagent.common.future import ustr
 
@@ -128,7 +129,8 @@ def umount(*args):
         # find all possible mounts
             for path in glob.glob(paths):
                 if os.path.ismount(path):
-                    os.unmount(path)
+                    command=["umount",path]
+                    shellutil.run_command(command)
 
 
 def rm_files(*args):

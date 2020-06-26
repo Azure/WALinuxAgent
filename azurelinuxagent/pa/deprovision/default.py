@@ -112,6 +112,9 @@ class DeprovisionHandler(object):
     def del_dhcp_lease(self, warnings, actions):
         warnings.append("WARNING! Cached DHCP leases will be deleted.")
 
+        # For Arch based systems. Kill DHCPCD service. Needed to clear cached leases.
+        shellutil.run("systemctl stop dhcpcd", chk_err=False)
+
         # For Arch based systems. Files mounted by DHCPCD can't be deleted whilst mounted, not even by root.
         dirs_to_umount = ["/var/lib/dhcpcd/run/systemd/journal", "/var/lib/dhcpcd/run/udev", "/var/lib/dhcpcd/sys", "/var/lib/dhcpcd/dev", "/var/lib/dhcpcd/proc"]
         actions.append(DeprovisionAction(fileutil.umount, dirs_to_umount))
