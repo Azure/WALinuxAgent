@@ -747,7 +747,7 @@ After=system-{1}.slice""".format(extension_name, EXTENSIONS_ROOT_CGROUP_NAME)
                                                            stderr=stderr,
                                                            error_code=error_code)
 
-                return [], process_output
+                return process_output
 
         # The process terminated in time and successfully
         return process_output
