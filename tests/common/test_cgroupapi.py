@@ -581,6 +581,30 @@ class SystemdCgroupsApiTestCase(AgentTestCase):
         self.assertTrue(memory_found, 'start_extension_command did not return a memory cgroup')
 
     @patch('time.sleep', side_effect=lambda _: mock_sleep())
+    def test_start_extension_command_should_return_the_command_output(self, _):
+        original_popen = subprocess.Popen
+
+        def mock_popen(command, *args, **kwargs):
+            if command.startswith('systemd-run --unit=Microsoft.Compute.TestExtension_1.2.3'):
+                command = "echo TEST_OUTPUT"
+            return original_popen(command, *args, **kwargs)
+
+        with mock_cgroup_commands() as mock_commands:
+            with tempfile.TemporaryFile(dir=self.tmp_dir, mode="w+b") as output_file:
+                with patch("azurelinuxagent.common.cgroupapi.subprocess.Popen", side_effect=mock_popen) as popen_patch:
+                    command_output = SystemdCgroupsApi().start_extension_command(
+                        extension_name="Microsoft.Compute.TestExtension-1.2.3",
+                        command="A_TEST_COMMAND",
+                        shell=True,
+                        timeout=300,
+                        cwd=self.tmp_dir,
+                        env={},
+                        stdout=output_file,
+                        stderr=output_file)
+
+                    self.assertIn("[stdout]\nTEST_OUTPUT\n", command_output, "The test output was not captured")
+
+    @patch('time.sleep', side_effect=lambda _: mock_sleep())
     def test_start_extension_command_should_execute_the_command_in_a_cgroup(self, _):
         with mock_cgroup_commands():
             SystemdCgroupsApi().start_extension_command(
@@ -636,9 +660,11 @@ class SystemdCgroupsApiTestCase(AgentTestCase):
                 with patch("azurelinuxagent.common.cgroupapi.subprocess.Popen", side_effect=mock_popen) as popen_patch:
                     CGroupsTelemetry.reset()
 
-                    process_output = SystemdCgroupsApi().start_extension_command(
+                    command = "echo TEST_OUTPUT"
+
+                    command_output = SystemdCgroupsApi().start_extension_command(
                         extension_name="Microsoft.Compute.TestExtension-1.2.3",
-                        command="date",
+                        command=command,
                         timeout=300,
                         shell=True,
                         cwd=self.tmp_dir,
@@ -654,15 +680,18 @@ class SystemdCgroupsApiTestCase(AgentTestCase):
                     self.assertEquals(False, kwargs['is_success'])
                     self.assertEquals('InvokeCommandUsingSystemd', kwargs['op'])
 
-                    extension_calls = [args[0] for (args, _) in popen_patch.call_args_list if "date" in args[0]]
+                    extension_calls = [args[0] for (args, _) in popen_patch.call_args_list if command in args[0]]
 
                     self.assertEquals(2, len(extension_calls), "The extension should have been invoked exactly twice")
                     self.assertIn("systemd-run --unit=Microsoft.Compute.TestExtension_1.2.3", extension_calls[0],
                         "The first call to the extension should have used systemd")
-                    self.assertEquals("date", extension_calls[1],
+                    self.assertEquals(command, extension_calls[1],
                         "The second call to the extension should not have used systemd")
 
                     self.assertEquals(len(CGroupsTelemetry._tracked), 0, "No cgroups should have been created")
+
+                    self.assertIn("TEST_OUTPUT\n", command_output, "The test output was not captured")
+
 
     @patch('time.sleep', side_effect=lambda _: mock_sleep())
     def test_start_extension_command_should_invoke_the_command_directly_if_systemd_times_out(self, _):
@@ -778,7 +807,7 @@ class SystemdCgroupsApiTestCase(AgentTestCase):
                 with patch("azurelinuxagent.common.cgroupapi.add_event"):
                     with patch("azurelinuxagent.common.cgroupapi.subprocess.Popen", side_effect=mock_popen):
                         # We expect this call to fail because of the syntax error
-                        extension_cgroups, process_output = SystemdCgroupsApi().start_extension_command(
+                        process_output = SystemdCgroupsApi().start_extension_command(
                             extension_name="Microsoft.Compute.TestExtension-1.2.3",
                             command="echo 'very specific test message'",
                             timeout=300,
@@ -789,7 +818,6 @@ class SystemdCgroupsApiTestCase(AgentTestCase):
                             stderr=stderr)
 
                         self.assertEquals(expected_output.format("very specific test message"), process_output)
-                        self.assertEquals(extension_cgroups, [])
 
 
 class SystemdCgroupsApiMockedFileSystemTestCase(_MockedFileSystemTestCase):
