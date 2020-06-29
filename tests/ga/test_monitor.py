@@ -39,7 +39,7 @@ from azurelinuxagent.common.exception import HttpError
 from azurelinuxagent.common.logger import Logger
 from azurelinuxagent.common.osutil import get_osutil
 from azurelinuxagent.common.protocol.wire import WireProtocol
-from azurelinuxagent.common.telemetryevent import TelemetryEvent, TelemetryEventParam
+from azurelinuxagent.common.telemetryevent import TelemetryEvent, TelemetryEventParam, GuestAgentExtensionEventsSchema
 from azurelinuxagent.common.utils import fileutil, restutil
 from azurelinuxagent.common.version import AGENT_VERSION, CURRENT_VERSION, CURRENT_AGENT, DISTRO_NAME, DISTRO_VERSION, DISTRO_CODE_NAME
 from azurelinuxagent.ga.monitor import get_monitor_handler, MonitorHandler, PeriodicOperation, ResetPeriodicLogMessagesOperation, PollResourceUsageOperation
@@ -177,6 +177,8 @@ class TestEventMonitoring(AgentTestCase, HttpRequestPredicates):
     def tearDown(self):
         fileutil.rm_dirs(self.lib_dir)
 
+    _TEST_EVENT_PROVIDER_ID = "XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX"
+
     def _create_extension_event(self,
                                size=0,
                                name="DummyExtension",
@@ -197,17 +199,18 @@ class TestEventMonitoring(AgentTestCase, HttpRequestPredicates):
 
     @staticmethod
     def _get_event_data(duration, is_success, message, name, op, version, eventId=1):
-        event = TelemetryEvent(eventId, "XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX")
-        event.parameters.append(TelemetryEventParam('Name', name))
-        event.parameters.append(TelemetryEventParam('Version', str(version)))
-        event.parameters.append(TelemetryEventParam('Operation', op))
-        event.parameters.append(TelemetryEventParam('OperationSuccess', is_success))
-        event.parameters.append(TelemetryEventParam('Message', message))
-        event.parameters.append(TelemetryEventParam('Duration', duration))
+        event = TelemetryEvent(eventId, TestEventMonitoring._TEST_EVENT_PROVIDER_ID)
+        event.parameters.append(TelemetryEventParam(GuestAgentExtensionEventsSchema.Name, name))
+        event.parameters.append(TelemetryEventParam(GuestAgentExtensionEventsSchema.Version, str(version)))
+        event.parameters.append(TelemetryEventParam(GuestAgentExtensionEventsSchema.Operation, op))
+        event.parameters.append(TelemetryEventParam(GuestAgentExtensionEventsSchema.OperationSuccess, is_success))
+        event.parameters.append(TelemetryEventParam(GuestAgentExtensionEventsSchema.Message, message))
+        event.parameters.append(TelemetryEventParam(GuestAgentExtensionEventsSchema.Duration, duration))
 
         data = get_properties(event)
         return json.dumps(data)
 
+    @patch("azurelinuxagent.common.event.TELEMETRY_EVENT_PROVIDER_ID", _TEST_EVENT_PROVIDER_ID)
     @patch("azurelinuxagent.common.protocol.wire.WireClient.send_event")
     @patch("azurelinuxagent.common.conf.get_lib_dir")
     def test_collect_and_send_events(self, mock_lib_dir, patch_send_event, *_):
@@ -217,7 +220,7 @@ class TestEventMonitoring(AgentTestCase, HttpRequestPredicates):
             self._create_extension_event(message="Message-Test")
 
             test_mtime = 1000  # epoch time, in ms
-            test_opcodename = datetime.datetime.fromtimestamp(test_mtime).strftime(u'%Y-%m-%dT%H:%M:%S.%fZ')
+            test_opcodename = datetime.datetime.fromtimestamp(test_mtime).strftime(logger.Logger.LogTimeFormatInUTC)
             test_eventtid = 42
             test_eventpid = 24
             test_taskname = "TEST_TaskName"
@@ -256,7 +259,6 @@ class TestEventMonitoring(AgentTestCase, HttpRequestPredicates):
                              '<Param Name="ExecutionMode" Value="IAAS" T="mt:wstr" />' \
                              '<Param Name="RAM" Value="{7}" T="mt:uint64" />' \
                              '<Param Name="Processors" Value="{8}" T="mt:uint64" />' \
-                             '<Param Name="VMName" Value="MachineRole_IN_0" T="mt:wstr" />' \
                              '<Param Name="TenantName" Value="db00a7755a5e4e8a8fe4b19bc3b330c3" T="mt:wstr" />' \
                              '<Param Name="RoleName" Value="MachineRole" T="mt:wstr" />' \
                              '<Param Name="RoleInstanceName" Value="MachineRole_IN_0" T="mt:wstr" />' \
