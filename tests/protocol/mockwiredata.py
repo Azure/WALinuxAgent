@@ -260,7 +260,7 @@ class WireProtocolDataFromFile(WireProtocolDataBase):
 
     def reload(self):
         """
-        TODO: Desc (of prior functionality)
+        Loads into this object's member variables the file contents given by self.data_files.
         """
         self.version_info = load_data(self.data_files.get("version_info"))
         self.goal_state = load_data(self.data_files.get("goal_state"))
@@ -294,7 +294,8 @@ class WireProtocolDataFromMemory(WireProtocolDataBase):
     
     def reload(self):
         """
-        TODO: Desc (of new functionality)
+        Loads into this object's member variables the dynamically generated contents given
+        by self.data_fetcher.
         """
         self.version_info = self.data_fetcher['version_info']()
         self.goal_state = self.data_fetcher['goal_state']()
