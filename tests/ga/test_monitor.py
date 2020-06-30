@@ -272,7 +272,7 @@ class TestEventMonitoring(AgentTestCase, HttpRequestPredicates):
                                                   osutil.get_processor_cores())
 
             self.maxDiff = None
-            self.assertEqual(sample_message, send_event_call_args[1])
+            self.assertEqual(sample_message.encode('utf-8'), send_event_call_args[1])
 
     @patch("azurelinuxagent.common.protocol.wire.WireClient.send_event")
     @patch("azurelinuxagent.common.conf.get_lib_dir")

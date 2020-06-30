@@ -371,8 +371,8 @@ class TestWireProtocol(AgentTestCase):
 
         # the headers should include utf-8 encoding...
         self.assertTrue("utf-8" in headers['Content-Type'])
-        # the body is not encoded, just check for equality
-        self.assertIn(event_str, body_received)
+        # the body is encoded, decode and check for equality
+        self.assertIn(event_str, body_received.decode('utf-8'))
 
     @patch("azurelinuxagent.common.protocol.wire.WireClient.send_event")
     def test_report_event_small_event(self, patch_send_event, *args):

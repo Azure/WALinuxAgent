@@ -747,7 +747,7 @@ class TestEvent(HttpRequestPredicates, AgentTestCase):
 
         def http_post_handler(url, body, **__):
             if self.is_telemetry_request(url):
-                http_post_handler.request_body = body
+                http_post_handler.request_body = body.decode('utf-8')
                 return MockHttpResponse(status=200)
             return None
         http_post_handler.request_body = None
