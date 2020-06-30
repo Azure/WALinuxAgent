@@ -32,6 +32,7 @@ from tests.protocol import mockwiredata
 from tests.protocol.mocks import mock_wire_protocol
 from tests.tools import AgentTestCase, patch, mock_sleep, clear_singleton_instances, Mock
 
+from tests.ga.extension_actor import get_extension_actor, get_protocol_and_handler, update_secondary_extension_actors, Actions
 
 class TestExtHandlers(AgentTestCase):
 
@@ -271,40 +272,58 @@ class VersionUpdateTestCase(AgentTestCase):
     """
     def setUp(self):
         AgentTestCase.setUp(self)
-        self.cur_ext_handler = Mock()   # Create a blank Mock reference that we can edit in each test, but can still
-                                # be referenced by the updated handler right now.
-
-        from azurelinuxagent.ga.exthandlers import ExtHandlerState
-        self.updated_ext_handler = Mock(**{
-            'get_installed_ext_handler.return_value': self.cur_ext_handler,
-            "get_handler_state.return_value": ExtHandlerState.NotInstalled,
-            # It doesn't matter what the actual versions are; just that cur and updated are different.
-            "version_ne.side_effect": (lambda comp: comp == self.cur_ext_handler)
-        })
-
-        from azurelinuxagent.ga.exthandlers import ExtHandlersHandler
-        self.ext_handler = ExtHandlersHandler(Mock())
+        self.mock_sleep = patch("time.sleep", lambda *_: mock_sleep(0.01))
+        self.mock_sleep.start()
 
     def tearDown(self):
+        self.mock_sleep.stop()
         AgentTestCase.tearDown(self)
 
     def test_enabled_ext_should_be_disabled_at_ver_update(self):
-        from azurelinuxagent.ga.exthandlers import ExtHandlerState
-        self.cur_ext_handler.get_handler_state.return_value = ExtHandlerState.Enabled
 
-        self.ext_handler.handle_enable(self.updated_ext_handler)
+        first_ext = get_extension_actor()
 
-        # We set the mock to an enable state, so our "handlershandler" should have disabled it.
-        self.cur_ext_handler.disable.assert_called_once()
+        with get_protocol_and_handler(first_ext) as (protocol, exthandlers_handler):
+            
+            with first_ext.patch_popen():
+                exthandlers_handler.run()
+
+            first_ext.get_command("installCommand").assert_called_once()
+            first_ext.get_command("enableCommand").assert_called_once()
+            
+            second_ext = get_extension_actor(version="1.1.0")
+            update_secondary_extension_actors(protocol, 2, second_ext)
+
+            with first_ext.patch_popen():
+                with second_ext.patch_popen():
+                    exthandlers_handler.run()
+
+            second_ext.get_command("installCommand").assert_called_once()
+            second_ext.get_command("enableCommand").assert_called_once()
+            first_ext.get_command("disableCommand").assert_called_once()
 
     def test_non_enabled_ext_should_not_be_disabled_at_ver_update(self):
-        from azurelinuxagent.ga.exthandlers import ExtHandlerState
-        self.cur_ext_handler.get_handler_state.return_value = ExtHandlerState.Installed
 
-        self.ext_handler.handle_enable(self.updated_ext_handler)
+        first_ext = get_extension_actor(enableAction=Actions.FailAction)
 
-        # As the mock was not in an enabled state, it should not be disabled by the above call.
-        self.cur_ext_handler.disable.assert_not_called()
+        with get_protocol_and_handler(first_ext) as (protocol, exthandlers_handler):
+            
+            with first_ext.patch_popen():
+                exthandlers_handler.run()
+
+            first_ext.get_command("installCommand").assert_called_once()
+            first_ext.get_command("enableCommand").assert_called_once()
+            
+            second_ext = get_extension_actor(version="1.1.0")
+            update_secondary_extension_actors(protocol, 2, second_ext)
+
+            with first_ext.patch_popen():
+                with second_ext.patch_popen():
+                    exthandlers_handler.run()
+
+            second_ext.get_command("installCommand").assert_called_once()
+            second_ext.get_command("enableCommand").assert_called_once()
+            first_ext.get_command("disableCommand").assert_not_called()
 
 class LaunchCommandTestCase(AgentTestCase):
     """
