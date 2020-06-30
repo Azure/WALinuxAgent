@@ -33,8 +33,9 @@ def parse_doc(xml_text):
     Parse xml document from string
     """
     # The minidom lib has some issue with unicode in python2.
-    # Encode the string into utf-8 first
-    xml_text = xml_text.encode('utf-8')
+    if isinstance(xml_text, str):
+        # Encode the string into utf-8 first
+        xml_text = xml_text.encode('utf-8')
     return minidom.parseString(xml_text)
 
 
