@@ -362,7 +362,7 @@ class TestWireProtocol(AgentTestCase):
 
         event_str = u'a test string'
         client = WireProtocol(WIRESERVER_URL).client
-        client.send_event("foo", event_str)
+        client.send_event("foo", event_str.encode('utf-8'))
 
         first_call = mock_http_request.call_args_list[0]
         args, kwargs = first_call

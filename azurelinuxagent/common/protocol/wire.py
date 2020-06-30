@@ -1075,7 +1075,7 @@ class WireClient(object):
                               u'<Provider id="{0}">').format(provider_id).encode('utf-8')
         data_format_footer = (u'</Provider>'
                               u'</TelemetryData>').encode('utf-8')
-        # Event string is already encoded by the time it gets here, to avoid double encoding, dividing it into parts.
+        # Event string should already be encoded by the time it gets here, to avoid double encoding, dividing it into parts.
         data = data_format_header + event_str + data_format_footer
         try:
             header = self.get_header_for_xml_content()
