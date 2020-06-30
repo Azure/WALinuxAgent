@@ -67,6 +67,7 @@ class WireProtocolDataBase(object):
         self.in_vm_artifacts_profile = None
 
 
+    # TODO: is this designed to be private or public?
     def reload(self):
         raise  NotImplementedError("WireProtocolDataBase by itself has no data with which to load.")
 
@@ -258,6 +259,9 @@ class WireProtocolDataFromFile(WireProtocolDataBase):
         self.reload()
 
     def reload(self):
+        """
+        TODO: Desc (of prior functionality)
+        """
         self.version_info = load_data(self.data_files.get("version_info"))
         self.goal_state = load_data(self.data_files.get("goal_state"))
         self.hosting_env = load_data(self.data_files.get("hosting_env"))
@@ -283,14 +287,15 @@ class WireProtocolDataFromFile(WireProtocolDataBase):
 
 class WireProtocolDataFromMemory(WireProtocolDataBase):
 
-    data_fetcher = None
-
     def __init__(self, data_fetcher=DEFAULT_FETCHER):
         super(WireProtocolDataFromMemory, self).__init__()
         self.data_fetcher = data_fetcher
         self.reload()
     
     def reload(self):
+        """
+        TODO: Desc (of new functionality)
+        """
         self.version_info = self.data_fetcher['version_info']()
         self.goal_state = self.data_fetcher['goal_state']()
         self.hosting_env = self.data_fetcher['hosting_env']()

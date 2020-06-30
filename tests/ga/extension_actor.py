@@ -15,6 +15,8 @@
 # Requires Python 2.6+ and Openssl 1.0+
 #
 
+# TODO: Check the licensing; it was copy-pasted from another file.\
+
 import contextlib
 import subprocess
 
@@ -26,18 +28,30 @@ from tests.tools import patch, Mock
 
 
 class Actions(object):
+    """
+    TODO: Desc
+    """
 
     @staticmethod
     def SucceedAction(*args, **kwargs):
+        """
+        TODO: Desc
+        """
         return 0
     
     @staticmethod
     def FailAction(*args, **kwargs):
+        """
+        TODO: Desc
+        """
         raise ExtensionError("FailAction called.")
 
     
     @staticmethod
     def _wrap_with_write_status(cmd, extensionId):
+        """
+        TODO: Desc
+        """
         import azurelinuxagent.common.utils.fileutil as fileutil
         import azurelinuxagent.common.conf as conf
         
@@ -70,6 +84,9 @@ class Actions(object):
 def get_extension_actor(name="OSTCExtensions.ExampleHandlerLinux", version="1.0.0", continueOnUpdateFailure=False,
     data_fetcher_base=mockwiredata.DEFAULT_FETCHER, installAction=Actions.SucceedAction, uninstallAction=Actions.SucceedAction,
     updateAction=Actions.SucceedAction, enableAction=Actions.SucceedAction, disableAction=Actions.SucceedAction):
+    """
+    TODO: Desc
+    """
     
     actionSet = ActionSet(installAction, uninstallAction, updateAction, enableAction, disableAction,
         "{0}-{1}".format(name, version))
@@ -80,6 +97,9 @@ def get_extension_actor(name="OSTCExtensions.ExampleHandlerLinux", version="1.0.
 
 @contextlib.contextmanager
 def get_protocol_and_handler(firstActor, *remainingActors):
+    """
+    TODO: Desc
+    """
 
     remainingActors_mockwiredata = {
         "{0}__{1}".format(actor.extension_info.name, actor.extension_info.version): mockwiredata.get_dynamic_wire_protocol_data(actor.data_fetcher)
@@ -102,6 +122,9 @@ def get_protocol_and_handler(firstActor, *remainingActors):
 
 
 def update_secondary_extension_actors(protocol, incarnation, *actors):
+    """
+    TODO: Desc
+    """
 
     actors_mockwiredata = {
         "{0}__{1}".format(actor.extension_info.name, actor.extension_info.version): mockwiredata.get_dynamic_wire_protocol_data(actor.data_fetcher)
@@ -127,9 +150,15 @@ def update_secondary_extension_actors(protocol, incarnation, *actors):
 
 
 class ActionSet(object):
+    """
+    TODO: Desc
+    """
 
     def __init__(self, installAction, uninstallAction, updateAction, enableAction, disableAction, extensionId):
-        formattedId = extensionId.replace(".", "_")
+        """
+        TODO: Desc
+        """
+        formattedId = extensionId.replace(".", "_") # TODO: explain
 
         self.delegate ={
             "installCommand": dict(key="{0}_install".format(formattedId), action=installAction),
@@ -140,18 +169,30 @@ class ActionSet(object):
         }
 
     def items(self):
+        """
+        TODO: Desc
+        """
         for key, action in self.delegate.items():
             yield key, action
     
     def keys(self):
+        """
+        TODO: Desc
+        """
         for key in self.delegate.keys():
             yield key
     
     def getKeyForCommand(self, cmd):
+        """
+        TODO: Desc
+        """
         return self.delegate.get(cmd, {}).get("key", None)
 
 
 class ExtensionInfo(object):
+    """
+    TODO: Desc
+    """
 
     def __init__(self, name, version, continueOnUpdateFailure):
         self.name = name
@@ -160,10 +201,15 @@ class ExtensionInfo(object):
 
 
 class ExtensionActor(object):
-
+    """
+    TODO: Desc
+    """
     
     @staticmethod
     def _configure_action_scope(actionScope, actionSet):
+        """
+        TODO: Desc
+        """
         actionScope.mock_add_spec(actionSet.keys())
         
         actionScope.configure_mock(**{
@@ -173,6 +219,9 @@ class ExtensionActor(object):
     
     @staticmethod
     def _configure_data_fetcher(dataFetcher, actionSet, extensionInfo):
+        """
+        TODO: Desc
+        """
 
         dataFetcher["test_ext"] = mockwiredata.generate_ext_fetcher_func([{
             "name": extensionInfo.name.split(".")[-1],
@@ -186,6 +235,9 @@ class ExtensionActor(object):
 
 
     def __init__(self, dataFetcherBase, actionSet, extensionInfo):
+        """
+        TODO: Desc
+        """
         self.action_scope = Mock()
         ExtensionActor._configure_action_scope(self.action_scope, actionSet)
 
@@ -198,15 +250,25 @@ class ExtensionActor(object):
 
     @contextlib.contextmanager
     def patch_popen(self):
+        """
+        TODO: Desc
+        """
 
         original_popen = subprocess.Popen
 
         def mock_popen(command, *args, **kwargs):
+            # TODO: Explain delegate (specifically, how it can stack onto previous mock_popens,
+            # TODO: and why we woudl want that). 
+            # TODO: Remove .wait() in concert with below changes
             delegate = (lambda *args, **kwargs: original_popen(command, *args, **kwargs).wait())
 
-            script_name = command.split("/")[-1]
+            script_name = command.split("/")[-1] # TODO: explain the why.
+
+            # TODO: Transition the return of these attributes to a mock following the spec of
+            # TODO: the mock object returned below.
             return_code = getattr(self.action_scope, script_name, delegate)(*args, **kwargs)
 
+            # TODO: return return_code (later mock_popen_obj)
             return Mock(**{
                 "poll.return_value": return_code,
                 "wait.return_value": return_code
