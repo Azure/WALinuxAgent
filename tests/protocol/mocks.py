@@ -27,8 +27,11 @@ _USE_MOCK_WIRE_DATA_RE = re.compile(
 
 
 @contextlib.contextmanager
-def mock_wire_protocol(mock_wire_data_file, http_get_handler=None, http_post_handler=None, http_put_handler=None, fail_on_unknown_request=True):
+def mock_wire_protocol(mock_wire_data_file, http_get_handler=None, http_post_handler=None, http_put_handler=None, fail_on_unknown_request=True,
+    mockwiredata_factory=mockwiredata.get_file_based_wire_protocol_data):
     """
+    TODO: Update desc.
+    
     Creates a WireProtocol object that handles requests to the WireServer and the Host GA Plugin (i.e requests on the WireServer endpoint), plus
     some requests to storage (requests on the fake server 'mock-goal-state').
 
@@ -129,7 +132,7 @@ def mock_wire_protocol(mock_wire_data_file, http_get_handler=None, http_post_han
     # create the protocol object
     #
     protocol = WireProtocol(restutil.KNOWN_WIRESERVER_IP)
-    protocol.mock_wire_data = mockwiredata.WireProtocolData(mock_wire_data_file)
+    protocol.mock_wire_data = mockwiredata_factory(mock_wire_data_file)
     protocol.start = start
     protocol.stop = stop
     protocol.track_url = lambda url: tracked_urls.append(url)

@@ -23,76 +23,17 @@ from azurelinuxagent.common.exception import HttpError, ResourceGoneError
 from azurelinuxagent.common.future import httpclient
 from azurelinuxagent.common.utils.cryptutil import CryptUtil
 
-DATA_FILE = {
-        "version_info": "wire/version_info.xml",
-        "goal_state": "wire/goal_state.xml",
-        "hosting_env": "wire/hosting_env.xml",
-        "shared_config": "wire/shared_config.xml",
-        "certs": "wire/certs.xml",
-        "ext_conf": "wire/ext_conf.xml",
-        "manifest": "wire/manifest.xml",
-        "ga_manifest": "wire/ga_manifest.xml",
-        "trans_prv": "wire/trans_prv",
-        "trans_cert": "wire/trans_cert",
-        "test_ext": "ext/sample_ext-1.3.0.zip",
-        "remote_access": None,
-        "in_vm_artifacts_profile": None
-}
+from tests.protocol.mockwiredata_filenames import *
+from tests.protocol.mockwiredata_fetcher import DEFAULT_FETCHER, data_files_to_fetcher, generate_ext_fetcher_func
 
-DATA_FILE_IN_VM_ARTIFACTS_PROFILE = DATA_FILE.copy()
-DATA_FILE_IN_VM_ARTIFACTS_PROFILE["ext_conf"] = "wire/ext_conf_in_vm_artifacts_profile.xml"
-DATA_FILE_IN_VM_ARTIFACTS_PROFILE["in_vm_artifacts_profile"] = "wire/in_vm_artifacts_profile.json"
+def get_file_based_wire_protocol_data(data_files):
+    return WireProtocolDataFromFile(data_files)
 
-DATA_FILE_NO_EXT = DATA_FILE.copy()
-DATA_FILE_NO_EXT["goal_state"] = "wire/goal_state_no_ext.xml"
-DATA_FILE_NO_EXT["ext_conf"] = None
+def get_dynamic_wire_protocol_data(data_fetcher):
+    return WireProtocolDataFromMemory(data_fetcher)
 
-DATA_FILE_EXT_NO_SETTINGS = DATA_FILE.copy()
-DATA_FILE_EXT_NO_SETTINGS["ext_conf"] = "wire/ext_conf_no_settings.xml"
-
-DATA_FILE_EXT_NO_PUBLIC = DATA_FILE.copy()
-DATA_FILE_EXT_NO_PUBLIC["ext_conf"] = "wire/ext_conf_no_public.xml"
-
-DATA_FILE_EXT_AUTOUPGRADE = DATA_FILE.copy()
-DATA_FILE_EXT_AUTOUPGRADE["ext_conf"] = "wire/ext_conf_autoupgrade.xml"
-
-DATA_FILE_EXT_INTERNALVERSION = DATA_FILE.copy()
-DATA_FILE_EXT_INTERNALVERSION["ext_conf"] = "wire/ext_conf_internalversion.xml"
-
-DATA_FILE_EXT_AUTOUPGRADE_INTERNALVERSION = DATA_FILE.copy()
-DATA_FILE_EXT_AUTOUPGRADE_INTERNALVERSION["ext_conf"] = "wire/ext_conf_autoupgrade_internalversion.xml"
-
-DATA_FILE_EXT_ROLLINGUPGRADE = DATA_FILE.copy()
-DATA_FILE_EXT_ROLLINGUPGRADE["ext_conf"] = "wire/ext_conf_upgradeguid.xml"
-
-DATA_FILE_EXT_SEQUENCING = DATA_FILE.copy()
-DATA_FILE_EXT_SEQUENCING["ext_conf"] = "wire/ext_conf_sequencing.xml"
-
-DATA_FILE_EXT_DELETION = DATA_FILE.copy()
-DATA_FILE_EXT_DELETION["manifest"] = "wire/manifest_deletion.xml"
-
-DATA_FILE_EXT_SINGLE = DATA_FILE.copy()
-DATA_FILE_EXT_SINGLE["manifest"] = "wire/manifest_deletion.xml"
-
-DATA_FILE_MULTIPLE_EXT = DATA_FILE.copy()
-DATA_FILE_MULTIPLE_EXT["ext_conf"] = "wire/ext_conf_multiple_extensions.xml"
-
-DATA_FILE_NO_CERT_FORMAT = DATA_FILE.copy()
-DATA_FILE_NO_CERT_FORMAT["certs"] = "wire/certs_no_format_specified.xml"
-
-DATA_FILE_CERT_FORMAT_NOT_PFX = DATA_FILE.copy()
-DATA_FILE_CERT_FORMAT_NOT_PFX["certs"] = "wire/certs_format_not_pfx.xml"
-
-DATA_FILE_REMOTE_ACCESS = DATA_FILE.copy()
-DATA_FILE_REMOTE_ACCESS["goal_state"] = "wire/goal_state_remote_access.xml"
-DATA_FILE_REMOTE_ACCESS["remote_access"] = "wire/remote_access_single_account.xml"
-
-DATA_FILE_PLUGIN_SETTINGS_MISMATCH = DATA_FILE.copy()
-DATA_FILE_PLUGIN_SETTINGS_MISMATCH["ext_conf"] = "wire/ext_conf_plugin_settings_version_mismatch.xml"
-
-
-class WireProtocolData(object):
-    def __init__(self, data_files=DATA_FILE):
+class WireProtocolDataBase(object):
+    def __init__(self):
         self.emulate_stale_goal_state = False
         self.call_counts = {
             "comp=versions": 0,
@@ -111,7 +52,6 @@ class WireProtocolData(object):
             "ExampleHandlerLinux": 0,
             "in_vm_artifacts_profile": 0
         }
-        self.data_files = data_files
         self.version_info = None
         self.goal_state = None
         self.hosting_env = None
@@ -126,30 +66,9 @@ class WireProtocolData(object):
         self.remote_access = None
         self.in_vm_artifacts_profile = None
 
-        self.reload()
 
     def reload(self):
-        self.version_info = load_data(self.data_files.get("version_info"))
-        self.goal_state = load_data(self.data_files.get("goal_state"))
-        self.hosting_env = load_data(self.data_files.get("hosting_env"))
-        self.shared_config = load_data(self.data_files.get("shared_config"))
-        self.certs = load_data(self.data_files.get("certs"))
-        self.ext_conf = self.data_files.get("ext_conf")
-        if self.ext_conf is not None:
-            self.ext_conf = load_data(self.ext_conf)
-        self.manifest = load_data(self.data_files.get("manifest"))
-        self.ga_manifest = load_data(self.data_files.get("ga_manifest"))
-        self.trans_prv = load_data(self.data_files.get("trans_prv"))
-        self.trans_cert = load_data(self.data_files.get("trans_cert"))
-        self.ext = load_bin_data(self.data_files.get("test_ext"))
-
-        remote_access_data_file = self.data_files.get("remote_access")
-        if remote_access_data_file is not None:
-            self.remote_access = load_data(remote_access_data_file)
-
-        in_vm_artifacts_profile_file = self.data_files.get("in_vm_artifacts_profile")
-        if in_vm_artifacts_profile_file is not None:
-            self.in_vm_artifacts_profile = load_data(in_vm_artifacts_profile_file)
+        raise  NotImplementedError("WireProtocolDataBase by itself has no data with which to load.")
 
     def mock_http_get(self, url, *args, **kwargs):
         content = None
@@ -293,40 +212,95 @@ class WireProtocolData(object):
         '''
         Sets the incarnation in the goal state, but not on its subcomponents (e.g. hosting env, shared config)
         '''
-        self.goal_state = WireProtocolData.replace_xml_element_value(self.goal_state, "Incarnation", str(incarnation))
+        self.goal_state = WireProtocolDataBase.replace_xml_element_value(self.goal_state, "Incarnation", str(incarnation))
 
     def set_container_id(self, container_id):
-        self.goal_state = WireProtocolData.replace_xml_element_value(self.goal_state, "ContainerId", container_id)
+        self.goal_state = WireProtocolDataBase.replace_xml_element_value(self.goal_state, "ContainerId", container_id)
 
     def set_role_config_name(self, role_config_name):
-        self.goal_state = WireProtocolData.replace_xml_element_value(self.goal_state, "ConfigName", role_config_name)
+        self.goal_state = WireProtocolDataBase.replace_xml_element_value(self.goal_state, "ConfigName", role_config_name)
 
     def set_hosting_env_deployment_name(self, deployment_name):
-        self.hosting_env = WireProtocolData.replace_xml_attribute_value(self.hosting_env, "Deployment", "name", deployment_name)
+        self.hosting_env = WireProtocolDataBase.replace_xml_attribute_value(self.hosting_env, "Deployment", "name", deployment_name)
 
     def set_shared_config_deployment_name(self, deployment_name):
-        self.shared_config = WireProtocolData.replace_xml_attribute_value(self.shared_config, "Deployment", "name", deployment_name)
+        self.shared_config = WireProtocolDataBase.replace_xml_attribute_value(self.shared_config, "Deployment", "name", deployment_name)
 
     def set_extensions_config_sequence_number(self, sequence_number):
         '''
         Sets the sequence number for *all* extensions
         '''
-        self.ext_conf = WireProtocolData.replace_xml_attribute_value(self.ext_conf, "RuntimeSettings", "seqNo", str(sequence_number))
+        self.ext_conf = WireProtocolDataBase.replace_xml_attribute_value(self.ext_conf, "RuntimeSettings", "seqNo", str(sequence_number))
 
     def set_extensions_config_version(self, version):
         '''
         Sets the version for *all* extensions
         '''
-        self.ext_conf = WireProtocolData.replace_xml_attribute_value(self.ext_conf, "Plugin", "version", version)
+        self.ext_conf = WireProtocolDataBase.replace_xml_attribute_value(self.ext_conf, "Plugin", "version", version)
 
     def set_extensions_config_state(self, state):
         '''
         Sets the state for *all* extensions
         '''
-        self.ext_conf = WireProtocolData.replace_xml_attribute_value(self.ext_conf, "Plugin", "state", state)
+        self.ext_conf = WireProtocolDataBase.replace_xml_attribute_value(self.ext_conf, "Plugin", "state", state)
 
     def set_manifest_version(self, version):
         '''
         Sets the version of the extension manifest
         '''
-        self.manifest = WireProtocolData.replace_xml_element_value(self.manifest, "Version", version)
+        self.manifest = WireProtocolDataBase.replace_xml_element_value(self.manifest, "Version", version)
+
+class WireProtocolDataFromFile(WireProtocolDataBase):
+
+    def __init__(self, data_files=DATA_FILE):
+        super(WireProtocolDataFromFile, self).__init__()
+        self.data_files = data_files
+        self.reload()
+
+    def reload(self):
+        self.version_info = load_data(self.data_files.get("version_info"))
+        self.goal_state = load_data(self.data_files.get("goal_state"))
+        self.hosting_env = load_data(self.data_files.get("hosting_env"))
+        self.shared_config = load_data(self.data_files.get("shared_config"))
+        self.certs = load_data(self.data_files.get("certs"))
+        self.ext_conf = self.data_files.get("ext_conf")
+        if self.ext_conf is not None:
+            self.ext_conf = load_data(self.ext_conf)
+        self.manifest = load_data(self.data_files.get("manifest"))
+        self.ga_manifest = load_data(self.data_files.get("ga_manifest"))
+        self.trans_prv = load_data(self.data_files.get("trans_prv"))
+        self.trans_cert = load_data(self.data_files.get("trans_cert"))
+        self.ext = load_bin_data(self.data_files.get("test_ext"))
+
+        remote_access_data_file = self.data_files.get("remote_access")
+        if remote_access_data_file is not None:
+            self.remote_access = load_data(remote_access_data_file)
+
+        in_vm_artifacts_profile_file = self.data_files.get("in_vm_artifacts_profile")
+        if in_vm_artifacts_profile_file is not None:
+            self.in_vm_artifacts_profile = load_data(in_vm_artifacts_profile_file)
+
+
+class WireProtocolDataFromMemory(WireProtocolDataBase):
+
+    data_fetcher = None
+
+    def __init__(self, data_fetcher=DEFAULT_FETCHER):
+        super(WireProtocolDataFromMemory, self).__init__()
+        self.data_fetcher = data_fetcher
+        self.reload()
+    
+    def reload(self):
+        self.version_info = self.data_fetcher['version_info']()
+        self.goal_state = self.data_fetcher['goal_state']()
+        self.hosting_env = self.data_fetcher['hosting_env']()
+        self.shared_config = self.data_fetcher['shared_config']()
+        self.certs = self.data_fetcher['certs']()
+        self.ext_conf = self.data_fetcher['ext_conf']()
+        self.manifest = self.data_fetcher['manifest']()
+        self.ga_manifest = self.data_fetcher['ga_manifest']()
+        self.trans_prv = self.data_fetcher['trans_prv']()
+        self.trans_cert = self.data_fetcher['trans_cert']()
+        self.ext = self.data_fetcher['test_ext']()
+        self.remote_access = self.data_fetcher['remote_access']()
+        self.in_vm_artifacts_profile = self.data_fetcher['in_vm_artifacts_profile']()
