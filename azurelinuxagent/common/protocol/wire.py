@@ -501,9 +501,8 @@ def event_param_to_v1(param):
         attr_type = 'mt:bool'
     elif param_type is float:
         attr_type = 'mt:float64'
-    xml_val = saxutils.quoteattr(ustr(param.value))
     return param_format.format(param.name,
-                               xml_val,
+                               saxutils.quoteattr(ustr(param.value)),
                                attr_type)
 
 
@@ -512,7 +511,7 @@ def event_to_v1(event):
     for param in event.parameters:
         params += event_param_to_v1(param)
     event_str = u'<Event id="{0}"><![CDATA[{1}]]></Event>'.format(event.eventId, params)
-    return event_str
+    return event_str.encode("utf-8")
 
 
 class WireClient(object):
@@ -1071,12 +1070,13 @@ class WireClient(object):
 
     def send_event(self, provider_id, event_str):
         uri = TELEMETRY_URI.format(self.get_endpoint())
-        data_format = ('<?xml version="1.0"?>'
-                       '<TelemetryData version="1.0">'
-                       '<Provider id="{0}">{1}'
-                       '</Provider>'
-                       '</TelemetryData>')
-        data = data_format.format(provider_id, event_str)
+        data_format_header = (u'<?xml version="1.0"?>'
+                              u'<TelemetryData version="1.0">'
+                              u'<Provider id="{0}">').format(provider_id).encode('utf-8')
+        data_format_footer = (u'</Provider>'
+                              u'</TelemetryData>').encode('utf-8')
+        # Event string is already encoded by the time it gets here, to avoid double encoding, dividing it into parts.
+        data = data_format_header + event_str + data_format_footer
         try:
             header = self.get_header_for_xml_content()
             # NOTE: The call to wireserver requests utf-8 encoding in the headers, but the body should not
@@ -1092,10 +1092,11 @@ class WireClient(object):
 
     def report_event(self, event_list):
         buf = {}
+        events_per_request = 0
         # Group events by providerId
         for event in event_list.events:
             if event.providerId not in buf:
-                buf[event.providerId] = ""
+                buf[event.providerId] = b'' #"".encode("utf-8")
             event_str = event_to_v1(event)
             if len(event_str) >= MAX_EVENT_BUFFER_SIZE:
                 details_of_event = [ustr(x.name) + ":" + ustr(x.value) for x in event.parameters if x.name in
@@ -1108,12 +1109,16 @@ class WireClient(object):
                 continue
             if len(buf[event.providerId] + event_str) >= MAX_EVENT_BUFFER_SIZE:
                 self.send_event(event.providerId, buf[event.providerId])
-                buf[event.providerId] = ""
+                buf[event.providerId] = b'' # "".encode("utf-8")
+                logger.info("No of events this request = {0}".format(events_per_request))
+                events_per_request = 0
             buf[event.providerId] = buf[event.providerId] + event_str
+            events_per_request += 1
 
         # Send out all events left in buffer.
         for provider_id in list(buf.keys()):
             if len(buf[provider_id]) > 0:
+                logger.info("No of events this request = {0}".format(events_per_request))
                 self.send_event(provider_id, buf[provider_id])
 
     def report_status_event(self, message, is_success):
