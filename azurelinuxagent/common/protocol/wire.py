@@ -488,7 +488,7 @@ class StatusBlob(object):
 
 
 def event_param_to_v1(param):
-    param_format = u'<Param Name="{0}" Value={1} T="{2}" />'
+    param_format = ustr('<Param Name="{0}" Value={1} T="{2}" />')
     param_type = type(param.value)
     attr_type = ""
     if param_type is int:
@@ -510,7 +510,7 @@ def event_to_v1(event):
     params = ""
     for param in event.parameters:
         params += event_param_to_v1(param)
-    event_str = u'<Event id="{0}"><![CDATA[{1}]]></Event>'.format(event.eventId, params)
+    event_str = ustr('<Event id="{0}"><![CDATA[{1}]]></Event>').format(event.eventId, params)
     return event_str.encode("utf-8")
 
 
@@ -1070,11 +1070,9 @@ class WireClient(object):
 
     def send_event(self, provider_id, event_str):
         uri = TELEMETRY_URI.format(self.get_endpoint())
-        data_format_header = (u'<?xml version="1.0"?>'
-                              u'<TelemetryData version="1.0">'
-                              u'<Provider id="{0}">').format(provider_id).encode('utf-8')
-        data_format_footer = (u'</Provider>'
-                              u'</TelemetryData>').encode('utf-8')
+        data_format_header = ustr('<?xml version="1.0"?><TelemetryData version="1.0"><Provider id="{0}">').format(
+            provider_id).encode('utf-8')
+        data_format_footer = ustr('</Provider></TelemetryData>').encode('utf-8')
         # Event string should already be encoded by the time it gets here, to avoid double encoding, dividing it into parts.
         data = data_format_header + event_str + data_format_footer
         try:
