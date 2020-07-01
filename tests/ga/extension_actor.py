@@ -100,7 +100,9 @@ def get_extension_actor(name="OSTCExtensions.ExampleHandlerLinux", version="1.0.
     data_fetcher_base=mockwiredata.DEFAULT_FETCHER, installAction=Actions.SucceedAction, uninstallAction=Actions.SucceedAction,
     updateAction=Actions.SucceedAction, enableAction=Actions.SucceedAction, disableAction=Actions.SucceedAction):
     """
-    Factory method for ExtensionActor class.
+    Factory method for ExtensionActor class. Note that the provided name and version needs to match a plugin listed
+    in the xml doc returned by data_fetcher_base["manifest"]; otherwise, the agent won't be able to properly download
+    this extension.
     """
     
     actionSet = ActionSet(installAction, uninstallAction, updateAction, enableAction, disableAction,
