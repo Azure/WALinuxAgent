@@ -27,6 +27,8 @@ import sys
 import zlib
 import xml.dom.minidom as minidom
 
+from azurelinuxagent.common.future import ustr
+
 
 def parse_doc(xml_text):
     """
@@ -397,3 +399,10 @@ def format_memory_value(unit, value):
         raise TypeError('Value must be convertible to a float')
 
     return int(value * units[unit])
+
+def str_to_encoded_ustr(s):
+    from azurelinuxagent.common.version import PY_VERSION_MAJOR
+    if PY_VERSION_MAJOR > 2:
+        # For py3+, str() is encoded to utf-8 by default so no need for extra encoding
+        return ustr(s)
+    return ustr(s, encoding='utf-8')

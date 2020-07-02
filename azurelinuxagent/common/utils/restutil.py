@@ -322,7 +322,7 @@ def _http_request(method, host, rel_uri, port=None, data=None, secure=False,
     logger.verbose("HTTP connection [{0}] [{1}] [{2}] [{3}]",
                    method,
                    redact_sas_tokens_in_urls(url),
-                   data,
+                   data if (data is None or type(data) is ustr) else textutil.str_to_encoded_ustr(data),
                    headers)
 
     conn.request(method=method, url=url, body=data, headers=headers)
