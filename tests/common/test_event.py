@@ -796,8 +796,11 @@ class TestEvent(HttpRequestPredicates, AgentTestCase):
                 add_event('TestEventEncoding', message=msg)
                 event_list = event.collect_events()
                 protocol.client.report_event(event_list)
+                # In Py2, encode() produces a str and in py3 it produces a bytes string.
+                # type(bytes) == type(str) for Py2 so this test is mainly for Py3 to ensure that the event is encoded properly.
                 self.assertIsInstance(http_post_handler.request_body, bytes, "The Event request body should be encoded")
-                self.assertIn(msg.encode('utf-8'), http_post_handler.request_body, "Encoded message not found in body")
+                self.assertIn(textutil.str_to_encoded_ustr(msg).encode('utf-8'), http_post_handler.request_body,
+                              "Encoded message not found in body")
 
 
 class TestMetrics(AgentTestCase):
