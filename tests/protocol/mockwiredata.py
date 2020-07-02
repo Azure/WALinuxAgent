@@ -27,7 +27,7 @@ from tests.protocol.mockwiredata_filenames import *
 from tests.protocol.mockwiredata_fetcher import DEFAULT_FETCHER, data_files_to_fetcher, generate_ext_fetcher_func
 
 def get_file_based_wire_protocol_data(data_files):
-    return WireProtocolDataFromFile(data_files)
+    return WireProtocolData(data_files)
 
 def get_dynamic_wire_protocol_data(data_fetcher):
     return WireProtocolDataFromMemory(data_fetcher)
@@ -251,10 +251,10 @@ class WireProtocolDataBase(object):
         '''
         self.manifest = WireProtocolDataBase.replace_xml_element_value(self.manifest, "Version", version)
 
-class WireProtocolDataFromFile(WireProtocolDataBase):
+class WireProtocolData(WireProtocolDataBase):
 
     def __init__(self, data_files=DATA_FILE):
-        super(WireProtocolDataFromFile, self).__init__()
+        super(WireProtocolData, self).__init__()
         self.data_files = data_files
         self.reload()
 
