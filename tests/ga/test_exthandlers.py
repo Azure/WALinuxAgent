@@ -32,7 +32,7 @@ from tests.protocol import mockwiredata
 from tests.protocol.mocks import mock_wire_protocol
 from tests.tools import AgentTestCase, patch, mock_sleep, clear_singleton_instances, Mock
 
-from tests.ga.extension_actor import get_extension_actor, get_protocol_and_handler, update_secondary_extension_actors, Actions
+from tests.ga.extension_actor import get_extension_actor, get_protocol_and_handler, update_extension_actors, Actions
 
 class TestExtHandlers(AgentTestCase):
 
@@ -265,65 +265,6 @@ class TestExtHandlers(AgentTestCase):
                               "Error message should contain the incorrect versions")
                 self.assertFalse(plugin_setting_mismatch_calls[0]['is_success'], "The event should be false")
 
-
-class VersionUpdateTestCase(AgentTestCase):
-    """
-    Test cases for extension version updates
-    """
-    def setUp(self):
-        AgentTestCase.setUp(self)
-        self.mock_sleep = patch("time.sleep", lambda *_: mock_sleep(0.01))
-        self.mock_sleep.start()
-
-    def tearDown(self):
-        self.mock_sleep.stop()
-        AgentTestCase.tearDown(self)
-
-    def test_enabled_ext_should_be_disabled_at_ver_update(self):
-
-        first_ext = get_extension_actor()
-
-        with get_protocol_and_handler(first_ext) as (protocol, exthandlers_handler):
-            
-            with first_ext.patch_popen():
-                exthandlers_handler.run()
-
-            first_ext.get_command("installCommand").assert_called_once()
-            first_ext.get_command("enableCommand").assert_called_once()
-            
-            second_ext = get_extension_actor(version="1.1.0")
-            update_secondary_extension_actors(protocol, 2, second_ext)
-
-            with first_ext.patch_popen():
-                with second_ext.patch_popen():
-                    exthandlers_handler.run()
-
-            second_ext.get_command("installCommand").assert_called_once()
-            second_ext.get_command("enableCommand").assert_called_once()
-            first_ext.get_command("disableCommand").assert_called_once()
-
-    def test_non_enabled_ext_should_not_be_disabled_at_ver_update(self):
-
-        first_ext = get_extension_actor(enableAction=Actions.FailAction)
-
-        with get_protocol_and_handler(first_ext) as (protocol, exthandlers_handler):
-            
-            with first_ext.patch_popen():
-                exthandlers_handler.run()
-
-            first_ext.get_command("installCommand").assert_called_once()
-            first_ext.get_command("enableCommand").assert_called_once()
-            
-            second_ext = get_extension_actor(version="1.1.0")
-            update_secondary_extension_actors(protocol, 2, second_ext)
-
-            with first_ext.patch_popen():
-                with second_ext.patch_popen():
-                    exthandlers_handler.run()
-
-            second_ext.get_command("installCommand").assert_called_once()
-            second_ext.get_command("enableCommand").assert_called_once()
-            first_ext.get_command("disableCommand").assert_not_called()
 
 class LaunchCommandTestCase(AgentTestCase):
     """

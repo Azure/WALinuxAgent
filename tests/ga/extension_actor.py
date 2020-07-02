@@ -19,12 +19,14 @@
 
 import contextlib
 import subprocess
+import json
 
 from azurelinuxagent.common.exception import ExtensionError
 from azurelinuxagent.ga.exthandlers import get_exthandlers_handler
-from tests.protocol.mocks import mock_wire_protocol
+from tests.protocol.mocks import mock_wire_protocol, HttpRequestPredicates
 from tests.protocol import mockwiredata
 from tests.tools import patch, Mock
+
 
 
 class Actions(object):
@@ -96,9 +98,10 @@ class Actions(object):
 
         return wrapped_cmd
 
-def get_extension_actor(name="OSTCExtensions.ExampleHandlerLinux", version="1.0.0", continueOnUpdateFailure=False,
-    data_fetcher_base=mockwiredata.DEFAULT_FETCHER, installAction=Actions.SucceedAction, uninstallAction=Actions.SucceedAction,
-    updateAction=Actions.SucceedAction, enableAction=Actions.SucceedAction, disableAction=Actions.SucceedAction):
+def get_extension_actor(name="OSTCExtensions.ExampleHandlerLinux", version="1.0.0", continueOnUpdateFailure=False, 
+    updateMode="UpdateWithInstall", data_fetcher_base=mockwiredata.DEFAULT_FETCHER, installAction=Actions.SucceedAction,
+    uninstallAction=Actions.SucceedAction, updateAction=Actions.SucceedAction, enableAction=Actions.SucceedAction,
+    disableAction=Actions.SucceedAction):
     """
     Factory method for ExtensionActor class. Note that the provided name and version needs to match a plugin listed
     in the xml doc returned by data_fetcher_base["manifest"]; otherwise, the agent won't be able to properly download
@@ -107,9 +110,65 @@ def get_extension_actor(name="OSTCExtensions.ExampleHandlerLinux", version="1.0.
     
     actionSet = ActionSet(installAction, uninstallAction, updateAction, enableAction, disableAction,
         "{0}-{1}".format(name, version))
-    info = ExtensionInfo(name, version, continueOnUpdateFailure)
+    info = ExtensionInfo(name, version, continueOnUpdateFailure, updateMode)
 
     return ExtensionActor(data_fetcher_base, actionSet, info)
+
+
+def _generate_mock_http_get(actors):
+
+    actorIdToData = {}
+    for actor in actors:
+        # This format is used in the url in the default manifest.xml (might want to revisit a la TODO in 
+        # get_protocol_and_handler docstring)
+        actorId = "{0}__{1}".format(actor.extension_info.name, actor.extension_info.version)
+        # By wrapping the actor's data_fetcher, we gain access to the WireProtocolDataFromMemory.mock_http_get func.
+        actorData = mockwiredata.get_dynamic_wire_protocol_data(actor.data_fetcher)
+
+        actorIdToData[actorId] = actorData
+
+    def mock_http_get(url, *args, **kwargs):
+        
+        for actorId, wire_data in actorIdToData.items():
+
+            if actorId in url:
+                # Delegate to the correct actor's WireProtocolData* obj. This achieves the same effect that replacing
+                # the (yet to be instantiated) protocol's mock_wire_data attribute, for just this one call.
+                return wire_data.mock_http_get(url, *args, **kwargs)
+        
+        # In order to correctly pull from firstActor's data, we need to let its WireProtocolData* obj know that we
+        # haven't satisfied the http_get request. Returning None here does that.
+        return None
+    
+    return mock_http_get
+
+def _generate_mock_http_put(actors):
+
+    def http_put_record_status(url, *args, **kwargs):
+        if HttpRequestPredicates.is_host_plugin_status_request(url):
+            return None
+
+        handlerStatuses = json.loads(args[0]).get('aggregateStatus', {}).get('handlerAggregateStatus', [])
+
+        for handlerStatus in handlerStatuses:
+            supplied_name = handlerStatus.get('handlerName', None)
+            supplied_version = handlerStatus.get('handlerVersion', None)
+            
+            try: 
+                matches_info = lambda actor: \
+                    actor.extension_info.name == supplied_name \
+                        and actor.extension_info.version == supplied_version
+                
+                next(
+                    actor for actor in actors
+                    if matches_info(actor)
+                ).statusBlobs.append(handlerStatus)
+
+            except StopIteration as e:
+                # Tests will want to know that the agent is running an extension they didn't specifically allocate.
+                raise Exception("Status submitted for non-emulated extension: {0}".format(json.dumps(handlerStatus)))
+
+    return http_put_record_status
 
 
 @contextlib.contextmanager
@@ -129,35 +188,15 @@ def get_protocol_and_handler(firstActor, *remainingActors):
     exthandlers_handler instance).
     """
 
-    dataForRemainingActors = {}
-    for actor in remainingActors:
-        # This format is used in the url in the default manifest.xml (might want to revisit a la TODO in docstring above)
-        actorId = "{0}__{1}".format(actor.extension_info.name, actor.extension_info.version)
-        # By wrapping the actor's data_fetcher, we gain access to the WireProtocolDataFromMemory.mock_http_get func.
-        actorData = mockwiredata.get_dynamic_wire_protocol_data(actor.data_fetcher)
-
-        dataForRemainingActors[actorId] = actorData
-
-    def http_get_for_remaining_actors(url, *args, **kwargs):
-        
-        for actorId, wire_data in dataForRemainingActors.items():
-
-            if actorId in url:
-                # Delegate to the correct actor's WireProtocolData* obj. This achieves the same effect that replacing
-                # the (yet to be instantiated) protocol's mock_wire_data attribute, for just this one call.
-                return wire_data.mock_http_get(url, *args, **kwargs)
-        
-        # In order to correctly pull from firstActor's data, we need to let its WireProtocolData* obj know that we
-        # haven't satisfied the http_get request. Returning None here does that.
-        return None
-
     with mock_wire_protocol(firstActor.data_fetcher, mockwiredata_factory=mockwiredata.get_dynamic_wire_protocol_data) as protocol:
 
-        protocol.set_http_handlers(http_get_handler=http_get_for_remaining_actors)
+        protocol.set_http_handlers(http_get_handler=_generate_mock_http_get(remainingActors),
+            http_put_handler=_generate_mock_http_put([firstActor, *remainingActors]))
+        
         yield protocol, get_exthandlers_handler(protocol)
 
 
-def update_secondary_extension_actors(protocol, incarnation, *actors):
+def update_extension_actors(protocol, incarnation, *actors):
     """
     TODO: Is this function's name descriptive of what it does? Is it clear?
 
@@ -177,31 +216,16 @@ def update_secondary_extension_actors(protocol, incarnation, *actors):
     extension_actor.update_secondary_extension_actors() function call, or greater than 0 if this is the first of such calls.
     """
 
-    dataForRemainingActors = {}
-    for actor in actors:
-        # This format is used in the url in the default manifest.xml (might want to revisit a la TODO in docstring above)
-        actorId = "{0}__{1}".format(actor.extension_info.name, actor.extension_info.version)
-        # By wrapping the actor's data_fetcher, we gain access to the WireProtocolDataFromMemory.mock_http_get func.
-        actorData = mockwiredata.get_dynamic_wire_protocol_data(actor.data_fetcher)
-
-        dataForRemainingActors[actorId] = actorData
-
-    def http_get(url, *args, **kwargs):
-        for actorId, wire_data in dataForRemainingActors.items():
-
-            if actorId in url:
-                return wire_data.mock_http_get(url, *args, **kwargs)
-        
-        return None
-
     # TODO: Revisit this to make it less hacky; currently, we set ALL versions in ext_conf to
     # TODO: the version of a single actor. More functionality is potentially needed in the WireProtocolDataBase
     # TODO: class, but the regex's currently implementing the xml modification look scary.
     # TODO: Ultimately, it would be nice to update the version of the particular extension emulated by each actor.
     if len(actors) > 0:
-        protocol.mock_wire_data.set_extensions_config_version(actors[0].extension_info.version)
+        protocol.mock_wire_data.set_extensions_config_version(max(actor.extension_info.version for actor in actors))
 
-    protocol.set_http_handlers(http_get_handler=http_get)
+    protocol.set_http_handlers(http_get_handler=_generate_mock_http_get(actors),
+        http_put_handler=_generate_mock_http_put(actors))
+    
     protocol.mock_wire_data.set_incarnation(incarnation)
     protocol.client.update_goal_state()
 
@@ -257,10 +281,11 @@ class ActionSet(object):
 
 class ExtensionInfo(object):
 
-    def __init__(self, name, version, continueOnUpdateFailure):
+    def __init__(self, name, version, continueOnUpdateFailure, updateMode):
         self.name = name
         self.version = version
         self.continueOnUpdateFailure = continueOnUpdateFailure
+        self.updateMode = updateMode
 
 
 class ExtensionActor(object):
@@ -330,7 +355,8 @@ class ExtensionActor(object):
             "handlerManifest": {
                 **{ title: cmd["key"] for title, cmd in actionSet.items() },
                 "rebootAfterInstall": False, "reportHeartbeat": False,
-                "continueOnUpdateFailure": extensionInfo.continueOnUpdateFailure
+                "continueOnUpdateFailure": extensionInfo.continueOnUpdateFailure,
+                "updateMode": extensionInfo.updateMode
             }
         }])
 
@@ -349,6 +375,8 @@ class ExtensionActor(object):
 
         self.get_command = lambda cmd: getattr(self.action_scope, actionSet.getKeyForCommand(cmd), None)
         self.extension_info = extensionInfo
+
+        self.statusBlobs = []
         
 
     @contextlib.contextmanager
