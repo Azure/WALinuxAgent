@@ -319,6 +319,7 @@ def _http_request(method, host, rel_uri, port=None, data=None, secure=False,
                                          conn_port,
                                          timeout=10)
 
+    # Logger requires the data to be a ustr to log properly, ensuring that the data string that we log is always ustr.
     logger.verbose("HTTP connection [{0}] [{1}] [{2}] [{3}]",
                    method,
                    redact_sas_tokens_in_urls(url),
