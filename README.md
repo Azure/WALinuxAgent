@@ -106,6 +106,12 @@ For more advanced installation options, such as installing to custom locations o
     sudo python setup.py install --register-service
 ```
 
+For Ubuntu, use:
+
+```bash
+    sudo python3 setup.py install --register-service
+```
+
 You can view more installation options by running:
 
 ```bash
