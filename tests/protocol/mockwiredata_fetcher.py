@@ -44,13 +44,17 @@ def generate_ext_fetcher_func(manifest, extra_files=None):
     def ext_fetcher_func():
         zip_file_buffer = BytesIO()
 
-        with zipfile.ZipFile(zip_file_buffer, "w", zipfile.ZIP_DEFLATED, False) as file:
+        file = zipfile.ZipFile(zip_file_buffer, "w", zipfile.ZIP_DEFLATED, False)
 
+        try:
             file.writestr("HandlerManifest.json", json.dumps(manifest))
 
             if extra_files != None:
                 for key, value in extra_files.items():
                     file.writestr(key, value)
+
+        finally:
+            file.close()
 
         return zip_file_buffer.getvalue()
 
