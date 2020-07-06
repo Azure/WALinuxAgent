@@ -15,17 +15,27 @@
 # Requires Python 2.6+ and Openssl 1.0+
 #
 
-# TODO: Check the licensing; it was copy-pasted from another file.\
-
 import contextlib
 import subprocess
 import json
 
 from azurelinuxagent.common.exception import ExtensionError
 from azurelinuxagent.ga.exthandlers import get_exthandlers_handler
+from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
 from tests.protocol.mocks import mock_wire_protocol, HttpRequestPredicates
 from tests.protocol import mockwiredata
 from tests.tools import patch, Mock
+
+
+class Formats(object):
+
+    @staticmethod
+    def FormatExtensionUri(name, version):
+        return "{0}__{1}".format(name, version)
+
+    @staticmethod
+    def FormatExtensionDir(name, version):
+        return "{0}-{1}".format(name, version)
 
 
 
@@ -51,25 +61,20 @@ class Actions(object):
 
     
     @staticmethod
-    def _wrap_with_write_status(cmd, extensionId):
+    def _wrap_with_write_status(cmd, name, version):
         """
         A function factory for an action that executes the given command after writing 
         a simple (successful) status file in the appropriate directory. 
         
         Useful in particular for wrapping "enableCommand"s, as the agent expects any 
         extension to write such a status after enabling.
-
-        TODO: Consider separating extensionId parameter into a name and version parameter
-        TODO: so that the file directory written to is guaranteed to be correct. As of now,
-        TODO: this method is relying on the extensionId being a correctly formatted combination
-        TODO: of the specific extension's name and version.
         """
         import azurelinuxagent.common.utils.fileutil as fileutil
         import azurelinuxagent.common.conf as conf
         
         filedir = "/".join([
             conf.get_lib_dir(),
-            extensionId,    # see TODO in above docstring.
+            Formats.FormatExtensionDir(name, version),
             "status"
         ])
 
@@ -108,8 +113,7 @@ def get_extension_actor(name="OSTCExtensions.ExampleHandlerLinux", version="1.0.
     this extension.
     """
     
-    actionSet = ActionSet(installAction, uninstallAction, updateAction, enableAction, disableAction,
-        "{0}-{1}".format(name, version))
+    actionSet = ActionSet(installAction, uninstallAction, updateAction, enableAction, disableAction, name, version)
     info = ExtensionInfo(name, version, continueOnUpdateFailure, updateMode)
 
     return ExtensionActor(data_fetcher_base, actionSet, info)
@@ -119,9 +123,7 @@ def _generate_mock_http_get(actors):
 
     actorIdToData = {}
     for actor in actors:
-        # This format is used in the url in the default manifest.xml (might want to revisit a la TODO in 
-        # get_protocol_and_handler docstring)
-        actorId = "{0}__{1}".format(actor.extension_info.name, actor.extension_info.version)
+        actorId = Formats.FormatExtensionUri(actor.extension_info.name, actor.extension_info.version)
         # By wrapping the actor's data_fetcher, we gain access to the WireProtocolDataFromMemory.mock_http_get func.
         actorData = mockwiredata.get_dynamic_wire_protocol_data(actor.data_fetcher)
 
@@ -174,57 +176,87 @@ def _generate_mock_http_put(actors):
 @contextlib.contextmanager
 def get_protocol_and_handler(firstActor, *remainingActors):
     """
-    TODO: Is there a scenario were a test wouldn't immediately want to patch popen for the actors passed
-    TODO: here? Maybe we should call patch_popen on our actors automatically.
-
-    TODO: Supporting retrieving data from *remainingActors (in addition to data from firstActor) depends on
-    TODO: the default manifest.xml file. Other manifest files might use a different url format for extension *.zip
-    TODO: files. Should this depenency be exposed as a func parameter?
-
     A wrapper for mockwiredata.mock_wire_protocol() that adapts a set of ExtensionActor objects into inputs that 
     that function can work with, whilst also creating and returning an exthandlers_handler instance pointing to the
-    returned protocol. Only firstActor need be populated; if so, this call basically devolves into 
-    mockwiredata.mock_wire_protocol(firstActor.data_fetcher) (as well as, obviously, returning the aforementioned
-    exthandlers_handler instance).
+    returned protocol. Additionally, Popen is patched (for the scope of the with) to enable the returned exthandlers_handler 
+    to interact with every extension actor supplied. Only firstActor need be populated.
+
+    Note that non-default manifest.xml files must use the same url format as the default in order to be compatible with this
+    function. Specifically, the *.zip resource urls for an extension must end in "{ExtensionName}__{ExtensionVersion}".
     """
 
     with mock_wire_protocol(firstActor.data_fetcher, mockwiredata_factory=mockwiredata.get_dynamic_wire_protocol_data) as protocol:
-
-        protocol.set_http_handlers(http_get_handler=_generate_mock_http_get(remainingActors),
-            http_put_handler=_generate_mock_http_put([firstActor, *remainingActors]))
         
-        yield protocol, get_exthandlers_handler(protocol)
+        # We save the patched popens within the protocol to enable additions in future function calls
+        # (e.g. update_extension_actors).
+        protocol._patched_popens = [ ] # Populated later; timing matters, and a patched_popen needs to be started immediately after creation.
+        # We also need actor objs to, amoung other things, guarantee that the same actor doesn't have
+        # two different patch_popen's running at the same time.
+        protocol._actors = [firstActor, *remainingActors]
+
+        protocol.set_http_handlers(http_get_handler=_generate_mock_http_get(protocol._actors[1:]),
+            http_put_handler=_generate_mock_http_put(protocol._actors))
+
+        try:
+            # enable the exthandlers_handler to interact with every actor before it is exposed.
+            for actor in protocol._actors:
+                patched_popen = actor.patch_popen() # We delay creation so that *this* patched_popen can "see" the prior ones (they must be started already).
+                patched_popen.start() # Allow later patches to "see" this one (as subprocess.Popen).
+
+                protocol._patched_popens.append(patched_popen)
+
+            yield protocol, get_exthandlers_handler(protocol)
+
+        finally:
+            for patched_popen in protocol._patched_popens:
+                patched_popen.stop()
 
 
-def update_extension_actors(protocol, incarnation, *actors):
+def add_extension_actors(protocol, incarnation, *actors):
     """
-    TODO: Is this function's name descriptive of what it does? Is it clear?
-
+    Given a protocol obj returned by a extension_actor.get_protocol_and_handler(firstActor, *remainingActors) call, injects the
+    extensions emulated by (the objects within) actors.
     
-    TODO: Supporting retrieving data from *actors depends on the default manifest.xml file. Other manifest files
-    TODO: might use a different url format for extension *.zip files. Should this depenency be exposed as a 
-    TODO: func parameter?
-
-
-    Given a protocol obj returned by a mockwiredata.mock_wire_protocol() call, updates (and/or replaces) any
-    functionality added by a extension_actor.get_protcol_and_handler(firstActor, *remainingActors) call. Specifically, 
-    after this call, the passed protocol obj will no longer grab data from any actors in remainingActors (if there were
-    ever any providing data in the first place); instead, it will attempt to grab data from any actors in the actors parameter
-    (if any exist).
+    It accomplishes this though applying the following updates onto the provided protocol:
+        *   adds unique data sources for *.zip extension resources garnered from actors (unique meaning ones not already given
+            by [firstActor, *remainingActors], if any)
+        *   updates ext_conf to reflect the extension names and versions within actors
+        *   updates the goal state's incarnation (to force the agent to re-read it)
 
     In order to force a goal state update, the incarnation parameter needs to be greater than the value passed in the last
-    extension_actor.update_secondary_extension_actors() function call, or greater than 0 if this is the first of such calls.
+    extension_actor.update_extension_actors() function call, or greater than 0 if this is the first of such calls.
+
+    Note that non-default manifest.xml files must use the same url format as the default in order to be compatible with this
+    function. Specifically, the *.zip resource urls for an extension must end in "{ExtensionName}__{ExtensionVersion}".
+
+    Note that this function does not update xml for ext_conf or manifest, meaning that added extensions must already be present
+    within those files as provided by the firstActor's data source. This could probably be implemented with the
+    WireProtocolDataBase.replace_xml_element_value function, but it would probably make sense to first implement autogeneration
+    of those files within ExtensionActor.__init__, as we would then know exactly the xml elements in those files. This would
+    simplify the logic of adding the new actors, but is a bigger change. Ultimately, this feature isn't currently (i.e. as of
+    writing) needed.
     """
 
-    # TODO: Revisit this to make it less hacky; currently, we set ALL versions in ext_conf to
-    # TODO: the version of a single actor. More functionality is potentially needed in the WireProtocolDataBase
-    # TODO: class, but the regex's currently implementing the xml modification look scary.
-    # TODO: Ultimately, it would be nice to update the version of the particular extension emulated by each actor.
-    if len(actors) > 0:
-        protocol.mock_wire_data.set_extensions_config_version(max(actor.extension_info.version for actor in actors))
+    new_actors = list(filter(lambda actor: actor not in protocol._actors, actors))  # list() applies the lambda before we edit protocol._actors
+    protocol._actors.extend(new_actors)
 
-    protocol.set_http_handlers(http_get_handler=_generate_mock_http_get(actors),
-        http_put_handler=_generate_mock_http_put(actors))
+    for actor in new_actors:
+        patched_popen = actor.patch_popen() # Like in get_protocol_and_handler, the patch_popen() and start() calls must
+        patched_popen.start()               # be interleaved.
+
+        # Keep track of the patches so the finally clause within get_protocol_and_handler can stop them.
+        protocol._patched_popens.append(patched_popen)
+    
+    protocol.set_http_handlers(http_get_handler=_generate_mock_http_get(protocol._actors[1:]),
+        http_put_handler=_generate_mock_http_put(protocol._actors))
+
+    distinct_names = set(actor.extension_info.name for actor in protocol._actors)
+    for name in distinct_names:
+        
+        max_ver = max(map(lambda actor: FlexibleVersion(actor.extension_info.version),
+            filter(lambda actor: actor.extension_info.name == name, protocol._actors)))
+
+        protocol.mock_wire_data.set_specific_extension_config_version(name, max_ver)
     
     protocol.mock_wire_data.set_incarnation(incarnation)
     protocol.client.update_goal_state()
@@ -235,21 +267,17 @@ class ActionSet(object):
     A wrapper class for the possible actions that an extension much support.
     """
 
-    def __init__(self, installAction, uninstallAction, updateAction, enableAction, disableAction, extensionId):
-        """
-        TODO: Actions._wrap_with_write_status would like to be passed the extension's name and version instead of the Id.
-        TODO: Maybe the parameters should be changed to enable this?
-        """
+    def __init__(self, installAction, uninstallAction, updateAction, enableAction, disableAction, name, version):
 
         # The keys below will be used to configure attributes for a mock; periods in such attributes are treated
         # as attribute trees, which would break introspection.
-        formattedId = extensionId.replace(".", "_")
+        formattedId = Formats.FormatExtensionDir(name, version).replace(".", "_")
 
         self.delegate ={
             "installCommand": dict(key="{0}_install".format(formattedId), action=installAction),
             "uninstallCommand": dict(key="{0}_uninstall".format(formattedId), action=uninstallAction),
             "updateCommand": dict(key="{0}_update".format(formattedId), action=updateAction),
-            "enableCommand": dict(key="{0}_enable".format(formattedId), action=Actions._wrap_with_write_status(enableAction, extensionId)),
+            "enableCommand": dict(key="{0}_enable".format(formattedId), action=Actions._wrap_with_write_status(enableAction, name, version)),
             "disableCommand": dict(key="{0}_disable".format(formattedId), action=disableAction),
         }
 
@@ -378,34 +406,48 @@ class ExtensionActor(object):
 
         self.statusBlobs = []
         
-
-    @contextlib.contextmanager
     def patch_popen(self):
         """
-        Replaces the existing subprocess.Popen function call such that any calls supposed to invoke the
-        extension emulated by this object are intercepted and correctly ran (via the action funcs in the
-        actionSet that initialized this object). Any other commands are passed through to the prior existing
-        subprocess.Popen.
+        Returns a mock that patches the existing subprocess.Popen function call (on start()) such that any
+        calls supposed to invoke the extension emulated by this object are intercepted and correctly ran
+        (via the action funcs in the actionSet that initialized this object). Any other commands are passed
+        through to the prior existing subprocess.Popen.
 
-        Note that the passthrough on a failure to match a command to this extension's action commands enables
-        stacking of patch_popen calls, like:
+        Note that the passthrough on failure to match a command to this extension's action commands enables
+        multiple patch_popen() Mocks to function at the same time.
 
-            with first_ext.patch_popen():
-                with second_ext.patch_popen():
-                    # Execute code that might try to invoke either extension.
-                    {more code}
+            try:
+                first_patch = first_ext.patch_popen()
+                first_patch.start()
+                second_patch = second_ext.patch_popen()
+                second_patch.start()
+
+                # Execute code that might try to invoke either extension.
+                {more code}
+
+            finally:
+                first_patch.stop()
+                second_patch.stop()
+
         
         For instance: if {more code} involves a invocation of the extension emulated by first_ext, the mock popen for
         second_ext will be invoked, but will fail to match the provided command to one within second_ext's actionScope.
         It will then fall back to the prior popen-- in this case, that's the mock popen from first_ext-- which will
         successfully match the provided command to one within first_ext's actionScope. The corresponding action will
         then be called and returned.
+
+        Note the need to interleave the patch_popen() and start() calls; in order for second_patch to know to fall back
+        to first_patch (instead of simply falling back to the original subprocess.Popen), first_patch must have already
+        replaced subprocess.Popen, which is handled by the start() function.
         """
 
         original_popen = subprocess.Popen
 
         def mock_popen(command, *args, **kwargs):
-            script_name = command.split("/")[-1] # The command passed here (if it corresponds to one within
+            # The command can be specified as a list of args or one single string. Handle that here.
+            format_command = lambda cmd: " ".join(cmd) if isinstance(cmd, list) else cmd
+
+            script_name = format_command(command).split("/")[-1] # The command passed here (if it corresponds to one within
                         # this object's action set) will be localized with the base dir of the extension
                         # this object is emulating. We don't want that file path because we aren't actually
                         # calling a script, just using the name as a tag.
@@ -415,5 +457,4 @@ class ExtensionActor(object):
             # described in the docstring above).
             return getattr(self.action_scope, script_name, original_popen)(command, *args, **kwargs)
 
-        with patch("subprocess.Popen", side_effect=mock_popen):
-            yield
+        return patch("subprocess.Popen", side_effect=mock_popen)

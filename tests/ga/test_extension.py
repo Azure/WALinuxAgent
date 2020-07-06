@@ -49,7 +49,7 @@ from tests.protocol.mocks import mock_wire_protocol, HttpRequestPredicates
 from tests.protocol.mockwiredata import DATA_FILE
 from tests.tools import are_cgroups_enabled, AgentTestCase, data_dir, i_am_root, MagicMock, Mock, \
     skip_if_predicate_false, patch
-from tests.ga.extension_actor import get_extension_actor, get_protocol_and_handler, update_extension_actors, Actions
+from tests.ga.extension_actor import get_extension_actor, get_protocol_and_handler, add_extension_actors, Actions, Formats
 
 from azurelinuxagent.common.exception import ResourceGoneError, ExtensionDownloadError, ProtocolError, \
     ExtensionErrorCodes, ExtensionError, ExtensionUpdateError
@@ -2547,32 +2547,6 @@ class TestExtensionUpdateOnFailure(ExtensionTestCase):
         AgentTestCase.tearDown(self)
 
     @staticmethod
-    def _get_ext_handler_instance(name, version, handler=None, continue_on_update_failure=False):
-
-        handler_json = {
-            "installCommand": "sample.py -install",
-            "uninstallCommand": "sample.py -uninstall",
-            "updateCommand": "sample.py -update",
-            "enableCommand": "sample.py -enable",
-            "disableCommand": "sample.py -disable",
-            "rebootAfterInstall": False,
-            "reportHeartbeat": False,
-            "continueOnUpdateFailure": continue_on_update_failure
-        }
-
-        if handler:
-            handler_json.update(handler)
-
-        ext_handler_properties = ExtHandlerProperties()
-        ext_handler_properties.version = version
-        ext_handler = ExtHandler(name=name)
-        ext_handler.properties = ext_handler_properties
-        ext_handler_i = ExtHandlerInstance(ext_handler=ext_handler, protocol=None)
-        ext_handler_i.load_manifest = MagicMock(return_value=HandlerManifest({'handlerManifest': handler_json}))
-        fileutil.mkdir(ext_handler_i.get_base_dir())
-        return ext_handler_i
-
-    @staticmethod
     def _do_upgrade_scenario(firstVersionActor, secondVersionActor):
         """
         Given the provided ExtensionActor objects, installs the first and then attempts
@@ -2588,8 +2562,7 @@ class TestExtensionUpdateOnFailure(ExtensionTestCase):
         with get_protocol_and_handler(firstVersionActor) as (protocol, exthandlers_handler):
 
             # Run the handler with only the first version to install it
-            with firstVersionActor.patch_popen():
-                exthandlers_handler.run()
+            exthandlers_handler.run()
             
             # Verify the extension was picked up correctly.
             # NOTE: this won't work for tests that want install to fail.
@@ -2597,12 +2570,10 @@ class TestExtensionUpdateOnFailure(ExtensionTestCase):
             firstVersionActor.get_command("enableCommand").assert_called_once()
 
             # Update to the second goal state incarnation, including the updated actor this time
-            update_extension_actors(protocol, 2, firstVersionActor, secondVersionActor)
+            add_extension_actors(protocol, 2, secondVersionActor)
 
             # Run the handler a second time on the updated goal state (including the new extension version)
-            with firstVersionActor.patch_popen():
-                with secondVersionActor.patch_popen():
-                    exthandlers_handler.run()
+            exthandlers_handler.run()
     
     
     def test_enabled_ext_should_be_disabled_at_ver_update(self):
@@ -2682,18 +2653,8 @@ class TestExtensionUpdateOnFailure(ExtensionTestCase):
         first_ext.get_command("uninstallCommand").assert_not_called()
         second_ext.get_command("installCommand").assert_not_called()
 
-        status_msg_contains = lambda msg, *strs: all(s in msg for s in strs)
-
-        # TODO: For now, we're just making sure the correct status blob exists (i.e. with "any"), not that it is the only
-        # TODO: status blob reported (i.e. with "all", possibly?). Is the behavior that this assumes invariant?
-
-        assert any(
-            status_msg_contains(message, str(exit_code))
-            for message in [
-                statusBlob.get("formattedMessage", {}).get("message", "")
-                for statusBlob in second_ext.statusBlobs
-            ]
-        )
+        assert len(second_ext.statusBlobs) == 1
+        assert str(exit_code) in second_ext.statusBlobs[0]["formattedMessage"]["message"]
 
 
     def test_extension_error_should_be_raised_when_continue_on_update_failure_is_false_on_uninstall_failure(self, *args):
@@ -2710,18 +2671,8 @@ class TestExtensionUpdateOnFailure(ExtensionTestCase):
         first_ext.get_command("uninstallCommand").assert_called_once()
         second_ext.get_command("installCommand").assert_not_called()
 
-        status_msg_contains = lambda msg, *strs: all(s in msg for s in strs)
-
-        # TODO: For now, we're just making sure the correct status blob exists (i.e. with "any"), not that it is the only
-        # TODO: status blob reported (i.e. with "all", possibly?). Is the behavior that this assumes invariant?
-
-        assert any(
-            status_msg_contains(message, str(exit_code))
-            for message in [
-                statusBlob.get("formattedMessage", {}).get("message", "")
-                for statusBlob in second_ext.statusBlobs
-            ]
-        )
+        assert len(second_ext.statusBlobs) == 1
+        assert str(exit_code) in second_ext.statusBlobs[0]["formattedMessage"]["message"]
 
     def test_extension_error_should_be_raised_when_continue_on_update_failure_is_true_on_disable_and_update_failure(self, *args):
         exit_codes = { "disable": uuid.uuid4(), "update": uuid.uuid4() }
@@ -2739,18 +2690,9 @@ class TestExtensionUpdateOnFailure(ExtensionTestCase):
         first_ext.get_command("uninstallCommand").assert_not_called()
         second_ext.get_command("installCommand").assert_not_called()
 
-        status_msg_contains = lambda msg, *strs: all(s in msg for s in strs)
+        assert len(second_ext.statusBlobs) == 1
+        assert str(exit_codes["update"]) in second_ext.statusBlobs[0]["formattedMessage"]["message"]
 
-        # TODO: For now, we're just making sure the correct status blob exists (i.e. with "any"), not that it is the only
-        # TODO: status blob reported (i.e. with "all", possibly?). Is the behavior that this assumes invariant?
-        
-        assert any(
-            status_msg_contains(message, str(exit_codes["update"])) # We check explicitly for the update code.
-            for message in [
-                statusBlob.get("formattedMessage", {}).get("message", "")
-                for statusBlob in second_ext.statusBlobs
-            ]
-        )
 
     def test_extension_error_should_be_raised_when_continue_on_update_failure_is_true_on_uninstall_and_install_failure(self, *args):
         exit_codes = { "install": uuid.uuid4(), "uninstall": uuid.uuid4() }
@@ -2768,47 +2710,8 @@ class TestExtensionUpdateOnFailure(ExtensionTestCase):
         first_ext.get_command("uninstallCommand").assert_called_once()
         second_ext.get_command("installCommand").assert_called_once()
 
-        status_msg_contains = lambda msg, *strs: all(s in msg for s in strs)
-
-        # TODO: For now, we're just making sure the correct status blob exists (i.e. with "any"), not that it is the only
-        # TODO: status blob reported (i.e. with "all", possibly?). Is the behavior that this assumes invariant?
-        
-        assert any(
-            status_msg_contains(message, str(exit_codes["install"])) # We check explicitly for the update code.
-            for message in [
-                statusBlob.get("formattedMessage", {}).get("message", "")
-                for statusBlob in second_ext.statusBlobs
-            ]
-        )
-
-
-    @patch("azurelinuxagent.common.cgroupconfigurator.handle_process_completion", side_effect="Process Successful")
-    def test_env_variable_should_not_set_when_continue_on_update_failure_is_false(self, *args):
-        
-        # TODO: This test case seems covered by two above tests in this same suite: 
-        # TODO: test_extension_error_should_be_raised_when_continue_on_update_failure_is_false_on_{disable, update}_failure
-        # TODO: Can we safely remove this test?
-
-        old_handler_i = self._get_ext_handler_instance('foo', '1.0.0')
-        new_handler_i = self._get_ext_handler_instance('foo', '1.0.1', continue_on_update_failure=False)
-
-        # When Disable Fails
-        with patch.object(ExtHandlerInstance, "launch_command") as patch_launch_command:
-            with patch.object(ExtHandlerInstance, "disable", side_effect=ExtensionError("Disable Failed")):
-                with self.assertRaises(ExtensionUpdateError):
-                    ExtHandlersHandler._update_extension_handler_and_return_if_failed(old_handler_i, new_handler_i)
-
-                self.assertEqual(0, patch_launch_command.call_count, "Launch command shouldn't be called even once for"
-                                                                     " disable failures")
-
-        # When Uninstall Fails
-        with patch.object(ExtHandlerInstance, "launch_command") as patch_launch_command:
-            with patch.object(ExtHandlerInstance, "uninstall", side_effect=ExtensionError("Uninstall Failed")):
-                with self.assertRaises(ExtensionUpdateError):
-                    ExtHandlersHandler._update_extension_handler_and_return_if_failed(old_handler_i, new_handler_i)
-
-                self.assertEqual(2, patch_launch_command.call_count, "Launch command should be called 2 times for "
-                                                                     "Disable->Update")
+        assert len(second_ext.statusBlobs) == 1
+        assert str(exit_codes["install"]) in second_ext.statusBlobs[0]["formattedMessage"]["message"]
 
     def test_failed_env_variables_should_be_set_from_within_extension_commands(self, *args):
         """
@@ -2833,20 +2736,22 @@ class TestExtensionUpdateOnFailure(ExtensionTestCase):
         _, update_kwargs = second_ext.get_command("updateCommand").call_args
         _, install_kwargs = second_ext.get_command("installCommand").call_args
 
-        # TODO: Is it good enough to just check the variable name exists? Or should we
-        # TODO: also check its value? (below)
+        second_extension_dir = "/".join([
+            conf.get_lib_dir(),
+            Formats.FormatExtensionDir(second_ext.extension_info.name, second_ext.extension_info.version)
+        ])
 
         # Ensure we're checking variables for update scenario
         assert update_kwargs.get("env", {}).get(ExtCommandEnvVariable.DisableReturnCode, "") == str(exit_codes["disable"])
         assert update_kwargs.get("env", {}).get(ExtCommandEnvVariable.UninstallReturnCode, "") != str(exit_codes["uninstall"])
-        self.assertTrue(ExtCommandEnvVariable.ExtensionPath in update_kwargs['env'] and
-                        ExtCommandEnvVariable.ExtensionVersion in update_kwargs['env'])
+        assert update_kwargs.get("env", {}).get(ExtCommandEnvVariable.ExtensionPath, "") == second_extension_dir
+        assert update_kwargs.get("env", {}).get(ExtCommandEnvVariable.ExtensionVersion, "") == "1.1.0"
 
         # Ensure we're checking variables for install scenario
         assert install_kwargs.get("env", {}).get(ExtCommandEnvVariable.UninstallReturnCode, "") == str(exit_codes["uninstall"])
         assert install_kwargs.get("env", {}).get(ExtCommandEnvVariable.DisableReturnCode, "") != str(exit_codes["disable"])
-        self.assertTrue(ExtCommandEnvVariable.ExtensionPath in install_kwargs['env'] and
-                        ExtCommandEnvVariable.ExtensionVersion in install_kwargs['env'])
+        assert install_kwargs.get("env", {}).get(ExtCommandEnvVariable.ExtensionPath, "") == second_extension_dir
+        assert install_kwargs.get("env", {}).get(ExtCommandEnvVariable.ExtensionVersion, "") == "1.1.0"
         
 
     def test_correct_exit_code_should_set_on_disable_cmd_failure(self):
@@ -2875,8 +2780,7 @@ class TestExtensionUpdateOnFailure(ExtensionTestCase):
 
         first_ext = get_extension_actor(disableAction=force_timeout, uninstallAction=force_timeout)
         second_ext = get_extension_actor(version="1.1.0", continueOnUpdateFailure=True)
-        
-        # TODO: Should these patches be built in to the ExtensionActor class?
+
         with patch("os.killpg"):
             with patch("os.getpgid") as mock_getpid:
                 TestExtensionUpdateOnFailure._do_upgrade_scenario(first_ext, second_ext)

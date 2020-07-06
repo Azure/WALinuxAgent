@@ -15,8 +15,6 @@
 # Requires Python 2.6+ and Openssl 1.0+
 #
 
-# TODO: Check the licensing; it was copy-pasted from another file.
-
 DATA_FILE = {
         "version_info": "wire/version_info.xml",
         "goal_state": "wire/goal_state.xml",

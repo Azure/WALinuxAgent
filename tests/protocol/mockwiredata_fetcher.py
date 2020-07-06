@@ -15,9 +15,6 @@
 # Requires Python 2.6+ and Openssl 1.0+
 #
 
-# TODO: Check the licensing; it was copy-pasted from another file.
-
-
 import zipfile
 import json
 

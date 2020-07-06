@@ -67,7 +67,6 @@ class WireProtocolDataBase(object):
         self.in_vm_artifacts_profile = None
 
 
-    # TODO: is this designed to be private or public?
     def reload(self):
         raise  NotImplementedError("WireProtocolDataBase by itself has no data with which to load.")
 
@@ -209,6 +208,21 @@ class WireProtocolDataBase(object):
             raise Exception("Could not match attribute '{0}' of element '{1}'".format(attribute_name, element_name))
         return new_xml_document
 
+    @staticmethod
+    def replace_xml_attribute_value_on_matching_element(xml_document, element_name, identifying_attr_str, attribute_name, attribute_value):
+
+        # Two cases: the attribute we're using to identify the element might be before the attribute we're replacing,
+        # or it might be after. We need to handle both.
+        replacing_attr_after_identifying_attr = r'(?<=<{0} )(.*{1}.*{2}=")[^"]+(?="[^>]*>)'.format(element_name, identifying_attr_str, attribute_name)
+        replacing_attr_before_identifying_attr = r'(?<=<{0} )(.*{1}=")[^"]+(?=".*{2}[^>]*>)'.format(element_name, attribute_name, identifying_attr_str)
+
+        for regex in [replacing_attr_before_identifying_attr, replacing_attr_after_identifying_attr]:
+            new_xml = re.sub(regex, r'\g<1>{0}'.format(attribute_value), xml_document)
+            if new_xml != xml_document:
+                return new_xml
+        
+        raise Exception("Could not match attribute '{0}' of element '{1}' with '{2}'".format(attribute_name, element_name, identifying_attr_str))
+
     def set_incarnation(self, incarnation):
         '''
         Sets the incarnation in the goal state, but not on its subcomponents (e.g. hosting env, shared config)
@@ -238,6 +252,12 @@ class WireProtocolDataBase(object):
         Sets the version for *all* extensions
         '''
         self.ext_conf = WireProtocolDataBase.replace_xml_attribute_value(self.ext_conf, "Plugin", "version", version)
+    
+    def set_specific_extension_config_version(self, extensionName, version):
+        """
+        Set the version for the only the specified extension.
+        """
+        self.ext_conf = WireProtocolDataBase.replace_xml_attribute_value_on_matching_element(self.ext_conf, "Plugin", 'name="{0}"'.format(extensionName), "version", version)
 
     def set_extensions_config_state(self, state):
         '''
