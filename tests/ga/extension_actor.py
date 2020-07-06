@@ -387,7 +387,9 @@ class ExtensionActor(object):
                 "updateMode": extensionInfo.updateMode
             }
         }]
-        base_manifest[0]['handlerManifest'].update({ title: cmd["key"] for title, cmd in actionSet.items() })
+
+        for title, cmd in actionSet.items():
+            base_manifest[0]['handlerManifest'][title] = cmd['key']
 
         dataFetcher["test_ext"] = mockwiredata.generate_ext_fetcher_func(base_manifest)
 
