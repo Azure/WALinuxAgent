@@ -192,7 +192,8 @@ def get_protocol_and_handler(firstActor, *remainingActors):
         protocol._patched_popens = [ ] # Populated later; timing matters, and a patched_popen needs to be started immediately after creation.
         # We also need actor objs to, amoung other things, guarantee that the same actor doesn't have
         # two different patch_popen's running at the same time.
-        protocol._actors = [firstActor, *remainingActors]
+        protocol._actors = [firstActor]
+        protocol._actors.extend(remainingActors)
 
         protocol.set_http_handlers(http_get_handler=_generate_mock_http_get(protocol._actors[1:]),
             http_put_handler=_generate_mock_http_put(protocol._actors))
@@ -377,16 +378,18 @@ class ExtensionActor(object):
         given actionSet and extensionInfo.
         """
 
-        dataFetcher["test_ext"] = mockwiredata.generate_ext_fetcher_func([{
+        base_manifest = [{
             "name": extensionInfo.name.split(".")[-1],
             "version": extensionInfo.version,
             "handlerManifest": {
-                **{ title: cmd["key"] for title, cmd in actionSet.items() },
                 "rebootAfterInstall": False, "reportHeartbeat": False,
                 "continueOnUpdateFailure": extensionInfo.continueOnUpdateFailure,
                 "updateMode": extensionInfo.updateMode
             }
-        }])
+        }]
+        base_manifest[0]['handlerManifest'].update({ title: cmd["key"] for title, cmd in actionSet.items() })
+
+        dataFetcher["test_ext"] = mockwiredata.generate_ext_fetcher_func(base_manifest)
 
 
     def __init__(self, dataFetcherBase, actionSet, extensionInfo):
