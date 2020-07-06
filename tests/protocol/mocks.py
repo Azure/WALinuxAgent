@@ -27,16 +27,15 @@ _USE_MOCK_WIRE_DATA_RE = re.compile(
 
 
 @contextlib.contextmanager
-def mock_wire_protocol(mock_wire_data_file, http_get_handler=None, http_post_handler=None, http_put_handler=None, fail_on_unknown_request=True,
+def mock_wire_protocol(mock_wire_data_source, http_get_handler=None, http_post_handler=None, http_put_handler=None, fail_on_unknown_request=True,
     mockwiredata_factory=mockwiredata.get_file_based_wire_protocol_data):
     """
-    TODO: Update desc.
-    
     Creates a WireProtocol object that handles requests to the WireServer and the Host GA Plugin (i.e requests on the WireServer endpoint), plus
     some requests to storage (requests on the fake server 'mock-goal-state').
 
-    The data returned by those requests is read from the files specified by 'mock_wire_data_file' (which must follow the structure of the data
-    files defined in tests/protocol/mockwiredata.py).
+    The data returned by those requests is read from the source 'mock_wire_data_source' (which must either follow the structure of the data
+    files defined in tests/protocol/mockwiredata_filenames.py or the structure of the data fetcher defined in tests/protocol/mockwiredata_fetcher.py,
+    depending on the factory function passed to the parameter mockwiredata_factory. The source will be passed as an argument to that factory).
 
     The caller can also provide handler functions for specific HTTP methods using the http_*_handler arguments. The return value of the handler
     function is interpreted similarly to the "return_value" argument of patch(): if it is an exception the exception is raised or, if it is
@@ -132,7 +131,7 @@ def mock_wire_protocol(mock_wire_data_file, http_get_handler=None, http_post_han
     # create the protocol object
     #
     protocol = WireProtocol(restutil.KNOWN_WIRESERVER_IP)
-    protocol.mock_wire_data = mockwiredata_factory(mock_wire_data_file)
+    protocol.mock_wire_data = mockwiredata_factory(mock_wire_data_source)
     protocol.start = start
     protocol.stop = stop
     protocol.track_url = lambda url: tracked_urls.append(url)
