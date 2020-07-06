@@ -30,9 +30,8 @@ from azurelinuxagent.common.utils.extensionprocessutil import TELEMETRY_MESSAGE_
 from azurelinuxagent.ga.exthandlers import parse_ext_status, ExtHandlerInstance, ExtCommandEnvVariable
 from tests.protocol import mockwiredata
 from tests.protocol.mocks import mock_wire_protocol
-from tests.tools import AgentTestCase, patch, mock_sleep, clear_singleton_instances, Mock
+from tests.tools import AgentTestCase, patch, mock_sleep, clear_singleton_instances
 
-from tests.ga.extension_actor import get_extension_actor, get_protocol_and_handler, update_extension_actors, Actions
 
 class TestExtHandlers(AgentTestCase):
 
@@ -264,7 +263,6 @@ class TestExtHandlers(AgentTestCase):
                 self.assertTrue("1.0.2" in plugin_setting_mismatch_calls[0]['message'] and "1.0.1" in plugin_setting_mismatch_calls[0]['message'],
                               "Error message should contain the incorrect versions")
                 self.assertFalse(plugin_setting_mismatch_calls[0]['is_success'], "The event should be false")
-
 
 class LaunchCommandTestCase(AgentTestCase):
     """
