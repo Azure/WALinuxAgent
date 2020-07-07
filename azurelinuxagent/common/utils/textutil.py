@@ -35,9 +35,8 @@ def parse_doc(xml_text):
     Parse xml document from string
     """
     # The minidom lib has some issue with unicode in python2.
-    if isinstance(xml_text, str):
-        # Encode the string into utf-8 first
-        xml_text = xml_text.encode('utf-8')
+    # Encode the string into utf-8 first
+    xml_text = xml_text.encode('utf-8')
     return minidom.parseString(xml_text)
 
 
@@ -403,11 +402,13 @@ def format_memory_value(unit, value):
 def str_to_encoded_ustr(s, encoding='utf-8'):
     from azurelinuxagent.common.version import PY_VERSION_MAJOR
     if PY_VERSION_MAJOR > 2:
-        # For py3+, str() is unicode by default
-        if isinstance(s, bytes):
-            # str.encode() returns bytes which should be decoded to get the str.
-            return s.decode(encoding)
-        # If its not encoded, just return the string
-        return ustr(s)
+        try:
+            # For py3+, str() is unicode by default
+            if isinstance(s, bytes):
+                # str.encode() returns bytes which should be decoded to get the str.
+                return s.decode(encoding)
+        finally:
+            # If its not encoded or some issues in decoding, just return the string
+            return ustr(s)
     # For Py2, explicitly convert the string to unicode with the specified encoding
     return ustr(s, encoding=encoding)

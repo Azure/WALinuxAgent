@@ -1094,7 +1094,7 @@ class WireClient(object):
         # Group events by providerId
         for event in event_list.events:
             if event.providerId not in buf:
-                buf[event.providerId] = b'' #"".encode("utf-8")
+                buf[event.providerId] = b''
             event_str = event_to_v1(event)
             if len(event_str) >= MAX_EVENT_BUFFER_SIZE:
                 details_of_event = [ustr(x.name) + ":" + ustr(x.value) for x in event.parameters if x.name in
@@ -1107,7 +1107,7 @@ class WireClient(object):
                 continue
             if len(buf[event.providerId] + event_str) >= MAX_EVENT_BUFFER_SIZE:
                 self.send_event(event.providerId, buf[event.providerId])
-                buf[event.providerId] = b'' # "".encode("utf-8")
+                buf[event.providerId] = b''
                 logger.info("No of events this request = {0}".format(events_per_request))
                 events_per_request = 0
             buf[event.providerId] = buf[event.providerId] + event_str
