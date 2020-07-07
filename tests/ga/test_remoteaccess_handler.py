@@ -110,7 +110,7 @@ class TestRemoteAccessHandler(AgentTestCase):
             tstuser = ""
             expiration = datetime.utcnow() + timedelta(days=1)
             pwd = tstpassword
-            error = "test exception for bad username".format(tstuser)
+            error = "test exception for bad username"
             self.assertRaisesRegex(Exception, error, rah._add_user, tstuser, pwd, expiration)
             self.assertEqual(0, len(rah._os_util.get_users()))
 
@@ -207,8 +207,7 @@ class TestRemoteAccessHandler(AgentTestCase):
             tstuser = "foobar"
             expiration = datetime.utcnow() + timedelta(days=1)
             pwd = "bad password"
-            error = "\[CryptError\] Error decoding secret\n" \
-                    "Inner error: Incorrect padding".format(tstuser)
+            error = "\[CryptError\] Error decoding secret\nInner error: Incorrect padding"
             self.assertRaisesRegex(Exception, error, rah._add_user, tstuser, pwd, expiration)
             users = get_user_dictionary(rah._os_util.get_users())
             self.assertEqual(0, len(users))
@@ -430,14 +429,14 @@ class TestRemoteAccessHandler(AgentTestCase):
     def test_remove_user_error(self):
         with patch("azurelinuxagent.ga.remoteaccess.get_osutil", return_value=MockOSUtil()):
             rah = RemoteAccessHandler(Mock())
-            error = "test exception, bad data".format("")
+            error = "test exception, bad data"
             self.assertRaisesRegex(Exception, error, rah._remove_user, "")
 
     def test_remove_user_not_exists(self):
         with patch("azurelinuxagent.ga.remoteaccess.get_osutil", return_value=MockOSUtil()):
             rah = RemoteAccessHandler(Mock())
             user = "bob"
-            error = "test exception, user does not exist to delete".format(user)
+            error = "test exception, user does not exist to delete"
             self.assertRaisesRegex(Exception, error, rah._remove_user, user)
 
     @patch('azurelinuxagent.common.utils.cryptutil.CryptUtil.decrypt_secret', return_value="]aPPEv}uNg1FPnl?")
