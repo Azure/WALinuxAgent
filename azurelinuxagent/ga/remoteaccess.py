@@ -119,7 +119,6 @@ class RemoteAccessHandler(object):
 
                 for user in existing_jit_users:
                     try:
-                        logger.info("Removing remote access user '{0}'", user)
                         self._remove_user(user)
                     except Exception as e:
                         logger.error("Error removing remote access user '{0}' - {1}", user, ustr(e))
