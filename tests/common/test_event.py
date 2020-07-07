@@ -717,8 +717,10 @@ class TestEvent(HttpRequestPredicates, AgentTestCase):
 
             raise ValueError('Could not find the Message for the telemetry event in {0}'.format(path))
 
-        def get_event_message_from_http_request_body(http_request_body):
+        def get_event_message_from_http_request_body(event_body):
             # The XML for the event is sent over as a CDATA element ("Event") in the request's body
+            http_request_body = event_body if (
+                        event_body is None or type(event_body) is ustr) else textutil.str_to_encoded_ustr(event_body)
             request_body_xml_doc = textutil.parse_doc(http_request_body)
 
             event_node = textutil.find(request_body_xml_doc, "Event")

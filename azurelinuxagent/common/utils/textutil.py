@@ -407,8 +407,11 @@ def str_to_encoded_ustr(s, encoding='utf-8'):
             if isinstance(s, bytes):
                 # str.encode() returns bytes which should be decoded to get the str.
                 return s.decode(encoding)
-        finally:
-            # If its not encoded or some issues in decoding, just return the string
+            else:
+                # If its not encoded, just return the string
+                return ustr(s)
+        except Exception:
+            # If some issues in decoding, just return the string
             return ustr(s)
     # For Py2, explicitly convert the string to unicode with the specified encoding
     return ustr(s, encoding=encoding)
