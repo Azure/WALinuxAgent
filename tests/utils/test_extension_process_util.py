@@ -164,29 +164,26 @@ class TestProcessUtils(AgentTestCase):
                 self.assertEquals(context_manager.exception.code, error_code)
                 self.assertIn("Non-zero exit code:", ustr(context_manager.exception))
 
-    def test_read_output_it_should_return_no_content(self):
+    def test_read_output_should_return_no_content(self):
         with patch('azurelinuxagent.common.utils.extensionprocessutil.TELEMETRY_MESSAGE_MAX_LEN', 0):
-            expected = "[stdout]\n\n\n[stderr]\n"
+            expected = ""
             actual = read_output(self.stdout, self.stderr)
             self.assertEqual(expected, actual)
 
-    def test_read_output_it_should_truncate_the_content(self):
-        with patch('azurelinuxagent.common.utils.extensionprocessutil.TELEMETRY_MESSAGE_MAX_LEN', 10):
-            expected = "[stdout]\nThe quick \n\n[stderr]\nThe five b"
-            actual = read_output(self.stdout, self.stderr)
-            self.assertEqual(expected, actual)
-
-    def test_read_output_it_should_return_all_content(self):
+    def test_read_output_should_truncate_the_content(self):
         with patch('azurelinuxagent.common.utils.extensionprocessutil.TELEMETRY_MESSAGE_MAX_LEN', 50):
+            expected = "[stdout]\nr the lazy dog.\n\n" \
+                       "[stderr]\ns jump quickly."
+            actual = read_output(self.stdout, self.stderr)
+            self.assertEqual(expected, actual)
+
+    def test_read_output_should_not_truncate_the_content(self):
+        with patch('azurelinuxagent.common.utils.extensionprocessutil.TELEMETRY_MESSAGE_MAX_LEN', 90):
             expected = "[stdout]\nThe quick brown fox jumps over the lazy dog.\n\n" \
                        "[stderr]\nThe five boxing wizards jump quickly."
             actual = read_output(self.stdout, self.stderr)
             self.assertEqual(expected, actual)
 
-    # def test_read_output_it_should_handle_exceptions(self):
-    #     with patch('azurelinuxagent.common.utils.extensionprocessutil.TELEMETRY_MESSAGE_MAX_LEN', "type error"):
-    #         actual = read_output(self.stdout, self.stderr)
-    #         self.assertIn("Cannot read stdout/stderr", actual)
 
     def test_format_stdout_stderr00(self):
         """
