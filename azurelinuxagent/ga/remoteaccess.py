@@ -111,17 +111,22 @@ class RemoteAccessHandler(object):
             # on each goal state; we use self._check_existing_jit_users to avoid enumerating the users
             # every single time.
             if self._check_existing_jit_users:
-                logger.info("Looking for existing remote access users.")
+                remove_user_errors = 0
 
-                self._check_existing_jit_users = False
+                try:
+                    logger.info("Looking for existing remote access users.")
 
-                existing_jit_users = self._get_existing_jit_users()
+                    existing_jit_users = self._get_existing_jit_users()
 
-                for user in existing_jit_users:
-                    try:
-                        self._remove_user(user)
-                    except Exception as e:
-                        logger.error("Error removing remote access user '{0}' - {1}", user, ustr(e))
+                    for user in existing_jit_users:
+                        try:
+                            self._remove_user(user)
+                        except Exception as e:
+                            remove_user_errors += 1
+                            logger.error("Error removing remote access user '{0}' - {1}", user, ustr(e))
+                finally:
+                    if remove_user_errors == 0:
+                        self._check_existing_jit_users = False
 
     @staticmethod
     def _is_jit_user(comment):
