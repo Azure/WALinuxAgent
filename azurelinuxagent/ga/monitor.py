@@ -19,6 +19,8 @@ import datetime
 import threading
 import uuid
 
+from azurelinuxagent.common.utils import textutil
+
 import azurelinuxagent.common.logger as logger
 import azurelinuxagent.common.utils.networkutil as networkutil
 from azurelinuxagent.common.cgroupconfigurator import CGroupConfigurator
@@ -247,10 +249,14 @@ class MonitorHandler(object):
         """
         Periodically send any events located in the events folder
         """
-        event_list = collect_events()
+        try:
+            event_list = collect_events()
 
-        if len(event_list.events) > 0:
-            self.protocol.report_event(event_list)
+            if len(event_list.events) > 0:
+                self.protocol.report_event(event_list)
+        except Exception as e:
+            err_msg = "Failure in collecting/sending Agent events: {0}".format(textutil.str_to_encoded_ustr(e))
+            add_event(op=WALAEventOperation.UnhandledError, message=err_msg, is_success=False)
 
     def send_imds_heartbeat(self):
         """

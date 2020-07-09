@@ -1089,29 +1089,49 @@ class WireClient(object):
                 "Failed to send events:{0}".format(resp.status))
 
     def report_event(self, event_list):
+        max_errors_to_report_per_run = 5
         buf = {}
         events_per_request = 0
+        unicode_error_count, unicode_errors = 0, []
+        event_report_error_count, event_report_errors = 0, []
+
         # Group events by providerId
         for event in event_list.events:
-            if event.providerId not in buf:
-                buf[event.providerId] = b''
-            event_str = event_to_v1(event)
-            if len(event_str) >= MAX_EVENT_BUFFER_SIZE:
-                details_of_event = [ustr(x.name) + ":" + ustr(x.value) for x in event.parameters if x.name in
-                                    [GuestAgentExtensionEventsSchema.Name, GuestAgentExtensionEventsSchema.Version,
-                                     GuestAgentExtensionEventsSchema.Operation,
-                                     GuestAgentExtensionEventsSchema.OperationSuccess]]
-                logger.periodic_warn(logger.EVERY_HALF_HOUR,
-                                     "Single event too large: {0}, with the length: {1} more than the limit({2})"
-                                     .format(str(details_of_event), len(event_str), MAX_EVENT_BUFFER_SIZE))
-                continue
-            if len(buf[event.providerId] + event_str) >= MAX_EVENT_BUFFER_SIZE:
-                self.send_event(event.providerId, buf[event.providerId])
-                buf[event.providerId] = b''
-                logger.verbose("No of events this request = {0}".format(events_per_request))
-                events_per_request = 0
-            buf[event.providerId] = buf[event.providerId] + event_str
-            events_per_request += 1
+            try:
+                if event.providerId not in buf:
+                    buf[event.providerId] = b''
+                event_str = event_to_v1(event)
+                if len(event_str) >= MAX_EVENT_BUFFER_SIZE:
+                    details_of_event = [ustr(x.name) + ":" + ustr(x.value) for x in event.parameters if x.name in
+                                        [GuestAgentExtensionEventsSchema.Name, GuestAgentExtensionEventsSchema.Version,
+                                         GuestAgentExtensionEventsSchema.Operation,
+                                         GuestAgentExtensionEventsSchema.OperationSuccess]]
+                    logger.periodic_warn(logger.EVERY_HALF_HOUR,
+                                         "Single event too large: {0}, with the length: {1} more than the limit({2})"
+                                         .format(str(details_of_event), len(event_str), MAX_EVENT_BUFFER_SIZE))
+                    continue
+                if len(buf[event.providerId] + event_str) >= MAX_EVENT_BUFFER_SIZE:
+                    self.send_event(event.providerId, buf[event.providerId])
+                    buf[event.providerId] = b''
+                    logger.verbose("No of events this request = {0}".format(events_per_request))
+                    events_per_request = 0
+                buf[event.providerId] = buf[event.providerId] + event_str
+                events_per_request += 1
+            except UnicodeError as e:
+                unicode_error_count += 1
+                if len(unicode_errors) < max_errors_to_report_per_run:
+                    unicode_errors.append(textutil.str_to_encoded_ustr(e))
+            except Exception as e:
+                event_report_error_count += 1
+                if len(event_report_errors) < max_errors_to_report_per_run:
+                    event_report_errors.append(textutil.str_to_encoded_ustr(e))
+
+        err_msg_format = "DroppedEventsCount: {0}\nReasons: {1}"
+        add_event(op=WALAEventOperation.ReportEventErrors,
+                  message=err_msg_format.format(event_report_error_count, ', '.join(event_report_errors)),
+                  is_success=False)
+        add_event(op=WALAEventOperation.ReportEventUnicodeErrors,
+                  message=err_msg_format.format(unicode_error_count, ', '.join(unicode_errors)), is_success=False)
 
         # Send out all events left in buffer.
         for provider_id in list(buf.keys()):

@@ -77,6 +77,8 @@ class WALAEventOperation:
     CGroupsInfo = "CGroupsInfo"
     CGroupsInitialize = "CGroupsInitialize"
     CGroupsLimitsCrossed = "CGroupsLimitsCrossed"
+    CollectEventErrors = "CollectEventErrors"
+    CollectEventUnicodeErrors = "CollectEventUnicodeErrors"
     ConfigurationChange = "ConfigurationChange"
     CustomData = "CustomData"
     Deploy = "Deploy"
@@ -106,6 +108,8 @@ class WALAEventOperation:
     Provision = "Provision"
     ProvisionGuestAgent = "ProvisionGuestAgent"
     RemoteAccessHandling = "RemoteAccessHandling"
+    ReportEventErrors = "ReportEventErrors"
+    ReportEventUnicodeErrors = "ReportEventUnicodeErrors"
     ReportStatus = "ReportStatus"
     ReportStatusExtended = "ReportStatusExtended"
     Restart = "Restart"
@@ -581,9 +585,12 @@ class EventLogger(object):
         Retuns a list of events that need to be sent to the telemetry pipeline and deletes the corresponding files
         from the events directory.
         """
+        max_errors_to_report_per_run = 5
         event_list = TelemetryEventList()
         event_directory_full_path = os.path.join(conf.get_lib_dir(), EVENTS_DIRECTORY)
         event_files = os.listdir(event_directory_full_path)
+        unicode_error_count, unicode_errors = 0, []
+        collect_event_error_count, collect_event_errors = 0, []
 
         for event_file in event_files:
             try:
@@ -619,8 +626,21 @@ class EventLogger(object):
                     event_list.events.append(event)
                 finally:
                     os.remove(event_file_path)
+            except UnicodeError as e:
+                unicode_error_count += 1
+                if len(unicode_errors) < max_errors_to_report_per_run:
+                    unicode_errors.append(textutil.str_to_encoded_ustr(e))
             except Exception as e:
-                logger.warn("Failed to process event file {0}: {1}", event_file, ustr(e))
+                collect_event_error_count += 1
+                if len(collect_event_errors) < max_errors_to_report_per_run:
+                    collect_event_errors.append(textutil.str_to_encoded_ustr(e))
+
+        err_msg_format = "DroppedEventsCount: {0}\nReasons: {1}"
+        add_event(op=WALAEventOperation.CollectEventErrors,
+                  message=err_msg_format.format(collect_event_error_count, ', '.join(collect_event_errors)),
+                  is_success=False)
+        add_event(op=WALAEventOperation.CollectEventUnicodeErrors,
+                  message=err_msg_format.format(unicode_error_count, ', '.join(unicode_errors)), is_success=False)
 
         return event_list
 

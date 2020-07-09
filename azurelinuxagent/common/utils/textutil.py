@@ -400,7 +400,19 @@ def format_memory_value(unit, value):
     return int(value * units[unit])
 
 def str_to_encoded_ustr(s, encoding='utf-8'):
+    """
+    This function takes the string and converts it into the corresponding encoded ustr if its not already a ustr.
+    The encoding is utf-8 by default if not specified.
+    Note: ustr() is a unicode object for Py2 and a str object for Py3.
+    :param s: The string to convert to ustr
+    :param encoding: Encoding to use. Utf-8 by default
+    :return: Returns the corresponding ustr string. Returns None if input is None.
+    """
     from azurelinuxagent.common.version import PY_VERSION_MAJOR
+
+    if s is None or type(s) is ustr:
+        # If its already a ustr/None then return as is
+        return s
     if PY_VERSION_MAJOR > 2:
         try:
             # For py3+, str() is unicode by default
