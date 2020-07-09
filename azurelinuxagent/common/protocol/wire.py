@@ -1127,11 +1127,13 @@ class WireClient(object):
                     event_report_errors.append(ustr(e))
 
         err_msg_format = "DroppedEventsCount: {0}\nReasons: {1}"
-        add_event(op=WALAEventOperation.ReportEventErrors,
-                  message=err_msg_format.format(event_report_error_count, ', '.join(event_report_errors)),
-                  is_success=False)
-        add_event(op=WALAEventOperation.ReportEventUnicodeErrors,
-                  message=err_msg_format.format(unicode_error_count, ', '.join(unicode_errors)), is_success=False)
+        if event_report_error_count > 0:
+            add_event(op=WALAEventOperation.ReportEventErrors,
+                      message=err_msg_format.format(event_report_error_count, ', '.join(event_report_errors)),
+                      is_success=False)
+        if unicode_error_count > 0:
+            add_event(op=WALAEventOperation.ReportEventUnicodeErrors,
+                      message=err_msg_format.format(unicode_error_count, ', '.join(unicode_errors)), is_success=False)
 
         # Send out all events left in buffer.
         for provider_id in list(buf.keys()):

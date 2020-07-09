@@ -634,11 +634,13 @@ class EventLogger(object):
                     collect_event_errors.append(ustr(e))
 
         err_msg_format = "DroppedEventsCount: {0}\nReasons: {1}"
-        add_event(op=WALAEventOperation.CollectEventErrors,
-                  message=err_msg_format.format(collect_event_error_count, ', '.join(collect_event_errors)),
-                  is_success=False)
-        add_event(op=WALAEventOperation.CollectEventUnicodeErrors,
-                  message=err_msg_format.format(unicode_error_count, ', '.join(unicode_errors)), is_success=False)
+        if collect_event_error_count > 0:
+            add_event(op=WALAEventOperation.CollectEventErrors,
+                      message=err_msg_format.format(collect_event_error_count, ', '.join(collect_event_errors)),
+                      is_success=False)
+        if unicode_error_count > 0:
+            add_event(op=WALAEventOperation.CollectEventUnicodeErrors,
+                      message=err_msg_format.format(unicode_error_count, ', '.join(unicode_errors)), is_success=False)
 
         return event_list
 
