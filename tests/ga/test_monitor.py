@@ -25,6 +25,7 @@ import re
 import string
 import tempfile
 import time
+import uuid
 from datetime import timedelta
 
 from azurelinuxagent.common.protocol.util import ProtocolUtil
@@ -210,6 +211,15 @@ class TestEventMonitoring(AgentTestCase, HttpRequestPredicates):
         data = get_properties(event)
         return json.dumps(data)
 
+    def _assert_error_event_reported(self, mock_add_event, expected_msg):
+        found_msg = False
+        for call_args in mock_add_event.call_args_list:
+            _, kwargs = call_args
+            if expected_msg in kwargs['message']:
+                found_msg = True
+                break
+        self.assertTrue(found_msg, "Error event not reported")
+
     @patch("azurelinuxagent.common.event.TELEMETRY_EVENT_PROVIDER_ID", _TEST_EVENT_PROVIDER_ID)
     @patch("azurelinuxagent.common.protocol.wire.WireClient.send_event")
     @patch("azurelinuxagent.common.conf.get_lib_dir")
@@ -340,13 +350,7 @@ class TestEventMonitoring(AgentTestCase, HttpRequestPredicates):
                 self.assertEqual(0, len(os.listdir(self.event_dir)))
                 expected_msg = "[ProtocolError] [Wireserver Exception] [ProtocolError] [Wireserver Failed] URI http://{0}/machine?comp=telemetrydata  [HTTP Failed] Status Code 503".format(
                     protocol.get_endpoint())
-                found_msg = False
-                for call_args in mock_add_event.call_args_list:
-                    _, kwargs = call_args
-                    if expected_msg in kwargs['message']:
-                        found_msg = True
-                        break
-                self.assertTrue(found_msg, "Error message not reported")
+                self._assert_error_event_reported(mock_add_event, expected_msg)
 
 
     @patch("azurelinuxagent.common.conf.get_lib_dir")
@@ -362,34 +366,37 @@ class TestEventMonitoring(AgentTestCase, HttpRequestPredicates):
                 self._create_extension_event(size)
 
             # This test validates that if we hit an issue while sending an event, we never send it again.
-            with patch("azurelinuxagent.common.logger.warn") as mock_warn:
+            with patch("azurelinuxagent.ga.monitor.add_event") as mock_add_event:
                 with patch("azurelinuxagent.common.protocol.wire.WireClient.send_event") as patch_send_event:
-                    patch_send_event.side_effect = Exception()
+                    test_str = "Test exception, Guid: {0}".format(str(uuid.uuid4()))
+                    patch_send_event.side_effect = Exception(test_str)
 
                     monitor_handler.run_and_wait()
 
-                    self.assertEqual(1, mock_warn.call_count)
                     self.assertEqual(0, len(os.listdir(self.event_dir)))
+                    self._assert_error_event_reported(mock_add_event, test_str)
 
     @patch("azurelinuxagent.common.conf.get_lib_dir")
-    def test_collect_and_send_with_call_wireserver_returns_http_error(self, mock_lib_dir, *args):
+    def test_collect_and_send_with_call_wireserver_returns_http_error_and_reports_event(self, mock_lib_dir, *args):
         mock_lib_dir.return_value = self.lib_dir
         fileutil.mkdir(self.event_dir)
         add_event(name="MonitorTests", op=WALAEventOperation.HeartBeat, is_success=True, message="Test heartbeat")
 
         with _create_monitor_handler(enabled_operations=["collect_and_send_events"]) as monitor_handler:
+            test_str = "A test exception, Guid: {0}".format(str(uuid.uuid4()))
+
             def http_post_handler(url, _, **__):
                 if self.is_telemetry_request(url):
-                    return HttpError("A test exception")
+                    return HttpError(test_str)
                 return None
 
             monitor_handler.get_mock_wire_protocol().set_http_handlers(http_post_handler=http_post_handler)
 
-            with patch("azurelinuxagent.common.logger.warn") as mock_warn:
+            with patch("azurelinuxagent.ga.monitor.add_event") as mock_add_event:
                 monitor_handler.run_and_wait()
 
-                self.assertEqual(1, mock_warn.call_count)
                 self.assertEqual(0, len(os.listdir(self.event_dir)))
+                self._assert_error_event_reported(mock_add_event, test_str)
 
 
 @patch('azurelinuxagent.common.osutil.get_osutil')
