@@ -627,11 +627,11 @@ class EventLogger(object):
             except UnicodeError as e:
                 unicode_error_count += 1
                 if len(unicode_errors) < max_errors_to_report_per_run:
-                    unicode_errors.append(textutil.str_to_encoded_ustr(e))
+                    unicode_errors.append(ustr(e))
             except Exception as e:
                 collect_event_error_count += 1
                 if len(collect_event_errors) < max_errors_to_report_per_run:
-                    collect_event_errors.append(textutil.str_to_encoded_ustr(e))
+                    collect_event_errors.append(ustr(e))
 
         err_msg_format = "DroppedEventsCount: {0}\nReasons: {1}"
         add_event(op=WALAEventOperation.CollectEventErrors,

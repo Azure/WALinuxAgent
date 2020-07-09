@@ -1120,11 +1120,11 @@ class WireClient(object):
             except UnicodeError as e:
                 unicode_error_count += 1
                 if len(unicode_errors) < max_errors_to_report_per_run:
-                    unicode_errors.append(textutil.str_to_encoded_ustr(e))
+                    unicode_errors.append(ustr(e))
             except Exception as e:
                 event_report_error_count += 1
                 if len(event_report_errors) < max_errors_to_report_per_run:
-                    event_report_errors.append(textutil.str_to_encoded_ustr(e))
+                    event_report_errors.append(ustr(e))
 
         err_msg_format = "DroppedEventsCount: {0}\nReasons: {1}"
         add_event(op=WALAEventOperation.ReportEventErrors,
