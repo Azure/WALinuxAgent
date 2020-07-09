@@ -382,7 +382,7 @@ class TestEvent(HttpRequestPredicates, AgentTestCase):
         os.chmod(self._create_test_event_file("custom_script_no_read_access.tld"), 0o200)
         self._create_test_event_file("custom_script_2.tld")  # another valid event
 
-        with patch("azurelinuxagent.common.event.logger.warn") as mock_warn:
+        with patch("azurelinuxagent.common.event.add_event") as mock_add_event:
             event_list = event.collect_events()
 
             self.assertEquals(
@@ -391,17 +391,19 @@ class TestEvent(HttpRequestPredicates, AgentTestCase):
                 all(TestEvent._get_event_message(evt) == "A test telemetry message." for evt in event_list.events),
                 "The valid events were not found")
 
-            invalid_events = {}
-            for args in mock_warn.call_args_list:
-                if re.search('Failed to process event file', args[0][0]) is not None:
-                    invalid_events[args[0][1]] = args[0][1]
+            invalid_events = []
+            total_dropped_count = 0
+            for args, kwargs in mock_add_event.call_args_list:
+                match = re.search("DroppedEventsCount: (\d+)", kwargs['message'])
+                if match is not None:
+                    invalid_events.append(kwargs['op'])
+                    total_dropped_count += int(match.groups()[0])
 
-            def assert_invalid_file_was_reported(file):
-                self.assertIn(file, invalid_events, '{0} was not reported as an invalid event file'.format(file))
-
-            assert_invalid_file_was_reported("custom_script_utf-16.tld")
-            assert_invalid_file_was_reported("custom_script_invalid_json.tld")
-            assert_invalid_file_was_reported("custom_script_no_read_access.tld")
+            self.assertEquals(3, total_dropped_count, "Total dropped events dont match")
+            self.assertIn(WALAEventOperation.CollectEventErrors, invalid_events,
+                          "{0} errors not reported".format(WALAEventOperation.CollectEventErrors))
+            self.assertIn(WALAEventOperation.CollectEventUnicodeErrors, invalid_events,
+                          "{0} errors not reported".format(WALAEventOperation.CollectEventUnicodeErrors))
 
     def test_save_event_rollover(self):
         # We keep 1000 events only, and the older ones are removed.

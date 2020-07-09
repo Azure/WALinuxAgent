@@ -29,7 +29,7 @@ import azurelinuxagent.common.conf as conf
 import azurelinuxagent.common.logger as logger
 import azurelinuxagent.common.utils.textutil as textutil
 from azurelinuxagent.common.datacontract import validate_param
-from azurelinuxagent.common.event import add_event, add_periodic, WALAEventOperation, EVENTS_DIRECTORY
+from azurelinuxagent.common.event import add_event, add_periodic, WALAEventOperation, EVENTS_DIRECTORY, EventLogger
 from azurelinuxagent.common.exception import ProtocolNotFoundError, \
     ResourceGoneError, ExtensionDownloadError, InvalidContainerError, ProtocolError, HttpError
 from azurelinuxagent.common.future import httpclient, bytebuffer, ustr
@@ -1089,7 +1089,7 @@ class WireClient(object):
                 "Failed to send events:{0}".format(resp.status))
 
     def report_event(self, event_list):
-        max_errors_to_report_per_run = 5
+        max_send_errors_to_report = 5
         buf = {}
         events_per_request = 0
         unicode_error_count, unicode_errors = 0, []
@@ -1119,21 +1119,18 @@ class WireClient(object):
                 events_per_request += 1
             except UnicodeError as e:
                 unicode_error_count += 1
-                if len(unicode_errors) < max_errors_to_report_per_run:
+                if len(unicode_errors) < max_send_errors_to_report:
                     unicode_errors.append(ustr(e))
             except Exception as e:
                 event_report_error_count += 1
-                if len(event_report_errors) < max_errors_to_report_per_run:
+                if len(event_report_errors) < max_send_errors_to_report:
                     event_report_errors.append(ustr(e))
 
-        err_msg_format = "DroppedEventsCount: {0}\nReasons: {1}"
-        if event_report_error_count > 0:
-            add_event(op=WALAEventOperation.ReportEventErrors,
-                      message=err_msg_format.format(event_report_error_count, ', '.join(event_report_errors)),
-                      is_success=False)
-        if unicode_error_count > 0:
-            add_event(op=WALAEventOperation.ReportEventUnicodeErrors,
-                      message=err_msg_format.format(unicode_error_count, ', '.join(unicode_errors)), is_success=False)
+        EventLogger.report_dropped_events_error(event_report_error_count, event_report_errors,
+                                                WALAEventOperation.CollectEventErrors, max_send_errors_to_report)
+        EventLogger.report_dropped_events_error(unicode_error_count, unicode_errors,
+                                                WALAEventOperation.CollectEventUnicodeErrors,
+                                                max_send_errors_to_report)
 
         # Send out all events left in buffer.
         for provider_id in list(buf.keys()):

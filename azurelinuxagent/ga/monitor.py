@@ -255,7 +255,7 @@ class MonitorHandler(object):
             if len(event_list.events) > 0:
                 self.protocol.report_event(event_list)
         except Exception as e:
-            err_msg = "Failure in collecting/sending Agent events: {0}".format(textutil.str_to_encoded_ustr(e))
+            err_msg = "Failure in collecting/sending Agent events: {0}".format(ustr(e))
             add_event(op=WALAEventOperation.UnhandledError, message=err_msg, is_success=False)
 
     def send_imds_heartbeat(self):
