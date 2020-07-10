@@ -18,7 +18,9 @@
 import contextlib
 import subprocess
 import json
+import os
 
+from azurelinuxagent.common import conf
 from azurelinuxagent.common.exception import ExtensionError
 from azurelinuxagent.ga.exthandlers import get_exthandlers_handler
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
@@ -35,8 +37,10 @@ class Formats(object):
 
     @staticmethod
     def FormatExtensionDir(name, version):
-        return "{0}-{1}".format(name, version)
-
+        return os.path.join(
+            conf.get_lib_dir(),
+            "{0}-{1}".format(name, version)
+        )
 
 
 class Actions(object):
@@ -72,11 +76,7 @@ class Actions(object):
         import azurelinuxagent.common.utils.fileutil as fileutil
         import azurelinuxagent.common.conf as conf
         
-        filedir = "/".join([
-            conf.get_lib_dir(),
-            Formats.FormatExtensionDir(name, version),
-            "status"
-        ])
+        filedir = Formats.FormatExtensionDir(name, version)
 
         msg = """
             [{
@@ -87,7 +87,7 @@ class Actions(object):
         """
 
         def wrapped_cmd(*args, **kwargs):
-            filename = "/".join([filedir, "{0}.status".format(wrapped_cmd.inc)])
+            filename = "/".join([filedir, "status", "{0}.status".format(wrapped_cmd.inc)])
             fileutil.write_file(filename, msg)
 
             # Every time enable is called, the agent looks for the next status file
@@ -272,7 +272,7 @@ class ActionSet(object):
 
         # The keys below will be used to configure attributes for a mock; periods in such attributes are treated
         # as attribute trees, which would break introspection.
-        formattedId = Formats.FormatExtensionDir(name, version).replace(".", "_")
+        formattedId = Formats.FormatExtensionDir(name, version).split("/")[-1].replace(".", "_")
 
         self.delegate ={
             "installCommand": dict(key="{0}_install".format(formattedId), action=installAction),

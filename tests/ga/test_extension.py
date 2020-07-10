@@ -2616,7 +2616,8 @@ class TestExtensionUpdateOnFailure(ExtensionTestCase):
         
         _, kwargs = second_ext.get_command("updateCommand").call_args
 
-        assert kwargs.get("env", {}).get(ExtCommandEnvVariable.DisableReturnCode, "") == str(exit_code)
+        self.assertEqual(kwargs["env"][ExtCommandEnvVariable.DisableReturnCode], str(exit_code),
+            "DisableAction's return code should be in updateAction's env.")
 
 
     def test_uninstall_failed_env_variable_should_set_for_install_when_continue_on_update_failure_is_true(self):
@@ -2636,7 +2637,8 @@ class TestExtensionUpdateOnFailure(ExtensionTestCase):
         
         _, kwargs = second_ext.get_command("installCommand").call_args
 
-        assert kwargs.get("env", {}).get(ExtCommandEnvVariable.UninstallReturnCode, "") == str(exit_code)
+        self.assertEqual(kwargs["env"][ExtCommandEnvVariable.UninstallReturnCode], str(exit_code),
+            "UninstallAction's return code should be in installCommand's env.")
 
 
     def test_extension_error_should_be_raised_when_continue_on_update_failure_is_false_on_disable_failure(self, *args):
@@ -2653,8 +2655,9 @@ class TestExtensionUpdateOnFailure(ExtensionTestCase):
         first_ext.get_command("uninstallCommand").assert_not_called()
         second_ext.get_command("installCommand").assert_not_called()
 
-        assert len(second_ext.statusBlobs) == 1
-        assert str(exit_code) in second_ext.statusBlobs[0]["formattedMessage"]["message"]
+        self.assertEqual(len(second_ext.statusBlobs), 1, "The second extension should have a single submitted status.")
+        self.assertTrue(str(exit_code) in second_ext.statusBlobs[0]["formattedMessage"]["message"],
+            "DisableAction's error code should be propagated to the status blob.")
 
 
     def test_extension_error_should_be_raised_when_continue_on_update_failure_is_false_on_uninstall_failure(self, *args):
@@ -2671,8 +2674,9 @@ class TestExtensionUpdateOnFailure(ExtensionTestCase):
         first_ext.get_command("uninstallCommand").assert_called_once()
         second_ext.get_command("installCommand").assert_not_called()
 
-        assert len(second_ext.statusBlobs) == 1
-        assert str(exit_code) in second_ext.statusBlobs[0]["formattedMessage"]["message"]
+        self.assertEqual(len(second_ext.statusBlobs), 1, "The second extension should have a single submitted status.")
+        self.assertTrue(str(exit_code) in second_ext.statusBlobs[0]["formattedMessage"]["message"],
+            "UninstallAction's error code should be propagated to the status blob.")
 
     def test_extension_error_should_be_raised_when_continue_on_update_failure_is_true_on_disable_and_update_failure(self, *args):
         exit_codes = { "disable": uuid.uuid4(), "update": uuid.uuid4() }
@@ -2690,8 +2694,9 @@ class TestExtensionUpdateOnFailure(ExtensionTestCase):
         first_ext.get_command("uninstallCommand").assert_not_called()
         second_ext.get_command("installCommand").assert_not_called()
 
-        assert len(second_ext.statusBlobs) == 1
-        assert str(exit_codes["update"]) in second_ext.statusBlobs[0]["formattedMessage"]["message"]
+        self.assertEqual(len(second_ext.statusBlobs), 1, "The second extension should have a single submitted status.")
+        self.assertTrue(str(exit_codes["update"]) in second_ext.statusBlobs[0]["formattedMessage"]["message"],
+            "UpdateAction's error code should be propagated to the status blob.")
 
 
     def test_extension_error_should_be_raised_when_continue_on_update_failure_is_true_on_uninstall_and_install_failure(self, *args):
@@ -2710,8 +2715,9 @@ class TestExtensionUpdateOnFailure(ExtensionTestCase):
         first_ext.get_command("uninstallCommand").assert_called_once()
         second_ext.get_command("installCommand").assert_called_once()
 
-        assert len(second_ext.statusBlobs) == 1
-        assert str(exit_codes["install"]) in second_ext.statusBlobs[0]["formattedMessage"]["message"]
+        self.assertEqual(len(second_ext.statusBlobs), 1, "The second extension should have a single submitted status.")
+        self.assertTrue(str(exit_codes["install"]) in second_ext.statusBlobs[0]["formattedMessage"]["message"],
+            "InstallAction's error code should be propagated to the status blob.")
 
     def test_failed_env_variables_should_be_set_from_within_extension_commands(self, *args):
         """
@@ -2736,22 +2742,27 @@ class TestExtensionUpdateOnFailure(ExtensionTestCase):
         _, update_kwargs = second_ext.get_command("updateCommand").call_args
         _, install_kwargs = second_ext.get_command("installCommand").call_args
 
-        second_extension_dir = "/".join([
-            conf.get_lib_dir(),
-            Formats.FormatExtensionDir(second_ext.extension_info.name, second_ext.extension_info.version)
-        ])
+        second_extension_dir = Formats.FormatExtensionDir(second_ext.extension_info.name, second_ext.extension_info.version)
 
         # Ensure we're checking variables for update scenario
-        assert update_kwargs.get("env", {}).get(ExtCommandEnvVariable.DisableReturnCode, "") == str(exit_codes["disable"])
-        assert update_kwargs.get("env", {}).get(ExtCommandEnvVariable.UninstallReturnCode, "") != str(exit_codes["uninstall"])
-        assert update_kwargs.get("env", {}).get(ExtCommandEnvVariable.ExtensionPath, "") == second_extension_dir
-        assert update_kwargs.get("env", {}).get(ExtCommandEnvVariable.ExtensionVersion, "") == "1.1.0"
+        self.assertEqual(update_kwargs["env"][ExtCommandEnvVariable.DisableReturnCode], str(exit_codes["disable"]),
+            "DisableAction's return code should be present in updateAction's env.")
+        self.assertTrue(ExtCommandEnvVariable.UninstallReturnCode not in update_kwargs["env"],
+            "UninstallAction's return code should not be in updateAction's env.")
+        self.assertEqual(update_kwargs["env"][ExtCommandEnvVariable.ExtensionPath], second_extension_dir,
+            "The second extension's directory should be present in updateAction's env.")
+        self.assertEqual(update_kwargs["env"][ExtCommandEnvVariable.ExtensionVersion], "1.1.0",
+            "The second extension's version should be present in updateAction's env.")
 
         # Ensure we're checking variables for install scenario
-        assert install_kwargs.get("env", {}).get(ExtCommandEnvVariable.UninstallReturnCode, "") == str(exit_codes["uninstall"])
-        assert install_kwargs.get("env", {}).get(ExtCommandEnvVariable.DisableReturnCode, "") != str(exit_codes["disable"])
-        assert install_kwargs.get("env", {}).get(ExtCommandEnvVariable.ExtensionPath, "") == second_extension_dir
-        assert install_kwargs.get("env", {}).get(ExtCommandEnvVariable.ExtensionVersion, "") == "1.1.0"
+        self.assertEqual(install_kwargs["env"][ExtCommandEnvVariable.UninstallReturnCode], str(exit_codes["uninstall"]),
+            "UninstallAction's return code should be present in installAction's env.")
+        self.assertTrue(ExtCommandEnvVariable.DisableReturnCode not in install_kwargs["env"],
+            "DisableAction's return code should not be in installAction's env.")
+        self.assertEqual(install_kwargs["env"][ExtCommandEnvVariable.ExtensionPath], second_extension_dir,
+            "The second extension's directory should be present in installAction's env.")
+        self.assertEqual(install_kwargs["env"][ExtCommandEnvVariable.ExtensionVersion], "1.1.0",
+            "The second extension's version should be present in installAction's env.")
         
 
     def test_correct_exit_code_should_set_on_disable_cmd_failure(self):
@@ -2770,7 +2781,8 @@ class TestExtensionUpdateOnFailure(ExtensionTestCase):
 
         _, update_kwargs = second_ext.get_command("updateCommand").call_args
 
-        assert update_kwargs.get("env", {}).get(ExtCommandEnvVariable.DisableReturnCode, "") == str(exit_code)
+        self.assertEqual(update_kwargs["env"][ExtCommandEnvVariable.DisableReturnCode], str(exit_code),
+            "DisableAction's return code should be present in UpdateAction's env.")
 
 
     def test_timeout_code_should_set_on_cmd_timeout(self):
@@ -2795,8 +2807,10 @@ class TestExtensionUpdateOnFailure(ExtensionTestCase):
         _, install_kwargs = second_ext.get_command("installCommand").call_args
 
         # Verify both commands are reported as timeouts.
-        assert update_kwargs.get("env", {}).get(ExtCommandEnvVariable.DisableReturnCode, "") == str(ExtensionErrorCodes.PluginHandlerScriptTimedout)
-        assert install_kwargs.get("env", {}).get(ExtCommandEnvVariable.UninstallReturnCode, "") == str(ExtensionErrorCodes.PluginHandlerScriptTimedout)
+        self.assertEqual(update_kwargs["env"][ExtCommandEnvVariable.DisableReturnCode], str(ExtensionErrorCodes.PluginHandlerScriptTimedout),
+            "DisableAction's return code should be marked as a timeout in UpdateAction's env.")
+        self.assertEqual(install_kwargs["env"][ExtCommandEnvVariable.UninstallReturnCode], str(ExtensionErrorCodes.PluginHandlerScriptTimedout),
+            "UninstallAction's return code should be marked as a timeout in installAction's env.")
 
 
     def test_success_code_should_set_in_env_variables_on_cmd_success(self):
@@ -2813,8 +2827,10 @@ class TestExtensionUpdateOnFailure(ExtensionTestCase):
         _, update_kwargs = second_ext.get_command("updateCommand").call_args
         _, install_kwargs = second_ext.get_command("installCommand").call_args
 
-        assert update_kwargs.get("env", {}).get(ExtCommandEnvVariable.DisableReturnCode, "") == "0"
-        assert install_kwargs.get("env", {}).get(ExtCommandEnvVariable.UninstallReturnCode, "") == "0"
+        self.assertEqual(update_kwargs["env"][ExtCommandEnvVariable.DisableReturnCode], "0",
+            "DisableAction's return code in updateAction's env should be 0.")
+        self.assertEqual(install_kwargs["env"][ExtCommandEnvVariable.UninstallReturnCode], "0",
+            "UninstallAction's return code in installAction's env should be 0.")
 
 
 @patch('time.sleep', side_effect=lambda _: mock_sleep(0.001))
