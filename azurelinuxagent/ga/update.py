@@ -763,7 +763,7 @@ class UpdateHandler(object):
                                                                           self._heartbeat_id, dropped_packets,
                                                                           self._heartbeat_update_goal_state_error_count,
                                                                           auto_update_enabled)
-            logger.info(u"[HEARTBEAT] Agent {0} is running as the goal state agent {1}", CURRENT_AGENT, debug_log_msg)
+            logger.verbose(u"[HEARTBEAT] Agent {0} is running as the goal state agent {1}", CURRENT_AGENT, debug_log_msg)
             self._last_telemetry_heartbeat = datetime.utcnow()
 
 
