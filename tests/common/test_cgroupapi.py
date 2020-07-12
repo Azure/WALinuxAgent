@@ -792,8 +792,9 @@ class SystemdCgroupsApiTestCase(AgentTestCase):
 
                     self.assertEquals(context_manager.exception.code, ExtensionErrorCodes.PluginUnknownFailure)
                     self.assertIn("Non-zero exit code", ustr(context_manager.exception))
-                    self.assertIn("[stderr]\nRunning scope as unit: Microsoft.Compute.TestExtension_1.2.3",
-                                  ustr(context_manager.exception))
+                    # The scope name should appear in the process output since systemd-run was invoked and stderr
+                    # wasn't truncated.
+                    self.assertIn("Microsoft.Compute.TestExtension_1.2.3", ustr(context_manager.exception))
 
     @attr('requires_sudo')
     @patch("azurelinuxagent.common.cgroupapi.add_event")
@@ -828,9 +829,9 @@ class SystemdCgroupsApiTestCase(AgentTestCase):
 
                     self.assertEquals(context_manager.exception.code, ExtensionErrorCodes.PluginUnknownFailure)
                     self.assertIn("Non-zero exit code", ustr(context_manager.exception))
-                    # stdout and stderr should have been truncated
-                    self.assertNotIn("[stderr]\nRunning scope as unit Microsoft.Compute.TestExtension_1.2.3",
-                                     ustr(context_manager.exception))
+                    # stdout and stderr should have been truncated, so the scope name doesn't appear in stderr
+                    # even though systemd-run ran
+                    self.assertNotIn("Microsoft.Compute.TestExtension_1.2.3", ustr(context_manager.exception))
 
     @attr('requires_sudo')
     @patch("azurelinuxagent.common.cgroupapi.add_event")
