@@ -653,11 +653,12 @@ After=system-{1}.slice""".format(extension_name, EXTENSIONS_ROOT_CGROUP_NAME)
         return processes
 
     @staticmethod
-    def _is_systemd_failure(scope_name, stderr):
-        stderr.seek(0)
-        stderr = ustr(stderr.read(TELEMETRY_MESSAGE_MAX_LEN), encoding='utf-8', errors='backslashreplace')
+    def _is_systemd_failure(scope_name, stderr, process_output):
+        # stderr.seek(0)
+        # stderr = ustr(stderr.read(TELEMETRY_MESSAGE_MAX_LEN), encoding='utf-8', errors='backslashreplace')
         unit_not_found = "Unit {0} not found.".format(scope_name)
-        return unit_not_found in stderr or scope_name not in stderr
+        # return unit_not_found in stderr or scope_name not in stderr
+        return unit_not_found in process_output or scope_name not in process_output
 
     def start_extension_command(self, extension_name, command, timeout, shell, cwd, env, stdout, stderr,
                                 error_code=ExtensionErrorCodes.PluginUnknownFailure):
@@ -712,8 +713,8 @@ After=system-{1}.slice""".format(extension_name, EXTENSIONS_ROOT_CGROUP_NAME)
         except ExtensionError as e:
             # The extension didn't terminate successfully. Determine whether it was due to systemd errors or
             # extension errors.
-            systemd_failure = self._is_systemd_failure(scope, stderr)
             process_output = read_output(stdout, stderr)
+            systemd_failure = self._is_systemd_failure(scope, stderr, process_output)
 
             if not systemd_failure:
                 # There was an extension error; it either timed out or returned a non-zero exit code. Re-raise the error
@@ -750,6 +751,7 @@ After=system-{1}.slice""".format(extension_name, EXTENSIONS_ROOT_CGROUP_NAME)
                                                            stderr=stderr,
                                                            error_code=error_code)
 
+                print("HI")
                 return process_output
 
         # The process terminated in time and successfully
