@@ -720,39 +720,6 @@ class SystemdCgroupsApiTestCase(AgentTestCase):
 
                     self.assertIn("TEST_OUTPUT\n", command_output, "The test output was not captured")
 
-    @attr('requires_sudo')
-    @patch("azurelinuxagent.common.cgroupapi.add_event")
-    @patch('time.sleep', side_effect=lambda _: mock_sleep())
-    @patch("azurelinuxagent.common.utils.extensionprocessutil.TELEMETRY_MESSAGE_MAX_LEN", return_value=5)
-    def test_start_extension_command_should_not_use_fallback_option_if_extension_fails_with_long_output(self, *args):
-        # self.assertTrue(i_am_root(), "Test does not run when non-root")
-        long_output = "a"*(5 * 4)
-        long_stdout_stderr_command = "echo {0} && echo {0} >&2 && ls folder_does_not_exist".format(long_output)
-
-        with tempfile.TemporaryFile(dir=self.tmp_dir, mode="w+b") as stdout:
-            with tempfile.TemporaryFile(dir=self.tmp_dir, mode="w+b") as stderr:
-                with patch("azurelinuxagent.common.cgroupapi.subprocess.Popen", wraps=subprocess.Popen) \
-                        as patch_mock_popen:
-                    with self.assertRaises(ExtensionError) as context_manager:
-                        SystemdCgroupsApi().start_extension_command(
-                            extension_name="Microsoft.Compute.TestExtension-1.2.3",
-                            command=long_stdout_stderr_command,
-                            timeout=300,
-                            shell=True,
-                            cwd=self.tmp_dir,
-                            env={},
-                            stdout=stdout,
-                            stderr=stderr)
-
-                        # We should have invoked the extension command only once, in the systemd-run case
-                        self.assertEquals(1, 2)
-                        self.assertEquals(2, patch_mock_popen.call_count)
-                        args = patch_mock_popen.call_args[0][0]
-                        self.assertIn("systemd-run --unit", args)
-
-                        self.assertEquals(context_manager.exception.code, ExtensionErrorCodes.PluginUnknownFailure)
-                        self.assertIn("Non-zero exit code", ustr(context_manager.exception))
-
     @patch('time.sleep', side_effect=lambda _: mock_sleep())
     def test_start_extension_command_should_invoke_the_command_directly_if_systemd_times_out(self, _):
         # Systemd has its own internal timeout which is shorter than what we define for extension operation timeout.
@@ -769,8 +736,6 @@ class SystemdCgroupsApiTestCase(AgentTestCase):
                 new_args = (systemd_timeout_command,)
 
             return original_popen(new_args, **kwargs)
-
-        expected_output = "[stdout]\n{0}\n\n\n[stderr]\n"
 
         with tempfile.TemporaryFile(dir=self.tmp_dir, mode="w+b") as stdout:
             with tempfile.TemporaryFile(dir=self.tmp_dir, mode="w+b") as stderr:
@@ -802,16 +767,16 @@ class SystemdCgroupsApiTestCase(AgentTestCase):
     @patch("azurelinuxagent.common.cgroupapi.add_event")
     @patch('time.sleep', side_effect=lambda _: mock_sleep())
     def test_start_extension_command_should_not_use_fallback_option_if_extension_fails(self, *args):
-        # self.assertTrue(i_am_root(), "Test does not run when non-root")
+        self.assertTrue(i_am_root(), "Test does not run when non-root")
+        command = "ls folder_does_not_exist"
 
         with tempfile.TemporaryFile(dir=self.tmp_dir, mode="w+b") as stdout:
             with tempfile.TemporaryFile(dir=self.tmp_dir, mode="w+b") as stderr:
-                with patch("azurelinuxagent.common.cgroupapi.subprocess.Popen", wraps=subprocess.Popen) \
-                        as patch_mock_popen:
+                with patch("azurelinuxagent.common.cgroupapi.subprocess.Popen", wraps=subprocess.Popen) as popen_patch:
                     with self.assertRaises(ExtensionError) as context_manager:
                         SystemdCgroupsApi().start_extension_command(
                             extension_name="Microsoft.Compute.TestExtension-1.2.3",
-                            command="ls folder_does_not_exist",
+                            command=command,
                             timeout=300,
                             shell=True,
                             cwd=self.tmp_dir,
@@ -819,13 +784,53 @@ class SystemdCgroupsApiTestCase(AgentTestCase):
                             stdout=stdout,
                             stderr=stderr)
 
-                        # We should have invoked the extension command only once, in the systemd-run case
-                        self.assertEquals(5, patch_mock_popen.call_count)
-                        args = patch_mock_popen.call_args[0][0]
-                        self.assertIn("systemd-run --unit23", args)
+                    extension_calls = [args[0] for (args, _) in popen_patch.call_args_list if command in args[0]]
 
-                        self.assertEquals(context_manager.exception.code, ExtensionErrorCodes.PluginUnknownFailure)
-                        self.assertIn("Non-zero exit code", ustr(context_manager.exception))
+                    self.assertEquals(1, len(extension_calls), "The extension should have been invoked exactly twice")
+                    self.assertIn("systemd-run --unit=Microsoft.Compute.TestExtension_1.2.3", extension_calls[0],
+                                  "The first call to the extension should have used systemd")
+
+                    self.assertEquals(context_manager.exception.code, ExtensionErrorCodes.PluginUnknownFailure)
+                    self.assertIn("Non-zero exit code", ustr(context_manager.exception))
+                    self.assertIn("[stderr]\nRunning scope as unit: Microsoft.Compute.TestExtension_1.2.3",
+                                  ustr(context_manager.exception))
+
+    @attr('requires_sudo')
+    @patch("azurelinuxagent.common.cgroupapi.add_event")
+    @patch('time.sleep', side_effect=lambda _: mock_sleep())
+    @patch("azurelinuxagent.common.utils.extensionprocessutil.TELEMETRY_MESSAGE_MAX_LEN", 5)
+    def test_start_extension_command_should_not_use_fallback_option_if_extension_fails_with_long_output(self, *args):
+        self.assertTrue(i_am_root(), "Test does not run when non-root")
+
+        long_output = "a"*20  # large enough to ensure both stdout and stderr are truncated
+        long_stdout_stderr_command = "echo {0} && echo {0} >&2 && ls folder_does_not_exist".format(long_output)
+
+        with tempfile.TemporaryFile(dir=self.tmp_dir, mode="w+b") as stdout:
+            with tempfile.TemporaryFile(dir=self.tmp_dir, mode="w+b") as stderr:
+                with patch("azurelinuxagent.common.cgroupapi.subprocess.Popen", wraps=subprocess.Popen) as popen_patch:
+                    with self.assertRaises(ExtensionError) as context_manager:
+                        SystemdCgroupsApi().start_extension_command(
+                            extension_name="Microsoft.Compute.TestExtension-1.2.3",
+                            command=long_stdout_stderr_command,
+                            timeout=300,
+                            shell=True,
+                            cwd=self.tmp_dir,
+                            env={},
+                            stdout=stdout,
+                            stderr=stderr)
+
+                    extension_calls = [args[0] for (args, _) in popen_patch.call_args_list
+                                       if long_stdout_stderr_command in args[0]]
+
+                    self.assertEquals(1, len(extension_calls), "The extension should have been invoked exactly twice")
+                    self.assertIn("systemd-run --unit=Microsoft.Compute.TestExtension_1.2.3", extension_calls[0],
+                                  "The first call to the extension should have used systemd")
+
+                    self.assertEquals(context_manager.exception.code, ExtensionErrorCodes.PluginUnknownFailure)
+                    self.assertIn("Non-zero exit code", ustr(context_manager.exception))
+                    # stdout and stderr should have been truncated
+                    self.assertNotIn("[stderr]\nRunning scope as unit Microsoft.Compute.TestExtension_1.2.3",
+                                     ustr(context_manager.exception))
 
     @attr('requires_sudo')
     @patch("azurelinuxagent.common.cgroupapi.add_event")
