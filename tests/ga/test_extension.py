@@ -2547,7 +2547,7 @@ class TestExtensionUpdateOnFailure(ExtensionTestCase):
         AgentTestCase.tearDown(self)
 
     @staticmethod
-    def _do_upgrade_scenario(firstVersionActor, secondVersionActor):
+    def _do_upgrade_scenario(first_actor, second_actor):
         """
         Given the provided ExtensionActor objects, installs the first and then attempts
         to update to the second. StatusBlobs and command invocations for each actor can
@@ -2559,18 +2559,20 @@ class TestExtensionUpdateOnFailure(ExtensionTestCase):
         (i.e. not an upgrade) with a failing installCommand.
         """
         
-        with get_protocol_and_handler(firstVersionActor) as (protocol, exthandlers_handler):
+        with get_protocol_and_handler(first_actor) as (protocol, exthandlers_handler):
 
             # Run the handler with only the first version to install it
             exthandlers_handler.run()
             
             # Verify the extension was picked up correctly.
+            if len(first_actor.get_command("installCommand").call_args_list) != 1:
+                raise Exception("First Extension not installed by ExtHandlersHandler.run().")
             # NOTE: this won't work for tests that want install to fail.
-            firstVersionActor.get_command("installCommand").assert_called_once()
-            firstVersionActor.get_command("enableCommand").assert_called_once()
+            if len(first_actor.get_command("enableCommand").call_args_list) != 1:
+                raise Exception("First Extension not enabled by ExtHandlersHandler.run().")
 
             # Update to the second goal state incarnation, including the updated actor this time
-            add_extension_actors(protocol, 2, secondVersionActor)
+            add_extension_actors(protocol, 2, second_actor)
 
             # Run the handler a second time on the updated goal state (including the new extension version)
             exthandlers_handler.run()
