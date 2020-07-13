@@ -46,21 +46,21 @@ class Formats(object):
 
 class Actions(object):
     """
-    A collection of static methods providing some basic functionality for the ActionSet
+    A collection of static methods providing some basic functionality for the ExtensionManifestInfo
     class' actions.
     """
 
     @staticmethod
     def succeed_action(*args, **kwargs):
         """
-        A nop action with the correct function signature for ActionSet actions.
+        A nop action with the correct function signature for ExtensionManifestInfo actions.
         """
         return 0
     
     @staticmethod
     def fail_action(*args, **kwargs):
         """
-        A simple fail action with the correct function signature for ActionSet actions.
+        A simple fail action with the correct function signature for ExtensionManifestInfo actions.
         """
         raise ExtensionError("FailAction called.")
 
@@ -148,7 +148,7 @@ def _generate_mock_http_get(actors):
                 # the (yet to be instantiated) protocol's mock_wire_data attribute, for just this one call.
                 return wire_data.mock_http_get(url, *args, **kwargs)
         
-        # In order to correctly pull from firstActor's data, we need to let its WireProtocolData* obj know that we
+        # In order to correctly pull from first_actor's data, we need to let its WireProtocolData* obj know that we
         # haven't satisfied the http_get request. Returning None here does that.
         return None
     
@@ -160,11 +160,11 @@ def _generate_mock_http_put(actors):
         if HttpRequestPredicates.is_host_plugin_status_request(url):
             return None
 
-        handler_statuses = json.loads(args[0]).get('aggregateStatus', {}).get('handlerAggregateStatus', [])
+        handler_statuses = json.loads(args[0]).get("aggregateStatus", {}).get("handlerAggregateStatus", [])
 
         for handler_status in handler_statuses:
-            supplied_name = handler_status.get('handlerName', None)
-            supplied_version = handler_status.get('handlerVersion', None)
+            supplied_name = handler_status.get("handlerName", None)
+            supplied_version = handler_status.get("handlerVersion", None)
             
             try: 
                 matches_info = (
@@ -185,26 +185,26 @@ def _generate_mock_http_put(actors):
 
 
 @contextlib.contextmanager
-def get_protocol_and_handler(firstActor, *remainingActors):
+def get_protocol_and_handler(first_actor, *remaining_actors):
     """
     A wrapper for mockwiredata.mock_wire_protocol() that adapts a set of ExtensionActor objects into inputs that 
     that function can work with, whilst also creating and returning an exthandlers_handler instance pointing to the
     returned protocol. Additionally, Popen is patched (for the scope of the with) to enable the returned exthandlers_handler 
-    to interact with every extension actor supplied. Only firstActor need be populated.
+    to interact with every extension actor supplied. Only first_actor need be populated.
 
     Note that non-default manifest.xml files must use the same url format as the default in order to be compatible with this
     function. Specifically, the *.zip resource urls for an extension must end in "{ExtensionName}__{ExtensionVersion}".
     """
 
-    with mock_wire_protocol(firstActor.data_fetcher, mockwiredata_factory=mockwiredata.get_dynamic_wire_protocol_data) as protocol:
+    with mock_wire_protocol(first_actor.data_fetcher, mockwiredata_factory=mockwiredata.get_dynamic_wire_protocol_data) as protocol:
         
         # We save the patched popens within the protocol to enable additions in future function calls
         # (e.g. update_extension_actors).
         protocol._patched_popens = [ ] # Populated later; timing matters, and a patched_popen needs to be started immediately after creation.
         # We also need actor objs to, amoung other things, guarantee that the same actor doesn't have
         # two different patch_popen's running at the same time.
-        protocol._actors = [firstActor]
-        protocol._actors.extend(remainingActors)
+        protocol._actors = [first_actor]
+        protocol._actors.extend(remaining_actors)
 
         protocol.set_http_handlers(http_get_handler=_generate_mock_http_get(protocol._actors[1:]),
             http_put_handler=_generate_mock_http_put(protocol._actors))
@@ -226,12 +226,12 @@ def get_protocol_and_handler(firstActor, *remainingActors):
 
 def add_extension_actors(protocol, incarnation, *actors):
     """
-    Given a protocol obj returned by a extension_actor.get_protocol_and_handler(firstActor, *remainingActors) call, injects the
+    Given a protocol obj returned by a extension_actor.get_protocol_and_handler(first_actor, *remaining_actors) call, injects the
     extensions emulated by (the objects within) actors.
     
     It accomplishes this though applying the following updates onto the provided protocol:
         *   adds unique data sources for *.zip extension resources garnered from actors (unique meaning ones not already given
-            by [firstActor, *remainingActors], if any)
+            by [first_actor, *remaining_actors], if any)
         *   updates ext_conf to reflect the extension names and versions within actors
         *   updates the goal state's incarnation (to force the agent to re-read it)
 
@@ -242,7 +242,7 @@ def add_extension_actors(protocol, incarnation, *actors):
     function. Specifically, the *.zip resource urls for an extension must end in "{ExtensionName}__{ExtensionVersion}".
 
     Note that this function does not update xml for ext_conf or manifest, meaning that added extensions must already be present
-    within those files as provided by the firstActor's data source. This could probably be implemented with the
+    within those files as provided by the first_actor's data source. This could probably be implemented with the
     WireProtocolDataBase.replace_xml_element_value function, but it would probably make sense to first implement autogeneration
     of those files within ExtensionActor.__init__, as we would then know exactly the xml elements in those files. This would
     simplify the logic of adding the new actors, but is a bigger change. Ultimately, this feature isn't currently (i.e. as of
@@ -317,7 +317,7 @@ class ExtensionManifestInfo:
         }]
 
         for title, cmd in self.commands():
-            base_manifest[0]['handlerManifest'][title] = cmd['key']
+            base_manifest[0]["handlerManifest"][title] = cmd["key"]
 
         return mockwiredata.generate_ext_fetcher_func(base_manifest)
     
@@ -341,7 +341,7 @@ class ExtensionManifestInfo:
     
     def get_key_for_command(self, cmd):
         """
-        Returns the unique ID associated with a specific command name in this ActionSet.
+        Returns the unique ID associated with a specific command name in this ExtensionManifestInfo.
         cmd may be "installCommand", "enableCommand", etc.
         """
         return self._delegate[cmd]["key"]
@@ -357,14 +357,14 @@ class ExtensionActor(object):
     @staticmethod
     def _configure_action_scope(action_scope, manifest_info):
         """
-        Creates a mock specced to the set of commands within the actionSet provided. The mock (actionScope) will
-        correctly call the (corresponding) actions provided in the actionSet when given any command present within
-        the actionSet.
+        Creates a mock specced to the set of commands within the manifest_info provided. The mock (action_scope) will
+        correctly call the (corresponding) actions provided in the manifest_info when given any command present within
+        the manifest_info.
 
-        The actionScope mock is intended for use with a mock_popen function; if a command passed to mock_popen is
-        present within the attribute list of the actionScope (and therefore listed as a action["key"] in the
-        actionSet), that attribute should return a mock popen object with the proper return code (the value returned
-        by the particular action function in the actionSet matching the action["key"]).
+        The action_scope mock is intended for use with a mock_popen function; if a command passed to mock_popen is
+        present within the attribute list of the action_scope (and therefore listed as a action["key"] in the
+        manifest_info), that attribute should return a mock popen object with the proper return code (the value returned
+        by the particular action function in the manifest_info matching the action["key"]).
         """
 
         def wrap_action_return_in_popen_obj(action_func):
@@ -391,7 +391,7 @@ class ExtensionActor(object):
             # action. see wrap_action_return_in_popen_obj for impl details.
             action_returning_popen_obj = wrap_action_return_in_popen_obj(action["action"])
             # Attempting to specify action["key"].side_effect throws an AttributeError
-            # at runtime, as we (below) have added a spec to the actionScope mock. Thus,
+            # at runtime, as we (below) have added a spec to the action_scope mock. Thus,
             # we need to instantiate a mock object for the attribute directly.
             action_scope_attributes[action["key"]] = Mock(wraps=action_returning_popen_obj)
 
@@ -399,7 +399,7 @@ class ExtensionActor(object):
         action_scope.configure_mock(**action_scope_attributes)
     
     @staticmethod
-    def _configure_data_fetcher(dataFetcher, manifest_info):
+    def _configure_data_fetcher(data_fetcher, manifest_info):
         """
         Replaces the "test_ext" fetcher function in the provided data fetcher
         with a lambda which generates a proper zip file containing a HanderManifest.json
@@ -408,19 +408,19 @@ class ExtensionActor(object):
         given manifest_info.
         """
 
-        dataFetcher["test_ext"] = manifest_info.as_generator()
+        data_fetcher["test_ext"] = manifest_info.as_generator()
 
 
-    def __init__(self, dataFetcherBase, manifest_info):
+    def __init__(self, data_fetcher_base, manifest_info):
         """
         Creates a ExtensionActor emulating an extension specified by the provided
-        extensionInfo and actionSet. Copies the dataFetcherBase to serve as the dynamic
+        manifest_info. Copies the data_fetcher_base to serve as the dynamic
         loader of info required by a WireProtocolData* object.
         """
         self._action_scope = Mock()
         ExtensionActor._configure_action_scope(self._action_scope, manifest_info)
 
-        self.data_fetcher = dataFetcherBase.copy()
+        self.data_fetcher = data_fetcher_base.copy()
         ExtensionActor._configure_data_fetcher(self.data_fetcher, manifest_info)
 
         self.manifest_info = manifest_info
@@ -437,8 +437,8 @@ class ExtensionActor(object):
         """
         Returns a mock that patches the existing subprocess.Popen function call (on start()) such that any
         calls supposed to invoke the extension emulated by this object are intercepted and correctly ran
-        (via the action funcs in the actionSet that initialized this object). Any other commands are passed
-        through to the prior existing subprocess.Popen.
+        (via the action funcs in the ExtensionManifestInfo that initialized this object). Any other commands
+        are passed through to the prior existing subprocess.Popen.
 
         Note that the passthrough on failure to match a command to this extension's action commands enables
         multiple patch_popen() Mocks to function at the same time.
@@ -458,9 +458,9 @@ class ExtensionActor(object):
 
         
         For instance: if {more code} involves a invocation of the extension emulated by first_ext, the mock popen for
-        second_ext will be invoked, but will fail to match the provided command to one within second_ext's actionScope.
+        second_ext will be invoked, but will fail to match the provided command to one within second_ext's action_scope.
         It will then fall back to the prior popen-- in this case, that's the mock popen from first_ext-- which will
-        successfully match the provided command to one within first_ext's actionScope. The corresponding action will
+        successfully match the provided command to one within first_ext's action_scope. The corresponding action will
         then be called and returned.
 
         Note the need to interleave the patch_popen() and start() calls; in order for second_patch to know to fall back
@@ -479,7 +479,7 @@ class ExtensionActor(object):
                         # this object is emulating. We don't want that file path because we aren't actually
                         # calling a script, just using the name as a tag.
 
-            # Here we look within our own actionScope first for the tag (script_name), but we need to fall
+            # Here we look within our own action_scope first for the tag (script_name), but we need to fall
             # back to the original_popen command if we can't find it to enable patch_popen stacking (as 
             # described in the docstring above).
             return getattr(self._action_scope, script_name, original_popen)(command, *args, **kwargs)
