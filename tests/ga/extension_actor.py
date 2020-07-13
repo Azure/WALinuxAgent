@@ -75,7 +75,7 @@ class Actions(object):
         exit_code, install_action = Actions.generate_unique_fail()
         extension = get_extension_actor(install_action=install_action)
         ...
-        
+
         """
         return_code = str(uuid.uuid4())
 
@@ -212,7 +212,7 @@ def get_protocol_and_handler(first_actor, *remaining_actors):
         protocol._actors = [first_actor]
         protocol._actors.extend(remaining_actors)
 
-        protocol.set_http_handlers(http_get_handler=_generate_mock_http_get(protocol._actors[1:]),
+        protocol.set_http_handlers(http_get_handler=_generate_mock_http_get(protocol._actors[1:]), # the protocol object already has access to the first actor (mock_wire_protocol(first_actor.data_fetcher,...)).
             http_put_handler=_generate_mock_http_put(protocol._actors))
 
         try:
