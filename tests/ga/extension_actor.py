@@ -68,7 +68,14 @@ class Actions(object):
     @staticmethod
     def generate_unique_fail():
         """
-        TODO: Desc
+        Utility function for tracking the return code of a command. Returns both a
+        unique return code, and a function pointer which returns said return code.
+        Use as such:
+
+        exit_code, install_action = Actions.generate_unique_fail()
+        extension = get_extension_actor(install_action=install_action)
+        ...
+        
         """
         return_code = str(uuid.uuid4())
 
