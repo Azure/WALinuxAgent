@@ -60,17 +60,17 @@ _IPTABLES_VERSION_PATTERN = re.compile("^[^\d\.]*([\d\.]+).*$")
 _IPTABLES_LOCKING_VERSION = FlexibleVersion('1.4.21')
 
 
-def _get_iptables_version_command():
-    return ["iptables", "--version"]
-
-
 def _add_wait(wait, command):
     """
-    If 'wait' is True, adds the wait option (w) to the given iptables command line
+    If 'wait' is True, adds the wait option (-w) to the given iptables command line
     """
     if wait:
         command.insert(1, "-w")
     return command
+
+
+def _get_iptables_version_command():
+    return ["iptables", "--version"]
 
 
 def _get_firewall_accept_command(wait, command, destination, owner_uid):
@@ -162,6 +162,7 @@ class DefaultOSUtil(object):
                     # Transient error  that we ignore.  This code fires every loop
                     # of the daemon (60m), so we will get the value eventually.
                     return 0
+                logger.error("Failed to get firewall packets: {0}", ustr(e))
                 return -1
 
             return 0
@@ -249,17 +250,14 @@ class DefaultOSUtil(object):
             try:
                 drop_rule = _get_firewall_drop_command(wait, "-C", dst_ip)
                 shellutil.run_command(drop_rule)
-                firewall_established = True
-            except Exception as e:
-                if isinstance(e, CommandError) and e.returncode == 2:
+                logger.verbose("Firewall appears established")
+                return True
+            except CommandError as e:
+                if e.returncode == 2:
                     self.remove_firewall(dst_ip, uid)
                     msg = "please upgrade iptables to a version that supports the -C option"
                     logger.warn(msg)
                     raise Exception(msg)
-
-            if firewall_established:
-                logger.verbose("Firewall appears established")
-                return True
 
             # Otherwise, append both rules
             try:
