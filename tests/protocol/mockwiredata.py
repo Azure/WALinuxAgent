@@ -213,7 +213,17 @@ class WireProtocolDataBase(object):
 
         # Two cases: the attribute we're using to identify the element might be before the attribute we're replacing,
         # or it might be after. We need to handle both.
+        #
+        # Much needed example of the cases:
+        #
+        #   1.  (indentifying attribute is before replacement attribute): '<Plugin other=stuff name="ExampleHandlerLinux" other=stuff version="1.0.0" other=stuff>'
+        #   2.  (indentifying attribute is after replacement attribute): '<Plugin other=stuff version="1.0.0" other=stuff name="ExampleHandlerLinux" other=stuff>'
+        #
+        # in both above examples, we're identifying a plugin by its name and replacing the version.
+
+        #                                           <Plugin name="" ver=" 1.0.0 " other=stuff>
         replacing_attr_after_identifying_attr = r'(?<=<{0} )(.*{1}.*{2}=")[^"]+(?="[^>]*>)'.format(element_name, identifying_attr_str, attribute_name)
+        #                                           <Plugin     ver=" 1.0.0 " name="" other=stuff>
         replacing_attr_before_identifying_attr = r'(?<=<{0} )(.*{1}=")[^"]+(?=".*{2}[^>]*>)'.format(element_name, attribute_name, identifying_attr_str)
 
         for regex in [replacing_attr_before_identifying_attr, replacing_attr_after_identifying_attr]:
