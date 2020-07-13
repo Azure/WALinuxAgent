@@ -21,7 +21,8 @@ import json
 import uuid
 import os
 
-from azurelinuxagent.common import conf
+import azurelinuxagent.common.utils.fileutil as fileutil
+import azurelinuxagent.common.conf as conf
 from azurelinuxagent.common.exception import ExtensionError
 from azurelinuxagent.ga.exthandlers import get_exthandlers_handler
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
@@ -86,8 +87,6 @@ class Actions(object):
         Useful in particular for wrapping "enableCommand"s, as the agent expects any 
         extension to write such a status after enabling.
         """
-        import azurelinuxagent.common.utils.fileutil as fileutil
-        import azurelinuxagent.common.conf as conf
         
         filedir = Formats.format_extension_dir(name, version)
 
