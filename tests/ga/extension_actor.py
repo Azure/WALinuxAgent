@@ -237,7 +237,7 @@ def add_extension_actors(protocol, incarnation, *actors):
     Given a protocol obj returned by a extension_actor.get_protocol_and_handler(first_actor, *remaining_actors) call, injects the
     extensions emulated by (the objects within) actors.
     
-    It accomplishes this though applying the following updates onto the provided protocol:
+    It accomplishes this through applying the following updates onto the provided protocol:
         *   adds unique data sources for *.zip extension resources garnered from actors (unique meaning ones not already given
             by [first_actor, *remaining_actors], if any)
         *   updates ext_conf to reflect the extension names and versions within actors

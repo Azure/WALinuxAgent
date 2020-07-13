@@ -23,8 +23,14 @@ from azurelinuxagent.common.exception import HttpError, ResourceGoneError
 from azurelinuxagent.common.future import httpclient
 from azurelinuxagent.common.utils.cryptutil import CryptUtil
 
-from tests.protocol.mockwiredata_filenames import *
 from tests.protocol.mockwiredata_fetcher import DEFAULT_FETCHER, data_files_to_fetcher, generate_ext_fetcher_func
+
+from tests.protocol.mockwiredata_filenames import DATA_FILE, DATA_FILE_IN_VM_ARTIFACTS_PROFILE, \
+    DATA_FILE_NO_EXT, DATA_FILE_EXT_NO_SETTINGS, DATA_FILE_EXT_NO_PUBLIC, DATA_FILE_EXT_AUTOUPGRADE, \
+    DATA_FILE_EXT_INTERNALVERSION, DATA_FILE_EXT_AUTOUPGRADE_INTERNALVERSION, DATA_FILE_EXT_ROLLINGUPGRADE, \
+    DATA_FILE_EXT_SEQUENCING, DATA_FILE_EXT_DELETION, DATA_FILE_EXT_SINGLE, DATA_FILE_MULTIPLE_EXT, \
+    DATA_FILE_NO_CERT_FORMAT, DATA_FILE_CERT_FORMAT_NOT_PFX, DATA_FILE_REMOTE_ACCESS, \
+    DATA_FILE_PLUGIN_SETTINGS_MISMATCH
 
 def get_file_based_wire_protocol_data(data_files):
     return WireProtocolData(data_files)
