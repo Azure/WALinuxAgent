@@ -99,7 +99,7 @@ class Actions(object):
         """
 
         def wrapped_cmd(*args, **kwargs):
-            filename = "/".join([filedir, "status", "{0}.status".format(wrapped_cmd.inc)])
+            filename = os.path.join(filedir, "status", "{0}.status".format(wrapped_cmd.inc))
             fileutil.write_file(filename, msg)
 
             # Every time enable is called, the agent looks for the next status file
@@ -283,7 +283,7 @@ class ExtensionManifestInfo:
 
         # The keys below will be used to configure attributes for a mock; periods in such attributes are treated
         # as attribute trees, which would break introspection.
-        formatted_id = Formats.format_extension_dir(name, version).split("/")[-1].replace(".", "_")
+        formatted_id = os.path.split(Formats.format_extension_dir(name, version))[-1].replace(".", "_")
 
         self.name = name
         self.version = version
@@ -473,7 +473,7 @@ class ExtensionActor(object):
             # The command can be specified as a list of args or one single string. Handle that here.
             format_command = lambda cmd: " ".join(cmd) if isinstance(cmd, list) else cmd
 
-            script_name = format_command(command).split("/")[-1] # The command passed here (if it corresponds to one within
+            script_name = os.path.basename(format_command(command)) # The command passed here (if it corresponds to one within
                         # this object's action set) will be localized with the base dir of the extension
                         # this object is emulating. We don't want that file path because we aren't actually
                         # calling a script, just using the name as a tag.
