@@ -2551,7 +2551,7 @@ class TestExtensionUpdateOnFailure(ExtensionTestCase):
         """
         Given the provided ExtensionActor objects, installs the first and then attempts
         to update to the second. StatusBlobs and command invocations for each actor can
-        be checked with {actor}.statusBlobs and {actor}.get_command({command_name})
+        be checked with {actor}.status_blobs and {actor}.get_command({command_name})
         respectively.
 
         Note that this method assumes the firstVersionActor's install command should
@@ -2590,7 +2590,7 @@ class TestExtensionUpdateOnFailure(ExtensionTestCase):
 
     def test_non_enabled_ext_should_not_be_disabled_at_ver_update(self):
 
-        first_ext = get_extension_actor(enableAction=Actions.FailAction)
+        first_ext = get_extension_actor(enable_action=Actions.fail_action)
         second_ext = get_extension_actor(version="1.1.0")
 
         TestExtensionUpdateOnFailure._do_upgrade_scenario(first_ext, second_ext)
@@ -2601,11 +2601,10 @@ class TestExtensionUpdateOnFailure(ExtensionTestCase):
         
 
     def test_disable_failed_env_variable_should_be_set_for_update_cmd_when_continue_on_update_failure_is_true(self):
-        exit_code = uuid.uuid4()    # Generate a unique UUID for highest strictness.
-        unique_fail = lambda *args, **kwargs: exit_code
+        exit_code, disable_action = Actions.generate_unique_fail()
 
-        first_ext = get_extension_actor(disableAction=unique_fail)
-        second_ext = get_extension_actor(version="1.1.0", continueOnUpdateFailure=True)
+        first_ext = get_extension_actor(disable_action=disable_action)
+        second_ext = get_extension_actor(version="1.1.0", continue_on_update_failure=True)
 
         TestExtensionUpdateOnFailure._do_upgrade_scenario(first_ext, second_ext)
 
@@ -2616,17 +2615,16 @@ class TestExtensionUpdateOnFailure(ExtensionTestCase):
         
         _, kwargs = second_ext.get_command("updateCommand").call_args
 
-        self.assertEqual(kwargs["env"][ExtCommandEnvVariable.DisableReturnCode], str(exit_code),
+        self.assertEqual(kwargs["env"][ExtCommandEnvVariable.DisableReturnCode], exit_code,
             "DisableAction's return code should be in updateAction's env.")
 
 
     def test_uninstall_failed_env_variable_should_set_for_install_when_continue_on_update_failure_is_true(self):
 
-        exit_code = uuid.uuid4()    # Generate a unique UUID for highest strictness.
-        unique_fail = lambda *args, **kwargs: exit_code
+        exit_code, uninstall_action = Actions.generate_unique_fail()
 
-        first_ext = get_extension_actor(uninstallAction=unique_fail)
-        second_ext = get_extension_actor(version="1.1.0", continueOnUpdateFailure=True)
+        first_ext = get_extension_actor(uninstall_action=uninstall_action)
+        second_ext = get_extension_actor(version="1.1.0", continue_on_update_failure=True)
 
         TestExtensionUpdateOnFailure._do_upgrade_scenario(first_ext, second_ext)
 
@@ -2637,16 +2635,15 @@ class TestExtensionUpdateOnFailure(ExtensionTestCase):
         
         _, kwargs = second_ext.get_command("installCommand").call_args
 
-        self.assertEqual(kwargs["env"][ExtCommandEnvVariable.UninstallReturnCode], str(exit_code),
+        self.assertEqual(kwargs["env"][ExtCommandEnvVariable.UninstallReturnCode], exit_code,
             "UninstallAction's return code should be in installCommand's env.")
 
 
     def test_extension_error_should_be_raised_when_continue_on_update_failure_is_false_on_disable_failure(self, *args):
-        exit_code = uuid.uuid4()    # Generate a unique UUID for highest strictness.
-        unique_fail = lambda *args, **kwargs: exit_code
+        exit_code, disable_action = Actions.generate_unique_fail()
 
-        first_ext = get_extension_actor(disableAction=unique_fail)
-        second_ext = get_extension_actor(version="1.1.0", continueOnUpdateFailure=False)
+        first_ext = get_extension_actor(disable_action=disable_action)
+        second_ext = get_extension_actor(version="1.1.0", continue_on_update_failure=False)
 
         TestExtensionUpdateOnFailure._do_upgrade_scenario(first_ext, second_ext)
             
@@ -2655,17 +2652,16 @@ class TestExtensionUpdateOnFailure(ExtensionTestCase):
         first_ext.get_command("uninstallCommand").assert_not_called()
         second_ext.get_command("installCommand").assert_not_called()
 
-        self.assertEqual(len(second_ext.statusBlobs), 1, "The second extension should have a single submitted status.")
-        self.assertTrue(str(exit_code) in second_ext.statusBlobs[0]["formattedMessage"]["message"],
+        self.assertEqual(len(second_ext.status_blobs), 1, "The second extension should have a single submitted status.")
+        self.assertTrue(exit_code in second_ext.status_blobs[0]["formattedMessage"]["message"],
             "DisableAction's error code should be propagated to the status blob.")
 
 
     def test_extension_error_should_be_raised_when_continue_on_update_failure_is_false_on_uninstall_failure(self, *args):
-        exit_code = uuid.uuid4()    # Generate a unique UUID for highest strictness.
-        unique_fail = lambda *args, **kwargs: exit_code
+        exit_code, uninstall_action = Actions.generate_unique_fail()
 
-        first_ext = get_extension_actor(uninstallAction=unique_fail)
-        second_ext = get_extension_actor(version="1.1.0", continueOnUpdateFailure=False)
+        first_ext = get_extension_actor(uninstall_action=uninstall_action)
+        second_ext = get_extension_actor(version="1.1.0", continue_on_update_failure=False)
 
         TestExtensionUpdateOnFailure._do_upgrade_scenario(first_ext, second_ext)
             
@@ -2674,18 +2670,18 @@ class TestExtensionUpdateOnFailure(ExtensionTestCase):
         first_ext.get_command("uninstallCommand").assert_called_once()
         second_ext.get_command("installCommand").assert_not_called()
 
-        self.assertEqual(len(second_ext.statusBlobs), 1, "The second extension should have a single submitted status.")
-        self.assertTrue(str(exit_code) in second_ext.statusBlobs[0]["formattedMessage"]["message"],
+        self.assertEqual(len(second_ext.status_blobs), 1, "The second extension should have a single submitted status.")
+        self.assertTrue(exit_code in second_ext.status_blobs[0]["formattedMessage"]["message"],
             "UninstallAction's error code should be propagated to the status blob.")
 
     def test_extension_error_should_be_raised_when_continue_on_update_failure_is_true_on_disable_and_update_failure(self, *args):
-        exit_codes = { "disable": uuid.uuid4(), "update": uuid.uuid4() }
+        exit_codes = { }
 
-        fail_disable = lambda *args, **kwargs: exit_codes["disable"]
-        fail_update = lambda *args, **kwargs: exit_codes["update"]
+        exit_codes["disable"], disable_action = Actions.generate_unique_fail()
+        exit_codes["update"], update_action = Actions.generate_unique_fail()
 
-        first_ext = get_extension_actor(disableAction=fail_disable)
-        second_ext = get_extension_actor(updateAction=fail_update, version="1.1.0", continueOnUpdateFailure=True)
+        first_ext = get_extension_actor(disable_action=disable_action)
+        second_ext = get_extension_actor(update_action=update_action, version="1.1.0", continue_on_update_failure=True)
 
         TestExtensionUpdateOnFailure._do_upgrade_scenario(first_ext, second_ext)
             
@@ -2694,29 +2690,29 @@ class TestExtensionUpdateOnFailure(ExtensionTestCase):
         first_ext.get_command("uninstallCommand").assert_not_called()
         second_ext.get_command("installCommand").assert_not_called()
 
-        self.assertEqual(len(second_ext.statusBlobs), 1, "The second extension should have a single submitted status.")
-        self.assertTrue(str(exit_codes["update"]) in second_ext.statusBlobs[0]["formattedMessage"]["message"],
+        self.assertEqual(len(second_ext.status_blobs), 1, "The second extension should have a single submitted status.")
+        self.assertTrue(exit_codes["update"] in second_ext.status_blobs[0]["formattedMessage"]["message"],
             "UpdateAction's error code should be propagated to the status blob.")
 
 
     def test_extension_error_should_be_raised_when_continue_on_update_failure_is_true_on_uninstall_and_install_failure(self, *args):
-        exit_codes = { "install": uuid.uuid4(), "uninstall": uuid.uuid4() }
+        exit_codes = { }
 
-        fail_install = lambda *args, **kwargs: exit_codes["install"]
-        fail_uninstall = lambda *args, **kwargs: exit_codes["uninstall"]
+        exit_codes["install"], install_action = Actions.generate_unique_fail()
+        exit_codes["uninstall"], uninstall_action = Actions.generate_unique_fail()
 
-        first_ext = get_extension_actor(uninstallAction=fail_uninstall)
-        second_ext = get_extension_actor(installAction=fail_install, version="1.1.0", continueOnUpdateFailure=True)
+        first_ext = get_extension_actor(uninstall_action=uninstall_action)
+        second_ext = get_extension_actor(install_action=install_action, version="1.1.0", continue_on_update_failure=True)
 
         TestExtensionUpdateOnFailure._do_upgrade_scenario(first_ext, second_ext)
-            
+        
         first_ext.get_command("disableCommand").assert_called_once()
         second_ext.get_command("updateCommand").assert_called_once()
         first_ext.get_command("uninstallCommand").assert_called_once()
         second_ext.get_command("installCommand").assert_called_once()
 
-        self.assertEqual(len(second_ext.statusBlobs), 1, "The second extension should have a single submitted status.")
-        self.assertTrue(str(exit_codes["install"]) in second_ext.statusBlobs[0]["formattedMessage"]["message"],
+        self.assertEqual(len(second_ext.status_blobs), 1, "The second extension should have a single submitted status.")
+        self.assertTrue(exit_codes["install"] in second_ext.status_blobs[0]["formattedMessage"]["message"],
             "InstallAction's error code should be propagated to the status blob.")
 
     def test_failed_env_variables_should_be_set_from_within_extension_commands(self, *args):
@@ -2724,13 +2720,14 @@ class TestExtensionUpdateOnFailure(ExtensionTestCase):
         This test will test from the perspective of the extensions command weather the env variables are
         being set for those processes
         """
-        exit_codes = { "disable": uuid.uuid4(), "uninstall": uuid.uuid4() }
+        exit_codes = { }
 
-        fail_disable = lambda *args, **kwargs: exit_codes["disable"]
-        fail_uninstall = lambda *args, **kwargs: exit_codes["uninstall"]
+        exit_codes["disable"], disable_action = Actions.generate_unique_fail()
+        exit_codes["uninstall"], uninstall_action = Actions.generate_unique_fail()
 
-        first_ext = get_extension_actor(disableAction=fail_disable, uninstallAction=fail_uninstall)
-        second_ext = get_extension_actor(version="1.1.0", continueOnUpdateFailure=True)
+
+        first_ext = get_extension_actor(disable_action=disable_action, uninstall_action=uninstall_action)
+        second_ext = get_extension_actor(version="1.1.0", continue_on_update_failure=True)
 
         TestExtensionUpdateOnFailure._do_upgrade_scenario(first_ext, second_ext)
 
@@ -2742,10 +2739,10 @@ class TestExtensionUpdateOnFailure(ExtensionTestCase):
         _, update_kwargs = second_ext.get_command("updateCommand").call_args
         _, install_kwargs = second_ext.get_command("installCommand").call_args
 
-        second_extension_dir = Formats.FormatExtensionDir(second_ext.extension_info.name, second_ext.extension_info.version)
+        second_extension_dir = Formats.format_extension_dir(second_ext.manifest_info.name, second_ext.manifest_info.version)
 
         # Ensure we're checking variables for update scenario
-        self.assertEqual(update_kwargs["env"][ExtCommandEnvVariable.DisableReturnCode], str(exit_codes["disable"]),
+        self.assertEqual(update_kwargs["env"][ExtCommandEnvVariable.DisableReturnCode], exit_codes["disable"],
             "DisableAction's return code should be present in updateAction's env.")
         self.assertTrue(ExtCommandEnvVariable.UninstallReturnCode not in update_kwargs["env"],
             "UninstallAction's return code should not be in updateAction's env.")
@@ -2755,7 +2752,7 @@ class TestExtensionUpdateOnFailure(ExtensionTestCase):
             "The second extension's version should be present in updateAction's env.")
 
         # Ensure we're checking variables for install scenario
-        self.assertEqual(install_kwargs["env"][ExtCommandEnvVariable.UninstallReturnCode], str(exit_codes["uninstall"]),
+        self.assertEqual(install_kwargs["env"][ExtCommandEnvVariable.UninstallReturnCode], exit_codes["uninstall"],
             "UninstallAction's return code should be present in installAction's env.")
         self.assertTrue(ExtCommandEnvVariable.DisableReturnCode not in install_kwargs["env"],
             "DisableAction's return code should not be in installAction's env.")
@@ -2766,11 +2763,10 @@ class TestExtensionUpdateOnFailure(ExtensionTestCase):
         
 
     def test_correct_exit_code_should_set_on_disable_cmd_failure(self):
-        exit_code = uuid.uuid4()
-        disable_fail = lambda *args, **kwargs: exit_code
+        exit_code, disable_action = Actions.generate_unique_fail()
 
-        first_ext = get_extension_actor(disableAction=disable_fail)
-        second_ext = get_extension_actor(version="1.1.0", continueOnUpdateFailure=True, updateMode="UpdateWithoutInstall")
+        first_ext = get_extension_actor(disable_action=disable_action)
+        second_ext = get_extension_actor(version="1.1.0", continue_on_update_failure=True, update_mode="UpdateWithoutInstall")
 
         TestExtensionUpdateOnFailure._do_upgrade_scenario(first_ext, second_ext)
 
@@ -2781,7 +2777,7 @@ class TestExtensionUpdateOnFailure(ExtensionTestCase):
 
         _, update_kwargs = second_ext.get_command("updateCommand").call_args
 
-        self.assertEqual(update_kwargs["env"][ExtCommandEnvVariable.DisableReturnCode], str(exit_code),
+        self.assertEqual(update_kwargs["env"][ExtCommandEnvVariable.DisableReturnCode], exit_code,
             "DisableAction's return code should be present in UpdateAction's env.")
 
 
@@ -2790,8 +2786,8 @@ class TestExtensionUpdateOnFailure(ExtensionTestCase):
         # Return None to every poll, forcing a timeout after 900 seconds (actually very quick because sleep(*) is mocked)
         force_timeout = lambda *args, **kwargs: None
 
-        first_ext = get_extension_actor(disableAction=force_timeout, uninstallAction=force_timeout)
-        second_ext = get_extension_actor(version="1.1.0", continueOnUpdateFailure=True)
+        first_ext = get_extension_actor(disable_action=force_timeout, uninstall_action=force_timeout)
+        second_ext = get_extension_actor(version="1.1.0", continue_on_update_failure=True)
 
         with patch("os.killpg"):
             with patch("os.getpgid") as mock_getpid:
@@ -2815,7 +2811,7 @@ class TestExtensionUpdateOnFailure(ExtensionTestCase):
 
     def test_success_code_should_set_in_env_variables_on_cmd_success(self):
         first_ext = get_extension_actor()
-        second_ext = get_extension_actor(version="1.1.0", continueOnUpdateFailure=False)
+        second_ext = get_extension_actor(version="1.1.0", continue_on_update_failure=False)
 
         TestExtensionUpdateOnFailure._do_upgrade_scenario(first_ext, second_ext)
         

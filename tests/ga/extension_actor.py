@@ -18,6 +18,7 @@
 import contextlib
 import subprocess
 import json
+import uuid
 import os
 
 from azurelinuxagent.common import conf
@@ -32,11 +33,11 @@ from tests.tools import patch, Mock
 class Formats(object):
 
     @staticmethod
-    def FormatExtensionUri(name, version):
+    def format_extension_uri(name, version):
         return "{0}__{1}".format(name, version)
 
     @staticmethod
-    def FormatExtensionDir(name, version):
+    def format_extension_dir(name, version):
         return os.path.join(
             conf.get_lib_dir(),
             "{0}-{1}".format(name, version)
@@ -50,18 +51,30 @@ class Actions(object):
     """
 
     @staticmethod
-    def SucceedAction(*args, **kwargs):
+    def succeed_action(*args, **kwargs):
         """
         A nop action with the correct function signature for ActionSet actions.
         """
         return 0
     
     @staticmethod
-    def FailAction(*args, **kwargs):
+    def fail_action(*args, **kwargs):
         """
         A simple fail action with the correct function signature for ActionSet actions.
         """
         raise ExtensionError("FailAction called.")
+
+    @staticmethod
+    def generate_unique_fail():
+        """
+        TODO: Desc
+        """
+        return_code = str(uuid.uuid4())
+
+        def fail_action(*args, **kwargs):
+            return return_code
+        
+        return return_code, fail_action
 
     
     @staticmethod
@@ -76,7 +89,7 @@ class Actions(object):
         import azurelinuxagent.common.utils.fileutil as fileutil
         import azurelinuxagent.common.conf as conf
         
-        filedir = Formats.FormatExtensionDir(name, version)
+        filedir = Formats.format_extension_dir(name, version)
 
         msg = """
             [{
@@ -95,7 +108,7 @@ class Actions(object):
             # to write to the correct location.
             wrapped_cmd.inc += 1
             
-            return cmd()
+            return cmd(*args, **kwargs)
         
         # this is the default value for the function's static variable; because each invocation
         # of this function generates a distinct wrapped_cmd, we shouldn't get collisions.
@@ -103,37 +116,34 @@ class Actions(object):
 
         return wrapped_cmd
 
-def get_extension_actor(name="OSTCExtensions.ExampleHandlerLinux", version="1.0.0", continueOnUpdateFailure=False, 
-    updateMode="UpdateWithInstall", data_fetcher_base=mockwiredata.DEFAULT_FETCHER, installAction=Actions.SucceedAction,
-    uninstallAction=Actions.SucceedAction, updateAction=Actions.SucceedAction, enableAction=Actions.SucceedAction,
-    disableAction=Actions.SucceedAction):
+def get_extension_actor(name="OSTCExtensions.ExampleHandlerLinux", version="1.0.0", continue_on_update_failure=False, 
+    update_mode="UpdateWithInstall", report_heartbeat=False, data_fetcher_base=mockwiredata.DEFAULT_FETCHER,
+    install_action=Actions.succeed_action, uninstall_action=Actions.succeed_action, update_action=Actions.succeed_action,
+    enable_action=Actions.succeed_action, disable_action=Actions.succeed_action):
     """
     Factory method for ExtensionActor class. Note that the provided name and version needs to match a plugin listed
     in the xml doc returned by data_fetcher_base["manifest"]; otherwise, the agent won't be able to properly download
     this extension.
     """
-    
-    actionSet = ActionSet(installAction, uninstallAction, updateAction, enableAction, disableAction, name, version)
-    info = ExtensionInfo(name, version, continueOnUpdateFailure, updateMode)
-
-    return ExtensionActor(data_fetcher_base, actionSet, info)
+    return ExtensionActor(data_fetcher_base, ExtensionManifestInfo(name, version, continue_on_update_failure, update_mode, report_heartbeat,
+        install_action, uninstall_action, update_action, enable_action, disable_action))
 
 
 def _generate_mock_http_get(actors):
 
-    actorIdToData = {}
+    actor_data = {}
     for actor in actors:
-        actorId = Formats.FormatExtensionUri(actor.extension_info.name, actor.extension_info.version)
+        actor_id = Formats.format_extension_uri(actor.manifest_info.name, actor.manifest_info.version)
         # By wrapping the actor's data_fetcher, we gain access to the WireProtocolDataFromMemory.mock_http_get func.
-        actorData = mockwiredata.get_dynamic_wire_protocol_data(actor.data_fetcher)
+        wire_data = mockwiredata.get_dynamic_wire_protocol_data(actor.data_fetcher)
 
-        actorIdToData[actorId] = actorData
+        actor_data[actor_id] = wire_data
 
     def mock_http_get(url, *args, **kwargs):
         
-        for actorId, wire_data in actorIdToData.items():
+        for actor_id, wire_data in actor_data.items():
 
-            if actorId in url:
+            if actor_id in url:
                 # Delegate to the correct actor's WireProtocolData* obj. This achieves the same effect that replacing
                 # the (yet to be instantiated) protocol's mock_wire_data attribute, for just this one call.
                 return wire_data.mock_http_get(url, *args, **kwargs)
@@ -150,25 +160,26 @@ def _generate_mock_http_put(actors):
         if HttpRequestPredicates.is_host_plugin_status_request(url):
             return None
 
-        handlerStatuses = json.loads(args[0]).get('aggregateStatus', {}).get('handlerAggregateStatus', [])
+        handler_statuses = json.loads(args[0]).get('aggregateStatus', {}).get('handlerAggregateStatus', [])
 
-        for handlerStatus in handlerStatuses:
-            supplied_name = handlerStatus.get('handlerName', None)
-            supplied_version = handlerStatus.get('handlerVersion', None)
+        for handler_status in handler_statuses:
+            supplied_name = handler_status.get('handlerName', None)
+            supplied_version = handler_status.get('handlerVersion', None)
             
             try: 
-                matches_info = lambda actor: \
-                    actor.extension_info.name == supplied_name \
-                        and actor.extension_info.version == supplied_version
+                matches_info = (
+                    lambda actor: actor.manifest_info.name == supplied_name
+                    and actor.manifest_info.version == supplied_version
+                )
                 
                 next(
                     actor for actor in actors
                     if matches_info(actor)
-                ).statusBlobs.append(handlerStatus)
+                ).status_blobs.append(handler_status)
 
             except StopIteration as e:
                 # Tests will want to know that the agent is running an extension they didn't specifically allocate.
-                raise Exception("Status submitted for non-emulated extension: {0}".format(json.dumps(handlerStatus)))
+                raise Exception("Status submitted for non-emulated extension: {0}".format(json.dumps(handler_status)))
 
     return http_put_record_status
 
@@ -251,11 +262,11 @@ def add_extension_actors(protocol, incarnation, *actors):
     protocol.set_http_handlers(http_get_handler=_generate_mock_http_get(protocol._actors[1:]),
         http_put_handler=_generate_mock_http_put(protocol._actors))
 
-    distinct_names = set(actor.extension_info.name for actor in protocol._actors)
+    distinct_names = set(actor.manifest_info.name for actor in protocol._actors)
     for name in distinct_names:
         
-        max_ver = max(map(lambda actor: FlexibleVersion(actor.extension_info.version),
-            filter(lambda actor: actor.extension_info.name == name, protocol._actors)))
+        max_ver = max(map(lambda actor: FlexibleVersion(actor.manifest_info.version),
+            filter(lambda actor: actor.manifest_info.name == name, protocol._actors)))
 
         protocol.mock_wire_data.set_specific_extension_config_version(name, max_ver)
     
@@ -263,58 +274,77 @@ def add_extension_actors(protocol, incarnation, *actors):
     protocol.client.update_goal_state()
 
 
-class ActionSet(object):
+class ExtensionManifestInfo:
     """
-    A wrapper class for the possible actions that an extension much support.
+    A wrapper class for the possible actions and options that an extension might support.
     """
 
-    def __init__(self, installAction, uninstallAction, updateAction, enableAction, disableAction, name, version):
+    def __init__(self, name, version, continue_on_update_failure, update_mode, report_heartbeat,
+        install_action, uninstall_action, update_action, enable_action, disable_action):
 
         # The keys below will be used to configure attributes for a mock; periods in such attributes are treated
         # as attribute trees, which would break introspection.
-        formattedId = Formats.FormatExtensionDir(name, version).split("/")[-1].replace(".", "_")
+        formatted_id = Formats.format_extension_dir(name, version).split("/")[-1].replace(".", "_")
 
-        self.delegate ={
-            "installCommand": dict(key="{0}_install".format(formattedId), action=installAction),
-            "uninstallCommand": dict(key="{0}_uninstall".format(formattedId), action=uninstallAction),
-            "updateCommand": dict(key="{0}_update".format(formattedId), action=updateAction),
-            "enableCommand": dict(key="{0}_enable".format(formattedId), action=Actions._wrap_with_write_status(enableAction, name, version)),
-            "disableCommand": dict(key="{0}_disable".format(formattedId), action=disableAction),
+        self.name = name
+        self.version = version
+        self.update_mode = update_mode
+        self.report_heartbeat = report_heartbeat
+        self.continue_on_update_failure = continue_on_update_failure
+
+        self._delegate = {
+            "installCommand": dict(key="{0}_install".format(formatted_id), action=Actions._wrap_with_write_status(install_action, name, version)),
+            "uninstallCommand": dict(key="{0}_uninstall".format(formatted_id), action=Actions._wrap_with_write_status(uninstall_action, name, version)),
+            "updateCommand": dict(key="{0}_update".format(formatted_id), action=Actions._wrap_with_write_status(update_action, name, version)),
+            "enableCommand": dict(key="{0}_enable".format(formatted_id), action=Actions._wrap_with_write_status(enable_action, name, version)),
+            "disableCommand": dict(key="{0}_disable".format(formatted_id), action=Actions._wrap_with_write_status(disable_action, name, version))
         }
 
-    def items(self):
+    def as_generator(self):
+        """
+        TODO: Desc
+        """
+
+        base_manifest = [{
+            "name": self.name.split(".")[-1],
+            "version": self.version,
+            "handlerManifest": {
+                "reportHeartbeat": self.report_heartbeat,
+                "continueOnUpdateFailure": self.continue_on_update_failure,
+                "updateMode": self.update_mode,
+                "rebootAfterInstall": False     # Not yet needed (or implemented)
+            }
+        }]
+
+        for title, cmd in self.commands():
+            base_manifest[0]['handlerManifest'][title] = cmd['key']
+
+        return mockwiredata.generate_ext_fetcher_func(base_manifest)
+    
+    def commands(self):
         """
         Keys are the various command names an extension must support, and values have the property layout { key, action }.
 
         A wrapper around dict.items().
         """
-        for key, action in self.delegate.items():
+        for key, action in self._delegate.items():
             yield key, action
     
-    def keys(self):
+    def command_names(self):
         """
         Yields the list of all possible command names an extension must support.
 
         A wrapper around dict.keys().
         """
-        for key in self.delegate.keys():
+        for key in self._delegate.keys():
             yield key
     
-    def getKeyForCommand(self, cmd):
+    def get_key_for_command(self, cmd):
         """
         Returns the unique ID associated with a specific command name in this ActionSet.
         cmd may be "installCommand", "enableCommand", etc.
         """
-        return self.delegate.get(cmd, {}).get("key", None)
-
-
-class ExtensionInfo(object):
-
-    def __init__(self, name, version, continueOnUpdateFailure, updateMode):
-        self.name = name
-        self.version = version
-        self.continueOnUpdateFailure = continueOnUpdateFailure
-        self.updateMode = updateMode
+        return self._delegate[cmd]["key"]
 
 
 class ExtensionActor(object):
@@ -325,7 +355,7 @@ class ExtensionActor(object):
     """
     
     @staticmethod
-    def _configure_action_scope(actionScope, actionSet):
+    def _configure_action_scope(action_scope, manifest_info):
         """
         Creates a mock specced to the set of commands within the actionSet provided. The mock (actionScope) will
         correctly call the (corresponding) actions provided in the actionSet when given any command present within
@@ -354,7 +384,7 @@ class ExtensionActor(object):
             return return_mock_popen_obj
         
         action_scope_attributes = {}
-        for _, action in actionSet.items():
+        for _, action in manifest_info.commands():
             # The action passed to us is meant to return some sort of error_code.
             # However, it is advantageous for our actions to return a mock specced to
             # a popen object, so that our mock popen func can delegate straight to the
@@ -365,51 +395,43 @@ class ExtensionActor(object):
             # we need to instantiate a mock object for the attribute directly.
             action_scope_attributes[action["key"]] = Mock(wraps=action_returning_popen_obj)
 
-        actionScope.mock_add_spec(actionSet.keys()) # We rely on this spec to enable proper fallthrough (as described in patch_popen())
-        actionScope.configure_mock(**action_scope_attributes)
+        action_scope.mock_add_spec(manifest_info.command_names()) # We rely on this spec to enable proper fallthrough (as described in patch_popen())
+        action_scope.configure_mock(**action_scope_attributes)
     
     @staticmethod
-    def _configure_data_fetcher(dataFetcher, actionSet, extensionInfo):
+    def _configure_data_fetcher(dataFetcher, manifest_info):
         """
         Replaces the "test_ext" fetcher function in the provided data fetcher
         with a lambda which generates a proper zip file containing a HanderManifest.json
         file populated with the correct extension metadata and command names (i.e. the
         name of the commands to call for installCommand, enableCommand, etc.) from the
-        given actionSet and extensionInfo.
+        given manifest_info.
         """
 
-        base_manifest = [{
-            "name": extensionInfo.name.split(".")[-1],
-            "version": extensionInfo.version,
-            "handlerManifest": {
-                "rebootAfterInstall": False, "reportHeartbeat": False,
-                "continueOnUpdateFailure": extensionInfo.continueOnUpdateFailure,
-                "updateMode": extensionInfo.updateMode
-            }
-        }]
-
-        for title, cmd in actionSet.items():
-            base_manifest[0]['handlerManifest'][title] = cmd['key']
-
-        dataFetcher["test_ext"] = mockwiredata.generate_ext_fetcher_func(base_manifest)
+        dataFetcher["test_ext"] = manifest_info.as_generator()
 
 
-    def __init__(self, dataFetcherBase, actionSet, extensionInfo):
+    def __init__(self, dataFetcherBase, manifest_info):
         """
         Creates a ExtensionActor emulating an extension specified by the provided
         extensionInfo and actionSet. Copies the dataFetcherBase to serve as the dynamic
         loader of info required by a WireProtocolData* object.
         """
-        self.action_scope = Mock()
-        ExtensionActor._configure_action_scope(self.action_scope, actionSet)
+        self._action_scope = Mock()
+        ExtensionActor._configure_action_scope(self._action_scope, manifest_info)
 
         self.data_fetcher = dataFetcherBase.copy()
-        ExtensionActor._configure_data_fetcher(self.data_fetcher, actionSet, extensionInfo)
+        ExtensionActor._configure_data_fetcher(self.data_fetcher, manifest_info)
 
-        self.get_command = lambda cmd: getattr(self.action_scope, actionSet.getKeyForCommand(cmd), None)
-        self.extension_info = extensionInfo
+        self.manifest_info = manifest_info
 
-        self.statusBlobs = []
+        self.status_blobs = []
+    
+    def get_command(self, cmd):
+        """
+        TODO: Desc
+        """
+        return getattr(self._action_scope, self.manifest_info.get_key_for_command(cmd))
         
     def patch_popen(self):
         """
@@ -460,6 +482,6 @@ class ExtensionActor(object):
             # Here we look within our own actionScope first for the tag (script_name), but we need to fall
             # back to the original_popen command if we can't find it to enable patch_popen stacking (as 
             # described in the docstring above).
-            return getattr(self.action_scope, script_name, original_popen)(command, *args, **kwargs)
+            return getattr(self._action_scope, script_name, original_popen)(command, *args, **kwargs)
 
         return patch("subprocess.Popen", side_effect=mock_popen)
