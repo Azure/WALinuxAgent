@@ -219,7 +219,9 @@ def get_protocol_and_handler(first_actor, *remaining_actors):
             yield protocol, get_exthandlers_handler(protocol)
 
         finally:
-            for patched_popen in protocol._patched_popens:
+            # If we don't stop back to front, a call to subprocess.Popen could potentially reach a stopped
+            # patched popen, which would be a Bad Thing.
+            for patched_popen in reversed(protocol._patched_popens):
                 patched_popen.stop()
 
 
@@ -301,7 +303,8 @@ class ExtensionManifestInfo:
 
     def as_generator(self):
         """
-        TODO: Desc
+        Convert this object into a generator lambda that returns a valid *.zip extension
+        resource file containing this object's data upon invocation.
         """
 
         base_manifest = [{
@@ -428,7 +431,8 @@ class ExtensionActor(object):
     
     def get_command(self, cmd):
         """
-        TODO: Desc
+        Returns the Mock object responsible for recording calls to the extension
+        command specified by a cmd in ["installCommand", "enableCommand", "uninstallCommand", etc.].
         """
         return getattr(self._action_scope, self.manifest_info.get_key_for_command(cmd))
         
@@ -452,8 +456,8 @@ class ExtensionActor(object):
                 {more code}
 
             finally:
-                first_patch.stop()
                 second_patch.stop()
+                first_patch.stop()
 
         
         For instance: if {more code} involves a invocation of the extension emulated by first_ext, the mock popen for
