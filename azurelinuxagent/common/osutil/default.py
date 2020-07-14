@@ -89,10 +89,6 @@ def _get_firewall_packets_command(wait):
     return _add_wait(wait, ["iptables", "-t", "security", "-L", "OUTPUT", "--zero", "OUTPUT", "-nxv"])
 
 
-def _get_firewall_flush_command(wait):
-    return _add_wait(wait, ["iptables", "-t", "security", "-flush"])
-
-
 # Precisely delete the rules created by the agent.
 # this rule was used <= 2.2.25.  This rule helped to validate our change, and determine impact.
 def _get_firewall_delete_conntrack_accept_command(wait, destination):
@@ -162,7 +158,7 @@ class DefaultOSUtil(object):
                     # Transient error  that we ignore.  This code fires every loop
                     # of the daemon (60m), so we will get the value eventually.
                     return 0
-                logger.error("Failed to get firewall packets: {0}", ustr(e))
+                logger.warn("Failed to get firewall packets: {0}", ustr(e))
                 return -1
 
             return 0
