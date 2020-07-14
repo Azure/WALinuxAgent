@@ -733,7 +733,7 @@ Chain OUTPUT (policy ACCEPT 104 packets, 43628 bytes)
       32     1920 DROP       tcp  --  any    any     anywhere             168.63.129.16
 
 ''')
-            self.assertEqual(32, osutil.DefaultOSUtil().get_firewall_dropped_packets('168.63.129.16'))
+            self.assertEqual(32, osutil.DefaultOSUtil().get_firewall_dropped_packets(destination))
 
 
     def test_enable_firewall_should_set_up_the_firewall(self):
@@ -871,7 +871,9 @@ Chain OUTPUT (policy ACCEPT 104 packets, 43628 bytes)
         osutil._enable_firewall = True
 
         with TestOSUtil._mock_iptables() as mock_iptables:
-            delete_conntrack_accept_command = mock_iptables.set_command(osutil._get_firewall_delete_conntrack_accept_command(mock_iptables.wait, mock_iptables.destination), exit_code=2)
+            command = osutil._get_firewall_delete_conntrack_accept_command(mock_iptables.wait, mock_iptables.destination)
+            # Note that the command is actually a valid rule, but we use the mock to report it as invalid (exit code 2)
+            delete_conntrack_accept_command = mock_iptables.set_command(command, exit_code=2)
 
             success = osutil.DefaultOSUtil().remove_firewall(mock_iptables.destination, mock_iptables.uid)
 
