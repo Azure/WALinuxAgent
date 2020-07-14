@@ -580,7 +580,7 @@ class EventLogger(object):
 
     @staticmethod
     def report_dropped_events_error(count, errors, op, max_errors_to_report):
-        err_msg_format = "DroppedEventsCount: {0}\nReasons (first {1}): {2}"
+        err_msg_format = "DroppedEventsCount: {0}\nReasons (first {1} errors): {2}"
         if count > 0:
             add_event(op=op,
                       message=err_msg_format.format(count, max_errors_to_report, ', '.join(errors)),
