@@ -15,7 +15,6 @@
 #
 # Requires Python 2.6+ and Openssl 1.0+
 #
-
 from tests.tools import AgentTestCase, patch
 import unittest
 import azurelinuxagent.common.utils.shellutil as shellutil
@@ -140,7 +139,8 @@ class RunCommandTestCase(AgentTestCase):
             shellutil.run_command(command)
 
         exception = context_manager.exception
-        self.assertEquals(str(exception), "'ls' failed: 2")
+        self.assertIn("'ls' failed: 2", str(exception))
+        self.assertIn("No such file or directory", str(exception))
         self.assertEquals(exception.stdout, "/etc\n")
         self.assertIn("No such file or directory", exception.stderr)
         self.assertEquals(exception.returncode, 2)

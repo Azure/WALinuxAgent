@@ -38,7 +38,7 @@ from azurelinuxagent.common.protocol.goal_state import GoalState, TRANSPORT_CERT
 from azurelinuxagent.common.protocol.hostplugin import HostPluginProtocol
 from azurelinuxagent.common.protocol.restapi import DataContract, ExtensionStatus, ExtHandlerPackage, \
     ExtHandlerPackageList, ExtHandlerVersionUri, ProvisionStatus, VMInfo, VMStatus
-from azurelinuxagent.common.telemetryevent import TelemetryEventList
+from azurelinuxagent.common.telemetryevent import TelemetryEventList, GuestAgentExtensionEventsSchema
 from azurelinuxagent.common.utils import fileutil, restutil
 from azurelinuxagent.common.utils.archive import StateFlusher
 from azurelinuxagent.common.utils.cryptutil import CryptUtil
@@ -1104,7 +1104,9 @@ class WireClient(object):
             event_str = event_to_v1(event)
             if len(event_str) >= MAX_EVENT_BUFFER_SIZE:
                 details_of_event = [ustr(x.name) + ":" + ustr(x.value) for x in event.parameters if x.name in
-                                    ["Name", "Version", "Operation", "OperationSuccess"]]
+                                    [GuestAgentExtensionEventsSchema.Name, GuestAgentExtensionEventsSchema.Version,
+                                     GuestAgentExtensionEventsSchema.Operation,
+                                     GuestAgentExtensionEventsSchema.OperationSuccess]]
                 logger.periodic_warn(logger.EVERY_HALF_HOUR,
                                      "Single event too large: {0}, with the length: {1} more than the limit({2})"
                                      .format(str(details_of_event), len(event_str), MAX_EVENT_BUFFER_SIZE))
