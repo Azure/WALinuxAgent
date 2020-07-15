@@ -15,7 +15,6 @@
 #
 # Requires Python 2.6+ and Openssl 1.0+
 #
-
 from tests.tools import AgentTestCase, patch
 import unittest
 import azurelinuxagent.common.utils.shellutil as shellutil
@@ -140,7 +139,8 @@ class RunCommandTestCase(AgentTestCase):
             shellutil.run_command(command)
 
         exception = context_manager.exception
-        self.assertEquals(str(exception), "'ls' failed: 2")
+        self.assertIn("'ls' failed: 2", str(exception))
+        self.assertIn("No such file or directory", str(exception))
         self.assertEquals(exception.stdout, "/etc\n")
         self.assertIn("No such file or directory", exception.stderr)
         self.assertEquals(exception.returncode, 2)
@@ -201,6 +201,17 @@ class RunCommandTestCase(AgentTestCase):
             args, kwargs = mock_log_error.call_args
             self.assertIn(command, args, msg="The command was not logged")
             self.assertTrue(any("No such file or directory" in str(a) for a in args), msg="The command's stderr was not logged")
+
+    def test_run_command_it_should_read_from_stdin_if_cmd_input_is_set(self):
+        import random
+        command = ["cat"]
+        random_hash = ''.join(random.choice('0123456789ABCDEF') for _ in range(16))
+        try:
+            output = shellutil.run_command(command, cmd_input=random_hash)
+        except:
+            self.fail("No exception should've been thrown when trying to read from stdin in run_command")
+
+        self.assertEqual(output, random_hash, "We're reading from stdin and printing it shell, output should match")
 
 
 if __name__ == '__main__':

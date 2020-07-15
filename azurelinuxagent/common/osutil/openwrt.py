@@ -47,20 +47,16 @@ class OpenWRTOSUtil(DefaultOSUtil):
             return
 
         if expiration is not None:
-            cmd = "useradd -m {0} -s /bin/ash -e {1}".format(username, expiration)
+            cmd = ["useradd", "-m", username, "-s", "/bin/ash", "-e", expiration]
         else:
-            cmd = "useradd -m {0} -s /bin/ash".format(username)
+            cmd = ["useradd", "-m", username, "-s", "/bin/ash"]
         
         if not os.path.exists("/home"):
             os.mkdir("/home")
 
         if comment is not None:
-            cmd += " -c {0}".format(comment)
-        retcode, out = shellutil.run_get_output(cmd)
-        if retcode != 0:
-            raise OSUtilError(("Failed to create user account:{0}, "
-                               "retcode:{1}, "
-                               "output:{2}").format(username, retcode, out))
+            cmd.extend(["-c", comment])
+        self._run_command_raising_OSUtilError(cmd, err_msg="Failed to create user account:{0}".format(username))
 
     def get_dhcp_pid(self):
         return self._get_dhcp_pid(["pidof", self.dhclient_name])
@@ -146,7 +142,9 @@ class OpenWRTOSUtil(DefaultOSUtil):
 
     def set_hostname(self, hostname):
         fileutil.write_file('/etc/hostname', hostname)
-        shellutil.run("uci set system.@system[0].hostname='{0}' && uci commit system && /etc/init.d/system reload".format(hostname), chk_err=False)
+        commands = [['uci', 'set', 'system.@system[0].hostname={0}'.format(hostname)], ['uci', 'commit', 'system'],
+                    ['/etc/init.d/system', 'reload']]
+        self._run_multiple_commands_without_raising(commands, log_error=False, continue_on_error=False)
 
     def remove_rules_files(self, rules_files=""):
         pass

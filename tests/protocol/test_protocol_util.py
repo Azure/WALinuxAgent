@@ -15,22 +15,23 @@
 # Requires Python 2.6+ and Openssl 1.0+
 #
 
-import unittest
 import os
 import tempfile
-from multiprocessing import Queue
+import unittest
+from errno import ENOENT
 from threading import Thread
 
-from tests.tools import AgentTestCase, MagicMock, Mock, patch, clear_singleton_instances
-from azurelinuxagent.common.exception import *
-from azurelinuxagent.common.protocol.metadata_server_migration_util import _METADATA_PROTOCOL_NAME, \
-                                                                           _LEGACY_METADATA_SERVER_TRANSPORT_PRV_FILE_NAME, \
-                                                                           _LEGACY_METADATA_SERVER_TRANSPORT_CERT_FILE_NAME, \
-                                                                           _LEGACY_METADATA_SERVER_P7B_FILE_NAME
+from azurelinuxagent.common.exception import ProtocolError, DhcpError, OSUtilError
 from azurelinuxagent.common.protocol.goal_state import TRANSPORT_CERT_FILE_NAME, TRANSPORT_PRV_FILE_NAME
-from azurelinuxagent.common.protocol.util import get_protocol_util, ProtocolUtil, PROTOCOL_FILE_NAME, WIRE_PROTOCOL_NAME, ENDPOINT_FILE_NAME
+from azurelinuxagent.common.protocol.metadata_server_migration_util import _METADATA_PROTOCOL_NAME, \
+    _LEGACY_METADATA_SERVER_TRANSPORT_PRV_FILE_NAME, \
+    _LEGACY_METADATA_SERVER_TRANSPORT_CERT_FILE_NAME, \
+    _LEGACY_METADATA_SERVER_P7B_FILE_NAME
+from azurelinuxagent.common.protocol.util import get_protocol_util, ProtocolUtil, PROTOCOL_FILE_NAME, \
+    WIRE_PROTOCOL_NAME, ENDPOINT_FILE_NAME
 from azurelinuxagent.common.utils.restutil import KNOWN_WIRESERVER_IP
-from errno import ENOENT
+from tests.tools import AgentTestCase, MagicMock, Mock, patch, clear_singleton_instances
+
 
 @patch("time.sleep")
 class TestProtocolUtil(AgentTestCase):
@@ -184,7 +185,6 @@ class TestProtocolUtil(AgentTestCase):
             self.assertFalse(os.path.exists(mds_cert_path))
 
         # Check firewall rules was reset
-        protocol_util.osutil.remove_rules_files.assert_called_once()
         protocol_util.osutil.remove_firewall.assert_called_once()
         protocol_util.osutil.enable_firewall.assert_called_once()
 
@@ -230,7 +230,6 @@ class TestProtocolUtil(AgentTestCase):
             self.assertTrue(os.path.isfile(ws_cert_path))
 
         # Check firewall rules was reset
-        protocol_util.osutil.remove_rules_files.assert_called_once()
         protocol_util.osutil.remove_firewall.assert_called_once()
         protocol_util.osutil.enable_firewall.assert_called_once()
 
@@ -269,7 +268,6 @@ class TestProtocolUtil(AgentTestCase):
             self.assertTrue(os.path.isfile(ws_cert_path))
 
         # Check firewall rules were not reset
-        protocol_util.osutil.remove_rules_files.assert_not_called()
         protocol_util.osutil.remove_firewall.assert_not_called()
         protocol_util.osutil.enable_firewall.assert_not_called()
 
@@ -281,11 +279,10 @@ class TestProtocolUtil(AgentTestCase):
         with open(os.path.join(dir, ENDPOINT_FILE_NAME), 'r') as f:
             self.assertEquals(f.read(), KNOWN_WIRESERVER_IP)
 
-    @patch("azurelinuxagent.common.utils.fileutil")
+    @patch("azurelinuxagent.common.protocol.util.fileutil")
     @patch("azurelinuxagent.common.conf.get_lib_dir")
     def test_endpoint_file_states(self, mock_get_lib_dir, mock_fileutil, _):
         mock_get_lib_dir.return_value = self.tmp_dir
-        mock_fileutil = MagicMock()
 
         protocol_util = get_protocol_util()
         endpoint_file = protocol_util._get_wireserver_endpoint_file_path()
@@ -312,7 +309,7 @@ class TestProtocolUtil(AgentTestCase):
         mock_fileutil.write_file.side_effect = IOError()
 
         ep = protocol_util.get_wireserver_endpoint()
-        self.assertRaises(OSUtilError, protocol_util._set_wireserver_endpoint('abc'))
+        self.assertRaises(OSUtilError, protocol_util._set_wireserver_endpoint, 'abc')
 
         # Test clear endpoint for io error
         with open(endpoint_file, "w+") as ep_fd:

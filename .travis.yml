@@ -22,6 +22,7 @@ matrix:
     - python: 3.4
     - python: 3.6
     - python: 3.7
+    - python: 3.8
       env:
         - >-
           NOSEOPTS="--verbose --with-coverage --with-timer --cover-inclusive
@@ -40,4 +41,4 @@ script:
   - if [ ! -z "$SETUPOPTS" ]; then /usr/bin/env python setup.py $SETUPOPTS; fi
 
 after_success:
-  - if [[ $TRAVIS_PYTHON_VERSION == 3.7 ]]; then codecov; fi
+  - if [[ $TRAVIS_PYTHON_VERSION == 3.8 ]]; then codecov; fi

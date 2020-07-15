@@ -16,27 +16,27 @@
 #
 
 
+from distutils.version import LooseVersion as Version
+
 import azurelinuxagent.common.logger as logger
-from azurelinuxagent.common.version import *
-from .default import DefaultOSUtil
+from azurelinuxagent.common.version import DISTRO_NAME, DISTRO_CODE_NAME, DISTRO_VERSION, DISTRO_FULL_NAME
+from .alpine import AlpineOSUtil
 from .arch import ArchUtil
+from .bigip import BigIpOSUtil
 from .clearlinux import ClearLinuxUtil
 from .coreos import CoreOSUtil
 from .debian import DebianOSBaseUtil, DebianOSModernUtil
+from .default import DefaultOSUtil
 from .freebsd import FreeBSDOSUtil
+from .gaia import GaiaOSUtil
+from .iosxe import IosxeOSUtil
+from .nsbsd import NSBSDOSUtil
 from .openbsd import OpenBSDOSUtil
+from .openwrt import OpenWRTOSUtil
 from .redhat import RedhatOSUtil, Redhat6xOSUtil
 from .suse import SUSEOSUtil, SUSE11OSUtil
 from .ubuntu import UbuntuOSUtil, Ubuntu12OSUtil, Ubuntu14OSUtil, \
     UbuntuSnappyOSUtil, Ubuntu16OSUtil, Ubuntu18OSUtil
-from .alpine import AlpineOSUtil
-from .bigip import BigIpOSUtil
-from .gaia import GaiaOSUtil
-from .iosxe import IosxeOSUtil
-from .nsbsd import NSBSDOSUtil
-from .openwrt import OpenWRTOSUtil
-
-from distutils.version import LooseVersion as Version
 
 
 def get_osutil(distro_name=DISTRO_NAME,
@@ -65,7 +65,9 @@ def _get_osutil(distro_name, distro_code_name, distro_version, distro_full_name)
             return Ubuntu14OSUtil()
         elif Version(distro_version) in [Version('16.04'), Version('16.10'), Version('17.04')]:
             return Ubuntu16OSUtil()
-        elif Version(distro_version) in [Version('18.04')]:
+        elif Version(distro_version) in [Version('18.04'), Version('18.10'),
+                                         Version('19.04'), Version('19.10'),
+                                         Version('20.04')]:
             return Ubuntu18OSUtil()
         elif distro_full_name == "Snappy Ubuntu Core":
             return UbuntuSnappyOSUtil()

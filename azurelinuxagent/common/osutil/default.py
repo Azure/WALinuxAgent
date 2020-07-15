@@ -56,25 +56,50 @@ for all distros. Each concrete distro classes could overwrite default behavior
 if needed.
 """
 
-IPTABLES_VERSION_PATTERN = re.compile("^[^\d\.]*([\d\.]+).*$")
-IPTABLES_VERSION = "iptables --version"
-IPTABLES_LOCKING_VERSION = FlexibleVersion('1.4.21')
+_IPTABLES_VERSION_PATTERN = re.compile("^[^\d\.]*([\d\.]+).*$")
+_IPTABLES_LOCKING_VERSION = FlexibleVersion('1.4.21')
 
-FIREWALL_ACCEPT = "iptables {0} -t security -{1} OUTPUT -d {2} -p tcp -m owner --uid-owner {3} -j ACCEPT"
-# Note:
-# -- Initially "flight" the change to ACCEPT packets and develop a metric baseline
-#    A subsequent release will convert the ACCEPT to DROP
-# FIREWALL_DROP = "iptables {0} -t security -{1} OUTPUT -d {2} -p tcp -m conntrack --ctstate INVALID,NEW -j ACCEPT"
-FIREWALL_DROP = "iptables {0} -t security -{1} OUTPUT -d {2} -p tcp -m conntrack --ctstate INVALID,NEW -j DROP"
-FIREWALL_LIST = "iptables {0} -t security -L -nxv"
-FIREWALL_PACKETS = "iptables {0} -t security -L OUTPUT --zero OUTPUT -nxv"
-FIREWALL_FLUSH = "iptables {0} -t security --flush"
+
+def _add_wait(wait, command):
+    """
+    If 'wait' is True, adds the wait option (-w) to the given iptables command line
+    """
+    if wait:
+        command.insert(1, "-w")
+    return command
+
+
+def _get_iptables_version_command():
+    return ["iptables", "--version"]
+
+
+def _get_firewall_accept_command(wait, command, destination, owner_uid):
+    return _add_wait(wait, ["iptables", "-t", "security", command, "OUTPUT", "-d", destination, "-p", "tcp", "-m", "owner", "--uid-owner", owner_uid, "-j" "ACCEPT"])
+
+
+def _get_firewall_drop_command(wait, command, destination):
+    return _add_wait(wait, ["iptables", "-t", "security", command, "OUTPUT", "-d", destination, "-p",  "tcp",  "-m", "conntrack", "--ctstate", "INVALID,NEW", "-j", "DROP"])
+
+
+def _get_firewall_list_command(wait):
+    return _add_wait(wait, ["iptables", "-t", "security", "-L", "-nxv"])
+
+
+def _get_firewall_packets_command(wait):
+    return _add_wait(wait, ["iptables", "-t", "security", "-L", "OUTPUT", "--zero", "OUTPUT", "-nxv"])
+
 
 # Precisely delete the rules created by the agent.
 # this rule was used <= 2.2.25.  This rule helped to validate our change, and determine impact.
-FIREWALL_DELETE_CONNTRACK_ACCEPT = "iptables {0} -t security -D OUTPUT -d {1} -p tcp -m conntrack --ctstate INVALID,NEW -j ACCEPT"
-FIREWALL_DELETE_OWNER_ACCEPT = "iptables {0} -t security -D OUTPUT -d {1} -p tcp -m owner --uid-owner {2} -j ACCEPT"
-FIREWALL_DELETE_CONNTRACK_DROP = "iptables {0} -t security -D OUTPUT -d {1} -p tcp -m conntrack --ctstate INVALID,NEW -j DROP"
+def _get_firewall_delete_conntrack_accept_command(wait, destination):
+    return _add_wait(wait, ["iptables", "-t", "security", "-D", "OUTPUT", "-d",  destination, "-p", "tcp", "-m", "conntrack", "--ctstate", "INVALID,NEW", "-j", "ACCEPT"])
+
+
+def _get_firewall_delete_owner_accept_command(wait, destination, owner_uid):
+    return _add_wait(wait, ["iptables", "-t", "security", "-D", "OUTPUT", "-d", destination, "-p", "tcp", "-m", "owner", "--uid-owner", owner_uid, "-j", "ACCEPT"])
+
+def _get_firewall_delete_conntrack_drop_command(wait, destination):
+    return _add_wait(wait, ["iptables", "-t", "security", "-D", "OUTPUT", "-d", destination, "-p", "tcp", "-m", "conntrack", "--ctstate", "INVALID,NEW", "-j", "DROP"])
 
 PACKET_PATTERN = "^\s*(\d+)\s+(\d+)\s+DROP\s+.*{0}[^\d]*$"
 ALL_CPUS_REGEX = re.compile('^cpu .*')
@@ -94,8 +119,6 @@ IOCTL_SIOCGIFHWADDR = 0x8927
 IFNAMSIZ = 16
 
 IP_COMMAND_OUTPUT = re.compile('^\d+:\s+(\w+):\s+(.*)$')
-
-BASE_CGROUPS = '/sys/fs/cgroup'
 
 STORAGE_DEVICE_PATH = '/sys/bus/vmbus/devices/'
 GEN2_DEVICE_ID = 'f8b3781a-1e82-4818-a1c3-63d806ec15bb'
@@ -121,21 +144,23 @@ class DefaultOSUtil(object):
         try:
             wait = self.get_firewall_will_wait()
 
-            rc, output = shellutil.run_get_output(FIREWALL_PACKETS.format(wait), log_cmd=False, expected_errors=[3])
-            if rc == 3:
-                # Transient error  that we ignore.  This code fires every loop
-                # of the daemon (60m), so we will get the value eventually.
-                return 0
+            try:
+                output = shellutil.run_command(_get_firewall_packets_command(wait))
 
-            if rc != 0:
+                pattern = re.compile(PACKET_PATTERN.format(dst_ip))
+                for line in output.split('\n'):
+                    m = pattern.match(line)
+                    if m is not None:
+                        return int(m.group(1))
+
+            except Exception as e:
+                if isinstance(e, CommandError) and e.returncode == 3:
+                    # Transient error  that we ignore.  This code fires every loop
+                    # of the daemon (60m), so we will get the value eventually.
+                    return 0
+                logger.warn("Failed to get firewall packets: {0}", ustr(e))
                 return -1
 
-            pattern = re.compile(PACKET_PATTERN.format(dst_ip))
-            for line in output.split('\n'):
-                m = pattern.match(line)
-                if m is not None:
-                    return int(m.group(1))
-            
             return 0
 
         except Exception as e:
@@ -146,20 +171,21 @@ class DefaultOSUtil(object):
 
     def get_firewall_will_wait(self):
         # Determine if iptables will serialize access
-        rc, output = shellutil.run_get_output(IPTABLES_VERSION)
-        if rc != 0:
-            msg = "Unable to determine version of iptables"
+        try:
+            output = shellutil.run_command(_get_iptables_version_command())
+        except Exception as e:
+            msg = "Unable to determine version of iptables: {0}".format(ustr(e))
             logger.warn(msg)
             raise Exception(msg)
 
-        m = IPTABLES_VERSION_PATTERN.match(output)
+        m = _IPTABLES_VERSION_PATTERN.match(output)
         if m is None:
-            msg = "iptables did not return version information"
+            msg = "iptables did not return version information: {0}".format(output)
             logger.warn(msg)
             raise Exception(msg)
 
         wait = "-w" \
-                if FlexibleVersion(m.group(1)) >= IPTABLES_LOCKING_VERSION \
+                if FlexibleVersion(m.group(1)) >= _IPTABLES_LOCKING_VERSION \
                 else ""
         return wait
 
@@ -169,11 +195,13 @@ class DefaultOSUtil(object):
         code is non-zero or the limit has been reached.
         """
         for i in range(1, 100):
-            rc = shellutil.run(rule, chk_err=False)
-            if rc == 1:
-                return
-            elif rc == 2:
-                raise Exception("invalid firewall deletion rule '{0}'".format(rule))
+            try:
+                rc = shellutil.run_command(rule)
+            except CommandError as e:
+                if e.returncode == 1:
+                    return
+                if e.returncode == 2:
+                    raise Exception("invalid firewall deletion rule '{0}'".format(rule))
 
     def remove_firewall(self, dst_ip=None, uid=None):
         # If a previous attempt failed, do not retry
@@ -191,10 +219,9 @@ class DefaultOSUtil(object):
 
             # This rule was <= 2.2.25 only, and may still exist on some VMs.  Until 2.2.25
             # has aged out, keep this cleanup in place.
-            self._delete_rule(FIREWALL_DELETE_CONNTRACK_ACCEPT.format(wait, dst_ip))
-
-            self._delete_rule(FIREWALL_DELETE_OWNER_ACCEPT.format(wait, dst_ip, uid))
-            self._delete_rule(FIREWALL_DELETE_CONNTRACK_DROP.format(wait, dst_ip))
+            self._delete_rule(_get_firewall_delete_conntrack_accept_command(wait, dst_ip))
+            self._delete_rule(_get_firewall_delete_owner_accept_command(wait, dst_ip, uid))
+            self._delete_rule(_get_firewall_delete_conntrack_drop_command(wait, dst_ip))
 
             return True
 
@@ -205,55 +232,53 @@ class DefaultOSUtil(object):
                         "{0}".format(ustr(e)))
             return False
 
-    def enable_firewall(self, dst_ip=None, uid=None):
+    def enable_firewall(self, dst_ip, uid):
         # If a previous attempt failed, do not retry
         global _enable_firewall
         if not _enable_firewall:
             return False
 
         try:
-            if dst_ip is None or uid is None:
-                msg = "Missing arguments to enable_firewall"
-                logger.warn(msg)
-                raise Exception(msg)
-
             wait = self.get_firewall_will_wait()
 
             # If the DROP rule exists, make no changes
-            drop_rule = FIREWALL_DROP.format(wait, "C", dst_ip)
-            rc = shellutil.run(drop_rule, chk_err=False)
-            if rc == 0:
+            firewall_established = False
+            try:
+                drop_rule = _get_firewall_drop_command(wait, "-C", dst_ip)
+                shellutil.run_command(drop_rule)
                 logger.verbose("Firewall appears established")
                 return True
-            elif rc == 2:
-                self.remove_firewall(dst_ip, uid)
-                msg = "please upgrade iptables to a version that supports the -C option"
-                logger.warn(msg)
-                raise Exception(msg)
+            except CommandError as e:
+                if e.returncode == 2:
+                    self.remove_firewall(dst_ip, uid)
+                    msg = "please upgrade iptables to a version that supports the -C option"
+                    logger.warn(msg)
+                    raise Exception(msg)
 
             # Otherwise, append both rules
-            accept_rule = FIREWALL_ACCEPT.format(wait, "A", dst_ip, uid)
-            drop_rule = FIREWALL_DROP.format(wait, "A", dst_ip)
-
-            if shellutil.run(accept_rule) != 0:
-                msg = "Unable to add ACCEPT firewall rule '{0}'".format(
-                    accept_rule)
+            try:
+                accept_rule = _get_firewall_accept_command(wait, "-A", dst_ip, uid)
+                shellutil.run_command(accept_rule)
+            except Exception as e:
+                msg = "Unable to add ACCEPT firewall rule '{0}' - {1}".format(accept_rule, ustr(e))
                 logger.warn(msg)
                 raise Exception(msg)
 
-            if shellutil.run(drop_rule) != 0:
-                msg = "Unable to add DROP firewall rule '{0}'".format(
-                    drop_rule)
+            try:
+                drop_rule = _get_firewall_drop_command(wait, "-A", dst_ip)
+                shellutil.run_command(drop_rule)
+            except Exception as e:
+                msg = "Unable to add DROP firewall rule '{0}' - {1}".format(drop_rule, ustr(e))
                 logger.warn(msg)
                 raise Exception(msg)
 
             logger.info("Successfully added Azure fabric firewall rules")
 
-            rc, output = shellutil.run_get_output(FIREWALL_LIST.format(wait))
-            if rc == 0:
+            try:
+                output = shellutil.run_command(_get_firewall_list_command(wait))
                 logger.info("Firewall rules:\n{0}".format(output))
-            else:
-                logger.warn("Listing firewall rules failed: {0}".format(output))
+            except Exception as e:
+                logger.warn("Listing firewall rules failed: {0}".format(ustr(e)))
 
             return True
 
@@ -302,64 +327,6 @@ class DefaultOSUtil(object):
         logger.verbose(" former instance id: {0}".format(id_that))
         return id_this.lower() == id_that.lower() or \
             id_this.lower() == self._correct_instance_id(id_that).lower()
-
-    @staticmethod
-    def is_cgroups_supported():
-        """
-        Enabled by default; disabled if the base path of cgroups doesn't exist.
-        """
-        return os.path.exists(BASE_CGROUPS)
-
-    @staticmethod
-    def _cgroup_path(tail=""):
-        return os.path.join(BASE_CGROUPS, tail).rstrip(os.path.sep)
-
-    def mount_cgroups(self):
-        try:
-            path = self._cgroup_path()
-            if not os.path.exists(path):
-                fileutil.mkdir(path)
-                self.mount(device='cgroup_root',
-                           mount_point=path,
-                           option="-t tmpfs",
-                           chk_err=False)
-            elif not os.path.isdir(self._cgroup_path()):
-                logger.error("Could not mount cgroups: ordinary file at {0}", path)
-                return
-
-            controllers_to_mount = ['cpu,cpuacct', 'memory']
-            errors = 0
-            cpu_mounted = False
-            for controller in controllers_to_mount:
-                try:
-                    target_path = self._cgroup_path(controller)
-                    if not os.path.exists(target_path):
-                        fileutil.mkdir(target_path)
-                        self.mount(device=controller,
-                                   mount_point=target_path,
-                                   option="-t cgroup -o {0}".format(controller),
-                                   chk_err=False)
-                        if controller == 'cpu,cpuacct':
-                            cpu_mounted = True
-                except Exception as exception:
-                    errors += 1
-                    if errors == len(controllers_to_mount):
-                        raise
-                    logger.warn("Could not mount cgroup controller {0}: {1}", controller, ustr(exception))
-
-            if cpu_mounted:
-                for controller in ['cpu', 'cpuacct']:
-                    target_path = self._cgroup_path(controller)
-                    if not os.path.exists(target_path):
-                        os.symlink(self._cgroup_path('cpu,cpuacct'), target_path)
-
-        except OSError as oe:
-            # log a warning for read-only file systems
-            logger.warn("Could not mount cgroups: {0}", ustr(oe))
-            raise
-        except Exception as e:
-            logger.error("Could not mount cgroups: {0}", ustr(e))
-            raise
 
     def get_agent_conf_file_path(self):
         return self.agent_conf_file_path
@@ -423,28 +390,23 @@ class DefaultOSUtil(object):
             return
 
         if expiration is not None:
-            cmd = "useradd -m {0} -e {1}".format(username, expiration)
+            cmd = ["useradd", "-m", username, "-e", expiration]
         else:
-            cmd = "useradd -m {0}".format(username)
+            cmd = ["useradd", "-m", username]
         
         if comment is not None:
-            cmd += " -c {0}".format(comment)
-        retcode, out = shellutil.run_get_output(cmd)
-        if retcode != 0:
-            raise OSUtilError(("Failed to create user account:{0}, "
-                               "retcode:{1}, "
-                               "output:{2}").format(username, retcode, out))
+            cmd.extend(["-c", comment])
+
+        self._run_command_raising_OSUtilError(cmd, err_msg="Failed to create user account:{0}".format(username))
 
     def chpasswd(self, username, password, crypt_id=6, salt_len=10):
         if self.is_sys_user(username):
             raise OSUtilError(("User {0} is a system user, "
                                "will not set password.").format(username))
         passwd_hash = textutil.gen_password_hash(password, crypt_id, salt_len)
-        cmd = "usermod -p '{0}' {1}".format(passwd_hash, username)
-        ret, output = shellutil.run_get_output(cmd, log_cmd=False)
-        if ret != 0:
-            raise OSUtilError(("Failed to set password for {0}: {1}"
-                               "").format(username, output))
+
+        self._run_command_raising_OSUtilError(["usermod", "-p", passwd_hash, username],
+                                              err_msg="Failed to set password for {0}".format(username))
     
     def get_users(self):
         return getpwall()
@@ -1124,7 +1086,7 @@ class DefaultOSUtil(object):
 
     def set_hostname(self, hostname):
         fileutil.write_file('/etc/hostname', hostname)
-        shellutil.run("hostname {0}".format(hostname), chk_err=False)
+        self._run_command_without_raising(["hostname", hostname], log_error=False)
 
     def set_dhcp_hostname(self, hostname):
         autosend = r'^[^#]*?send\s*host-name.*?(<hostname>|gethostname[(,)])'
@@ -1292,8 +1254,9 @@ class DefaultOSUtil(object):
     def del_account(self, username):
         if self.is_sys_user(username):
             logger.error("{0} is a system user. Will not delete it.", username)
-        shellutil.run("> /var/run/utmp")
-        shellutil.run("userdel -f -r " + username)
+
+        self._run_command_without_raising(["touch", "/var/run/utmp"])
+        self._run_command_without_raising(['userdel', '-f', '-r', username])
         self.conf_sudoer(username, remove=True)
 
     def decode_customdata(self, data):
@@ -1420,3 +1383,33 @@ class DefaultOSUtil(object):
                     handler(state[interface_name], result.group(2))
                 else:
                     logger.error("Interface {0} has {1} but no link state".format(interface_name, description))
+
+    @staticmethod
+    def _run_command_without_raising(cmd, log_error=True):
+        try:
+            shellutil.run_command(cmd, log_error=log_error)
+        # Original implementation of run() does a blanket catch, so mimicking the behaviour here
+        except Exception:
+            pass
+
+    @staticmethod
+    def _run_multiple_commands_without_raising(commands, log_error=True, continue_on_error=False):
+        for cmd in commands:
+            try:
+                shellutil.run_command(cmd, log_error=log_error)
+            # Original implementation of run() does a blanket catch, so mimicking the behaviour here
+            except Exception:
+                if continue_on_error:
+                    continue
+                break
+
+    @staticmethod
+    def _run_command_raising_OSUtilError(cmd, err_msg, cmd_input=None):
+        # This method runs shell command using the new secure shellutil.run_command and raises OSUtilErrors on failures.
+        try:
+            return shellutil.run_command(cmd, log_error=True, cmd_input=cmd_input)
+        except shellutil.CommandError as e:
+            raise OSUtilError(
+                "{0}, Retcode: {1}, Output: {2}, Error: {3}".format(err_msg, e.returncode, e.stdout, e.stderr))
+        except Exception as e:
+            raise OSUtilError("{0}, Retcode: {1}, Error: {2}".format(err_msg, -1, ustr(e)))

@@ -120,32 +120,39 @@ class CommandError(Exception):
     Exception raised by run_command when the command returns an error
     """
     @staticmethod
-    def _get_message(command, returncode):
+    def _get_message(command, return_code, stderr):
         command_name = command[0] if isinstance(command, list) and len(command) > 0 else command
-        return "'{0}' failed: {1}".format(command_name, returncode)
+        return "'{0}' failed: {1} ({2})".format(command_name, return_code, stderr.rstrip())
 
-    def __init__(self, command, returncode, stdout, stderr):
-        super(Exception, self).__init__(CommandError._get_message(command, returncode))
+    def __init__(self, command, return_code, stdout, stderr):
+        super(Exception, self).__init__(CommandError._get_message(command, return_code, stderr))
         self.command = command
-        self.returncode = returncode
+        self.returncode = return_code
         self.stdout = stdout
         self.stderr = stderr
 
 
-def run_command(command, log_error=False):
+def run_command(command, log_error=False, cmd_input=None):
     """
-    Executes the given command and returns its stdout as a string.
-    If there are any errors executing the command it logs details about the failure and raises a RunCommandException;
-    if 'log_error' is True, it also logs details about the error.
+        Executes the given command and returns its stdout as a string. If cmd_input is specified, then we pass the cmd_input
+        to stdin and execute the command. Currently we only support string input for stdin.
+        If there are any errors executing the command it logs details about the failure and raises a RunCommandException;
+        if 'log_error' is True, it also logs details about the error.
 
-    Note: This is the preferred method to execute shell commands over `azurelinuxagent.common.utils.shellutil.run` function.
+        Note: This is the preferred method to execute shell commands over `azurelinuxagent.common.utils.shellutil.run` function.
     """
     def format_command(cmd):
         return " ".join(cmd) if isinstance(cmd, list) else command
 
+    # Currently we only support PIPE for stdin/stdout/stderr, but acceptable options as per python docs are -
+    # PIPE, an existing file descriptor (a positive integer), an existing file object, and None
+    stdin = subprocess.PIPE if cmd_input else None
     try:
-        process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=False)
-        stdout, stderr = process.communicate()
+        # Starting Python 3.4+, you need to encode the string, i.e. you need to pass Bytes to the input rather than string to process.communicate()
+        process_input = cmd_input.encode() if cmd_input else None
+
+        process = subprocess.Popen(command, stdin=stdin, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=False)
+        stdout, stderr = process.communicate(input=process_input)
         returncode = process.returncode
     except Exception as e:
         if log_error:
@@ -162,7 +169,7 @@ def run_command(command, log_error=False):
                 returncode,
                 encoded_stdout,
                 encoded_stderr)
-        raise CommandError(command=command, returncode=returncode, stdout=encoded_stdout, stderr=encoded_stderr)
+        raise CommandError(command=command, return_code=returncode, stdout=encoded_stdout, stderr=encoded_stderr)
 
     return _encode_command_output(stdout)
 

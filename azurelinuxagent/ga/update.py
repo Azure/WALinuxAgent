@@ -48,13 +48,12 @@ from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.osutil import get_osutil
 from azurelinuxagent.common.protocol.util import get_protocol_util
 from azurelinuxagent.common.protocol.hostplugin import HostPluginProtocol
-from azurelinuxagent.common.protocol.wire import WireProtocol
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
 from azurelinuxagent.common.version import AGENT_NAME, AGENT_VERSION, AGENT_DIR_PATTERN, CURRENT_AGENT,\
     CURRENT_VERSION, DISTRO_NAME, DISTRO_VERSION, is_current_agent_installed, PY_VERSION_MAJOR, PY_VERSION_MINOR, \
     PY_VERSION_MICRO
 
-from azurelinuxagent.ga.exthandlers import HandlerManifest
+from azurelinuxagent.ga.exthandlers import HandlerManifest, get_traceback
 
 AGENT_ERROR_FILE = "error.json" # File name for agent error record
 AGENT_MANIFEST_FILE = "HandlerManifest.json"
@@ -67,9 +66,9 @@ CHILD_POLL_INTERVAL = 60
 
 MAX_FAILURE = 3 # Max failure allowed for agent before blacklisted
 
-GOAL_STATE_INTERVAL = 3
 GOAL_STATE_INTERVAL_DISABLED = 5 * 60
 
+ORPHAN_POLL_INTERVAL = 3
 ORPHAN_WAIT_INTERVAL = 15 * 60
 
 AGENT_SENTINEL_FILE = "current_version"
@@ -267,7 +266,7 @@ class UpdateHandler(object):
                 PY_VERSION_MINOR, PY_VERSION_MICRO)
             logger.info(os_info_msg)
             add_event(AGENT_NAME, op=WALAEventOperation.OSInfo, message=os_info_msg)
-
+            
             # Launch monitoring threads
             from azurelinuxagent.ga.monitor import get_monitor_handler
             monitor_thread = get_monitor_handler()
@@ -286,11 +285,12 @@ class UpdateHandler(object):
 
             self._ensure_no_orphans()
             self._emit_restart_event()
+            self._emit_changes_in_default_configuration()
             self._ensure_partition_assigned()
             self._ensure_readonly_files()
             self._ensure_cgroups_initialized()
 
-            goal_state_interval = GOAL_STATE_INTERVAL if conf.get_extensions_enabled() else GOAL_STATE_INTERVAL_DISABLED
+            goal_state_interval = conf.get_goal_state_period() if conf.get_extensions_enabled() else GOAL_STATE_INTERVAL_DISABLED
 
             while self.running:
                 #
@@ -350,7 +350,6 @@ class UpdateHandler(object):
                             message="Incarnation {0}".format(exthandlers_handler.last_etag))
 
                 self._send_heartbeat_telemetry(protocol)
-
                 time.sleep(goal_state_interval)
 
         except Exception as e:
@@ -422,6 +421,33 @@ class UpdateHandler(object):
 
         return
 
+    @staticmethod
+    def _emit_changes_in_default_configuration():
+        try:
+            def log_if_int_changed_from_default(name, current):
+                default = conf.get_int_default_value(name)
+                if default != current:
+                    msg = "{0} changed from its default; new value: {1}".format(name, current)
+                    logger.info(msg)
+                    add_event(AGENT_NAME, op=WALAEventOperation.ConfigurationChange, message=msg)
+
+            log_if_int_changed_from_default("Extensions.GoalStatePeriod", conf.get_goal_state_period())
+
+            if not conf.enable_firewall():
+                message = "OS.EnableFirewall is False"
+                logger.info(message)
+                add_event(AGENT_NAME, op=WALAEventOperation.ConfigurationChange, message=message)
+            else:
+                log_if_int_changed_from_default("OS.EnableFirewallPeriod", conf.get_enable_firewall_period())
+
+            if conf.get_lib_dir() != "/var/lib/waagent":
+                message = "lib dir is in an unexpected location: {0}".format(conf.get_lib_dir())
+                logger.info(message)
+                add_event(AGENT_NAME, op=WALAEventOperation.ConfigurationChange, message=message)
+
+        except Exception as e:
+            logger.warn("Failed to log changes in configuration: {0}", ustr(e))
+
     def _ensure_no_orphans(self, orphan_wait_interval=ORPHAN_WAIT_INTERVAL):
         pid_files, ignored = self._write_pid_file()
         for pid_file in pid_files:
@@ -430,7 +456,7 @@ class UpdateHandler(object):
                 wait_interval = orphan_wait_interval
 
                 while self.osutil.check_pid_alive(pid):
-                    wait_interval -= GOAL_STATE_INTERVAL
+                    wait_interval -= ORPHAN_POLL_INTERVAL
                     if wait_interval <= 0:
                         logger.warn(
                             u"{0} forcibly terminated orphan process {1}",
@@ -443,7 +469,7 @@ class UpdateHandler(object):
                         u"{0} waiting for orphan process {1} to terminate",
                         CURRENT_AGENT,
                         pid)
-                    time.sleep(GOAL_STATE_INTERVAL)
+                    time.sleep(ORPHAN_POLL_INTERVAL)
 
                 os.remove(pid_file)
 
@@ -475,9 +501,7 @@ class UpdateHandler(object):
 
     def _ensure_cgroups_initialized(self):
         configurator = CGroupConfigurator.get_instance()
-        configurator.create_agent_cgroups(track_cgroups=True)
-        configurator.cleanup_legacy_cgroups()
-        configurator.create_extension_cgroups_root()
+        configurator.initialize()
 
     def _evaluate_agent_health(self, latest_agent):
         """
@@ -640,18 +664,8 @@ class UpdateHandler(object):
         return
 
     def _upgrade_available(self, protocol, base_version=CURRENT_VERSION):
-        # Emit an event expressing the state of AutoUpdate
-        # Note: Duplicate events get suppressed; state transitions always emit
-        add_event(
-            AGENT_NAME,
-            version=CURRENT_VERSION,
-            op=WALAEventOperation.AutoUpdate,
-            is_success=conf.get_autoupdate_enabled(),
-            log_event=False)
-
         # Ignore new agents if updating is disabled
         if not conf.get_autoupdate_enabled():
-            logger.warn(u"Agent auto-update is disabled.")
             return False
 
         now = time.time()
@@ -735,13 +749,21 @@ class UpdateHandler(object):
 
         if datetime.utcnow() >= (self._last_telemetry_heartbeat + UpdateHandler.TELEMETRY_HEARTBEAT_PERIOD):
             dropped_packets = self.osutil.get_firewall_dropped_packets(protocol.get_endpoint())
-            msg = "{0};{1};{2};{3}".format(self._heartbeat_counter, self._heartbeat_id, dropped_packets, self._heartbeat_update_goal_state_error_count)
+            auto_update_enabled = 1 if conf.get_autoupdate_enabled() else 0
+            telemetry_msg = "{0};{1};{2};{3};{4}".format(self._heartbeat_counter, self._heartbeat_id, dropped_packets,
+                                                         self._heartbeat_update_goal_state_error_count, auto_update_enabled)
 
-            add_event(name=AGENT_NAME, version=CURRENT_VERSION, op=WALAEventOperation.HeartBeat, is_success=True, message=msg, log_event=False)
+            add_event(name=AGENT_NAME, version=CURRENT_VERSION, op=WALAEventOperation.HeartBeat, is_success=True,
+                      message=telemetry_msg, log_event=False)
             self._heartbeat_counter += 1
             self._heartbeat_update_goal_state_error_count = 0
 
-            logger.info(u"[HEARTBEAT] Agent {0} is running as the goal state agent", CURRENT_AGENT)
+            debug_log_msg = "[DEBUG HeartbeatCounter: {0};HeartbeatId: {1};DroppedPackets: {2};" \
+                            "UpdateGSErrors: {3};AutoUpdate: {4}]".format(self._heartbeat_counter,
+                                                                          self._heartbeat_id, dropped_packets,
+                                                                          self._heartbeat_update_goal_state_error_count,
+                                                                          auto_update_enabled)
+            logger.info(u"[HEARTBEAT] Agent {0} is running as the goal state agent {1}", CURRENT_AGENT, debug_log_msg)
             self._last_telemetry_heartbeat = datetime.utcnow()
 
 
@@ -789,13 +811,13 @@ class GuestAgent(object):
 
             msg = u"Agent {0} install failed with exception: {1}".format(
                         self.name, ustr(e))
-            logger.warn(msg)
+            detailed_msg = '{0} {1}'.format(msg, traceback.extract_tb(get_traceback(e)))
             add_event(
                 AGENT_NAME,
                 version=self.version,
                 op=WALAEventOperation.Install,
                 is_success=False,
-                message=msg)
+                message=detailed_msg)
 
     @property
     def name(self):

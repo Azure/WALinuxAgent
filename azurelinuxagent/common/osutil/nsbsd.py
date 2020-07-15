@@ -51,11 +51,11 @@ class NSBSDOSUtil(FreeBSDOSUtil):
             dns.resolver.override_system_resolver(self.resolver)
 
     def set_hostname(self, hostname):
-        shellutil.run("/usr/Firewall/sbin/setconf /usr/Firewall/System/global SystemName {0}".format(hostname))
-        shellutil.run("/usr/Firewall/sbin/enlog")
-        shellutil.run("/usr/Firewall/sbin/enproxy -u")
-        shellutil.run("/usr/Firewall/sbin/ensl -u")
-        shellutil.run("/usr/Firewall/sbin/ennetwork -f")
+        self._run_command_without_raising(['/usr/Firewall/sbin/setconf', '/usr/Firewall/System/global', 'SystemName', hostname])
+        self._run_command_without_raising(["/usr/Firewall/sbin/enlog"])
+        self._run_command_without_raising(["/usr/Firewall/sbin/enproxy", "-u"])
+        self._run_command_without_raising(["/usr/Firewall/sbin/ensl", "-u"])
+        self._run_command_without_raising(["/usr/Firewall/sbin/ennetwork", "-f"])
 
     def restart_ssh_service(self):
         return shellutil.run('/usr/Firewall/sbin/enservice', chk_err=False)
@@ -86,15 +86,13 @@ class NSBSDOSUtil(FreeBSDOSUtil):
         logger.warn("Sudo is not enabled")
 
     def chpasswd(self, username, password, crypt_id=6, salt_len=10):
-        cmd = "/usr/Firewall/sbin/fwpasswd -p {0}".format(password)
-        ret, output = shellutil.run_get_output(cmd, log_cmd=False)
-        if ret != 0:
-            raise OSUtilError(("Failed to set password for admin: {0}"
-                               "").format(output))
+        self._run_command_raising_OSUtilError(["/usr/Firewall/sbin/fwpasswd", "-p", password],
+                                              err_msg="Failed to set password for admin")
 
         # password set, activate webadmin and ssh access
-        shellutil.run('setconf /usr/Firewall/ConfigFiles/webadmin ACL any && ensl',
-                      chk_err=False)
+        commands = [['setconf', '/usr/Firewall/ConfigFiles/webadmin', 'ACL', 'any'], ['ensl']]
+        self._run_multiple_commands_without_raising(commands, log_error=False, continue_on_error=False)
+
 
     def deploy_ssh_pubkey(self, username, pubkey):
         """

@@ -38,8 +38,9 @@ import azurelinuxagent.common.utils.fileutil as fileutil
 import azurelinuxagent.common.version as version
 from azurelinuxagent.common.cgroupconfigurator import CGroupConfigurator
 from azurelinuxagent.common.datacontract import get_properties, set_properties
-from azurelinuxagent.common.errorstate import ERROR_STATE_DELTA_INSTALL, ErrorState
-from azurelinuxagent.common.event import add_event, elapsed_milliseconds, report_event, WALAEventOperation, add_periodic
+from azurelinuxagent.common.errorstate import ErrorState
+from azurelinuxagent.common.event import add_event, elapsed_milliseconds, report_event, WALAEventOperation, \
+    add_periodic, EVENTS_DIRECTORY
 from azurelinuxagent.common.exception import ExtensionDownloadError, ExtensionError, ExtensionErrorCodes, \
     ExtensionOperationError, ExtensionUpdateError, ProtocolError, ProtocolNotFoundError
 from azurelinuxagent.common.future import ustr
@@ -80,6 +81,11 @@ _TRUNCATED_SUFFIX = u" ... [TRUNCATED]"
 # Status file specific retries and delays.
 _NUM_OF_STATUS_FILE_RETRIES = 5
 _STATUS_FILE_RETRY_DELAY = 2  # seconds
+
+_ENABLE_EXTENSION_TELEMETRY_PIPELINE = False
+
+def is_extension_telemetry_pipeline_enabled():
+    return _ENABLE_EXTENSION_TELEMETRY_PIPELINE
 
 
 class ValidHandlerStatus(object):
@@ -236,32 +242,11 @@ class ExtHandlersHandler(object):
         self.log_process = False
 
         self.report_status_error_state = ErrorState()
-        self.get_artifact_error_state = ErrorState(min_timedelta=ERROR_STATE_DELTA_INSTALL)
 
     def run(self):
-        self.ext_handlers, etag = None, None
+
         try:
             self.ext_handlers, etag = self.protocol.get_ext_handlers()
-            self.get_artifact_error_state.reset()
-        except Exception as e:
-            msg = u"Exception retrieving extension handlers: {0}".format(ustr(e))
-            detailed_msg = '{0} {1}'.format(msg, traceback.extract_tb(get_traceback(e)))
-
-            self.get_artifact_error_state.incr()
-
-            if self.get_artifact_error_state.is_triggered():
-                add_event(AGENT_NAME,
-                          version=CURRENT_VERSION,
-                          op=WALAEventOperation.GetArtifactExtended,
-                          is_success=False,
-                          message="Failed to get extension artifact for over "
-                                  "{0}: {1}".format(self.get_artifact_error_state.min_timedelta, msg))
-                self.get_artifact_error_state.reset()
-
-            add_event(AGENT_NAME, version=CURRENT_VERSION, op=WALAEventOperation.ExtensionProcessing, is_success=False, message=detailed_msg)
-            return
-
-        try:
             msg = u"Handle extensions updates for incarnation {0}".format(etag)
             logger.verbose(msg)
             # Log status report success on new config
@@ -287,6 +272,7 @@ class ExtHandlersHandler(object):
     def _cleanup_outdated_handlers(self):
         handlers = []
         pkgs = []
+        ext_handlers_in_gs = [ext_handler.name for ext_handler in self.ext_handlers.extHandlers]
 
         # Build a collection of uninstalled handlers and orphaned packages
         # Note:
@@ -302,19 +288,19 @@ class ExtHandlersHandler(object):
                 if re.match(HANDLER_NAME_PATTERN, item) is None:
                     continue
                 try:
-                    eh = ExtHandler()
-
                     separator = item.rfind('-')
+                    handler_name = item[0:separator]
+                    if handler_name in ext_handlers_in_gs:
+                        # Handler in GS, keeping it
+                        continue
 
-                    eh.name = item[0:separator]
+                    eh = ExtHandler(name=handler_name)
                     eh.properties.version = str(FlexibleVersion(item[separator + 1:]))
 
-                    handler = ExtHandlerInstance(eh, self.protocol)
+                    # Since this handler name doesn't exist in the GS, marking it for deletion
+                    handlers.append(ExtHandlerInstance(eh, self.protocol))
                 except Exception:
                     continue
-                if handler.get_handler_state() != ExtHandlerState.NotInstalled:
-                    continue
-                handlers.append(handler)
 
             elif os.path.isfile(path) and \
                     not os.path.isdir(path[0:-len(HANDLER_PKG_EXT)]):
@@ -330,8 +316,8 @@ class ExtHandlersHandler(object):
             except OSError as e:
                 logger.warn("Failed to remove orphaned package {0}: {1}".format(pkg, e.strerror))
 
-        # Finally, remove the directories and packages of the
-        # uninstalled handlers
+        # Finally, remove the directories and packages of the orphaned handlers, i.e. Any extension directory that
+        # is still in the FileSystem but not in the GoalState
         for handler in handlers:
             handler.remove_ext_handler()
             pkg = os.path.join(conf.get_lib_dir(), handler.get_full_name() + HANDLER_PKG_EXT)
@@ -422,7 +408,14 @@ class ExtHandlersHandler(object):
         ext_handler_i = ExtHandlerInstance(ext_handler, self.protocol)
 
         try:
+            if self.last_etag == etag:
+                if self.log_etag:
+                    ext_handler_i.logger.verbose("Incarnation {0} did not change, not processing GoalState", etag)
+                    self.log_etag = False
+                return
+
             state = ext_handler.properties.state
+
             if ext_handler_i.decide_version(target_state=state) is None:
                 version = ext_handler_i.ext_handler.properties.version
                 name = ext_handler_i.ext_handler.name
@@ -430,15 +423,6 @@ class ExtHandlersHandler(object):
                 ext_handler_i.set_operation(WALAEventOperation.Download)
                 ext_handler_i.set_handler_status(message=ustr(err_msg), code=-1)
                 ext_handler_i.report_event(message=ustr(err_msg), is_success=False)
-                return
-
-            self.get_artifact_error_state.reset()
-            if self.last_etag == etag:
-                if self.log_etag:
-                    ext_handler_i.logger.verbose("Version {0} is current for etag {1}",
-                                                 ext_handler_i.pkg.version,
-                                                 etag)
-                    self.log_etag = False
                 return
 
             self.log_etag = True
@@ -474,12 +458,8 @@ class ExtHandlersHandler(object):
         msg = ustr(e)
         ext_handler_i.set_handler_status(message=msg, code=code)
 
-        self.get_artifact_error_state.incr()
-        if self.get_artifact_error_state.is_triggered():
-            report_event(op=WALAEventOperation.Download, is_success=False, log_event=True,
-                         message="Failed to get artifact for over "
-                                 "{0}: {1}".format(self.get_artifact_error_state.min_timedelta, msg))
-            self.get_artifact_error_state.reset()
+        report_event(op=WALAEventOperation.Download, is_success=False, log_event=True,
+                     message="Failed to download artifacts: {0}".format(msg))
 
     def handle_enable(self, ext_handler_i):
         self.log_process = True
@@ -925,6 +905,12 @@ class ExtHandlerInstance(object):
             status_dir = self.get_status_dir()
             fileutil.mkdir(status_dir, mode=0o700)
 
+            conf_dir = self.get_conf_dir()
+            fileutil.mkdir(conf_dir, mode=0o700)
+
+            if is_extension_telemetry_pipeline_enabled():
+                fileutil.mkdir(self.get_extension_events_dir(), mode=0o700)
+
             seq_no, status_path = self.get_status_file_path()
             if status_path is not None:
                 now = datetime.datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
@@ -940,15 +926,9 @@ class ExtHandlerInstance(object):
                 }
                 fileutil.write_file(status_path, json.dumps(status))
 
-            conf_dir = self.get_conf_dir()
-            fileutil.mkdir(conf_dir, mode=0o700)
-
         except IOError as e:
             fileutil.clean_ioerror(e, paths=[self.get_base_dir(), self.pkg_file])
             raise ExtensionDownloadError(u"Failed to initialize extension '{0}'".format(self.get_full_name()), e)
-
-        # Create cgroups for the extension
-        CGroupConfigurator.get_instance().create_extension_cgroups(self.get_full_name())
 
         # Save HandlerEnvironment.json
         self.create_handler_env()
@@ -1017,9 +997,6 @@ class ExtHandlerInstance(object):
             message = "Failed to remove extension handler directory: {0}".format(e)
             self.report_event(message=message, is_success=False)
             self.logger.warn(message)
-
-        # Also remove the cgroups for the extension
-        CGroupConfigurator.get_instance().remove_extension_cgroups(self.get_full_name())
 
     def update(self, version=None, disable_exit_code=None, updating_from_version=None):
         if version is None:
@@ -1334,15 +1311,20 @@ class ExtHandlerInstance(object):
             self.update_settings_file(settings_file, json.dumps(ext_settings))
 
     def create_handler_env(self):
-        env = [{
-            "name": self.ext_handler.name,
-            "version": _HANDLER_ENVIRONMENT_VERSION,
-            "handlerEnvironment": {
+        handler_env = {
                 "logFolder": self.get_log_dir(),
                 "configFolder": self.get_conf_dir(),
                 "statusFolder": self.get_status_dir(),
                 "heartbeatFile": self.get_heartbeat_file()
             }
+
+        if is_extension_telemetry_pipeline_enabled():
+            handler_env["eventsFolder"] = self.get_extension_events_dir()
+
+        env = [{
+            "name": self.ext_handler.name,
+            "version": _HANDLER_ENVIRONMENT_VERSION,
+            "handlerEnvironment": handler_env
         }]
         try:
             fileutil.write_file(self.get_env_file(), json.dumps(env))
@@ -1388,6 +1370,8 @@ class ExtHandlerInstance(object):
         try:
             handler_status_json = json.dumps(get_properties(handler_status))
             if handler_status_json is not None:
+                if not os.path.exists(state_dir):
+                    fileutil.mkdir(state_dir, mode=0o700)
                 fileutil.write_file(status_file, handler_status_json)
             else:
                 self.logger.error("Failed to create JSON document of handler status for {0} version {1}".format(
@@ -1403,13 +1387,26 @@ class ExtHandlerInstance(object):
         if not os.path.isfile(status_file):
             return None
 
+        handler_status_contents = ""
         try:
-            data = json.loads(fileutil.read_file(status_file))
+            handler_status_contents = fileutil.read_file(status_file)
+            data = json.loads(handler_status_contents)
             handler_status = ExtHandlerStatus()
             set_properties("ExtHandlerStatus", handler_status, data)
             return handler_status
         except (IOError, ValueError) as e:
             self.logger.error("Failed to get handler status: {0}", e)
+        except Exception as e:
+            error_msg = "Failed to get handler status message: {0}.\n Contents of file: {1}".format(
+                ustr(e), handler_status_contents).replace('"', '\'')
+            add_periodic(
+                delta=logger.EVERY_HOUR,
+                name=AGENT_NAME,
+                version=CURRENT_VERSION,
+                op=WALAEventOperation.ExtensionProcessing,
+                is_success=False,
+                message=error_msg)
+            raise
 
     def get_extension_package_zipfile_name(self):
         return "{0}__{1}{2}".format(self.ext_handler.name,
@@ -1428,6 +1425,9 @@ class ExtHandlerInstance(object):
 
     def get_conf_dir(self):
         return os.path.join(self.get_base_dir(), 'config')
+
+    def get_extension_events_dir(self):
+        return os.path.join(self.get_log_dir(), EVENTS_DIRECTORY)
 
     def get_heartbeat_file(self):
         return os.path.join(self.get_base_dir(), 'heartbeat.log')
