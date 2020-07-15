@@ -786,7 +786,7 @@ class SystemdCgroupsApiTestCase(AgentTestCase):
 
                     extension_calls = [args[0] for (args, _) in popen_patch.call_args_list if command in args[0]]
 
-                    self.assertEquals(1, len(extension_calls), "The extension should have been invoked exactly twice")
+                    self.assertEquals(1, len(extension_calls), "The extension should have been invoked exactly once")
                     self.assertIn("systemd-run --unit=Microsoft.Compute.TestExtension_1.2.3", extension_calls[0],
                                   "The first call to the extension should have used systemd")
 
