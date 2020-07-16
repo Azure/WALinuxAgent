@@ -238,6 +238,8 @@ class HostPluginProtocol(object):
         else:
             logger.info("HostGAPlugin: Upload VM logs succeeded")
 
+        return True
+
     def put_vm_status(self, status_blob, sas_url, config_blob_type=None):
         """
         Try to upload the VM status via the host plugin /status channel

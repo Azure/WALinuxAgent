@@ -881,41 +881,8 @@ class WireClient(object):
                      "advised by Fabric.").format(PROTOCOL_VERSION)
             raise ProtocolNotFoundError(error)
 
-    def send_request_using_appropriate_channel(self, direct_func, host_func):
-        # A wrapper method for all function calls that send HTTP requests. The purpose of the method is to
-        # define which channel to use, direct or through the host plugin. For the host plugin channel,
-        # also implement a retry mechanism.
-
-        # By default, the direct channel is the default channel. If that is the case, try getting a response
-        # through that channel. On failure, fall back to the host plugin channel.
-
-        # When using the host plugin channel, regardless if it's set as default or not, try sending the request first.
-        # On specific failures that indicate a stale goal state (such as resource gone or invalid container parameter),
-        # refresh the goal state and try again. If successful, set the host plugin channel as default. If failed,
-        # raise the exception.
-
-        # NOTE: direct_func and host_func are passed as lambdas. Be careful about capturing goal state data in them as
-        # they will not be refreshed even if a goal state refresh is called before retrying the host_func.
-
-        if not HostPluginProtocol.is_default_channel():
-            ret = None
-            try:
-                ret = direct_func()
-
-                # Different direct channel functions report failure in different ways: by returning None, False,
-                # or raising ResourceGone or InvalidContainer exceptions.
-                if not ret:
-                    logger.periodic_info(logger.EVERY_HOUR, "[PERIODIC] Request failed using the direct channel, "
-                                                            "switching to host plugin.")
-            except (ResourceGoneError, InvalidContainerError) as e:
-                logger.periodic_info(logger.EVERY_HOUR, "[PERIODIC] Request failed using the direct channel, "
-                                                        "switching to host plugin. Error: {0}".format(ustr(e)))
-
-            if ret:
-                return ret
-        else:
-            logger.periodic_info(logger.EVERY_HALF_DAY, "[PERIODIC] Using host plugin as default channel.")
-
+    def call_hostplugin_with_container_check(self, host_func):
+        ret = None
         try:
             ret = host_func()
         except (ResourceGoneError, InvalidContainerError) as e:
@@ -964,6 +931,45 @@ class WireClient(object):
                              message=msg,
                              log_event=True)
                 raise
+
+        return ret
+
+    def send_request_using_appropriate_channel(self, direct_func, host_func):
+        # A wrapper method for all function calls that send HTTP requests. The purpose of the method is to
+        # define which channel to use, direct or through the host plugin. For the host plugin channel,
+        # also implement a retry mechanism.
+
+        # By default, the direct channel is the default channel. If that is the case, try getting a response
+        # through that channel. On failure, fall back to the host plugin channel.
+
+        # When using the host plugin channel, regardless if it's set as default or not, try sending the request first.
+        # On specific failures that indicate a stale goal state (such as resource gone or invalid container parameter),
+        # refresh the goal state and try again. If successful, set the host plugin channel as default. If failed,
+        # raise the exception.
+
+        # NOTE: direct_func and host_func are passed as lambdas. Be careful about capturing goal state data in them as
+        # they will not be refreshed even if a goal state refresh is called before retrying the host_func.
+
+        if not HostPluginProtocol.is_default_channel():
+            ret = None
+            try:
+                ret = direct_func()
+
+                # Different direct channel functions report failure in different ways: by returning None, False,
+                # or raising ResourceGone or InvalidContainer exceptions.
+                if not ret:
+                    logger.periodic_info(logger.EVERY_HOUR, "[PERIODIC] Request failed using the direct channel, "
+                                                            "switching to host plugin.")
+            except (ResourceGoneError, InvalidContainerError) as e:
+                logger.periodic_info(logger.EVERY_HOUR, "[PERIODIC] Request failed using the direct channel, "
+                                                        "switching to host plugin. Error: {0}".format(ustr(e)))
+
+            if ret:
+                return ret
+        else:
+            logger.periodic_info(logger.EVERY_HALF_DAY, "[PERIODIC] Using host plugin as default channel.")
+
+        ret = self.call_hostplugin_with_container_check(host_func)
 
         if not HostPluginProtocol.is_default_channel():
             logger.info("Setting host plugin as default channel from now on. "
@@ -1206,69 +1212,13 @@ class WireClient(object):
         return artifacts_profile
 
     def upload_logs(self, content):
-        try:
-            host_plugin = self.get_host_plugin()
-            host_plugin.put_vm_log(content)
+        host_func = self._upload_logs_through_host(content)
+        # propagate any exceptions up to the main thread
+        return self.call_hostplugin_with_container_check(host_func)
 
-            msg = "Upload VM logs request succeeded using the host plugin channel with " \
-                  "container id {0} and role config file {1}".format(host_plugin.container_id,
-                                                                     host_plugin.role_config_name)
-            logger.info(msg)
-            add_event(name=AGENT_NAME,
-                      version=CURRENT_VERSION,
-                      op=WALAEventOperation.HostPlugin,
-                      is_success=True,
-                      message=msg,
-                      log_event=False)
-            return
-        except (ResourceGoneError, InvalidContainerError) as e:
-            host_plugin = self.get_host_plugin()
-            old_container_id = host_plugin.container_id
-            old_role_config_name = host_plugin.role_config_name
-
-            msg = "Upload VM logs request failed with the current host plugin configuration. " \
-                  "ContainerId: {0}, role config file: {1}. Fetching new goal state and retrying the call." \
-                  "Error: {2}".format(old_container_id, old_role_config_name, ustr(e))
-            logger.info(msg)
-
-            self.update_host_plugin_from_goal_state()
-
-            new_container_id = host_plugin.container_id
-            new_role_config_name = host_plugin.role_config_name
-            msg = "Host plugin reconfigured with new parameters. " \
-                  "ContainerId: {0}, role config file: {1}.".format(new_container_id, new_role_config_name)
-            logger.info(msg)
-
-            try:
-                host = self.get_host_plugin()
-                host.put_vm_log(content)
-
-                msg = "Upload VM logs request succeeded using the host plugin channel after goal state refresh. " \
-                      "ContainerId changed from {0} to {1}, " \
-                      "role config file changed from {2} to {3}.".format(old_container_id, new_container_id,
-                                                                         old_role_config_name, new_role_config_name)
-                logger.info(msg)
-                add_event(name=AGENT_NAME,
-                          version=CURRENT_VERSION,
-                          op=WALAEventOperation.HostPlugin,
-                          is_success=True,
-                          message=msg,
-                          log_event=False)
-                return
-            except (ResourceGoneError, InvalidContainerError) as e:
-                msg = "Upload VM logs request failed using the host plugin channel after goal state refresh. " \
-                      "ContainerId changed from {0} to {1}, role config file changed from {2} to {3}. " \
-                      "Exception type: {4}.".format(old_container_id, new_container_id, old_role_config_name,
-                                                    new_role_config_name, type(e).__name__)
-                add_event(name=AGENT_NAME,
-                          version=CURRENT_VERSION,
-                          op=WALAEventOperation.HostPlugin,
-                          is_success=False,
-                          message=msg,
-                          log_event=True)
-                raise
-        except Exception as e:
-            raise ProtocolError("Failed to upload logs. Error: {0}".format(ustr(e)))
+    def _upload_logs_through_host(self, content):
+        host = self.get_host_plugin()
+        return host.put_vm_log(content)
 
 
 class VersionInfo(object):
