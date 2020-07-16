@@ -1476,10 +1476,8 @@ class TestUpdate(UpdateTestCase):
         update_handler.last_telemetry_heartbeat = datetime.utcnow() - timedelta(hours=1)
         update_handler._send_heartbeat_telemetry(mock_protocol)
         self.assertEqual(1, patch_add_event.call_count)
-        self.assertTrue(
-            any(call_args[0] == "[HEARTBEAT] Agent {0} is running as the goal state agent" for call_args in patch_info.call_args),
-            "The heartbeat was not written to the agent's log"
-        )
+        self.assertTrue(any(call_args[0] == "[HEARTBEAT] Agent {0} is running as the goal state agent {1}"
+                            for call_args in patch_info.call_args), "The heartbeat was not written to the agent's log")
 
 
 class MonitorThreadTest(AgentTestCase):

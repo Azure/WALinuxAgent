@@ -231,6 +231,7 @@ class InvalidExtensionEventError(AgentError):
     def __init__(self, msg=None, inner=None):
         super(InvalidExtensionEventError, self).__init__(msg, inner)
 
+        
 class ExtensionErrorCodes(object):
     """
     Common Error codes used across by Compute RP for better understanding
