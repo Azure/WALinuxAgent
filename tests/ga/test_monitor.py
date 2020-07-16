@@ -221,7 +221,7 @@ class TestEventMonitoring(AgentTestCase, HttpRequestPredicates):
         self.assertTrue(found_msg, "Error event not reported")
 
     @patch("azurelinuxagent.common.event.TELEMETRY_EVENT_PROVIDER_ID", _TEST_EVENT_PROVIDER_ID)
-    @patch("azurelinuxagent.common.protocol.wire.WireClient.send_event")
+    @patch("azurelinuxagent.common.protocol.wire.WireClient.send_encoded_event")
     @patch("azurelinuxagent.common.conf.get_lib_dir")
     def test_collect_and_send_events(self, mock_lib_dir, patch_send_event, *_):
         mock_lib_dir.return_value = self.lib_dir
@@ -243,7 +243,7 @@ class TestEventMonitoring(AgentTestCase, HttpRequestPredicates):
 
             # Validating the crafted message by the collect_and_send_events call.
             self.assertEqual(1, patch_send_event.call_count)
-            send_event_call_args = monitor_handler.get_mock_wire_protocol().client.send_event.call_args[0]
+            send_event_call_args = monitor_handler.get_mock_wire_protocol().client.send_encoded_event.call_args[0]
 
             # Some of those expected values come from the mock protocol and imds client set up during test initialization
             osutil = get_osutil()
@@ -284,7 +284,7 @@ class TestEventMonitoring(AgentTestCase, HttpRequestPredicates):
             self.maxDiff = None
             self.assertEqual(sample_message.encode('utf-8'), send_event_call_args[1])
 
-    @patch("azurelinuxagent.common.protocol.wire.WireClient.send_event")
+    @patch("azurelinuxagent.common.protocol.wire.WireClient.send_encoded_event")
     @patch("azurelinuxagent.common.conf.get_lib_dir")
     def test_collect_and_send_events_with_small_events(self, mock_lib_dir, patch_send_event, *_):
         mock_lib_dir.return_value = self.lib_dir
@@ -303,7 +303,7 @@ class TestEventMonitoring(AgentTestCase, HttpRequestPredicates):
 
             self.assertEqual(4, patch_send_event.call_count)
 
-    @patch("azurelinuxagent.common.protocol.wire.WireClient.send_event")
+    @patch("azurelinuxagent.common.protocol.wire.WireClient.send_encoded_event")
     @patch("azurelinuxagent.common.conf.get_lib_dir")
     def test_collect_and_send_events_with_large_events(self, mock_lib_dir, patch_send_event, *_):
         mock_lib_dir.return_value = self.lib_dir
@@ -367,7 +367,7 @@ class TestEventMonitoring(AgentTestCase, HttpRequestPredicates):
 
             # This test validates that if we hit an issue while sending an event, we never send it again.
             with patch("azurelinuxagent.ga.monitor.add_event") as mock_add_event:
-                with patch("azurelinuxagent.common.protocol.wire.WireClient.send_event") as patch_send_event:
+                with patch("azurelinuxagent.common.protocol.wire.WireClient.send_encoded_event") as patch_send_event:
                     test_str = "Test exception, Guid: {0}".format(str(uuid.uuid4()))
                     patch_send_event.side_effect = Exception(test_str)
 

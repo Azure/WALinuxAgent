@@ -506,12 +506,12 @@ def event_param_to_v1(param):
                                attr_type)
 
 
-def event_to_v1(event):
+def event_to_v1_encoded(event, encoding='utf-8'):
     params = ""
     for param in event.parameters:
         params += event_param_to_v1(param)
     event_str = ustr('<Event id="{0}"><![CDATA[{1}]]></Event>').format(event.eventId, params)
-    return event_str.encode("utf-8")
+    return event_str.encode(encoding)
 
 
 class WireClient(object):
@@ -1068,11 +1068,11 @@ class WireClient(object):
                                  u",{0}: {1}").format(resp.status,
                                                       resp.read()))
 
-    def send_event(self, provider_id, event_str):
+    def send_encoded_event(self, provider_id, event_str, encoding='utf-8'):
         uri = TELEMETRY_URI.format(self.get_endpoint())
         data_format_header = ustr('<?xml version="1.0"?><TelemetryData version="1.0"><Provider id="{0}">').format(
-            provider_id).encode('utf-8')
-        data_format_footer = ustr('</Provider></TelemetryData>').encode('utf-8')
+            provider_id).encode(encoding)
+        data_format_footer = ustr('</Provider></TelemetryData>').encode(encoding)
         # Event string should already be encoded by the time it gets here, to avoid double encoding, dividing it into parts.
         data = data_format_header + event_str + data_format_footer
         try:
@@ -1100,7 +1100,7 @@ class WireClient(object):
             try:
                 if event.providerId not in buf:
                     buf[event.providerId] = b''
-                event_str = event_to_v1(event)
+                event_str = event_to_v1_encoded(event)
                 if len(event_str) >= MAX_EVENT_BUFFER_SIZE:
                     details_of_event = [ustr(x.name) + ":" + ustr(x.value) for x in event.parameters if x.name in
                                         [GuestAgentExtensionEventsSchema.Name, GuestAgentExtensionEventsSchema.Version,
@@ -1111,7 +1111,7 @@ class WireClient(object):
                                          .format(str(details_of_event), len(event_str), MAX_EVENT_BUFFER_SIZE))
                     continue
                 if len(buf[event.providerId] + event_str) >= MAX_EVENT_BUFFER_SIZE:
-                    self.send_event(event.providerId, buf[event.providerId])
+                    self.send_encoded_event(event.providerId, buf[event.providerId])
                     buf[event.providerId] = b''
                     logger.verbose("No of events this request = {0}".format(events_per_request))
                     events_per_request = 0
@@ -1136,7 +1136,7 @@ class WireClient(object):
         for provider_id in list(buf.keys()):
             if len(buf[provider_id]) > 0:
                 logger.verbose("No of events this request = {0}".format(events_per_request))
-                self.send_event(provider_id, buf[provider_id])
+                self.send_encoded_event(provider_id, buf[provider_id])
 
     def report_status_event(self, message, is_success):
         from azurelinuxagent.common.event import report_event, \
