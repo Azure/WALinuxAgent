@@ -87,19 +87,20 @@ def get_data_files(name, version, fullname):
         set_bin_files(data_files)
         set_conf_files(data_files)
         set_logrotate_files(data_files)
-        set_udev_files(data_files)
         if version.startswith("6"):
             set_sysv_files(data_files)
+            set_udev_files(data_files)
         else:
             # redhat7.0+ use systemd
             set_systemd_files(data_files, dest="/usr/lib/systemd/system")
+            set_udev_files(data_files, dest="/lib/udev/rules.d")
             if version.startswith("7.1"):
                 # TODO this is a mitigation to systemctl bug on 7.1
                 set_sysv_files(data_files)
     elif name == 'arch':
         set_bin_files(data_files, dest="/usr/bin")
         set_conf_files(data_files, src=["config/arch/waagent.conf"])
-        set_udev_files(data_files)
+        set_udev_files(data_files, dest="/lib/udev/rules.d")
         set_systemd_files(data_files, dest='/usr/lib/systemd/system',
                           src=["init/arch/waagent.service"])
     elif name == 'coreos':
@@ -120,34 +121,37 @@ def get_data_files(name, version, fullname):
         set_bin_files(data_files)
         set_conf_files(data_files, src=["config/ubuntu/waagent.conf"])
         set_logrotate_files(data_files)
-        set_udev_files(data_files)
         if version.startswith("12") or version.startswith("14"):
             # Ubuntu12.04/14.04 - uses upstart
             set_files(data_files, dest="/etc/init",
                       src=["init/ubuntu/walinuxagent.conf"])
             set_files(data_files, dest='/etc/default',
                       src=['init/ubuntu/walinuxagent'])
+            set_udev_files(data_files)
         elif fullname == 'Snappy Ubuntu Core':
             set_files(data_files, dest="<TODO>",
                       src=["init/ubuntu/snappy/walinuxagent.yml"])
+            set_udev_files(data_files)
         else:
             # Ubuntu15.04+ uses systemd
             set_systemd_files(data_files,
                               src=["init/ubuntu/walinuxagent.service"])
+            set_udev_files(data_files, dest="/lib/udev/rules.d")
     elif name == 'suse' or name == 'opensuse':
         set_bin_files(data_files)
         set_conf_files(data_files, src=["config/suse/waagent.conf"])
         set_logrotate_files(data_files)
-        set_udev_files(data_files)
         if fullname == 'SUSE Linux Enterprise Server' and \
                 version.startswith('11') or \
                 fullname == 'openSUSE' and version.startswith(
                     '13.1'):
             set_sysv_files(data_files, dest='/etc/init.d',
                            src=["init/suse/waagent"])
+            set_udev_files(data_files)
         else:
             # sles 12+ and openSUSE 13.2+ use systemd
             set_systemd_files(data_files, dest='/usr/lib/systemd/system')
+            set_udev_files(data_files, dest="/lib/udev/rules.d")
     elif name == 'freebsd':
         set_bin_files(data_files, dest="/usr/local/sbin")
         set_conf_files(data_files, src=["config/freebsd/waagent.conf"])
@@ -167,7 +171,7 @@ def get_data_files(name, version, fullname):
         set_bin_files(data_files)
         set_conf_files(data_files, src=["config/iosxe/waagent.conf"])
         set_logrotate_files(data_files)
-        set_udev_files(data_files)
+        set_udev_files(data_files, dest="/lib/udev/rules.d")
         set_systemd_files(data_files, dest="/usr/lib/systemd/system")
         if version.startswith("7.1"):
             # TODO this is a mitigation to systemctl bug on 7.1
