@@ -26,7 +26,7 @@ from collections import defaultdict
 import azurelinuxagent.common.logger as logger
 from azurelinuxagent.common import conf
 from azurelinuxagent.common.event import EVENTS_DIRECTORY, TELEMETRY_LOG_EVENT_ID, \
-    TELEMETRY_LOG_PROVIDER_ID, add_common_params_to_extension_event, add_event, WALAEventOperation, add_log_event
+    TELEMETRY_LOG_PROVIDER_ID, add_event, WALAEventOperation, add_log_event, get_event_logger
 from azurelinuxagent.common.exception import InvalidExtensionEventError
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.telemetryevent import TelemetryEventList, TelemetryEvent, TelemetryEventParam, \
@@ -36,7 +36,6 @@ from azurelinuxagent.ga.periodic_operation import PeriodicOperation
 
 
 def get_extension_telemetry_handler(protocol_util):
-    # Reuse the same protocol_util as the ExtHandler class
     return ExtensionTelemetryHandler(protocol_util)
 
 class ExtensionEventSchema(object):
@@ -58,8 +57,8 @@ class ExtensionTelemetryHandler(object):
     Kusto for advanced debuggability.
     """
 
-    EXTENSION_EVENT_COLLECTION_PERIOD = datetime.timedelta(minutes=5)
-    EXTENSION_EVENT_FILE_NAME_REGEX = re.compile(r"^(\d+)\.json$", re.IGNORECASE)
+    _EXTENSION_EVENT_COLLECTION_PERIOD = datetime.timedelta(minutes=5)
+    _EXTENSION_EVENT_FILE_NAME_REGEX = re.compile(r"^(\d+)\.json$", re.IGNORECASE)
 
     # Limits
     MAX_NUMBER_OF_EVENTS_PER_EXTENSION_PER_PERIOD = 300
@@ -108,7 +107,7 @@ class ExtensionTelemetryHandler(object):
 
     def daemon(self):
         op = PeriodicOperation("collect_and_send_events", self.collect_and_send_events,
-                               self.EXTENSION_EVENT_COLLECTION_PERIOD)
+                               self._EXTENSION_EVENT_COLLECTION_PERIOD)
         logger.info("Successfully started the {0} thread".format(self.get_thread_name()))
         while not self.stopped():
             try:
@@ -185,7 +184,7 @@ class ExtensionTelemetryHandler(object):
 
         # Filter out the files that do not follow the pre-defined EXTENSION_EVENT_FILE_NAME_REGEX
         event_files = [event_file for event_file in os.listdir(handler_event_dir_path) if
-                       re.match(self.EXTENSION_EVENT_FILE_NAME_REGEX, event_file) is not None]
+                       re.match(self._EXTENSION_EVENT_FILE_NAME_REGEX, event_file) is not None]
         # Pick the latest files first, we'll discard older events if len(events) > MAX_EVENT_COUNT
         event_files.sort(reverse=True)
 
@@ -264,6 +263,7 @@ class ExtensionTelemetryHandler(object):
     def _parse_event_file_and_capture_events(self, handler_name, event_file_path, captured_events_count,
                                              dropped_events_with_error_count):
         events_list = []
+        event_file_time = datetime.datetime.fromtimestamp(os.path.getmtime(event_file_path))
 
         # Read event file and decode it properly
         with open(event_file_path, "rb") as fd:
@@ -279,7 +279,7 @@ class ExtensionTelemetryHandler(object):
 
         for event in events:
             try:
-                events_list.append(self._parse_telemetry_event(handler_name, event))
+                events_list.append(self._parse_telemetry_event(handler_name, event, event_file_time))
                 captured_events_count += 1
             except InvalidExtensionEventError as e:
             # These are the errors thrown if there's an error parsing the event. We want to report these back to the
@@ -295,7 +295,7 @@ class ExtensionTelemetryHandler(object):
 
         return events_list
 
-    def _parse_telemetry_event(self, handler_name, extension_unparsed_event):
+    def _parse_telemetry_event(self, handler_name, extension_unparsed_event, event_file_time):
         """
         Parse the Json event file and convert it to TelemetryEvent object with the required data.
         :return: Complete TelemetryEvent with all required fields filled up properly. Raises if event breaches contract.
@@ -308,7 +308,7 @@ class ExtensionTelemetryHandler(object):
 
         event = TelemetryEvent(TELEMETRY_LOG_EVENT_ID, TELEMETRY_LOG_PROVIDER_ID)
         event.file_type = "json"
-        add_common_params_to_extension_event(event)
+        self.add_common_params_to_extension_event(event, event_file_time)
 
         replace_or_add_params = {
             GuestAgentGenericLogsSchema.EventName: "{0}-{1}".format(handler_name, extension_event[
@@ -383,3 +383,8 @@ class ExtensionTelemetryHandler(object):
         # Add the remaining params to the event
         for param_name in replace_or_add_params:
             event.parameters.append(TelemetryEventParam(param_name, replace_or_add_params[param_name]))
+
+    @staticmethod
+    def add_common_params_to_extension_event(event, event_time):
+        reporter = get_event_logger()
+        reporter.add_common_event_parameters(event, event_time)

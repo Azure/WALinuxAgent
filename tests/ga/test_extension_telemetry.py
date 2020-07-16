@@ -51,8 +51,6 @@ class TestExtensionTelemetryHandler(AgentTestCase, HttpRequestPredicates):
 
     def setUp(self):
         AgentTestCase.setUp(self)
-        prefix = "ExtensionTelemetryUnitTest"
-        logger.DEFAULT_LOGGER = Logger(prefix=prefix)
         clear_singleton_instances(ProtocolUtil)
 
         # Create the log directory if not exists
@@ -60,6 +58,7 @@ class TestExtensionTelemetryHandler(AgentTestCase, HttpRequestPredicates):
 
     def tearDown(self):
         AgentTestCase.tearDown(self)
+
 
     @staticmethod
     def _parse_file_and_count_good_events(test_events_file_path):

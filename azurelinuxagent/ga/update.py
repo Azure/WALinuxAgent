@@ -278,6 +278,7 @@ class UpdateHandler(object):
             ]
 
             if is_extension_telemetry_pipeline_enabled():
+                # Reuse the same protocol_util as the UpdateHandler class to avoid new initializations
                 all_thread_handlers.append(get_extension_telemetry_handler(self.protocol_util))
 
             # Launch all monitoring threads
