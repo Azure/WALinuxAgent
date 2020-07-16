@@ -2583,27 +2583,6 @@ class TestExtensionUpdateOnFailure(ExtensionTestCase):
             # Run whatever test logic is required.
             verify_func(manager, first_ext, second_ext)
 
-    
-    def test_enabled_ext_should_be_disabled_at_ver_update(self):
-        # TODO: This test is redundant.
-
-        def verify(manager, first_ext, second_ext):
-
-            manager.verify_invocation_ordering(
-                first_ext.get_command_key("disableCommand"),
-                second_ext.get_command_key("updateCommand"),
-                first_ext.get_command_key("uninstallCommand"),
-                second_ext.get_command_key("installCommand"),
-                second_ext.get_command_key("enableCommand")
-            )
-        
-        TestExtensionUpdateOnFailure._do_upgrade_scenario(
-            first_ext_info=extension_manifest_info(),
-            upgraded_ext_info=extension_manifest_info(version="1.1.0"),
-            verify_func=verify
-        )
-
-
     def test_non_enabled_ext_should_not_be_disabled_at_ver_update(self):
 
         def verify(manager, first_ext, second_ext):
