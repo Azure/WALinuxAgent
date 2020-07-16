@@ -228,14 +228,13 @@ class WireProtocolDataBase(object):
         # in both above examples, we're identifying a plugin by its name and replacing the version.
 
         #                                           <Plugin name="" ver=" 1.0.0 " other=stuff>
-        replacing_attr_after_identifying_attr = r'(?<=<{0} )(.*{1}.*{2}=")[^"]+(?="[^>]*>)'.format(element_name, identifying_attr_str, attribute_name)
+        replacing_attr_after_identifying_attr = r'(?<=<{0} )([^>]*{1}[^>]*{2}=")[^"]+(?="[^>]*>)'.format(element_name, identifying_attr_str, attribute_name)
         #                                           <Plugin     ver=" 1.0.0 " name="" other=stuff>
-        replacing_attr_before_identifying_attr = r'(?<=<{0} )(.*{1}=")[^"]+(?=".*{2}[^>]*>)'.format(element_name, attribute_name, identifying_attr_str)
+        replacing_attr_before_identifying_attr = r'(?<=<{0} )([^>]*{1}=")[^"]+(?="[^>]*{2}[^>]*>)'.format(element_name, attribute_name, identifying_attr_str)
 
         for regex in [replacing_attr_before_identifying_attr, replacing_attr_after_identifying_attr]:
-            new_xml = re.sub(regex, r'\g<1>{0}'.format(attribute_value), xml_document)
-            if new_xml != xml_document:
-                return new_xml
+            if re.search(regex, xml_document) is not None:
+                return re.sub(regex, r'\g<1>{0}'.format(attribute_value), xml_document)
         
         raise Exception("Could not match attribute '{0}' of element '{1}' with '{2}'".format(attribute_name, element_name, identifying_attr_str))
 
