@@ -74,7 +74,7 @@ def _get_iptables_version_command():
 
 
 def _get_firewall_accept_command(wait, command, destination, owner_uid):
-    return _add_wait(wait, ["iptables", "-t", "security", command, "OUTPUT", "-d", destination, "-p", "tcp", "-m", "owner", "--uid-owner", owner_uid, "-j" "ACCEPT"])
+    return _add_wait(wait, ["iptables", "-t", "security", command, "OUTPUT", "-d", destination, "-p", "tcp", "-m", "owner", "--uid-owner", str(owner_uid), "-j" "ACCEPT"])
 
 
 def _get_firewall_drop_command(wait, command, destination):
@@ -96,7 +96,7 @@ def _get_firewall_delete_conntrack_accept_command(wait, destination):
 
 
 def _get_firewall_delete_owner_accept_command(wait, destination, owner_uid):
-    return _add_wait(wait, ["iptables", "-t", "security", "-D", "OUTPUT", "-d", destination, "-p", "tcp", "-m", "owner", "--uid-owner", owner_uid, "-j", "ACCEPT"])
+    return _add_wait(wait, ["iptables", "-t", "security", "-D", "OUTPUT", "-d", destination, "-p", "tcp", "-m", "owner", "--uid-owner", str(owner_uid), "-j", "ACCEPT"])
 
 def _get_firewall_delete_conntrack_drop_command(wait, destination):
     return _add_wait(wait, ["iptables", "-t", "security", "-D", "OUTPUT", "-d", destination, "-p", "tcp", "-m", "conntrack", "--ctstate", "INVALID,NEW", "-j", "DROP"])
@@ -203,18 +203,13 @@ class DefaultOSUtil(object):
                 if e.returncode == 2:
                     raise Exception("invalid firewall deletion rule '{0}'".format(rule))
 
-    def remove_firewall(self, dst_ip=None, uid=None):
+    def remove_firewall(self, dst_ip, uid):
         # If a previous attempt failed, do not retry
         global _enable_firewall
         if not _enable_firewall:
             return False
 
         try:
-            if dst_ip is None or uid is None:
-                msg = "Missing arguments to enable_firewall"
-                logger.warn(msg)
-                raise Exception(msg)
-
             wait = self.get_firewall_will_wait()
 
             # This rule was <= 2.2.25 only, and may still exist on some VMs.  Until 2.2.25
