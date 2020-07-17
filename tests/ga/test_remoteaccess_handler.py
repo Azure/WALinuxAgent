@@ -15,14 +15,14 @@
 # Requires Python 2.6+ and Openssl 1.0+
 #
 
-from datetime import timedelta
+from datetime import timedelta, datetime
 
 from mock import Mock, MagicMock
-from azurelinuxagent.common.protocol.util import ProtocolUtil
 
 from azurelinuxagent.common.exception import RemoteAccessError
 from azurelinuxagent.common.protocol.goal_state import RemoteAccess
-from azurelinuxagent.common.protocol.wire import *
+from azurelinuxagent.common.protocol.util import ProtocolUtil
+from azurelinuxagent.common.protocol.wire import WireProtocol
 from azurelinuxagent.ga.remoteaccess import RemoteAccessHandler
 from tests.common.osutil.mock_osutil import MockOSUtil
 from tests.tools import AgentTestCase, load_data, patch, clear_singleton_instances
@@ -349,7 +349,7 @@ class TestRemoteAccessHandler(AgentTestCase):
         for user in remote_access.user_list.users:
             count += 1
             user.name = "tstuser{0}".format(count)
-            if count is 2:
+            if count == 2:
                 user.name = ""
             expiration_date = datetime.utcnow() + timedelta(days=count)
             user.expiration = expiration_date.strftime("%a, %d %b %Y %H:%M:%S ") + "UTC"

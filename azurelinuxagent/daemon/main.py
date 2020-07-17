@@ -26,7 +26,6 @@ import azurelinuxagent.common.conf as conf
 import azurelinuxagent.common.logger as logger
 import azurelinuxagent.common.utils.fileutil as fileutil
 
-from azurelinuxagent.common.cgroupconfigurator import CGroupConfigurator
 from azurelinuxagent.common.event import add_event, WALAEventOperation, initialize_event_logger_vminfo_common_parameters
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.osutil import get_osutil
@@ -148,9 +147,6 @@ class DaemonHandler(object):
         # Once we have the protocol, complete initialization of the telemetry fields
         # that require the goal state and IMDS
         self._initialize_telemetry()
-
-        # Initialize the agent cgroup
-        CGroupConfigurator.get_instance().create_agent_cgroups(track_cgroups=False)
 
         # Enable RDMA, continue in errors
         if conf.enable_rdma():

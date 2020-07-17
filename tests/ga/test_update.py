@@ -3,21 +3,38 @@
 
 from __future__ import print_function
 
+import glob
+import json
+import os
+import shutil
+import stat
+import sys
 import tempfile
+import time
 import unittest
+import zipfile
+from datetime import datetime, timedelta
 from threading import currentThread
 
-from azurelinuxagent.ga.env import EnvHandler
-
+from azurelinuxagent.common import conf
+from azurelinuxagent.common.exception import ProtocolError, UpdateError, ResourceGoneError
+from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.protocol.goal_state import ExtensionsConfig
-from azurelinuxagent.common.protocol.hostplugin import *
+from azurelinuxagent.common.protocol.hostplugin import URI_FORMAT_GET_API_VERSIONS, HOST_PLUGIN_PORT, \
+    URI_FORMAT_GET_EXTENSION_ARTIFACT, HostPluginProtocol
+from azurelinuxagent.common.protocol.restapi import ExtHandlerPackageUri, VMAgentManifest, VMAgentManifestUri, \
+    VMAgentManifestList, ExtHandlerPackage, ExtHandlerPackageList
 from azurelinuxagent.common.protocol.util import ProtocolUtil
-from azurelinuxagent.common.protocol.wire import *
-from azurelinuxagent.common.version import AGENT_PKG_GLOB, AGENT_DIR_GLOB
-from azurelinuxagent.ga.monitor import MonitorHandler
-from azurelinuxagent.ga.update import *
+from azurelinuxagent.common.protocol.wire import WireProtocol
+from azurelinuxagent.common.utils import fileutil, restutil, textutil
+from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
+from azurelinuxagent.common.version import AGENT_PKG_GLOB, AGENT_DIR_GLOB, AGENT_NAME, AGENT_DIR_PATTERN, \
+    AGENT_VERSION, CURRENT_AGENT, CURRENT_VERSION
+from azurelinuxagent.ga.update import GuestAgent, GuestAgentError, MAX_FAILURE, AGENT_MANIFEST_FILE, \
+    get_update_handler, ORPHAN_POLL_INTERVAL, AGENT_PARTITION_FILE, AGENT_ERROR_FILE, ORPHAN_WAIT_INTERVAL, \
+    CHILD_LAUNCH_RESTART_MAX, get_python_cmd, CHILD_HEALTH_INTERVAL, UpdateHandler
 from tests.tools import AgentTestCase, call, data_dir, DEFAULT, patch, load_bin_data, load_data, Mock, MagicMock, \
-    mock_sleep, clear_singleton_instances, skip_if_predicate_true
+    clear_singleton_instances
 
 NO_ERROR = {
     "last_failure": 0.0,
@@ -745,7 +762,7 @@ class TestUpdate(UpdateTestCase):
         with patch('os.kill') as mock_kill:
             calls, sleeps = self._test_ensure_no_orphans(
                 invocations=4,
-                interval=3 * GOAL_STATE_INTERVAL,
+                interval=3 * ORPHAN_POLL_INTERVAL,
                 pid_count=1)
             self.assertEqual(3, calls)
             self.assertEqual(2, sleeps)
@@ -1209,7 +1226,7 @@ class TestUpdate(UpdateTestCase):
         self._test_run_latest()
         self.assertEqual(0, mock_signal.call_count)
 
-    def _test_run(self, invocations=1, calls=[call.run()], enable_updates=False, sleep_interval=(3,)):
+    def _test_run(self, invocations=1, calls=[call.run()], enable_updates=False, sleep_interval=(6,)):
         conf.get_autoupdate_enabled = Mock(return_value=enable_updates)
 
         # Note:
@@ -1459,10 +1476,9 @@ class TestUpdate(UpdateTestCase):
         update_handler.last_telemetry_heartbeat = datetime.utcnow() - timedelta(hours=1)
         update_handler._send_heartbeat_telemetry(mock_protocol)
         self.assertEqual(1, patch_add_event.call_count)
-        self.assertTrue(
-            any(call_args[0] == "[HEARTBEAT] Agent {0} is running as the goal state agent" for call_args in patch_info.call_args),
-            "The heartbeat was not written to the agent's log"
-        )
+        self.assertTrue(any(call_args[0] == "[HEARTBEAT] Agent {0} is running as the goal state agent {1}"
+                            for call_args in patch_info.call_args), "The heartbeat was not written to the agent's log")
+
 
 class MonitorThreadTest(AgentTestCase):
     def setUp(self):
@@ -1488,9 +1504,10 @@ class MonitorThreadTest(AgentTestCase):
                 with patch('azurelinuxagent.ga.exthandlers.get_exthandlers_handler'):
                     with patch('azurelinuxagent.ga.remoteaccess.get_remote_access_handler'):
                         with patch('azurelinuxagent.ga.update.initialize_event_logger_vminfo_common_parameters'):
-                            with patch('time.sleep', side_effect=iterator):
-                                with patch('sys.exit'):
-                                    self.update_handler.run()
+                            with patch('azurelinuxagent.common.cgroupapi.CGroupsApi.cgroups_supported', return_value=False):  # skip all cgroup stuff
+                                with patch('time.sleep', side_effect=iterator):
+                                    with patch('sys.exit'):
+                                        self.update_handler.run()
 
     @patch('azurelinuxagent.ga.monitor.get_monitor_handler')
     @patch('azurelinuxagent.ga.env.get_env_handler')

@@ -26,10 +26,10 @@ import xml.dom
 from datetime import datetime, timedelta
 import azurelinuxagent.common.utils.textutil as textutil
 from azurelinuxagent.common import event, logger
+from azurelinuxagent.common.AgentGlobals import AgentGlobals
 from azurelinuxagent.common.event import add_event, add_periodic, add_log_event, elapsed_milliseconds, report_metric, \
     WALAEventOperation, parse_xml_event, parse_json_event, AGENT_EVENT_FILE_EXTENSION, EVENTS_DIRECTORY
 from azurelinuxagent.common.future import ustr
-from azurelinuxagent.common.protocol.goal_state import GoalState
 from tests.protocol import mockwiredata
 from tests.protocol.mocks import mock_wire_protocol, HttpRequestPredicates, MockHttpResponse
 from azurelinuxagent.common.version import CURRENT_AGENT, CURRENT_VERSION, AGENT_EXECUTION_MODE
@@ -51,7 +51,7 @@ class TestEvent(HttpRequestPredicates, AgentTestCase):
             # common parameters computed at event creation; the timestamp (stored as the opcode name) is not included here and
             # is checked separately from these parameters
             'GAVersion': CURRENT_AGENT,
-            'ContainerId': GoalState.ContainerID,
+            'ContainerId': AgentGlobals.get_container_id(),
             'EventTid': threading.current_thread().ident,
             'EventPid': os.getpid(),
             'TaskName': threading.current_thread().getName(),

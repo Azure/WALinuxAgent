@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 # Copyright 2018 Microsoft Corporation
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -20,6 +21,7 @@ import json
 import os
 import platform
 import random
+import re
 import string
 import tempfile
 import time
@@ -28,8 +30,9 @@ from datetime import timedelta
 from azurelinuxagent.common.protocol.util import ProtocolUtil
 
 from azurelinuxagent.common import event, logger
-from azurelinuxagent.common.cgroup import CGroup, CpuCgroup, MemoryCgroup
-from azurelinuxagent.common.cgroupstelemetry import CGroupsTelemetry, MetricValue
+from azurelinuxagent.common.cgroup import CGroup, CpuCgroup, MemoryCgroup, MetricValue
+from azurelinuxagent.common.cgroupconfigurator import CGroupConfigurator
+from azurelinuxagent.common.cgroupstelemetry import CGroupsTelemetry
 from azurelinuxagent.common.datacontract import get_properties
 from azurelinuxagent.common.event import add_event, WALAEventOperation, EVENTS_DIRECTORY
 from azurelinuxagent.common.exception import HttpError
@@ -39,7 +42,8 @@ from azurelinuxagent.common.protocol.wire import WireProtocol
 from azurelinuxagent.common.telemetryevent import TelemetryEvent, TelemetryEventParam
 from azurelinuxagent.common.utils import fileutil, restutil
 from azurelinuxagent.common.version import AGENT_VERSION, CURRENT_VERSION, CURRENT_AGENT, DISTRO_NAME, DISTRO_VERSION, DISTRO_CODE_NAME
-from azurelinuxagent.ga.monitor import generate_extension_metrics_telemetry_dictionary, get_monitor_handler, MonitorHandler, PeriodicOperation
+from azurelinuxagent.ga.monitor import get_monitor_handler, MonitorHandler, PeriodicOperation, ResetPeriodicLogMessagesOperation, PollResourceUsageOperation
+from tests.common.mock_cgroup_commands import mock_cgroup_commands
 from tests.protocol.mockwiredata import DATA_FILE
 from tests.protocol.mocks import mock_wire_protocol, HttpRequestPredicates, MockHttpResponse
 from tests.tools import Mock, MagicMock, patch, AgentTestCase, clear_singleton_instances, PropertyMock
@@ -157,10 +161,9 @@ class TestMonitor(AgentTestCase, HttpRequestPredicates):
         if len(logger.DEFAULT_LOGGER.periodic_messages) != 100:
             raise Exception('Test setup error: the periodic messages were not added')
 
-        with _create_monitor_handler(enabled_operations=["reset_loggers"]) as monitor_handler:
-            monitor_handler.run_and_wait()
+        ResetPeriodicLogMessagesOperation().run()
 
-            self.assertEqual(len(logger.DEFAULT_LOGGER.periodic_messages), 0, "The monitor thread did not reset the periodic log messages")
+        self.assertEqual(0, len(logger.DEFAULT_LOGGER.periodic_messages), "The monitor thread did not reset the periodic log messages")
 
 
 class TestEventMonitoring(AgentTestCase, HttpRequestPredicates):
@@ -403,55 +406,27 @@ class TestExtensionMetricsDataTelemetry(AgentTestCase):
     @patch('azurelinuxagent.common.event.EventLogger.add_metric')
     @patch('azurelinuxagent.common.event.EventLogger.add_event')
     @patch("azurelinuxagent.common.cgroupstelemetry.CGroupsTelemetry.poll_all_tracked")
-    @patch("azurelinuxagent.common.cgroupstelemetry.CGroupsTelemetry.report_all_tracked")
-    def test_send_extension_metrics_telemetry(self, patch_report_all_tracked, patch_poll_all_tracked, patch_add_event,
+    def test_send_extension_metrics_telemetry(self, patch_poll_all_tracked, patch_add_event,
                                               patch_add_metric, *args):
         patch_poll_all_tracked.return_value = [MetricValue("Process", "% Processor Time", 1, 1),
                                                MetricValue("Memory", "Total Memory Usage", 1, 1),
                                                MetricValue("Memory", "Max Memory Usage", 1, 1)]
 
-        patch_report_all_tracked.return_value = {
-            "memory": {
-                "cur_mem": [1, 1, 1, 1, 1, str(datetime.datetime.utcnow()), str(datetime.datetime.utcnow())],
-                "max_mem": [1, 1, 1, 1, 1, str(datetime.datetime.utcnow()), str(datetime.datetime.utcnow())]
-            },
-            "cpu": {
-                "cur_cpu": [1, 1, 1, 1, 1, str(datetime.datetime.utcnow()), str(datetime.datetime.utcnow())]
-            }
-        }
-
-        monitor_handler = get_monitor_handler()
-        monitor_handler.init_protocols()
-        monitor_handler.last_cgroup_polling_telemetry = datetime.datetime.utcnow() - timedelta(hours=1)
-        monitor_handler.last_cgroup_report_telemetry = datetime.datetime.utcnow() - timedelta(hours=1)
-        monitor_handler.poll_telemetry_metrics()
-        monitor_handler.send_telemetry_metrics()
+        PollResourceUsageOperation().run()
         self.assertEqual(1, patch_poll_all_tracked.call_count)
-        self.assertEqual(1, patch_report_all_tracked.call_count)
-        self.assertEqual(1, patch_add_event.call_count)
         self.assertEqual(3, patch_add_metric.call_count)  # Three metrics being sent.
-        monitor_handler.stop()
 
     @patch('azurelinuxagent.common.event.EventLogger.add_metric')
     @patch('azurelinuxagent.common.event.EventLogger.add_event')
     @patch("azurelinuxagent.common.cgroupstelemetry.CGroupsTelemetry.poll_all_tracked")
-    @patch("azurelinuxagent.common.cgroupstelemetry.CGroupsTelemetry.report_all_tracked", return_value={})
-    def test_send_extension_metrics_telemetry_for_empty_cgroup(self, patch_report_all_tracked, patch_poll_all_tracked,
+    def test_send_extension_metrics_telemetry_for_empty_cgroup(self, patch_poll_all_tracked,
                                                                patch_add_event, patch_add_metric,*args):
-        patch_report_all_tracked.return_value = {}
         patch_poll_all_tracked.return_value = []
 
-        monitor_handler = get_monitor_handler()
-        monitor_handler.init_protocols()
-        monitor_handler.last_cgroup_polling_telemetry = datetime.datetime.utcnow() - timedelta(hours=1)
-        monitor_handler.last_cgroup_report_telemetry = datetime.datetime.utcnow() - timedelta(hours=1)
-        monitor_handler.poll_telemetry_metrics()
-        monitor_handler.send_telemetry_metrics()
+        PollResourceUsageOperation().run()
         self.assertEqual(1, patch_poll_all_tracked.call_count)
-        self.assertEqual(1, patch_report_all_tracked.call_count)
         self.assertEqual(0, patch_add_event.call_count)
         self.assertEqual(0, patch_add_metric.call_count)
-        monitor_handler.stop()
 
     @patch('azurelinuxagent.common.event.EventLogger.add_metric')
     @patch("azurelinuxagent.common.cgroup.MemoryCgroup.get_memory_usage")
@@ -465,14 +440,9 @@ class TestExtensionMetricsDataTelemetry(AgentTestCase):
 
         CGroupsTelemetry._tracked.append(MemoryCgroup("cgroup_name", "/test/path"))
 
-        monitor_handler = get_monitor_handler()
-        monitor_handler.init_protocols()
-        monitor_handler.last_cgroup_polling_telemetry = datetime.datetime.utcnow() - timedelta(hours=1)
-        monitor_handler.last_cgroup_report_telemetry = datetime.datetime.utcnow() - timedelta(hours=1)
-        monitor_handler.poll_telemetry_metrics()
+        PollResourceUsageOperation().run()
         self.assertEqual(0, patch_periodic_warn.call_count)
         self.assertEqual(0, patch_add_metric.call_count)  # No metrics should be sent.
-        monitor_handler.stop()
 
     @patch('azurelinuxagent.common.event.EventLogger.add_metric')
     @patch("azurelinuxagent.common.cgroup.CpuCgroup.get_cpu_usage")
@@ -486,34 +456,22 @@ class TestExtensionMetricsDataTelemetry(AgentTestCase):
 
         CGroupsTelemetry._tracked.append(CpuCgroup("cgroup_name", "/test/path"))
 
-        monitor_handler = get_monitor_handler()
-        monitor_handler.init_protocols()
-        monitor_handler.last_cgroup_polling_telemetry = datetime.datetime.utcnow() - timedelta(hours=1)
-        monitor_handler.last_cgroup_report_telemetry = datetime.datetime.utcnow() - timedelta(hours=1)
-        monitor_handler.poll_telemetry_metrics()
+        PollResourceUsageOperation().run()
         self.assertEqual(0, patch_periodic_warn.call_count)
         self.assertEqual(0, patch_add_metric.call_count)  # No metrics should be sent.
-        monitor_handler.stop()
 
     @patch('azurelinuxagent.common.event.EventLogger.add_metric')
     @patch('azurelinuxagent.common.logger.Logger.periodic_warn')
     def test_send_extension_metrics_telemetry_for_unsupported_cgroup(self, patch_periodic_warn, patch_add_metric, *args):
         CGroupsTelemetry._tracked.append(CGroup("cgroup_name", "/test/path", "io"))
 
-        monitor_handler = get_monitor_handler()
-        monitor_handler.init_protocols()
-        monitor_handler.last_cgroup_polling_telemetry = datetime.datetime.utcnow() - timedelta(hours=1)
-        monitor_handler.last_cgroup_report_telemetry = datetime.datetime.utcnow() - timedelta(hours=1)
-        monitor_handler.poll_telemetry_metrics()
+        PollResourceUsageOperation().run()
         self.assertEqual(1, patch_periodic_warn.call_count)
         self.assertEqual(0, patch_add_metric.call_count)  # No metrics should be sent.
-
-        monitor_handler.stop()
 
     def test_generate_extension_metrics_telemetry_dictionary(self, *args):
         num_polls = 10
         num_extensions = 1
-        num_summarization_values = 7
 
         cpu_percent_values = [random.randint(0, 100) for _ in range(num_polls)]
 
@@ -544,53 +502,64 @@ class TestExtensionMetricsDataTelemetry(AgentTestCase):
                             patch_get_memory_max_usage.return_value = max_memory_usage_values[i]  # example 450 MB
                             CGroupsTelemetry.poll_all_tracked()
 
-        performance_metrics = CGroupsTelemetry.report_all_tracked()
 
-        message_json = generate_extension_metrics_telemetry_dictionary(schema_version=1.0,
-                                                                       performance_metrics=performance_metrics)
+class PollResourceUsageOperationTestCase(AgentTestCase):
+    @classmethod
+    def setUpClass(cls):
+        AgentTestCase.setUpClass()
+        # ensure cgroups are enabled by forcing a new instance
+        CGroupConfigurator._instance = None
+        with mock_cgroup_commands():
+            CGroupConfigurator.get_instance().initialize()
 
-        for i in range(num_extensions):
-            self.assertTrue(CGroupsTelemetry.is_tracked("dummy_cpu_path_{0}".format(i)))
-            self.assertTrue(CGroupsTelemetry.is_tracked("dummy_memory_path_{0}".format(i)))
+    @classmethod
+    def tearDownClass(cls):
+        CGroupConfigurator._instance = None
+        AgentTestCase.tearDownClass()
 
-        self.assertIn("SchemaVersion", message_json)
-        self.assertIn("PerfMetrics", message_json)
+    def test_it_should_report_processes_that_do_not_belong_to_the_agent_cgroup(self):
+        with mock_cgroup_commands() as mock_commands:
+            mock_commands.add_command(r'^systemd-cgls.+/walinuxagent.service$',
+'''
+Directory /sys/fs/cgroup/cpu/system.slice/walinuxagent.service:
+├─27519 /usr/bin/python3 -u /usr/sbin/waagent -daemon
+├─27547 python3 -u bin/WALinuxAgent-2.2.48.1-py2.7.egg -run-exthandlers
+├─6200 systemd-cgls /sys/fs/cgroup/cpu,cpuacct/system.slice/walinuxagent.service
+├─5821 pidof systemd-networkd
+├─5822 iptables --version
+├─5823 iptables -w -t security -D OUTPUT -d 168.63.129.16 -p tcp -m conntrack --ctstate INVALID,NEW -j ACCEPT
+├─5824 iptables -w -t security -D OUTPUT -d 168.63.129.16 -p tcp -m owner --uid-owner 0 -j ACCEPT
+├─5825 ip route show
+├─5826 ifdown eth0 && ifup eth0
+├─5699 bash /var/lib/waagent/Microsoft.CPlat.Core.RunCommandLinux-1.0.1/bin/run-command-shim enable
+├─5701 tee -ia /var/log/azure/run-command/handler.log
+├─5719 /var/lib/waagent/Microsoft.CPlat.Core.RunCommandLinux-1.0.1/bin/run-command-extension enable
+├─5727 /bin/sh -c /var/lib/waagent/run-command/download/1/script.sh
+└─5728 /bin/sh /var/lib/waagent/run-command/download/1/script.sh
+''')
+            with patch("azurelinuxagent.ga.monitor.add_event") as add_event_patcher:
+                PollResourceUsageOperation().run()
 
-        collected_metrics = message_json["PerfMetrics"]
+                messages = [kwargs["message"] for (_, kwargs) in add_event_patcher.call_args_list if "The agent's cgroup includes unexpected processes" in kwargs["message"]]
 
-        for i in range(num_extensions):
-            extn_name = "dummy_extension_{0}".format(i)
+                self.assertEqual(1, len(messages), "Exactly 1 telemetry event should have been reported. Events: {0}".format(messages))
 
-            self.assertIn("memory", collected_metrics[extn_name])
-            self.assertIn("cur_mem", collected_metrics[extn_name]["memory"])
-            self.assertIn("max_mem", collected_metrics[extn_name]["memory"])
-            self.assertEqual(len(collected_metrics[extn_name]["memory"]["cur_mem"]), num_summarization_values)
-            self.assertEqual(len(collected_metrics[extn_name]["memory"]["max_mem"]), num_summarization_values)
+                unexpected_processes = [
+                    'bash /var/lib/waagent/Microsoft.CPlat.Core.RunCommandLinux-1.0.1/bin/run-command-shim enable',
+                    'tee -ia /var/log/azure/run-command/handler.log',
+                    '/var/lib/waagent/Microsoft.CPlat.Core.RunCommandLinux-1.0.1/bin/run-command-extension enable',
+                    '/bin/sh -c /var/lib/waagent/run-command/download/1/script.sh',
+                    '/bin/sh /var/lib/waagent/run-command/download/1/script.sh',
+                ]
 
-            self.assertIsInstance(collected_metrics[extn_name]["memory"]["cur_mem"][5], str)
-            self.assertIsInstance(collected_metrics[extn_name]["memory"]["cur_mem"][6], str)
-            self.assertIsInstance(collected_metrics[extn_name]["memory"]["max_mem"][5], str)
-            self.assertIsInstance(collected_metrics[extn_name]["memory"]["max_mem"][6], str)
+                for fp in unexpected_processes:
+                    self.assertIn(fp, messages[0], "[{0}] was not reported as an unexpected process. Events: {1}".format(fp, messages))
 
-            self.assertIn("cpu", collected_metrics[extn_name])
-            self.assertIn("cur_cpu", collected_metrics[extn_name]["cpu"])
-            self.assertEqual(len(collected_metrics[extn_name]["cpu"]["cur_cpu"]), num_summarization_values)
-
-            self.assertIsInstance(collected_metrics[extn_name]["cpu"]["cur_cpu"][5], str)
-            self.assertIsInstance(collected_metrics[extn_name]["cpu"]["cur_cpu"][6], str)
-
-        message_json = generate_extension_metrics_telemetry_dictionary(schema_version=1.0,
-                                                                       performance_metrics=None)
-        self.assertIn("SchemaVersion", message_json)
-        self.assertNotIn("PerfMetrics", message_json)
-
-        message_json = generate_extension_metrics_telemetry_dictionary(schema_version=2.0,
-                                                                       performance_metrics=None)
-        self.assertEqual(message_json, None)
-
-        message_json = generate_extension_metrics_telemetry_dictionary(schema_version="z",
-                                                                       performance_metrics=None)
-        self.assertEqual(message_json, None)
+                # The list of processes in the message is an array of strings: "['foo', ..., 'bar']"
+                search = re.search(r'\[(?P<processes>.+)\]', messages[0])
+                self.assertIsNotNone(search, "The event message is not in the expected format: {0}".format(messages[0]))
+                processes = search.group('processes')
+                self.assertEquals(5, len(processes.split(',')), 'Extra processes were reported as unexpected: {0}'.format(processes))
 
 
 @patch("azurelinuxagent.common.utils.restutil.http_post")
