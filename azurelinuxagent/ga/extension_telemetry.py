@@ -51,76 +51,32 @@ class ExtensionEventSchema(object):
     EventTid = "EventTid"
     OperationId = "OperationId"
 
-class ExtensionTelemetryHandler(object):
+class ProcessExtensionTelemetry(PeriodicOperation):
     """
-    This Handler takes care of fetching the Extension Telemetry events from the {extension_events_dir} and sends it to
-    Kusto for advanced debuggability.
+    Periodic operation for collecting and sending extension telemetry events to Wireserver.
     """
 
     _EXTENSION_EVENT_COLLECTION_PERIOD = datetime.timedelta(minutes=5)
     _EXTENSION_EVENT_FILE_NAME_REGEX = re.compile(r"^(\d+)\.json$", re.IGNORECASE)
 
     # Limits
-    MAX_NUMBER_OF_EVENTS_PER_EXTENSION_PER_PERIOD = 300
-    EXTENSION_EVENT_FILE_MAX_SIZE = 4 * 1024 * 1024  # 4 MB = 4 * 1,048,576 Bytes
-    EXTENSION_EVENT_MAX_SIZE = 1024 * 6   # 6Kb or 6144 characters. Limit for the whole event. Prevent oversized events.
-    EXTENSION_EVENT_MAX_MSG_LEN = 1024 * 3  # 3Kb or 3072 chars.
+    _MAX_NUMBER_OF_EVENTS_PER_EXTENSION_PER_PERIOD = 300
+    _EXTENSION_EVENT_FILE_MAX_SIZE = 4 * 1024 * 1024  # 4 MB = 4 * 1,048,576 Bytes
+    _EXTENSION_EVENT_MAX_SIZE = 1024 * 6  # 6Kb or 6144 characters. Limit for the whole event. Prevent oversized events.
+    _EXTENSION_EVENT_MAX_MSG_LEN = 1024 * 3  # 3Kb or 3072 chars.
 
     _EXTENSION_EVENT_REQUIRED_FIELDS = [attr.lower() for attr in dir(ExtensionEventSchema) if
                                         not callable(getattr(ExtensionEventSchema, attr)) and not attr.startswith("__")]
 
-    _THREAD_NAME = "ExtensionTelemetryHandler"
-
     def __init__(self, protocol_util):
-        self.protocol_util = protocol_util
-        self._protocol = self.protocol_util.get_protocol()
-        self.should_run = True
-        self.thread = None
+        super(ProcessExtensionTelemetry, self).__init__(
+            name="collect and send extension events",
+            operation=self._collect_and_send_events,
+            period=ProcessExtensionTelemetry._EXTENSION_EVENT_COLLECTION_PERIOD)
 
-    @staticmethod
-    def get_thread_name():
-        return ExtensionTelemetryHandler._THREAD_NAME
+        self._protocol = protocol_util.get_protocol()
 
-    def run(self):
-        logger.info("Start Extension Telemetry service.")
-        self.start()
-
-    def is_alive(self):
-        return self.thread is not None and self.thread.is_alive()
-
-    def start(self):
-        self.thread = threading.Thread(target=self.daemon)
-        self.thread.setDaemon(True)
-        self.thread.setName(ExtensionTelemetryHandler.get_thread_name())
-        self.thread.start()
-
-    def stop(self):
-        """
-        Stop server communication and join the thread to main thread.
-        """
-        self.should_run = False
-        if self.is_alive():
-            self.thread.join()
-
-    def stopped(self):
-        return not self.should_run
-
-    def daemon(self):
-        op = PeriodicOperation("collect_and_send_events", self.collect_and_send_events,
-                               self._EXTENSION_EVENT_COLLECTION_PERIOD)
-        logger.info("Successfully started the {0} thread".format(self.get_thread_name()))
-        while not self.stopped():
-            try:
-                op.run()
-
-            except Exception as e:
-                logger.warn(
-                    "An error occurred in the Telemetry Extension thread main loop; will skip the current iteration.\n{0}",
-                    ustr(e))
-            finally:
-                PeriodicOperation.sleep_until_next_operation([op])
-
-    def collect_and_send_events(self):
+    def _collect_and_send_events(self):
         event_list = self._collect_extension_events()
 
         if len(event_list.events) > 0:
@@ -197,12 +153,12 @@ class ExtensionTelemetryHandler(object):
             try:
                 logger.verbose("Processing event file: {0}", event_file_path)
 
-                # We only support EXTENSION_EVENT_FILE_MAX_SIZE=4Mb max file size
+                # We only support _EXTENSION_EVENT_FILE_MAX_SIZE=4Mb max file size
                 event_file_size = os.stat(event_file_path).st_size
-                if event_file_size > self.EXTENSION_EVENT_FILE_MAX_SIZE:
+                if event_file_size > self._EXTENSION_EVENT_FILE_MAX_SIZE:
                     msg = "Skipping file: {0} as its size is {1:.2f} Mb > Max size allowed {2:.1f} Mb".format(
                             event_file_path, convert_to_mb(event_file_size),
-                            convert_to_mb(self.EXTENSION_EVENT_FILE_MAX_SIZE))
+                            convert_to_mb(self._EXTENSION_EVENT_FILE_MAX_SIZE))
                     logger.warn(msg)
                     add_log_event(level=logger.LogLevel.WARNING, message=msg, forced=True)
                     continue
@@ -215,9 +171,9 @@ class ExtensionTelemetryHandler(object):
                 captured_extension_events_count += len(parsed_events)
 
                 # We only allow MAX_NUMBER_OF_EVENTS_PER_EXTENSION_PER_PERIOD=300 maximum events per period per handler
-                if captured_extension_events_count >= self.MAX_NUMBER_OF_EVENTS_PER_EXTENSION_PER_PERIOD:
+                if captured_extension_events_count >= self._MAX_NUMBER_OF_EVENTS_PER_EXTENSION_PER_PERIOD:
                     msg = "Reached max count for the extension: {0}; Max Limit: {1}. Skipping the rest.".format(
-                        handler_name, self.MAX_NUMBER_OF_EVENTS_PER_EXTENSION_PER_PERIOD)
+                        handler_name, self._MAX_NUMBER_OF_EVENTS_PER_EXTENSION_PER_PERIOD)
                     logger.warn(msg)
                     add_log_event(level=logger.LogLevel.WARNING, message=msg, forced=True)
                     break
@@ -290,7 +246,7 @@ class ExtensionTelemetryHandler(object):
             except Exception as e:
                 logger.warn("Unable to parse and transmit event, error: {0}".format(e))
 
-            if captured_events_count >= self.MAX_NUMBER_OF_EVENTS_PER_EXTENSION_PER_PERIOD:
+            if captured_events_count >= self._MAX_NUMBER_OF_EVENTS_PER_EXTENSION_PER_PERIOD:
                 break
 
         return events_list
@@ -344,7 +300,7 @@ class ExtensionTelemetryHandler(object):
         # Trim message and only pick the first 3k chars
         message_key = ExtensionEventSchema.Message.lower()
         if message_key in event:
-            event[message_key] = event[message_key][:ExtensionTelemetryHandler.EXTENSION_EVENT_MAX_MSG_LEN]
+            event[message_key] = event[message_key][:self._EXTENSION_EVENT_MAX_MSG_LEN]
         else:
             raise InvalidExtensionEventError(
                 key_err_msg.format(InvalidExtensionEventError.MissingKeyError, ExtensionEventSchema.Message))
@@ -354,17 +310,17 @@ class ExtensionTelemetryHandler(object):
                 "{0}: {1} should not be empty".format(InvalidExtensionEventError.EmptyMessageError,
                                                      ExtensionEventSchema.Message))
 
-        for required_key in ExtensionTelemetryHandler._EXTENSION_EVENT_REQUIRED_FIELDS:
+        for required_key in self._EXTENSION_EVENT_REQUIRED_FIELDS:
             # If all required keys not in event then raise
             if not required_key in event:
                 raise InvalidExtensionEventError(
                     key_err_msg.format(InvalidExtensionEventError.MissingKeyError, required_key))
 
-            # If the event_size > EXTENSION_EVENT_MAX_SIZE=6k, then raise
-            if event_size > ExtensionTelemetryHandler.EXTENSION_EVENT_MAX_SIZE:
+            # If the event_size > _EXTENSION_EVENT_MAX_SIZE=6k, then raise
+            if event_size > self._EXTENSION_EVENT_MAX_SIZE:
                 raise InvalidExtensionEventError(
                     "{0}: max event size allowed: {1}".format(InvalidExtensionEventError.OversizeEventError,
-                                                              ExtensionTelemetryHandler.EXTENSION_EVENT_MAX_SIZE))
+                                                              self._EXTENSION_EVENT_MAX_SIZE))
 
             event_size += len(event[required_key])
 
@@ -388,3 +344,59 @@ class ExtensionTelemetryHandler(object):
     def add_common_params_to_extension_event(event, event_time):
         reporter = get_event_logger()
         reporter.add_common_event_parameters(event, event_time)
+
+
+class ExtensionTelemetryHandler(object):
+    """
+    This Handler takes care of fetching the Extension Telemetry events from the {extension_events_dir} and sends it to
+    Kusto for advanced debuggability.
+    """
+
+    _THREAD_NAME = "ExtensionTelemetryHandler"
+
+    def __init__(self, protocol_util):
+        self.protocol_util = protocol_util
+        self.should_run = True
+        self.thread = None
+
+    @staticmethod
+    def get_thread_name():
+        return ExtensionTelemetryHandler._THREAD_NAME
+
+    def run(self):
+        logger.info("Start Extension Telemetry service.")
+        self.start()
+
+    def is_alive(self):
+        return self.thread is not None and self.thread.is_alive()
+
+    def start(self):
+        self.thread = threading.Thread(target=self.daemon)
+        self.thread.setDaemon(True)
+        self.thread.setName(ExtensionTelemetryHandler.get_thread_name())
+        self.thread.start()
+
+    def stop(self):
+        """
+        Stop server communication and join the thread to main thread.
+        """
+        self.should_run = False
+        if self.is_alive():
+            self.thread.join()
+
+    def stopped(self):
+        return not self.should_run
+
+    def daemon(self):
+        op = ProcessExtensionTelemetry(self.protocol_util)
+        logger.info("Successfully started the {0} thread".format(self.get_thread_name()))
+        while not self.stopped():
+            try:
+                op.run()
+
+            except Exception as e:
+                logger.warn(
+                    "An error occurred in the Telemetry Extension thread main loop; will skip the current iteration.\n{0}",
+                    ustr(e))
+            finally:
+                PeriodicOperation.sleep_until_next_operation([op])

@@ -11,16 +11,15 @@ from collections import defaultdict
 
 from mock import MagicMock, Mock, patch
 
-from azurelinuxagent.common import logger, conf
+from azurelinuxagent.common import conf
 from azurelinuxagent.common.event import EVENTS_DIRECTORY
 from azurelinuxagent.common.exception import InvalidExtensionEventError
-from azurelinuxagent.common.logger import Logger
 from azurelinuxagent.common.protocol.util import ProtocolUtil
 from azurelinuxagent.common.protocol.wire import event_param_to_v1
 from azurelinuxagent.common.telemetryevent import TelemetryEventParam, GuestAgentGenericLogsSchema, \
     CommonTelemetryEventSchema
 from azurelinuxagent.common.utils import fileutil, textutil
-from azurelinuxagent.ga.extension_telemetry import get_extension_telemetry_handler, ExtensionEventSchema
+from azurelinuxagent.ga.extension_telemetry import ExtensionEventSchema, ProcessExtensionTelemetry
 from tests.protocol.mocks import mock_wire_protocol, HttpRequestPredicates, MockHttpResponse
 from tests.protocol.mockwiredata import DATA_FILE
 from tests.tools import AgentTestCase, clear_singleton_instances, data_dir, skip_if_predicate_true
@@ -157,20 +156,20 @@ class TestExtensionTelemetryHandler(AgentTestCase, HttpRequestPredicates):
 
 
     @contextlib.contextmanager
-    def _create_extension_telemetry_handler(self):
+    def _create_extension_telemetry_processor(self):
 
         def http_post_handler(url, body, **__):
             if self.is_telemetry_request(url):
-                extension_telemetry_handler.event_body.append(body)
+                extension_telemetry_processor.event_body.append(body)
                 return MockHttpResponse(status=200)
             return None
 
         with mock_wire_protocol(DATA_FILE, http_post_handler=http_post_handler) as protocol:
             protocol_util = MagicMock()
             protocol_util.get_protocol = Mock(return_value=protocol)
-            extension_telemetry_handler = get_extension_telemetry_handler(protocol_util)
-            extension_telemetry_handler.event_body = []
-            yield extension_telemetry_handler
+            extension_telemetry_processor = ProcessExtensionTelemetry(protocol_util) # get_extension_telemetry_processor(protocol_util)
+            extension_telemetry_processor.event_body = []
+            yield extension_telemetry_processor
 
     def _assert_handler_data_in_event_body(self, telemetry_events, ext_names_with_count, expected_count=None):
 
@@ -213,50 +212,50 @@ class TestExtensionTelemetryHandler(AgentTestCase, HttpRequestPredicates):
         return found
 
     def test_it_should_not_capture_malformed_events(self):
-        with self._create_extension_telemetry_handler() as extension_telemetry_handler:
+        with self._create_extension_telemetry_processor() as extension_telemetry_processor:
             bad_name_ext_with_count = self._create_random_extension_events_dir_with_events(2, self._MALFORMED_FILES)
             bad_json_ext_with_count = self._create_random_extension_events_dir_with_events(2, os.path.join(
                 self._MALFORMED_FILES, "bad_json_files", "1591816395.json"))
 
-            extension_telemetry_handler.collect_and_send_events()
-            telemetry_events = self._get_handlers_with_version_from_event_body(extension_telemetry_handler.event_body)
+            extension_telemetry_processor.run()
+            telemetry_events = self._get_handlers_with_version_from_event_body(extension_telemetry_processor.event_body)
 
             self._assert_handler_data_in_event_body(telemetry_events, bad_name_ext_with_count, expected_count=0)
             self._assert_handler_data_in_event_body(telemetry_events, bad_json_ext_with_count, expected_count=0)
 
     def test_it_should_capture_and_send_correct_events(self):
 
-        with self._create_extension_telemetry_handler() as extension_telemetry_handler:
+        with self._create_extension_telemetry_processor() as extension_telemetry_processor:
 
             ext_names_with_count = self._create_random_extension_events_dir_with_events(2, self._WELL_FORMED_FILES)
             ext_names_with_count.update(self._create_random_extension_events_dir_with_events(3, os.path.join(
                 self._MIX_FILES, "1591835859.json")))
-            extension_telemetry_handler.collect_and_send_events()
+            extension_telemetry_processor.run()
 
-            telemetry_events = self._get_handlers_with_version_from_event_body(extension_telemetry_handler.event_body)
+            telemetry_events = self._get_handlers_with_version_from_event_body(extension_telemetry_processor.event_body)
 
             self._assert_handler_data_in_event_body(telemetry_events, ext_names_with_count)
 
     def test_it_should_disregard_bad_events_and_keep_good_ones_in_a_mixed_file(self):
-        with self._create_extension_telemetry_handler() as extension_telemetry_handler:
+        with self._create_extension_telemetry_processor() as extension_telemetry_processor:
             extensions_with_count = self._create_random_extension_events_dir_with_events(2, self._MIX_FILES)
             extensions_with_count.update(self._create_random_extension_events_dir_with_events(3, os.path.join(
                 self._MALFORMED_FILES, "bad_name_file.json")))
 
-            extension_telemetry_handler.collect_and_send_events()
-            telemetry_events = self._get_handlers_with_version_from_event_body(extension_telemetry_handler.event_body)
+            extension_telemetry_processor.run()
+            telemetry_events = self._get_handlers_with_version_from_event_body(extension_telemetry_processor.event_body)
 
             self._assert_handler_data_in_event_body(telemetry_events, extensions_with_count)
 
     def test_it_should_limit_max_no_of_events_to_send_per_run_per_extension_and_report_event(self):
         max_events = 5
         with patch("azurelinuxagent.ga.extension_telemetry.add_log_event") as mock_event:
-            with self._create_extension_telemetry_handler() as extension_telemetry_handler:
-                with patch.object(extension_telemetry_handler, "MAX_NUMBER_OF_EVENTS_PER_EXTENSION_PER_PERIOD", max_events):
+            with self._create_extension_telemetry_processor() as extension_telemetry_processor:
+                with patch.object(extension_telemetry_processor, "_MAX_NUMBER_OF_EVENTS_PER_EXTENSION_PER_PERIOD", max_events):
                     ext_names_with_count = self._create_random_extension_events_dir_with_events(5, self._WELL_FORMED_FILES)
-                    extension_telemetry_handler.collect_and_send_events()
+                    extension_telemetry_processor.run()
 
-                    telemetry_events = self._get_handlers_with_version_from_event_body(extension_telemetry_handler.event_body)
+                    telemetry_events = self._get_handlers_with_version_from_event_body(extension_telemetry_processor.event_body)
                     self._assert_handler_data_in_event_body(telemetry_events, ext_names_with_count, expected_count=max_events)
 
                 pattern = r'Reached max count for the extension:\s*(?P<name>.+?);\s*.+'
@@ -267,8 +266,8 @@ class TestExtensionTelemetryHandler(AgentTestCase, HttpRequestPredicates):
         no_of_extension = 2
         test_guid = str(uuid.uuid4())
 
-        with self._create_extension_telemetry_handler() as extension_telemetry_handler:
-            with patch.object(extension_telemetry_handler, "MAX_NUMBER_OF_EVENTS_PER_EXTENSION_PER_PERIOD", max_events):
+        with self._create_extension_telemetry_processor() as extension_telemetry_processor:
+            with patch.object(extension_telemetry_processor, "_MAX_NUMBER_OF_EVENTS_PER_EXTENSION_PER_PERIOD", max_events):
                 ext_names_with_count = self._create_random_extension_events_dir_with_events(no_of_extension, self._WELL_FORMED_FILES)
 
                 for ext_name in ext_names_with_count.keys():
@@ -276,52 +275,52 @@ class TestExtensionTelemetryHandler(AgentTestCase, HttpRequestPredicates):
                         os.path.join(conf.get_ext_log_dir(), ext_name, EVENTS_DIRECTORY, "9999999999.json"),
                         replace_from='"{0}": ""'.format(ExtensionEventSchema.OperationId),
                         replace_to='"{0}": "{1}"'.format(ExtensionEventSchema.OperationId, test_guid))
-                extension_telemetry_handler.collect_and_send_events()
+                extension_telemetry_processor.run()
 
-                telemetry_events = self._get_handlers_with_version_from_event_body(extension_telemetry_handler.event_body)
+                telemetry_events = self._get_handlers_with_version_from_event_body(extension_telemetry_processor.event_body)
                 self._assert_handler_data_in_event_body(telemetry_events, ext_names_with_count,
                                                         expected_count=max_events)
-                self._assert_param_in_events(extension_telemetry_handler.event_body,
+                self._assert_param_in_events(extension_telemetry_processor.event_body,
                                              param_key=GuestAgentGenericLogsSchema.Context1,
                                              param_value="This is the latest event", min_count=no_of_extension*max_events)
-                self._assert_param_in_events(extension_telemetry_handler.event_body,
+                self._assert_param_in_events(extension_telemetry_processor.event_body,
                                              param_key=GuestAgentGenericLogsSchema.Context3, param_value=test_guid,
                                              min_count=no_of_extension*max_events)
 
 
     def test_it_should_parse_extension_event_irrespective_of_case(self):
-        with self._create_extension_telemetry_handler() as extension_telemetry_handler:
+        with self._create_extension_telemetry_processor() as extension_telemetry_processor:
             extensions_with_count = self._create_random_extension_events_dir_with_events(2, os.path.join(
                 self._TEST_DATA_DIR, "different_cases"))
 
-            extension_telemetry_handler.collect_and_send_events()
-            telemetry_events = self._get_handlers_with_version_from_event_body(extension_telemetry_handler.event_body)
+            extension_telemetry_processor.run()
+            telemetry_events = self._get_handlers_with_version_from_event_body(extension_telemetry_processor.event_body)
 
             self._assert_handler_data_in_event_body(telemetry_events, extensions_with_count)
 
     @skip_if_predicate_true(lambda: True, "Bug when sending out event with special chars - https://msazure.visualstudio.com/One/_workitems/edit/7472752")
     def test_it_should_parse_special_chars_properly(self):
-        with self._create_extension_telemetry_handler() as extension_telemetry_handler:
+        with self._create_extension_telemetry_processor() as extension_telemetry_processor:
             extensions_with_count = self._create_random_extension_events_dir_with_events(2, os.path.join(
                 self._TEST_DATA_DIR, "special_chars"))
 
-            extension_telemetry_handler.collect_and_send_events()
-            telemetry_events = self._get_handlers_with_version_from_event_body(extension_telemetry_handler.event_body)
+            extension_telemetry_processor.run()
+            telemetry_events = self._get_handlers_with_version_from_event_body(extension_telemetry_processor.event_body)
 
             self._assert_handler_data_in_event_body(telemetry_events, extensions_with_count)
 
     def _setup_and_assert_tests_for_max_sizes(self, no_of_extensions=2, expected_count=None):
-        with self._create_extension_telemetry_handler() as extension_telemetry_handler:
+        with self._create_extension_telemetry_processor() as extension_telemetry_processor:
             extensions_with_count = self._create_random_extension_events_dir_with_events(no_of_extensions,
                                                                                          os.path.join(
                                                                                              self._TEST_DATA_DIR,
                                                                                              "large_messages"))
 
-            extension_telemetry_handler.collect_and_send_events()
-            telemetry_events = self._get_handlers_with_version_from_event_body(extension_telemetry_handler.event_body)
+            extension_telemetry_processor.run()
+            telemetry_events = self._get_handlers_with_version_from_event_body(extension_telemetry_processor.event_body)
             self._assert_handler_data_in_event_body(telemetry_events, extensions_with_count, expected_count)
 
-            return extensions_with_count, extension_telemetry_handler.event_body
+            return extensions_with_count, extension_telemetry_processor.event_body
 
     def _assert_invalid_extension_error_event_reported(self, mock_event, handler_name_with_count, error, expected_drop_count=None):
 
@@ -355,7 +354,7 @@ class TestExtensionTelemetryHandler(AgentTestCase, HttpRequestPredicates):
     def test_it_should_trim_message_if_more_than_limit(self):
         max_len = 100
         no_of_extensions = 2
-        with patch("azurelinuxagent.ga.extension_telemetry.ExtensionTelemetryHandler.EXTENSION_EVENT_MAX_MSG_LEN", max_len):
+        with patch("azurelinuxagent.ga.extension_telemetry.ProcessExtensionTelemetry._EXTENSION_EVENT_MAX_MSG_LEN", max_len):
             handler_name_with_count, event_body = self._setup_and_assert_tests_for_max_sizes()
             context1_vals = self._get_param_value_from_event_body_if_exists(event_body,
                                                                             GuestAgentGenericLogsSchema.Context1)
@@ -369,7 +368,7 @@ class TestExtensionTelemetryHandler(AgentTestCase, HttpRequestPredicates):
         max_size = 1000
         no_of_extensions = 3
         with patch("azurelinuxagent.ga.extension_telemetry.add_log_event") as mock_event:
-            with patch("azurelinuxagent.ga.extension_telemetry.ExtensionTelemetryHandler.EXTENSION_EVENT_MAX_SIZE",
+            with patch("azurelinuxagent.ga.extension_telemetry.ProcessExtensionTelemetry._EXTENSION_EVENT_MAX_SIZE",
                        max_size):
                 handler_name_with_count, _ = self._setup_and_assert_tests_for_max_sizes(no_of_extensions, expected_count=0)
                 self._assert_invalid_extension_error_event_reported(mock_event, handler_name_with_count,
@@ -379,7 +378,7 @@ class TestExtensionTelemetryHandler(AgentTestCase, HttpRequestPredicates):
         max_file_size = 10000
         no_of_extensions = 5
         with patch("azurelinuxagent.ga.extension_telemetry.add_log_event") as mock_event:
-            with patch("azurelinuxagent.ga.extension_telemetry.ExtensionTelemetryHandler.EXTENSION_EVENT_FILE_MAX_SIZE",
+            with patch("azurelinuxagent.ga.extension_telemetry.ProcessExtensionTelemetry._EXTENSION_EVENT_FILE_MAX_SIZE",
                        max_file_size):
                 handler_name_with_count, _ = self._setup_and_assert_tests_for_max_sizes(no_of_extensions, expected_count=0)
 
@@ -400,15 +399,15 @@ class TestExtensionTelemetryHandler(AgentTestCase, HttpRequestPredicates):
             CommonTelemetryEventSchema.EventTid: ExtensionEventSchema.EventTid
         }
 
-        with self._create_extension_telemetry_handler() as extension_telemetry_handler:
+        with self._create_extension_telemetry_processor() as extension_telemetry_processor:
             test_file = os.path.join(self._WELL_FORMED_FILES, "1592355539.json")
             handler_name = list(self._create_random_extension_events_dir_with_events(1, test_file))[0]
-            extension_telemetry_handler.collect_and_send_events()
+            extension_telemetry_processor.run()
 
             telemetry_event_map = defaultdict(list)
             for telemetry_event_key in expected_mapping:
                 telemetry_event_map[telemetry_event_key] = self._get_param_value_from_event_body_if_exists(
-                    extension_telemetry_handler.event_body, telemetry_event_key)
+                    extension_telemetry_processor.event_body, telemetry_event_key)
 
             with open(test_file, 'r') as event_file:
                 data = json.load(event_file)
@@ -432,7 +431,7 @@ class TestExtensionTelemetryHandler(AgentTestCase, HttpRequestPredicates):
                                                                                         extension_event_key))
 
     def test_it_should_always_cleanup_files_on_good_and_bad_cases(self):
-        with self._create_extension_telemetry_handler() as extension_telemetry_handler:
+        with self._create_extension_telemetry_processor() as extension_telemetry_processor:
             extensions_with_count = self._create_random_extension_events_dir_with_events(2, os.path.join(
                 self._TEST_DATA_DIR, "large_messages"))
             extensions_with_count.update(self._create_random_extension_events_dir_with_events(3, self._MALFORMED_FILES))
@@ -446,8 +445,8 @@ class TestExtensionTelemetryHandler(AgentTestCase, HttpRequestPredicates):
                 with open(file_name, 'a') as random_file:
                     random_file.write('1*2*3' * 100)
 
-            extension_telemetry_handler.collect_and_send_events()
-            telemetry_events = self._get_handlers_with_version_from_event_body(extension_telemetry_handler.event_body)
+            extension_telemetry_processor.run()
+            telemetry_events = self._get_handlers_with_version_from_event_body(extension_telemetry_processor.event_body)
 
             self._assert_handler_data_in_event_body(telemetry_events, extensions_with_count)
 
@@ -459,29 +458,29 @@ class TestExtensionTelemetryHandler(AgentTestCase, HttpRequestPredicates):
     def test_it_should_skip_unwanted_parameters_in_event_file(self):
         extra_params = ["SomethingNewButNotCool", "SomethingVeryWeird"]
         param_format = '<Param Name="{0}"'
-        with self._create_extension_telemetry_handler() as extension_telemetry_handler:
+        with self._create_extension_telemetry_processor() as extension_telemetry_processor:
             extensions_with_count= self._create_random_extension_events_dir_with_events(3, os.path.join(
                 self._TEST_DATA_DIR, "extra_parameters"))
 
-            extension_telemetry_handler.collect_and_send_events()
-            telemetry_events = self._get_handlers_with_version_from_event_body(extension_telemetry_handler.event_body)
+            extension_telemetry_processor.run()
+            telemetry_events = self._get_handlers_with_version_from_event_body(extension_telemetry_processor.event_body)
 
             self._assert_handler_data_in_event_body(telemetry_events, extensions_with_count)
-            self.assertFalse(self._is_string_in_event_body(extension_telemetry_handler.event_body,
+            self.assertFalse(self._is_string_in_event_body(extension_telemetry_processor.event_body,
                                                            param_format.format(extra_params[0])),
                              "Unwanted param {0} found".format(extra_params[0]))
-            self.assertFalse(self._is_string_in_event_body(extension_telemetry_handler.event_body,
+            self.assertFalse(self._is_string_in_event_body(extension_telemetry_processor.event_body,
                                                            param_format.format(extra_params[1])),
                              "Unwanted param {0} found".format(extra_params[1]))
 
     def test_it_should_not_send_events_which_dont_have_all_required_keys_and_report_event(self):
         with patch("azurelinuxagent.ga.extension_telemetry.add_log_event") as mock_event:
-            with self._create_extension_telemetry_handler() as extension_telemetry_handler:
+            with self._create_extension_telemetry_processor() as extension_telemetry_processor:
                 extensions_with_count = self._create_random_extension_events_dir_with_events(3, os.path.join(
                     self._TEST_DATA_DIR, "missing_parameters"))
 
-                extension_telemetry_handler.collect_and_send_events()
-                telemetry_events = self._get_handlers_with_version_from_event_body(extension_telemetry_handler.event_body)
+                extension_telemetry_processor.run()
+                telemetry_events = self._get_handlers_with_version_from_event_body(extension_telemetry_processor.event_body)
 
                 self._assert_handler_data_in_event_body(telemetry_events, extensions_with_count, expected_count=0)
                 self.assertTrue(mock_event.called, "Even a single event not logged")
@@ -519,12 +518,12 @@ class TestExtensionTelemetryHandler(AgentTestCase, HttpRequestPredicates):
 
     def test_it_should_not_send_event_where_message_is_empty_and_report_event(self):
         with patch("azurelinuxagent.ga.extension_telemetry.add_log_event") as mock_event:
-            with self._create_extension_telemetry_handler() as extension_telemetry_handler:
+            with self._create_extension_telemetry_processor() as extension_telemetry_processor:
                 extensions_with_count = self._create_random_extension_events_dir_with_events(3, os.path.join(
                     self._TEST_DATA_DIR, "empty_message"))
 
-                extension_telemetry_handler.collect_and_send_events()
-                telemetry_events = self._get_handlers_with_version_from_event_body(extension_telemetry_handler.event_body)
+                extension_telemetry_processor.run()
+                telemetry_events = self._get_handlers_with_version_from_event_body(extension_telemetry_processor.event_body)
 
                 self._assert_handler_data_in_event_body(telemetry_events, extensions_with_count, expected_count=0)
                 self._assert_invalid_extension_error_event_reported(mock_event, extensions_with_count,
