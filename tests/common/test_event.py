@@ -717,7 +717,7 @@ class TestEvent(HttpRequestPredicates, AgentTestCase):
                 if p['name'] == GuestAgentExtensionEventsSchema.Message:
                     return p['value']
 
-            raise ValueError('Could not find the Message for the telemetry event in {0}'.format(path))
+            raise ValueError('Could not find the Message for the telemetry event in {0}'.format(event_file))
 
         def get_event_message_from_http_request_body(event_body):
             # The XML for the event is sent over as a CDATA element ("Event") in the request's body
