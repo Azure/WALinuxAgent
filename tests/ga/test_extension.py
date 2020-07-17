@@ -2842,7 +2842,7 @@ class TestExtensionUpdateOnFailure(ExtensionTestCase):
                 ExtCommandEnvVariable.DisableReturnCode, exit_code) in update_kwargs['message'])
 
     @patch('time.sleep', side_effect=lambda _: mock_sleep(0.0001))
-    def test_disable_should_not_be_called_on_disabled_ext_during_version_upgrade(self, _):
+    def test_disable_should_not_be_called_during_version_upgrade_if_not_enabled(self, _):
 
         old_handler_i = TestExtensionUpdateOnFailure._get_ext_handler_instance('foo', '1.0.0')
         old_handler_i.set_handler_state(ExtHandlerState.Installed)  # Something other than Enabled.
@@ -2852,7 +2852,7 @@ class TestExtensionUpdateOnFailure(ExtensionTestCase):
             with patch.object(old_handler_i, 'disable', autospec=True) as mock_disable:
                 uninstall_rc = ExtHandlersHandler._update_extension_handler_and_return_if_failed(old_handler_i,
                                                                                                 new_handler_i)
-                mock_disable.assert_not_called()
+                mock_disable.mock.assert_not_called() # Python2.6's mock library doesn't forward assert_not_called, so we have to do it ourselves.
 
 
 @patch('time.sleep', side_effect=lambda _: mock_sleep(0.001))
