@@ -318,4 +318,3 @@ class MonitorHandler(object):
                 is_success=False,
                 message=msg,
                 log_event=False)
-

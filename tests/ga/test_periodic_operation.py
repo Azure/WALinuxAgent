@@ -144,4 +144,3 @@ class TestPeriodicOperation(AgentTestCase):
             PeriodicOperation.sleep_until_next_operation(operations)
             self.assertAlmostEqual(mock_sleep.seconds, 10, 0, "did not sleep for the expected time")
 
-
