@@ -636,7 +636,7 @@ Match host 192.168.1.2\n\
 
     @staticmethod
     def _command_to_string(command):
-        return " ".join([str(c) for c in command]) if isinstance(command, list) else command
+        return " ".join(command) if isinstance(command, list) else command
 
     @staticmethod
     @contextlib.contextmanager
