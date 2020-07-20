@@ -62,9 +62,6 @@ class Ubuntu12OSUtil(Ubuntu14OSUtil):
     def get_dhcp_pid(self):
         return self._get_dhcp_pid(["pidof", "dhclient3"])
 
-    def mount_cgroups(self):
-        pass
-
 
 class Ubuntu16OSUtil(Ubuntu14OSUtil):
     """
@@ -79,12 +76,6 @@ class Ubuntu16OSUtil(Ubuntu14OSUtil):
 
     def unregister_agent_service(self):
         return shellutil.run("systemctl mask {0}".format(self.service_name), chk_err=False)
-
-    def mount_cgroups(self):
-        """
-        Mounted by default in Ubuntu 16.04
-        """
-        pass
 
 
 class Ubuntu18OSUtil(Ubuntu16OSUtil):

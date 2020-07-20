@@ -20,17 +20,18 @@ import contextlib
 import json
 import os
 import re
+import socket
 import time
 import unittest
 import uuid
 
 from azurelinuxagent.common.exception import InvalidContainerError, ResourceGoneError, ProtocolError, \
     ExtensionDownloadError, HttpError
-from azurelinuxagent.common.future import httpclient
-from azurelinuxagent.common.protocol.hostplugin import HostPluginProtocol
 from azurelinuxagent.common.protocol.goal_state import ExtensionsConfig
+from azurelinuxagent.common.protocol.hostplugin import HostPluginProtocol
+from azurelinuxagent.common.protocol.restapi import VMAgentManifestUri
 from azurelinuxagent.common.protocol.wire import WireProtocol, WireClient, \
-    InVMArtifactsProfile, VMAgentManifestUri, StatusBlob, VMStatus, ExtHandlerVersionUri, DataContractList, socket
+    InVMArtifactsProfile, StatusBlob, VMStatus
 from azurelinuxagent.common.telemetryevent import TelemetryEvent, TelemetryEventParam, TelemetryEventList
 from azurelinuxagent.common.utils import restutil
 from azurelinuxagent.common.version import CURRENT_VERSION, DISTRO_NAME, DISTRO_VERSION
@@ -39,7 +40,7 @@ from tests.protocol import mockwiredata
 from tests.protocol.mocks import mock_wire_protocol, HttpRequestPredicates
 from tests.protocol.mockwiredata import DATA_FILE_NO_EXT
 from tests.protocol.mockwiredata import WireProtocolData
-from tests.tools import MagicMock, Mock, patch, AgentTestCase
+from tests.tools import Mock, patch, AgentTestCase
 
 data_with_bom = b'\xef\xbb\xbfhehe'
 testurl = 'http://foo'
