@@ -5,8 +5,8 @@ ATTRS{ID_VENDOR}!="Msft", GOTO="walinuxagent_end"
 ATTRS{ID_MODEL}!="Virtual_Disk", GOTO="walinuxagent_end"
 
 # Match the known ID parts for root and resource disks.
-ATTRS{device_id}=="?00000000-0000-*", ENV{fabric_name}="azure_root", GOTO="wa_azure_names"
-ATTRS{device_id}=="?00000000-0001-*", ENV{fabric_name}="azure_resource", GOTO="wa_azure_names"
+ATTRS{device_id}=="?00000000-0000-*", ENV{fabric_name}="root", GOTO="wa_azure_names"
+ATTRS{device_id}=="?00000000-0001-*", ENV{fabric_name}="resource", GOTO="wa_azure_names"
 
 # Gen2 disk.
 ATTRS{device_id}=="{f8b3781a-1e82-4818-a1c3-63d806ec15bb}", ENV{fabric_scsi_controller}="scsi0", GOTO="azure_datadisk"
@@ -21,8 +21,8 @@ LABEL="azure_datadisk"
 ENV{DEVTYPE}=="partition", PROGRAM="/bin/sh -c 'readlink /sys/class/block/%k/../device|cut -d: -f4'", ENV{fabric_name}="$env{fabric_scsi_controller}/lun$result"
 ENV{DEVTYPE}=="disk", PROGRAM="/bin/sh -c 'readlink /sys/class/block/%k/device|cut -d: -f4'", ENV{fabric_name}="$env{fabric_scsi_controller}/lun$result"
 
-ENV{fabric_name}=="scsi0/lun0", ENV{fabric_name}="azure_root"
-ENV{fabric_name}=="scsi0/lun1", ENV{fabric_name}="azure_resource"
+ENV{fabric_name}=="scsi0/lun0", ENV{fabric_name}="root"
+ENV{fabric_name}=="scsi0/lun1", ENV{fabric_name}="resource"
 # Don't create a symlink for the cd-rom.
 ENV{fabric_name}=="scsi0/lun2", GOTO="walinuxagent_end"
 
