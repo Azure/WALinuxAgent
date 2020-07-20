@@ -143,4 +143,3 @@ class TestPeriodicOperation(AgentTestCase):
         with patch("azurelinuxagent.ga.periodic_operation.time.sleep", side_effect=mock_sleep):
             PeriodicOperation.sleep_until_next_operation(operations)
             self.assertAlmostEqual(mock_sleep.seconds, 10, 0, "did not sleep for the expected time")
-
