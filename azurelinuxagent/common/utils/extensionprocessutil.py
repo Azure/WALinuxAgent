@@ -99,7 +99,7 @@ def read_output(stdout, stderr):
         return format_stdout_stderr("", "Cannot read stdout/stderr: {0}".format(ustr(e)))
 
 
-def format_stdout_stderr(stdout, stderr, max_len=TELEMETRY_MESSAGE_MAX_LEN):
+def format_stdout_stderr(stdout, stderr):
     """
     Format stdout and stderr's output to make it suitable in telemetry.
     The goal is to maximize the amount of output given the constraints
@@ -118,6 +118,7 @@ def format_stdout_stderr(stdout, stderr, max_len=TELEMETRY_MESSAGE_MAX_LEN):
     """
     template = "[stdout]\n{0}\n\n[stderr]\n{1}"
     # +6 == len("{0}") + len("{1}")
+    max_len = TELEMETRY_MESSAGE_MAX_LEN
     max_len_each = int((max_len - len(template) + 6) / 2)
 
     if max_len_each <= 0:
