@@ -2580,6 +2580,7 @@ class TestExtensionUpdateOnFailure(ExtensionTestCase):
     def test_uninstall_failed_env_variable_should_set_for_install_when_continue_on_update_failure_is_true(
             self, *args):
         old_handler_i = self._get_ext_handler_instance('foo', '1.0.0')
+        old_handler_i.set_handler_state(ExtHandlerState.Enabled)
         new_handler_i = self._get_ext_handler_instance('foo', '1.0.1', continue_on_update_failure=True)
 
         with patch.object(CGroupConfigurator.get_instance(), "start_extension_command",
@@ -2594,6 +2595,7 @@ class TestExtensionUpdateOnFailure(ExtensionTestCase):
 
     def test_extension_error_should_be_raised_when_continue_on_update_failure_is_false_on_disable_failure(self, *args):
         old_handler_i = self._get_ext_handler_instance('foo', '1.0.0')
+        old_handler_i.set_handler_state(ExtHandlerState.Enabled)
         new_handler_i = self._get_ext_handler_instance('foo', '1.0.1', continue_on_update_failure=False)
 
         with patch.object(ExtHandlerInstance, "disable", side_effect=ExtensionError("Disable Failed")):
@@ -2645,6 +2647,7 @@ class TestExtensionUpdateOnFailure(ExtensionTestCase):
     @patch("azurelinuxagent.common.cgroupconfigurator.handle_process_completion", side_effect="Process Successful")
     def test_env_variable_should_not_set_when_continue_on_update_failure_is_false(self, *args):
         old_handler_i = self._get_ext_handler_instance('foo', '1.0.0')
+        old_handler_i.set_handler_state(ExtHandlerState.Enabled)
         new_handler_i = self._get_ext_handler_instance('foo', '1.0.1', continue_on_update_failure=False)
 
         # When Disable Fails
@@ -2723,6 +2726,8 @@ class TestExtensionUpdateOnFailure(ExtensionTestCase):
         old_handler_i = TestExtensionUpdateOnFailure._get_ext_handler_instance('foo', '1.0.0', handler={
             "disableCommand": test_failure_file_name,
             "uninstallCommand": test_failure_file_name})
+        old_handler_i.set_handler_state(ExtHandlerState.Enabled)
+
         new_handler_i = TestExtensionUpdateOnFailure._get_ext_handler_instance(
             'foo', '1.0.1',
             handler={"updateCommand": test_env_file_name,
@@ -2759,6 +2764,7 @@ class TestExtensionUpdateOnFailure(ExtensionTestCase):
         old_handler_i = TestExtensionUpdateOnFailure._get_ext_handler_instance('foo', '1.0.0', handler={
             "disableCommand": test_failure_file_name,
             "uninstallCommand": test_failure_file_name})
+        old_handler_i.set_handler_state(ExtHandlerState.Enabled)
         new_handler_i = TestExtensionUpdateOnFailure._get_ext_handler_instance(
             'foo', '1.0.1',
             handler={"updateCommand": test_env_file_name + " -u", "installCommand": test_env_file_name + " -i"},
@@ -2802,6 +2808,7 @@ class TestExtensionUpdateOnFailure(ExtensionTestCase):
         old_handler_i = TestExtensionUpdateOnFailure._get_ext_handler_instance('foo', '1.0.0', handler={
             "disableCommand": test_success_file_name,
             "uninstallCommand": test_success_file_name})
+        old_handler_i.set_handler_state(ExtHandlerState.Enabled)
         new_handler_i = TestExtensionUpdateOnFailure._get_ext_handler_instance(
             'foo', '1.0.1',
             handler={"updateCommand": test_env_file_name + " -u", "installCommand": test_env_file_name + " -i"},
@@ -2833,6 +2840,19 @@ class TestExtensionUpdateOnFailure(ExtensionTestCase):
                 ExtCommandEnvVariable.UninstallReturnCode, exit_code) in install_kwargs['message'])
             self.assertTrue(test_env_file_name + " -u" in update_kwargs['message'] and "%s=%s" % (
                 ExtCommandEnvVariable.DisableReturnCode, exit_code) in update_kwargs['message'])
+
+    @patch('time.sleep', side_effect=lambda _: mock_sleep(0.0001))
+    def test_disable_should_not_be_called_during_version_upgrade_if_not_enabled(self, _):
+
+        old_handler_i = TestExtensionUpdateOnFailure._get_ext_handler_instance('foo', '1.0.0')
+        old_handler_i.set_handler_state(ExtHandlerState.Installed)  # Something other than Enabled.
+        new_handler_i = TestExtensionUpdateOnFailure._get_ext_handler_instance('foo', '1.0.1', continue_on_update_failure=False)
+
+        with patch.object(CGroupConfigurator.get_instance(), "start_extension_command", return_value="[stdout]\n\n\n[stderr]\n\n\n"):
+            with patch.object(old_handler_i, 'disable', autospec=True) as mock_disable:
+                uninstall_rc = ExtHandlersHandler._update_extension_handler_and_return_if_failed(old_handler_i,
+                                                                                                new_handler_i)
+                mock_disable.mock.assert_not_called() # Python2.6's mock library doesn't forward assert_not_called, so we have to do it ourselves.
 
 
 @patch('time.sleep', side_effect=lambda _: mock_sleep(0.001))
