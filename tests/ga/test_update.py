@@ -3,6 +3,7 @@
 
 from __future__ import print_function
 
+import contextlib
 import glob
 import json
 import os
@@ -16,6 +17,8 @@ import zipfile
 from datetime import datetime, timedelta
 from threading import currentThread
 
+from mock import PropertyMock
+
 from azurelinuxagent.common import conf
 from azurelinuxagent.common.exception import ProtocolError, UpdateError, ResourceGoneError
 from azurelinuxagent.common.future import ustr
@@ -23,18 +26,21 @@ from azurelinuxagent.common.protocol.goal_state import ExtensionsConfig
 from azurelinuxagent.common.protocol.hostplugin import URI_FORMAT_GET_API_VERSIONS, HOST_PLUGIN_PORT, \
     URI_FORMAT_GET_EXTENSION_ARTIFACT, HostPluginProtocol
 from azurelinuxagent.common.protocol.restapi import ExtHandlerPackageUri, VMAgentManifest, VMAgentManifestUri, \
-    VMAgentManifestList, ExtHandlerPackage, ExtHandlerPackageList
+    VMAgentManifestList, ExtHandlerPackage, ExtHandlerPackageList, ExtHandler
 from azurelinuxagent.common.protocol.util import ProtocolUtil
 from azurelinuxagent.common.protocol.wire import WireProtocol
 from azurelinuxagent.common.utils import fileutil, restutil, textutil
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
 from azurelinuxagent.common.version import AGENT_PKG_GLOB, AGENT_DIR_GLOB, AGENT_NAME, AGENT_DIR_PATTERN, \
     AGENT_VERSION, CURRENT_AGENT, CURRENT_VERSION
+from azurelinuxagent.ga.exthandlers import ExtHandlerInstance, HandlerEnvironment
 from azurelinuxagent.ga.update import GuestAgent, GuestAgentError, MAX_FAILURE, AGENT_MANIFEST_FILE, \
     get_update_handler, ORPHAN_POLL_INTERVAL, AGENT_PARTITION_FILE, AGENT_ERROR_FILE, ORPHAN_WAIT_INTERVAL, \
     CHILD_LAUNCH_RESTART_MAX, get_python_cmd, CHILD_HEALTH_INTERVAL, UpdateHandler
+from tests.protocol.mocks import mock_wire_protocol
+from tests.protocol.mockwiredata import DATA_FILE
 from tests.tools import AgentTestCase, call, data_dir, DEFAULT, patch, load_bin_data, load_data, Mock, MagicMock, \
-    clear_singleton_instances
+    clear_singleton_instances, mock_sleep
 
 NO_ERROR = {
     "last_failure": 0.0,
@@ -1478,6 +1484,60 @@ class TestUpdate(UpdateTestCase):
         self.assertEqual(1, patch_add_event.call_count)
         self.assertTrue(any(call_args[0] == "[HEARTBEAT] Agent {0} is running as the goal state agent {1}"
                             for call_args in patch_info.call_args), "The heartbeat was not written to the agent's log")
+
+    @contextlib.contextmanager
+    def _get_update_handler(self, iterations=1):
+        with mock_wire_protocol(DATA_FILE) as protocol:
+            protocol_util = MagicMock()
+            protocol_util.get_protocol = Mock(return_value=protocol)
+            with patch("azurelinuxagent.ga.update.get_protocol_util", return_value=protocol_util):
+                with patch("azurelinuxagent.common.conf.get_autoupdate_enabled", return_value=False):
+                    update_handler = get_update_handler()
+                    # The extra False in the end is for UpdateHandler._shutdown
+                    type(update_handler).running = PropertyMock(side_effect=[True] * iterations + [False] * 2)
+                    with patch("time.sleep", side_effect=lambda _: mock_sleep(0.001)):
+                        with patch('sys.exit'):
+                            yield update_handler, protocol
+
+    def test_it_should_recreate_handler_env_on_service_startup(self):
+        iterations = 3
+        expected_handler_name = "OSTCExtensions.ExampleHandlerLinux"
+        expected_version = "1.0.0"
+        with self._get_update_handler(iterations) as (update_handler, protocol):
+            update_handler.run(debug=True)
+
+            eh = ExtHandler(name=expected_handler_name)
+            eh.properties.version = expected_version
+            expected_handler = ExtHandlerInstance(eh, protocol)
+            handler_env_file = expected_handler.get_env_file()
+
+            self.assertTrue(os.path.exists(expected_handler.get_base_dir()), "Extension not found")
+            # First iteration should install the extension handler and
+            # subsequent iterations should not recreate the HandlerEnvironment file
+            last_modification_time = os.path.getmtime(handler_env_file)
+            self.assertEqual(os.path.getctime(handler_env_file), last_modification_time,
+                             "The creation time and last modified time of the HandlerEnvironment file dont match")
+
+            # Rerun the update handler and ensure that the HandlerEnvironment file is recreated with eventsFolder
+            # flag in HandlerEnvironment.json file
+            with patch('azurelinuxagent.ga.exthandlers.is_extension_telemetry_pipeline_enabled',
+                       return_value=True):
+                update_handler.run(debug=True)
+
+            self.assertGreater(os.path.getmtime(handler_env_file), last_modification_time,
+                                "HandlerEnvironment file didn't get overwritten")
+
+            with open(handler_env_file, 'r') as file:
+                content = json.load(file)
+            self.assertIn(HandlerEnvironment.eventsFolder, content[0][HandlerEnvironment.handlerEnvironment],
+                          "{0} not found in HandlerEnv file".format(HandlerEnvironment.eventsFolder))
+
+
+    # def test_it_should_delete_extension_events_directory_if_extension_telemetry_pipeline_disabled(self):
+    #     raise NotImplementedError()
+    #
+    # def test_it_should_retain_events_directories_if_extension_telemetry_pipeline_enabled(self):
+    #     raise NotImplementedError()
 
 
 class MonitorThreadTest(AgentTestCase):

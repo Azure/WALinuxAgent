@@ -232,6 +232,16 @@ def get_exthandlers_handler(protocol):
     return ExtHandlersHandler(protocol)
 
 
+def list_agent_lib_directory(skip_agent_package=True):
+    for name in os.listdir(conf.get_lib_dir()):
+        path = os.path.join(conf.get_lib_dir(), name)
+
+        if skip_agent_package and (version.is_agent_package(path) or version.is_agent_path(path)):
+            continue
+
+        yield name, path
+
+
 class ExtHandlersHandler(object):
     def __init__(self, protocol):
         self.protocol = protocol
@@ -269,6 +279,21 @@ class ExtHandlersHandler(object):
                       message=detailed_msg)
             return
 
+    @staticmethod
+    def get_ext_handler_instance_from_path_if_valid(name, path, protocol, skip_handlers=None):
+        if not os.path.isdir(path) or re.match(HANDLER_NAME_PATTERN, name) is None:
+            return None
+        separator = name.rfind('-')
+        handler_name = name[0:separator]
+        if skip_handlers is not None and handler_name in skip_handlers:
+            # Handler in skip_handlers list, not parsing it
+            return None
+
+        eh = ExtHandler(name=handler_name)
+        eh.properties.version = str(FlexibleVersion(name[separator + 1:]))
+
+        return ExtHandlerInstance(eh, protocol)
+
     def _cleanup_outdated_handlers(self):
         handlers = []
         pkgs = []
@@ -278,31 +303,45 @@ class ExtHandlersHandler(object):
         # Note:
         # -- An orphaned package is one without a corresponding handler
         #    directory
-        for item in os.listdir(conf.get_lib_dir()):
-            path = os.path.join(conf.get_lib_dir(), item)
 
-            if version.is_agent_package(path) or version.is_agent_path(path):
+        for item, path in list_agent_lib_directory(skip_agent_package=True):
+        # for item in os.listdir(conf.get_lib_dir()):
+        #     path = os.path.join(conf.get_lib_dir(), item)
+        #
+        #     if version.is_agent_package(path) or version.is_agent_path(path):
+        #         continue
+
+            try:
+                handler_instance = ExtHandlersHandler.get_ext_handler_instance_from_path_if_valid(name=item,
+                                                                                                  path=path,
+                                                                                                  protocol=self.protocol,
+                                                                                                  skip_handlers=ext_handlers_in_gs)
+                if handler_instance is not None:
+                    # Since this handler name doesn't exist in the GS, marking it for deletion
+                    handlers.append(handler_instance)
+                    continue
+            except Exception:
                 continue
 
-            if os.path.isdir(path):
-                if re.match(HANDLER_NAME_PATTERN, item) is None:
-                    continue
-                try:
-                    separator = item.rfind('-')
-                    handler_name = item[0:separator]
-                    if handler_name in ext_handlers_in_gs:
-                        # Handler in GS, keeping it
-                        continue
+            # if os.path.isdir(path):
+            #     if re.match(HANDLER_NAME_PATTERN, item) is None:
+            #         continue
+            #     try:
+            #         separator = item.rfind('-')
+            #         handler_name = item[0:separator]
+            #         if handler_name in ext_handlers_in_gs:
+            #             # Handler in GS, keeping it
+            #             continue
+            #
+            #         eh = ExtHandler(name=handler_name)
+            #         eh.properties.version = str(FlexibleVersion(item[separator + 1:]))
+            #
+            #         # Since this handler name doesn't exist in the GS, marking it for deletion
+            #         handlers.append(ExtHandlerInstance(eh, self.protocol))
+            #     except Exception:
+            #         continue
 
-                    eh = ExtHandler(name=handler_name)
-                    eh.properties.version = str(FlexibleVersion(item[separator + 1:]))
-
-                    # Since this handler name doesn't exist in the GS, marking it for deletion
-                    handlers.append(ExtHandlerInstance(eh, self.protocol))
-                except Exception:
-                    continue
-
-            elif os.path.isfile(path) and \
+            if os.path.isfile(path) and \
                     not os.path.isdir(path[0:-len(HANDLER_PKG_EXT)]):
                 if not re.match(_HANDLER_PKG_PATTERN, item):
                     continue
@@ -1436,7 +1475,7 @@ class ExtHandlerInstance(object):
         return os.path.join(self.get_base_dir(), 'HandlerManifest.json')
 
     def get_env_file(self):
-        return os.path.join(self.get_base_dir(), 'HandlerEnvironment.json')
+        return os.path.join(self.get_base_dir(), HandlerEnvironment.fileName)
 
     def get_log_dir(self):
         return os.path.join(conf.get_ext_log_dir(), self.ext_handler.name)
@@ -1510,23 +1549,32 @@ class ExtHandlerInstance(object):
 
 
 class HandlerEnvironment(object):
-    def __init__(self, data):
-        self.data = data
 
-    def get_version(self):
-        return self.data["version"]
+    fileName = "HandlerEnvironment.json"
+    handlerEnvironment = "handlerEnvironment"
+    logFolder = "logFolder"
+    configFolder = "configFolder"
+    statusFolder = "statusFolder"
+    heartbeatFile = "heartbeatFile"
+    eventsFolder = "eventsFolder"
 
-    def get_log_dir(self):
-        return self.data["handlerEnvironment"]["logFolder"]
-
-    def get_conf_dir(self):
-        return self.data["handlerEnvironment"]["configFolder"]
-
-    def get_status_dir(self):
-        return self.data["handlerEnvironment"]["statusFolder"]
-
-    def get_heartbeat_file(self):
-        return self.data["handlerEnvironment"]["heartbeatFile"]
+    # def __init__(self, data):
+    #     self.data = data
+    #
+    # def get_version(self):
+    #     return self.data["version"]
+    #
+    # def get_log_dir(self):
+    #     return self.data["handlerEnvironment"]["logFolder"]
+    #
+    # def get_conf_dir(self):
+    #     return self.data["handlerEnvironment"]["configFolder"]
+    #
+    # def get_status_dir(self):
+    #     return self.data["handlerEnvironment"]["statusFolder"]
+    #
+    # def get_heartbeat_file(self):
+    #     return self.data["handlerEnvironment"]["heartbeatFile"]
 
 
 class HandlerManifest(object):
