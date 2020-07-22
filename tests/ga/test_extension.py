@@ -49,7 +49,7 @@ from tests.protocol.mocks import mock_wire_protocol, HttpRequestPredicates
 from tests.protocol.mockwiredata import DATA_FILE
 from tests.tools import are_cgroups_enabled, AgentTestCase, data_dir, i_am_root, MagicMock, Mock, \
     skip_if_predicate_false, patch
-from tests.ga.extension_emulator import generate_patched_popen, generate_put_handler, generate_patched_zipfile, \
+from tests.ga.extension_emulator import generate_patched_popen, generate_put_handler, generate_mock_load_manifest, \
     Actions, extension_emulator
 
 from azurelinuxagent.common.exception import ResourceGoneError, ExtensionDownloadError, ProtocolError, \
@@ -2563,11 +2563,11 @@ class TestExtensionUpdateOnFailure(ExtensionTestCase):
 
         with mock_wire_protocol(DATA_FILE, http_put_handler=generate_put_handler(first_ext, upgraded_ext)) as protocol:
             patched_popen, invocation_record = generate_patched_popen(first_ext, upgraded_ext)
-            mocked_zipfile = generate_patched_zipfile(first_ext, upgraded_ext)
+            mocked_load_manifest = generate_mock_load_manifest(first_ext, upgraded_ext)
 
             exthandlers_handler = get_exthandlers_handler(protocol)
 
-            with patch("zipfile.ZipFile", side_effect=mocked_zipfile):
+            with patch.object(ExtHandlerInstance, "load_manifest", mocked_load_manifest):
                 with patch("subprocess.Popen", side_effect=patched_popen):
                     exthandlers_handler.run()
 
@@ -2582,7 +2582,7 @@ class TestExtensionUpdateOnFailure(ExtensionTestCase):
             protocol.mock_wire_data.set_incarnation(2)
             protocol.client.update_goal_state()
         
-            with patch("zipfile.ZipFile", side_effect=mocked_zipfile):
+            with patch.object(ExtHandlerInstance, "load_manifest", mocked_load_manifest):
                 with patch("subprocess.Popen", side_effect=patched_popen):
                     exthandlers_handler.run()
             
@@ -2602,9 +2602,6 @@ class TestExtensionUpdateOnFailure(ExtensionTestCase):
             (second_ext, "install"),
             (second_ext, "enable")
         )
-
-        # Not a strictly necessary check, but good to have nonetheless.
-        first_ext.actions['disable'].assert_not_called()
 
     def test_disable_failed_env_variable_should_be_set_for_update_cmd_when_continue_on_update_failure_is_true(self):
         exit_code, disable_action = Actions.generate_unique_fail()

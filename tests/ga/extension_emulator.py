@@ -26,6 +26,8 @@ import azurelinuxagent.common.utils.fileutil as fileutil
 import azurelinuxagent.common.conf as conf
 from tests.tools import Mock
 
+from azurelinuxagent.ga.exthandlers import ExtHandlerInstance, HandlerManifest
+
 
 class Actions(object):
     """
@@ -89,7 +91,7 @@ def generate_patched_popen(*emulators):
         try:
             ext_name, ext_version, command_name = _ExtractExtensionInfo.from_command(cmd)
             invocation_record.add(ext_name, ext_version, command_name)
-        except Exception:
+        except Exception: # TODO: This should be specific
             return original_popen(cmd, *args, **kwargs)
         
         try:
@@ -104,43 +106,34 @@ def generate_patched_popen(*emulators):
 
     return patched_popen, invocation_record
 
-def generate_patched_zipfile(*emulators):
+def generate_mock_load_manifest(*emulators):
 
-    original_constructor = zipfile.ZipFile
+    original_load_manifest = ExtHandlerInstance.load_manifest
 
-    def patched_zip_constructor(zip_filename, *args, **kwargs):
-
-        zipfile = original_constructor(zip_filename, *args, **kwargs)
+    def mock_load_manifest(self):
 
         try:
-            ext_name, ext_version = _ExtractExtensionInfo.from_zipfilename(zip_filename)
             matching_emulator = next(
                 emulator for emulator in emulators
-                if emulator.matches(ext_name, ext_version)
+                if emulator.matches(self.ext_handler.name,
+                    self.ext_handler.properties.version)
             )
-        
-        except StopIteration:
-            return zipfile # TODO: We want to let the test know there's an extension not being emulated
-        except Exception:
-            return zipfile
+            
+            base_manifest = original_load_manifest(self)
 
-        def extended_extractall(destination):
-            zipfile.extractall(destination)
-
-            content = fileutil.read_file(os.path.join(destination, "HandlerManifest.json"))
-            handler_manifest = json.loads(content)
-
-            handler_manifest[0]["handlerManifest"].update({
+            base_manifest.data["handlerManifest"].update({
                 "continueOnUpdateFailure": matching_emulator.continue_on_update_failure,
-                "updateMode": matching_emulator.update_mode,
-                "reportHeartbeat": matching_emulator.report_heartbeat
+                "reportHeartbeat": matching_emulator.report_heartbeat,
+                "updateMode": matching_emulator.update_mode
             })
 
-            fileutil.write_file(os.path.join(destination, "HandlerManifest.json"), json.dumps(handler_manifest))
+            return base_manifest
 
-        return Mock(**{ "extractall.side_effect": extended_extractall })
+        except StopIteration:
+            pass # TODO: We want to let the test know there's an extension not being emulated
+    
+    return mock_load_manifest
 
-    return patched_zip_constructor
 
 
 def generate_put_handler(*emulators):
@@ -170,17 +163,17 @@ def generate_put_handler(*emulators):
 class InvocationRecord:
 
     def __init__(self):
-        self._delegate = []
+        self._queue = []
 
     def add(self, ext_name, ext_ver, ext_cmd):
-        self._delegate.append((ext_name, ext_ver, ext_cmd))
+        self._queue.append((ext_name, ext_ver, ext_cmd))
 
     def compare(self, *cmds):
 
         for (ext, command_name) in cmds:
 
             try:
-                (ext_name, ext_ver, ext_cmd) = self._delegate.pop(0)
+                (ext_name, ext_ver, ext_cmd) = self._queue.pop(0)
 
                 if not ext.matches(ext_name, ext_ver) or command_name != ext_cmd:
                     raise Exception("({0}-{1}, {2}) vs. ({3}-{4}, {5})".format(ext.name, ext.version, command_name, ext_name, ext_ver, ext_cmd))
@@ -188,7 +181,7 @@ class InvocationRecord:
             except IndexError:
                 raise Exception("{0}: {1}".format(ext.version, command_name))
         
-        if self._delegate:
+        if self._queue:
             raise Exception("")
 
 class ExtensionEmulator:
@@ -285,35 +278,11 @@ class _ExtractExtensionInfo:
 def _extend_func(func):
     
     def wrapped_func(cmd, *args, **kwargs):
-
-        base_dir = os.path.dirname(cmd.split(" ")[0])
-        
-        status_file = os.path.join(base_dir, "status", "{0}.status".format(wrapped_func.inc))
-        fileutil.write_file(
-            status_file,
-            """
-            [{
-                "status": {
-                    "status": "success"
-                }
-            }]
-            """
-        )
-
-        # Every time a command is called, the agent looks for the next status file
-        # (by filename prefix). We need to keep track of that number ourselves
-        # to write to the correct location.
-        wrapped_func.inc += 1
-
         return_value = func(cmd, *args, **kwargs)
 
         return Mock(**{
             "poll.return_value": return_value,
             "wait.return_value": return_value
         })
-    
-    # this is the default value for the function's static variable; because each invocation
-    # of this function generates a distinct wrapped_func, we shouldn't get collisions.
-    wrapped_func.inc = 0
 
     return Mock(wraps=wrapped_func)
