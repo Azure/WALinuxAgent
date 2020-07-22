@@ -18,8 +18,6 @@ from azurelinuxagent.common.osutil.default import DefaultOSUtil, shellutil
 from azurelinuxagent.ga.env import EnvHandler
 from tests.tools import AgentTestCase, patch
 
-import os
-
 
 class TestEnvHandler(AgentTestCase):
     def setUp(self):
@@ -39,10 +37,6 @@ class TestEnvHandler(AgentTestCase):
     def tearDown(self):
         self.mock_get_osutil.stop()
         AgentTestCase.tearDown(self)
-
-    def test_print_os_environment(self):
-        print(os.environ)
-        self.assertEqual(1, 1)
 
     def test_get_dhcp_client_pid_should_return_a_sorted_list_of_pids(self):
         with patch("azurelinuxagent.common.utils.shellutil.run_command", return_value="11 9 5 22 4 6"):
