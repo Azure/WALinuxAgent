@@ -100,7 +100,7 @@ def generate_patched_popen(*emulators):
             )(cmd, *args, **kwargs)
 
         except StopIteration:
-            pass # TODO: figure out what to do here.
+            pass # TODO: We want to let the test know there's an extension not being emulated
 
     return patched_popen, invocation_record
 
@@ -114,30 +114,31 @@ def generate_patched_zipfile(*emulators):
 
         try:
             ext_name, ext_version = _ExtractExtensionInfo.from_zipfilename(zip_filename)
-
             matching_emulator = next(
                 emulator for emulator in emulators
                 if emulator.matches(ext_name, ext_version)
             )
-
-            def extended_extractall(destination):
-                zipfile.extractall(destination)
-
-                content = fileutil.read_file(os.path.join(destination, "HandlerManifest.json"))
-                handler_manifest = json.loads(content)
-
-                handler_manifest[0]["handlerManifest"].update({
-                    "continueOnUpdateFailure": matching_emulator.continue_on_update_failure,
-                    "updateMode": matching_emulator.update_mode,
-                    "reportHeartbeat": matching_emulator.report_heartbeat
-                })
-
-                fileutil.write_file(os.path.join(destination, "HandlerManifest.json"), json.dumps(handler_manifest))
-
-            return Mock(**{ "extractall.side_effect": extended_extractall })
-
-        except Exception as e:
+        
+        except StopIteration:
+            return zipfile # TODO: We want to let the test know there's an extension not being emulated
+        except Exception:
             return zipfile
+
+        def extended_extractall(destination):
+            zipfile.extractall(destination)
+
+            content = fileutil.read_file(os.path.join(destination, "HandlerManifest.json"))
+            handler_manifest = json.loads(content)
+
+            handler_manifest[0]["handlerManifest"].update({
+                "continueOnUpdateFailure": matching_emulator.continue_on_update_failure,
+                "updateMode": matching_emulator.update_mode,
+                "reportHeartbeat": matching_emulator.report_heartbeat
+            })
+
+            fileutil.write_file(os.path.join(destination, "HandlerManifest.json"), json.dumps(handler_manifest))
+
+        return Mock(**{ "extractall.side_effect": extended_extractall })
 
     return patched_zip_constructor
 
@@ -165,6 +166,65 @@ def generate_put_handler(*emulators):
                 raise Exception("")
 
     return mock_put_handler
+
+class InvocationRecord:
+
+    def __init__(self):
+        self._delegate = []
+
+    def add(self, ext_name, ext_ver, ext_cmd):
+        self._delegate.append((ext_name, ext_ver, ext_cmd))
+
+    def compare(self, *cmds):
+
+        for (ext, command_name) in cmds:
+
+            try:
+                (ext_name, ext_ver, ext_cmd) = self._delegate.pop(0)
+
+                if not ext.matches(ext_name, ext_ver) or command_name != ext_cmd:
+                    raise Exception("({0}-{1}, {2}) vs. ({3}-{4}, {5})".format(ext.name, ext.version, command_name, ext_name, ext_ver, ext_cmd))
+
+            except IndexError:
+                raise Exception("{0}: {1}".format(ext.version, command_name))
+        
+        if self._delegate:
+            raise Exception("")
+
+class ExtensionEmulator:
+    """
+    A wrapper class for the possible actions and options that an extension might support.
+    """
+
+    def __init__(self, name, version,
+        update_mode, report_heartbeat,
+        continue_on_update_failure,
+        install_action, uninstall_action,
+        enable_action, disable_action,
+        update_action):
+
+        self.name = name
+        self.version = version
+
+        self.update_mode = update_mode
+        self.report_heartbeat = report_heartbeat
+        self.continue_on_update_failure = continue_on_update_failure
+
+        self.actions = {
+            "install": install_action,
+            "uninstall": uninstall_action,
+            "update": update_action,
+            "enable": enable_action,
+            "disable": disable_action
+        }
+
+        self.status_blobs = []
+        
+    
+    def matches(self, name, version):
+        """
+        """
+        return self.name == name and self.version == version
 
 class _ExtractExtensionInfo:
 
@@ -257,62 +317,3 @@ def _extend_func(func):
     wrapped_func.inc = 0
 
     return Mock(wraps=wrapped_func)
-
-class InvocationRecord:
-
-    def __init__(self):
-        self._delegate = []
-
-    def add(self, ext_name, ext_ver, ext_cmd):
-        self._delegate.append((ext_name, ext_ver, ext_cmd))
-
-    def compare(self, *cmds):
-
-        for (ext, command_name) in cmds:
-
-            try:
-                (ext_name, ext_ver, ext_cmd) = self._delegate.pop(0)
-
-                if not ext.matches(ext_name, ext_ver) or command_name != ext_cmd:
-                    raise Exception("({0}-{1}, {2}) vs. ({3}-{4}, {5})".format(ext.name, ext.version, command_name, ext_name, ext_ver, ext_cmd))
-
-            except IndexError:
-                raise Exception("{0}: {1}".format(ext.version, command_name))
-        
-        if self._delegate:
-            raise Exception("")
-
-class ExtensionEmulator:
-    """
-    A wrapper class for the possible actions and options that an extension might support.
-    """
-
-    def __init__(self, name, version,
-        update_mode, report_heartbeat,
-        continue_on_update_failure,
-        install_action, uninstall_action,
-        enable_action, disable_action,
-        update_action):
-
-        self.name = name
-        self.version = version
-
-        self.update_mode = update_mode
-        self.report_heartbeat = report_heartbeat
-        self.continue_on_update_failure = continue_on_update_failure
-
-        self.actions = {
-            "install": install_action,
-            "uninstall": uninstall_action,
-            "update": update_action,
-            "enable": enable_action,
-            "disable": disable_action
-        }
-
-        self.status_blobs = []
-        
-    
-    def matches(self, name, version):
-        """
-        """
-        return self.name == name and self.version == version
