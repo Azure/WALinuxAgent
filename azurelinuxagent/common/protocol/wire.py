@@ -29,7 +29,8 @@ import azurelinuxagent.common.conf as conf
 import azurelinuxagent.common.logger as logger
 import azurelinuxagent.common.utils.textutil as textutil
 from azurelinuxagent.common.datacontract import validate_param
-from azurelinuxagent.common.event import add_event, add_periodic, WALAEventOperation, EVENTS_DIRECTORY, EventLogger
+from azurelinuxagent.common.event import add_event, add_periodic, WALAEventOperation, EVENTS_DIRECTORY, EventLogger, \
+    report_event
 from azurelinuxagent.common.exception import ProtocolNotFoundError, \
     ResourceGoneError, ExtensionDownloadError, InvalidContainerError, ProtocolError, HttpError
 from azurelinuxagent.common.future import httpclient, bytebuffer, ustr
@@ -1232,7 +1233,7 @@ class WireClient(object):
         return artifacts_profile
 
     def upload_logs(self, content):
-        host_func = self._upload_logs_through_host(content)
+        host_func = lambda: self._upload_logs_through_host(content)
         # propagate any exceptions up to the main thread
         return self.call_hostplugin_with_container_check(host_func)
 
