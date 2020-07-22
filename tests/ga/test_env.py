@@ -42,7 +42,7 @@ class TestEnvHandler(AgentTestCase):
 
     def test_print_os_environment(self):
         print(os.environ)
-        self.fail("TEST MESSAGE")
+        self.assertEqual(1, 1)
 
     def test_get_dhcp_client_pid_should_return_a_sorted_list_of_pids(self):
         with patch("azurelinuxagent.common.utils.shellutil.run_command", return_value="11 9 5 22 4 6"):
