@@ -134,10 +134,11 @@ def mock_get_osutil(*args):
     # It's a known issue that calling platform.linux_distribution() in Travis will result in the wrong info.
     # See https://github.com/travis-ci/travis-ci/issues/2755
     # When running in Travis, use manual distro resolution that relies on environment variables.
-    if running_under_travis():
-        return get_osutil_for_travis()
-    else:
-        return _get_osutil(*args)
+    # if running_under_travis():
+    #     return get_osutil_for_travis()
+    # else:
+    #     return _get_osutil(*args)
+    return _get_osutil(*args)
 
 
 def are_cgroups_enabled():
@@ -149,15 +150,6 @@ def are_cgroups_enabled():
     ret = CGroupConfigurator.get_instance().enabled
     mock__get_osutil.stop()
     return ret
-
-
-def is_trusty_in_travis():
-    # In Travis, Trusty (Ubuntu 14.04) is missing the cpuacct.stat file,
-    # possibly because the accounting is not enabled by default.
-    if not running_under_travis():
-        return False
-
-    return type(get_osutil_for_travis()) == Ubuntu14OSUtil
 
 
 def is_systemd_present():
