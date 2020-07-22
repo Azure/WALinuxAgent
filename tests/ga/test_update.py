@@ -1493,11 +1493,15 @@ class TestUpdate(UpdateTestCase):
             with patch("azurelinuxagent.ga.update.get_protocol_util", return_value=protocol_util):
                 with patch("azurelinuxagent.common.conf.get_autoupdate_enabled", return_value=False):
                     update_handler = get_update_handler()
-                    # The extra False in the end is for UpdateHandler._shutdown
+                    # Mock the running to control how many iterations to run (the last False is for _shutdown()) function
                     type(update_handler).running = PropertyMock(side_effect=[True] * iterations + [False] * 2)
                     with patch("time.sleep", side_effect=lambda _: mock_sleep(0.001)):
                         with patch('sys.exit'):
-                            yield update_handler, protocol
+                            try:
+                                yield update_handler, protocol
+                            finally:
+                                # Revert the data back
+                                type(update_handler).running = True
 
     def test_it_should_recreate_handler_env_on_service_startup(self):
         iterations = 3
