@@ -791,7 +791,9 @@ class UpdateHandler(object):
             if not is_extension_telemetry_pipeline_enabled():
                 # If extension telemetry pipeline is disabled, ensure we delete all existing extension events directory
                 # because the agent will not be listening on those events.
-                fileutil.rm_dirs(glob.glob(os.path.join(conf.get_ext_log_dir(), "*", EVENTS_DIRECTORY)))
+                extension_event_dirs = glob.glob(os.path.join(conf.get_ext_log_dir(), "*", EVENTS_DIRECTORY))
+                for ext_dir in extension_event_dirs:
+                    shutil.rmtree(ext_dir, ignore_errors=True)
         except Exception as e:
             logger.warn("Error when trying to delete existing Extension events directory. Error: {0}".format(ustr(e)))
 
