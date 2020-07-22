@@ -538,12 +538,11 @@ class TestHostPlugin(HttpRequestPredicates, AgentTestCase):
                         test_goal_state,
                         exp_method, exp_url, exp_data)
 
-    def test_validate_http_request_when_uploading_logs(self):
+    def test_validate_http_request_for_put_vm_log(self):
         def http_put_handler(url, *args, **kwargs):
             if self.is_host_plugin_put_logs_request(url):
                 http_put_handler.args, http_put_handler.kwargs = args, kwargs
                 return MockResponse(body=b'', status_code=200)
-            self.fail('The upload logs request was sent to the wrong url: {0}'.format(url))
 
         http_put_handler.args, http_put_handler.kwargs = [], {}
 
@@ -579,8 +578,32 @@ class TestHostPlugin(HttpRequestPredicates, AgentTestCase):
 
             # Special check for correlation id header value, check for pattern, not exact value
             self.assertTrue("x-ms-client-correlationid" in headers.keys(), "Correlation id not found in headers!")
-            self.assertTrue(UUID_PATTERN.match(headers["x-ms-client-correlationid"]),
-                            "Correlation id is not in GUID form!")
+            self.assertTrue(UUID_PATTERN.match(headers["x-ms-client-correlationid"]), "Correlation id is not in GUID form!")
+
+    def test_put_vm_log_should_raise_an_exception_when_request_fails(self):
+        def http_put_handler(url, *args, **kwargs):
+            if self.is_host_plugin_put_logs_request(url):
+                http_put_handler.args, http_put_handler.kwargs = args, kwargs
+                return MockResponse(body=ustr('Gone'), status_code=410)
+
+        http_put_handler.args, http_put_handler.kwargs = [], {}
+
+        with mock_wire_protocol(DATA_FILE, http_put_handler=http_put_handler) as protocol:
+            test_goal_state = protocol.client.get_goal_state()
+
+            host_client = wire.HostPluginProtocol(wireserver_url,
+                                                  test_goal_state.container_id,
+                                                  test_goal_state.role_config_name)
+
+            self.assertFalse(host_client.is_initialized, "Host plugin should not be initialized!")
+
+            with self.assertRaises(HttpError) as context_manager:
+                content = b"test"
+                host_client.put_vm_log(content)
+
+            self.assertIsInstance(context_manager.exception, HttpError)
+            self.assertIn("410", ustr(context_manager.exception))
+            self.assertIn("Gone", ustr(context_manager.exception))
 
     def test_validate_get_extension_artifacts(self):
         with mock_wire_protocol(DATA_FILE) as protocol:

@@ -1234,7 +1234,6 @@ class WireClient(object):
 
     def upload_logs(self, content):
         host_func = lambda: self._upload_logs_through_host(content)
-        # propagate any exceptions up to the main thread
         return self.call_hostplugin_with_container_check(host_func)
 
     def _upload_logs_through_host(self, content):

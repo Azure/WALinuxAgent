@@ -217,7 +217,6 @@ class TestWireProtocol(AgentTestCase):
         def http_put_handler(url, *_, **__):
             if protocol.get_endpoint() in url and url.endswith('/status'):
                 return MockResponse(body=b'', status_code=200)
-            self.fail('The upload status request was sent to the wrong url: {0}'.format(url))
 
         with mock_wire_protocol(mockwiredata.DATA_FILE, http_put_handler=http_put_handler) as protocol:
             HostPluginProtocol.set_default_channel(False)
@@ -820,7 +819,6 @@ class TestWireClient(HttpRequestPredicates, AgentTestCase):
         def http_put_handler(url, *_, **__):
             if self.is_host_plugin_put_logs_request(url):
                 return MockResponse(body=b'', status_code=200)
-            self.fail('The upload logs request was sent to the wrong url: {0}'.format(url))
 
         with mock_wire_protocol(mockwiredata.DATA_FILE, http_put_handler=http_put_handler) as protocol:
             content = b"test"
