@@ -119,37 +119,8 @@ def running_under_travis():
     return 'TRAVIS' in os.environ and os.environ['TRAVIS'] == 'true'
 
 
-def get_osutil_for_travis():
-    distro_name = os.environ['_system_name'].lower()
-    distro_version = os.environ['_system_version']
-
-    if distro_name == "ubuntu" and distro_version == "14.04":
-        return Ubuntu14OSUtil()
-
-    if distro_name == "ubuntu" and distro_version == "16.04":
-        return Ubuntu16OSUtil()
-
-
-def mock_get_osutil(*args):
-    # It's a known issue that calling platform.linux_distribution() in Travis will result in the wrong info.
-    # See https://github.com/travis-ci/travis-ci/issues/2755
-    # When running in Travis, use manual distro resolution that relies on environment variables.
-    # if running_under_travis():
-    #     return get_osutil_for_travis()
-    # else:
-    #     return _get_osutil(*args)
-    return _get_osutil(*args)
-
-
 def are_cgroups_enabled():
-    # We use a function decorator to check if cgroups are enabled in multiple tests, which at some point calls
-    # get_osutil. The global mock for that function doesn't get executed before the function decorators are imported,
-    # so we need to specifically mock it beforehand.
-    mock__get_osutil = patch("azurelinuxagent.common.osutil.factory._get_osutil", mock_get_osutil)
-    mock__get_osutil.start()
-    ret = CGroupConfigurator.get_instance().enabled
-    mock__get_osutil.stop()
-    return ret
+    return CGroupConfigurator.get_instance().enabled
 
 
 def is_systemd_present():
@@ -225,14 +196,9 @@ class AgentTestCase(unittest.TestCase):
         event.init_event_status(self.tmp_dir)
         event.init_event_logger(self.tmp_dir)
 
-        self.mock__get_osutil = patch("azurelinuxagent.common.osutil.factory._get_osutil", mock_get_osutil)
-        self.mock__get_osutil.start()
-
     def tearDown(self):
         if not debug and self.tmp_dir is not None:
             shutil.rmtree(self.tmp_dir)
-
-        self.mock__get_osutil.stop()
 
     def emulate_assertIn(self, a, b, msg=None):
         if a not in b:
