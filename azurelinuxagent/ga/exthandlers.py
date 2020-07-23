@@ -305,12 +305,6 @@ class ExtHandlersHandler(object):
         #    directory
 
         for item, path in list_agent_lib_directory(skip_agent_package=True):
-        # for item in os.listdir(conf.get_lib_dir()):
-        #     path = os.path.join(conf.get_lib_dir(), item)
-        #
-        #     if version.is_agent_package(path) or version.is_agent_path(path):
-        #         continue
-
             try:
                 handler_instance = ExtHandlersHandler.get_ext_handler_instance_from_path_if_valid(name=item,
                                                                                                   path=path,
@@ -322,24 +316,6 @@ class ExtHandlersHandler(object):
                     continue
             except Exception:
                 continue
-
-            # if os.path.isdir(path):
-            #     if re.match(HANDLER_NAME_PATTERN, item) is None:
-            #         continue
-            #     try:
-            #         separator = item.rfind('-')
-            #         handler_name = item[0:separator]
-            #         if handler_name in ext_handlers_in_gs:
-            #             # Handler in GS, keeping it
-            #             continue
-            #
-            #         eh = ExtHandler(name=handler_name)
-            #         eh.properties.version = str(FlexibleVersion(item[separator + 1:]))
-            #
-            #         # Since this handler name doesn't exist in the GS, marking it for deletion
-            #         handlers.append(ExtHandlerInstance(eh, self.protocol))
-            #     except Exception:
-            #         continue
 
             if os.path.isfile(path) and \
                     not os.path.isdir(path[0:-len(HANDLER_PKG_EXT)]):
@@ -1351,19 +1327,19 @@ class ExtHandlerInstance(object):
 
     def create_handler_env(self):
         handler_env = {
-                "logFolder": self.get_log_dir(),
-                "configFolder": self.get_conf_dir(),
-                "statusFolder": self.get_status_dir(),
-                "heartbeatFile": self.get_heartbeat_file()
+                HandlerEnvironment.logFolder: self.get_log_dir(),
+                HandlerEnvironment.configFolder: self.get_conf_dir(),
+                HandlerEnvironment.statusFolder: self.get_status_dir(),
+                HandlerEnvironment.heartbeatFile: self.get_heartbeat_file()
             }
 
         if is_extension_telemetry_pipeline_enabled():
-            handler_env["eventsFolder"] = self.get_extension_events_dir()
+            handler_env[HandlerEnvironment.eventsFolder] = self.get_extension_events_dir()
 
         env = [{
             "name": self.ext_handler.name,
             "version": _HANDLER_ENVIRONMENT_VERSION,
-            "handlerEnvironment": handler_env
+            HandlerEnvironment.handlerEnvironment: handler_env
         }]
         try:
             fileutil.write_file(self.get_env_file(), json.dumps(env))
@@ -1557,24 +1533,6 @@ class HandlerEnvironment(object):
     statusFolder = "statusFolder"
     heartbeatFile = "heartbeatFile"
     eventsFolder = "eventsFolder"
-
-    # def __init__(self, data):
-    #     self.data = data
-    #
-    # def get_version(self):
-    #     return self.data["version"]
-    #
-    # def get_log_dir(self):
-    #     return self.data["handlerEnvironment"]["logFolder"]
-    #
-    # def get_conf_dir(self):
-    #     return self.data["handlerEnvironment"]["configFolder"]
-    #
-    # def get_status_dir(self):
-    #     return self.data["handlerEnvironment"]["statusFolder"]
-    #
-    # def get_heartbeat_file(self):
-    #     return self.data["handlerEnvironment"]["heartbeatFile"]
 
 
 class HandlerManifest(object):

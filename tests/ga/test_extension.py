@@ -40,7 +40,7 @@ from azurelinuxagent.common.version import PY_VERSION_MAJOR, PY_VERSION_MINOR, P
     GOAL_STATE_AGENT_VERSION, CURRENT_VERSION, DISTRO_NAME, DISTRO_VERSION
 from azurelinuxagent.ga.exthandlers import ExtHandlerState, ExtHandlersHandler, ExtHandlerInstance, HANDLER_PKG_EXT, \
     migrate_handler_state, get_exthandlers_handler, AGENT_STATUS_FILE, ExtCommandEnvVariable, \
-    HandlerManifest, NOT_RUN, ValidHandlerStatus, HANDLER_NAME_PATTERN
+    HandlerManifest, NOT_RUN, ValidHandlerStatus, HANDLER_NAME_PATTERN, HandlerEnvironment
 
 from azurelinuxagent.ga.monitor import get_monitor_handler
 from nose.plugins.attrib import attr
@@ -964,13 +964,14 @@ class TestExtension(ExtensionTestCase):
                         with open(handler_env_json, 'r') as env_json:
                             env_data = json.load(env_json)
 
-                        self.assertEqual(enable_extensions, "eventsFolder" in env_data[0]['handlerEnvironment'],
+                        self.assertEqual(enable_extensions, HandlerEnvironment.eventsFolder in env_data[0][
+                            HandlerEnvironment.handlerEnvironment],
                                          "eventsFolder wrongfully set in HandlerEnvironment.json file")
 
                         if enable_extensions:
                             self.assertEqual(ehi.get_extension_events_dir(),
-                                             env_data[0]['handlerEnvironment']["eventsFolder"],
-                                             "Events directory dont match")
+                                             env_data[0][HandlerEnvironment.handlerEnvironment][
+                                                 HandlerEnvironment.eventsFolder], "Events directory dont match")
 
             # Clean the File System for the next test run
             if os.path.exists(tmp_lib_dir):
