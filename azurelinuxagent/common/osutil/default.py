@@ -997,12 +997,16 @@ class DefaultOSUtil(object):
         return endpoint
 
     def is_missing_default_route(self):
-        route_cmd = "ip route show"
-        routes = shellutil.run_get_output(route_cmd)[1]
-        for route in routes.split("\n"):
-            if route.startswith("0.0.0.0 ") or route.startswith("default "):
-               return False
-        return True
+        try:
+            route_cmd = ["ip", "route", "show"]
+            routes = shellutil.run_command(route_cmd)
+            for route in routes.split("\n"):
+                if route.startswith("0.0.0.0 ") or route.startswith("default "):
+                    return False
+            return True
+        except CommandError as e:
+            logger.warn("Cannot get the routing table. {0} failed: {1}", ustr(route_cmd), ustr(e))
+            return False
 
     def get_if_name(self):
         if_name = ''
@@ -1018,15 +1022,18 @@ class DefaultOSUtil(object):
         return self.get_first_if()[1]
 
     def set_route_for_dhcp_broadcast(self, ifname):
-        route_cmd = "ip route add"
-        return shellutil.run("{0} 255.255.255.255 dev {1}".format(
-            route_cmd, ifname),
-                             chk_err=False)
+        try:
+            route_cmd = ["ip", "route", "add", "255.255.255.255", "dev", ifname]
+            return shellutil.run_command(route_cmd)
+        except CommandError:
+            return ""
 
     def remove_route_for_dhcp_broadcast(self, ifname):
-        route_cmd = "ip route del"
-        shellutil.run("{0} 255.255.255.255 dev {1}".format(route_cmd, ifname),
-                      chk_err=False)
+        try:
+            route_cmd = ["ip", "route", "del", "255.255.255.255", "dev", ifname]
+            shellutil.run_command(route_cmd)
+        except CommandError:
+            pass
 
     def is_dhcp_available(self):
         return True
@@ -1062,8 +1069,11 @@ class DefaultOSUtil(object):
         """
         Add specified route 
         """
-        cmd = "ip route add {0} via {1}".format(net, gateway)
-        return shellutil.run(cmd, chk_err=False)
+        try:
+            cmd = ["ip", "route", "add", net, "via", gateway]
+            return shellutil.run_command(cmd)
+        except CommandError:
+            return ""
 
     @staticmethod
     def _text_to_pid_list(text):
