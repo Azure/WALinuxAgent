@@ -119,10 +119,6 @@ def running_under_travis():
     return 'TRAVIS' in os.environ and os.environ['TRAVIS'] == 'true'
 
 
-def are_cgroups_enabled():
-    return CGroupConfigurator.get_instance().enabled
-
-
 def is_systemd_present():
     return os.path.exists("/run/systemd/system")
 
