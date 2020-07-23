@@ -24,6 +24,7 @@ import subprocess
 
 import azurelinuxagent.common.utils.fileutil as fileutil
 import azurelinuxagent.common.conf as conf
+from azurelinuxagent.common.future import ustr
 from tests.tools import Mock
 
 from azurelinuxagent.ga.exthandlers import ExtHandlerInstance, HandlerManifest
@@ -228,7 +229,7 @@ class _ExtractExtensionInfo:
     def from_command(command):
         """
         """
-        if not isinstance(command, str):
+        if not isinstance(command, (str, ustr)):
             raise Exception("Cannot extract extension info from non-string commands")
 
         # Group layout of the expected command; this lets us grab what we want after a match
