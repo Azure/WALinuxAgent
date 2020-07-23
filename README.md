@@ -106,6 +106,12 @@ For more advanced installation options, such as installing to custom locations o
     sudo python setup.py install --register-service
 ```
 
+For Python 3, use:
+
+```bash
+    sudo python3 setup.py install --register-service
+```
+
 You can view more installation options by running:
 
 ```bash
@@ -258,6 +264,19 @@ How often to clean up the history folder of the agent. The agent keeps past goal
 states on this folder, each goal state represented with a set of small files. The
 history is useful to debug issues in the agent or extensions.
  
+#### __AutoUpdate.Enabled__
+
+_Type: Boolean_  
+_Default: y_
+
+Enables auto-update of the Extension Handler. The Extension Handler is responsible 
+for managing extensions and reporting VM status. The core functionality of the agent
+is contained in the Extension Handler, and we encourage users to enable this option 
+in order to maintain an up to date version.
+
+On most distros the default value is 'y'.
+
+For more information on the agent version, see our [FAQ](https://github.com/Azure/WALinuxAgent/wiki/FAQ#what-does-goal-state-agent-mean-in-waagent---version-output).
 
 #### __Provisioning.Agent__
 
