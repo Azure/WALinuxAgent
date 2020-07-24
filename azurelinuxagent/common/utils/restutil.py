@@ -35,8 +35,8 @@ from azurelinuxagent.common.version import PY_VERSION_MAJOR, AGENT_NAME, GOAL_ST
 
 SECURE_WARNING_EMITTED = False
 
-DEFAULT_RETRIES = 6
-DELAY_IN_SECONDS = 1
+DEFAULT_RETRIES = 3
+DELAY_IN_SECONDS = 5
 
 THROTTLE_RETRIES = 25
 THROTTLE_DELAY_IN_SECONDS = 1
@@ -389,8 +389,7 @@ def http_request(method,
             #    item in the Fibonacci series and the initial delay value
             delay = THROTTLE_DELAY_IN_SECONDS \
                         if was_throttled \
-                        else _compute_delay(retry_attempt=attempt,
-                                            delay=retry_delay)
+                        else retry_delay #_compute_delay(retry_attempt=attempt, delay=retry_delay)
 
             logger.verbose("[HTTP Retry] "
                         "Attempt {0} of {1} will delay {2} seconds: {3}",
