@@ -590,11 +590,11 @@ class TestHttpOperations(AgentTestCase):
             mock_resp = Mock(return_value=MockHttpResponse(status=httpclient.BAD_GATEWAY))
             mock_conn = MagicMock(getresponse=mock_resp)
             max_retry = randint(2, 10)
-            start_time = datetime.utcnow()
             with patch("azurelinuxagent.common.future.httpclient.HTTPConnection", return_value=mock_conn):
                 with self.assertRaises(HttpError):
+                    start_time = datetime.utcnow()
                     restutil.http_get("http://foo.bar", retry_delay=retry_delay_in_sec, max_retry=max_retry)
-            end_time = datetime.utcnow()
+                    end_time = datetime.utcnow()
             self.assertEqual(max_retry, mock_resp.call_count, "Did not Retry the required amount of time")
             upper_bound = timedelta(seconds=retry_delay_in_sec * (max_retry + 1))
             lower_bound = timedelta(seconds=retry_delay_in_sec * (max_retry - 1))
