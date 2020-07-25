@@ -135,13 +135,6 @@ class IOErrorCounter(object):
         IOErrorCounter._protocol_endpoint = endpoint
 
 
-def _compute_delay(retry_attempt=1, delay=DELAY_IN_SECONDS):
-    fib = (1, 1)
-    for n in range(retry_attempt):
-        fib = (fib[1], fib[0]+fib[1])
-    return delay*fib[1]
-
-
 def _is_retry_status(status, retry_codes=RETRY_CODES):
     return status in retry_codes
 
@@ -385,11 +378,8 @@ def http_request(method,
             # Compute the request delay
             # -- Use a fixed delay if the server ever rate-throttles the request
             #    (with a safe, minimum number of retry attempts)
-            # -- Otherwise, compute a delay that is the product of the next
-            #    item in the Fibonacci series and the initial delay value
-            delay = THROTTLE_DELAY_IN_SECONDS \
-                        if was_throttled \
-                        else retry_delay #_compute_delay(retry_attempt=attempt, delay=retry_delay)
+            # -- Otherwise, use the retry_delay (fixed) with maximum of max_retry retries for the rest of the requests.
+            delay = THROTTLE_DELAY_IN_SECONDS if was_throttled else retry_delay
 
             logger.verbose("[HTTP Retry] "
                         "Attempt {0} of {1} will delay {2} seconds: {3}",
