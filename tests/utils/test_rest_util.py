@@ -584,12 +584,12 @@ class TestHttpOperations(AgentTestCase):
     def test_it_should_have_http_request_retries_with_linear_delay(self):
 
         self.assertTrue(httpclient.BAD_GATEWAY in restutil.RETRY_CODES, "Ensure that the test params are correct")
-        retry_delay_in_sec = 0.01
+        retry_delay_in_sec = 0.05
 
-        for _ in range(5):
+        for _ in range(3):
             mock_resp = Mock(return_value=MockHttpResponse(status=httpclient.BAD_GATEWAY))
             mock_conn = MagicMock(getresponse=mock_resp)
-            max_retry = randint(2, 10)
+            max_retry = randint(5, 10)
             duration = None
             with patch("azurelinuxagent.common.future.httpclient.HTTPConnection", return_value=mock_conn):
                 with self.assertRaises(HttpError):
@@ -598,8 +598,8 @@ class TestHttpOperations(AgentTestCase):
                 duration = datetime.utcnow() - start_time
 
             self.assertEqual(max_retry, mock_resp.call_count, "Did not Retry the required amount of time")
-            upper_bound = timedelta(seconds=retry_delay_in_sec * (max_retry + 1))
-            lower_bound = timedelta(seconds=retry_delay_in_sec * (max_retry - 1))
+            upper_bound = timedelta(seconds=retry_delay_in_sec * (max_retry + 2))
+            lower_bound = timedelta(seconds=retry_delay_in_sec * (max_retry - 2))
             self.assertTrue(upper_bound >= duration >= lower_bound,
                             "The total duration for request not in acceptable range. UB: {0}; LB: {1}; Actual: {2}".format(
                                 upper_bound, lower_bound, duration))
