@@ -133,7 +133,7 @@ def generate_put_handler(*emulators):
 
             except StopIteration as e:
                 # Tests will want to know that the agent is running an extension they didn't specifically allocate.
-                raise Exception("")
+                raise Exception("Extension running, but not present in emulators: {0}, {1}".foramt(supplied_name, supplied_version))
 
     return mock_put_handler
 
