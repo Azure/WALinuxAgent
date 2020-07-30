@@ -28,6 +28,8 @@ import azurelinuxagent.common.conf as conf
 from azurelinuxagent.common.future import ustr
 from tests.tools import Mock, patch
 
+from tests.protocol.mocks import HttpRequestPredicates
+
 from azurelinuxagent.ga.exthandlers import ExtHandlerInstance, HandlerManifest
 
 
@@ -114,7 +116,8 @@ def generate_put_handler(*emulators):
 
     def mock_put_handler(url, *args, **kwargs):
 
-        # TODO: verify correct put call.
+        if HttpRequestPredicates.is_host_plugin_status_request(url):
+            return None
 
         handler_statuses = json.loads(args[0]).get("aggregateStatus", {}).get("handlerAggregateStatus", [])
 
@@ -267,6 +270,7 @@ class _ExtractExtensionInfo:
     @staticmethod
     def from_command(command):
         """
+        Parse a command into a tuple of extension info.
         """
         if not isinstance(command, (str, ustr)):
             raise Exception("Cannot extract extension info from non-string commands")
