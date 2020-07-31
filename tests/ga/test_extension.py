@@ -994,6 +994,26 @@ class TestExtension(ExtensionTestCase):
             exthandlers_handler.run()
             self.assertTrue(os.path.exists(ehi.get_extension_events_dir()), "Events directory should still exist")
 
+    def test_it_should_uninstall_unregistered_extensions_properly(self, *args):
+        test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE)
+        exthandlers_handler, protocol = self._create_mock(test_data, *args)
+        exthandlers_handler.run()
+        self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.0.0")
+
+        # Update version and set it to uninstall. That is how it would be propagated by CRP if a version 1.0.x is unregistered in PIR.
+        test_data.set_extensions_config_state("uninstall")
+        test_data.set_extensions_config_version("1.0.1")
+        # Since the installed version is not in PIR anymore, we need to also remove it from manifest file
+        test_data.manifest = test_data.manifest.replace("1.0.0", "9.9.9")
+        test_data.set_incarnation(2)
+        protocol.update_goal_state()
+        exthandlers_handler.run()
+        args, _ = protocol.report_vm_status.call_args
+        vm_status = args[0]
+        self.assertEqual(0, len(vm_status.vmAgent.extensionHandlers),
+                         "The extension should not be reported as its uninstalled")
+
+
     @patch('azurelinuxagent.common.errorstate.ErrorState.is_triggered')
     @patch('azurelinuxagent.ga.exthandlers.add_event')
     def test_ext_handler_report_status_permanent(self, mock_add_event, mock_error_state, *args):
