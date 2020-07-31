@@ -425,19 +425,18 @@ class ExtHandlersHandler(object):
 
             state = ext_handler.properties.state
 
+            # The Agent currently only supports 1 version per extension.
+            # If the extension version is unregistered and the customers wants to uninstall the extension,
+            # we should let it go through even if the installed version doesnt exist in Extension manifest (PIR) anymore.
             if ext_handler_i.decide_version(target_state=state) is None:
                 version = ext_handler_i.ext_handler.properties.version
                 name = ext_handler_i.ext_handler.name
                 err_msg = "Unable to find version {0} in manifest for extension {1}".format(version, name)
-                logger.warn(err_msg)
-                # The Agent currently only supports 1 version per extension.
-                # If the extension version is unregistered and the customers wants to uninstall the extension,
-                # we should let it go through even if the installed version doesnt exist in Extension manifest (PIR) anymore.
-                # If target state is uninstall/disable, let the extension proceed and remove it after logging the warning above.
-                if not state in (ExtensionRequestedState.Uninstall, ExtensionRequestedState.Disabled):
+                # If target state is enabled and version not found in manifest, do not process the extension.
+                if state == ExtensionRequestedState.Enabled:
                     ext_handler_i.set_operation(WALAEventOperation.Download)
                     ext_handler_i.set_handler_status(message=ustr(err_msg), code=-1)
-                    ext_handler_i.report_event(message=ustr(err_msg), is_success=False, log_event=False)
+                    ext_handler_i.report_event(message=ustr(err_msg), is_success=False, log_event=True)
                     return
 
             self.log_etag = True
@@ -740,8 +739,8 @@ class ExtHandlerInstance(object):
         #    is allowed if the installed version is no longer available
         if target_state in (ExtensionRequestedState.Uninstall, ExtensionRequestedState.Disabled):
             if installed_pkg is None:
-                msg = "Failed to find installed version of {0} " \
-                      "to uninstall".format(self.ext_handler.name)
+                msg = "Failed to find installed version: {0} of Handler: {1}  in handler manifest to uninstall.".format(
+                    installed_version, self.ext_handler.name)
                 self.logger.warn(msg)
             self.pkg = installed_pkg
             self.ext_handler.properties.version = str(installed_version) \

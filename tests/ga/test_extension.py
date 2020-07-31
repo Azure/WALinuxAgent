@@ -1000,7 +1000,8 @@ class TestExtension(ExtensionTestCase):
         exthandlers_handler.run()
         self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.0.0")
 
-        # Update version and set it to uninstall. That is how it would be propagated by CRP if a version 1.0.x is unregistered in PIR.
+        # Update version and set it to uninstall. That is how it would be propagated by CRP if a version 1.0.0 is
+        # unregistered in PIR and a new version 1.0.1 is published.
         test_data.set_extensions_config_state(ExtensionRequestedState.Uninstall)
         test_data.set_extensions_config_version("1.0.1")
         # Since the installed version is not in PIR anymore, we need to also remove it from manifest file
@@ -1011,8 +1012,7 @@ class TestExtension(ExtensionTestCase):
         args, _ = protocol.report_vm_status.call_args
         vm_status = args[0]
         self.assertEqual(0, len(vm_status.vmAgent.extensionHandlers),
-                         "The extension should not be reported as its uninstalled")
-
+                         "The extension should not be reported as it is uninstalled")
 
     @patch('azurelinuxagent.common.errorstate.ErrorState.is_triggered')
     @patch('azurelinuxagent.ga.exthandlers.add_event')
