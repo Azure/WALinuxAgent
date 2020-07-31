@@ -233,8 +233,9 @@ def get_exthandlers_handler(protocol):
 
 
 def list_agent_lib_directory(skip_agent_package=True):
-    for name in os.listdir(conf.get_lib_dir()):
-        path = os.path.join(conf.get_lib_dir(), name)
+    lib_dir = conf.get_lib_dir()
+    for name in os.listdir(lib_dir):
+        path = os.path.join(lib_dir, name)
 
         if skip_agent_package and (version.is_agent_package(path) or version.is_agent_path(path)):
             continue
