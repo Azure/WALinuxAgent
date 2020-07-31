@@ -228,6 +228,15 @@ class ExtHandlerState(object):
     FailedUpgrade = "FailedUpgrade"
 
 
+class ExtensionRequestedState(object):
+    """
+    This is the state of the Extension as requested by the Goal State.
+    """
+    Enabled = u"enabled"
+    Disabled = u"disabled"
+    Uninstall = u"uninstall"
+
+
 def get_exthandlers_handler(protocol):
     return ExtHandlersHandler(protocol)
 
@@ -420,19 +429,25 @@ class ExtHandlersHandler(object):
                 version = ext_handler_i.ext_handler.properties.version
                 name = ext_handler_i.ext_handler.name
                 err_msg = "Unable to find version {0} in manifest for extension {1}".format(version, name)
-                ext_handler_i.set_operation(WALAEventOperation.Download)
-                ext_handler_i.set_handler_status(message=ustr(err_msg), code=-1)
-                ext_handler_i.report_event(message=ustr(err_msg), is_success=False)
-                return
+                logger.warn(err_msg)
+                # The Agent currently only supports 1 version per extension.
+                # If the extension version is unregistered and the customers wants to uninstall the extension,
+                # we should let it go through even if the installed version doesnt exist in Extension manifest (PIR) anymore.
+                # If target state is uninstall/disable, let the extension proceed and remove it after logging the warning above.
+                if not state in (ExtensionRequestedState.Uninstall, ExtensionRequestedState.Disabled):
+                    ext_handler_i.set_operation(WALAEventOperation.Download)
+                    ext_handler_i.set_handler_status(message=ustr(err_msg), code=-1)
+                    ext_handler_i.report_event(message=ustr(err_msg), is_success=False, log_event=False)
+                    return
 
             self.log_etag = True
 
             ext_handler_i.logger.info("Target handler state: {0} [incarnation {1}]", state, etag)
-            if state == u"enabled":
+            if state == ExtensionRequestedState.Enabled:
                 self.handle_enable(ext_handler_i)
-            elif state == u"disabled":
+            elif state == ExtensionRequestedState.Disabled:
                 self.handle_disable(ext_handler_i)
-            elif state == u"uninstall":
+            elif state == ExtensionRequestedState.Uninstall:
                 self.handle_uninstall(ext_handler_i)
             else:
                 message = u"Unknown ext handler state:{0}".format(state)
@@ -723,7 +738,7 @@ class ExtHandlerInstance(object):
         # Note:
         #  - A downgrade, which will be bound to the same major version,
         #    is allowed if the installed version is no longer available
-        if target_state == u"uninstall" or target_state == u"disabled":
+        if target_state in (ExtensionRequestedState.Uninstall, ExtensionRequestedState.Disabled):
             if installed_pkg is None:
                 msg = "Failed to find installed version of {0} " \
                       "to uninstall".format(self.ext_handler.name)
