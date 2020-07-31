@@ -597,7 +597,7 @@ class TestHttpOperations(AgentTestCase):
                     restutil.http_get("http://foo.bar", retry_delay=retry_delay_in_sec, max_retry=max_retry)
                 duration = datetime.utcnow() - start_time
 
-            self.assertEqual(max_retry, mock_resp.call_count, "Did not Retry the required amount of time")
+            self.assertEqual(max_retry, mock_resp.call_count, "Did not Retry the required amount of times")
             upper_bound = timedelta(seconds=retry_delay_in_sec * (max_retry + 2))
             lower_bound = timedelta(seconds=retry_delay_in_sec * (max_retry - 2))
             self.assertTrue(upper_bound >= duration >= lower_bound,
