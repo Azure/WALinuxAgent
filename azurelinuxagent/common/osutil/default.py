@@ -74,7 +74,7 @@ def _get_iptables_version_command():
 
 
 def _get_firewall_accept_command(wait, command, destination, owner_uid):
-    return _add_wait(wait, ["iptables", "-t", "security", command, "OUTPUT", "-d", destination, "-p", "tcp", "-m", "owner", "--uid-owner", owner_uid, "-j" "ACCEPT"])
+    return _add_wait(wait, ["iptables", "-t", "security", command, "OUTPUT", "-d", destination, "-p", "tcp", "-m", "owner", "--uid-owner", str(owner_uid), "-j" "ACCEPT"])
 
 
 def _get_firewall_drop_command(wait, command, destination):
@@ -96,7 +96,7 @@ def _get_firewall_delete_conntrack_accept_command(wait, destination):
 
 
 def _get_firewall_delete_owner_accept_command(wait, destination, owner_uid):
-    return _add_wait(wait, ["iptables", "-t", "security", "-D", "OUTPUT", "-d", destination, "-p", "tcp", "-m", "owner", "--uid-owner", owner_uid, "-j", "ACCEPT"])
+    return _add_wait(wait, ["iptables", "-t", "security", "-D", "OUTPUT", "-d", destination, "-p", "tcp", "-m", "owner", "--uid-owner", str(owner_uid), "-j", "ACCEPT"])
 
 def _get_firewall_delete_conntrack_drop_command(wait, destination):
     return _add_wait(wait, ["iptables", "-t", "security", "-D", "OUTPUT", "-d", destination, "-p", "tcp", "-m", "conntrack", "--ctstate", "INVALID,NEW", "-j", "DROP"])
@@ -203,18 +203,13 @@ class DefaultOSUtil(object):
                 if e.returncode == 2:
                     raise Exception("invalid firewall deletion rule '{0}'".format(rule))
 
-    def remove_firewall(self, dst_ip=None, uid=None):
+    def remove_firewall(self, dst_ip, uid):
         # If a previous attempt failed, do not retry
         global _enable_firewall
         if not _enable_firewall:
             return False
 
         try:
-            if dst_ip is None or uid is None:
-                msg = "Missing arguments to enable_firewall"
-                logger.warn(msg)
-                raise Exception(msg)
-
             wait = self.get_firewall_will_wait()
 
             # This rule was <= 2.2.25 only, and may still exist on some VMs.  Until 2.2.25
@@ -1002,12 +997,16 @@ class DefaultOSUtil(object):
         return endpoint
 
     def is_missing_default_route(self):
-        route_cmd = "ip route show"
-        routes = shellutil.run_get_output(route_cmd)[1]
-        for route in routes.split("\n"):
-            if route.startswith("0.0.0.0 ") or route.startswith("default "):
-               return False
-        return True
+        try:
+            route_cmd = ["ip", "route", "show"]
+            routes = shellutil.run_command(route_cmd)
+            for route in routes.split("\n"):
+                if route.startswith("0.0.0.0 ") or route.startswith("default "):
+                    return False
+            return True
+        except CommandError as e:
+            logger.warn("Cannot get the routing table. {0} failed: {1}", ustr(route_cmd), ustr(e))
+            return False
 
     def get_if_name(self):
         if_name = ''
@@ -1023,15 +1022,18 @@ class DefaultOSUtil(object):
         return self.get_first_if()[1]
 
     def set_route_for_dhcp_broadcast(self, ifname):
-        route_cmd = "ip route add"
-        return shellutil.run("{0} 255.255.255.255 dev {1}".format(
-            route_cmd, ifname),
-                             chk_err=False)
+        try:
+            route_cmd = ["ip", "route", "add", "255.255.255.255", "dev", ifname]
+            return shellutil.run_command(route_cmd)
+        except CommandError:
+            return ""
 
     def remove_route_for_dhcp_broadcast(self, ifname):
-        route_cmd = "ip route del"
-        shellutil.run("{0} 255.255.255.255 dev {1}".format(route_cmd, ifname),
-                      chk_err=False)
+        try:
+            route_cmd = ["ip", "route", "del", "255.255.255.255", "dev", ifname]
+            shellutil.run_command(route_cmd)
+        except CommandError:
+            pass
 
     def is_dhcp_available(self):
         return True
@@ -1067,8 +1069,11 @@ class DefaultOSUtil(object):
         """
         Add specified route 
         """
-        cmd = "ip route add {0} via {1}".format(net, gateway)
-        return shellutil.run(cmd, chk_err=False)
+        try:
+            cmd = ["ip", "route", "add", net, "via", gateway]
+            return shellutil.run_command(cmd)
+        except CommandError:
+            return ""
 
     @staticmethod
     def _text_to_pid_list(text):
