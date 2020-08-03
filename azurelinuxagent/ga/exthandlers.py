@@ -428,16 +428,15 @@ class ExtHandlersHandler(object):
             # The Guest Agent currently only supports 1 installed version per extension on the VM.
             # If the extension version is unregistered and the customers wants to uninstall the extension,
             # we should let it go through even if the installed version doesnt exist in Handler manifest (PIR) anymore.
-            if ext_handler_i.decide_version(target_state=state) is None:
+            # If target state is enabled and version not found in manifest, do not process the extension.
+            if ext_handler_i.decide_version(target_state=state) is None and state == ExtensionRequestedState.Enabled:
                 version = ext_handler_i.ext_handler.properties.version
                 name = ext_handler_i.ext_handler.name
                 err_msg = "Unable to find version {0} in manifest for extension {1}".format(version, name)
-                # If target state is enabled and version not found in manifest, do not process the extension.
-                if state == ExtensionRequestedState.Enabled:
-                    ext_handler_i.set_operation(WALAEventOperation.Download)
-                    ext_handler_i.set_handler_status(message=ustr(err_msg), code=-1)
-                    ext_handler_i.report_event(message=ustr(err_msg), is_success=False)
-                    return
+                ext_handler_i.set_operation(WALAEventOperation.Download)
+                ext_handler_i.set_handler_status(message=ustr(err_msg), code=-1)
+                ext_handler_i.report_event(message=ustr(err_msg), is_success=False)
+                return
 
             self.log_etag = True
 
