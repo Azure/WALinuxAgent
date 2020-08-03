@@ -18,22 +18,21 @@
 import json
 import re
 import uuid
-import os
 import contextlib
 from enum import Enum
 import subprocess
 
-import azurelinuxagent.common.utils.fileutil as fileutil
 import azurelinuxagent.common.conf as conf
 from azurelinuxagent.common.future import ustr
+from azurelinuxagent.common.exception import ExtensionError
 from tests.tools import Mock, patch
 
 from tests.protocol.mocks import HttpRequestPredicates
 
-from azurelinuxagent.ga.exthandlers import ExtHandlerInstance, HandlerManifest
+from azurelinuxagent.ga.exthandlers import ExtHandlerInstance
 
 
-class ExtensionCommandNames(Enum):
+class ExtensionCommandName(Enum):
     INSTALL = "install"
     UNINSTALL = "uninstall"
     UPDATE = "update"
@@ -114,6 +113,8 @@ def generate_put_handler(*emulators):
     For use with tests.protocol.mocks.mock_wire_protocol.
     """
 
+    first_matching_emulator = lambda matches_func: next(emulator for emulator in emulators if matches_func(emulator))
+
     def mock_put_handler(url, *args, **kwargs):
 
         if HttpRequestPredicates.is_host_plugin_status_request(url):
@@ -126,10 +127,8 @@ def generate_put_handler(*emulators):
             supplied_version = handler_status.get("handlerVersion", None)
             
             try:
-                next(
-                    emulator for emulator in emulators
-                    if emulator.matches(supplied_name, supplied_version)
-                ).status_blobs.append(handler_status)
+                extension_emulator = first_matching_emulator(lambda ext: ext.matches(supplied_name, supplied_version))
+                extension_emulator.status_blobs.append(handler_status)
 
             except StopIteration as e:
                 # Tests will want to know that the agent is running an extension they didn't specifically allocate.
@@ -145,25 +144,26 @@ class InvocationRecord:
     def add(self, ext_name, ext_ver, ext_cmd):
         self._queue.append((ext_name, ext_ver, ext_cmd))
 
-    def compare(self, *cmds):
+    def compare(self, *expected_cmds):
         """
         Verifies that any and all recorded invocations appear in the provided command list in that exact ordering.
 
-        Each cmd in cmds should be a tuple of the form (ExtensionEmulator, ExtensionCommandNames).
+        Each cmd in expected_cmds should be a tuple of the form (ExtensionEmulator, ExtensionCommandNames).
         """
 
-        for (ext, command_name) in cmds:
+        for (expected_ext_emulator, command_name) in expected_cmds:
 
             try:
                 (ext_name, ext_ver, ext_cmd) = self._queue.pop(0)
 
-                if not ext.matches(ext_name, ext_ver) or command_name != ext_cmd:
+                if not expected_ext_emulator.matches(ext_name, ext_ver) or command_name != ext_cmd:
                     raise Exception("Unexpected invocation: have ({0}, {1}, {2}), but expected ({3}, {4}, {5})".format(
-                        ext_name, ext_ver, ext_cmd, ext.name, ext.version, command_name
+                        ext_name, ext_ver, ext_cmd, expected_ext_emulator.name, expected_ext_emulator.version, command_name
                     ))
 
             except IndexError:
-                raise Exception("No more invocations recorded. Expected ({0}, {1}, {2}).".format(ext.name, ext.version, command_name))
+                raise Exception("No more invocations recorded. Expected ({0}, {1}, {2}).".format(expected_ext_emulator.name,
+                    expected_ext_emulator.version, command_name))
         
         if self._queue:
             raise Exception("Invocation recorded, but not expected: ({0}, {1}, {2})".format(
@@ -190,11 +190,11 @@ class ExtensionEmulator:
         self.continue_on_update_failure = continue_on_update_failure
 
         self.actions = {
-            ExtensionCommandNames.INSTALL: install_action,
-            ExtensionCommandNames.UNINSTALL: uninstall_action,
-            ExtensionCommandNames.UPDATE: update_action,
-            ExtensionCommandNames.ENABLE: enable_action,
-            ExtensionCommandNames.DISABLE: disable_action
+            ExtensionCommandName.INSTALL: install_action,
+            ExtensionCommandName.UNINSTALL: uninstall_action,
+            ExtensionCommandName.UPDATE: update_action,
+            ExtensionCommandName.ENABLE: enable_action,
+            ExtensionCommandName.DISABLE: disable_action
         }
 
         self.status_blobs = []
@@ -210,20 +210,19 @@ def generate_patched_popen(invocation_record, *emulators):
     """
     original_popen = subprocess.Popen
 
+    first_matching_emulator = lambda matches_func: next(emulator for emulator in emulators if matches_func(emulator))
+    
     def patched_popen(cmd, *args, **kwargs):
 
         try:
             ext_name, ext_version, command_name = _ExtractExtensionInfo.from_command(cmd)
-            invocation_record.add(ext_name, ext_version, ExtensionCommandNames(command_name))
+            invocation_record.add(ext_name, ext_version, ExtensionCommandName(command_name))
         except ValueError:
             return original_popen(cmd, *args, **kwargs)
         
         try:
-            return next(
-                emulator.actions[ExtensionCommandNames(command_name)]
-                for emulator in emulators
-                if emulator.matches(ext_name, ext_version)
-            )(cmd, *args, **kwargs)
+            extension_emulator = first_matching_emulator(lambda ext: ext.matches(ext_name, ext_version))
+            return extension_emulator.actions[ExtensionCommandName(command_name)](cmd, *args, **kwargs)
 
         except StopIteration:
             raise Exception("Extension('{name}', '{version}') not listed as a parameter. Is it being emulated?".format(
@@ -236,29 +235,27 @@ def generate_mock_load_manifest(*emulators):
 
     original_load_manifest = ExtHandlerInstance.load_manifest
 
+    first_matching_emulator = lambda matches_func: next(emulator for emulator in emulators if matches_func(emulator))
+
     def mock_load_manifest(self):
 
         try:
-            matching_emulator = next(
-                emulator for emulator in emulators
-                if emulator.matches(self.ext_handler.name,
-                    self.ext_handler.properties.version)
-            )
-            
-            base_manifest = original_load_manifest(self)
-
-            base_manifest.data["handlerManifest"].update({
-                "continueOnUpdateFailure": matching_emulator.continue_on_update_failure,
-                "reportHeartbeat": matching_emulator.report_heartbeat,
-                "updateMode": matching_emulator.update_mode
-            })
-
-            return base_manifest
-
+            matching_emulator = first_matching_emulator(lambda ext: ext.matches(self.ext_handler.name,
+                    self.ext_handler.properties.version))
         except StopIteration:
             raise Exception("Extension('{name}', '{version}') not listed as a parameter. Is it being emulated?".format(
                 name=self.ext_handler.name, version=self.ext_handler.properties.version
             ))
+                    
+        base_manifest = original_load_manifest(self)
+
+        base_manifest.data["handlerManifest"].update({
+            "continueOnUpdateFailure": matching_emulator.continue_on_update_failure,
+            "reportHeartbeat": matching_emulator.report_heartbeat,
+            "updateMode": matching_emulator.update_mode
+        })
+
+        return base_manifest
     
     return mock_load_manifest
 

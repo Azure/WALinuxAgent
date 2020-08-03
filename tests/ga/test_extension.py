@@ -32,28 +32,25 @@ import datetime
 from azurelinuxagent.common import conf
 from azurelinuxagent.common.cgroupconfigurator import CGroupConfigurator
 from azurelinuxagent.common.datacontract import get_properties
-from azurelinuxagent.common.protocol.util import get_protocol_util
 from azurelinuxagent.common.utils import fileutil
 from azurelinuxagent.common.utils.fileutil import read_file
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
 from azurelinuxagent.common.version import PY_VERSION_MAJOR, PY_VERSION_MINOR, PY_VERSION_MICRO, AGENT_NAME, \
     GOAL_STATE_AGENT_VERSION, CURRENT_VERSION, DISTRO_NAME, DISTRO_VERSION
-from azurelinuxagent.ga.exthandlers import ExtHandlerState, ExtHandlersHandler, ExtHandlerInstance, HANDLER_PKG_EXT, \
-    migrate_handler_state, get_exthandlers_handler, AGENT_STATUS_FILE, ExtCommandEnvVariable, \
-    HandlerManifest, NOT_RUN, ValidHandlerStatus, HANDLER_NAME_PATTERN
+from azurelinuxagent.ga.exthandlers import ExtHandlersHandler, ExtHandlerInstance, migrate_handler_state, \
+    get_exthandlers_handler, AGENT_STATUS_FILE, ExtCommandEnvVariable, HandlerManifest, NOT_RUN, \
+    ValidHandlerStatus, HANDLER_NAME_PATTERN
 
-from azurelinuxagent.ga.monitor import get_monitor_handler
-from nose.plugins.attrib import attr
 from tests.protocol import mockwiredata
 from tests.protocol.mocks import mock_wire_protocol, HttpRequestPredicates
 from tests.protocol.mockwiredata import DATA_FILE
-from tests.tools import AgentTestCase, data_dir, i_am_root, MagicMock, Mock, patch
-from tests.ga.extension_emulator import Actions, ExtensionCommandNames, extension_emulator, \
+from tests.tools import AgentTestCase, data_dir, MagicMock, Mock, patch
+from tests.ga.extension_emulator import Actions, ExtensionCommandName, extension_emulator, \
     enable_invocations, generate_put_handler 
     
 from azurelinuxagent.common.exception import ResourceGoneError, ExtensionDownloadError, ProtocolError, \
     ExtensionErrorCodes, ExtensionError, ExtensionUpdateError
-from azurelinuxagent.common.protocol.restapi import Extension, ExtHandlerProperties, ExtHandler, ExtHandlerStatus, \
+from azurelinuxagent.common.protocol.restapi import Extension, ExtHandler, ExtHandlerStatus, \
     ExtensionStatus
 from azurelinuxagent.common.protocol.wire import WireProtocol, InVMArtifactsProfile
 from azurelinuxagent.common.utils.restutil import KNOWN_WIRESERVER_IP
@@ -2335,7 +2332,7 @@ class TestExtensionUpdateOnFailure(ExtensionTestCase):
         AgentTestCase.tearDown(self)
 
     @staticmethod
-    def _do_upgrade_scenario(first_ext, upgraded_ext):
+    def _do_upgrade_scenario_and_get_order(first_ext, upgraded_ext):
         """
         Given the provided ExtensionEmulator objects, installs the first and then attempts to
         update to the second.
@@ -2356,13 +2353,13 @@ class TestExtensionUpdateOnFailure(ExtensionTestCase):
                 exthandlers_handler.run()
 
                 invocation_record.compare(
-                    (first_ext, ExtensionCommandNames.INSTALL),
+                    (first_ext, ExtensionCommandName.INSTALL),
 
                     # Note that if installCommand is supposed to fail, this will erroneously raise.
-                    (first_ext, ExtensionCommandNames.ENABLE)
+                    (first_ext, ExtensionCommandName.ENABLE)
                 )
 
-            protocol.mock_wire_data.set_extensions_config_version("1.1.0")
+            protocol.mock_wire_data.set_extensions_config_version(upgraded_ext.version)
             protocol.mock_wire_data.set_incarnation(2)
             protocol.client.update_goal_state()
 
@@ -2377,13 +2374,13 @@ class TestExtensionUpdateOnFailure(ExtensionTestCase):
         first_ext = extension_emulator(enable_action=Actions.fail_action)
         second_ext = extension_emulator(version="1.1.0")
         
-        invocation_record = TestExtensionUpdateOnFailure._do_upgrade_scenario(first_ext, second_ext)
+        invocation_record = TestExtensionUpdateOnFailure._do_upgrade_scenario_and_get_order(first_ext, second_ext)
 
         invocation_record.compare(
-            (second_ext, ExtensionCommandNames.UPDATE),
-            (first_ext, ExtensionCommandNames.UNINSTALL),
-            (second_ext, ExtensionCommandNames.INSTALL),
-            (second_ext, ExtensionCommandNames.ENABLE)
+            (second_ext, ExtensionCommandName.UPDATE),
+            (first_ext, ExtensionCommandName.UNINSTALL),
+            (second_ext, ExtensionCommandName.INSTALL),
+            (second_ext, ExtensionCommandName.ENABLE)
         )
 
     def test_disable_failed_env_variable_should_be_set_for_update_cmd_when_continue_on_update_failure_is_true(self):
@@ -2392,17 +2389,17 @@ class TestExtensionUpdateOnFailure(ExtensionTestCase):
         first_ext = extension_emulator(disable_action=disable_action)
         second_ext = extension_emulator(version="1.1.0", continue_on_update_failure=True)
 
-        invocation_record = TestExtensionUpdateOnFailure._do_upgrade_scenario(first_ext, second_ext)
+        invocation_record = TestExtensionUpdateOnFailure._do_upgrade_scenario_and_get_order(first_ext, second_ext)
 
         invocation_record.compare(
-            (first_ext, ExtensionCommandNames.DISABLE),
-            (second_ext, ExtensionCommandNames.UPDATE),
-            (first_ext, ExtensionCommandNames.UNINSTALL),
-            (second_ext, ExtensionCommandNames.INSTALL),
-            (second_ext, ExtensionCommandNames.ENABLE)
+            (first_ext, ExtensionCommandName.DISABLE),
+            (second_ext, ExtensionCommandName.UPDATE),
+            (first_ext, ExtensionCommandName.UNINSTALL),
+            (second_ext, ExtensionCommandName.INSTALL),
+            (second_ext, ExtensionCommandName.ENABLE)
         )
 
-        _, kwargs = second_ext.actions[ExtensionCommandNames.UPDATE].call_args
+        _, kwargs = second_ext.actions[ExtensionCommandName.UPDATE].call_args
 
         self.assertEqual(kwargs["env"][ExtCommandEnvVariable.DisableReturnCode], exit_code,
             "DisableAction's return code should be in updateAction's env.")
@@ -2414,17 +2411,17 @@ class TestExtensionUpdateOnFailure(ExtensionTestCase):
         first_ext = extension_emulator(uninstall_action=uninstall_action)
         second_ext = extension_emulator(version="1.1.0", continue_on_update_failure=True)
 
-        invocation_record = TestExtensionUpdateOnFailure._do_upgrade_scenario(first_ext, second_ext)
+        invocation_record = TestExtensionUpdateOnFailure._do_upgrade_scenario_and_get_order(first_ext, second_ext)
 
         invocation_record.compare(
-            (first_ext, ExtensionCommandNames.DISABLE),
-            (second_ext, ExtensionCommandNames.UPDATE),
-            (first_ext, ExtensionCommandNames.UNINSTALL),
-            (second_ext, ExtensionCommandNames.INSTALL),
-            (second_ext, ExtensionCommandNames.ENABLE)
+            (first_ext, ExtensionCommandName.DISABLE),
+            (second_ext, ExtensionCommandName.UPDATE),
+            (first_ext, ExtensionCommandName.UNINSTALL),
+            (second_ext, ExtensionCommandName.INSTALL),
+            (second_ext, ExtensionCommandName.ENABLE)
         )
 
-        _, kwargs = second_ext.actions[ExtensionCommandNames.INSTALL].call_args
+        _, kwargs = second_ext.actions[ExtensionCommandName.INSTALL].call_args
 
         self.assertEqual(kwargs["env"][ExtCommandEnvVariable.UninstallReturnCode], exit_code,
             "UninstallAction's return code should be in updateAction's env.")
@@ -2436,10 +2433,10 @@ class TestExtensionUpdateOnFailure(ExtensionTestCase):
         first_ext = extension_emulator(disable_action=disable_action)
         second_ext = extension_emulator(version="1.1.0", continue_on_update_failure=False)
 
-        invocation_record = TestExtensionUpdateOnFailure._do_upgrade_scenario(first_ext, second_ext)
+        invocation_record = TestExtensionUpdateOnFailure._do_upgrade_scenario_and_get_order(first_ext, second_ext)
 
         invocation_record.compare(
-            (first_ext, ExtensionCommandNames.DISABLE)
+            (first_ext, ExtensionCommandName.DISABLE)
         )
 
         self.assertEqual(len(second_ext.status_blobs), 1, "The second extension should have a single submitted status.")
@@ -2453,12 +2450,12 @@ class TestExtensionUpdateOnFailure(ExtensionTestCase):
         first_ext = extension_emulator(uninstall_action=uninstall_action)
         second_ext = extension_emulator(version="1.1.0", continue_on_update_failure=False)
 
-        invocation_record = TestExtensionUpdateOnFailure._do_upgrade_scenario(first_ext, second_ext)
+        invocation_record = TestExtensionUpdateOnFailure._do_upgrade_scenario_and_get_order(first_ext, second_ext)
 
         invocation_record.compare(
-            (first_ext, ExtensionCommandNames.DISABLE),
-            (second_ext, ExtensionCommandNames.UPDATE),
-            (first_ext, ExtensionCommandNames.UNINSTALL)
+            (first_ext, ExtensionCommandName.DISABLE),
+            (second_ext, ExtensionCommandName.UPDATE),
+            (first_ext, ExtensionCommandName.UNINSTALL)
         )
 
         self.assertEqual(len(second_ext.status_blobs), 1, "The second extension should have a single submitted status.")
@@ -2475,11 +2472,11 @@ class TestExtensionUpdateOnFailure(ExtensionTestCase):
         second_ext = extension_emulator(version="1.1.0", update_action=update_action,
             continue_on_update_failure=True)
 
-        invocation_record = TestExtensionUpdateOnFailure._do_upgrade_scenario(first_ext, second_ext)
+        invocation_record = TestExtensionUpdateOnFailure._do_upgrade_scenario_and_get_order(first_ext, second_ext)
 
         invocation_record.compare(
-            (first_ext, ExtensionCommandNames.DISABLE),
-            (second_ext, ExtensionCommandNames.UPDATE)
+            (first_ext, ExtensionCommandName.DISABLE),
+            (second_ext, ExtensionCommandName.UPDATE)
         )
 
         self.assertEqual(len(second_ext.status_blobs), 1, "The second extension should have a single submitted status.")
@@ -2497,13 +2494,13 @@ class TestExtensionUpdateOnFailure(ExtensionTestCase):
         second_ext = extension_emulator(version="1.1.0", install_action=install_action,
             continue_on_update_failure=True)
 
-        invocation_record = TestExtensionUpdateOnFailure._do_upgrade_scenario(first_ext, second_ext)
+        invocation_record = TestExtensionUpdateOnFailure._do_upgrade_scenario_and_get_order(first_ext, second_ext)
 
         invocation_record.compare(
-            (first_ext, ExtensionCommandNames.DISABLE),
-            (second_ext, ExtensionCommandNames.UPDATE),
-            (first_ext, ExtensionCommandNames.UNINSTALL),
-            (second_ext, ExtensionCommandNames.INSTALL)
+            (first_ext, ExtensionCommandName.DISABLE),
+            (second_ext, ExtensionCommandName.UPDATE),
+            (first_ext, ExtensionCommandName.UNINSTALL),
+            (second_ext, ExtensionCommandName.INSTALL)
         )
 
         self.assertEqual(len(second_ext.status_blobs), 1, "The second extension should have a single submitted status.")
@@ -2524,18 +2521,18 @@ class TestExtensionUpdateOnFailure(ExtensionTestCase):
         first_ext = extension_emulator(disable_action=disable_action, uninstall_action=uninstall_action)
         second_ext = extension_emulator(version="1.1.0", continue_on_update_failure=True)
 
-        invocation_record = TestExtensionUpdateOnFailure._do_upgrade_scenario(first_ext, second_ext)
+        invocation_record = TestExtensionUpdateOnFailure._do_upgrade_scenario_and_get_order(first_ext, second_ext)
 
         invocation_record.compare(
-            (first_ext, ExtensionCommandNames.DISABLE),
-            (second_ext, ExtensionCommandNames.UPDATE),
-            (first_ext, ExtensionCommandNames.UNINSTALL),
-            (second_ext, ExtensionCommandNames.INSTALL),
-            (second_ext, ExtensionCommandNames.ENABLE)
+            (first_ext, ExtensionCommandName.DISABLE),
+            (second_ext, ExtensionCommandName.UPDATE),
+            (first_ext, ExtensionCommandName.UNINSTALL),
+            (second_ext, ExtensionCommandName.INSTALL),
+            (second_ext, ExtensionCommandName.ENABLE)
         )
     
-        _, update_kwargs = second_ext.actions[ExtensionCommandNames.UPDATE].call_args
-        _, install_kwargs = second_ext.actions[ExtensionCommandNames.INSTALL].call_args
+        _, update_kwargs = second_ext.actions[ExtensionCommandName.UPDATE].call_args
+        _, install_kwargs = second_ext.actions[ExtensionCommandName.INSTALL].call_args
 
         second_extension_dir = os.path.join(
             conf.get_lib_dir(), "{0}-{1}".format(second_ext.name, second_ext.version)
@@ -2569,16 +2566,16 @@ class TestExtensionUpdateOnFailure(ExtensionTestCase):
         second_ext = extension_emulator(version="1.1.0", continue_on_update_failure=True,
             update_mode="UpdateWithoutInstall")
 
-        invocation_record = TestExtensionUpdateOnFailure._do_upgrade_scenario(first_ext, second_ext)
+        invocation_record = TestExtensionUpdateOnFailure._do_upgrade_scenario_and_get_order(first_ext, second_ext)
 
         invocation_record.compare(
-            (first_ext, ExtensionCommandNames.DISABLE),
-            (second_ext, ExtensionCommandNames.UPDATE),
-            (first_ext, ExtensionCommandNames.UNINSTALL),
-            (second_ext, ExtensionCommandNames.ENABLE)
+            (first_ext, ExtensionCommandName.DISABLE),
+            (second_ext, ExtensionCommandName.UPDATE),
+            (first_ext, ExtensionCommandName.UNINSTALL),
+            (second_ext, ExtensionCommandName.ENABLE)
         )
 
-        _, update_kwargs = second_ext.actions[ExtensionCommandNames.UPDATE].call_args
+        _, update_kwargs = second_ext.actions[ExtensionCommandName.UPDATE].call_args
 
         self.assertEqual(update_kwargs["env"][ExtCommandEnvVariable.DisableReturnCode], exit_code,
             "DisableAction's return code should be present in UpdateAction's env.")
@@ -2595,19 +2592,19 @@ class TestExtensionUpdateOnFailure(ExtensionTestCase):
         
         with patch("os.killpg"):
             with patch("os.getpgid"):
-                invocation_record = TestExtensionUpdateOnFailure._do_upgrade_scenario(first_ext, second_ext)
+                invocation_record = TestExtensionUpdateOnFailure._do_upgrade_scenario_and_get_order(first_ext, second_ext)
 
         invocation_record.compare(
-            (first_ext, ExtensionCommandNames.DISABLE),
-            (second_ext, ExtensionCommandNames.UPDATE),
-            (first_ext, ExtensionCommandNames.UNINSTALL),
-            (second_ext, ExtensionCommandNames.INSTALL),
-            (second_ext, ExtensionCommandNames.ENABLE)
+            (first_ext, ExtensionCommandName.DISABLE),
+            (second_ext, ExtensionCommandName.UPDATE),
+            (first_ext, ExtensionCommandName.UNINSTALL),
+            (second_ext, ExtensionCommandName.INSTALL),
+            (second_ext, ExtensionCommandName.ENABLE)
         )
 
 
-        _, update_kwargs = second_ext.actions[ExtensionCommandNames.UPDATE].call_args
-        _, install_kwargs = second_ext.actions[ExtensionCommandNames.INSTALL].call_args
+        _, update_kwargs = second_ext.actions[ExtensionCommandName.UPDATE].call_args
+        _, install_kwargs = second_ext.actions[ExtensionCommandName.INSTALL].call_args
 
         # Verify both commands are reported as timeouts.
         self.assertEqual(update_kwargs["env"][ExtCommandEnvVariable.DisableReturnCode], str(ExtensionErrorCodes.PluginHandlerScriptTimedout),
@@ -2621,18 +2618,18 @@ class TestExtensionUpdateOnFailure(ExtensionTestCase):
         first_ext = extension_emulator()
         second_ext = extension_emulator(version="1.1.0")
 
-        invocation_record = TestExtensionUpdateOnFailure._do_upgrade_scenario(first_ext, second_ext)
+        invocation_record = TestExtensionUpdateOnFailure._do_upgrade_scenario_and_get_order(first_ext, second_ext)
 
         invocation_record.compare(
-            (first_ext, ExtensionCommandNames.DISABLE),
-            (second_ext, ExtensionCommandNames.UPDATE),
-            (first_ext, ExtensionCommandNames.UNINSTALL),
-            (second_ext, ExtensionCommandNames.INSTALL),
-            (second_ext, ExtensionCommandNames.ENABLE)
+            (first_ext, ExtensionCommandName.DISABLE),
+            (second_ext, ExtensionCommandName.UPDATE),
+            (first_ext, ExtensionCommandName.UNINSTALL),
+            (second_ext, ExtensionCommandName.INSTALL),
+            (second_ext, ExtensionCommandName.ENABLE)
         )
 
-        _, update_kwargs = second_ext.actions[ExtensionCommandNames.UPDATE].call_args
-        _, install_kwargs = second_ext.actions[ExtensionCommandNames.INSTALL].call_args
+        _, update_kwargs = second_ext.actions[ExtensionCommandName.UPDATE].call_args
+        _, install_kwargs = second_ext.actions[ExtensionCommandName.INSTALL].call_args
 
         self.assertEqual(update_kwargs["env"][ExtCommandEnvVariable.DisableReturnCode], "0",
             "DisableAction's return code in updateAction's env should be 0.")
