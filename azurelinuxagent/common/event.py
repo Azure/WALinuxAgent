@@ -76,6 +76,8 @@ class WALAEventOperation:
     CGroupsInfo = "CGroupsInfo"
     CGroupsInitialize = "CGroupsInitialize"
     CGroupsLimitsCrossed = "CGroupsLimitsCrossed"
+    CollectEventErrors = "CollectEventErrors"
+    CollectEventUnicodeErrors = "CollectEventUnicodeErrors"
     ConfigurationChange = "ConfigurationChange"
     CustomData = "CustomData"
     Deploy = "Deploy"
@@ -106,6 +108,8 @@ class WALAEventOperation:
     Provision = "Provision"
     ProvisionGuestAgent = "ProvisionGuestAgent"
     RemoteAccessHandling = "RemoteAccessHandling"
+    ReportEventErrors = "ReportEventErrors"
+    ReportEventUnicodeErrors = "ReportEventUnicodeErrors"
     ReportStatus = "ReportStatus"
     ReportStatusExtended = "ReportStatusExtended"
     Restart = "Restart"
@@ -575,14 +579,25 @@ class EventLogger(object):
 
         event.parameters = trimmed_params
 
+    @staticmethod
+    def report_dropped_events_error(count, errors, op, max_errors_to_report):
+        err_msg_format = "DroppedEventsCount: {0}\nReasons (first {1} errors): {2}"
+        if count > 0:
+            add_event(op=op,
+                      message=err_msg_format.format(count, max_errors_to_report, ', '.join(errors)),
+                      is_success=False)
+
     def collect_events(self):
         """
         Retuns a list of events that need to be sent to the telemetry pipeline and deletes the corresponding files
         from the events directory.
         """
+        max_collect_errors_to_report = 5
         event_list = TelemetryEventList()
         event_directory_full_path = os.path.join(conf.get_lib_dir(), EVENTS_DIRECTORY)
         event_files = os.listdir(event_directory_full_path)
+        unicode_error_count, unicode_errors = 0, []
+        collect_event_error_count, collect_event_errors = 0, []
 
         for event_file in event_files:
             try:
@@ -618,8 +633,20 @@ class EventLogger(object):
                     event_list.events.append(event)
                 finally:
                     os.remove(event_file_path)
+            except UnicodeError as e:
+                unicode_error_count += 1
+                if len(unicode_errors) < max_collect_errors_to_report:
+                    unicode_errors.append(ustr(e))
             except Exception as e:
-                logger.warn("Failed to process event file {0}: {1}", event_file, ustr(e))
+                collect_event_error_count += 1
+                if len(collect_event_errors) < max_collect_errors_to_report:
+                    collect_event_errors.append(ustr(e))
+
+        EventLogger.report_dropped_events_error(collect_event_error_count, collect_event_errors,
+                                                WALAEventOperation.CollectEventErrors, max_collect_errors_to_report)
+        EventLogger.report_dropped_events_error(unicode_error_count, unicode_errors,
+                                                WALAEventOperation.CollectEventUnicodeErrors,
+                                                max_collect_errors_to_report)
 
         return event_list
 

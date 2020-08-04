@@ -49,7 +49,6 @@ from tests.protocol.mocks import mock_wire_protocol, HttpRequestPredicates
 from tests.protocol.mockwiredata import DATA_FILE
 from tests.tools import are_cgroups_enabled, AgentTestCase, data_dir, i_am_root, MagicMock, Mock, \
     skip_if_predicate_false, patch, mock_sleep
-
 from azurelinuxagent.common.exception import ResourceGoneError, ExtensionDownloadError, ProtocolError, \
     ExtensionErrorCodes, ExtensionError, ExtensionUpdateError
 from azurelinuxagent.common.protocol.restapi import Extension, ExtHandlerProperties, ExtHandler, ExtHandlerStatus, \
@@ -2318,218 +2317,6 @@ class TestInVMArtifactsProfile(AgentTestCase):
         self.assertTrue(profile.is_on_hold(), "Failed to parse '{0}'".format(profile_json))
 
 
-@skip_if_predicate_false(are_cgroups_enabled, "Does not run when Cgroups are not enabled")
-@patch('time.sleep', side_effect=lambda _: mock_sleep(0.001))
-@patch("azurelinuxagent.common.cgroupapi.CGroupsApi._is_systemd", return_value=True)
-@patch("azurelinuxagent.common.conf.get_cgroups_enforce_limits", return_value=False)
-@patch("azurelinuxagent.common.protocol.wire.CryptUtil")
-@patch("azurelinuxagent.common.utils.restutil.http_get")
-class TestExtensionWithCGroupsEnabled(AgentTestCase):
-    def _assert_handler_status(self, report_vm_status, expected_status,
-                               expected_ext_count, version,
-                               expected_handler_name="OSTCExtensions.ExampleHandlerLinux"):
-        self.assertTrue(report_vm_status.called)
-        args, kw = report_vm_status.call_args
-        vm_status = args[0]
-        self.assertNotEquals(0, len(vm_status.vmAgent.extensionHandlers))
-        handler_status = vm_status.vmAgent.extensionHandlers[0]
-        self.assertEquals(expected_status, handler_status.status)
-        self.assertEquals(expected_handler_name,
-                          handler_status.name)
-        self.assertEquals(version, handler_status.version)
-        self.assertEquals(expected_ext_count, len(handler_status.extensions))
-        return
-
-    def _assert_no_handler_status(self, report_vm_status):
-        self.assertTrue(report_vm_status.called)
-        args, kw = report_vm_status.call_args
-        vm_status = args[0]
-        self.assertEquals(0, len(vm_status.vmAgent.extensionHandlers))
-        return
-
-    def _assert_ext_status(self, report_ext_status, expected_status,
-                           expected_seq_no):
-        self.assertTrue(report_ext_status.called)
-        args, kw = report_ext_status.call_args
-        ext_status = args[-1]
-        self.assertEquals(expected_status, ext_status.status)
-        self.assertEquals(expected_seq_no, ext_status.sequenceNumber)
-
-    def _create_mock(self, test_data, mock_http_get, mock_crypt_util, *args):
-        monitor_handler = get_monitor_handler()
-
-        # Mock protocol to return test data
-        mock_http_get.side_effect = test_data.mock_http_get
-        mock_crypt_util.side_effect = test_data.mock_crypt_util
-
-        protocol = WireProtocol(KNOWN_WIRESERVER_IP)
-        protocol.detect()
-        protocol.report_ext_status = MagicMock()
-        protocol.report_vm_status = MagicMock()
-
-        ext_handler = get_exthandlers_handler(protocol)
-
-        protocol_util = get_protocol_util()
-        protocol_util.get_protocol = Mock(return_value=protocol)
-        monitor_handler.protocol_util = Mock(return_value=protocol_util)
-        return ext_handler, monitor_handler, protocol
-
-    @attr('requires_sudo')
-    def test_ext_handler_with_cgroup_enabled(self, *args):
-        self.assertTrue(i_am_root(), "Test does not run when non-root")
-
-        # Test enable scenario.
-        test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE)
-        exthandlers_handler, _, protocol = self._create_mock(test_data, *args)
-
-        exthandlers_handler.run()
-
-        self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.0.0")
-        self._assert_ext_status(protocol.report_ext_status, "success", 0)
-
-        # Test goal state not changed
-        exthandlers_handler.run()
-        self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.0.0")
-
-        # Test goal state changed
-        test_data.set_incarnation(2)
-        test_data.set_extensions_config_sequence_number(1)
-        protocol.update_goal_state()
-
-        exthandlers_handler.run()
-
-        self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.0.0")
-        self._assert_ext_status(protocol.report_ext_status, "success", 1)
-
-        # Test hotfix
-        test_data.set_incarnation(3)
-        test_data.set_extensions_config_version("1.1.1")
-        test_data.set_extensions_config_sequence_number(2)
-        protocol.update_goal_state()
-
-        exthandlers_handler.run()
-
-        self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.1.1")
-        self._assert_ext_status(protocol.report_ext_status, "success", 2)
-
-        # Test upgrade
-        test_data.set_incarnation(4)
-        test_data.set_extensions_config_version("1.2.0")
-        test_data.set_extensions_config_sequence_number(3)
-        protocol.update_goal_state()
-
-        exthandlers_handler.run()
-
-        self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.2.0")
-        self._assert_ext_status(protocol.report_ext_status, "success", 3)
-
-        # Test disable
-        test_data.set_incarnation(5)
-        test_data.set_extensions_config_state("disabled")
-        protocol.update_goal_state()
-
-        exthandlers_handler.run()
-
-        self._assert_handler_status(protocol.report_vm_status, "NotReady", 1, "1.2.0")
-
-        # Test uninstall
-        test_data.set_incarnation(6)
-        test_data.set_extensions_config_state("uninstall")
-        protocol.update_goal_state()
-
-        exthandlers_handler.run()
-
-        self._assert_no_handler_status(protocol.report_vm_status)
-
-        # Test uninstall again!
-        test_data.set_incarnation(7)
-        protocol.update_goal_state()
-
-        exthandlers_handler.run()
-
-        self._assert_no_handler_status(protocol.report_vm_status)
-
-
-    @attr('requires_sudo')
-    def test_ext_handler_with_systemd_cgroup_enabled(self, *args):
-        self.assertTrue(i_am_root(), "Test does not run when non-root")
-
-        from azurelinuxagent.common.cgroupapi import CGroupsApi
-        print(CGroupsApi._is_systemd())
-
-        # Test enable scenario.
-        test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE)
-        exthandlers_handler, _, protocol = self._create_mock(test_data, *args)
-
-        exthandlers_handler.run()
-
-        self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.0.0")
-        self._assert_ext_status(protocol.report_ext_status, "success", 0)
-
-        # Test goal state not changed
-        exthandlers_handler.run()
-
-        self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.0.0")
-
-        # Test goal state changed
-        test_data.set_incarnation(2)
-        test_data.set_extensions_config_sequence_number(1)
-        protocol.update_goal_state()
-
-        exthandlers_handler.run()
-
-        self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.0.0")
-        self._assert_ext_status(protocol.report_ext_status, "success", 1)
-
-        # Test hotfix
-        test_data.set_incarnation(3)
-        test_data.ext_conf = test_data.ext_conf.replace("1.0.0", "1.1.1")
-        test_data.set_extensions_config_sequence_number(2)
-        protocol.update_goal_state()
-
-        exthandlers_handler.run()
-
-        self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.1.1")
-        self._assert_ext_status(protocol.report_ext_status, "success", 2)
-
-        # Test upgrade
-        test_data.set_incarnation(4)
-        test_data.set_extensions_config_version("1.2.0")
-        test_data.set_extensions_config_sequence_number(3)
-        protocol.update_goal_state()
-
-        exthandlers_handler.run()
-
-        self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.2.0")
-        self._assert_ext_status(protocol.report_ext_status, "success", 3)
-
-        # Test disable
-        test_data.set_incarnation(5)
-        test_data.ext_conf = test_data.ext_conf.replace("enabled", "disabled")
-        protocol.update_goal_state()
-
-        exthandlers_handler.run()
-
-        self._assert_handler_status(protocol.report_vm_status, "NotReady", 1, "1.2.0")
-
-        # Test uninstall
-        test_data.set_incarnation(6)
-        test_data.ext_conf = test_data.ext_conf.replace("disabled", "uninstall")
-        protocol.update_goal_state()
-
-        exthandlers_handler.run()
-
-        self._assert_no_handler_status(protocol.report_vm_status)
-
-        # Test uninstall again!
-        test_data.set_incarnation(7)
-        protocol.update_goal_state()
-
-        exthandlers_handler.run()
-
-        self._assert_no_handler_status(protocol.report_vm_status)
-
-
 class TestExtensionUpdateOnFailure(ExtensionTestCase):
 
     @staticmethod
@@ -2576,6 +2363,7 @@ class TestExtensionUpdateOnFailure(ExtensionTestCase):
     def test_uninstall_failed_env_variable_should_set_for_install_when_continue_on_update_failure_is_true(
             self, *args):
         old_handler_i = self._get_ext_handler_instance('foo', '1.0.0')
+        old_handler_i.set_handler_state(ExtHandlerState.Enabled)
         new_handler_i = self._get_ext_handler_instance('foo', '1.0.1', continue_on_update_failure=True)
 
         with patch.object(CGroupConfigurator.get_instance(), "start_extension_command",
@@ -2590,6 +2378,7 @@ class TestExtensionUpdateOnFailure(ExtensionTestCase):
 
     def test_extension_error_should_be_raised_when_continue_on_update_failure_is_false_on_disable_failure(self, *args):
         old_handler_i = self._get_ext_handler_instance('foo', '1.0.0')
+        old_handler_i.set_handler_state(ExtHandlerState.Enabled)
         new_handler_i = self._get_ext_handler_instance('foo', '1.0.1', continue_on_update_failure=False)
 
         with patch.object(ExtHandlerInstance, "disable", side_effect=ExtensionError("Disable Failed")):
@@ -2641,6 +2430,7 @@ class TestExtensionUpdateOnFailure(ExtensionTestCase):
     @patch("azurelinuxagent.common.cgroupconfigurator.handle_process_completion", side_effect="Process Successful")
     def test_env_variable_should_not_set_when_continue_on_update_failure_is_false(self, *args):
         old_handler_i = self._get_ext_handler_instance('foo', '1.0.0')
+        old_handler_i.set_handler_state(ExtHandlerState.Enabled)
         new_handler_i = self._get_ext_handler_instance('foo', '1.0.1', continue_on_update_failure=False)
 
         # When Disable Fails
@@ -2719,6 +2509,8 @@ class TestExtensionUpdateOnFailure(ExtensionTestCase):
         old_handler_i = TestExtensionUpdateOnFailure._get_ext_handler_instance('foo', '1.0.0', handler={
             "disableCommand": test_failure_file_name,
             "uninstallCommand": test_failure_file_name})
+        old_handler_i.set_handler_state(ExtHandlerState.Enabled)
+
         new_handler_i = TestExtensionUpdateOnFailure._get_ext_handler_instance(
             'foo', '1.0.1',
             handler={"updateCommand": test_env_file_name,
@@ -2755,6 +2547,7 @@ class TestExtensionUpdateOnFailure(ExtensionTestCase):
         old_handler_i = TestExtensionUpdateOnFailure._get_ext_handler_instance('foo', '1.0.0', handler={
             "disableCommand": test_failure_file_name,
             "uninstallCommand": test_failure_file_name})
+        old_handler_i.set_handler_state(ExtHandlerState.Enabled)
         new_handler_i = TestExtensionUpdateOnFailure._get_ext_handler_instance(
             'foo', '1.0.1',
             handler={"updateCommand": test_env_file_name + " -u", "installCommand": test_env_file_name + " -i"},
@@ -2798,6 +2591,7 @@ class TestExtensionUpdateOnFailure(ExtensionTestCase):
         old_handler_i = TestExtensionUpdateOnFailure._get_ext_handler_instance('foo', '1.0.0', handler={
             "disableCommand": test_success_file_name,
             "uninstallCommand": test_success_file_name})
+        old_handler_i.set_handler_state(ExtHandlerState.Enabled)
         new_handler_i = TestExtensionUpdateOnFailure._get_ext_handler_instance(
             'foo', '1.0.1',
             handler={"updateCommand": test_env_file_name + " -u", "installCommand": test_env_file_name + " -i"},
@@ -2829,6 +2623,19 @@ class TestExtensionUpdateOnFailure(ExtensionTestCase):
                 ExtCommandEnvVariable.UninstallReturnCode, exit_code) in install_kwargs['message'])
             self.assertTrue(test_env_file_name + " -u" in update_kwargs['message'] and "%s=%s" % (
                 ExtCommandEnvVariable.DisableReturnCode, exit_code) in update_kwargs['message'])
+
+    @patch('time.sleep', side_effect=lambda _: mock_sleep(0.0001))
+    def test_disable_should_not_be_called_during_version_upgrade_if_not_enabled(self, _):
+
+        old_handler_i = TestExtensionUpdateOnFailure._get_ext_handler_instance('foo', '1.0.0')
+        old_handler_i.set_handler_state(ExtHandlerState.Installed)  # Something other than Enabled.
+        new_handler_i = TestExtensionUpdateOnFailure._get_ext_handler_instance('foo', '1.0.1', continue_on_update_failure=False)
+
+        with patch.object(CGroupConfigurator.get_instance(), "start_extension_command", return_value="[stdout]\n\n\n[stderr]\n\n\n"):
+            with patch.object(old_handler_i, 'disable', autospec=True) as mock_disable:
+                uninstall_rc = ExtHandlersHandler._update_extension_handler_and_return_if_failed(old_handler_i,
+                                                                                                new_handler_i)
+                mock_disable.mock.assert_not_called() # Python2.6's mock library doesn't forward assert_not_called, so we have to do it ourselves.
 
 
 @patch('time.sleep', side_effect=lambda _: mock_sleep(0.001))
