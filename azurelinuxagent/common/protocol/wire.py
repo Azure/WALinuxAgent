@@ -879,7 +879,7 @@ class WireClient(object):
                      "advised by Fabric.").format(PROTOCOL_VERSION)
             raise ProtocolNotFoundError(error)
 
-    def call_hostplugin_with_container_check(self, host_func):
+    def _call_hostplugin_with_container_check(self, host_func):
         ret = None
         try:
             ret = host_func()
@@ -967,7 +967,7 @@ class WireClient(object):
         else:
             logger.periodic_info(logger.EVERY_HALF_DAY, "[PERIODIC] Using host plugin as default channel.")
 
-        ret = self.call_hostplugin_with_container_check(host_func)
+        ret = self._call_hostplugin_with_container_check(host_func)
 
         if not HostPluginProtocol.is_default_channel():
             logger.info("Setting host plugin as default channel from now on. "
@@ -1234,7 +1234,7 @@ class WireClient(object):
 
     def upload_logs(self, content):
         host_func = lambda: self._upload_logs_through_host(content)
-        return self.call_hostplugin_with_container_check(host_func)
+        return self._call_hostplugin_with_container_check(host_func)
 
     def _upload_logs_through_host(self, content):
         host = self.get_host_plugin()
