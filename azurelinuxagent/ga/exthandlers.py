@@ -231,6 +231,8 @@ class ExtHandlerState(object):
 class ExtensionRequestedState(object):
     """
     This is the state of the Extension as requested by the Goal State.
+    CRP only supports 2 states as of now - Enabled and Uninstall
+    Disabled was used for older XML extensions and we keep it to support backward compatibility.
     """
     Enabled = u"enabled"
     Disabled = u"disabled"
