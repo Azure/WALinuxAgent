@@ -25,6 +25,7 @@ import shutil
 import threading
 import xml.dom
 from datetime import datetime, timedelta
+
 import azurelinuxagent.common.utils.textutil as textutil
 from azurelinuxagent.common import event, logger
 from azurelinuxagent.common.AgentGlobals import AgentGlobals
@@ -32,13 +33,13 @@ from azurelinuxagent.common.event import add_event, add_periodic, add_log_event,
     WALAEventOperation, parse_xml_event, parse_json_event, AGENT_EVENT_FILE_EXTENSION, EVENTS_DIRECTORY, \
     TELEMETRY_EVENT_EVENT_ID, TELEMETRY_EVENT_PROVIDER_ID, TELEMETRY_LOG_EVENT_ID, TELEMETRY_LOG_PROVIDER_ID
 from azurelinuxagent.common.future import ustr
+from azurelinuxagent.common.osutil import get_osutil
 from azurelinuxagent.common.telemetryevent import CommonTelemetryEventSchema, GuestAgentGenericLogsSchema, \
     GuestAgentExtensionEventsSchema, GuestAgentPerfCounterEventsSchema
+from azurelinuxagent.common.version import CURRENT_AGENT, CURRENT_VERSION, AGENT_EXECUTION_MODE
 from tests.protocol import mockwiredata
 from tests.protocol.mocks import mock_wire_protocol, HttpRequestPredicates, MockHttpResponse
-from azurelinuxagent.common.version import CURRENT_AGENT, CURRENT_VERSION, AGENT_EXECUTION_MODE
-from azurelinuxagent.common.osutil import get_osutil
-from tests.tools import AgentTestCase, data_dir, load_data, Mock, patch, skip_if_predicate_true
+from tests.tools import AgentTestCase, data_dir, load_data, patch, skip_if_predicate_true
 from tests.utils.event_logger_tools import EventLoggerTools
 
 
@@ -52,8 +53,8 @@ class TestEvent(HttpRequestPredicates, AgentTestCase):
         osutil = get_osutil()
 
         self.expected_common_parameters = {
-            # common parameters computed at event creation; the timestamp (stored as the opcode name) is not included here and
-            # is checked separately from these parameters
+            # common parameters computed at event creation; the timestamp (stored as the opcode name) is not included
+            # here and is checked separately from these parameters
             CommonTelemetryEventSchema.GAVersion: CURRENT_AGENT,
             CommonTelemetryEventSchema.ContainerId: AgentGlobals.get_container_id(),
             CommonTelemetryEventSchema.EventTid: threading.current_thread().ident,
@@ -68,7 +69,7 @@ class TestEvent(HttpRequestPredicates, AgentTestCase):
             # common parameters from the goal state
             CommonTelemetryEventSchema.TenantName: 'db00a7755a5e4e8a8fe4b19bc3b330c3',
             CommonTelemetryEventSchema.RoleName: 'MachineRole',
-            CommonTelemetryEventSchema.RoleInstanceName: 'MachineRole_IN_0',
+            CommonTelemetryEventSchema.RoleInstanceName: 'b61f93d0-e1ed-40b2-b067-22c243233448.MachineRole_IN_0',
             # common parameters
             CommonTelemetryEventSchema.Location: EventLoggerTools.mock_imds_data['location'],
             CommonTelemetryEventSchema.SubscriptionId: EventLoggerTools.mock_imds_data['subscriptionId'],
