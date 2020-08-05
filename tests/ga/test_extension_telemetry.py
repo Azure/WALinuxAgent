@@ -14,6 +14,7 @@ from mock import MagicMock, Mock, patch
 from azurelinuxagent.common import conf
 from azurelinuxagent.common.event import EVENTS_DIRECTORY
 from azurelinuxagent.common.exception import InvalidExtensionEventError
+from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.protocol.util import ProtocolUtil
 from azurelinuxagent.common.protocol.wire import event_param_to_v1
 from azurelinuxagent.common.telemetryevent import TelemetryEventParam, GuestAgentGenericLogsSchema, \
@@ -126,6 +127,7 @@ class TestExtensionTelemetryHandler(AgentTestCase, HttpRequestPredicates):
         event_with_name_and_versions = defaultdict(list)
         regex_pattern = r'<Param Name="EventName" Value="(.+?)-(.+?)" .* \/>'
         for body in event_body:
+            body = TestExtensionTelemetryHandler._get_ustr_from_event_body(body)
             xml_doc = textutil.parse_doc(body)
             events = textutil.findall(xml_doc, "Event")
 
@@ -142,6 +144,7 @@ class TestExtensionTelemetryHandler(AgentTestCase, HttpRequestPredicates):
         param_values = []
 
         for body in event_body:
+            body = TestExtensionTelemetryHandler._get_ustr_from_event_body(body)
             xml_doc = textutil.parse_doc(body)
             events = textutil.findall(xml_doc, "Event")
 
@@ -192,6 +195,7 @@ class TestExtensionTelemetryHandler(AgentTestCase, HttpRequestPredicates):
         param_str = event_param_to_v1(param)
         count = 0
         for body in event_body:
+            body = TestExtensionTelemetryHandler._get_ustr_from_event_body(body)
             if count >= min_count:
                 break
             count += body.count(param_str)
@@ -200,11 +204,15 @@ class TestExtensionTelemetryHandler(AgentTestCase, HttpRequestPredicates):
                                 "'{0}' param only found {1} times in events. Min_count required: {2}".format(param_str,
                                                                                                              count,
                                                                                                              min_count))
+    @staticmethod
+    def _get_ustr_from_event_body(body):
+        return body if (body is None or type(body) is ustr) else textutil.str_to_encoded_ustr(body)
 
     @staticmethod
     def _is_string_in_event_body(event_body, expected_string):
         found = False
         for body in event_body:
+            body = TestExtensionTelemetryHandler._get_ustr_from_event_body(body)
             if expected_string in body:
                 found = True
                 break
