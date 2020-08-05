@@ -210,28 +210,6 @@ class ResourceGoneError(HttpError):
         super(ResourceGoneError, self).__init__(msg, inner)
 
 
-class RemoteAccessError(AgentError):
-    """
-    Remote Access Error
-    """
-
-    def __init__(self, msg=None, inner=None):
-        super(RemoteAccessError, self).__init__(msg, inner)
-
-
-class InvalidExtensionEventError(AgentError):
-    """
-    Error thrown when the extension telemetry event is invalid as defined per the contract with extensions.
-    """
-    # Types of InvalidExtensionEventError
-    MissingKeyError = "MissingKeyError"
-    EmptyMessageError = "EmptyMessageError"
-    OversizeEventError = "OversizeEventError"
-
-    def __init__(self, msg=None, inner=None):
-        super(InvalidExtensionEventError, self).__init__(msg, inner)
-
-        
 class ExtensionErrorCodes(object):
     """
     Common Error codes used across by Compute RP for better understanding

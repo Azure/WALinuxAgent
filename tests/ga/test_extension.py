@@ -47,7 +47,7 @@ from nose.plugins.attrib import attr
 from tests.protocol import mockwiredata
 from tests.protocol.mocks import mock_wire_protocol, HttpRequestPredicates
 from tests.protocol.mockwiredata import DATA_FILE
-from tests.tools import AgentTestCase, data_dir, i_am_root, MagicMock, Mock, patch
+from tests.tools import AgentTestCase, data_dir, i_am_root, MagicMock, Mock, patch, mock_sleep
 from azurelinuxagent.common.exception import ResourceGoneError, ExtensionDownloadError, ProtocolError, \
     ExtensionErrorCodes, ExtensionError, ExtensionUpdateError
 from azurelinuxagent.common.protocol.restapi import Extension, ExtHandlerProperties, ExtHandler, ExtHandlerStatus, \
