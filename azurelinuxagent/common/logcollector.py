@@ -65,8 +65,9 @@ class LogCollector(object):
 
     _TRUNCATED_FILE_PREFIX = "truncated_"
 
-    def __init__(self, manifest_file_path):
-        self._manifest_file_path = manifest_file_path
+    def __init__(self, mode):
+        self._manifest_file_path = os.path.join("/etc", "logcollector_manifest_full") if mode == "full" else \
+            os.path.join("/etc", "logcollector_manifest_normal")
         self._must_collect_files = self._expand_must_collect_files()
         self._create_base_dirs()
         self._set_logger()
@@ -354,11 +355,11 @@ class LogCollector(object):
                              "Compressed archive size is {0}b".format(compressed_archive_size))
                 compressed_archive.write(_OUTPUT_RESULTS_FILE_PATH, arcname="results.txt")
 
-            return True
+            return _COMPRESSED_ARCHIVE_PATH
         except Exception as e:
             msg = "Failed to collect logs: {0}".format(ustr(e))
             _LOGGER.error(msg)
 
-            return False
+            return None
         finally:
             self._remove_uncollected_truncated_files(files_to_collect)

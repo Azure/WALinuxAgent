@@ -82,13 +82,13 @@ class TestAgent(AgentTestCase):
 
     def test_accepts_configuration_path(self):
         conf_path = os.path.join(data_dir, "test_waagent.conf")
-        c, f, v, d, cfp = parse_args(["-configuration-path:" + conf_path])
+        c, f, v, d, cfp, lcm = parse_args(["-configuration-path:" + conf_path])
         self.assertEqual(cfp, conf_path)
 
     @patch("os.path.exists", return_value=True)
     def test_checks_configuration_path(self, mock_exists):
         conf_path = "/foo/bar-baz/something.conf"
-        c, f, v, d, cfp = parse_args(["-configuration-path:"+conf_path])
+        c, f, v, d, cfp, lcm = parse_args(["-configuration-path:"+conf_path])
         self.assertEqual(cfp, conf_path)
         self.assertEqual(mock_exists.call_count, 1)
 
@@ -97,13 +97,13 @@ class TestAgent(AgentTestCase):
     @patch("sys.exit", side_effect=Exception)
     def test_rejects_missing_configuration_path(self, mock_exit, mock_exists, mock_stderr):
         try:
-            c, f, v, d, cfp = parse_args(["-configuration-path:/foo/bar.conf"])
+            c, f, v, d, cfp, lcm = parse_args(["-configuration-path:/foo/bar.conf"])
             self.assertTrue(False)
         except Exception:
             self.assertEqual(mock_exit.call_count, 1)
 
     def test_configuration_path_defaults_to_none(self):
-        c, f, v, d, cfp = parse_args([])
+        c, f, v, d, cfp, lcm = parse_args([])
         self.assertEqual(cfp, None)
 
     def test_agent_accepts_configuration_path(self):
@@ -179,6 +179,47 @@ class TestAgent(AgentTestCase):
             actual_configuration.append("{0} = {1}".format(k, configuration[k]))
         self.assertListEqual(EXPECTED_CONFIGURATION, actual_configuration)
 
+    def test_checks_log_collector_mode(self):
+        # Specify full mode
+        c, f, v, d, cfp, lcm = parse_args(["-collect-logs", "-mode:full"])
+        self.assertEqual(c, "collect-logs")
+        self.assertEqual(lcm, "full")
+
+        # Specify normal mode
+        c, f, v, d, cfp, lcm = parse_args(["-collect-logs", "-mode:normal"])
+        self.assertEqual(c, "collect-logs")
+        self.assertEqual(lcm, "normal")
+
+        # Defaults to None if mode not specified
+        c, f, v, d, cfp, lcm = parse_args(["-collect-logs"])
+        self.assertEqual(c, "collect-logs")
+        self.assertEqual(lcm, None)
+
+    @patch("sys.stderr")
+    @patch("sys.exit", side_effect=Exception)
+    def test_rejects_invalid_log_collector_mode(self, mock_exit, mock_stderr):
+        try:
+            c, f, v, d, cfp, lcm = parse_args(["-collect-logs", "-mode:invalid"])
+            self.assertTrue(False)
+        except Exception:
+            self.assertEqual(mock_exit.call_count, 1)
+
+    @patch("azurelinuxagent.common.logcollector.LogCollector")
+    def test_calls_collect_logs_with_proper_manifest(self, mock_log_collector):
+        agent = Agent(False)
+
+        agent.collect_logs("full")
+        manifest_file_path = mock_log_collector.call_args_list[0][0][0]
+        self.assertIn("logcollector_manifest_full", manifest_file_path)
+
+        agent.collect_logs("normal")
+        manifest_file_path = mock_log_collector.call_args_list[1][0][0]
+        self.assertIn("logcollector_manifest_normal", manifest_file_path)
+
+        agent.collect_logs(None)
+        manifest_file_path = mock_log_collector.call_args_list[2][0][0]
+        self.assertIn("logcollector_manifest_normal", manifest_file_path)
+
     def test_agent_usage_message(self):
         message = usage()
 
@@ -194,6 +235,7 @@ class TestAgent(AgentTestCase):
         self.assertTrue("-start" in message)
         self.assertTrue("-run-exthandlers" in message)
         self.assertTrue("-show-configuration" in message)
+        self.assertTrue("-collect-logs" in message)
 
         # sanity check
         self.assertFalse("-not-a-valid-option" in message)

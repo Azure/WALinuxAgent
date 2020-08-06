@@ -151,6 +151,17 @@ class Agent(object):
         for k in sorted(configuration.keys()):
             print("{0} = {1}".format(k, configuration[k]))
 
+    def collect_logs(self, log_collector_mode):
+        # This will be dist-packages/azurelinuxagent when ran from the command line
+        if log_collector_mode == "full":
+            print("Running log collector mode full")
+        else:
+            print("Running log collector mode normal")
+
+        from azurelinuxagent.common.logcollector import LogCollector
+        lc = LogCollector(log_collector_mode)
+        print(lc.collect_logs())
+
 
 def main(args=[]):
     """
@@ -159,7 +170,7 @@ def main(args=[]):
     """
     if len(args) <= 0:
         args = sys.argv[1:]
-    command, force, verbose, debug, conf_file_path = parse_args(args)
+    command, force, verbose, debug, conf_file_path, log_collector_mode = parse_args(args)
     if command == "version":
         version()
     elif command == "help":
@@ -183,10 +194,13 @@ def main(args=[]):
                 agent.run_exthandlers(debug)
             elif command == "show-configuration":
                 agent.show_configuration()
+            elif command == "collect-logs":
+                agent.collect_logs(log_collector_mode)
         except Exception:
             logger.error(u"Failed to run '{0}': {1}",
                          command,
                          traceback.format_exc())
+
 
 def parse_args(sys_args):
     """
@@ -197,45 +211,57 @@ def parse_args(sys_args):
     verbose = False
     debug = False
     conf_file_path = None
-    for a in sys_args:
-        m = re.match("^(?:[-/]*)configuration-path:([\w/\.\-_]+)", a)
-        if not m is None:
+    log_collector_mode = None
+    for arg in sys_args:
+        m = re.match("^(?:[-/]*)configuration-path:([\w/\.\-_]+)", arg)
+        if m is not None:
             conf_file_path = m.group(1)
             if not os.path.exists(conf_file_path):
                 print("Error: Configuration file {0} does not exist".format(
                         conf_file_path), file=sys.stderr)
                 usage()
                 sys.exit(1)
-        
-        elif re.match("^([-/]*)deprovision\\+user", a):
+
+        m = re.match("^(?:[-/]*)-mode:([\w/\.\-_]+)", arg)
+        if m is not None:
+            log_collector_mode = m.group(1)
+            if log_collector_mode not in ("full", "normal"):
+                print("Error: Invalid value for log collector mode: {0}. Accepted values: full, normal. "
+                      "If mode is not specified, will use normal mode.".format(log_collector_mode))
+                usage()
+                sys.exit(1)
+
+        elif re.match("^([-/]*)deprovision\\+user", arg):
             cmd = "deprovision+user"
-        elif re.match("^([-/]*)deprovision", a):
+        elif re.match("^([-/]*)deprovision", arg):
             cmd = "deprovision"
-        elif re.match("^([-/]*)daemon", a):
+        elif re.match("^([-/]*)daemon", arg):
             cmd = "daemon"
-        elif re.match("^([-/]*)start", a):
+        elif re.match("^([-/]*)start", arg):
             cmd = "start"
-        elif re.match("^([-/]*)register-service", a):
+        elif re.match("^([-/]*)register-service", arg):
             cmd = "register-service"
-        elif re.match("^([-/]*)run-exthandlers", a):
+        elif re.match("^([-/]*)run-exthandlers", arg):
             cmd = "run-exthandlers"
-        elif re.match("^([-/]*)version", a):
+        elif re.match("^([-/]*)version", arg):
             cmd = "version"
-        elif re.match("^([-/]*)verbose", a):
+        elif re.match("^([-/]*)verbose", arg):
             verbose = True
-        elif re.match("^([-/]*)debug", a):
+        elif re.match("^([-/]*)debug", arg):
             debug = True
-        elif re.match("^([-/]*)force", a):
+        elif re.match("^([-/]*)force", arg):
             force = True
-        elif re.match("^([-/]*)show-configuration", a):
+        elif re.match("^([-/]*)show-configuration", arg):
             cmd = "show-configuration"
-        elif re.match("^([-/]*)(help|usage|\\?)", a):
+        elif re.match("^([-/]*)(help|usage|\\?)", arg):
             cmd = "help"
+        elif re.match("^([-/]*)collect-logs", arg):
+            cmd = "collect-logs"
         else:
             cmd = "help"
             break
 
-    return cmd, force, verbose, debug, conf_file_path
+    return cmd, force, verbose, debug, conf_file_path, log_collector_mode
 
 
 def version():
@@ -258,7 +284,7 @@ def usage():
     s += ("usage: {0} [-verbose] [-force] [-help] "
            "-configuration-path:<path to configuration file>"
            "-deprovision[+user]|-register-service|-version|-daemon|-start|"
-           "-run-exthandlers|-show-configuration]"
+           "-run-exthandlers|-show-configuration|-collect-logs [-mode:full|normal]"
            "").format(sys.argv[0])
     s += "\n"
     return s
