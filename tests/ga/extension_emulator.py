@@ -32,7 +32,7 @@ from tests.protocol.mocks import HttpRequestPredicates
 from azurelinuxagent.ga.exthandlers import ExtHandlerInstance
 
 
-class ExtensionCommandName:
+class ExtensionCommandNames:
     INSTALL = "install"
     UNINSTALL = "uninstall"
     UPDATE = "update"
@@ -52,14 +52,6 @@ class Actions(object):
         """
         return 0
     
-    
-    @staticmethod
-    def fail_action(*args, **kwargs):
-        """
-        A simple fail action with the correct function signature for ExtensionEmulator actions.
-        """
-        raise ExtensionError("FailAction called.")
-
     @staticmethod
     def generate_unique_fail():
         """
@@ -83,11 +75,8 @@ def extension_emulator(name="OSTCExtensions.ExampleHandlerLinux", version="1.0.0
     Factory method for ExtensionEmulator objects with sensible defaults.
     """
     
-    return ExtensionEmulator(name, version,
-        update_mode, report_heartbeat, continue_on_update_failure,
-        _extend_func(install_action), _extend_func(uninstall_action),
-        _extend_func(enable_action), _extend_func(disable_action),
-        _extend_func(update_action))
+    return ExtensionEmulator(name, version, update_mode, report_heartbeat, continue_on_update_failure,
+        install_action, uninstall_action, enable_action, disable_action, update_action)
 
 @contextlib.contextmanager
 def enable_invocations(*emulators):
@@ -113,8 +102,6 @@ def generate_put_handler(*emulators):
     For use with tests.protocol.mocks.mock_wire_protocol.
     """
 
-    first_matching_emulator = lambda matches_func: next(emulator for emulator in emulators if matches_func(emulator))
-
     def mock_put_handler(url, *args, **kwargs):
 
         if HttpRequestPredicates.is_host_plugin_status_request(url):
@@ -127,7 +114,9 @@ def generate_put_handler(*emulators):
             supplied_version = handler_status.get("handlerVersion", None)
             
             try:
-                extension_emulator = first_matching_emulator(lambda ext: ext.matches(supplied_name, supplied_version))
+                extension_emulator = ExtensionEmulator._first_matching_emulator(emulators,
+                    lambda ext: ext.matches(supplied_name, supplied_version))
+                    
                 extension_emulator.status_blobs.append(handler_status)
 
             except StopIteration as e:
@@ -148,7 +137,7 @@ class InvocationRecord:
         """
         Verifies that any and all recorded invocations appear in the provided command list in that exact ordering.
 
-        Each cmd in expected_cmds should be a tuple of the form (ExtensionEmulator, ExtensionCommandNames).
+        Each cmd in expected_cmds should be a tuple of the form (ExtensionEmulator, ExtensionCommandNames object).
         """
 
         for (expected_ext_emulator, command_name) in expected_cmds:
@@ -190,14 +179,37 @@ class ExtensionEmulator:
         self.continue_on_update_failure = continue_on_update_failure
 
         self.actions = {
-            ExtensionCommandName.INSTALL: install_action,
-            ExtensionCommandName.UNINSTALL: uninstall_action,
-            ExtensionCommandName.UPDATE: update_action,
-            ExtensionCommandName.ENABLE: enable_action,
-            ExtensionCommandName.DISABLE: disable_action
+            ExtensionCommandNames.INSTALL: ExtensionEmulator._extend_func(install_action),
+            ExtensionCommandNames.UNINSTALL: ExtensionEmulator._extend_func(uninstall_action),
+            ExtensionCommandNames.UPDATE: ExtensionEmulator._extend_func(update_action),
+            ExtensionCommandNames.ENABLE: ExtensionEmulator._extend_func(enable_action),
+            ExtensionCommandNames.DISABLE: ExtensionEmulator._extend_func(disable_action)
         }
 
         self.status_blobs = []
+    
+    @staticmethod
+    def _extend_func(func):
+        """
+        Convert a function such that its returned value mimicks a Popen object (i.e. with 
+        correct return values for poll() and wait() calls).
+        """
+        
+        def wrapped_func(cmd, *args, **kwargs):
+            return_value = func(cmd, *args, **kwargs)
+
+            return Mock(**{
+                "poll.return_value": return_value,
+                "wait.return_value": return_value
+            })
+
+        # Wrap the function in a mock to allow invocation reflection a la .assert_not_called(), etc.
+        return Mock(wraps=wrapped_func)
+
+
+    @staticmethod
+    def _first_matching_emulator(emulators, match_func):
+        return next(emulator for emulator in emulators if match_func(emulator))
         
     
     def matches(self, name, version):
@@ -210,8 +222,6 @@ def generate_patched_popen(invocation_record, *emulators):
     """
     original_popen = subprocess.Popen
 
-    first_matching_emulator = lambda matches_func: next(emulator for emulator in emulators if matches_func(emulator))
-    
     def patched_popen(cmd, *args, **kwargs):
 
         try:
@@ -221,7 +231,9 @@ def generate_patched_popen(invocation_record, *emulators):
             return original_popen(cmd, *args, **kwargs)
         
         try:
-            extension_emulator = first_matching_emulator(lambda ext: ext.matches(ext_name, ext_version))
+            extension_emulator = ExtensionEmulator._first_matching_emulator(emulators,
+                lambda ext: ext.matches(ext_name, ext_version))
+
             return extension_emulator.actions[command_name](cmd, *args, **kwargs)
 
         except StopIteration:
@@ -235,13 +247,11 @@ def generate_mock_load_manifest(*emulators):
 
     original_load_manifest = ExtHandlerInstance.load_manifest
 
-    first_matching_emulator = lambda matches_func: next(emulator for emulator in emulators if matches_func(emulator))
-
     def mock_load_manifest(self):
 
         try:
-            matching_emulator = first_matching_emulator(lambda ext: ext.matches(self.ext_handler.name,
-                    self.ext_handler.properties.version))
+            matching_emulator = ExtensionEmulator._first_matching_emulator(emulators,
+                lambda ext: ext.matches(self.ext_handler.name, self.ext_handler.properties.version))
         except StopIteration:
             raise Exception("Extension('{name}', '{version}') not listed as a parameter. Is it being emulated?".format(
                 name=self.ext_handler.name, version=self.ext_handler.properties.version
@@ -292,21 +302,3 @@ class _ExtractExtensionInfo:
             raise ValueError("Command does not match the desired format: {0}".format(command))
 
         return match_obj.group('name', 'ver', 'cmd')
-
-
-def _extend_func(func):
-    """
-    Convert a function such that its returned value mimicks a Popen object (i.e. with 
-    correct return values for poll() and wait() calls).
-    """
-    
-    def wrapped_func(cmd, *args, **kwargs):
-        return_value = func(cmd, *args, **kwargs)
-
-        return Mock(**{
-            "poll.return_value": return_value,
-            "wait.return_value": return_value
-        })
-
-    # Wrap the function in a mock to allow invocation reflection a la .assert_not_called(), etc.
-    return Mock(wraps=wrapped_func)
