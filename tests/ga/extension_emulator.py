@@ -32,7 +32,7 @@ from tests.protocol.mocks import HttpRequestPredicates
 from azurelinuxagent.ga.exthandlers import ExtHandlerInstance
 
 
-class ExtensionCommandName(Enum):
+class ExtensionCommandName:
     INSTALL = "install"
     UNINSTALL = "uninstall"
     UPDATE = "update"
@@ -132,7 +132,7 @@ def generate_put_handler(*emulators):
 
             except StopIteration as e:
                 # Tests will want to know that the agent is running an extension they didn't specifically allocate.
-                raise Exception("Extension running, but not present in emulators: {0}, {1}".foramt(supplied_name, supplied_version))
+                raise Exception("Extension running, but not present in emulators: {0}, {1}".format(supplied_name, supplied_version))
 
     return mock_put_handler
 
@@ -216,13 +216,13 @@ def generate_patched_popen(invocation_record, *emulators):
 
         try:
             ext_name, ext_version, command_name = _ExtractExtensionInfo.from_command(cmd)
-            invocation_record.add(ext_name, ext_version, ExtensionCommandName(command_name))
+            invocation_record.add(ext_name, ext_version, command_name)
         except ValueError:
             return original_popen(cmd, *args, **kwargs)
         
         try:
             extension_emulator = first_matching_emulator(lambda ext: ext.matches(ext_name, ext_version))
-            return extension_emulator.actions[ExtensionCommandName(command_name)](cmd, *args, **kwargs)
+            return extension_emulator.actions[command_name](cmd, *args, **kwargs)
 
         except StopIteration:
             raise Exception("Extension('{name}', '{version}') not listed as a parameter. Is it being emulated?".format(
