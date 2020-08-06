@@ -204,8 +204,9 @@ class TestAgent(AgentTestCase):
         except Exception:
             self.assertEqual(mock_exit.call_count, 1)
 
+    @patch("os.path.exists", return_value=True)
     @patch("azurelinuxagent.common.logcollector.LogCollector")
-    def test_calls_collect_logs_with_proper_manifest(self, mock_log_collector):
+    def test_calls_collect_logs_with_proper_manifest(self, mock_log_collector, *args):
         agent = Agent(False)
 
         agent.collect_logs("full")

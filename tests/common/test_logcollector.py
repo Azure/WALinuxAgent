@@ -58,7 +58,7 @@ class TestLogCollector(AgentTestCase):
         cls.mock_truncated_files_dir.start()
 
         cls.output_results_file_path = os.path.join(cls.log_collector_dir, "results.txt")
-        cls.mock_output_results_file_path = patch("azurelinuxagent.common.logcollector._OUTPUT_RESULTS_FILE_PATH",
+        cls.mock_output_results_file_path = patch("azurelinuxagent.common.logcollector.OUTPUT_RESULTS_FILE_PATH",
                                                   cls.output_results_file_path)
         cls.mock_output_results_file_path.start()
 

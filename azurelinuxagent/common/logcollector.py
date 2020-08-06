@@ -38,7 +38,7 @@ _AGENT_LOG = get_agent_log_file()
 _LOG_COLLECTOR_DIR = os.path.join(_AGENT_LIB_DIR, "logcollector")
 _TRUNCATED_FILES_DIR = os.path.join(_LOG_COLLECTOR_DIR, "truncated")
 
-_OUTPUT_RESULTS_FILE_PATH = os.path.join(_LOG_COLLECTOR_DIR, "results.txt")
+OUTPUT_RESULTS_FILE_PATH = os.path.join(_LOG_COLLECTOR_DIR, "results.txt")
 _COMPRESSED_ARCHIVE_PATH = os.path.join(_LOG_COLLECTOR_DIR, "logs.zip")
 
 _MUST_COLLECT_FILES = [
@@ -65,9 +65,8 @@ class LogCollector(object):
 
     _TRUNCATED_FILE_PREFIX = "truncated_"
 
-    def __init__(self, mode):
-        self._manifest_file_path = os.path.join("/etc", "logcollector_manifest_full") if mode == "full" else \
-            os.path.join("/etc", "logcollector_manifest_normal")
+    def __init__(self, manifest_file_path):
+        self._manifest_file_path = manifest_file_path
         self._must_collect_files = self._expand_must_collect_files()
         self._create_base_dirs()
         self._set_logger()
@@ -89,7 +88,7 @@ class LogCollector(object):
 
     @staticmethod
     def _set_logger():
-        _f_handler = logging.FileHandler(_OUTPUT_RESULTS_FILE_PATH, encoding="utf-8")
+        _f_handler = logging.FileHandler(OUTPUT_RESULTS_FILE_PATH, encoding="utf-8")
         _f_format = logging.Formatter(fmt='%(asctime)s %(levelname)s %(message)s',
                                       datefmt=u'%Y-%m-%dT%H:%M:%SZ')
         _f_format.converter = time.gmtime
@@ -340,7 +339,7 @@ class LogCollector(object):
         try:
             # Clear previous run's output and create base directories if they don't exist already.
             self._create_base_dirs()
-            LogCollector._reset_file(_OUTPUT_RESULTS_FILE_PATH)
+            LogCollector._reset_file(OUTPUT_RESULTS_FILE_PATH)
 
             files_to_collect = self._create_list_of_files_to_collect()
             _LOGGER.info("### Creating compressed archive ###")
@@ -353,13 +352,13 @@ class LogCollector(object):
                 compressed_archive_size = os.path.getsize(_COMPRESSED_ARCHIVE_PATH)
                 _LOGGER.info("Successfully compressed files. "
                              "Compressed archive size is {0}b".format(compressed_archive_size))
-                compressed_archive.write(_OUTPUT_RESULTS_FILE_PATH, arcname="results.txt")
+                compressed_archive.write(OUTPUT_RESULTS_FILE_PATH, arcname="results.txt")
 
             return _COMPRESSED_ARCHIVE_PATH
         except Exception as e:
             msg = "Failed to collect logs: {0}".format(ustr(e))
             _LOGGER.error(msg)
 
-            return None
+            raise
         finally:
             self._remove_uncollected_truncated_files(files_to_collect)

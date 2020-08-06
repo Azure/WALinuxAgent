@@ -100,6 +100,7 @@ class WALAEventOperation:
     InitializeHostPlugin = "InitializeHostPlugin"
     InvokeCommandUsingSystemd = "InvokeCommandUsingSystemd"
     Log = "Log"
+    LogCollection = "LogCollection"
     OSInfo = "OSInfo"
     Partition = "Partition"
     PluginSettingsVersionMismatch = "PluginSettingsVersionMismatch"

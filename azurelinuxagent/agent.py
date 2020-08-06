@@ -24,21 +24,22 @@ Module agent
 from __future__ import print_function
 
 import os
-import sys
 import re
 import subprocess
+import sys
 import threading
 import traceback
 
-import azurelinuxagent.common.logger as logger
-import azurelinuxagent.common.event as event
 import azurelinuxagent.common.conf as conf
-from azurelinuxagent.common.version import AGENT_NAME, AGENT_LONG_VERSION, \
-                                     DISTRO_NAME, DISTRO_VERSION, \
-                                     PY_VERSION_MAJOR, PY_VERSION_MINOR, \
-                                     PY_VERSION_MICRO, GOAL_STATE_AGENT_VERSION
+import azurelinuxagent.common.event as event
+import azurelinuxagent.common.logger as logger
+from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.osutil import get_osutil
 from azurelinuxagent.common.utils import fileutil
+from azurelinuxagent.common.version import AGENT_NAME, AGENT_LONG_VERSION, \
+    DISTRO_NAME, DISTRO_VERSION, \
+    PY_VERSION_MAJOR, PY_VERSION_MINOR, \
+    PY_VERSION_MICRO, GOAL_STATE_AGENT_VERSION
 
 
 class Agent(object):
@@ -49,17 +50,17 @@ class Agent(object):
         self.conf_file_path = conf_file_path
         self.osutil = get_osutil()
 
-        #Init stdout log
+        # Init stdout log
         level = logger.LogLevel.VERBOSE if verbose else logger.LogLevel.INFO
         logger.add_logger_appender(logger.AppenderType.STDOUT, level)
 
-        #Init config
+        # Init config
         conf_file_path = self.conf_file_path \
                 if self.conf_file_path is not None \
                     else self.osutil.get_agent_conf_file_path()
         conf.load_conf_from_file(conf_file_path)
 
-        #Init log
+        # Init log
         verbose = verbose or conf.get_logs_verbose()
         level = logger.LogLevel.VERBOSE if verbose else logger.LogLevel.INFO
         logger.add_logger_appender(logger.AppenderType.FILE, level,
@@ -104,7 +105,6 @@ class Agent(object):
         child_args = None \
             if self.conf_file_path is None \
                 else "-configuration-path:{0}".format(self.conf_file_path)
-
         from azurelinuxagent.daemon import get_daemon_handler
         daemon_handler = get_daemon_handler()
         daemon_handler.run(child_args=child_args)
@@ -152,15 +152,25 @@ class Agent(object):
             print("{0} = {1}".format(k, configuration[k]))
 
     def collect_logs(self, log_collector_mode):
-        # This will be dist-packages/azurelinuxagent when ran from the command line
         if log_collector_mode == "full":
             print("Running log collector mode full")
+            manifest_file_path = os.path.join("/etc", "logcollector_manifest_full")
         else:
             print("Running log collector mode normal")
+            manifest_file_path = os.path.join("/etc", "logcollector_manifest_normal")
 
-        from azurelinuxagent.common.logcollector import LogCollector
-        lc = LogCollector(log_collector_mode)
-        print(lc.collect_logs())
+        if not os.path.exists(manifest_file_path):
+            print("Required manifest file for log collector doesn't exist: {0}".format(manifest_file_path))
+            sys.exit(1)
+
+        from azurelinuxagent.common.logcollector import LogCollector, OUTPUT_RESULTS_FILE_PATH
+        try:
+            lc = LogCollector(manifest_file_path)
+            archive = lc.collect_logs()
+            print("Log collection successfully completed. Archive can be found at {0}".format(archive))
+        except Exception as e:
+            print("Log collection completed unsuccessfully. Error: {0}".format(ustr(e)))
+            print("Detailed log output can be seen at {0}".format(OUTPUT_RESULTS_FILE_PATH))
 
 
 def main(args=[]):
@@ -219,7 +229,7 @@ def parse_args(sys_args):
             if not os.path.exists(conf_file_path):
                 print("Error: Configuration file {0} does not exist".format(
                         conf_file_path), file=sys.stderr)
-                usage()
+                print(usage())
                 sys.exit(1)
 
         m = re.match("^(?:[-/]*)-mode:([\w/\.\-_]+)", arg)
@@ -228,7 +238,7 @@ def parse_args(sys_args):
             if log_collector_mode not in ("full", "normal"):
                 print("Error: Invalid value for log collector mode: {0}. Accepted values: full, normal. "
                       "If mode is not specified, will use normal mode.".format(log_collector_mode))
-                usage()
+                print(usage())
                 sys.exit(1)
 
         elif re.match("^([-/]*)deprovision\\+user", arg):
@@ -276,6 +286,7 @@ def version():
                                        PY_VERSION_MICRO))
     print("Goal state agent: {0}".format(GOAL_STATE_AGENT_VERSION))
 
+
 def usage():
     """
     Return agent usage message
@@ -289,6 +300,7 @@ def usage():
     s += "\n"
     return s
 
+
 def start(conf_file_path=None):
     """
     Start agent daemon in a background process and set stdout/stderr to
@@ -299,6 +311,7 @@ def start(conf_file_path=None):
     if conf_file_path is not None:
         args.append('-configuration-path:{0}'.format(conf_file_path))
     subprocess.Popen(args, stdout=devnull, stderr=devnull)
+
 
 if __name__ == '__main__' :
     main()
