@@ -19,7 +19,6 @@ import json
 import re
 import uuid
 import contextlib
-from enum import Enum
 import subprocess
 
 import azurelinuxagent.common.conf as conf
