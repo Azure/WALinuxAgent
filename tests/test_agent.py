@@ -38,6 +38,7 @@ Extensions.GoalStatePeriod = 6
 HttpProxy.Host = None
 HttpProxy.Port = None
 Lib.Dir = /var/lib/waagent
+Logs.Collect = False
 Logs.Console = True
 Logs.Verbose = False
 OS.AllowHTTP = False
@@ -107,8 +108,7 @@ class TestAgent(AgentTestCase):
         self.assertEqual(cfp, None)
 
     def test_agent_accepts_configuration_path(self):
-        Agent(False,
-                conf_file_path=os.path.join(data_dir, "test_waagent.conf"))
+        Agent(False, conf_file_path=os.path.join(data_dir, "test_waagent.conf"))
         self.assertTrue(conf.get_fips_enabled())
 
     @patch("azurelinuxagent.common.conf.load_conf_from_file")
@@ -151,8 +151,7 @@ class TestAgent(AgentTestCase):
         mock_dir.return_value = ext_log_dir
 
         self.assertFalse(os.path.isdir(ext_log_dir))
-        agent = Agent(False,
-                    conf_file_path=os.path.join(data_dir, "test_waagent.conf"))
+        agent = Agent(False, conf_file_path=os.path.join(data_dir, "test_waagent.conf"))
         self.assertTrue(os.path.isdir(ext_log_dir))
 
     @patch("azurelinuxagent.common.logger.error")
@@ -207,7 +206,7 @@ class TestAgent(AgentTestCase):
     @patch("os.path.exists", return_value=True)
     @patch("azurelinuxagent.common.logcollector.LogCollector")
     def test_calls_collect_logs_with_proper_manifest(self, mock_log_collector, *args):
-        agent = Agent(False)
+        agent = Agent(False, conf_file_path=os.path.join(data_dir, "test_waagent.conf"))
 
         agent.collect_logs("full")
         manifest_file_path = mock_log_collector.call_args_list[0][0][0]
