@@ -176,7 +176,7 @@ class CollectLogsHandler(object):
 
         try:
             with open(archive_file_path, "rb") as fh:
-                archive_content = fh.read().encode("utf-8")
+                archive_content = fh.read()
                 self.protocol.upload_logs(archive_content)
                 msg = "Successfully uploaded logs."
                 logger.info(msg)
