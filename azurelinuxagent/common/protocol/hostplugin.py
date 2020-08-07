@@ -235,8 +235,6 @@ class HostPluginProtocol(object):
         if restutil.request_failed(response):
             error_response = restutil.read_response_error(response)
             raise HttpError("HostGAPlugin: Upload VM logs failed: {0}".format(error_response))
-        else:
-            logger.info("HostGAPlugin: Upload VM logs succeeded")
 
         return response
 
