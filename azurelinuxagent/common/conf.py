@@ -150,7 +150,8 @@ __INTEGER_OPTIONS__ = {
     "Provisioning.PasswordCryptSaltLength": 10,
     "HttpProxy.Port": None,
     "ResourceDisk.SwapSizeMB": 0,
-    "Autoupdate.Frequency": 3600
+    "Autoupdate.Frequency": 3600,
+    "Logs.CollectPeriod": 3600
 }
 
 
@@ -226,6 +227,10 @@ def get_logs_console(conf=__conf__):
 
 def get_collect_logs(conf=__conf__):
     return conf.get_switch("Logs.Collect", False)
+
+
+def get_collect_logs_period(conf=__conf__):
+    return conf.get_int("Logs.CollectPeriod", 3600)
 
 
 def get_lib_dir(conf=__conf__):

@@ -39,6 +39,7 @@ HttpProxy.Host = None
 HttpProxy.Port = None
 Lib.Dir = /var/lib/waagent
 Logs.Collect = False
+Logs.CollectPeriod = 3600
 Logs.Console = True
 Logs.Verbose = False
 OS.AllowHTTP = False
@@ -163,8 +164,7 @@ class TestAgent(AgentTestCase):
 
         self.assertTrue(os.path.isfile(ext_log_dir))
         self.assertFalse(os.path.isdir(ext_log_dir))
-        agent = Agent(False,
-                    conf_file_path=os.path.join(data_dir, "test_waagent.conf"))
+        agent = Agent(False, conf_file_path=os.path.join(data_dir, "test_waagent.conf"))
         self.assertTrue(os.path.isfile(ext_log_dir))
         self.assertFalse(os.path.isdir(ext_log_dir))
         self.assertEqual(1, mock_log.call_count)

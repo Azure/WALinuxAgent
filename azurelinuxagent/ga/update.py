@@ -276,6 +276,10 @@ class UpdateHandler(object):
             env_thread = get_env_handler()
             env_thread.run()
 
+            from azurelinuxagent.ga.collect_logs import get_collect_logs_handler
+            collect_logs_thread = get_collect_logs_handler()
+            collect_logs_thread.run()
+
             from azurelinuxagent.ga.exthandlers import get_exthandlers_handler, migrate_handler_state
             exthandlers_handler = get_exthandlers_handler(protocol)
             migrate_handler_state()

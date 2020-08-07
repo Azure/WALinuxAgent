@@ -167,10 +167,11 @@ class Agent(object):
         try:
             lc = LogCollector(manifest_file_path)
             archive = lc.collect_logs()
-            print("Log collection successfully completed. Archive can be found at {0}".format(archive))
+            print("Log collection successfully completed. Archive can be found at {0} "
+                  "and detailed log output can be found at {1}".format(archive, OUTPUT_RESULTS_FILE_PATH))
         except Exception as e:
             print("Log collection completed unsuccessfully. Error: {0}".format(ustr(e)))
-            print("Detailed log output can be seen at {0}".format(OUTPUT_RESULTS_FILE_PATH))
+            print("Detailed log output can be found at {0}".format(OUTPUT_RESULTS_FILE_PATH))
 
 
 def main(args=[]):
