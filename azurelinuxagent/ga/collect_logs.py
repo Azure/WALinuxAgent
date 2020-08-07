@@ -175,8 +175,9 @@ class CollectLogsHandler(object):
             return
 
         try:
-            with open(archive_file_path, "rb") as archive:
-                self.protocol.upload_logs(archive)
+            with open(archive_file_path, "rb") as fh:
+                archive_content = fh.read()
+                self.protocol.upload_logs(archive_content)
                 msg = "Successfully uploaded logs."
                 logger.info(msg)
                 add_event(
