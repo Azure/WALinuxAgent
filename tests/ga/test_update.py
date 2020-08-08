@@ -1249,25 +1249,27 @@ class TestUpdate(UpdateTestCase):
             with patch('azurelinuxagent.ga.remoteaccess.get_remote_access_handler') as mock_ra_handler:
                 with patch('azurelinuxagent.ga.monitor.get_monitor_handler') as mock_monitor:
                     with patch('azurelinuxagent.ga.env.get_env_handler') as mock_env:
-                        with patch('azurelinuxagent.ga.update.initialize_event_logger_vminfo_common_parameters'):
-                            with patch('time.sleep', side_effect=iterator) as mock_sleep:
-                                with patch('sys.exit') as mock_exit:
-                                    if isinstance(os.getppid, MagicMock):
-                                        self.update_handler.run()
-                                    else:
-                                        with patch('os.getppid', return_value=42):
+                        with patch('azurelinuxagent.ga.collect_logs.get_collect_logs_handler') as mock_collect_logs:
+                            with patch('azurelinuxagent.ga.update.initialize_event_logger_vminfo_common_parameters'):
+                                with patch('time.sleep', side_effect=iterator) as mock_sleep:
+                                    with patch('sys.exit') as mock_exit:
+                                        if isinstance(os.getppid, MagicMock):
                                             self.update_handler.run()
+                                        else:
+                                            with patch('os.getppid', return_value=42):
+                                                self.update_handler.run()
 
-                                    self.assertEqual(1, mock_handler.call_count)
-                                    self.assertEqual(mock_handler.return_value.method_calls, calls)
-                                    self.assertEqual(1, mock_ra_handler.call_count)
-                                    self.assertEqual(mock_ra_handler.return_value.method_calls, calls)
-                                    self.assertEqual(invocations, mock_sleep.call_count)
-                                    if invocations > 0:
-                                        self.assertEqual(sleep_interval, mock_sleep.call_args[0])
-                                    self.assertEqual(1, mock_monitor.call_count)
-                                    self.assertEqual(1, mock_env.call_count)
-                                    self.assertEqual(1, mock_exit.call_count)
+                                        self.assertEqual(1, mock_handler.call_count)
+                                        self.assertEqual(mock_handler.return_value.method_calls, calls)
+                                        self.assertEqual(1, mock_ra_handler.call_count)
+                                        self.assertEqual(mock_ra_handler.return_value.method_calls, calls)
+                                        self.assertEqual(invocations, mock_sleep.call_count)
+                                        if invocations > 0:
+                                            self.assertEqual(sleep_interval, mock_sleep.call_args[0])
+                                        self.assertEqual(1, mock_monitor.call_count)
+                                        self.assertEqual(1, mock_env.call_count)
+                                        self.assertEqual(1, mock_collect_logs.call_count)
+                                        self.assertEqual(1, mock_exit.call_count)
 
     def test_run(self):
         self._test_run()
@@ -1509,9 +1511,10 @@ class MonitorThreadTest(AgentTestCase):
                                     with patch('sys.exit'):
                                         self.update_handler.run()
 
+    @patch('azurelinuxagent.ga.collect_logs.get_collect_logs_handler')
     @patch('azurelinuxagent.ga.monitor.get_monitor_handler')
     @patch('azurelinuxagent.ga.env.get_env_handler')
-    def test_start_threads(self, mock_env, mock_monitor):
+    def test_start_threads(self, mock_env, mock_monitor, mock_collect_logs):
         self.assertTrue(self.update_handler.running)
 
         mock_monitor_thread = MagicMock()
@@ -1528,9 +1531,10 @@ class MonitorThreadTest(AgentTestCase):
         self.assertEqual(1, mock_env.call_count)
         self.assertEqual(1, mock_env_thread.run.call_count)
 
+    @patch('azurelinuxagent.ga.collect_logs.get_collect_logs_handler')
     @patch('azurelinuxagent.ga.monitor.get_monitor_handler')
     @patch('azurelinuxagent.ga.env.get_env_handler')
-    def test_check_if_monitor_thread_is_alive(self, mock_env, mock_monitor):
+    def test_check_if_monitor_thread_is_alive(self, mock_env, mock_monitor, mock_collect_logs):
         self.assertTrue(self.update_handler.running)
 
         mock_monitor_thread = MagicMock()
@@ -1545,9 +1549,10 @@ class MonitorThreadTest(AgentTestCase):
         self.assertEqual(1, mock_monitor_thread.is_alive.call_count)
         self.assertEqual(0, mock_monitor_thread.start.call_count)
 
+    @patch('azurelinuxagent.ga.collect_logs.get_collect_logs_handler')
     @patch('azurelinuxagent.ga.monitor.get_monitor_handler')
     @patch('azurelinuxagent.ga.env.get_env_handler')
-    def test_check_if_env_thread_is_alive(self, mock_env, mock_monitor):
+    def test_check_if_env_thread_is_alive(self, mock_env, mock_monitor, mock_collect_logs):
         self.assertTrue(self.update_handler.running)
 
         mock_env_thread = MagicMock()
@@ -1562,9 +1567,10 @@ class MonitorThreadTest(AgentTestCase):
         self.assertEqual(1, mock_env_thread.is_alive.call_count)
         self.assertEqual(0, mock_env_thread.start.call_count)
 
+    @patch('azurelinuxagent.ga.collect_logs.get_collect_logs_handler')
     @patch('azurelinuxagent.ga.monitor.get_monitor_handler')
     @patch('azurelinuxagent.ga.env.get_env_handler')
-    def test_restart_monitor_thread_if_not_alive(self, mock_env, mock_monitor):
+    def test_restart_monitor_thread_if_not_alive(self, mock_env, mock_monitor, mock_collect_logs):
         self.assertTrue(self.update_handler.running)
 
         mock_monitor_thread = MagicMock()
@@ -1579,9 +1585,10 @@ class MonitorThreadTest(AgentTestCase):
         self.assertEqual(1, mock_monitor_thread.is_alive.call_count)
         self.assertEqual(1, mock_monitor_thread.start.call_count)
 
+    @patch('azurelinuxagent.ga.collect_logs.get_collect_logs_handler')
     @patch('azurelinuxagent.ga.monitor.get_monitor_handler')
     @patch('azurelinuxagent.ga.env.get_env_handler')
-    def test_restart_env_thread_if_not_alive(self, mock_env, mock_monitor):
+    def test_restart_env_thread_if_not_alive(self, mock_env, mock_monitor, mock_collect_logs):
         self.assertTrue(self.update_handler.running)
 
         mock_env_thread = MagicMock()
@@ -1596,9 +1603,10 @@ class MonitorThreadTest(AgentTestCase):
         self.assertEqual(1, mock_env_thread.is_alive.call_count)
         self.assertEqual(1, mock_env_thread.start.call_count)
 
+    @patch('azurelinuxagent.ga.collect_logs.get_collect_logs_handler')
     @patch('azurelinuxagent.ga.monitor.get_monitor_handler')
     @patch('azurelinuxagent.ga.env.get_env_handler')
-    def test_restart_monitor_thread(self, mock_env, mock_monitor):
+    def test_restart_monitor_thread(self, mock_env, mock_monitor, mock_collect_logs):
         self.assertTrue(self.update_handler.running)
 
         mock_monitor_thread = MagicMock()
@@ -1613,9 +1621,10 @@ class MonitorThreadTest(AgentTestCase):
         self.assertEqual(True, mock_monitor_thread.is_alive.called)
         self.assertEqual(True, mock_monitor_thread.start.called)
 
+    @patch('azurelinuxagent.ga.collect_logs.get_collect_logs_handler')
     @patch('azurelinuxagent.ga.monitor.get_monitor_handler')
     @patch('azurelinuxagent.ga.env.get_env_handler')
-    def test_restart_env_thread(self, mock_env, mock_monitor):
+    def test_restart_env_thread(self, mock_env, mock_monitor, mock_collect_logs):
         self.assertTrue(self.update_handler.running)
 
         mock_env_thread = MagicMock()
