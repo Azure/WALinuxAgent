@@ -138,6 +138,8 @@ class CollectLogsHandler(object):
 
     @staticmethod
     def collect_logs():
+        logger.info("Starting log collection...")
+
         # Invoke the command line tool in the agent to collect logs, with resource limits on CPU and memory (RAM).
         scope_name = "collect-logs-{0}.scope".format(datetime.datetime.utcnow())
         systemd_cmd = ["systemd-run", "--unit={0}".format(scope_name), "--scope"]
@@ -145,8 +147,8 @@ class CollectLogsHandler(object):
         # More info on resource limits properties in systemd here:
         # https://access.redhat.com/documentation/en-us/red_hat_enterprise_linux/7/html/resource_management_guide/sec-modifying_control_groups
         cpu_limit, memory_limit = CollectLogsHandler.get_resource_limits()
-        resource_limits = ["--property=CPUAccounting=1", "--property=CPUQuota={0}%".format(cpu_limit),
-                           "--property=MemoryAccounting=1", "--property=MemoryLimit={0}M".format(memory_limit)]
+        resource_limits = ["--property=CPUAccounting=1", "--property=CPUQuota={0}".format(cpu_limit),
+                           "--property=MemoryAccounting=1", "--property=MemoryLimit={0}".format(memory_limit)]
 
         collect_logs_cmd = [get_python_cmd(), "-u", sys.argv[0], "-collect-logs"]
         final_command = systemd_cmd + resource_limits + collect_logs_cmd
