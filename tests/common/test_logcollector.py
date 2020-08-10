@@ -63,7 +63,7 @@ class TestLogCollector(AgentTestCase):
         cls.mock_output_results_file_path.start()
 
         cls.compressed_archive_path = os.path.join(cls.log_collector_dir, "logs.zip")
-        cls.mock_compressed_archive_path = patch("azurelinuxagent.common.logcollector._COMPRESSED_ARCHIVE_PATH",
+        cls.mock_compressed_archive_path = patch("azurelinuxagent.common.logcollector.COMPRESSED_ARCHIVE_PATH",
                                                  cls.compressed_archive_path)
         cls.mock_compressed_archive_path.start()
 

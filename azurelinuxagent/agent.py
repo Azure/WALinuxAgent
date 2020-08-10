@@ -172,6 +172,7 @@ class Agent(object):
         except Exception as e:
             print("Log collection completed unsuccessfully. Error: {0}".format(ustr(e)))
             print("Detailed log output can be found at {0}".format(OUTPUT_RESULTS_FILE_PATH))
+            sys.exit(1)
 
 
 def main(args=[]):

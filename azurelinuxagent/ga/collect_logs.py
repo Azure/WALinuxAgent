@@ -18,17 +18,19 @@
 #
 import datetime
 import os
+import sys
 import threading
 
 import azurelinuxagent.common.conf as conf
 from azurelinuxagent.common import logger
 from azurelinuxagent.common.event import elapsed_milliseconds, add_event, WALAEventOperation
-from azurelinuxagent.common.exception import HttpError, ProtocolError
 from azurelinuxagent.common.future import ustr
-from azurelinuxagent.common.logcollector import LogCollector
+from azurelinuxagent.common.logcollector import LogCollector, COMPRESSED_ARCHIVE_PATH
 from azurelinuxagent.common.protocol.util import get_protocol_util
-from azurelinuxagent.ga.periodic_operation import PeriodicOperation
+from azurelinuxagent.common.utils import shellutil
+from azurelinuxagent.common.utils.shellutil import get_python_cmd
 from azurelinuxagent.common.version import PY_VERSION_MAJOR, PY_VERSION_MINOR, AGENT_NAME, CURRENT_VERSION
+from azurelinuxagent.ga.periodic_operation import PeriodicOperation
 
 
 def get_collect_logs_handler():
@@ -124,28 +126,38 @@ class CollectLogsHandler(object):
             logger.error("An error occurred in the log collection thread; will exit the thread.\n{0}", ustr(e))
 
     def collect_and_send_logs(self):
-        archive_file_path = self.collect_logs()
-        self.send_logs(archive_file_path)
+        if self.collect_logs():
+            self.send_logs()
+
+    @staticmethod
+    def get_resource_limits():
+        # Define CPU limit (as percentage of CPU time) and memory limit (absolute value in megabytes).
+        cpu_limit = "5%"
+        memory_limit = "20M"  # K for kb, M for mb
+        return cpu_limit, memory_limit
 
     @staticmethod
     def collect_logs():
-        logger.info("Starting log collection.")
+        # Invoke the command line tool in the agent to collect logs, with resource limits on CPU and memory (RAM).
+        scope_name = "collect-logs-{0}.scope".format(datetime.datetime.utcnow())
+        systemd_cmd = ["systemd-run", "--unit={0}".format(scope_name), "--scope"]
 
-        archive_file_path = None
+        # More info on resource limits properties in systemd here:
+        # https://access.redhat.com/documentation/en-us/red_hat_enterprise_linux/7/html/resource_management_guide/sec-modifying_control_groups
+        cpu_limit, memory_limit = CollectLogsHandler.get_resource_limits()
+        resource_limits = ["--property=CPUAccounting=1", "--property=CPUQuota={0}%".format(cpu_limit),
+                           "--property=MemoryAccounting=1", "--property=MemoryLimit={0}M".format(memory_limit)]
+
+        collect_logs_cmd = [get_python_cmd(), "-u", sys.argv[0], "-collect-logs"]
+        final_command = systemd_cmd + resource_limits + collect_logs_cmd
         start_time = datetime.datetime.utcnow()
         try:
-            # Current directory is /WALinuxAgent/azurelinuxagent/ga/, manifest directory is /WALinuxAgent/config/.
-            curr_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)))
-            manifest_file_path = os.path.join(os.path.dirname(os.path.dirname(curr_dir)), "config",
-                                              "logcollector_manifest_normal")
-
-            log_collector = LogCollector(manifest_file_path)
-            archive_file_path = log_collector.collect_logs()
-
+            shellutil.run_command(final_command, log_error=True)
             duration = elapsed_milliseconds(start_time)
-            archive_size = os.path.getsize(archive_file_path)
+            archive_size = os.path.getsize(COMPRESSED_ARCHIVE_PATH)
 
-            msg = "Successfully collected logs. Archive size: {0}b, elapsed time: {0} ms.".format(archive_size, duration)
+            msg = "Successfully collected logs. Archive size: {0}b, elapsed time: {0} ms.".format(archive_size,
+                                                                                                  duration)
             logger.info(msg)
             add_event(
                 name=AGENT_NAME,
@@ -154,12 +166,10 @@ class CollectLogsHandler(object):
                 is_success=True,
                 message=msg,
                 log_event=False)
-
         except Exception as e:
             duration = elapsed_milliseconds(start_time)
-
             msg = "Failed to collect logs. Elapsed time: {0} ms. Error: {1}".format(duration, ustr(e))
-            logger.warn(msg)
+            # No need to log to the local log since we ran run_command with logging errors as enabled
             add_event(
                 name=AGENT_NAME,
                 version=CURRENT_VERSION,
@@ -168,14 +178,12 @@ class CollectLogsHandler(object):
                 message=msg,
                 log_event=False)
 
-        return archive_file_path
+            return False
+        return True
 
-    def send_logs(self, archive_file_path):
-        if not archive_file_path:
-            return
-
+    def send_logs(self):
         try:
-            with open(archive_file_path, "rb") as fh:
+            with open(COMPRESSED_ARCHIVE_PATH, "rb") as fh:
                 archive_content = fh.read()
                 self.protocol.upload_logs(archive_content)
                 msg = "Successfully uploaded logs."

@@ -39,7 +39,7 @@ _LOG_COLLECTOR_DIR = os.path.join(_AGENT_LIB_DIR, "logcollector")
 _TRUNCATED_FILES_DIR = os.path.join(_LOG_COLLECTOR_DIR, "truncated")
 
 OUTPUT_RESULTS_FILE_PATH = os.path.join(_LOG_COLLECTOR_DIR, "results.txt")
-_COMPRESSED_ARCHIVE_PATH = os.path.join(_LOG_COLLECTOR_DIR, "logs.zip")
+COMPRESSED_ARCHIVE_PATH = os.path.join(_LOG_COLLECTOR_DIR, "logs.zip")
 
 _MUST_COLLECT_FILES = [
     _AGENT_LOG,
@@ -344,17 +344,17 @@ class LogCollector(object):
             files_to_collect = self._create_list_of_files_to_collect()
             _LOGGER.info("### Creating compressed archive ###")
 
-            with zipfile.ZipFile(_COMPRESSED_ARCHIVE_PATH, "w", compression=zipfile.ZIP_DEFLATED) as compressed_archive:
+            with zipfile.ZipFile(COMPRESSED_ARCHIVE_PATH, "w", compression=zipfile.ZIP_DEFLATED) as compressed_archive:
                 for file in files_to_collect:
                     archive_file_name = LogCollector._convert_file_name_to_archive_name(file)
                     compressed_archive.write(file, arcname=archive_file_name)
 
-                compressed_archive_size = os.path.getsize(_COMPRESSED_ARCHIVE_PATH)
+                compressed_archive_size = os.path.getsize(COMPRESSED_ARCHIVE_PATH)
                 _LOGGER.info("Successfully compressed files. "
                              "Compressed archive size is {0}b".format(compressed_archive_size))
                 compressed_archive.write(OUTPUT_RESULTS_FILE_PATH, arcname="results.txt")
 
-            return _COMPRESSED_ARCHIVE_PATH
+            return COMPRESSED_ARCHIVE_PATH
         except Exception as e:
             msg = "Failed to collect logs: {0}".format(ustr(e))
             _LOGGER.error(msg)

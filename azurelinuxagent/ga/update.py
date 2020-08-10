@@ -20,7 +20,6 @@
 import glob
 import json
 import os
-import platform
 import random
 import re
 import shutil
@@ -49,6 +48,7 @@ from azurelinuxagent.common.osutil import get_osutil
 from azurelinuxagent.common.protocol.util import get_protocol_util
 from azurelinuxagent.common.protocol.hostplugin import HostPluginProtocol
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
+from azurelinuxagent.common.utils.shellutil import get_python_cmd
 from azurelinuxagent.common.version import AGENT_NAME, AGENT_VERSION, AGENT_DIR_PATTERN, CURRENT_AGENT,\
     CURRENT_VERSION, DISTRO_NAME, DISTRO_VERSION, is_current_agent_installed, PY_VERSION_MAJOR, PY_VERSION_MINOR, \
     PY_VERSION_MICRO
@@ -84,11 +84,6 @@ READONLY_FILE_GLOBS = [
 
 def get_update_handler():
     return UpdateHandler()
-
-
-def get_python_cmd():
-    major_version = platform.python_version_tuple()[0]
-    return "python" if int(major_version) <= 2 else "python{0}".format(major_version)
 
 
 class UpdateHandler(object):

@@ -28,11 +28,12 @@ from azurelinuxagent.common.protocol.util import ProtocolUtil
 from azurelinuxagent.common.protocol.wire import WireProtocol
 from azurelinuxagent.common.utils import fileutil, restutil, textutil
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
+from azurelinuxagent.common.utils.shellutil import get_python_cmd
 from azurelinuxagent.common.version import AGENT_PKG_GLOB, AGENT_DIR_GLOB, AGENT_NAME, AGENT_DIR_PATTERN, \
     AGENT_VERSION, CURRENT_AGENT, CURRENT_VERSION
 from azurelinuxagent.ga.update import GuestAgent, GuestAgentError, MAX_FAILURE, AGENT_MANIFEST_FILE, \
     get_update_handler, ORPHAN_POLL_INTERVAL, AGENT_PARTITION_FILE, AGENT_ERROR_FILE, ORPHAN_WAIT_INTERVAL, \
-    CHILD_LAUNCH_RESTART_MAX, get_python_cmd, CHILD_HEALTH_INTERVAL, UpdateHandler
+    CHILD_LAUNCH_RESTART_MAX, CHILD_HEALTH_INTERVAL, UpdateHandler
 from tests.tools import AgentTestCase, call, data_dir, DEFAULT, patch, load_bin_data, load_data, Mock, MagicMock, \
     clear_singleton_instances
 
