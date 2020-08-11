@@ -427,5 +427,8 @@ def str_to_encoded_ustr(s, encoding='utf-8'):
         except Exception:
             # If some issues in decoding, just return the string
             return ustr(s)
-    # For Py2, explicitly convert the string to unicode with the specified encoding
-    return ustr(s, encoding=encoding)
+    try:
+        # For Py2, explicitly convert the string to unicode with the specified encoding
+        return ustr(s, encoding=encoding)
+    except Exception as e:
+        return ustr(e)
