@@ -18,8 +18,10 @@
 #
 import datetime
 import os
+import shutil
 import sys
 import threading
+import time
 
 import azurelinuxagent.common.conf as conf
 from azurelinuxagent.common import logger
@@ -108,12 +110,30 @@ class CollectLogsHandler(object):
         self.protocol_util = get_protocol_util()
         self.protocol = self.protocol_util.get_protocol()
 
+    def copy_manifest_files(self):
+        # The log collection tool relies on the manifest files being in /etc.
+        manifest_full_filename = "logcollector_manifest_full"
+        manifest_normal_filename = "logcollector_manifest_normal"
+
+        current_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)))
+        manifest_dir = os.path.join(os.path.dirname(os.path.dirname(current_dir)), "config")
+        manifest_full_source = os.path.join(manifest_dir, manifest_full_filename)
+        manifest_normal_source = os.path.join(manifest_dir, manifest_normal_filename)
+
+        shutil.copy2(manifest_full_source, os.path.join("/etc", manifest_full_filename))
+        shutil.copy2(manifest_normal_source, os.path.join("/etc", manifest_normal_filename))
+
     def daemon(self, init_data=False):
         try:
+            if not self.log_collection_allowed():
+                return
+
+            self.copy_manifest_files()
+
             if init_data:
                 self.init_protocols()
 
-            while not self.stopped() and self.log_collection_allowed():
+            while not self.stopped():
                 try:
                     for op in self._periodic_operations:
                         op.run()
@@ -141,7 +161,7 @@ class CollectLogsHandler(object):
         logger.info("Starting log collection...")
 
         # Invoke the command line tool in the agent to collect logs, with resource limits on CPU and memory (RAM).
-        scope_name = "collect-logs-{0}.scope".format(datetime.datetime.utcnow())
+        scope_name = "collect-logs-{0}.scope".format(ustr(int(time.time() * 1000000)))
         systemd_cmd = ["systemd-run", "--unit={0}".format(scope_name), "--scope"]
 
         # More info on resource limits properties in systemd here:
@@ -150,6 +170,7 @@ class CollectLogsHandler(object):
         resource_limits = ["--property=CPUAccounting=1", "--property=CPUQuota={0}".format(cpu_limit),
                            "--property=MemoryAccounting=1", "--property=MemoryLimit={0}".format(memory_limit)]
 
+        # The log tool is invoked from the current agent's egg with the command line option
         collect_logs_cmd = [get_python_cmd(), "-u", sys.argv[0], "-collect-logs"]
         final_command = systemd_cmd + resource_limits + collect_logs_cmd
         start_time = datetime.datetime.utcnow()
@@ -208,20 +229,3 @@ class CollectLogsHandler(object):
                 is_success=False,
                 message=msg,
                 log_event=False)
-
-    def _invoke_command_with_limits(self, command):
-        # README: https://access.redhat.com/documentation/en-us/red_hat_enterprise_linux/7/html/resource_
-        # management_guide/sec-modifying_control_groups
-
-        # systemd-run --scope --unit=bla
-        # --property=CPUAccounting=1 --property=CPUQuota=20%
-        # --property=MemoryAccounting=1 --property=MemoryLimit=100M
-        # echo 42
-        # CPUQuota available since systemd 213: https://github.com/systemd/systemd/blob/master/NEWS
-
-        # Persistent unit for reporting resource usage? Or existing track cgroups?
-
-        # cat cpuhog.sh
-        # #!/usr/bin/env bash
-        # dd if=/dev/zero of=/dev/null
-        pass
