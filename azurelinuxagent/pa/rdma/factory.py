@@ -23,7 +23,7 @@ from .suse import SUSERDMAHandler
 from .centos import CentOSRDMAHandler
 from .ubuntu import UbuntuRDMAHandler
 
-from distutils.version import LooseVersion as Version
+from distutils.version import LooseVersion as Version # pylint: disable=C0411,no-name-in-module, import-error
 
 
 def get_rdma_handler(
@@ -32,13 +32,13 @@ def get_rdma_handler(
 ):
     """Return the handler object for RDMA driver handling"""
     if (
-            (distro_full_name == 'SUSE Linux Enterprise Server' or
+            (distro_full_name == 'SUSE Linux Enterprise Server' or # pylint: disable=R1714
              distro_full_name == 'SLES') and
             Version(distro_version) > Version('11')
     ):
         return SUSERDMAHandler()
 
-    if distro_full_name == 'CentOS Linux' or distro_full_name == 'CentOS' or distro_full_name == 'Red Hat Enterprise Linux Server':
+    if distro_full_name == 'CentOS Linux' or distro_full_name == 'CentOS' or distro_full_name == 'Red Hat Enterprise Linux Server': # pylint: disable=R1714
         return CentOSRDMAHandler(distro_version)
 
     if distro_full_name == 'Ubuntu':
