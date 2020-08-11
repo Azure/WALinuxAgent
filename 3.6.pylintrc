@@ -1,0 +1,24 @@
+
+[MESSAGES CONTROL]
+
+disable=misplaced-comparison-constant,no-self-use,consider-iterating-dictionary,
+    consider-using-dict-comprehension,consider-using-set-comprehension,broad-except,
+    useless-object-inheritance,empty-docstring,missing-docstring,missing-module-docstring,
+    missing-class-docstring,missing-function-docstring,line-too-long,trailing-whitespace,
+    missing-final-newline,trailing-newlines,multiple-statements,superfluous-parens,
+    import-outside-toplevel,too-many-statements,bad-whitespace,
+    duplicate-code #TODO:
+
+[SIMILARITIES]
+
+# Minimum lines number of a similarity.
+min-similarity-lines=8
+
+# Ignore comments when computing similarities.
+ignore-comments=yes
+
+# Ignore docstrings when computing similarities.
+ignore-docstrings=yes
+
+# Ignore imports when computing similarities.
+ignore-imports=no
