@@ -14,7 +14,7 @@ class _SingletonPerThreadMetaClass(type):
             return cls._instances[obj_name]
 
 
-class SingletonPerThread(_SingletonPerThreadMetaClass('SingleObjectPerThreadMetaClass', (object,), {})):
+class SingletonPerThread(_SingletonPerThreadMetaClass('SingleObjectPerThreadMetaClass', (object,), {})): # pylint: disable=R0903
     # This base class calls the metaclass above to create the singleton per thread object. This class provides an
     # abstraction over how to invoke the Metaclass so just inheriting this class makes the
     # child class a singleton per thread (As opposed to invoking the Metaclass separately for each derived classes)

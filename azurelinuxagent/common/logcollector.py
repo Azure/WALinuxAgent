@@ -61,7 +61,7 @@ _UNCOMPRESSED_ARCHIVE_SIZE_LIMIT = 150 * 1024 * 1024  # 150 MB
 _LOGGER = logging.getLogger(__name__)
 
 
-class LogCollector(object):
+class LogCollector(object): # pylint: disable=R0903
 
     _TRUNCATED_FILE_PREFIX = "truncated_"
 
@@ -115,7 +115,7 @@ class LogCollector(object):
             process = subprocess.Popen(command, stdin=subprocess.PIPE, stdout=stdout, stderr=subprocess.PIPE, shell=False)
             stdout, stderr = process.communicate()
             return_code = process.returncode
-        except Exception as e:
+        except Exception as e: # pylint: disable=C0103
             error_msg = u"Command [{0}] raised unexpected exception: [{1}]".format(format_command(command), ustr(e))
             _LOGGER.error(error_msg)
             return
@@ -146,7 +146,7 @@ class LogCollector(object):
     def _read_manifest_file(self):
         with open(self._manifest_file_path, "rb") as in_file:
             data = in_file.read()
-            if data is None:
+            if data is None: # pylint: disable=R1705
                 return None
             else:
                 data = ustr(data, encoding="utf-8")
@@ -173,7 +173,7 @@ class LogCollector(object):
         # For non-truncated files: /var/log/waagent.log on disk becomes var/log/waagent.log in archive
         # (leading separator is removed by the archive).
         # For truncated files: /var/truncated/var/log/syslog.1 on disk becomes truncated_var_log_syslog.1 in archive.
-        if file_name.startswith(_TRUNCATED_FILES_DIR):
+        if file_name.startswith(_TRUNCATED_FILES_DIR): # pylint: disable=R1705
             original_file_path = file_name[len(_TRUNCATED_FILES_DIR):].lstrip(os.path.sep)
             archive_file_name = LogCollector._TRUNCATED_FILE_PREFIX + original_file_path.replace(os.path.sep, "_")
             return archive_file_name
@@ -195,9 +195,9 @@ class LogCollector(object):
 
     @staticmethod
     def _expand_parameters(manifest_data):
-        _LOGGER.info("Using {0} as $LIB_DIR".format(_AGENT_LIB_DIR))
-        _LOGGER.info("Using {0} as $LOG_DIR".format(_EXTENSION_LOG_DIR))
-        _LOGGER.info("Using {0} as $AGENT_LOG".format(_AGENT_LOG))
+        _LOGGER.info("Using {0} as $LIB_DIR".format(_AGENT_LIB_DIR)) # pylint: disable=W1202
+        _LOGGER.info("Using {0} as $LOG_DIR".format(_EXTENSION_LOG_DIR)) # pylint: disable=W1202
+        _LOGGER.info("Using {0} as $AGENT_LOG".format(_AGENT_LOG)) # pylint: disable=W1202
 
         new_manifest = []
         for line in manifest_data:
@@ -223,8 +223,8 @@ class LogCollector(object):
             contents = entry.split(",")
             if len(contents) != 2:
                 # If it's not a comment or an empty line, it's a malformed entry
-                if not entry.startswith("#") and len(entry.strip()) > 0:
-                    _LOGGER.error("Couldn't parse \"{0}\"".format(entry))
+                if not entry.startswith("#") and len(entry.strip()) > 0: # pylint: disable=len-as-condition
+                    _LOGGER.error("Couldn't parse \"{0}\"".format(entry)) # pylint: disable=W1202
                 continue
 
             command, value = contents
@@ -246,7 +246,7 @@ class LogCollector(object):
             # Binary files cannot be truncated, don't include large binary files
             ext = os.path.splitext(file_path)[1]
             if ext in [".gz", ".zip", ".xz"]:
-                _LOGGER.warning("Discarding large binary file {0}".format(file_path))
+                _LOGGER.warning("Discarding large binary file {0}".format(file_path)) # pylint: disable=W1202
                 return None
 
             truncated_file_path = os.path.join(_TRUNCATED_FILES_DIR, file_path.replace(os.path.sep, "_"))
@@ -260,15 +260,15 @@ class LogCollector(object):
                     return truncated_file_path
 
             # Get the last N bytes of the file
-            with open(truncated_file_path, "w+") as fh:
+            with open(truncated_file_path, "w+") as fh: # pylint: disable=C0103
                 LogCollector._run_shell_command(["tail", "-c", str(_FILE_SIZE_LIMIT), file_path], stdout=fh)
 
             return truncated_file_path
-        except OSError as e:
-            _LOGGER.error("Failed to truncate large file: {0}".format(ustr(e)))
+        except OSError as e: # pylint: disable=C0103
+            _LOGGER.error("Failed to truncate large file: {0}".format(ustr(e))) # pylint: disable=W1202
             return None
 
-    def _get_file_priority(self, file):
+    def _get_file_priority(self, file): # pylint: disable=redefined-builtin
         # The sooner the file appears in the must collect list, the bigger its priority.
         # Priority is higher the lower the number (0 is highest priority).
         try:
@@ -281,7 +281,7 @@ class LogCollector(object):
         # Given a list of files to collect, determine if they show up in the must collect list and build a priority
         # queue. The queue will determine the order in which the files are collected, highest priority files first.
         priority_file_queue = []
-        for file in file_list:
+        for file in file_list: # pylint: disable=redefined-builtin
             priority = self._get_file_priority(file)
             heappush(priority_file_queue, (priority, file))
 
@@ -304,16 +304,16 @@ class LogCollector(object):
 
             if os.path.getsize(file_path) <= _FILE_SIZE_LIMIT:
                 final_files_to_collect.append(file_path)
-                _LOGGER.info("Adding file {0}, size {1}b".format(file_path, file_size))
+                _LOGGER.info("Adding file {0}, size {1}b".format(file_path, file_size)) # pylint: disable=W1202
             else:
                 truncated_file_path = self._truncate_large_file(file_path)
                 if truncated_file_path:
-                    _LOGGER.info("Adding truncated file {0}, size {1}b".format(truncated_file_path, file_size))
+                    _LOGGER.info("Adding truncated file {0}, size {1}b".format(truncated_file_path, file_size)) # pylint: disable=W1202
                     final_files_to_collect.append(truncated_file_path)
 
             total_uncompressed_size += file_size
 
-        _LOGGER.info("Uncompressed archive size is {0}b".format(total_uncompressed_size))
+        _LOGGER.info("Uncompressed archive size is {0}b".format(total_uncompressed_size)) # pylint: disable=W1202
 
         return final_files_to_collect
 
@@ -345,17 +345,17 @@ class LogCollector(object):
             _LOGGER.info("### Creating compressed archive ###")
 
             with zipfile.ZipFile(_COMPRESSED_ARCHIVE_PATH, "w", compression=zipfile.ZIP_DEFLATED) as compressed_archive:
-                for file in files_to_collect:
+                for file in files_to_collect: # pylint: disable=redefined-builtin
                     archive_file_name = LogCollector._convert_file_name_to_archive_name(file)
                     compressed_archive.write(file, arcname=archive_file_name)
 
                 compressed_archive_size = os.path.getsize(_COMPRESSED_ARCHIVE_PATH)
-                _LOGGER.info("Successfully compressed files. "
+                _LOGGER.info("Successfully compressed files. " # pylint: disable=W1202
                              "Compressed archive size is {0}b".format(compressed_archive_size))
                 compressed_archive.write(_OUTPUT_RESULTS_FILE_PATH, arcname="results.txt")
 
             return True
-        except Exception as e:
+        except Exception as e: # pylint: disable=C0103
             msg = "Failed to collect logs: {0}".format(ustr(e))
             _LOGGER.error(msg)
 
