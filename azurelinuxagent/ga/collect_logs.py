@@ -16,6 +16,7 @@
 #
 # Requires Python 2.6+ and Openssl 1.0+
 #
+
 import datetime
 import os
 import shutil
@@ -27,7 +28,7 @@ import azurelinuxagent.common.conf as conf
 from azurelinuxagent.common import logger
 from azurelinuxagent.common.event import elapsed_milliseconds, add_event, WALAEventOperation
 from azurelinuxagent.common.future import ustr
-from azurelinuxagent.common.logcollector import LogCollector, COMPRESSED_ARCHIVE_PATH
+from azurelinuxagent.common.logcollector import COMPRESSED_ARCHIVE_PATH
 from azurelinuxagent.common.protocol.util import get_protocol_util
 from azurelinuxagent.common.utils import shellutil
 from azurelinuxagent.common.utils.shellutil import get_python_cmd
@@ -153,7 +154,7 @@ class CollectLogsHandler(object):
     def get_resource_limits():
         # Define CPU limit (as percentage of CPU time) and memory limit (absolute value in megabytes).
         cpu_limit = "5%"
-        memory_limit = "20M"  # K for kb, M for mb
+        memory_limit = "30M"  # K for kb, M for mb
         return cpu_limit, memory_limit
 
     @staticmethod
@@ -179,7 +180,7 @@ class CollectLogsHandler(object):
             duration = elapsed_milliseconds(start_time)
             archive_size = os.path.getsize(COMPRESSED_ARCHIVE_PATH)
 
-            msg = "Successfully collected logs. Archive size: {0}b, elapsed time: {0} ms.".format(archive_size,
+            msg = "Successfully collected logs. Archive size: {0}b, elapsed time: {1} ms.".format(archive_size,
                                                                                                   duration)
             logger.info(msg)
             add_event(
