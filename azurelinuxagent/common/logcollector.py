@@ -345,14 +345,14 @@ class LogCollector(object):
             _LOGGER.info("### Creating compressed archive ###")
 
             with zipfile.ZipFile(COMPRESSED_ARCHIVE_PATH, "w", compression=zipfile.ZIP_DEFLATED) as compressed_archive:
-                for file in files_to_collect:
-                    archive_file_name = LogCollector._convert_file_name_to_archive_name(file)
-                    compressed_archive.write(file, arcname=archive_file_name)
+                for file_to_collect in files_to_collect:
+                    archive_file_name = LogCollector._convert_file_name_to_archive_name(file_to_collect)
+                    compressed_archive.write(file_to_collect.encode("utf-8"), arcname=archive_file_name)
 
                 compressed_archive_size = os.path.getsize(COMPRESSED_ARCHIVE_PATH)
                 _LOGGER.info("Successfully compressed files. "
                              "Compressed archive size is {0}b".format(compressed_archive_size))
-                compressed_archive.write(OUTPUT_RESULTS_FILE_PATH, arcname="results.txt")
+                compressed_archive.write(OUTPUT_RESULTS_FILE_PATH.encode("utf-8"), arcname="results.txt")
 
             return COMPRESSED_ARCHIVE_PATH
         except Exception as e:
