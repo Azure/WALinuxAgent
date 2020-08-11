@@ -17,9 +17,9 @@
 #
 
 import azurelinuxagent.common.utils.fileutil as fileutil
-import azurelinuxagent.common.utils.shellutil as shellutil
-from azurelinuxagent.common.exception import OSUtilError
-from azurelinuxagent.common.future import ustr
+import azurelinuxagent.common.utils.shellutil as shellutil # pylint: disable=W0611
+from azurelinuxagent.common.exception import OSUtilError # pylint: disable=W0611
+from azurelinuxagent.common.future import ustr # pylint: disable=W0611
 from azurelinuxagent.common.osutil.default import DefaultOSUtil
 
 

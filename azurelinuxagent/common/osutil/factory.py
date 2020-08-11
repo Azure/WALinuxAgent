@@ -16,7 +16,7 @@
 #
 
 
-from distutils.version import LooseVersion as Version
+from distutils.version import LooseVersion as Version # pylint: disable=no-name-in-module, import-error
 
 import azurelinuxagent.common.logger as logger
 from azurelinuxagent.common.version import DISTRO_NAME, DISTRO_CODE_NAME, DISTRO_VERSION, DISTRO_FULL_NAME
@@ -50,7 +50,7 @@ def get_osutil(distro_name=DISTRO_NAME,
     return _get_osutil(distro_name, distro_code_name, distro_version, distro_full_name)
 
 
-def _get_osutil(distro_name, distro_code_name, distro_version, distro_full_name):
+def _get_osutil(distro_name, distro_code_name, distro_version, distro_full_name): # pylint: disable=R0912,R0911
 
     if distro_name == "arch":
         return ArchUtil()
@@ -59,7 +59,7 @@ def _get_osutil(distro_name, distro_code_name, distro_version, distro_full_name)
         return ClearLinuxUtil()
 
     if distro_name == "ubuntu":
-        if Version(distro_version) in [Version("12.04"), Version("12.10")]:
+        if Version(distro_version) in [Version("12.04"), Version("12.10")]: # pylint: disable=R1705
             return Ubuntu12OSUtil()
         elif Version(distro_version) in [Version("14.04"), Version("14.10")]:
             return Ubuntu14OSUtil()
@@ -84,6 +84,7 @@ def _get_osutil(distro_name, distro_code_name, distro_version, distro_full_name)
         return CoreOSUtil()
 
     if distro_name in ("suse", "sles", "opensuse"):
+        # pylint: disable=R1705
         if distro_full_name == 'SUSE Linux Enterprise Server' \
                 and Version(distro_version) < Version('12') \
                 or distro_full_name == 'openSUSE' and Version(distro_version) < Version('13.2'):
@@ -92,15 +93,16 @@ def _get_osutil(distro_name, distro_code_name, distro_version, distro_full_name)
             return SUSEOSUtil()
 
     if distro_name == "debian":
-        if "sid" in distro_version or Version(distro_version) > Version("7"):
+        if "sid" in distro_version or Version(distro_version) > Version("7"): # pylint: disable=R1705
             return DebianOSModernUtil()
         else:
             return DebianOSBaseUtil()
 
+    # pylint: disable=R1714
     if distro_name == "redhat" \
             or distro_name == "centos" \
             or distro_name == "oracle":
-        if Version(distro_version) < Version("7"):
+        if Version(distro_version) < Version("7"): # pylint: disable=R1705
             return Redhat6xOSUtil()
         else:
             return RedhatOSUtil()
@@ -126,7 +128,7 @@ def _get_osutil(distro_name, distro_code_name, distro_version, distro_full_name)
     if distro_name == "nsbsd":
         return NSBSDOSUtil()
 
-    if distro_name == "openwrt":
+    if distro_name == "openwrt": # pylint: disable=R1705
         return OpenWRTOSUtil()
 
     else:
