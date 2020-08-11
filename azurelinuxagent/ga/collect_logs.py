@@ -19,8 +19,8 @@
 
 import datetime
 import os
-import shutil
 import sys
+import pkg_resources
 import threading
 import time
 
@@ -111,18 +111,27 @@ class CollectLogsHandler(object):
         self.protocol_util = get_protocol_util()
         self.protocol = self.protocol_util.get_protocol()
 
-    def copy_manifest_files(self):
+    @staticmethod
+    def copy_manifest_files():
         # The log collection tool relies on the manifest files being in /etc.
         manifest_full_filename = "logcollector_manifest_full"
         manifest_normal_filename = "logcollector_manifest_normal"
 
-        current_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)))
-        manifest_dir = os.path.join(os.path.dirname(os.path.dirname(current_dir)), "config")
-        manifest_full_source = os.path.join(manifest_dir, manifest_full_filename)
-        manifest_normal_source = os.path.join(manifest_dir, manifest_normal_filename)
+        # current_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)))
+        # manifest_dir = os.path.join(os.path.dirname(os.path.dirname(current_dir)), "config")
+        # manifest_full_source = os.path.join(manifest_dir, manifest_full_filename)
+        # manifest_normal_source = os.path.join(manifest_dir, manifest_normal_filename)
+        #
+        # shutil.copy2(manifest_full_source, os.path.join("/etc", manifest_full_filename))
+        # shutil.copy2(manifest_normal_source, os.path.join("/etc", manifest_normal_filename))
 
-        shutil.copy2(manifest_full_source, os.path.join("/etc", manifest_full_filename))
-        shutil.copy2(manifest_normal_source, os.path.join("/etc", manifest_normal_filename))
+        data = pkg_resources.resource_string("config", manifest_full_filename)
+        with open(os.path.join("/etc", manifest_full_filename), "wb") as f:
+            f.write(data)
+
+        data = pkg_resources.resource_string("config", manifest_normal_filename)
+        with open(os.path.join("/etc", manifest_normal_filename), "wb") as f:
+            f.write(data)
 
     def daemon(self, init_data=False):
         try:

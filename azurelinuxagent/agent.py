@@ -165,7 +165,7 @@ class Agent(object):
 
         from azurelinuxagent.common.logcollector import LogCollector, OUTPUT_RESULTS_FILE_PATH
         try:
-            lc = LogCollector(manifest_file_path)
+            lc = LogCollector(log_collector_mode)
             archive = lc.collect_logs()
             print("Log collection successfully completed. Archive can be found at {0} "
                   "and detailed log output can be found at {1}".format(archive, OUTPUT_RESULTS_FILE_PATH))

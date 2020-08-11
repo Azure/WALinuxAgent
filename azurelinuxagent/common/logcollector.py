@@ -65,8 +65,9 @@ class LogCollector(object):
 
     _TRUNCATED_FILE_PREFIX = "truncated_"
 
-    def __init__(self, manifest_file_path):
-        self._manifest_file_path = manifest_file_path
+    def __init__(self, mode):
+        self._manifest_file_path = os.path.join("/etc", "logcollector_manifest_full") if mode == "full" \
+            else os.path.join("/etc", "logcollector_manifest_normal")
         self._must_collect_files = self._expand_must_collect_files()
         self._create_base_dirs()
         self._set_logger()
