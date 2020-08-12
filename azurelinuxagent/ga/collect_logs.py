@@ -32,7 +32,7 @@ from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.logcollector import COMPRESSED_ARCHIVE_PATH, MANIFEST_FULL_NAME, \
     MANIFEST_FULL_PATH, MANIFEST_NORMAL_NAME, MANIFEST_NORMAL_PATH
 from azurelinuxagent.common.protocol.util import get_protocol_util
-from azurelinuxagent.common.utils import shellutil
+from azurelinuxagent.common.utils import shellutil, fileutil
 from azurelinuxagent.common.utils.shellutil import get_python_cmd
 from azurelinuxagent.common.version import PY_VERSION_MAJOR, PY_VERSION_MINOR, AGENT_NAME, CURRENT_VERSION
 from azurelinuxagent.ga.periodic_operation import PeriodicOperation
@@ -120,6 +120,10 @@ class CollectLogsHandler(object):
     def copy_manifest_files():
         # Ensure manifest files are available to the log collection tool.
         data = pkg_resources.resource_string("config", MANIFEST_FULL_NAME)
+
+        if not os.path.exists(os.path.dirname(MANIFEST_FULL_PATH)):
+            fileutil.mkdir(os.path.dirname(MANIFEST_FULL_PATH))
+
         with open(MANIFEST_FULL_PATH, "wb") as f:
             f.write(data)
 
