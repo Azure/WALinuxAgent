@@ -99,6 +99,7 @@ class WireProtocolData(object):
             "/versions": 0,
             "/health": 0,
             "/HealthService": 0,
+            "/vmAgentLog": 0,
             "goalstate": 0,
             "hostingenvuri": 0,
             "sharedconfiguri": 0,
@@ -237,6 +238,21 @@ class WireProtocolData(object):
 
         if url.endswith('/HealthService'):
             self.call_counts['/HealthService'] += 1
+            content = ''
+        else:
+            raise Exception("Bad url {0}".format(url))
+
+        resp.read = Mock(return_value=content.encode("utf-8"))
+        return resp
+
+    def mock_http_put(self, url, *args, **kwargs):
+        content = None
+
+        resp = MagicMock()
+        resp.status = httpclient.OK
+
+        if url.endswith('/vmAgentLog'):
+            self.call_counts['/vmAgentLog'] += 1
             content = ''
         else:
             raise Exception("Bad url {0}".format(url))
