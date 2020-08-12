@@ -238,10 +238,10 @@ class ProcessExtensionTelemetry(PeriodicOperation):
                 events_list.append(self._parse_telemetry_event(handler_name, event, event_file_time))
                 captured_events_count += 1
             except InvalidExtensionEventError as e:
-            # These are the errors thrown if there's an error parsing the event. We want to report these back to the
-            # extension publishers so that they are aware of the issues.
-            # The error messages are all static messages, we will use this to create a dict and emit an event at the
-            # end of each run to notify if there were any errors parsing events for the extension
+                # These are the errors thrown if there's an error parsing the event. We want to report these back to the
+                # extension publishers so that they are aware of the issues.
+                # The error messages are all static messages, we will use this to create a dict and emit an event at the
+                # end of each run to notify if there were any errors parsing events for the extension
                 dropped_events_with_error_count[ustr(e)] += 1
             except Exception as e:
                 logger.warn("Unable to parse and transmit event, error: {0}".format(e))
