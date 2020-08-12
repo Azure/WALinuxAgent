@@ -238,8 +238,8 @@ def parse_args(sys_args):
         m = re.match("^(?:[-/]*)-mode:([\w/\.\-_]+)", arg)
         if m is not None:
             log_collector_mode = m.group(1)
-            if log_collector_mode not in ("full", "normal"):
-                print("Error: Invalid value for log collector mode: {0}. Accepted values: full, normal. "
+            if log_collector_mode != "full":
+                print("Error: Invalid value for log collector mode: {0}. Accepted value: full. "
                       "If mode is not specified, will use normal mode.".format(log_collector_mode))
                 print(usage())
                 sys.exit(1)
@@ -298,7 +298,7 @@ def usage():
     s += ("usage: {0} [-verbose] [-force] [-help] "
            "-configuration-path:<path to configuration file>"
            "-deprovision[+user]|-register-service|-version|-daemon|-start|"
-           "-run-exthandlers|-show-configuration|-collect-logs [-mode:full|normal]"
+           "-run-exthandlers|-show-configuration|-collect-logs [-mode:full]"
            "").format(sys.argv[0])
     s += "\n"
     return s

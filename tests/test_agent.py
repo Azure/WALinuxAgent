@@ -184,11 +184,6 @@ class TestAgent(AgentTestCase):
         self.assertEqual(c, "collect-logs")
         self.assertEqual(lcm, "full")
 
-        # Specify normal mode
-        c, f, v, d, cfp, lcm = parse_args(["-collect-logs", "-mode:normal"])
-        self.assertEqual(c, "collect-logs")
-        self.assertEqual(lcm, "normal")
-
         # Defaults to None if mode not specified
         c, f, v, d, cfp, lcm = parse_args(["-collect-logs"])
         self.assertEqual(c, "collect-logs")
@@ -205,20 +200,20 @@ class TestAgent(AgentTestCase):
 
     @patch("os.path.exists", return_value=True)
     @patch("azurelinuxagent.common.logcollector.LogCollector")
-    def test_calls_collect_logs_with_proper_manifest(self, mock_log_collector, *args):
+    def test_calls_collect_logs_with_proper_mode(self, mock_log_collector, *args):
         agent = Agent(False, conf_file_path=os.path.join(data_dir, "test_waagent.conf"))
 
         agent.collect_logs("full")
-        manifest_file_path = mock_log_collector.call_args_list[0][0][0]
-        self.assertIn("logcollector_manifest_full", manifest_file_path)
-
-        agent.collect_logs("normal")
-        manifest_file_path = mock_log_collector.call_args_list[1][0][0]
-        self.assertIn("logcollector_manifest_normal", manifest_file_path)
+        full_mode = mock_log_collector.call_args_list[0][0][0]
+        self.assertTrue(full_mode)
 
         agent.collect_logs(None)
-        manifest_file_path = mock_log_collector.call_args_list[2][0][0]
-        self.assertIn("logcollector_manifest_normal", manifest_file_path)
+        full_mode = mock_log_collector.call_args_list[1][0][0]
+        self.assertFalse(full_mode)
+
+        agent.collect_logs("random value")
+        full_mode = mock_log_collector.call_args_list[2][0][0]
+        self.assertFalse(full_mode)
 
     def test_agent_usage_message(self):
         message = usage()

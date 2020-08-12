@@ -20,15 +20,16 @@
 import datetime
 import os
 import sys
-import pkg_resources
 import threading
 import time
+
+import pkg_resources
 
 import azurelinuxagent.common.conf as conf
 from azurelinuxagent.common import logger
 from azurelinuxagent.common.event import elapsed_milliseconds, add_event, WALAEventOperation
 from azurelinuxagent.common.future import ustr
-from azurelinuxagent.common.logcollector import COMPRESSED_ARCHIVE_PATH, MANIFESTS_DIR, MANIFEST_FULL_NAME, \
+from azurelinuxagent.common.logcollector import COMPRESSED_ARCHIVE_PATH, MANIFEST_FULL_NAME, \
     MANIFEST_FULL_PATH, MANIFEST_NORMAL_NAME, MANIFEST_NORMAL_PATH
 from azurelinuxagent.common.protocol.util import get_protocol_util
 from azurelinuxagent.common.utils import shellutil
@@ -97,13 +98,16 @@ class CollectLogsHandler(object):
         self.event_thread.setName("CollectLogsHandler")
         self.event_thread.start()
 
+    def join(self):
+        self.event_thread.join()
+
     def stopped(self):
         return not self.should_run
 
     def stop(self):
         self.should_run = False
         if self.is_alive():
-            self.event_thread.join()
+            self.join()
 
     def init_protocols(self):
         # The initialization of ProtocolUtil for the log collection thread should be done within the thread itself
