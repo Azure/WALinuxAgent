@@ -774,17 +774,22 @@ class UpdateHandler(object):
         for name, path in list_agent_lib_directory(skip_agent_package=True):
 
             try:
-                handler_instance = ExtHandlersHandler.get_ext_handler_instance_from_path_if_valid(name=name,
-                                                                                                  path=path,
-                                                                                                  protocol=protocol)
+                handler_instance = ExtHandlersHandler.get_ext_handler_instance_from_path(name=name,
+                                                                                         path=path,
+                                                                                         protocol=protocol)
+            except Exception:
+                # Ignore errors if any
+                continue
+
+            try:
                 if handler_instance is not None:
                     # Recreate the HandlerEnvironment for existing extensions on startup.
                     # This is to ensure that existing extensions can start using the telemetry pipeline if they support
                     # it and also ensures that the extensions are not sending out telemetry if the Agent has to disable the feature.
                     handler_instance.create_handler_env()
-
-            except Exception:
-                # Ignore errors if any
+            except Exception as e:
+                logger.warn(
+                    "Unable to re-create HandlerEnvironment file on service startup. Error: {0}".format(ustr(e)))
                 continue
 
         try:

@@ -281,7 +281,7 @@ class ExtHandlersHandler(object):
             return
 
     @staticmethod
-    def get_ext_handler_instance_from_path_if_valid(name, path, protocol, skip_handlers=None):
+    def get_ext_handler_instance_from_path(name, path, protocol, skip_handlers=None):
         if not os.path.isdir(path) or re.match(HANDLER_NAME_PATTERN, name) is None:
             return None
         separator = name.rfind('-')
@@ -307,10 +307,10 @@ class ExtHandlersHandler(object):
 
         for item, path in list_agent_lib_directory(skip_agent_package=True):
             try:
-                handler_instance = ExtHandlersHandler.get_ext_handler_instance_from_path_if_valid(name=item,
-                                                                                                  path=path,
-                                                                                                  protocol=self.protocol,
-                                                                                                  skip_handlers=ext_handlers_in_gs)
+                handler_instance = ExtHandlersHandler.get_ext_handler_instance_from_path(name=item,
+                                                                                         path=path,
+                                                                                         protocol=self.protocol,
+                                                                                         skip_handlers=ext_handlers_in_gs)
                 if handler_instance is not None:
                     # Since this handler name doesn't exist in the GS, marking it for deletion
                     handlers.append(handler_instance)

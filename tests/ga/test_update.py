@@ -1590,7 +1590,7 @@ class TestUpdate(UpdateTestCase):
                     for ext_dir in expected_events_dirs:
                         self.assertFalse(os.path.exists(ext_dir), "Extension directory {0} still exists!".format(ext_dir))
 
-    def test_it_should_retain_events_directories_if_extension_telemetry_pipeline_enabled(self):
+    def test_it_should_retain_extension_events_directories_if_extension_telemetry_pipeline_enabled(self):
 
             # Rerun update handler again with extension telemetry pipeline enabled to ensure we dont delete events directories
             with self._setup_test_for_ext_event_dirs_retention() as (update_handler, expected_events_dirs):
