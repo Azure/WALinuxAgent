@@ -37,6 +37,13 @@ _AGENT_LOG = get_agent_log_file()
 
 _LOG_COLLECTOR_DIR = os.path.join(_AGENT_LIB_DIR, "logcollector")
 _TRUNCATED_FILES_DIR = os.path.join(_LOG_COLLECTOR_DIR, "truncated")
+_MANIFESTS_DIR = os.path.join(_LOG_COLLECTOR_DIR, "manifests")
+
+MANIFEST_FULL_NAME = "logcollector_manifest_full"
+MANIFEST_FULL_PATH = os.path.join(_MANIFESTS_DIR, "logcollector_manifest_full")
+
+MANIFEST_NORMAL_NAME = "logcollector_manifest_normal"
+MANIFEST_NORMAL_PATH = os.path.join(_MANIFESTS_DIR, "logcollector_manifest_normal")
 
 OUTPUT_RESULTS_FILE_PATH = os.path.join(_LOG_COLLECTOR_DIR, "results.txt")
 COMPRESSED_ARCHIVE_PATH = os.path.join(_LOG_COLLECTOR_DIR, "logs.zip")
@@ -65,9 +72,8 @@ class LogCollector(object):
 
     _TRUNCATED_FILE_PREFIX = "truncated_"
 
-    def __init__(self, mode):
-        self._manifest_file_path = os.path.join("/etc", "logcollector_manifest_full") if mode == "full" \
-            else os.path.join("/etc", "logcollector_manifest_normal")
+    def __init__(self, full_mode=False):
+        self._manifest_file_path = MANIFEST_FULL_PATH if full_mode else MANIFEST_NORMAL_PATH
         self._must_collect_files = self._expand_must_collect_files()
         self._create_base_dirs()
         self._set_logger()

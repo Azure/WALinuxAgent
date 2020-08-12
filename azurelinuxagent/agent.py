@@ -152,20 +152,21 @@ class Agent(object):
             print("{0} = {1}".format(k, configuration[k]))
 
     def collect_logs(self, log_collector_mode):
+        from azurelinuxagent.common.logcollector import LogCollector, OUTPUT_RESULTS_FILE_PATH, \
+            MANIFEST_FULL_PATH, MANIFEST_NORMAL_PATH
         if log_collector_mode == "full":
             print("Running log collector mode full")
-            manifest_file_path = os.path.join("/etc", "logcollector_manifest_full")
+            manifest_file_path = MANIFEST_FULL_PATH
         else:
             print("Running log collector mode normal")
-            manifest_file_path = os.path.join("/etc", "logcollector_manifest_normal")
+            manifest_file_path = MANIFEST_NORMAL_PATH
 
         if not os.path.exists(manifest_file_path):
             print("Required manifest file for log collector doesn't exist: {0}".format(manifest_file_path))
             sys.exit(1)
 
-        from azurelinuxagent.common.logcollector import LogCollector, OUTPUT_RESULTS_FILE_PATH
         try:
-            lc = LogCollector(log_collector_mode)
+            lc = LogCollector(log_collector_mode == "full")
             archive = lc.collect_logs()
             print("Log collection successfully completed. Archive can be found at {0} "
                   "and detailed log output can be found at {1}".format(archive, OUTPUT_RESULTS_FILE_PATH))

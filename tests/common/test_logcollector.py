@@ -46,6 +46,8 @@ class TestLogCollector(AgentTestCase):
     @classmethod
     def _mock_constants(cls):
         cls.manifest_path = os.path.join(cls.tmp_dir, "logcollector_manifest")
+        cls.mock_manifest_path = patch("azurelinuxagent.common.logcollector.MANIFEST_NORMAL_PATH", cls.manifest_path)
+        cls.mock_manifest_path.start()
 
         cls.log_collector_dir = os.path.join(cls.tmp_dir, "logcollector")
         cls.mock_log_collector_dir = patch("azurelinuxagent.common.logcollector._LOG_COLLECTOR_DIR",
@@ -69,6 +71,7 @@ class TestLogCollector(AgentTestCase):
 
     @classmethod
     def tearDownClass(cls):
+        cls.mock_manifest_path.stop()
         cls.mock_log_collector_dir.stop()
         cls.mock_truncated_files_dir.stop()
         cls.mock_output_results_file_path.stop()
@@ -193,8 +196,9 @@ diskinfo,""".format(folder_to_list, file_to_collect)
         manifest_file_path = os.path.join(self.tmp_dir, "manifest")
         write_file(manifest_file_path, manifest_content)
 
-        lc = LogCollector(manifest_file_path)
-        archive = lc.collect_logs()
+        with patch("azurelinuxagent.common.logcollector.MANIFEST_NORMAL_PATH", manifest_file_path):
+            lc = LogCollector()
+            archive = lc.collect_logs()
 
         with open(self.output_results_file_path, "r") as fh:
             results = fh.readlines()
@@ -212,10 +216,32 @@ diskinfo,""".format(folder_to_list, file_to_collect)
         no_files = self._get_number_of_files_in_archive()
         self.assertEquals(1, no_files, "Expected 1 file in archive, found {0}!".format(no_files))
 
+    def test_log_collector_uses_full_manifest_when_full_mode_enabled(self):
+        file_to_collect = os.path.join(self.root_collect_dir, "less_important_file")
+        folder_to_list = self.root_collect_dir
+
+        manifest_content = """
+echo,### Test header ###
+copy,{0}
+""".format(file_to_collect)
+
+        manifest_file_path = os.path.join(self.tmp_dir, "manifest")
+        write_file(manifest_file_path, manifest_content)
+
+        with patch("azurelinuxagent.common.logcollector.MANIFEST_FULL_PATH", manifest_file_path):
+            lc = LogCollector(full_mode=True)
+            archive = lc.collect_logs()
+        self._assert_archive_created(archive)
+        self._assert_files_are_in_archive(expected_files=[file_to_collect])
+
+        no_files = self._get_number_of_files_in_archive()
+        self.assertEquals(1, no_files, "Expected 1 file in archive, found {0}!".format(no_files))
+
     def test_log_collector_should_collect_all_files(self):
         # All files in the manifest should be collected, since none of them are over the individual file size limit,
         # and combined they do not cross the archive size threshold.
-        lc = LogCollector(self.manifest_path)
+
+        lc = LogCollector()
         archive = lc.collect_logs()
 
         self._assert_archive_created(archive)
@@ -236,7 +262,7 @@ diskinfo,""".format(folder_to_list, file_to_collect)
     def test_log_collector_should_truncate_large_text_files_and_ignore_large_binary_files(self):
         # Set the size limit so that some files are too large to collect in full.
         with patch("azurelinuxagent.common.logcollector._FILE_SIZE_LIMIT", SMALL_FILE_SIZE):
-            lc = LogCollector(self.manifest_path)
+            lc = LogCollector()
             archive = lc.collect_logs()
 
         self._assert_archive_created(archive)
@@ -269,7 +295,7 @@ diskinfo,""".format(folder_to_list, file_to_collect)
 
         with patch("azurelinuxagent.common.logcollector._UNCOMPRESSED_ARCHIVE_SIZE_LIMIT", 10 * 1024 * 1024):
             with patch("azurelinuxagent.common.logcollector._MUST_COLLECT_FILES", must_collect_files):
-                lc = LogCollector(self.manifest_path)
+                lc = LogCollector()
                 archive = lc.collect_logs()
 
         self._assert_archive_created(archive)
@@ -319,7 +345,7 @@ diskinfo,""".format(folder_to_list, file_to_collect)
     def test_log_collector_should_update_archive_when_files_are_new_or_modified_or_deleted(self):
         # Ensure the archive reflects the state of files on the disk at collection time. If a file was updated, it
         # needs to be updated in the archive, deleted if removed from disk, and added if not previously seen.
-        lc = LogCollector(self.manifest_path)
+        lc = LogCollector()
         first_archive = lc.collect_logs()
         self._assert_archive_created(first_archive)
 
@@ -389,7 +415,7 @@ diskinfo,""".format(folder_to_list, file_to_collect)
         with patch("azurelinuxagent.common.logcollector._UNCOMPRESSED_ARCHIVE_SIZE_LIMIT", 2 * SMALL_FILE_SIZE):
             with patch("azurelinuxagent.common.logcollector._MUST_COLLECT_FILES", must_collect_files):
                 with patch("azurelinuxagent.common.logcollector._FILE_SIZE_LIMIT", SMALL_FILE_SIZE):
-                    lc = LogCollector(self.manifest_path)
+                    lc = LogCollector()
                     archive = lc.collect_logs()
 
         self._assert_archive_created(archive)
@@ -410,7 +436,7 @@ diskinfo,""".format(folder_to_list, file_to_collect)
         with patch("azurelinuxagent.common.logcollector._UNCOMPRESSED_ARCHIVE_SIZE_LIMIT", 2 * SMALL_FILE_SIZE):
             with patch("azurelinuxagent.common.logcollector._MUST_COLLECT_FILES", must_collect_files):
                 with patch("azurelinuxagent.common.logcollector._FILE_SIZE_LIMIT", SMALL_FILE_SIZE):
-                    lc = LogCollector(self.manifest_path)
+                    lc = LogCollector()
                     second_archive = lc.collect_logs()
 
         expected_files = [

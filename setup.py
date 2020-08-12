@@ -18,16 +18,17 @@
 #
 
 import os
-from azurelinuxagent.common.version import AGENT_NAME, AGENT_VERSION, \
-    AGENT_DESCRIPTION, \
-    DISTRO_NAME, DISTRO_VERSION, DISTRO_FULL_NAME
+import subprocess
+import sys
 
-from azurelinuxagent.common.osutil import get_osutil
 import setuptools
 from setuptools import find_packages
 from setuptools.command.install import install as _install
-import subprocess
-import sys
+
+from azurelinuxagent.common.osutil import get_osutil
+from azurelinuxagent.common.version import AGENT_NAME, AGENT_VERSION, \
+    AGENT_DESCRIPTION, \
+    DISTRO_NAME, DISTRO_VERSION, DISTRO_FULL_NAME
 
 root_dir = os.path.dirname(os.path.abspath(__file__))
 os.chdir(root_dir)
@@ -46,7 +47,7 @@ def set_conf_files(data_files, dest="/etc", src=["config/waagent.conf"]):
     data_files.append((dest, src))
 
 
-def set_log_collector_files(data_files, dest="/etc",
+def set_log_collector_files(data_files, dest="/var/lib/waagent/logcollector/manifests",
                             src=["config/logcollector_manifest_full",
                                  "config/logcollector_manifest_normal"]):
     data_files.append((dest, src))
@@ -265,9 +266,13 @@ setuptools.setup(
     url='https://github.com/Azure/WALinuxAgent',
     license='Apache License Version 2.0',
     packages=find_packages(exclude=["tests*"]),
+    package_data={
+        'config': ['logcollector_manifest_*']
+    },
     py_modules=modules,
     install_requires=requires,
     cmdclass={
         'install': install
     }
 )
+

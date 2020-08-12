@@ -28,7 +28,8 @@ import azurelinuxagent.common.conf as conf
 from azurelinuxagent.common import logger
 from azurelinuxagent.common.event import elapsed_milliseconds, add_event, WALAEventOperation
 from azurelinuxagent.common.future import ustr
-from azurelinuxagent.common.logcollector import COMPRESSED_ARCHIVE_PATH
+from azurelinuxagent.common.logcollector import COMPRESSED_ARCHIVE_PATH, MANIFESTS_DIR, MANIFEST_FULL_NAME, \
+    MANIFEST_FULL_PATH, MANIFEST_NORMAL_NAME, MANIFEST_NORMAL_PATH
 from azurelinuxagent.common.protocol.util import get_protocol_util
 from azurelinuxagent.common.utils import shellutil
 from azurelinuxagent.common.utils.shellutil import get_python_cmd
@@ -113,32 +114,23 @@ class CollectLogsHandler(object):
 
     @staticmethod
     def copy_manifest_files():
-        # The log collection tool relies on the manifest files being in /etc.
-        manifest_full_filename = "logcollector_manifest_full"
-        manifest_normal_filename = "logcollector_manifest_normal"
-
-        # current_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)))
-        # manifest_dir = os.path.join(os.path.dirname(os.path.dirname(current_dir)), "config")
-        # manifest_full_source = os.path.join(manifest_dir, manifest_full_filename)
-        # manifest_normal_source = os.path.join(manifest_dir, manifest_normal_filename)
-        #
-        # shutil.copy2(manifest_full_source, os.path.join("/etc", manifest_full_filename))
-        # shutil.copy2(manifest_normal_source, os.path.join("/etc", manifest_normal_filename))
-
-        data = pkg_resources.resource_string("config", manifest_full_filename)
-        with open(os.path.join("/etc", manifest_full_filename), "wb") as f:
+        # Ensure manifest files are available to the log collection tool.
+        data = pkg_resources.resource_string("config", MANIFEST_FULL_NAME)
+        with open(MANIFEST_FULL_PATH, "wb") as f:
             f.write(data)
 
-        data = pkg_resources.resource_string("config", manifest_normal_filename)
-        with open(os.path.join("/etc", manifest_normal_filename), "wb") as f:
+        data = pkg_resources.resource_string("config", MANIFEST_NORMAL_NAME)
+        with open(MANIFEST_NORMAL_PATH, "wb") as f:
             f.write(data)
 
     def daemon(self, init_data=False):
         try:
+            # Copy manifest files even if log collection is not allowed. This enables the command line tool
+            # to still work on demand if needed.
+            self.copy_manifest_files()
+
             if not self.log_collection_allowed():
                 return
-
-            self.copy_manifest_files()
 
             if init_data:
                 self.init_protocols()
