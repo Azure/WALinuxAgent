@@ -55,9 +55,6 @@ _HANDLER_PATTERN = r'^([^-]+)-(\d+(?:\.\d+)*)'
 _HANDLER_PKG_PATTERN = re.compile(_HANDLER_PATTERN + r'\.zip$', re.IGNORECASE)
 _DEFAULT_EXT_TIMEOUT_MINUTES = 90
 
-# HandlerEnvironment.json schema version
-_HANDLER_ENVIRONMENT_VERSION = 1.0
-
 _VALID_HANDLER_STATUS = ['Ready', 'NotReady', "Installing", "Unresponsive"]
 
 HANDLER_NAME_PATTERN = re.compile(_HANDLER_PATTERN + r'$', re.IGNORECASE)
@@ -1358,8 +1355,8 @@ class ExtHandlerInstance(object):
             handler_env[HandlerEnvironment.eventsFolder] = self.get_extension_events_dir()
 
         env = [{
-            "name": self.ext_handler.name,
-            "version": _HANDLER_ENVIRONMENT_VERSION,
+            HandlerEnvironment.name: self.ext_handler.name,
+            HandlerEnvironment.version: HandlerEnvironment.schemaVersion,
             HandlerEnvironment.handlerEnvironment: handler_env
         }]
         try:
@@ -1546,7 +1543,8 @@ class ExtHandlerInstance(object):
 
 
 class HandlerEnvironment(object):
-
+    # HandlerEnvironment.json schema version
+    schemaVersion = 1.0
     fileName = "HandlerEnvironment.json"
     handlerEnvironment = "handlerEnvironment"
     logFolder = "logFolder"
@@ -1554,6 +1552,8 @@ class HandlerEnvironment(object):
     statusFolder = "statusFolder"
     heartbeatFile = "heartbeatFile"
     eventsFolder = "eventsFolder"
+    name = "name"
+    version = "version"
 
 
 class HandlerManifest(object):
