@@ -170,7 +170,7 @@ class TestExtensionTelemetryHandler(AgentTestCase, HttpRequestPredicates):
         with mock_wire_protocol(DATA_FILE, http_post_handler=http_post_handler) as protocol:
             protocol_util = MagicMock()
             protocol_util.get_protocol = Mock(return_value=protocol)
-            extension_telemetry_processor = ProcessExtensionTelemetry(protocol_util) # get_extension_telemetry_processor(protocol_util)
+            extension_telemetry_processor = ProcessExtensionTelemetry(protocol_util)
             extension_telemetry_processor.event_body = []
             yield extension_telemetry_processor
 
