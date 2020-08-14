@@ -42,7 +42,8 @@ import azurelinuxagent.common.utils.restutil as restutil
 import azurelinuxagent.common.utils.textutil as textutil
 from azurelinuxagent.common.cgroupconfigurator import CGroupConfigurator
 
-from azurelinuxagent.common.event import add_event, initialize_event_logger_vminfo_common_parameters, elapsed_milliseconds, WALAEventOperation
+from azurelinuxagent.common.event import add_event, initialize_event_logger_vminfo_common_parameters, \
+    elapsed_milliseconds, WALAEventOperation, EVENTS_DIRECTORY
 from azurelinuxagent.common.exception import ResourceGoneError, UpdateError
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.osutil import get_osutil
@@ -55,7 +56,8 @@ from azurelinuxagent.common.version import AGENT_NAME, AGENT_VERSION, AGENT_DIR_
 from azurelinuxagent.ga.env import get_env_handler
 from azurelinuxagent.ga.extension_telemetry import get_extension_telemetry_handler
 
-from azurelinuxagent.ga.exthandlers import HandlerManifest, get_traceback, is_extension_telemetry_pipeline_enabled
+from azurelinuxagent.ga.exthandlers import HandlerManifest, get_traceback, ExtHandlersHandler, \
+    is_extension_telemetry_pipeline_enabled, list_agent_lib_directory
 from azurelinuxagent.ga.monitor import get_monitor_handler
 
 AGENT_ERROR_FILE = "error.json" # File name for agent error record
@@ -297,6 +299,7 @@ class UpdateHandler(object):
             self._ensure_partition_assigned()
             self._ensure_readonly_files()
             self._ensure_cgroups_initialized()
+            self._ensure_extension_telemetry_state_configured_properly(protocol)
 
             goal_state_interval = conf.get_goal_state_period() if conf.get_extensions_enabled() else GOAL_STATE_INTERVAL_DISABLED
 
@@ -770,6 +773,39 @@ class UpdateHandler(object):
                                                                           auto_update_enabled)
             logger.info(u"[HEARTBEAT] Agent {0} is running as the goal state agent {1}", CURRENT_AGENT, debug_log_msg)
             self._last_telemetry_heartbeat = datetime.utcnow()
+
+    @staticmethod
+    def _ensure_extension_telemetry_state_configured_properly(protocol):
+        for name, path in list_agent_lib_directory(skip_agent_package=True):
+
+            try:
+                handler_instance = ExtHandlersHandler.get_ext_handler_instance_from_path(name=name,
+                                                                                         path=path,
+                                                                                         protocol=protocol)
+            except Exception:
+                # Ignore errors if any
+                continue
+
+            try:
+                if handler_instance is not None:
+                    # Recreate the HandlerEnvironment for existing extensions on startup.
+                    # This is to ensure that existing extensions can start using the telemetry pipeline if they support
+                    # it and also ensures that the extensions are not sending out telemetry if the Agent has to disable the feature.
+                    handler_instance.create_handler_env()
+            except Exception as e:
+                logger.warn(
+                    "Unable to re-create HandlerEnvironment file on service startup. Error: {0}".format(ustr(e)))
+                continue
+
+        try:
+            if not is_extension_telemetry_pipeline_enabled():
+                # If extension telemetry pipeline is disabled, ensure we delete all existing extension events directory
+                # because the agent will not be listening on those events.
+                extension_event_dirs = glob.glob(os.path.join(conf.get_ext_log_dir(), "*", EVENTS_DIRECTORY))
+                for ext_dir in extension_event_dirs:
+                    shutil.rmtree(ext_dir, ignore_errors=True)
+        except Exception as e:
+            logger.warn("Error when trying to delete existing Extension events directory. Error: {0}".format(ustr(e)))
 
 
 class GuestAgent(object):
