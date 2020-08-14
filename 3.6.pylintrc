@@ -96,6 +96,7 @@ disable=bad-whitespace, # Used when a wrong number of spaces is used around an o
     useless-object-inheritance, # Used when a class inherit from object, which under python3 is implicit
     duplicate-code # Indicates that a set of similar lines has been detected among multiple file. TODO: this is on our "fix" list, and is thus left last.
 
+# This section controls the duplicate-code error.
 [SIMILARITIES]
 
 # Minimum lines number of a similarity.
