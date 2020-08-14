@@ -306,7 +306,6 @@ class TestExtensionTelemetryHandler(AgentTestCase, HttpRequestPredicates):
 
             self._assert_handler_data_in_event_body(telemetry_events, extensions_with_count)
 
-    @skip_if_predicate_true(lambda: True, "Bug when sending out event with special chars - https://msazure.visualstudio.com/One/_workitems/edit/7472752")
     def test_it_should_parse_special_chars_properly(self):
         with self._create_extension_telemetry_processor() as extension_telemetry_processor:
             extensions_with_count = self._create_random_extension_events_dir_with_events(2, os.path.join(
