@@ -5,14 +5,13 @@ language: python
 env:
   - >-
     NOSEOPTS="--verbose --with-timer" SETUPOPTS=""
-  # Add SETUPOPTS="check flake8" to enable flake8 checks
 
 matrix:
   # exclude the default "python" build - we're being specific here...
   exclude:
     - python:
       env:
-        - NOSEOPTS="" SETUPOPTS="check flake8"
+        - NOSEOPTS="" SETUPOPTS=""
 
   include:
     - python: 2.6
