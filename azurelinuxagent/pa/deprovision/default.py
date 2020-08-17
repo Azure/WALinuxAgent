@@ -31,7 +31,7 @@ from azurelinuxagent.common import version
 from azurelinuxagent.common.exception import ProtocolError
 from azurelinuxagent.common.osutil import get_osutil
 from azurelinuxagent.common.protocol.util import get_protocol_util
-from azurelinuxagent.ga.exthandlers import HANDLER_NAME_PATTERN
+from azurelinuxagent.ga.exthandlers import HANDLER_COMPLETE_NAME_PATTERN
 
 
 def read_input(message):
@@ -125,7 +125,7 @@ class DeprovisionHandler(object):
     def del_ext_handler_files(self, warnings, actions): # pylint: disable=W0613
         ext_dirs = [d for d in os.listdir(conf.get_lib_dir())
                     if os.path.isdir(os.path.join(conf.get_lib_dir(), d))
-                    and re.match(HANDLER_NAME_PATTERN, d) is not None
+                    and re.match(HANDLER_COMPLETE_NAME_PATTERN, d) is not None
                     and not version.is_agent_path(d)]
 
         for ext_dir in ext_dirs:

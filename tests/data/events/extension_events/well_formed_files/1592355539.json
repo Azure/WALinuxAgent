@@ -1,0 +1,72 @@
+[
+    {
+        "EventLevel": "INFO",
+        "Message": "Starting IaaS ScriptHandler Extension v1",
+        "Version": "1",
+        "TaskName": "Extension Info",
+        "EventPid": "5676",
+        "EventTid": "1",
+        "OperationId": "e1065def-7571-42c2-88a2-4f8b4c8f226d",
+        "Timestamp": "2019-12-12T01:11:38.2298194Z"
+    },
+    {
+        "EventLevel": "INFO",
+        "Message": "HandlerEnvironment = Version: 1, HandlerEnvironment: [LogFolder: \"C:\\WindowsAzure\\Logs\\Plugins\\Microsoft.Compute.CustomScriptExtension\\1.10.3\", ConfigFolder: \"C:\\Packages\\Plugins\\Microsoft.Compute.CustomScriptExtension\\1.10.3\\RuntimeSettings\", StatusFolder: \"C:\\Packages\\Plugins\\Microsoft.Compute.CustomScriptExtension\\1.10.3\\Status\", HeartbeatFile: \"C:\\Packages\\Plugins\\Microsoft.Compute.CustomScriptExtension\\1.10.3\\Status\\HeartBeat.Json\"]",
+        "Version": "1",
+        "TaskName": "Extension Info",
+        "EventPid": "5676",
+        "EventTid": "1",
+        "OperationId": "e1065def-7571-42c2-88a2-4f8b4c8f226d",
+        "Timestamp": "2019-12-12T01:11:38.2318168Z"
+    },
+    {
+        "EventLevel": "INFO",
+        "Message": "Comamnd Executed: enable",
+        "Version": "1",
+        "TaskName": "Handler Command",
+        "EventPid": "5676",
+        "EventTid": "1",
+        "OperationId": "e1065def-7571-42c2-88a2-4f8b4c8f226d",
+        "Timestamp": "2019-12-12T01:11:38.2328180Z"
+    },
+    {
+        "EventLevel": "INFO",
+        "Message": "Enabling Handler",
+        "Version": "1",
+        "TaskName": "Handler Operation",
+        "EventPid": "5676",
+        "EventTid": "1",
+        "OperationId": "e1065def-7571-42c2-88a2-4f8b4c8f226d",
+        "Timestamp": "2019-12-12T01:11:38.2338180Z"
+    },
+    {
+        "EventLevel": "INFO",
+        "Message": "Successfully enabled TLS.",
+        "Version": "1",
+        "TaskName": "TLS",
+        "EventPid": "5676",
+        "EventTid": "1",
+        "OperationId": "e1065def-7571-42c2-88a2-4f8b4c8f226d",
+        "Timestamp": "2019-12-12T01:11:38.2368192Z"
+    },
+    {
+        "EventLevel": "INFO",
+        "Message": "Handler successfully enabled",
+        "Version": "1",
+        "TaskName": "Handler Operation",
+        "EventPid": "5676",
+        "EventTid": "1",
+        "OperationId": "e1065def-7571-42c2-88a2-4f8b4c8f226d",
+        "Timestamp": "2019-12-12T01:11:38.2448190Z"
+    },
+    {
+        "EventLevel": "INFO",
+        "Message": "Loading configuration for sequence number 11",
+        "Version": "1",
+        "TaskName": "Sequence Number",
+        "EventPid": "5676",
+        "EventTid": "1",
+        "OperationId": "e1065def-7571-42c2-88a2-4f8b4c8f226d",
+        "Timestamp": "2019-12-12T01:11:38.2498176Z"
+    }
+]
