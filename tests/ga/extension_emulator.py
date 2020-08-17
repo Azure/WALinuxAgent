@@ -18,11 +18,13 @@
 import json
 import re
 import uuid
+import os
 import contextlib
 import subprocess
 
 import azurelinuxagent.common.conf as conf
 from azurelinuxagent.common.future import ustr
+from azurelinuxagent.common.utils import fileutil
 from azurelinuxagent.common.exception import ExtensionError
 from tests.tools import Mock, patch
 
@@ -31,7 +33,7 @@ from tests.protocol.mocks import HttpRequestPredicates
 from azurelinuxagent.ga.exthandlers import ExtHandlerInstance
 
 
-class ExtensionCommandNames:
+class ExtensionCommandNames(object):
     INSTALL = "install"
     UNINSTALL = "uninstall"
     UPDATE = "update"
@@ -196,6 +198,27 @@ class ExtensionEmulator:
         
         def wrapped_func(cmd, *args, **kwargs):
             return_value = func(cmd, *args, **kwargs)
+
+            config_dir = os.path.join(os.path.dirname(cmd), "config")
+            
+            regex = r'{directory}{sep}(?P<seq>{sequence})\.settings'.format(
+                directory=config_dir, sep=os.path.sep, sequence=r'[0-9]+'
+            )
+
+            seq = 0
+            for config_file in map(lambda filename: os.path.join(config_dir, filename), os.listdir(config_dir)):
+                if not os.path.isfile(config_file):
+                    continue
+
+                match = re.fullmatch(regex, config_file)
+                if not match:
+                    continue
+
+                if seq < int(match.group("seq")):
+                    seq = int(match.group("seq"))
+
+            fileutil.write_file(os.path.join(os.path.dirname(cmd), "status", "{seq}.status".format(seq=seq)),
+                json.dumps([{ "status": {"status": "success"} }]))
 
             return Mock(**{
                 "poll.return_value": return_value,

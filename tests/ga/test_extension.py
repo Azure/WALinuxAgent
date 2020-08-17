@@ -2461,6 +2461,7 @@ class TestExtensionUpdateOnFailure(ExtensionTestCase):
             (first_ext, ExtensionCommandNames.DISABLE)
         )
 
+        self.assertEqual(len(first_ext.status_blobs), 1, "The first extension should not have submitted a second status.")
         self.assertEqual(len(second_ext.status_blobs), 1, "The second extension should have a single submitted status.")
         self.assertTrue(exit_code in second_ext.status_blobs[0]["formattedMessage"]["message"],
             "DisableAction's error code should be propagated to the status blob.")
@@ -2480,6 +2481,7 @@ class TestExtensionUpdateOnFailure(ExtensionTestCase):
             (first_ext, ExtensionCommandNames.UNINSTALL)
         )
 
+        self.assertEqual(len(first_ext.status_blobs), 1, "The first extension should not have submitted a second status.")
         self.assertEqual(len(second_ext.status_blobs), 1, "The second extension should have a single submitted status.")
         self.assertTrue(exit_code in second_ext.status_blobs[0]["formattedMessage"]["message"],
             "UninstallAction's error code should be propagated to the status blob.")
@@ -2501,6 +2503,7 @@ class TestExtensionUpdateOnFailure(ExtensionTestCase):
             (second_ext, ExtensionCommandNames.UPDATE)
         )
 
+        self.assertEqual(len(first_ext.status_blobs), 1, "The first extension should not have submitted a second status.")
         self.assertEqual(len(second_ext.status_blobs), 1, "The second extension should have a single submitted status.")
         self.assertTrue(exit_codes["update"] in second_ext.status_blobs[0]["formattedMessage"]["message"],
             "UpdateAction's error code should be propagated to the status blob.")
@@ -2525,6 +2528,7 @@ class TestExtensionUpdateOnFailure(ExtensionTestCase):
             (second_ext, ExtensionCommandNames.INSTALL)
         )
 
+        self.assertEqual(len(first_ext.status_blobs), 1, "The first extension should not have submitted a second status.")
         self.assertEqual(len(second_ext.status_blobs), 1, "The second extension should have a single submitted status.")
         self.assertTrue(exit_codes["install"] in second_ext.status_blobs[0]["formattedMessage"]["message"],
             "InstallAction's error code should be propagated to the status blob.")
