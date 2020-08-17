@@ -49,7 +49,7 @@ class ScvmmHandler(object):
             dvd_device = os.path.join(dev_dir, devices.group(0))
             self.osutil.mount_dvd(max_retry=1, chk_err=False, dvd_device=dvd_device, mount_point=mount_point)
             found = os.path.isfile(os.path.join(mount_point, VMM_CONF_FILE_NAME))
-            if found:
+            if found: # pylint: disable=R1723
                 self.start_scvmm_agent(mount_point=mount_point)
                 break
             else:
