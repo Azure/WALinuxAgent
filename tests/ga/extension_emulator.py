@@ -210,7 +210,7 @@ class ExtensionEmulator:
                 if not os.path.isfile(config_file):
                     continue
 
-                match = re.fullmatch(regex, config_file)
+                match = re.match(regex, config_file)
                 if not match:
                     continue
 
