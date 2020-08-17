@@ -41,7 +41,8 @@ import azurelinuxagent.common.utils.restutil as restutil
 import azurelinuxagent.common.utils.textutil as textutil
 from azurelinuxagent.common.cgroupconfigurator import CGroupConfigurator
 
-from azurelinuxagent.common.event import add_event, initialize_event_logger_vminfo_common_parameters, elapsed_milliseconds, WALAEventOperation
+from azurelinuxagent.common.event import add_event, initialize_event_logger_vminfo_common_parameters, \
+    elapsed_milliseconds, WALAEventOperation, EVENTS_DIRECTORY
 from azurelinuxagent.common.exception import ResourceGoneError, UpdateError
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.osutil import get_osutil
@@ -51,8 +52,12 @@ from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
 from azurelinuxagent.common.version import AGENT_NAME, AGENT_VERSION, AGENT_DIR_PATTERN, CURRENT_AGENT,\
     CURRENT_VERSION, DISTRO_NAME, DISTRO_VERSION, is_current_agent_installed, PY_VERSION_MAJOR, PY_VERSION_MINOR, \
     PY_VERSION_MICRO
+from azurelinuxagent.ga.env import get_env_handler
+from azurelinuxagent.ga.extension_telemetry import get_extension_telemetry_handler
 
-from azurelinuxagent.ga.exthandlers import HandlerManifest, get_traceback
+from azurelinuxagent.ga.exthandlers import HandlerManifest, get_traceback, ExtHandlersHandler, \
+    is_extension_telemetry_pipeline_enabled, list_agent_lib_directory
+from azurelinuxagent.ga.monitor import get_monitor_handler
 
 # pylint: disable=C0302
 
@@ -244,7 +249,7 @@ class UpdateHandler(object): # pylint: disable=R0902
         self.child_process = None
         return
 
-    def run(self, debug=False): # pylint: disable=R0914
+    def run(self, debug=False): # pylint: disable=R0912,R0914
         """
         This is the main loop which watches for agent and extension updates.
         """
@@ -267,15 +272,20 @@ class UpdateHandler(object): # pylint: disable=R0902
                 PY_VERSION_MINOR, PY_VERSION_MICRO)
             logger.info(os_info_msg)
             add_event(AGENT_NAME, op=WALAEventOperation.OSInfo, message=os_info_msg)
-            
-            # Launch monitoring threads
-            from azurelinuxagent.ga.monitor import get_monitor_handler
-            monitor_thread = get_monitor_handler()
-            monitor_thread.run()
 
-            from azurelinuxagent.ga.env import get_env_handler
-            env_thread = get_env_handler()
-            env_thread.run()
+            # Get all thread handlers
+            all_thread_handlers = [
+                get_monitor_handler(),
+                get_env_handler()
+            ]
+
+            if is_extension_telemetry_pipeline_enabled():
+                # Reuse the same protocol_util as the UpdateHandler class to avoid new initializations
+                all_thread_handlers.append(get_extension_telemetry_handler(self.protocol_util))
+
+            # Launch all monitoring threads
+            for thread_handler in all_thread_handlers:
+                thread_handler.run()
 
             from azurelinuxagent.ga.exthandlers import get_exthandlers_handler, migrate_handler_state
             exthandlers_handler = get_exthandlers_handler(protocol)
@@ -290,6 +300,7 @@ class UpdateHandler(object): # pylint: disable=R0902
             self._ensure_partition_assigned()
             self._ensure_readonly_files()
             self._ensure_cgroups_initialized()
+            self._ensure_extension_telemetry_state_configured_properly(protocol)
 
             goal_state_interval = conf.get_goal_state_period() if conf.get_extensions_enabled() else GOAL_STATE_INTERVAL_DISABLED
 
@@ -304,13 +315,10 @@ class UpdateHandler(object): # pylint: disable=R0902
                 #
                 # Check that all the threads are still running
                 #
-                if not monitor_thread.is_alive():
-                    logger.warn(u"Monitor thread died, restarting")
-                    monitor_thread.start()
-
-                if not env_thread.is_alive():
-                    logger.warn(u"Environment thread died, restarting")
-                    env_thread.start()
+                for thread_handler in all_thread_handlers:
+                    if not thread_handler.is_alive():
+                        logger.warn("{0} thread died, restarting".format(thread_handler.get_thread_name()))
+                        thread_handler.start()
 
                 #
                 # Process the goal state
@@ -764,6 +772,39 @@ class UpdateHandler(object): # pylint: disable=R0902
                                                                           auto_update_enabled)
             logger.info(u"[HEARTBEAT] Agent {0} is running as the goal state agent {1}", CURRENT_AGENT, debug_log_msg)
             self._last_telemetry_heartbeat = datetime.utcnow()
+
+    @staticmethod
+    def _ensure_extension_telemetry_state_configured_properly(protocol):
+        for name, path in list_agent_lib_directory(skip_agent_package=True):
+
+            try:
+                handler_instance = ExtHandlersHandler.get_ext_handler_instance_from_path(name=name,
+                                                                                         path=path,
+                                                                                         protocol=protocol)
+            except Exception:
+                # Ignore errors if any
+                continue
+
+            try:
+                if handler_instance is not None:
+                    # Recreate the HandlerEnvironment for existing extensions on startup.
+                    # This is to ensure that existing extensions can start using the telemetry pipeline if they support
+                    # it and also ensures that the extensions are not sending out telemetry if the Agent has to disable the feature.
+                    handler_instance.create_handler_env()
+            except Exception as e: # pylint: disable=C0103
+                logger.warn(
+                    "Unable to re-create HandlerEnvironment file on service startup. Error: {0}".format(ustr(e)))
+                continue
+
+        try:
+            if not is_extension_telemetry_pipeline_enabled():
+                # If extension telemetry pipeline is disabled, ensure we delete all existing extension events directory
+                # because the agent will not be listening on those events.
+                extension_event_dirs = glob.glob(os.path.join(conf.get_ext_log_dir(), "*", EVENTS_DIRECTORY))
+                for ext_dir in extension_event_dirs:
+                    shutil.rmtree(ext_dir, ignore_errors=True)
+        except Exception as e: # pylint: disable=C0103
+            logger.warn("Error when trying to delete existing Extension events directory. Error: {0}".format(ustr(e)))
 
 
 class GuestAgent(object):
