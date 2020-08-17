@@ -104,10 +104,8 @@ class ProcessExtensionTelemetry(PeriodicOperation):
             # Always ensure that the events directory are being deleted each run,
             # even if we run into an error and dont process them this run.
             self._ensure_all_events_directories_empty(extension_handler_with_event_dirs)
-            # Note: this is similar to a pattern we have elsewhere (see: exthandlers.run), but slightly
-            # Note: different. Pylint apparently doesn't like a return in a finally after an except clause,
-            # Note: but is fine with a return inside an except clause.
-            return events_list # pylint: disable=W0150
+
+        return events_list
 
     @staticmethod
     def _get_extension_events_dir_with_handler_name(extension_log_dir):
