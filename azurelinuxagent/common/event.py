@@ -86,6 +86,7 @@ class WALAEventOperation:
     Download = "Download"
     Enable = "Enable"
     ExtensionProcessing = "ExtensionProcessing"
+    ExtensionTelemetryEventProcessing = "ExtensionTelemetryEventProcessing"
     FetchGoalState = "FetchGoalState"
     Firewall = "Firewall"
     HealthCheck = "HealthCheck"
@@ -437,7 +438,7 @@ class EventLogger(object):
         event.parameters.append(TelemetryEventParam(GuestAgentExtensionEventsSchema.OperationSuccess, bool(is_success)))
         event.parameters.append(TelemetryEventParam(GuestAgentExtensionEventsSchema.Message, str(message)))
         event.parameters.append(TelemetryEventParam(GuestAgentExtensionEventsSchema.Duration, int(duration)))
-        self._add_common_event_parameters(event, datetime.utcnow())
+        self.add_common_event_parameters(event, datetime.utcnow())
 
         data = get_properties(event)
         try:
@@ -452,7 +453,7 @@ class EventLogger(object):
         event.parameters.append(TelemetryEventParam(GuestAgentGenericLogsSchema.Context1, self._clean_up_message(message)))
         event.parameters.append(TelemetryEventParam(GuestAgentGenericLogsSchema.Context2, datetime.utcnow().strftime(logger.Logger.LogTimeFormatInUTC)))
         event.parameters.append(TelemetryEventParam(GuestAgentGenericLogsSchema.Context3, ''))
-        self._add_common_event_parameters(event, datetime.utcnow())
+        self.add_common_event_parameters(event, datetime.utcnow())
 
         data = get_properties(event)
         try:
@@ -480,7 +481,7 @@ class EventLogger(object):
         event.parameters.append(TelemetryEventParam(GuestAgentPerfCounterEventsSchema.Counter, str(counter)))
         event.parameters.append(TelemetryEventParam(GuestAgentPerfCounterEventsSchema.Instance, str(instance)))
         event.parameters.append(TelemetryEventParam(GuestAgentPerfCounterEventsSchema.Value, float(value)))
-        self._add_common_event_parameters(event, datetime.utcnow())
+        self.add_common_event_parameters(event, datetime.utcnow())
 
         data = get_properties(event)
         try:
@@ -529,7 +530,7 @@ class EventLogger(object):
             else:
                 return message
 
-    def _add_common_event_parameters(self, event, event_timestamp):
+    def add_common_event_parameters(self, event, event_timestamp):
         """
         This method is called for all events and ensures all telemetry fields are added before the event is sent out.
         Note that the event timestamp is saved in the OpcodeName field.
@@ -625,7 +626,7 @@ class EventLogger(object):
 
                         if event.is_extension_event():
                             EventLogger._trim_extension_event_parameters(event)
-                            self._add_common_event_parameters(event, event_file_creation_time)
+                            self.add_common_event_parameters(event, event_file_creation_time)
                         else:
                             self._update_legacy_agent_event(event, event_file_creation_time)
 
@@ -654,7 +655,7 @@ class EventLogger(object):
         # will be appended, ensuring the event schema is complete before the event is reported.
         new_event = TelemetryEvent()
         new_event.parameters = []
-        self._add_common_event_parameters(new_event, event_creation_time)
+        self.add_common_event_parameters(new_event, event_creation_time)
 
         event_params = dict([(param.name, param.value) for param in event.parameters])
         new_event_params = dict([(param.name, param.value) for param in new_event.parameters])
@@ -668,6 +669,9 @@ class EventLogger(object):
 
 
 __event_logger__ = EventLogger()
+
+def get_event_logger():
+    return __event_logger__
 
 
 def elapsed_milliseconds(utc_start):
