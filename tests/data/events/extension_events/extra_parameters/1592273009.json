@@ -1,0 +1,35 @@
+[
+    {
+        "EventLevel": "INFO",
+        "Message": "Files downloaded. Asynchronously executing command: 'SecureCommand_11'",
+        "Version": "1",
+        "TaskName": "Downloading files",
+        "EventPid": "3228",
+        "EventTid": "1",
+        "OperationId": "519e4beb-018a-4bd9-8d8e-c5226cf7f56e",
+        "TimeStamp": "2019-12-12T01:21:05.1960563Z",
+        "SomethingNewButNotCool": "This is a random new param"
+    },
+    {
+        "EL": "INFO",
+        "msg": "HandlerEnvironment = Version: 1, HandlerEnvironment: [LogFolder: \"C:\\WindowsAzure\\Logs\\Plugins\\Microsoft.Compute.CustomScriptExtension\\1.10.3\", ConfigFolder: \"C:\\Packages\\Plugins\\Microsoft.Compute.CustomScriptExtension\\1.10.3\\RuntimeSettings\", StatusFolder: \"C:\\Packages\\Plugins\\Microsoft.Compute.CustomScriptExtension\\1.10.3\\Status\", HeartbeatFile: \"C:\\Packages\\Plugins\\Microsoft.Compute.CustomScriptExtension\\1.10.3\\Status\\HeartBeat.Json\"]",
+        "ver": "1",
+        "TaskName": "Downloading files",
+        "EventPid": "3228",
+        "EventTid": "1",
+        "OperationId": "519e4beb-018a-4bd9-8d8e-c5226cf7f56e",
+        "Time": "2019-12-12T01:21:05.1960563Z",
+        "BadEvent": true
+    },
+    {
+        "EventLevel": "INFO",
+        "Message": "Hello World",
+        "Version": "1",
+        "TaskName": "Downloading files",
+        "EventPid": "3228",
+        "EventTid": "1",
+        "OperationId": "519e4beb-018a-4bd9-8d8e-c5226cf7f56e",
+        "TimeStamp": "2019-12-12T01:21:05.1960563Z",
+        "SomethingVeryWeird": "Weirdly weird but satisfying"
+    }
+]

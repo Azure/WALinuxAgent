@@ -5,14 +5,13 @@ language: python
 env:
   - >-
     NOSEOPTS="--verbose --with-timer" SETUPOPTS=""
-  # Add SETUPOPTS="check flake8" to enable flake8 checks
 
 matrix:
   # exclude the default "python" build - we're being specific here...
   exclude:
     - python:
       env:
-        - NOSEOPTS="" SETUPOPTS="check flake8"
+        - NOSEOPTS="" SETUPOPTS=""
 
   include:
     - python: 2.6
@@ -24,25 +23,25 @@ matrix:
         - >-
           NOSEOPTS="--verbose --with-timer" SETUPOPTS=""
           PYLINTOPTS="--rcfile=2.7.pylintrc"
-          PYLINTFILES="setup.py makepkg.py"
+          PYLINTFILES="azurelinuxagent/daemon setup.py makepkg.py"
     - python: 3.4
       env:
         - >-
           NOSEOPTS="--verbose --with-timer" SETUPOPTS=""
           PYLINTOPTS="--rcfile=2.7.pylintrc"
-          PYLINTFILES="setup.py makepkg.py"
+          PYLINTFILES="azurelinuxagent/daemon setup.py makepkg.py"
     - python: 3.6
       env:
         - >-
           NOSEOPTS="--verbose --with-timer" SETUPOPTS=""
           PYLINTOPTS="--rcfile=3.6.pylintrc"
-          PYLINTFILES="setup.py makepkg.py"
+          PYLINTFILES="azurelinuxagent/daemon setup.py makepkg.py"
     - python: 3.7
       env:
         - >-
           NOSEOPTS="--verbose --with-timer" SETUPOPTS=""
           PYLINTOPTS="--rcfile=3.6.pylintrc"
-          PYLINTFILES="setup.py makepkg.py"
+          PYLINTFILES="azurelinuxagent/daemon setup.py makepkg.py"
     - python: 3.8
       env:
         - >-
@@ -51,7 +50,7 @@ matrix:
           --cover-package=azurelinuxagent --cover-xml"
           SETUPOPTS=""
           PYLINTOPTS="--rcfile=3.6.pylintrc"
-          PYLINTFILES="setup.py makepkg.py"
+          PYLINTFILES="azurelinuxagent/daemon setup.py makepkg.py"
 
 install:
   - pip install -r requirements.txt
