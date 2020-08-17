@@ -5,14 +5,17 @@ language: python
 env:
   - >-
     NOSEOPTS="--verbose --with-timer" SETUPOPTS=""
+<<<<<<< HEAD
   # Add SETUPOPTS="check flake8" to enable flake8 checks
+=======
+>>>>>>> e004bd0fbecd562d577426d9c1ad8c8e76e94df5
 
 matrix:
   # exclude the default "python" build - we're being specific here...
   exclude:
     - python:
       env:
-        - NOSEOPTS="" SETUPOPTS="check flake8"
+        - NOSEOPTS="" SETUPOPTS=""
 
   include:
     - python: 2.6
@@ -24,25 +27,25 @@ matrix:
         - >-
           NOSEOPTS="--verbose --with-timer" SETUPOPTS=""
           PYLINTOPTS="--rcfile=2.7.pylintrc"
-          PYLINTFILES="azurelinuxagent/common/osutil"
+          PYLINTFILES="azurelinuxagent/daemon azurelinuxagent/common/osutil"
     - python: 3.4
       env:
         - >-
           NOSEOPTS="--verbose --with-timer" SETUPOPTS=""
           PYLINTOPTS="--rcfile=2.7.pylintrc"
-          PYLINTFILES="azurelinuxagent/common/osutil"
+          PYLINTFILES="azurelinuxagent/daemon azurelinuxagent/common/osutil"
     - python: 3.6
       env:
         - >-
           NOSEOPTS="--verbose --with-timer" SETUPOPTS=""
           PYLINTOPTS="--rcfile=3.6.pylintrc"
-          PYLINTFILES="azurelinuxagent/common/osutil"
+          PYLINTFILES="azurelinuxagent/daemon azurelinuxagent/common/osutil"
     - python: 3.7
       env:
         - >-
           NOSEOPTS="--verbose --with-timer" SETUPOPTS=""
           PYLINTOPTS="--rcfile=3.6.pylintrc"
-          PYLINTFILES="azurelinuxagent/common/osutil"
+          PYLINTFILES="azurelinuxagent/daemon azurelinuxagent/common/osutil"
     - python: 3.8
       env:
         - >-
@@ -51,7 +54,7 @@ matrix:
           --cover-package=azurelinuxagent --cover-xml"
           SETUPOPTS=""
           PYLINTOPTS="--rcfile=3.6.pylintrc"
-          PYLINTFILES="azurelinuxagent/common/osutil"
+          PYLINTFILES="azurelinuxagent/daemon azurelinuxagent/common/osutil"
 
 install:
   - pip install -r requirements.txt
