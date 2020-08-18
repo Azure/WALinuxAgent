@@ -42,6 +42,7 @@ CACHE_PATTERNS = [
 
 MAXIMUM_CACHED_FILES = 50
 
+
 def get_env_handler():
     return EnvHandler()
 
@@ -54,6 +55,13 @@ class EnvHandler(object):
     Monitor scsi disk.
     If new scsi disk found, set timeout
     """
+
+    _THREAD_NAME = "EnvHandler"
+
+    @staticmethod
+    def get_thread_name():
+        return EnvHandler._THREAD_NAME
+
     def __init__(self):
         self.osutil = get_osutil()
         self.dhcp_handler = get_dhcp_handler()
@@ -97,7 +105,7 @@ class EnvHandler(object):
     def start(self):
         self.server_thread = threading.Thread(target=self.monitor)
         self.server_thread.setDaemon(True)
-        self.server_thread.setName("EnvHandler")
+        self.server_thread.setName(self.get_thread_name())
         self.server_thread.start()
 
     def monitor(self):

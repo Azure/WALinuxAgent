@@ -44,6 +44,12 @@ class CollectLogsHandler(object):
     Periodically collects and uploads logs from the VM to the host.
     """
 
+    _THREAD_NAME = "CollectLogsHandler"
+
+    @staticmethod
+    def get_thread_name():
+        return CollectLogsHandler._THREAD_NAME
+
     def __init__(self):
         self.protocol = None
         self.protocol_util = None
@@ -92,7 +98,7 @@ class CollectLogsHandler(object):
     def start(self, init_data=False):
         self.event_thread = threading.Thread(target=self.daemon, args=(init_data,))
         self.event_thread.setDaemon(True)
-        self.event_thread.setName("CollectLogsHandler")
+        self.event_thread.setName(self.get_thread_name())
         self.event_thread.start()
 
     def join(self):

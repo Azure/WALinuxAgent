@@ -1,0 +1,85 @@
+[
+    {
+        "EventLevel": "INFO",
+        "Message": "Starting IaaS ScriptHandler Extension v1",
+        "Version": "1",
+        "TaskName": "Extension Info",
+        "EventPid": "3228",
+        "EventTid": "1",
+        "OperationId": "519e4beb-018a-4bd9-8d8e-c5226cf7f56e",
+        "TimeStamp": "2019-12-12T01:20:05.0950244Z"
+    },
+    {
+        "EventLevel": "INFO",
+        "Message": "HandlerEnvironment = Version: 1, HandlerEnvironment: [LogFolder: \"C:\\WindowsAzure\\Logs\\Plugins\\Microsoft.Compute.CustomScriptExtension\\1.10.3\", ConfigFolder: \"C:\\Packages\\Plugins\\Microsoft.Compute.CustomScriptExtension\\1.10.3\\RuntimeSettings\", StatusFolder: \"C:\\Packages\\Plugins\\Microsoft.Compute.CustomScriptExtension\\1.10.3\\Status\", HeartbeatFile: \"C:\\Packages\\Plugins\\Microsoft.Compute.CustomScriptExtension\\1.10.3\\Status\\HeartBeat.Json\"]",
+        "Version": "1",
+        "TaskName": "Extension Info",
+        "EventPid": "3228",
+        "EventTid": "1",
+        "OperationId": "519e4beb-018a-4bd9-8d8e-c5226cf7f56e",
+        "TimeStamp": "2019-12-12T01:20:05.0950244Z"
+    },
+    {
+        "EventLevel": "INFO",
+        "Message": "Comamnd Executed: enable",
+        "Version": "1",
+        "TaskName": "Handler Command",
+        "EventPid": "3228",
+        "EventTid": "1",
+        "OperationId": "519e4beb-018a-4bd9-8d8e-c5226cf7f56e",
+        "TimeStamp": "2019-12-12T01:20:05.0950244Z"
+    },
+    {
+        "EventLevel": "INFO",
+        "Message": "Enabling Handler",
+        "Version": "1",
+        "TaskName": "Handler Operation",
+        "EventPid": "3228",
+        "EventTid": "1",
+        "OperationId": "519e4beb-018a-4bd9-8d8e-c5226cf7f56e",
+        "TimeStamp": "2019-12-12T01:20:05.0950244Z"
+    },
+    {
+        "EventLevel": "INFO",
+        "Message": "Successfully enabled TLS.",
+        "Version": "1",
+        "TaskName": "TLS",
+        "EventPid": "3228",
+        "EventTid": "1",
+        "OperationId": "519e4beb-018a-4bd9-8d8e-c5226cf7f56e",
+        "TimeStamp": "2019-12-12T01:20:05.1106498Z"
+    },
+    {
+        "EventLevel": "INFO",
+        "Message": "Handler successfully enabled",
+        "Version": "1",
+        "TaskName": "Handler Operation",
+        "EventPid": "3228",
+        "EventTid": "1",
+        "OperationId": "519e4beb-018a-4bd9-8d8e-c5226cf7f56e",
+        "TimeStamp": "2019-12-12T01:20:05.1731503Z"
+    },
+    {
+        "EventLevel": "INFO",
+        "Message": "Loading configuration for sequence number 11",
+        "Version": "1",
+        "TaskName": "Sequence Number",
+        "EventPid": "3228",
+        "EventTid": "1",
+        "OperationId": "519e4beb-018a-4bd9-8d8e-c5226cf7f56e",
+        "TimeStamp": "2019-12-12T01:20:05.1731503Z"
+    },
+    {
+        "EventLevel": "INFO",
+        "Message": "HandlerSettings = ProtectedSettingsCertThumbprint: C8F2B56B0E79B592334BA0AFFFE172EB3DEF6753, ProtectedSettings: {MIIB0AYJKoZIhvcNAQcDoIIBwTCCAb0CAQAxggFpMIIBZQIBADBNMDkxNzA1BgoJkiaJk/IsZAEZFidXaW5kb3dzIEF6dXJlIENSUCBDZXJ0aWZpY2F0ZSBHZW5lcmF0b3ICEGPedX2PQQm0SE3jOKJHGtUwDQYJKoZIhvcNAQEBBQAEggEAqCIhARxqObDt9esAHszPzPonOyNyDpS2f/bsaA6TiZXyUg08JARIAZYAvR3TMJaH+Q3IkTC2tcQHmlBFVx7v9Dxm0RtwGM3CJve8Xq/Jf2X6gsq79nKPiFrZ1BRDp/TB6lZdC6ahIiRA+DOeL9p1wap8R7j67s+oQiEVi0nI0zqSOPH+nXsKNhi2xaW466zdgXdfsy2amp9pO/p9/mg+W/qyMFKcnFI8d26bqaWxYBQVYqxWnXSUE7Ul7hHEKyXQeF2QwE7QVBEMJIgLyx6u58M2FYtoWopU37gOMk8MWfTgIumP0WZOPHS/n6AffPgaypStiu9Q3HYTYnqH28OtjTBLBgkqhkiG9w0BBwEwFAYIKoZIhvcNAwcECCzHZJQzFhdSgCgV25G1ZQKeyJPTLZu+u8bIjtPQ5yOOLFQZj8XrJj4HhQNTndIDwyNz}, PublicSettings: {}",
+        "Version": "1",
+        "TaskName": "Handler Configuration",
+        "EventPid": "3228",
+        "EventTid": "1",
+        "OperationId": "519e4beb-018a-4bd9-8d8e-c5226cf7f56e",
+        "TimeStamp": "2019-12-12T01:20:16.7047734Z"
+    },
+    {
+        "BadEvent": true
+    }
+]
