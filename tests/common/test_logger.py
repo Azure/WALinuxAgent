@@ -214,7 +214,7 @@ class TestLogger(AgentTestCase):
             log = log_file.read()
             try:
                 time_in_file = datetime.strptime(log.split(logger.LogLevel.STRINGS[logger.LogLevel.INFO])[0].strip()
-                                                 , u'%Y-%m-%dT%H:%M:%S.%fZ')
+                                                 , logger.Logger.LogTimeFormatInUTC)
             except ValueError:
                 self.fail("Ensure timestamp follows ISO-8601 format + 'Z' for UTC")
 
@@ -239,7 +239,7 @@ class TestLogger(AgentTestCase):
             log = log_file.read()
             try:
                 time_in_file = datetime.strptime(log.split(logger.LogLevel.STRINGS[logger.LogLevel.INFO])[0].strip()
-                                                 , u'%Y-%m-%dT%H:%M:%S.%fZ')
+                                                 , logger.Logger.LogTimeFormatInUTC)
             except ValueError:
                 self.fail("Ensure timestamp follows ISO-8601 format and has micro seconds in it")
 

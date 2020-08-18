@@ -96,6 +96,9 @@ DATA_FILE_FAST_TRACK_DEPENDENCIES = DATA_FILE.copy()
 DATA_FILE_FAST_TRACK_DEPENDENCIES["ext_conf"] = "wire/ext_conf_in_vm_artifacts_profile.xml"
 DATA_FILE_FAST_TRACK_DEPENDENCIES["in_vm_artifacts_profile"] = "wire/in_vm_artifacts_profile_dependencies.json"
 
+DATA_FILE_PLUGIN_SETTINGS_MISMATCH = DATA_FILE.copy()
+DATA_FILE_PLUGIN_SETTINGS_MISMATCH["ext_conf"] = "wire/ext_conf_plugin_settings_version_mismatch.xml"
+
 
 class WireProtocolData(object):
     def __init__(self, data_files=DATA_FILE):
@@ -105,6 +108,7 @@ class WireProtocolData(object):
             "/versions": 0,
             "/health": 0,
             "/HealthService": 0,
+            "/vmAgentLog": 0,
             "goalstate": 0,
             "goalstateremoteaccess": 0,
             "hostingenvuri": 0,
@@ -251,6 +255,21 @@ class WireProtocolData(object):
 
         if url.endswith('/HealthService'):
             self.call_counts['/HealthService'] += 1
+            content = ''
+        else:
+            raise Exception("Bad url {0}".format(url))
+
+        resp.read = Mock(return_value=content.encode("utf-8"))
+        return resp
+
+    def mock_http_put(self, url, *args, **kwargs):
+        content = None
+
+        resp = MagicMock()
+        resp.status = httpclient.OK
+
+        if url.endswith('/vmAgentLog'):
+            self.call_counts['/vmAgentLog'] += 1
             content = ''
         else:
             raise Exception("Bad url {0}".format(url))

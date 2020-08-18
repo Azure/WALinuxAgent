@@ -28,16 +28,17 @@ from datetime import datetime
 
 import azurelinuxagent.common.conf as conf
 import azurelinuxagent.common.logger as logger
+from azurelinuxagent.common.AgentGlobals import AgentGlobals
 from azurelinuxagent.common.exception import EventError, OSUtilError
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.datacontract import get_properties, set_properties
 from azurelinuxagent.common.osutil import get_osutil
-from azurelinuxagent.common.telemetryevent import TelemetryEventParam, TelemetryEvent
+from azurelinuxagent.common.telemetryevent import TelemetryEventParam, TelemetryEvent, CommonTelemetryEventSchema, \
+    GuestAgentGenericLogsSchema, GuestAgentExtensionEventsSchema, GuestAgentPerfCounterEventsSchema
 from azurelinuxagent.common.utils import fileutil, textutil
 from azurelinuxagent.common.utils.textutil import parse_doc, findall, find, getattrib
-from azurelinuxagent.common.version import CURRENT_VERSION, CURRENT_AGENT, DISTRO_NAME, DISTRO_VERSION, DISTRO_CODE_NAME, AGENT_EXECUTION_MODE
+from azurelinuxagent.common.version import CURRENT_VERSION, CURRENT_AGENT, AGENT_NAME, DISTRO_NAME, DISTRO_VERSION, DISTRO_CODE_NAME, AGENT_EXECUTION_MODE
 from azurelinuxagent.common.telemetryevent import TelemetryEventList
-from azurelinuxagent.common.protocol.goal_state import GoalState
 from azurelinuxagent.common.protocol.imds import get_imds_client
 
 EVENTS_DIRECTORY = "events"
@@ -70,9 +71,13 @@ class WALAEventOperation:
     AgentBlacklisted = "AgentBlacklisted"
     AgentEnabled = "AgentEnabled"
     ArtifactsProfileBlob = "ArtifactsProfileBlob"
-    AutoUpdate = "AutoUpdate"
     CGroupsCleanUp = "CGroupsCleanUp"
+    CGroupsDebug = "CGroupsDebug"
+    CGroupsInfo = "CGroupsInfo"
+    CGroupsInitialize = "CGroupsInitialize"
     CGroupsLimitsCrossed = "CGroupsLimitsCrossed"
+    CollectEventErrors = "CollectEventErrors"
+    CollectEventUnicodeErrors = "CollectEventUnicodeErrors"
     ConfigurationChange = "ConfigurationChange"
     CustomData = "CustomData"
     Deploy = "Deploy"
@@ -81,6 +86,7 @@ class WALAEventOperation:
     Download = "Download"
     Enable = "Enable"
     ExtensionProcessing = "ExtensionProcessing"
+    ExtensionTelemetryEventProcessing = "ExtensionTelemetryEventProcessing"
     FetchGoalState = "FetchGoalState"
     Firewall = "Firewall"
     HealthCheck = "HealthCheck"
@@ -92,16 +98,18 @@ class WALAEventOperation:
     HttpErrors = "HttpErrors"
     ImdsHeartbeat = "ImdsHeartbeat"
     Install = "Install"
-    InitializeCGroups = "InitializeCGroups"
     InitializeHostPlugin = "InitializeHostPlugin"
     InvokeCommandUsingSystemd = "InvokeCommandUsingSystemd"
     Log = "Log"
     OSInfo = "OSInfo"
     Partition = "Partition"
+    PluginSettingsVersionMismatch = "PluginSettingsVersionMismatch"
     ProcessGoalState = "ProcessGoalState"
     Provision = "Provision"
     ProvisionGuestAgent = "ProvisionGuestAgent"
     RemoteAccessHandling = "RemoteAccessHandling"
+    ReportEventErrors = "ReportEventErrors"
+    ReportEventUnicodeErrors = "ReportEventUnicodeErrors"
     ReportStatus = "ReportStatus"
     ReportStatusExtended = "ReportStatusExtended"
     Restart = "Restart"
@@ -177,7 +185,6 @@ class EventStatus(object):
 
 __event_status__ = EventStatus()
 __event_status_operations__ = [
-        WALAEventOperation.AutoUpdate,
         WALAEventOperation.ReportStatus
     ]
 
@@ -302,23 +309,22 @@ class EventLogger(object):
 
         # Parameters from OS
         osutil = get_osutil()
-        self._common_parameters.append(TelemetryEventParam("OSVersion", EventLogger._get_os_version()))
-        self._common_parameters.append(TelemetryEventParam("ExecutionMode", AGENT_EXECUTION_MODE))
-        self._common_parameters.append(TelemetryEventParam("RAM", int(EventLogger._get_ram(osutil))))
-        self._common_parameters.append(TelemetryEventParam("Processors", int(EventLogger._get_processors(osutil))))
+        self._common_parameters.append(TelemetryEventParam(CommonTelemetryEventSchema.OSVersion, EventLogger._get_os_version()))
+        self._common_parameters.append(TelemetryEventParam(CommonTelemetryEventSchema.ExecutionMode, AGENT_EXECUTION_MODE))
+        self._common_parameters.append(TelemetryEventParam(CommonTelemetryEventSchema.RAM, int(EventLogger._get_ram(osutil))))
+        self._common_parameters.append(TelemetryEventParam(CommonTelemetryEventSchema.Processors, int(EventLogger._get_processors(osutil))))
 
         # Parameters from goal state
-        self._common_parameters.append(TelemetryEventParam("VMName", "VMName_UNINITIALIZED"))
-        self._common_parameters.append(TelemetryEventParam("TenantName", "TenantName_UNINITIALIZED"))
-        self._common_parameters.append(TelemetryEventParam("RoleName", "RoleName_UNINITIALIZED"))
-        self._common_parameters.append(TelemetryEventParam("RoleInstanceName", "RoleInstanceName_UNINITIALIZED"))
+        self._common_parameters.append(TelemetryEventParam(CommonTelemetryEventSchema.TenantName, "TenantName_UNINITIALIZED"))
+        self._common_parameters.append(TelemetryEventParam(CommonTelemetryEventSchema.RoleName, "RoleName_UNINITIALIZED"))
+        self._common_parameters.append(TelemetryEventParam(CommonTelemetryEventSchema.RoleInstanceName, "RoleInstanceName_UNINITIALIZED"))
         #
         # # Parameters from IMDS
-        self._common_parameters.append(TelemetryEventParam('Location', "Location_UNINITIALIZED"))
-        self._common_parameters.append(TelemetryEventParam('SubscriptionId', "SubscriptionId_UNINITIALIZED"))
-        self._common_parameters.append(TelemetryEventParam('ResourceGroupName', "ResourceGroupName_UNINITIALIZED"))
-        self._common_parameters.append(TelemetryEventParam('VMId', "VMId_UNINITIALIZED"))
-        self._common_parameters.append(TelemetryEventParam('ImageOrigin', 0))
+        self._common_parameters.append(TelemetryEventParam(CommonTelemetryEventSchema.Location, "Location_UNINITIALIZED"))
+        self._common_parameters.append(TelemetryEventParam(CommonTelemetryEventSchema.SubscriptionId, "SubscriptionId_UNINITIALIZED"))
+        self._common_parameters.append(TelemetryEventParam(CommonTelemetryEventSchema.ResourceGroupName, "ResourceGroupName_UNINITIALIZED"))
+        self._common_parameters.append(TelemetryEventParam(CommonTelemetryEventSchema.VMId, "VMId_UNINITIALIZED"))
+        self._common_parameters.append(TelemetryEventParam(CommonTelemetryEventSchema.ImageOrigin, 0))
 
     @staticmethod
     def _get_os_version():
@@ -351,21 +357,20 @@ class EventLogger(object):
 
         try:
             vminfo = protocol.get_vminfo()
-            parameters["VMName"].value = vminfo.vmName
-            parameters["TenantName"].value = vminfo.tenantName
-            parameters["RoleName"].value = vminfo.roleName
-            parameters["RoleInstanceName"].value = vminfo.roleInstanceName
+            parameters[CommonTelemetryEventSchema.TenantName].value = vminfo.tenantName
+            parameters[CommonTelemetryEventSchema.RoleName].value = vminfo.roleName
+            parameters[CommonTelemetryEventSchema.RoleInstanceName].value = vminfo.roleInstanceName
         except Exception as e:
             logger.warn("Failed to get VM info from goal state; will be missing from telemetry: {0}", ustr(e))
 
         try:
             imds_client = get_imds_client(protocol.get_endpoint())
             imds_info = imds_client.get_compute()
-            parameters['Location'].value = imds_info.location
-            parameters['SubscriptionId'].value = imds_info.subscriptionId
-            parameters['ResourceGroupName'].value = imds_info.resourceGroupName
-            parameters['VMId'].value = imds_info.vmId
-            parameters['ImageOrigin'].value = int(imds_info.image_origin)
+            parameters[CommonTelemetryEventSchema.Location].value = imds_info.location
+            parameters[CommonTelemetryEventSchema.SubscriptionId].value = imds_info.subscriptionId
+            parameters[CommonTelemetryEventSchema.ResourceGroupName].value = imds_info.resourceGroupName
+            parameters[CommonTelemetryEventSchema.VMId].value = imds_info.vmId
+            parameters[CommonTelemetryEventSchema.ImageOrigin].value = int(imds_info.image_origin)
         except Exception as e:
             logger.warn("Failed to get IMDS info; will be missing from telemetry: {0}", ustr(e))
 
@@ -427,13 +432,13 @@ class EventLogger(object):
             _log_event(name, op, message, duration, is_success=is_success)
 
         event = TelemetryEvent(TELEMETRY_EVENT_EVENT_ID, TELEMETRY_EVENT_PROVIDER_ID)
-        event.parameters.append(TelemetryEventParam('Name', str(name)))
-        event.parameters.append(TelemetryEventParam('Version', str(version)))
-        event.parameters.append(TelemetryEventParam('Operation', str(op)))
-        event.parameters.append(TelemetryEventParam('OperationSuccess', bool(is_success)))
-        event.parameters.append(TelemetryEventParam('Message', str(message)))
-        event.parameters.append(TelemetryEventParam('Duration', int(duration)))
-        self._add_common_event_parameters(event, datetime.utcnow())
+        event.parameters.append(TelemetryEventParam(GuestAgentExtensionEventsSchema.Name, str(name)))
+        event.parameters.append(TelemetryEventParam(GuestAgentExtensionEventsSchema.Version, str(version)))
+        event.parameters.append(TelemetryEventParam(GuestAgentExtensionEventsSchema.Operation, str(op)))
+        event.parameters.append(TelemetryEventParam(GuestAgentExtensionEventsSchema.OperationSuccess, bool(is_success)))
+        event.parameters.append(TelemetryEventParam(GuestAgentExtensionEventsSchema.Message, str(message)))
+        event.parameters.append(TelemetryEventParam(GuestAgentExtensionEventsSchema.Duration, int(duration)))
+        self.add_common_event_parameters(event, datetime.utcnow())
 
         data = get_properties(event)
         try:
@@ -443,12 +448,12 @@ class EventLogger(object):
 
     def add_log_event(self, level, message):
         event = TelemetryEvent(TELEMETRY_LOG_EVENT_ID, TELEMETRY_LOG_PROVIDER_ID)
-        event.parameters.append(TelemetryEventParam('EventName', WALAEventOperation.Log))
-        event.parameters.append(TelemetryEventParam('CapabilityUsed', logger.LogLevel.STRINGS[level]))
-        event.parameters.append(TelemetryEventParam('Context1', self._clean_up_message(message)))
-        event.parameters.append(TelemetryEventParam('Context2', ''))
-        event.parameters.append(TelemetryEventParam('Context3', ''))
-        self._add_common_event_parameters(event, datetime.utcnow())
+        event.parameters.append(TelemetryEventParam(GuestAgentGenericLogsSchema.EventName, WALAEventOperation.Log))
+        event.parameters.append(TelemetryEventParam(GuestAgentGenericLogsSchema.CapabilityUsed, logger.LogLevel.STRINGS[level]))
+        event.parameters.append(TelemetryEventParam(GuestAgentGenericLogsSchema.Context1, self._clean_up_message(message)))
+        event.parameters.append(TelemetryEventParam(GuestAgentGenericLogsSchema.Context2, datetime.utcnow().strftime(logger.Logger.LogTimeFormatInUTC)))
+        event.parameters.append(TelemetryEventParam(GuestAgentGenericLogsSchema.Context3, ''))
+        self.add_common_event_parameters(event, datetime.utcnow())
 
         data = get_properties(event)
         try:
@@ -472,11 +477,11 @@ class EventLogger(object):
             _log_event(AGENT_NAME, "METRIC", message, 0)
 
         event = TelemetryEvent(TELEMETRY_METRICS_EVENT_ID, TELEMETRY_EVENT_PROVIDER_ID)
-        event.parameters.append(TelemetryEventParam('Category', str(category)))
-        event.parameters.append(TelemetryEventParam('Counter', str(counter)))
-        event.parameters.append(TelemetryEventParam('Instance', str(instance)))
-        event.parameters.append(TelemetryEventParam('Value', float(value)))
-        self._add_common_event_parameters(event, datetime.utcnow())
+        event.parameters.append(TelemetryEventParam(GuestAgentPerfCounterEventsSchema.Category, str(category)))
+        event.parameters.append(TelemetryEventParam(GuestAgentPerfCounterEventsSchema.Counter, str(counter)))
+        event.parameters.append(TelemetryEventParam(GuestAgentPerfCounterEventsSchema.Instance, str(instance)))
+        event.parameters.append(TelemetryEventParam(GuestAgentPerfCounterEventsSchema.Value, float(value)))
+        self.add_common_event_parameters(event, datetime.utcnow())
 
         data = get_properties(event)
         try:
@@ -525,20 +530,24 @@ class EventLogger(object):
             else:
                 return message
 
-    def _add_common_event_parameters(self, event, event_timestamp):
+    def add_common_event_parameters(self, event, event_timestamp):
         """
         This method is called for all events and ensures all telemetry fields are added before the event is sent out.
         Note that the event timestamp is saved in the OpcodeName field.
         """
-        common_params = [TelemetryEventParam('GAVersion', CURRENT_AGENT),
-                         TelemetryEventParam('ContainerId', GoalState.ContainerID),
-                         TelemetryEventParam('OpcodeName', event_timestamp.strftime(u'%Y-%m-%dT%H:%M:%S.%fZ')),
-                         TelemetryEventParam('EventTid', threading.current_thread().ident),
-                         TelemetryEventParam('EventPid', os.getpid()),
-                         TelemetryEventParam('TaskName', threading.current_thread().getName()),
-                         TelemetryEventParam('KeywordName', ''),
-                         TelemetryEventParam('ExtensionType', event.file_type),
-                         TelemetryEventParam('IsInternal', False)]
+        common_params = [TelemetryEventParam(CommonTelemetryEventSchema.GAVersion, CURRENT_AGENT),
+                         TelemetryEventParam(CommonTelemetryEventSchema.ContainerId, AgentGlobals.get_container_id()),
+                         TelemetryEventParam(CommonTelemetryEventSchema.OpcodeName, event_timestamp.strftime(logger.Logger.LogTimeFormatInUTC)),
+                         TelemetryEventParam(CommonTelemetryEventSchema.EventTid, threading.current_thread().ident),
+                         TelemetryEventParam(CommonTelemetryEventSchema.EventPid, os.getpid()),
+                         TelemetryEventParam(CommonTelemetryEventSchema.TaskName, threading.current_thread().getName()),
+                         TelemetryEventParam(CommonTelemetryEventSchema.KeywordName, '')]
+
+        if event.eventId == TELEMETRY_EVENT_EVENT_ID and event.providerId == TELEMETRY_EVENT_PROVIDER_ID:
+            # Currently only the GuestAgentExtensionEvents has these columns, the other tables dont have them so skipping
+            # this data in those tables.
+            common_params.extend([TelemetryEventParam(GuestAgentExtensionEventsSchema.ExtensionType, event.file_type),
+                         TelemetryEventParam(GuestAgentExtensionEventsSchema.IsInternal, False)])
 
         event.parameters.extend(common_params)
         event.parameters.extend(self._common_parameters)
@@ -554,7 +563,14 @@ class EventLogger(object):
         :param event: Extension event to trim.
         :return: Trimmed extension event; containing only extension-specific parameters.
         """
-        params_to_keep = dict().fromkeys(['Name', 'Version', 'Operation', 'OperationSuccess', 'Message', 'Duration'])
+        params_to_keep = dict().fromkeys([
+            GuestAgentExtensionEventsSchema.Name,
+            GuestAgentExtensionEventsSchema.Version,
+            GuestAgentExtensionEventsSchema.Operation,
+            GuestAgentExtensionEventsSchema.OperationSuccess,
+            GuestAgentExtensionEventsSchema.Message,
+            GuestAgentExtensionEventsSchema.Duration
+        ])
         trimmed_params = []
 
         for param in event.parameters:
@@ -563,14 +579,25 @@ class EventLogger(object):
 
         event.parameters = trimmed_params
 
+    @staticmethod
+    def report_dropped_events_error(count, errors, op, max_errors_to_report):
+        err_msg_format = "DroppedEventsCount: {0}\nReasons (first {1} errors): {2}"
+        if count > 0:
+            add_event(op=op,
+                      message=err_msg_format.format(count, max_errors_to_report, ', '.join(errors)),
+                      is_success=False)
+
     def collect_events(self):
         """
         Retuns a list of events that need to be sent to the telemetry pipeline and deletes the corresponding files
         from the events directory.
         """
+        max_collect_errors_to_report = 5
         event_list = TelemetryEventList()
         event_directory_full_path = os.path.join(conf.get_lib_dir(), EVENTS_DIRECTORY)
         event_files = os.listdir(event_directory_full_path)
+        unicode_error_count, unicode_errors = 0, []
+        collect_event_error_count, collect_event_errors = 0, []
 
         for event_file in event_files:
             try:
@@ -599,15 +626,27 @@ class EventLogger(object):
 
                         if event.is_extension_event():
                             EventLogger._trim_extension_event_parameters(event)
-                            self._add_common_event_parameters(event, event_file_creation_time)
+                            self.add_common_event_parameters(event, event_file_creation_time)
                         else:
                             self._update_legacy_agent_event(event, event_file_creation_time)
 
                     event_list.events.append(event)
                 finally:
                     os.remove(event_file_path)
+            except UnicodeError as e:
+                unicode_error_count += 1
+                if len(unicode_errors) < max_collect_errors_to_report:
+                    unicode_errors.append(ustr(e))
             except Exception as e:
-                logger.warn("Failed to process event file {0}: {1}", event_file, ustr(e))
+                collect_event_error_count += 1
+                if len(collect_event_errors) < max_collect_errors_to_report:
+                    collect_event_errors.append(ustr(e))
+
+        EventLogger.report_dropped_events_error(collect_event_error_count, collect_event_errors,
+                                                WALAEventOperation.CollectEventErrors, max_collect_errors_to_report)
+        EventLogger.report_dropped_events_error(unicode_error_count, unicode_errors,
+                                                WALAEventOperation.CollectEventUnicodeErrors,
+                                                max_collect_errors_to_report)
 
         return event_list
 
@@ -616,7 +655,7 @@ class EventLogger(object):
         # will be appended, ensuring the event schema is complete before the event is reported.
         new_event = TelemetryEvent()
         new_event.parameters = []
-        self._add_common_event_parameters(new_event, event_creation_time)
+        self.add_common_event_parameters(new_event, event_creation_time)
 
         event_params = dict([(param.name, param.value) for param in event.parameters])
         new_event_params = dict([(param.name, param.value) for param in new_event.parameters])
@@ -630,6 +669,9 @@ class EventLogger(object):
 
 
 __event_logger__ = EventLogger()
+
+def get_event_logger():
+    return __event_logger__
 
 
 def elapsed_milliseconds(utc_start):
@@ -688,7 +730,7 @@ def initialize_event_logger_vminfo_common_parameters(protocol, reporter=__event_
     reporter.initialize_vminfo_common_parameters(protocol)
 
 
-def add_event(name, op=WALAEventOperation.Unknown, is_success=True, duration=0, version=str(CURRENT_VERSION),
+def add_event(name=AGENT_NAME, op=WALAEventOperation.Unknown, is_success=True, duration=0, version=str(CURRENT_VERSION),
               message="", log_event=True, reporter=__event_logger__):
     if reporter.event_dir is None:
         logger.warn("Cannot add event -- Event reporter is not initialized.")
@@ -702,17 +744,19 @@ def add_event(name, op=WALAEventOperation.Unknown, is_success=True, duration=0, 
                            log_event=log_event)
 
 
-def add_log_event(level, message, reporter=__event_logger__):
+def add_log_event(level, message, forced=False, reporter=__event_logger__):
     """
     :param level: LoggerLevel of the log event
     :param message: Message
+    :param forced: Force write the event even if send_logs_to_telemetry() is disabled
+        (NOTE: Remove this flag once send_logs_to_telemetry() is enabled for all events)
     :param reporter:
     :return:
     """
     if reporter.event_dir is None:
         return
 
-    if not send_logs_to_telemetry():
+    if not (forced or send_logs_to_telemetry()):
         return
 
     if level >= logger.LogLevel.WARNING:

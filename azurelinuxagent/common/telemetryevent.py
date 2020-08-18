@@ -20,6 +20,58 @@
 from azurelinuxagent.common.datacontract import DataContract, DataContractList
 from azurelinuxagent.common.version import AGENT_NAME
 
+class CommonTelemetryEventSchema(object):
+
+    # Common schema keys for GuestAgentExtensionEvents, GuestAgentGenericLogs
+    # and GuestAgentPerformanceCounterEvents tables in Kusto.
+    EventPid = "EventPid"
+    EventTid = "EventTid"
+    GAVersion = "GAVersion"
+    ContainerId = "ContainerId"
+    TaskName = "TaskName"
+    OpcodeName = "OpcodeName"
+    KeywordName = "KeywordName"
+    OSVersion = "OSVersion"
+    ExecutionMode = "ExecutionMode"
+    RAM = "RAM"
+    Processors = "Processors"
+    TenantName = "TenantName"
+    RoleName = "RoleName"
+    RoleInstanceName = "RoleInstanceName"
+    Location = "Location"
+    SubscriptionId = "SubscriptionId"
+    ResourceGroupName = "ResourceGroupName"
+    VMId = "VMId"
+    ImageOrigin = "ImageOrigin"
+
+class GuestAgentGenericLogsSchema(CommonTelemetryEventSchema):
+
+    # GuestAgentGenericLogs table specific schema keys
+    EventName = "EventName"
+    CapabilityUsed = "CapabilityUsed"
+    Context1 = "Context1"
+    Context2 = "Context2"
+    Context3 = "Context3"
+
+class GuestAgentExtensionEventsSchema(CommonTelemetryEventSchema):
+
+    # GuestAgentExtensionEvents table specific schema keys
+    ExtensionType = "ExtensionType"
+    IsInternal = "IsInternal"
+    Name = "Name"
+    Version = "Version"
+    Operation = "Operation"
+    OperationSuccess = "OperationSuccess"
+    Message = "Message"
+    Duration = "Duration"
+
+class GuestAgentPerfCounterEventsSchema(CommonTelemetryEventSchema):
+
+    # GuestAgentPerformanceCounterEvents table specific schema keys
+    Category = "Category"
+    Counter = "Counter"
+    Instance = "Instance"
+    Value = "Value"
 
 class TelemetryEventParam(DataContract):
     def __init__(self, name=None, value=None):
@@ -46,13 +98,13 @@ class TelemetryEvent(DataContract):
         # parameter, in the case of log and metric events. So, in case the Name parameter exists and it is not
         # "WALinuxAgent", it is an extension event.
         for param in self.parameters:
-            if param.name == "Name":
+            if param.name == GuestAgentExtensionEventsSchema.Name:
                 return param.value != AGENT_NAME
         return False
 
     def get_version(self):
         for param in self.parameters:
-            if param.name == "Version":
+            if param.name == GuestAgentExtensionEventsSchema.Version:
                 return param.value
         return None
 

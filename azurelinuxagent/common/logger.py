@@ -36,6 +36,10 @@ class Logger(object):
     """
     Logger class
     """
+
+    # This format is based on ISO-8601, Z represents UTC (Zero offset)
+    LogTimeFormatInUTC = u'%Y-%m-%dT%H:%M:%S.%fZ'
+
     def __init__(self, logger=None, prefix=None):
         self.appenders = []
         self.logger = self if logger is None else logger
@@ -132,8 +136,7 @@ class Logger(object):
             msg = msg_format.format(*args)
         else:
             msg = msg_format
-            # This format is based on ISO-8601, Z represents UTC (Zero offset)
-        time = datetime.utcnow().strftime(u'%Y-%m-%dT%H:%M:%S.%fZ')
+        time = datetime.utcnow().strftime(Logger.LogTimeFormatInUTC)
         level_str = LogLevel.STRINGS[level]
         thread_name = currentThread().getName()
         if self.prefix is not None:

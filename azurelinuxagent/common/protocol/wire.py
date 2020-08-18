@@ -29,16 +29,18 @@ import azurelinuxagent.common.conf as conf
 import azurelinuxagent.common.logger as logger
 import azurelinuxagent.common.utils.textutil as textutil
 from azurelinuxagent.common.datacontract import validate_param
-from azurelinuxagent.common.event import add_event, add_periodic, WALAEventOperation, EVENTS_DIRECTORY
+from azurelinuxagent.common.event import add_event, add_periodic, WALAEventOperation, EVENTS_DIRECTORY, EventLogger, \
+    report_event
 from azurelinuxagent.common.exception import ProtocolNotFoundError, \
     ResourceGoneError, ExtensionDownloadError, InvalidContainerError, ProtocolError, HttpError
-from azurelinuxagent.common.future import httpclient, bytebuffer
+from azurelinuxagent.common.future import httpclient, bytebuffer, ustr
 from azurelinuxagent.common.protocol.extensions_config_retriever import ExtensionsConfigRetriever
 from azurelinuxagent.common.protocol.goal_state import GoalState, TRANSPORT_CERT_FILE_NAME, TRANSPORT_PRV_FILE_NAME, \
     ExtensionsConfig, UpdateType
 from azurelinuxagent.common.protocol.hostplugin import HostPluginProtocol
-from azurelinuxagent.common.protocol.restapi import *
-from azurelinuxagent.common.telemetryevent import TelemetryEventList
+from azurelinuxagent.common.protocol.restapi import DataContract, ExtensionStatus, ExtHandlerPackage, \
+    ExtHandlerPackageList, ExtHandlerVersionUri, ProvisionStatus, VMInfo, VMStatus
+from azurelinuxagent.common.telemetryevent import TelemetryEventList, GuestAgentExtensionEventsSchema
 from azurelinuxagent.common.utils import fileutil, restutil
 from azurelinuxagent.common.utils.archive import StateFlusher
 from azurelinuxagent.common.utils.cryptutil import CryptUtil
@@ -188,6 +190,9 @@ class WireProtocol(DataContract):
     def report_event(self, events):
         validate_param(EVENTS_DIRECTORY, events, TelemetryEventList)
         self.client.report_event(events)
+
+    def upload_logs(self, logs):
+        self.client.upload_logs(logs)
 
 
 def _build_role_properties(container_id, role_instance_id, thumbprint):
@@ -492,7 +497,7 @@ class StatusBlob(object):
 
 
 def event_param_to_v1(param):
-    param_format = '<Param Name="{0}" Value={1} T="{2}" />'
+    param_format = ustr('<Param Name="{0}" Value={1} T="{2}" />')
     param_type = type(param.value)
     attr_type = ""
     if param_type is int:
@@ -510,14 +515,12 @@ def event_param_to_v1(param):
                                attr_type)
 
 
-def event_to_v1(event):
+def event_to_v1_encoded(event, encoding='utf-8'):
     params = ""
     for param in event.parameters:
         params += event_param_to_v1(param)
-    event_str = ('<Event id="{0}">'
-                 '<![CDATA[{1}]]>'
-                 '</Event>').format(event.eventId, params)
-    return event_str
+    event_str = ustr('<Event id="{0}"><![CDATA[{1}]]></Event>').format(event.eventId, params)
+    return event_str.encode(encoding)
 
 
 class WireClient(object):
@@ -919,7 +922,6 @@ class WireClient(object):
         ret = None
         etag = None
         not_modified = False         # Corresponds to a 304 NOT MODIFIED response from the server
-
         try:
             if uses_etag:
                 ret, etag, not_modified = host_func()
@@ -1029,6 +1031,45 @@ class WireClient(object):
             logger.periodic_info(logger.EVERY_HALF_DAY, "[PERIODIC] Using host plugin as default channel.")
 
         ret, _, _ = self.call_hostplugin_with_container_check(host_func, uses_etag=False)
+
+        return ret
+
+    def send_request_using_appropriate_channel(self, direct_func, host_func):
+        # A wrapper method for all function calls that send HTTP requests. The purpose of the method is to
+        # define which channel to use, direct or through the host plugin. For the host plugin channel,
+        # also implement a retry mechanism.
+
+        # By default, the direct channel is the default channel. If that is the case, try getting a response
+        # through that channel. On failure, fall back to the host plugin channel.
+
+        # When using the host plugin channel, regardless if it's set as default or not, try sending the request first.
+        # On specific failures that indicate a stale goal state (such as resource gone or invalid container parameter),
+        # refresh the goal state and try again. If successful, set the host plugin channel as default. If failed,
+        # raise the exception.
+
+        # NOTE: direct_func and host_func are passed as lambdas. Be careful about capturing goal state data in them as
+        # they will not be refreshed even if a goal state refresh is called before retrying the host_func.
+
+        if not HostPluginProtocol.is_default_channel():
+            ret = None
+            try:
+                ret = direct_func()
+
+                # Different direct channel functions report failure in different ways: by returning None, False,
+                # or raising ResourceGone or InvalidContainer exceptions.
+                if not ret:
+                    logger.periodic_info(logger.EVERY_HOUR, "[PERIODIC] Request failed using the direct channel, "
+                                                            "switching to host plugin.")
+            except (ResourceGoneError, InvalidContainerError) as e:
+                logger.periodic_info(logger.EVERY_HOUR, "[PERIODIC] Request failed using the direct channel, "
+                                                        "switching to host plugin. Error: {0}".format(ustr(e)))
+
+            if ret:
+                return ret
+        else:
+            logger.periodic_info(logger.EVERY_HALF_DAY, "[PERIODIC] Using host plugin as default channel.")
+
+        ret = self._call_hostplugin_with_container_check(host_func)
 
         if not HostPluginProtocol.is_default_channel():
             logger.info("Setting host plugin as default channel from now on. "
@@ -1152,14 +1193,13 @@ class WireClient(object):
                                  u",{0}: {1}").format(resp.status,
                                                       resp.read()))
 
-    def send_event(self, provider_id, event_str):
+    def send_encoded_event(self, provider_id, event_str, encoding='utf-8'):
         uri = TELEMETRY_URI.format(self.get_endpoint())
-        data_format = ('<?xml version="1.0"?>'
-                       '<TelemetryData version="1.0">'
-                       '<Provider id="{0}">{1}'
-                       '</Provider>'
-                       '</TelemetryData>')
-        data = data_format.format(provider_id, event_str)
+        data_format_header = ustr('<?xml version="1.0"?><TelemetryData version="1.0"><Provider id="{0}">').format(
+            provider_id).encode(encoding)
+        data_format_footer = ustr('</Provider></TelemetryData>').encode(encoding)
+        # Event string should already be encoded by the time it gets here, to avoid double encoding, dividing it into parts.
+        data = data_format_header + event_str + data_format_footer
         try:
             header = self.get_header_for_xml_content()
             # NOTE: The call to wireserver requests utf-8 encoding in the headers, but the body should not
@@ -1174,33 +1214,56 @@ class WireClient(object):
                 "Failed to send events:{0}".format(resp.status))
 
     def report_event(self, event_list):
+        max_send_errors_to_report = 5
         buf = {}
+        events_per_request = 0
+        unicode_error_count, unicode_errors = 0, []
+        event_report_error_count, event_report_errors = 0, []
+
         # Group events by providerId
         for event in event_list.events:
-            if event.providerId not in buf:
-                buf[event.providerId] = ""
-            event_str = event_to_v1(event)
-            if len(event_str) >= MAX_EVENT_BUFFER_SIZE:
-                details_of_event = [ustr(x.name) + ":" + ustr(x.value) for x in event.parameters if x.name in
-                                    ["Name", "Version", "Operation", "OperationSuccess"]]
-                logger.periodic_warn(logger.EVERY_HALF_HOUR,
-                                     "Single event too large: {0}, with the length: {1} more than the limit({2})"
-                                     .format(str(details_of_event), len(event_str), MAX_EVENT_BUFFER_SIZE))
-                continue
-            if len(buf[event.providerId] + event_str) >= MAX_EVENT_BUFFER_SIZE:
-                self.send_event(event.providerId, buf[event.providerId])
-                buf[event.providerId] = ""
-            buf[event.providerId] = buf[event.providerId] + event_str
+            try:
+                if event.providerId not in buf:
+                    buf[event.providerId] = b''
+                event_str = event_to_v1_encoded(event)
+                if len(event_str) >= MAX_EVENT_BUFFER_SIZE:
+                    details_of_event = [ustr(x.name) + ":" + ustr(x.value) for x in event.parameters if x.name in
+                                        [GuestAgentExtensionEventsSchema.Name, GuestAgentExtensionEventsSchema.Version,
+                                         GuestAgentExtensionEventsSchema.Operation,
+                                         GuestAgentExtensionEventsSchema.OperationSuccess]]
+                    logger.periodic_warn(logger.EVERY_HALF_HOUR,
+                                         "Single event too large: {0}, with the length: {1} more than the limit({2})"
+                                         .format(str(details_of_event), len(event_str), MAX_EVENT_BUFFER_SIZE))
+                    continue
+                if len(buf[event.providerId] + event_str) >= MAX_EVENT_BUFFER_SIZE:
+                    self.send_encoded_event(event.providerId, buf[event.providerId])
+                    buf[event.providerId] = b''
+                    logger.verbose("No of events this request = {0}".format(events_per_request))
+                    events_per_request = 0
+                buf[event.providerId] = buf[event.providerId] + event_str
+                events_per_request += 1
+            except UnicodeError as e:
+                unicode_error_count += 1
+                if len(unicode_errors) < max_send_errors_to_report:
+                    unicode_errors.append(ustr(e))
+            except Exception as e:
+                event_report_error_count += 1
+                if len(event_report_errors) < max_send_errors_to_report:
+                    event_report_errors.append(ustr(e))
+
+        EventLogger.report_dropped_events_error(event_report_error_count, event_report_errors,
+                                                WALAEventOperation.CollectEventErrors, max_send_errors_to_report)
+        EventLogger.report_dropped_events_error(unicode_error_count, unicode_errors,
+                                                WALAEventOperation.CollectEventUnicodeErrors,
+                                                max_send_errors_to_report)
 
         # Send out all events left in buffer.
         for provider_id in list(buf.keys()):
             if len(buf[provider_id]) > 0:
-                self.send_event(provider_id, buf[provider_id])
+                logger.verbose("No of events this request = {0}".format(events_per_request))
+                self.send_encoded_event(provider_id, buf[provider_id])
 
     def report_status_event(self, message, is_success):
-        from azurelinuxagent.common.event import report_event, \
-            WALAEventOperation
-
         report_event(op=WALAEventOperation.ReportStatus,
                      is_success=is_success,
                      message=message,
@@ -1272,7 +1335,6 @@ class WireClient(object):
                     msg = "Content: [{0}]".format(profile)
                     logger.verbose(msg)
 
-                    from azurelinuxagent.common.event import report_event, WALAEventOperation
                     report_event(op=WALAEventOperation.ArtifactsProfileBlob,
                                  is_success=False,
                                  message=msg,
@@ -1289,6 +1351,14 @@ class WireClient(object):
                 self.vm_artifacts_profile_etag = etag
 
         return artifacts_profile
+
+    def upload_logs(self, content):
+        host_func = lambda: self._upload_logs_through_host(content)
+        return self._call_hostplugin_with_container_check(host_func)
+
+    def _upload_logs_through_host(self, content):
+        host = self.get_host_plugin()
+        return host.put_vm_log(content)
 
 
 class VersionInfo(object):

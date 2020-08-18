@@ -38,8 +38,9 @@ import azurelinuxagent.common.utils.fileutil as fileutil
 import azurelinuxagent.common.version as version
 from azurelinuxagent.common.cgroupconfigurator import CGroupConfigurator
 from azurelinuxagent.common.datacontract import get_properties, set_properties
-from azurelinuxagent.common.errorstate import ERROR_STATE_DELTA_INSTALL, ErrorState
-from azurelinuxagent.common.event import add_event, elapsed_milliseconds, report_event, WALAEventOperation, add_periodic
+from azurelinuxagent.common.errorstate import ErrorState
+from azurelinuxagent.common.event import add_event, elapsed_milliseconds, report_event, WALAEventOperation, \
+    add_periodic, EVENTS_DIRECTORY
 from azurelinuxagent.common.exception import ExtensionDownloadError, ExtensionError, ExtensionErrorCodes, \
     ExtensionOperationError, ExtensionUpdateError, ProtocolError, ProtocolNotFoundError
 from azurelinuxagent.common.future import ustr
@@ -49,16 +50,16 @@ from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
 from azurelinuxagent.common.version import AGENT_NAME, CURRENT_VERSION, DISTRO_NAME, DISTRO_VERSION, \
     GOAL_STATE_AGENT_VERSION, PY_VERSION_MAJOR, PY_VERSION_MICRO, PY_VERSION_MINOR
 
-_HANDLER_PATTERN = r'^([^-]+)-(\d+(?:\.\d+)*)'
+_HANDLER_NAME_PATTERN = r'^([^-]+)'
+_HANDLER_VERSION_PATTERN = r'(\d+(?:\.\d+)*)'
+_HANDLER_PATTERN = _HANDLER_NAME_PATTERN + r"-" + _HANDLER_VERSION_PATTERN #r'^([^-]+)-(\d+(?:\.\d+)*)'
 _HANDLER_PKG_PATTERN = re.compile(_HANDLER_PATTERN + r'\.zip$', re.IGNORECASE)
 _DEFAULT_EXT_TIMEOUT_MINUTES = 90
 
-# HandlerEnvironment.json schema version
-_HANDLER_ENVIRONMENT_VERSION = 1.0
-
 _VALID_HANDLER_STATUS = ['Ready', 'NotReady', "Installing", "Unresponsive"]
 
-HANDLER_NAME_PATTERN = re.compile(_HANDLER_PATTERN + r'$', re.IGNORECASE)
+HANDLER_NAME_PATTERN = re.compile(_HANDLER_NAME_PATTERN, re.IGNORECASE)
+HANDLER_COMPLETE_NAME_PATTERN = re.compile(_HANDLER_PATTERN + r'$', re.IGNORECASE)
 HANDLER_PKG_EXT = ".zip"
 
 AGENT_STATUS_FILE = "waagent_status.json"
@@ -79,6 +80,11 @@ _TRUNCATED_SUFFIX = u" ... [TRUNCATED]"
 # Status file specific retries and delays.
 _NUM_OF_STATUS_FILE_RETRIES = 5
 _STATUS_FILE_RETRY_DELAY = 2  # seconds
+
+_ENABLE_EXTENSION_TELEMETRY_PIPELINE = False
+
+def is_extension_telemetry_pipeline_enabled():
+    return _ENABLE_EXTENSION_TELEMETRY_PIPELINE
 
 
 class ValidHandlerStatus(object):
@@ -221,8 +227,30 @@ class ExtHandlerState(object):
     FailedUpgrade = "FailedUpgrade"
 
 
+class ExtensionRequestedState(object):
+    """
+    This is the state of the Extension as requested by the Goal State.
+    CRP only supports 2 states as of now - Enabled and Uninstall
+    Disabled was used for older XML extensions and we keep it to support backward compatibility.
+    """
+    Enabled = u"enabled"
+    Disabled = u"disabled"
+    Uninstall = u"uninstall"
+
+
 def get_exthandlers_handler(protocol):
     return ExtHandlersHandler(protocol)
+
+
+def list_agent_lib_directory(skip_agent_package=True):
+    lib_dir = conf.get_lib_dir()
+    for name in os.listdir(lib_dir):
+        path = os.path.join(lib_dir, name)
+
+        if skip_agent_package and (version.is_agent_package(path) or version.is_agent_path(path)):
+            continue
+
+        yield name, path
 
 
 class ExtHandlersHandler(object):
@@ -271,6 +299,21 @@ class ExtHandlersHandler(object):
     def goal_state_description(self):
         return self.ext_config.get_description()
 
+    @staticmethod
+    def get_ext_handler_instance_from_path(name, path, protocol, skip_handlers=None):
+        if not os.path.isdir(path) or re.match(HANDLER_NAME_PATTERN, name) is None:
+            return None
+        separator = name.rfind('-')
+        handler_name = name[0:separator]
+        if skip_handlers is not None and handler_name in skip_handlers:
+            # Handler in skip_handlers list, not parsing it
+            return None
+
+        eh = ExtHandler(name=handler_name)
+        eh.properties.version = str(FlexibleVersion(name[separator + 1:]))
+
+        return ExtHandlerInstance(eh, protocol)
+
     def _cleanup_outdated_handlers(self):
         handlers = []
         pkgs = []
@@ -280,31 +323,21 @@ class ExtHandlersHandler(object):
         # Note:
         # -- An orphaned package is one without a corresponding handler
         #    directory
-        for item in os.listdir(conf.get_lib_dir()):
-            path = os.path.join(conf.get_lib_dir(), item)
 
-            if version.is_agent_package(path) or version.is_agent_path(path):
+        for item, path in list_agent_lib_directory(skip_agent_package=True):
+            try:
+                handler_instance = ExtHandlersHandler.get_ext_handler_instance_from_path(name=item,
+                                                                                         path=path,
+                                                                                         protocol=self.protocol,
+                                                                                         skip_handlers=ext_handlers_in_gs)
+                if handler_instance is not None:
+                    # Since this handler name doesn't exist in the GS, marking it for deletion
+                    handlers.append(handler_instance)
+                    continue
+            except Exception:
                 continue
 
-            if os.path.isdir(path):
-                if re.match(HANDLER_NAME_PATTERN, item) is None:
-                    continue
-                try:
-                    separator = item.rfind('-')
-                    handler_name = item[0:separator]
-                    if handler_name in ext_handlers_in_gs:
-                        # Handler in GS, keeping it
-                        continue
-
-                    eh = ExtHandler(name=handler_name)
-                    eh.properties.version = str(FlexibleVersion(item[separator + 1:]))
-
-                    # Since this handler name doesn't exist in the GS, marking it for deletion
-                    handlers.append(ExtHandlerInstance(eh, self.protocol))
-                except Exception:
-                    continue
-
-            elif os.path.isfile(path) and \
+            if os.path.isfile(path) and \
                     not os.path.isdir(path[0:-len(HANDLER_PKG_EXT)]):
                 if not re.match(_HANDLER_PKG_PATTERN, item):
                     continue
@@ -420,7 +453,11 @@ class ExtHandlersHandler(object):
             self.log_gs_not_changed = True
             state = ext_handler.properties.state
 
-            if ext_handler_i.decide_version(target_state=state) is None:
+            # The Guest Agent currently only supports 1 installed version per extension on the VM.
+            # If the extension version is unregistered and the customers wants to uninstall the extension,
+            # we should let it go through even if the installed version doesnt exist in Handler manifest (PIR) anymore.
+            # If target state is enabled and version not found in manifest, do not process the extension.
+            if ext_handler_i.decide_version(target_state=state) is None and state == ExtensionRequestedState.Enabled:
                 version = ext_handler_i.ext_handler.properties.version
                 name = ext_handler_i.ext_handler.name
                 err_msg = "Unable to find version {0} in manifest for extension {1}".format(version, name)
@@ -430,11 +467,12 @@ class ExtHandlersHandler(object):
                 return
 
             ext_handler_i.logger.info("Target handler state: {0} [{1}]", state, self.ext_config.get_description())
-            if state == u"enabled":
+            if state == ExtensionRequestedState.Enabled:
+                self.log_etag = True
                 self.handle_enable(ext_handler_i)
-            elif state == u"disabled":
+            elif state == ExtensionRequestedState.Disabled:
                 self.handle_disable(ext_handler_i)
-            elif state == u"uninstall":
+            elif state == ExtensionRequestedState.Uninstall:
                 self.handle_uninstall(ext_handler_i)
             else:
                 message = u"Unknown ext handler state:{0}".format(state)
@@ -518,8 +556,13 @@ class ExtHandlersHandler(object):
                 logger.info("Continue on Update failure flag is set, proceeding with update")
             return exit_code
 
-        disable_exit_code = execute_old_handler_command_and_return_if_succeeds(
-            func=lambda: old_ext_handler_i.disable())
+        disable_exit_code = NOT_RUN
+        # We only want to disable the old handler if it is currently enabled; no
+        # other state makes sense.
+        if old_ext_handler_i.get_handler_state() == ExtHandlerState.Enabled:
+            disable_exit_code = execute_old_handler_command_and_return_if_succeeds(
+                func=lambda: old_ext_handler_i.disable())
+
         ext_handler_i.copy_status_files(old_ext_handler_i)
         if ext_handler_i.version_gt(old_ext_handler_i):
             ext_handler_i.update(disable_exit_code=disable_exit_code,
@@ -723,10 +766,10 @@ class ExtHandlerInstance(object):
         # Note:
         #  - A downgrade, which will be bound to the same major version,
         #    is allowed if the installed version is no longer available
-        if target_state == u"uninstall" or target_state == u"disabled":
+        if target_state in (ExtensionRequestedState.Uninstall, ExtensionRequestedState.Disabled):
             if installed_pkg is None:
-                msg = "Failed to find installed version of {0} " \
-                      "to uninstall".format(self.ext_handler.name)
+                msg = "Failed to find installed version: {0} of Handler: {1}  in handler manifest to uninstall.".format(
+                    installed_version, self.ext_handler.name)
                 self.logger.warn(msg)
             self.pkg = installed_pkg
             self.ext_handler.properties.version = str(installed_version) \
@@ -913,6 +956,9 @@ class ExtHandlerInstance(object):
             conf_dir = self.get_conf_dir()
             fileutil.mkdir(conf_dir, mode=0o700)
 
+            if is_extension_telemetry_pipeline_enabled():
+                fileutil.mkdir(self.get_extension_events_dir(), mode=0o700)
+
             seq_no, status_path = self.get_status_file_path()
             if status_path is not None:
                 now = datetime.datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
@@ -931,9 +977,6 @@ class ExtHandlerInstance(object):
         except IOError as e:
             fileutil.clean_ioerror(e, paths=[self.get_base_dir(), self.pkg_file])
             raise ExtensionDownloadError(u"Failed to initialize extension '{0}'".format(self.get_full_name()), e)
-
-        # Create cgroups for the extension
-        CGroupConfigurator.get_instance().create_extension_cgroups(self.get_full_name())
 
         # Save HandlerEnvironment.json
         self.create_handler_env()
@@ -1002,9 +1045,6 @@ class ExtHandlerInstance(object):
             message = "Failed to remove extension handler directory: {0}".format(e)
             self.report_event(message=message, is_success=False)
             self.logger.warn(message)
-
-        # Also remove the cgroups for the extension
-        CGroupConfigurator.get_instance().remove_extension_cgroups(self.get_full_name())
 
     def update(self, version=None, disable_exit_code=None, updating_from_version=None):
         if version is None:
@@ -1319,15 +1359,20 @@ class ExtHandlerInstance(object):
             self.update_settings_file(settings_file, json.dumps(ext_settings))
 
     def create_handler_env(self):
-        env = [{
-            "name": self.ext_handler.name,
-            "version": _HANDLER_ENVIRONMENT_VERSION,
-            "handlerEnvironment": {
-                "logFolder": self.get_log_dir(),
-                "configFolder": self.get_conf_dir(),
-                "statusFolder": self.get_status_dir(),
-                "heartbeatFile": self.get_heartbeat_file()
+        handler_env = {
+                HandlerEnvironment.logFolder: self.get_log_dir(),
+                HandlerEnvironment.configFolder: self.get_conf_dir(),
+                HandlerEnvironment.statusFolder: self.get_status_dir(),
+                HandlerEnvironment.heartbeatFile: self.get_heartbeat_file()
             }
+
+        if is_extension_telemetry_pipeline_enabled():
+            handler_env[HandlerEnvironment.eventsFolder] = self.get_extension_events_dir()
+
+        env = [{
+            HandlerEnvironment.name: self.ext_handler.name,
+            HandlerEnvironment.version: HandlerEnvironment.schemaVersion,
+            HandlerEnvironment.handlerEnvironment: handler_env
         }]
         try:
             fileutil.write_file(self.get_env_file(), json.dumps(env))
@@ -1429,6 +1474,9 @@ class ExtHandlerInstance(object):
     def get_conf_dir(self):
         return os.path.join(self.get_base_dir(), 'config')
 
+    def get_extension_events_dir(self):
+        return os.path.join(self.get_log_dir(), EVENTS_DIRECTORY)
+
     def get_heartbeat_file(self):
         return os.path.join(self.get_base_dir(), 'heartbeat.log')
 
@@ -1436,7 +1484,7 @@ class ExtHandlerInstance(object):
         return os.path.join(self.get_base_dir(), 'HandlerManifest.json')
 
     def get_env_file(self):
-        return os.path.join(self.get_base_dir(), 'HandlerEnvironment.json')
+        return os.path.join(self.get_base_dir(), HandlerEnvironment.fileName)
 
     def get_log_dir(self):
         return os.path.join(conf.get_ext_log_dir(), self.ext_handler.name)
@@ -1510,23 +1558,17 @@ class ExtHandlerInstance(object):
 
 
 class HandlerEnvironment(object):
-    def __init__(self, data):
-        self.data = data
-
-    def get_version(self):
-        return self.data["version"]
-
-    def get_log_dir(self):
-        return self.data["handlerEnvironment"]["logFolder"]
-
-    def get_conf_dir(self):
-        return self.data["handlerEnvironment"]["configFolder"]
-
-    def get_status_dir(self):
-        return self.data["handlerEnvironment"]["statusFolder"]
-
-    def get_heartbeat_file(self):
-        return self.data["handlerEnvironment"]["heartbeatFile"]
+    # HandlerEnvironment.json schema version
+    schemaVersion = 1.0
+    fileName = "HandlerEnvironment.json"
+    handlerEnvironment = "handlerEnvironment"
+    logFolder = "logFolder"
+    configFolder = "configFolder"
+    statusFolder = "statusFolder"
+    heartbeatFile = "heartbeatFile"
+    eventsFolder = "eventsFolder"
+    name = "name"
+    version = "version"
 
 
 class HandlerManifest(object):

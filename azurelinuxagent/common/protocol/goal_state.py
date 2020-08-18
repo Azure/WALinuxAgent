@@ -25,11 +25,17 @@ from azurelinuxagent.common.exception import ProtocolError
 
 import azurelinuxagent.common.conf as conf
 import azurelinuxagent.common.logger as logger
-from azurelinuxagent.common.datacontract import set_properties, DataContract, DataContractList
+from azurelinuxagent.common.AgentGlobals import AgentGlobals
+from azurelinuxagent.common.datacontract import set_properties
+from azurelinuxagent.common.event import add_event, WALAEventOperation
+from azurelinuxagent.common.future import ustr
+from azurelinuxagent.common.protocol.restapi import Cert, CertList, Extension, ExtHandler, ExtHandlerList, \
+    ExtHandlerVersionUri, RemoteAccessUser, RemoteAccessUsersList, \
+    VMAgentManifest, VMAgentManifestList, VMAgentManifestUri
 from azurelinuxagent.common.utils import fileutil
 from azurelinuxagent.common.utils.cryptutil import CryptUtil
 from azurelinuxagent.common.utils.textutil import parse_doc, findall, find, findtext, getattrib, gettext
-from azurelinuxagent.common.protocol.restapi import *
+from azurelinuxagent.common.version import AGENT_NAME
 
 GOAL_STATE_URI = "http://{0}/machine/?comp=goalstate"
 CERTS_FILE_NAME = "Certificates.xml"
@@ -85,7 +91,7 @@ class GoalState(object):
         self.container_id = findtext(container, "ContainerId")
         lbprobe_ports = find(xml_doc, "LBProbePorts")
         self.load_balancer_probe_port = findtext(lbprobe_ports, "Port")
-        GoalState.ContainerID = self.container_id
+        AgentGlobals.update_container_id(self.container_id)
 
         if retrieval_mode != UpdateType.HostPlugin:
             # Retrieve the extension config, which we need to determine if anything changed
@@ -384,12 +390,24 @@ class ExtensionsConfig(object):
 
         name = ext_handler.name
         version = ext_handler.properties.version
-        settings = [x for x in plugin_settings \
-                    if getattrib(x, "name") == name and \
-                    getattrib(x, "version") == version]
 
-        if settings is None or len(settings) == 0:
+        ext_handler_plugin_settings = [x for x in plugin_settings if getattrib(x, "name") == name]
+        if ext_handler_plugin_settings is None or len(ext_handler_plugin_settings) == 0:
             return
+
+        settings = [x for x in ext_handler_plugin_settings if getattrib(x, "version") == version]
+        if len(settings) != len(ext_handler_plugin_settings):
+            msg = "ExtHandler PluginSettings Version Mismatch! Expected PluginSettings version: {0} for Handler: " \
+                  "{1} but found versions: ({2})".format(version, name, ', '.join(
+                set([getattrib(x, "version") for x in ext_handler_plugin_settings])))
+            add_event(AGENT_NAME, op=WALAEventOperation.PluginSettingsVersionMismatch, message=msg, log_event=False,
+                      is_success=False)
+            if len(settings) == 0:
+                # If there is no corresponding settings for the specific extension handler, we will not process it at all,
+                # this is an unexpected error as we always expect both versions to be in sync.
+                logger.error(msg)
+                return
+            logger.warn(msg)
 
         runtime_settings = None
         runtime_settings_node = find(settings[0], "RuntimeSettings")

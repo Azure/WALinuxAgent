@@ -120,14 +120,14 @@ class CommandError(Exception):
     Exception raised by run_command when the command returns an error
     """
     @staticmethod
-    def _get_message(command, returncode):
+    def _get_message(command, return_code, stderr):
         command_name = command[0] if isinstance(command, list) and len(command) > 0 else command
-        return "'{0}' failed: {1}".format(command_name, returncode)
+        return "'{0}' failed: {1} ({2})".format(command_name, return_code, stderr.rstrip())
 
-    def __init__(self, command, returncode, stdout, stderr):
-        super(Exception, self).__init__(CommandError._get_message(command, returncode))
+    def __init__(self, command, return_code, stdout, stderr):
+        super(Exception, self).__init__(CommandError._get_message(command, return_code, stderr))
         self.command = command
-        self.returncode = returncode
+        self.returncode = return_code
         self.stdout = stdout
         self.stderr = stderr
 
@@ -169,7 +169,7 @@ def run_command(command, log_error=False, cmd_input=None):
                 returncode,
                 encoded_stdout,
                 encoded_stderr)
-        raise CommandError(command=command, returncode=returncode, stdout=encoded_stdout, stderr=encoded_stderr)
+        raise CommandError(command=command, return_code=returncode, stdout=encoded_stdout, stderr=encoded_stderr)
 
     return _encode_command_output(stdout)
 

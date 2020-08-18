@@ -15,22 +15,23 @@
 # Requires Python 2.6+ and Openssl 1.0+
 #
 
-import unittest
 import os
 import tempfile
-from multiprocessing import Queue
+import unittest
+from errno import ENOENT
 from threading import Thread
 
-from tests.tools import AgentTestCase, MagicMock, Mock, patch, clear_singleton_instances
-from azurelinuxagent.common.exception import *
-from azurelinuxagent.common.protocol.metadata_server_migration_util import _METADATA_PROTOCOL_NAME, \
-                                                                           _LEGACY_METADATA_SERVER_TRANSPORT_PRV_FILE_NAME, \
-                                                                           _LEGACY_METADATA_SERVER_TRANSPORT_CERT_FILE_NAME, \
-                                                                           _LEGACY_METADATA_SERVER_P7B_FILE_NAME
+from azurelinuxagent.common.exception import ProtocolError, DhcpError, OSUtilError
 from azurelinuxagent.common.protocol.goal_state import TRANSPORT_CERT_FILE_NAME, TRANSPORT_PRV_FILE_NAME
-from azurelinuxagent.common.protocol.util import get_protocol_util, ProtocolUtil, PROTOCOL_FILE_NAME, WIRE_PROTOCOL_NAME, ENDPOINT_FILE_NAME
+from azurelinuxagent.common.protocol.metadata_server_migration_util import _METADATA_PROTOCOL_NAME, \
+    _LEGACY_METADATA_SERVER_TRANSPORT_PRV_FILE_NAME, \
+    _LEGACY_METADATA_SERVER_TRANSPORT_CERT_FILE_NAME, \
+    _LEGACY_METADATA_SERVER_P7B_FILE_NAME
+from azurelinuxagent.common.protocol.util import get_protocol_util, ProtocolUtil, PROTOCOL_FILE_NAME, \
+    WIRE_PROTOCOL_NAME, ENDPOINT_FILE_NAME
 from azurelinuxagent.common.utils.restutil import KNOWN_WIRESERVER_IP
-from errno import ENOENT
+from tests.tools import AgentTestCase, MagicMock, Mock, patch, clear_singleton_instances
+
 
 @patch("time.sleep")
 class TestProtocolUtil(AgentTestCase):

@@ -20,6 +20,7 @@ import contextlib
 import json
 import os
 import re
+import socket
 import time
 import unittest
 import uuid
@@ -30,10 +31,11 @@ from azurelinuxagent.common.protocol.extensions_config_retriever import Extensio
 from azurelinuxagent.common.protocol.extensions_config_retriever import GenericExtensionsConfig
 from azurelinuxagent.common.protocol.hostplugin import HostPluginProtocol
 from azurelinuxagent.common.protocol.goal_state import ExtensionsConfig, GoalState
+from azurelinuxagent.common.protocol.restapi import VMAgentManifestUri
 from azurelinuxagent.common.protocol.wire import WireProtocol, WireClient, \
-    InVMArtifactsProfile, VMAgentManifestUri, StatusBlob, VMStatus, ExtHandlerVersionUri, DataContractList, socket, \
-    HEADER_ETAG
-from azurelinuxagent.common.telemetryevent import TelemetryEvent, TelemetryEventParam, TelemetryEventList
+    InVMArtifactsProfile, StatusBlob, VMStatus, ExtHandlerVersionUri, HEADER_ETAG
+from azurelinuxagent.common.telemetryevent import TelemetryEventList, GuestAgentExtensionEventsSchema, \
+    TelemetryEventParam, TelemetryEvent
 from azurelinuxagent.common.utils import restutil
 from azurelinuxagent.common.version import CURRENT_VERSION, DISTRO_NAME, DISTRO_VERSION
 from tests.ga.test_monitor import random_generator
@@ -41,7 +43,7 @@ from tests.protocol import mockwiredata
 from tests.protocol.mocks import mock_wire_protocol, HttpRequestPredicates
 from tests.protocol.mockwiredata import DATA_FILE_NO_EXT
 from tests.protocol.mockwiredata import WireProtocolData
-from tests.tools import MagicMock, Mock, patch, AgentTestCase
+from tests.tools import Mock, patch, AgentTestCase
 
 data_with_bom = b'\xef\xbb\xbfhehe'
 testurl = 'http://foo'
@@ -53,14 +55,14 @@ WIRESERVER_URL = '168.63.129.16'
 def get_event(message, duration=30000, evt_type="", is_internal=False, is_success=True,
               name="", op="Unknown", version=CURRENT_VERSION, eventId=1):
     event = TelemetryEvent(eventId, "XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX")
-    event.parameters.append(TelemetryEventParam('Name', name))
-    event.parameters.append(TelemetryEventParam('Version', str(version)))
-    event.parameters.append(TelemetryEventParam('IsInternal', is_internal))
-    event.parameters.append(TelemetryEventParam('Operation', op))
-    event.parameters.append(TelemetryEventParam('OperationSuccess', is_success))
-    event.parameters.append(TelemetryEventParam('Message', message))
-    event.parameters.append(TelemetryEventParam('Duration', duration))
-    event.parameters.append(TelemetryEventParam('ExtensionType', evt_type))
+    event.parameters.append(TelemetryEventParam(GuestAgentExtensionEventsSchema.Name, name))
+    event.parameters.append(TelemetryEventParam(GuestAgentExtensionEventsSchema.Version, str(version)))
+    event.parameters.append(TelemetryEventParam(GuestAgentExtensionEventsSchema.IsInternal, is_internal))
+    event.parameters.append(TelemetryEventParam(GuestAgentExtensionEventsSchema.Operation, op))
+    event.parameters.append(TelemetryEventParam(GuestAgentExtensionEventsSchema.OperationSuccess, is_success))
+    event.parameters.append(TelemetryEventParam(GuestAgentExtensionEventsSchema.Message, message))
+    event.parameters.append(TelemetryEventParam(GuestAgentExtensionEventsSchema.Duration, duration))
+    event.parameters.append(TelemetryEventParam(GuestAgentExtensionEventsSchema.ExtensionType, evt_type))
     return event
 
 
@@ -219,7 +221,6 @@ class TestWireProtocol(AgentTestCase):
         def http_put_handler(url, *_, **__):
             if protocol.get_endpoint() in url and url.endswith('/status'):
                 return MockResponse(body=b'', status_code=200)
-            self.fail('The upload status request was sent to the wrong url: {0}'.format(url))
 
         with mock_wire_protocol(mockwiredata.DATA_FILE, http_put_handler=http_put_handler) as protocol:
             HostPluginProtocol.set_default_channel(False)
@@ -369,12 +370,12 @@ class TestWireProtocol(AgentTestCase):
         self.assertEqual(json.dumps(v1_vm_status), actual.to_json(extensions_fast_track_enabled=False))
 
     @patch("azurelinuxagent.common.utils.restutil.http_request")
-    def test_send_event(self, mock_http_request, *args):
+    def test_send_encoded_event(self, mock_http_request, *args):
         mock_http_request.return_value = MockResponse("", 200)
 
         event_str = u'a test string'
         client = WireProtocol(WIRESERVER_URL).client
-        client.send_event("foo", event_str)
+        client.send_encoded_event("foo", event_str.encode('utf-8'))
 
         first_call = mock_http_request.call_args_list[0]
         args, kwargs = first_call
@@ -383,10 +384,10 @@ class TestWireProtocol(AgentTestCase):
 
         # the headers should include utf-8 encoding...
         self.assertTrue("utf-8" in headers['Content-Type'])
-        # the body is not encoded, just check for equality
-        self.assertIn(event_str, body_received)
+        # the body is encoded, decode and check for equality
+        self.assertIn(event_str, body_received.decode('utf-8'))
 
-    @patch("azurelinuxagent.common.protocol.wire.WireClient.send_event")
+    @patch("azurelinuxagent.common.protocol.wire.WireClient.send_encoded_event")
     def test_report_event_small_event(self, patch_send_event, *args):
         event_list = TelemetryEventList()
         client = WireProtocol(WIRESERVER_URL).client
@@ -408,7 +409,7 @@ class TestWireProtocol(AgentTestCase):
         # It merges the messages into one message
         self.assertEqual(patch_send_event.call_count, 1)
 
-    @patch("azurelinuxagent.common.protocol.wire.WireClient.send_event")
+    @patch("azurelinuxagent.common.protocol.wire.WireClient.send_encoded_event")
     def test_report_event_multiple_events_to_fill_buffer(self, patch_send_event, *args):
         event_list = TelemetryEventList()
         client = WireProtocol(WIRESERVER_URL).client
@@ -422,7 +423,7 @@ class TestWireProtocol(AgentTestCase):
         # It merges the messages into one message
         self.assertEqual(patch_send_event.call_count, 2)
 
-    @patch("azurelinuxagent.common.protocol.wire.WireClient.send_event")
+    @patch("azurelinuxagent.common.protocol.wire.WireClient.send_encoded_event")
     def test_report_event_large_event(self, patch_send_event, *args):
         event_list = TelemetryEventList()
         event_str = random_generator(2 ** 18)
@@ -893,6 +894,40 @@ class TestWireClient(HttpRequestPredicates, AgentTestCase):
             self.assertEquals(43, ret)
             self.assertEquals(0, direct_func.counter)
             self.assertEquals(1, host_func.counter)
+
+    def test_upload_logs_should_not_refresh_plugin_when_first_attempt_succeeds(self):
+        def http_put_handler(url, *_, **__):
+            if self.is_host_plugin_put_logs_request(url):
+                return MockResponse(body=b'', status_code=200)
+
+        with mock_wire_protocol(mockwiredata.DATA_FILE, http_put_handler=http_put_handler) as protocol:
+            content = b"test"
+            protocol.client.upload_logs(content)
+
+            urls = protocol.get_tracked_urls()
+            self.assertEqual(len(urls), 1, 'Expected one post request to the host: [{0}]'.format(urls))
+
+    def test_upload_logs_should_retry_the_host_channel_after_refreshing_the_host_plugin(self):
+        def http_put_handler(url, *_, **__):
+            if self.is_host_plugin_put_logs_request(url):
+                if http_put_handler.host_plugin_calls == 0:
+                    http_put_handler.host_plugin_calls += 1
+                    return ResourceGoneError("Exception to fake a stale goal state")
+                protocol.track_url(url)
+            return None
+        http_put_handler.host_plugin_calls = 0
+
+        with mock_wire_protocol(mockwiredata.DATA_FILE_IN_VM_ARTIFACTS_PROFILE, http_put_handler=http_put_handler) \
+                as protocol:
+            content = b"test"
+            protocol.client.upload_logs(content)
+
+            urls = protocol.get_tracked_urls()
+            self.assertEquals(len(urls), 2, "Invalid number of requests: [{0}]".format(urls))
+            self.assertTrue(self.is_host_plugin_put_logs_request(urls[0]),
+                            "The first request should have been over the host channel")
+            self.assertTrue(self.is_host_plugin_put_logs_request(urls[1]),
+                            "The second request should have been over the host channel")
 
     def test_send_request_using_appropriate_channel_should_not_invoke_host_channel_when_direct_channel_succeeds(self):
         with mock_wire_protocol(mockwiredata.DATA_FILE) as protocol:

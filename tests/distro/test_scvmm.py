@@ -17,14 +17,16 @@
 # Implements parts of RFC 2131, 1541, 1497 and
 # http://msdn.microsoft.com/en-us/library/cc227282%28PROT.10%29.aspx
 # http://msdn.microsoft.com/en-us/library/cc227259%28PROT.13%29.aspx
-
-import mock
-from tests.tools import AgentTestCase, Mock, patch
+import os
 import unittest
 
+import mock
+
 import azurelinuxagent.daemon.scvmm as scvmm
-from azurelinuxagent.daemon.main import *
+from azurelinuxagent.common import conf
 from azurelinuxagent.common.osutil.default import DefaultOSUtil
+from azurelinuxagent.common.utils import fileutil
+from tests.tools import AgentTestCase, Mock, patch
 
 
 class TestSCVMM(AgentTestCase):
@@ -49,7 +51,6 @@ class TestSCVMM(AgentTestCase):
                     self.assertTrue(po.call_count == 1)
                     # cleanup
                     os.remove(scvmm_file)
-
 
     def test_scvmm_detection_with_multiple_cdroms(self):
         # setup

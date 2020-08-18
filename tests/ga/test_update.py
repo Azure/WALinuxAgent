@@ -3,18 +3,45 @@
 
 from __future__ import print_function
 
+import contextlib
+import glob
+import json
+import os
+import shutil
+import stat
+import sys
 import tempfile
+import time
 import unittest
+import zipfile
+from datetime import datetime, timedelta
 from threading import currentThread
 
+from mock import PropertyMock
+
+from azurelinuxagent.common import conf
+from azurelinuxagent.common.event import EVENTS_DIRECTORY
+from azurelinuxagent.common.exception import ProtocolError, UpdateError, ResourceGoneError
+from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.protocol.goal_state import ExtensionsConfig
-from azurelinuxagent.common.protocol.hostplugin import *
+from azurelinuxagent.common.protocol.hostplugin import URI_FORMAT_GET_API_VERSIONS, HOST_PLUGIN_PORT, \
+    URI_FORMAT_GET_EXTENSION_ARTIFACT, HostPluginProtocol
+from azurelinuxagent.common.protocol.restapi import ExtHandlerPackageUri, VMAgentManifest, VMAgentManifestUri, \
+    VMAgentManifestList, ExtHandlerPackage, ExtHandlerPackageList, ExtHandler
 from azurelinuxagent.common.protocol.util import ProtocolUtil
-from azurelinuxagent.common.protocol.wire import *
-from azurelinuxagent.common.version import AGENT_PKG_GLOB, AGENT_DIR_GLOB
-from azurelinuxagent.ga.update import *
+from azurelinuxagent.common.protocol.wire import WireProtocol
+from azurelinuxagent.common.utils import fileutil, restutil, textutil
+from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
+from azurelinuxagent.common.version import AGENT_PKG_GLOB, AGENT_DIR_GLOB, AGENT_NAME, AGENT_DIR_PATTERN, \
+    AGENT_VERSION, CURRENT_AGENT, CURRENT_VERSION
+from azurelinuxagent.ga.exthandlers import ExtHandlerInstance, HandlerEnvironment
+from azurelinuxagent.ga.update import GuestAgent, GuestAgentError, MAX_FAILURE, AGENT_MANIFEST_FILE, \
+    get_update_handler, ORPHAN_POLL_INTERVAL, AGENT_PARTITION_FILE, AGENT_ERROR_FILE, ORPHAN_WAIT_INTERVAL, \
+    CHILD_LAUNCH_RESTART_MAX, get_python_cmd, CHILD_HEALTH_INTERVAL, UpdateHandler
+from tests.protocol.mocks import mock_wire_protocol
+from tests.protocol.mockwiredata import DATA_FILE, DATA_FILE_MULTIPLE_EXT
 from tests.tools import AgentTestCase, call, data_dir, DEFAULT, patch, load_bin_data, load_data, Mock, MagicMock, \
-    clear_singleton_instances
+    clear_singleton_instances, mock_sleep
 
 NO_ERROR = {
     "last_failure": 0.0,
@@ -1458,11 +1485,124 @@ class TestUpdate(UpdateTestCase):
         update_handler.last_telemetry_heartbeat = datetime.utcnow() - timedelta(hours=1)
         update_handler._send_heartbeat_telemetry(mock_protocol)
         self.assertEqual(1, patch_add_event.call_count)
-        self.assertTrue(
-            any(call_args[0] == "[HEARTBEAT] Agent {0} is running as the goal state agent" for call_args in patch_info.call_args),
-            "The heartbeat was not written to the agent's log"
-        )
+        self.assertTrue(any(call_args[0] == "[HEARTBEAT] Agent {0} is running as the goal state agent {1}"
+                            for call_args in patch_info.call_args), "The heartbeat was not written to the agent's log")
 
+    @contextlib.contextmanager
+    def _get_update_handler(self, iterations=1, test_data=DATA_FILE):
+        """
+        This function returns a mocked version of the UpdateHandler object to be used for testing. It will only run the
+        main loop [iterations] no of times.
+        To reuse the same object, be sure to reset the iterations by using the update_handler.set_iterations() function.
+        :param iterations: No of times the UpdateHandler.run() method should run.
+        :return: Mocked object of UpdateHandler() class and object of the MockWireProtocol().
+        """
+
+        def _set_iterations(iterations):
+            # This will reset the current iteration and the max iterations to run for this test object.
+            update_handler._cur_iteration = 0
+            update_handler._iterations = iterations
+
+        def check_running(*args, **kwargs):
+            # This method will determine if the current UpdateHandler object is supposed to run or not.
+            if update_handler._cur_iteration < update_handler._iterations:
+                update_handler._cur_iteration += 1
+                return True
+            return False
+
+        with mock_wire_protocol(test_data) as protocol:
+            protocol_util = MagicMock()
+            protocol_util.get_protocol = Mock(return_value=protocol)
+            with patch("azurelinuxagent.ga.update.get_protocol_util", return_value=protocol_util):
+                with patch("azurelinuxagent.common.conf.get_autoupdate_enabled", return_value=False):
+                    update_handler = get_update_handler()
+                    # Setup internal state for the object required for testing
+                    update_handler._cur_iteration = 0
+                    update_handler._iterations = 0
+                    update_handler.set_iterations = lambda i: _set_iterations(i)
+                    type(update_handler).running = PropertyMock(side_effect=check_running)
+                    with patch("time.sleep", side_effect=lambda _: mock_sleep(0.001)):
+                        with patch('sys.exit'):
+                            # Setup the initial number of iterations
+                            update_handler.set_iterations(iterations)
+                            try:
+                                yield update_handler, protocol
+                            finally:
+                                # Since PropertyMock requires us to mock the type(ClassName).property of the object,
+                                # reverting it back to keep the state of the test clean
+                                type(update_handler).running = True
+
+    @staticmethod
+    def _get_test_ext_handler_instance(protocol, name="OSTCExtensions.ExampleHandlerLinux", version="1.0.0"):
+        eh = ExtHandler(name=name)
+        eh.properties.version = version
+        return ExtHandlerInstance(eh, protocol)
+
+    def test_it_should_recreate_handler_env_on_service_startup(self):
+        iterations = 5
+
+        with self._get_update_handler(iterations) as (update_handler, protocol):
+            update_handler.run(debug=True)
+
+            expected_handler = self._get_test_ext_handler_instance(protocol)
+            handler_env_file = expected_handler.get_env_file()
+
+            self.assertTrue(os.path.exists(expected_handler.get_base_dir()), "Extension not found")
+            # First iteration should install the extension handler and
+            # subsequent iterations should not recreate the HandlerEnvironment file
+            last_modification_time = os.path.getmtime(handler_env_file)
+            self.assertEqual(os.path.getctime(handler_env_file), last_modification_time,
+                             "The creation time and last modified time of the HandlerEnvironment file dont match")
+
+            # Rerun the update handler and ensure that the HandlerEnvironment file is recreated with eventsFolder
+            # flag in HandlerEnvironment.json file
+            with patch('azurelinuxagent.ga.exthandlers._ENABLE_EXTENSION_TELEMETRY_PIPELINE',
+                       return_value=True):
+                update_handler.set_iterations(1)
+                update_handler.run(debug=True)
+
+            self.assertGreater(os.path.getmtime(handler_env_file), last_modification_time,
+                                "HandlerEnvironment file didn't get overwritten")
+
+            with open(handler_env_file, 'r') as handler_env_content_file:
+                content = json.load(handler_env_content_file)
+            self.assertIn(HandlerEnvironment.eventsFolder, content[0][HandlerEnvironment.handlerEnvironment],
+                          "{0} not found in HandlerEnv file".format(HandlerEnvironment.eventsFolder))
+
+    @contextlib.contextmanager
+    def _setup_test_for_ext_event_dirs_retention(self):
+        with self._get_update_handler(test_data=DATA_FILE_MULTIPLE_EXT) as (update_handler, protocol):
+            with patch('azurelinuxagent.ga.exthandlers._ENABLE_EXTENSION_TELEMETRY_PIPELINE', True):
+                update_handler.run(debug=True)
+                expected_events_dirs = glob.glob(os.path.join(conf.get_ext_log_dir(), "*", EVENTS_DIRECTORY))
+                no_of_extensions = protocol.mock_wire_data.get_no_of_plugins_in_extension_config()
+                # Ensure extensions installed and events directory created
+                self.assertEqual(len(expected_events_dirs), no_of_extensions, "Extension events directories dont match")
+                for ext_dir in expected_events_dirs:
+                    self.assertTrue(os.path.exists(ext_dir), "Extension directory {0} not created!".format(ext_dir))
+
+                yield update_handler, expected_events_dirs
+
+    def test_it_should_delete_extension_events_directory_if_extension_telemetry_pipeline_disabled(self):
+
+            # Disable extension telemetry pipeline and ensure events directory got deleted
+            with self._setup_test_for_ext_event_dirs_retention() as (update_handler, expected_events_dirs):
+                with patch('azurelinuxagent.ga.exthandlers._ENABLE_EXTENSION_TELEMETRY_PIPELINE', False):
+                    update_handler.run(debug=True)
+                    for ext_dir in expected_events_dirs:
+                        self.assertFalse(os.path.exists(ext_dir), "Extension directory {0} still exists!".format(ext_dir))
+
+    def test_it_should_retain_extension_events_directories_if_extension_telemetry_pipeline_enabled(self):
+
+            # Rerun update handler again with extension telemetry pipeline enabled to ensure we dont delete events directories
+            with self._setup_test_for_ext_event_dirs_retention() as (update_handler, expected_events_dirs):
+                update_handler.run(debug=True)
+                for ext_dir in expected_events_dirs:
+                    self.assertTrue(os.path.exists(ext_dir), "Extension directory {0} should exist!".format(ext_dir))
+
+
+@patch('azurelinuxagent.ga.update.get_monitor_handler')
+@patch('azurelinuxagent.ga.update.get_env_handler')
 class MonitorThreadTest(AgentTestCase):
     def setUp(self):
         AgentTestCase.setUp(self)
@@ -1487,12 +1627,23 @@ class MonitorThreadTest(AgentTestCase):
                 with patch('azurelinuxagent.ga.exthandlers.get_exthandlers_handler'):
                     with patch('azurelinuxagent.ga.remoteaccess.get_remote_access_handler'):
                         with patch('azurelinuxagent.ga.update.initialize_event_logger_vminfo_common_parameters'):
-                            with patch('time.sleep', side_effect=iterator):
-                                with patch('sys.exit'):
-                                    self.update_handler.run()
+                            with patch('azurelinuxagent.common.cgroupapi.CGroupsApi.cgroups_supported', return_value=False):  # skip all cgroup stuff
+                                with patch('time.sleep', side_effect=iterator):
+                                    with patch('sys.exit'):
+                                        self.update_handler.run()
 
-    @patch('azurelinuxagent.ga.monitor.get_monitor_handler')
-    @patch('azurelinuxagent.ga.env.get_env_handler')
+    def _setup_mock_thread_and_start_test_run(self, mock_thread, is_alive=True, invocations=0):
+        self.assertTrue(self.update_handler.running)
+
+        thread = MagicMock()
+        thread.run = MagicMock()
+        thread.is_alive = MagicMock(return_value=is_alive)
+        thread.start = MagicMock()
+        mock_thread.return_value = thread
+
+        self._test_run(invocations=invocations)
+        return thread
+
     def test_start_threads(self, mock_env, mock_monitor):
         self.assertTrue(self.update_handler.running)
 
@@ -1510,103 +1661,43 @@ class MonitorThreadTest(AgentTestCase):
         self.assertEqual(1, mock_env.call_count)
         self.assertEqual(1, mock_env_thread.run.call_count)
 
-    @patch('azurelinuxagent.ga.monitor.get_monitor_handler')
-    @patch('azurelinuxagent.ga.env.get_env_handler')
     def test_check_if_monitor_thread_is_alive(self, mock_env, mock_monitor):
-        self.assertTrue(self.update_handler.running)
-
-        mock_monitor_thread = MagicMock()
-        mock_monitor_thread.run = MagicMock()
-        mock_monitor_thread.is_alive = MagicMock(return_value=True)
-        mock_monitor_thread.start = MagicMock()
-        mock_monitor.return_value = mock_monitor_thread
-
-        self._test_run(invocations=0)
+        mock_monitor_thread = self._setup_mock_thread_and_start_test_run(mock_monitor, is_alive=True, invocations=0)
         self.assertEqual(1, mock_monitor.call_count)
         self.assertEqual(1, mock_monitor_thread.run.call_count)
         self.assertEqual(1, mock_monitor_thread.is_alive.call_count)
         self.assertEqual(0, mock_monitor_thread.start.call_count)
 
-    @patch('azurelinuxagent.ga.monitor.get_monitor_handler')
-    @patch('azurelinuxagent.ga.env.get_env_handler')
     def test_check_if_env_thread_is_alive(self, mock_env, mock_monitor):
-        self.assertTrue(self.update_handler.running)
-
-        mock_env_thread = MagicMock()
-        mock_env_thread.run = MagicMock()
-        mock_env_thread.is_alive = MagicMock(return_value=True)
-        mock_env_thread.start = MagicMock()
-        mock_env.return_value = mock_env_thread
-
-        self._test_run(invocations=1)
+        mock_env_thread = self._setup_mock_thread_and_start_test_run(mock_env, is_alive=True, invocations=1)
         self.assertEqual(1, mock_env.call_count)
         self.assertEqual(1, mock_env_thread.run.call_count)
         self.assertEqual(1, mock_env_thread.is_alive.call_count)
         self.assertEqual(0, mock_env_thread.start.call_count)
 
-    @patch('azurelinuxagent.ga.monitor.get_monitor_handler')
-    @patch('azurelinuxagent.ga.env.get_env_handler')
     def test_restart_monitor_thread_if_not_alive(self, mock_env, mock_monitor):
-        self.assertTrue(self.update_handler.running)
-
-        mock_monitor_thread = MagicMock()
-        mock_monitor_thread.run = MagicMock()
-        mock_monitor_thread.is_alive = MagicMock(return_value=False)
-        mock_monitor_thread.start = MagicMock()
-        mock_monitor.return_value = mock_monitor_thread
-
-        self._test_run(invocations=1)
+        mock_monitor_thread = self._setup_mock_thread_and_start_test_run(mock_monitor, is_alive=False, invocations=1)
         self.assertEqual(1, mock_monitor.call_count)
         self.assertEqual(1, mock_monitor_thread.run.call_count)
         self.assertEqual(1, mock_monitor_thread.is_alive.call_count)
         self.assertEqual(1, mock_monitor_thread.start.call_count)
 
-    @patch('azurelinuxagent.ga.monitor.get_monitor_handler')
-    @patch('azurelinuxagent.ga.env.get_env_handler')
     def test_restart_env_thread_if_not_alive(self, mock_env, mock_monitor):
-        self.assertTrue(self.update_handler.running)
-
-        mock_env_thread = MagicMock()
-        mock_env_thread.run = MagicMock()
-        mock_env_thread.is_alive = MagicMock(return_value=False)
-        mock_env_thread.start = MagicMock()
-        mock_env.return_value = mock_env_thread
-
-        self._test_run(invocations=1)
+        mock_env_thread = self._setup_mock_thread_and_start_test_run(mock_env, is_alive=False, invocations=1)
         self.assertEqual(1, mock_env.call_count)
         self.assertEqual(1, mock_env_thread.run.call_count)
         self.assertEqual(1, mock_env_thread.is_alive.call_count)
         self.assertEqual(1, mock_env_thread.start.call_count)
 
-    @patch('azurelinuxagent.ga.monitor.get_monitor_handler')
-    @patch('azurelinuxagent.ga.env.get_env_handler')
     def test_restart_monitor_thread(self, mock_env, mock_monitor):
-        self.assertTrue(self.update_handler.running)
-
-        mock_monitor_thread = MagicMock()
-        mock_monitor_thread.run = MagicMock()
-        mock_monitor_thread.is_alive = MagicMock(return_value=False)
-        mock_monitor_thread.start = MagicMock()
-        mock_monitor.return_value = mock_monitor_thread
-
-        self._test_run(invocations=0)
+        mock_monitor_thread = self._setup_mock_thread_and_start_test_run(mock_monitor, is_alive=False, invocations=0)
         self.assertEqual(True, mock_monitor.called)
         self.assertEqual(True, mock_monitor_thread.run.called)
         self.assertEqual(True, mock_monitor_thread.is_alive.called)
         self.assertEqual(True, mock_monitor_thread.start.called)
 
-    @patch('azurelinuxagent.ga.monitor.get_monitor_handler')
-    @patch('azurelinuxagent.ga.env.get_env_handler')
     def test_restart_env_thread(self, mock_env, mock_monitor):
-        self.assertTrue(self.update_handler.running)
-
-        mock_env_thread = MagicMock()
-        mock_env_thread.run = MagicMock()
-        mock_env_thread.is_alive = MagicMock(return_value=False)
-        mock_env_thread.start = MagicMock()
-        mock_env.return_value = mock_env_thread
-
-        self._test_run(invocations=0)
+        mock_env_thread = self._setup_mock_thread_and_start_test_run(mock_env, is_alive=False, invocations=0)
         self.assertEqual(True, mock_env.called)
         self.assertEqual(True, mock_env_thread.run.called)
         self.assertEqual(True, mock_env_thread.is_alive.called)
