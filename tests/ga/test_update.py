@@ -321,116 +321,6 @@ class TestGuestAgentError(UpdateTestCase):
         return
 
 
-@patch('azurelinuxagent.ga.update.get_collect_logs_handler')
-@patch('azurelinuxagent.ga.update.get_monitor_handler')
-@patch('azurelinuxagent.ga.update.get_env_handler')
-class MonitorThreadTest(AgentTestCase):
-    def setUp(self):
-        AgentTestCase.setUp(self)
-        self.event_patch = patch('azurelinuxagent.common.event.add_event')
-        currentThread().setName("ExtHandler")
-        self.update_handler = get_update_handler()
-        self.update_handler.protocol_util = Mock()
-        clear_singleton_instances(ProtocolUtil)
-
-    def _test_run(self, invocations=1):
-        iterations = [0]
-
-        def iterator(*args, **kwargs):
-            iterations[0] += 1
-            if iterations[0] >= invocations:
-                self.update_handler.running = False
-            return
-
-        with patch('os.getpid', return_value=42):
-            with patch.object(UpdateHandler, '_is_orphaned') as mock_is_orphaned:
-                mock_is_orphaned.__get__ = Mock(return_value=False)
-                with patch('azurelinuxagent.ga.exthandlers.get_exthandlers_handler'):
-                    with patch('azurelinuxagent.ga.remoteaccess.get_remote_access_handler'):
-                        with patch('azurelinuxagent.ga.update.initialize_event_logger_vminfo_common_parameters'):
-                            with patch('azurelinuxagent.common.cgroupapi.CGroupsApi.cgroups_supported', return_value=False):  # skip all cgroup stuff
-                                with patch('time.sleep', side_effect=iterator):
-                                    with patch('sys.exit'):
-                                        self.update_handler.run()
-
-    def _setup_mock_thread_and_start_test_run(self, mock_thread, is_alive=True, invocations=0):
-        self.assertTrue(self.update_handler.running)
-
-        thread = MagicMock()
-        thread.run = MagicMock()
-        thread.is_alive = MagicMock(return_value=is_alive)
-        thread.start = MagicMock()
-        mock_thread.return_value = thread
-
-        self._test_run(invocations=invocations)
-        return thread
-
-    def test_start_threads(self, mock_env, mock_monitor, mock_collect_logs):
-        self.assertTrue(self.update_handler.running)
-
-        mock_monitor_thread = MagicMock()
-        mock_monitor_thread.run = MagicMock()
-        mock_monitor.return_value = mock_monitor_thread
-
-        mock_env_thread = MagicMock()
-        mock_env_thread.run = MagicMock()
-        mock_env.return_value = mock_env_thread
-
-        mock_collect_logs_thread = MagicMock()
-        mock_collect_logs_thread.run = MagicMock()
-        mock_collect_logs.return_value = mock_collect_logs_thread
-
-        self._test_run(invocations=0)
-        self.assertEqual(1, mock_monitor.call_count)
-        self.assertEqual(1, mock_monitor_thread.run.call_count)
-        self.assertEqual(1, mock_env.call_count)
-        self.assertEqual(1, mock_env_thread.run.call_count)
-        self.assertEqual(1, mock_collect_logs.run.call_count)
-        self.assertEqual(1, mock_collect_logs_thread.run.call_count)
-
-    def test_check_if_monitor_thread_is_alive(self, mock_env, mock_monitor, mock_collect_logs):
-        mock_monitor_thread = self._setup_mock_thread_and_start_test_run(mock_monitor, is_alive=True, invocations=0)
-        self.assertEqual(1, mock_monitor.call_count)
-        self.assertEqual(1, mock_monitor_thread.run.call_count)
-        self.assertEqual(1, mock_monitor_thread.is_alive.call_count)
-        self.assertEqual(0, mock_monitor_thread.start.call_count)
-
-    def test_check_if_env_thread_is_alive(self, mock_env, mock_monitor, mock_collect_logs):
-        mock_env_thread = self._setup_mock_thread_and_start_test_run(mock_env, is_alive=True, invocations=1)
-        self.assertEqual(1, mock_env.call_count)
-        self.assertEqual(1, mock_env_thread.run.call_count)
-        self.assertEqual(1, mock_env_thread.is_alive.call_count)
-        self.assertEqual(0, mock_env_thread.start.call_count)
-
-    def test_restart_monitor_thread_if_not_alive(self, mock_env, mock_monitor, mock_collect_logs):
-        mock_monitor_thread = self._setup_mock_thread_and_start_test_run(mock_monitor, is_alive=False, invocations=1)
-        self.assertEqual(1, mock_monitor.call_count)
-        self.assertEqual(1, mock_monitor_thread.run.call_count)
-        self.assertEqual(1, mock_monitor_thread.is_alive.call_count)
-        self.assertEqual(1, mock_monitor_thread.start.call_count)
-
-    def test_restart_env_thread_if_not_alive(self, mock_env, mock_monitor, mock_collect_logs):
-        mock_env_thread = self._setup_mock_thread_and_start_test_run(mock_env, is_alive=False, invocations=1)
-        self.assertEqual(1, mock_env.call_count)
-        self.assertEqual(1, mock_env_thread.run.call_count)
-        self.assertEqual(1, mock_env_thread.is_alive.call_count)
-        self.assertEqual(1, mock_env_thread.start.call_count)
-
-    def test_restart_monitor_thread(self, mock_env, mock_monitor, mock_collect_logs):
-        mock_monitor_thread = self._setup_mock_thread_and_start_test_run(mock_monitor, is_alive=False, invocations=0)
-        self.assertEqual(True, mock_monitor.called)
-        self.assertEqual(True, mock_monitor_thread.run.called)
-        self.assertEqual(True, mock_monitor_thread.is_alive.called)
-        self.assertEqual(True, mock_monitor_thread.start.called)
-
-    def test_restart_env_thread(self, mock_env, mock_monitor, mock_collect_logs):
-        mock_env_thread = self._setup_mock_thread_and_start_test_run(mock_env, is_alive=False, invocations=0)
-        self.assertEqual(True, mock_env.called)
-        self.assertEqual(True, mock_env_thread.run.called)
-        self.assertEqual(True, mock_env_thread.is_alive.called)
-        self.assertEqual(True, mock_env_thread.start.called)
-
-
 class TestGuestAgent(UpdateTestCase):
     def setUp(self):
         UpdateTestCase.setUp(self)
@@ -1704,12 +1594,121 @@ class TestUpdate(UpdateTestCase):
                         self.assertFalse(os.path.exists(ext_dir), "Extension directory {0} still exists!".format(ext_dir))
 
     def test_it_should_retain_extension_events_directories_if_extension_telemetry_pipeline_enabled(self):
+        # Rerun update handler again with extension telemetry pipeline enabled to ensure we dont delete events directories
+        with self._setup_test_for_ext_event_dirs_retention() as (update_handler, expected_events_dirs):
+            update_handler.run(debug=True)
+            for ext_dir in expected_events_dirs:
+                self.assertTrue(os.path.exists(ext_dir), "Extension directory {0} should exist!".format(ext_dir))
 
-            # Rerun update handler again with extension telemetry pipeline enabled to ensure we dont delete events directories
-            with self._setup_test_for_ext_event_dirs_retention() as (update_handler, expected_events_dirs):
-                update_handler.run(debug=True)
-                for ext_dir in expected_events_dirs:
-                    self.assertTrue(os.path.exists(ext_dir), "Extension directory {0} should exist!".format(ext_dir))
+
+@patch('azurelinuxagent.ga.update.get_collect_logs_handler')
+@patch('azurelinuxagent.ga.update.get_monitor_handler')
+@patch('azurelinuxagent.ga.update.get_env_handler')
+class MonitorThreadTest(AgentTestCase):
+    def setUp(self):
+        AgentTestCase.setUp(self)
+        self.event_patch = patch('azurelinuxagent.common.event.add_event')
+        currentThread().setName("ExtHandler")
+        self.update_handler = get_update_handler()
+        self.update_handler.protocol_util = Mock()
+        clear_singleton_instances(ProtocolUtil)
+
+    def _test_run(self, invocations=1):
+        iterations = [0]
+
+        def iterator(*args, **kwargs):
+            iterations[0] += 1
+            if iterations[0] >= invocations:
+                self.update_handler.running = False
+            return
+
+        with patch('os.getpid', return_value=42):
+            with patch.object(UpdateHandler, '_is_orphaned') as mock_is_orphaned:
+                mock_is_orphaned.__get__ = Mock(return_value=False)
+                with patch('azurelinuxagent.ga.exthandlers.get_exthandlers_handler'):
+                    with patch('azurelinuxagent.ga.remoteaccess.get_remote_access_handler'):
+                        with patch('azurelinuxagent.ga.update.initialize_event_logger_vminfo_common_parameters'):
+                            with patch('azurelinuxagent.common.cgroupapi.CGroupsApi.cgroups_supported', return_value=False):  # skip all cgroup stuff
+                                with patch('time.sleep', side_effect=iterator):
+                                    with patch('sys.exit'):
+                                        self.update_handler.run()
+
+    def _setup_mock_thread_and_start_test_run(self, mock_thread, is_alive=True, invocations=0):
+        self.assertTrue(self.update_handler.running)
+
+        thread = MagicMock()
+        thread.run = MagicMock()
+        thread.is_alive = MagicMock(return_value=is_alive)
+        thread.start = MagicMock()
+        mock_thread.return_value = thread
+
+        self._test_run(invocations=invocations)
+        return thread
+
+    def test_start_threads(self, mock_env, mock_monitor, mock_collect_logs):
+        self.assertTrue(self.update_handler.running)
+
+        mock_monitor_thread = MagicMock()
+        mock_monitor_thread.run = MagicMock()
+        mock_monitor.return_value = mock_monitor_thread
+
+        mock_env_thread = MagicMock()
+        mock_env_thread.run = MagicMock()
+        mock_env.return_value = mock_env_thread
+
+        mock_collect_logs_thread = MagicMock()
+        mock_collect_logs_thread.run = MagicMock()
+        mock_collect_logs.return_value = mock_collect_logs_thread
+
+        self._test_run(invocations=0)
+        self.assertEqual(1, mock_monitor.call_count)
+        self.assertEqual(1, mock_monitor_thread.run.call_count)
+        self.assertEqual(1, mock_env.call_count)
+        self.assertEqual(1, mock_env_thread.run.call_count)
+        self.assertEqual(1, mock_collect_logs.run.call_count)
+        self.assertEqual(1, mock_collect_logs_thread.run.call_count)
+
+    def test_check_if_monitor_thread_is_alive(self, mock_env, mock_monitor, mock_collect_logs):
+        mock_monitor_thread = self._setup_mock_thread_and_start_test_run(mock_monitor, is_alive=True, invocations=0)
+        self.assertEqual(1, mock_monitor.call_count)
+        self.assertEqual(1, mock_monitor_thread.run.call_count)
+        self.assertEqual(1, mock_monitor_thread.is_alive.call_count)
+        self.assertEqual(0, mock_monitor_thread.start.call_count)
+
+    def test_check_if_env_thread_is_alive(self, mock_env, mock_monitor, mock_collect_logs):
+        mock_env_thread = self._setup_mock_thread_and_start_test_run(mock_env, is_alive=True, invocations=1)
+        self.assertEqual(1, mock_env.call_count)
+        self.assertEqual(1, mock_env_thread.run.call_count)
+        self.assertEqual(1, mock_env_thread.is_alive.call_count)
+        self.assertEqual(0, mock_env_thread.start.call_count)
+
+    def test_restart_monitor_thread_if_not_alive(self, mock_env, mock_monitor, mock_collect_logs):
+        mock_monitor_thread = self._setup_mock_thread_and_start_test_run(mock_monitor, is_alive=False, invocations=1)
+        self.assertEqual(1, mock_monitor.call_count)
+        self.assertEqual(1, mock_monitor_thread.run.call_count)
+        self.assertEqual(1, mock_monitor_thread.is_alive.call_count)
+        self.assertEqual(1, mock_monitor_thread.start.call_count)
+
+    def test_restart_env_thread_if_not_alive(self, mock_env, mock_monitor, mock_collect_logs):
+        mock_env_thread = self._setup_mock_thread_and_start_test_run(mock_env, is_alive=False, invocations=1)
+        self.assertEqual(1, mock_env.call_count)
+        self.assertEqual(1, mock_env_thread.run.call_count)
+        self.assertEqual(1, mock_env_thread.is_alive.call_count)
+        self.assertEqual(1, mock_env_thread.start.call_count)
+
+    def test_restart_monitor_thread(self, mock_env, mock_monitor, mock_collect_logs):
+        mock_monitor_thread = self._setup_mock_thread_and_start_test_run(mock_monitor, is_alive=False, invocations=0)
+        self.assertEqual(True, mock_monitor.called)
+        self.assertEqual(True, mock_monitor_thread.run.called)
+        self.assertEqual(True, mock_monitor_thread.is_alive.called)
+        self.assertEqual(True, mock_monitor_thread.start.called)
+
+    def test_restart_env_thread(self, mock_env, mock_monitor, mock_collect_logs):
+        mock_env_thread = self._setup_mock_thread_and_start_test_run(mock_env, is_alive=False, invocations=0)
+        self.assertEqual(True, mock_env.called)
+        self.assertEqual(True, mock_env_thread.run.called)
+        self.assertEqual(True, mock_env_thread.is_alive.called)
+        self.assertEqual(True, mock_env_thread.start.called)
 
 
 class ChildMock(Mock):
