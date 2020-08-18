@@ -47,12 +47,6 @@ def set_conf_files(data_files, dest="/etc", src=["config/waagent.conf"]):
     data_files.append((dest, src))
 
 
-def set_log_collector_files(data_files, dest="/var/lib/waagent/logcollector/manifests",
-                            src=["config/logcollector_manifest_full",
-                                 "config/logcollector_manifest_normal"]):
-    data_files.append((dest, src))
-
-
 def set_logrotate_files(data_files, dest="/etc/logrotate.d",
                         src=["config/waagent.logrotate",
                              "config/waagent-extn.logrotate"]):
@@ -93,7 +87,6 @@ def get_data_files(name, version, fullname):
     if name == 'redhat' or name == 'centos':
         set_bin_files(data_files)
         set_conf_files(data_files)
-        set_log_collector_files(data_files)
         set_logrotate_files(data_files)
         set_udev_files(data_files)
         if version.startswith("6"):
@@ -127,7 +120,6 @@ def get_data_files(name, version, fullname):
     elif name == 'ubuntu':
         set_bin_files(data_files)
         set_conf_files(data_files, src=["config/ubuntu/waagent.conf"])
-        set_log_collector_files(data_files)
         set_logrotate_files(data_files)
         set_udev_files(data_files)
         if version.startswith("12") or version.startswith("14"):
@@ -146,7 +138,6 @@ def get_data_files(name, version, fullname):
     elif name == 'suse' or name == 'opensuse':
         set_bin_files(data_files)
         set_conf_files(data_files, src=["config/suse/waagent.conf"])
-        set_log_collector_files(data_files)
         set_logrotate_files(data_files)
         set_udev_files(data_files)
         if fullname == 'SUSE Linux Enterprise Server' and \
@@ -169,7 +160,6 @@ def get_data_files(name, version, fullname):
     elif name == 'debian':
         set_bin_files(data_files)
         set_conf_files(data_files, src=["config/debian/waagent.conf"])
-        set_log_collector_files(data_files)
         set_logrotate_files(data_files)
         set_udev_files(data_files, dest="/lib/udev/rules.d")
         if debian_has_systemd():
@@ -266,9 +256,6 @@ setuptools.setup(
     url='https://github.com/Azure/WALinuxAgent',
     license='Apache License Version 2.0',
     packages=find_packages(exclude=["tests*"]),
-    package_data={
-        'config': ['logcollector_manifest_*']
-    },
     py_modules=modules,
     install_requires=requires,
     cmdclass={

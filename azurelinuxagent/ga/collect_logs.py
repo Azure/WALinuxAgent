@@ -23,16 +23,13 @@ import sys
 import threading
 import time
 
-import pkg_resources
-
 import azurelinuxagent.common.conf as conf
 from azurelinuxagent.common import logger
 from azurelinuxagent.common.event import elapsed_milliseconds, add_event, WALAEventOperation
 from azurelinuxagent.common.future import ustr
-from azurelinuxagent.common.logcollector import COMPRESSED_ARCHIVE_PATH, MANIFEST_FULL_NAME, \
-    MANIFEST_FULL_PATH, MANIFEST_NORMAL_NAME, MANIFEST_NORMAL_PATH
+from azurelinuxagent.common.logcollector import COMPRESSED_ARCHIVE_PATH
 from azurelinuxagent.common.protocol.util import get_protocol_util
-from azurelinuxagent.common.utils import shellutil, fileutil
+from azurelinuxagent.common.utils import shellutil
 from azurelinuxagent.common.utils.shellutil import get_python_cmd
 from azurelinuxagent.common.version import PY_VERSION_MAJOR, PY_VERSION_MINOR, AGENT_NAME, CURRENT_VERSION
 from azurelinuxagent.ga.periodic_operation import PeriodicOperation
@@ -58,7 +55,7 @@ class CollectLogsHandler(object):
             PeriodicOperation("collect_and_send_logs", self.collect_and_send_logs, conf.get_collect_logs_period())
         ]
 
-    def log_collection_allowed(self):
+    def _log_collection_allowed(self):
         # There are three conditions that need to be met in order to allow periodic log collection:
         # 1) It should be enabled in the configuration.
         # 2) The system must be using systemd to manage services. Needed for resource limiting of the log collection.
@@ -116,28 +113,9 @@ class CollectLogsHandler(object):
         self.protocol_util = get_protocol_util()
         self.protocol = self.protocol_util.get_protocol()
 
-    @staticmethod
-    def copy_manifest_files():
-        # Ensure manifest files are available to the log collection tool.
-        data = pkg_resources.resource_string("config", MANIFEST_FULL_NAME)
-
-        if not os.path.exists(os.path.dirname(MANIFEST_FULL_PATH)):
-            fileutil.mkdir(os.path.dirname(MANIFEST_FULL_PATH))
-
-        with open(MANIFEST_FULL_PATH, "wb") as f:
-            f.write(data)
-
-        data = pkg_resources.resource_string("config", MANIFEST_NORMAL_NAME)
-        with open(MANIFEST_NORMAL_PATH, "wb") as f:
-            f.write(data)
-
     def daemon(self, init_data=False):
         try:
-            # Copy manifest files even if log collection is not allowed. This enables the command line tool
-            # to still work on demand if needed.
-            self.copy_manifest_files()
-
-            if not self.log_collection_allowed():
+            if not self._log_collection_allowed():
                 return
 
             if init_data:
@@ -156,18 +134,18 @@ class CollectLogsHandler(object):
             logger.error("An error occurred in the log collection thread; will exit the thread.\n{0}", ustr(e))
 
     def collect_and_send_logs(self):
-        if self.collect_logs():
-            self.send_logs()
+        if self._collect_logs():
+            self._send_logs()
 
     @staticmethod
-    def get_resource_limits():
+    def _get_resource_limits():
         # Define CPU limit (as percentage of CPU time) and memory limit (absolute value in megabytes).
         cpu_limit = "5%"
         memory_limit = "30M"  # K for kb, M for mb
         return cpu_limit, memory_limit
 
     @staticmethod
-    def collect_logs():
+    def _collect_logs():
         logger.info("Starting log collection...")
 
         # Invoke the command line tool in the agent to collect logs, with resource limits on CPU and memory (RAM).
@@ -176,7 +154,7 @@ class CollectLogsHandler(object):
 
         # More info on resource limits properties in systemd here:
         # https://access.redhat.com/documentation/en-us/red_hat_enterprise_linux/7/html/resource_management_guide/sec-modifying_control_groups
-        cpu_limit, memory_limit = CollectLogsHandler.get_resource_limits()
+        cpu_limit, memory_limit = CollectLogsHandler._get_resource_limits()
         resource_limits = ["--property=CPUAccounting=1", "--property=CPUQuota={0}".format(cpu_limit),
                            "--property=MemoryAccounting=1", "--property=MemoryLimit={0}".format(memory_limit)]
 
@@ -189,8 +167,8 @@ class CollectLogsHandler(object):
             duration = elapsed_milliseconds(start_time)
             archive_size = os.path.getsize(COMPRESSED_ARCHIVE_PATH)
 
-            msg = "Successfully collected logs. Archive size: {0}b, elapsed time: {1} ms.".format(archive_size,
-                                                                                                  duration)
+            msg = "Successfully collected logs. Archive size: {0} b, elapsed time: {1} ms.".format(archive_size,
+                                                                                                   duration)
             logger.info(msg)
             add_event(
                 name=AGENT_NAME,
@@ -214,7 +192,7 @@ class CollectLogsHandler(object):
             return False
         return True
 
-    def send_logs(self):
+    def _send_logs(self):
         try:
             with open(COMPRESSED_ARCHIVE_PATH, "rb") as fh:
                 archive_content = fh.read()

@@ -18,18 +18,20 @@
 #
 
 import glob
-from heapq import heappush, heappop
 import logging
 import os
 import subprocess
 import time
 import zipfile
-
-# Please note: be careful when adding agent dependencies in this module.
-# This module uses its own logger and logs to its own file, not to the agent log.
+from datetime import datetime
+from heapq import heappush, heappop
 
 from azurelinuxagent.common.conf import get_lib_dir, get_ext_log_dir, get_agent_log_file
 from azurelinuxagent.common.future import ustr
+from azurelinuxagent.common.logcollector_manifests import MANIFEST_NORMAL, MANIFEST_FULL
+
+# Please note: be careful when adding agent dependencies in this module.
+# This module uses its own logger and logs to its own file, not to the agent log.
 
 _EXTENSION_LOG_DIR = get_ext_log_dir()
 _AGENT_LIB_DIR = get_lib_dir()
@@ -37,13 +39,6 @@ _AGENT_LOG = get_agent_log_file()
 
 _LOG_COLLECTOR_DIR = os.path.join(_AGENT_LIB_DIR, "logcollector")
 _TRUNCATED_FILES_DIR = os.path.join(_LOG_COLLECTOR_DIR, "truncated")
-_MANIFESTS_DIR = os.path.join(_LOG_COLLECTOR_DIR, "manifests")
-
-MANIFEST_FULL_NAME = "logcollector_manifest_full"
-MANIFEST_FULL_PATH = os.path.join(_MANIFESTS_DIR, "logcollector_manifest_full")
-
-MANIFEST_NORMAL_NAME = "logcollector_manifest_normal"
-MANIFEST_NORMAL_PATH = os.path.join(_MANIFESTS_DIR, "logcollector_manifest_normal")
 
 OUTPUT_RESULTS_FILE_PATH = os.path.join(_LOG_COLLECTOR_DIR, "results.txt")
 COMPRESSED_ARCHIVE_PATH = os.path.join(_LOG_COLLECTOR_DIR, "logs.zip")
@@ -73,7 +68,7 @@ class LogCollector(object):
     _TRUNCATED_FILE_PREFIX = "truncated_"
 
     def __init__(self, full_mode=False):
-        self._manifest_file_path = MANIFEST_FULL_PATH if full_mode else MANIFEST_NORMAL_PATH
+        self._manifest = MANIFEST_FULL if full_mode else MANIFEST_NORMAL
         self._must_collect_files = self._expand_must_collect_files()
         self._create_base_dirs()
         self._set_logger()
@@ -150,14 +145,8 @@ class LogCollector(object):
 
         return manifest
 
-    def _read_manifest_file(self):
-        with open(self._manifest_file_path, "rb") as in_file:
-            data = in_file.read()
-            if data is None:
-                return None
-            else:
-                data = ustr(data, encoding="utf-8")
-                return data.splitlines()
+    def _read_manifest(self):
+        return self._manifest.splitlines()
 
     @staticmethod
     def _process_ll_command(folder):
@@ -217,7 +206,7 @@ class LogCollector(object):
 
     def _process_manifest_file(self):
         files_to_collect = set()
-        data = self._read_manifest_file()
+        data = self._read_manifest()
         manifest_entries = LogCollector._expand_parameters(data)
 
         for entry in manifest_entries:
@@ -275,11 +264,11 @@ class LogCollector(object):
             _LOGGER.error("Failed to truncate large file: {0}".format(ustr(e)))
             return None
 
-    def _get_file_priority(self, file):
+    def _get_file_priority(self, file_entry):
         # The sooner the file appears in the must collect list, the bigger its priority.
         # Priority is higher the lower the number (0 is highest priority).
         try:
-            return self._must_collect_files.index(file)
+            return self._must_collect_files.index(file_entry)
         except ValueError:
             # Doesn't matter, file is not in the must collect list, assign a low priority
             return 999999999
@@ -288,9 +277,9 @@ class LogCollector(object):
         # Given a list of files to collect, determine if they show up in the must collect list and build a priority
         # queue. The queue will determine the order in which the files are collected, highest priority files first.
         priority_file_queue = []
-        for file in file_list:
-            priority = self._get_file_priority(file)
-            heappush(priority_file_queue, (priority, file))
+        for file_entry in file_list:
+            priority = self._get_file_priority(file_entry)
+            heappush(priority_file_queue, (priority, file_entry))
 
         return priority_file_queue
 
@@ -311,16 +300,16 @@ class LogCollector(object):
 
             if os.path.getsize(file_path) <= _FILE_SIZE_LIMIT:
                 final_files_to_collect.append(file_path)
-                _LOGGER.info("Adding file {0}, size {1}b".format(file_path, file_size))
+                _LOGGER.info("Adding file {0}, size {1} b".format(file_path, file_size))
             else:
                 truncated_file_path = self._truncate_large_file(file_path)
                 if truncated_file_path:
-                    _LOGGER.info("Adding truncated file {0}, size {1}b".format(truncated_file_path, file_size))
+                    _LOGGER.info("Adding truncated file {0}, size {1} b".format(truncated_file_path, file_size))
                     final_files_to_collect.append(truncated_file_path)
 
             total_uncompressed_size += file_size
 
-        _LOGGER.info("Uncompressed archive size is {0}b".format(total_uncompressed_size))
+        _LOGGER.info("Uncompressed archive size is {0} b".format(total_uncompressed_size))
 
         return final_files_to_collect
 
@@ -347,6 +336,8 @@ class LogCollector(object):
             # Clear previous run's output and create base directories if they don't exist already.
             self._create_base_dirs()
             LogCollector._reset_file(OUTPUT_RESULTS_FILE_PATH)
+            start_time = datetime.utcnow()
+            _LOGGER.info("Starting log collection at {0}".format(start_time.strftime("%Y-%m-%dT%H:%M:%SZ")))
 
             files_to_collect = self._create_list_of_files_to_collect()
             _LOGGER.info("### Creating compressed archive ###")
@@ -358,7 +349,14 @@ class LogCollector(object):
 
                 compressed_archive_size = os.path.getsize(COMPRESSED_ARCHIVE_PATH)
                 _LOGGER.info("Successfully compressed files. "
-                             "Compressed archive size is {0}b".format(compressed_archive_size))
+                             "Compressed archive size is {0} b".format(compressed_archive_size))
+
+                end_time = datetime.utcnow()
+                duration = end_time - start_time
+                elapsed_ms = int(((duration.days * 24 * 60 * 60 + duration.seconds) * 1000) + (duration.microseconds / 1000.0))
+                _LOGGER.info("Finishing log collection at {0}".format(end_time.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")))
+                _LOGGER.info("Elapsed time: {0} ms".format(elapsed_ms))
+
                 compressed_archive.write(OUTPUT_RESULTS_FILE_PATH.encode("utf-8"), arcname="results.txt")
 
             return COMPRESSED_ARCHIVE_PATH

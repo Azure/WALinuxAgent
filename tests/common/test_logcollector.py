@@ -40,14 +40,15 @@ class TestLogCollector(AgentTestCase):
 
         prefix = "{0}_".format(cls.__class__.__name__)
         cls.tmp_dir = tempfile.mkdtemp(prefix=prefix)
+        cls.root_collect_dir = os.path.join(cls.tmp_dir, "files_to_collect")
+        mkdir(cls.root_collect_dir)
 
         cls._mock_constants()
 
     @classmethod
     def _mock_constants(cls):
-        cls.manifest_path = os.path.join(cls.tmp_dir, "logcollector_manifest")
-        cls.mock_manifest_path = patch("azurelinuxagent.common.logcollector.MANIFEST_NORMAL_PATH", cls.manifest_path)
-        cls.mock_manifest_path.start()
+        cls.mock_manifest = patch("azurelinuxagent.common.logcollector.MANIFEST_NORMAL", cls._build_manifest())
+        cls.mock_manifest.start()
 
         cls.log_collector_dir = os.path.join(cls.tmp_dir, "logcollector")
         cls.mock_log_collector_dir = patch("azurelinuxagent.common.logcollector._LOG_COLLECTOR_DIR",
@@ -71,7 +72,7 @@ class TestLogCollector(AgentTestCase):
 
     @classmethod
     def tearDownClass(cls):
-        cls.mock_manifest_path.stop()
+        cls.mock_manifest.stop()
         cls.mock_log_collector_dir.stop()
         cls.mock_truncated_files_dir.stop()
         cls.mock_output_results_file_path.stop()
@@ -84,7 +85,6 @@ class TestLogCollector(AgentTestCase):
     def setUp(self):
         AgentTestCase.setUp(self)
         self._build_test_data()
-        self._build_manifest(self.manifest_path)
 
     def tearDown(self):
         rm_dirs(self.root_collect_dir)
@@ -96,9 +96,6 @@ class TestLogCollector(AgentTestCase):
         """
         Build a dummy file structure which will be used as a foundation for the log collector tests
         """
-        cls.root_collect_dir = os.path.join(cls.tmp_dir, "files_to_collect")
-        mkdir(cls.root_collect_dir)
-
         cls._create_file_of_specific_size(os.path.join(cls.root_collect_dir, "waagent.log"),
                                           SMALL_FILE_SIZE)  # small text file
         cls._create_file_of_specific_size(os.path.join(cls.root_collect_dir, "waagent.log.1"),
@@ -115,7 +112,7 @@ class TestLogCollector(AgentTestCase):
                                           SMALL_FILE_SIZE)
 
     @classmethod
-    def _build_manifest(cls, manifest_file):
+    def _build_manifest(cls):
         """
         Files listed in the manifest will be collected, others will be ignored
         """
@@ -126,9 +123,11 @@ class TestLogCollector(AgentTestCase):
             os.path.join(cls.root_collect_dir, "non_existing_file"),
         ]
 
-        with open(manifest_file, "w") as fh:
-            for file in files:
-                fh.write("copy,{0}\n".format(file))
+        manifest = ""
+        for file_entry in files:
+            manifest += "copy,{0}\n".format(file_entry)
+
+        return manifest
 
     @staticmethod
     def _create_file_of_specific_size(file_path, file_size, binary=False):
@@ -186,17 +185,14 @@ class TestLogCollector(AgentTestCase):
         file_to_collect = os.path.join(self.root_collect_dir, "waagent.log")
         folder_to_list = self.root_collect_dir
 
-        manifest_content = """
+        manifest = """
 echo,### Test header ###
 unknown command
 ll,{0}
 copy,{1}
 diskinfo,""".format(folder_to_list, file_to_collect)
 
-        manifest_file_path = os.path.join(self.tmp_dir, "manifest")
-        write_file(manifest_file_path, manifest_content)
-
-        with patch("azurelinuxagent.common.logcollector.MANIFEST_NORMAL_PATH", manifest_file_path):
+        with patch("azurelinuxagent.common.logcollector.MANIFEST_NORMAL", manifest):
             lc = LogCollector()
             archive = lc.collect_logs()
 
@@ -220,17 +216,15 @@ diskinfo,""".format(folder_to_list, file_to_collect)
         file_to_collect = os.path.join(self.root_collect_dir, "less_important_file")
         folder_to_list = self.root_collect_dir
 
-        manifest_content = """
+        manifest = """
 echo,### Test header ###
 copy,{0}
 """.format(file_to_collect)
 
-        manifest_file_path = os.path.join(self.tmp_dir, "manifest")
-        write_file(manifest_file_path, manifest_content)
-
-        with patch("azurelinuxagent.common.logcollector.MANIFEST_FULL_PATH", manifest_file_path):
+        with patch("azurelinuxagent.common.logcollector.MANIFEST_FULL", manifest):
             lc = LogCollector(full_mode=True)
             archive = lc.collect_logs()
+
         self._assert_archive_created(archive)
         self._assert_files_are_in_archive(expected_files=[file_to_collect])
 
