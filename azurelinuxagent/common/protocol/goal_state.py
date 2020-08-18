@@ -38,6 +38,7 @@ PEM_FILE_NAME = "Certificates.pem"
 TRANSPORT_CERT_FILE_NAME = "TransportCert.pem"
 TRANSPORT_PRV_FILE_NAME = "TransportPrivate.pem"
 
+
 # Type of update performed by _update_from_goal_state()
 class UpdateType(object):
     # Update the Host GA Plugin client (Container ID and RoleConfigName)
