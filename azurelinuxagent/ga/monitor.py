@@ -19,7 +19,7 @@ import datetime
 import threading
 import uuid
 
-from azurelinuxagent.common.utils import textutil
+from azurelinuxagent.common.utils import textutil # pylint: disable=W0611
 
 import azurelinuxagent.common.logger as logger
 import azurelinuxagent.common.utils.networkutil as networkutil
@@ -71,10 +71,10 @@ class PollResourceUsageOperation(PeriodicOperation):
                     if not CGroupConfigurator.is_agent_process(command_line):
                         unexpected_processes.append(command_line)
 
-                if len(unexpected_processes) > 0:
+                if len(unexpected_processes) > 0: # pylint: disable=len-as-condition
                     unexpected_processes.sort()
                     processes_check_error = "The agent's cgroup includes unexpected processes: {0}".format(ustr(unexpected_processes))
-        except Exception as e:
+        except Exception as e: # pylint: disable=C0103
             processes_check_error = "Failed to check the processes in the agent's cgroup: {0}".format(ustr(e))
 
         # Report a small sample of errors
@@ -157,7 +157,7 @@ class ReportNetworkConfigurationChangesOperation(PeriodicOperation):
             self.last_nic_state = nic_state
 
 
-class MonitorHandler(object):
+class MonitorHandler(object): # pylint: disable=R0902
     # telemetry
     EVENT_COLLECTION_PERIOD = datetime.timedelta(minutes=1)
     # host plugin
@@ -241,14 +241,14 @@ class MonitorHandler(object):
                 try:
                     self.protocol.update_host_plugin_from_goal_state()
 
-                    for op in self._periodic_operations:
+                    for op in self._periodic_operations: # pylint: disable=C0103
                         op.run()
 
-                except Exception as e:
+                except Exception as e: # pylint: disable=C0103
                     logger.error("An error occurred in the monitor thread main loop; will skip the current iteration.\n{0}", ustr(e))
                 finally:
                     PeriodicOperation.sleep_until_next_operation(self._periodic_operations)
-        except Exception as e:
+        except Exception as e: # pylint: disable=C0103
             logger.error("An error occurred in the monitor thread; will exit the thread.\n{0}", ustr(e))
 
     def collect_and_send_events(self):
@@ -258,9 +258,9 @@ class MonitorHandler(object):
         try:
             event_list = collect_events()
 
-            if len(event_list.events) > 0:
+            if len(event_list.events) > 0: # pylint: disable=len-as-condition
                 self.protocol.report_event(event_list)
-        except Exception as e:
+        except Exception as e: # pylint: disable=C0103
             err_msg = "Failure in collecting/sending Agent events: {0}".format(ustr(e))
             add_event(op=WALAEventOperation.UnhandledError, message=err_msg, is_success=False)
 
@@ -282,7 +282,7 @@ class MonitorHandler(object):
 
             self.health_service.report_imds_status(is_healthy, response)
 
-        except Exception as e:
+        except Exception as e: # pylint: disable=C0103
             msg = "Exception sending imds heartbeat: {0}".format(ustr(e))
             add_event(
                 name=AGENT_NAME,
@@ -321,7 +321,7 @@ class MonitorHandler(object):
                     message='{0} since successful heartbeat'.format(self.host_plugin_errorstate.fail_time),
                     log_event=False)
 
-        except Exception as e:
+        except Exception as e: # pylint: disable=C0103
             msg = "Exception sending host plugin heartbeat: {0}".format(ustr(e))
             add_event(
                 name=AGENT_NAME,
