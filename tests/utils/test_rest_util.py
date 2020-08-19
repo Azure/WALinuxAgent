@@ -85,55 +85,55 @@ class TestIOErrorCounter(AgentTestCase):
         self.assertEqual(1, counts.get("protocol"))
         self.assertEqual(2, counts.get("other"))
         self.assertEqual(
-           {"hostplugin":0, "protocol":0, "other":0},
-            restutil.IOErrorCounter._counts)
+           {"hostplugin":0, "protocol":0, "other":0}, # pylint: disable=bad-continuation
+            restutil.IOErrorCounter._counts) # pylint: disable=protected-access
 
 
-class TestHttpOperations(AgentTestCase):
+class TestHttpOperations(AgentTestCase): # pylint: disable=too-many-public-methods
     def test_parse_url(self):
         test_uri = "http://abc.def/ghi#hash?jkl=mn"
-        host, port, secure, rel_uri = restutil._parse_url(test_uri)
-        self.assertEquals("abc.def", host)
-        self.assertEquals("/ghi#hash?jkl=mn", rel_uri)
+        host, port, secure, rel_uri = restutil._parse_url(test_uri) # pylint: disable=unused-variable,protected-access
+        self.assertEquals("abc.def", host) # pylint: disable=deprecated-method
+        self.assertEquals("/ghi#hash?jkl=mn", rel_uri) # pylint: disable=deprecated-method
 
         test_uri = "http://abc.def/"
-        host, port, secure, rel_uri = restutil._parse_url(test_uri)
-        self.assertEquals("abc.def", host)
-        self.assertEquals("/", rel_uri)
-        self.assertEquals(False, secure)
+        host, port, secure, rel_uri = restutil._parse_url(test_uri) # pylint: disable=protected-access
+        self.assertEquals("abc.def", host) # pylint: disable=deprecated-method
+        self.assertEquals("/", rel_uri) # pylint: disable=deprecated-method
+        self.assertEquals(False, secure) # pylint: disable=deprecated-method
 
         test_uri = "https://abc.def/ghi?jkl=mn"
-        host, port, secure, rel_uri = restutil._parse_url(test_uri)
-        self.assertEquals(True, secure)
+        host, port, secure, rel_uri = restutil._parse_url(test_uri) # pylint: disable=protected-access
+        self.assertEquals(True, secure) # pylint: disable=deprecated-method
 
         test_uri = "http://abc.def:80/"
-        host, port, secure, rel_uri = restutil._parse_url(test_uri)
-        self.assertEquals("abc.def", host)
+        host, port, secure, rel_uri = restutil._parse_url(test_uri) # pylint: disable=protected-access
+        self.assertEquals("abc.def", host) # pylint: disable=deprecated-method
 
-        host, port, secure, rel_uri = restutil._parse_url("")
-        self.assertEquals(None, host)
-        self.assertEquals(rel_uri, "")
+        host, port, secure, rel_uri = restutil._parse_url("") # pylint: disable=protected-access
+        self.assertEquals(None, host) # pylint: disable=deprecated-method
+        self.assertEquals(rel_uri, "") # pylint: disable=deprecated-method
 
-        host, port, secure, rel_uri = restutil._parse_url("None")
-        self.assertEquals(None, host)
-        self.assertEquals(rel_uri, "None")
+        host, port, secure, rel_uri = restutil._parse_url("None") # pylint: disable=protected-access
+        self.assertEquals(None, host) # pylint: disable=deprecated-method
+        self.assertEquals(rel_uri, "None") # pylint: disable=deprecated-method
 
     def test_cleanup_sas_tokens_from_urls_for_normal_cases(self):
         test_url = "http://abc.def/ghi#hash?jkl=mn"
         filtered_url = restutil.redact_sas_tokens_in_urls(test_url)
-        self.assertEquals(test_url, filtered_url)
+        self.assertEquals(test_url, filtered_url) # pylint: disable=deprecated-method
 
         test_url = "http://abc.def:80/"
         filtered_url = restutil.redact_sas_tokens_in_urls(test_url)
-        self.assertEquals(test_url, filtered_url)
+        self.assertEquals(test_url, filtered_url) # pylint: disable=deprecated-method
 
         test_url = "http://abc.def/"
         filtered_url = restutil.redact_sas_tokens_in_urls(test_url)
-        self.assertEquals(test_url, filtered_url)
+        self.assertEquals(test_url, filtered_url) # pylint: disable=deprecated-method
 
         test_url = "https://abc.def/ghi?jkl=mn"
         filtered_url = restutil.redact_sas_tokens_in_urls(test_url)
-        self.assertEquals(test_url, filtered_url)
+        self.assertEquals(test_url, filtered_url) # pylint: disable=deprecated-method
 
     def test_cleanup_sas_tokens_from_urls_containing_sas_tokens(self):
         # Contains pair of URLs (RawURL, RedactedURL)
@@ -175,17 +175,17 @@ class TestHttpOperations(AgentTestCase):
                         "https://abc.def.xyz.123.net/?sv=2017-11-09&ss=b&srt=o&sp=r&se"
                         "=2018-07-26T02:20:42Z&st=2018-07-25T18:20:44Z&spr=https&sig"
                         "=" + restutil.REDACTED_TEXT)
-                       ]
+                       ] # pylint: disable=bad-continuation
 
-        for x in urls_tuples:
-            self.assertEquals(restutil.redact_sas_tokens_in_urls(x[0]), x[1])
+        for x in urls_tuples: # pylint: disable=invalid-name
+            self.assertEquals(restutil.redact_sas_tokens_in_urls(x[0]), x[1]) # pylint: disable=deprecated-method
 
     @patch('azurelinuxagent.common.conf.get_httpproxy_port')
     @patch('azurelinuxagent.common.conf.get_httpproxy_host')
     def test_get_http_proxy_none_is_default(self, mock_host, mock_port):
         mock_host.return_value = None
         mock_port.return_value = None
-        h, p = restutil._get_http_proxy()
+        h, p = restutil._get_http_proxy() # pylint: disable=protected-access,invalid-name
         self.assertEqual(None, h)
         self.assertEqual(None, p)
 
@@ -194,7 +194,7 @@ class TestHttpOperations(AgentTestCase):
     def test_get_http_proxy_configuration_overrides_env(self, mock_host, mock_port):
         mock_host.return_value = "host"
         mock_port.return_value = None
-        h, p = restutil._get_http_proxy()
+        h, p = restutil._get_http_proxy() # pylint: disable=protected-access,invalid-name
         self.assertEqual("host", h)
         self.assertEqual(None, p)
         self.assertEqual(1, mock_host.call_count)
@@ -205,7 +205,7 @@ class TestHttpOperations(AgentTestCase):
     def test_get_http_proxy_configuration_requires_host(self, mock_host, mock_port):
         mock_host.return_value = None
         mock_port.return_value = None
-        h, p = restutil._get_http_proxy()
+        h, p = restutil._get_http_proxy() # pylint: disable=protected-access,invalid-name
         self.assertEqual(None, h)
         self.assertEqual(None, p)
         self.assertEqual(1, mock_host.call_count)
@@ -215,10 +215,10 @@ class TestHttpOperations(AgentTestCase):
     def test_get_http_proxy_http_uses_httpproxy(self, mock_host):
         mock_host.return_value = None
         with patch.dict(os.environ, {
-                                    'http_proxy' : 'http://foo.com:80',
-                                    'https_proxy' : 'https://bar.com:443'
-                                }):
-            h, p = restutil._get_http_proxy()
+                                    'http_proxy' : 'http://foo.com:80', # pylint: disable=bad-continuation
+                                    'https_proxy' : 'https://bar.com:443' # pylint: disable=bad-continuation
+                                }): # pylint: disable=bad-continuation
+            h, p = restutil._get_http_proxy() # pylint: disable=protected-access,invalid-name
             self.assertEqual("foo.com", h)
             self.assertEqual(80, p)
 
@@ -226,10 +226,10 @@ class TestHttpOperations(AgentTestCase):
     def test_get_http_proxy_https_uses_httpsproxy(self, mock_host):
         mock_host.return_value = None
         with patch.dict(os.environ, {
-                                    'http_proxy' : 'http://foo.com:80',
-                                    'https_proxy' : 'https://bar.com:443'
-                                }):
-            h, p = restutil._get_http_proxy(secure=True)
+                                    'http_proxy' : 'http://foo.com:80', # pylint: disable=bad-continuation
+                                    'https_proxy' : 'https://bar.com:443' # pylint: disable=bad-continuation
+                                }): # pylint: disable=bad-continuation
+            h, p = restutil._get_http_proxy(secure=True) # pylint: disable=protected-access,invalid-name
             self.assertEqual("bar.com", h)
             self.assertEqual(443, p)
 
@@ -237,20 +237,20 @@ class TestHttpOperations(AgentTestCase):
     def test_get_http_proxy_ignores_user_in_httpproxy(self, mock_host):
         mock_host.return_value = None
         with patch.dict(os.environ, {
-                                    'http_proxy' : 'http://user:pw@foo.com:80'
-                                }):
-            h, p = restutil._get_http_proxy()
+                                    'http_proxy' : 'http://user:pw@foo.com:80' # pylint: disable=bad-continuation
+                                }): # pylint: disable=bad-continuation
+            h, p = restutil._get_http_proxy() # pylint: disable=protected-access,invalid-name
             self.assertEqual("foo.com", h)
             self.assertEqual(80, p)
 
     def test_get_no_proxy_with_values_set(self):
         no_proxy_list = ["foo.com", "www.google.com"]
         with patch.dict(os.environ, {
-            'no_proxy': ",".join(no_proxy_list)
+            'no_proxy': ",".join(no_proxy_list) # pylint: disable=bad-continuation
         }):
             no_proxy_from_environment = restutil.get_no_proxy()
 
-            self.assertEquals(len(no_proxy_list), len(no_proxy_from_environment))
+            self.assertEquals(len(no_proxy_list), len(no_proxy_from_environment)) # pylint: disable=deprecated-method
 
             for i, j in zip(no_proxy_from_environment, no_proxy_list):
                 self.assertEqual(i, j)
@@ -260,11 +260,11 @@ class TestHttpOperations(AgentTestCase):
         no_proxy_list_cleaned = [entry for entry in no_proxy_list if entry]
 
         with patch.dict(os.environ, {
-            'no_proxy': ",".join(no_proxy_list)
+            'no_proxy': ",".join(no_proxy_list) # pylint: disable=bad-continuation
         }):
             no_proxy_from_environment = restutil.get_no_proxy()
 
-            self.assertEquals(len(no_proxy_list_cleaned), len(no_proxy_from_environment))
+            self.assertEquals(len(no_proxy_list_cleaned), len(no_proxy_from_environment)) # pylint: disable=deprecated-method
 
             for i, j in zip(no_proxy_from_environment, no_proxy_list_cleaned):
                 print(i, j)
@@ -276,11 +276,11 @@ class TestHttpOperations(AgentTestCase):
                          '10.0.0.6', '10.0.0.7', '10.0.0.8', '10.0.0.9', '10.0.0.10']
 
         with patch.dict(os.environ, {
-            'no_proxy': no_proxy_var
+            'no_proxy': no_proxy_var # pylint: disable=bad-continuation
         }):
             no_proxy_from_environment = restutil.get_no_proxy()
 
-            self.assertEquals(len(no_proxy_list), len(no_proxy_from_environment))
+            self.assertEquals(len(no_proxy_list), len(no_proxy_from_environment)) # pylint: disable=deprecated-method
 
             for i, j in zip(no_proxy_from_environment, no_proxy_list):
                 self.assertEqual(i, j)
@@ -307,17 +307,17 @@ class TestHttpOperations(AgentTestCase):
         self.assertFalse(restutil.address_in_network('172.16.0.1', '192.168.1.0/24'))
 
     def test_dotted_netmask(self):
-        self.assertEquals(restutil.dotted_netmask(0), '0.0.0.0')
-        self.assertEquals(restutil.dotted_netmask(8), '255.0.0.0')
-        self.assertEquals(restutil.dotted_netmask(16), '255.255.0.0')
-        self.assertEquals(restutil.dotted_netmask(24), '255.255.255.0')
-        self.assertEquals(restutil.dotted_netmask(32), '255.255.255.255')
+        self.assertEquals(restutil.dotted_netmask(0), '0.0.0.0') # pylint: disable=deprecated-method
+        self.assertEquals(restutil.dotted_netmask(8), '255.0.0.0') # pylint: disable=deprecated-method
+        self.assertEquals(restutil.dotted_netmask(16), '255.255.0.0') # pylint: disable=deprecated-method
+        self.assertEquals(restutil.dotted_netmask(24), '255.255.255.0') # pylint: disable=deprecated-method
+        self.assertEquals(restutil.dotted_netmask(32), '255.255.255.255') # pylint: disable=deprecated-method
         self.assertRaises(ValueError, restutil.dotted_netmask, 33)
 
     def test_bypass_proxy(self):
         no_proxy_list = ["foo.com", "www.google.com", "168.63.129.16", "Microsoft.com"]
         with patch.dict(os.environ, {
-            'no_proxy': ",".join(no_proxy_list)
+            'no_proxy': ",".join(no_proxy_list) # pylint: disable=bad-continuation
         }):
             self.assertFalse(restutil.bypass_proxy("http://bar.com"))
             self.assertTrue(restutil.bypass_proxy("http://foo.com"))
@@ -328,7 +328,7 @@ class TestHttpOperations(AgentTestCase):
 
     @patch("azurelinuxagent.common.future.httpclient.HTTPSConnection")
     @patch("azurelinuxagent.common.future.httpclient.HTTPConnection")
-    def test_http_request_direct(self, HTTPConnection, HTTPSConnection):
+    def test_http_request_direct(self, HTTPConnection, HTTPSConnection): # pylint: disable=invalid-name
         mock_conn = \
             MagicMock(getresponse=\
                 Mock(return_value=\
@@ -336,7 +336,7 @@ class TestHttpOperations(AgentTestCase):
 
         HTTPConnection.return_value = mock_conn
 
-        resp = restutil._http_request("GET", "foo", "/bar")
+        resp = restutil._http_request("GET", "foo", "/bar") # pylint: disable=protected-access
 
         HTTPConnection.assert_has_calls([
             call("foo", 80, timeout=10)
@@ -346,12 +346,12 @@ class TestHttpOperations(AgentTestCase):
             call(method="GET", url="/bar", body=None, headers={'User-Agent': HTTP_USER_AGENT, 'Connection': 'close'})
         ])
         self.assertEqual(1, mock_conn.getresponse.call_count)
-        self.assertNotEquals(None, resp)
-        self.assertEquals("TheResults", resp.read())
+        self.assertNotEquals(None, resp) # pylint: disable=deprecated-method
+        self.assertEquals("TheResults", resp.read()) # pylint: disable=deprecated-method
 
     @patch("azurelinuxagent.common.future.httpclient.HTTPSConnection")
     @patch("azurelinuxagent.common.future.httpclient.HTTPConnection")
-    def test_http_request_direct_secure(self, HTTPConnection, HTTPSConnection):
+    def test_http_request_direct_secure(self, HTTPConnection, HTTPSConnection): # pylint: disable=invalid-name
         mock_conn = \
             MagicMock(getresponse=\
                 Mock(return_value=\
@@ -359,7 +359,7 @@ class TestHttpOperations(AgentTestCase):
 
         HTTPSConnection.return_value = mock_conn
 
-        resp = restutil._http_request("GET", "foo", "/bar", secure=True)
+        resp = restutil._http_request("GET", "foo", "/bar", secure=True) # pylint: disable=protected-access
 
         HTTPConnection.assert_not_called()
         HTTPSConnection.assert_has_calls([
@@ -369,12 +369,12 @@ class TestHttpOperations(AgentTestCase):
             call(method="GET", url="/bar", body=None, headers={'User-Agent': HTTP_USER_AGENT, 'Connection': 'close'})
         ])
         self.assertEqual(1, mock_conn.getresponse.call_count)
-        self.assertNotEquals(None, resp)
-        self.assertEquals("TheResults", resp.read())
+        self.assertNotEquals(None, resp) # pylint: disable=deprecated-method
+        self.assertEquals("TheResults", resp.read()) # pylint: disable=deprecated-method
 
     @patch("azurelinuxagent.common.future.httpclient.HTTPSConnection")
     @patch("azurelinuxagent.common.future.httpclient.HTTPConnection")
-    def test_http_request_proxy(self, HTTPConnection, HTTPSConnection):
+    def test_http_request_proxy(self, HTTPConnection, HTTPSConnection): # pylint: disable=invalid-name
         mock_conn = \
             MagicMock(getresponse=\
                 Mock(return_value=\
@@ -382,8 +382,8 @@ class TestHttpOperations(AgentTestCase):
 
         HTTPConnection.return_value = mock_conn
 
-        resp = restutil._http_request("GET", "foo", "/bar",
-                            proxy_host="foo.bar", proxy_port=23333)
+        resp = restutil._http_request("GET", "foo", "/bar", # pylint: disable=protected-access
+                            proxy_host="foo.bar", proxy_port=23333) # pylint: disable=bad-continuation
 
         HTTPConnection.assert_has_calls([
             call("foo.bar", 23333, timeout=10)
@@ -393,13 +393,13 @@ class TestHttpOperations(AgentTestCase):
             call(method="GET", url="http://foo:80/bar", body=None, headers={'User-Agent': HTTP_USER_AGENT, 'Connection': 'close'})
         ])
         self.assertEqual(1, mock_conn.getresponse.call_count)
-        self.assertNotEquals(None, resp)
-        self.assertEquals("TheResults", resp.read())
+        self.assertNotEquals(None, resp) # pylint: disable=deprecated-method
+        self.assertEquals("TheResults", resp.read()) # pylint: disable=deprecated-method
 
     @patch("azurelinuxagent.common.utils.restutil._get_http_proxy")
     @patch("time.sleep")
     @patch("azurelinuxagent.common.utils.restutil._http_request")
-    def test_http_request_proxy_with_no_proxy_check(self, _http_request, sleep, mock_get_http_proxy):
+    def test_http_request_proxy_with_no_proxy_check(self, _http_request, sleep, mock_get_http_proxy): # pylint: disable=unused-argument
         mock_http_resp = MagicMock()
         mock_http_resp.read = Mock(return_value="hehe")
         _http_request.return_value = mock_http_resp
@@ -407,17 +407,17 @@ class TestHttpOperations(AgentTestCase):
 
         no_proxy_list = ["foo.com", "www.google.com", "168.63.129.16"]
         with patch.dict(os.environ, {
-            'no_proxy': ",".join(no_proxy_list)
+            'no_proxy': ",".join(no_proxy_list) # pylint: disable=bad-continuation
         }):
             # Test http get
             resp = restutil.http_get("http://foo.com", use_proxy=True)
-            self.assertEquals("hehe", resp.read())
-            self.assertEquals(0, mock_get_http_proxy.call_count)
+            self.assertEquals("hehe", resp.read()) # pylint: disable=deprecated-method
+            self.assertEquals(0, mock_get_http_proxy.call_count) # pylint: disable=deprecated-method
 
             # Test http get
             resp = restutil.http_get("http://bar.com", use_proxy=True)
-            self.assertEquals("hehe", resp.read())
-            self.assertEquals(1, mock_get_http_proxy.call_count)
+            self.assertEquals("hehe", resp.read()) # pylint: disable=deprecated-method
+            self.assertEquals(1, mock_get_http_proxy.call_count) # pylint: disable=deprecated-method
 
     def test_proxy_conditions_with_no_proxy(self):
         should_use_proxy = True
@@ -426,39 +426,39 @@ class TestHttpOperations(AgentTestCase):
 
         no_proxy_list = ["foo.com", "www.google.com", "168.63.129.16"]
         with patch.dict(os.environ, {
-            'no_proxy': ",".join(no_proxy_list)
+            'no_proxy': ",".join(no_proxy_list) # pylint: disable=bad-continuation
         }):
             host = "10.0.0.1"
-            self.assertEquals(should_use_proxy, use_proxy and not restutil.bypass_proxy(host))
+            self.assertEquals(should_use_proxy, use_proxy and not restutil.bypass_proxy(host)) # pylint: disable=deprecated-method
 
             host = "foo.com"
-            self.assertEquals(should_not_use_proxy, use_proxy and not restutil.bypass_proxy(host))
+            self.assertEquals(should_not_use_proxy, use_proxy and not restutil.bypass_proxy(host)) # pylint: disable=deprecated-method
 
             host = "www.google.com"
-            self.assertEquals(should_not_use_proxy, use_proxy and not restutil.bypass_proxy(host))
+            self.assertEquals(should_not_use_proxy, use_proxy and not restutil.bypass_proxy(host)) # pylint: disable=deprecated-method
 
             host = "168.63.129.16"
-            self.assertEquals(should_not_use_proxy, use_proxy and not restutil.bypass_proxy(host))
+            self.assertEquals(should_not_use_proxy, use_proxy and not restutil.bypass_proxy(host)) # pylint: disable=deprecated-method
 
             host = "www.bar.com"
-            self.assertEquals(should_use_proxy, use_proxy and not restutil.bypass_proxy(host))
+            self.assertEquals(should_use_proxy, use_proxy and not restutil.bypass_proxy(host)) # pylint: disable=deprecated-method
 
         no_proxy_list = ["10.0.0.1/24"]
         with patch.dict(os.environ, {
-            'no_proxy': ",".join(no_proxy_list)
+            'no_proxy': ",".join(no_proxy_list) # pylint: disable=bad-continuation
         }):
             host = "www.bar.com"
-            self.assertEquals(should_use_proxy, use_proxy and not restutil.bypass_proxy(host))
+            self.assertEquals(should_use_proxy, use_proxy and not restutil.bypass_proxy(host)) # pylint: disable=deprecated-method
 
             host = "10.0.0.1"
-            self.assertEquals(should_not_use_proxy, use_proxy and not restutil.bypass_proxy(host))
+            self.assertEquals(should_not_use_proxy, use_proxy and not restutil.bypass_proxy(host)) # pylint: disable=deprecated-method
 
             host = "10.0.1.1"
-            self.assertEquals(should_use_proxy, use_proxy and not restutil.bypass_proxy(host))
+            self.assertEquals(should_use_proxy, use_proxy and not restutil.bypass_proxy(host)) # pylint: disable=deprecated-method
 
         # When No_proxy is empty
         with patch.dict(os.environ, {
-            'no_proxy': ""
+            'no_proxy': "" # pylint: disable=bad-continuation
         }):
             host = "10.0.0.1"
             self.assertTrue(use_proxy and not restutil.bypass_proxy(host))
@@ -506,7 +506,7 @@ class TestHttpOperations(AgentTestCase):
 
     @patch("azurelinuxagent.common.future.httpclient.HTTPSConnection")
     @patch("azurelinuxagent.common.future.httpclient.HTTPConnection")
-    def test_http_request_proxy_secure(self, HTTPConnection, HTTPSConnection):
+    def test_http_request_proxy_secure(self, HTTPConnection, HTTPSConnection): # pylint: disable=invalid-name
         mock_conn = \
             MagicMock(getresponse=\
                 Mock(return_value=\
@@ -514,9 +514,9 @@ class TestHttpOperations(AgentTestCase):
 
         HTTPSConnection.return_value = mock_conn
 
-        resp = restutil._http_request("GET", "foo", "/bar",
-                            proxy_host="foo.bar", proxy_port=23333,
-                            secure=True)
+        resp = restutil._http_request("GET", "foo", "/bar", # pylint: disable=protected-access
+                            proxy_host="foo.bar", proxy_port=23333, # pylint: disable=bad-continuation
+                            secure=True) # pylint: disable=bad-continuation
 
         HTTPConnection.assert_not_called()
         HTTPSConnection.assert_has_calls([
@@ -526,23 +526,23 @@ class TestHttpOperations(AgentTestCase):
             call(method="GET", url="https://foo:443/bar", body=None, headers={'User-Agent': HTTP_USER_AGENT, 'Connection': 'close'})
         ])
         self.assertEqual(1, mock_conn.getresponse.call_count)
-        self.assertNotEquals(None, resp)
-        self.assertEquals("TheResults", resp.read())
+        self.assertNotEquals(None, resp) # pylint: disable=deprecated-method
+        self.assertEquals("TheResults", resp.read()) # pylint: disable=deprecated-method
 
     @patch("time.sleep")
     @patch("azurelinuxagent.common.utils.restutil._http_request")
-    def test_http_request_with_retry(self, _http_request, sleep):
+    def test_http_request_with_retry(self, _http_request, sleep): # pylint: disable=unused-argument
         mock_http_resp = MagicMock()
         mock_http_resp.read = Mock(return_value="hehe")
         _http_request.return_value = mock_http_resp
 
         # Test http get
         resp = restutil.http_get("http://foo.bar")
-        self.assertEquals("hehe", resp.read())
+        self.assertEquals("hehe", resp.read()) # pylint: disable=deprecated-method
 
         # Test https get
         resp = restutil.http_get("https://foo.bar")
-        self.assertEquals("hehe", resp.read())
+        self.assertEquals("hehe", resp.read()) # pylint: disable=deprecated-method
 
         # Test http failure
         _http_request.side_effect = httpclient.HTTPException("Http failure")
@@ -611,12 +611,12 @@ class TestHttpOperations(AgentTestCase):
         self.assertTrue(httpclient.SERVICE_UNAVAILABLE in restutil.THROTTLE_CODES)
 
         _http_request.side_effect = [
-                Mock(status=httpclient.SERVICE_UNAVAILABLE)
-                    for i in range(restutil.DEFAULT_RETRIES)
+                Mock(status=httpclient.SERVICE_UNAVAILABLE) # pylint: disable=bad-continuation
+                    for i in range(restutil.DEFAULT_RETRIES) # pylint: disable=bad-continuation,unused-variable
             ] + [Mock(status=httpclient.OK)]
 
         restutil.http_get("https://foo.bar",
-                            max_retry=restutil.DEFAULT_RETRIES+1)
+                            max_retry=restutil.DEFAULT_RETRIES+1) # pylint: disable=bad-continuation
 
         self.assertEqual(restutil.DEFAULT_RETRIES+1, _http_request.call_count)
         self.assertEqual(restutil.DEFAULT_RETRIES, _sleep.call_count)
@@ -631,12 +631,12 @@ class TestHttpOperations(AgentTestCase):
         self.assertTrue(httpclient.SERVICE_UNAVAILABLE in restutil.THROTTLE_CODES)
 
         _http_request.side_effect = [
-                Mock(status=httpclient.SERVICE_UNAVAILABLE)
-                    for i in range(restutil.THROTTLE_RETRIES-1)
+                Mock(status=httpclient.SERVICE_UNAVAILABLE) # pylint: disable=bad-continuation
+                    for i in range(restutil.THROTTLE_RETRIES-1) # pylint: disable=bad-continuation,unused-variable
             ] + [Mock(status=httpclient.OK)]
 
         restutil.http_get("https://foo.bar",
-                            max_retry=1)
+                            max_retry=1) # pylint: disable=bad-continuation
 
         self.assertEqual(restutil.THROTTLE_RETRIES, _http_request.call_count)
         self.assertEqual(restutil.THROTTLE_RETRIES-1, _sleep.call_count)
@@ -758,7 +758,7 @@ class TestHttpOperations(AgentTestCase):
         response.status = 'status'
         response.reason = 'reason'
         with patch.object(response, 'read') as patch_response:
-            for s in responses:
+            for s in responses: # pylint: disable=invalid-name
                 patch_response.return_value = s
                 result = restutil.read_response_error(response)
                 print("RESPONSE: {0}".format(s))
@@ -804,7 +804,7 @@ class TestHttpOperations(AgentTestCase):
             self.assertEqual(result, expected_response)
             try:
                 raise HttpError("{0}".format(result))
-            except HttpError as e:
+            except HttpError as e: # pylint: disable=invalid-name
                 self.assertTrue(result in ustr(e))
 
 

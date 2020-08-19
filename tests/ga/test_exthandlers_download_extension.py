@@ -1,7 +1,7 @@
 # Copyright (c) Microsoft Corporation. All rights reserved.
 # Licensed under the Apache License.
 
-import zipfile, time, os
+import zipfile, time, os # pylint: disable=multiple-imports
 
 from azurelinuxagent.common.protocol.restapi import ExtHandler, ExtHandlerProperties, ExtHandlerPackage, ExtHandlerVersionUri
 from azurelinuxagent.common.protocol.wire import WireProtocol
@@ -10,7 +10,7 @@ from azurelinuxagent.common.exception import ExtensionDownloadError, ExtensionEr
 from tests.tools import AgentTestCase, patch, mock_sleep
 
 
-class DownloadExtensionTestCase(AgentTestCase):
+class DownloadExtensionTestCase(AgentTestCase): # pylint: disable=too-many-instance-attributes
     """
     Test cases for launch_command
     """
@@ -69,7 +69,7 @@ class DownloadExtensionTestCase(AgentTestCase):
 
     @staticmethod
     def _create_zip_file(filename):
-        file = None
+        file = None # pylint: disable=redefined-builtin
         try:
             file = zipfile.ZipFile(filename, "w")
             info = zipfile.ZipInfo(DownloadExtensionTestCase._extension_command)
@@ -82,7 +82,7 @@ class DownloadExtensionTestCase(AgentTestCase):
 
     @staticmethod
     def _create_invalid_zip_file(filename):
-        with open(filename, "w") as file:
+        with open(filename, "w") as file: # pylint: disable=redefined-builtin
             file.write("An invalid ZIP file\n")
 
     def _get_extension_package_file(self):
@@ -177,14 +177,14 @@ class DownloadExtensionTestCase(AgentTestCase):
                 self.ext_handler_instance.download()
 
         self.assertFalse(os.path.exists(self._get_extension_package_file()),
-                        "The bad zip extension package should not be downloaded to the expected location")
+                        "The bad zip extension package should not be downloaded to the expected location") # pylint: disable=bad-continuation
         self.assertFalse(os.path.exists(self._get_extension_command_file()),
-                        "The extension package should not expanded be to the expected location due to bad zip")
+                        "The extension package should not expanded be to the expected location due to bad zip") # pylint: disable=bad-continuation
         self.assertEqual(self.ext_handler_instance.get_handler_state(), ExtHandlerState.NotInstalled,
                          "Ensure that the state is maintained for extension HandlerState")
 
     def test_it_should_use_alternate_uris_when_download_fails(self):
-        self.download_failures = 0
+        self.download_failures = 0 # pylint: disable=attribute-defined-outside-init
 
         def download_ext_handler_pkg(_uri, destination):
             # fail a few times, then succeed
@@ -197,12 +197,12 @@ class DownloadExtensionTestCase(AgentTestCase):
         with patch("azurelinuxagent.common.protocol.wire.WireProtocol.download_ext_handler_pkg", side_effect=download_ext_handler_pkg) as mock_download_ext_handler_pkg:
             self.ext_handler_instance.download()
 
-        self.assertEquals(mock_download_ext_handler_pkg.call_count, self.download_failures + 1)
+        self.assertEquals(mock_download_ext_handler_pkg.call_count, self.download_failures + 1) # pylint: disable=deprecated-method
 
         self._assert_download_and_expand_succeeded()
 
     def test_it_should_use_alternate_uris_when_download_raises_an_exception(self):
-        self.download_failures = 0
+        self.download_failures = 0 # pylint: disable=attribute-defined-outside-init
 
         def download_ext_handler_pkg(_uri, destination):
             # fail a few times, then succeed
@@ -215,12 +215,12 @@ class DownloadExtensionTestCase(AgentTestCase):
         with patch("azurelinuxagent.common.protocol.wire.WireProtocol.download_ext_handler_pkg", side_effect=download_ext_handler_pkg) as mock_download_ext_handler_pkg:
             self.ext_handler_instance.download()
 
-        self.assertEquals(mock_download_ext_handler_pkg.call_count, self.download_failures + 1)
+        self.assertEquals(mock_download_ext_handler_pkg.call_count, self.download_failures + 1) # pylint: disable=deprecated-method
 
         self._assert_download_and_expand_succeeded()
 
     def test_it_should_use_alternate_uris_when_it_downloads_an_invalid_package(self):
-        self.download_failures = 0
+        self.download_failures = 0 # pylint: disable=attribute-defined-outside-init
 
         def download_ext_handler_pkg(_uri, destination):
             # fail a few times, then succeed
@@ -234,7 +234,7 @@ class DownloadExtensionTestCase(AgentTestCase):
         with patch("azurelinuxagent.common.protocol.wire.WireProtocol.download_ext_handler_pkg", side_effect=download_ext_handler_pkg) as mock_download_ext_handler_pkg:
             self.ext_handler_instance.download()
 
-        self.assertEquals(mock_download_ext_handler_pkg.call_count, self.download_failures + 1)
+        self.assertEquals(mock_download_ext_handler_pkg.call_count, self.download_failures + 1) # pylint: disable=deprecated-method
 
         self._assert_download_and_expand_succeeded()
 
@@ -248,10 +248,10 @@ class DownloadExtensionTestCase(AgentTestCase):
                 with self.assertRaises(ExtensionDownloadError) as context_manager:
                     self.ext_handler_instance.download()
 
-        self.assertEquals(mock_download_ext_handler_pkg.call_count, NUMBER_OF_DOWNLOAD_RETRIES * len(self.pkg.uris))
+        self.assertEquals(mock_download_ext_handler_pkg.call_count, NUMBER_OF_DOWNLOAD_RETRIES * len(self.pkg.uris)) # pylint: disable=deprecated-method
 
         self.assertRegex(str(context_manager.exception), "Failed to download extension")
-        self.assertEquals(context_manager.exception.code, ExtensionErrorCodes.PluginManifestDownloadError)
+        self.assertEquals(context_manager.exception.code, ExtensionErrorCodes.PluginManifestDownloadError) # pylint: disable=deprecated-method
 
         self.assertFalse(os.path.exists(self.extension_dir), "The extension directory was not removed")
         self.assertFalse(os.path.exists(self._get_extension_package_file()), "The extension package was not removed")

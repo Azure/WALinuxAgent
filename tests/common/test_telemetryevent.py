@@ -19,8 +19,8 @@ from azurelinuxagent.common.telemetryevent import TelemetryEvent, TelemetryEvent
 from tests.tools import AgentTestCase
 
 
-def get_test_event(name="DummyExtension", op="Unknown", is_success=True, duration=0, version="foo", evt_type="", is_internal=False,
-                      message="DummyMessage", eventId=1):
+def get_test_event(name="DummyExtension", op="Unknown", is_success=True, duration=0, version="foo", evt_type="", is_internal=False, # pylint: disable=invalid-name,too-many-arguments
+                      message="DummyMessage", eventId=1): # pylint: disable=bad-continuation
     event = TelemetryEvent(eventId, "XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX")
     event.parameters.append(TelemetryEventParam(GuestAgentExtensionEventsSchema.Name, name))
     event.parameters.append(TelemetryEventParam(GuestAgentExtensionEventsSchema.Version, str(version)))
@@ -34,7 +34,7 @@ def get_test_event(name="DummyExtension", op="Unknown", is_success=True, duratio
 
 
 class TestTelemetryEvent(AgentTestCase):
-    def test_contains_works_for_TelemetryEvent(self):
+    def test_contains_works_for_TelemetryEvent(self): # pylint: disable=invalid-name
         test_event = get_test_event(message="Dummy Event")
 
         self.assertTrue(GuestAgentExtensionEventsSchema.Name in test_event)

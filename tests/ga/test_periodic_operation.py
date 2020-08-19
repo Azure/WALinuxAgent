@@ -26,26 +26,26 @@ class TestPeriodicOperation(AgentTestCase):
             operation.run_time = datetime.datetime.utcnow()
         operation.run_time = None
 
-        op = PeriodicOperation("test_operation", operation, period=datetime.timedelta(hours=1))
+        op = PeriodicOperation("test_operation", operation, period=datetime.timedelta(hours=1)) # pylint: disable=invalid-name
         op.run()
 
         expected = operation.run_time + datetime.timedelta(hours=1)
         difference = op.next_run_time() - expected
         self.assertTrue(difference < datetime.timedelta(seconds=1),
-            "The next run time exceeds the expected value by more than 1 second: {0} vs {1}".format(op.next_run_time(), expected))
+            "The next run time exceeds the expected value by more than 1 second: {0} vs {1}".format(op.next_run_time(), expected)) # pylint: disable=bad-continuation
 
     def test_it_should_take_a_number_of_seconds_as_period(self):
         def operation():
             operation.run_time = datetime.datetime.utcnow()
         operation.run_time = None
 
-        op = PeriodicOperation("test_operation", operation, period=3600)
+        op = PeriodicOperation("test_operation", operation, period=3600) # pylint: disable=invalid-name
         op.run()
 
         expected = operation.run_time + datetime.timedelta(hours=1)
         difference = op.next_run_time() - expected
         self.assertTrue(difference < datetime.timedelta(seconds=1),
-            "The next run time exceeds the expected value by more than 1 second: {0} vs {1}".format(op.next_run_time(), expected))
+            "The next run time exceeds the expected value by more than 1 second: {0} vs {1}".format(op.next_run_time(), expected)) # pylint: disable=bad-continuation
 
     def test_it_should_be_invoked_when_run_is_called_first_time(self):
         def operation():
@@ -116,7 +116,7 @@ class TestPeriodicOperation(AgentTestCase):
         with patch("azurelinuxagent.common.logger.warn") as warn_patcher:
             for i in range(2):
                 def operation():
-                    raise Exception("WARNING {0}".format(i))
+                    raise Exception("WARNING {0}".format(i)) # pylint: disable=cell-var-from-loop
 
                 pop = PeriodicOperation("test_operation", operation, period=datetime.timedelta(hours=1))
                 for _ in range(5):
@@ -133,7 +133,7 @@ class TestPeriodicOperation(AgentTestCase):
             PeriodicOperation("one", lambda: None, period=datetime.timedelta(minutes=11)),
             PeriodicOperation("one", lambda: None, period=datetime.timedelta(days=1))
         ]
-        for op in operations:
+        for op in operations: # pylint: disable=invalid-name
             op.run()
 
         def mock_sleep(seconds):

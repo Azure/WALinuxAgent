@@ -23,25 +23,25 @@ matrix:
         - >-
           NOSEOPTS="--verbose --with-timer" SETUPOPTS=""
           PYLINTOPTS="--rcfile=2.7.pylintrc"
-          PYLINTFILES="azurelinuxagent/daemon azurelinuxagent/agent.py azurelinuxagent/ga"
+          PYLINTFILES="azurelinuxagent/daemon azurelinuxagent/agent.py azurelinuxagent/ga tests"
     - python: 3.4
       env:
         - >-
           NOSEOPTS="--verbose --with-timer" SETUPOPTS=""
           PYLINTOPTS="--rcfile=2.7.pylintrc"
-          PYLINTFILES="azurelinuxagent/daemon azurelinuxagent/agent.py azurelinuxagent/ga"
+          PYLINTFILES="azurelinuxagent/daemon azurelinuxagent/agent.py azurelinuxagent/ga tests"
     - python: 3.6
       env:
         - >-
           NOSEOPTS="--verbose --with-timer" SETUPOPTS=""
           PYLINTOPTS="--rcfile=3.6.pylintrc"
-          PYLINTFILES="azurelinuxagent/daemon azurelinuxagent/agent.py azurelinuxagent/ga"
+          PYLINTFILES="azurelinuxagent/daemon azurelinuxagent/agent.py azurelinuxagent/ga tests"
     - python: 3.7
       env:
         - >-
           NOSEOPTS="--verbose --with-timer" SETUPOPTS=""
           PYLINTOPTS="--rcfile=3.6.pylintrc"
-          PYLINTFILES="azurelinuxagent/daemon azurelinuxagent/agent.py azurelinuxagent/ga"
+          PYLINTFILES="azurelinuxagent/daemon azurelinuxagent/agent.py azurelinuxagent/ga tests"
     - python: 3.8
       env:
         - >-
@@ -50,7 +50,7 @@ matrix:
           --cover-package=azurelinuxagent --cover-xml"
           SETUPOPTS=""
           PYLINTOPTS="--rcfile=3.6.pylintrc"
-          PYLINTFILES="azurelinuxagent/daemon azurelinuxagent/agent.py azurelinuxagent/ga"
+          PYLINTFILES="azurelinuxagent/daemon azurelinuxagent/agent.py azurelinuxagent/ga tests"
 
 install:
   - pip install -r requirements.txt

@@ -34,26 +34,26 @@ from threading import currentThread
 import azurelinuxagent.common.conf as conf
 import azurelinuxagent.common.event as event
 import azurelinuxagent.common.logger as logger
-from azurelinuxagent.common.cgroupconfigurator import CGroupConfigurator
-from azurelinuxagent.common.osutil.factory import _get_osutil
-from azurelinuxagent.common.osutil.ubuntu import Ubuntu14OSUtil, Ubuntu16OSUtil
+from azurelinuxagent.common.cgroupconfigurator import CGroupConfigurator # pylint: disable=unused-import
+from azurelinuxagent.common.osutil.factory import _get_osutil # pylint: disable=unused-import
+from azurelinuxagent.common.osutil.ubuntu import Ubuntu14OSUtil, Ubuntu16OSUtil # pylint: disable=unused-import
 from azurelinuxagent.common.utils import fileutil
 from azurelinuxagent.common.version import PY_VERSION_MAJOR
 
 try:
-    from unittest.mock import Mock, patch, MagicMock, ANY, DEFAULT, call, PropertyMock
+    from unittest.mock import Mock, patch, MagicMock, ANY, DEFAULT, call, PropertyMock # pylint: disable=unused-import,ungrouped-imports
 
     # Import mock module for Python2 and Python3
-    from bin.waagent2 import Agent
+    from bin.waagent2 import Agent # pylint: disable=unused-import
 except ImportError:
     from mock import Mock, patch, MagicMock, ANY, DEFAULT, call, PropertyMock
 
-test_dir = os.path.dirname(os.path.abspath(__file__))
-data_dir = os.path.join(test_dir, "data")
+test_dir = os.path.dirname(os.path.abspath(__file__)) # pylint: disable=invalid-name
+data_dir = os.path.join(test_dir, "data") # pylint: disable=invalid-name
 
-debug = False
+debug = False # pylint: disable=invalid-name
 if os.environ.get('DEBUG') == '1':
-    debug = True
+    debug = True # pylint: disable=invalid-name
 
 # Enable verbose logger to stdout
 if debug:
@@ -133,7 +133,7 @@ def is_python_version_26():
 
 class AgentTestCase(unittest.TestCase):
     @classmethod
-    def setUpClass(cls):
+    def setUpClass(cls): # pylint: disable=too-many-branches
         # Setup newer unittest assertions missing in prior versions of Python
 
         if not hasattr(cls, "assertRegex"):
@@ -196,53 +196,53 @@ class AgentTestCase(unittest.TestCase):
         if not debug and self.tmp_dir is not None:
             shutil.rmtree(self.tmp_dir)
 
-    def emulate_assertIn(self, a, b, msg=None):
+    def emulate_assertIn(self, a, b, msg=None): # pylint: disable=invalid-name
         if a not in b:
             msg = msg if msg is not None else "{0} not found in {1}".format(_safe_repr(a), _safe_repr(b))
             self.fail(msg)
 
-    def emulate_assertNotIn(self, a, b, msg=None):
+    def emulate_assertNotIn(self, a, b, msg=None): # pylint: disable=invalid-name
         if a in b:
             msg = msg if msg is not None else "{0} unexpectedly found in {1}".format(_safe_repr(a), _safe_repr(b))
             self.fail(msg)
 
-    def emulate_assertGreater(self, a, b, msg=None):
+    def emulate_assertGreater(self, a, b, msg=None): # pylint: disable=invalid-name
         if not a > b:
             msg = msg if msg is not None else '{0} not greater than {1}'.format(_safe_repr(a), _safe_repr(b))
             self.fail(msg)
 
-    def emulate_assertGreaterEqual(self, a, b, msg=None):
+    def emulate_assertGreaterEqual(self, a, b, msg=None): # pylint: disable=invalid-name
         if not a >= b:
             msg = msg if msg is not None else '{0} not greater or equal to {1}'.format(_safe_repr(a), _safe_repr(b))
             self.fail(msg)
 
-    def emulate_assertLess(self, a, b, msg=None):
+    def emulate_assertLess(self, a, b, msg=None): # pylint: disable=invalid-name
         if not a < b:
             msg = msg if msg is not None else '{0} not less than {1}'.format(_safe_repr(a), _safe_repr(b))
             self.fail(msg)
 
-    def emulate_assertLessEqual(self, a, b, msg=None):
+    def emulate_assertLessEqual(self, a, b, msg=None): # pylint: disable=invalid-name
         if not a <= b:
             msg = msg if msg is not None else '{0} not less or equal to {1}'.format(_safe_repr(a), _safe_repr(b))
             self.fail(msg)
 
-    def emulate_assertIsNone(self, x, msg=None):
+    def emulate_assertIsNone(self, x, msg=None): # pylint: disable=invalid-name
         if x is not None:
             msg = msg if msg is not None else '{0} is not None'.format(_safe_repr(x))
             self.fail(msg)
 
-    def emulate_assertIsNotNone(self, x, msg=None):
+    def emulate_assertIsNotNone(self, x, msg=None): # pylint: disable=invalid-name
         if x is None:
             msg = msg if msg is not None else '{0} is None'.format(_safe_repr(x))
             self.fail(msg)
 
-    def emulate_assertRegexpMatches(self, text, regexp, msg=None):
+    def emulate_assertRegexpMatches(self, text, regexp, msg=None): # pylint: disable=invalid-name
         if re.search(regexp, text) is not None:
             return
         msg = msg if msg is not None else "'{0}' does not match '{1}'.".format(text, regexp)
         self.fail(msg)
 
-    def emulate_assertNotRegexpMatches(self, text, regexp, msg=None):
+    def emulate_assertNotRegexpMatches(self, text, regexp, msg=None): # pylint: disable=invalid-name
         if re.search(regexp, text, flags=1) is None:
             return
         msg = msg if msg is not None else "'{0}' should not match '{1}'.".format(text, regexp)
@@ -257,22 +257,22 @@ class AgentTestCase(unittest.TestCase):
             return self
 
         @staticmethod
-        def _get_type_name(type):
+        def _get_type_name(type): # pylint: disable=redefined-builtin
             return type.__name__ if hasattr(type, "__name__") else str(type)
 
         def __exit__(self, exception_type, exception, *_):
             if exception_type is None:
-                expected = AgentTestCase._AssertRaisesContextManager._get_type_name(self._expected_exception_type)
+                expected = AgentTestCase._AssertRaisesContextManager._get_type_name(self._expected_exception_type) # pylint: disable=protected-access
                 self._test_case.fail("Did not raise an exception; expected '{0}'".format(expected))
             if not issubclass(exception_type, self._expected_exception_type):
-                raised = AgentTestCase._AssertRaisesContextManager._get_type_name(exception_type)
-                expected = AgentTestCase._AssertRaisesContextManager._get_type_name(self._expected_exception_type)
+                raised = AgentTestCase._AssertRaisesContextManager._get_type_name(exception_type) # pylint: disable=protected-access
+                expected = AgentTestCase._AssertRaisesContextManager._get_type_name(self._expected_exception_type) # pylint: disable=protected-access
                 self._test_case.fail("Raised '{0}', but expected '{1}'".format(raised, expected))
 
-            self.exception = exception
+            self.exception = exception # pylint: disable=attribute-defined-outside-init
             return True
 
-    def emulate_assertRaises(self, exception_type, function=None, *args, **kwargs):
+    def emulate_assertRaises(self, exception_type, function=None, *args, **kwargs): # pylint: disable=invalid-name,keyword-arg-before-vararg
         # return a context manager only when function is not provided; otherwise use the original assertRaises
         if function is None:
             return AgentTestCase._AssertRaisesContextManager(exception_type, self)
@@ -284,15 +284,15 @@ class AgentTestCase(unittest.TestCase):
     def emulate_raises_regex(self, exception_type, regex, function, *args, **kwargs):
         try:
             function(*args, **kwargs)
-        except Exception as e:
-            if re.search(regex, str(e), flags=1) is not None:
+        except Exception as e: # pylint: disable=invalid-name
+            if re.search(regex, str(e), flags=1) is not None: # pylint: disable=no-else-return
                 return
             else:
                 self.fail("Expected exception {0} matching {1}.  Actual: {2}".format(
                     exception_type, regex, str(e)))
         self.fail("No exception was thrown.  Expected exception {0} matching {1}".format(exception_type, regex))
 
-    def emulate_assertDictEqual(self, first, second, msg=None):
+    def emulate_assertDictEqual(self, first, second, msg=None): # pylint: disable=invalid-name
         def fail(message):
             self.fail(self._formatMessage(msg, message))
 
@@ -306,7 +306,7 @@ class AgentTestCase(unittest.TestCase):
             if k not in first:
                 fail("'{0}' is missing from first".format(k))
 
-    def emulate_assertListEqual(self, seq1, seq2, msg=None, seq_type=None):
+    def emulate_assertListEqual(self, seq1, seq2, msg=None, seq_type=None): # pylint: disable=too-many-locals,too-many-branches,invalid-name
         """An equality assertion for ordered sequences (like lists and tuples).
 
         For the purposes of this function, a valid ordered sequence type is one
@@ -324,10 +324,10 @@ class AgentTestCase(unittest.TestCase):
             seq_type_name = seq_type.__name__
             if not isinstance(seq1, seq_type):
                 raise self.failureException('First sequence is not a %s: %s'
-                                        % (seq_type_name, safe_repr(seq1)))
+                                        % (seq_type_name, safe_repr(seq1))) # pylint: disable=bad-continuation
             if not isinstance(seq2, seq_type):
                 raise self.failureException('Second sequence is not a %s: %s'
-                                        % (seq_type_name, safe_repr(seq2)))
+                                        % (seq_type_name, safe_repr(seq2))) # pylint: disable=bad-continuation
         else:
             seq_type_name = "sequence"
 
@@ -336,14 +336,14 @@ class AgentTestCase(unittest.TestCase):
             len1 = len(seq1)
         except (TypeError, NotImplementedError):
             differing = 'First %s has no length.    Non-sequence?' % (
-                    seq_type_name)
+                    seq_type_name) # pylint: disable=bad-continuation
 
         if differing is None:
             try:
                 len2 = len(seq2)
             except (TypeError, NotImplementedError):
                 differing = 'Second %s has no length.    Non-sequence?' % (
-                        seq_type_name)
+                        seq_type_name) # pylint: disable=bad-continuation
 
         if differing is None:
             if seq1 == seq2:
@@ -358,34 +358,34 @@ class AgentTestCase(unittest.TestCase):
             elements = (seq_type_name.capitalize(), seq1_repr, seq2_repr)
             differing = '%ss differ: %s != %s\n' % elements
 
-            for i in xrange(min(len1, len2)):
+            for i in xrange(min(len1, len2)): # pylint: disable=undefined-variable
                 try:
                     item1 = seq1[i]
                 except (TypeError, IndexError, NotImplementedError):
                     differing += ('\nUnable to index element %d of first %s\n' %
-                                 (i, seq_type_name))
+                                 (i, seq_type_name)) # pylint: disable=bad-continuation
                     break
 
                 try:
                     item2 = seq2[i]
                 except (TypeError, IndexError, NotImplementedError):
                     differing += ('\nUnable to index element %d of second %s\n' %
-                                 (i, seq_type_name))
+                                 (i, seq_type_name)) # pylint: disable=bad-continuation
                     break
 
                 if item1 != item2:
                     differing += ('\nFirst differing element %d:\n%s\n%s\n' %
-                                 (i, safe_repr(item1), safe_repr(item2)))
+                                 (i, safe_repr(item1), safe_repr(item2))) # pylint: disable=bad-continuation
                     break
             else:
                 if (len1 == len2 and seq_type is None and
-                    type(seq1) != type(seq2)):
+                    type(seq1) != type(seq2)): # pylint: disable=unidiomatic-typecheck,bad-continuation
                     # The sequences are the same, but have differing types.
                     return
 
             if len1 > len2:
                 differing += ('\nFirst %s contains %d additional '
-                             'elements.\n' % (seq_type_name, len1 - len2))
+                             'elements.\n' % (seq_type_name, len1 - len2)) # pylint: disable=bad-continuation
                 try:
                     differing += ('First extra element %d:\n%s\n' %
                                   (len2, safe_repr(seq1[len2])))
@@ -394,22 +394,22 @@ class AgentTestCase(unittest.TestCase):
                                   'of first %s\n' % (len2, seq_type_name))
             elif len1 < len2:
                 differing += ('\nSecond %s contains %d additional '
-                             'elements.\n' % (seq_type_name, len2 - len1))
+                             'elements.\n' % (seq_type_name, len2 - len1)) # pylint: disable=bad-continuation
                 try:
                     differing += ('First extra element %d:\n%s\n' %
                                   (len1, safe_repr(seq2[len1])))
                 except (TypeError, IndexError, NotImplementedError):
                     differing += ('Unable to index element %d '
                                   'of second %s\n' % (len1, seq_type_name))
-        standardMsg = differing
-        diffMsg = '\n' + '\n'.join(
+        standardMsg = differing # pylint: disable=invalid-name
+        diffMsg = '\n' + '\n'.join( # pylint: disable=invalid-name
             difflib.ndiff(pprint.pformat(seq1).splitlines(),
                           pprint.pformat(seq2).splitlines()))
-        standardMsg = self._truncateMessage(standardMsg, diffMsg)
+        standardMsg = self._truncateMessage(standardMsg, diffMsg) # pylint: disable=invalid-name
         msg = self._formatMessage(msg, standardMsg)
         self.fail(msg)
 
-    def emulate_assertIsInstance(self, obj, object_type, msg=None):
+    def emulate_assertIsInstance(self, obj, object_type, msg=None): # pylint: disable=invalid-name
         if not isinstance(obj, object_type):
             msg = msg if msg is not None else '{0} is not an instance of {1}'.format(_safe_repr(obj),
                                                                                      _safe_repr(object_type))
@@ -418,7 +418,7 @@ class AgentTestCase(unittest.TestCase):
     @staticmethod
     def _create_files(tmp_dir, prefix, suffix, count, with_sleep=0):
         for i in range(count):
-            f = os.path.join(tmp_dir, '.'.join((prefix, str(i), suffix)))
+            f = os.path.join(tmp_dir, '.'.join((prefix, str(i), suffix))) # pylint: disable=invalid-name
             fileutil.write_file(f, "faux content")
             time.sleep(with_sleep)
 
@@ -464,7 +464,7 @@ def load_bin_data(name):
         return data_file.read()
 
 
-supported_distro = [
+supported_distro = [ # pylint: disable=invalid-name
     ["ubuntu", "12.04", ""],
     ["ubuntu", "14.04", ""],
     ["ubuntu", "14.10", ""],
@@ -519,7 +519,7 @@ def distros(distro_name=".*", distro_version=".*", distro_full_name=".*"):
 
 def clear_singleton_instances(cls):
     # Adding this lock to avoid any race conditions
-    with cls._lock:
+    with cls._lock: # pylint: disable=protected-access
         obj_name = "%s__%s" % (cls.__name__, currentThread().getName())  # Object Name = className__threadName
-        if obj_name in cls._instances:
-            del cls._instances[obj_name]
+        if obj_name in cls._instances: # pylint: disable=protected-access
+            del cls._instances[obj_name] # pylint: disable=protected-access

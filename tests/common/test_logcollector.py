@@ -123,8 +123,8 @@ class TestLogCollector(AgentTestCase):
             os.path.join(cls.root_collect_dir, "non_existing_file"),
         ]
 
-        with open(manifest_file, "w") as fh:
-            for file in files:
+        with open(manifest_file, "w") as fh: # pylint: disable=invalid-name
+            for file in files: # pylint: disable=redefined-builtin
                 fh.write("copy,{0}\n".format(file))
 
     @staticmethod
@@ -132,7 +132,7 @@ class TestLogCollector(AgentTestCase):
         binary_descriptor = "b" if binary else ""
         data = b'0' if binary else '0'
 
-        with open(file_path, "w{0}".format(binary_descriptor)) as fh:
+        with open(file_path, "w{0}".format(binary_descriptor)) as fh: # pylint: disable=bad-open-mode,invalid-name
             fh.seek(file_size - 1)
             fh.write(data)
 
@@ -144,7 +144,7 @@ class TestLogCollector(AgentTestCase):
         with zipfile.ZipFile(self.compressed_archive_path, "r") as archive:
             archive_files = archive.namelist()
 
-            for file in expected_files:
+            for file in expected_files: # pylint: disable=redefined-builtin
                 if file.lstrip(os.path.sep) not in archive_files:
                     self.fail("File {0} was supposed to be collected, but is not present in the archive!".format(file))
 
@@ -152,24 +152,24 @@ class TestLogCollector(AgentTestCase):
             if "results.txt" not in archive_files:
                 self.fail("File results.txt was supposed to be collected, but is not present in the archive!")
 
-        self.assertTrue(True)
+        self.assertTrue(True) # pylint: disable=redundant-unittest-assert
 
     def _assert_files_are_not_in_archive(self, unexpected_files):
         with zipfile.ZipFile(self.compressed_archive_path, "r") as archive:
             archive_files = archive.namelist()
 
-            for file in unexpected_files:
+            for file in unexpected_files: # pylint: disable=redefined-builtin
                 if file.lstrip(os.path.sep) in archive_files:
                     self.fail("File {0} wasn't supposed to be collected, but is present in the archive!".format(file))
 
-        self.assertTrue(True)
+        self.assertTrue(True) # pylint: disable=redundant-unittest-assert
 
     def _assert_archive_created(self, archive):
         with open(self.output_results_file_path, "r") as out:
             error_message = out.readlines()[-1]
             self.assertTrue(archive, "Failed to collect logs, error message: {0}".format(error_message))
 
-    def _get_uncompressed_file_size(self, file):
+    def _get_uncompressed_file_size(self, file): # pylint: disable=redefined-builtin
         with zipfile.ZipFile(self.compressed_archive_path, "r") as archive:
             return archive.getinfo(file.lstrip(os.path.sep)).file_size
 
@@ -193,10 +193,10 @@ diskinfo,""".format(folder_to_list, file_to_collect)
         manifest_file_path = os.path.join(self.tmp_dir, "manifest")
         write_file(manifest_file_path, manifest_content)
 
-        lc = LogCollector(manifest_file_path)
+        lc = LogCollector(manifest_file_path) # pylint: disable=invalid-name
         archive = lc.collect_logs()
 
-        with open(self.output_results_file_path, "r") as fh:
+        with open(self.output_results_file_path, "r") as fh: # pylint: disable=invalid-name
             results = fh.readlines()
 
         # Assert echo was parsed
@@ -210,12 +210,12 @@ diskinfo,""".format(folder_to_list, file_to_collect)
         self._assert_files_are_in_archive(expected_files=[file_to_collect])
 
         no_files = self._get_number_of_files_in_archive()
-        self.assertEquals(1, no_files, "Expected 1 file in archive, found {0}!".format(no_files))
+        self.assertEquals(1, no_files, "Expected 1 file in archive, found {0}!".format(no_files)) # pylint: disable=deprecated-method
 
     def test_log_collector_should_collect_all_files(self):
         # All files in the manifest should be collected, since none of them are over the individual file size limit,
         # and combined they do not cross the archive size threshold.
-        lc = LogCollector(self.manifest_path)
+        lc = LogCollector(self.manifest_path) # pylint: disable=invalid-name
         archive = lc.collect_logs()
 
         self._assert_archive_created(archive)
@@ -231,12 +231,12 @@ diskinfo,""".format(folder_to_list, file_to_collect)
         self._assert_files_are_in_archive(expected_files)
 
         no_files = self._get_number_of_files_in_archive()
-        self.assertEquals(6, no_files, "Expected 6 files in archive, found {0}!".format(no_files))
+        self.assertEquals(6, no_files, "Expected 6 files in archive, found {0}!".format(no_files)) # pylint: disable=deprecated-method
 
     def test_log_collector_should_truncate_large_text_files_and_ignore_large_binary_files(self):
         # Set the size limit so that some files are too large to collect in full.
         with patch("azurelinuxagent.common.logcollector._FILE_SIZE_LIMIT", SMALL_FILE_SIZE):
-            lc = LogCollector(self.manifest_path)
+            lc = LogCollector(self.manifest_path) # pylint: disable=invalid-name
             archive = lc.collect_logs()
 
         self._assert_archive_created(archive)
@@ -255,7 +255,7 @@ diskinfo,""".format(folder_to_list, file_to_collect)
         self._assert_files_are_not_in_archive(unexpected_files)
 
         no_files = self._get_number_of_files_in_archive()
-        self.assertEquals(5, no_files, "Expected 5 files in archive, found {0}!".format(no_files))
+        self.assertEquals(5, no_files, "Expected 5 files in archive, found {0}!".format(no_files)) # pylint: disable=deprecated-method
 
     def test_log_collector_should_prioritize_important_files_if_archive_too_big(self):
         # Set the archive size limit so that not all files can be collected. In that case, files will be added to the
@@ -269,7 +269,7 @@ diskinfo,""".format(folder_to_list, file_to_collect)
 
         with patch("azurelinuxagent.common.logcollector._UNCOMPRESSED_ARCHIVE_SIZE_LIMIT", 10 * 1024 * 1024):
             with patch("azurelinuxagent.common.logcollector._MUST_COLLECT_FILES", must_collect_files):
-                lc = LogCollector(self.manifest_path)
+                lc = LogCollector(self.manifest_path) # pylint: disable=invalid-name
                 archive = lc.collect_logs()
 
         self._assert_archive_created(archive)
@@ -288,7 +288,7 @@ diskinfo,""".format(folder_to_list, file_to_collect)
         self._assert_files_are_not_in_archive(unexpected_files)
 
         no_files = self._get_number_of_files_in_archive()
-        self.assertEquals(3, no_files, "Expected 3 files in archive, found {0}!".format(no_files))
+        self.assertEquals(3, no_files, "Expected 3 files in archive, found {0}!".format(no_files)) # pylint: disable=deprecated-method
 
         # Second collection, if a file got deleted, delete it from the archive and add next file on the priority list
         # if there is enough space.
@@ -314,12 +314,12 @@ diskinfo,""".format(folder_to_list, file_to_collect)
         self._assert_archive_created(second_archive)
 
         no_files = self._get_number_of_files_in_archive()
-        self.assertEquals(5, no_files, "Expected 5 files in archive, found {0}!".format(no_files))
+        self.assertEquals(5, no_files, "Expected 5 files in archive, found {0}!".format(no_files)) # pylint: disable=deprecated-method
 
     def test_log_collector_should_update_archive_when_files_are_new_or_modified_or_deleted(self):
         # Ensure the archive reflects the state of files on the disk at collection time. If a file was updated, it
         # needs to be updated in the archive, deleted if removed from disk, and added if not previously seen.
-        lc = LogCollector(self.manifest_path)
+        lc = LogCollector(self.manifest_path) # pylint: disable=invalid-name
         first_archive = lc.collect_logs()
         self._assert_archive_created(first_archive)
 
@@ -335,7 +335,7 @@ diskinfo,""".format(folder_to_list, file_to_collect)
         self._assert_files_are_in_archive(expected_files)
 
         no_files = self._get_number_of_files_in_archive()
-        self.assertEquals(6, no_files, "Expected 6 files in archive, found {0}!".format(no_files))
+        self.assertEquals(6, no_files, "Expected 6 files in archive, found {0}!".format(no_files)) # pylint: disable=deprecated-method
 
         # Update a file and its last modified time to ensure the last modified time and last collection time are not
         # the same in this test
@@ -366,13 +366,13 @@ diskinfo,""".format(folder_to_list, file_to_collect)
         self._assert_files_are_in_archive(expected_files)
         self._assert_files_are_not_in_archive(unexpected_files)
 
-        file = os.path.join(self.root_collect_dir, "waagent.log")
+        file = os.path.join(self.root_collect_dir, "waagent.log") # pylint: disable=redefined-builtin
         new_file_size = self._get_uncompressed_file_size(file)
-        self.assertEquals(LARGE_FILE_SIZE, new_file_size, "File {0} hasn't been updated! Size in archive is {1}, but "
-                                                          "should be {2}.".format(file, new_file_size, LARGE_FILE_SIZE))
+        self.assertEquals(LARGE_FILE_SIZE, new_file_size, "File {0} hasn't been updated! Size in archive is {1}, but " # pylint: disable=deprecated-method
+                                                          "should be {2}.".format(file, new_file_size, LARGE_FILE_SIZE)) # pylint: disable=bad-continuation
 
         no_files = self._get_number_of_files_in_archive()
-        self.assertEquals(6, no_files, "Expected 6 files in archive, found {0}!".format(no_files))
+        self.assertEquals(6, no_files, "Expected 6 files in archive, found {0}!".format(no_files)) # pylint: disable=deprecated-method
 
     def test_log_collector_should_clean_up_uncollected_truncated_files(self):
         # Make sure that truncated files that are no longer needed are cleaned up. If an existing truncated file
@@ -389,7 +389,7 @@ diskinfo,""".format(folder_to_list, file_to_collect)
         with patch("azurelinuxagent.common.logcollector._UNCOMPRESSED_ARCHIVE_SIZE_LIMIT", 2 * SMALL_FILE_SIZE):
             with patch("azurelinuxagent.common.logcollector._MUST_COLLECT_FILES", must_collect_files):
                 with patch("azurelinuxagent.common.logcollector._FILE_SIZE_LIMIT", SMALL_FILE_SIZE):
-                    lc = LogCollector(self.manifest_path)
+                    lc = LogCollector(self.manifest_path) # pylint: disable=invalid-name
                     archive = lc.collect_logs()
 
         self._assert_archive_created(archive)
@@ -401,7 +401,7 @@ diskinfo,""".format(folder_to_list, file_to_collect)
         self._assert_files_are_in_archive(expected_files)
 
         no_files = self._get_number_of_files_in_archive()
-        self.assertEquals(2, no_files, "Expected 2 files in archive, found {0}!".format(no_files))
+        self.assertEquals(2, no_files, "Expected 2 files in archive, found {0}!".format(no_files)) # pylint: disable=deprecated-method
 
         # Remove the original file so it is not collected anymore. In the next collection, the truncated file should be
         # removed both from the archive and from the filesystem.
@@ -410,7 +410,7 @@ diskinfo,""".format(folder_to_list, file_to_collect)
         with patch("azurelinuxagent.common.logcollector._UNCOMPRESSED_ARCHIVE_SIZE_LIMIT", 2 * SMALL_FILE_SIZE):
             with patch("azurelinuxagent.common.logcollector._MUST_COLLECT_FILES", must_collect_files):
                 with patch("azurelinuxagent.common.logcollector._FILE_SIZE_LIMIT", SMALL_FILE_SIZE):
-                    lc = LogCollector(self.manifest_path)
+                    lc = LogCollector(self.manifest_path) # pylint: disable=invalid-name
                     second_archive = lc.collect_logs()
 
         expected_files = [
@@ -426,7 +426,7 @@ diskinfo,""".format(folder_to_list, file_to_collect)
         self._assert_archive_created(second_archive)
 
         no_files = self._get_number_of_files_in_archive()
-        self.assertEquals(2, no_files, "Expected 2 files in archive, found {0}!".format(no_files))
+        self.assertEquals(2, no_files, "Expected 2 files in archive, found {0}!".format(no_files)) # pylint: disable=deprecated-method
 
         truncated_files = os.listdir(self.truncated_files_dir)
-        self.assertEquals(0, len(truncated_files), "Uncollected truncated file waagent.log.1 should have been deleted!")
+        self.assertEquals(0, len(truncated_files), "Uncollected truncated file waagent.log.1 should have been deleted!") # pylint: disable=deprecated-method

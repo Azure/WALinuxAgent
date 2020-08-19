@@ -46,7 +46,8 @@ class TestExtHandlers(AgentTestCase):
         Parse a status report for a successful execution of an extension.
         """
 
-        s = '''[{
+        # pylint: disable=invalid-name
+        s = '''[{ # pylint: disable=invalid-name
     "status": {
       "status": "success",
       "formattedMessage": {
@@ -61,6 +62,7 @@ class TestExtHandlers(AgentTestCase):
     "timestampUTC": "2018-04-20T21:20:24Z"
   }
 ]'''
+        # pylint: enable=invalid-name
         ext_status = ExtensionStatus(seq_no=0)
         parse_ext_status(ext_status, json.loads(s))
 
@@ -80,8 +82,8 @@ class TestExtHandlers(AgentTestCase):
         The agent should handle this gracefully, and convert all unknown
         status/status values into an error.
         """
-
-        s = '''[{
+        # pylint: disable=invalid-name
+        s = '''[{ 
     "status": {
       "status": "failed",
       "formattedMessage": {
@@ -95,6 +97,7 @@ class TestExtHandlers(AgentTestCase):
     "version": "1.0",
     "timestampUTC": "2018-04-20T20:50:22Z"
 }]'''
+        # pylint: enable=invalid-name
         ext_status = ExtensionStatus(seq_no=0)
         parse_ext_status(ext_status, json.loads(s))
 
@@ -163,7 +166,7 @@ class TestExtHandlers(AgentTestCase):
         """
 
         # Validating empty status case
-        s = '''[]'''
+        s = '''[]''' # pylint: disable=invalid-name
         ext_status = ExtensionStatus(seq_no=0)
         parse_ext_status(ext_status, json.loads(s))
 
@@ -189,7 +192,7 @@ class TestExtHandlers(AgentTestCase):
 
     @patch('azurelinuxagent.common.event.EventLogger.add_event')
     @patch('azurelinuxagent.ga.exthandlers.ExtHandlerInstance._get_largest_seq_no')
-    def assert_extension_sequence_number(self,
+    def assert_extension_sequence_number(self, # pylint: disable=too-many-locals,too-many-arguments
                                          patch_get_largest_seq,
                                          patch_add_event,
                                          goal_state_sequence_number,
@@ -215,7 +218,7 @@ class TestExtHandlers(AgentTestCase):
 
         if gs_int and gs_seq_int != disk_sequence_number:
             self.assertEqual(1, patch_add_event.call_count)
-            args, kw_args = patch_add_event.call_args
+            args, kw_args = patch_add_event.call_args # pylint: disable=unused-variable
             self.assertEqual('SequenceNumberMismatch', kw_args['op'])
             self.assertEqual(False, kw_args['is_success'])
             self.assertEqual('Goal state: {0}, disk: {1}'
@@ -231,19 +234,19 @@ class TestExtHandlers(AgentTestCase):
             self.assertIsNone(path)
 
     def test_extension_sequence_number(self):
-        self.assert_extension_sequence_number(goal_state_sequence_number="12",
+        self.assert_extension_sequence_number(goal_state_sequence_number="12", # pylint: disable=no-value-for-parameter
                                               disk_sequence_number=366,
                                               expected_sequence_number=12)
 
-        self.assert_extension_sequence_number(goal_state_sequence_number=" 12 ",
+        self.assert_extension_sequence_number(goal_state_sequence_number=" 12 ", # pylint: disable=no-value-for-parameter
                                               disk_sequence_number=366,
                                               expected_sequence_number=12)
 
-        self.assert_extension_sequence_number(goal_state_sequence_number=" foo",
+        self.assert_extension_sequence_number(goal_state_sequence_number=" foo", # pylint: disable=no-value-for-parameter
                                               disk_sequence_number=3,
                                               expected_sequence_number=3)
 
-        self.assert_extension_sequence_number(goal_state_sequence_number="-1",
+        self.assert_extension_sequence_number(goal_state_sequence_number="-1", # pylint: disable=no-value-for-parameter
                                               disk_sequence_number=3,
                                               expected_sequence_number=-1)
 
@@ -259,9 +262,9 @@ class TestExtHandlers(AgentTestCase):
                                  "PluginSettingsMismatch event should be reported once")
                 self.assertIn('ExtHandler PluginSettings Version Mismatch! Expected PluginSettings version: 1.0.0 for Handler: OSTCExtensions.ExampleHandlerLinux'
                               , plugin_setting_mismatch_calls[0]['message'],
-                    "Invalid error message with incomplete data detected for PluginSettingsVersionMismatch")
+                    "Invalid error message with incomplete data detected for PluginSettingsVersionMismatch") # pylint: disable=bad-continuation
                 self.assertTrue("1.0.2" in plugin_setting_mismatch_calls[0]['message'] and "1.0.1" in plugin_setting_mismatch_calls[0]['message'],
-                              "Error message should contain the incorrect versions")
+                              "Error message should contain the incorrect versions") # pylint: disable=bad-continuation
                 self.assertFalse(plugin_setting_mismatch_calls[0]['is_success'], "The event should be false")
 
 class LaunchCommandTestCase(AgentTestCase):
@@ -382,7 +385,7 @@ with open("{2}", "w") as file:
 
         start_time = time.time()
 
-        with patch("time.sleep", side_effect=sleep, autospec=True) as mock_sleep:
+        with patch("time.sleep", side_effect=sleep, autospec=True) as mock_sleep: # pylint: disable=redefined-outer-name
 
             with self.assertRaises(ExtensionError) as context_manager:
                 self.ext_handler_instance.launch_command(command, timeout=timeout, extension_error_code=extension_error_code)
@@ -393,7 +396,7 @@ with open("{2}", "w") as file:
             self.assertRegex(message, r"Timeout\(\d+\):\s+{0}\s+{1}".format(command_full_path, LaunchCommandTestCase._output_regex(stdout, stderr)))
 
             # the exception code should be as specified in the call to launch_command
-            self.assertEquals(context_manager.exception.code, extension_error_code)
+            self.assertEquals(context_manager.exception.code, extension_error_code) # pylint: disable=deprecated-method
 
             # the timeout period should have elapsed
             self.assertGreaterEqual(mock_sleep.call_count, timeout)
@@ -426,7 +429,7 @@ exit({2})
         message = str(context_manager.exception)
         self.assertRegex(message, r"Non-zero exit code: {0}.+{1}\s+{2}".format(exit_code, command, LaunchCommandTestCase._output_regex(stdout, stderr)))
 
-        self.assertEquals(context_manager.exception.code, extension_error_code)
+        self.assertEquals(context_manager.exception.code, extension_error_code) # pylint: disable=deprecated-method
 
     def test_it_should_not_wait_for_child_process(self):
         stdout = "stdout"
@@ -567,7 +570,7 @@ echo {1}
 
         with open(command_output_file, "r") as command_output:
             output = command_output.read()
-            self.assertEquals(output, "{0}\n{1}\n".format(stdout, stderr))
+            self.assertEquals(output, "{0}\n{1}\n".format(stdout, stderr)) # pylint: disable=deprecated-method
 
     def test_it_should_truncate_the_command_output(self):
         stdout = "STDOUT"
@@ -605,7 +608,7 @@ sys.stderr.write("E" * 5 * 1024 * 1024)
 
         mock_format.assert_called_once()
 
-        args, kwargs = mock_format.call_args
+        args, kwargs = mock_format.call_args # pylint: disable=unused-variable
         stdout, stderr = args
 
         self.assertGreaterEqual(len(stdout), 1024)
@@ -626,7 +629,7 @@ sys.stderr.write("STDERR")
         # trying to use these files.
         original_capture_process_output = read_output
 
-        def capture_process_output(stdout_file, stderr_file):
+        def capture_process_output(stdout_file, stderr_file): # pylint: disable=unused-argument
             return original_capture_process_output(None, None)
 
         with patch('azurelinuxagent.common.utils.extensionprocessutil.read_output', side_effect=capture_process_output):
@@ -649,7 +652,7 @@ sys.stderr.write("STDERR")
         with patch("subprocess.Popen", wraps=subprocess.Popen) as patch_popen:
             output = self.ext_handler_instance.launch_command(test_file)
 
-            args, kwagrs = patch_popen.call_args
+            args, kwagrs = patch_popen.call_args # pylint: disable=unused-variable
             without_os_env = dict((k, v) for (k, v) in kwagrs['env'].items() if k not in os.environ)
 
             # This check will fail if any helper environment variables are added/removed later on

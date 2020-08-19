@@ -82,33 +82,33 @@ class TestAgent(AgentTestCase):
 
     def test_accepts_configuration_path(self):
         conf_path = os.path.join(data_dir, "test_waagent.conf")
-        c, f, v, d, cfp = parse_args(["-configuration-path:" + conf_path])
+        c, f, v, d, cfp = parse_args(["-configuration-path:" + conf_path]) # pylint: disable=unused-variable,invalid-name
         self.assertEqual(cfp, conf_path)
 
     @patch("os.path.exists", return_value=True)
     def test_checks_configuration_path(self, mock_exists):
         conf_path = "/foo/bar-baz/something.conf"
-        c, f, v, d, cfp = parse_args(["-configuration-path:"+conf_path])
+        c, f, v, d, cfp = parse_args(["-configuration-path:"+conf_path]) # pylint: disable=unused-variable,invalid-name
         self.assertEqual(cfp, conf_path)
         self.assertEqual(mock_exists.call_count, 1)
 
     @patch("sys.stderr")
     @patch("os.path.exists", return_value=False)
     @patch("sys.exit", side_effect=Exception)
-    def test_rejects_missing_configuration_path(self, mock_exit, mock_exists, mock_stderr):
+    def test_rejects_missing_configuration_path(self, mock_exit, mock_exists, mock_stderr): # pylint: disable=unused-argument
         try:
-            c, f, v, d, cfp = parse_args(["-configuration-path:/foo/bar.conf"])
-            self.assertTrue(False)
+            c, f, v, d, cfp = parse_args(["-configuration-path:/foo/bar.conf"]) # pylint: disable=unused-variable,invalid-name
+            self.assertTrue(False) # pylint: disable=redundant-unittest-assert
         except Exception:
             self.assertEqual(mock_exit.call_count, 1)
 
     def test_configuration_path_defaults_to_none(self):
-        c, f, v, d, cfp = parse_args([])
+        c, f, v, d, cfp = parse_args([]) # pylint: disable=unused-variable,invalid-name
         self.assertEqual(cfp, None)
 
     def test_agent_accepts_configuration_path(self):
         Agent(False,
-                conf_file_path=os.path.join(data_dir, "test_waagent.conf"))
+                conf_file_path=os.path.join(data_dir, "test_waagent.conf")) # pylint: disable=bad-continuation
         self.assertTrue(conf.get_fips_enabled())
 
     @patch("azurelinuxagent.common.conf.load_conf_from_file")
@@ -119,7 +119,7 @@ class TestAgent(AgentTestCase):
     @patch("azurelinuxagent.daemon.get_daemon_handler")
     @patch("azurelinuxagent.common.conf.load_conf_from_file")
     def test_agent_does_not_pass_configuration_path(self,
-                mock_load, mock_handler):
+                mock_load, mock_handler): # pylint: disable=bad-continuation
 
         mock_daemon = Mock()
         mock_daemon.run = Mock()
@@ -151,8 +151,8 @@ class TestAgent(AgentTestCase):
         mock_dir.return_value = ext_log_dir
 
         self.assertFalse(os.path.isdir(ext_log_dir))
-        agent = Agent(False,
-                    conf_file_path=os.path.join(data_dir, "test_waagent.conf"))
+        agent = Agent(False, # pylint: disable=unused-variable
+                    conf_file_path=os.path.join(data_dir, "test_waagent.conf")) # pylint: disable=bad-continuation
         self.assertTrue(os.path.isdir(ext_log_dir))
 
     @patch("azurelinuxagent.common.logger.error")
@@ -164,8 +164,8 @@ class TestAgent(AgentTestCase):
 
         self.assertTrue(os.path.isfile(ext_log_dir))
         self.assertFalse(os.path.isdir(ext_log_dir))
-        agent = Agent(False,
-                    conf_file_path=os.path.join(data_dir, "test_waagent.conf"))
+        agent = Agent(False, # pylint: disable=unused-variable
+                    conf_file_path=os.path.join(data_dir, "test_waagent.conf")) # pylint: disable=bad-continuation
         self.assertTrue(os.path.isfile(ext_log_dir))
         self.assertFalse(os.path.isdir(ext_log_dir))
         self.assertEqual(1, mock_log.call_count)
