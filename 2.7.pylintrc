@@ -18,6 +18,7 @@
 # deprecated-method<W1505>: (hi-pri) The method is marked as deprecated and will be removed in a future version of Python.
 # duplicate-key<W0109>: (hi-pri) Used when a dictionary expression binds the same key multiple times.
 # expression-not-assigned<W0106>: (hi-pri) Used when an expression that is not a function call is assigned to nothing.
+# duplicate-code<R0801>: (hi-pri) Indicates that a set of similar lines has been detected among multiple file. (also disabled globally)
 # fixme<W0511>: Used when a warning note as FIXME or TODO is detected
 # function-redefined<E0102>: (hi-pri) Used when a function / class / method is redefined.
 # global-statement<W0603>: Used when you use the "global" statement to update a global variable.

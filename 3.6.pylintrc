@@ -21,6 +21,7 @@
 # dangerous-default-value<W0102>: (hi-pri) Used when a mutable value as list or dictionary is detected in a default value for an argument.
 # deprecated-method<W1505>: (hi-pri) The method is marked as deprecated and will be removed in a future version of Python
 # duplicate-key<W0109>: (hi-pri) Used when a dictionary expression binds the same key multiple times.
+# duplicate-code<R0801>: (hi-pri) Indicates that a set of similar lines has been detected among multiple file. (also disabled globally)
 # duplicate-string-formatting-argument<W1308>: (hi-pri) Used when we detect that a string formatting is repeating an argument instead of using named string arguments
 # expression-not-assigned<W0106>: (hi-pri) Used when an expression that is not a function call is assigned to nothing.
 # fixme<W0511>: Used when a warning note as FIXME or TODO is detected
@@ -34,6 +35,7 @@
 # len-as-condition<C1801>: (hi-pri) Used when Pylint detects that len(sequence) is being used without explicit comparison inside a condition to determine if a sequence is empty.
 # logging-format-interpolation<W1202>: (hi-pri) Used when a logging statement has a call form of "logging.<logging method>(format_string.format(format_args...))". Use another type of string formatting instead.
 # multiple-imports<C0410>: (hi-pri) Used when import statement importing multiple modules is detected.
+# lost-exception<W0150>: (needs review) Used when a break or a return statement is found inside the finally clause of a try...finally block: the exceptions raised in the try clause will be silently swallowed instead of being re-raised.
 # no-else-break<R1723>: (hi-pri) Used in order to highlight an unnecessary block of code following an if containing a break statement.
 # no-else-continue<R1724>: (hi-pri) Used in order to highlight an unnecessary block of code following an if containing a continue statement.
 # no-else-raise<R1720>: (hi-pri) Used in order to highlight an unnecessary block of code following an if containing a raise statement. 
