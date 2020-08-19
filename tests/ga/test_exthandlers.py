@@ -47,7 +47,7 @@ class TestExtHandlers(AgentTestCase):
         """
 
         # pylint: disable=invalid-name
-        s = '''[{ # pylint: disable=invalid-name
+        s = '''[{
     "status": {
       "status": "success",
       "formattedMessage": {
