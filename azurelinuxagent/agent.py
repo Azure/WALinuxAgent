@@ -79,7 +79,7 @@ class Agent(object):
                 raise Exception("{0} is a file".format(ext_log_dir))
             if not os.path.isdir(ext_log_dir):
                 fileutil.mkdir(ext_log_dir, mode=0o755, owner="root")
-        except Exception as e:
+        except Exception as e: # pylint: disable=C0103
             logger.error(
                 "Exception occurred while creating extension "
                 "log directory {0}: {1}".format(ext_log_dir, e))
@@ -152,12 +152,12 @@ class Agent(object):
             print("{0} = {1}".format(k, configuration[k]))
 
 
-def main(args=[]):
+def main(args=[]): # pylint: disable=R0912,W0102
     """
     Parse command line arguments, exit with usage() on error.
     Invoke different methods according to different command
     """
-    if len(args) <= 0:
+    if len(args) <= 0: # pylint: disable=len-as-condition
         args = sys.argv[1:]
     command, force, verbose, debug, conf_file_path = parse_args(args)
     if command == "version":
@@ -188,7 +188,7 @@ def main(args=[]):
                          command,
                          traceback.format_exc())
 
-def parse_args(sys_args):
+def parse_args(sys_args): # pylint: disable=R0912
     """
     Parse command line arguments
     """
@@ -197,13 +197,13 @@ def parse_args(sys_args):
     verbose = False
     debug = False
     conf_file_path = None
-    for a in sys_args:
-        m = re.match("^(?:[-/]*)configuration-path:([\w/\.\-_]+)", a)
+    for a in sys_args: # pylint: disable=C0103
+        m = re.match("^(?:[-/]*)configuration-path:([\w/\.\-_]+)", a) # pylint: disable=W1401,C0103
         if not m is None:
             conf_file_path = m.group(1)
             if not os.path.exists(conf_file_path):
                 print("Error: Configuration file {0} does not exist".format(
-                        conf_file_path), file=sys.stderr)
+                        conf_file_path), file=sys.stderr) # pylint: disable=C0330
                 usage()
                 sys.exit(1)
         
@@ -254,13 +254,13 @@ def usage():
     """
     Return agent usage message
     """
-    s  = "\n"
-    s += ("usage: {0} [-verbose] [-force] [-help] "
-           "-configuration-path:<path to configuration file>"
+    s  = "\n" # pylint: disable=C0103
+    s += ("usage: {0} [-verbose] [-force] [-help] " # pylint: disable=C0103
+           "-configuration-path:<path to configuration file>" # pylint: disable=C0330
            "-deprovision[+user]|-register-service|-version|-daemon|-start|"
            "-run-exthandlers|-show-configuration]"
            "").format(sys.argv[0])
-    s += "\n"
+    s += "\n" # pylint: disable=C0103
     return s
 
 def start(conf_file_path=None):
