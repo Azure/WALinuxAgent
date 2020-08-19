@@ -100,6 +100,8 @@ disable=bad-option-value, # pylint does not recognize the error code/symbol (nee
     useless-object-inheritance, # Used when a class inherit from object, which under python3 is implicit (3+ only)
     duplicate-code # Indicates that a set of similar lines has been detected among multiple file. TODO: this is on our "fix" list, and is thus left last.
 
+
+# This section controls the duplicate-code error.
 [SIMILARITIES]
 
 # Minimum lines number of a similarity.
