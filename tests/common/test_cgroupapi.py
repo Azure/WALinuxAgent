@@ -65,7 +65,7 @@ class CGroupsApiTestCase(_MockedFileSystemTestCase):
             (['redhat', '7.7.1908', 'Core'], False),
             (['bigip', '15.0.1', 'Final'], False),
             (['gaia', '273.562', 'R80.30'], False),
-            (['debian' '9.1', ''], False), # pylint: disable=implicit-str-concat
+            (['debian' '9.1', ''], False), # pylint: disable=implicit-str-concat,implicit-str-concat-in-sequence
         ]
 
         for (distro, supported) in test_cases:
@@ -431,7 +431,7 @@ class FileSystemCgroupsApiTestCase(_MockedFileSystemTestCase):
             self.assertTrue(any(retrieved_cgroup.path == cgroup.path for retrieved_cgroup in retrieved))
 
     @patch('time.sleep', side_effect=lambda _: mock_sleep())
-    def test_start_extension_command_should_add_the_child_process_to_the_extension_cgroup(self, _):
+    def test_start_extension_command_should_add_the_child_process_to_the_extension_cgroup(self, _): # pylint: disable=too-many-locals
         api = FileSystemCgroupsApi()
         api.create_extension_cgroups_root()
 

@@ -15,7 +15,7 @@
 # Requires Python 2.6+ and Openssl 1.0+
 #
 
-from distutils.version import LooseVersion as Version
+from distutils.version import LooseVersion as Version # pylint: disable=no-name-in-module,import-error
 from tests.tools import AgentTestCase
 
 import hashlib # pylint: disable=wrong-import-order

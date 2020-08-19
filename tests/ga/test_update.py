@@ -160,7 +160,7 @@ class UpdateTestCase(AgentTestCase):
             return err
 
     def copy_agents(self, *agents): # pylint: disable=useless-return
-        if len(agents) <= 0:
+        if len(agents) <= 0: # pylint: disable=len-as-condition
             agents = get_agent_pkgs()
         for agent in agents:
             shutil.copy(agent, self.tmp_dir)
@@ -717,7 +717,7 @@ class TestUpdate(UpdateTestCase): # pylint: disable=too-many-public-methods
 
     def _create_protocol(self, count=20, versions=None):
         latest_version = self.prepare_agents(count=count)
-        if versions is None or len(versions) <= 0:
+        if versions is None or len(versions) <= 0: # pylint: disable=len-as-condition
             versions = [latest_version]
         return ProtocolMock(versions=versions)
 
@@ -1730,7 +1730,7 @@ class ProtocolMock(object): # pylint: disable=too-many-instance-attributes
 
     def create_manifests(self):
         self.agent_manifests = VMAgentManifestList()
-        if len(self.versions) <= 0:
+        if len(self.versions) <= 0: # pylint: disable=len-as-condition
             return
 
         if self.family is not None:
@@ -1742,7 +1742,7 @@ class ProtocolMock(object): # pylint: disable=too-many-instance-attributes
 
     def create_packages(self):
         self.agent_packages = ExtHandlerPackageList()
-        if len(self.versions) <= 0:
+        if len(self.versions) <= 0: # pylint: disable=len-as-condition
             return
 
         for version in self.versions:

@@ -77,7 +77,8 @@ def create_mock_protocol(artifacts_profile_blob=None, status_upload_blob=None, s
         yield protocol
 
 
-@patch("time.sleep") # pylint: disable=too-many-public-methods
+# pylint: disable=too-many-public-methods
+@patch("time.sleep")
 @patch("azurelinuxagent.common.protocol.wire.CryptUtil")
 @patch("azurelinuxagent.common.protocol.healthservice.HealthService._report")
 class TestWireProtocol(AgentTestCase):
@@ -1052,7 +1053,7 @@ class UpdateGoalStateTestCase(AgentTestCase):
 
             self.assertEqual(protocol.client.get_host_plugin().container_id, new_container_id)
             self.assertEqual(protocol.client.get_host_plugin().role_config_name, new_role_config_name)
-
+# pylint: enable=too-many-public-methods
 
 class TryUpdateGoalStateTestCase(HttpRequestPredicates, AgentTestCase):
     """

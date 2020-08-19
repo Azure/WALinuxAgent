@@ -139,7 +139,7 @@ class AgentTestCase(unittest.TestCase):
         if not hasattr(cls, "assertRegex"):
             cls.assertRegex = cls.assertRegexpMatches if hasattr(cls, "assertRegexpMatches") else cls.emulate_assertRegexpMatches
         if not hasattr(cls, "assertNotRegex"):
-            cls.assertNotRegex = cls.assertNotRegexpMatches if hasattr(cls, "assertNotRegexpMatches") else cls.emulate_assertNotRegexpMatches
+            cls.assertNotRegex = cls.assertNotRegexpMatches if hasattr(cls, "assertNotRegexpMatches") else cls.emulate_assertNotRegexpMatches # pylint: disable=no-member
         if not hasattr(cls, "assertIn"):
             cls.assertIn = cls.emulate_assertIn
         if not hasattr(cls, "assertNotIn"):
