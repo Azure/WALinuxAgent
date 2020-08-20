@@ -165,6 +165,9 @@ class ExtensionEmulator:
     A wrapper class for the possible actions and options that an extension might support.
     """
 
+    _EXT_STATUS_SUCCESS = [{ "status": {"status": "success"} }]
+    _EXT_STATUS_ERROR_BASE = [{ "status": {"status": "error"} }]
+
     def __init__(self, name, version,
         update_mode, report_heartbeat,
         continue_on_update_failure,
@@ -216,9 +219,16 @@ class ExtensionEmulator:
 
                 if seq < int(match.group("seq")):
                     seq = int(match.group("seq"))
+            
+            status_file = os.path.join(os.path.dirname(cmd), "status", "{seq}.status".format(seq=seq))
+            
+            if return_value == 0:
+                status_contents = ExtensionEmulator._EXT_STATUS_SUCCESS
+            else:
+                status_contents = ExtensionEmulator._EXT_STATUS_ERROR_BASE.copy()
+                status_contents[0]["status"]["substatus"] = return_value
 
-            fileutil.write_file(os.path.join(os.path.dirname(cmd), "status", "{seq}.status".format(seq=seq)),
-                json.dumps([{ "status": {"status": "success"} }]))
+            fileutil.write_file(status_file, json.dumps(status_contents))
 
             return Mock(**{
                 "poll.return_value": return_value,
