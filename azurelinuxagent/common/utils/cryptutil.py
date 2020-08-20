@@ -44,12 +44,12 @@ class CryptUtil(object):
         cmd = ("{0} req -x509 -nodes -subj /CN=LinuxTransport -days 730 "
                "-newkey rsa:2048 -keyout {1} "
                "-out {2}").format(self.openssl_cmd, prv_file, crt_file)
-        rc = shellutil.run(cmd)
+        rc = shellutil.run(cmd) # pylint: disable=C0103
         if rc != 0:
             logger.error("Failed to create {0} and {1} certificates".format(prv_file, crt_file))
 
     def get_pubkey_from_prv(self, file_name):
-        if not os.path.exists(file_name):
+        if not os.path.exists(file_name): # pylint: disable=R1720
             raise IOError(errno.ENOENT, "File not found", file_name)
         else:
             cmd = [self.openssl_cmd, "rsa", "-in", file_name, "-pubout"]
@@ -57,7 +57,7 @@ class CryptUtil(object):
             return pub
 
     def get_pubkey_from_crt(self, file_name):
-        if not os.path.exists(file_name):
+        if not os.path.exists(file_name): # pylint: disable=R1720
             raise IOError(errno.ENOENT, "File not found", file_name)
         else:
             cmd = [self.openssl_cmd, "x509", "-in", file_name, "-pubkey", "-noout"]
@@ -65,7 +65,7 @@ class CryptUtil(object):
             return pub
 
     def get_thumbprint_from_crt(self, file_name):
-        if not os.path.exists(file_name):
+        if not os.path.exists(file_name): # pylint: disable=R1720
             raise IOError(errno.ENOENT, "File not found", file_name)
         else:
             cmd = [self.openssl_cmd, "x509", "-in", file_name, "-fingerprint", "-noout"]
@@ -74,7 +74,7 @@ class CryptUtil(object):
             return thumbprint
 
     def decrypt_p7m(self, p7m_file, trans_prv_file, trans_cert_file, pem_file):
-        if not os.path.exists(p7m_file):
+        if not os.path.exists(p7m_file): # pylint: disable=R1720
             raise IOError(errno.ENOENT, "File not found", p7m_file)
         elif not os.path.exists(trans_prv_file):
             raise IOError(errno.ENOENT, "File not found", trans_prv_file)
@@ -84,7 +84,7 @@ class CryptUtil(object):
                    "").format(self.openssl_cmd, p7m_file, trans_prv_file,
                               trans_cert_file, self.openssl_cmd, pem_file)
             shellutil.run(cmd)
-            rc = shellutil.run(cmd)
+            rc = shellutil.run(cmd) # pylint: disable=C0103
             if rc != 0:
                 logger.error("Failed to decrypt {0}".format(p7m_file))
 
@@ -97,13 +97,13 @@ class CryptUtil(object):
         lines = [x for x in lines if not x.startswith("----")]
         base64_encoded = "".join(lines)
         try:
-            #TODO remove pyasn1 dependency
+            #TODO remove pyasn1 dependency # pylint: disable=W0511
             from pyasn1.codec.der import decoder as der_decoder
             der_encoded = base64.b64decode(base64_encoded)
-            der_encoded = der_decoder.decode(der_encoded)[0][1]
+            der_encoded = der_decoder.decode(der_encoded)[0][1] # pylint: disable=unsubscriptable-object
             key = der_decoder.decode(self.bits_to_bytes(der_encoded))[0]
-            n=key[0]
-            e=key[1]
+            n=key[0] # pylint: disable=C0103,unsubscriptable-object
+            e=key[1] # pylint: disable=C0103,unsubscriptable-object
             keydata = bytearray()
             keydata.extend(struct.pack('>I', len("ssh-rsa")))
             keydata.extend(b"ssh-rsa")
@@ -115,7 +115,7 @@ class CryptUtil(object):
             keydata_base64 = base64.b64encode(bytebuffer(keydata))
             return ustr(b"ssh-rsa " +  keydata_base64 + b"\n",
                         encoding='utf-8')
-        except ImportError as e:
+        except ImportError as e: # pylint: disable=C0103
             raise CryptError("Failed to load pyasn1.codec.der")
 
     def num_to_bytes(self, num):
@@ -149,12 +149,12 @@ class CryptUtil(object):
         try:
             decoded = base64.b64decode(encrypted_password)
             args = DECRYPT_SECRET_CMD.format(self.openssl_cmd, private_key).split(' ')
-            p = subprocess.Popen(args, stdout=subprocess.PIPE, stdin=subprocess.PIPE, stderr=subprocess.STDOUT)
+            p = subprocess.Popen(args, stdout=subprocess.PIPE, stdin=subprocess.PIPE, stderr=subprocess.STDOUT) # pylint: disable=C0103
             p.stdin.write(decoded)
             output = p.communicate()[0]
             retcode = p.poll()
             if retcode:
                 raise subprocess.CalledProcessError(retcode, "openssl cms -decrypt", output=output)
             return output.decode('utf-16')
-        except Exception as e:
+        except Exception as e: # pylint: disable=C0103
             raise CryptError("Error decoding secret", e)

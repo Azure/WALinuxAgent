@@ -21,7 +21,7 @@
 File operation util functions
 """
 
-import errno as errno
+import errno as errno # pylint: disable=C0414
 import glob
 import os
 import pwd
@@ -85,7 +85,7 @@ def append_file(filepath, contents, asbin=False, encoding='utf-8'):
 
 
 def base_name(path):
-    head, tail = os.path.split(path)
+    head, tail = os.path.split(path) # pylint: disable=W0612
     return tail
 
 
@@ -135,11 +135,11 @@ def rm_dirs(*args):
     """
     Remove the contents of each directory
     """
-    for p in args:
+    for p in args: # pylint: disable=C0103
         if not os.path.isdir(p):
             continue
 
-        for pp in os.listdir(p):
+        for pp in os.listdir(p): # pylint: disable=C0103
             path = os.path.join(p, pp)
             if os.path.isfile(path):
                 os.remove(path)
@@ -167,7 +167,7 @@ def update_conf_file(path, line_start, val, chk_err=False):
 
 
 def search_file(target_dir_name, target_file_name):
-    for root, dirs, files in os.walk(target_dir_name):
+    for root, dirs, files in os.walk(target_dir_name): # pylint: disable=W0612
         for file_name in files:
             if file_name == target_file_name:
                 return os.path.join(root, file_name)
@@ -175,7 +175,7 @@ def search_file(target_dir_name, target_file_name):
 
 
 def chmod_tree(path, mode):
-    for root, dirs, files in os.walk(path):
+    for root, dirs, files in os.walk(path): # pylint: disable=W0612
         for file_name in files:
             os.chmod(os.path.join(root, file_name), mode)
 
@@ -186,7 +186,7 @@ def findstr_in_file(file_path, line_str):
     (Trailing whitespace is ignored.)
     """
     try:
-        with open(file_path, 'r') as fh:
+        with open(file_path, 'r') as fh: # pylint: disable=C0103
             for line in fh.readlines():
                 if line_str == line.rstrip():
                     return True
@@ -201,13 +201,13 @@ def findre_in_file(file_path, line_re):
     Return match object if found in file.
     """
     try:
-        with open(file_path, 'r') as fh:
+        with open(file_path, 'r') as fh: # pylint: disable=C0103
             pattern = re.compile(line_re)
             for line in fh.readlines():
                 match = re.search(pattern, line)
                 if match:
                     return match
-    except:
+    except: # pylint: disable=W0702
         pass
 
     return None
@@ -218,13 +218,13 @@ def get_all_files(root_path):
     Find all files under the given root path
     """
     result = []
-    for root, dirs, files in os.walk(root_path):
-        result.extend([os.path.join(root, file) for file in files])
+    for root, dirs, files in os.walk(root_path): # pylint: disable=W0612
+        result.extend([os.path.join(root, file) for file in files]) # pylint: disable=redefined-builtin
 
     return result
 
 
-def clean_ioerror(e, paths=[]):
+def clean_ioerror(e, paths=[]): # pylint: disable=W0102,C0103
     """
     Clean-up possibly bad files and directories after an IO error.
     The code ignores *all* errors since disk state may be unhealthy.

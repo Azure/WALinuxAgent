@@ -21,9 +21,10 @@ import azurelinuxagent.common.logger as logger
 import azurelinuxagent.common.utils.shellutil as shellutil
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.osutil.default import DefaultOSUtil
-from azurelinuxagent.common.osutil.redhat import Redhat6xOSUtil
-from azurelinuxagent.common.utils import textutil
+from azurelinuxagent.common.osutil.redhat import Redhat6xOSUtil # pylint: disable=W0611
+from azurelinuxagent.common.utils import textutil # pylint: disable=W0611
 
+# pylint: disable=W0105
 '''
 The IOSXE distribution is a variant of the Centos distribution, 
 version 7.1.
@@ -33,8 +34,10 @@ the waagent environment:
  - no provisioning is performed
  - no DHCP-based services are available
 '''
+# pylint: enable=W0105
+
 class IosxeOSUtil(DefaultOSUtil):
-    def __init__(self):
+    def __init__(self): # pylint: disable=W0235
         super(IosxeOSUtil, self).__init__()
 
     def set_hostname(self, hostname):
@@ -46,7 +49,7 @@ class IosxeOSUtil(DefaultOSUtil):
         hostnamectl_cmd = ["hostnamectl", "set-hostname", hostname, "--static"]
         try:
             shellutil.run_command(hostnamectl_cmd)
-        except Exception as e:
+        except Exception as e: # pylint: disable=C0103
             logger.warn("[{0}] failed with error: {1}, attempting fallback".format(' '.join(hostnamectl_cmd), ustr(e)))
             DefaultOSUtil.set_hostname(self, hostname)
 
@@ -55,7 +58,7 @@ class IosxeOSUtil(DefaultOSUtil):
         Restart NetworkManager first before publishing hostname
         """
         shellutil.run("service NetworkManager restart")
-        super(RedhatOSUtil, self).publish_hostname(hostname)
+        super(RedhatOSUtil, self).publish_hostname(hostname) # pylint: disable=E0602
 
     def register_agent_service(self):
         return shellutil.run("systemctl enable waagent", chk_err=False)
@@ -76,13 +79,13 @@ class IosxeOSUtil(DefaultOSUtil):
         If that is missing, then extracts from dmidecode
         If nothing works (for old VMs), return the empty string
         '''
-        if os.path.isfile(PRODUCT_ID_FILE):
+        if os.path.isfile(PRODUCT_ID_FILE): # pylint: disable=E0602
             try:
-                s = fileutil.read_file(PRODUCT_ID_FILE).strip()
+                s = fileutil.read_file(PRODUCT_ID_FILE).strip() # pylint: disable=E0602,C0103
                 return self._correct_instance_id(s.strip())
             except IOError:
                 pass
-        rc, s = shellutil.run_get_output(DMIDECODE_CMD)
-        if rc != 0 or UUID_PATTERN.match(s) is None:
+        rc, s = shellutil.run_get_output(DMIDECODE_CMD) # pylint: disable=E0602,C0103
+        if rc != 0 or UUID_PATTERN.match(s) is None: # pylint: disable=E0602
             return ""
         return self._correct_instance_id(s.strip())
