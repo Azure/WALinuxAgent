@@ -65,7 +65,7 @@ class CGroupsApiTestCase(_MockedFileSystemTestCase):
             (['redhat', '7.7.1908', 'Core'], False),
             (['bigip', '15.0.1', 'Final'], False),
             (['gaia', '273.562', 'R80.30'], False),
-            (['debian' '9.1', ''], False),
+            (['debian', '9.1', ''], False),
         ]
 
         for (distro, supported) in test_cases:
