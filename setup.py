@@ -142,7 +142,7 @@ def get_data_files(name, version, fullname): # pylint: disable=R0912
         if fullname == 'SUSE Linux Enterprise Server' and \
                 version.startswith('11') or \
                 fullname == 'openSUSE' and version.startswith(
-                    '13.1'): # pylint: disable=C0330
+                    '13.1'): 
             set_sysv_files(data_files, dest='/etc/init.d',
                            src=["init/suse/waagent"])
         else:

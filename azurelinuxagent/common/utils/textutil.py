@@ -347,10 +347,10 @@ def swap_hexstring(s, width=2): # pylint: disable=C0103
         s = ('0' * (width - (len(s) % width))) + s
 
     return ''.join(reversed(
-                        re.findall( # pylint: disable=C0330
-                                r'[a-f0-9]{{{0}}}'.format(width), # pylint: disable=C0330
-                                s, # pylint: disable=C0330
-                                re.IGNORECASE))) # pylint: disable=C0330
+                        re.findall( 
+                                r'[a-f0-9]{{{0}}}'.format(width), 
+                                s, 
+                                re.IGNORECASE))) 
 
 
 def parse_json(json_str):

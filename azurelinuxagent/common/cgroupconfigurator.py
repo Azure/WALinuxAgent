@@ -274,14 +274,14 @@ class CGroupConfigurator(object):
                                                            error_code=error_code)
             else:
                 process_output = self._cgroups_api.start_extension_command(extension_name,
-                                                                          command, # pylint: disable=C0330
-                                                                          timeout, # pylint: disable=C0330
-                                                                          shell=shell, # pylint: disable=C0330
-                                                                          cwd=cwd, # pylint: disable=C0330
-                                                                          env=env, # pylint: disable=C0330
-                                                                          stdout=stdout, # pylint: disable=C0330
-                                                                          stderr=stderr, # pylint: disable=C0330
-                                                                          error_code=error_code) # pylint: disable=C0330
+                                                                          command, 
+                                                                          timeout, 
+                                                                          shell=shell, 
+                                                                          cwd=cwd, 
+                                                                          env=env, 
+                                                                          stdout=stdout, 
+                                                                          stderr=stderr, 
+                                                                          error_code=error_code) 
 
             return process_output
 

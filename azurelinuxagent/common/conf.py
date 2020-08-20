@@ -285,12 +285,12 @@ def get_ssh_key_glob(conf=__conf__):
 
 def get_ssh_key_private_path(conf=__conf__):
     return os.path.join(get_ssh_dir(conf),
-        'ssh_host_{0}_key'.format(get_ssh_host_keypair_type(conf))) # pylint: disable=C0330
+        'ssh_host_{0}_key'.format(get_ssh_host_keypair_type(conf))) 
 
 
 def get_ssh_key_public_path(conf=__conf__):
     return os.path.join(get_ssh_dir(conf),
-        'ssh_host_{0}_key.pub'.format(get_ssh_host_keypair_type(conf))) # pylint: disable=C0330
+        'ssh_host_{0}_key.pub'.format(get_ssh_host_keypair_type(conf))) 
 
 
 def get_root_device_scsi_timeout(conf=__conf__):

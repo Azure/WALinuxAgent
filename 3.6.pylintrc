@@ -7,7 +7,6 @@
 # assignment-from-no-return<E1111>: (hi-pri) Used when an assignment is done on a function call but the inferred function doesn't return anything.
 # assignment-from-none<E1128>: (hi-pri) Used when an assignment is done on a function call but the inferred function returns nothing but None.
 # attribute-defined-outside-init<W0201>: (hi-pri) Used when an instance attribute is defined outside the __init__ method.
-# bad-continuation<C0330>: (needs review) **REMOVED in pylint-2.6.0**
 # bad-indentation<W0311>: (hi-pri) Used when an unexpected number of indentation's tabulations or spaces has been found.
 # bad-open-mode<W1501>: (hi-pri) Python supports: r, w, a[, x] modes with b, +, and U (only with r) options.
 # bad-super-call<E1003>: (hi-pri) Used when another argument than the current class is given as first argument of the super builtin.
@@ -86,7 +85,8 @@
 
 [MESSAGES CONTROL]
 
-disable=bad-whitespace, # Used when a wrong number of spaces is used around an operator, bracket or block opener. **REMOVED IN pylint-2.6.0**
+disable=bad-continuation, # Buggy, **REMOVED in pylint-2.6.0**
+    bad-whitespace, # Used when a wrong number of spaces is used around an operator, bracket or block opener. **REMOVED IN pylint-2.6.0**
     broad-except, # Used when an except catches a too general exception, possibly burying unrelated errors.
     consider-iterating-dictionary, # Emitted when the keys of a dictionary are iterated through the .keys() method.
     consider-using-dict-comprehension, # Although there is nothing syntactically wrong with this code, it is hard to read and can be simplified to a dict comprehension. 

@@ -6,7 +6,6 @@
 # anomalous-backslash-in-string<W1401>: (hi-pri) Used when a backslash is in a literal string but not as an escape.
 # arguments-differ<W0221>: (hi-pri) Used when a method has a different number of arguments than in the implemented interface or in an overridden method.
 # attribute-defined-outside-init<W0201>: (hi-pri) Used when an instance attribute is defined outside the __init__ method.
-# bad-continuation<C0330>: (needs review) **REMOVED in pylint-2.6.0**
 # bad-indentation<W0311>: (hi-pri) Used when an unexpected number of indentation's tabulations or spaces has been found.
 # bad-open-mode<W1501>: (hi-pri) Python supports: r, w, a[, x] modes with b, +, and U (only with r) options.
 # bad-super-call<E1003>: (hi-pri) Used when another argument than the current class is given as first argument of the super builtin.
@@ -89,7 +88,8 @@
 
 [MESSAGES CONTROL]
 
-disable=bad-option-value, # pylint does not recognize the error code/symbol (needed to supress breaking changes across pylint versions)
+disable=bad-continuation, # Buggy, **REMOVED in pylint-2.6.0**
+    bad-option-value, # pylint does not recognize the error code/symbol (needed to supress breaking changes across pylint versions)
     bad-whitespace, # Used when a wrong number of spaces is used around an operator, bracket or block opener.
     broad-except, # Used when an except catches a too general exception, possibly burying unrelated errors.
     consider-iterating-dictionary, # Emitted when the keys of a dictionary are iterated through the .keys() method.

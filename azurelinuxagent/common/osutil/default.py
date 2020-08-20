@@ -308,11 +308,11 @@ class DefaultOSUtil(object): # pylint: disable=R0904
 
         parts = id.split('-')
         return '-'.join([
-                textutil.swap_hexstring(parts[0], width=2), # pylint: disable=C0330
-                textutil.swap_hexstring(parts[1], width=2), # pylint: disable=C0330
-                textutil.swap_hexstring(parts[2], width=2), # pylint: disable=C0330
-                parts[3], # pylint: disable=C0330
-                parts[4] # pylint: disable=C0330
+                textutil.swap_hexstring(parts[0], width=2), 
+                textutil.swap_hexstring(parts[1], width=2), 
+                textutil.swap_hexstring(parts[2], width=2), 
+                parts[3], 
+                parts[4] 
             ])
 
     def is_current_instance_id(self, id_that):
@@ -821,7 +821,7 @@ class DefaultOSUtil(object): # pylint: disable=R0904
             route = entry.split("\t")
             if len(route) > 0: # pylint: disable=len-as-condition
                 route_obj = RouteEntry(route[idx_iface], route[idx_dest], route[idx_gw], route[idx_mask],
-                                                   route[idx_flags], route[idx_metric]) # pylint: disable=C0330
+                                                   route[idx_flags], route[idx_metric]) 
                 route_list.append(route_obj)
         return route_list
 

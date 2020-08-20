@@ -547,7 +547,7 @@ class EventLogger(object):
             # Currently only the GuestAgentExtensionEvents has these columns, the other tables dont have them so skipping
             # this data in those tables.
             common_params.extend([TelemetryEventParam(GuestAgentExtensionEventsSchema.ExtensionType, event.file_type),
-                         TelemetryEventParam(GuestAgentExtensionEventsSchema.IsInternal, False)]) # pylint: disable=C0330
+                         TelemetryEventParam(GuestAgentExtensionEventsSchema.IsInternal, False)]) 
 
         event.parameters.extend(common_params)
         event.parameters.extend(self._common_parameters)
