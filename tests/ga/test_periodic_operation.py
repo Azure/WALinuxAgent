@@ -32,7 +32,7 @@ class TestPeriodicOperation(AgentTestCase):
         expected = operation.run_time + datetime.timedelta(hours=1)
         difference = op.next_run_time() - expected
         self.assertTrue(difference < datetime.timedelta(seconds=1),
-            "The next run time exceeds the expected value by more than 1 second: {0} vs {1}".format(op.next_run_time(), expected)) # pylint: disable=bad-continuation
+            "The next run time exceeds the expected value by more than 1 second: {0} vs {1}".format(op.next_run_time(), expected))
 
     def test_it_should_take_a_number_of_seconds_as_period(self):
         def operation():
@@ -45,7 +45,7 @@ class TestPeriodicOperation(AgentTestCase):
         expected = operation.run_time + datetime.timedelta(hours=1)
         difference = op.next_run_time() - expected
         self.assertTrue(difference < datetime.timedelta(seconds=1),
-            "The next run time exceeds the expected value by more than 1 second: {0} vs {1}".format(op.next_run_time(), expected)) # pylint: disable=bad-continuation
+            "The next run time exceeds the expected value by more than 1 second: {0} vs {1}".format(op.next_run_time(), expected))
 
     def test_it_should_be_invoked_when_run_is_called_first_time(self):
         def operation():

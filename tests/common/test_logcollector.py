@@ -369,7 +369,7 @@ diskinfo,""".format(folder_to_list, file_to_collect)
         file = os.path.join(self.root_collect_dir, "waagent.log") # pylint: disable=redefined-builtin
         new_file_size = self._get_uncompressed_file_size(file)
         self.assertEquals(LARGE_FILE_SIZE, new_file_size, "File {0} hasn't been updated! Size in archive is {1}, but " # pylint: disable=deprecated-method
-                                                          "should be {2}.".format(file, new_file_size, LARGE_FILE_SIZE)) # pylint: disable=bad-continuation
+                                                          "should be {2}.".format(file, new_file_size, LARGE_FILE_SIZE))
 
         no_files = self._get_number_of_files_in_archive()
         self.assertEquals(6, no_files, "Expected 6 files in archive, found {0}!".format(no_files)) # pylint: disable=deprecated-method

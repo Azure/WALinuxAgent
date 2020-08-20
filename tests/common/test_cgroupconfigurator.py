@@ -134,7 +134,7 @@ class CGroupConfiguratorSystemdTestCase(AgentTestCase):
             processes = configurator.get_processes_in_agent_cgroup()
 
             self.assertTrue(len(processes) >= 2,
-                "The cgroup should contain at least 2 procceses (daemon and extension handler): [{0}]".format(processes)) # pylint: disable=bad-continuation
+                "The cgroup should contain at least 2 procceses (daemon and extension handler): [{0}]".format(processes))
 
             daemon_present = any("waagent -daemon" in command for (pid, command) in processes)
             self.assertTrue(daemon_present, "Could not find the daemon in the cgroup: [{0}]".format(processes))

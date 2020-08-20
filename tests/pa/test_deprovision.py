@@ -32,7 +32,7 @@ class TestDeprovision(AgentTestCase):
     @patch('azurelinuxagent.common.protocol.util.get_protocol_util')
     @patch('azurelinuxagent.pa.deprovision.default.read_input')
     def test_confirmation(self,
-            mock_read, mock_protocol, mock_util, mock_signal): # pylint: disable=unused-argument,bad-continuation
+            mock_read, mock_protocol, mock_util, mock_signal): # pylint: disable=unused-argument
         dh = DeprovisionHandler() # pylint: disable=invalid-name
 
         dh.setup = Mock()
@@ -57,10 +57,10 @@ class TestDeprovision(AgentTestCase):
     @distros("ubuntu")
     @patch('azurelinuxagent.common.conf.get_lib_dir')
     def test_del_lib_dir_files(self,
-                        distro_name, # pylint: disable=bad-continuation
-                        distro_version, # pylint: disable=bad-continuation
-                        distro_full_name, # pylint: disable=bad-continuation
-                        mock_conf): # pylint: disable=bad-continuation
+                        distro_name,
+                        distro_version,
+                        distro_full_name,
+                        mock_conf):
         dirs = [
             'WALinuxAgent-2.2.26/config',
             'Microsoft.Azure.Extensions.CustomScript-2.0.6/config',

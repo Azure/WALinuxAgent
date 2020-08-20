@@ -85,7 +85,7 @@ class TestIOErrorCounter(AgentTestCase):
         self.assertEqual(1, counts.get("protocol"))
         self.assertEqual(2, counts.get("other"))
         self.assertEqual(
-           {"hostplugin":0, "protocol":0, "other":0}, # pylint: disable=bad-continuation
+           {"hostplugin":0, "protocol":0, "other":0},
             restutil.IOErrorCounter._counts) # pylint: disable=protected-access
 
 
@@ -175,7 +175,7 @@ class TestHttpOperations(AgentTestCase): # pylint: disable=too-many-public-metho
                         "https://abc.def.xyz.123.net/?sv=2017-11-09&ss=b&srt=o&sp=r&se"
                         "=2018-07-26T02:20:42Z&st=2018-07-25T18:20:44Z&spr=https&sig"
                         "=" + restutil.REDACTED_TEXT)
-                       ] # pylint: disable=bad-continuation
+                       ]
 
         for x in urls_tuples: # pylint: disable=invalid-name
             self.assertEquals(restutil.redact_sas_tokens_in_urls(x[0]), x[1]) # pylint: disable=deprecated-method
@@ -215,9 +215,9 @@ class TestHttpOperations(AgentTestCase): # pylint: disable=too-many-public-metho
     def test_get_http_proxy_http_uses_httpproxy(self, mock_host):
         mock_host.return_value = None
         with patch.dict(os.environ, {
-                                    'http_proxy' : 'http://foo.com:80', # pylint: disable=bad-continuation
-                                    'https_proxy' : 'https://bar.com:443' # pylint: disable=bad-continuation
-                                }): # pylint: disable=bad-continuation
+                                    'http_proxy' : 'http://foo.com:80',
+                                    'https_proxy' : 'https://bar.com:443'
+                                }):
             h, p = restutil._get_http_proxy() # pylint: disable=protected-access,invalid-name
             self.assertEqual("foo.com", h)
             self.assertEqual(80, p)
@@ -226,9 +226,9 @@ class TestHttpOperations(AgentTestCase): # pylint: disable=too-many-public-metho
     def test_get_http_proxy_https_uses_httpsproxy(self, mock_host):
         mock_host.return_value = None
         with patch.dict(os.environ, {
-                                    'http_proxy' : 'http://foo.com:80', # pylint: disable=bad-continuation
-                                    'https_proxy' : 'https://bar.com:443' # pylint: disable=bad-continuation
-                                }): # pylint: disable=bad-continuation
+                                    'http_proxy' : 'http://foo.com:80',
+                                    'https_proxy' : 'https://bar.com:443'
+                                }):
             h, p = restutil._get_http_proxy(secure=True) # pylint: disable=protected-access,invalid-name
             self.assertEqual("bar.com", h)
             self.assertEqual(443, p)
@@ -237,8 +237,8 @@ class TestHttpOperations(AgentTestCase): # pylint: disable=too-many-public-metho
     def test_get_http_proxy_ignores_user_in_httpproxy(self, mock_host):
         mock_host.return_value = None
         with patch.dict(os.environ, {
-                                    'http_proxy' : 'http://user:pw@foo.com:80' # pylint: disable=bad-continuation
-                                }): # pylint: disable=bad-continuation
+                                    'http_proxy' : 'http://user:pw@foo.com:80'
+                                }):
             h, p = restutil._get_http_proxy() # pylint: disable=protected-access,invalid-name
             self.assertEqual("foo.com", h)
             self.assertEqual(80, p)
@@ -246,7 +246,7 @@ class TestHttpOperations(AgentTestCase): # pylint: disable=too-many-public-metho
     def test_get_no_proxy_with_values_set(self):
         no_proxy_list = ["foo.com", "www.google.com"]
         with patch.dict(os.environ, {
-            'no_proxy': ",".join(no_proxy_list) # pylint: disable=bad-continuation
+            'no_proxy': ",".join(no_proxy_list)
         }):
             no_proxy_from_environment = restutil.get_no_proxy()
 
@@ -260,7 +260,7 @@ class TestHttpOperations(AgentTestCase): # pylint: disable=too-many-public-metho
         no_proxy_list_cleaned = [entry for entry in no_proxy_list if entry]
 
         with patch.dict(os.environ, {
-            'no_proxy': ",".join(no_proxy_list) # pylint: disable=bad-continuation
+            'no_proxy': ",".join(no_proxy_list)
         }):
             no_proxy_from_environment = restutil.get_no_proxy()
 
@@ -276,7 +276,7 @@ class TestHttpOperations(AgentTestCase): # pylint: disable=too-many-public-metho
                          '10.0.0.6', '10.0.0.7', '10.0.0.8', '10.0.0.9', '10.0.0.10']
 
         with patch.dict(os.environ, {
-            'no_proxy': no_proxy_var # pylint: disable=bad-continuation
+            'no_proxy': no_proxy_var
         }):
             no_proxy_from_environment = restutil.get_no_proxy()
 
@@ -317,7 +317,7 @@ class TestHttpOperations(AgentTestCase): # pylint: disable=too-many-public-metho
     def test_bypass_proxy(self):
         no_proxy_list = ["foo.com", "www.google.com", "168.63.129.16", "Microsoft.com"]
         with patch.dict(os.environ, {
-            'no_proxy': ",".join(no_proxy_list) # pylint: disable=bad-continuation
+            'no_proxy': ",".join(no_proxy_list)
         }):
             self.assertFalse(restutil.bypass_proxy("http://bar.com"))
             self.assertTrue(restutil.bypass_proxy("http://foo.com"))
@@ -383,7 +383,7 @@ class TestHttpOperations(AgentTestCase): # pylint: disable=too-many-public-metho
         HTTPConnection.return_value = mock_conn
 
         resp = restutil._http_request("GET", "foo", "/bar", # pylint: disable=protected-access
-                            proxy_host="foo.bar", proxy_port=23333) # pylint: disable=bad-continuation
+                            proxy_host="foo.bar", proxy_port=23333)
 
         HTTPConnection.assert_has_calls([
             call("foo.bar", 23333, timeout=10)
@@ -407,7 +407,7 @@ class TestHttpOperations(AgentTestCase): # pylint: disable=too-many-public-metho
 
         no_proxy_list = ["foo.com", "www.google.com", "168.63.129.16"]
         with patch.dict(os.environ, {
-            'no_proxy': ",".join(no_proxy_list) # pylint: disable=bad-continuation
+            'no_proxy': ",".join(no_proxy_list)
         }):
             # Test http get
             resp = restutil.http_get("http://foo.com", use_proxy=True)
@@ -426,7 +426,7 @@ class TestHttpOperations(AgentTestCase): # pylint: disable=too-many-public-metho
 
         no_proxy_list = ["foo.com", "www.google.com", "168.63.129.16"]
         with patch.dict(os.environ, {
-            'no_proxy': ",".join(no_proxy_list) # pylint: disable=bad-continuation
+            'no_proxy': ",".join(no_proxy_list)
         }):
             host = "10.0.0.1"
             self.assertEquals(should_use_proxy, use_proxy and not restutil.bypass_proxy(host)) # pylint: disable=deprecated-method
@@ -445,7 +445,7 @@ class TestHttpOperations(AgentTestCase): # pylint: disable=too-many-public-metho
 
         no_proxy_list = ["10.0.0.1/24"]
         with patch.dict(os.environ, {
-            'no_proxy': ",".join(no_proxy_list) # pylint: disable=bad-continuation
+            'no_proxy': ",".join(no_proxy_list)
         }):
             host = "www.bar.com"
             self.assertEquals(should_use_proxy, use_proxy and not restutil.bypass_proxy(host)) # pylint: disable=deprecated-method
@@ -458,7 +458,7 @@ class TestHttpOperations(AgentTestCase): # pylint: disable=too-many-public-metho
 
         # When No_proxy is empty
         with patch.dict(os.environ, {
-            'no_proxy': "" # pylint: disable=bad-continuation
+            'no_proxy': ""
         }):
             host = "10.0.0.1"
             self.assertTrue(use_proxy and not restutil.bypass_proxy(host))
@@ -515,8 +515,8 @@ class TestHttpOperations(AgentTestCase): # pylint: disable=too-many-public-metho
         HTTPSConnection.return_value = mock_conn
 
         resp = restutil._http_request("GET", "foo", "/bar", # pylint: disable=protected-access
-                            proxy_host="foo.bar", proxy_port=23333, # pylint: disable=bad-continuation
-                            secure=True) # pylint: disable=bad-continuation
+                            proxy_host="foo.bar", proxy_port=23333,
+                            secure=True)
 
         HTTPConnection.assert_not_called()
         HTTPSConnection.assert_has_calls([
@@ -611,12 +611,12 @@ class TestHttpOperations(AgentTestCase): # pylint: disable=too-many-public-metho
         self.assertTrue(httpclient.SERVICE_UNAVAILABLE in restutil.THROTTLE_CODES)
 
         _http_request.side_effect = [
-                Mock(status=httpclient.SERVICE_UNAVAILABLE) # pylint: disable=bad-continuation
-                    for i in range(restutil.DEFAULT_RETRIES) # pylint: disable=bad-continuation,unused-variable
+                Mock(status=httpclient.SERVICE_UNAVAILABLE)
+                    for i in range(restutil.DEFAULT_RETRIES) # pylint: disable=unused-variable
             ] + [Mock(status=httpclient.OK)]
 
         restutil.http_get("https://foo.bar",
-                            max_retry=restutil.DEFAULT_RETRIES+1) # pylint: disable=bad-continuation
+                            max_retry=restutil.DEFAULT_RETRIES+1)
 
         self.assertEqual(restutil.DEFAULT_RETRIES+1, _http_request.call_count)
         self.assertEqual(restutil.DEFAULT_RETRIES, _sleep.call_count)
@@ -631,12 +631,12 @@ class TestHttpOperations(AgentTestCase): # pylint: disable=too-many-public-metho
         self.assertTrue(httpclient.SERVICE_UNAVAILABLE in restutil.THROTTLE_CODES)
 
         _http_request.side_effect = [
-                Mock(status=httpclient.SERVICE_UNAVAILABLE) # pylint: disable=bad-continuation
-                    for i in range(restutil.THROTTLE_RETRIES-1) # pylint: disable=bad-continuation,unused-variable
+                Mock(status=httpclient.SERVICE_UNAVAILABLE)
+                    for i in range(restutil.THROTTLE_RETRIES-1) # pylint: disable=unused-variable
             ] + [Mock(status=httpclient.OK)]
 
         restutil.http_get("https://foo.bar",
-                            max_retry=1) # pylint: disable=bad-continuation
+                            max_retry=1)
 
         self.assertEqual(restutil.THROTTLE_RETRIES, _http_request.call_count)
         self.assertEqual(restutil.THROTTLE_RETRIES-1, _sleep.call_count)

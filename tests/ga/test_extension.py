@@ -1067,7 +1067,7 @@ class TestExtension(ExtensionTestCase):
 
         def _assert_mock_add_event_call(expected_download_failed_event_count, err_msg_guid):
             event_occurrences = [kw for _, kw in mock_add_event.call_args_list if
-                          "Failed to download artifacts: [ExtensionDownloadError] {0}".format(err_msg_guid) in kw['message']] # pylint: disable=bad-continuation
+                          "Failed to download artifacts: [ExtensionDownloadError] {0}".format(err_msg_guid) in kw['message']]
             self.assertEquals(expected_download_failed_event_count, len(event_occurrences), "Call count do not match") # pylint: disable=deprecated-method
             self.assertFalse(any([kw['is_success'] for kw in event_occurrences]), "The events should have failed")
             self.assertEqual(expected_download_failed_event_count, len([kw['op'] for kw in event_occurrences]),
@@ -1745,7 +1745,7 @@ class TestExtension(ExtensionTestCase):
 
     @patch('azurelinuxagent.ga.exthandlers.HandlerManifest.get_disable_command')
     def test_extension_upgrade_failure_when_prev_version_disable_fails_and_recovers_on_next_incarnation(self, patch_get_disable_command,
-                                                                                                         *args): # pylint: disable=bad-continuation
+                                                                                                         *args):
         test_data, exthandlers_handler, protocol = self._set_up_update_test_and_update_gs(patch_get_disable_command,
                                                                                           *args)
 
@@ -1779,7 +1779,7 @@ class TestExtension(ExtensionTestCase):
 
     @patch('azurelinuxagent.ga.exthandlers.HandlerManifest.get_disable_command')
     def test_extension_upgrade_failure_when_prev_version_disable_fails_incorrect_zip(self, patch_get_disable_command,
-                                                                                      *args): # pylint: disable=bad-continuation
+                                                                                      *args):
         test_data, exthandlers_handler, protocol = self._set_up_update_test_and_update_gs(patch_get_disable_command, # pylint: disable=unused-variable
                                                                                           *args)
 
@@ -2661,7 +2661,7 @@ class TestExtensionUpdateOnFailure(ExtensionTestCase):
         with patch.object(CGroupConfigurator.get_instance(), "start_extension_command", return_value="[stdout]\n\n\n[stderr]\n\n\n"):
             with patch.object(old_handler_i, 'disable', autospec=True) as mock_disable:
                 uninstall_rc = ExtHandlersHandler._update_extension_handler_and_return_if_failed(old_handler_i, # pylint: disable=unused-variable,protected-access
-                                                                                                new_handler_i) # pylint: disable=bad-continuation
+                                                                                                new_handler_i)
                 mock_disable.mock.assert_not_called() # Python2.6's mock library doesn't forward assert_not_called, so we have to do it ourselves.
 
 
@@ -2737,7 +2737,7 @@ class TestCollectExtensionStatus(ExtensionTestCase):
         self.assertEqual(len(ext_status.substatusList), 1) # NUM OF SUBSTATUS PARSED
         for sub_status in ext_status.substatusList:
             self.assertRegex(sub_status.name, '\[\{"status"\: \{"status": "success", "code": "1", "snapshotInfo": ' # pylint: disable=anomalous-backslash-in-string
-                                              '\[\{"snapshotUri":.*') # pylint: disable=anomalous-backslash-in-string,bad-continuation
+                                              '\[\{"snapshotUri":.*') # pylint: disable=anomalous-backslash-in-string
             self.assertEqual(0, sub_status.code)
             self.assertRegex(sub_status.message, "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Vestibulum "
                                                  "non lacinia urna, sit amet venenatis orci.*")
@@ -2764,7 +2764,7 @@ class TestCollectExtensionStatus(ExtensionTestCase):
         self.assertEqual(len(ext_status.substatusList), 12)  # The original file has 41 substatus nodes.
         for sub_status in ext_status.substatusList:
             self.assertRegex(sub_status.name, '\[\{"status"\: \{"status": "success", "code": "1", "snapshotInfo": ' # pylint: disable=anomalous-backslash-in-string
-                                              '\[\{"snapshotUri":.*') # pylint: disable=anomalous-backslash-in-string,bad-continuation
+                                              '\[\{"snapshotUri":.*') # pylint: disable=anomalous-backslash-in-string
             self.assertEqual(0, sub_status.code)
             self.assertRegex(sub_status.message, "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Vestibulum "
                                                  "non lacinia urna, sit amet venenatis orci.*")
@@ -2808,7 +2808,7 @@ class TestCollectExtensionStatus(ExtensionTestCase):
         Testing collect_ext_status() with a malformed json status file.
         """
         ext_handler_i, extension = self._setup_extension_for_validating_collect_ext_status(mock_lib_dir,
-                                        "sample-status-invalid-format-emptykey-line7.json", *args) # pylint: disable=bad-continuation
+                                        "sample-status-invalid-format-emptykey-line7.json", *args)
         ext_status = ext_handler_i.collect_ext_status(extension)
 
         self.assertEqual(ext_status.code, ExtensionErrorCodes.PluginSettingsStatusInvalid)
@@ -2828,7 +2828,7 @@ class TestCollectExtensionStatus(ExtensionTestCase):
         Testing collect_ext_status() with a malformed json status file.
         """
         ext_handler_i, extension = self._setup_extension_for_validating_collect_ext_status(mock_lib_dir,
-                                        "sample-status-invalid-status-no-status-status-key.json", *args) # pylint: disable=bad-continuation
+                                        "sample-status-invalid-status-no-status-status-key.json", *args)
         ext_status = ext_handler_i.collect_ext_status(extension)
 
         self.assertEqual(ext_status.code, ExtensionErrorCodes.PluginSettingsStatusInvalid)

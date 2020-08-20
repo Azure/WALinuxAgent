@@ -30,14 +30,11 @@ from tests.tools import patch, data_dir
 #
 _default_commands = [ # pylint: disable=invalid-name
     (r"^systemctl --version$",
-    # pylint: disable=bad-continuation 
 '''systemd 237
 +PAM +AUDIT +SELINUX +IMA +APPARMOR +SMACK +SYSVINIT +UTMP +LIBCRYPTSETUP +GCRYPT +GNUTLS +ACL +XZ +LZ4 +SECCOMP +BLKID +ELFUTILS +KMOD -IDN2 +IDN -PCRE2 default-hierarchy=hybrid
 '''),
-    # pylint: enable=bad-continuation 
 
     (r"^mount -t cgroup$",
-    # pylint: disable=bad-continuation     
 '''cgroup on /sys/fs/cgroup/systemd type cgroup (rw,nosuid,nodev,noexec,relatime,xattr,name=systemd)
 cgroup on /sys/fs/cgroup/rdma type cgroup (rw,nosuid,nodev,noexec,relatime,rdma)
 cgroup on /sys/fs/cgroup/cpuset type cgroup (rw,nosuid,nodev,noexec,relatime,cpuset)
@@ -51,41 +48,30 @@ cgroup on /sys/fs/cgroup/devices type cgroup (rw,nosuid,nodev,noexec,relatime,de
 cgroup on /sys/fs/cgroup/cpu,cpuacct type cgroup (rw,nosuid,nodev,noexec,relatime,cpu,cpuacct)
 cgroup on /sys/fs/cgroup/blkio type cgroup (rw,nosuid,nodev,noexec,relatime,blkio)
 '''),
-    # pylint: enable=bad-continuation 
     (r"^mount -t cgroup2$",
-    # pylint: disable=bad-continuation 
 '''cgroup on /sys/fs/cgroup/unified type cgroup2 (rw,nosuid,nodev,noexec,relatime) 
 '''),
-    # pylint: enable=bad-continuation 
 
     (r"^systemctl show walinuxagent\.service --property CPUAccounting$",
-    # pylint: disable=bad-continuation 
 '''CPUAccounting=no
 '''),
-    # pylint: enable=bad-continuation 
 
     (r"^systemctl show walinuxagent\.service --property MemoryAccounting$",
-    # pylint: disable=bad-continuation 
 '''MemoryAccounting=no
 '''),
-    # pylint: enable=bad-continuation 
 
     (r"^systemd-run --unit=([^\s]+) --scope ([^\s]+)",
-    # pylint: disable=bad-continuation 
 ''' 
 Running scope as unit: TEST_UNIT.scope
 Thu 28 May 2020 07:25:55 AM PDT
 '''),
-    # pylint: enable=bad-continuation 
 
     (r"^systemd-cgls.+/walinuxagent.service$",
-    # pylint: disable=bad-continuation
 '''
 Directory /sys/fs/cgroup/cpu/system.slice/walinuxagent.service:
 ├─27519 /usr/bin/python3 -u /usr/sbin/waagent -daemon
 └─27547 python3 -u bin/WALinuxAgent-2.2.48.1-py2.7.egg -run-exthandlers
 '''),
-    # pylint: enable=bad-continuation 
 ]
 
 _default_files = [ # pylint: disable=invalid-name

@@ -181,19 +181,19 @@ class TestEventMonitoring(AgentTestCase, HttpRequestPredicates):
     _TEST_EVENT_PROVIDER_ID = "XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX"
 
     def _create_extension_event(self, # pylint: disable=invalid-name,too-many-arguments
-                               size=0, # pylint: disable=bad-continuation
-                               name="DummyExtension", # pylint: disable=bad-continuation
-                               op=WALAEventOperation.Unknown, # pylint: disable=bad-continuation
-                               is_success=True, # pylint: disable=bad-continuation
-                               duration=0, # pylint: disable=bad-continuation
-                               version=CURRENT_VERSION, # pylint: disable=bad-continuation
-                               message="DummyMessage"): # pylint: disable=bad-continuation
+                               size=0,
+                               name="DummyExtension",
+                               op=WALAEventOperation.Unknown,
+                               is_success=True,
+                               duration=0,
+                               version=CURRENT_VERSION,
+                               message="DummyMessage"):
         event_data = TestEventMonitoring._get_event_data(name=size if size != 0 else name,
-                op=op, # pylint: disable=bad-continuation
-                is_success=is_success, # pylint: disable=bad-continuation
-                duration=duration, # pylint: disable=bad-continuation
-                version=version, # pylint: disable=bad-continuation
-                message=random_generator(size) if size != 0 else message) # pylint: disable=bad-continuation
+                op=op,
+                is_success=is_success,
+                duration=duration,
+                version=version,
+                message=random_generator(size) if size != 0 else message)
         event_file = os.path.join(self.event_dir, "{0}.tld".format(int(time.time() * 1000000)))
         with open(event_file, 'wb+') as fd: # pylint: disable=invalid-name
             fd.write(event_data.encode('utf-8'))
@@ -537,7 +537,6 @@ class PollResourceUsageOperationTestCase(AgentTestCase):
     def test_it_should_report_processes_that_do_not_belong_to_the_agent_cgroup(self):
         with mock_cgroup_commands() as mock_commands:
             mock_commands.add_command(r'^systemd-cgls.+/walinuxagent.service$',
-            # pylint: disable=bad-continuation
 ''' 
 Directory /sys/fs/cgroup/cpu/system.slice/walinuxagent.service:
 ├─27519 /usr/bin/python3 -u /usr/sbin/waagent -daemon
@@ -555,7 +554,6 @@ Directory /sys/fs/cgroup/cpu/system.slice/walinuxagent.service:
 ├─5727 /bin/sh -c /var/lib/waagent/run-command/download/1/script.sh
 └─5728 /bin/sh /var/lib/waagent/run-command/download/1/script.sh
 ''')
-            # pylint: enable=bad-continuation
             with patch("azurelinuxagent.ga.monitor.add_event") as add_event_patcher:
                 PollResourceUsageOperation().run()
 

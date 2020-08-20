@@ -388,7 +388,7 @@ class TestLogger(AgentTestCase):
                 self.assertIn("Test Log - Warning", logcontent)
         except Exception as e: # pylint: disable=invalid-name
             self.assertFalse(True, "The log file looks like it isn't correctly setup for this test. Take a look. " # pylint: disable=redundant-unittest-assert
-                                   "{0}".format(e)) # pylint: disable=bad-continuation
+                                   "{0}".format(e))
 
     @skip_if_predicate_true(lambda: True, "Enable this test when SEND_LOGS_TO_TELEMETRY is enabled")
     @patch("azurelinuxagent.common.logger.StdoutAppender.write")
@@ -458,7 +458,7 @@ class TestLogger(AgentTestCase):
                                                                                                             self.event_dir))
         except Exception as e: # pylint: disable=invalid-name
             self.assertFalse(True, "The log file looks like it isn't correctly setup for this test. " # pylint: disable=redundant-unittest-assert
-                                   "Take a look. {0}".format(e)) # pylint: disable=bad-continuation
+                                   "Take a look. {0}".format(e))
 
 
 class TestAppender(AgentTestCase):

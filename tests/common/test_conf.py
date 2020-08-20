@@ -74,8 +74,8 @@ class TestConf(AgentTestCase):
         AgentTestCase.setUp(self)
         self.conf = conf.ConfigurationProvider()
         conf.load_conf_from_file(
-                os.path.join(data_dir, "test_waagent.conf"), # pylint: disable=bad-continuation
-                self.conf) # pylint: disable=bad-continuation
+                os.path.join(data_dir, "test_waagent.conf"),
+                self.conf)
 
     def test_key_value_handling(self):
         self.assertEqual("Value1", self.conf.get("FauxKey1", "Bad"))

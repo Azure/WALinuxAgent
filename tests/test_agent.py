@@ -108,7 +108,7 @@ class TestAgent(AgentTestCase):
 
     def test_agent_accepts_configuration_path(self):
         Agent(False,
-                conf_file_path=os.path.join(data_dir, "test_waagent.conf")) # pylint: disable=bad-continuation
+                conf_file_path=os.path.join(data_dir, "test_waagent.conf"))
         self.assertTrue(conf.get_fips_enabled())
 
     @patch("azurelinuxagent.common.conf.load_conf_from_file")
@@ -119,7 +119,7 @@ class TestAgent(AgentTestCase):
     @patch("azurelinuxagent.daemon.get_daemon_handler")
     @patch("azurelinuxagent.common.conf.load_conf_from_file")
     def test_agent_does_not_pass_configuration_path(self,
-                mock_load, mock_handler): # pylint: disable=bad-continuation
+                mock_load, mock_handler):
 
         mock_daemon = Mock()
         mock_daemon.run = Mock()
@@ -152,7 +152,7 @@ class TestAgent(AgentTestCase):
 
         self.assertFalse(os.path.isdir(ext_log_dir))
         agent = Agent(False, # pylint: disable=unused-variable
-                    conf_file_path=os.path.join(data_dir, "test_waagent.conf")) # pylint: disable=bad-continuation
+                    conf_file_path=os.path.join(data_dir, "test_waagent.conf"))
         self.assertTrue(os.path.isdir(ext_log_dir))
 
     @patch("azurelinuxagent.common.logger.error")
@@ -165,7 +165,7 @@ class TestAgent(AgentTestCase):
         self.assertTrue(os.path.isfile(ext_log_dir))
         self.assertFalse(os.path.isdir(ext_log_dir))
         agent = Agent(False, # pylint: disable=unused-variable
-                    conf_file_path=os.path.join(data_dir, "test_waagent.conf")) # pylint: disable=bad-continuation
+                    conf_file_path=os.path.join(data_dir, "test_waagent.conf"))
         self.assertTrue(os.path.isfile(ext_log_dir))
         self.assertFalse(os.path.isdir(ext_log_dir))
         self.assertEqual(1, mock_log.call_count)

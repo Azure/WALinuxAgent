@@ -359,7 +359,7 @@ class TestEvent(HttpRequestPredicates, AgentTestCase): # pylint: disable=too-man
         # checking the extension of the file created.
         for filename in os.listdir(self.event_dir):
             self.assertTrue(filename.endswith(AGENT_EVENT_FILE_EXTENSION),
-                'Event file does not have the correct extension ({0}): {1}'.format(AGENT_EVENT_FILE_EXTENSION, filename)) # pylint: disable=bad-continuation
+                'Event file does not have the correct extension ({0}): {1}'.format(AGENT_EVENT_FILE_EXTENSION, filename))
 
     @staticmethod
     def _get_event_message(evt):
@@ -523,13 +523,13 @@ class TestEvent(HttpRequestPredicates, AgentTestCase): # pylint: disable=too-man
             event_list.events[0],
             expected_parameters,
             assert_timestamp=lambda timestamp:
-                self.assertTrue(timestamp_lower <= timestamp <= timestamp_upper, "The event timestamp (opcode) is incorrect") # pylint: disable=bad-continuation
+                self.assertTrue(timestamp_lower <= timestamp <= timestamp_upper, "The event timestamp (opcode) is incorrect")
         )
 
     def test_add_event_should_create_events_that_have_all_the_parameters_in_the_telemetry_schema(self):
         self._test_create_event_function_should_create_events_that_have_all_the_parameters_in_the_telemetry_schema(
             create_event_function=lambda:
-                add_event( # pylint: disable=bad-continuation
+                add_event(
                     name="TestEvent",
                     op=WALAEventOperation.AgentEnabled,
                     is_success=True,
@@ -548,7 +548,7 @@ class TestEvent(HttpRequestPredicates, AgentTestCase): # pylint: disable=too-man
     def test_add_periodic_should_create_events_that_have_all_the_parameters_in_the_telemetry_schema(self):
         self._test_create_event_function_should_create_events_that_have_all_the_parameters_in_the_telemetry_schema(
             create_event_function=lambda:
-                add_periodic( # pylint: disable=bad-continuation
+                add_periodic(
                     delta=logger.EVERY_MINUTE,
                     name="TestPeriodicEvent",
                     op=WALAEventOperation.HostPlugin,
@@ -639,7 +639,7 @@ class TestEvent(HttpRequestPredicates, AgentTestCase): # pylint: disable=too-man
                 CommonTelemetryEventSchema.TaskName: "ALegacyTask",
                 CommonTelemetryEventSchema.KeywordName: "ALegacyKeywordName"},
             assert_timestamp=lambda timestamp:
-                self.assertEquals(timestamp, '1970-01-01 12:00:00', "The event timestamp (opcode) is incorrect") # pylint: disable=deprecated-method,bad-continuation
+                self.assertEquals(timestamp, '1970-01-01 12:00:00', "The event timestamp (opcode) is incorrect") # pylint: disable=deprecated-method
         )
 
     def test_collect_events_should_use_the_file_creation_time_for_legacy_agent_events_missing_a_timestamp(self):
@@ -669,7 +669,7 @@ class TestEvent(HttpRequestPredicates, AgentTestCase): # pylint: disable=too-man
                 CommonTelemetryEventSchema.TaskName: "ALegacyTask",
                 CommonTelemetryEventSchema.KeywordName: "ALegacyKeywordName"},
             assert_timestamp=lambda timestamp:
-                self.assertEquals(timestamp, event_creation_time, "The event timestamp (opcode) is incorrect") # pylint: disable=deprecated-method,bad-continuation
+                self.assertEquals(timestamp, event_creation_time, "The event timestamp (opcode) is incorrect") # pylint: disable=deprecated-method
         )
 
     def _assert_extension_event_includes_all_parameters_in_the_telemetry_schema(self, event_file):
@@ -694,7 +694,7 @@ class TestEvent(HttpRequestPredicates, AgentTestCase): # pylint: disable=too-man
                 GuestAgentExtensionEventsSchema.Duration: 150000,
                 GuestAgentExtensionEventsSchema.ExtensionType: 'json'},
             assert_timestamp=lambda timestamp:
-                self.assertEquals(timestamp, event_creation_time, "The event timestamp (opcode) is incorrect") # pylint: disable=deprecated-method,bad-continuation
+                self.assertEquals(timestamp, event_creation_time, "The event timestamp (opcode) is incorrect") # pylint: disable=deprecated-method
             )
 
     def test_collect_events_should_add_all_the_parameters_in_the_telemetry_schema_to_extension_events(self):
@@ -723,7 +723,7 @@ class TestEvent(HttpRequestPredicates, AgentTestCase): # pylint: disable=too-man
         def get_event_message_from_http_request_body(event_body):
             # The XML for the event is sent over as a CDATA element ("Event") in the request's body
             http_request_body = event_body if (
-                        event_body is None or type(event_body) is ustr) else textutil.str_to_encoded_ustr(event_body) # pylint: disable=unidiomatic-typecheck,bad-continuation
+                        event_body is None or type(event_body) is ustr) else textutil.str_to_encoded_ustr(event_body) # pylint: disable=unidiomatic-typecheck
             request_body_xml_doc = textutil.parse_doc(http_request_body)
 
             event_node = textutil.find(request_body_xml_doc, "Event")

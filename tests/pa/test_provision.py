@@ -35,7 +35,7 @@ class TestProvision(AgentTestCase):
  
     @distros("redhat")
     @patch('azurelinuxagent.common.osutil.default.DefaultOSUtil.get_instance_id',
-        return_value='B9F3C233-9913-9F42-8EB3-BA656DF32502') # pylint: disable=bad-continuation
+        return_value='B9F3C233-9913-9F42-8EB3-BA656DF32502')
     def test_provision(self, mock_util, distro_name, distro_version, distro_full_name): # pylint: disable=unused-argument
         provision_handler = get_provision_handler(distro_name, distro_version,
                                                   distro_full_name)
@@ -59,12 +59,12 @@ class TestProvision(AgentTestCase):
         fileutil.write_file(tempfile.mktemp(), data)
 
     @patch('azurelinuxagent.common.conf.get_provision_enabled',
-        return_value=False) # pylint: disable=bad-continuation
+        return_value=False)
     def test_provisioning_is_skipped_when_not_enabled(self, mock_conf): # pylint: disable=unused-argument
         ph = ProvisionHandler() # pylint: disable=invalid-name
         ph.osutil = DefaultOSUtil()
         ph.osutil.get_instance_id = Mock(
-                        return_value='B9F3C233-9913-9F42-8EB3-BA656DF32502') # pylint: disable=bad-continuation
+                        return_value='B9F3C233-9913-9F42-8EB3-BA656DF32502')
 
         ph.is_provisioned = Mock()
         ph.report_ready = Mock()
@@ -83,10 +83,10 @@ class TestProvision(AgentTestCase):
 
     @patch('os.path.isfile', return_value=True)
     @patch('azurelinuxagent.common.utils.fileutil.read_file',
-            return_value="B9F3C233-9913-9F42-8EB3-BA656DF32502") # pylint: disable=bad-continuation
+            return_value="B9F3C233-9913-9F42-8EB3-BA656DF32502")
     @patch('azurelinuxagent.pa.deprovision.get_deprovision_handler')
     def test_is_provisioned_is_provisioned(self,
-            mock_deprovision, mock_read, mock_isfile): # pylint: disable=unused-argument,bad-continuation
+            mock_deprovision, mock_read, mock_isfile): # pylint: disable=unused-argument
 
         ph = ProvisionHandler() # pylint: disable=invalid-name
         ph.osutil = Mock()
@@ -102,10 +102,10 @@ class TestProvision(AgentTestCase):
 
     @patch('os.path.isfile', return_value=True)
     @patch('azurelinuxagent.common.utils.fileutil.read_file',
-            return_value="B9F3C233-9913-9F42-8EB3-BA656DF32502") # pylint: disable=bad-continuation
+            return_value="B9F3C233-9913-9F42-8EB3-BA656DF32502")
     @patch('azurelinuxagent.pa.deprovision.get_deprovision_handler')
     def test_is_provisioned_not_deprovisioned(self,
-            mock_deprovision, mock_read, mock_isfile): # pylint: disable=unused-argument,bad-continuation
+            mock_deprovision, mock_read, mock_isfile): # pylint: disable=unused-argument
 
         ph = ProvisionHandler() # pylint: disable=invalid-name
         ph.osutil = Mock()

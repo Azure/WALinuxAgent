@@ -936,7 +936,7 @@ class TestWireClient(HttpRequestPredicates, AgentTestCase):
             # Assert we've called both the direct channel function (once) and the host channel function (twice).
             # After the host channel succeeds, the host plugin should have been set as the default channel.
             with patch(
-                    'azurelinuxagent.common.protocol.wire.WireClient.update_host_plugin_from_goal_state') as mock_update_host_plugin_from_goal_state: # pylint: disable=bad-continuation
+                    'azurelinuxagent.common.protocol.wire.WireClient.update_host_plugin_from_goal_state') as mock_update_host_plugin_from_goal_state:
                 ret = protocol.client.send_request_using_appropriate_channel(direct_func, host_func)
                 self.assertEquals(42, ret) # pylint: disable=deprecated-method
                 self.assertEquals(1, direct_func.counter) # pylint: disable=deprecated-method

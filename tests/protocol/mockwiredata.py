@@ -24,19 +24,19 @@ from azurelinuxagent.common.future import httpclient # pylint: disable=ungrouped
 from azurelinuxagent.common.utils.cryptutil import CryptUtil # pylint: disable=ungrouped-imports
 
 DATA_FILE = {
-        "version_info": "wire/version_info.xml", # pylint: disable=bad-continuation
-        "goal_state": "wire/goal_state.xml", # pylint: disable=bad-continuation
-        "hosting_env": "wire/hosting_env.xml", # pylint: disable=bad-continuation
-        "shared_config": "wire/shared_config.xml", # pylint: disable=bad-continuation
-        "certs": "wire/certs.xml", # pylint: disable=bad-continuation
-        "ext_conf": "wire/ext_conf.xml", # pylint: disable=bad-continuation
-        "manifest": "wire/manifest.xml", # pylint: disable=bad-continuation
-        "ga_manifest": "wire/ga_manifest.xml", # pylint: disable=bad-continuation
-        "trans_prv": "wire/trans_prv", # pylint: disable=bad-continuation
-        "trans_cert": "wire/trans_cert", # pylint: disable=bad-continuation
-        "test_ext": "ext/sample_ext-1.3.0.zip", # pylint: disable=bad-continuation
-        "remote_access": None, # pylint: disable=bad-continuation
-        "in_vm_artifacts_profile": None # pylint: disable=bad-continuation
+        "version_info": "wire/version_info.xml",
+        "goal_state": "wire/goal_state.xml",
+        "hosting_env": "wire/hosting_env.xml",
+        "shared_config": "wire/shared_config.xml",
+        "certs": "wire/certs.xml",
+        "ext_conf": "wire/ext_conf.xml",
+        "manifest": "wire/manifest.xml",
+        "ga_manifest": "wire/ga_manifest.xml",
+        "trans_prv": "wire/trans_prv",
+        "trans_cert": "wire/trans_cert",
+        "test_ext": "ext/sample_ext-1.3.0.zip",
+        "remote_access": None,
+        "in_vm_artifacts_profile": None
 }
 
 DATA_FILE_IN_VM_ARTIFACTS_PROFILE = DATA_FILE.copy()

@@ -1560,7 +1560,7 @@ class TestUpdate(UpdateTestCase): # pylint: disable=too-many-public-methods
                 update_handler.run(debug=True)
 
             self.assertGreater(os.path.getmtime(handler_env_file), last_modification_time,
-                                "HandlerEnvironment file didn't get overwritten") # pylint: disable=bad-continuation
+                                "HandlerEnvironment file didn't get overwritten")
 
             with open(handler_env_file, 'r') as handler_env_content_file:
                 content = json.load(handler_env_content_file)

@@ -84,14 +84,12 @@ class TestFileOperations(AgentTestCase):
         fp = tempfile.mktemp() # pylint: disable=invalid-name
         with open(fp, 'w') as f: # pylint: disable=invalid-name
             f.write(
-            # pylint: disable=bad-continuation
 '''
 First line
 Second line
 Third line with more words
 '''
             )
-            # pylint: enable=bad-continuation
 
         self.assertNotEquals( # pylint: disable=deprecated-method
             None,
@@ -113,14 +111,12 @@ Third line with more words
         fp = tempfile.mktemp() # pylint: disable=invalid-name
         with open(fp, 'w') as f: # pylint: disable=invalid-name
             f.write(
-            # pylint: disable=bad-continuation
 '''
 First line
 Second line
 Third line with more words
 '''
             )
-            # pylint: enable=bad-continuation
 
         self.assertTrue(fileutil.findstr_in_file(fp, "First line"))
         self.assertTrue(fileutil.findstr_in_file(fp, "Second line"))

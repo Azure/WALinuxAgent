@@ -177,9 +177,9 @@ class DownloadExtensionTestCase(AgentTestCase): # pylint: disable=too-many-insta
                 self.ext_handler_instance.download()
 
         self.assertFalse(os.path.exists(self._get_extension_package_file()),
-                        "The bad zip extension package should not be downloaded to the expected location") # pylint: disable=bad-continuation
+                        "The bad zip extension package should not be downloaded to the expected location")
         self.assertFalse(os.path.exists(self._get_extension_command_file()),
-                        "The extension package should not expanded be to the expected location due to bad zip") # pylint: disable=bad-continuation
+                        "The extension package should not expanded be to the expected location due to bad zip")
         self.assertEqual(self.ext_handler_instance.get_handler_state(), ExtHandlerState.NotInstalled,
                          "Ensure that the state is maintained for extension HandlerState")
 

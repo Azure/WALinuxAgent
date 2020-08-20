@@ -20,7 +20,7 @@ from tests.tools import AgentTestCase
 
 
 def get_test_event(name="DummyExtension", op="Unknown", is_success=True, duration=0, version="foo", evt_type="", is_internal=False, # pylint: disable=invalid-name,too-many-arguments
-                      message="DummyMessage", eventId=1): # pylint: disable=bad-continuation
+                      message="DummyMessage", eventId=1):
     event = TelemetryEvent(eventId, "XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX")
     event.parameters.append(TelemetryEventParam(GuestAgentExtensionEventsSchema.Name, name))
     event.parameters.append(TelemetryEventParam(GuestAgentExtensionEventsSchema.Version, str(version)))

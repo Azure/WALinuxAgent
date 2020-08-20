@@ -185,7 +185,7 @@ class EventStatus(object):
 
 __event_status__ = EventStatus()
 __event_status_operations__ = [
-        WALAEventOperation.ReportStatus # pylint: disable=bad-continuation
+        WALAEventOperation.ReportStatus
     ]
 
 
