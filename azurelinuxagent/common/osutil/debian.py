@@ -16,20 +16,20 @@
 # Requires Python 2.6+ and Openssl 1.0+
 #
 
-import os
-import re
-import pwd
-import shutil
-import socket
-import array
-import struct
-import fcntl
-import time
-import base64
-import azurelinuxagent.common.logger as logger
-import azurelinuxagent.common.utils.fileutil as fileutil
+import os # pylint: disable=W0611
+import re # pylint: disable=W0611
+import pwd # pylint: disable=W0611
+import shutil # pylint: disable=W0611
+import socket # pylint: disable=W0611
+import array # pylint: disable=W0611
+import struct # pylint: disable=W0611
+import fcntl # pylint: disable=W0611
+import time # pylint: disable=W0611
+import base64 # pylint: disable=W0611
+import azurelinuxagent.common.logger as logger # pylint: disable=W0611
+import azurelinuxagent.common.utils.fileutil as fileutil # pylint: disable=W0611
 import azurelinuxagent.common.utils.shellutil as shellutil
-import azurelinuxagent.common.utils.textutil as textutil
+import azurelinuxagent.common.utils.textutil as textutil # pylint: disable=W0611
 from azurelinuxagent.common.osutil.default import DefaultOSUtil
 
 
