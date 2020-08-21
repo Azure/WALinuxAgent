@@ -57,7 +57,7 @@ install:
   - pip install -r test-requirements.txt
 
 script:
-  - if [[ $TRAVIS_PYTHON_VERSION != 2.6 ]]; then pylint $PYLINTOPTS $PYLINTFILES; fi
+  - if [[ $TRAVIS_PYTHON_VERSION != 2.6 ]]; then ./run.sh; fi
   - nosetests $NOSEOPTS --attr '!requires_sudo' tests
   - sudo env "PATH=$PATH" nosetests $NOSEOPTS --verbose --attr 'requires_sudo' tests
   - if [ ! -z "$SETUPOPTS" ]; then /usr/bin/env python setup.py $SETUPOPTS; fi
