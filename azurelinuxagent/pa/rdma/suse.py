@@ -25,7 +25,7 @@ from azurelinuxagent.common.rdma import RDMAHandler
 
 class SUSERDMAHandler(RDMAHandler):
 
-    def install_driver(self):
+    def install_driver(self): # pylint: disable=R0912,R0914,R1710
         """Install the appropriate driver package for the RDMA firmware"""
 
         fw_version = self.get_rdma_version()
@@ -43,7 +43,7 @@ class SUSERDMAHandler(RDMAHandler):
         package_name = 'dummy'
         # Figure out the kernel that is running to find the proper kmp
         cmd = 'uname -r'
-        status, kernel_release = shellutil.run_get_output(cmd)
+        status, kernel_release = shellutil.run_get_output(cmd) # pylint: disable=W0612
         if 'default' in kernel_release:
             package_name = 'msft-rdma-kmp-default'
             info_msg = 'RDMA: Detected kernel-default'
@@ -125,7 +125,7 @@ class SUSERDMAHandler(RDMAHandler):
                 if not self.load_driver_module() or requires_reboot:
                     self.reboot_system()
                 return True
-        else:
+        else: # pylint: disable=W0120
             logger.info("RDMA: No suitable match in repos. Trying local.")
             local_packages = glob.glob('/opt/microsoft/rdma/*.rpm')
             for local_package in local_packages:

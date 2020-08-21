@@ -17,7 +17,7 @@
 # Requires Python 2.6+ and Openssl 1.0+
 #
 
-import glob
+import glob # pylint: disable=W0611
 import os
 import re
 import time
@@ -38,7 +38,7 @@ class CentOSRDMAHandler(RDMAHandler):
     version_minor = None
 
     def __init__(self, distro_version):
-        v = distro_version.split('.')
+        v = distro_version.split('.') # pylint: disable=C0103
         if len(v) < 2:
             raise Exception('Unexpected centos version: %s' % distro_version)
         self.version_major, self.version_minor = v[0], v[1]
@@ -68,7 +68,7 @@ class CentOSRDMAHandler(RDMAHandler):
         if installed_pkg:
             logger.info(
                 'RDMA: driver package present: {0}'.format(installed_pkg))
-            if self.is_rdma_package_up_to_date(installed_pkg, fw_version):
+            if self.is_rdma_package_up_to_date(installed_pkg, fw_version): # pylint: disable=R1705
                 logger.info('RDMA: driver package is up-to-date')
                 return
             else:
@@ -82,13 +82,13 @@ class CentOSRDMAHandler(RDMAHandler):
         # Example match (pkg name, -, followed by 3 segments, fw_version and -):
         # - pkg=microsoft-hyper-v-rdma-4.1.0.142-20160323.x86_64
         # - fw_version=142
-        pattern = '{0}-(\d+\.){{3,}}({1})-'.format(self.rdma_user_mode_package_name, fw_version)
+        pattern = '{0}-(\d+\.){{3,}}({1})-'.format(self.rdma_user_mode_package_name, fw_version) # pylint: disable=W1401
         return re.match(pattern, pkg)
 
     @staticmethod
     def get_int_rdma_version(version):
-        s = version.split('.')
-        if len(s) == 0:
+        s = version.split('.') # pylint: disable=C0103
+        if len(s) == 0: # pylint: disable=len-as-condition
             raise Exception('Unexpected RDMA firmware version: "%s"' % version)
         return s[0]
 
@@ -155,7 +155,7 @@ class CentOSRDMAHandler(RDMAHandler):
 
         # Install kernel mode driver (kmod-microsoft-hyper-v-rdma-*)
         kmod_pkg = self.get_file_by_pattern(
-            pkgs, "%s-(\d+\.){3,}(%s)-\d{8}\.x86_64.rpm" % (self.rdma_kernel_mode_package_name, fw_version))
+            pkgs, "%s-(\d+\.){3,}(%s)-\d{8}\.x86_64.rpm" % (self.rdma_kernel_mode_package_name, fw_version)) # pylint: disable=W1401
         if not kmod_pkg:
             raise Exception("RDMA kernel mode package not found")
         kmod_pkg_path = os.path.join(pkg_dir, kmod_pkg)
@@ -164,7 +164,7 @@ class CentOSRDMAHandler(RDMAHandler):
 
         # Install user mode driver (microsoft-hyper-v-rdma-*)
         umod_pkg = self.get_file_by_pattern(
-            pkgs, "%s-(\d+\.){3,}(%s)-\d{8}\.x86_64.rpm" % (self.rdma_user_mode_package_name, fw_version))
+            pkgs, "%s-(\d+\.){3,}(%s)-\d{8}\.x86_64.rpm" % (self.rdma_user_mode_package_name, fw_version)) # pylint: disable=W1401
         if not umod_pkg:
             raise Exception("RDMA user mode package not found")
         umod_pkg_path = os.path.join(pkg_dir, umod_pkg)
@@ -179,8 +179,8 @@ class CentOSRDMAHandler(RDMAHandler):
             logger.info("RDMA: kernel module is loaded")
 
     @staticmethod
-    def get_file_by_pattern(list, pattern):
-        for l in list:
+    def get_file_by_pattern(list, pattern): # pylint: disable=W0622
+        for l in list: # pylint: disable=C0103
             if re.match(pattern, l):
                 return l
         return None
