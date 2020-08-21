@@ -17,12 +17,14 @@
 # Requires Python 2.6+ and Openssl 1.0+
 #
 
+# pylint: disable=W0611
 import azurelinuxagent.common.utils.fileutil as fileutil
 from azurelinuxagent.pa.deprovision.default import DeprovisionHandler, \
-                                                   DeprovisionAction
+                                                   DeprovisionAction 
+# pylint: enable=W0611
 
 class ClearLinuxDeprovisionHandler(DeprovisionHandler):
-    def __init__(self, distro):
+    def __init__(self, distro): # pylint: disable=W0231
         self.distro = distro
 
     def setup(self, deluser):

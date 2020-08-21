@@ -1,4 +1,4 @@
-# python 3.6+ uses the latest pylint version, whose docs can be found here: http://pylint.pycqa.org/en/latest/technical_reference/features.html
+# python 3.6+ uses the latest pylint version, whose docs can be found here: http://pylint.pycqa.org/en/stable/technical_reference/features.html
 
 # The source code suppresses the following errors in python3.6+:
 
@@ -85,8 +85,7 @@
 
 [MESSAGES CONTROL]
 
-disable=bad-continuation, # Buggy, **REMOVED in pylint-2.6.0**
-    bad-whitespace, # Used when a wrong number of spaces is used around an operator, bracket or block opener. **REMOVED IN pylint-2.6.0**
+disable=bad-whitespace, # Used when a wrong number of spaces is used around an operator, bracket or block opener. **REMOVED IN pylint-2.6.0**
     broad-except, # Used when an except catches a too general exception, possibly burying unrelated errors.
     consider-iterating-dictionary, # Emitted when the keys of a dictionary are iterated through the .keys() method.
     consider-using-dict-comprehension, # Although there is nothing syntactically wrong with this code, it is hard to read and can be simplified to a dict comprehension. 
@@ -101,7 +100,9 @@ disable=bad-continuation, # Buggy, **REMOVED in pylint-2.6.0**
     missing-module-docstring, # Used when a module has no docstring.
     multiple-statements, # Used when more than on statement are found on the same line.
     no-self-use, # Used when a method doesn’t use its bound instance, and so could be written as a function.
+    raise-missing-from, # Python 3's exception chaining means it shows the traceback of the current exception, but also the original exception. Not using raise from makes the traceback inaccurate, because the message implies there is a bug in the exception-handling code itself, which is a separate situation than wrapping an exception.
     superfluous-parens, # Used when a single item in parentheses follows an if, for, or other keyword.
+    super-with-arguments, # Emitted when calling the super() builtin with the current class and instance. On Python 3 these arguments are the default and they can be omitted.
     too-many-statements, # Used when a function or method has too many statements. You should then split it in smaller functions / methods.
     trailing-newlines, # Used when there are trailing blank lines in a file.
     trailing-whitespace, # Used when there is whitespace between the end of a line and the newline.

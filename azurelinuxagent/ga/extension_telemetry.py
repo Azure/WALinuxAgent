@@ -158,8 +158,8 @@ class ProcessExtensionTelemetry(PeriodicOperation):
                 event_file_size = os.stat(event_file_path).st_size
                 if event_file_size > self._EXTENSION_EVENT_FILE_MAX_SIZE:
                     msg = "Skipping file: {0} as its size is {1:.2f} Mb > Max size allowed {2:.1f} Mb".format(
-                            event_file_path, convert_to_mb(event_file_size), #pylint: disable=C0330
-                            convert_to_mb(self._EXTENSION_EVENT_FILE_MAX_SIZE)) #pylint: disable=C0330
+                            event_file_path, convert_to_mb(event_file_size),
+                            convert_to_mb(self._EXTENSION_EVENT_FILE_MAX_SIZE))
                     logger.warn(msg)
                     add_log_event(level=logger.LogLevel.WARNING, message=msg, forced=True)
                     continue
@@ -309,7 +309,7 @@ class ProcessExtensionTelemetry(PeriodicOperation):
         if event[message_key] is None or len(event[message_key]) == 0: # pylint: disable=C1801
             raise InvalidExtensionEventError(
                 "{0}: {1} should not be empty".format(InvalidExtensionEventError.EmptyMessageError,
-                                                     ExtensionEventSchema.Message)) #pylint: disable=C0330
+                                                     ExtensionEventSchema.Message))
 
         for required_key in self._EXTENSION_EVENT_REQUIRED_FIELDS:
             # If all required keys not in event then raise
