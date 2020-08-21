@@ -9,15 +9,22 @@ wait $PYLINT_PID || EXIT_CODE=$(($EXIT_CODE || $?))
 wait $NOSETESTS_PID || EXIT_CODE=$(($EXIT_CODE || $?))
 wait $NOSETESTS_SUDO_PID || EXIT_CODE=$(($EXIT_CODE || $?))
 
+echo "========================================="
 echo "pylint output:"
+echo "========================================="
+
 cat pylint.output
 
 echo
+echo "========================================="
 echo "nosetests -a '!requires_sudo' output:"
+echo "========================================="
 cat nosetests_no_sudo.output
 
 echo
+echo "========================================="
 echo "nosetests -a 'requires_sudo' output:"
+echo "========================================="
 cat nosetests_sudo.output
 
 exit "$EXIT_CODE"
