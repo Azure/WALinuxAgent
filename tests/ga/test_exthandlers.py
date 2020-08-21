@@ -401,8 +401,19 @@ with open("{2}", "w") as file:
             # the timeout period should have elapsed
             self.assertGreaterEqual(mock_sleep.call_count, timeout)
 
-            # the command should have been terminated
-            self.assertFalse(LaunchCommandTestCase._find_process(command), "The command was not terminated")
+            # The command should have been terminated.
+            # The /proc file system may not be updated yet when we do this check so we try a few times after a short delay; note that we
+            # are mocking sleep, so we need to use the original implementation.
+            terminated = False
+            i = 0
+            while not terminated and i < 4:
+                if not LaunchCommandTestCase._find_process(command):
+                    terminated = True
+                else:
+                    original_sleep(0.25)
+                i += 1
+
+            self.assertTrue(terminated, "The command was not terminated")
 
         # as a check for the test itself, verify it completed in just a few seconds
         self.assertLessEqual(time.time() - start_time, 5)
