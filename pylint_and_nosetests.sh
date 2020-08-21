@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-pylint $PYLINTOPTS $PYLINTFILES &> pylint.output & PYLINT_PID=$!
+pylint $PYLINTOPTS --jobs=0 $PYLINTFILES &> pylint.output & PYLINT_PID=$!
 nosetests -a '!requires_sudo' tests &> nosetests_no_sudo.output & NOSETESTS_PID=$!
 sudo env "PATH=$PATH" nosetests -a 'requires_sudo' tests &> nosetests_sudo.output & NOSETESTS_SUDO_PID=$!
 
