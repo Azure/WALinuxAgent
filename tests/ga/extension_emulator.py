@@ -46,7 +46,7 @@ class Actions(object):
     """
 
     @staticmethod
-    def succeed_action(*_, **_):
+    def succeed_action(*_, **__):
         """
         A nop action with the correct function signature for ExtensionEmulator actions.
         """
@@ -60,7 +60,7 @@ class Actions(object):
         """
         return_code = str(uuid.uuid4())
 
-        def fail_action(*_, **_):
+        def fail_action(*_, **__):
             return return_code
         
         return return_code, fail_action
