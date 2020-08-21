@@ -349,7 +349,7 @@ sys.stderr.write("{1}")
         self.assertListEqual(files_before, files_after, "Not all temporary files were deleted. File list: {0}".format(files_after))
 
     # R0914: "Too many local variables" - The use of locals in this function is currently acceptable.
-    def test_it_should_raise_an_exception_when_the_command_times_out(self):  # pylint disable=R0914
+    def test_it_should_raise_an_exception_when_the_command_times_out(self):  # pylint: disable=R0914
         extension_error_code = ExtensionErrorCodes.PluginHandlerScriptTimedout
         stdout = "stdout" * 7
         stderr = "stderr" * 7
