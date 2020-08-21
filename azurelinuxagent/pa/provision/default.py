@@ -72,7 +72,7 @@ class ProvisionHandler(object):
 
             if not self.validate_cloud_init(is_expected=False):
                 raise ProvisionError("cloud-init appears to be running, "
-                                        "this is not expected, cannot continue") # pylint: disable=C0330
+                                        "this is not expected, cannot continue")
 
             logger.info("Copying ovf-env.xml")
             ovf_env = self.protocol_util.copy_ovf_env()
@@ -89,8 +89,8 @@ class ProvisionHandler(object):
             self.write_provisioned()
 
             self.report_event("Provisioning succeeded ({0}s)".format(self._get_uptime_seconds()),
-                is_success=True, # pylint: disable=C0330
-                duration=elapsed_milliseconds(utc_start)) # pylint: disable=C0330
+                is_success=True,
+                duration=elapsed_milliseconds(utc_start))
 
             self.handle_provision_guest_agent(ovf_env.provision_guest_agent)
 
@@ -278,9 +278,9 @@ class ProvisionHandler(object):
             os.chmod(customdata_file, 0o700)
             shellutil.run(customdata_file)
             add_event(name=AGENT_NAME,
-                        duration=int(time.time() - start), # pylint: disable=C0330
-                        is_success=True, # pylint: disable=C0330
-                        op=WALAEventOperation.CustomData) # pylint: disable=C0330
+                        duration=int(time.time() - start),
+                        is_success=True,
+                        op=WALAEventOperation.CustomData)
 
     def deploy_ssh_pubkeys(self, ovfenv):
         for pubkey in ovfenv.ssh_pubkeys:
@@ -295,10 +295,10 @@ class ProvisionHandler(object):
     def report_event(self, message, is_success=False, duration=0,
                      operation=WALAEventOperation.Provision):
         add_event(name=AGENT_NAME,
-                    message=message, # pylint: disable=C0330
-                    duration=duration, # pylint: disable=C0330
-                    is_success=is_success, # pylint: disable=C0330
-                    op=operation) # pylint: disable=C0330
+                    message=message,
+                    duration=duration,
+                    is_success=is_success,
+                    op=operation)
 
     def report_not_ready(self, sub_status, description):
         status = ProvisionStatus(status="NotReady", subStatus=sub_status,

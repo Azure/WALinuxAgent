@@ -81,7 +81,7 @@ class DeprovisionHandler(object):
     def regen_ssh_host_key(self, warnings, actions):
         warnings.append("WARNING! All SSH host key pairs will be deleted.")
         actions.append(DeprovisionAction(fileutil.rm_files,
-                        [conf.get_ssh_key_glob()])) # pylint: disable=C0330
+                        [conf.get_ssh_key_glob()]))
 
     def stop_agent_service(self, warnings, actions):
         warnings.append("WARNING! The waagent service will be stopped.")

@@ -59,8 +59,8 @@ class CloudInitProvisionHandler(ProvisionHandler):
 
             self.report_ready()
             self.report_event("Provisioning with cloud-init succeeded ({0}s)".format(self._get_uptime_seconds()),
-                is_success=True, # pylint: disable=C0330
-                duration=elapsed_milliseconds(utc_start)) # pylint: disable=C0330
+                is_success=True,
+                duration=elapsed_milliseconds(utc_start))
 
         except ProvisionError as e: # pylint: disable=C0103
             msg = "Provisioning with cloud-init failed: {0} ({1}s)".format(ustr(e), self._get_uptime_seconds())
