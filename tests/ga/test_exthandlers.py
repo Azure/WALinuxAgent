@@ -375,11 +375,10 @@ with open("{2}", "w") as file:
 '''.format(stdout, stderr, signal_file))
 
         # mock time.sleep to wait for the signal file (launch_command implements the time out using polling and sleep)
-        original_sleep = time.sleep
-
         def sleep(seconds):
             if not os.path.exists(signal_file):
-                original_sleep(seconds)
+                sleep.original_sleep(seconds)
+        sleep.original_sleep = time.sleep
 
         timeout = 60
 
@@ -410,7 +409,7 @@ with open("{2}", "w") as file:
                 if not LaunchCommandTestCase._find_process(command):
                     terminated = True
                 else:
-                    original_sleep(0.25)
+                    sleep.original_sleep(0.25)
                 i += 1
 
             self.assertTrue(terminated, "The command was not terminated")
