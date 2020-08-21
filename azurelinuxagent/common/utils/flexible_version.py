@@ -17,11 +17,11 @@
 # Requires Python 2.6+ and Openssl 1.0+
 #
 
-from distutils import version
+from distutils import version # pylint: disable=no-name-in-module
 import re
 
 
-class FlexibleVersion(version.Version):
+class FlexibleVersion(version.Version): # pylint: disable=R0902
     """
     A more flexible implementation of distutils.version.StrictVersion
 
@@ -40,7 +40,7 @@ class FlexibleVersion(version.Version):
         http://stackoverflow.com/questions/12255554/sort-versions-in-python
     """
 
-    def __init__(self, vstring=None, sep='.', prerel_tags=('alpha', 'beta', 'rc')):
+    def __init__(self, vstring=None, sep='.', prerel_tags=('alpha', 'beta', 'rc')): # pylint: disable=R1711
         version.Version.__init__(self) 
 
         if sep is None:
@@ -71,7 +71,7 @@ class FlexibleVersion(version.Version):
 
     @property
     def major(self):
-        return self.version[0] if len(self.version) > 0 else 0
+        return self.version[0] if len(self.version) > 0 else 0 # pylint: disable=len-as-condition
 
     @property
     def minor(self):
@@ -81,8 +81,8 @@ class FlexibleVersion(version.Version):
     def patch(self):
         return self.version[2] if len(self.version) > 2 else 0
 
-    def _parse(self, vstring):
-        m = self.version_re.match(vstring)
+    def _parse(self, vstring): # pylint: disable=R1711
+        m = self.version_re.match(vstring) # pylint: disable=C0103
         if not m:
             raise ValueError("Invalid version number '{0}'".format(vstring))
 
@@ -94,19 +94,19 @@ class FlexibleVersion(version.Version):
         tag_num = m.group(self._nn_prerel_num)
 
         if tag is not None and tag_num is not None:
-            self.prerelease = (tag, int(tag_num) if len(tag_num) else None)
+            self.prerelease = (tag, int(tag_num) if len(tag_num) else None) # pylint: disable=C1801
 
         self.version = tuple(map(int, self.sep_re.split(m.group(self._nn_version))))
         return
 
     def __add__(self, increment):
-        version = list(self.version)
+        version = list(self.version) # pylint: disable=W0621
         version[-1] += increment
         vstring = self._assemble(version, self.sep, self.prerel_sep, self.prerelease)
         return FlexibleVersion(vstring=vstring, sep=self.sep, prerel_tags=self.prerel_tags)
 
     def __sub__(self, decrement):
-        version = list(self.version)
+        version = list(self.version) # pylint: disable=W0621
         if version[-1] <= 0:
             raise ArithmeticError("Cannot decrement final numeric component of {0} below zero" \
                 .format(self))
@@ -179,27 +179,27 @@ class FlexibleVersion(version.Version):
 
         return True
 
-    def _assemble(self, version, sep, prerel_sep, prerelease):
-        s = sep.join(map(str, version))
+    def _assemble(self, version, sep, prerel_sep, prerelease): # pylint: disable=W0621
+        s = sep.join(map(str, version)) # pylint: disable=C0103
         if prerelease is not None:
             if prerel_sep is not None:
-                s += prerel_sep
-            s += prerelease[0]
+                s += prerel_sep # pylint: disable=C0103
+            s += prerelease[0] # pylint: disable=C0103
             if prerelease[1] is not None:
-                s += str(prerelease[1])
+                s += str(prerelease[1]) # pylint: disable=C0103
         return s
 
-    def _compile_pattern(self):
+    def _compile_pattern(self): # pylint: disable=R1711
         sep, self.sep_re = self._compile_separator(self.sep)
 
         if self.prerel_tags:
             tags = '|'.join(re.escape(tag) for tag in self.prerel_tags)
             self.prerel_tags_set = dict(zip(self.prerel_tags, range(len(self.prerel_tags))))
-            release_re = '(?:{prerel_sep}(?P<{tn}>{tags})(?P<{nn}>\d*))?'.format(
-                        prerel_sep=self._re_prerel_sep,
-                        tags=tags,
-                        tn=self._nn_prerel_tag,
-                        nn=self._nn_prerel_num)
+            release_re = '(?:{prerel_sep}(?P<{tn}>{tags})(?P<{nn}>\d*))?'.format( # pylint: disable=W1401
+                        prerel_sep=self._re_prerel_sep, 
+                        tags=tags, 
+                        tn=self._nn_prerel_tag, 
+                        nn=self._nn_prerel_num) 
         else:
             release_re = ''
 

@@ -19,7 +19,7 @@ import azurelinuxagent.common.utils.shellutil as shellutil
 import azurelinuxagent.common.logger as logger
 from azurelinuxagent.common.exception import OSUtilError
 from azurelinuxagent.common.osutil.freebsd import FreeBSDOSUtil
-import os
+import os # pylint: disable=C0411
 
 class NSBSDOSUtil(FreeBSDOSUtil):
 
@@ -39,13 +39,13 @@ class NSBSDOSUtil(FreeBSDOSUtil):
             self.resolver = dns.resolver.Resolver()
             servers = []
             cmd = "getconf /usr/Firewall/ConfigFiles/dns Servers | tail -n +2"
-            ret, output = shellutil.run_get_output(cmd)
+            ret, output = shellutil.run_get_output(cmd) # pylint: disable=W0612
             for server in output.split("\n"):
                 if server == '':
                     break
                 server = server[:-1] # remove last '='
                 cmd = "grep '{}' /etc/hosts".format(server) + " | awk '{print $1}'"
-                ret, ip = shellutil.run_get_output(cmd)
+                ret, ip = shellutil.run_get_output(cmd) # pylint: disable=C0103
                 servers.append(ip)
             self.resolver.nameservers = servers
             dns.resolver.override_system_resolver(self.resolver)
@@ -72,7 +72,7 @@ class NSBSDOSUtil(FreeBSDOSUtil):
         logger.info("{0} SSH password-based authentication methods."
                     .format("Disabled" if disable_password else "Enabled"))
 
-    def useradd(self, username, expiration=None):
+    def useradd(self, username, expiration=None): # pylint: disable=R1711,W0221
         """
         Create user account with 'username'
         """
@@ -98,11 +98,11 @@ class NSBSDOSUtil(FreeBSDOSUtil):
         """
         Deploy authorized_key
         """
-        path, thumbprint, value = pubkey
+        path, thumbprint, value = pubkey # pylint: disable=W0612
 
         #overide parameters
         super(NSBSDOSUtil, self).deploy_ssh_pubkey('admin',
-            ["/usr/Firewall/.ssh/authorized_keys", thumbprint, value])
+            ["/usr/Firewall/.ssh/authorized_keys", thumbprint, value]) 
 
     def del_root_password(self):
         logger.warn("Root password deletion disabled")

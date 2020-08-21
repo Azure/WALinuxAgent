@@ -18,8 +18,8 @@
 from __future__ import print_function
 
 import mock
-import os
-import textwrap
+import os # pylint: disable=wrong-import-order
+import textwrap # pylint: disable=wrong-import-order
 
 import azurelinuxagent.common.conf as conf
 from azurelinuxagent.common.event import EVENTS_DIRECTORY
@@ -33,7 +33,7 @@ def freebsd_system():
     return ["FreeBSD"]
 
 
-def freebsd_system_release(x, y, z):
+def freebsd_system_release(x, y, z): # pylint: disable=unused-argument,invalid-name
     return "10.0"
 
 
@@ -41,7 +41,7 @@ def openbsd_system():
     return ["OpenBSD"]
 
 
-def openbsd_system_release(x, y, z):
+def openbsd_system_release(x, y, z): # pylint: disable=unused-argument,invalid-name
     return "20.0"
 
 
@@ -59,19 +59,19 @@ def default_system_exception():
 
 def is_platform_dist_supported():
     # platform.dist() and platform.linux_distribution() is deprecated from Python 3.8+
-    if PY_VERSION_MAJOR == 3 and PY_VERSION_MINOR >= 8:
+    if PY_VERSION_MAJOR == 3 and PY_VERSION_MINOR >= 8: # pylint: disable=no-else-return
         return False
     else:
         return True
 
 class TestAgentVersion(AgentTestCase):
-    def setUp(self):
+    def setUp(self): # pylint: disable=useless-return
         AgentTestCase.setUp(self)
         return
 
     @mock.patch('platform.system', side_effect=freebsd_system)
     @mock.patch('re.sub', side_effect=freebsd_system_release)
-    def test_distro_is_correct_format_when_freebsd(self, platform_system_name, mock_variable):
+    def test_distro_is_correct_format_when_freebsd(self, platform_system_name, mock_variable): # pylint: disable=useless-return,unused-argument
         osinfo = get_distro()
         freebsd_list = ['freebsd', "10.0", '', 'freebsd']
         self.assertListEqual(freebsd_list, osinfo)
@@ -79,14 +79,14 @@ class TestAgentVersion(AgentTestCase):
 
     @mock.patch('platform.system', side_effect=openbsd_system)
     @mock.patch('re.sub', side_effect=openbsd_system_release)
-    def test_distro_is_correct_format_when_openbsd(self, platform_system_name, mock_variable):
+    def test_distro_is_correct_format_when_openbsd(self, platform_system_name, mock_variable): # pylint: disable=useless-return,unused-argument
         osinfo = get_distro()
         openbsd_list = ['openbsd', "20.0", '', 'openbsd']
         self.assertListEqual(openbsd_list, osinfo)
         return
 
     @mock.patch('platform.system', side_effect=default_system)
-    def test_distro_is_correct_format_when_default_case(self, *args):
+    def test_distro_is_correct_format_when_default_case(self, *args): # pylint: disable=useless-return,unused-argument
         default_list = ['', '', '', '']
         unknown_list = ['unknown', 'FFFF', '', '']
 
@@ -101,7 +101,7 @@ class TestAgentVersion(AgentTestCase):
         return
 
     @mock.patch('platform.system', side_effect=default_system)
-    def test_distro_is_correct_for_exception_case(self, *args):
+    def test_distro_is_correct_for_exception_case(self, *args): # pylint: disable=useless-return,unused-argument
         default_list = ['unknown', 'FFFF', '', '']
 
         if is_platform_dist_supported():
@@ -117,26 +117,26 @@ class TestAgentVersion(AgentTestCase):
 
 
 class TestCurrentAgentName(AgentTestCase):
-    def setUp(self):
+    def setUp(self): # pylint: disable=useless-return
         AgentTestCase.setUp(self)
         return
 
     @patch("os.getcwd", return_value="/default/install/directory")
-    def test_extract_name_finds_installed(self, mock_cwd):
+    def test_extract_name_finds_installed(self, mock_cwd): # pylint: disable=useless-return,unused-argument
         current_agent, current_version = set_current_agent()
         self.assertEqual(AGENT_LONG_VERSION, current_agent)
         self.assertEqual(AGENT_VERSION, str(current_version))
         return
 
     @patch("os.getcwd", return_value="/")
-    def test_extract_name_root_finds_installed(self, mock_cwd):
+    def test_extract_name_root_finds_installed(self, mock_cwd): # pylint: disable=useless-return,unused-argument
         current_agent, current_version = set_current_agent()
         self.assertEqual(AGENT_LONG_VERSION, current_agent)
         self.assertEqual(AGENT_VERSION, str(current_version))
         return
 
     @patch("os.getcwd")
-    def test_extract_name_in_path_finds_installed(self, mock_cwd):
+    def test_extract_name_in_path_finds_installed(self, mock_cwd): # pylint: disable=useless-return
         path = os.path.join(conf.get_lib_dir(), EVENTS_DIRECTORY)
         mock_cwd.return_value = path
         current_agent, current_version = set_current_agent()
@@ -145,7 +145,7 @@ class TestCurrentAgentName(AgentTestCase):
         return
 
     @patch("os.getcwd")
-    def test_extract_name_finds_latest_agent(self, mock_cwd):
+    def test_extract_name_finds_latest_agent(self, mock_cwd): # pylint: disable=useless-return
         path = os.path.join(conf.get_lib_dir(), "{0}-{1}".format(
             AGENT_NAME,
             "1.2.3"))
@@ -172,7 +172,7 @@ class TestGetF5Platforms(AgentTestCase):
         Changelist: 1874858
         JobID: 705993""")
 
-        mo = mock.mock_open(read_data=version_file)
+        mo = mock.mock_open(read_data=version_file) # pylint: disable=invalid-name
         with patch(open_patch(), mo):
             platform = get_f5_platform()
             self.assertTrue(platform[0] == 'bigip')
@@ -193,7 +193,7 @@ class TestGetF5Platforms(AgentTestCase):
         Changelist: 1773831
         JobID: 673467""")
 
-        mo = mock.mock_open(read_data=version_file)
+        mo = mock.mock_open(read_data=version_file) # pylint: disable=invalid-name
         with patch(open_patch(), mo):
             platform = get_f5_platform()
             self.assertTrue(platform[0] == 'bigip')
@@ -214,7 +214,7 @@ class TestGetF5Platforms(AgentTestCase):
         Changelist: 1486072
         JobID: 536212""")
 
-        mo = mock.mock_open(read_data=version_file)
+        mo = mock.mock_open(read_data=version_file) # pylint: disable=invalid-name
         with patch(open_patch(), mo):
             platform = get_f5_platform()
             self.assertTrue(platform[0] == 'bigip')
@@ -235,7 +235,7 @@ class TestGetF5Platforms(AgentTestCase):
         Changelist: 1924048
         JobID: 734712""")
 
-        mo = mock.mock_open(read_data=version_file)
+        mo = mock.mock_open(read_data=version_file) # pylint: disable=invalid-name
         with patch(open_patch(), mo):
             platform = get_f5_platform()
             self.assertTrue(platform[0] == 'iworkflow')
@@ -256,7 +256,7 @@ class TestGetF5Platforms(AgentTestCase):
         Changelist: 1907534
         JobID: 726344""")
 
-        mo = mock.mock_open(read_data=version_file)
+        mo = mock.mock_open(read_data=version_file) # pylint: disable=invalid-name
         with patch(open_patch(), mo):
             platform = get_f5_platform()
             self.assertTrue(platform[0] == 'bigiq')

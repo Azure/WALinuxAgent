@@ -4,9 +4,9 @@
 from azurelinuxagent.ga.exthandlers import ExtHandlerInstance
 from azurelinuxagent.common.protocol.restapi import ExtHandler, ExtHandlerProperties, ExtHandlerPackage, \
     ExtHandlerVersionUri
-import os
-import shutil
-import sys
+import os # pylint: disable=wrong-import-order
+import shutil # pylint: disable=wrong-import-order
+import sys # pylint: disable=wrong-import-order
 from tests.tools import AgentTestCase, patch
 
 
@@ -117,7 +117,7 @@ class ExtHandlerInstanceTestCase(AgentTestCase):
 
         original_remove_api = getattr(shutil.os, remove_api_name)
 
-        def mock_remove(path, dir_fd=None):
+        def mock_remove(path, dir_fd=None): # pylint: disable=unused-argument
             if path.endswith("extension_file2"):
                 raise IOError("A mocked error")
             original_remove_api(path)
@@ -126,6 +126,6 @@ class ExtHandlerInstanceTestCase(AgentTestCase):
             with patch.object(self.ext_handler_instance, "report_event") as mock_report_event:
                 self.ext_handler_instance.remove_ext_handler()
 
-        args, kwargs = mock_report_event.call_args
+        args, kwargs = mock_report_event.call_args # pylint: disable=unused-variable
         self.assertTrue("A mocked error" in kwargs["message"])
 
