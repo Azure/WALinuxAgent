@@ -18,9 +18,9 @@
 from azurelinuxagent.common.osutil.freebsd import FreeBSDOSUtil
 import azurelinuxagent.common.utils.shellutil as shellutil
 from .test_default import osutil_get_dhcp_pid_should_return_a_list_of_pids
-from tests.tools import AgentTestCase, patch
-import traceback
-import unittest
+from tests.tools import AgentTestCase, patch # pylint: disable=wrong-import-order
+import traceback # pylint: disable=wrong-import-order
+import unittest # pylint: disable=wrong-import-order
 
 
 class TestFreeBSDOSUtil(AgentTestCase):
@@ -118,9 +118,9 @@ Destination        Gateway            Flags     Netif Expire
         with patch.object(freebsdosutil, '_get_net_info', return_value=('em0', '10.0.0.1', 'e5:f0:38:aa:da:52')):
             try:
                 freebsdosutil.get_first_if()[0]
-            except Exception as e:
+            except Exception as e: # pylint: disable=unused-variable,invalid-name
                 print(traceback.format_exc())
-                exception = True
+                exception = True # pylint: disable=unused-variable
 
 if __name__ == '__main__':
     unittest.main()

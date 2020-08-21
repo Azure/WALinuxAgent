@@ -203,7 +203,7 @@ def parse_args(sys_args): # pylint: disable=R0912
             conf_file_path = m.group(1)
             if not os.path.exists(conf_file_path):
                 print("Error: Configuration file {0} does not exist".format(
-                        conf_file_path), file=sys.stderr) # pylint: disable=C0330
+                        conf_file_path), file=sys.stderr) 
                 usage()
                 sys.exit(1)
         
@@ -256,7 +256,7 @@ def usage():
     """
     s  = "\n" # pylint: disable=C0103
     s += ("usage: {0} [-verbose] [-force] [-help] " # pylint: disable=C0103
-           "-configuration-path:<path to configuration file>" # pylint: disable=C0330
+           "-configuration-path:<path to configuration file>" 
            "-deprovision[+user]|-register-service|-version|-daemon|-start|"
            "-run-exthandlers|-show-configuration]"
            "").format(sys.argv[0])

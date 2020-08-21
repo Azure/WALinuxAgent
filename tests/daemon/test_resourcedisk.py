@@ -47,11 +47,11 @@ class TestResourceDisk(AgentTestCase):
     @patch(
         'azurelinuxagent.daemon.resourcedisk.default.ResourceDiskHandler.check_existing_swap_file',
         return_value=False)
-    def test_create_swap_space(
+    def test_create_swap_space( # pylint: disable=too-many-arguments
             self,
-            mock_check_existing_swap_file,
-            mock_isfile,
-            mock_mkfile,
+            mock_check_existing_swap_file, # pylint: disable=unused-argument
+            mock_isfile, # pylint: disable=unused-argument
+            mock_mkfile, # pylint: disable=unused-argument
             mock_run,
             mock_run_get_output):
         mount_point = '/mnt/resource'
@@ -59,12 +59,12 @@ class TestResourceDisk(AgentTestCase):
 
         rdh = ResourceDiskHandler()
 
-        def rgo_side_effect(*args, **kwargs):
+        def rgo_side_effect(*args, **kwargs): # pylint: disable=unused-argument
             if args[0] == 'swapon -s':
                 return (0, 'Filename\t\t\t\tType\t\tSize\tUsed\tPriority\n/mnt/resource/swapfile                 \tfile    \t131068\t0\t-2\n')
             return DEFAULT
 
-        def run_side_effect(*args, **kwargs):
+        def run_side_effect(*args, **kwargs): # pylint: disable=unused-argument
             # We have to change the default mock behavior to return a falsey value
             # (instead of the default truthy of the mock), because we are testing
             # really for the exit code of the the swapon command to return 0.

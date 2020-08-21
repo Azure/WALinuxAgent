@@ -1347,10 +1347,10 @@ class ExtHandlerInstance(object): # pylint: disable=R0904
 
     def create_handler_env(self):
         handler_env = {
-                HandlerEnvironment.logFolder: self.get_log_dir(), # pylint: disable=C0330
-                HandlerEnvironment.configFolder: self.get_conf_dir(), # pylint: disable=C0330
-                HandlerEnvironment.statusFolder: self.get_status_dir(), # pylint: disable=C0330
-                HandlerEnvironment.heartbeatFile: self.get_heartbeat_file() # pylint: disable=C0330
+                HandlerEnvironment.logFolder: self.get_log_dir(), 
+                HandlerEnvironment.configFolder: self.get_conf_dir(), 
+                HandlerEnvironment.statusFolder: self.get_status_dir(), 
+                HandlerEnvironment.heartbeatFile: self.get_heartbeat_file() 
             }
 
         if is_extension_telemetry_pipeline_enabled():

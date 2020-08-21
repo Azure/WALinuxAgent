@@ -88,7 +88,8 @@ class TestImds(AgentTestCase):
         test_subject = imds.ImdsClient(restutil.KNOWN_WIRESERVER_IP)
         self.assertRaises(ValueError, test_subject.get_compute)
 
-    def test_deserialize_ComputeInfo(self):
+    def test_deserialize_ComputeInfo(self): # pylint: disable=invalid-name
+        # pylint: disable=invalid-name
         s = '''{
         "location": "westcentralus",
         "name": "unit_test",
@@ -108,6 +109,7 @@ class TestImds(AgentTestCase):
         "vmScaleSetName": "MyScaleSet",
         "zone": "In"
         }'''
+        # pylint: enable=invalid-name
 
         data = json.loads(s, encoding='utf-8')
 
@@ -138,7 +140,7 @@ class TestImds(AgentTestCase):
         image_origin = self._setup_image_origin_assert("", "", "", "")
         self.assertEqual(imds.IMDS_IMAGE_ORIGIN_CUSTOM, image_origin)
 
-    def test_is_endorsed_CentOS(self):
+    def test_is_endorsed_CentOS(self): # pylint: disable=invalid-name
         self.assertEqual(imds.IMDS_IMAGE_ORIGIN_ENDORSED, self._setup_image_origin_assert("OpenLogic", "CentOS", "6.3", ""))
         self.assertEqual(imds.IMDS_IMAGE_ORIGIN_ENDORSED, self._setup_image_origin_assert("OpenLogic", "CentOS", "6.4", ""))
         self.assertEqual(imds.IMDS_IMAGE_ORIGIN_ENDORSED, self._setup_image_origin_assert("OpenLogic", "CentOS", "6.5", ""))
@@ -163,7 +165,7 @@ class TestImds(AgentTestCase):
         self.assertEqual(imds.IMDS_IMAGE_ORIGIN_PLATFORM, self._setup_image_origin_assert("OpenLogic", "CentOS", "6.2", ""))
         self.assertEqual(imds.IMDS_IMAGE_ORIGIN_PLATFORM, self._setup_image_origin_assert("OpenLogic", "CentOS", "6.1", ""))
 
-    def test_is_endorsed_CoreOS(self):
+    def test_is_endorsed_CoreOS(self): # pylint: disable=invalid-name
         self.assertEqual(imds.IMDS_IMAGE_ORIGIN_ENDORSED, self._setup_image_origin_assert("CoreOS", "CoreOS", "stable", "494.4.0"))
         self.assertEqual(imds.IMDS_IMAGE_ORIGIN_ENDORSED, self._setup_image_origin_assert("CoreOS", "CoreOS", "stable", "899.17.0"))
         self.assertEqual(imds.IMDS_IMAGE_ORIGIN_ENDORSED, self._setup_image_origin_assert("CoreOS", "CoreOS", "stable", "1688.5.3"))
@@ -172,7 +174,7 @@ class TestImds(AgentTestCase):
         self.assertEqual(imds.IMDS_IMAGE_ORIGIN_PLATFORM, self._setup_image_origin_assert("CoreOS", "CoreOS", "alpha", ""))
         self.assertEqual(imds.IMDS_IMAGE_ORIGIN_PLATFORM, self._setup_image_origin_assert("CoreOS", "CoreOS", "beta", ""))
 
-    def test_is_endorsed_Debian(self):
+    def test_is_endorsed_Debian(self): # pylint: disable=invalid-name
         self.assertEqual(imds.IMDS_IMAGE_ORIGIN_ENDORSED, self._setup_image_origin_assert("credativ", "Debian", "7", ""))
         self.assertEqual(imds.IMDS_IMAGE_ORIGIN_ENDORSED, self._setup_image_origin_assert("credativ", "Debian", "8", ""))
         self.assertEqual(imds.IMDS_IMAGE_ORIGIN_ENDORSED, self._setup_image_origin_assert("credativ", "Debian", "9", ""))
@@ -180,7 +182,7 @@ class TestImds(AgentTestCase):
         self.assertEqual(imds.IMDS_IMAGE_ORIGIN_PLATFORM, self._setup_image_origin_assert("credativ", "Debian", "9-DAILY", ""))
         self.assertEqual(imds.IMDS_IMAGE_ORIGIN_PLATFORM, self._setup_image_origin_assert("credativ", "Debian", "10-DAILY", ""))
 
-    def test_is_endorsed_Rhel(self):
+    def test_is_endorsed_Rhel(self): # pylint: disable=invalid-name
         self.assertEqual(imds.IMDS_IMAGE_ORIGIN_ENDORSED, self._setup_image_origin_assert("RedHat", "RHEL", "6.7", ""))
         self.assertEqual(imds.IMDS_IMAGE_ORIGIN_ENDORSED, self._setup_image_origin_assert("RedHat", "RHEL", "6.8", ""))
         self.assertEqual(imds.IMDS_IMAGE_ORIGIN_ENDORSED, self._setup_image_origin_assert("RedHat", "RHEL", "6.9", ""))
@@ -206,7 +208,7 @@ class TestImds(AgentTestCase):
 
         self.assertEqual(imds.IMDS_IMAGE_ORIGIN_PLATFORM, self._setup_image_origin_assert("RedHat", "RHEL", "6.6", ""))
 
-    def test_is_endorsed_SuSE(self):
+    def test_is_endorsed_SuSE(self): # pylint: disable=invalid-name
         self.assertEqual(imds.IMDS_IMAGE_ORIGIN_ENDORSED, self._setup_image_origin_assert("SuSE", "SLES", "11-SP4", ""))
         self.assertEqual(imds.IMDS_IMAGE_ORIGIN_ENDORSED, self._setup_image_origin_assert("SuSE", "SLES-BYOS", "11-SP4", ""))
 
@@ -230,7 +232,7 @@ class TestImds(AgentTestCase):
 
         self.assertEqual(imds.IMDS_IMAGE_ORIGIN_PLATFORM, self._setup_image_origin_assert("SuSE", "SLES", "11-SP3", ""))
 
-    def test_is_endorsed_UbuntuServer(self):
+    def test_is_endorsed_UbuntuServer(self): # pylint: disable=invalid-name
         self.assertEqual(imds.IMDS_IMAGE_ORIGIN_ENDORSED, self._setup_image_origin_assert("Canonical", "UbuntuServer", "14.04.0-LTS", ""))
         self.assertEqual(imds.IMDS_IMAGE_ORIGIN_ENDORSED, self._setup_image_origin_assert("Canonical", "UbuntuServer", "14.04.1-LTS", ""))
         self.assertEqual(imds.IMDS_IMAGE_ORIGIN_ENDORSED, self._setup_image_origin_assert("Canonical", "UbuntuServer", "14.04.2-LTS", ""))
@@ -251,12 +253,14 @@ class TestImds(AgentTestCase):
 
     @staticmethod
     def _setup_image_origin_assert(publisher, offer, sku, version):
+        # pylint: disable=invalid-name
         s = '''{{
             "publisher": "{0}",
             "offer": "{1}",
             "sku": "{2}",
             "version": "{3}"
         }}'''.format(publisher, offer, sku, version)
+        # pylint: enable=invalid-name
 
         data = json.loads(s, encoding='utf-8')
         compute_info = imds.ComputeInfo()
@@ -311,7 +315,7 @@ class TestImds(AgentTestCase):
                                 expected_response='')
 
     def test_field_validation(self):
-        # TODO: compute fields (#1249)
+        # TODO: compute fields (#1249) # pylint: disable=fixme
 
         self._assert_field('network', 'interface', 'ipv4', 'ipAddress', 'privateIpAddress')
         self._assert_field('network', 'interface', 'ipv4', 'ipAddress')
@@ -343,7 +347,7 @@ class TestImds(AgentTestCase):
         if isinstance(obj, list):
             self._update_field(obj[0], fields, val)
         else:
-            f = fields[0]
+            f = fields[0] # pylint: disable=invalid-name
             if len(fields) == 1:
                 if val is None:
                     del obj[f]
@@ -353,9 +357,9 @@ class TestImds(AgentTestCase):
                 self._update_field(obj[f], fields[1:], val)
 
     @staticmethod
-    def _imds_response(f):
+    def _imds_response(f): # pylint: disable=invalid-name
         path = os.path.join(data_dir, "imds", "{0}.json".format(f))
-        with open(path, "rb") as fh:
+        with open(path, "rb") as fh: # pylint: disable=invalid-name
             return fh.read()
 
     def _assert_validation(self, http_status_code, http_response, expected_valid, expected_response):
@@ -395,75 +399,75 @@ class TestImds(AgentTestCase):
 
             for has_primary_ioerror in (False, True):
                 # secondary endpoint unreachable
-                test_subject._http_get = Mock(side_effect=self._mock_http_get)
+                test_subject._http_get = Mock(side_effect=self._mock_http_get) # pylint: disable=protected-access
                 self._mock_imds_setup(primary_ioerror=has_primary_ioerror, secondary_ioerror=True)
                 result = test_subject.get_metadata(resource_path=resource_path, is_health=is_health)
-                self.assertFalse(result.success) if has_primary_ioerror else self.assertTrue(result.success)
+                self.assertFalse(result.success) if has_primary_ioerror else self.assertTrue(result.success) # pylint: disable=expression-not-assigned
                 self.assertFalse(result.service_error)
                 if has_primary_ioerror:
                     self.assertEqual('IMDS error in /metadata/{0}: Unable to connect to endpoint'.format(resource_path), result.response)
                 else:
                     self.assertEqual('Mock success response', result.response)
-                for _, kwargs in test_subject._http_get.call_args_list:
+                for _, kwargs in test_subject._http_get.call_args_list: # pylint: disable=protected-access
                     self.assertTrue('User-Agent' in kwargs['headers'])
                     self.assertEqual(expected_useragent, kwargs['headers']['User-Agent'])
-                self.assertEqual(2 if has_primary_ioerror else 1, test_subject._http_get.call_count)
+                self.assertEqual(2 if has_primary_ioerror else 1, test_subject._http_get.call_count) # pylint: disable=protected-access
 
                 # IMDS success
-                test_subject._http_get = Mock(side_effect=self._mock_http_get)
+                test_subject._http_get = Mock(side_effect=self._mock_http_get) # pylint: disable=protected-access
                 self._mock_imds_setup(primary_ioerror=has_primary_ioerror)
                 result = test_subject.get_metadata(resource_path=resource_path, is_health=is_health)
                 self.assertTrue(result.success)
                 self.assertFalse(result.service_error)
                 self.assertEqual('Mock success response', result.response)
-                for _, kwargs in test_subject._http_get.call_args_list:
+                for _, kwargs in test_subject._http_get.call_args_list: # pylint: disable=protected-access
                     self.assertTrue('User-Agent' in kwargs['headers'])
                     self.assertEqual(expected_useragent, kwargs['headers']['User-Agent'])
-                self.assertEqual(2 if has_primary_ioerror else 1, test_subject._http_get.call_count)
+                self.assertEqual(2 if has_primary_ioerror else 1, test_subject._http_get.call_count) # pylint: disable=protected-access
 
                 # IMDS throttled
-                test_subject._http_get = Mock(side_effect=self._mock_http_get)
+                test_subject._http_get = Mock(side_effect=self._mock_http_get) # pylint: disable=protected-access
                 self._mock_imds_setup(primary_ioerror=has_primary_ioerror, throttled=True)
                 result = test_subject.get_metadata(resource_path=resource_path, is_health=is_health)
                 self.assertFalse(result.success)
                 self.assertFalse(result.service_error)
                 self.assertEqual('IMDS error in /metadata/{0}: Throttled'.format(resource_path), result.response)
-                for _, kwargs in test_subject._http_get.call_args_list:
+                for _, kwargs in test_subject._http_get.call_args_list: # pylint: disable=protected-access
                     self.assertTrue('User-Agent' in kwargs['headers'])
                     self.assertEqual(expected_useragent, kwargs['headers']['User-Agent'])
-                self.assertEqual(2 if has_primary_ioerror else 1, test_subject._http_get.call_count)
+                self.assertEqual(2 if has_primary_ioerror else 1, test_subject._http_get.call_count) # pylint: disable=protected-access
 
                 # IMDS gone error
-                test_subject._http_get = Mock(side_effect=self._mock_http_get)
+                test_subject._http_get = Mock(side_effect=self._mock_http_get) # pylint: disable=protected-access
                 self._mock_imds_setup(primary_ioerror=has_primary_ioerror, gone_error=True)
                 result = test_subject.get_metadata(resource_path=resource_path, is_health=is_health)
                 self.assertFalse(result.success)
                 self.assertTrue(result.service_error)
                 self.assertEqual('IMDS error in /metadata/{0}: HTTP Failed with Status Code 410: Gone'.format(resource_path), result.response)
-                for _, kwargs in test_subject._http_get.call_args_list:
+                for _, kwargs in test_subject._http_get.call_args_list: # pylint: disable=protected-access
                     self.assertTrue('User-Agent' in kwargs['headers'])
                     self.assertEqual(expected_useragent, kwargs['headers']['User-Agent'])
-                self.assertEqual(2 if has_primary_ioerror else 1, test_subject._http_get.call_count)
+                self.assertEqual(2 if has_primary_ioerror else 1, test_subject._http_get.call_count) # pylint: disable=protected-access
 
                 # IMDS bad request
-                test_subject._http_get = Mock(side_effect=self._mock_http_get)
+                test_subject._http_get = Mock(side_effect=self._mock_http_get) # pylint: disable=protected-access
                 self._mock_imds_setup(primary_ioerror=has_primary_ioerror, bad_request=True)
                 result = test_subject.get_metadata(resource_path=resource_path, is_health=is_health)
                 self.assertFalse(result.success)
                 self.assertFalse(result.service_error)
                 self.assertEqual('IMDS error in /metadata/{0}: [HTTP Failed] [404: reason] Mock not found'.format(resource_path), result.response)
-                for _, kwargs in test_subject._http_get.call_args_list:
+                for _, kwargs in test_subject._http_get.call_args_list: # pylint: disable=protected-access
                     self.assertTrue('User-Agent' in kwargs['headers'])
                     self.assertEqual(expected_useragent, kwargs['headers']['User-Agent'])
-                self.assertEqual(2 if has_primary_ioerror else 1, test_subject._http_get.call_count)
+                self.assertEqual(2 if has_primary_ioerror else 1, test_subject._http_get.call_count) # pylint: disable=protected-access
 
-    def _mock_imds_setup(self, primary_ioerror=False, secondary_ioerror=False, gone_error=False, throttled=False, bad_request=False):
-        self._mock_imds_expect_fallback = primary_ioerror
-        self._mock_imds_primary_ioerror = primary_ioerror
-        self._mock_imds_secondary_ioerror = secondary_ioerror
-        self._mock_imds_gone_error = gone_error
-        self._mock_imds_throttled = throttled
-        self._mock_imds_bad_request = bad_request
+    def _mock_imds_setup(self, primary_ioerror=False, secondary_ioerror=False, gone_error=False, throttled=False, bad_request=False): # pylint: disable=too-many-arguments
+        self._mock_imds_expect_fallback = primary_ioerror # pylint: disable=attribute-defined-outside-init
+        self._mock_imds_primary_ioerror = primary_ioerror # pylint: disable=attribute-defined-outside-init
+        self._mock_imds_secondary_ioerror = secondary_ioerror # pylint: disable=attribute-defined-outside-init
+        self._mock_imds_gone_error = gone_error # pylint: disable=attribute-defined-outside-init
+        self._mock_imds_throttled = throttled # pylint: disable=attribute-defined-outside-init
+        self._mock_imds_bad_request = bad_request # pylint: disable=attribute-defined-outside-init
 
     def _mock_http_get(self, *_, **kwargs):
         if "foo.bar" == kwargs['endpoint'] and not self._mock_imds_expect_fallback:

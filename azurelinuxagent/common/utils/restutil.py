@@ -324,11 +324,11 @@ def _http_request(method, host, rel_uri, port=None, data=None, secure=False, # p
 
 
 def http_request(method, # pylint: disable=R0913,R0912,R0914,W0102
-                url, data, headers=None, # pylint: disable=C0330
-                use_proxy=False, # pylint: disable=C0330
-                max_retry=DEFAULT_RETRIES, # pylint: disable=C0330
-                retry_codes=RETRY_CODES, # pylint: disable=C0330
-                retry_delay=DELAY_IN_SECONDS): # pylint: disable=C0330
+                url, data, headers=None, 
+                use_proxy=False, 
+                max_retry=DEFAULT_RETRIES, 
+                retry_codes=RETRY_CODES, 
+                retry_delay=DELAY_IN_SECONDS): 
 
     global SECURE_WARNING_EMITTED # pylint: disable=W0603
 
@@ -382,11 +382,11 @@ def http_request(method, # pylint: disable=R0913,R0912,R0914,W0102
             delay = THROTTLE_DELAY_IN_SECONDS if was_throttled else retry_delay
 
             logger.verbose("[HTTP Retry] "
-                        "Attempt {0} of {1} will delay {2} seconds: {3}", # pylint: disable=C0330
-                        attempt+1, # pylint: disable=C0330
-                        max_retry, # pylint: disable=C0330
-                        delay, # pylint: disable=C0330
-                        msg) # pylint: disable=C0330
+                        "Attempt {0} of {1} will delay {2} seconds: {3}", 
+                        attempt+1, 
+                        max_retry, 
+                        delay, 
+                        msg) 
 
             time.sleep(delay)
 
@@ -546,9 +546,9 @@ def read_response_error(resp):
     if resp is not None:
         try:
             result = "[HTTP Failed] [{0}: {1}] {2}".format(
-                        resp.status, # pylint: disable=C0330
-                        resp.reason, # pylint: disable=C0330
-                        resp.read()) # pylint: disable=C0330
+                        resp.status, 
+                        resp.reason, 
+                        resp.read()) 
 
             # this result string is passed upstream to several methods
             # which do a raise HttpError() or a format() of some kind;

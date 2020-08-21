@@ -102,7 +102,7 @@ class NSBSDOSUtil(FreeBSDOSUtil):
 
         #overide parameters
         super(NSBSDOSUtil, self).deploy_ssh_pubkey('admin',
-            ["/usr/Firewall/.ssh/authorized_keys", thumbprint, value]) # pylint: disable=C0330
+            ["/usr/Firewall/.ssh/authorized_keys", thumbprint, value]) 
 
     def del_root_password(self):
         logger.warn("Root password deletion disabled")
