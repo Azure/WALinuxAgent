@@ -348,7 +348,8 @@ sys.stderr.write("{1}")
 
         self.assertListEqual(files_before, files_after, "Not all temporary files were deleted. File list: {0}".format(files_after))
 
-    def test_it_should_raise_an_exception_when_the_command_times_out(self):
+    # R0914: "Too many local variables" - The use of locals in this function is currently acceptable.
+    def test_it_should_raise_an_exception_when_the_command_times_out(self):  # pylint disable=R0914
         extension_error_code = ExtensionErrorCodes.PluginHandlerScriptTimedout
         stdout = "stdout" * 7
         stderr = "stderr" * 7
@@ -401,7 +402,7 @@ with open("{2}", "w") as file:
             self.assertGreaterEqual(mock_sleep.call_count, timeout)
 
             # The command should have been terminated.
-            # The /proc file system may not be updated yet when we do this check so we try a few times after a short delay; note that we
+            # The /proc file system may still include the process when we do this check so we try a few times after a short delay; note that we
             # are mocking sleep, so we need to use the original implementation.
             terminated = False
             i = 0
