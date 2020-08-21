@@ -472,7 +472,7 @@ class SystemdCgroupsApiTestCase(AgentTestCase):
     def test_get_systemd_version_should_return_a_version_number(self):
         with mock_cgroup_commands():
             version_info = SystemdCgroupsApi.get_systemd_version()
-            found = re.search("systemd \d+", version_info) is not None # pylint: disable=anomalous-backslash-in-string
+            found = re.search(r"systemd \d+", version_info) is not None
             self.assertTrue(found, "Could not determine the systemd version: {0}".format(version_info))
 
     def test_get_cpu_and_memory_mount_points_should_return_the_cgroup_mount_points(self):
@@ -536,7 +536,7 @@ class SystemdCgroupsApiTestCase(AgentTestCase):
             daemon_present = any("waagent -daemon" in command for (pid, command) in processes)
             self.assertTrue(daemon_present, "Could not find the daemon in the cgroup: [{0}]".format(processes))
 
-            extension_handler_present = any(re.search("(WALinuxAgent-.+\.egg|waagent) -run-exthandlers", command) for (pid, command) in processes) # pylint: disable=anomalous-backslash-in-string
+            extension_handler_present = any(re.search(r"(WALinuxAgent-.+\.egg|waagent) -run-exthandlers", command) for (pid, command) in processes)
             self.assertTrue(extension_handler_present, "Could not find the extension handler in the cgroup: [{0}]".format(processes))
 
     @attr('requires_sudo')
