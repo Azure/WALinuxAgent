@@ -12,9 +12,9 @@ from azurelinuxagent.common.utils import fileutil
 from azurelinuxagent.common.utils.archive import StateFlusher, StateArchiver, MAX_ARCHIVED_STATES
 from tests.tools import AgentTestCase
 
-debug = False
+debug = False # pylint: disable=invalid-name
 if os.environ.get('DEBUG') == '1':
-    debug = True
+    debug = True # pylint: disable=invalid-name
 
 # Enable verbose logger to stdout
 if debug:
@@ -32,11 +32,11 @@ class TestArchive(AgentTestCase):
         if not debug and self.tmp_dir is not None:
             shutil.rmtree(self.tmp_dir)
 
-    def _write_file(self, fn, contents=None):
+    def _write_file(self, fn, contents=None): # pylint: disable=invalid-name
         full_name = os.path.join(self.tmp_dir, fn)
         fileutil.mkdir(os.path.dirname(full_name))
 
-        with open(full_name, 'w') as fh:
+        with open(full_name, 'w') as fh: # pylint: disable=invalid-name
             data = contents if contents is not None else fn
             fh.write(data)
             return full_name
@@ -56,7 +56,7 @@ class TestArchive(AgentTestCase):
             'Microsoft.Azure.Extensions.CustomScript.0.xml'
         ]
 
-        for f in temp_files:
+        for f in temp_files: # pylint: disable=invalid-name
             self._write_file(f)
 
         test_subject = StateFlusher(self.tmp_dir)
@@ -69,10 +69,10 @@ class TestArchive(AgentTestCase):
         self.assertEqual(1, len(timestamp_dirs))
 
         self.assertIsIso8601(timestamp_dirs[0])
-        ts = self.parse_isoformat(timestamp_dirs[0])
+        ts = self.parse_isoformat(timestamp_dirs[0]) # pylint: disable=invalid-name
         self.assertDateTimeCloseTo(ts, datetime.utcnow(), timedelta(seconds=30))
 
-        for f in temp_files:
+        for f in temp_files: # pylint: disable=invalid-name
             history_path = os.path.join(self.history_dir, timestamp_dirs[0], f)
             msg = "expected the temp file {0} to exist".format(history_path)
             self.assertTrue(os.path.exists(history_path), msg)
@@ -91,7 +91,7 @@ class TestArchive(AgentTestCase):
             'Microsoft.Azure.Extensions.CustomScript.0.xml'
         ]
 
-        for f in temp_files:
+        for f in temp_files: # pylint: disable=invalid-name
             self._write_file(f)
 
         flusher = StateFlusher(self.tmp_dir)
@@ -107,7 +107,7 @@ class TestArchive(AgentTestCase):
         ts_s = os.path.splitext(zip_fn)[0]  # 2000-01-01T00:00:00.000000
 
         self.assertIsIso8601(ts_s)
-        ts = self.parse_isoformat(ts_s)
+        ts = self.parse_isoformat(ts_s) # pylint: disable=invalid-name
         self.assertDateTimeCloseTo(ts, datetime.utcnow(), timedelta(seconds=30))
 
         zip_full = os.path.join(self.history_dir, zip_fn)
@@ -130,13 +130,13 @@ class TestArchive(AgentTestCase):
         timestamps = []
 
         for i in range(0, total):
-            ts = start + timedelta(seconds=i)
+            ts = start + timedelta(seconds=i) # pylint: disable=invalid-name
             timestamps.append(ts)
 
             if i % 2 == 0:
-                fn = os.path.join('history', ts.isoformat(), 'Prod.0.manifest.xml')
+                fn = os.path.join('history', ts.isoformat(), 'Prod.0.manifest.xml') # pylint: disable=invalid-name
             else:
-                fn = os.path.join('history', "{0}.zip".format(ts.isoformat()))
+                fn = os.path.join('history', "{0}.zip".format(ts.isoformat())) # pylint: disable=invalid-name
 
             self._write_file(fn)
 
@@ -151,11 +151,11 @@ class TestArchive(AgentTestCase):
         archived_entries.sort()
 
         for i in range(0, MAX_ARCHIVED_STATES):
-            ts = timestamps[i + count].isoformat()
+            ts = timestamps[i + count].isoformat() # pylint: disable=invalid-name
             if i % 2 == 0:
-                fn = ts
+                fn = ts # pylint: disable=invalid-name
             else:
-                fn = "{0}.zip".format(ts)
+                fn = "{0}.zip".format(ts) # pylint: disable=invalid-name
             self.assertTrue(fn in archived_entries, "'{0}' is not in the list of unpurged entires".format(fn))
 
     def test_archive03(self):
@@ -170,11 +170,11 @@ class TestArchive(AgentTestCase):
         ]
 
         def _write_goal_state_files(temp_files, content=None):
-            for f in temp_files:
+            for f in temp_files: # pylint: disable=invalid-name
                 self._write_file(f, content)
 
         def _check_history_files(timestamp_dir, files, content=None):
-            for f in files:
+            for f in files: # pylint: disable=invalid-name
                 history_path = os.path.join(self.history_dir, timestamp_dir, f)
                 msg = "expected the temp file {0} to exist".format(history_path)
                 self.assertTrue(os.path.exists(history_path), msg)
@@ -196,7 +196,7 @@ class TestArchive(AgentTestCase):
         self.assertEqual(1, len(timestamp_dirs))
 
         self.assertIsIso8601(timestamp_dirs[0])
-        ts = self.parse_isoformat(timestamp_dirs[0])
+        ts = self.parse_isoformat(timestamp_dirs[0]) # pylint: disable=invalid-name
         self.assertDateTimeCloseTo(ts, datetime.utcnow(), timedelta(seconds=30))
 
         # Ensure saved files contain the right content
@@ -219,22 +219,22 @@ class TestArchive(AgentTestCase):
         test_subject = StateArchiver(os.path.join(self.tmp_dir, 'does-not-exist'))
         test_subject.purge()
 
-    def parse_isoformat(self, s):
+    def parse_isoformat(self, s): # pylint: disable=invalid-name
         return datetime.strptime(s, '%Y-%m-%dT%H:%M:%S.%f')
 
-    def assertIsIso8601(self, s):
+    def assertIsIso8601(self, s): # pylint: disable=invalid-name
         try:
             self.parse_isoformat(s)
         except:
             raise AssertionError("the value '{0}' is not an ISO8601 formatted timestamp".format(s))
 
-    def _total_seconds(self, td):
+    def _total_seconds(self, td): # pylint: disable=invalid-name
         """
         Compute the total_seconds for a timedelta because 2.6 does not have total_seconds.
         """
         return (0.0 + td.microseconds + (td.seconds + td.days * 24 * 60 * 60) * 10 ** 6) / 10 ** 6
 
-    def assertDateTimeCloseTo(self, t1, t2, within):
+    def assertDateTimeCloseTo(self, t1, t2, within): # pylint: disable=invalid-name
         if t1 <= t2:
             diff = t2 -t1
         else:
@@ -244,10 +244,10 @@ class TestArchive(AgentTestCase):
         if secs < 0:
             self.fail("the timestamps are outside of the tolerance of by {0} seconds".format(secs))
 
-    def assertZipContains(self, zip_fn, files):
+    def assertZipContains(self, zip_fn, files): # pylint: disable=invalid-name
         ziph = zipfile.ZipFile(zip_fn, 'r')
         zip_files = [x.filename for x in ziph.filelist]
-        for f in files:
+        for f in files: # pylint: disable=invalid-name
             self.assertTrue(f in zip_files, "'{0}' was not found in {1}".format(f, zip_fn))
 
         ziph.close()

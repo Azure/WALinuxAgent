@@ -25,15 +25,14 @@ import subprocess
 import azurelinuxagent.common.conf as conf
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.utils import fileutil
-from azurelinuxagent.common.exception import ExtensionError
-from tests.tools import Mock, patch
-
-from tests.protocol.mocks import HttpRequestPredicates
-
 from azurelinuxagent.ga.exthandlers import ExtHandlerInstance
+
+from tests.tools import Mock, patch
+from tests.protocol.mocks import HttpRequestPredicates
 
 
 class ExtensionCommandNames(object):
+    # Linter reports too few public methods, but I don't think we want any here.
     INSTALL = "install"
     UNINSTALL = "uninstall"
     UPDATE = "update"
@@ -47,7 +46,7 @@ class Actions(object):
     """
 
     @staticmethod
-    def succeed_action(*args, **kwargs):
+    def succeed_action(*_, **_):
         """
         A nop action with the correct function signature for ExtensionEmulator actions.
         """
@@ -61,7 +60,7 @@ class Actions(object):
         """
         return_code = str(uuid.uuid4())
 
-        def fail_action(*args, **kwargs):
+        def fail_action(*_, **_):
             return return_code
         
         return return_code, fail_action
@@ -75,6 +74,8 @@ def extension_emulator(name="OSTCExtensions.ExampleHandlerLinux", version="1.0.0
     """
     Factory method for ExtensionEmulator objects with sensible defaults.
     """
+    # Linter reports too many arguments, but I think in this case being able to specify all the defaults
+    # is useful.
     
     return ExtensionEmulator(name, version, update_mode, report_heartbeat, continue_on_update_failure,
         install_action, uninstall_action, enable_action, disable_action, update_action)
@@ -103,10 +104,10 @@ def generate_put_handler(*emulators):
     For use with tests.protocol.mocks.mock_wire_protocol.
     """
 
-    def mock_put_handler(url, *args, **kwargs):
+    def mock_put_handler(url, *args, **_):
 
         if HttpRequestPredicates.is_host_plugin_status_request(url):
-            return None
+            return
 
         handler_statuses = json.loads(args[0]).get("aggregateStatus", {}).get("handlerAggregateStatus", [])
 
@@ -115,12 +116,10 @@ def generate_put_handler(*emulators):
             supplied_version = handler_status.get("handlerVersion", None)
             
             try:
-                extension_emulator = ExtensionEmulator._first_matching_emulator(emulators,
-                    lambda ext: ext.matches(supplied_name, supplied_version))
-                    
-                extension_emulator.status_blobs.append(handler_status)
+                matching_ext = _first_matching_emulator(emulators, supplied_name, supplied_version)
+                matching_ext.status_blobs.append(handler_status)
 
-            except StopIteration as e:
+            except StopIteration:
                 # Tests will want to know that the agent is running an extension they didn't specifically allocate.
                 raise Exception("Extension running, but not present in emulators: {0}, {1}".format(supplied_name, supplied_version))
 
@@ -160,13 +159,13 @@ class InvocationRecord:
                 *self._queue[0]
             ))
 
+def _first_matching_emulator(emulators, name, version):
+    return next(filter(lambda ext: ext.matches(name, version), emulators))
+
 class ExtensionEmulator:
     """
     A wrapper class for the possible actions and options that an extension might support.
     """
-
-    _EXT_STATUS_SUCCESS = [{ "status": {"status": "success"} }]
-    _EXT_STATUS_ERROR_BASE = [{ "status": {"status": "error"} }]
 
     def __init__(self, name, version,
         update_mode, report_heartbeat,
@@ -221,12 +220,11 @@ class ExtensionEmulator:
                     seq = int(match.group("seq"))
             
             status_file = os.path.join(os.path.dirname(cmd), "status", "{seq}.status".format(seq=seq))
-            
+
             if return_value == 0:
-                status_contents = ExtensionEmulator._EXT_STATUS_SUCCESS
+                status_contents = [{ "status": {"status": "success"} }]
             else:
-                status_contents = ExtensionEmulator._EXT_STATUS_ERROR_BASE.copy()
-                status_contents[0]["status"]["substatus"] = return_value
+                status_contents = [{ "status": {"status": "error", "substatus": {"exit_code": return_value}} }]
 
             fileutil.write_file(status_file, json.dumps(status_contents))
 
@@ -237,11 +235,6 @@ class ExtensionEmulator:
 
         # Wrap the function in a mock to allow invocation reflection a la .assert_not_called(), etc.
         return Mock(wraps=wrapped_func)
-
-
-    @staticmethod
-    def _first_matching_emulator(emulators, match_func):
-        return next(emulator for emulator in emulators if match_func(emulator))
         
     
     def matches(self, name, version):
@@ -257,16 +250,15 @@ def generate_patched_popen(invocation_record, *emulators):
     def patched_popen(cmd, *args, **kwargs):
 
         try:
-            ext_name, ext_version, command_name = _ExtractExtensionInfo.from_command(cmd)
+            ext_name, ext_version, command_name = _extract_extension_info_from_command(cmd)
             invocation_record.add(ext_name, ext_version, command_name)
         except ValueError:
             return original_popen(cmd, *args, **kwargs)
         
         try:
-            extension_emulator = ExtensionEmulator._first_matching_emulator(emulators,
-                lambda ext: ext.matches(ext_name, ext_version))
+            matching_ext = _first_matching_emulator(emulators, ext_name, ext_version)
 
-            return extension_emulator.actions[command_name](cmd, *args, **kwargs)
+            return matching_ext.actions[command_name](cmd, *args, **kwargs)
 
         except StopIteration:
             raise Exception("Extension('{name}', '{version}') not listed as a parameter. Is it being emulated?".format(
@@ -282,8 +274,7 @@ def generate_mock_load_manifest(*emulators):
     def mock_load_manifest(self):
 
         try:
-            matching_emulator = ExtensionEmulator._first_matching_emulator(emulators,
-                lambda ext: ext.matches(self.ext_handler.name, self.ext_handler.properties.version))
+            matching_emulator = _first_matching_emulator(emulators, self.ext_handler.name, self.ext_handler.properties.version)
         except StopIteration:
             raise Exception("Extension('{name}', '{version}') not listed as a parameter. Is it being emulated?".format(
                 name=self.ext_handler.name, version=self.ext_handler.properties.version
@@ -301,36 +292,32 @@ def generate_mock_load_manifest(*emulators):
     
     return mock_load_manifest
 
-class _ExtractExtensionInfo:
+def _extract_extension_info_from_command(command):
+    """
+    Parse a command into a tuple of extension info.
+    """
+    if not isinstance(command, (str, ustr)):
+        raise Exception("Cannot extract extension info from non-string commands")
 
+    # Group layout of the expected command; this lets us grab what we want after a match
+    template = r'(?<={base_dir}/)(?P<name>{ext_name})-(?P<ver>{ext_ver})(?:/{script_file} -)(?P<cmd>{ext_cmd})'
+
+    base_dir_regex = conf.get_lib_dir()
+    script_file_regex = r'[^\s]+'
+    ext_cmd_regex = r'[a-zA-Z]+'
     ext_name_regex = r'[a-zA-Z]+(?:\.[a-zA-Z]+)?'
     ext_ver_regex = r'[0-9]+(?:\.[0-9]+)*'
 
-    @staticmethod
-    def from_command(command):
-        """
-        Parse a command into a tuple of extension info.
-        """
-        if not isinstance(command, (str, ustr)):
-            raise Exception("Cannot extract extension info from non-string commands")
+    full_regex = template.format(
+        ext_name=ext_name_regex,
+        ext_ver=ext_ver_regex, 
+        base_dir=base_dir_regex, script_file=script_file_regex,
+        ext_cmd=ext_cmd_regex
+    )
 
-        # Group layout of the expected command; this lets us grab what we want after a match
-        template = r'(?<={base_dir}/)(?P<name>{ext_name})-(?P<ver>{ext_ver})(?:/{script_file} -)(?P<cmd>{ext_cmd})'
+    match_obj = re.search(full_regex, command)
 
-        base_dir_regex = conf.get_lib_dir()
-        script_file_regex = r'[^\s]+'
-        ext_cmd_regex = r'[a-zA-Z]+'
+    if not match_obj:
+        raise ValueError("Command does not match the desired format: {0}".format(command))
 
-        full_regex = template.format(
-            ext_name=_ExtractExtensionInfo.ext_name_regex,
-            ext_ver=_ExtractExtensionInfo.ext_ver_regex, 
-            base_dir=base_dir_regex, script_file=script_file_regex,
-            ext_cmd=ext_cmd_regex
-        )
-
-        match_obj = re.search(full_regex, command)
-
-        if not match_obj:
-            raise ValueError("Command does not match the desired format: {0}".format(command))
-
-        return match_obj.group('name', 'ver', 'cmd')
+    return match_obj.group('name', 'ver', 'cmd')

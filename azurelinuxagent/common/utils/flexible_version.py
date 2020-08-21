@@ -196,10 +196,10 @@ class FlexibleVersion(version.Version): # pylint: disable=R0902
             tags = '|'.join(re.escape(tag) for tag in self.prerel_tags)
             self.prerel_tags_set = dict(zip(self.prerel_tags, range(len(self.prerel_tags))))
             release_re = '(?:{prerel_sep}(?P<{tn}>{tags})(?P<{nn}>\d*))?'.format( # pylint: disable=W1401
-                        prerel_sep=self._re_prerel_sep, # pylint: disable=C0330
-                        tags=tags, # pylint: disable=C0330
-                        tn=self._nn_prerel_tag, # pylint: disable=C0330
-                        nn=self._nn_prerel_num) # pylint: disable=C0330
+                        prerel_sep=self._re_prerel_sep, 
+                        tags=tags, 
+                        tn=self._nn_prerel_tag, 
+                        nn=self._nn_prerel_num) 
         else:
             release_re = ''
 

@@ -225,9 +225,9 @@ class FileSystemCgroupsApi(CGroupsApi):
             if not os.path.exists(path):
                 fileutil.mkdir(path)
                 osutil.mount(device='cgroup_root',
-                           mount_point=path, # pylint: disable=C0330
-                           option="-t tmpfs", # pylint: disable=C0330
-                           chk_err=False) # pylint: disable=C0330
+                           mount_point=path, 
+                           option="-t tmpfs", 
+                           chk_err=False) 
             elif not os.path.isdir(cgroup_path()):
                 logger.error("Could not mount cgroups: ordinary file at {0}", path)
                 return
@@ -241,9 +241,9 @@ class FileSystemCgroupsApi(CGroupsApi):
                     if not os.path.exists(target_path):
                         fileutil.mkdir(target_path)
                         osutil.mount(device=controller,
-                                   mount_point=target_path, # pylint: disable=C0330
-                                   option="-t cgroup -o {0}".format(controller), # pylint: disable=C0330
-                                   chk_err=False) # pylint: disable=C0330
+                                   mount_point=target_path, 
+                                   option="-t cgroup -o {0}".format(controller), 
+                                   chk_err=False) 
                         if controller == 'cpu,cpuacct':
                             cpu_mounted = True
                 except Exception as exception:

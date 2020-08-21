@@ -362,7 +362,7 @@ class RDMADeviceHandler(object):
     def wait_any_rdma_device(dir, timeout_sec, check_interval_sec): # pylint: disable=W0622
         logger.info(
             "RDMA: waiting for any Infiniband device at directory={0} timeout={1}s".format(
-            dir, timeout_sec)) # pylint: disable=C0330
+            dir, timeout_sec)) 
         total_retries = timeout_sec/check_interval_sec
         n = 0 # pylint: disable=C0103
         while n < total_retries:
