@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-pylint --rcfile=3.6.pylintrc --jobs=0 azurelinuxagent tests setup.py makepkg.py &> pylint.output & PYLINT_PID=$!
+pylint $PYLINTOPTS $PYLINTFILES &> pylint.output & PYLINT_PID=$!
 nosetests -a '!requires_sudo' tests &> nosetests_no_sudo.output & NOSETESTS_PID=$!
 sudo env "PATH=$PATH" nosetests -a 'requires_sudo' tests &> nosetests_sudo.output & NOSETESTS_SUDO_PID=$!
 
