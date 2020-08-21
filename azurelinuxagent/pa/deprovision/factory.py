@@ -15,8 +15,7 @@
 # Requires Python 2.6+ and Openssl 1.0+
 #
 
-from azurelinuxagent.common.version import DISTRO_NAME, DISTRO_VERSION, \
-                                     DISTRO_FULL_NAME
+from azurelinuxagent.common.version import DISTRO_NAME, DISTRO_VERSION, DISTRO_FULL_NAME
 
 from .default import DeprovisionHandler
 from .arch import ArchDeprovisionHandler
@@ -25,7 +24,7 @@ from .coreos import CoreOSDeprovisionHandler
 from .ubuntu import UbuntuDeprovisionHandler, Ubuntu1804DeprovisionHandler
 
 
-from distutils.version import LooseVersion as Version
+from distutils.version import LooseVersion as Version # pylint: disable=C0411,no-name-in-module, import-error
 
 
 def get_deprovision_handler(distro_name=DISTRO_NAME, 
@@ -34,14 +33,14 @@ def get_deprovision_handler(distro_name=DISTRO_NAME,
     if distro_name == "arch":
         return ArchDeprovisionHandler()
     if distro_name == "ubuntu":
-        if Version(distro_version) >= Version('18.04'):
+        if Version(distro_version) >= Version('18.04'): # pylint: disable=R1705
             return Ubuntu1804DeprovisionHandler()
         else:
             return UbuntuDeprovisionHandler()
     if distro_name == "coreos":
         return CoreOSDeprovisionHandler()
     if "Clear Linux" in distro_full_name:
-        return ClearLinuxDeprovisionHandler()
+        return ClearLinuxDeprovisionHandler() # pylint: disable=E1120
 
     return DeprovisionHandler()
 
