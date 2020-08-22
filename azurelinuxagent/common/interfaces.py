@@ -18,6 +18,3 @@ class ThreadHandlerInterface(object):
 
     def stop(self):
         raise NotImplementedError("stop() not implemented")
-
-    def stopped(self):
-        raise NotImplementedError("stopped() not implemented")

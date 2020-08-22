@@ -19,8 +19,6 @@ import datetime
 import threading
 import uuid
 
-from azurelinuxagent.common.utils import textutil # pylint: disable=W0611
-
 import azurelinuxagent.common.logger as logger
 import azurelinuxagent.common.utils.networkutil as networkutil
 from azurelinuxagent.common.cgroupconfigurator import CGroupConfigurator
@@ -28,10 +26,11 @@ from azurelinuxagent.common.cgroupstelemetry import CGroupsTelemetry
 from azurelinuxagent.common.errorstate import ErrorState
 from azurelinuxagent.common.event import add_event, WALAEventOperation, report_metric, collect_events
 from azurelinuxagent.common.future import ustr
+from azurelinuxagent.common.interfaces import ThreadHandlerInterface
 from azurelinuxagent.common.osutil import get_osutil
-from azurelinuxagent.common.protocol.util import get_protocol_util
 from azurelinuxagent.common.protocol.healthservice import HealthService
 from azurelinuxagent.common.protocol.imds import get_imds_client
+from azurelinuxagent.common.protocol.util import get_protocol_util
 from azurelinuxagent.common.utils.restutil import IOErrorCounter
 from azurelinuxagent.common.utils.textutil import hash_strings
 from azurelinuxagent.common.version import AGENT_NAME, CURRENT_VERSION
@@ -157,7 +156,7 @@ class ReportNetworkConfigurationChangesOperation(PeriodicOperation):
             self.last_nic_state = nic_state
 
 
-class MonitorHandler(object): # pylint: disable=R0902
+class MonitorHandler(ThreadHandlerInterface): # pylint: disable=R0902
     # telemetry
     EVENT_COLLECTION_PERIOD = datetime.timedelta(minutes=1)
     # host plugin
