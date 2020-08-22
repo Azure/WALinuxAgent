@@ -348,7 +348,8 @@ sys.stderr.write("{1}")
 
         self.assertListEqual(files_before, files_after, "Not all temporary files were deleted. File list: {0}".format(files_after))
 
-    def test_it_should_raise_an_exception_when_the_command_times_out(self):
+    # R0914: "Too many local variables" - The use of locals in this function is currently acceptable.
+    def test_it_should_raise_an_exception_when_the_command_times_out(self):  # pylint: disable=R0914
         extension_error_code = ExtensionErrorCodes.PluginHandlerScriptTimedout
         stdout = "stdout" * 7
         stderr = "stderr" * 7
@@ -375,11 +376,10 @@ with open("{2}", "w") as file:
 '''.format(stdout, stderr, signal_file))
 
         # mock time.sleep to wait for the signal file (launch_command implements the time out using polling and sleep)
-        original_sleep = time.sleep
-
         def sleep(seconds):
             if not os.path.exists(signal_file):
-                original_sleep(seconds)
+                sleep.original_sleep(seconds)
+        sleep.original_sleep = time.sleep
 
         timeout = 60
 
@@ -401,8 +401,19 @@ with open("{2}", "w") as file:
             # the timeout period should have elapsed
             self.assertGreaterEqual(mock_sleep.call_count, timeout)
 
-            # the command should have been terminated
-            self.assertFalse(LaunchCommandTestCase._find_process(command), "The command was not terminated")
+            # The command should have been terminated.
+            # The /proc file system may still include the process when we do this check so we try a few times after a short delay; note that we
+            # are mocking sleep, so we need to use the original implementation.
+            terminated = False
+            i = 0
+            while not terminated and i < 4:
+                if not LaunchCommandTestCase._find_process(command):
+                    terminated = True
+                else:
+                    sleep.original_sleep(0.25)
+                i += 1
+
+            self.assertTrue(terminated, "The command was not terminated")
 
         # as a check for the test itself, verify it completed in just a few seconds
         self.assertLessEqual(time.time() - start_time, 5)
