@@ -224,8 +224,8 @@ class MonitorHandler(ThreadHandlerInterface): # pylint: disable=R0902
     def is_alive(self):
         return self.event_thread is not None and self.event_thread.is_alive()
 
-    # pylint: disable=arguments-differ - This is a special case, we need to init_data only when run first time.
-    def start(self, init_data=False):
+    # W0221: arguments-differ - This is a special case, we need to init_data only when run first time.
+    def start(self, init_data=False):   # pylint: disable=arguments-differ
         self.event_thread = threading.Thread(target=self.daemon, args=(init_data,))
         self.event_thread.setDaemon(True)
         self.event_thread.setName(self.get_thread_name())
