@@ -413,7 +413,7 @@ class UpdateHandler(object): # pylint: disable=R0902
         try:
             if not self._is_clean_start:
                 msg = u"Agent did not terminate cleanly: {0}".format(
-                            fileutil.read_file(self._sentinel_file_path())) # pylint: disable=C0330
+                            fileutil.read_file(self._sentinel_file_path())) 
                 logger.info(msg)
                 add_event(
                     AGENT_NAME,
@@ -595,7 +595,7 @@ class UpdateHandler(object): # pylint: disable=R0902
     def _load_agents(self):
         path = os.path.join(conf.get_lib_dir(), "{0}-*".format(AGENT_NAME))
         return [GuestAgent(path=agent_dir)
-                        for agent_dir in glob.iglob(path) if os.path.isdir(agent_dir)] # pylint: disable=C0330
+                        for agent_dir in glob.iglob(path) if os.path.isdir(agent_dir)] 
 
     def _partition(self):
         return int(fileutil.read_file(self._partition_file))
@@ -694,7 +694,7 @@ class UpdateHandler(object): # pylint: disable=R0902
                             if m.family == family and len(m.versionsManifestUris) > 0]
             if len(manifests) == 0: # pylint: disable=len-as-condition
                 logger.verbose(u"Incarnation {0} has no {1} agent updates",
-                                etag, family) # pylint: disable=C0330
+                                etag, family) 
                 return False
 
             pkg_list = protocol.get_vmagent_pkgs(manifests[0])
@@ -846,7 +846,7 @@ class GuestAgent(object):
             self.mark_failure(is_fatal=os.path.isfile(self.get_agent_pkg_path()))
 
             msg = u"Agent {0} install failed with exception: {1}".format(
-                        self.name, ustr(e)) # pylint: disable=C0330
+                        self.name, ustr(e)) 
             detailed_msg = '{0} {1}'.format(msg, traceback.extract_tb(get_traceback(e)))
             add_event(
                 AGENT_NAME,
@@ -1046,9 +1046,9 @@ class GuestAgent(object):
             self.name,
             self.get_agent_manifest_path())
         logger.verbose(u"Successfully loaded Agent {0} {1}: {2}",
-            self.name, # pylint: disable=C0330
-            AGENT_MANIFEST_FILE, # pylint: disable=C0330
-            ustr(self.manifest.data)) # pylint: disable=C0330
+            self.name, 
+            AGENT_MANIFEST_FILE, 
+            ustr(self.manifest.data)) 
         return
 
     def _unpack(self): # pylint: disable=R1711
@@ -1060,7 +1060,7 @@ class GuestAgent(object):
 
         except Exception as e: # pylint: disable=C0103
             fileutil.clean_ioerror(e,
-                paths=[self.get_agent_dir(), self.get_agent_pkg_path()]) # pylint: disable=C0330
+                paths=[self.get_agent_dir(), self.get_agent_pkg_path()]) 
 
             msg = u"Exception unpacking Agent {0} from {1}: {2}".format(
                 self.name,

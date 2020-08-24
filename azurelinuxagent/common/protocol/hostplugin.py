@@ -56,7 +56,7 @@ _HEADER_ARTIFACT_MANIFEST_LOCATION = "x-ms-artifact-manifest-location"
 MAXIMUM_PAGEBLOB_PAGE_SIZE = 4 * 1024 * 1024  # Max page size: 4MB
 
 
-class HostPluginProtocol(object):
+class HostPluginProtocol(object): # pylint: disable=R0902
     _is_default_channel = False
 
     FETCH_REPORTING_PERIOD = datetime.timedelta(minutes=1)
@@ -141,7 +141,7 @@ class HostPluginProtocol(object):
             else:
                 return_val = ustr(remove_bom(response.read()), encoding='utf-8')
                 is_healthy = True
-        except HttpError as e:
+        except HttpError as e: # pylint: disable=C0103
             logger.error("HostGAPlugin: Exception Get API versions: {0}".format(e))
 
         self.health_service.report_host_plugin_versions(is_healthy=is_healthy, response=error_response)
@@ -232,7 +232,7 @@ class HostPluginProtocol(object):
                                      data=content,
                                      headers=self._build_log_headers())
 
-        if restutil.request_failed(response):
+        if restutil.request_failed(response): # pylint: disable=R1720
             error_response = restutil.read_response_error(response)
             raise HttpError("HostGAPlugin: Upload VM logs failed: {0}".format(error_response))
 
@@ -269,7 +269,7 @@ class HostPluginProtocol(object):
                                          bytearray(status_blob.data, encoding='utf-8')),
                                      headers=self._build_status_headers())
 
-        if restutil.request_failed(response):
+        if restutil.request_failed(response): # pylint: disable=R1720
             error_response = restutil.read_response_error(response)
             is_healthy = not restutil.request_failed_at_hostplugin(response)
             self.report_status_health(is_healthy=is_healthy, response=error_response)
@@ -294,7 +294,7 @@ class HostPluginProtocol(object):
                                          status_blob.get_page_blob_create_headers(status_size)),
                                      headers=self._build_status_headers())
 
-        if restutil.request_failed(response):
+        if restutil.request_failed(response): # pylint: disable=R1720
             error_response = restutil.read_response_error(response)
             is_healthy = not restutil.request_failed_at_hostplugin(response)
             self.report_status_health(is_healthy=is_healthy, response=error_response)
@@ -373,7 +373,7 @@ class HostPluginProtocol(object):
         }
 
     def _base64_encode(self, data):
-        s = base64.b64encode(bytes(data))
+        s = base64.b64encode(bytes(data)) # pylint: disable=C0103
         if PY_VERSION_MAJOR > 2:
             return s.decode('utf-8')
         return s

@@ -29,16 +29,16 @@ class TestHealthService(AgentTestCase):
         is_healthy = not restutil.request_failed_at_hostplugin(response)
         self.assertEqual(expected_healthy, is_healthy)
 
-    def assert_observation(self, call_args, name, is_healthy, value, description):
+    def assert_observation(self, call_args, name, is_healthy, value, description): # pylint: disable=too-many-locals,too-many-arguments
         endpoint = call_args[0][0]
         content = call_args[0][1]
 
-        jo = json.loads(content)
+        jo = json.loads(content) # pylint: disable=invalid-name
         api = jo['Api']
         source = jo['Source']
         version = jo['Version']
         obs = jo['Observations']
-        fo = obs[0]
+        fo = obs[0] # pylint: disable=invalid-name
         obs_name = fo['ObservationName']
         obs_healthy = fo['IsHealthy']
         obs_value = fo['Value']
@@ -56,7 +56,7 @@ class TestHealthService(AgentTestCase):
         self.assertEqual(description, obs_description)
 
     def assert_telemetry(self, call_args, response=''):
-        args, kw_args = call_args
+        args, kw_args = call_args # pylint: disable=unused-variable
         self.assertFalse(kw_args['is_success'])
         self.assertEqual('HealthObservation', kw_args['op'])
         obs = json.loads(kw_args['message'])
@@ -75,12 +75,12 @@ class TestHealthService(AgentTestCase):
         except ValueError:
             pass
 
-        o = Observation(name='Name', is_healthy=True, value=None, description=None)
+        o = Observation(name='Name', is_healthy=True, value=None, description=None) # pylint: disable=invalid-name
         self.assertEqual('', o.value)
         self.assertEqual('', o.description)
 
         long_str = 's' * 200
-        o = Observation(name=long_str, is_healthy=True, value=long_str, description=long_str)
+        o = Observation(name=long_str, is_healthy=True, value=long_str, description=long_str) # pylint: disable=invalid-name
         self.assertEqual(200, len(o.name))
         self.assertEqual(200, len(o.value))
         self.assertEqual(200, len(o.description))
@@ -208,7 +208,7 @@ class TestHealthService(AgentTestCase):
 
         # make 100 observations
         for i in range(0, 100):
-            health_service._observe(is_healthy=True, name='{0}'.format(i))
+            health_service._observe(is_healthy=True, name='{0}'.format(i)) # pylint: disable=protected-access
 
         # ensure we keep only 10
         self.assertEqual(10, len(health_service.observations))

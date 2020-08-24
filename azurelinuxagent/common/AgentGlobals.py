@@ -1,4 +1,4 @@
-# Microsoft Azure Linux Agent
+# Microsoft Azure Linux Agent # pylint: disable=C0103
 #
 # Copyright 2020 Microsoft Corporation
 #

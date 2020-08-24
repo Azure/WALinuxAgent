@@ -23,7 +23,7 @@ from tests.tools import AgentTestCase, data_dir, patch
 
 
 def raise_ioerror(*_):
-    e = IOError()
+    e = IOError() # pylint: disable=invalid-name
     from errno import ENOENT
     e.errno = ENOENT
     raise e
@@ -62,12 +62,12 @@ class TestProcessInfo(AgentTestCase):
         patch_read_file.read_file.side_effect = raise_ioerror
         # No such file exists; _get_proc_cmdline throws exception.
         with self.assertRaises(IOError):
-            ProcessInfo._get_proc_cmdline(1000)
+            ProcessInfo._get_proc_cmdline(1000) # pylint: disable=protected-access
 
         patch_read_file.read_file.side_effect = raise_exception
         # Other exception; _get_proc_cmdline throws exception.
         with self.assertRaises(ProcessInfoException):
-            ProcessInfo._get_proc_cmdline(1000)
+            ProcessInfo._get_proc_cmdline(1000) # pylint: disable=protected-access
 
     @patch("azurelinuxagent.common.resourceusage.fileutil")
     def test_get_proc_comm(self, patch_read_file):
@@ -83,4 +83,4 @@ class TestProcessInfo(AgentTestCase):
         patch_read_file.read_file.side_effect = raise_exception
         # Other exception; _get_proc_cmdline throws exception.
         with self.assertRaises(ProcessInfoException):
-            ProcessInfo._get_proc_comm(1000)
+            ProcessInfo._get_proc_comm(1000) # pylint: disable=protected-access

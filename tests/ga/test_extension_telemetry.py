@@ -23,7 +23,7 @@ from azurelinuxagent.common.utils import fileutil, textutil
 from azurelinuxagent.ga.extension_telemetry import ExtensionEventSchema, ProcessExtensionTelemetry
 from tests.protocol.mocks import mock_wire_protocol, HttpRequestPredicates, MockHttpResponse
 from tests.protocol.mockwiredata import DATA_FILE
-from tests.tools import AgentTestCase, clear_singleton_instances, data_dir, skip_if_predicate_true
+from tests.tools import AgentTestCase, clear_singleton_instances, data_dir, skip_if_predicate_true # pylint: disable=unused-import
 
 
 class TestExtensionTelemetryHandler(AgentTestCase, HttpRequestPredicates):
@@ -66,7 +66,7 @@ class TestExtensionTelemetryHandler(AgentTestCase, HttpRequestPredicates):
             raise OSError("Test Events file {0} not found".format(test_events_file_path))
 
         try:
-            with open(test_events_file_path, "rb") as fd:
+            with open(test_events_file_path, "rb") as fd: # pylint: disable=invalid-name
                 event_data = fd.read().decode("utf-8")
 
             # Parse the string and get the list of events
@@ -75,7 +75,7 @@ class TestExtensionTelemetryHandler(AgentTestCase, HttpRequestPredicates):
             if not isinstance(events, list):
                 events = [events]
 
-        except Exception as e:
+        except Exception as e: # pylint: disable=invalid-name
             print("Error parsing json file: {0}".format(e))
             return 0
 
@@ -91,7 +91,7 @@ class TestExtensionTelemetryHandler(AgentTestCase, HttpRequestPredicates):
             test_events_paths = [events_path]
 
         extension_names = {}
-        for i in range(no_of_extensions):
+        for i in range(no_of_extensions): # pylint: disable=unused-variable
             ext_name = "Microsoft.OSTCExtensions.{0}".format(''.join(random.sample(string.ascii_letters, no_of_chars)))
             no_of_good_events = 0
 
@@ -114,12 +114,12 @@ class TestExtensionTelemetryHandler(AgentTestCase, HttpRequestPredicates):
     @staticmethod
     def _replace_in_file(file_path, replace_from, replace_to):
 
-        with open(file_path, 'r') as f:
+        with open(file_path, 'r') as f: # pylint: disable=invalid-name
             content = f.read()
 
         content = content.replace(replace_from, replace_to)
 
-        with open(file_path, 'w') as f:
+        with open(file_path, 'w') as f: # pylint: disable=invalid-name
             f.write(content)
 
     @staticmethod
@@ -206,7 +206,7 @@ class TestExtensionTelemetryHandler(AgentTestCase, HttpRequestPredicates):
                                                                                                              min_count))
     @staticmethod
     def _get_ustr_from_event_body(body):
-        return body if (body is None or type(body) is ustr) else textutil.str_to_encoded_ustr(body)
+        return body if (body is None or type(body) is ustr) else textutil.str_to_encoded_ustr(body) # pylint: disable=unidiomatic-typecheck
 
     @staticmethod
     def _is_string_in_event_body(event_body, expected_string):
@@ -362,7 +362,7 @@ class TestExtensionTelemetryHandler(AgentTestCase, HttpRequestPredicates):
         max_len = 100
         no_of_extensions = 2
         with patch("azurelinuxagent.ga.extension_telemetry.ProcessExtensionTelemetry._EXTENSION_EVENT_MAX_MSG_LEN", max_len):
-            handler_name_with_count, event_body = self._setup_and_assert_tests_for_max_sizes()
+            handler_name_with_count, event_body = self._setup_and_assert_tests_for_max_sizes() # pylint: disable=unused-variable
             context1_vals = self._get_param_value_from_event_body_if_exists(event_body,
                                                                             GuestAgentGenericLogsSchema.Context1)
             self.assertEqual(no_of_extensions, len(context1_vals),
@@ -392,7 +392,7 @@ class TestExtensionTelemetryHandler(AgentTestCase, HttpRequestPredicates):
                 pattern = r'Skipping file:\s*{0}/(?P<name>.+?)/{1}.+'.format(conf.get_ext_log_dir(), EVENTS_DIRECTORY)
                 self._assert_event_reported(mock_event, handler_name_with_count, pattern)
 
-    def test_it_should_map_extension_event_json_correctly_to_telemetry_event(self):
+    def test_it_should_map_extension_event_json_correctly_to_telemetry_event(self): # pylint: disable=too-many-locals
 
         # EventName maps to HandlerName + '-' + Version from event file
         expected_mapping = {
@@ -509,7 +509,7 @@ class TestExtensionTelemetryHandler(AgentTestCase, HttpRequestPredicates):
                             ExtensionEventSchema.Message.lower(): 2,
                             ExtensionEventSchema.Version.lower(): 3
                         }
-                        for m in msg:
+                        for m in msg: # pylint: disable=invalid-name
                             match = re.search(patt, m)
                             self.assertIsNotNone(match, "No InvalidExtensionEventError errors reported")
                             self.assertEqual(match.group("reason").strip(), InvalidExtensionEventError.MissingKeyError,
