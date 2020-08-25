@@ -81,7 +81,7 @@ class TestCollectLogs(AgentTestCase, HttpRequestPredicates):
         AgentTestCase.tearDown(self)
 
     def _create_dummy_archive(self, size=1024):
-        with open(self.archive_path, "wb") as f:
+        with open(self.archive_path, "wb") as f: # pylint: disable=C0103
             f.truncate(size)
 
     def test_it_should_invoke_all_periodic_operations(self):
@@ -111,33 +111,33 @@ class TestCollectLogs(AgentTestCase, HttpRequestPredicates):
                 with patch("azurelinuxagent.ga.collect_logs.conf.get_collect_logs", return_value=False):
                     collect_logs_handler.run_and_wait()
 
-        self.assertEquals(patch_collect_and_send_logs.call_count, 0, "Log collection should not have been enabled")
+        self.assertEqual(patch_collect_and_send_logs.call_count, 0, "Log collection should not have been enabled")
 
         with _create_collect_logs_handler() as collect_logs_handler:
             with patch("azurelinuxagent.ga.collect_logs.os.path.exists", return_value=True):
                 with patch("azurelinuxagent.ga.collect_logs.conf.get_collect_logs", return_value=False):
                     collect_logs_handler.run_and_wait()
 
-        self.assertEquals(patch_collect_and_send_logs.call_count, 0, "Log collection should not have been enabled")
+        self.assertEqual(patch_collect_and_send_logs.call_count, 0, "Log collection should not have been enabled")
 
         with _create_collect_logs_handler() as collect_logs_handler:
             with patch("azurelinuxagent.ga.collect_logs.os.path.exists", return_value=False):
                 with patch("azurelinuxagent.ga.collect_logs.conf.get_collect_logs", return_value=True):
                     collect_logs_handler.run_and_wait()
 
-        self.assertEquals(patch_collect_and_send_logs.call_count, 0, "Log collection should not have been enabled")
+        self.assertEqual(patch_collect_and_send_logs.call_count, 0, "Log collection should not have been enabled")
 
         with _create_collect_logs_handler() as collect_logs_handler:
             collect_logs_handler.run_and_wait()
 
-        self.assertEquals(patch_collect_and_send_logs.call_count, 1, "Log collection should have been enabled")
+        self.assertEqual(patch_collect_and_send_logs.call_count, 1, "Log collection should have been enabled")
 
     def test_log_collection_is_invoked_with_resource_limits(self):
         with _create_collect_logs_handler() as collect_logs_handler:
             with patch("azurelinuxagent.ga.collect_logs.shellutil.run_command") as patch_run_command:
                 collect_logs_handler.run_and_wait()
 
-        args, kwargs = patch_run_command.call_args
+        args, _ = patch_run_command.call_args
         self.assertIn("systemd-run", args[0], "The log collector should have been invoked with systemd-run")
         self.assertIn("--property=CPUAccounting=1", args[0], "The log collector should have been invoked with CPUAccounting turned on")
         self.assertIn("--property=MemoryAccounting=1", args[0], "The log collector should have been invoked with MemoryAccounting turned on")
@@ -165,9 +165,9 @@ class TestCollectLogs(AgentTestCase, HttpRequestPredicates):
                 protocol.set_http_handlers(http_put_handler=http_put_handler)
 
                 collect_logs_handler.run_and_wait()
-                self.assertEquals(http_put_handler.counter, 1, "The PUT API to upload logs should have been called once")
+                self.assertEqual(http_put_handler.counter, 1, "The PUT API to upload logs should have been called once")
                 self.assertTrue(os.path.exists(self.archive_path), "The archive file should exist on disk")
-                self.assertEquals(archive_size, len(http_put_handler.archive), "The archive file should have {0} bytes, not {1}".format(archive_size, len(http_put_handler.archive)))
+                self.assertEqual(archive_size, len(http_put_handler.archive), "The archive file should have {0} bytes, not {1}".format(archive_size, len(http_put_handler.archive)))
 
     def test_it_does_not_upload_logs_when_collection_is_unsuccessful(self):
         with _create_collect_logs_handler() as collect_logs_handler:
@@ -184,4 +184,4 @@ class TestCollectLogs(AgentTestCase, HttpRequestPredicates):
 
                 collect_logs_handler.run_and_wait()
                 self.assertTrue(os.path.exists(self.archive_path), "The archive file should exist on disk")
-                self.assertEquals(http_put_handler.counter, 0, "The PUT API to upload logs shouldn't have been called")
+                self.assertEqual(http_put_handler.counter, 0, "The PUT API to upload logs shouldn't have been called")

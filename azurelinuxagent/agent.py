@@ -159,11 +159,11 @@ class Agent(object):
             print("Running log collector mode normal")
 
         try:
-            lc = LogCollector(log_collector_mode == "full")
-            archive = lc.collect_logs()
+            log_collector = LogCollector(log_collector_mode == "full")
+            archive = log_collector.collect_logs()
             print("Log collection successfully completed. Archive can be found at {0} "
                   "and detailed log output can be found at {1}".format(archive, OUTPUT_RESULTS_FILE_PATH))
-        except Exception as e:
+        except Exception as e: # pylint: disable=C0103
             print("Log collection completed unsuccessfully. Error: {0}".format(ustr(e)))
             print("Detailed log output can be found at {0}".format(OUTPUT_RESULTS_FILE_PATH))
             sys.exit(1)
@@ -229,7 +229,7 @@ def parse_args(sys_args): # pylint: disable=R0912
                 usage()
                 sys.exit(1)
 
-        m = re.match("^(?:[-/]*)-mode:([\w/\.\-_]+)", arg)
+        m = re.match("^(?:[-/]*)-mode:([\w/\.\-_]+)", arg) # pylint: disable=W1401,C0103
         if m is not None:
             log_collector_mode = m.group(1)
             if log_collector_mode != "full":

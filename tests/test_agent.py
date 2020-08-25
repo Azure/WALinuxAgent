@@ -182,27 +182,27 @@ class TestAgent(AgentTestCase):
 
     def test_checks_log_collector_mode(self):
         # Specify full mode
-        c, f, v, d, cfp, lcm = parse_args(["-collect-logs", "-mode:full"])
+        c, f, v, d, cfp, lcm = parse_args(["-collect-logs", "-mode:full"]) # pylint: disable=unused-variable,invalid-name
         self.assertEqual(c, "collect-logs")
         self.assertEqual(lcm, "full")
 
         # Defaults to None if mode not specified
-        c, f, v, d, cfp, lcm = parse_args(["-collect-logs"])
+        c, f, v, d, cfp, lcm = parse_args(["-collect-logs"]) # pylint: disable=unused-variable,invalid-name
         self.assertEqual(c, "collect-logs")
         self.assertEqual(lcm, None)
 
     @patch("sys.stderr")
     @patch("sys.exit", side_effect=Exception)
-    def test_rejects_invalid_log_collector_mode(self, mock_exit, mock_stderr):
+    def test_rejects_invalid_log_collector_mode(self, mock_exit, mock_stderr): # pylint: disable=unused-argument
         try:
-            c, f, v, d, cfp, lcm = parse_args(["-collect-logs", "-mode:invalid"])
-            self.assertTrue(False)
+            c, f, v, d, cfp, lcm = parse_args(["-collect-logs", "-mode:invalid"]) # pylint: disable=unused-variable,invalid-name
+            self.assertTrue(False) # pylint: disable=redundant-unittest-assert
         except Exception:
             self.assertEqual(mock_exit.call_count, 1)
 
     @patch("os.path.exists", return_value=True)
     @patch("azurelinuxagent.common.logcollector.LogCollector")
-    def test_calls_collect_logs_with_proper_mode(self, mock_log_collector, *args):
+    def test_calls_collect_logs_with_proper_mode(self, mock_log_collector, *args): # pylint: disable=unused-argument
         agent = Agent(False, conf_file_path=os.path.join(data_dir, "test_waagent.conf"))
 
         agent.collect_logs("full")

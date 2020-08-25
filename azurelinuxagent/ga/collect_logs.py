@@ -68,7 +68,7 @@ class CollectLogsHandler(object):
         # 3) The python version must be greater than 2.6 in order to support the ZipFile library used when collecting.
         conf_enabled = conf.get_collect_logs()
         systemd_present = os.path.exists("/run/systemd/system/")
-        supported_python = (PY_VERSION_MAJOR == 2 and PY_VERSION_MINOR >= 7) or (PY_VERSION_MAJOR == 3)
+        supported_python = PY_VERSION_MINOR >= 7 if PY_VERSION_MAJOR == 2 else PY_VERSION_MAJOR == 3
         is_allowed = conf_enabled and systemd_present and supported_python
 
         if self.last_state != is_allowed:
@@ -129,14 +129,14 @@ class CollectLogsHandler(object):
 
             while not self.stopped():
                 try:
-                    for op in self._periodic_operations:
+                    for op in self._periodic_operations: # pylint: disable=C0103
                         op.run()
-                except Exception as e:
+                except Exception as e: # pylint: disable=C0103
                     logger.error("An error occurred in the log collection thread main loop; "
                                  "will skip the current iteration.\n{0}", ustr(e))
                 finally:
                     PeriodicOperation.sleep_until_next_operation(self._periodic_operations)
-        except Exception as e:
+        except Exception as e: # pylint: disable=C0103
             logger.error("An error occurred in the log collection thread; will exit the thread.\n{0}", ustr(e))
 
     def collect_and_send_logs(self):
@@ -183,7 +183,7 @@ class CollectLogsHandler(object):
                 is_success=True,
                 message=msg,
                 log_event=False)
-        except Exception as e:
+        except Exception as e: # pylint: disable=C0103
             duration = elapsed_milliseconds(start_time)
             msg = "Failed to collect logs. Elapsed time: {0} ms. Error: {1}".format(duration, ustr(e))
             # No need to log to the local log since we ran run_command with logging errors as enabled
@@ -200,7 +200,7 @@ class CollectLogsHandler(object):
 
     def _send_logs(self):
         try:
-            with open(COMPRESSED_ARCHIVE_PATH, "rb") as fh:
+            with open(COMPRESSED_ARCHIVE_PATH, "rb") as fh: # pylint: disable=C0103
                 archive_content = fh.read()
                 self.protocol.upload_logs(archive_content)
                 msg = "Successfully uploaded logs."
@@ -213,7 +213,7 @@ class CollectLogsHandler(object):
                     message=msg,
                     log_event=False)
 
-        except Exception as e:
+        except Exception as e: # pylint: disable=C0103
             msg = "Failed to upload logs. Error: {0}".format(ustr(e))
             logger.warn(msg)
             add_event(

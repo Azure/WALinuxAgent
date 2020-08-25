@@ -191,9 +191,9 @@ class LogCollector(object): # pylint: disable=R0903
 
     @staticmethod
     def _expand_parameters(manifest_data):
-        _LOGGER.info("Using {0} as $LIB_DIR".format(_AGENT_LIB_DIR)) # pylint: disable=W1202
-        _LOGGER.info("Using {0} as $LOG_DIR".format(_EXTENSION_LOG_DIR)) # pylint: disable=W1202
-        _LOGGER.info("Using {0} as $AGENT_LOG".format(_AGENT_LOG)) # pylint: disable=W1202
+        _LOGGER.info("Using %s as $LIB_DIR", _AGENT_LIB_DIR)
+        _LOGGER.info("Using %s as $LOG_DIR", _EXTENSION_LOG_DIR)
+        _LOGGER.info("Using %s as $AGENT_LOG", _AGENT_LOG)
 
         new_manifest = []
         for line in manifest_data:
@@ -300,16 +300,16 @@ class LogCollector(object): # pylint: disable=R0903
 
             if os.path.getsize(file_path) <= _FILE_SIZE_LIMIT:
                 final_files_to_collect.append(file_path)
-                _LOGGER.info("Adding file {0}, size {1} b".format(file_path, file_size))
+                _LOGGER.info("Adding file %s, size %s b", file_path, file_size)
             else:
                 truncated_file_path = self._truncate_large_file(file_path)
                 if truncated_file_path:
-                    _LOGGER.info("Adding truncated file {0}, size {1} b".format(truncated_file_path, file_size))
+                    _LOGGER.info("Adding truncated file %s, size %s b", truncated_file_path, file_size)
                     final_files_to_collect.append(truncated_file_path)
 
             total_uncompressed_size += file_size
 
-        _LOGGER.info("Uncompressed archive size is {0} b".format(total_uncompressed_size))
+        _LOGGER.info("Uncompressed archive size is %s b", total_uncompressed_size)
 
         return final_files_to_collect
 
@@ -337,7 +337,7 @@ class LogCollector(object): # pylint: disable=R0903
             self._create_base_dirs()
             LogCollector._reset_file(OUTPUT_RESULTS_FILE_PATH)
             start_time = datetime.utcnow()
-            _LOGGER.info("Starting log collection at {0}".format(start_time.strftime("%Y-%m-%dT%H:%M:%SZ")))
+            _LOGGER.info("Starting log collection at %s", start_time.strftime("%Y-%m-%dT%H:%M:%SZ"))
 
             files_to_collect = self._create_list_of_files_to_collect()
             _LOGGER.info("### Creating compressed archive ###")
@@ -348,19 +348,18 @@ class LogCollector(object): # pylint: disable=R0903
                     compressed_archive.write(file_to_collect.encode("utf-8"), arcname=archive_file_name)
 
                 compressed_archive_size = os.path.getsize(COMPRESSED_ARCHIVE_PATH)
-                _LOGGER.info("Successfully compressed files. "
-                             "Compressed archive size is {0} b".format(compressed_archive_size))
+                _LOGGER.info("Successfully compressed files. Compressed archive size is %s b", compressed_archive_size)
 
                 end_time = datetime.utcnow()
                 duration = end_time - start_time
                 elapsed_ms = int(((duration.days * 24 * 60 * 60 + duration.seconds) * 1000) + (duration.microseconds / 1000.0))
-                _LOGGER.info("Finishing log collection at {0}".format(end_time.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")))
-                _LOGGER.info("Elapsed time: {0} ms".format(elapsed_ms))
+                _LOGGER.info("Finishing log collection at %s", end_time.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ"))
+                _LOGGER.info("Elapsed time: %s ms", elapsed_ms)
 
                 compressed_archive.write(OUTPUT_RESULTS_FILE_PATH.encode("utf-8"), arcname="results.txt")
 
             return COMPRESSED_ARCHIVE_PATH
-        except Exception as e:
+        except Exception as e: # pylint: disable=C0103
             msg = "Failed to collect logs: {0}".format(ustr(e))
             _LOGGER.error(msg)
 
