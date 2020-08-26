@@ -245,7 +245,7 @@ class TestHostPlugin(HttpRequestPredicates, AgentTestCase): # pylint: disable=to
     @patch("azurelinuxagent.common.protocol.hostplugin.HostPluginProtocol.ensure_initialized", return_value=True)
     @patch("azurelinuxagent.common.protocol.wire.StatusBlob.upload", return_value=False)
     @patch("azurelinuxagent.common.protocol.hostplugin.HostPluginProtocol._put_page_blob_status")
-    def test_default_channel(self, patch_put, patch_upload, _):
+    def test_default_channel_for_status_upload(self, patch_put, patch_upload, _):
         """
         Status now defaults to HostPlugin. Validate that any errors on the public
         channel are ignored.  Validate that the default channel is never changed
@@ -269,9 +269,6 @@ class TestHostPlugin(HttpRequestPredicates, AgentTestCase): # pylint: disable=to
 
             # ensure the correct url is used
             self.assertEqual(sas_url, patch_put.call_args[0][0])
-
-            # ensure host plugin is not set as default
-            self.assertFalse(wire.HostPluginProtocol.is_default_channel())
 
     @patch("azurelinuxagent.common.protocol.hostplugin.HostPluginProtocol.ensure_initialized",
            return_value=True)
@@ -301,9 +298,6 @@ class TestHostPlugin(HttpRequestPredicates, AgentTestCase): # pylint: disable=to
 
             # ensure the correct url is used
             self.assertEqual(sas_url, patch_put.call_args[0][0])
-
-            # ensure host plugin is not set as default
-            self.assertFalse(wire.HostPluginProtocol.is_default_channel())
 
     @patch("azurelinuxagent.common.protocol.hostplugin.HostPluginProtocol.ensure_initialized",
            return_value=True)
@@ -336,9 +330,6 @@ class TestHostPlugin(HttpRequestPredicates, AgentTestCase): # pylint: disable=to
             # ensure the correct url is used
             self.assertEqual(sas_url, patch_put.call_args[0][0])
 
-            # ensure host plugin is not set as default
-            self.assertFalse(wire.HostPluginProtocol.is_default_channel())
-
     @patch("azurelinuxagent.common.protocol.hostplugin.HostPluginProtocol.ensure_initialized",
            return_value=True)
     @patch("azurelinuxagent.common.protocol.wire.StatusBlob.upload",
@@ -368,15 +359,11 @@ class TestHostPlugin(HttpRequestPredicates, AgentTestCase): # pylint: disable=to
             # ensure the correct url is used
             self.assertEqual(sas_url, patch_put.call_args[0][0])
 
-            # ensure host plugin is not set as default
-            self.assertFalse(wire.HostPluginProtocol.is_default_channel())
-
     @patch("azurelinuxagent.common.event.add_event")
     def test_put_status_error_reporting(self, patch_add_event):
         """
         Validate the telemetry when uploading status fails
         """
-        wire.HostPluginProtocol.set_default_channel(False)
         with patch.object(wire.StatusBlob, "upload", return_value=False):
             with self.create_mock_protocol() as wire_protocol:
                 wire_protocol_client = wire_protocol.client
@@ -392,8 +379,6 @@ class TestHostPlugin(HttpRequestPredicates, AgentTestCase): # pylint: disable=to
                         #
                         # The agent tries to upload using a direct connection, and that succeeds.
                         self.assertEqual(1, wire_protocol_client.status_blob.upload.call_count) # pylint: disable=no-member
-                        # The agent never touches the default protocol is this code path, so no change.
-                        self.assertFalse(wire.HostPluginProtocol.is_default_channel())
                         # The agent never logs telemetry event for direct fallback
                         self.assertEqual(1, patch_add_event.call_count)
                         self.assertEqual('ReportStatus', patch_add_event.call_args[1]['op'])
