@@ -72,12 +72,11 @@ class NSBSDOSUtil(FreeBSDOSUtil):
         logger.info("{0} SSH password-based authentication methods."
                     .format("Disabled" if disable_password else "Enabled"))
 
-    def useradd(self, username, expiration=None): # pylint: disable=R1711,W0221
+    def useradd(self, username, expiration=None, comment=None):
         """
         Create user account with 'username'
         """
         logger.warn("User creation disabled")
-        return
 
     def del_account(self, username):
         logger.warn("User deletion disabled")
