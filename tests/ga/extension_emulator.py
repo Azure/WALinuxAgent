@@ -161,7 +161,11 @@ class InvocationRecord:
             ))
 
 def _first_matching_emulator(emulators, name, version):
-    return next(filter(lambda ext: ext.matches(name, version), emulators))
+    for ext in emulators:
+        if ext.matches(name, version):
+            return ext
+    
+    raise StopIteration
 
 class ExtensionEmulator:
     """
