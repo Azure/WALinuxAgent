@@ -135,9 +135,9 @@ class TestProcessUtils(AgentTestCase):
 
                     # We're mocking sleep to avoid prolonging the test execution time, but we still want to make sure
                     # we're "waiting" the correct amount of time before killing the process and raising an exception
-                    self.assertEquals(mock_sleep.call_count, timeout) # pylint: disable=deprecated-method
+                    self.assertEqual(mock_sleep.call_count, timeout)
 
-                    self.assertEquals(context_manager.exception.code, ExtensionErrorCodes.PluginHandlerScriptTimedout) # pylint: disable=deprecated-method
+                    self.assertEqual(context_manager.exception.code, ExtensionErrorCodes.PluginHandlerScriptTimedout)
                     self.assertIn("Timeout({0})".format(timeout), ustr(context_manager.exception))
 
     def test_handle_process_completion_should_raise_on_nonzero_exit_code(self):
