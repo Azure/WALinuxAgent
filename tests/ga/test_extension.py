@@ -2736,8 +2736,8 @@ class TestCollectExtensionStatus(ExtensionTestCase):
         self.assertEqual(ext_status.status, ValidHandlerStatus.success)
         self.assertEqual(len(ext_status.substatusList), 1) # NUM OF SUBSTATUS PARSED
         for sub_status in ext_status.substatusList:
-            self.assertRegex(sub_status.name, '\[\{"status"\: \{"status": "success", "code": "1", "snapshotInfo": ' # pylint: disable=anomalous-backslash-in-string
-                                              '\[\{"snapshotUri":.*') # pylint: disable=anomalous-backslash-in-string
+            self.assertRegex(sub_status.name, r'\[\{"status"\: \{"status": "success", "code": "1", "snapshotInfo": '
+                                              r'\[\{"snapshotUri":.*')
             self.assertEqual(0, sub_status.code)
             self.assertRegex(sub_status.message, "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Vestibulum "
                                                  "non lacinia urna, sit amet venenatis orci.*")
@@ -2763,8 +2763,8 @@ class TestCollectExtensionStatus(ExtensionTestCase):
         self.assertEqual(ext_status.status, ValidHandlerStatus.success)
         self.assertEqual(len(ext_status.substatusList), 12)  # The original file has 41 substatus nodes.
         for sub_status in ext_status.substatusList:
-            self.assertRegex(sub_status.name, '\[\{"status"\: \{"status": "success", "code": "1", "snapshotInfo": ' # pylint: disable=anomalous-backslash-in-string
-                                              '\[\{"snapshotUri":.*') # pylint: disable=anomalous-backslash-in-string
+            self.assertRegex(sub_status.name, r'\[\{"status"\: \{"status": "success", "code": "1", "snapshotInfo": '
+                                              r'\[\{"snapshotUri":.*')
             self.assertEqual(0, sub_status.code)
             self.assertRegex(sub_status.message, "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Vestibulum "
                                                  "non lacinia urna, sit amet venenatis orci.*")

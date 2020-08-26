@@ -139,7 +139,7 @@ class CGroupConfiguratorSystemdTestCase(AgentTestCase):
             daemon_present = any("waagent -daemon" in command for (pid, command) in processes)
             self.assertTrue(daemon_present, "Could not find the daemon in the cgroup: [{0}]".format(processes))
 
-            extension_handler_present = any(re.search("(WALinuxAgent-.+\.egg|waagent) -run-exthandlers", command) for (pid, command) in processes) # pylint: disable=anomalous-backslash-in-string
+            extension_handler_present = any(re.search(r"(WALinuxAgent-.+\.egg|waagent) -run-exthandlers", command) for (pid, command) in processes)
             self.assertTrue(extension_handler_present, "Could not find the extension handler in the cgroup: [{0}]".format(processes))
 
     @patch('time.sleep', side_effect=lambda _: mock_sleep())
