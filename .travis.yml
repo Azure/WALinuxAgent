@@ -22,25 +22,25 @@ matrix:
       env:
         - >-
           NOSEOPTS="--verbose --with-timer" SETUPOPTS=""
-          PYLINTOPTS="--rcfile=2.7.pylintrc"
+          PYLINTOPTS="--rcfile=ci/2.7.pylintrc"
           PYLINTFILES="azurelinuxagent setup.py makepkg.py tests"
     - python: 3.4
       env:
         - >-
           NOSEOPTS="--verbose --with-timer" SETUPOPTS=""
-          PYLINTOPTS="--rcfile=2.7.pylintrc"
+          PYLINTOPTS="--rcfile=ci/2.7.pylintrc"
           PYLINTFILES="azurelinuxagent setup.py makepkg.py tests"
     - python: 3.6
       env:
         - >-
           NOSEOPTS="--verbose --with-timer" SETUPOPTS=""
-          PYLINTOPTS="--rcfile=3.6.pylintrc"
+          PYLINTOPTS="--rcfile=ci/3.6.pylintrc"
           PYLINTFILES="azurelinuxagent setup.py makepkg.py tests"
     - python: 3.7
       env:
         - >-
           NOSEOPTS="--verbose --with-timer" SETUPOPTS=""
-          PYLINTOPTS="--rcfile=3.6.pylintrc"
+          PYLINTOPTS="--rcfile=ci/3.6.pylintrc"
           PYLINTFILES="azurelinuxagent setup.py makepkg.py tests"
     - python: 3.8
       env:
@@ -49,7 +49,7 @@ matrix:
           --cover-min-percentage=60 --cover-branches
           --cover-package=azurelinuxagent --cover-xml"
           SETUPOPTS=""
-          PYLINTOPTS="--rcfile=3.6.pylintrc"
+          PYLINTOPTS="--rcfile=ci/3.6.pylintrc"
           PYLINTFILES="azurelinuxagent setup.py makepkg.py tests"
 
 install:
