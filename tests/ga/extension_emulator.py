@@ -67,7 +67,7 @@ class Actions(object):
         return return_code, fail_action
 
 
-def extension_emulator(name="OSTCExtensions.ExampleHandlerLinux", version="1.0.0",
+def extension_emulator(name="OSTCExtensions.ExampleHandlerLinux", version="1.0.0", # pylint: disable=too-many-arguments
     update_mode="UpdateWithInstall", report_heartbeat=False, continue_on_update_failure=False,
     install_action=Actions.succeed_action, uninstall_action=Actions.succeed_action, 
     enable_action=Actions.succeed_action, disable_action=Actions.succeed_action,
@@ -75,8 +75,8 @@ def extension_emulator(name="OSTCExtensions.ExampleHandlerLinux", version="1.0.0
     """
     Factory method for ExtensionEmulator objects with sensible defaults.
     """
-    # Linter reports too many arguments, but I think in this case being able to specify all the defaults
-    # is useful.
+    # Linter reports too many arguments, but this isn't an issue because all are defaulted;
+    # no caller will have to actually provide all of the arguments listed.
     
     return ExtensionEmulator(name, version, update_mode, report_heartbeat, continue_on_update_failure,
         install_action, uninstall_action, enable_action, disable_action, update_action)
@@ -168,12 +168,15 @@ class ExtensionEmulator:
     A wrapper class for the possible actions and options that an extension might support.
     """
 
-    def __init__(self, name, version,
+    def __init__(self, name, version, # pylint: disable=too-many-arguments
         update_mode, report_heartbeat,
         continue_on_update_failure,
         install_action, uninstall_action,
         enable_action, disable_action,
         update_action):
+        # Linter reports too many arguments, but this constructor has its access mediated by
+        # a factory method; the calls affected by the number of arguments here is very
+        # limited in scope. 
 
         self.name = name
         self.version = version
@@ -182,7 +185,7 @@ class ExtensionEmulator:
         self.report_heartbeat = report_heartbeat
         self.continue_on_update_failure = continue_on_update_failure
 
-        self.actions = {
+        self._actions = {
             ExtensionCommandNames.INSTALL: ExtensionEmulator._extend_func(install_action),
             ExtensionCommandNames.UNINSTALL: ExtensionEmulator._extend_func(uninstall_action),
             ExtensionCommandNames.UPDATE: ExtensionEmulator._extend_func(update_action),
@@ -190,7 +193,24 @@ class ExtensionEmulator:
             ExtensionCommandNames.DISABLE: ExtensionEmulator._extend_func(disable_action)
         }
 
-        self.status_blobs = []
+        self._status_blobs = []
+
+    @property
+    def actions(self):
+        """
+        A read-only property designed to allow inspection for the emulated extension's
+        actions. `actions` maps an ExtensionCommandNames object to a mock wrapping the
+        function this emulator was initialized with.
+        """
+        return self._actions
+
+    @property
+    def status_blobs(self):
+        """
+        A property for storing and retreiving the status blobs for the extension this object
+        is emulating that are uploaded to the HTTP PUT /status endpoint.
+        """
+        return self._status_blobs
     
     @staticmethod
     def _extend_func(func):
