@@ -21,4 +21,4 @@ from tests.tools import AgentTestCase, patch # pylint: disable=unused-import
 
 class DefaultOsUtilTestCase(AgentTestCase):
     def test_default_service_name(self):
-        self.assertEquals(DefaultOSUtil().get_service_name(), "waagent") # pylint: disable=deprecated-method
+        self.assertEqual(DefaultOSUtil().get_service_name(), "waagent")

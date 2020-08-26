@@ -114,8 +114,8 @@ class TestExtensionCleanup(AgentTestCase):
                          "All ExtensionHandlers: {0}".format(handler_statuses))
         for ext_handler_status in handler_statuses:
             debug_info = "ExtensionHandler: {0}".format(ext_handler_status)
-            self.assertEquals(expected_status, ext_handler_status['status'], debug_info) # pylint: disable=deprecated-method
-            self.assertEquals(version, ext_handler_status['handlerVersion'], debug_info) # pylint: disable=deprecated-method
+            self.assertEqual(expected_status, ext_handler_status['status'], debug_info)
+            self.assertEqual(version, ext_handler_status['handlerVersion'], debug_info)
         return
 
     @contextlib.contextmanager
@@ -260,8 +260,8 @@ class TestHandlerStateMigration(AgentTestCase):
 
         migrate_handler_state()
 
-        self.assertEquals(self.ext_handler_i.get_handler_state(), self.handler_state) # pylint: disable=deprecated-method
-        self.assertEquals( # pylint: disable=deprecated-method
+        self.assertEqual(self.ext_handler_i.get_handler_state(), self.handler_state)
+        self.assertEqual(
             self.ext_handler_i.get_handler_status().status,
             self.handler_status.status)
         return
@@ -294,21 +294,21 @@ class TestHandlerStateMigration(AgentTestCase):
         status = "NotReady"
         code = 1
         message = "A message"
-        self.assertNotEquals(state, self.handler_state) # pylint: disable=deprecated-method
-        self.assertNotEquals(status, self.handler_status.status) # pylint: disable=deprecated-method
-        self.assertNotEquals(code, self.handler_status.code) # pylint: disable=deprecated-method
-        self.assertNotEquals(message, self.handler_status.message) # pylint: disable=deprecated-method
+        self.assertNotEqual(state, self.handler_state)
+        self.assertNotEqual(status, self.handler_status.status)
+        self.assertNotEqual(code, self.handler_status.code)
+        self.assertNotEqual(message, self.handler_status.message)
 
         self.ext_handler_i.set_handler_state(state)
         self.ext_handler_i.set_handler_status(status=status, code=code, message=message)
 
         migrate_handler_state()
 
-        self.assertEquals(self.ext_handler_i.get_handler_state(), state) # pylint: disable=deprecated-method
+        self.assertEqual(self.ext_handler_i.get_handler_state(), state)
         handler_status = self.ext_handler_i.get_handler_status()
-        self.assertEquals(handler_status.status, status) # pylint: disable=deprecated-method
-        self.assertEquals(handler_status.code, code) # pylint: disable=deprecated-method
-        self.assertEquals(handler_status.message, message) # pylint: disable=deprecated-method
+        self.assertEqual(handler_status.status, status)
+        self.assertEqual(handler_status.code, code)
+        self.assertEqual(handler_status.message, message)
         return
 
     def test_set_handler_status_ignores_none_content(self):
@@ -380,13 +380,13 @@ class TestExtension(ExtensionTestCase):
         self.assertTrue(report_vm_status.called)
         args, kw = report_vm_status.call_args # pylint: disable=unused-variable,invalid-name
         vm_status = args[0]
-        self.assertNotEquals(0, len(vm_status.vmAgent.extensionHandlers)) # pylint: disable=deprecated-method
+        self.assertNotEqual(0, len(vm_status.vmAgent.extensionHandlers))
         handler_status = vm_status.vmAgent.extensionHandlers[0]
-        self.assertEquals(expected_status, handler_status.status) # pylint: disable=deprecated-method
-        self.assertEquals(expected_handler_name, # pylint: disable=deprecated-method
+        self.assertEqual(expected_status, handler_status.status)
+        self.assertEqual(expected_handler_name,
                           handler_status.name)
-        self.assertEquals(version, handler_status.version) # pylint: disable=deprecated-method
-        self.assertEquals(expected_ext_count, len(handler_status.extensions)) # pylint: disable=deprecated-method
+        self.assertEqual(version, handler_status.version)
+        self.assertEqual(expected_ext_count, len(handler_status.extensions))
         return
 
     def _assert_ext_pkg_file_status(self, expected_to_be_present=True, extension_version="1.0.0",
@@ -401,7 +401,7 @@ class TestExtension(ExtensionTestCase):
         self.assertTrue(report_vm_status.called)
         args, kw = report_vm_status.call_args # pylint: disable=unused-variable,invalid-name
         vm_status = args[0]
-        self.assertEquals(0, len(vm_status.vmAgent.extensionHandlers)) # pylint: disable=deprecated-method
+        self.assertEqual(0, len(vm_status.vmAgent.extensionHandlers))
         return
 
     def _create_mock(self, test_data, mock_http_get, MockCryptUtil, *args): # pylint: disable=unused-argument,invalid-name
@@ -832,7 +832,7 @@ class TestExtension(ExtensionTestCase):
         status_path = os.path.join(conf.get_lib_dir(), AGENT_STATUS_FILE)
         actual_status_json = json.loads(fileutil.read_file(status_path))
 
-        self.assertEquals(expected_status_json, actual_status_json) # pylint: disable=deprecated-method
+        self.assertEqual(expected_status_json, actual_status_json)
 
     def test_ext_handler_rollingupgrade(self, *args):
         # Test enable scenario.
@@ -939,7 +939,7 @@ class TestExtension(ExtensionTestCase):
 
         exthandlers_handler.run()
 
-        self.assertEquals(0, mock_add_event.call_count) # pylint: disable=deprecated-method
+        self.assertEqual(0, mock_add_event.call_count)
 
     def test_it_should_create_extension_events_dir_and_set_handler_environment_only_if_extension_telemetry_enabled(self, *args):
 
@@ -1026,11 +1026,11 @@ class TestExtension(ExtensionTestCase):
 
         mock_error_state.return_value = True
         exthandlers_handler.run()
-        self.assertEquals(5, mock_add_event.call_count) # pylint: disable=deprecated-method
+        self.assertEqual(5, mock_add_event.call_count)
         args, kw = mock_add_event.call_args # pylint: disable=invalid-name
-        self.assertEquals(False, kw['is_success']) # pylint: disable=deprecated-method
+        self.assertEqual(False, kw['is_success'])
         self.assertTrue("Failed to report vm agent status" in kw['message'])
-        self.assertEquals("ReportStatusExtended", kw['op']) # pylint: disable=deprecated-method
+        self.assertEqual("ReportStatusExtended", kw['op'])
 
     @patch('azurelinuxagent.ga.exthandlers.add_event')
     def test_ext_handler_report_status_resource_gone(self, mock_add_event, *args):
@@ -1039,11 +1039,11 @@ class TestExtension(ExtensionTestCase):
         protocol.report_vm_status = Mock(side_effect=ResourceGoneError)
 
         exthandlers_handler.run()
-        self.assertEquals(4, mock_add_event.call_count) # pylint: disable=deprecated-method
+        self.assertEqual(4, mock_add_event.call_count)
         args, kw = mock_add_event.call_args # pylint: disable=invalid-name
-        self.assertEquals(False, kw['is_success']) # pylint: disable=deprecated-method
+        self.assertEqual(False, kw['is_success'])
         self.assertTrue("ResourceGoneError" in kw['message'])
-        self.assertEquals("ExtensionProcessing", kw['op']) # pylint: disable=deprecated-method
+        self.assertEqual("ExtensionProcessing", kw['op'])
 
     @patch('azurelinuxagent.common.errorstate.ErrorState.is_triggered')
     @patch('azurelinuxagent.ga.exthandlers.ExtHandlerInstance.report_event')
@@ -1056,9 +1056,9 @@ class TestExtension(ExtensionTestCase):
 
         exthandlers_handler.run()
 
-        self.assertEquals(1, mock_add_event.call_count) # pylint: disable=deprecated-method
+        self.assertEqual(1, mock_add_event.call_count)
         args, kw = mock_add_event.call_args_list[0] # pylint: disable=invalid-name
-        self.assertEquals(False, kw['is_success']) # pylint: disable=deprecated-method
+        self.assertEqual(False, kw['is_success'])
         self.assertTrue("Failed to get ext handler pkgs" in kw['message'])
         self.assertTrue("ProtocolError" in kw['message'])
 
@@ -1068,7 +1068,7 @@ class TestExtension(ExtensionTestCase):
         def _assert_mock_add_event_call(expected_download_failed_event_count, err_msg_guid):
             event_occurrences = [kw for _, kw in mock_add_event.call_args_list if
                           "Failed to download artifacts: [ExtensionDownloadError] {0}".format(err_msg_guid) in kw['message']]
-            self.assertEquals(expected_download_failed_event_count, len(event_occurrences), "Call count do not match") # pylint: disable=deprecated-method
+            self.assertEqual(expected_download_failed_event_count, len(event_occurrences), "Call count do not match")
             self.assertFalse(any([kw['is_success'] for kw in event_occurrences]), "The events should have failed")
             self.assertEqual(expected_download_failed_event_count, len([kw['op'] for kw in event_occurrences]),
                              "Incorrect Operation, all events should be a download errors")
@@ -1193,8 +1193,8 @@ class TestExtension(ExtensionTestCase):
         self.assertTrue(report_ext_status.called)
         args, kw = report_ext_status.call_args # pylint: disable=unused-variable,invalid-name
         ext_status = args[-1]
-        self.assertEquals(expected_status, ext_status.status) # pylint: disable=deprecated-method
-        self.assertEquals(expected_seq_no, ext_status.sequenceNumber) # pylint: disable=deprecated-method
+        self.assertEqual(expected_status, ext_status.status)
+        self.assertEqual(expected_seq_no, ext_status.sequenceNumber)
 
     def test_ext_handler_no_reporting_status(self, *args):
         test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE)
@@ -1649,7 +1649,7 @@ class TestExtension(ExtensionTestCase):
 
         self.assertEqual(1, patch_get_uninstall_command.call_count)
         self.assertEqual(2, protocol.report_vm_status.call_count)
-        self.assertEquals("Ready", protocol.report_vm_status.call_args[0][0].vmAgent.status) # pylint: disable=deprecated-method
+        self.assertEqual("Ready", protocol.report_vm_status.call_args[0][0].vmAgent.status)
         self._assert_no_handler_status(protocol.report_vm_status)
 
         # Ensure there are no further retries
@@ -1657,7 +1657,7 @@ class TestExtension(ExtensionTestCase):
 
         self.assertEqual(1, patch_get_uninstall_command.call_count)
         self.assertEqual(3, protocol.report_vm_status.call_count)
-        self.assertEquals("Ready", protocol.report_vm_status.call_args[0][0].vmAgent.status) # pylint: disable=deprecated-method
+        self.assertEqual("Ready", protocol.report_vm_status.call_args[0][0].vmAgent.status)
         self._assert_no_handler_status(protocol.report_vm_status)
 
     @patch('azurelinuxagent.ga.exthandlers.HandlerManifest.get_update_command')
@@ -1687,8 +1687,8 @@ class TestExtension(ExtensionTestCase):
             enable_command_count = len([extension_call for extension_call in extension_calls
                                         if "-enable" in extension_call])
 
-            self.assertEquals(1, update_command_count) # pylint: disable=deprecated-method
-            self.assertEquals(0, enable_command_count) # pylint: disable=deprecated-method
+            self.assertEqual(1, update_command_count)
+            self.assertEqual(0, enable_command_count)
 
             # We report the failure of the new extension version
             self._assert_handler_status(protocol.report_vm_status, "NotReady", expected_ext_count=1, version="1.0.1")
@@ -1702,8 +1702,8 @@ class TestExtension(ExtensionTestCase):
                                         if patch_get_update_command.return_value in extension_call])
             enable_command_count = len([extension_call for extension_call in extension_calls
                                         if "-enable" in extension_call])
-            self.assertEquals(1, update_command_count) # pylint: disable=deprecated-method
-            self.assertEquals(0, enable_command_count) # pylint: disable=deprecated-method
+            self.assertEqual(1, update_command_count)
+            self.assertEqual(0, enable_command_count)
 
             # If the incarnation number changes (there's a new goal state), ensure we go through the entire upgrade
             # process again.
@@ -1716,8 +1716,8 @@ class TestExtension(ExtensionTestCase):
                                         if patch_get_update_command.return_value in extension_call])
             enable_command_count = len([extension_call for extension_call in extension_calls
                                         if "-enable" in extension_call])
-            self.assertEquals(2, update_command_count) # pylint: disable=deprecated-method
-            self.assertEquals(0, enable_command_count) # pylint: disable=deprecated-method
+            self.assertEqual(2, update_command_count)
+            self.assertEqual(0, enable_command_count)
 
             # We report the failure of the new extension version
             self._assert_handler_status(protocol.report_vm_status, "NotReady", expected_ext_count=1, version="1.0.1")

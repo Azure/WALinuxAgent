@@ -1,0 +1,2 @@
+1
+./test-run.sh: line 6: nosetests: command not found
