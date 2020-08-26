@@ -123,7 +123,7 @@ class NSBSDOSUtil(FreeBSDOSUtil):
     def eject_dvd(self, chk_err=True):
         pass
 
-    def restart_if(self, ifname):
+    def restart_if(self, ifname=None, retries=None, wait=None):
         # Restart dhclient only to publish hostname
         shellutil.run("ennetwork", chk_err=False)
 
