@@ -173,7 +173,7 @@ class TestCpuCgroup(AgentTestCase):
         cgroup.initialize_cpu_usage()
 
         self.assertEqual(cgroup._current_cgroup_cpu, 0) # pylint: disable=protected-access
-        self.assertEqual(cgroup._current_system_cpu, 5496872)  # check the system usage just for test sanity,protected-access
+        self.assertEqual(cgroup._current_system_cpu, 5496872)  # check the system usage just for test sanity # pylint: disable=protected-access
 
 
     def test_initialize_cpu_usage_should_raise_an_exception_when_called_more_than_once(self):
