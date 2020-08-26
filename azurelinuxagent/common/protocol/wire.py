@@ -933,6 +933,7 @@ class WireClient(object): # pylint: disable=R0904
         return ret
 
     def _call_direct_channel(self, direct_func):
+        ret = None
         try:
             ret = direct_func()
 
@@ -941,11 +942,11 @@ class WireClient(object): # pylint: disable=R0904
             if not ret:
                 logger.periodic_info(logger.EVERY_HOUR, "[PERIODIC] Request failed using the direct channel, "
                                                         "switching to host plugin.")
-            else:
-                return ret
         except (ResourceGoneError, InvalidContainerError) as e: # pylint: disable=C0103
             logger.periodic_info(logger.EVERY_HOUR, "[PERIODIC] Request failed using the direct channel, "
                                                     "switching to host plugin. Error: {0}".format(ustr(e)))
+
+        return ret
 
     def send_request_using_appropriate_channel(self, direct_func, host_func):
         # A wrapper method for all function calls that send HTTP requests. The direct channel is always used first and

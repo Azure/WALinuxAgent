@@ -83,9 +83,6 @@ def create_mock_protocol(artifacts_profile_blob=None, status_upload_blob=None, s
 @patch("azurelinuxagent.common.protocol.healthservice.HealthService._report")
 class TestWireProtocol(AgentTestCase):
 
-    def setUp(self):
-        super(TestWireProtocol, self).setUp()
-
     def _test_getters(self, test_data, certsMustBePresent, __, MockCryptUtil, _): # pylint: disable=invalid-name
         MockCryptUtil.side_effect = test_data.mock_crypt_util
 
@@ -787,7 +784,6 @@ class TestWireClient(HttpRequestPredicates, AgentTestCase):
 
     def test_send_request_using_appropriate_channel_should_use_host_channel_when_direct_channel_fails(self):
         with mock_wire_protocol(mockwiredata.DATA_FILE) as protocol:
-            host = protocol.client.get_host_plugin()
 
             def direct_func(*args): # pylint: disable=unused-argument
                 direct_func.counter += 1
