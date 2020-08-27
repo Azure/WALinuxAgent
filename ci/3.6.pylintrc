@@ -2,7 +2,6 @@
 
 # The source code suppresses the following errors in python3.6+:
 
-# anomalous-backslash-in-string<W1401>: (hi-pri) Used when a backslash is in a literal string but not as an escape.
 # arguments-differ<W0221>: (hi-pri) Used when a method has a different number of arguments than in the implemented interface or in an overridden method.
 # assignment-from-no-return<E1111>: (hi-pri) Used when an assignment is done on a function call but the inferred function doesn't return anything.
 # assignment-from-none<E1128>: (hi-pri) Used when an assignment is done on a function call but the inferred function returns nothing but None.

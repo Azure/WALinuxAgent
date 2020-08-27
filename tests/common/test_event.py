@@ -395,7 +395,7 @@ class TestEvent(HttpRequestPredicates, AgentTestCase): # pylint: disable=too-man
             invalid_events = []
             total_dropped_count = 0
             for args, kwargs in mock_add_event.call_args_list: # pylint: disable=unused-variable
-                match = re.search("DroppedEventsCount: (\d+)", kwargs['message']) # pylint: disable=anomalous-backslash-in-string
+                match = re.search(r"DroppedEventsCount: (\d+)", kwargs['message'])
                 if match is not None:
                     invalid_events.append(kwargs['op'])
                     total_dropped_count += int(match.groups()[0])
