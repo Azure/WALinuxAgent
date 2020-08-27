@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 
+set -u
+
 EXIT_CODE=0
 
 echo
