@@ -113,7 +113,7 @@ class TestProcessUtils(AgentTestCase):
 
     def test_handle_process_completion_should_raise_on_timeout(self):
         command = "sleep 1m"
-        timeout = 5
+        timeout = 20
         with tempfile.TemporaryFile(dir=self.tmp_dir, mode="w+b") as stdout:
             with tempfile.TemporaryFile(dir=self.tmp_dir, mode="w+b") as stderr:
                 with patch('time.sleep') as mock_sleep:
@@ -135,7 +135,9 @@ class TestProcessUtils(AgentTestCase):
 
                     # We're mocking sleep to avoid prolonging the test execution time, but we still want to make sure
                     # we're "waiting" the correct amount of time before killing the process and raising an exception
-                    self.assertEqual(mock_sleep.call_count, timeout)
+                    # Due to an extra call to sleep at some point in the call stack which only happens sometimes,
+                    # we are relaxing this assertion to allow +/- 2 sleep calls.
+                    self.assertTrue(abs(mock_sleep.call_count - timeout) <= 2)
 
                     self.assertEqual(context_manager.exception.code, ExtensionErrorCodes.PluginHandlerScriptTimedout)
                     self.assertIn("Timeout({0})".format(timeout), ustr(context_manager.exception))
