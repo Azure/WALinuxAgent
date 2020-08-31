@@ -859,7 +859,7 @@ Chain OUTPUT (policy ACCEPT 104 packets, 43628 bytes)
                 delete_conntrack_drop_command = TestOSUtil._command_to_string(osutil._get_firewall_delete_conntrack_drop_command(mock_iptables.wait, mock_iptables.destination)) # pylint: disable=protected-access
 
                 self.assertTrue(success, "Removing the firewall should have succeeded")
-                self.assertEquals(len(delete_commands), 3, "Expected 3 delete commands: [{0}]".format(delete_commands)) # pylint: disable=deprecated-method
+                self.assertEqual(len(delete_commands), 3, "Expected 3 delete commands: [{0}]".format(delete_commands))
                 # delete rules < 2.2.26
                 self.assertIn(delete_conntrack_accept_command, delete_commands, "The delete conntrack accept command was not executed")
                 self.assertEqual(delete_commands[delete_conntrack_accept_command], 2, "The delete conntrack accept command should have been executed twice")

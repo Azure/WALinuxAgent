@@ -52,7 +52,7 @@ class TestDaemon(AgentTestCase):
         daemon_handler.run()
 
         mock_sleep.assert_any_call(15)
-        self.assertEquals(2, daemon_handler.daemon.call_count) # pylint: disable=deprecated-method
+        self.assertEqual(2, daemon_handler.daemon.call_count)
 
     @patch("time.sleep")
     @patch("azurelinuxagent.daemon.main.conf")
