@@ -35,7 +35,7 @@ class TestTextUtil(AgentTestCase):
                 data = textutil.remove_bom(data)
                 data = ustr(data, encoding='utf-8')
                 password_hash = textutil.gen_password_hash(data, 6, 10)
-                self.assertNotEquals(None, password_hash) # pylint: disable=deprecated-method
+                self.assertNotEqual(None, password_hash)
 
     def test_replace_non_ascii(self):
         data = ustr(b'\xef\xbb\xbfhehe', encoding='utf-8')
@@ -54,31 +54,31 @@ class TestTextUtil(AgentTestCase):
         #Test bom could be removed
         data = ustr(b'\xef\xbb\xbfhehe', encoding='utf-8')
         data = textutil.remove_bom(data)
-        self.assertNotEquals(0xbb, data[0]) # pylint: disable=deprecated-method
+        self.assertNotEqual(0xbb, data[0])
 
         #bom is comprised of a sequence of three bytes and ff length of the input is shorter
         # than three bytes, remove_bom should not do anything
         data = u"\xa7"
         data = textutil.remove_bom(data)
-        self.assertEquals(data, data[0]) # pylint: disable=deprecated-method
+        self.assertEqual(data, data[0])
 
         data = u"\xa7\xef"
         data = textutil.remove_bom(data)
-        self.assertEquals(u"\xa7", data[0]) # pylint: disable=deprecated-method
-        self.assertEquals(u"\xef", data[1]) # pylint: disable=deprecated-method
+        self.assertEqual(u"\xa7", data[0])
+        self.assertEqual(u"\xef", data[1])
 
         #Test string without BOM is not affected
         data = u"hehe"
         data = textutil.remove_bom(data)
-        self.assertEquals(u"h", data[0]) # pylint: disable=deprecated-method
+        self.assertEqual(u"h", data[0])
 
         data = u""
         data = textutil.remove_bom(data)
-        self.assertEquals(u"", data) # pylint: disable=deprecated-method
+        self.assertEqual(u"", data)
 
         data = u"  "
         data = textutil.remove_bom(data)
-        self.assertEquals(u"  ", data) # pylint: disable=deprecated-method
+        self.assertEqual(u"  ", data)
 
     def test_version_compare(self):
         self.assertTrue(Version("1.0") < Version("1.1"))
@@ -102,14 +102,14 @@ class TestTextUtil(AgentTestCase):
                    "certificate\n"
                    "-----END CERTIFICATE----\n")
         base64_bytes = textutil.get_bytes_from_pem(content)
-        self.assertEquals("certificate", base64_bytes) # pylint: disable=deprecated-method
+        self.assertEqual("certificate", base64_bytes)
 
 
         content = ("-----BEGIN PRIVATE KEY-----\n"
                    "private key\n"
                    "-----END PRIVATE Key-----\n")
         base64_bytes = textutil.get_bytes_from_pem(content)
-        self.assertEquals("private key", base64_bytes) # pylint: disable=deprecated-method
+        self.assertEqual("private key", base64_bytes)
 
     def test_swap_hexstring(self):
         data = [
