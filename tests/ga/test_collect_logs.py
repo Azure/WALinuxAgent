@@ -29,7 +29,7 @@ from tests.tools import Mock, MagicMock, patch, AgentTestCase, clear_singleton_i
 
 
 @contextlib.contextmanager
-def _create_collect_logs_handler(iterations=1):
+def _create_collect_logs_handler(iterations=1, systemd_present=True):
     """
     Creates an instance of CollectLogsHandler that
         * Uses a mock_wire_protocol for network requests,
@@ -41,13 +41,21 @@ def _create_collect_logs_handler(iterations=1):
         * run_and_wait() - invokes run() and wait() on the CollectLogsHandler
 
     """
+
+    original_file_exists = os.path.exists
+
+    def mock_file_exists(filepath):
+        if filepath == "/run/systemd/system/":
+            return systemd_present
+        return original_file_exists(filepath)
+
     with mock_wire_protocol(DATA_FILE) as protocol:
         protocol_util = MagicMock()
         protocol_util.get_protocol = Mock(return_value=protocol)
         with patch("azurelinuxagent.ga.collect_logs.get_protocol_util", return_value=protocol_util):
             with patch("azurelinuxagent.ga.collect_logs.CollectLogsHandler.stopped", side_effect=[False] * iterations + [True]):
                 with patch("time.sleep"):
-                    with patch("azurelinuxagent.ga.collect_logs.os.path.exists", return_value=True):
+                    with patch("azurelinuxagent.ga.collect_logs.os.path.exists", side_effect=mock_file_exists):
                         with patch("azurelinuxagent.ga.collect_logs.conf.get_collect_logs", return_value=True):
                             def run_and_wait():
                                 collect_logs_handler.run()
@@ -102,28 +110,25 @@ class TestCollectLogs(AgentTestCase, HttpRequestPredicates):
     @patch("azurelinuxagent.ga.collect_logs.CollectLogsHandler.collect_and_send_logs")
     def test_it_should_only_collect_logs_if_conditions_are_met(self, patch_collect_and_send_logs):
         # In order to collect logs, three conditions have to be met:
-        # 1) the flag must be set in the conf file
+        # 1) the flag must be set to true in the conf file
         # 2) systemd must be managing services
         # 3) python version 2.7+ which is automatically true for these tests since they are disabled on py2.6
 
-        with _create_collect_logs_handler() as collect_logs_handler:
-            with patch("azurelinuxagent.ga.collect_logs.os.path.exists", return_value=False):
-                with patch("azurelinuxagent.ga.collect_logs.conf.get_collect_logs", return_value=False):
-                    collect_logs_handler.run_and_wait()
+        with _create_collect_logs_handler(systemd_present=False) as collect_logs_handler:
+            with patch("azurelinuxagent.ga.collect_logs.conf.get_collect_logs", return_value=False):
+                collect_logs_handler.run_and_wait()
 
         self.assertEqual(patch_collect_and_send_logs.call_count, 0, "Log collection should not have been enabled")
 
-        with _create_collect_logs_handler() as collect_logs_handler:
-            with patch("azurelinuxagent.ga.collect_logs.os.path.exists", return_value=True):
-                with patch("azurelinuxagent.ga.collect_logs.conf.get_collect_logs", return_value=False):
-                    collect_logs_handler.run_and_wait()
+        with _create_collect_logs_handler(systemd_present=False) as collect_logs_handler:
+            with patch("azurelinuxagent.ga.collect_logs.conf.get_collect_logs", return_value=False):
+                collect_logs_handler.run_and_wait()
 
         self.assertEqual(patch_collect_and_send_logs.call_count, 0, "Log collection should not have been enabled")
 
-        with _create_collect_logs_handler() as collect_logs_handler:
-            with patch("azurelinuxagent.ga.collect_logs.os.path.exists", return_value=False):
-                with patch("azurelinuxagent.ga.collect_logs.conf.get_collect_logs", return_value=True):
-                    collect_logs_handler.run_and_wait()
+        with _create_collect_logs_handler(systemd_present=False) as collect_logs_handler:
+            with patch("azurelinuxagent.ga.collect_logs.conf.get_collect_logs", return_value=True):
+                collect_logs_handler.run_and_wait()
 
         self.assertEqual(patch_collect_and_send_logs.call_count, 0, "Log collection should not have been enabled")
 
@@ -183,5 +188,5 @@ class TestCollectLogs(AgentTestCase, HttpRequestPredicates):
                 protocol.set_http_handlers(http_put_handler=http_put_handler)
 
                 collect_logs_handler.run_and_wait()
-                self.assertTrue(os.path.exists(self.archive_path), "The archive file should exist on disk")
+                self.assertFalse(os.path.exists(self.archive_path), "The archive file should not exist on disk")
                 self.assertEqual(http_put_handler.counter, 0, "The PUT API to upload logs shouldn't have been called")
