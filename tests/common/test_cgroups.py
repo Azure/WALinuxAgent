@@ -128,8 +128,8 @@ class TestCpuCgroup(AgentTestCase):
 
         cgroup.initialize_cpu_usage()
 
-        self.assertEquals(cgroup._current_cgroup_cpu, 63763) # pylint: disable=deprecated-method,protected-access
-        self.assertEquals(cgroup._current_system_cpu, 5496872) # pylint: disable=deprecated-method,protected-access
+        self.assertEqual(cgroup._current_cgroup_cpu, 63763) # pylint: disable=protected-access
+        self.assertEqual(cgroup._current_system_cpu, 5496872) # pylint: disable=protected-access
 
     def test_get_cpu_usage_should_return_the_cpu_usage_since_its_last_invocation(self):
         cgroup = CpuCgroup("test", "/sys/fs/cgroup/cpu/system.slice/test")
@@ -148,7 +148,7 @@ class TestCpuCgroup(AgentTestCase):
 
         cpu_usage = cgroup.get_cpu_usage()
 
-        self.assertEquals(cpu_usage, 0.031) # pylint: disable=deprecated-method
+        self.assertEqual(cpu_usage, 0.031)
 
         TestCpuCgroup.mock_read_file_map = {
             "/proc/stat": os.path.join(data_dir, "cgroups", "proc_stat_t2"),
@@ -157,7 +157,7 @@ class TestCpuCgroup(AgentTestCase):
 
         cpu_usage = cgroup.get_cpu_usage()
 
-        self.assertEquals(cpu_usage, 0.045) # pylint: disable=deprecated-method
+        self.assertEqual(cpu_usage, 0.045)
 
     def test_initialie_cpu_usage_should_set_the_cgroup_usage_to_0_when_the_cgroup_does_not_exist(self):
         cgroup = CpuCgroup("test", "/sys/fs/cgroup/cpu/system.slice/test")
@@ -172,8 +172,8 @@ class TestCpuCgroup(AgentTestCase):
 
         cgroup.initialize_cpu_usage()
 
-        self.assertEquals(cgroup._current_cgroup_cpu, 0) # pylint: disable=deprecated-method,protected-access
-        self.assertEquals(cgroup._current_system_cpu, 5496872)  # check the system usage just for test sanity # pylint: disable=deprecated-method,protected-access
+        self.assertEqual(cgroup._current_cgroup_cpu, 0) # pylint: disable=protected-access
+        self.assertEqual(cgroup._current_system_cpu, 5496872)  # check the system usage just for test sanity # pylint: disable=protected-access
 
 
     def test_initialize_cpu_usage_should_raise_an_exception_when_called_more_than_once(self):

@@ -109,7 +109,7 @@ class TestEvent(HttpRequestPredicates, AgentTestCase): # pylint: disable=too-man
         def create_event_and_return_container_id(): # pylint: disable=inconsistent-return-statements
             event.add_event(name='Event')
             event_list = event.collect_events()
-            self.assertEquals(len(event_list.events), 1, "Could not find the event created by add_event") # pylint: disable=deprecated-method
+            self.assertEqual(len(event_list.events), 1, "Could not find the event created by add_event")
 
             for p in event_list.events[0].parameters: # pylint: disable=invalid-name
                 if p.name == CommonTelemetryEventSchema.ContainerId:
@@ -120,17 +120,17 @@ class TestEvent(HttpRequestPredicates, AgentTestCase): # pylint: disable=too-man
         with mock_wire_protocol(mockwiredata.DATA_FILE) as protocol:
             contained_id = create_event_and_return_container_id()
             # The expect value comes from DATA_FILE
-            self.assertEquals(contained_id, 'c6d5526c-5ac2-4200-b6e2-56f2b70c5ab2', "Incorrect container ID") # pylint: disable=deprecated-method
+            self.assertEqual(contained_id, 'c6d5526c-5ac2-4200-b6e2-56f2b70c5ab2', "Incorrect container ID")
 
             protocol.mock_wire_data.set_container_id('AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE')
             protocol.update_goal_state()
             contained_id = create_event_and_return_container_id()
-            self.assertEquals(contained_id, 'AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE', "Incorrect container ID") # pylint: disable=deprecated-method
+            self.assertEqual(contained_id, 'AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE', "Incorrect container ID")
 
             protocol.mock_wire_data.set_container_id('11111111-2222-3333-4444-555555555555')
             protocol.update_goal_state()
             contained_id = create_event_and_return_container_id()
-            self.assertEquals(contained_id, '11111111-2222-3333-4444-555555555555', "Incorrect container ID") # pylint: disable=deprecated-method
+            self.assertEqual(contained_id, '11111111-2222-3333-4444-555555555555', "Incorrect container ID")
 
 
     def test_add_event_should_handle_event_errors(self):
@@ -237,12 +237,12 @@ class TestEvent(HttpRequestPredicates, AgentTestCase): # pylint: disable=too-man
                   message="dummy event message",
                   reporter=mock_reporter)
 
-        self.assertEquals(1, mock_logger_error.call_count) # pylint: disable=deprecated-method
-        self.assertEquals(1, mock_logger_warn.call_count) # pylint: disable=deprecated-method
-        self.assertEquals(0, mock_logger_info.call_count) # pylint: disable=deprecated-method
+        self.assertEqual(1, mock_logger_error.call_count)
+        self.assertEqual(1, mock_logger_warn.call_count)
+        self.assertEqual(0, mock_logger_info.call_count)
 
         args = mock_logger_error.call_args[0]
-        self.assertEquals(('dummy name', 'Download', 'dummy event message', 0), args[1:]) # pylint: disable=deprecated-method
+        self.assertEqual(('dummy name', 'Download', 'dummy event message', 0), args[1:])
 
     @patch('azurelinuxagent.common.event.EventLogger')
     @patch('azurelinuxagent.common.logger.error')
@@ -264,13 +264,13 @@ class TestEvent(HttpRequestPredicates, AgentTestCase): # pylint: disable=too-man
                               is_success=False,
                               message="dummy event message")
 
-                    self.assertEquals(1, mock_should_emit_event.call_count) # pylint: disable=deprecated-method
-                    self.assertEquals(1, mock_logger_error.call_count) # pylint: disable=deprecated-method
-                    self.assertEquals(0, mock_logger_warn.call_count) # pylint: disable=deprecated-method
-                    self.assertEquals(0, mock_logger_info.call_count) # pylint: disable=deprecated-method
+                    self.assertEqual(1, mock_should_emit_event.call_count)
+                    self.assertEqual(1, mock_logger_error.call_count)
+                    self.assertEqual(0, mock_logger_warn.call_count)
+                    self.assertEqual(0, mock_logger_info.call_count)
 
                     args = mock_logger_error.call_args[0]
-                    self.assertEquals(('dummy name', 'Download', 'dummy event message', 0), args[1:]) # pylint: disable=deprecated-method
+                    self.assertEqual(('dummy name', 'Download', 'dummy event message', 0), args[1:])
 
     @patch('azurelinuxagent.common.event.EventLogger.add_event')
     def test_periodic_emits_if_not_previously_sent(self, mock_event):
@@ -344,13 +344,13 @@ class TestEvent(HttpRequestPredicates, AgentTestCase): # pylint: disable=too-man
         add_event(name='Event3')
 
         event_files = os.listdir(self.event_dir)
-        self.assertEquals(len(event_files), 3, "Did not find all the event files that were created") # pylint: disable=deprecated-method
+        self.assertEqual(len(event_files), 3, "Did not find all the event files that were created")
 
         event_list = event.collect_events()
         event_files = os.listdir(self.event_dir)
 
-        self.assertEquals(len(event_list.events), 3, "Did not collect all the events that were created") # pylint: disable=deprecated-method
-        self.assertEquals(len(event_files), 0, "The event files were not deleted") # pylint: disable=deprecated-method
+        self.assertEqual(len(event_list.events), 3, "Did not collect all the events that were created")
+        self.assertEqual(len(event_files), 0, "The event files were not deleted")
 
     def test_save_event(self):
         add_event('test', message='test event')
@@ -373,8 +373,8 @@ class TestEvent(HttpRequestPredicates, AgentTestCase): # pylint: disable=too-man
 
         event_list = event.collect_events()
 
-        self.assertEquals(len(event_list.events), 1) # pylint: disable=deprecated-method
-        self.assertEquals(TestEvent._get_event_message(event_list.events[0]), u'World\u05e2\u05d9\u05d5\u05ea \u05d0\u05d7\u05e8\u05d5\u05ea\u0906\u091c') # pylint: disable=deprecated-method
+        self.assertEqual(len(event_list.events), 1)
+        self.assertEqual(TestEvent._get_event_message(event_list.events[0]), u'World\u05e2\u05d9\u05d5\u05ea \u05d0\u05d7\u05e8\u05d5\u05ea\u0906\u091c')
 
     def test_collect_events_should_ignore_invalid_event_files(self):
         self._create_test_event_file("custom_script_1.tld")  # a valid event
@@ -386,7 +386,7 @@ class TestEvent(HttpRequestPredicates, AgentTestCase): # pylint: disable=too-man
         with patch("azurelinuxagent.common.event.add_event") as mock_add_event:
             event_list = event.collect_events()
 
-            self.assertEquals( # pylint: disable=deprecated-method
+            self.assertEqual(
                 len(event_list.events), 2)
             self.assertTrue(
                 all(TestEvent._get_event_message(evt) == "A test telemetry message." for evt in event_list.events),
@@ -395,12 +395,12 @@ class TestEvent(HttpRequestPredicates, AgentTestCase): # pylint: disable=too-man
             invalid_events = []
             total_dropped_count = 0
             for args, kwargs in mock_add_event.call_args_list: # pylint: disable=unused-variable
-                match = re.search("DroppedEventsCount: (\d+)", kwargs['message']) # pylint: disable=anomalous-backslash-in-string
+                match = re.search(r"DroppedEventsCount: (\d+)", kwargs['message'])
                 if match is not None:
                     invalid_events.append(kwargs['op'])
                     total_dropped_count += int(match.groups()[0])
 
-            self.assertEquals(3, total_dropped_count, "Total dropped events dont match") # pylint: disable=deprecated-method
+            self.assertEqual(3, total_dropped_count, "Total dropped events dont match")
             self.assertIn(WALAEventOperation.CollectEventErrors, invalid_events,
                           "{0} errors not reported".format(WALAEventOperation.CollectEventErrors))
             self.assertIn(WALAEventOperation.CollectEventUnicodeErrors, invalid_events,
@@ -516,7 +516,7 @@ class TestEvent(HttpRequestPredicates, AgentTestCase): # pylint: disable=too-man
         # retrieve the event that was created
         event_list = event.collect_events()
 
-        self.assertEquals(len(event_list.events), 1) # pylint: disable=deprecated-method
+        self.assertEqual(len(event_list.events), 1)
 
         # verify the event parameters
         self._assert_event_includes_all_parameters_in_the_telemetry_schema(
@@ -590,7 +590,7 @@ class TestEvent(HttpRequestPredicates, AgentTestCase): # pylint: disable=too-man
     def test_add_log_event_should_not_create_event_if_not_allowed_and_not_forced(self):
         add_log_event(logger.LogLevel.WARNING, 'A test WARNING log event')
         event_list = event.collect_events()
-        self.assertEquals(len(event_list.events), 0, "No events should be created if not forced and not allowed") # pylint: disable=deprecated-method
+        self.assertEqual(len(event_list.events), 0, "No events should be created if not forced and not allowed")
 
     def test_report_metric_should_create_events_that_have_all_the_parameters_in_the_telemetry_schema(self):
         self._test_create_event_function_should_create_events_that_have_all_the_parameters_in_the_telemetry_schema(
@@ -619,7 +619,7 @@ class TestEvent(HttpRequestPredicates, AgentTestCase): # pylint: disable=too-man
 
         event_list = event.collect_events()
 
-        self.assertEquals(len(event_list.events), 1) # pylint: disable=deprecated-method
+        self.assertEqual(len(event_list.events), 1)
 
         self._assert_event_includes_all_parameters_in_the_telemetry_schema(
             event_list.events[0],
@@ -639,7 +639,7 @@ class TestEvent(HttpRequestPredicates, AgentTestCase): # pylint: disable=too-man
                 CommonTelemetryEventSchema.TaskName: "ALegacyTask",
                 CommonTelemetryEventSchema.KeywordName: "ALegacyKeywordName"},
             assert_timestamp=lambda timestamp:
-                self.assertEquals(timestamp, '1970-01-01 12:00:00', "The event timestamp (opcode) is incorrect") # pylint: disable=deprecated-method
+                self.assertEqual(timestamp, '1970-01-01 12:00:00', "The event timestamp (opcode) is incorrect")
         )
 
     def test_collect_events_should_use_the_file_creation_time_for_legacy_agent_events_missing_a_timestamp(self):
@@ -649,7 +649,7 @@ class TestEvent(HttpRequestPredicates, AgentTestCase): # pylint: disable=too-man
 
         event_list = event.collect_events()
 
-        self.assertEquals(len(event_list.events), 1) # pylint: disable=deprecated-method
+        self.assertEqual(len(event_list.events), 1)
 
         self._assert_event_includes_all_parameters_in_the_telemetry_schema(
             event_list.events[0],
@@ -669,7 +669,7 @@ class TestEvent(HttpRequestPredicates, AgentTestCase): # pylint: disable=too-man
                 CommonTelemetryEventSchema.TaskName: "ALegacyTask",
                 CommonTelemetryEventSchema.KeywordName: "ALegacyKeywordName"},
             assert_timestamp=lambda timestamp:
-                self.assertEquals(timestamp, event_creation_time, "The event timestamp (opcode) is incorrect") # pylint: disable=deprecated-method
+                self.assertEqual(timestamp, event_creation_time, "The event timestamp (opcode) is incorrect")
         )
 
     def _assert_extension_event_includes_all_parameters_in_the_telemetry_schema(self, event_file):
@@ -681,7 +681,7 @@ class TestEvent(HttpRequestPredicates, AgentTestCase): # pylint: disable=too-man
 
         event_list = event.collect_events()
 
-        self.assertEquals(len(event_list.events), 1) # pylint: disable=deprecated-method
+        self.assertEqual(len(event_list.events), 1)
 
         self._assert_event_includes_all_parameters_in_the_telemetry_schema(
             event_list.events[0],
@@ -694,7 +694,7 @@ class TestEvent(HttpRequestPredicates, AgentTestCase): # pylint: disable=too-man
                 GuestAgentExtensionEventsSchema.Duration: 150000,
                 GuestAgentExtensionEventsSchema.ExtensionType: 'json'},
             assert_timestamp=lambda timestamp:
-                self.assertEquals(timestamp, event_creation_time, "The event timestamp (opcode) is incorrect") # pylint: disable=deprecated-method
+                self.assertEqual(timestamp, event_creation_time, "The event timestamp (opcode) is incorrect")
             )
 
     def test_collect_events_should_add_all_the_parameters_in_the_telemetry_schema_to_extension_events(self):
@@ -768,7 +768,7 @@ class TestEvent(HttpRequestPredicates, AgentTestCase): # pylint: disable=too-man
 
             event_message = get_event_message_from_http_request_body(http_post_handler.request_body)
 
-            self.assertEquals(event_message, expected_message, "The Message in the HTTP request does not match the Message in the event's *.tld file") # pylint: disable=deprecated-method
+            self.assertEqual(event_message, expected_message, "The Message in the HTTP request does not match the Message in the event's *.tld file")
 
     def test_report_event_should_encode_events_correctly(self):
 
@@ -866,11 +866,11 @@ class TestMetrics(AgentTestCase):
                          ev_logger._clean_up_message('[PERIODIC] Daemon Cgroup controller "memory" is not mounted. ' # pylint: disable=protected-access
                                                      'Failed to create a cgroup for the VM Agent; resource usage will '
                                                      'not be tracked'))
-        self.assertEquals('The time should be in UTC', ev_logger._clean_up_message( # pylint: disable=deprecated-method,protected-access
+        self.assertEqual('The time should be in UTC', ev_logger._clean_up_message( # pylint: disable=protected-access
             '2019-11-26T18:15:06.866746Z INFO The time should be in UTC'))
-        self.assertEquals('The time should be in UTC', ev_logger._clean_up_message( # pylint: disable=deprecated-method,protected-access
+        self.assertEqual('The time should be in UTC', ev_logger._clean_up_message( # pylint: disable=protected-access
             '2019-11-26T18:15:06.866746Z The time should be in UTC'))
-        self.assertEquals('[PERIODIC] The time should be in UTC', ev_logger._clean_up_message( # pylint: disable=deprecated-method,protected-access
+        self.assertEqual('[PERIODIC] The time should be in UTC', ev_logger._clean_up_message( # pylint: disable=protected-access
             '2019-11-26T18:15:06.866746Z INFO [PERIODIC] The time should be in UTC'))
-        self.assertEquals('[PERIODIC] The time should be in UTC', ev_logger._clean_up_message( # pylint: disable=deprecated-method,protected-access
+        self.assertEqual('[PERIODIC] The time should be in UTC', ev_logger._clean_up_message( # pylint: disable=protected-access
             '2019-11-26T18:15:06.866746Z [PERIODIC] The time should be in UTC'))

@@ -209,7 +209,7 @@ diskinfo,""".format(folder_to_list, file_to_collect)
         self._assert_files_are_in_archive(expected_files=[file_to_collect])
 
         no_files = self._get_number_of_files_in_archive()
-        self.assertEquals(1, no_files, "Expected 1 file in archive, found {0}!".format(no_files)) # pylint: disable=deprecated-method
+        self.assertEqual(1, no_files, "Expected 1 file in archive, found {0}!".format(no_files))
 
     def test_log_collector_uses_full_manifest_when_full_mode_enabled(self):
         file_to_collect = os.path.join(self.root_collect_dir, "less_important_file")
@@ -249,7 +249,7 @@ copy,{0}
         self._assert_files_are_in_archive(expected_files)
 
         no_files = self._get_number_of_files_in_archive()
-        self.assertEquals(6, no_files, "Expected 6 files in archive, found {0}!".format(no_files)) # pylint: disable=deprecated-method
+        self.assertEqual(6, no_files, "Expected 6 files in archive, found {0}!".format(no_files))
 
     def test_log_collector_should_truncate_large_text_files_and_ignore_large_binary_files(self):
         # Set the size limit so that some files are too large to collect in full.
@@ -273,7 +273,7 @@ copy,{0}
         self._assert_files_are_not_in_archive(unexpected_files)
 
         no_files = self._get_number_of_files_in_archive()
-        self.assertEquals(5, no_files, "Expected 5 files in archive, found {0}!".format(no_files)) # pylint: disable=deprecated-method
+        self.assertEqual(5, no_files, "Expected 5 files in archive, found {0}!".format(no_files))
 
     def test_log_collector_should_prioritize_important_files_if_archive_too_big(self):
         # Set the archive size limit so that not all files can be collected. In that case, files will be added to the
@@ -306,7 +306,7 @@ copy,{0}
         self._assert_files_are_not_in_archive(unexpected_files)
 
         no_files = self._get_number_of_files_in_archive()
-        self.assertEquals(3, no_files, "Expected 3 files in archive, found {0}!".format(no_files)) # pylint: disable=deprecated-method
+        self.assertEqual(3, no_files, "Expected 3 files in archive, found {0}!".format(no_files))
 
         # Second collection, if a file got deleted, delete it from the archive and add next file on the priority list
         # if there is enough space.
@@ -332,7 +332,7 @@ copy,{0}
         self._assert_archive_created(second_archive)
 
         no_files = self._get_number_of_files_in_archive()
-        self.assertEquals(5, no_files, "Expected 5 files in archive, found {0}!".format(no_files)) # pylint: disable=deprecated-method
+        self.assertEqual(5, no_files, "Expected 5 files in archive, found {0}!".format(no_files))
 
     def test_log_collector_should_update_archive_when_files_are_new_or_modified_or_deleted(self):
         # Ensure the archive reflects the state of files on the disk at collection time. If a file was updated, it
@@ -353,7 +353,7 @@ copy,{0}
         self._assert_files_are_in_archive(expected_files)
 
         no_files = self._get_number_of_files_in_archive()
-        self.assertEquals(6, no_files, "Expected 6 files in archive, found {0}!".format(no_files)) # pylint: disable=deprecated-method
+        self.assertEqual(6, no_files, "Expected 6 files in archive, found {0}!".format(no_files))
 
         # Update a file and its last modified time to ensure the last modified time and last collection time are not
         # the same in this test
@@ -386,11 +386,11 @@ copy,{0}
 
         file = os.path.join(self.root_collect_dir, "waagent.log") # pylint: disable=redefined-builtin
         new_file_size = self._get_uncompressed_file_size(file)
-        self.assertEquals(LARGE_FILE_SIZE, new_file_size, "File {0} hasn't been updated! Size in archive is {1}, but " # pylint: disable=deprecated-method
+        self.assertEqual(LARGE_FILE_SIZE, new_file_size, "File {0} hasn't been updated! Size in archive is {1}, but "
                                                           "should be {2}.".format(file, new_file_size, LARGE_FILE_SIZE))
 
         no_files = self._get_number_of_files_in_archive()
-        self.assertEquals(6, no_files, "Expected 6 files in archive, found {0}!".format(no_files)) # pylint: disable=deprecated-method
+        self.assertEqual(6, no_files, "Expected 6 files in archive, found {0}!".format(no_files))
 
     def test_log_collector_should_clean_up_uncollected_truncated_files(self):
         # Make sure that truncated files that are no longer needed are cleaned up. If an existing truncated file
@@ -419,7 +419,7 @@ copy,{0}
         self._assert_files_are_in_archive(expected_files)
 
         no_files = self._get_number_of_files_in_archive()
-        self.assertEquals(2, no_files, "Expected 2 files in archive, found {0}!".format(no_files)) # pylint: disable=deprecated-method
+        self.assertEqual(2, no_files, "Expected 2 files in archive, found {0}!".format(no_files))
 
         # Remove the original file so it is not collected anymore. In the next collection, the truncated file should be
         # removed both from the archive and from the filesystem.
@@ -444,7 +444,7 @@ copy,{0}
         self._assert_archive_created(second_archive)
 
         no_files = self._get_number_of_files_in_archive()
-        self.assertEquals(2, no_files, "Expected 2 files in archive, found {0}!".format(no_files)) # pylint: disable=deprecated-method
+        self.assertEqual(2, no_files, "Expected 2 files in archive, found {0}!".format(no_files))
 
         truncated_files = os.listdir(self.truncated_files_dir)
-        self.assertEquals(0, len(truncated_files), "Uncollected truncated file waagent.log.1 should have been deleted!") # pylint: disable=deprecated-method
+        self.assertEqual(0, len(truncated_files), "Uncollected truncated file waagent.log.1 should have been deleted!")

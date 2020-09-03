@@ -396,7 +396,7 @@ with open("{2}", "w") as file:
             self.assertRegex(message, r"Timeout\(\d+\):\s+{0}\s+{1}".format(command_full_path, LaunchCommandTestCase._output_regex(stdout, stderr)))
 
             # the exception code should be as specified in the call to launch_command
-            self.assertEquals(context_manager.exception.code, extension_error_code) # pylint: disable=deprecated-method
+            self.assertEqual(context_manager.exception.code, extension_error_code)
 
             # the timeout period should have elapsed
             self.assertGreaterEqual(mock_sleep.call_count, timeout)
@@ -440,7 +440,7 @@ exit({2})
         message = str(context_manager.exception)
         self.assertRegex(message, r"Non-zero exit code: {0}.+{1}\s+{2}".format(exit_code, command, LaunchCommandTestCase._output_regex(stdout, stderr)))
 
-        self.assertEquals(context_manager.exception.code, extension_error_code) # pylint: disable=deprecated-method
+        self.assertEqual(context_manager.exception.code, extension_error_code)
 
     def test_it_should_not_wait_for_child_process(self):
         stdout = "stdout"
@@ -581,7 +581,7 @@ echo {1}
 
         with open(command_output_file, "r") as command_output:
             output = command_output.read()
-            self.assertEquals(output, "{0}\n{1}\n".format(stdout, stderr)) # pylint: disable=deprecated-method
+            self.assertEqual(output, "{0}\n{1}\n".format(stdout, stderr))
 
     def test_it_should_truncate_the_command_output(self):
         stdout = "STDOUT"

@@ -30,31 +30,31 @@ class ShellQuoteTestCase(AgentTestCase):
 class RunTestCase(AgentTestCase):
     def test_it_should_return_the_exit_code_of_the_command(self):
         exit_code = shellutil.run("exit 123")
-        self.assertEquals(123, exit_code) # pylint: disable=deprecated-method
+        self.assertEqual(123, exit_code)
 
     def test_it_should_be_a_pass_thru_to_run_get_output(self):
         with patch.object(shellutil, "run_get_output", return_value=(0, "")) as mock_run_get_output:
             shellutil.run("echo hello word!", chk_err=False, expected_errors=[1, 2, 3])
 
-        self.assertEquals(mock_run_get_output.call_count, 1) # pylint: disable=deprecated-method
+        self.assertEqual(mock_run_get_output.call_count, 1)
 
         args, kwargs = mock_run_get_output.call_args
-        self.assertEquals(args[0], "echo hello word!") # pylint: disable=deprecated-method
-        self.assertEquals(kwargs["chk_err"], False) # pylint: disable=deprecated-method
-        self.assertEquals(kwargs["expected_errors"], [1, 2, 3]) # pylint: disable=deprecated-method
+        self.assertEqual(args[0], "echo hello word!")
+        self.assertEqual(kwargs["chk_err"], False)
+        self.assertEqual(kwargs["expected_errors"], [1, 2, 3])
 
 
 class RunGetOutputTestCase(AgentTestCase):
     def test_run_get_output(self):
         output = shellutil.run_get_output(u"ls /")
-        self.assertNotEquals(None, output) # pylint: disable=deprecated-method
-        self.assertEquals(0, output[0]) # pylint: disable=deprecated-method
+        self.assertNotEqual(None, output)
+        self.assertEqual(0, output[0])
 
         err = shellutil.run_get_output(u"ls /not-exists")
-        self.assertNotEquals(0, err[0]) # pylint: disable=deprecated-method
+        self.assertNotEqual(0, err[0])
             
         err = shellutil.run_get_output(u"ls 我")
-        self.assertNotEquals(0, err[0]) # pylint: disable=deprecated-method
+        self.assertNotEqual(0, err[0])
 
     def test_it_should_log_the_command(self):
         command = "echo hello world!"
@@ -62,7 +62,7 @@ class RunGetOutputTestCase(AgentTestCase):
         with patch("azurelinuxagent.common.utils.shellutil.logger", autospec=True) as mock_logger:
             shellutil.run_get_output(command)
 
-        self.assertEquals(mock_logger.verbose.call_count, 1) # pylint: disable=deprecated-method
+        self.assertEqual(mock_logger.verbose.call_count, 1)
 
         args, kwargs = mock_logger.verbose.call_args # pylint: disable=unused-variable
         command_in_message = args[1]
@@ -75,7 +75,7 @@ class RunGetOutputTestCase(AgentTestCase):
         with patch("azurelinuxagent.common.utils.shellutil.logger", autospec=True) as mock_logger:
             shellutil.run_get_output(command, log_cmd=False)
 
-        self.assertEquals(mock_logger.error.call_count, 1) # pylint: disable=deprecated-method
+        self.assertEqual(mock_logger.error.call_count, 1)
 
         args, kwargs = mock_logger.error.call_args # pylint: disable=unused-variable
 
@@ -83,9 +83,9 @@ class RunGetOutputTestCase(AgentTestCase):
         self.assertIn("[{0}]".format(command), message)
         self.assertIn("[{0}]".format(return_code), message)
 
-        self.assertEquals(mock_logger.verbose.call_count, 0) # pylint: disable=deprecated-method
-        self.assertEquals(mock_logger.info.call_count, 0) # pylint: disable=deprecated-method
-        self.assertEquals(mock_logger.warn.call_count, 0) # pylint: disable=deprecated-method
+        self.assertEqual(mock_logger.verbose.call_count, 0)
+        self.assertEqual(mock_logger.info.call_count, 0)
+        self.assertEqual(mock_logger.warn.call_count, 0)
 
     def test_it_should_log_expected_errors_as_info(self):
         return_code = 99
@@ -94,7 +94,7 @@ class RunGetOutputTestCase(AgentTestCase):
         with patch("azurelinuxagent.common.utils.shellutil.logger", autospec=True) as mock_logger:
             shellutil.run_get_output(command, log_cmd=False, expected_errors=[return_code])
 
-        self.assertEquals(mock_logger.info.call_count, 1) # pylint: disable=deprecated-method
+        self.assertEqual(mock_logger.info.call_count, 1)
 
         args, kwargs = mock_logger.info.call_args # pylint: disable=unused-variable
 
@@ -102,9 +102,9 @@ class RunGetOutputTestCase(AgentTestCase):
         self.assertIn("[{0}]".format(command), message)
         self.assertIn("[{0}]".format(return_code), message)
 
-        self.assertEquals(mock_logger.verbose.call_count, 0) # pylint: disable=deprecated-method
-        self.assertEquals(mock_logger.warn.call_count, 0) # pylint: disable=deprecated-method
-        self.assertEquals(mock_logger.error.call_count, 0) # pylint: disable=deprecated-method
+        self.assertEqual(mock_logger.verbose.call_count, 0)
+        self.assertEqual(mock_logger.warn.call_count, 0)
+        self.assertEqual(mock_logger.error.call_count, 0)
 
     def test_it_should_log_unexpected_errors_as_errors(self):
         return_code = 99
@@ -113,7 +113,7 @@ class RunGetOutputTestCase(AgentTestCase):
         with patch("azurelinuxagent.common.utils.shellutil.logger", autospec=True) as mock_logger:
             shellutil.run_get_output(command, log_cmd=False, expected_errors=[return_code + 1])
 
-        self.assertEquals(mock_logger.error.call_count, 1) # pylint: disable=deprecated-method
+        self.assertEqual(mock_logger.error.call_count, 1)
 
         args, kwargs = mock_logger.error.call_args # pylint: disable=unused-variable
 
@@ -121,16 +121,16 @@ class RunGetOutputTestCase(AgentTestCase):
         self.assertIn("[{0}]".format(command), message)
         self.assertIn("[{0}]".format(return_code), message)
 
-        self.assertEquals(mock_logger.info.call_count, 0) # pylint: disable=deprecated-method
-        self.assertEquals(mock_logger.verbose.call_count, 0) # pylint: disable=deprecated-method
-        self.assertEquals(mock_logger.warn.call_count, 0) # pylint: disable=deprecated-method
+        self.assertEqual(mock_logger.info.call_count, 0)
+        self.assertEqual(mock_logger.verbose.call_count, 0)
+        self.assertEqual(mock_logger.warn.call_count, 0)
 
 
 class RunCommandTestCase(AgentTestCase):
     def test_run_command_should_execute_the_command(self):
         command = ["echo", "-n", "A TEST STRING"]
         ret = shellutil.run_command(command)
-        self.assertEquals(ret, "A TEST STRING") # pylint: disable=deprecated-method
+        self.assertEqual(ret, "A TEST STRING")
 
     def test_run_command_should_raise_an_exception_when_the_command_fails(self):
         command = ["ls", "-d", "/etc", "nonexistent_file"]
@@ -141,9 +141,9 @@ class RunCommandTestCase(AgentTestCase):
         exception = context_manager.exception
         self.assertIn("'ls' failed: 2", str(exception))
         self.assertIn("No such file or directory", str(exception))
-        self.assertEquals(exception.stdout, "/etc\n") # pylint: disable=deprecated-method
+        self.assertEqual(exception.stdout, "/etc\n")
         self.assertIn("No such file or directory", exception.stderr)
-        self.assertEquals(exception.returncode, 2) # pylint: disable=deprecated-method
+        self.assertEqual(exception.returncode, 2)
 
     def test_run_command_should_raise_an_exception_when_it_cannot_execute_the_command(self):
         command = "nonexistent_command"
@@ -163,10 +163,10 @@ class RunCommandTestCase(AgentTestCase):
             except: # pylint: disable=bare-except
                 pass
 
-            self.assertEquals(mock_logger.info.call_count, 0) # pylint: disable=deprecated-method
-            self.assertEquals(mock_logger.verbose.call_count, 0) # pylint: disable=deprecated-method
-            self.assertEquals(mock_logger.warn.call_count, 0) # pylint: disable=deprecated-method
-            self.assertEquals(mock_logger.error.call_count, 0) # pylint: disable=deprecated-method
+            self.assertEqual(mock_logger.info.call_count, 0)
+            self.assertEqual(mock_logger.verbose.call_count, 0)
+            self.assertEqual(mock_logger.warn.call_count, 0)
+            self.assertEqual(mock_logger.error.call_count, 0)
 
             assert_no_message_logged(["ls", "nonexistent_file"])
             assert_no_message_logged("nonexistent_command")
@@ -180,7 +180,7 @@ class RunCommandTestCase(AgentTestCase):
             except: # pylint: disable=bare-except
                 pass
 
-            self.assertEquals(mock_log_error.call_count, 1) # pylint: disable=deprecated-method
+            self.assertEqual(mock_log_error.call_count, 1)
 
             args, kwargs = mock_log_error.call_args # pylint: disable=unused-variable
             self.assertIn("ls -d /etc nonexistent_file", args, msg="The command was not logged")
@@ -196,7 +196,7 @@ class RunCommandTestCase(AgentTestCase):
             except: # pylint: disable=bare-except
                 pass
 
-            self.assertEquals(mock_log_error.call_count, 1) # pylint: disable=deprecated-method
+            self.assertEqual(mock_log_error.call_count, 1)
 
             args, kwargs = mock_log_error.call_args
             self.assertIn(command, args, msg="The command was not logged")
