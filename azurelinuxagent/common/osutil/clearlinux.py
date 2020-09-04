@@ -76,8 +76,12 @@ class ClearLinuxUtil(DefaultOSUtil):
     def del_root_password(self):
         try:
             passwd_file_path = conf.get_passwd_file_path()
-            passwd_content = fileutil.read_file(passwd_file_path)
-            if not passwd_content:
+            try:
+                passwd_content = fileutil.read_file(passwd_file_path)
+                if not passwd_content:
+                    # Empty file is no better than no file
+                    raise IOError
+            except (IOError, OSError):
                 new_passwd = ["root:*LOCK*:14600::::::"]
             else:
                 passwd = passwd_content.split('\n')
