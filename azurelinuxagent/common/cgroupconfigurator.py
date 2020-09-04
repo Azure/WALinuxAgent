@@ -214,8 +214,7 @@ class CGroupConfigurator(object):
             Deletes the cgroup for the given extension
             """
             def __impl():
-                cgroups = self._cgroups_api.remove_extension_cgroups(name) # pylint: disable=E1111
-                return cgroups
+                self._cgroups_api.remove_extension_cgroups(name)
 
             self._invoke_cgroup_operation(__impl, "Failed to delete cgroups for extension '{0}'.".format(name))
 
