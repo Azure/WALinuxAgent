@@ -38,6 +38,9 @@ def read_input(message):
     if sys.version_info[0] >= 3: # pylint: disable=R1705
         return input(message)
     else:
+        # This is not defined in python3, and the linter will thus 
+        # throw an undefined-variable<E0602> error on this line.
+        # Suppress it here.
         return raw_input(message) # pylint: disable=E0602
 
 class DeprovisionAction(object): # pylint: disable=R0903

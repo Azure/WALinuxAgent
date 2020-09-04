@@ -31,10 +31,26 @@ elif sys.version_info[0] == 2:
     import httplib as httpclient # pylint: disable=E0401,W0611
     from urlparse import urlparse # pylint: disable=E0401
 
-    """Rename Python2 unicode to ustr""" # pylint: disable=W0105
+    # Rename Python2 unicode to ustr 
+    # This is not defined in python3, and the linter will thus 
+    # throw an undefined-variable<E0602> error on this line.
+    # Suppress it here.
     ustr = unicode # pylint: disable=E0602,invalid-name
 
+    # This is not defined in python3, and the linter will thus 
+    # throw an undefined-variable<E0602> error on this line.
+    # Suppress it here.
     bytebuffer = buffer # pylint: disable=E0602,invalid-name
+
+    # This is not defined in python3, and the linter will thus 
+    # throw an undefined-variable<E0602> error on this line.
+    # Suppress it here.
+    range = xrange # pylint: disable=E0602,invalid-name,redefined-builtin
+
+    # This is not defined in python3, and the linter will thus 
+    # throw an undefined-variable<E0602> error on this line.
+    # Suppress it here.
+    int = long # pylint: disable=E0602,invalid-name,redefined-builtin
 
     if sys.version_info[1] >= 7:
         from collections import OrderedDict  # For Py 2.7+ # pylint: disable=C0412

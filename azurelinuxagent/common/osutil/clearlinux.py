@@ -32,6 +32,7 @@ import azurelinuxagent.common.utils.fileutil as fileutil
 import azurelinuxagent.common.utils.shellutil as shellutil
 import azurelinuxagent.common.utils.textutil as textutil # pylint: disable=W0611
 from azurelinuxagent.common.osutil.default import DefaultOSUtil
+from azurelinuxagent.common.exception import OSUtilError
 
 class ClearLinuxUtil(DefaultOSUtil):
 
@@ -75,12 +76,8 @@ class ClearLinuxUtil(DefaultOSUtil):
     def del_root_password(self):
         try:
             passwd_file_path = conf.get_passwd_file_path()
-            try:
-                passwd_content = fileutil.read_file(passwd_file_path)
-                if not passwd_content:
-                    # Empty file is no better than no file
-                    raise FileNotFoundError # pylint: disable=undefined-variable
-            except FileNotFoundError: # pylint: disable=undefined-variable
+            passwd_content = fileutil.read_file(passwd_file_path)
+            if not passwd_content:
                 new_passwd = ["root:*LOCK*:14600::::::"]
             else:
                 passwd = passwd_content.split('\n')
@@ -88,5 +85,5 @@ class ClearLinuxUtil(DefaultOSUtil):
                 new_passwd.insert(0, "root:*LOCK*:14600::::::")
             fileutil.write_file(passwd_file_path, "\n".join(new_passwd))
         except IOError as e: # pylint: disable=C0103
-            raise OSUtilError("Failed to delete root password:{0}".format(e)) # pylint: disable=E0602
+            raise OSUtilError("Failed to delete root password:{0}".format(e))
         pass # pylint: disable=W0107

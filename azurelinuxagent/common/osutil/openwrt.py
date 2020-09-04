@@ -126,7 +126,7 @@ class OpenWRTOSUtil(DefaultOSUtil):
         if os.path.exists("/etc/init.d/sshd"): # pylint: disable=R1705
             return shellutil.run("/etc/init.d/sshd restart", chk_err=True)
         else:
-            logger.warn("sshd service does not exists", username) # pylint: disable=E0602
+            logger.warn("sshd service does not exists")
 
     def stop_agent_service(self):
         return shellutil.run("/etc/init.d/{0} stop".format(self.service_name), chk_err=True)

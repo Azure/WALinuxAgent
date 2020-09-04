@@ -27,7 +27,7 @@ import azurelinuxagent.common.protocol.restapi as restapi
 import azurelinuxagent.common.protocol.wire as wire
 from azurelinuxagent.common.errorstate import ErrorState
 from azurelinuxagent.common.exception import HttpError, ResourceGoneError
-from azurelinuxagent.common.future import ustr
+from azurelinuxagent.common.future import ustr, httpclient
 from azurelinuxagent.common.osutil.default import UUID_PATTERN
 from azurelinuxagent.common.protocol.hostplugin import API_VERSION
 from azurelinuxagent.common.utils import restutil
@@ -36,13 +36,6 @@ from tests.protocol.mocks import mock_wire_protocol, HttpRequestPredicates
 from tests.protocol.mockwiredata import DATA_FILE, DATA_FILE_NO_EXT
 from tests.protocol.test_wire import MockResponse as TestWireMockResponse
 from tests.tools import AgentTestCase, PY_VERSION_MAJOR, Mock, patch
-
-if sys.version_info[0] == 3:
-    import http.client as httpclient # pylint: disable=import-error
-    bytebuffer = memoryview # pylint: disable=invalid-name
-elif sys.version_info[0] == 2:
-    import httplib as httpclient # pylint: disable=import-error
-    bytebuffer = buffer # pylint: disable=undefined-variable,invalid-name
 
 
 hostplugin_status_url = "http://168.63.129.16:32526/status" # pylint: disable=invalid-name

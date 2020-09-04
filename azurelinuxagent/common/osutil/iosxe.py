@@ -17,12 +17,13 @@
 # Requires Python 2.6+ and Openssl 1.0+
 #
 
+import os
+
 import azurelinuxagent.common.logger as logger
 import azurelinuxagent.common.utils.shellutil as shellutil
 from azurelinuxagent.common.future import ustr
-from azurelinuxagent.common.osutil.default import DefaultOSUtil
-from azurelinuxagent.common.osutil.redhat import Redhat6xOSUtil # pylint: disable=W0611
-from azurelinuxagent.common.utils import textutil # pylint: disable=W0611
+from azurelinuxagent.common.osutil.default import DefaultOSUtil, PRODUCT_ID_FILE, DMIDECODE_CMD, UUID_PATTERN
+from azurelinuxagent.common.utils import textutil, fileutil # pylint: disable=W0611
 
 # pylint: disable=W0105
 '''
@@ -58,7 +59,7 @@ class IosxeOSUtil(DefaultOSUtil):
         Restart NetworkManager first before publishing hostname
         """
         shellutil.run("service NetworkManager restart")
-        super(RedhatOSUtil, self).publish_hostname(hostname) # pylint: disable=E0602
+        super(IosxeOSUtil, self).publish_hostname(hostname)
 
     def register_agent_service(self):
         return shellutil.run("systemctl enable waagent", chk_err=False)
@@ -79,13 +80,13 @@ class IosxeOSUtil(DefaultOSUtil):
         If that is missing, then extracts from dmidecode
         If nothing works (for old VMs), return the empty string
         '''
-        if os.path.isfile(PRODUCT_ID_FILE): # pylint: disable=E0602
+        if os.path.isfile(PRODUCT_ID_FILE):
             try:
-                s = fileutil.read_file(PRODUCT_ID_FILE).strip() # pylint: disable=E0602,C0103
+                s = fileutil.read_file(PRODUCT_ID_FILE).strip() # pylint: disable=C0103
                 return self._correct_instance_id(s.strip())
             except IOError:
                 pass
-        rc, s = shellutil.run_get_output(DMIDECODE_CMD) # pylint: disable=E0602,C0103
-        if rc != 0 or UUID_PATTERN.match(s) is None: # pylint: disable=E0602
+        rc, s = shellutil.run_get_output(DMIDECODE_CMD) # pylint: disable=C0103
+        if rc != 0 or UUID_PATTERN.match(s) is None:
             return ""
         return self._correct_instance_id(s.strip())
