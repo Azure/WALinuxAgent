@@ -25,6 +25,10 @@ if sys.version_info[0] == 3:
 
     bytebuffer = memoryview # pylint: disable=C0103
 
+    range = range
+
+    int = int
+
     from collections import OrderedDict # pylint: disable=W0611
 
 elif sys.version_info[0] == 2:
