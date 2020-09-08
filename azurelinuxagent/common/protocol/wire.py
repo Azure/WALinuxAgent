@@ -32,7 +32,7 @@ from azurelinuxagent.common.datacontract import validate_param
 from azurelinuxagent.common.event import add_event, add_periodic, WALAEventOperation, EVENTS_DIRECTORY, EventLogger, \
     report_event
 from azurelinuxagent.common.exception import ProtocolNotFoundError, \
-    ResourceGoneError, ExtensionDownloadError, InvalidContainerError, ProtocolError, HttpError
+    ResourceGoneError, ExtensionDownloadError, InvalidContainerError, ProtocolError, HttpError, AgentError
 from azurelinuxagent.common.future import httpclient, bytebuffer, ustr
 from azurelinuxagent.common.protocol.goal_state import GoalState, TRANSPORT_CERT_FILE_NAME, TRANSPORT_PRV_FILE_NAME
 from azurelinuxagent.common.protocol.hostplugin import HostPluginProtocol
@@ -71,6 +71,9 @@ MAX_EVENT_BUFFER_SIZE = 2 ** 16 - 2 ** 10
 class UploadError(HttpError):
     pass
 
+class HttpResponseFailure(AgentError):
+    def __init__(self, msg=None, inner=None):
+        super(AgentError, self).__init__(msg, inner)
 
 class WireProtocol(DataContract):
     def __init__(self, endpoint):
@@ -161,13 +164,7 @@ class WireProtocol(DataContract):
         # NOTE: the host_func may be called after refreshing the goal state, be careful about any goal state data
         # in the lambda.
         host_func = lambda: self._download_ext_handler_pkg_through_host(uri, destination)
-
-        try:
-            success = self.client.send_request_using_appropriate_channel(direct_func, host_func)
-        except Exception:
-            success = False
-
-        return success
+        return self.client.send_request_using_appropriate_channel(direct_func, host_func)
 
     def report_provision_status(self, provision_status):
         validate_param("provision_status", provision_status, ProvisionStatus)
@@ -675,14 +672,14 @@ class WireClient(object): # pylint: disable=R0904
                                                     is_healthy=not restutil.request_failed_at_hostplugin(resp),
                                                     source='WireClient',
                                                     response=error_response)
-                raise ProtocolError(msg)
+                raise HttpResponseFailure(msg)
             else:
                 if host_plugin is not None:
                     host_plugin.report_fetch_health(uri, source='WireClient')
 
         except (HttpError, ProtocolError, IOError) as e: # pylint: disable=C0103
             logger.verbose("Fetch failed from [{0}]: {1}", uri, e)
-            if isinstance(e, ResourceGoneError) or isinstance(e, InvalidContainerError): # pylint: disable=R1701
+            if isinstance(e, ResourceGoneError) or isinstance(e, InvalidContainerError) or isinstance(e, HttpResponseFailure): # pylint: disable=R1701
                 raise
         return resp
 
@@ -942,7 +939,7 @@ class WireClient(object): # pylint: disable=R0904
             if not ret:
                 logger.periodic_info(logger.EVERY_HOUR, "[PERIODIC] Request failed using the direct channel, "
                                                         "switching to host plugin.")
-        except (ResourceGoneError, InvalidContainerError) as e: # pylint: disable=C0103
+        except (ResourceGoneError, InvalidContainerError, HttpResponseFailure) as e: # pylint: disable=C0103
             logger.periodic_info(logger.EVERY_HOUR, "[PERIODIC] Request failed using the direct channel, "
                                                     "switching to host plugin. Error: {0}".format(ustr(e)))
 

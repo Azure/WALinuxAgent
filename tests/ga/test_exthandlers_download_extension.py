@@ -190,9 +190,8 @@ class DownloadExtensionTestCase(AgentTestCase): # pylint: disable=too-many-insta
             # fail a few times, then succeed
             if self.download_failures < 3:
                 self.download_failures += 1
-                return False
+                raise Exception("test failure")
             DownloadExtensionTestCase._create_zip_file(destination)
-            return True
 
         with patch("azurelinuxagent.common.protocol.wire.WireProtocol.download_ext_handler_pkg", side_effect=download_ext_handler_pkg) as mock_download_ext_handler_pkg:
             self.ext_handler_instance.download()

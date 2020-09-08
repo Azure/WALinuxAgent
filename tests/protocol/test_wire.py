@@ -31,7 +31,7 @@ from azurelinuxagent.common.protocol.goal_state import ExtensionsConfig
 from azurelinuxagent.common.protocol.hostplugin import HostPluginProtocol
 from azurelinuxagent.common.protocol.restapi import VMAgentManifestUri
 from azurelinuxagent.common.protocol.wire import WireProtocol, WireClient, \
-    InVMArtifactsProfile, StatusBlob, VMStatus
+    InVMArtifactsProfile, StatusBlob, VMStatus, HttpResponseFailure
 from azurelinuxagent.common.telemetryevent import TelemetryEventList, GuestAgentExtensionEventsSchema, \
     TelemetryEventParam, TelemetryEvent
 from azurelinuxagent.common.utils import restutil
@@ -532,6 +532,37 @@ class TestWireClient(HttpRequestPredicates, AgentTestCase):
             self.assertTrue(self.is_host_plugin_extension_artifact_request(urls[3]), "The third attempt should have been over the host channel")
             self.assertTrue(os.path.exists(target_file), 'The extension package was not downloaded')
 
+    def test_download_ext_handler_pkg_should_fail_if_both_channels_return_an_unsuccessful_response(self):
+        extension_url = "https://fake_host/fake_extension.zip"
+        target_file = os.path.join(self.tmp_dir, "fake_extension.zip")
+
+        def http_get_handler(url, *_, **kwargs):
+            if url == extension_url or self.is_host_plugin_extension_request(url, kwargs, extension_url):
+                return MockResponse(body=b"content not found", status_code=404, reason="Not Found")
+            if self.is_goal_state_request(url):
+                protocol.track_url(url)  # keep track of goal state requests
+            return None
+
+        with mock_wire_protocol(mockwiredata.DATA_FILE) as protocol:
+            # initialization of the host plugin triggers a request for the goal state;
+            # do it here before we start tracking those requests.
+            protocol.client.get_host_plugin()
+
+            protocol.set_http_handlers(http_get_handler=http_get_handler)
+
+            with self.assertRaises(HttpResponseFailure) as context_manager:
+                protocol.download_ext_handler_pkg(extension_url, target_file)
+
+            self.assertIn("content not found", str(context_manager.exception))
+            self.assertTrue(isinstance(context_manager.exception, HttpResponseFailure))
+
+            urls = protocol.get_tracked_urls()
+            self.assertEquals(len(urls), 2, "Unexpected number of HTTP requests: [{0}]".format(urls))
+            self.assertEquals(urls[0], extension_url, "The first attempt should have been over the direct channel")
+            self.assertTrue(self.is_host_plugin_extension_artifact_request(urls[1]),
+                            "The second attempt should have been over the host channel")
+            self.assertFalse(os.path.exists(target_file), "The extension package was downloaded and it shouldn't have")
+
     def test_fetch_manifest_should_not_invoke_host_channel_when_direct_channel_succeeds(self):
         manifest_url = 'https://fake_host/fake_manifest.xml'
         manifest_xml = '<?xml version="1.0" encoding="utf-8"?><PluginVersionManifest/>'
@@ -636,6 +667,33 @@ class TestWireClient(HttpRequestPredicates, AgentTestCase):
             self.assertTrue(self.is_host_plugin_extension_artifact_request(urls[3]),
                             "The third attempt should have been over the host channel")
 
+    def test_fetch_manifest_should_raise_if_both_channels_return_an_unsuccessful_response(self):
+        manifest_url = 'https://fake_host/fake_manifest.xml'
+
+        def http_get_handler(url, *_, **kwargs):
+            if url == manifest_url or self.is_host_plugin_extension_request(url, kwargs, manifest_url):
+                return MockResponse(body=b"content not found", status_code=404, reason="Not Found")
+            elif self.is_goal_state_request(url):
+                protocol.track_url(url)  # keep track of goal state requests
+            return None
+
+        # Direct channel fails, then host channel fails. Goal state should not have been updated.
+        with mock_wire_protocol(mockwiredata.DATA_FILE) as protocol:
+            # initialization of the host plugin triggers a request for the goal state; do it here before we start
+            # tracking those requests.
+            protocol.client.get_host_plugin()
+
+            protocol.set_http_handlers(http_get_handler=http_get_handler)
+
+            with self.assertRaises(ExtensionDownloadError):
+                protocol.client.fetch_manifest([VMAgentManifestUri(uri=manifest_url)])
+
+            urls = protocol.get_tracked_urls()
+            self.assertEquals(len(urls), 2, "Unexpected number of HTTP requests: [{0}]".format(urls))
+            self.assertEquals(urls[0], manifest_url, "The first attempt should have been over the direct channel")
+            self.assertTrue(self.is_host_plugin_extension_artifact_request(urls[1]),
+                            "The second attempt should have been over the host channel")
+
     def test_get_artifacts_profile_should_not_invoke_host_channel_when_direct_channel_succeeds(self):
         def http_get_handler(url, *_, **__): # pylint: disable=useless-return
             if self.is_in_vm_artifacts_profile_request(url):
@@ -727,6 +785,32 @@ class TestWireClient(HttpRequestPredicates, AgentTestCase):
             self.assertTrue(self.is_host_plugin_extension_artifact_request(urls[1]), "The second request should have been over the host channel")
             self.assertTrue(self.is_goal_state_request(urls[2]), "The goal state should have been refreshed before retrying the host channel")
             self.assertTrue(self.is_host_plugin_extension_artifact_request(urls[3]), "The retry request should have been over the host channel")
+
+    def test_get_artifacts_profile_should_fail_if_both_channels_return_an_unsuccessful_response(self):
+        def http_get_handler(url, *_, **kwargs):
+            if self.is_in_vm_artifacts_profile_request(url) or \
+                    self.is_host_plugin_in_vm_artifacts_profile_request(url, kwargs):
+                return MockResponse(body=b"not found", status_code=404)
+            if self.is_goal_state_request(url):
+                protocol.track_url(url)
+            return None
+
+        with mock_wire_protocol(mockwiredata.DATA_FILE_IN_VM_ARTIFACTS_PROFILE) as protocol:
+            # initialization of the host plugin triggers a request for the goal state;
+            # do it here before we start tracking those requests.
+            protocol.client.get_host_plugin()
+
+            protocol.set_http_handlers(http_get_handler=http_get_handler)
+
+            return_value = protocol.client.get_artifacts_profile()
+
+            self.assertIsNone(return_value, "The artifacts profile request should have failed")
+            urls = protocol.get_tracked_urls()
+            self.assertEquals(len(urls), 2, "Invalid number of requests: [{0}]".format(urls))
+            self.assertTrue(self.is_in_vm_artifacts_profile_request(urls[0]),
+                            "The first request should have been over the direct channel")
+            self.assertTrue(self.is_host_plugin_extension_artifact_request(urls[1]),
+                            "The second request should have been over the host channel")
 
     def test_upload_logs_should_not_refresh_plugin_when_first_attempt_succeeds(self):
         def http_put_handler(url, *_, **__): # pylint: disable=inconsistent-return-statements
@@ -1081,9 +1165,10 @@ class UpdateHostPluginFromGoalStateTestCase(AgentTestCase):
 
 
 class MockResponse: # pylint: disable=too-few-public-methods
-    def __init__(self, body, status_code):
+    def __init__(self, body, status_code, reason=None):
         self.body = body
         self.status = status_code
+        self.reason = reason
 
     def read(self, *_):
         return self.body
