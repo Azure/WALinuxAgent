@@ -73,7 +73,7 @@ class UploadError(HttpError):
 
 class HttpResponseFailure(AgentError):
     def __init__(self, msg=None, inner=None):
-        super(AgentError, self).__init__(msg, inner)
+        super(HttpResponseFailure, self).__init__(msg, inner)
 
 class WireProtocol(DataContract):
     def __init__(self, endpoint):

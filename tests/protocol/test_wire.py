@@ -524,9 +524,9 @@ class TestWireClient(HttpRequestPredicates, AgentTestCase):
             success = protocol.download_ext_handler_pkg(extension_url, target_file)
 
             urls = protocol.get_tracked_urls()
-            self.assertEquals(success, True, 'The download should have succeeded') # pylint: disable=deprecated-method
-            self.assertEquals(len(urls), 4, "Unexpected number of HTTP requests: [{0}]".format(urls)) # pylint: disable=deprecated-method
-            self.assertEquals(urls[0], extension_url, "The first attempt should have been over the direct channel") # pylint: disable=deprecated-method
+            self.assertEqual(success, True, 'The download should have succeeded') # pylint: disable=deprecated-method
+            self.assertEqual(len(urls), 4, "Unexpected number of HTTP requests: [{0}]".format(urls)) # pylint: disable=deprecated-method
+            self.assertEqual(urls[0], extension_url, "The first attempt should have been over the direct channel") # pylint: disable=deprecated-method
             self.assertTrue(self.is_host_plugin_extension_artifact_request(urls[1]), "The second attempt should have been over the host channel")
             self.assertTrue(self.is_goal_state_request(urls[2]), "The host channel should have been refreshed the goal state")
             self.assertTrue(self.is_host_plugin_extension_artifact_request(urls[3]), "The third attempt should have been over the host channel")
@@ -557,8 +557,8 @@ class TestWireClient(HttpRequestPredicates, AgentTestCase):
             self.assertTrue(isinstance(context_manager.exception, HttpResponseFailure))
 
             urls = protocol.get_tracked_urls()
-            self.assertEquals(len(urls), 2, "Unexpected number of HTTP requests: [{0}]".format(urls))
-            self.assertEquals(urls[0], extension_url, "The first attempt should have been over the direct channel")
+            self.assertEqual(len(urls), 2, "Unexpected number of HTTP requests: [{0}]".format(urls))
+            self.assertEqual(urls[0], extension_url, "The first attempt should have been over the direct channel")
             self.assertTrue(self.is_host_plugin_extension_artifact_request(urls[1]),
                             "The second attempt should have been over the host channel")
             self.assertFalse(os.path.exists(target_file), "The extension package was downloaded and it shouldn't have")
@@ -579,9 +579,9 @@ class TestWireClient(HttpRequestPredicates, AgentTestCase):
             manifest = protocol.client.fetch_manifest([VMAgentManifestUri(uri=manifest_url)])
 
             urls = protocol.get_tracked_urls()
-            self.assertEquals(manifest, manifest_xml, 'The expected manifest was not downloaded') # pylint: disable=deprecated-method
-            self.assertEquals(len(urls), 1, "Unexpected number of HTTP requests: [{0}]".format(urls)) # pylint: disable=deprecated-method
-            self.assertEquals(urls[0], manifest_url, "The manifest should have been downloaded over the direct channel") # pylint: disable=deprecated-method
+            self.assertEqual(manifest, manifest_xml, 'The expected manifest was not downloaded') # pylint: disable=deprecated-method
+            self.assertEqual(len(urls), 1, "Unexpected number of HTTP requests: [{0}]".format(urls)) # pylint: disable=deprecated-method
+            self.assertEqual(urls[0], manifest_url, "The manifest should have been downloaded over the direct channel") # pylint: disable=deprecated-method
 
     def test_fetch_manifest_should_use_host_channel_when_direct_channel_fails(self):
         manifest_url = 'https://fake_host/fake_manifest.xml'
@@ -598,9 +598,9 @@ class TestWireClient(HttpRequestPredicates, AgentTestCase):
             manifest = protocol.client.fetch_manifest([VMAgentManifestUri(uri=manifest_url)])
 
             urls = protocol.get_tracked_urls()
-            self.assertEquals(manifest, manifest_xml, 'The expected manifest was not downloaded') # pylint: disable=deprecated-method
-            self.assertEquals(len(urls), 2, "Unexpected number of HTTP requests: [{0}]".format(urls)) # pylint: disable=deprecated-method
-            self.assertEquals(urls[0], manifest_url, "The first attempt should have been over the direct channel") # pylint: disable=deprecated-method
+            self.assertEqual(manifest, manifest_xml, 'The expected manifest was not downloaded') # pylint: disable=deprecated-method
+            self.assertEqual(len(urls), 2, "Unexpected number of HTTP requests: [{0}]".format(urls)) # pylint: disable=deprecated-method
+            self.assertEqual(urls[0], manifest_url, "The first attempt should have been over the direct channel") # pylint: disable=deprecated-method
             self.assertTrue(self.is_host_plugin_extension_artifact_request(urls[1]), "The retry should have been over the host channel")
 
     def test_fetch_manifest_should_retry_the_host_channel_after_refreshing_the_host_plugin(self):
@@ -629,9 +629,9 @@ class TestWireClient(HttpRequestPredicates, AgentTestCase):
             manifest = protocol.client.fetch_manifest([VMAgentManifestUri(uri=manifest_url)])
 
             urls = protocol.get_tracked_urls()
-            self.assertEquals(manifest, manifest_xml) # pylint: disable=deprecated-method
-            self.assertEquals(len(urls), 4, "Unexpected number of HTTP requests: [{0}]".format(urls)) # pylint: disable=deprecated-method
-            self.assertEquals(urls[0], manifest_url, "The first attempt should have been over the direct channel") # pylint: disable=deprecated-method
+            self.assertEqual(manifest, manifest_xml) # pylint: disable=deprecated-method
+            self.assertEqual(len(urls), 4, "Unexpected number of HTTP requests: [{0}]".format(urls)) # pylint: disable=deprecated-method
+            self.assertEqual(urls[0], manifest_url, "The first attempt should have been over the direct channel") # pylint: disable=deprecated-method
             self.assertTrue(self.is_host_plugin_extension_artifact_request(urls[1]), "The second attempt should have been over the host channel")
             self.assertTrue(self.is_goal_state_request(urls[2]), "The host channel should have been refreshed the goal state")
             self.assertTrue(self.is_host_plugin_extension_artifact_request(urls[3]), "The third attempt should have been over the host channel")
@@ -673,7 +673,7 @@ class TestWireClient(HttpRequestPredicates, AgentTestCase):
         def http_get_handler(url, *_, **kwargs):
             if url == manifest_url or self.is_host_plugin_extension_request(url, kwargs, manifest_url):
                 return MockResponse(body=b"content not found", status_code=404, reason="Not Found")
-            elif self.is_goal_state_request(url):
+            if self.is_goal_state_request(url):
                 protocol.track_url(url)  # keep track of goal state requests
             return None
 
@@ -689,8 +689,8 @@ class TestWireClient(HttpRequestPredicates, AgentTestCase):
                 protocol.client.fetch_manifest([VMAgentManifestUri(uri=manifest_url)])
 
             urls = protocol.get_tracked_urls()
-            self.assertEquals(len(urls), 2, "Unexpected number of HTTP requests: [{0}]".format(urls))
-            self.assertEquals(urls[0], manifest_url, "The first attempt should have been over the direct channel")
+            self.assertEqual(len(urls), 2, "Unexpected number of HTTP requests: [{0}]".format(urls))
+            self.assertEqual(urls[0], manifest_url, "The first attempt should have been over the direct channel")
             self.assertTrue(self.is_host_plugin_extension_artifact_request(urls[1]),
                             "The second attempt should have been over the host channel")
 
@@ -705,7 +705,7 @@ class TestWireClient(HttpRequestPredicates, AgentTestCase):
 
             self.assertIsInstance(return_value, InVMArtifactsProfile, 'The request did not return a valid artifacts profile: {0}'.format(return_value))
             urls = protocol.get_tracked_urls()
-            self.assertEquals(len(urls), 1, "Unexpected HTTP requests: [{0}]".format(urls)) # pylint: disable=deprecated-method
+            self.assertEqual(len(urls), 1, "Unexpected HTTP requests: [{0}]".format(urls)) # pylint: disable=deprecated-method
 
     def test_get_artifacts_profile_should_use_host_channel_when_direct_channel_fails(self):
         def http_get_handler(url, *_, **kwargs):
@@ -724,7 +724,7 @@ class TestWireClient(HttpRequestPredicates, AgentTestCase):
             self.assertIsInstance(return_value, InVMArtifactsProfile, 'The request did not return a valid artifacts profile: {0}'.format(return_value))
             self.assertTrue(return_value.onHold, 'The OnHold property should be True') # pylint: disable=no-member
             urls = protocol.get_tracked_urls()
-            self.assertEquals(len(urls), 2, "Invalid number of requests: [{0}]".format(urls)) # pylint: disable=deprecated-method
+            self.assertEqual(len(urls), 2, "Invalid number of requests: [{0}]".format(urls)) # pylint: disable=deprecated-method
             self.assertTrue(self.is_in_vm_artifacts_profile_request(urls[0]), "The first request should have been over the direct channel")
             self.assertTrue(self.is_host_plugin_extension_artifact_request(urls[1]), "The second request should have been over the host channel")
 
@@ -754,7 +754,7 @@ class TestWireClient(HttpRequestPredicates, AgentTestCase):
             self.assertIsInstance(return_value, InVMArtifactsProfile, 'The request did not return a valid artifacts profile: {0}'.format(return_value))
             self.assertTrue(return_value.onHold, 'The OnHold property should be True') # pylint: disable=no-member
             urls = protocol.get_tracked_urls()
-            self.assertEquals(len(urls), 4, "Invalid number of requests: [{0}]".format(urls)) # pylint: disable=deprecated-method
+            self.assertEqual(len(urls), 4, "Invalid number of requests: [{0}]".format(urls)) # pylint: disable=deprecated-method
             self.assertTrue(self.is_in_vm_artifacts_profile_request(urls[0]), "The first request should have been over the direct channel")
             self.assertTrue(self.is_host_plugin_extension_artifact_request(urls[1]), "The second request should have been over the host channel")
             self.assertTrue(self.is_goal_state_request(urls[2]), "The goal state should have been refreshed before retrying the host channel")
@@ -806,7 +806,7 @@ class TestWireClient(HttpRequestPredicates, AgentTestCase):
 
             self.assertIsNone(return_value, "The artifacts profile request should have failed")
             urls = protocol.get_tracked_urls()
-            self.assertEquals(len(urls), 2, "Invalid number of requests: [{0}]".format(urls))
+            self.assertEqual(len(urls), 2, "Invalid number of requests: [{0}]".format(urls))
             self.assertTrue(self.is_in_vm_artifacts_profile_request(urls[0]),
                             "The first request should have been over the direct channel")
             self.assertTrue(self.is_host_plugin_extension_artifact_request(urls[1]),
@@ -882,9 +882,9 @@ class TestWireClient(HttpRequestPredicates, AgentTestCase):
 
             # Assert we've called both the direct channel function and the host channel function, which succeeded.
             ret = protocol.client.send_request_using_appropriate_channel(direct_func, host_func)
-            self.assertEquals(42, ret) # pylint: disable=deprecated-method
-            self.assertEquals(1, direct_func.counter) # pylint: disable=deprecated-method
-            self.assertEquals(1, host_func.counter) # pylint: disable=deprecated-method
+            self.assertEqual(42, ret) # pylint: disable=deprecated-method
+            self.assertEqual(1, direct_func.counter) # pylint: disable=deprecated-method
+            self.assertEqual(1, host_func.counter) # pylint: disable=deprecated-method
 
     def test_send_request_using_appropriate_channel_should_retry_the_host_channel_after_reloading_goal_state(self):
         with mock_wire_protocol(mockwiredata.DATA_FILE) as protocol:
@@ -906,10 +906,10 @@ class TestWireClient(HttpRequestPredicates, AgentTestCase):
             with patch("azurelinuxagent.common.protocol.wire.WireClient.update_host_plugin_from_goal_state") \
                     as mock_update_host_plugin_from_goal_state:
                 ret = protocol.client.send_request_using_appropriate_channel(direct_func, host_func)
-                self.assertEquals(42, ret) # pylint: disable=deprecated-method
-                self.assertEquals(1, direct_func.counter) # pylint: disable=deprecated-method
-                self.assertEquals(2, host_func.counter) # pylint: disable=deprecated-method
-                self.assertEquals(1, mock_update_host_plugin_from_goal_state.call_count) # pylint: disable=deprecated-method
+                self.assertEqual(42, ret) # pylint: disable=deprecated-method
+                self.assertEqual(1, direct_func.counter) # pylint: disable=deprecated-method
+                self.assertEqual(2, host_func.counter) # pylint: disable=deprecated-method
+                self.assertEqual(1, mock_update_host_plugin_from_goal_state.call_count) # pylint: disable=deprecated-method
 
 
 class UpdateGoalStateTestCase(AgentTestCase):
