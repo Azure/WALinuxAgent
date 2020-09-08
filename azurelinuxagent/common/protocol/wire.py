@@ -932,47 +932,36 @@ class WireClient(object): # pylint: disable=R0904
 
         return ret
 
-    def send_request_using_appropriate_channel(self, direct_func, host_func):
-        # A wrapper method for all function calls that send HTTP requests. The purpose of the method is to
-        # define which channel to use, direct or through the host plugin. For the host plugin channel,
-        # also implement a retry mechanism.
+    def _call_direct_channel(self, direct_func):
+        ret = None
+        try:
+            ret = direct_func()
 
-        # By default, the direct channel is the default channel. If that is the case, try getting a response
-        # through that channel. On failure, fall back to the host plugin channel.
+            # Different direct channel functions report failure in different ways: by returning None, False,
+            # or raising ResourceGone or InvalidContainer exceptions.
+            if not ret:
+                logger.periodic_info(logger.EVERY_HOUR, "[PERIODIC] Request failed using the direct channel, "
+                                                        "switching to host plugin.")
+        except (ResourceGoneError, InvalidContainerError) as e: # pylint: disable=C0103
+            logger.periodic_info(logger.EVERY_HOUR, "[PERIODIC] Request failed using the direct channel, "
+                                                    "switching to host plugin. Error: {0}".format(ustr(e)))
+
+        return ret
+
+    def send_request_using_appropriate_channel(self, direct_func, host_func):
+        # A wrapper method for all function calls that send HTTP requests. The direct channel is always used first and
+        # the host plugin channel as a fallback. For the host plugin channel, also implement a retry mechanism.
 
         # When using the host plugin channel, regardless if it's set as default or not, try sending the request first.
         # On specific failures that indicate a stale goal state (such as resource gone or invalid container parameter),
-        # refresh the goal state and try again. If successful, set the host plugin channel as default. If failed,
-        # raise the exception.
+        # refresh the goal state and try again. If failed, raise the exception.
 
         # NOTE: direct_func and host_func are passed as lambdas. Be careful about capturing goal state data in them as
         # they will not be refreshed even if a goal state refresh is called before retrying the host_func.
 
-        if not HostPluginProtocol.is_default_channel():
-            ret = None
-            try:
-                ret = direct_func()
-
-                # Different direct channel functions report failure in different ways: by returning None, False,
-                # or raising ResourceGone or InvalidContainer exceptions.
-                if not ret:
-                    logger.periodic_info(logger.EVERY_HOUR, "[PERIODIC] Request failed using the direct channel, "
-                                                            "switching to host plugin.")
-            except (ResourceGoneError, InvalidContainerError) as e: # pylint: disable=C0103
-                logger.periodic_info(logger.EVERY_HOUR, "[PERIODIC] Request failed using the direct channel, "
-                                                        "switching to host plugin. Error: {0}".format(ustr(e)))
-
-            if ret:
-                return ret
-        else:
-            logger.periodic_info(logger.EVERY_HALF_DAY, "[PERIODIC] Using host plugin as default channel.")
-
-        ret = self._call_hostplugin_with_container_check(host_func)
-
-        if not HostPluginProtocol.is_default_channel():
-            logger.info("Setting host plugin as default channel from now on. "
-                        "Restart the agent to reset the default channel.")
-            HostPluginProtocol.set_default_channel(True)
+        ret = self._call_direct_channel(direct_func)
+        if not ret:
+            ret = self._call_hostplugin_with_container_check(host_func)
 
         return ret
 

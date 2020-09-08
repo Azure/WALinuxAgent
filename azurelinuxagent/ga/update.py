@@ -31,7 +31,6 @@ import time
 import traceback
 import uuid
 import zipfile
-
 from datetime import datetime, timedelta
 
 import azurelinuxagent.common.conf as conf
@@ -40,21 +39,18 @@ import azurelinuxagent.common.utils.fileutil as fileutil
 import azurelinuxagent.common.utils.restutil as restutil
 import azurelinuxagent.common.utils.textutil as textutil
 from azurelinuxagent.common.cgroupconfigurator import CGroupConfigurator
-
 from azurelinuxagent.common.event import add_event, initialize_event_logger_vminfo_common_parameters, \
     elapsed_milliseconds, WALAEventOperation, EVENTS_DIRECTORY
 from azurelinuxagent.common.exception import ResourceGoneError, UpdateError
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.osutil import get_osutil
 from azurelinuxagent.common.protocol.util import get_protocol_util
-from azurelinuxagent.common.protocol.hostplugin import HostPluginProtocol
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
-from azurelinuxagent.common.version import AGENT_NAME, AGENT_VERSION, AGENT_DIR_PATTERN, CURRENT_AGENT,\
+from azurelinuxagent.common.version import AGENT_NAME, AGENT_VERSION, AGENT_DIR_PATTERN, CURRENT_AGENT, \
     CURRENT_VERSION, DISTRO_NAME, DISTRO_VERSION, is_current_agent_installed, PY_VERSION_MAJOR, PY_VERSION_MINOR, \
     PY_VERSION_MICRO
 from azurelinuxagent.ga.env import get_env_handler
 from azurelinuxagent.ga.extension_telemetry import get_extension_telemetry_handler
-
 from azurelinuxagent.ga.exthandlers import HandlerManifest, get_traceback, ExtHandlersHandler, \
     is_extension_telemetry_pipeline_enabled, list_agent_lib_directory
 from azurelinuxagent.ga.monitor import get_monitor_handler
@@ -937,31 +933,17 @@ class GuestAgent(object):
         uris_shuffled = self.pkg.uris
         random.shuffle(uris_shuffled)
         for uri in uris_shuffled:
-            if not HostPluginProtocol.is_default_channel() and self._fetch(uri.uri): # pylint: disable=R1723
+            if self._fetch(uri.uri): # pylint: disable=R1723
                 break
 
             elif self.host is not None and self.host.ensure_initialized():
-                if not HostPluginProtocol.is_default_channel():
-                    logger.warn("Download failed, switching to host plugin")
-                else:
-                    logger.verbose("Using host plugin as default channel")
+                logger.warn("Download failed, switching to host plugin")
 
                 uri, headers = self.host.get_artifact_request(uri.uri, self.host.manifest_uri)
-                try:
-                    if self._fetch(uri, headers=headers, use_proxy=False): # pylint: disable=R1723
-                        if not HostPluginProtocol.is_default_channel():
-                            logger.verbose("Setting host plugin as default channel")
-                            HostPluginProtocol.set_default_channel(True)
-                        break
-                    else:
-                        logger.warn("Host plugin download failed")
-
-                # If the HostPlugin rejects the request,
-                # let the error continue, but set to use the HostPlugin
-                except ResourceGoneError:
-                    HostPluginProtocol.set_default_channel(True)
-                    raise
-
+                if self._fetch(uri, headers=headers, use_proxy=False): # pylint: disable=R1723
+                    break
+                else:
+                    logger.warn("Host plugin download failed")
             else:
                 logger.error("No download channels available")
 
