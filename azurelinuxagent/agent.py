@@ -34,7 +34,7 @@ import azurelinuxagent.common.conf as conf
 import azurelinuxagent.common.event as event
 import azurelinuxagent.common.logger as logger
 from azurelinuxagent.common.future import ustr
-from azurelinuxagent.common.logcollector import LogCollector, LOG_COLLECTOR_FULL_MODE_FLAG, OUTPUT_RESULTS_FILE_PATH
+from azurelinuxagent.common.logcollector import LogCollector, OUTPUT_RESULTS_FILE_PATH
 from azurelinuxagent.common.osutil import get_osutil
 from azurelinuxagent.common.utils import fileutil
 from azurelinuxagent.common.version import AGENT_NAME, AGENT_LONG_VERSION, \
@@ -152,14 +152,14 @@ class Agent(object):
         for k in sorted(configuration.keys()):
             print("{0} = {1}".format(k, configuration[k]))
 
-    def collect_logs(self, log_collector_mode):
-        if log_collector_mode == LOG_COLLECTOR_FULL_MODE_FLAG:
+    def collect_logs(self, is_full_mode):
+        if is_full_mode:
             print("Running log collector mode full")
         else:
             print("Running log collector mode normal")
 
         try:
-            log_collector = LogCollector(log_collector_mode == LOG_COLLECTOR_FULL_MODE_FLAG)
+            log_collector = LogCollector(is_full_mode)
             archive = log_collector.collect_logs_and_get_archive()
             print("Log collection successfully completed. Archive can be found at {0} "
                   "and detailed log output can be found at {1}".format(archive, OUTPUT_RESULTS_FILE_PATH))
@@ -176,7 +176,7 @@ def main(args=[]): # pylint: disable=R0912,W0102
     """
     if len(args) <= 0: # pylint: disable=len-as-condition
         args = sys.argv[1:]
-    command, force, verbose, debug, conf_file_path, log_collector_mode = parse_args(args)
+    command, force, verbose, debug, conf_file_path, log_collector_full_mode = parse_args(args)
     if command == "version":
         version()
     elif command == "help":
@@ -201,7 +201,7 @@ def main(args=[]): # pylint: disable=R0912,W0102
             elif command == "show-configuration":
                 agent.show_configuration()
             elif command == "collect-logs":
-                agent.collect_logs(log_collector_mode)
+                agent.collect_logs(log_collector_full_mode)
         except Exception:
             logger.error(u"Failed to run '{0}': {1}",
                          command,
@@ -217,7 +217,7 @@ def parse_args(sys_args): # pylint: disable=R0912
     verbose = False
     debug = False
     conf_file_path = None
-    log_collector_mode = None
+    log_collector_full_mode = False
 
     for arg in sys_args: # pylint: disable=C0103
         m = re.match("^(?:[-/]*)configuration-path:([\w/\.\-_]+)", arg) # pylint: disable=W1401,C0103
@@ -228,16 +228,6 @@ def parse_args(sys_args): # pylint: disable=R0912
                         conf_file_path), file=sys.stderr) 
                 print(usage())
                 sys.exit(1)
-
-        m = re.match("^(?:[-/]*)-mode:([\w/\.\-_]+)", arg) # pylint: disable=W1401,C0103
-        if m is not None:
-            log_collector_mode = m.group(1)
-            if log_collector_mode != LOG_COLLECTOR_FULL_MODE_FLAG:
-                print("Error: Invalid value for log collector mode: {0}. Accepted value: full. "
-                      "If mode is not specified, will use normal mode.".format(log_collector_mode))
-                print(usage())
-                sys.exit(1)
-
         elif re.match("^([-/]*)deprovision\\+user", arg):
             cmd = "deprovision+user"
         elif re.match("^([-/]*)deprovision", arg):
@@ -264,11 +254,13 @@ def parse_args(sys_args): # pylint: disable=R0912
             cmd = "help"
         elif re.match("^([-/]*)collect-logs", arg):
             cmd = "collect-logs"
+        elif re.match("^([-/]*)full", arg):
+            log_collector_full_mode = True
         else:
             cmd = "help"
             break
 
-    return cmd, force, verbose, debug, conf_file_path, log_collector_mode
+    return cmd, force, verbose, debug, conf_file_path, log_collector_full_mode
 
 
 def version():
@@ -292,7 +284,7 @@ def usage():
     s += ("usage: {0} [-verbose] [-force] [-help] " # pylint: disable=C0103
            "-configuration-path:<path to configuration file>" 
            "-deprovision[+user]|-register-service|-version|-daemon|-start|"
-           "-run-exthandlers|-show-configuration|-collect-logs [-mode:full]"
+           "-run-exthandlers|-show-configuration|-collect-logs [-full]"
            "").format(sys.argv[0])
     s += "\n" # pylint: disable=C0103
     return s

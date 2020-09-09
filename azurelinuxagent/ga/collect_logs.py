@@ -30,7 +30,7 @@ from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.logcollector import COMPRESSED_ARCHIVE_PATH
 from azurelinuxagent.common.protocol.util import get_protocol_util
 from azurelinuxagent.common.utils import shellutil
-from azurelinuxagent.common.utils.shellutil import get_python_cmd, CommandError
+from azurelinuxagent.common.utils.shellutil import CommandError
 from azurelinuxagent.common.version import PY_VERSION_MAJOR, PY_VERSION_MINOR, AGENT_NAME, CURRENT_VERSION
 from azurelinuxagent.ga.periodic_operation import PeriodicOperation
 
@@ -164,7 +164,7 @@ class CollectLogsHandler(object):
                            "--property=MemoryAccounting=1", "--property=MemoryLimit={0}".format(memory_limit)]
 
         # The log tool is invoked from the current agent's egg with the command line option
-        collect_logs_cmd = [get_python_cmd(), "-u", sys.argv[0], "-collect-logs"]
+        collect_logs_cmd = [sys.executable, "-u", sys.argv[0], "-collect-logs"]
         final_command = systemd_cmd + resource_limits + collect_logs_cmd
 
         start_time = datetime.datetime.utcnow()

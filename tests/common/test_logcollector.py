@@ -220,7 +220,7 @@ copy,{0}
 """.format(file_to_collect)
 
         with patch("azurelinuxagent.common.logcollector.MANIFEST_FULL", manifest):
-            log_collector = LogCollector(full_mode=True)
+            log_collector = LogCollector(is_full_mode=True)
             archive = log_collector.collect_logs_and_get_archive()
 
         self._assert_archive_created(archive)

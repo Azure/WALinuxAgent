@@ -40,7 +40,6 @@ _AGENT_LOG = get_agent_log_file()
 _LOG_COLLECTOR_DIR = os.path.join(_AGENT_LIB_DIR, "logcollector")
 _TRUNCATED_FILES_DIR = os.path.join(_LOG_COLLECTOR_DIR, "truncated")
 
-LOG_COLLECTOR_FULL_MODE_FLAG = "full"
 OUTPUT_RESULTS_FILE_PATH = os.path.join(_LOG_COLLECTOR_DIR, "results.txt")
 COMPRESSED_ARCHIVE_PATH = os.path.join(_LOG_COLLECTOR_DIR, "logs.zip")
 
@@ -68,8 +67,9 @@ class LogCollector(object): # pylint: disable=R0903
 
     _TRUNCATED_FILE_PREFIX = "truncated_"
 
-    def __init__(self, full_mode=False):
-        self._manifest = MANIFEST_FULL if full_mode else MANIFEST_NORMAL
+    def __init__(self, is_full_mode=False):
+        self._is_full_mode = is_full_mode
+        self._manifest = MANIFEST_FULL if is_full_mode else MANIFEST_NORMAL
         self._must_collect_files = self._expand_must_collect_files()
         self._create_base_dirs()
         self._set_logger()
@@ -339,6 +339,7 @@ class LogCollector(object): # pylint: disable=R0903
             LogCollector._reset_file(OUTPUT_RESULTS_FILE_PATH)
             start_time = datetime.utcnow()
             _LOGGER.info("Starting log collection at %s", start_time.strftime("%Y-%m-%dT%H:%M:%SZ"))
+            _LOGGER.info("Using log collection mode %s", "full" if self._is_full_mode else "normal")
 
             files_to_collect = self._create_list_of_files_to_collect()
             _LOGGER.info("### Creating compressed archive ###")
