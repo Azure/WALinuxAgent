@@ -32,8 +32,8 @@ class TestDataContract(unittest.TestCase):
         obj.foo = "foo"
         obj.bar.append(1)
         data = get_properties(obj)
-        self.assertEquals("foo", data["foo"]) # pylint: disable=deprecated-method
-        self.assertEquals(list, type(data["bar"])) # pylint: disable=deprecated-method
+        self.assertEqual("foo", data["foo"])
+        self.assertEqual(list, type(data["bar"]))
 
     def test_set_properties(self):
         obj = SampleDataContract()

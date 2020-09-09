@@ -99,7 +99,7 @@ class TestProtocolUtil(AgentTestCase):
 
         # Test wire protocol is available
         protocol = protocol_util.get_protocol()
-        self.assertEquals(WireProtocol.return_value, protocol) # pylint: disable=deprecated-method
+        self.assertEqual(WireProtocol.return_value, protocol)
 
         # Test wire protocol is not available
         protocol_util.clear_protocol()
@@ -145,7 +145,7 @@ class TestProtocolUtil(AgentTestCase):
 
         protocol = protocol_util.get_protocol()
 
-        self.assertEquals(WireProtocol.return_value, protocol) # pylint: disable=deprecated-method
+        self.assertEqual(WireProtocol.return_value, protocol)
         protocol_util.get_wireserver_endpoint.assert_any_call()
 
     @patch('azurelinuxagent.common.conf.get_lib_dir')
@@ -235,11 +235,11 @@ class TestProtocolUtil(AgentTestCase):
 
         # Check Protocol File is updated to WireProtocol
         with open(os.path.join(dir, PROTOCOL_FILE_NAME), "r") as f: # pylint: disable=invalid-name
-            self.assertEquals(f.read(), WIRE_PROTOCOL_NAME) # pylint: disable=deprecated-method
+            self.assertEqual(f.read(), WIRE_PROTOCOL_NAME)
         
         # Check Endpoint file is updated to WireServer IP
         with open(os.path.join(dir, ENDPOINT_FILE_NAME), 'r') as f: # pylint: disable=invalid-name
-            self.assertEquals(f.read(), KNOWN_WIRESERVER_IP) # pylint: disable=deprecated-method
+            self.assertEqual(f.read(), KNOWN_WIRESERVER_IP)
 
     @patch('azurelinuxagent.common.conf.get_lib_dir')
     @patch('azurelinuxagent.common.conf.enable_firewall')
@@ -273,11 +273,11 @@ class TestProtocolUtil(AgentTestCase):
 
         # Check Protocol File is updated to WireProtocol
         with open(os.path.join(dir, PROTOCOL_FILE_NAME), "r") as f: # pylint: disable=invalid-name
-            self.assertEquals(f.read(), WIRE_PROTOCOL_NAME) # pylint: disable=deprecated-method
+            self.assertEqual(f.read(), WIRE_PROTOCOL_NAME)
         
         # Check Endpoint file is updated to WireServer IP
         with open(os.path.join(dir, ENDPOINT_FILE_NAME), 'r') as f: # pylint: disable=invalid-name
-            self.assertEquals(f.read(), KNOWN_WIRESERVER_IP) # pylint: disable=deprecated-method
+            self.assertEqual(f.read(), KNOWN_WIRESERVER_IP)
 
     @patch("azurelinuxagent.common.protocol.util.fileutil")
     @patch("azurelinuxagent.common.conf.get_lib_dir")
@@ -291,19 +291,19 @@ class TestProtocolUtil(AgentTestCase):
         mock_fileutil.read_file.side_effect = IOError()
 
         ep = protocol_util.get_wireserver_endpoint() # pylint: disable=invalid-name
-        self.assertEquals(ep, KNOWN_WIRESERVER_IP) # pylint: disable=deprecated-method
+        self.assertEqual(ep, KNOWN_WIRESERVER_IP)
 
         # Test get endpoint when file not found
         mock_fileutil.read_file.side_effect = IOError(ENOENT, 'File not found')
 
         ep = protocol_util.get_wireserver_endpoint() # pylint: disable=invalid-name
-        self.assertEquals(ep, KNOWN_WIRESERVER_IP) # pylint: disable=deprecated-method
+        self.assertEqual(ep, KNOWN_WIRESERVER_IP)
 
         # Test get endpoint for empty file
         mock_fileutil.read_file.return_value = ""
 
         ep = protocol_util.get_wireserver_endpoint() # pylint: disable=invalid-name
-        self.assertEquals(ep, KNOWN_WIRESERVER_IP) # pylint: disable=deprecated-method
+        self.assertEqual(ep, KNOWN_WIRESERVER_IP)
 
         # Test set endpoint for io error
         mock_fileutil.write_file.side_effect = IOError()

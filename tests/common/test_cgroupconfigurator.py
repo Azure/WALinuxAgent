@@ -82,7 +82,7 @@ class CGroupConfiguratorSystemdTestCase(AgentTestCase):
 
         CGroupConfiguratorSystemdTestCase._get_new_cgroup_configurator_instance().disable()
 
-        self.assertEquals(len(CGroupsTelemetry._tracked), 0) # pylint: disable=deprecated-method,protected-access
+        self.assertEqual(len(CGroupsTelemetry._tracked), 0) # pylint: disable=protected-access
 
     def test_cgroup_operations_should_not_invoke_the_cgroup_api_when_cgroups_are_not_enabled(self):
         configurator = CGroupConfiguratorSystemdTestCase._get_new_cgroup_configurator_instance()
@@ -121,7 +121,7 @@ class CGroupConfiguratorSystemdTestCase(AgentTestCase):
                     with patch(op[1], raise_exception):
                         op[0]()
 
-                    self.assertEquals(mock_logger_warn.call_count, 1) # pylint: disable=deprecated-method
+                    self.assertEqual(mock_logger_warn.call_count, 1)
 
                     args, kwargs = mock_logger_warn.call_args # pylint: disable=unused-variable
                     message = args[0]

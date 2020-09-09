@@ -46,7 +46,7 @@ class TestNSBSDOSUtil(AgentTestCase):
                 with patch("azurelinuxagent.common.osutil.nsbsd.fileutil.read_file", mock_read_file):
                     pid_list = NSBSDOSUtil().get_dhcp_pid()
 
-            self.assertEquals(pid_list, [123]) # pylint: disable=deprecated-method
+            self.assertEqual(pid_list, [123])
 
     def test_get_dhcp_pid_should_return_an_empty_list_when_the_dhcp_client_is_not_running(self):
         with patch.object(NSBSDOSUtil, "resolver"):  # instantiating NSBSDOSUtil requires a resolver
@@ -61,7 +61,7 @@ class TestNSBSDOSUtil(AgentTestCase):
             with patch("os.path.isfile", mock_isfile):
                 pid_list = NSBSDOSUtil().get_dhcp_pid()
 
-            self.assertEquals(pid_list, []) # pylint: disable=deprecated-method
+            self.assertEqual(pid_list, [])
 
             #
             # PID file is empty
@@ -80,7 +80,7 @@ class TestNSBSDOSUtil(AgentTestCase):
                 with patch("azurelinuxagent.common.osutil.nsbsd.fileutil.read_file", mock_read_file):
                     pid_list = NSBSDOSUtil().get_dhcp_pid()
 
-            self.assertEquals(pid_list, []) # pylint: disable=deprecated-method
+            self.assertEqual(pid_list, [])
 
 
 if __name__ == '__main__':
