@@ -185,7 +185,7 @@ class CollectLogsHandler(object):
             duration = elapsed_milliseconds(start_time)
 
             if isinstance(e, CommandError):
-                exception_message = ustr("[stderr] %s", e.stderr)
+                exception_message = ustr("[stderr] %s", e.stderr) # pylint: disable=no-member
             else:
                 exception_message = ustr(e)
 
