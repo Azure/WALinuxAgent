@@ -220,7 +220,7 @@ class LogCollector(object): # pylint: disable=R0903
             if len(contents) != 2:
                 # If it's not a comment or an empty line, it's a malformed entry
                 if not entry.startswith("#") and len(entry.strip()) > 0: # pylint: disable=len-as-condition
-                    _LOGGER.error("Couldn't parse \"{0}\"".format(entry)) # pylint: disable=W1202
+                    _LOGGER.error("Couldn't parse \"%s\"", entry)
                 continue
 
             command, value = contents
@@ -242,7 +242,7 @@ class LogCollector(object): # pylint: disable=R0903
             # Binary files cannot be truncated, don't include large binary files
             ext = os.path.splitext(file_path)[1]
             if ext in [".gz", ".zip", ".xz"]:
-                _LOGGER.warning("Discarding large binary file {0}".format(file_path)) # pylint: disable=W1202
+                _LOGGER.warning("Discarding large binary file %s", file_path)
                 return None
 
             truncated_file_path = os.path.join(_TRUNCATED_FILES_DIR, file_path.replace(os.path.sep, "_"))
@@ -261,7 +261,7 @@ class LogCollector(object): # pylint: disable=R0903
 
             return truncated_file_path
         except OSError as e: # pylint: disable=C0103
-            _LOGGER.error("Failed to truncate large file: {0}".format(ustr(e))) # pylint: disable=W1202
+            _LOGGER.error("Failed to truncate large file: %s", ustr(e))
             return None
 
     def _get_file_priority(self, file_entry):
