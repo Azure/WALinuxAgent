@@ -34,6 +34,7 @@ import azurelinuxagent.common.conf as conf
 import azurelinuxagent.common.event as event
 import azurelinuxagent.common.logger as logger
 from azurelinuxagent.common.future import ustr
+from azurelinuxagent.common.logcollector import LogCollector, LOG_COLLECTOR_FULL_MODE_FLAG, OUTPUT_RESULTS_FILE_PATH
 from azurelinuxagent.common.osutil import get_osutil
 from azurelinuxagent.common.utils import fileutil
 from azurelinuxagent.common.version import AGENT_NAME, AGENT_LONG_VERSION, \
@@ -152,15 +153,14 @@ class Agent(object):
             print("{0} = {1}".format(k, configuration[k]))
 
     def collect_logs(self, log_collector_mode):
-        from azurelinuxagent.common.logcollector import LogCollector, OUTPUT_RESULTS_FILE_PATH
-        if log_collector_mode == "full":
+        if log_collector_mode == LOG_COLLECTOR_FULL_MODE_FLAG:
             print("Running log collector mode full")
         else:
             print("Running log collector mode normal")
 
         try:
-            log_collector = LogCollector(log_collector_mode == "full")
-            archive = log_collector.collect_logs()
+            log_collector = LogCollector(log_collector_mode == LOG_COLLECTOR_FULL_MODE_FLAG)
+            archive = log_collector.collect_logs_and_get_archive()
             print("Log collection successfully completed. Archive can be found at {0} "
                   "and detailed log output can be found at {1}".format(archive, OUTPUT_RESULTS_FILE_PATH))
         except Exception as e: # pylint: disable=C0103
@@ -226,13 +226,13 @@ def parse_args(sys_args): # pylint: disable=R0912
             if not os.path.exists(conf_file_path):
                 print("Error: Configuration file {0} does not exist".format(
                         conf_file_path), file=sys.stderr) 
-                usage()
+                print(usage())
                 sys.exit(1)
 
         m = re.match("^(?:[-/]*)-mode:([\w/\.\-_]+)", arg) # pylint: disable=W1401,C0103
         if m is not None:
             log_collector_mode = m.group(1)
-            if log_collector_mode != "full":
+            if log_collector_mode != LOG_COLLECTOR_FULL_MODE_FLAG:
                 print("Error: Invalid value for log collector mode: {0}. Accepted value: full. "
                       "If mode is not specified, will use normal mode.".format(log_collector_mode))
                 print(usage())

@@ -312,11 +312,17 @@ def _http_request(method, host, rel_uri, port=None, data=None, secure=False, # p
                                          conn_port,
                                          timeout=10)
 
+
+    if method == "PUT" and "vmAgentLog" in url:
+        payload = "[redacted binary contents of logs.zip]"
+    else:
+        payload = textutil.str_to_encoded_ustr(data)
+
     # Logger requires the data to be a ustr to log properly, ensuring that the data string that we log is always ustr.
     logger.verbose("HTTP connection [{0}] [{1}] [{2}] [{3}]",
                    method,
                    redact_sas_tokens_in_urls(url),
-                   textutil.str_to_encoded_ustr(data),
+                   payload,
                    headers)
 
     conn.request(method=method, url=url, body=data, headers=headers)

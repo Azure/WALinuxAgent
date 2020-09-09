@@ -30,13 +30,40 @@ from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.logcollector import COMPRESSED_ARCHIVE_PATH
 from azurelinuxagent.common.protocol.util import get_protocol_util
 from azurelinuxagent.common.utils import shellutil
-from azurelinuxagent.common.utils.shellutil import get_python_cmd
+from azurelinuxagent.common.utils.shellutil import get_python_cmd, CommandError
 from azurelinuxagent.common.version import PY_VERSION_MAJOR, PY_VERSION_MINOR, AGENT_NAME, CURRENT_VERSION
 from azurelinuxagent.ga.periodic_operation import PeriodicOperation
 
 
 def get_collect_logs_handler():
     return CollectLogsHandler()
+
+
+def is_log_collection_allowed():
+    # There are three conditions that need to be met in order to allow periodic log collection:
+    # 1) It should be enabled in the configuration.
+    # 2) The system must be using systemd to manage services. Needed for resource limiting of the log collection.
+    # 3) The python version must be greater than 2.6 in order to support the ZipFile library used when collecting.
+    conf_enabled = conf.get_collect_logs()
+    systemd_present = os.path.exists("/run/systemd/system/")
+    supported_python = PY_VERSION_MINOR >= 7 if PY_VERSION_MAJOR == 2 else PY_VERSION_MAJOR == 3
+    is_allowed = conf_enabled and systemd_present and supported_python
+
+    msg = "Checking if log collection is allowed at this time [{0}]. All three conditions must be met: " \
+          "configuration enabled [{1}], systemd present [{2}], python supported: [{3}]".format(is_allowed,
+                                                                                               conf_enabled,
+                                                                                               systemd_present,
+                                                                                               supported_python)
+    logger.info(msg)
+    add_event(
+        name=AGENT_NAME,
+        version=CURRENT_VERSION,
+        op=WALAEventOperation.LogCollection,
+        is_success=is_allowed,
+        message=msg,
+        log_event=False)
+
+    return is_allowed
 
 
 class CollectLogsHandler(object):
@@ -60,34 +87,6 @@ class CollectLogsHandler(object):
         self._periodic_operations = [
             PeriodicOperation("collect_and_send_logs", self.collect_and_send_logs, conf.get_collect_logs_period())
         ]
-
-    def _log_collection_allowed(self):
-        # There are three conditions that need to be met in order to allow periodic log collection:
-        # 1) It should be enabled in the configuration.
-        # 2) The system must be using systemd to manage services. Needed for resource limiting of the log collection.
-        # 3) The python version must be greater than 2.6 in order to support the ZipFile library used when collecting.
-        conf_enabled = conf.get_collect_logs()
-        systemd_present = os.path.exists("/run/systemd/system/")
-        supported_python = PY_VERSION_MINOR >= 7 if PY_VERSION_MAJOR == 2 else PY_VERSION_MAJOR == 3
-        is_allowed = conf_enabled and systemd_present and supported_python
-
-        if self.last_state != is_allowed:
-            msg = "Checking if log collection is allowed at this time [{0}]. All three conditions must be met: " \
-                  "configuration enabled [{1}], systemd present [{2}], python supported: [{3}]".format(is_allowed,
-                                                                                                       conf_enabled,
-                                                                                                       systemd_present,
-                                                                                                       supported_python)
-            self.last_state = is_allowed
-            logger.info(msg)
-            add_event(
-                name=AGENT_NAME,
-                version=CURRENT_VERSION,
-                op=WALAEventOperation.LogCollection,
-                is_success=is_allowed,
-                message=msg,
-                log_event=False)
-
-        return is_allowed
 
     def run(self):
         self.start(init_data=True)
@@ -121,7 +120,7 @@ class CollectLogsHandler(object):
 
     def daemon(self, init_data=False):
         try:
-            if not self._log_collection_allowed():
+            if not is_log_collection_allowed():
                 return
 
             if init_data:
@@ -167,7 +166,10 @@ class CollectLogsHandler(object):
         # The log tool is invoked from the current agent's egg with the command line option
         collect_logs_cmd = [get_python_cmd(), "-u", sys.argv[0], "-collect-logs"]
         final_command = systemd_cmd + resource_limits + collect_logs_cmd
+
         start_time = datetime.datetime.utcnow()
+        success = False
+        msg = None
         try:
             shellutil.run_command(final_command, log_error=True)
             duration = elapsed_milliseconds(start_time)
@@ -176,50 +178,49 @@ class CollectLogsHandler(object):
             msg = "Successfully collected logs. Archive size: {0} b, elapsed time: {1} ms.".format(archive_size,
                                                                                                    duration)
             logger.info(msg)
-            add_event(
-                name=AGENT_NAME,
-                version=CURRENT_VERSION,
-                op=WALAEventOperation.LogCollection,
-                is_success=True,
-                message=msg,
-                log_event=False)
+            success = True
+
+            return True
         except Exception as e: # pylint: disable=C0103
             duration = elapsed_milliseconds(start_time)
-            msg = "Failed to collect logs. Elapsed time: {0} ms. Error: {1}".format(duration, ustr(e))
+
+            if isinstance(e, CommandError):
+                exception_message = ustr("[stderr] %s", e.stderr)
+            else:
+                exception_message = ustr(e)
+
+            msg = "Failed to collect logs. Elapsed time: {0} ms. Error: {1}".format(duration, exception_message)
             # No need to log to the local log since we ran run_command with logging errors as enabled
+
+            return False
+        finally:
             add_event(
                 name=AGENT_NAME,
                 version=CURRENT_VERSION,
                 op=WALAEventOperation.LogCollection,
-                is_success=False,
+                is_success=success,
                 message=msg,
                 log_event=False)
 
-            return False
-        return True
-
     def _send_logs(self):
+        msg = None
+        success = False
         try:
             with open(COMPRESSED_ARCHIVE_PATH, "rb") as fh: # pylint: disable=C0103
                 archive_content = fh.read()
                 self.protocol.upload_logs(archive_content)
                 msg = "Successfully uploaded logs."
                 logger.info(msg)
-                add_event(
-                    name=AGENT_NAME,
-                    version=CURRENT_VERSION,
-                    op=WALAEventOperation.LogCollection,
-                    is_success=True,
-                    message=msg,
-                    log_event=False)
 
+            success = True
         except Exception as e: # pylint: disable=C0103
             msg = "Failed to upload logs. Error: {0}".format(ustr(e))
             logger.warn(msg)
+        finally:
             add_event(
                 name=AGENT_NAME,
                 version=CURRENT_VERSION,
                 op=WALAEventOperation.LogCollection,
-                is_success=False,
+                is_success=success,
                 message=msg,
                 log_event=False)

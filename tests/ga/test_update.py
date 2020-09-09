@@ -1259,13 +1259,14 @@ class TestUpdate(UpdateTestCase): # pylint: disable=too-many-public-methods
                     with patch('azurelinuxagent.ga.update.get_env_handler') as mock_env:
                         with patch('azurelinuxagent.ga.update.get_collect_logs_handler') as mock_collect_logs:
                             with patch('azurelinuxagent.ga.update.initialize_event_logger_vminfo_common_parameters'):
-                                with patch('time.sleep', side_effect=iterator) as mock_sleep: # pylint: disable=redefined-outer-name
-                                    with patch('sys.exit') as mock_exit:
-                                        if isinstance(os.getppid, MagicMock):
-                                            self.update_handler.run()
-                                        else:
-                                            with patch('os.getppid', return_value=42):
+                                with patch('azurelinuxagent.ga.update.is_log_collection_allowed', return_value=True):
+                                    with patch('time.sleep', side_effect=iterator) as mock_sleep: # pylint: disable=redefined-outer-name
+                                        with patch('sys.exit') as mock_exit:
+                                            if isinstance(os.getppid, MagicMock):
                                                 self.update_handler.run()
+                                            else:
+                                                with patch('os.getppid', return_value=42):
+                                                    self.update_handler.run()
 
                                         self.assertEqual(1, mock_handler.call_count)
                                         self.assertEqual(mock_handler.return_value.method_calls, calls)
@@ -1629,9 +1630,10 @@ class MonitorThreadTest(AgentTestCase):
                     with patch('azurelinuxagent.ga.remoteaccess.get_remote_access_handler'):
                         with patch('azurelinuxagent.ga.update.initialize_event_logger_vminfo_common_parameters'):
                             with patch('azurelinuxagent.common.cgroupapi.CGroupsApi.cgroups_supported', return_value=False):  # skip all cgroup stuff
-                                with patch('time.sleep', side_effect=iterator):
-                                    with patch('sys.exit'):
-                                        self.update_handler.run()
+                                with patch('azurelinuxagent.ga.update.is_log_collection_allowed', return_value=True):
+                                    with patch('time.sleep', side_effect=iterator):
+                                        with patch('sys.exit'):
+                                            self.update_handler.run()
 
     def _setup_mock_thread_and_start_test_run(self, mock_thread, is_alive=True, invocations=0):
         self.assertTrue(self.update_handler.running)

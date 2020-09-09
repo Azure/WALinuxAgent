@@ -114,24 +114,28 @@ class TestCollectLogs(AgentTestCase, HttpRequestPredicates):
         # 2) systemd must be managing services
         # 3) python version 2.7+ which is automatically true for these tests since they are disabled on py2.6
 
+        # systemd not present, config flag false
         with _create_collect_logs_handler(systemd_present=False) as collect_logs_handler:
             with patch("azurelinuxagent.ga.collect_logs.conf.get_collect_logs", return_value=False):
                 collect_logs_handler.run_and_wait()
 
         self.assertEqual(patch_collect_and_send_logs.call_count, 0, "Log collection should not have been enabled")
 
-        with _create_collect_logs_handler(systemd_present=False) as collect_logs_handler:
+        # systemd present, config flag false
+        with _create_collect_logs_handler() as collect_logs_handler:
             with patch("azurelinuxagent.ga.collect_logs.conf.get_collect_logs", return_value=False):
                 collect_logs_handler.run_and_wait()
 
         self.assertEqual(patch_collect_and_send_logs.call_count, 0, "Log collection should not have been enabled")
 
+        # systemd not present, config flag true
         with _create_collect_logs_handler(systemd_present=False) as collect_logs_handler:
             with patch("azurelinuxagent.ga.collect_logs.conf.get_collect_logs", return_value=True):
                 collect_logs_handler.run_and_wait()
 
         self.assertEqual(patch_collect_and_send_logs.call_count, 0, "Log collection should not have been enabled")
 
+        # systemd present, config flag true
         with _create_collect_logs_handler() as collect_logs_handler:
             collect_logs_handler.run_and_wait()
 

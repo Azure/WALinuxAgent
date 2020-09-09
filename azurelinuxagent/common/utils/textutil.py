@@ -427,8 +427,6 @@ def str_to_encoded_ustr(s, encoding='utf-8'): # pylint: disable=C0103
         except Exception:
             # If some issues in decoding, just return the string
             return ustr(s)
-    try:
-        # For Py2, explicitly convert the string to unicode with the specified encoding
-        return ustr(s, encoding=encoding)
-    except Exception as e: # pylint: disable=C0103
-        return ustr(e)
+
+    # For Py2, explicitly convert the string to unicode with the specified encoding
+    return ustr(s, encoding=encoding)

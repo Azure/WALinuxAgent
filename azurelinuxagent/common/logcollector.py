@@ -40,6 +40,7 @@ _AGENT_LOG = get_agent_log_file()
 _LOG_COLLECTOR_DIR = os.path.join(_AGENT_LIB_DIR, "logcollector")
 _TRUNCATED_FILES_DIR = os.path.join(_LOG_COLLECTOR_DIR, "truncated")
 
+LOG_COLLECTOR_FULL_MODE_FLAG = "full"
 OUTPUT_RESULTS_FILE_PATH = os.path.join(_LOG_COLLECTOR_DIR, "results.txt")
 COMPRESSED_ARCHIVE_PATH = os.path.join(_LOG_COLLECTOR_DIR, "logs.zip")
 
@@ -168,7 +169,8 @@ class LogCollector(object): # pylint: disable=R0903
         # File name is the name of the file on disk, whereas archive name is the name of that same file in the archive.
         # For non-truncated files: /var/log/waagent.log on disk becomes var/log/waagent.log in archive
         # (leading separator is removed by the archive).
-        # For truncated files: /var/truncated/var/log/syslog.1 on disk becomes truncated_var_log_syslog.1 in archive.
+        # For truncated files: /var/lib/waagent/logcollector/truncated/var/log/syslog.1 on disk becomes
+        # truncated_var_log_syslog.1 in the archive.
         if file_name.startswith(_TRUNCATED_FILES_DIR): # pylint: disable=R1705
             original_file_path = file_name[len(_TRUNCATED_FILES_DIR):].lstrip(os.path.sep)
             archive_file_name = LogCollector._TRUNCATED_FILE_PREFIX + original_file_path.replace(os.path.sep, "_")
@@ -324,11 +326,10 @@ class LogCollector(object): # pylint: disable=R0903
         files_to_collect = self._get_final_list_for_archive(prioritized_file_paths)
         return files_to_collect
 
-    def collect_logs(self):
+    def collect_logs_and_get_archive(self):
         """
-        Public method that collects necessary log files in a tarball that is updated each time this method is invoked.
-        The tarball is then compressed into a zip.
-        :return: Returns True if the log collection succeeded
+        Public method that collects necessary log files in a compressed zip archive.
+        :return: Returns the path of the collected compressed archive
         """
         files_to_collect = []
 

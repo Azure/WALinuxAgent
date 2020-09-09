@@ -19,6 +19,7 @@ import os.path
 
 from azurelinuxagent.agent import parse_args, Agent, usage
 from azurelinuxagent.common import conf
+from azurelinuxagent.common.logcollector import LOG_COLLECTOR_FULL_MODE_FLAG
 from azurelinuxagent.common.utils import fileutil
 from tests.tools import AgentTestCase, data_dir, Mock, patch
 
@@ -100,7 +101,6 @@ class TestAgent(AgentTestCase):
     def test_rejects_missing_configuration_path(self, mock_exit, mock_exists, mock_stderr): # pylint: disable=unused-argument
         try:
             c, f, v, d, cfp, lcm = parse_args(["-configuration-path:/foo/bar.conf"]) # pylint: disable=unused-variable,invalid-name
-            self.assertTrue(False) # pylint: disable=redundant-unittest-assert
         except Exception:
             self.assertEqual(mock_exit.call_count, 1)
 
@@ -182,9 +182,9 @@ class TestAgent(AgentTestCase):
 
     def test_checks_log_collector_mode(self):
         # Specify full mode
-        c, f, v, d, cfp, lcm = parse_args(["-collect-logs", "-mode:full"]) # pylint: disable=unused-variable,invalid-name
+        c, f, v, d, cfp, lcm = parse_args(["-collect-logs", "-mode:{0}".format(LOG_COLLECTOR_FULL_MODE_FLAG)]) # pylint: disable=unused-variable,invalid-name
         self.assertEqual(c, "collect-logs")
-        self.assertEqual(lcm, "full")
+        self.assertEqual(lcm, LOG_COLLECTOR_FULL_MODE_FLAG)
 
         # Defaults to None if mode not specified
         c, f, v, d, cfp, lcm = parse_args(["-collect-logs"]) # pylint: disable=unused-variable,invalid-name
@@ -196,16 +196,15 @@ class TestAgent(AgentTestCase):
     def test_rejects_invalid_log_collector_mode(self, mock_exit, mock_stderr): # pylint: disable=unused-argument
         try:
             c, f, v, d, cfp, lcm = parse_args(["-collect-logs", "-mode:invalid"]) # pylint: disable=unused-variable,invalid-name
-            self.assertTrue(False) # pylint: disable=redundant-unittest-assert
         except Exception:
             self.assertEqual(mock_exit.call_count, 1)
 
     @patch("os.path.exists", return_value=True)
-    @patch("azurelinuxagent.common.logcollector.LogCollector")
+    @patch("azurelinuxagent.agent.LogCollector")
     def test_calls_collect_logs_with_proper_mode(self, mock_log_collector, *args): # pylint: disable=unused-argument
         agent = Agent(False, conf_file_path=os.path.join(data_dir, "test_waagent.conf"))
 
-        agent.collect_logs("full")
+        agent.collect_logs(LOG_COLLECTOR_FULL_MODE_FLAG)
         full_mode = mock_log_collector.call_args_list[0][0][0]
         self.assertTrue(full_mode)
 
