@@ -949,19 +949,24 @@ class WireClient(object): # pylint: disable=R0904
         return ret
 
     def send_request_using_appropriate_channel(self, direct_func, host_func):
-        # A wrapper method for all function calls that send HTTP requests. The direct channel is always used first and
-        # the host plugin channel as a fallback. For the host plugin channel, also implement a retry mechanism.
+        # A wrapper method for all function calls that send HTTP requests. The first attempt is always via the
+        # host plugin channel. If, for whatever reason, the request failed, we fall back to using the direct channel.
 
-        # When using the host plugin channel, regardless if it's set as default or not, try sending the request first.
-        # On specific failures that indicate a stale goal state (such as resource gone or invalid container parameter),
+        # When using the host plugin channel, there is a retry mechanism. On specific failures that indicate
+        # a stale goal state (such as resource gone or invalid container parameter),
         # refresh the goal state and try again. If failed, raise the exception.
 
         # NOTE: direct_func and host_func are passed as lambdas. Be careful about capturing goal state data in them as
         # they will not be refreshed even if a goal state refresh is called before retrying the host_func.
 
-        ret = self._call_direct_channel(direct_func)
-        if not ret:
+        ret = None
+        try:
             ret = self._call_hostplugin_with_container_check(host_func)
+        except Exception:
+            pass
+
+        if not ret:
+            ret = self._call_direct_channel(direct_func)
 
         return ret
 
