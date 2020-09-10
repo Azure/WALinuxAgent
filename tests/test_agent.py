@@ -194,7 +194,7 @@ class TestAgent(AgentTestCase):
     @patch("sys.exit", side_effect=Exception)
     def test_rejects_invalid_log_collector_mode(self, mock_exit, mock_stderr): # pylint: disable=unused-argument
         try:
-            c, f, v, d, cfp, lcm = parse_args(["-collect-logs", "-mode:invalid"]) # pylint: disable=unused-variable,invalid-name
+            c, f, v, d, cfp, lcm = parse_args(["-collect-logs", "-notvalid"]) # pylint: disable=unused-variable,invalid-name
         except Exception:
             self.assertEqual(mock_exit.call_count, 1)
 

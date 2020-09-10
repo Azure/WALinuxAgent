@@ -120,9 +120,6 @@ class CollectLogsHandler(object):
 
     def daemon(self, init_data=False):
         try:
-            if not is_log_collection_allowed():
-                return
-
             if init_data:
                 self.init_protocols()
 

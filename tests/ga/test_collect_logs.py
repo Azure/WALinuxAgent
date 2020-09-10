@@ -20,7 +20,7 @@ import os
 from azurelinuxagent.common import logger
 from azurelinuxagent.common.logger import Logger
 from azurelinuxagent.common.protocol.util import ProtocolUtil
-from azurelinuxagent.ga.collect_logs import get_collect_logs_handler, CollectLogsHandler
+from azurelinuxagent.ga.collect_logs import get_collect_logs_handler, CollectLogsHandler, is_log_collection_allowed
 from azurelinuxagent.ga.periodic_operation import PeriodicOperation
 from tests.protocol.mocks import mock_wire_protocol, HttpRequestPredicates, MockHttpResponse
 from tests.protocol.mockwiredata import DATA_FILE
@@ -107,39 +107,30 @@ class TestCollectLogs(AgentTestCase, HttpRequestPredicates):
                 self.assertEqual(invoked_operations.sort(), expected_operations.sort(),
                                  "The collect logs thread did not invoke the expected operations")
 
-    @patch("azurelinuxagent.ga.collect_logs.CollectLogsHandler.collect_and_send_logs")
-    def test_it_should_only_collect_logs_if_conditions_are_met(self, patch_collect_and_send_logs):
+    def test_it_should_only_collect_logs_if_conditions_are_met(self):
         # In order to collect logs, three conditions have to be met:
         # 1) the flag must be set to true in the conf file
         # 2) systemd must be managing services
         # 3) python version 2.7+ which is automatically true for these tests since they are disabled on py2.6
 
         # systemd not present, config flag false
-        with _create_collect_logs_handler(systemd_present=False) as collect_logs_handler:
+        with _create_collect_logs_handler(systemd_present=False):
             with patch("azurelinuxagent.ga.collect_logs.conf.get_collect_logs", return_value=False):
-                collect_logs_handler.run_and_wait()
-
-        self.assertEqual(patch_collect_and_send_logs.call_count, 0, "Log collection should not have been enabled")
+                self.assertEqual(False, is_log_collection_allowed(), "Log collection should not have been enabled")
 
         # systemd present, config flag false
-        with _create_collect_logs_handler() as collect_logs_handler:
+        with _create_collect_logs_handler():
             with patch("azurelinuxagent.ga.collect_logs.conf.get_collect_logs", return_value=False):
-                collect_logs_handler.run_and_wait()
-
-        self.assertEqual(patch_collect_and_send_logs.call_count, 0, "Log collection should not have been enabled")
+                self.assertEqual(False, is_log_collection_allowed(), "Log collection should not have been enabled")
 
         # systemd not present, config flag true
-        with _create_collect_logs_handler(systemd_present=False) as collect_logs_handler:
+        with _create_collect_logs_handler(systemd_present=False):
             with patch("azurelinuxagent.ga.collect_logs.conf.get_collect_logs", return_value=True):
-                collect_logs_handler.run_and_wait()
-
-        self.assertEqual(patch_collect_and_send_logs.call_count, 0, "Log collection should not have been enabled")
+                self.assertEqual(False, is_log_collection_allowed(), "Log collection should not have been enabled")
 
         # systemd present, config flag true
-        with _create_collect_logs_handler() as collect_logs_handler:
-            collect_logs_handler.run_and_wait()
-
-        self.assertEqual(patch_collect_and_send_logs.call_count, 1, "Log collection should have been enabled")
+        with _create_collect_logs_handler():
+            self.assertEqual(True, is_log_collection_allowed(), "Log collection should have been enabled")
 
     def test_log_collection_is_invoked_with_resource_limits(self):
         with _create_collect_logs_handler() as collect_logs_handler:
