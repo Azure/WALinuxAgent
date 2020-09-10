@@ -97,6 +97,7 @@ __SWITCH_OPTIONS__ = {
     "OS.CheckRdmaDriver": False,
     "Logs.Verbose": False,
     "Logs.Console": True,
+    "Logs.Collect": False,
     "Extensions.Enabled": True,
     "Provisioning.AllowResetSysUser": False,
     "Provisioning.RegenerateSshHostKeyPair": False,
@@ -149,7 +150,8 @@ __INTEGER_OPTIONS__ = {
     "Provisioning.PasswordCryptSaltLength": 10,
     "HttpProxy.Port": None,
     "ResourceDisk.SwapSizeMB": 0,
-    "Autoupdate.Frequency": 3600
+    "Autoupdate.Frequency": 3600,
+    "Logs.CollectPeriod": 3600
 }
 
 
@@ -221,6 +223,14 @@ def get_logs_verbose(conf=__conf__):
 
 def get_logs_console(conf=__conf__):
     return conf.get_switch("Logs.Console", True)
+
+
+def get_collect_logs(conf=__conf__):
+    return conf.get_switch("Logs.Collect", False)
+
+
+def get_collect_logs_period(conf=__conf__):
+    return conf.get_int("Logs.CollectPeriod", 3600)
 
 
 def get_lib_dir(conf=__conf__):
@@ -374,8 +384,10 @@ def get_password_crypt_salt_len(conf=__conf__):
 def get_monitor_hostname(conf=__conf__):
     return conf.get_switch("Provisioning.MonitorHostName", False)
 
+
 def get_monitor_hostname_period(conf=__conf__):
     return conf.get_int("Provisioning.MonitorHostNamePeriod", 30)
+
 
 def get_httpproxy_host(conf=__conf__):
     return conf.get("HttpProxy.Host", None)
@@ -395,9 +407,11 @@ def get_resourcedisk_format(conf=__conf__):
 
 def get_resourcedisk_enable_swap(conf=__conf__):
     return conf.get_switch("ResourceDisk.EnableSwap", False)
-    
+
+
 def get_resourcedisk_enable_swap_encryption(conf=__conf__):
     return conf.get_switch("ResourceDisk.EnableSwapEncryption", False)
+
 
 def get_resourcedisk_mountpoint(conf=__conf__):
     return conf.get("ResourceDisk.MountPoint", "/mnt/resource")

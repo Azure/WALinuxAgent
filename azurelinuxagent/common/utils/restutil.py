@@ -279,8 +279,8 @@ def redact_sas_tokens_in_urls(url):
     return SAS_TOKEN_RETRIEVAL_REGEX.sub(r"\1" + REDACTED_TEXT + r"\3", url)
 
 
-def _http_request(method, host, rel_uri, port=None, data=None, secure=False, # pylint: disable=R0913
-                  headers=None, proxy_host=None, proxy_port=None):
+def _http_request(method, host, rel_uri, port=None, data=None, secure=False, # pylint: disable=R0913,R0914
+                  headers=None, proxy_host=None, proxy_port=None, redact_data=False):
 
     headers = {} if headers is None else headers
     headers['Connection'] = 'close'
@@ -312,11 +312,15 @@ def _http_request(method, host, rel_uri, port=None, data=None, secure=False, # p
                                          conn_port,
                                          timeout=10)
 
+    payload = data
+    if redact_data:
+        payload = "[REDACTED]"
+
     # Logger requires the data to be a ustr to log properly, ensuring that the data string that we log is always ustr.
     logger.verbose("HTTP connection [{0}] [{1}] [{2}] [{3}]",
                    method,
                    redact_sas_tokens_in_urls(url),
-                   textutil.str_to_encoded_ustr(data),
+                   textutil.str_to_encoded_ustr(payload),
                    headers)
 
     conn.request(method=method, url=url, body=data, headers=headers)
@@ -324,11 +328,12 @@ def _http_request(method, host, rel_uri, port=None, data=None, secure=False, # p
 
 
 def http_request(method, # pylint: disable=R0913,R0912,R0914,W0102
-                url, data, headers=None, 
-                use_proxy=False, 
-                max_retry=DEFAULT_RETRIES, 
-                retry_codes=RETRY_CODES, 
-                retry_delay=DELAY_IN_SECONDS): 
+                 url, data, headers=None,
+                 use_proxy=False,
+                 max_retry=DEFAULT_RETRIES,
+                 retry_codes=RETRY_CODES,
+                 retry_delay=DELAY_IN_SECONDS,
+                 redact_data=False):
 
     global SECURE_WARNING_EMITTED # pylint: disable=W0603
 
@@ -401,7 +406,8 @@ def http_request(method, # pylint: disable=R0913,R0912,R0914,W0102
                                  secure=secure,
                                  headers=headers,
                                  proxy_host=proxy_host,
-                                 proxy_port=proxy_port)
+                                 proxy_port=proxy_port,
+                                 redact_data=redact_data)
             logger.verbose("[HTTP Response] Status Code {0}", resp.status)
 
             if request_failed(resp):
@@ -497,14 +503,16 @@ def http_put(url, # pylint: disable=R0913,W0102
              use_proxy=False,
              max_retry=DEFAULT_RETRIES,
              retry_codes=RETRY_CODES,
-             retry_delay=DELAY_IN_SECONDS):
+             retry_delay=DELAY_IN_SECONDS,
+             redact_data=False):
 
     return http_request("PUT",
                         url, data, headers=headers,
                         use_proxy=use_proxy,
                         max_retry=max_retry,
                         retry_codes=retry_codes,
-                        retry_delay=retry_delay)
+                        retry_delay=retry_delay,
+                        redact_data=redact_data)
 
 
 def http_delete(url, # pylint: disable=R0913,W0102

@@ -1,4 +1,58 @@
-echo,### Probing Directories ###
+# Microsoft Azure Linux Agent
+#
+# Copyright 2020 Microsoft Corporation
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+# Requires Python 2.6+ and Openssl 1.0+
+#
+
+MANIFEST_NORMAL = """echo,### Probing Directories ###
+ll,/var/log
+ll,$LIB_DIR
+
+echo,### Gathering Configuration Files ###
+copy,/etc/*-release
+copy,/etc/HOSTNAME
+copy,/etc/hostname
+copy,/etc/waagent.conf
+echo,
+
+echo,### Gathering Log Files ###
+copy,$AGENT_LOG*
+copy,/var/log/dmesg*
+copy,/var/log/syslog*
+copy,/var/log/auth*
+copy,$LOG_DIR/*/*
+copy,$LOG_DIR/*/*/*
+copy,$LOG_DIR/custom-script/handler.log
+echo,
+
+echo,### Gathering Extension Files ###
+copy,$LIB_DIR/*.xml
+copy,$LIB_DIR/waagent_status.json
+copy,$LIB_DIR/*/status/*.status
+copy,$LIB_DIR/*/config/*.settings
+copy,$LIB_DIR/*/config/HandlerState
+copy,$LIB_DIR/*/config/HandlerStatus
+copy,$LIB_DIR/*.agentsManifest
+copy,$LIB_DIR/error.json
+copy,$LIB_DIR/Incarnation
+copy,$LIB_DIR/history/*.zip
+echo,
+"""
+
+MANIFEST_FULL = """echo,### Probing Directories ###
 ll,/var/log
 ll,$LIB_DIR
 ll,/etc/udev/rules.d
@@ -71,3 +125,4 @@ echo,
 
 echo,### Gathering Disk Info ###
 diskinfo,
+"""

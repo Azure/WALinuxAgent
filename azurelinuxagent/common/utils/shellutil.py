@@ -17,9 +17,17 @@
 # Requires Python 2.6+ and Openssl 1.0+
 #
 
+import platform
 import subprocess
+
 import azurelinuxagent.common.logger as logger
 from azurelinuxagent.common.future import ustr
+
+
+def get_python_cmd():
+    major_version = platform.python_version_tuple()[0]
+    return "python" if int(major_version) <= 2 else "python{0}".format(major_version)
+
 
 if not hasattr(subprocess, 'check_output'):
     def check_output(*popenargs, **kwargs):
@@ -59,11 +67,13 @@ Shell command util functions
 """ 
 # pylint: enable=W0105
 
+
 def has_command(cmd):
     """
     Return True if the given command is on the path
     """
     return not run(cmd, False)
+
 
 def run(cmd, chk_err=True, expected_errors=[]): # pylint: disable=W0102
     """
@@ -150,7 +160,8 @@ def run_command(command, log_error=False, cmd_input=None):
     # PIPE, an existing file descriptor (a positive integer), an existing file object, and None
     stdin = subprocess.PIPE if cmd_input else None
     try:
-        # Starting Python 3.4+, you need to encode the string, i.e. you need to pass Bytes to the input rather than string to process.communicate()
+        # Starting Python 3.4+, you need to encode the string, i.e. you need to pass Bytes to the input rather than
+        # string to process.communicate()
         process_input = cmd_input.encode() if cmd_input else None
 
         process = subprocess.Popen(command, stdin=stdin, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=False)

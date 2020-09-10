@@ -121,7 +121,7 @@ def mock_cgroup_commands():
         with patch("azurelinuxagent.common.cgroupapi.os.path.exists", side_effect=mock_path_exists):
             with patch("azurelinuxagent.common.cgroupapi.fileutil.read_file", side_effect=mock_read_file):
                 with patch('azurelinuxagent.common.cgroupapi.CGroupsApi.cgroups_supported', return_value=True):
-                    with patch('azurelinuxagent.common.cgroupapi.CGroupsApi._is_systemd', return_value=True):
+                    with patch('azurelinuxagent.common.cgroupapi.CGroupsApi.is_systemd', return_value=True):
                         patcher.commands = _default_commands[:]
                         patcher.files = _default_files[:]
                         patcher.add_command = add_command

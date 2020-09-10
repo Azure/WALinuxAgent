@@ -41,6 +41,7 @@ CGROUP_CONTROLLERS = ["cpu", "memory"]
 VM_AGENT_CGROUP_NAME = "walinuxagent.service"
 EXTENSIONS_ROOT_CGROUP_NAME = "walinuxagent.extensions"
 UNIT_FILES_FILE_SYSTEM_PATH = "/etc/systemd/system"
+SYSTEMD_RUN_PATH = "/run/systemd/system/"
 
 
 class CGroupsApi(object):
@@ -94,15 +95,15 @@ class CGroupsApi(object):
         """
         Factory method to create the correct API for the current platform
         """
-        return SystemdCgroupsApi() if CGroupsApi._is_systemd() else FileSystemCgroupsApi()
+        return SystemdCgroupsApi() if CGroupsApi.is_systemd() else FileSystemCgroupsApi()
 
     @staticmethod
-    def _is_systemd():
+    def is_systemd():
         """
         Determine if systemd is managing system services; the implementation follows the same strategy as, for example,
         sd_booted() in libsystemd, or /usr/sbin/service
         """
-        return os.path.exists('/run/systemd/system/')
+        return os.path.exists(SYSTEMD_RUN_PATH)
 
     @staticmethod
     def _foreach_controller(operation, message):
