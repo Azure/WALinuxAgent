@@ -42,6 +42,7 @@ CACHE_PATTERNS = [
 
 MAXIMUM_CACHED_FILES = 50
 
+
 def get_env_handler():
     return EnvHandler()
 

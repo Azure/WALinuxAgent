@@ -19,7 +19,6 @@
 import glob
 import json
 import os
-import platform
 import random
 import re
 import shutil
@@ -49,9 +48,11 @@ from azurelinuxagent.common.osutil import get_osutil
 from azurelinuxagent.common.protocol.util import get_protocol_util
 from azurelinuxagent.common.protocol.hostplugin import HostPluginProtocol
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
+from azurelinuxagent.common.utils.shellutil import get_python_cmd
 from azurelinuxagent.common.version import AGENT_NAME, AGENT_VERSION, AGENT_DIR_PATTERN, CURRENT_AGENT,\
     CURRENT_VERSION, DISTRO_NAME, DISTRO_VERSION, is_current_agent_installed, PY_VERSION_MAJOR, PY_VERSION_MINOR, \
     PY_VERSION_MICRO
+from azurelinuxagent.ga.collect_logs import get_collect_logs_handler, is_log_collection_allowed
 from azurelinuxagent.ga.env import get_env_handler
 from azurelinuxagent.ga.extension_telemetry import get_extension_telemetry_handler
 
@@ -92,13 +93,7 @@ def get_update_handler():
     return UpdateHandler()
 
 
-def get_python_cmd():
-    major_version = platform.python_version_tuple()[0]
-    return "python" if int(major_version) <= 2 else "python{0}".format(major_version)
-
-
 class UpdateHandler(object): # pylint: disable=R0902
-
     TELEMETRY_HEARTBEAT_PERIOD = timedelta(minutes=30)
 
     def __init__(self):
@@ -278,6 +273,9 @@ class UpdateHandler(object): # pylint: disable=R0902
                 get_monitor_handler(),
                 get_env_handler()
             ]
+
+            if is_log_collection_allowed():
+                all_thread_handlers.append(get_collect_logs_handler())
 
             if is_extension_telemetry_pipeline_enabled():
                 # Reuse the same protocol_util as the UpdateHandler class to avoid new initializations

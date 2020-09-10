@@ -34,6 +34,7 @@ from threading import currentThread
 import azurelinuxagent.common.conf as conf
 import azurelinuxagent.common.event as event
 import azurelinuxagent.common.logger as logger
+from azurelinuxagent.common.cgroupapi import SYSTEMD_RUN_PATH
 from azurelinuxagent.common.cgroupconfigurator import CGroupConfigurator # pylint: disable=unused-import
 from azurelinuxagent.common.osutil.factory import _get_osutil # pylint: disable=unused-import
 from azurelinuxagent.common.osutil.ubuntu import Ubuntu14OSUtil, Ubuntu16OSUtil # pylint: disable=unused-import
@@ -120,7 +121,7 @@ def running_under_travis():
 
 
 def is_systemd_present():
-    return os.path.exists("/run/systemd/system")
+    return os.path.exists(SYSTEMD_RUN_PATH)
 
 
 def i_am_root():
