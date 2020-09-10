@@ -18,6 +18,7 @@ import contextlib
 import os
 
 from azurelinuxagent.common import logger
+from azurelinuxagent.common.cgroupapi import SYSTEMD_RUN_PATH
 from azurelinuxagent.common.logger import Logger
 from azurelinuxagent.common.protocol.util import ProtocolUtil
 from azurelinuxagent.ga.collect_logs import get_collect_logs_handler, CollectLogsHandler, is_log_collection_allowed
@@ -45,7 +46,7 @@ def _create_collect_logs_handler(iterations=1, systemd_present=True):
     original_file_exists = os.path.exists
 
     def mock_file_exists(filepath):
-        if filepath == "/run/systemd/system/":
+        if filepath == SYSTEMD_RUN_PATH:
             return systemd_present
         return original_file_exists(filepath)
 

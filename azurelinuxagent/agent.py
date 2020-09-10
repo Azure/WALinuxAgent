@@ -219,7 +219,7 @@ def parse_args(sys_args): # pylint: disable=R0912
     conf_file_path = None
     log_collector_full_mode = False
 
-    for arg in sys_args: # pylint: disable=C0103
+    for arg in sys_args:
         m = re.match("^(?:[-/]*)configuration-path:([\w/\.\-_]+)", arg) # pylint: disable=W1401,C0103
         if not m is None:
             conf_file_path = m.group(1)

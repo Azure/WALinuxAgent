@@ -230,7 +230,8 @@ class HostPluginProtocol(object): # pylint: disable=R0902
         url = URI_FORMAT_PUT_LOG.format(self.endpoint, HOST_PLUGIN_PORT)
         response = restutil.http_put(url,
                                      data=content,
-                                     headers=self._build_log_headers())
+                                     headers=self._build_log_headers(),
+                                     redact_data=True)
 
         if restutil.request_failed(response): # pylint: disable=R1720
             error_response = restutil.read_response_error(response)

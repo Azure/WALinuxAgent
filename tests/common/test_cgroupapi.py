@@ -24,7 +24,8 @@ import tempfile
 
 from nose.plugins.attrib import attr
 
-from azurelinuxagent.common.cgroupapi import CGroupsApi, FileSystemCgroupsApi, SystemdCgroupsApi, VM_AGENT_CGROUP_NAME
+from azurelinuxagent.common.cgroupapi import CGroupsApi, FileSystemCgroupsApi, SystemdCgroupsApi, VM_AGENT_CGROUP_NAME, \
+    SYSTEMD_RUN_PATH
 from azurelinuxagent.common.cgroupstelemetry import CGroupsTelemetry
 from azurelinuxagent.common.exception import ExtensionError, ExtensionErrorCodes
 from azurelinuxagent.common.future import ustr
@@ -73,13 +74,13 @@ class CGroupsApiTestCase(_MockedFileSystemTestCase):
                 self.assertEqual(CGroupsApi.cgroups_supported(), supported, "cgroups_supported() failed on {0}".format(distro))
 
     def test_create_should_return_a_SystemdCgroupsApi_on_systemd_platforms(self): # pylint: disable=invalid-name
-        with patch("azurelinuxagent.common.cgroupapi.CGroupsApi._is_systemd", return_value=True):
+        with patch("azurelinuxagent.common.cgroupapi.CGroupsApi.is_systemd", return_value=True):
             api = CGroupsApi.create()
 
         self.assertTrue(type(api) == SystemdCgroupsApi) # pylint: disable=unidiomatic-typecheck
 
     def test_create_should_return_a_FileSystemCgroupsApi_on_non_systemd_platforms(self): # pylint: disable=invalid-name
-        with patch("azurelinuxagent.common.cgroupapi.CGroupsApi._is_systemd", return_value=False):
+        with patch("azurelinuxagent.common.cgroupapi.CGroupsApi.is_systemd", return_value=False):
             api = CGroupsApi.create()
 
         self.assertTrue(type(api) == FileSystemCgroupsApi) # pylint: disable=unidiomatic-typecheck
@@ -88,7 +89,7 @@ class CGroupsApiTestCase(_MockedFileSystemTestCase):
         path_exists = os.path.exists
 
         def mock_path_exists(path):
-            if path == "/run/systemd/system/":
+            if path == SYSTEMD_RUN_PATH:
                 mock_path_exists.path_tested = True
                 return True
             return path_exists(path)
@@ -96,7 +97,7 @@ class CGroupsApiTestCase(_MockedFileSystemTestCase):
         mock_path_exists.path_tested = False
 
         with patch("azurelinuxagent.common.cgroupapi.os.path.exists", mock_path_exists):
-            is_systemd = CGroupsApi._is_systemd() # pylint: disable=protected-access
+            is_systemd = CGroupsApi.is_systemd() # pylint: disable=protected-access
 
         self.assertTrue(is_systemd)
 
@@ -106,7 +107,7 @@ class CGroupsApiTestCase(_MockedFileSystemTestCase):
         path_exists = os.path.exists
 
         def mock_path_exists(path):
-            if path == "/run/systemd/system/":
+            if path == SYSTEMD_RUN_PATH:
                 mock_path_exists.path_tested = True
                 return False
             return path_exists(path)
@@ -114,7 +115,7 @@ class CGroupsApiTestCase(_MockedFileSystemTestCase):
         mock_path_exists.path_tested = False
 
         with patch("azurelinuxagent.common.cgroupapi.os.path.exists", mock_path_exists):
-            is_systemd = CGroupsApi._is_systemd() # pylint: disable=protected-access
+            is_systemd = CGroupsApi.is_systemd() # pylint: disable=protected-access
 
         self.assertFalse(is_systemd)
 
