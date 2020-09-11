@@ -24,10 +24,9 @@ import azurelinuxagent.common.logger as logger
 from azurelinuxagent.common.future import ustr
 
 
-def get_current_python_cmd():
+def get_complete_python_cmd():
+    # Returns the complete python command (with path) for the current python interpreter
     return sys.executable
-    # major_version = platform.python_version_tuple()[0]
-    # return "python" if int(major_version) <= 2 else "python{0}".format(major_version)
 
 
 if not hasattr(subprocess, 'check_output'):

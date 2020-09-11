@@ -32,7 +32,7 @@ from azurelinuxagent.common.protocol.util import ProtocolUtil
 from azurelinuxagent.common.protocol.wire import WireProtocol
 from azurelinuxagent.common.utils import fileutil, restutil, textutil
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
-from azurelinuxagent.common.utils.shellutil import get_current_python_cmd
+from azurelinuxagent.common.utils.shellutil import get_complete_python_cmd
 from azurelinuxagent.common.version import AGENT_PKG_GLOB, AGENT_DIR_GLOB, AGENT_NAME, AGENT_DIR_PATTERN, \
     AGENT_VERSION, CURRENT_AGENT, CURRENT_VERSION
 from azurelinuxagent.ga.exthandlers import ExtHandlerInstance, HandlerEnvironment
@@ -1086,11 +1086,11 @@ class TestUpdate(UpdateTestCase): # pylint: disable=too-many-public-methods
         args = args[0]
         cmds = textutil.safe_shlex_split(agent.get_agent_cmd())
         if cmds[0].lower() == "python":
-            cmds[0] = get_current_python_cmd()
+            cmds[0] = get_complete_python_cmd()
 
         self.assertEqual(args, cmds)
         self.assertTrue(len(args) > 1)
-        self.assertTrue(args[0].startswith("python"))
+        self.assertRegex(args[0], r"(/*/python\d*)$", "The command doesn't contain full python path")
         self.assertEqual("-run-exthandlers", args[len(args) - 1])
         self.assertEqual(True, 'cwd' in kwargs)
         self.assertEqual(agent.get_agent_dir(), kwargs['cwd'])
@@ -1104,7 +1104,7 @@ class TestUpdate(UpdateTestCase): # pylint: disable=too-many-public-methods
         args = args[0]
 
         self.assertTrue(len(args) > 1)
-        self.assertTrue(args[0].startswith("python"))
+        self.assertRegex(args[0], r"(/*/python\d*)$", "The command doesn't contain full python path")
         self.assertEqual("AnArgument", args[len(args) - 1])
 
     def test_run_latest_polls_and_waits_for_success(self):
@@ -1146,7 +1146,7 @@ class TestUpdate(UpdateTestCase): # pylint: disable=too-many-public-methods
 
         args, kwargs = self._test_run_latest()
 
-        self.assertEqual(args[0], [get_current_python_cmd(), "-u", sys.argv[0], "-run-exthandlers"])
+        self.assertEqual(args[0], [get_complete_python_cmd(), "-u", sys.argv[0], "-run-exthandlers"])
         self.assertEqual(True, 'cwd' in kwargs)
         self.assertEqual(os.getcwd(), kwargs['cwd'])
 
