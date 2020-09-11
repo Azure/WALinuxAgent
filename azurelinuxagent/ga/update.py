@@ -48,7 +48,7 @@ from azurelinuxagent.common.osutil import get_osutil
 from azurelinuxagent.common.protocol.util import get_protocol_util
 from azurelinuxagent.common.protocol.hostplugin import HostPluginProtocol
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
-from azurelinuxagent.common.utils.shellutil import get_python_cmd
+from azurelinuxagent.common.utils.shellutil import get_current_python_cmd
 from azurelinuxagent.common.version import AGENT_NAME, AGENT_VERSION, AGENT_DIR_PATTERN, CURRENT_AGENT,\
     CURRENT_VERSION, DISTRO_NAME, DISTRO_VERSION, is_current_agent_installed, PY_VERSION_MAJOR, PY_VERSION_MINOR, \
     PY_VERSION_MICRO
@@ -154,7 +154,7 @@ class UpdateHandler(object): # pylint: disable=R0902
             # Launch the correct Python version for python-based agents
             cmds = textutil.safe_shlex_split(agent_cmd)
             if cmds[0].lower() == "python":
-                cmds[0] = get_python_cmd()
+                cmds[0] = get_current_python_cmd()
                 agent_cmd = " ".join(cmds)
 
             self._evaluate_agent_health(latest_agent)
