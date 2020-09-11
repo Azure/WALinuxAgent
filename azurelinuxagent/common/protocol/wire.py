@@ -190,7 +190,7 @@ class WireProtocol(DataContract):
         self.client.status_blob.set_ext_status(ext_handler_name, ext_status)
 
     def report_event(self, events):
-        validate_param(EVENTS_DIRECTORY, events, TelemetryEventList)
+        # validate_param(EVENTS_DIRECTORY, events, TelemetryEventList)
         self.client.report_event(events)
 
     def upload_logs(self, logs):
@@ -1106,7 +1106,7 @@ class WireClient(object): # pylint: disable=R0904
         event_report_error_count, event_report_errors = 0, []
 
         # Group events by providerId
-        for event in event_list.events:
+        for event in event_list:
             try:
                 if event.providerId not in buf:
                     buf[event.providerId] = b''

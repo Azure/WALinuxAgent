@@ -26,10 +26,12 @@ if sys.version_info[0] == 3:
     bytebuffer = memoryview # pylint: disable=C0103
 
     from collections import OrderedDict # pylint: disable=W0611
+    from queue import PriorityQueue
 
 elif sys.version_info[0] == 2:
     import httplib as httpclient # pylint: disable=E0401,W0611
     from urlparse import urlparse # pylint: disable=E0401
+    from Queue import PriorityQueue
 
     """Rename Python2 unicode to ustr""" # pylint: disable=W0105
     ustr = unicode # pylint: disable=E0602,invalid-name
