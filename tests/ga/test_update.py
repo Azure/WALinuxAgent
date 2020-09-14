@@ -1090,7 +1090,7 @@ class TestUpdate(UpdateTestCase): # pylint: disable=too-many-public-methods
 
         self.assertEqual(args, cmds)
         self.assertTrue(len(args) > 1)
-        self.assertRegex(args[0], r"(/*/python\d*)$", "The command doesn't contain full python path")
+        self.assertRegex(args[0], r"(/.*/python[\d.]*)$", "The command doesn't contain full python path")
         self.assertEqual("-run-exthandlers", args[len(args) - 1])
         self.assertEqual(True, 'cwd' in kwargs)
         self.assertEqual(agent.get_agent_dir(), kwargs['cwd'])
@@ -1104,7 +1104,7 @@ class TestUpdate(UpdateTestCase): # pylint: disable=too-many-public-methods
         args = args[0]
 
         self.assertTrue(len(args) > 1)
-        self.assertRegex(args[0], r"(/*/python\d*)$", "The command doesn't contain full python path")
+        self.assertRegex(args[0], r"(/.*/python[\d.]*)$", "The command doesn't contain full python path")
         self.assertEqual("AnArgument", args[len(args) - 1])
 
     def test_run_latest_polls_and_waits_for_success(self):
