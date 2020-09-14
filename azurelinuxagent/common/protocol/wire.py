@@ -1106,7 +1106,7 @@ class WireClient(object): # pylint: disable=R0904
         event_report_error_count, event_report_errors = 0, []
 
         # Group events by providerId
-        for event in event_list:
+        for event in event_list():
             try:
                 if event.providerId not in buf:
                     buf[event.providerId] = b''

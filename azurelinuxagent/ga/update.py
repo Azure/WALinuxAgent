@@ -60,6 +60,7 @@ from azurelinuxagent.ga.exthandlers import HandlerManifest, get_traceback, ExtHa
 from azurelinuxagent.ga.monitor import get_monitor_handler
 
 # pylint: disable=C0302
+from azurelinuxagent.ga.telemetry_service import get_telemetry_service_handler
 
 AGENT_ERROR_FILE = "error.json" # File name for agent error record
 AGENT_MANIFEST_FILE = "HandlerManifest.json"
@@ -274,9 +275,11 @@ class UpdateHandler(object): # pylint: disable=R0902
             add_event(AGENT_NAME, op=WALAEventOperation.OSInfo, message=os_info_msg)
 
             # Get all thread handlers
+            telemetry_handler = get_telemetry_service_handler(self.protocol_util)
             all_thread_handlers = [
-                get_monitor_handler(),
-                get_env_handler()
+                get_monitor_handler(telemetry_handler),
+                get_env_handler(),
+                telemetry_handler
             ]
 
             if is_extension_telemetry_pipeline_enabled():

@@ -38,8 +38,8 @@ from azurelinuxagent.common.version import AGENT_NAME, CURRENT_VERSION
 from azurelinuxagent.ga.periodic_operation import PeriodicOperation
 
 
-def get_monitor_handler():
-    return MonitorHandler()
+def get_monitor_handler(telemetry_handler):
+    return MonitorHandler(telemetry_handler)
 
 
 class PollResourceUsageOperation(PeriodicOperation):
@@ -109,6 +109,35 @@ class ResetPeriodicLogMessagesOperation(PeriodicOperation):
         logger.reset_periodic()
 
 
+class CollectAndEnqueueEventsPeriodicOperation(PeriodicOperation):
+    """
+    Periodic operation to collect and send telemetry events located in the events folder
+    """
+
+    _EVENT_COLLECTION_PERIOD = datetime.timedelta(minutes=1)
+
+    def __init__(self, telemetry_handler):
+        super(CollectAndEnqueueEventsPeriodicOperation, self).__init__(
+            name="collect_and_enqueue_events",
+            operation=self.collect_and_enqueue_events,
+            period=CollectAndEnqueueEventsPeriodicOperation._EVENT_COLLECTION_PERIOD)
+        self.enqueue_events = telemetry_handler.enqueue_event
+
+    def collect_and_enqueue_events(self):
+        """
+        Periodically send any events located in the events folder
+        """
+        try:
+            # event_list = collect_events()
+            collect_events(self.enqueue_events)
+
+            # if len(event_list.events) > 0: # pylint: disable=len-as-condition
+            #     self.protocol.report_event(event_list)
+        except Exception as e: # pylint: disable=C0103
+            err_msg = "Failure in collecting Agent events: {0}".format(ustr(e))
+            add_event(op=WALAEventOperation.UnhandledError, message=err_msg, is_success=False)
+
+
 class ReportNetworkErrorsOperation(PeriodicOperation):
     def __init__(self):
         super(ReportNetworkErrorsOperation, self).__init__(
@@ -158,8 +187,6 @@ class ReportNetworkConfigurationChangesOperation(PeriodicOperation):
 
 
 class MonitorHandler(object): # pylint: disable=R0902
-    # telemetry
-    EVENT_COLLECTION_PERIOD = datetime.timedelta(minutes=1)
     # host plugin
     HOST_PLUGIN_HEARTBEAT_PERIOD = datetime.timedelta(minutes=1)
     HOST_PLUGIN_HEALTH_PERIOD = datetime.timedelta(minutes=5)
@@ -173,14 +200,14 @@ class MonitorHandler(object): # pylint: disable=R0902
     def get_thread_name():
         return MonitorHandler._THREAD_NAME
 
-    def __init__(self):
+    def __init__(self, telemetry_handler):
         self.osutil = get_osutil()
         self.imds_client = None
 
         self.event_thread = None
         self._periodic_operations = [
             ResetPeriodicLogMessagesOperation(),
-            PeriodicOperation("collect_and_send_events", self.collect_and_send_events, self.EVENT_COLLECTION_PERIOD),
+            CollectAndEnqueueEventsPeriodicOperation(telemetry_handler),
             ReportNetworkErrorsOperation(),
             PollResourceUsageOperation(),
             PeriodicOperation("send_host_plugin_heartbeat", self.send_host_plugin_heartbeat, self.HOST_PLUGIN_HEARTBEAT_PERIOD),
@@ -250,19 +277,6 @@ class MonitorHandler(object): # pylint: disable=R0902
                     PeriodicOperation.sleep_until_next_operation(self._periodic_operations)
         except Exception as e: # pylint: disable=C0103
             logger.error("An error occurred in the monitor thread; will exit the thread.\n{0}", ustr(e))
-
-    def collect_and_send_events(self):
-        """
-        Periodically send any events located in the events folder
-        """
-        try:
-            event_list = collect_events()
-
-            if len(event_list.events) > 0: # pylint: disable=len-as-condition
-                self.protocol.report_event(event_list)
-        except Exception as e: # pylint: disable=C0103
-            err_msg = "Failure in collecting/sending Agent events: {0}".format(ustr(e))
-            add_event(op=WALAEventOperation.UnhandledError, message=err_msg, is_success=False)
 
     def send_imds_heartbeat(self):
         """

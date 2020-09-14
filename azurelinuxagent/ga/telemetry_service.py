@@ -16,6 +16,7 @@
 #
 # Requires Python 2.6+ and Openssl 1.0+
 #
+import datetime
 import threading
 
 from azurelinuxagent.common import logger
@@ -32,12 +33,13 @@ class TelemetryServiceHandler(object):
     """
 
     _THREAD_NAME = "TelemetryServiceHandler"
+    _MAX_TIMEOUT = datetime.timedelta(minutes=5).seconds
 
     def __init__(self, protocol_util):
         self._protocol = protocol_util.get_protocol()
         self.should_run = True
         self.thread = None
-        self._should_process_event = threading.Event()
+        self._should_process_events = threading.Event()
         self._queue = PriorityQueue()
 
     @staticmethod
@@ -71,14 +73,16 @@ class TelemetryServiceHandler(object):
     def enqueue_event(self, event, priority):
         # Add event to queue and set event
         self._queue.put((priority, event))
-        if not self._should_process_event.is_set():
-            self._should_process_event.set()
+
+        # Always set the event if any enqueue happens (even if already set)
+        self._should_process_events.set()
 
     def daemon(self):
         logger.info("Successfully started the {0} thread".format(self.get_thread_name()))
         try:
             # On demand wait, start processing as soon as there is any data available in the queue
-            while self._should_process_event.wait():
+            # In worst case, also keep checking every 5 mins to ensure that no data is being missed
+            while self._should_process_events.wait(timeout=TelemetryServiceHandler._MAX_TIMEOUT):
                 self.send_events_in_queue()
 
         except Exception as error:
@@ -88,7 +92,8 @@ class TelemetryServiceHandler(object):
     def get_events(self):
         while not self._queue.empty():
             try:
-                yield self._queue.get()
+                _, event = self._queue.get()
+                yield event
             finally:
                 # Mark the event as processed once done
                 self._queue.task_done()
@@ -99,6 +104,6 @@ class TelemetryServiceHandler(object):
             self._protocol.report_event(self.get_events)
 
         # Clear event when done
-        if self._should_process_event.is_set():
-            self._should_process_event.clear()
-        raise NotImplementedError()
+        # There might be a rare race condition where the loop exits and we get a new event, in that case not unsetting the event.
+        if self._should_process_events.is_set() and not self._queue.empty():
+            self._should_process_events.clear()
