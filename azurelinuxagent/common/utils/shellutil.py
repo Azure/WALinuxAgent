@@ -74,55 +74,6 @@ def has_command(cmd):
     """
     return not run(cmd, False)
 
-
-def run(cmd, chk_err=True, expected_errors=[]): # pylint: disable=W0102
-    """
-    Note: Deprecating in favour of `azurelinuxagent.common.utils.shellutil.run_command` function.
-    Calls run_get_output on 'cmd', returning only the return code.
-    If chk_err=True then errors will be reported in the log.
-    If chk_err=False then errors will be suppressed from the log.
-    """
-    retcode, out = run_get_output(cmd, chk_err=chk_err, expected_errors=expected_errors) # pylint: disable=W0612
-    return retcode
-
-
-def run_get_output(cmd, chk_err=True, log_cmd=True, expected_errors=[]): # pylint: disable=W0102
-    """
-    Wrapper for subprocess.check_output.
-    Execute 'cmd'.  Returns return code and STDOUT, trapping expected
-    exceptions.
-    Reports exceptions to Error if chk_err parameter is True
-
-    For new callers, consider using run_command instead as it separates stdout from stderr,
-    returns only stdout on success, logs both outputs and return code on error and raises an exception.
-    """
-    if log_cmd:
-        logger.verbose(u"Command: [{0}]", cmd)
-    try:
-        output = subprocess.check_output(cmd,
-                                         stderr=subprocess.STDOUT,
-                                         shell=True)
-        output = _encode_command_output(output)
-    except subprocess.CalledProcessError as e: # pylint: disable=C0103
-        output = _encode_command_output(e.output)
-
-        if chk_err:
-            msg = u"Command: [{0}], " \
-                  u"return code: [{1}], " \
-                  u"result: [{2}]".format(cmd, e.returncode, output)
-            if e.returncode in expected_errors:
-                logger.info(msg)
-            else:
-                logger.error(msg)
-        return e.returncode, output
-    except Exception as e: # pylint: disable=C0103
-        if chk_err:
-            logger.error(u"Command [{0}] raised unexpected exception: [{1}]"
-                         .format(cmd, ustr(e)))
-        return -1, ustr(e)
-    return 0, output
-
-
 def _encode_command_output(output):
     return ustr(output, encoding='utf-8', errors="backslashreplace")
 

@@ -121,7 +121,7 @@ class RDMAHandler(object):
         # for suse, it uses hv_kvp_daemon
         kvp_daemon_names = ['hypervkvpd', 'hv_kvp_daemon']
 
-        exitcode, ps_out  = shellutil.run_get_output("ps -ef")
+        exitcode, ps_out  = shellutil.run_command("ps -ef")
         if exitcode != 0:
             raise Exception('RDMA: ps -ef failed: %s' % ps_out)
         for n in  kvp_daemon_names: # pylint: disable=C0103
