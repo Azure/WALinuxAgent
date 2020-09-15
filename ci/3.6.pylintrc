@@ -3,7 +3,6 @@
 # The source code suppresses the following errors in python3.6+:
 
 # arguments-differ<W0221>: (hi-pri) Used when a method has a different number of arguments than in the implemented interface or in an overridden method.
-# assignment-from-no-return<E1111>: (hi-pri) Used when an assignment is done on a function call but the inferred function doesn't return anything.
 # assignment-from-none<E1128>: (hi-pri) Used when an assignment is done on a function call but the inferred function returns nothing but None.
 # attribute-defined-outside-init<W0201>: (hi-pri) Used when an instance attribute is defined outside the __init__ method.
 # bad-indentation<W0311>: (hi-pri) Used when an unexpected number of indentation's tabulations or spaces has been found.
