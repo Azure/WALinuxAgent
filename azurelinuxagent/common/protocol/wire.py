@@ -1135,6 +1135,7 @@ class WireClient(object): # pylint: disable=R0904
                 event_report_error_count += 1
                 if len(event_report_errors) < max_send_errors_to_report:
                     event_report_errors.append(ustr(e))
+            logger.info("Event {0} done processing!".format(event))
 
         EventLogger.report_dropped_events_error(event_report_error_count, event_report_errors,
                                                 WALAEventOperation.ReportEventErrors, max_send_errors_to_report)

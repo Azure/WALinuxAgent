@@ -28,6 +28,7 @@ from azurelinuxagent.common.future import ustr, PriorityQueue
 def get_telemetry_service_handler(protocol_util):
     return TelemetryServiceHandler(protocol_util)
 
+
 class TelemetryServiceHandler(object):
     """
     This Handler takes care of sending all telemetry out of the agent to Wireserver. It sends out data as soon as
@@ -43,6 +44,10 @@ class TelemetryServiceHandler(object):
         self.thread = None
         self._should_process_events = threading.Event()
         self._queue = PriorityQueue()
+        # The basic PriorityQueue sorts based on the 2nd item if the priority is same, but since TelemetryEvent is not orderable, it throws.
+        # This property takes care of that collision by maintaining a counter to ensure that collision can never occur.
+        # It is reset every time the threading event self._should_process_events is unset
+        self._queue_counter = 0
 
     @staticmethod
     def get_thread_name():
@@ -74,7 +79,8 @@ class TelemetryServiceHandler(object):
 
     def enqueue_event(self, event, priority):
         # Add event to queue and set event
-        self._queue.put((priority, event))
+        self._queue.put((priority, self._queue_counter, event))
+        self._queue_counter += 1
 
         # Always set the event if any enqueue happens (even if already set)
         self._should_process_events.set()
@@ -94,10 +100,11 @@ class TelemetryServiceHandler(object):
     def get_events(self):
         while not self._queue.empty():
             try:
-                _, event = self._queue.get()
+                _, __, event = self._queue.get()
                 yield event
             finally:
                 # Mark the event as processed once done
+                logger.info("Marking event {0} as done!".format(event))
                 self._queue.task_done()
 
     def send_events_in_queue(self):
@@ -109,3 +116,4 @@ class TelemetryServiceHandler(object):
         # There might be a rare race condition where the loop exits and we get a new event, in that case not unsetting the event.
         if self._should_process_events.is_set() and not self._queue.empty():
             self._should_process_events.clear()
+            self._queue_counter = 0
