@@ -104,7 +104,7 @@ class TelemetryServiceHandler(object):
                 yield event
             finally:
                 # Mark the event as processed once done
-                logger.info("Marking event {0} as done!".format(event))
+                logger.verbose("Finished working with event {0}".format(event))
                 self._queue.task_done()
 
     def send_events_in_queue(self):
