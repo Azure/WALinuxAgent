@@ -1137,9 +1137,9 @@ class WireClient(object): # pylint: disable=R0904
                     event_report_errors.append(ustr(e))
 
         EventLogger.report_dropped_events_error(event_report_error_count, event_report_errors,
-                                                WALAEventOperation.CollectEventErrors, max_send_errors_to_report)
+                                                WALAEventOperation.ReportEventErrors, max_send_errors_to_report)
         EventLogger.report_dropped_events_error(unicode_error_count, unicode_errors,
-                                                WALAEventOperation.CollectEventUnicodeErrors,
+                                                WALAEventOperation.ReportEventUnicodeErrors,
                                                 max_send_errors_to_report)
 
         # Send out all events left in buffer.

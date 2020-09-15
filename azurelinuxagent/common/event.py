@@ -609,7 +609,7 @@ class EventLogger(object):
         event_directory_full_path = os.path.join(conf.get_lib_dir(), EVENTS_DIRECTORY)
         event_files = os.listdir(event_directory_full_path)
         unicode_error_count, unicode_errors = 0, []
-        collect_event_error_count, collect_event_errors = 0, []
+        collect_event_error_count, collect_event_errors = 0, set()
 
         for event_file in event_files:
             try:
@@ -655,7 +655,7 @@ class EventLogger(object):
             except Exception as e: # pylint: disable=C0103
                 collect_event_error_count += 1
                 if len(collect_event_errors) < max_collect_errors_to_report:
-                    collect_event_errors.append(ustr(e))
+                    collect_event_errors.add(traceback.format_exc())
 
         EventLogger.report_dropped_events_error(collect_event_error_count, collect_event_errors,
                                                 WALAEventOperation.CollectEventErrors, max_collect_errors_to_report)
