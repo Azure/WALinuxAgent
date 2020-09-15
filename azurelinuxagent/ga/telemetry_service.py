@@ -19,6 +19,8 @@
 import datetime
 import threading
 
+import traceback
+
 from azurelinuxagent.common import logger
 from azurelinuxagent.common.future import ustr, PriorityQueue
 
@@ -86,8 +88,8 @@ class TelemetryServiceHandler(object):
                 self.send_events_in_queue()
 
         except Exception as error:
-            logger.warn("An unknown error occurred in the {0} thread main loop, stopping thread. Error: {1}",
-                        self.get_thread_name(), ustr(error))
+            logger.warn("An unknown error occurred in the {0} thread main loop, stopping thread. Error: {1}, Stack: {2}",
+                        self.get_thread_name(), ustr(error), traceback.format_exc())
 
     def get_events(self):
         while not self._queue.empty():
