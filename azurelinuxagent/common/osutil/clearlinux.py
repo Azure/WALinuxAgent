@@ -80,8 +80,10 @@ class ClearLinuxUtil(DefaultOSUtil):
                 passwd_content = fileutil.read_file(passwd_file_path)
                 if not passwd_content:
                     # Empty file is no better than no file
-                    raise IOError
-            except (IOError, OSError):
+                    raise IOError(os.errno.ENOENT, "Empty File", passwd_file_path)
+            except (IOError, OSError) as file_read_err:
+                if file_read_err.errno != os.errno.ENOENT:
+                    raise
                 new_passwd = ["root:*LOCK*:14600::::::"]
             else:
                 passwd = passwd_content.split('\n')
