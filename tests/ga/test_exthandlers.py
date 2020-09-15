@@ -27,7 +27,7 @@ from azurelinuxagent.common.protocol.restapi import ExtensionStatus, Extension, 
 from azurelinuxagent.common.protocol.util import ProtocolUtil
 from azurelinuxagent.common.utils.extensionprocessutil import TELEMETRY_MESSAGE_MAX_LEN, format_stdout_stderr, \
     read_output
-from azurelinuxagent.ga.exthandlers import parse_ext_status, ExtHandlerInstance, ExtCommandEnvVariable
+from azurelinuxagent.ga.exthandlers import parse_ext_status, ExtHandlerInstance, ExtCommandEnvVariable, ExtensionStatusError
 from tests.protocol import mockwiredata
 from tests.protocol.mocks import mock_wire_protocol
 from tests.tools import AgentTestCase, patch, mock_sleep, clear_singleton_instances
@@ -40,6 +40,23 @@ class TestExtHandlers(AgentTestCase):
         # Since ProtocolUtil is a singleton per thread, we need to clear it to ensure that the test cases do not
         # reuse a previous state
         clear_singleton_instances(ProtocolUtil)
+
+    def test_parse_ext_status_should_raise_on_non_array(self):
+        status = json.loads('''
+            {
+                "status": {
+                    "status": "transitioning",
+                    "operation": "Enabling Handler",
+                    "code": 0,
+                    "name": "Microsoft.Azure.RecoveryServices.SiteRecovery.Linux"
+                },
+                "version": 1.0,
+                "timestampUTC": "2020-01-14T15:04:43Z"
+            }''')
+
+        with self.assertRaises(ExtensionStatusError) as context_manager:
+            parse_ext_status(ExtensionStatus(seq_no=0), status)
+        self.assertIn("The extension status must be an array", str(context_manager.exception))
 
     def test_parse_extension_status00(self):
         """

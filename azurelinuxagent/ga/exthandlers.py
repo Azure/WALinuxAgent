@@ -150,8 +150,13 @@ def parse_ext_substatus(substatus):
 
 
 def parse_ext_status(ext_status, data):
-    if data is None or len(data) == 0: # pylint: disable=len-as-condition
+    if data is None:
         return
+    if not isinstance(data, list):
+        raise ExtensionStatusError(msg="The extension status must be an array: {0}".format(data), code=ExtensionStatusError.StatusFileMalformed)
+    if not data:
+        return
+
     # Currently, only the first status will be reported
     data = data[0]
     # Check extension status format
