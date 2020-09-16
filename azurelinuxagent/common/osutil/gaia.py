@@ -59,7 +59,7 @@ class GaiaOSUtil(DefaultOSUtil):
             time.sleep(2)
         return ret, out
 
-    def useradd(self, username, expiration=None): # pylint: disable=W0221
+    def useradd(self, username, expiration=None, comment=None):
         logger.warn('useradd is not supported on GAiA')
 
     def chpasswd(self, username, password, crypt_id=6, salt_len=10):

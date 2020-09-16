@@ -34,7 +34,7 @@ class AlpineOSUtil(DefaultOSUtil):
     def get_dhcp_pid(self):
         return self._get_dhcp_pid(["pidof", "dhcpcd"])
 
-    def restart_if(self, ifname): # pylint: disable=W0221
+    def restart_if(self, ifname, retries=None, wait=None):
         logger.info('restarting {} (sort of, actually SIGHUPing dhcpcd)'.format(ifname))
         pid = self.get_dhcp_pid()
         if pid != None: # pylint: disable=C0121
