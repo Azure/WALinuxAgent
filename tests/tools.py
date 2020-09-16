@@ -34,10 +34,8 @@ from threading import currentThread
 import azurelinuxagent.common.conf as conf
 import azurelinuxagent.common.event as event
 import azurelinuxagent.common.logger as logger
+from azurelinuxagent.common.future import range # pylint: disable=redefined-builtin
 from azurelinuxagent.common.cgroupapi import SYSTEMD_RUN_PATH
-from azurelinuxagent.common.cgroupconfigurator import CGroupConfigurator # pylint: disable=unused-import
-from azurelinuxagent.common.osutil.factory import _get_osutil # pylint: disable=unused-import
-from azurelinuxagent.common.osutil.ubuntu import Ubuntu14OSUtil, Ubuntu16OSUtil # pylint: disable=unused-import
 from azurelinuxagent.common.utils import fileutil
 from azurelinuxagent.common.version import PY_VERSION_MAJOR
 
@@ -359,7 +357,7 @@ class AgentTestCase(unittest.TestCase):
             elements = (seq_type_name.capitalize(), seq1_repr, seq2_repr)
             differing = '%ss differ: %s != %s\n' % elements
 
-            for i in xrange(min(len1, len2)): # pylint: disable=undefined-variable
+            for i in range(min(len1, len2)):
                 try:
                     item1 = seq1[i]
                 except (TypeError, IndexError, NotImplementedError):
