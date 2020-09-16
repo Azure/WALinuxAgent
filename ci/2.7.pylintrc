@@ -47,7 +47,6 @@
 # too-many-nested-blocks<R1702>: Used when a function or a method has too many nested blocks. 
 # too-many-public-methods<R0904>: Used when class has too many public methods, try to reduce this to get a simpler (and so easier to use) class.
 # too-many-return-statements<R0911>: Used when a function or method has too many return statement, making it hard to follow.
-# undefined-variable<E0602>: (hi-pri) Used when an undefined variable is accessed.
 # ungrouped-imports<C0412>: (needs review) Used when imports are not grouped by packages
 # unidiomatic-typecheck<C0123>: (hi-pri) The idiomatic way to perform an explicit typecheck in Python is to use isinstance(x, Y) rather than type(x) == Y, type(x) is Y.
 # unnecessary-lambda<W0108>: Used when the body of a lambda expression is a function call on the same argument list as the lambda itself
