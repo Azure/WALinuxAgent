@@ -196,7 +196,7 @@ class MonitorHandler(ThreadHandlerInterface): # pylint: disable=R0902
         self.imds_errorstate = ErrorState(min_timedelta=MonitorHandler.IMDS_HEALTH_PERIOD)
 
     def run(self):
-        self.start(init_data=True)
+        self.start()
 
     def stop(self):
         self.should_run = False
@@ -224,17 +224,18 @@ class MonitorHandler(ThreadHandlerInterface): # pylint: disable=R0902
     def is_alive(self):
         return self.event_thread is not None and self.event_thread.is_alive()
 
-    # W0221: arguments-differ - This is a special case, we need to init_data only when run first time.
-    def start(self, init_data=False):   # pylint: disable=arguments-differ
-        self.event_thread = threading.Thread(target=self.daemon, args=(init_data,))
+    def start(self):
+        self.event_thread = threading.Thread(target=self.daemon)
         self.event_thread.setDaemon(True)
         self.event_thread.setName(self.get_thread_name())
         self.event_thread.start()
 
-    def daemon(self, init_data=False):
+    def daemon(self):
         try:
-            if init_data:
+            if self.protocol_util is None or self.protocol is None:
                 self.init_protocols()
+
+            if self.imds_client is None:
                 self.init_imds_client()
 
             while not self.stopped():
