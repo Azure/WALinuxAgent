@@ -29,6 +29,24 @@ def get_telemetry_service_handler(protocol_util):
     return TelemetryServiceHandler(protocol_util)
 
 
+class QueueCounter(object):
+    def __init__(self):
+        self._value = 0
+        self._lock = threading.RLock()
+
+    def increment(self):
+        with self._lock:
+            self._value += 1
+
+    @property
+    def value(self):
+        return self._value
+
+    def reset(self):
+        with self._lock:
+            self._value = 0
+
+
 class TelemetryServiceHandler(object):
     """
     This Handler takes care of sending all telemetry out of the agent to Wireserver. It sends out data as soon as
@@ -47,7 +65,7 @@ class TelemetryServiceHandler(object):
         # The basic PriorityQueue sorts based on the 2nd item if the priority is same, but since TelemetryEvent is not orderable, it throws.
         # This property takes care of that collision by maintaining a counter to ensure that collision can never occur.
         # It is reset every time the threading event self._should_process_events is unset
-        self._queue_counter = 0
+        self._queue_counter = QueueCounter()
 
     @staticmethod
     def get_thread_name():
@@ -79,8 +97,8 @@ class TelemetryServiceHandler(object):
 
     def enqueue_event(self, event, priority):
         # Add event to queue and set event
-        self._queue.put((priority, self._queue_counter, event))
-        self._queue_counter += 1
+        self._queue.put((priority, self._queue_counter.value, event))
+        self._queue_counter.increment()
 
         # Always set the event if any enqueue happens (even if already set)
         self._should_process_events.set()
@@ -116,4 +134,4 @@ class TelemetryServiceHandler(object):
         # There might be a rare race condition where the loop exits and we get a new event, in that case not unsetting the event.
         if self._should_process_events.is_set() and not self._queue.empty():
             self._should_process_events.clear()
-            self._queue_counter = 0
+            self._queue_counter.reset()
