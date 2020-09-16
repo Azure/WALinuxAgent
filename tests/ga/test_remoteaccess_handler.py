@@ -207,7 +207,7 @@ class TestRemoteAccessHandler(AgentTestCase): # pylint: disable=too-many-public-
             tstuser = "foobar"
             expiration = datetime.utcnow() + timedelta(days=1)
             pwd = "bad password"
-            error = "\[CryptError\] Error decoding secret\nInner error: Incorrect padding" # pylint: disable=anomalous-backslash-in-string
+            error = r"\[CryptError\] Error decoding secret\nInner error: Incorrect padding"
             self.assertRaisesRegex(Exception, error, rah._add_user, tstuser, pwd, expiration) # pylint: disable=protected-access
             users = get_user_dictionary(rah._os_util.get_users()) # pylint: disable=protected-access
             self.assertEqual(0, len(users))

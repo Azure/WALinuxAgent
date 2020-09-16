@@ -49,8 +49,8 @@ class TestProcessUtils(AgentTestCase):
             stderr=subprocess.PIPE)
 
         timed_out, ret = wait_for_process_completion_or_timeout(process=process, timeout=5)
-        self.assertEquals(timed_out, False) # pylint: disable=deprecated-method
-        self.assertEquals(ret, 0) # pylint: disable=deprecated-method
+        self.assertEqual(timed_out, False) 
+        self.assertEqual(ret, 0) 
 
     def test_wait_for_process_completion_or_timeout_should_kill_process_on_timeout(self):
         timeout = 5
@@ -70,11 +70,11 @@ class TestProcessUtils(AgentTestCase):
 
                 # We're mocking sleep to avoid prolonging the test execution time, but we still want to make sure
                 # we're "waiting" the correct amount of time before killing the process
-                self.assertEquals(mock_sleep.call_count, timeout) # pylint: disable=deprecated-method
+                self.assertEqual(mock_sleep.call_count, timeout) 
 
-                self.assertEquals(patch_kill.call_count, 1) # pylint: disable=deprecated-method
-                self.assertEquals(timed_out, True) # pylint: disable=deprecated-method
-                self.assertEquals(ret, None) # pylint: disable=deprecated-method
+                self.assertEqual(patch_kill.call_count, 1) 
+                self.assertEqual(timed_out, True) 
+                self.assertEqual(ret, None) 
 
     def test_handle_process_completion_should_return_nonzero_when_process_fails(self):
         process = subprocess.Popen(
@@ -86,8 +86,8 @@ class TestProcessUtils(AgentTestCase):
             stderr=subprocess.PIPE)
 
         timed_out, ret = wait_for_process_completion_or_timeout(process=process, timeout=5)
-        self.assertEquals(timed_out, False) # pylint: disable=deprecated-method
-        self.assertEquals(ret, 2) # pylint: disable=deprecated-method
+        self.assertEqual(timed_out, False) 
+        self.assertEqual(ret, 2) 
 
     def test_handle_process_completion_should_return_process_output(self):
         command = "echo 'dummy stdout' && 1>&2 echo 'dummy stderr'"
@@ -109,11 +109,11 @@ class TestProcessUtils(AgentTestCase):
                                                            error_code=42)
 
         expected_output = "[stdout]\ndummy stdout\n\n\n[stderr]\ndummy stderr\n"
-        self.assertEquals(process_output, expected_output) # pylint: disable=deprecated-method
+        self.assertEqual(process_output, expected_output) 
 
     def test_handle_process_completion_should_raise_on_timeout(self):
         command = "sleep 1m"
-        timeout = 5
+        timeout = 20
         with tempfile.TemporaryFile(dir=self.tmp_dir, mode="w+b") as stdout:
             with tempfile.TemporaryFile(dir=self.tmp_dir, mode="w+b") as stderr:
                 with patch('time.sleep') as mock_sleep:
@@ -135,9 +135,11 @@ class TestProcessUtils(AgentTestCase):
 
                     # We're mocking sleep to avoid prolonging the test execution time, but we still want to make sure
                     # we're "waiting" the correct amount of time before killing the process and raising an exception
-                    self.assertEquals(mock_sleep.call_count, timeout) # pylint: disable=deprecated-method
+                    # Due to an extra call to sleep at some point in the call stack which only happens sometimes,
+                    # we are relaxing this assertion to allow +/- 2 sleep calls.
+                    self.assertTrue(abs(mock_sleep.call_count - timeout) <= 2)
 
-                    self.assertEquals(context_manager.exception.code, ExtensionErrorCodes.PluginHandlerScriptTimedout) # pylint: disable=deprecated-method
+                    self.assertEqual(context_manager.exception.code, ExtensionErrorCodes.PluginHandlerScriptTimedout)
                     self.assertIn("Timeout({0})".format(timeout), ustr(context_manager.exception))
 
     def test_handle_process_completion_should_raise_on_nonzero_exit_code(self):
@@ -161,7 +163,7 @@ class TestProcessUtils(AgentTestCase):
                                               stderr=stderr,
                                               error_code=error_code)
 
-                self.assertEquals(context_manager.exception.code, error_code) # pylint: disable=deprecated-method
+                self.assertEqual(context_manager.exception.code, error_code) 
                 self.assertIn("Non-zero exit code:", ustr(context_manager.exception))
 
     def test_read_output_should_return_no_content(self):

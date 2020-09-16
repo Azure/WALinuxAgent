@@ -18,7 +18,7 @@
 # Requires Python 2.6+ and Openssl 1.0+
 #
 import os
-import errno as errno # pylint: disable=C0414,W0611
+from time import sleep
 
 import azurelinuxagent.common.logger as logger
 import azurelinuxagent.common.utils.fileutil as fileutil
@@ -94,7 +94,7 @@ class OpenWRTResourceDiskHandler(ResourceDiskHandler):
             logger.info("Waiting for partition [{0}], {1} attempts remaining",
                         partition,
                         attempts)
-            sleep(5) # pylint: disable=E0602
+            sleep(5)
             attempts -= 1
 
         if not os.path.exists(partition):

@@ -197,7 +197,7 @@ class DownloadExtensionTestCase(AgentTestCase): # pylint: disable=too-many-insta
         with patch("azurelinuxagent.common.protocol.wire.WireProtocol.download_ext_handler_pkg", side_effect=download_ext_handler_pkg) as mock_download_ext_handler_pkg:
             self.ext_handler_instance.download()
 
-        self.assertEquals(mock_download_ext_handler_pkg.call_count, self.download_failures + 1) # pylint: disable=deprecated-method
+        self.assertEqual(mock_download_ext_handler_pkg.call_count, self.download_failures + 1)
 
         self._assert_download_and_expand_succeeded()
 
@@ -215,7 +215,7 @@ class DownloadExtensionTestCase(AgentTestCase): # pylint: disable=too-many-insta
         with patch("azurelinuxagent.common.protocol.wire.WireProtocol.download_ext_handler_pkg", side_effect=download_ext_handler_pkg) as mock_download_ext_handler_pkg:
             self.ext_handler_instance.download()
 
-        self.assertEquals(mock_download_ext_handler_pkg.call_count, self.download_failures + 1) # pylint: disable=deprecated-method
+        self.assertEqual(mock_download_ext_handler_pkg.call_count, self.download_failures + 1)
 
         self._assert_download_and_expand_succeeded()
 
@@ -234,7 +234,7 @@ class DownloadExtensionTestCase(AgentTestCase): # pylint: disable=too-many-insta
         with patch("azurelinuxagent.common.protocol.wire.WireProtocol.download_ext_handler_pkg", side_effect=download_ext_handler_pkg) as mock_download_ext_handler_pkg:
             self.ext_handler_instance.download()
 
-        self.assertEquals(mock_download_ext_handler_pkg.call_count, self.download_failures + 1) # pylint: disable=deprecated-method
+        self.assertEqual(mock_download_ext_handler_pkg.call_count, self.download_failures + 1)
 
         self._assert_download_and_expand_succeeded()
 
@@ -248,10 +248,10 @@ class DownloadExtensionTestCase(AgentTestCase): # pylint: disable=too-many-insta
                 with self.assertRaises(ExtensionDownloadError) as context_manager:
                     self.ext_handler_instance.download()
 
-        self.assertEquals(mock_download_ext_handler_pkg.call_count, NUMBER_OF_DOWNLOAD_RETRIES * len(self.pkg.uris)) # pylint: disable=deprecated-method
+        self.assertEqual(mock_download_ext_handler_pkg.call_count, NUMBER_OF_DOWNLOAD_RETRIES * len(self.pkg.uris))
 
         self.assertRegex(str(context_manager.exception), "Failed to download extension")
-        self.assertEquals(context_manager.exception.code, ExtensionErrorCodes.PluginManifestDownloadError) # pylint: disable=deprecated-method
+        self.assertEqual(context_manager.exception.code, ExtensionErrorCodes.PluginManifestDownloadError)
 
         self.assertFalse(os.path.exists(self.extension_dir), "The extension directory was not removed")
         self.assertFalse(os.path.exists(self._get_extension_package_file()), "The extension package was not removed")

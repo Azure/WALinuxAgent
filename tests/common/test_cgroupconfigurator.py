@@ -82,7 +82,7 @@ class CGroupConfiguratorSystemdTestCase(AgentTestCase):
 
         CGroupConfiguratorSystemdTestCase._get_new_cgroup_configurator_instance().disable()
 
-        self.assertEquals(len(CGroupsTelemetry._tracked), 0) # pylint: disable=deprecated-method,protected-access
+        self.assertEqual(len(CGroupsTelemetry._tracked), 0) # pylint: disable=protected-access
 
     def test_cgroup_operations_should_not_invoke_the_cgroup_api_when_cgroups_are_not_enabled(self):
         configurator = CGroupConfiguratorSystemdTestCase._get_new_cgroup_configurator_instance()
@@ -121,7 +121,7 @@ class CGroupConfiguratorSystemdTestCase(AgentTestCase):
                     with patch(op[1], raise_exception):
                         op[0]()
 
-                    self.assertEquals(mock_logger_warn.call_count, 1) # pylint: disable=deprecated-method
+                    self.assertEqual(mock_logger_warn.call_count, 1)
 
                     args, kwargs = mock_logger_warn.call_args # pylint: disable=unused-variable
                     message = args[0]
@@ -139,7 +139,7 @@ class CGroupConfiguratorSystemdTestCase(AgentTestCase):
             daemon_present = any("waagent -daemon" in command for (pid, command) in processes)
             self.assertTrue(daemon_present, "Could not find the daemon in the cgroup: [{0}]".format(processes))
 
-            extension_handler_present = any(re.search("(WALinuxAgent-.+\.egg|waagent) -run-exthandlers", command) for (pid, command) in processes) # pylint: disable=anomalous-backslash-in-string
+            extension_handler_present = any(re.search(r"(WALinuxAgent-.+\.egg|waagent) -run-exthandlers", command) for (pid, command) in processes)
             self.assertTrue(extension_handler_present, "Could not find the extension handler in the cgroup: [{0}]".format(processes))
 
     @patch('time.sleep', side_effect=lambda _: mock_sleep())

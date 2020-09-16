@@ -93,47 +93,47 @@ class TestHttpOperations(AgentTestCase): # pylint: disable=too-many-public-metho
     def test_parse_url(self):
         test_uri = "http://abc.def/ghi#hash?jkl=mn"
         host, port, secure, rel_uri = restutil._parse_url(test_uri) # pylint: disable=unused-variable,protected-access
-        self.assertEquals("abc.def", host) # pylint: disable=deprecated-method
-        self.assertEquals("/ghi#hash?jkl=mn", rel_uri) # pylint: disable=deprecated-method
+        self.assertEqual("abc.def", host) 
+        self.assertEqual("/ghi#hash?jkl=mn", rel_uri) 
 
         test_uri = "http://abc.def/"
         host, port, secure, rel_uri = restutil._parse_url(test_uri) # pylint: disable=protected-access
-        self.assertEquals("abc.def", host) # pylint: disable=deprecated-method
-        self.assertEquals("/", rel_uri) # pylint: disable=deprecated-method
-        self.assertEquals(False, secure) # pylint: disable=deprecated-method
+        self.assertEqual("abc.def", host) 
+        self.assertEqual("/", rel_uri) 
+        self.assertEqual(False, secure) 
 
         test_uri = "https://abc.def/ghi?jkl=mn"
         host, port, secure, rel_uri = restutil._parse_url(test_uri) # pylint: disable=protected-access
-        self.assertEquals(True, secure) # pylint: disable=deprecated-method
+        self.assertEqual(True, secure) 
 
         test_uri = "http://abc.def:80/"
         host, port, secure, rel_uri = restutil._parse_url(test_uri) # pylint: disable=protected-access
-        self.assertEquals("abc.def", host) # pylint: disable=deprecated-method
+        self.assertEqual("abc.def", host) 
 
         host, port, secure, rel_uri = restutil._parse_url("") # pylint: disable=protected-access
-        self.assertEquals(None, host) # pylint: disable=deprecated-method
-        self.assertEquals(rel_uri, "") # pylint: disable=deprecated-method
+        self.assertEqual(None, host) 
+        self.assertEqual(rel_uri, "") 
 
         host, port, secure, rel_uri = restutil._parse_url("None") # pylint: disable=protected-access
-        self.assertEquals(None, host) # pylint: disable=deprecated-method
-        self.assertEquals(rel_uri, "None") # pylint: disable=deprecated-method
+        self.assertEqual(None, host) 
+        self.assertEqual(rel_uri, "None") 
 
     def test_cleanup_sas_tokens_from_urls_for_normal_cases(self):
         test_url = "http://abc.def/ghi#hash?jkl=mn"
         filtered_url = restutil.redact_sas_tokens_in_urls(test_url)
-        self.assertEquals(test_url, filtered_url) # pylint: disable=deprecated-method
+        self.assertEqual(test_url, filtered_url) 
 
         test_url = "http://abc.def:80/"
         filtered_url = restutil.redact_sas_tokens_in_urls(test_url)
-        self.assertEquals(test_url, filtered_url) # pylint: disable=deprecated-method
+        self.assertEqual(test_url, filtered_url) 
 
         test_url = "http://abc.def/"
         filtered_url = restutil.redact_sas_tokens_in_urls(test_url)
-        self.assertEquals(test_url, filtered_url) # pylint: disable=deprecated-method
+        self.assertEqual(test_url, filtered_url) 
 
         test_url = "https://abc.def/ghi?jkl=mn"
         filtered_url = restutil.redact_sas_tokens_in_urls(test_url)
-        self.assertEquals(test_url, filtered_url) # pylint: disable=deprecated-method
+        self.assertEqual(test_url, filtered_url) 
 
     def test_cleanup_sas_tokens_from_urls_containing_sas_tokens(self):
         # Contains pair of URLs (RawURL, RedactedURL)
@@ -178,7 +178,7 @@ class TestHttpOperations(AgentTestCase): # pylint: disable=too-many-public-metho
                        ]
 
         for x in urls_tuples: # pylint: disable=invalid-name
-            self.assertEquals(restutil.redact_sas_tokens_in_urls(x[0]), x[1]) # pylint: disable=deprecated-method
+            self.assertEqual(restutil.redact_sas_tokens_in_urls(x[0]), x[1]) 
 
     @patch('azurelinuxagent.common.conf.get_httpproxy_port')
     @patch('azurelinuxagent.common.conf.get_httpproxy_host')
@@ -250,7 +250,7 @@ class TestHttpOperations(AgentTestCase): # pylint: disable=too-many-public-metho
         }):
             no_proxy_from_environment = restutil.get_no_proxy()
 
-            self.assertEquals(len(no_proxy_list), len(no_proxy_from_environment)) # pylint: disable=deprecated-method
+            self.assertEqual(len(no_proxy_list), len(no_proxy_from_environment)) 
 
             for i, j in zip(no_proxy_from_environment, no_proxy_list):
                 self.assertEqual(i, j)
@@ -264,7 +264,7 @@ class TestHttpOperations(AgentTestCase): # pylint: disable=too-many-public-metho
         }):
             no_proxy_from_environment = restutil.get_no_proxy()
 
-            self.assertEquals(len(no_proxy_list_cleaned), len(no_proxy_from_environment)) # pylint: disable=deprecated-method
+            self.assertEqual(len(no_proxy_list_cleaned), len(no_proxy_from_environment)) 
 
             for i, j in zip(no_proxy_from_environment, no_proxy_list_cleaned):
                 print(i, j)
@@ -280,7 +280,7 @@ class TestHttpOperations(AgentTestCase): # pylint: disable=too-many-public-metho
         }):
             no_proxy_from_environment = restutil.get_no_proxy()
 
-            self.assertEquals(len(no_proxy_list), len(no_proxy_from_environment)) # pylint: disable=deprecated-method
+            self.assertEqual(len(no_proxy_list), len(no_proxy_from_environment)) 
 
             for i, j in zip(no_proxy_from_environment, no_proxy_list):
                 self.assertEqual(i, j)
@@ -307,11 +307,11 @@ class TestHttpOperations(AgentTestCase): # pylint: disable=too-many-public-metho
         self.assertFalse(restutil.address_in_network('172.16.0.1', '192.168.1.0/24'))
 
     def test_dotted_netmask(self):
-        self.assertEquals(restutil.dotted_netmask(0), '0.0.0.0') # pylint: disable=deprecated-method
-        self.assertEquals(restutil.dotted_netmask(8), '255.0.0.0') # pylint: disable=deprecated-method
-        self.assertEquals(restutil.dotted_netmask(16), '255.255.0.0') # pylint: disable=deprecated-method
-        self.assertEquals(restutil.dotted_netmask(24), '255.255.255.0') # pylint: disable=deprecated-method
-        self.assertEquals(restutil.dotted_netmask(32), '255.255.255.255') # pylint: disable=deprecated-method
+        self.assertEqual(restutil.dotted_netmask(0), '0.0.0.0') 
+        self.assertEqual(restutil.dotted_netmask(8), '255.0.0.0') 
+        self.assertEqual(restutil.dotted_netmask(16), '255.255.0.0') 
+        self.assertEqual(restutil.dotted_netmask(24), '255.255.255.0') 
+        self.assertEqual(restutil.dotted_netmask(32), '255.255.255.255') 
         self.assertRaises(ValueError, restutil.dotted_netmask, 33)
 
     def test_bypass_proxy(self):
@@ -346,8 +346,8 @@ class TestHttpOperations(AgentTestCase): # pylint: disable=too-many-public-metho
             call(method="GET", url="/bar", body=None, headers={'User-Agent': HTTP_USER_AGENT, 'Connection': 'close'})
         ])
         self.assertEqual(1, mock_conn.getresponse.call_count)
-        self.assertNotEquals(None, resp) # pylint: disable=deprecated-method
-        self.assertEquals("TheResults", resp.read()) # pylint: disable=deprecated-method
+        self.assertNotEqual(None, resp) 
+        self.assertEqual("TheResults", resp.read()) 
 
     @patch("azurelinuxagent.common.future.httpclient.HTTPSConnection")
     @patch("azurelinuxagent.common.future.httpclient.HTTPConnection")
@@ -369,8 +369,8 @@ class TestHttpOperations(AgentTestCase): # pylint: disable=too-many-public-metho
             call(method="GET", url="/bar", body=None, headers={'User-Agent': HTTP_USER_AGENT, 'Connection': 'close'})
         ])
         self.assertEqual(1, mock_conn.getresponse.call_count)
-        self.assertNotEquals(None, resp) # pylint: disable=deprecated-method
-        self.assertEquals("TheResults", resp.read()) # pylint: disable=deprecated-method
+        self.assertNotEqual(None, resp) 
+        self.assertEqual("TheResults", resp.read()) 
 
     @patch("azurelinuxagent.common.future.httpclient.HTTPSConnection")
     @patch("azurelinuxagent.common.future.httpclient.HTTPConnection")
@@ -393,8 +393,8 @@ class TestHttpOperations(AgentTestCase): # pylint: disable=too-many-public-metho
             call(method="GET", url="http://foo:80/bar", body=None, headers={'User-Agent': HTTP_USER_AGENT, 'Connection': 'close'})
         ])
         self.assertEqual(1, mock_conn.getresponse.call_count)
-        self.assertNotEquals(None, resp) # pylint: disable=deprecated-method
-        self.assertEquals("TheResults", resp.read()) # pylint: disable=deprecated-method
+        self.assertNotEqual(None, resp) 
+        self.assertEqual("TheResults", resp.read()) 
 
     @patch("azurelinuxagent.common.utils.restutil._get_http_proxy")
     @patch("time.sleep")
@@ -411,13 +411,13 @@ class TestHttpOperations(AgentTestCase): # pylint: disable=too-many-public-metho
         }):
             # Test http get
             resp = restutil.http_get("http://foo.com", use_proxy=True)
-            self.assertEquals("hehe", resp.read()) # pylint: disable=deprecated-method
-            self.assertEquals(0, mock_get_http_proxy.call_count) # pylint: disable=deprecated-method
+            self.assertEqual("hehe", resp.read()) 
+            self.assertEqual(0, mock_get_http_proxy.call_count) 
 
             # Test http get
             resp = restutil.http_get("http://bar.com", use_proxy=True)
-            self.assertEquals("hehe", resp.read()) # pylint: disable=deprecated-method
-            self.assertEquals(1, mock_get_http_proxy.call_count) # pylint: disable=deprecated-method
+            self.assertEqual("hehe", resp.read()) 
+            self.assertEqual(1, mock_get_http_proxy.call_count) 
 
     def test_proxy_conditions_with_no_proxy(self):
         should_use_proxy = True
@@ -429,32 +429,32 @@ class TestHttpOperations(AgentTestCase): # pylint: disable=too-many-public-metho
             'no_proxy': ",".join(no_proxy_list)
         }):
             host = "10.0.0.1"
-            self.assertEquals(should_use_proxy, use_proxy and not restutil.bypass_proxy(host)) # pylint: disable=deprecated-method
+            self.assertEqual(should_use_proxy, use_proxy and not restutil.bypass_proxy(host)) 
 
             host = "foo.com"
-            self.assertEquals(should_not_use_proxy, use_proxy and not restutil.bypass_proxy(host)) # pylint: disable=deprecated-method
+            self.assertEqual(should_not_use_proxy, use_proxy and not restutil.bypass_proxy(host)) 
 
             host = "www.google.com"
-            self.assertEquals(should_not_use_proxy, use_proxy and not restutil.bypass_proxy(host)) # pylint: disable=deprecated-method
+            self.assertEqual(should_not_use_proxy, use_proxy and not restutil.bypass_proxy(host)) 
 
             host = "168.63.129.16"
-            self.assertEquals(should_not_use_proxy, use_proxy and not restutil.bypass_proxy(host)) # pylint: disable=deprecated-method
+            self.assertEqual(should_not_use_proxy, use_proxy and not restutil.bypass_proxy(host)) 
 
             host = "www.bar.com"
-            self.assertEquals(should_use_proxy, use_proxy and not restutil.bypass_proxy(host)) # pylint: disable=deprecated-method
+            self.assertEqual(should_use_proxy, use_proxy and not restutil.bypass_proxy(host)) 
 
         no_proxy_list = ["10.0.0.1/24"]
         with patch.dict(os.environ, {
             'no_proxy': ",".join(no_proxy_list)
         }):
             host = "www.bar.com"
-            self.assertEquals(should_use_proxy, use_proxy and not restutil.bypass_proxy(host)) # pylint: disable=deprecated-method
+            self.assertEqual(should_use_proxy, use_proxy and not restutil.bypass_proxy(host)) 
 
             host = "10.0.0.1"
-            self.assertEquals(should_not_use_proxy, use_proxy and not restutil.bypass_proxy(host)) # pylint: disable=deprecated-method
+            self.assertEqual(should_not_use_proxy, use_proxy and not restutil.bypass_proxy(host)) 
 
             host = "10.0.1.1"
-            self.assertEquals(should_use_proxy, use_proxy and not restutil.bypass_proxy(host)) # pylint: disable=deprecated-method
+            self.assertEqual(should_use_proxy, use_proxy and not restutil.bypass_proxy(host)) 
 
         # When No_proxy is empty
         with patch.dict(os.environ, {
@@ -526,8 +526,8 @@ class TestHttpOperations(AgentTestCase): # pylint: disable=too-many-public-metho
             call(method="GET", url="https://foo:443/bar", body=None, headers={'User-Agent': HTTP_USER_AGENT, 'Connection': 'close'})
         ])
         self.assertEqual(1, mock_conn.getresponse.call_count)
-        self.assertNotEquals(None, resp) # pylint: disable=deprecated-method
-        self.assertEquals("TheResults", resp.read()) # pylint: disable=deprecated-method
+        self.assertNotEqual(None, resp) 
+        self.assertEqual("TheResults", resp.read()) 
 
     @patch("time.sleep")
     @patch("azurelinuxagent.common.utils.restutil._http_request")
@@ -538,11 +538,11 @@ class TestHttpOperations(AgentTestCase): # pylint: disable=too-many-public-metho
 
         # Test http get
         resp = restutil.http_get("http://foo.bar")
-        self.assertEquals("hehe", resp.read()) # pylint: disable=deprecated-method
+        self.assertEqual("hehe", resp.read()) 
 
         # Test https get
         resp = restutil.http_get("https://foo.bar")
-        self.assertEquals("hehe", resp.read()) # pylint: disable=deprecated-method
+        self.assertEqual("hehe", resp.read()) 
 
         # Test http failure
         _http_request.side_effect = httpclient.HTTPException("Http failure")

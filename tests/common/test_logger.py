@@ -305,7 +305,7 @@ class TestLogger(AgentTestCase):
         prefix = "YoloLogger"
 
         lg.set_prefix(prefix)
-        self.assertEquals(lg.prefix, prefix) # pylint: disable=deprecated-method
+        self.assertEqual(lg.prefix, prefix)
 
         lg.add_appender(logger.AppenderType.FILE, logger.LogLevel.INFO, path=self.log_file)
         lg.add_appender(logger.AppenderType.TELEMETRY, logger.LogLevel.WARNING, path=add_log_event)
