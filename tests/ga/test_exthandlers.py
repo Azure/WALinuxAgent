@@ -43,20 +43,23 @@ class TestExtHandlers(AgentTestCase):
 
     def test_parse_ext_status_should_raise_on_non_array(self):
         status = json.loads('''
-            {
-                "status": {
+            {{
+                "status": {{
                     "status": "transitioning",
                     "operation": "Enabling Handler",
                     "code": 0,
                     "name": "Microsoft.Azure.RecoveryServices.SiteRecovery.Linux"
-                },
+                }},
                 "version": 1.0,
-                "timestampUTC": "2020-01-14T15:04:43Z"
-            }''')
+                "timestampUTC": "2020-01-14T15:04:43Z",
+                "longText": "{0}"
+            }}'''.format("*" * 5 * 1024))
 
         with self.assertRaises(ExtensionStatusError) as context_manager:
             parse_ext_status(ExtensionStatus(seq_no=0), status)
-        self.assertIn("The extension status must be an array", str(context_manager.exception))
+        error_message = str(context_manager.exception)
+        self.assertIn("The extension status must be an array", error_message)
+        self.assertTrue(0 < len(error_message) - 64 < 4096, "The error message should not be much longer than 4K characters: [{0}]".format(error_message))
 
     def test_parse_extension_status00(self):
         """

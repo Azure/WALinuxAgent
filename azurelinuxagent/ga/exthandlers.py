@@ -153,7 +153,8 @@ def parse_ext_status(ext_status, data):
     if data is None:
         return
     if not isinstance(data, list):
-        raise ExtensionStatusError(msg="The extension status must be an array: {0}".format(data), code=ExtensionStatusError.StatusFileMalformed)
+        data_string = ustr(data)[:4096]
+        raise ExtensionStatusError(msg="The extension status must be an array: {0}".format(data_string), code=ExtensionStatusError.StatusFileMalformed)
     if not data:
         return
 
