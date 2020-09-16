@@ -26,6 +26,7 @@ import struct # pylint: disable=W0611
 import fcntl # pylint: disable=W0611
 import time # pylint: disable=W0611
 import base64 # pylint: disable=W0611
+import errno
 import azurelinuxagent.common.conf as conf
 import azurelinuxagent.common.logger as logger # pylint: disable=W0611
 import azurelinuxagent.common.utils.fileutil as fileutil
@@ -80,9 +81,9 @@ class ClearLinuxUtil(DefaultOSUtil):
                 passwd_content = fileutil.read_file(passwd_file_path)
                 if not passwd_content:
                     # Empty file is no better than no file
-                    raise IOError(os.errno.ENOENT, "Empty File", passwd_file_path)
+                    raise IOError(errno.ENOENT, "Empty File", passwd_file_path)
             except (IOError, OSError) as file_read_err:
-                if file_read_err.errno != os.errno.ENOENT:
+                if file_read_err.errno != errno.ENOENT:
                     raise
                 new_passwd = ["root:*LOCK*:14600::::::"]
             else:
