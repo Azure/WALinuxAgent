@@ -18,15 +18,9 @@
 #
 
 import subprocess
-import sys
 
 import azurelinuxagent.common.logger as logger
 from azurelinuxagent.common.future import ustr
-
-
-def get_complete_python_cmd():
-    # Returns the complete python command (with path) for the current python interpreter
-    return sys.executable
 
 
 if not hasattr(subprocess, 'check_output'):
