@@ -32,7 +32,7 @@ def get_telemetry_service_handler(protocol_util):
 class QueueCounter(object):
     def __init__(self):
         self._value = 0
-        self._lock = threading.RLock()
+        self._lock = threading.Lock()
 
     def increment(self):
         with self._lock:
@@ -98,6 +98,8 @@ class TelemetryServiceHandler(object):
     def enqueue_event(self, event, priority):
         # Add event to queue and set event
         self._queue.put((priority, self._queue_counter.value, event))
+        logger.verbose(
+            "Added event Priority: {0}, Counter: {1}, Event: {2}".format(priority, self._queue_counter.value, event))
         self._queue_counter.increment()
 
         # Always set the event if any enqueue happens (even if already set)
@@ -117,16 +119,20 @@ class TelemetryServiceHandler(object):
 
     def get_events(self):
         while not self._queue.empty():
+            event = None
             try:
                 _, __, event = self._queue.get()
+                logger.verbose("Fetched event Priority: {0}, Counter: {1}, Event: {2}".format(_, __, event))
                 yield event
             finally:
                 # Mark the event as processed once done
                 logger.verbose("Finished working with event {0}".format(event))
-                self._queue.task_done()
+                # self._queue.task_done()
 
     def send_events_in_queue(self):
         # Process everything in Queue
+        logger.verbose("Processing data in the telemetry service queue, approx qsize: {0}; Counter val: {1}",
+                       self._queue.qsize(), self._queue_counter.value)
         if not self._queue.empty():
             self._protocol.report_event(self.get_events)
 
