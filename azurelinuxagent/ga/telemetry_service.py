@@ -138,6 +138,7 @@ class TelemetryServiceHandler(object):
 
         # Clear event when done
         # There might be a rare race condition where the loop exits and we get a new event, in that case not unsetting the event.
-        if self._should_process_events.is_set() and not self._queue.empty():
+        if self._should_process_events.is_set() and self._queue.empty():
+            logger.verbose("Resetting the event and counter with val: {0}", self._queue_counter.value)
             self._should_process_events.clear()
             self._queue_counter.reset()
