@@ -29,24 +29,6 @@ def get_telemetry_service_handler(protocol_util):
     return TelemetryServiceHandler(protocol_util)
 
 
-class QueueCounter(object):
-    def __init__(self):
-        self._value = 0
-        self._lock = threading.Lock()
-
-    def increment(self):
-        with self._lock:
-            self._value += 1
-
-    @property
-    def value(self):
-        return self._value
-
-    def reset(self):
-        with self._lock:
-            self._value = 0
-
-
 class TelemetryServiceHandler(object):
     """
     This Handler takes care of sending all telemetry out of the agent to Wireserver. It sends out data as soon as
@@ -62,10 +44,6 @@ class TelemetryServiceHandler(object):
         self.thread = None
         self._should_process_events = threading.Event()
         self._queue = PriorityQueue()
-        # The basic PriorityQueue sorts based on the 2nd item if the priority is same, but since TelemetryEvent is not orderable, it throws.
-        # This property takes care of that collision by maintaining a counter to ensure that collision can never occur.
-        # It is reset every time the threading event self._should_process_events is unset
-        self._queue_counter = QueueCounter()
 
     @staticmethod
     def get_thread_name():
@@ -95,13 +73,11 @@ class TelemetryServiceHandler(object):
     def stopped(self):
         return not self.should_run
 
-    def enqueue_event(self, event, priority):
+    def enqueue_event(self, event):
         # Add event to queue and set event
         self._queue.put(event)
         # self._queue.put((priority, self._queue_counter.value, event))
-        logger.verbose(
-            "Added event Priority: {0}, Counter: {1}, Event: {2}".format(priority, self._queue_counter.value, event))
-        self._queue_counter.increment()
+        logger.verbose("Added event Priority: {0}, Event: {1}", event.priority, event)
 
         # Always set the event if any enqueue happens (even if already set)
         self._should_process_events.set()
@@ -136,14 +112,12 @@ class TelemetryServiceHandler(object):
 
     def send_events_in_queue(self):
         # Process everything in Queue
-        logger.verbose("Processing data in the telemetry service queue, approx qsize: {0}; Counter val: {1}",
-                       self._queue.qsize(), self._queue_counter.value)
+        logger.verbose("Processing data in the telemetry service queue, approx qsize: {0}", self._queue.qsize())
         if not self._queue.empty():
             self._protocol.report_event(self.get_events)
 
         # Clear event when done
         # There might be a rare race condition where the loop exits and we get a new event, in that case not unsetting the event.
         if self._should_process_events.is_set() and self._queue.empty():
-            logger.verbose("Resetting the event and counter with val: {0}", self._queue_counter.value)
+            logger.verbose("Resetting the event")
             self._should_process_events.clear()
-            self._queue_counter.reset()

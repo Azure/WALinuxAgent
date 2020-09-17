@@ -93,6 +93,7 @@ class TelemetryEventPriorities(object):
     EXTENSION_EVENT_NEW_PIPELINE = 2    # Prioritize extensions using the new dedicated pipeline over extensions hijacking the agent pipeline
     EXTENSION_EVENT_OLD_PIPELINE = 3
 
+
 class TelemetryEvent(DataContract):
     def __init__(self, eventId=None, providerId=None, priority=TelemetryEventPriorities.AGENT_EVENT):
         self.eventId = eventId # pylint: disable=C0103

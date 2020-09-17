@@ -281,18 +281,6 @@ def _log_event(name, op, message, duration, is_success=True): # pylint: disable=
         logger.info(_EVENT_MSG, name, op, message, duration)
 
 
-class TelemetryEventPriorities(object):
-    """
-    Class defining the priorities for telemetry events. Lower the number, higher the priority
-
-    Note: 0 is reserved for a feature like QuickLog in the Windows Agent (i.e. the ability to send out telemetry
-    instantly rather than waiting for a minute for the monitor thread to pick up the events)
-    """
-    AGENT_EVENT = 1 # Agent events always get the highest priority
-    EXTENSION_EVENT_NEW_PIPELINE = 2    # Prioritize extensions using the new dedicated pipeline over extensions hijacking the agent pipeline
-    EXTENSION_EVENT_OLD_PIPELINE = 3
-
-
 class EventLogger(object):
     def __init__(self):
         self.event_dir = None
@@ -626,7 +614,6 @@ class EventLogger(object):
                         event_data = fd.read().decode("utf-8")
 
                     event = parse_event(event_data)
-                    priority = TelemetryEventPriorities.AGENT_EVENT
 
                     # "legacy" events are events produced by previous versions of the agent (<= 2.2.46) and extensions;
                     # they do not include all the telemetry fields, so we add them here
@@ -640,12 +627,11 @@ class EventLogger(object):
                         if event.is_extension_event():
                             EventLogger._trim_extension_event_parameters(event)
                             self.add_common_event_parameters(event, event_file_creation_time)
-                            priority = TelemetryEventPriorities.EXTENSION_EVENT_OLD_PIPELINE
                         else:
                             self._update_legacy_agent_event(event, event_file_creation_time)
 
                     # event_list.events.append(event)
-                    enqueue_event(event, priority)
+                    enqueue_event(event)
                 finally:
                     os.remove(event_file_path)
             except UnicodeError as e: # pylint: disable=C0103
