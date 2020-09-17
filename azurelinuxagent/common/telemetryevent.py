@@ -18,7 +18,6 @@
 #
 
 from azurelinuxagent.common.datacontract import DataContract, DataContractList
-from azurelinuxagent.common.event import TelemetryEventPriorities
 from azurelinuxagent.common.version import AGENT_NAME
 
 class CommonTelemetryEventSchema(object): # pylint: disable=R0903
@@ -82,6 +81,17 @@ class TelemetryEventParam(DataContract): # pylint: disable=R0903
     def __eq__(self, other):
         return isinstance(other, TelemetryEventParam) and other.name == self.name and other.value == self.value
 
+
+class TelemetryEventPriorities(object):
+    """
+    Class defining the priorities for telemetry events. Lower the number, higher the priority
+
+    Note: 0 is reserved for a feature like QuickLog in the Windows Agent (i.e. the ability to send out telemetry
+    instantly rather than waiting for a minute for the monitor thread to pick up the events)
+    """
+    AGENT_EVENT = 1 # Agent events always get the highest priority
+    EXTENSION_EVENT_NEW_PIPELINE = 2    # Prioritize extensions using the new dedicated pipeline over extensions hijacking the agent pipeline
+    EXTENSION_EVENT_OLD_PIPELINE = 3
 
 class TelemetryEvent(DataContract):
     def __init__(self, eventId=None, providerId=None, priority=TelemetryEventPriorities.AGENT_EVENT):
