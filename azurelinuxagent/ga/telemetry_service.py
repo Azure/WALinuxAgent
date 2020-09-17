@@ -97,7 +97,8 @@ class TelemetryServiceHandler(object):
 
     def enqueue_event(self, event, priority):
         # Add event to queue and set event
-        self._queue.put((priority, self._queue_counter.value, event))
+        self._queue.put(event)
+        # self._queue.put((priority, self._queue_counter.value, event))
         logger.verbose(
             "Added event Priority: {0}, Counter: {1}, Event: {2}".format(priority, self._queue_counter.value, event))
         self._queue_counter.increment()
@@ -121,8 +122,10 @@ class TelemetryServiceHandler(object):
         while not self._queue.empty():
             event = None
             try:
-                _, __, event = self._queue.get()
-                logger.verbose("Fetched event Priority: {0}, Counter: {1}, Event: {2}".format(_, __, event))
+                # _, __, event = self._queue.get()
+                event = self._queue.get()
+                # logger.verbose("Fetched event Priority: {0}, Counter: {1}, Event: {2}".format(_, __, event))
+                logger.verbose("Fetched event Priority: {0}, Event: {1}".format(event.priority if event is not None else 100, event))
                 yield event
             finally:
                 # Mark the event as processed once done

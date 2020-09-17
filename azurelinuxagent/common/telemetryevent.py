@@ -18,6 +18,7 @@
 #
 
 from azurelinuxagent.common.datacontract import DataContract, DataContractList
+from azurelinuxagent.common.event import TelemetryEventPriorities
 from azurelinuxagent.common.version import AGENT_NAME
 
 class CommonTelemetryEventSchema(object): # pylint: disable=R0903
@@ -83,15 +84,38 @@ class TelemetryEventParam(DataContract): # pylint: disable=R0903
 
 
 class TelemetryEvent(DataContract):
-    def __init__(self, eventId=None, providerId=None):
+    def __init__(self, eventId=None, providerId=None, priority=TelemetryEventPriorities.AGENT_EVENT):
         self.eventId = eventId # pylint: disable=C0103
         self.providerId = providerId # pylint: disable=C0103
         self.parameters = DataContractList(TelemetryEventParam)
         self.file_type = ""
+        self._priority = priority
 
     # Checking if the particular param name is in the TelemetryEvent.
     def __contains__(self, param_name):
         return param_name in [param.name for param in self.parameters]
+
+    def __le__(self, other):
+        raise self.priority <= other.priority
+
+    def __ge__(self, other):
+        raise self.priority >= other.priority
+
+    def __eq__(self, other):
+        raise self.priority == other.priority
+
+    def __lt__(self, other):
+        raise self.priority < other.priority
+
+    def __gt__(self, other):
+        raise self.priority > other.priority
+
+    def __ne__(self, other):
+        raise self.priority != other.priority
+
+    @property
+    def priority(self):
+        return self._priority
 
     def is_extension_event(self):
         # Events originating from the agent have "WALinuxAgent" as the Name parameter, or they don't have a Name
@@ -99,7 +123,9 @@ class TelemetryEvent(DataContract):
         # "WALinuxAgent", it is an extension event.
         for param in self.parameters:
             if param.name == GuestAgentExtensionEventsSchema.Name:
-                return param.value != AGENT_NAME
+                if param.value != AGENT_NAME:
+                    self._priority = TelemetryEventPriorities.EXTENSION_EVENT_OLD_PIPELINE
+                    return True
         return False
 
     def get_version(self):
