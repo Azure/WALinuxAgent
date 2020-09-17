@@ -106,22 +106,22 @@ class TelemetryEvent(DataContract):
         return param_name in [param.name for param in self.parameters]
 
     def __le__(self, other):
-        raise self.priority <= other.priority
+        return self.priority <= other.priority
 
     def __ge__(self, other):
-        raise self.priority >= other.priority
+        return self.priority >= other.priority
 
     def __eq__(self, other):
-        raise self.priority == other.priority
+        return self.priority == other.priority
 
     def __lt__(self, other):
-        raise self.priority < other.priority
+        return self.priority < other.priority
 
     def __gt__(self, other):
-        raise self.priority > other.priority
+        return self.priority > other.priority
 
     def __ne__(self, other):
-        raise self.priority != other.priority
+        return self.priority != other.priority
 
     @property
     def priority(self):

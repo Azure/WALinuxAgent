@@ -127,6 +127,8 @@ class TelemetryServiceHandler(object):
                 # logger.verbose("Fetched event Priority: {0}, Counter: {1}, Event: {2}".format(_, __, event))
                 logger.verbose("Fetched event Priority: {0}, Event: {1}".format(event.priority if event is not None else 100, event))
                 yield event
+            except Exception as e:
+                logger.error("Some exception: {0}, now the event will be None".format(ustr(e)))
             finally:
                 # Mark the event as processed once done
                 logger.verbose("Finished working with event {0}".format(event))
