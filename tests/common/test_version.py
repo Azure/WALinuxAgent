@@ -25,7 +25,8 @@ import azurelinuxagent.common.conf as conf
 from azurelinuxagent.common.event import EVENTS_DIRECTORY
 from azurelinuxagent.common.version import set_current_agent, \
     AGENT_LONG_VERSION, AGENT_VERSION, AGENT_NAME, AGENT_NAME_PATTERN, \
-    get_f5_platform, get_distro, PY_VERSION_MAJOR, PY_VERSION_MINOR
+    get_f5_platform, get_distro, get_lis_version, PY_VERSION_MAJOR, \
+    PY_VERSION_MINOR
 from tests.tools import AgentTestCase, open_patch, patch
 
 
@@ -113,6 +114,18 @@ class TestAgentVersion(AgentTestCase):
             osinfo = get_distro()
 
         self.assertListEqual(default_list, osinfo)
+        return
+
+    def test_get_lis_version_should_return_a_string(self, *args): # pylint: disable=useless-return,unused-argument
+        """
+        On a Hyper-V guest with the LIS drivers installed as a module,
+        this function should return a string of the version, like
+        '4.3.5'. Anywhere else it should return 'Absent' and possibly
+        return 'Failed' if an exception was raised, so we check that
+        it returns a string'.
+        """
+        lis_version = get_lis_version()
+        self.assertIsInstance(lis_version, str)
         return
 
 
