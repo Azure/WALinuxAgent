@@ -29,14 +29,14 @@ from azurelinuxagent.common.event import EVENTS_DIRECTORY, TELEMETRY_LOG_EVENT_I
     TELEMETRY_LOG_PROVIDER_ID, add_event, WALAEventOperation, add_log_event, get_event_logger
 from azurelinuxagent.common.exception import InvalidExtensionEventError
 from azurelinuxagent.common.future import ustr
-from azurelinuxagent.common.telemetryevent import TelemetryEventList, TelemetryEvent, TelemetryEventParam, \
-    GuestAgentGenericLogsSchema
+from azurelinuxagent.common.telemetryevent import TelemetryEvent, TelemetryEventParam, \
+    GuestAgentGenericLogsSchema, TelemetryEventPriorities
 from azurelinuxagent.ga.exthandlers import HANDLER_NAME_PATTERN
 from azurelinuxagent.ga.periodic_operation import PeriodicOperation
 
 
-def get_extension_telemetry_handler(protocol_util):
-    return ExtensionTelemetryHandler(protocol_util)
+def get_extension_telemetry_handler(protocol_util, telemetry_handler):
+    return ExtensionTelemetryHandler(protocol_util, telemetry_handler)
 
 class ExtensionEventSchema(object): # pylint: disable=R0903
     """
@@ -68,44 +68,36 @@ class ProcessExtensionTelemetry(PeriodicOperation):
     _EXTENSION_EVENT_REQUIRED_FIELDS = [attr.lower() for attr in dir(ExtensionEventSchema) if
                                         not callable(getattr(ExtensionEventSchema, attr)) and not attr.startswith("__")]
 
-    def __init__(self, protocol_util):
+    def __init__(self, protocol_util, enqueue_event):
         super(ProcessExtensionTelemetry, self).__init__(
-            name="collect and send extension events",
-            operation=self._collect_and_send_events,
+            name="collect_and_enqueue_extension_events",
+            operation=self._collect_and_enqueue_extension_events,
             period=ProcessExtensionTelemetry._EXTENSION_EVENT_COLLECTION_PERIOD)
 
         self._protocol = protocol_util.get_protocol()
+        self._enqueue_event = enqueue_event
 
-    def _collect_and_send_events(self):
-        event_list = self._collect_extension_events()
-
-        if len(event_list.events) > 0: # pylint: disable=C1801
-            self._protocol.report_event(event_list)
-
-    def _collect_extension_events(self):
-        events_list = TelemetryEventList()
+    def _collect_and_enqueue_extension_events(self):
         extension_handler_with_event_dirs = []
 
         try:
             extension_handler_with_event_dirs = self._get_extension_events_dir_with_handler_name(conf.get_ext_log_dir())
 
-            if len(extension_handler_with_event_dirs) == 0: # pylint: disable=C1801
+            if not extension_handler_with_event_dirs:
                 logger.verbose("No Extension events directory exist")
-                return events_list
+                return
 
             for extension_handler_with_event_dir in extension_handler_with_event_dirs:
                 handler_name = extension_handler_with_event_dir[0]
                 handler_event_dir_path = extension_handler_with_event_dir[1]
-                self._capture_extension_events(handler_name, handler_event_dir_path, events_list)
-        except Exception as e: # pylint: disable=C0103
-            msg = "Unknown error occurred when trying to collect extension events. Error: {0}".format(ustr(e))
+                self._capture_extension_events(handler_name, handler_event_dir_path)
+        except Exception as error:
+            msg = "Unknown error occurred when trying to collect extension events. Error: {0}".format(ustr(error))
             add_event(op=WALAEventOperation.ExtensionTelemetryEventProcessing, message=msg, is_success=False)
         finally:
             # Always ensure that the events directory are being deleted each run,
             # even if we run into an error and dont process them this run.
             self._ensure_all_events_directories_empty(extension_handler_with_event_dirs)
-
-        return events_list
 
     @staticmethod
     def _get_extension_events_dir_with_handler_name(extension_log_dir):
@@ -129,15 +121,25 @@ class ProcessExtensionTelemetry(PeriodicOperation):
 
         return extension_handler_with_event_dirs
 
-    def _capture_extension_events(self, handler_name, handler_event_dir_path, events_list): # pylint: disable=R0914
+    def _event_file_size_allowed(self, event_file_path):
+
+        event_file_size = os.stat(event_file_path).st_size
+        if event_file_size > self._EXTENSION_EVENT_FILE_MAX_SIZE:
+            convert_to_mb = lambda x: (1.0 * x) / (1000 * 1000)
+            msg = "Skipping file: {0} as its size is {1:.2f} Mb > Max size allowed {2:.1f} Mb".format(
+                event_file_path, convert_to_mb(event_file_size),
+                convert_to_mb(self._EXTENSION_EVENT_FILE_MAX_SIZE))
+            logger.warn(msg)
+            add_log_event(level=logger.LogLevel.WARNING, message=msg, forced=True)
+            return False
+        return True
+
+    def _capture_extension_events(self, handler_name, handler_event_dir_path):
         """
         Capture Extension events and add them to the events_list
         :param handler_name: Complete Handler Name. Eg: Microsoft.CPlat.Core.RunCommandLinux
         :param handler_event_dir_path: Full path. Eg: '/var/log/azure/Microsoft.CPlat.Core.RunCommandLinux/events'
-        :param events_list: List of captured extension events
         """
-
-        convert_to_mb = lambda x: (1.0 * x)/(1000 * 1000)
 
         # Filter out the files that do not follow the pre-defined EXTENSION_EVENT_FILE_NAME_REGEX
         event_files = [event_file for event_file in os.listdir(handler_event_dir_path) if
@@ -154,22 +156,13 @@ class ProcessExtensionTelemetry(PeriodicOperation):
             try:
                 logger.verbose("Processing event file: {0}", event_file_path)
 
-                # We only support _EXTENSION_EVENT_FILE_MAX_SIZE=4Mb max file size
-                event_file_size = os.stat(event_file_path).st_size
-                if event_file_size > self._EXTENSION_EVENT_FILE_MAX_SIZE:
-                    msg = "Skipping file: {0} as its size is {1:.2f} Mb > Max size allowed {2:.1f} Mb".format(
-                            event_file_path, convert_to_mb(event_file_size),
-                            convert_to_mb(self._EXTENSION_EVENT_FILE_MAX_SIZE))
-                    logger.warn(msg)
-                    add_log_event(level=logger.LogLevel.WARNING, message=msg, forced=True)
+                if not self._event_file_size_allowed(event_file_path):
                     continue
 
                 # We support multiple events in a file, read the file and parse events.
-                parsed_events = self._parse_event_file_and_capture_events(handler_name, event_file_path,
-                                                                          captured_extension_events_count,
-                                                                          dropped_events_with_error_count)
-                events_list.events.extend(parsed_events)
-                captured_extension_events_count += len(parsed_events)
+                captured_extension_events_count = self._get_captured_events_count(handler_name, event_file_path,
+                                                                captured_extension_events_count,
+                                                                dropped_events_with_error_count)
 
                 # We only allow MAX_NUMBER_OF_EVENTS_PER_EXTENSION_PER_PERIOD=300 maximum events per period per handler
                 if captured_extension_events_count >= self._MAX_NUMBER_OF_EVENTS_PER_EXTENSION_PER_PERIOD:
@@ -179,14 +172,14 @@ class ProcessExtensionTelemetry(PeriodicOperation):
                     add_log_event(level=logger.LogLevel.WARNING, message=msg, forced=True)
                     break
 
-            except Exception as e: # pylint: disable=C0103
-                msg = "Failed to process event file {0}: {1}", event_file, ustr(e)
+            except Exception as error:
+                msg = "Failed to process event file {0}: {1}", event_file, ustr(error)
                 logger.warn(msg)
                 add_log_event(level=logger.LogLevel.WARNING, message=msg, forced=True)
             finally:
                 os.remove(event_file_path)
 
-        if dropped_events_with_error_count is not None and len(dropped_events_with_error_count) > 0: # pylint: disable=C1801
+        if dropped_events_with_error_count:
             msg = "Dropped events for Extension: {0}; Details:\n\t{1}".format(handler_name, '\n\t'.join(
                 ["Reason: {0}; Dropped Count: {1}".format(k, v) for k, v in dropped_events_with_error_count.items()]))
             logger.warn(msg)
@@ -197,7 +190,7 @@ class ProcessExtensionTelemetry(PeriodicOperation):
 
     @staticmethod
     def _ensure_all_events_directories_empty(extension_events_directories):
-        if len(extension_events_directories) == 0: # pylint: disable=C1801
+        if not extension_events_directories:
             return
 
         for extension_handler_with_event_dir in extension_events_directories:
@@ -210,16 +203,16 @@ class ProcessExtensionTelemetry(PeriodicOperation):
             for residue_file in os.listdir(event_dir_path):
                 try:
                     os.remove(os.path.join(event_dir_path, residue_file))
-                except Exception as e: # pylint: disable=C0103
+                except Exception as error:
                     # Only log the first error once per handler per run if unable to clean off residue files
-                    err = ustr(e) if err is None else err
+                    err = ustr(error) if err is None else err
 
                 if err is not None:
                     logger.error("Failed to completely clear the {0} directory. Exception: {1}", event_dir_path, err)
 
-    def _parse_event_file_and_capture_events(self, handler_name, event_file_path, captured_events_count,
-                                             dropped_events_with_error_count):
-        events_list = []
+    def _get_captured_events_count(self, handler_name, event_file_path, captured_events_count,
+                                   dropped_events_with_error_count):
+
         event_file_time = datetime.datetime.fromtimestamp(os.path.getmtime(event_file_path))
 
         # Read event file and decode it properly
@@ -236,21 +229,21 @@ class ProcessExtensionTelemetry(PeriodicOperation):
 
         for event in events:
             try:
-                events_list.append(self._parse_telemetry_event(handler_name, event, event_file_time))
+                self._enqueue_event(self._parse_telemetry_event(handler_name, event, event_file_time))
                 captured_events_count += 1
-            except InvalidExtensionEventError as e: # pylint: disable=C0103
+            except InvalidExtensionEventError as invalid_error:
                 # These are the errors thrown if there's an error parsing the event. We want to report these back to the
                 # extension publishers so that they are aware of the issues.
                 # The error messages are all static messages, we will use this to create a dict and emit an event at the
                 # end of each run to notify if there were any errors parsing events for the extension
-                dropped_events_with_error_count[ustr(e)] += 1
-            except Exception as e: # pylint: disable=C0103
-                logger.warn("Unable to parse and transmit event, error: {0}".format(e))
+                dropped_events_with_error_count[ustr(invalid_error)] += 1
+            except Exception as error:
+                logger.warn("Unable to parse and transmit event, error: {0}".format(error))
 
             if captured_events_count >= self._MAX_NUMBER_OF_EVENTS_PER_EXTENSION_PER_PERIOD:
                 break
 
-        return events_list
+        return captured_events_count
 
     def _parse_telemetry_event(self, handler_name, extension_unparsed_event, event_file_time):
         """
@@ -263,7 +256,8 @@ class ProcessExtensionTelemetry(PeriodicOperation):
         # Create a telemetry event, add all common parameters to the event
         # and then overwrite all the common params with extension events params if same
 
-        event = TelemetryEvent(TELEMETRY_LOG_EVENT_ID, TELEMETRY_LOG_PROVIDER_ID)
+        event = TelemetryEvent(TELEMETRY_LOG_EVENT_ID, TELEMETRY_LOG_PROVIDER_ID,
+                               priority=TelemetryEventPriorities.EXTENSION_EVENT_NEW_PIPELINE)
         event.file_type = "json"
         self.add_common_params_to_extension_event(event, event_file_time)
 
@@ -306,14 +300,14 @@ class ProcessExtensionTelemetry(PeriodicOperation):
             raise InvalidExtensionEventError(
                 key_err_msg.format(InvalidExtensionEventError.MissingKeyError, ExtensionEventSchema.Message))
 
-        if event[message_key] is None or len(event[message_key]) == 0: # pylint: disable=C1801
+        if not event[message_key]:
             raise InvalidExtensionEventError(
                 "{0}: {1} should not be empty".format(InvalidExtensionEventError.EmptyMessageError,
                                                      ExtensionEventSchema.Message))
 
         for required_key in self._EXTENSION_EVENT_REQUIRED_FIELDS:
             # If all required keys not in event then raise
-            if not required_key in event:
+            if required_key not in event:
                 raise InvalidExtensionEventError(
                     key_err_msg.format(InvalidExtensionEventError.MissingKeyError, required_key))
 
@@ -355,10 +349,11 @@ class ExtensionTelemetryHandler(object):
 
     _THREAD_NAME = "ExtensionTelemetryHandler"
 
-    def __init__(self, protocol_util):
+    def __init__(self, protocol_util, telemetry_handler):
         self.protocol_util = protocol_util
         self.should_run = True
         self.thread = None
+        self._enqueue_event = telemetry_handler.enqueue_event
 
     @staticmethod
     def get_thread_name():
@@ -389,7 +384,7 @@ class ExtensionTelemetryHandler(object):
         return not self.should_run
 
     def daemon(self):
-        op = ProcessExtensionTelemetry(self.protocol_util) # pylint: disable=C0103
+        op = ProcessExtensionTelemetry(self.protocol_util, self._enqueue_event) # pylint: disable=C0103
         logger.info("Successfully started the {0} thread".format(self.get_thread_name()))
         while not self.stopped():
             try:
