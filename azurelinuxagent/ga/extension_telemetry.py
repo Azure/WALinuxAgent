@@ -23,6 +23,8 @@ import re
 import threading
 from collections import defaultdict
 
+import traceback
+
 import azurelinuxagent.common.logger as logger
 from azurelinuxagent.common import conf
 from azurelinuxagent.common.event import EVENTS_DIRECTORY, TELEMETRY_LOG_EVENT_ID, \
@@ -92,7 +94,8 @@ class ProcessExtensionTelemetry(PeriodicOperation):
                 handler_event_dir_path = extension_handler_with_event_dir[1]
                 self._capture_extension_events(handler_name, handler_event_dir_path)
         except Exception as error:
-            msg = "Unknown error occurred when trying to collect extension events. Error: {0}".format(ustr(error))
+            msg = "Unknown error occurred when trying to collect extension events. Error: {0}, Stack: {1}".format(
+                ustr(error), traceback.format_exc())
             add_event(op=WALAEventOperation.ExtensionTelemetryEventProcessing, message=msg, is_success=False)
         finally:
             # Always ensure that the events directory are being deleted each run,

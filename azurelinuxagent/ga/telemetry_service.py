@@ -77,7 +77,7 @@ class TelemetryServiceHandler(object):
         # Add event to queue and set event
         self._queue.put(event)
         # self._queue.put((priority, self._queue_counter.value, event))
-        logger.verbose("Added event Priority: {0}, Event: {1}", event.priority, event)
+        logger.verbose("Added event for {0}, Priority: {1}, Event: {2}", self.get_thread_name(), event.priority, event)
 
         # Always set the event if any enqueue happens (even if already set)
         self._should_process_events.set()
