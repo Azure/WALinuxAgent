@@ -96,7 +96,6 @@ class ProcessExtensionTelemetry(PeriodicOperation):
         except Exception as error:
             msg = "Unknown error occurred when trying to collect extension events. Error: {0}, Stack: {1}".format(
                 ustr(error), traceback.format_exc())
-            logger.warn(msg)
             add_event(op=WALAEventOperation.ExtensionTelemetryEventProcessing, message=msg, is_success=False)
         finally:
             # Always ensure that the events directory are being deleted each run,
@@ -177,7 +176,7 @@ class ProcessExtensionTelemetry(PeriodicOperation):
                     break
 
             except Exception as error:
-                msg = "Failed to process event file {0}: {1}", event_file, ustr(error)
+                msg = "Failed to process event file {0}: {1}".format(event_file, ustr(error))
                 logger.warn(msg)
                 add_log_event(level=logger.LogLevel.WARNING, message=msg, forced=True)
             finally:
