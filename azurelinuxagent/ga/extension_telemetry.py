@@ -176,7 +176,8 @@ class ProcessExtensionTelemetry(PeriodicOperation):
                     break
 
             except Exception as error:
-                msg = "Failed to process event file {0}: {1}".format(event_file, ustr(error))
+                msg = "Failed to process event file {0}: {1}, {2}".format(event_file, ustr(error),
+                                                                          traceback.format_exc())
                 logger.warn(msg)
                 add_log_event(level=logger.LogLevel.WARNING, message=msg, forced=True)
             finally:

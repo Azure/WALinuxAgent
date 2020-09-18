@@ -23,7 +23,7 @@ from azurelinuxagent.common.utils import fileutil, textutil
 from azurelinuxagent.ga.extension_telemetry import ExtensionEventSchema, ProcessExtensionTelemetry
 from tests.protocol.mocks import mock_wire_protocol, HttpRequestPredicates, MockHttpResponse
 from tests.protocol.mockwiredata import DATA_FILE
-from tests.tools import AgentTestCase, clear_singleton_instances, data_dir, skip_if_predicate_true # pylint: disable=unused-import
+from tests.tools import AgentTestCase, clear_singleton_instances, data_dir
 
 
 class TestExtensionTelemetryHandler(AgentTestCase, HttpRequestPredicates):

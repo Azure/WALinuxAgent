@@ -23,6 +23,7 @@ import random
 import time
 import traceback
 import xml.sax.saxutils as saxutils
+from collections import defaultdict
 from datetime import datetime # pylint: disable=ungrouped-imports
 
 import azurelinuxagent.common.conf as conf
@@ -1101,7 +1102,7 @@ class WireClient(object): # pylint: disable=R0904
     def report_event(self, get_events):
         max_send_errors_to_report = 5
         buf = {}
-        events_per_request = 0
+        events_per_request = defaultdict(int)
         unicode_error_count, unicode_errors = 0, []
         event_report_error_count, event_report_errors = 0, []
 
@@ -1121,12 +1122,12 @@ class WireClient(object): # pylint: disable=R0904
                                          .format(str(details_of_event), len(event_str), MAX_EVENT_BUFFER_SIZE))
                     continue
                 if len(buf[event.providerId] + event_str) >= MAX_EVENT_BUFFER_SIZE:
+                    logger.verbose("No of events this request = {0}".format(events_per_request[event.providerId]))
                     self.send_encoded_event(event.providerId, buf[event.providerId])
                     buf[event.providerId] = b''
-                    logger.verbose("No of events this request = {0}".format(events_per_request))
-                    events_per_request = 0
+                    events_per_request[event.providerId] = 0
                 buf[event.providerId] = buf[event.providerId] + event_str
-                events_per_request += 1
+                events_per_request[event.providerId] += 1
             except UnicodeError as e: # pylint: disable=C0103
                 unicode_error_count += 1
                 if len(unicode_errors) < max_send_errors_to_report:
@@ -1146,7 +1147,7 @@ class WireClient(object): # pylint: disable=R0904
         # Send out all events left in buffer.
         for provider_id in list(buf.keys()):
             if len(buf[provider_id]) > 0: # pylint: disable=len-as-condition
-                logger.verbose("No of events this request = {0}".format(events_per_request))
+                logger.verbose("No of events this request = {0}".format(events_per_request[provider_id]))
                 self.send_encoded_event(provider_id, buf[provider_id])
 
     def report_status_event(self, message, is_success):
