@@ -84,6 +84,20 @@ class TestEvent(HttpRequestPredicates, AgentTestCase): # pylint: disable=too-man
         }
 
     @staticmethod
+    def _report_events(protocol, event_list):
+        def _yield_events():
+            for telemetry_event in event_list:
+                yield telemetry_event
+
+        protocol.client.report_event(_yield_events)
+
+    @staticmethod
+    def _collect_events():
+        event_list = []
+        event.collect_events(lambda telemetry_event: event_list.append(telemetry_event))
+        return event_list
+
+    @staticmethod
     def _is_guest_extension_event(event): # pylint: disable=redefined-outer-name
         return event.eventId == TELEMETRY_EVENT_EVENT_ID and event.providerId == TELEMETRY_EVENT_PROVIDER_ID
 
@@ -94,24 +108,24 @@ class TestEvent(HttpRequestPredicates, AgentTestCase): # pylint: disable=too-man
     def test_parse_xml_event(self, *args): # pylint: disable=unused-argument
         data_str = load_data('ext/event_from_extension.xml')
         event = parse_xml_event(data_str) # pylint: disable=redefined-outer-name
-        self.assertNotEqual(None, event)
+        self.assertIsNotNone(event)
         self.assertNotEqual(0, event.parameters)
         self.assertTrue(all(param is not None for param in event.parameters))
 
     def test_parse_json_event(self, *args): # pylint: disable=unused-argument
         data_str = load_data('ext/event.json')
         event = parse_json_event(data_str) # pylint: disable=redefined-outer-name
-        self.assertNotEqual(None, event)
+        self.assertIsNotNone(event)
         self.assertNotEqual(0, event.parameters)
         self.assertTrue(all(param is not None for param in event.parameters))
 
     def test_add_event_should_use_the_container_id_from_the_most_recent_goal_state(self):
         def create_event_and_return_container_id(): # pylint: disable=inconsistent-return-statements
             event.add_event(name='Event')
-            event_list = event.collect_events()
-            self.assertEquals(len(event_list.events), 1, "Could not find the event created by add_event") # pylint: disable=deprecated-method
+            event_list = self._collect_events()
+            self.assertEquals(len(event_list), 1, "Could not find the event created by add_event") # pylint: disable=deprecated-method
 
-            for p in event_list.events[0].parameters: # pylint: disable=invalid-name
+            for p in event_list[0].parameters: # pylint: disable=invalid-name
                 if p.name == CommonTelemetryEventSchema.ContainerId:
                     return p.value
 
@@ -346,10 +360,10 @@ class TestEvent(HttpRequestPredicates, AgentTestCase): # pylint: disable=too-man
         event_files = os.listdir(self.event_dir)
         self.assertEquals(len(event_files), 3, "Did not find all the event files that were created") # pylint: disable=deprecated-method
 
-        event_list = event.collect_events()
+        event_list = self._collect_events()
         event_files = os.listdir(self.event_dir)
 
-        self.assertEquals(len(event_list.events), 3, "Did not collect all the events that were created") # pylint: disable=deprecated-method
+        self.assertEquals(len(event_list), 3, "Did not collect all the events that were created") # pylint: disable=deprecated-method
         self.assertEquals(len(event_files), 0, "The event files were not deleted") # pylint: disable=deprecated-method
 
     def test_save_event(self):
@@ -371,10 +385,11 @@ class TestEvent(HttpRequestPredicates, AgentTestCase): # pylint: disable=too-man
     def test_collect_events_should_be_able_to_process_events_with_non_ascii_characters(self):
         self._create_test_event_file("custom_script_nonascii_characters.tld")
 
-        event_list = event.collect_events()
+        event_list = self._collect_events()
 
-        self.assertEquals(len(event_list.events), 1) # pylint: disable=deprecated-method
-        self.assertEquals(TestEvent._get_event_message(event_list.events[0]), u'World\u05e2\u05d9\u05d5\u05ea \u05d0\u05d7\u05e8\u05d5\u05ea\u0906\u091c') # pylint: disable=deprecated-method
+        self.assertEquals(len(event_list), 1) # pylint: disable=deprecated-method
+        self.assertEquals(TestEvent._get_event_message(event_list[0]),
+                          u'World\u05e2\u05d9\u05d5\u05ea \u05d0\u05d7\u05e8\u05d5\u05ea\u0906\u091c')  # pylint: disable=deprecated-method
 
     def test_collect_events_should_ignore_invalid_event_files(self):
         self._create_test_event_file("custom_script_1.tld")  # a valid event
@@ -384,12 +399,12 @@ class TestEvent(HttpRequestPredicates, AgentTestCase): # pylint: disable=too-man
         self._create_test_event_file("custom_script_2.tld")  # another valid event
 
         with patch("azurelinuxagent.common.event.add_event") as mock_add_event:
-            event_list = event.collect_events()
+            event_list = self._collect_events()
 
             self.assertEquals( # pylint: disable=deprecated-method
-                len(event_list.events), 2)
+                len(event_list), 2)
             self.assertTrue(
-                all(TestEvent._get_event_message(evt) == "A test telemetry message." for evt in event_list.events),
+                all(TestEvent._get_event_message(evt) == "A test telemetry message." for evt in event_list),
                 "The valid events were not found")
 
             invalid_events = []
@@ -513,14 +528,13 @@ class TestEvent(HttpRequestPredicates, AgentTestCase): # pylint: disable=too-man
         create_event_function()
         timestamp_upper = TestEvent._datetime_to_event_timestamp(datetime.utcnow())
 
-        # retrieve the event that was created
-        event_list = event.collect_events()
+        event_list = self._collect_events()
 
-        self.assertEquals(len(event_list.events), 1) # pylint: disable=deprecated-method
+        self.assertEquals(len(event_list), 1) # pylint: disable=deprecated-method
 
         # verify the event parameters
         self._assert_event_includes_all_parameters_in_the_telemetry_schema(
-            event_list.events[0],
+            event_list[0],
             expected_parameters,
             assert_timestamp=lambda timestamp:
                 self.assertTrue(timestamp_lower <= timestamp <= timestamp_upper, "The event timestamp (opcode) is incorrect")
@@ -589,8 +603,8 @@ class TestEvent(HttpRequestPredicates, AgentTestCase): # pylint: disable=too-man
 
     def test_add_log_event_should_not_create_event_if_not_allowed_and_not_forced(self):
         add_log_event(logger.LogLevel.WARNING, 'A test WARNING log event')
-        event_list = event.collect_events()
-        self.assertEquals(len(event_list.events), 0, "No events should be created if not forced and not allowed") # pylint: disable=deprecated-method
+        event_list = self._collect_events()
+        self.assertEquals(len(event_list), 0, "No events should be created if not forced and not allowed") # pylint: disable=deprecated-method
 
     def test_report_metric_should_create_events_that_have_all_the_parameters_in_the_telemetry_schema(self):
         self._test_create_event_function_should_create_events_that_have_all_the_parameters_in_the_telemetry_schema(
@@ -617,12 +631,12 @@ class TestEvent(HttpRequestPredicates, AgentTestCase): # pylint: disable=too-man
         # only a subset of fields; the rest are added by the current agent when events are collected.
         self._create_test_event_file("legacy_agent.tld")
 
-        event_list = event.collect_events()
+        event_list = self._collect_events()
 
-        self.assertEquals(len(event_list.events), 1) # pylint: disable=deprecated-method
+        self.assertEquals(len(event_list), 1) # pylint: disable=deprecated-method
 
         self._assert_event_includes_all_parameters_in_the_telemetry_schema(
-            event_list.events[0],
+            event_list[0],
             expected_parameters={
                 GuestAgentExtensionEventsSchema.Name: "WALinuxAgent",
                 GuestAgentExtensionEventsSchema.Version: "9.9.9",
@@ -647,12 +661,12 @@ class TestEvent(HttpRequestPredicates, AgentTestCase): # pylint: disable=too-man
 
         event_creation_time = TestEvent._get_file_creation_timestamp(test_file)
 
-        event_list = event.collect_events()
+        event_list = self._collect_events()
 
-        self.assertEquals(len(event_list.events), 1) # pylint: disable=deprecated-method
+        self.assertEquals(len(event_list), 1) # pylint: disable=deprecated-method
 
         self._assert_event_includes_all_parameters_in_the_telemetry_schema(
-            event_list.events[0],
+            event_list[0],
             expected_parameters={
                 GuestAgentExtensionEventsSchema.Name: "WALinuxAgent",
                 GuestAgentExtensionEventsSchema.Version: "9.9.9",
@@ -679,12 +693,12 @@ class TestEvent(HttpRequestPredicates, AgentTestCase): # pylint: disable=too-man
 
         event_creation_time = TestEvent._get_file_creation_timestamp(test_file)
 
-        event_list = event.collect_events()
+        event_list = self._collect_events()
 
-        self.assertEquals(len(event_list.events), 1) # pylint: disable=deprecated-method
+        self.assertEquals(len(event_list), 1) # pylint: disable=deprecated-method
 
         self._assert_event_includes_all_parameters_in_the_telemetry_schema(
-            event_list.events[0],
+            event_list[0],
             expected_parameters={
                 GuestAgentExtensionEventsSchema.Name: 'Microsoft.Azure.Extensions.CustomScript',
                 GuestAgentExtensionEventsSchema.Version: '2.0.4',
@@ -762,9 +776,10 @@ class TestEvent(HttpRequestPredicates, AgentTestCase): # pylint: disable=too-man
             event_file_path = self._create_test_event_file("event_with_callstack.waagent.tld")
             expected_message = get_event_message_from_event_file(event_file_path)
 
-            event_list = event.collect_events()
+            event_list = self._collect_events()
 
-            protocol.client.report_event(event_list)
+
+            self._report_events(protocol, event_list)
 
             event_message = get_event_message_from_http_request_body(http_post_handler.request_body)
 
@@ -799,8 +814,8 @@ class TestEvent(HttpRequestPredicates, AgentTestCase): # pylint: disable=too-man
             ]
             for msg in test_messages:
                 add_event('TestEventEncoding', message=msg)
-                event_list = event.collect_events()
-                protocol.client.report_event(event_list)
+                event_list = self._collect_events()
+                self._report_events(protocol, event_list)
                 # In Py2, encode() produces a str and in py3 it produces a bytes string.
                 # type(bytes) == type(str) for Py2 so this check is mainly for Py3 to ensure that the event is encoded properly.
                 self.assertIsInstance(http_post_handler.request_body, bytes, "The Event request body should be encoded")

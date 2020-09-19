@@ -68,6 +68,10 @@ def _create_monitor_handler(enabled_operations=[], iterations=1): # pylint: disa
         * run_and_wait() - invokes run() and wait() on the MonitorHandler
 
     """
+    event_list = []
+    def _enqueue_events(telemetry_event):
+        event_list.append(telemetry_event)
+    
     def run(self):
         if len(enabled_operations) == 0 or self._name in enabled_operations: # pylint: disable=protected-access,len-as-condition
             run.original_definition(self)
@@ -84,9 +88,10 @@ def _create_monitor_handler(enabled_operations=[], iterations=1): # pylint: disa
                             monitor_handler.run()
                             monitor_handler.join()
 
-                        monitor_handler = get_monitor_handler()
+                        monitor_handler = get_monitor_handler(_enqueue_events)
                         monitor_handler.get_mock_wire_protocol = lambda: protocol
                         monitor_handler.run_and_wait = run_and_wait
+                        monitor_handler.event_list = event_list
                         yield monitor_handler
 
 
@@ -221,12 +226,12 @@ class TestEventMonitoring(AgentTestCase, HttpRequestPredicates):
         self.assertTrue(found_msg, "Error event not reported")
 
     @patch("azurelinuxagent.common.event.TELEMETRY_EVENT_PROVIDER_ID", _TEST_EVENT_PROVIDER_ID)
-    @patch("azurelinuxagent.common.protocol.wire.WireClient.send_encoded_event")
+    # @patch("azurelinuxagent.common.protocol.wire.WireClient.send_encoded_event")
     @patch("azurelinuxagent.common.conf.get_lib_dir")
-    def test_collect_and_send_events(self, mock_lib_dir, patch_send_event, *_):
+    def test_collect_and_send_events(self, mock_lib_dir, *_):
         mock_lib_dir.return_value = self.lib_dir
 
-        with _create_monitor_handler(enabled_operations=["collect_and_send_events"]) as monitor_handler:
+        with _create_monitor_handler(enabled_operations=["collect_and_enqueue_events"]) as monitor_handler:
             self._create_extension_event(message="Message-Test")
 
             test_mtime = 1000  # epoch time, in ms
@@ -242,8 +247,8 @@ class TestEventMonitoring(AgentTestCase, HttpRequestPredicates):
                             monitor_handler.run_and_wait()
 
             # Validating the crafted message by the collect_and_send_events call.
-            self.assertEqual(1, patch_send_event.call_count)
-            send_event_call_args = monitor_handler.get_mock_wire_protocol().client.send_encoded_event.call_args[0] # pylint: disable=no-member
+            self.assertEqual(1, len(monitor_handler.event_list))
+            collected_event = monitor_handler.get_mock_wire_protocol().client.send_encoded_event.call_args[0] # pylint: disable=no-member
 
             # Some of those expected values come from the mock protocol and imds client set up during test initialization
             osutil = get_osutil()
@@ -282,7 +287,7 @@ class TestEventMonitoring(AgentTestCase, HttpRequestPredicates):
                                                   osutil.get_processor_cores())
 
             self.maxDiff = None # pylint: disable=invalid-name
-            self.assertEqual(sample_message.encode('utf-8'), send_event_call_args[1])
+            self.assertEqual(sample_message.encode('utf-8'), collected_event[1])
 
     @patch("azurelinuxagent.common.protocol.wire.WireClient.send_encoded_event")
     @patch("azurelinuxagent.common.conf.get_lib_dir")
@@ -588,7 +593,7 @@ class TestMonitorFailure(AgentTestCase):
     @patch("azurelinuxagent.common.protocol.healthservice.HealthService.report_host_plugin_heartbeat")
     def test_error_heartbeat_creates_no_signal(self, patch_report_heartbeat, patch_http_get, patch_add_event, *args): # pylint: disable=unused-argument
 
-        monitor_handler = get_monitor_handler()
+        monitor_handler = get_monitor_handler(MagicMock())
         protocol = WireProtocol('endpoint')
         protocol.update_goal_state = MagicMock()
         with patch('azurelinuxagent.common.protocol.util.ProtocolUtil.get_protocol', return_value=protocol):

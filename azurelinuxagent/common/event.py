@@ -593,7 +593,7 @@ class EventLogger(object):
         from the events directory.
         """
         max_collect_errors_to_report = 5
-        event_list = TelemetryEventList()
+        # event_list = TelemetryEventList()
         event_directory_full_path = os.path.join(conf.get_lib_dir(), EVENTS_DIRECTORY)
         event_files = os.listdir(event_directory_full_path)
         unicode_error_count, unicode_errors = 0, []
@@ -649,7 +649,7 @@ class EventLogger(object):
                                                 WALAEventOperation.CollectEventUnicodeErrors,
                                                 max_collect_errors_to_report)
 
-        return event_list
+        # return event_list
 
     def _update_legacy_agent_event(self, event, event_creation_time):
         # Ensure that if an agent event is missing a field from the schema defined since 2.2.47, the missing fields

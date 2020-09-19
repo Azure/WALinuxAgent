@@ -115,6 +115,14 @@ class TestWireProtocol(AgentTestCase):
                 self.assertFalse(os.path.isfile(prv2))
             self.assertEqual("1", protocol.get_incarnation())
 
+    @staticmethod
+    def _get_telemetry_events_generator(event_list):
+        def _yield_events():
+            for telemetry_event in event_list:
+                yield telemetry_event
+
+        return _yield_events
+
     def test_getters(self, *args):
         """Normal case"""
         test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE)
@@ -376,47 +384,47 @@ class TestWireProtocol(AgentTestCase):
 
     @patch("azurelinuxagent.common.protocol.wire.WireClient.send_encoded_event")
     def test_report_event_small_event(self, patch_send_event, *args): # pylint: disable=unused-argument
-        event_list = TelemetryEventList()
+        event_list = []
         client = WireProtocol(WIRESERVER_URL).client
 
         event_str = random_generator(10)
-        event_list.events.append(get_event(message=event_str))
+        event_list.append(get_event(message=event_str))
 
         event_str = random_generator(100)
-        event_list.events.append(get_event(message=event_str))
+        event_list.append(get_event(message=event_str))
 
         event_str = random_generator(1000)
-        event_list.events.append(get_event(message=event_str))
+        event_list.append(get_event(message=event_str))
 
         event_str = random_generator(10000)
-        event_list.events.append(get_event(message=event_str))
+        event_list.append(get_event(message=event_str))
 
-        client.report_event(event_list)
+        client.report_event(self._get_telemetry_events_generator(event_list))
 
         # It merges the messages into one message
         self.assertEqual(patch_send_event.call_count, 1)
 
     @patch("azurelinuxagent.common.protocol.wire.WireClient.send_encoded_event")
     def test_report_event_multiple_events_to_fill_buffer(self, patch_send_event, *args): # pylint: disable=unused-argument
-        event_list = TelemetryEventList()
+        event_list = []
         client = WireProtocol(WIRESERVER_URL).client
 
         event_str = random_generator(2 ** 15)
-        event_list.events.append(get_event(message=event_str))
-        event_list.events.append(get_event(message=event_str))
+        event_list.append(get_event(message=event_str))
+        event_list.append(get_event(message=event_str))
 
-        client.report_event(event_list)
+        client.report_event(self._get_telemetry_events_generator(event_list))
 
         # It merges the messages into one message
         self.assertEqual(patch_send_event.call_count, 2)
 
     @patch("azurelinuxagent.common.protocol.wire.WireClient.send_encoded_event")
     def test_report_event_large_event(self, patch_send_event, *args): # pylint: disable=unused-argument
-        event_list = TelemetryEventList()
+        event_list = []
         event_str = random_generator(2 ** 18)
-        event_list.events.append(get_event(message=event_str))
+        event_list.append(get_event(message=event_str))
         client = WireProtocol(WIRESERVER_URL).client
-        client.report_event(event_list)
+        client.report_event(self._get_telemetry_events_generator(event_list))
 
         self.assertEqual(patch_send_event.call_count, 0)
 

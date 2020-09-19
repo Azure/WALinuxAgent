@@ -38,8 +38,8 @@ from azurelinuxagent.common.version import AGENT_NAME, CURRENT_VERSION
 from azurelinuxagent.ga.periodic_operation import PeriodicOperation
 
 
-def get_monitor_handler(telemetry_handler):
-    return MonitorHandler(telemetry_handler)
+def get_monitor_handler(enqueue_event):
+    return MonitorHandler(enqueue_event)
 
 
 class PollResourceUsageOperation(PeriodicOperation):
@@ -116,12 +116,12 @@ class CollectAndEnqueueEventsPeriodicOperation(PeriodicOperation):
 
     _EVENT_COLLECTION_PERIOD = datetime.timedelta(minutes=1)
 
-    def __init__(self, telemetry_handler):
+    def __init__(self, enqueue_event):
         super(CollectAndEnqueueEventsPeriodicOperation, self).__init__(
             name="collect_and_enqueue_events",
             operation=self.collect_and_enqueue_events,
             period=CollectAndEnqueueEventsPeriodicOperation._EVENT_COLLECTION_PERIOD)
-        self.enqueue_events = telemetry_handler.enqueue_event
+        self.enqueue_events = enqueue_event
 
     def collect_and_enqueue_events(self):
         """
@@ -133,8 +133,8 @@ class CollectAndEnqueueEventsPeriodicOperation(PeriodicOperation):
 
             # if len(event_list.events) > 0: # pylint: disable=len-as-condition
             #     self.protocol.report_event(event_list)
-        except Exception as e: # pylint: disable=C0103
-            err_msg = "Failure in collecting Agent events: {0}".format(ustr(e))
+        except Exception as error:
+            err_msg = "Failure in collecting Agent events: {0}".format(ustr(error))
             add_event(op=WALAEventOperation.UnhandledError, message=err_msg, is_success=False)
 
 
@@ -200,14 +200,14 @@ class MonitorHandler(object): # pylint: disable=R0902
     def get_thread_name():
         return MonitorHandler._THREAD_NAME
 
-    def __init__(self, telemetry_handler):
+    def __init__(self, enqueue_event):
         self.osutil = get_osutil()
         self.imds_client = None
 
         self.event_thread = None
         self._periodic_operations = [
             ResetPeriodicLogMessagesOperation(),
-            CollectAndEnqueueEventsPeriodicOperation(telemetry_handler),
+            CollectAndEnqueueEventsPeriodicOperation(enqueue_event),
             ReportNetworkErrorsOperation(),
             PollResourceUsageOperation(),
             PeriodicOperation("send_host_plugin_heartbeat", self.send_host_plugin_heartbeat, self.HOST_PLUGIN_HEARTBEAT_PERIOD),

@@ -277,7 +277,7 @@ class UpdateHandler(object): # pylint: disable=R0902
             # Get all thread handlers
             telemetry_handler = get_telemetry_service_handler(self.protocol_util)
             all_thread_handlers = [
-                get_monitor_handler(telemetry_handler),
+                get_monitor_handler(telemetry_handler.enqueue_event),
                 get_env_handler(),
                 telemetry_handler
             ]
