@@ -41,7 +41,7 @@ class TelemetryServiceHandler(object):
     def __init__(self, protocol_util):
         self._protocol = protocol_util.get_protocol()
         self.should_run = True
-        self.thread = None
+        self._thread = None
         self._should_process_events = threading.Event()
         self._queue = PriorityQueue()
 
@@ -54,13 +54,13 @@ class TelemetryServiceHandler(object):
         self.start()
 
     def is_alive(self):
-        return self.thread is not None and self.thread.is_alive()
+        return self._thread is not None and self._thread.is_alive()
 
     def start(self):
-        self.thread = threading.Thread(target=self.daemon)
-        self.thread.setDaemon(True)
-        self.thread.setName(self.get_thread_name())
-        self.thread.start()
+        self._thread = threading.Thread(target=self._process_telemetry_thread)
+        self._thread.setDaemon(True)
+        self._thread.setName(self.get_thread_name())
+        self._thread.start()
 
     def stop(self):
         """
@@ -68,7 +68,11 @@ class TelemetryServiceHandler(object):
         """
         self.should_run = False
         if self.is_alive():
-            self.thread.join()
+            self.join()
+
+    def join(self):
+        self._queue.join()
+        self._thread.join()
 
     def stopped(self):
         return not self.should_run
@@ -82,39 +86,37 @@ class TelemetryServiceHandler(object):
         # Always set the event if any enqueue happens (even if already set)
         self._should_process_events.set()
 
-    def daemon(self):
+    def _process_telemetry_thread(self):
         logger.info("Successfully started the {0} thread".format(self.get_thread_name()))
         try:
             # On demand wait, start processing as soon as there is any data available in the queue
             # In worst case, also keep checking every 5 mins to ensure that no data is being missed
             while self._should_process_events.wait(timeout=TelemetryServiceHandler._MAX_TIMEOUT):
-                self.send_events_in_queue()
+                self._send_events_in_queue()
 
         except Exception as error:
             logger.warn("An unknown error occurred in the {0} thread main loop, stopping thread. Error: {1}, Stack: {2}",
                         self.get_thread_name(), ustr(error), traceback.format_exc())
 
-    def get_events(self):
+    def _get_events_in_queue(self):
         while not self._queue.empty():
-            event = None
             try:
                 # _, __, event = self._queue.get()
                 event = self._queue.get()
                 # logger.verbose("Fetched event Priority: {0}, Counter: {1}, Event: {2}".format(_, __, event))
                 logger.verbose("Fetched event Priority: {0}, Event: {1}".format(event.priority if event is not None else 100, event))
                 yield event
+                # Mark task_done once data processed. Do not mark task_done if error fetching from queue, else that will raise errors
+                logger.verbose("Marking event as done now: {0}".format(event))
+                self._queue.task_done()
             except Exception as e:
-                logger.error("Some exception: {0}, now the event will be None".format(ustr(e)))
-            finally:
-                # Mark the event as processed once done
-                logger.verbose("Finished working with event {0}".format(event))
-                # self._queue.task_done()
+                logger.error("Some exception when fetching event from queue: {0}".format(ustr(e)))
 
-    def send_events_in_queue(self):
+    def _send_events_in_queue(self):
         # Process everything in Queue
         logger.verbose("Processing data in the telemetry service queue, approx qsize: {0}", self._queue.qsize())
         if not self._queue.empty():
-            self._protocol.report_event(self.get_events)
+            self._protocol.report_event(self._get_events_in_queue)
 
         # Clear event when done
         # There might be a rare race condition where the loop exits and we get a new event, in that case not unsetting the event.

@@ -1,3 +1,20 @@
+# Copyright 2020 Microsoft Corporation
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+# Requires Python 2.6+ and Openssl 1.0+
+#
+
 import contextlib
 import glob
 import json
@@ -9,20 +26,18 @@ import string
 import uuid
 from collections import defaultdict
 
-from mock import MagicMock, Mock, patch
+from mock import patch
 
 from azurelinuxagent.common import conf
 from azurelinuxagent.common.event import EVENTS_DIRECTORY
 from azurelinuxagent.common.exception import InvalidExtensionEventError
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.protocol.util import ProtocolUtil
-from azurelinuxagent.common.protocol.wire import event_param_to_v1
-from azurelinuxagent.common.telemetryevent import TelemetryEventParam, GuestAgentGenericLogsSchema, \
+from azurelinuxagent.common.telemetryevent import GuestAgentGenericLogsSchema, \
     CommonTelemetryEventSchema
 from azurelinuxagent.common.utils import fileutil, textutil
 from azurelinuxagent.ga.extension_telemetry import ExtensionEventSchema, ProcessExtensionTelemetry
-from tests.protocol.mocks import mock_wire_protocol, HttpRequestPredicates, MockHttpResponse
-from tests.protocol.mockwiredata import DATA_FILE
+from tests.protocol.mocks import HttpRequestPredicates
 from tests.tools import AgentTestCase, clear_singleton_instances, data_dir
 
 
