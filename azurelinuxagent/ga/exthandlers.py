@@ -84,7 +84,7 @@ _STATUS_FILE_RETRY_DELAY = 2  # seconds
 _ENABLE_EXTENSION_TELEMETRY_PIPELINE = False
 
 def is_extension_telemetry_pipeline_enabled():
-    return _ENABLE_EXTENSION_TELEMETRY_PIPELINE
+    return conf.get_logs_verbose()
 
 
 class ValidHandlerStatus(object): # pylint: disable=R0903
