@@ -38,7 +38,7 @@ class FreeBSDResourceDiskHandler(ResourceDiskHandler):
     2. GPT: The resource disk partition is /dev/da1p2, /dev/da1p1 is for reserved usage.
     """
 
-    def __init__(self):
+    def __init__(self): # pylint: disable=W0235
         super(FreeBSDResourceDiskHandler, self).__init__()
 
     @staticmethod
@@ -51,8 +51,8 @@ class FreeBSDResourceDiskHandler(ResourceDiskHandler):
                 dic[geom_name] = line[8:]
         return dic
 
-    def mount_resource_disk(self, mount_point):
-        fs = self.fs
+    def mount_resource_disk(self, mount_point): # pylint: disable=R0912,R0914
+        fs = self.fs # pylint: disable=C0103
         if fs != 'ufs':
             raise ResourceDiskError(
                 "Unsupported filesystem type:{0}, only ufs is supported.".format(fs))

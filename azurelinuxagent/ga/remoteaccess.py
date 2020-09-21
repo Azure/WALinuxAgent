@@ -25,10 +25,9 @@ import traceback
 import azurelinuxagent.common.conf as conf
 import azurelinuxagent.common.logger as logger
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta # pylint: disable=C0411,ungrouped-imports
 
 from azurelinuxagent.common.event import add_event, WALAEventOperation
-from azurelinuxagent.common.exception import RemoteAccessError, ProtocolError
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.utils.cryptutil import CryptUtil
 from azurelinuxagent.common.version import AGENT_NAME, CURRENT_VERSION
@@ -46,110 +45,112 @@ def get_remote_access_handler(protocol):
     return RemoteAccessHandler(protocol)
 
 
-class RemoteAccessHandler(object):
+class RemoteAccessHandler(object): # pylint: disable=R0903
     def __init__(self, protocol):
-        self.os_util = get_osutil()
-        self.protocol = protocol
-        self.cryptUtil = CryptUtil(conf.get_openssl_cmd())
-        self.remote_access = None
-        self.incarnation = 0
-        self.error_message = ""
+        self._os_util = get_osutil()
+        self._protocol = protocol
+        self._cryptUtil = CryptUtil(conf.get_openssl_cmd()) # pylint: disable=C0103
+        self._remote_access = None
+        self._incarnation = 0
+        self._check_existing_jit_users = True
 
     def run(self):
         try:
-            if self.os_util.jit_enabled:
-                current_incarnation = self.protocol.get_incarnation()
-                if self.incarnation != current_incarnation:
+            if self._os_util.jit_enabled:
+                current_incarnation = self._protocol.get_incarnation()
+                if self._incarnation != current_incarnation:
                     # something changed. Handle remote access if any.
-                    self.incarnation = current_incarnation
-                    self.remote_access = self.protocol.client.get_remote_access()
-                    self.handle_remote_access()
-        except Exception as e:
-            msg = u"Exception processing remote access handler: {0} {1}".format(ustr(e), traceback.format_exc())
-            logger.error(msg)
+                    self._incarnation = current_incarnation
+                    self._remote_access = self._protocol.client.get_remote_access()
+                    self._handle_remote_access()
+        except Exception as e: # pylint: disable=C0103
+            msg = u"Exception processing goal state for remote access users: {0} {1}".format(ustr(e), traceback.format_exc())
             add_event(AGENT_NAME,
                       version=CURRENT_VERSION,
                       op=WALAEventOperation.RemoteAccessHandling,
                       is_success=False,
                       message=msg)
 
-    def handle_remote_access(self):
-        # Get JIT user accounts.
-        all_users = self.os_util.get_users()
-        existing_jit_users = set(u[0] for u in all_users if self.validate_jit_user(u[4]))
-        self.err_message = ""
-        if self.remote_access is not None:
-            goal_state_users = set(u.name for u in self.remote_access.user_list.users)
-            for acc in self.remote_access.user_list.users:
+    def _get_existing_jit_users(self):
+        all_users = self._os_util.get_users()
+        return set(u[0] for u in all_users if self._is_jit_user(u[4]))
+
+    def _handle_remote_access(self):
+        if self._remote_access is not None:
+            logger.info("Processing remote access users in goal state.")
+
+            self._check_existing_jit_users = True
+
+            existing_jit_users = self._get_existing_jit_users()
+            goal_state_users = set(u.name for u in self._remote_access.user_list.users)
+
+            for acc in self._remote_access.user_list.users:
                 try:
                     raw_expiration = acc.expiration
                     account_expiration = datetime.strptime(raw_expiration, REMOTE_USR_EXPIRATION_FORMAT)
                     now = datetime.utcnow()
                     if acc.name not in existing_jit_users and now < account_expiration:
-                        self.add_user(acc.name, acc.encrypted_password, account_expiration)
+                        self._add_user(acc.name, acc.encrypted_password, account_expiration)
                     elif acc.name in existing_jit_users and now > account_expiration:
                         # user account expired, delete it.
-                        logger.info("user {0} expired from remote_access".format(acc.name))
-                        self.remove_user(acc.name)
-                except RemoteAccessError as rae:
-                    self.err_message = self.err_message + "Error processing user {0}. Exception: {1}"\
-                        .format(acc.name, ustr(rae))
+                        logger.info("Remote access user '{0}' expired.", acc.name)
+                        self._remove_user(acc.name)
+                except Exception as e: # pylint: disable=C0103
+                    logger.error("Error processing remote access user '{0}' - {1}", acc.name, ustr(e))
+
             for user in existing_jit_users:
                 try:
                     if user not in goal_state_users:
                         # user explicitly removed
-                        logger.info("User {0} removed from remote_access".format(user))
-                        self.remove_user(user)
-                except RemoteAccessError as rae:
-                    self.err_message = self.err_message + "Error removing user {0}. Exception: {1}"\
-                        .format(user, ustr(rae))
+                        self._remove_user(user)
+                except Exception as e: # pylint: disable=C0103
+                    logger.error("Error removing remote access user '{0}' - {1}", user, ustr(e))
         else:
-            # All users removed, remove any remaining JIT accounts.
-            for user in existing_jit_users:
-                try:
-                    logger.info("User {0} removed from remote_access. remote_access empty".format(user))
-                    self.remove_user(user)
-                except RemoteAccessError as rae:
-                    self.err_message = self.err_message + "Error removing user {0}. Exception: {1}"\
-                        .format(user, ustr(rae))
+            # There are no JIT users in the goal state; that may mean that they were removed or that they
+            # were never added. Enumerating the users on the current vm can be very slow and this path is hit
+            # on each goal state; we use self._check_existing_jit_users to avoid enumerating the users
+            # every single time.
+            if self._check_existing_jit_users:
+                logger.info("Looking for existing remote access users.")
 
-    def validate_jit_user(self, comment):
+                existing_jit_users = self._get_existing_jit_users()
+
+                remove_user_errors = False
+
+                for user in existing_jit_users:
+                    try:
+                        self._remove_user(user)
+                    except Exception as e: # pylint: disable=C0103
+                        logger.error("Error removing remote access user '{0}' - {1}", user, ustr(e))
+                        remove_user_errors = True
+
+                if not remove_user_errors:
+                    self._check_existing_jit_users = False
+
+    @staticmethod
+    def _is_jit_user(comment):
         return comment == REMOTE_ACCESS_ACCOUNT_COMMENT
 
-    def add_user(self, username, encrypted_password, account_expiration):
+    def _add_user(self, username, encrypted_password, account_expiration):
+        user_added = False
+
         try:
             expiration_date = (account_expiration + timedelta(days=1)).strftime(DATE_FORMAT)
-            logger.verbose("Adding user {0} with expiration date {1}".format(username, expiration_date))
-            self.os_util.useradd(username, expiration_date, REMOTE_ACCESS_ACCOUNT_COMMENT)
-        except Exception as e:
-            raise RemoteAccessError("Error adding user {0}. {1}".format(username, ustr(e)))
-        try:
+            logger.info("Adding remote access user '{0}' with expiration date {1}", username, expiration_date)
+            self._os_util.useradd(username, expiration_date, REMOTE_ACCESS_ACCOUNT_COMMENT)
+            user_added = True
+
+            logger.info("Adding remote access user '{0}' to sudoers", username)
             prv_key = os.path.join(conf.get_lib_dir(), TRANSPORT_PRIVATE_CERT)
-            pwd = self.cryptUtil.decrypt_secret(encrypted_password, prv_key)
-            self.os_util.chpasswd(username, pwd, conf.get_password_cryptid(), conf.get_password_crypt_salt_len())
-            self.os_util.conf_sudoer(username)
-            logger.info("User '{0}' added successfully with expiration in {1}".format(username, expiration_date))
-        except Exception as e:
-            error = "Error adding user {0}. {1} ".format(username, str(e))
-            try:
-                self.handle_failed_create(username)
-                error += "cleanup successful"
-            except RemoteAccessError as rae:
-                error += "and error cleaning up {0}".format(str(rae))
-            raise RemoteAccessError("Error adding user {0} cleanup successful".format(username), ustr(e))
+            pwd = self._cryptUtil.decrypt_secret(encrypted_password, prv_key)
+            self._os_util.chpasswd(username, pwd, conf.get_password_cryptid(), conf.get_password_crypt_salt_len())
+            self._os_util.conf_sudoer(username)
+        except Exception:
+            if user_added:
+                self._remove_user(username)
+            raise
 
-    def handle_failed_create(self, username):
-        try:
-            self.delete_user(username)
-        except Exception as e:
-            raise RemoteAccessError("Failed to clean up after account creation for {0}.".format(username), e)
+    def _remove_user(self, username):
+        logger.info("Removing remote access user '{0}'", username)
+        self._os_util.del_account(username)
 
-    def remove_user(self, username):
-        try:
-            self.delete_user(username)
-        except Exception as e:
-            raise RemoteAccessError("Failed to delete user {0}".format(username), e)
-
-    def delete_user(self, username):
-        self.os_util.del_account(username)
-        logger.info("User deleted {0}".format(username))

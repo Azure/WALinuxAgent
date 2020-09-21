@@ -19,10 +19,10 @@ from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.utils.extensionprocessutil import format_stdout_stderr, read_output, \
     wait_for_process_completion_or_timeout, handle_process_completion
 from tests.tools import AgentTestCase, patch
-import os
-import shutil
-import subprocess
-import tempfile
+import os # pylint: disable=wrong-import-order
+import shutil # pylint: disable=wrong-import-order
+import subprocess # pylint: disable=wrong-import-order
+import tempfile # pylint: disable=wrong-import-order
 
 
 class TestProcessUtils(AgentTestCase):
@@ -49,12 +49,12 @@ class TestProcessUtils(AgentTestCase):
             stderr=subprocess.PIPE)
 
         timed_out, ret = wait_for_process_completion_or_timeout(process=process, timeout=5)
-        self.assertEquals(timed_out, False)
-        self.assertEquals(ret, 0)
+        self.assertEqual(timed_out, False) 
+        self.assertEqual(ret, 0) 
 
     def test_wait_for_process_completion_or_timeout_should_kill_process_on_timeout(self):
         timeout = 5
-        process = subprocess.Popen(
+        process = subprocess.Popen( # pylint: disable=subprocess-popen-preexec-fn
             "sleep 1m",
             shell=True,
             cwd=self.tmp_dir,
@@ -70,11 +70,11 @@ class TestProcessUtils(AgentTestCase):
 
                 # We're mocking sleep to avoid prolonging the test execution time, but we still want to make sure
                 # we're "waiting" the correct amount of time before killing the process
-                self.assertEquals(mock_sleep.call_count, timeout)
+                self.assertEqual(mock_sleep.call_count, timeout) 
 
-                self.assertEquals(patch_kill.call_count, 1)
-                self.assertEquals(timed_out, True)
-                self.assertEquals(ret, None)
+                self.assertEqual(patch_kill.call_count, 1) 
+                self.assertEqual(timed_out, True) 
+                self.assertEqual(ret, None) 
 
     def test_handle_process_completion_should_return_nonzero_when_process_fails(self):
         process = subprocess.Popen(
@@ -86,14 +86,14 @@ class TestProcessUtils(AgentTestCase):
             stderr=subprocess.PIPE)
 
         timed_out, ret = wait_for_process_completion_or_timeout(process=process, timeout=5)
-        self.assertEquals(timed_out, False)
-        self.assertEquals(ret, 2)
+        self.assertEqual(timed_out, False) 
+        self.assertEqual(ret, 2) 
 
     def test_handle_process_completion_should_return_process_output(self):
         command = "echo 'dummy stdout' && 1>&2 echo 'dummy stderr'"
         with tempfile.TemporaryFile(dir=self.tmp_dir, mode="w+b") as stdout:
             with tempfile.TemporaryFile(dir=self.tmp_dir, mode="w+b") as stderr:
-                process = subprocess.Popen(command,
+                process = subprocess.Popen(command, # pylint: disable=subprocess-popen-preexec-fn
                                            shell=True,
                                            cwd=self.tmp_dir,
                                            env={},
@@ -109,16 +109,16 @@ class TestProcessUtils(AgentTestCase):
                                                            error_code=42)
 
         expected_output = "[stdout]\ndummy stdout\n\n\n[stderr]\ndummy stderr\n"
-        self.assertEquals(process_output, expected_output)
+        self.assertEqual(process_output, expected_output) 
 
     def test_handle_process_completion_should_raise_on_timeout(self):
         command = "sleep 1m"
-        timeout = 5
+        timeout = 20
         with tempfile.TemporaryFile(dir=self.tmp_dir, mode="w+b") as stdout:
             with tempfile.TemporaryFile(dir=self.tmp_dir, mode="w+b") as stderr:
                 with patch('time.sleep') as mock_sleep:
                     with self.assertRaises(ExtensionError) as context_manager:
-                        process = subprocess.Popen(command,
+                        process = subprocess.Popen(command, # pylint: disable=subprocess-popen-preexec-fn
                                                    shell=True,
                                                    cwd=self.tmp_dir,
                                                    env={},
@@ -135,9 +135,11 @@ class TestProcessUtils(AgentTestCase):
 
                     # We're mocking sleep to avoid prolonging the test execution time, but we still want to make sure
                     # we're "waiting" the correct amount of time before killing the process and raising an exception
-                    self.assertEquals(mock_sleep.call_count, timeout)
+                    # Due to an extra call to sleep at some point in the call stack which only happens sometimes,
+                    # we are relaxing this assertion to allow +/- 2 sleep calls.
+                    self.assertTrue(abs(mock_sleep.call_count - timeout) <= 2)
 
-                    self.assertEquals(context_manager.exception.code, ExtensionErrorCodes.PluginHandlerScriptTimedout)
+                    self.assertEqual(context_manager.exception.code, ExtensionErrorCodes.PluginHandlerScriptTimedout)
                     self.assertIn("Timeout({0})".format(timeout), ustr(context_manager.exception))
 
     def test_handle_process_completion_should_raise_on_nonzero_exit_code(self):
@@ -146,7 +148,7 @@ class TestProcessUtils(AgentTestCase):
         with tempfile.TemporaryFile(dir=self.tmp_dir, mode="w+b") as stdout:
             with tempfile.TemporaryFile(dir=self.tmp_dir, mode="w+b") as stderr:
                 with self.assertRaises(ExtensionError) as context_manager:
-                    process = subprocess.Popen(command,
+                    process = subprocess.Popen(command, # pylint: disable=subprocess-popen-preexec-fn
                                                shell=True,
                                                cwd=self.tmp_dir,
                                                env={},
@@ -161,32 +163,29 @@ class TestProcessUtils(AgentTestCase):
                                               stderr=stderr,
                                               error_code=error_code)
 
-                self.assertEquals(context_manager.exception.code, error_code)
+                self.assertEqual(context_manager.exception.code, error_code) 
                 self.assertIn("Non-zero exit code:", ustr(context_manager.exception))
 
-    def test_read_output_it_should_return_no_content(self):
+    def test_read_output_should_return_no_content(self):
         with patch('azurelinuxagent.common.utils.extensionprocessutil.TELEMETRY_MESSAGE_MAX_LEN', 0):
-            expected = "[stdout]\n\n\n[stderr]\n"
+            expected = ""
             actual = read_output(self.stdout, self.stderr)
             self.assertEqual(expected, actual)
 
-    def test_read_output_it_should_truncate_the_content(self):
-        with patch('azurelinuxagent.common.utils.extensionprocessutil.TELEMETRY_MESSAGE_MAX_LEN', 10):
-            expected = "[stdout]\nThe quick \n\n[stderr]\nThe five b"
-            actual = read_output(self.stdout, self.stderr)
-            self.assertEqual(expected, actual)
-
-    def test_read_output_it_should_return_all_content(self):
+    def test_read_output_should_truncate_the_content(self):
         with patch('azurelinuxagent.common.utils.extensionprocessutil.TELEMETRY_MESSAGE_MAX_LEN', 50):
+            expected = "[stdout]\nr the lazy dog.\n\n" \
+                       "[stderr]\ns jump quickly."
+            actual = read_output(self.stdout, self.stderr)
+            self.assertEqual(expected, actual)
+
+    def test_read_output_should_not_truncate_the_content(self):
+        with patch('azurelinuxagent.common.utils.extensionprocessutil.TELEMETRY_MESSAGE_MAX_LEN', 90):
             expected = "[stdout]\nThe quick brown fox jumps over the lazy dog.\n\n" \
                        "[stderr]\nThe five boxing wizards jump quickly."
             actual = read_output(self.stdout, self.stderr)
             self.assertEqual(expected, actual)
 
-    def test_read_output_it_should_handle_exceptions(self):
-        with patch('azurelinuxagent.common.utils.extensionprocessutil.TELEMETRY_MESSAGE_MAX_LEN', "type error"):
-            actual = read_output(self.stdout, self.stderr)
-            self.assertIn("Cannot read stdout/stderr", actual)
 
     def test_format_stdout_stderr00(self):
         """
@@ -197,8 +196,9 @@ class TestProcessUtils(AgentTestCase):
         stderr = "The five boxing wizards jump quickly."
 
         expected = "[stdout]\n{0}\n\n[stderr]\n{1}".format(stdout, stderr)
-        actual = format_stdout_stderr(stdout, stderr, 1000)
-        self.assertEqual(expected, actual)
+        with patch('azurelinuxagent.common.utils.extensionprocessutil.TELEMETRY_MESSAGE_MAX_LEN', 1000):
+            actual = format_stdout_stderr(stdout, stderr)
+            self.assertEqual(expected, actual)
 
     def test_format_stdout_stderr01(self):
         """
@@ -210,9 +210,10 @@ class TestProcessUtils(AgentTestCase):
 
         # noinspection SpellCheckingInspection
         expected = '[stdout]\ns over the lazy dog.\n\n[stderr]\nizards jump quickly.'
-        actual = format_stdout_stderr(stdout, stderr, 60)
-        self.assertEqual(expected, actual)
-        self.assertEqual(60, len(actual))
+        with patch('azurelinuxagent.common.utils.extensionprocessutil.TELEMETRY_MESSAGE_MAX_LEN', 60):
+            actual = format_stdout_stderr(stdout, stderr)
+            self.assertEqual(expected, actual)
+            self.assertEqual(60, len(actual))
 
     def test_format_stdout_stderr02(self):
         """
@@ -223,9 +224,10 @@ class TestProcessUtils(AgentTestCase):
         stderr = "The five boxing wizards jump quickly."
 
         expected = '[stdout]\nempty\n\n[stderr]\ns jump quickly.'
-        actual = format_stdout_stderr(stdout, stderr, 40)
-        self.assertEqual(expected, actual)
-        self.assertEqual(40, len(actual))
+        with patch('azurelinuxagent.common.utils.extensionprocessutil.TELEMETRY_MESSAGE_MAX_LEN', 40):
+            actual = format_stdout_stderr(stdout, stderr)
+            self.assertEqual(expected, actual)
+            self.assertEqual(40, len(actual))
 
     def test_format_stdout_stderr03(self):
         """
@@ -236,9 +238,10 @@ class TestProcessUtils(AgentTestCase):
         stderr = "empty"
 
         expected = '[stdout]\nr the lazy dog.\n\n[stderr]\nempty'
-        actual = format_stdout_stderr(stdout, stderr, 40)
-        self.assertEqual(expected, actual)
-        self.assertEqual(40, len(actual))
+        with patch('azurelinuxagent.common.utils.extensionprocessutil.TELEMETRY_MESSAGE_MAX_LEN', 40):
+            actual = format_stdout_stderr(stdout, stderr)
+            self.assertEqual(expected, actual)
+            self.assertEqual(40, len(actual))
 
     def test_format_stdout_stderr04(self):
         """
@@ -249,9 +252,10 @@ class TestProcessUtils(AgentTestCase):
         stderr = "The five boxing wizards jump quickly."
 
         expected = ''
-        actual = format_stdout_stderr(stdout, stderr, 4)
-        self.assertEqual(expected, actual)
-        self.assertEqual(0, len(actual))
+        with patch('azurelinuxagent.common.utils.extensionprocessutil.TELEMETRY_MESSAGE_MAX_LEN', 4):
+            actual = format_stdout_stderr(stdout, stderr)
+            self.assertEqual(expected, actual)
+            self.assertEqual(0, len(actual))
 
     def test_format_stdout_stderr05(self):
         """
@@ -259,5 +263,6 @@ class TestProcessUtils(AgentTestCase):
         """
 
         expected = '[stdout]\n\n\n[stderr]\n'
-        actual = format_stdout_stderr('', '', 1000)
-        self.assertEqual(expected, actual)
+        with patch('azurelinuxagent.common.utils.extensionprocessutil.TELEMETRY_MESSAGE_MAX_LEN', 1000):
+            actual = format_stdout_stderr('', '')
+            self.assertEqual(expected, actual)

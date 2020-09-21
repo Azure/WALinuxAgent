@@ -1,0 +1,122 @@
+# python2.7 uses pylint 1.9.5, whose docs can be found here: http://pylint.pycqa.org/en/1.9/technical_reference/features.html#messages
+# python3.4 uses pylint 2.3.1, whose docs can be found here: http://pylint.pycqa.org/en/pylint-2.3.1/technical_reference/features.html
+
+# The source code supresses the following error types common between python2.7 and python3.4:
+
+# attribute-defined-outside-init<W0201>: (hi-pri) Used when an instance attribute is defined outside the __init__ method.
+# bad-indentation<W0311>: (hi-pri) Used when an unexpected number of indentation's tabulations or spaces has been found.
+# bad-open-mode<W1501>: (hi-pri) Python supports: r, w, a[, x] modes with b, +, and U (only with r) options.
+# bad-super-call<E1003>: (hi-pri) Used when another argument than the current class is given as first argument of the super builtin.
+# bare-except<W0702>: (hi-pri) Used when an except clause doesn't specify exceptions type to catch.
+# blacklisted-name<C0102>: (needs review) Used when the name is listed in the black list (unauthorized names).
+# cell-var-from-loop<W0640>: (hi-pri) A variable used in a closure is defined in a loop. This will result in all closures using the same value for the closed-over variable.
+# cyclic-import<R0401>: (hi-pri) Used when a cyclic import between two or more modules is detected.
+# dangerous-default-value<W0102>: (hi-pri) Used when a mutable value as list or dictionary is detected in a default value for an argument.
+# expression-not-assigned<W0106>: (hi-pri) Used when an expression that is not a function call is assigned to nothing.
+# duplicate-code<R0801>: (hi-pri) Indicates that a set of similar lines has been detected among multiple file. (also disabled globally)
+# fixme<W0511>: Used when a warning note as FIXME or TODO is detected
+# function-redefined<E0102>: (hi-pri) Used when a function / class / method is redefined.
+# global-statement<W0603>: Used when you use the "global" statement to update a global variable.
+# import-error<E0401>: (hi-pri) Used when pylint has been unable to import a module.
+# inconsistent-return-statements<R1710>: (hi-pri) if any return statement returns an expression, any return statements where no value is returned should explicitly state this as return None, and an explicit return statement should be present at the end of the function
+# invalid-name<C0103>: (needs review) Used when the name doesn't conform to naming rules associated to its type (constant, variable, class...).
+# keyword-arg-before-vararg<W1113>: (hi-pri) When defining a keyword argument before variable positional arguments, one can end up in having multiple values passed for the aforementioned parameter in case the method is called with keyword arguments.
+# len-as-condition<C1801>: (hi-pri) Used when Pylint detects that len(sequence) is being used without explicit comparison inside a condition to determine if a sequence is empty.
+# multiple-imports<C0410>: (hi-pri) Used when import statement importing multiple modules is detected.
+# no-else-return<R1705>: (hi-pri) Used in order to highlight an unnecessary block of code following an if containing a return statement.
+# no-member<E1101>: (hi-pri) Used when a variable is accessed for an unexistent member.
+# no-name-in-module<E0611>: (hi-pri) Used when a name cannot be found in a module.
+# no-value-for-parameter<E1120>: (hi-pri) Used when a function call passes too few arguments.
+# pointless-statement<W0104>: (hi-pri) Used when a statement doesn’t have (or at least seems to) any effect.
+# pointless-string-statement<W0105>: (hi-pri) Used when a string is used as a statement (which of course has no effect). This is a particular case of W0104 with its own message so you can easily disable it if you're using those strings as documentation, instead of comments.
+# protected-access<W0212>: Used when a protected member (i.e. class member with a name beginning with an underscore) is access outside the class or a descendant of the class where it's defined.
+# raising-format-tuple<W0715>: (hi-pri) Used when passing multiple arguments to an exception constructor, the first of them a string literal containing what appears to be placeholders intended for formatting
+# redefined-builtin<W0622>: (hi-pri) Used when a variable or function override a built-in.
+# redefined-outer-name<W0621>: (hi-pri) Used when a variable's name hides a name defined in the outer scope.
+# redundant-unittest-assert<W1503>: (hi-pri) The first argument of assertTrue and assertFalse is a condition. If a constant is passed as parameter, that condition will be always true.
+# reimported<W0404>: (hi-pri) Used when a module is reimported multiple times.
+# simplifiable-if-statement<R1703>: Used when an if statement can be replaced with 'bool(test)'.
+# singleton-comparison<C0121>: (hi-pri) Used when an expression is compared to singleton values like True, False or None.
+# super-init-not-called<W0231>: (hi-pri) Used when an ancestor class method has an __init__ method which is not called by a derived class.
+# too-few-public-methods<R0903>: Used when class has too few public methods, so be sure it's really worth it.
+# too-many-arguments<R0913>: Used when a function or method takes too many arguments.
+# too-many-branches<R0912>: Used when a function or method has too many branches, making it hard to follow.
+# too-many-instance-attributes<R0902>: Used when class has too many instance attributes, try to reduce this to get a simpler (and so easier to use) class.
+# too-many-lines<C0302>: (needs review) Used when a module has too many lines, reducing its readability.
+# too-many-locals<R0914>: Used when a function or method has too many local variables.
+# too-many-nested-blocks<R1702>: Used when a function or a method has too many nested blocks. 
+# too-many-public-methods<R0904>: Used when class has too many public methods, try to reduce this to get a simpler (and so easier to use) class.
+# too-many-return-statements<R0911>: Used when a function or method has too many return statement, making it hard to follow.
+# ungrouped-imports<C0412>: (needs review) Used when imports are not grouped by packages
+# unidiomatic-typecheck<C0123>: (hi-pri) The idiomatic way to perform an explicit typecheck in Python is to use isinstance(x, Y) rather than type(x) == Y, type(x) is Y.
+# unnecessary-lambda<W0108>: Used when the body of a lambda expression is a function call on the same argument list as the lambda itself
+# unnecessary-pass<W0107>: (hi-pri) Used when a "pass" statement that can be avoided is encountered.
+# unnecessary-semicolon<W0301>: Used when a statement is ended by a semi-colon (";"), which isn't necessary
+# unneeded-not<C0113>: (needs review) Used when a boolean expression contains an unneeded negation.
+# unused-argument<W0613>: (hi-pri) Used when a function or method argument is not used.
+# unused-import<W0611>: (hi-pri) Used when an imported module or variable is not used.
+# unused-variable<W0612>: (hi-pri) Used when a variable is defined but not used.
+# useless-else-on-loop<W0120>: (hi-pri) Loops should only have an else clause if they can exit early with a break statement, otherwise the statements under else should be on the same scope as the loop itself.
+# useless-super-delegation<W0235>: Used whenever we can detect that an overridden method is useless, relying on super() delegation to do the same thing as another method from the MRO.
+# wrong-import-order<C0411>: (hi-pri) Used when PEP8 import order is not respected (standard imports first, then third-party libraries, then local imports)
+# wrong-import-position<C0413>: (hi-pri) Used when code and imports are mixed
+
+# The source code suppresses the following error codes specifically for python2.7:
+
+# no-init<W0232>: (needs review) Used when a class has no __init__ method, neither its parent classes.
+# undefined-loop-variable<W0631>: (needs review) Used when an loop variable (i.e. defined by a for loop or a list comprehension or a generator expression) is used outside the loop.
+# unsubscriptable-object<E1136>: (hi-pri) Emitted when a subscripted value doesn’t support subscription(i.e. doesn’t define __getitem__ method)
+
+# The source code suppresses the following error codes specifically for python3.4:
+
+# chained-comparison<R1716>: This message is emitted when pylint encounters boolean operation like"a < b and b < c", suggesting instead to refactor it to "a < b < c"
+# consider-using-in<R1714>: To check if a variable is equal to one of many values,combine the values into a tuple and check if the variable is contained "in" it instead of checking for equality against each of the values.
+# duplicate-string-formatting-argument<W1308>: (hi-pri) Used when we detect that a string formatting is repeating an argument instead of using named string arguments
+# implicit-str-concat-in-sequence<W1403>: (hi-pri) String literals are implicitly concatenated in a literal iterable definition : maybe a comma is missing ?
+# no-else-raise<R1720>: (hi-pri) Used in order to highlight an unnecessary block of code following an if containing a raise statement. 
+# simplifiable-if-expression<R1719>: Used when an if expression can be replaced with 'bool(test)'.
+# subprocess-popen-preexec-fn<W1509>: (hi-pri) The preexec_fn parameter is not safe to use in the presence of threads in your application. The child process could deadlock before exec is called.
+# useless-import-alias<C0414>: (hi-pri) Used when an import alias is same as original package.e.g using import numpy as numpy instead of import numpy as np
+# useless-return<R1711>: (hi-pri) Emitted when a single "return" or "return None" statement is found at the end of function or method definition.
+
+
+[MESSAGES CONTROL]
+
+disable=bad-continuation, # Buggy, **REMOVED in pylint-2.6.0**
+    bad-option-value, # pylint does not recognize the error code/symbol (needed to supress breaking changes across pylint versions)
+    bad-whitespace, # Used when a wrong number of spaces is used around an operator, bracket or block opener.
+    broad-except, # Used when an except catches a too general exception, possibly burying unrelated errors.
+    consider-iterating-dictionary, # Emitted when the keys of a dictionary are iterated through the .keys() method.
+    consider-using-dict-comprehension, # Although there is nothing syntactically wrong with this code, it is hard to read and can be simplified to a dict comprehension. (3+ only)
+    consider-using-set-comprehension, # Although there is nothing syntactically wrong with this code, it is hard to read and can be simplified to a set comprehension. (3+ only)
+    deprecated-lambda, # Used when a lambda is the first argument to “map” or “filter”. It could be clearer as a list comprehension or generator expression. (2.7 only)
+    empty-docstring, # Used when a module, function, class or method has an empty docstring
+    line-too-long, # Used when a line is longer than a given number of characters.
+    misplaced-comparison-constant, # Used when the constant is placed on the left side of a comparison. 
+    missing-docstring, # Used when a module, function, class or method has no docstring
+    missing-final-newline, # Used when the last line in a file is missing a newline.
+    multiple-statements, # Used when more than on statement are found on the same line.
+    no-self-use, # Used when a method doesn’t use its bound instance, and so could be written as a function.
+    old-style-class, # Used when a class is defined that does not inherit from another class and does not inherit explicitly from “object”. (2.7 only)
+    superfluous-parens, # Used when a single item in parentheses follows an if, for, or other keyword.
+    too-many-statements, # Used when a function or method has too many statements. You should then split it in smaller functions / methods.
+    trailing-newlines, # Used when there are trailing blank lines in a file.
+    trailing-whitespace, # Used when there is whitespace between the end of a line and the newline.
+    useless-object-inheritance, # Used when a class inherit from object, which under python3 is implicit (3+ only)
+    duplicate-code # Indicates that a set of similar lines has been detected among multiple file. TODO: this is on our "fix" list, and is thus left last.
+
+
+# This section controls the duplicate-code error.
+[SIMILARITIES]
+
+# Minimum lines number of a similarity.
+min-similarity-lines=8
+
+# Ignore comments when computing similarities.
+ignore-comments=yes
+
+# Ignore docstrings when computing similarities.
+ignore-docstrings=yes
+
+# Ignore imports when computing similarities.
+ignore-imports=no

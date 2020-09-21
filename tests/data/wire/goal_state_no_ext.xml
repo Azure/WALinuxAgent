@@ -12,13 +12,14 @@
      <ContainerId>c6d5526c-5ac2-4200-b6e2-56f2b70c5ab2</ContainerId>
      <RoleInstanceList>
        <RoleInstance>
-         <InstanceId>MachineRole_IN_0</InstanceId>
+         <InstanceId>b61f93d0-e1ed-40b2-b067-22c243233448.MachineRole_IN_0</InstanceId>
          <State>Started</State>
          <Configuration>
          <HostingEnvironmentConfig>http://168.63.129.16:80/hostingenvuri/</HostingEnvironmentConfig>
          <SharedConfig>http://168.63.129.16:80/sharedconfiguri/</SharedConfig>
          <Certificates>http://168.63.129.16:80/certificatesuri/</Certificates>
          <FullConfig>http://168.63.129.16:80/fullconfiguri/</FullConfig>
+         <ConfigName>b61f93d0-e1ed-40b2-b067-22c243233448.1.b61f93d0-e1ed-40b2-b067-22c243233448.2.MachineRole_IN_0.xml</ConfigName>
          </Configuration>
        </RoleInstance>
      </RoleInstanceList>

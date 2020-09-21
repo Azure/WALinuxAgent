@@ -18,7 +18,7 @@
 # Requires Python 2.6+ and Openssl 1.0+
 #
 import os
-import errno as errno
+from time import sleep
 
 import azurelinuxagent.common.logger as logger
 import azurelinuxagent.common.utils.fileutil as fileutil
@@ -35,11 +35,11 @@ class OpenWRTResourceDiskHandler(ResourceDiskHandler):
             self.fs = 'ffs'
 
     def reread_partition_table(self, device):
-        ret, output = shellutil.run_get_output("hdparm -z {0}".format(device), chk_err=False)
+        ret, output = shellutil.run_get_output("hdparm -z {0}".format(device), chk_err=False) # pylint: disable=W0612
         if ret != 0:
             logger.warn("Failed refresh the partition table.")
 
-    def mount_resource_disk(self, mount_point):
+    def mount_resource_disk(self, mount_point): # pylint: disable=R0914
         device = self.osutil.device_for_ide_port(1)
         if device is None:
             raise ResourceDiskError("unable to detect disk topology")

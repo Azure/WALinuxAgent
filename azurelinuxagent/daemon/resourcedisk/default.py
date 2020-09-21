@@ -48,7 +48,7 @@ http://msdn.microsoft.com/en-us/library/windowsazure/jj672979.aspx
 class ResourceDiskHandler(object):
     def __init__(self):
         self.osutil = get_osutil()
-        self.fs = conf.get_resourcedisk_filesystem()
+        self.fs = conf.get_resourcedisk_filesystem() # pylint: disable=C0103
 
     def start_activate_resource_disk(self):
         disk_thread = threading.Thread(target=self.run)
@@ -71,10 +71,10 @@ class ResourceDiskHandler(object):
                                         DATALOSS_WARNING_FILE_NAME)
             try:
                 fileutil.write_file(warning_file, DATA_LOSS_WARNING)
-            except IOError as e:
+            except IOError as e: # pylint: disable=C0103
                 logger.warn("Failed to write data loss warning:{0}", e)
             return mount_point
-        except ResourceDiskError as e:
+        except ResourceDiskError as e: # pylint: disable=C0103
             logger.error("Failed to mount resource disk {0}", e)
             add_event(name=AGENT_NAME, is_success=False, message=ustr(e),
                       op=WALAEventOperation.ActivateResourceDisk)
@@ -84,7 +84,7 @@ class ResourceDiskHandler(object):
         try:
             size_mb = conf.get_resourcedisk_swap_size_mb()
             self.create_swap_space(mount_point, size_mb)
-        except ResourceDiskError as e:
+        except ResourceDiskError as e: # pylint: disable=C0103
             logger.error("Failed to enable swap {0}", e)
 
     def reread_partition_table(self, device):
@@ -92,7 +92,7 @@ class ResourceDiskHandler(object):
             shellutil.run("blockdev --rereadpt {0}".format(device),
                           chk_err=False)
 
-    def mount_resource_disk(self, mount_point):
+    def mount_resource_disk(self, mount_point): # pylint: disable=R0912,R0914
         device = self.osutil.device_for_ide_port(1)
         if device is None:
             raise ResourceDiskError("unable to detect disk topology")
@@ -223,7 +223,7 @@ class ResourceDiskHandler(object):
         """
 
         command_to_use = '--part-type'
-        input = "sfdisk {0} {1} {2}".format(
+        input = "sfdisk {0} {1} {2}".format( # pylint: disable=W0622
             command_to_use, '-f' if suppress_message else '', option_str)
         err_code, output = shellutil.run_get_output(
             input, chk_err=False, log_cmd=True)
@@ -250,7 +250,7 @@ class ResourceDiskHandler(object):
         return err_code, output
 
     def get_mount_string(self, mount_options, partition, mount_point):
-        if mount_options is not None:
+        if mount_options is not None: # pylint: disable=R1705
             return 'mount -t {0} -o {1} {2} {3}'.format(
                 self.fs,
                 mount_options,
@@ -303,7 +303,7 @@ class ResourceDiskHandler(object):
             raise ResourceDiskError("{0}".format(swapfile))
         logger.info("Enabled {0}KB of swap at {1}".format(size_kb, swapfile))
 
-    def mkfile(self, filename, nbytes):
+    def mkfile(self, filename, nbytes): # pylint: disable=R0912
         """
         Create a non-sparse file of that size. Deletes and replaces existing
         file.
@@ -339,14 +339,14 @@ class ResourceDiskHandler(object):
                 # Probable errors:
                 #  - OSError: Seen on Cygwin, libc notimpl?
                 #  - AttributeError: What if someone runs this under...
-                fd = None
+                fd = None # pylint: disable=C0103
 
                 try:
-                    fd = os.open(
+                    fd = os.open( # pylint: disable=C0103
                         filename,
                         os.O_CREAT | os.O_WRONLY | os.O_EXCL,
                         stat.S_IRUSR | stat.S_IWUSR)
-                    os.posix_fallocate(fd, 0, nbytes)
+                    os.posix_fallocate(fd, 0, nbytes) # pylint: disable=no-member
                     return 0
                 except BaseException:
                     # Not confident with this thing, just keep trying...

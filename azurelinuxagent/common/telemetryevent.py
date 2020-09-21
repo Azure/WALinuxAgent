@@ -20,7 +20,7 @@
 from azurelinuxagent.common.datacontract import DataContract, DataContractList
 from azurelinuxagent.common.version import AGENT_NAME
 
-class CommonTelemetryEventSchema(object):
+class CommonTelemetryEventSchema(object): # pylint: disable=R0903
 
     # Common schema keys for GuestAgentExtensionEvents, GuestAgentGenericLogs
     # and GuestAgentPerformanceCounterEvents tables in Kusto.
@@ -44,7 +44,7 @@ class CommonTelemetryEventSchema(object):
     VMId = "VMId"
     ImageOrigin = "ImageOrigin"
 
-class GuestAgentGenericLogsSchema(CommonTelemetryEventSchema):
+class GuestAgentGenericLogsSchema(CommonTelemetryEventSchema): # pylint: disable=R0903
 
     # GuestAgentGenericLogs table specific schema keys
     EventName = "EventName"
@@ -53,7 +53,7 @@ class GuestAgentGenericLogsSchema(CommonTelemetryEventSchema):
     Context2 = "Context2"
     Context3 = "Context3"
 
-class GuestAgentExtensionEventsSchema(CommonTelemetryEventSchema):
+class GuestAgentExtensionEventsSchema(CommonTelemetryEventSchema): # pylint: disable=R0903
 
     # GuestAgentExtensionEvents table specific schema keys
     ExtensionType = "ExtensionType"
@@ -65,7 +65,7 @@ class GuestAgentExtensionEventsSchema(CommonTelemetryEventSchema):
     Message = "Message"
     Duration = "Duration"
 
-class GuestAgentPerfCounterEventsSchema(CommonTelemetryEventSchema):
+class GuestAgentPerfCounterEventsSchema(CommonTelemetryEventSchema): # pylint: disable=R0903
 
     # GuestAgentPerformanceCounterEvents table specific schema keys
     Category = "Category"
@@ -73,7 +73,7 @@ class GuestAgentPerfCounterEventsSchema(CommonTelemetryEventSchema):
     Instance = "Instance"
     Value = "Value"
 
-class TelemetryEventParam(DataContract):
+class TelemetryEventParam(DataContract): # pylint: disable=R0903
     def __init__(self, name=None, value=None):
         self.name = name
         self.value = value
@@ -84,8 +84,8 @@ class TelemetryEventParam(DataContract):
 
 class TelemetryEvent(DataContract):
     def __init__(self, eventId=None, providerId=None):
-        self.eventId = eventId
-        self.providerId = providerId
+        self.eventId = eventId # pylint: disable=C0103
+        self.providerId = providerId # pylint: disable=C0103
         self.parameters = DataContractList(TelemetryEventParam)
         self.file_type = ""
 
@@ -109,6 +109,6 @@ class TelemetryEvent(DataContract):
         return None
 
 
-class TelemetryEventList(DataContract):
+class TelemetryEventList(DataContract): # pylint: disable=R0903
     def __init__(self):
         self.events = DataContractList(TelemetryEvent)

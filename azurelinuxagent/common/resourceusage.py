@@ -30,17 +30,17 @@ PROC_COMM_FILENAME_FORMAT = "/proc/{0}/comm"
 PROC_STATUS_FILENAME_FORMAT = "/proc/{0}/status"
 
 
-class ResourceUsage(object):
+class ResourceUsage(object): # pylint: disable=R0903
     pass
 
 
-class MemoryResourceUsage(ResourceUsage):
+class MemoryResourceUsage(ResourceUsage): # pylint: disable=R0903
     @staticmethod
     def get_memory_usage_from_proc_statm(process_id):
         proc_pid_rss = 0
         try:
             proc_pid_rss = MemoryResourceUsage._get_proc_rss(process_id)
-        except Exception as e:
+        except Exception as e: # pylint: disable=C0103
             if isinstance(e, (IOError, OSError)):
                 raise
             logger.periodic_info(EVERY_SIX_HOURS, "[PERIODIC] Could not get the /prod/{0}/statm data due to {1}", process_id, ustr(e))
@@ -100,7 +100,7 @@ class ProcessInfo(object):
         cmdline_file_name = PROC_CMDLINE_FILENAME_FORMAT.format(process_id)
         try:
             pid_cmdline = fileutil.read_file(cmdline_file_name).replace("\0", " ").strip()
-        except Exception as e:
+        except Exception as e: # pylint: disable=C0103
             if isinstance(e, (IOError, OSError)):
                 raise
             raise ProcessInfoException("Could not get contents from {0}".format(cmdline_file_name), e)
@@ -123,7 +123,7 @@ class ProcessInfo(object):
         try:
             pid_comm = fileutil.read_file(comm_file_name).strip()
             pid_comm_str = str(pid_comm)
-        except Exception as e:
+        except Exception as e: # pylint: disable=C0103
             if isinstance(e, (IOError, OSError)):
                 raise
             raise ProcessInfoException("Could not get contents from {0}".format(comm_file_name), e)
