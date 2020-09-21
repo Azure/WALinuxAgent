@@ -37,9 +37,11 @@ from azurelinuxagent.ga.exthandlers import HANDLER_NAME_PATTERN
 from azurelinuxagent.ga.periodic_operation import PeriodicOperation
 
 
-def get_extension_telemetry_handler(protocol_util, telemetry_handler):
-    return ExtensionTelemetryHandler(protocol_util, telemetry_handler)
+def get_extension_telemetry_handler(enqueue_events):
+    return ExtensionTelemetryHandler(enqueue_events)
 
+
+# Pylint R0903 (too-few-public-methods) : Disabling here because this class is an Enum, no public methods needed.
 class ExtensionEventSchema(object): # pylint: disable=R0903
     """
     Class for defining the schema for Extension Events.
@@ -70,13 +72,12 @@ class ProcessExtensionTelemetry(PeriodicOperation):
     _EXTENSION_EVENT_REQUIRED_FIELDS = [attr.lower() for attr in dir(ExtensionEventSchema) if
                                         not callable(getattr(ExtensionEventSchema, attr)) and not attr.startswith("__")]
 
-    def __init__(self, protocol_util, enqueue_event):
+    def __init__(self, enqueue_event):
         super(ProcessExtensionTelemetry, self).__init__(
             name="collect_and_enqueue_extension_events",
             operation=self._collect_and_enqueue_extension_events,
             period=ProcessExtensionTelemetry._EXTENSION_EVENT_COLLECTION_PERIOD)
 
-        self._protocol = protocol_util.get_protocol()
         self._enqueue_event = enqueue_event
 
     def _collect_and_enqueue_extension_events(self):
@@ -220,8 +221,8 @@ class ProcessExtensionTelemetry(PeriodicOperation):
         event_file_time = datetime.datetime.fromtimestamp(os.path.getmtime(event_file_path))
 
         # Read event file and decode it properly
-        with open(event_file_path, "rb") as fd: # pylint: disable=C0103
-            event_data = fd.read().decode("utf-8")
+        with open(event_file_path, "rb") as event_file_descriptor:
+            event_data = event_file_descriptor.read().decode("utf-8")
 
         # Parse the string and get the list of events
         events = json.loads(event_data)
@@ -353,11 +354,10 @@ class ExtensionTelemetryHandler(object):
 
     _THREAD_NAME = "ExtensionTelemetryHandler"
 
-    def __init__(self, protocol_util, telemetry_handler):
-        self.protocol_util = protocol_util
+    def __init__(self, enqueue_events):
         self.should_run = True
         self.thread = None
-        self._enqueue_event = telemetry_handler.enqueue_event
+        self._enqueue_event = enqueue_events
 
     @staticmethod
     def get_thread_name():
@@ -388,15 +388,15 @@ class ExtensionTelemetryHandler(object):
         return not self.should_run
 
     def daemon(self):
-        op = ProcessExtensionTelemetry(self.protocol_util, self._enqueue_event) # pylint: disable=C0103
+        op = ProcessExtensionTelemetry(self._enqueue_event)
         logger.info("Successfully started the {0} thread".format(self.get_thread_name()))
         while not self.stopped():
             try:
                 op.run()
 
-            except Exception as e: # pylint: disable=C0103
+            except Exception as error:
                 logger.warn(
                     "An error occurred in the Telemetry Extension thread main loop; will skip the current iteration.\n{0}",
-                    ustr(e))
+                    ustr(error))
             finally:
                 PeriodicOperation.sleep_until_next_operation([op])
