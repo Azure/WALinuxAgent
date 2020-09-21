@@ -75,15 +75,11 @@ class GoalState(object): # pylint: disable=R0902
 
         AgentGlobals.update_container_id(self.container_id)
 
-        fetch_full_goal_state = False
-        if full_goal_state:
-            fetch_full_goal_state = True
+        if full_goal_state and role_config:
             reason = 'force update'
-        elif base_incarnation is not None and self.incarnation != base_incarnation:
-            fetch_full_goal_state = True
+        elif base_incarnation not in (None, self.incarnation) and role_config:
             reason = 'new incarnation'
-
-        if not fetch_full_goal_state:
+        else:
             self.hosting_env = None
             self.shared_conf = None
             self.certs = None
@@ -136,11 +132,27 @@ class GoalState(object): # pylint: disable=R0902
         return GoalState(wire_client)
 
     @staticmethod
+    def _verify_gs_for_noop(goal_state):
+        noop_gs_msg_format = "[PERIODIC] Goal State [incarnation {inc}] retrieved, but its a no-op."
+
+        if not goal_state.ext_conf:
+            logger.periodic_warn(logger.EVERY_SIX_HOURS, noop_gs_msg_format.format(inc=goal_state.incarnation))
+            raise ValueError("Goal State is a no-op")
+
+
+    @staticmethod
     def fetch_full_goal_state(wire_client):
         """
         Fetches the full goal state, including nested properties (such as extension config).
         """
-        return GoalState(wire_client, full_goal_state=True)
+        goal_state = GoalState(wire_client, full_goal_state=True)
+
+        try:
+            GoalState._verify_gs_for_noop(goal_state)
+        except ValueError:
+            return None
+
+        return goal_state
 
     @staticmethod
     def fetch_full_goal_state_if_incarnation_different_than(wire_client, incarnation):
@@ -148,6 +160,12 @@ class GoalState(object): # pylint: disable=R0902
         Fetches the full goal state if the new incarnation is different than 'incarnation', otherwise returns None.
         """
         goal_state = GoalState(wire_client, base_incarnation=incarnation)
+
+        try:
+            GoalState._verify_gs_for_noop(goal_state)
+        except ValueError:
+            return None
+
         return goal_state if goal_state.incarnation != incarnation else None
 
 

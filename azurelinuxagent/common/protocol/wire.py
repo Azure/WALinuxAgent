@@ -744,8 +744,12 @@ class WireClient(object): # pylint: disable=R0904
                     goal_state = GoalState.fetch_goal_state(self)
                     self._update_host_plugin(goal_state.container_id, goal_state.role_config_name)
                     return
-
-                if self._goal_state is None or refresh_type == WireClient._UpdateType.GoalStateForced:
+                
+                if self._goal_state is None:
+                    new_goal_state = GoalState.fetch_full_goal_state(self)
+                    if not new_goal_state:
+                        raise StopIteration("Attempted to fetch the full goal state, but none was returned.")
+                elif refresh_type == WireClient._UpdateType.GoalStateForced:
                     new_goal_state = GoalState.fetch_full_goal_state(self)
                 else:
                     new_goal_state = GoalState.fetch_full_goal_state_if_incarnation_different_than(self, self._goal_state.incarnation)
