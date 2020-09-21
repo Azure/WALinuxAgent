@@ -36,7 +36,7 @@ class TestProvision(AgentTestCase):
     @distros("redhat")
     @patch('azurelinuxagent.common.osutil.default.DefaultOSUtil.get_instance_id',
         return_value='B9F3C233-9913-9F42-8EB3-BA656DF32502')
-    def test_provision(self, mock_util, distro_name, distro_version, distro_full_name):
+    def test_provision(self, mock_util, distro_name, distro_version, distro_full_name): # pylint: disable=unused-argument
         provision_handler = get_provision_handler(distro_name, distro_version,
                                                   distro_full_name)
         mock_osutil = MagicMock()
@@ -60,8 +60,8 @@ class TestProvision(AgentTestCase):
 
     @patch('azurelinuxagent.common.conf.get_provision_enabled',
         return_value=False)
-    def test_provisioning_is_skipped_when_not_enabled(self, mock_conf):
-        ph = ProvisionHandler()
+    def test_provisioning_is_skipped_when_not_enabled(self, mock_conf): # pylint: disable=unused-argument
+        ph = ProvisionHandler() # pylint: disable=invalid-name
         ph.osutil = DefaultOSUtil()
         ph.osutil.get_instance_id = Mock(
                         return_value='B9F3C233-9913-9F42-8EB3-BA656DF32502')
@@ -77,8 +77,8 @@ class TestProvision(AgentTestCase):
         self.assertEqual(1, ph.write_provisioned.call_count)
 
     @patch('os.path.isfile', return_value=False)
-    def test_is_provisioned_not_provisioned(self, mock_isfile):
-        ph = ProvisionHandler()
+    def test_is_provisioned_not_provisioned(self, mock_isfile): # pylint: disable=unused-argument
+        ph = ProvisionHandler() # pylint: disable=invalid-name
         self.assertFalse(ph.is_provisioned())
 
     @patch('os.path.isfile', return_value=True)
@@ -86,9 +86,9 @@ class TestProvision(AgentTestCase):
             return_value="B9F3C233-9913-9F42-8EB3-BA656DF32502")
     @patch('azurelinuxagent.pa.deprovision.get_deprovision_handler')
     def test_is_provisioned_is_provisioned(self,
-            mock_deprovision, mock_read, mock_isfile):
+            mock_deprovision, mock_read, mock_isfile): # pylint: disable=unused-argument
 
-        ph = ProvisionHandler()
+        ph = ProvisionHandler() # pylint: disable=invalid-name
         ph.osutil = Mock()
         ph.osutil.is_current_instance_id = Mock(return_value=True)
         ph.write_provisioned = Mock()
@@ -105,9 +105,9 @@ class TestProvision(AgentTestCase):
             return_value="B9F3C233-9913-9F42-8EB3-BA656DF32502")
     @patch('azurelinuxagent.pa.deprovision.get_deprovision_handler')
     def test_is_provisioned_not_deprovisioned(self,
-            mock_deprovision, mock_read, mock_isfile):
+            mock_deprovision, mock_read, mock_isfile): # pylint: disable=unused-argument
 
-        ph = ProvisionHandler()
+        ph = ProvisionHandler() # pylint: disable=invalid-name
         ph.osutil = Mock()
         ph.osutil.is_current_instance_id = Mock(return_value=False)
         ph.report_ready = Mock()
@@ -129,7 +129,7 @@ class TestProvision(AgentTestCase):
         """
         ProvisionGuestAgent flag is 'false'
         """
-        self._provision_test(distro_name,
+        self._provision_test(distro_name, # pylint: disable=no-value-for-parameter
                              distro_version,
                              distro_full_name,
                              OVF_FILE_NAME,
@@ -145,7 +145,7 @@ class TestProvision(AgentTestCase):
         """
         ProvisionGuestAgent flag is 'true'
         """
-        self._provision_test(distro_name,
+        self._provision_test(distro_name, # pylint: disable=no-value-for-parameter
                              distro_version,
                              distro_full_name,
                              'ovf-env-2.xml',
@@ -161,7 +161,7 @@ class TestProvision(AgentTestCase):
         """
         ProvisionGuestAgent flag is ''
         """
-        self._provision_test(distro_name,
+        self._provision_test(distro_name, # pylint: disable=no-value-for-parameter
                              distro_version,
                              distro_full_name,
                              'ovf-env-3.xml',
@@ -177,7 +177,7 @@ class TestProvision(AgentTestCase):
         """
         ProvisionGuestAgent flag is 'bad data'
         """
-        self._provision_test(distro_name,
+        self._provision_test(distro_name, # pylint: disable=no-value-for-parameter
                              distro_version,
                              distro_full_name,
                              'ovf-env-4.xml',
@@ -187,7 +187,7 @@ class TestProvision(AgentTestCase):
     @patch('azurelinuxagent.common.osutil.default.DefaultOSUtil.get_instance_id',
            return_value='B9F3C233-9913-9F42-8EB3-BA656DF32502')
     @patch('azurelinuxagent.pa.provision.default.ProvisionHandler.write_agent_disabled')
-    def _provision_test(self,
+    def _provision_test(self, # pylint: disable=too-many-locals,invalid-name,too-many-arguments
                         distro_name,
                         distro_version,
                         distro_full_name,
@@ -195,7 +195,7 @@ class TestProvision(AgentTestCase):
                         provisionMessage,
                         expect_success,
                         patch_write_agent_disabled,
-                        patch_get_instance_id):
+                        patch_get_instance_id): # pylint: disable=unused-argument
         """
         Assert that the agent issues two telemetry messages as part of a
         successful provisioning.
@@ -203,7 +203,7 @@ class TestProvision(AgentTestCase):
          1. Provision
          2. GuestState
         """
-        ph = get_provision_handler(distro_name,
+        ph = get_provision_handler(distro_name, # pylint: disable=invalid-name
                                    distro_version,
                                    distro_full_name)
         ph.report_event = MagicMock()
@@ -236,7 +236,7 @@ class TestProvision(AgentTestCase):
             self.assertTrue(kw_args['message'] == provisionMessage)
             self.assertTrue(kw_args['is_success'])
 
-            expected_disabled = True if provisionMessage == 'false' else False
+            expected_disabled = True if provisionMessage == 'false' else False # pylint: disable=simplifiable-if-expression
             self.assertTrue(patch_write_agent_disabled.call_count == expected_disabled)
 
         else:
@@ -252,7 +252,7 @@ class TestProvision(AgentTestCase):
         return_value='B9F3C233-9913-9F42-8EB3-BA656DF32502')
     @patch('azurelinuxagent.common.conf.get_provisioning_agent', return_value='waagent')
     def test_provision_telemetry_fail(self,
-                                      mock_util,
+                                      mock_util, # pylint: disable=unused-argument
                                       distro_name,
                                       distro_version,
                                       distro_full_name, _):
@@ -262,7 +262,7 @@ class TestProvision(AgentTestCase):
 
          1. Provision
         """
-        ph = get_provision_handler(distro_name, distro_version,
+        ph = get_provision_handler(distro_name, distro_version, # pylint: disable=invalid-name
                                    distro_full_name)
         ph.report_event = MagicMock()
         ph.reg_ssh_host_key = MagicMock(side_effect=ProvisionError(
@@ -281,7 +281,7 @@ class TestProvision(AgentTestCase):
         fileutil.write_file(ovfenv_file, ovfenv_data)
 
         ph.run()
-        positional_args, kw_args = ph.report_event.call_args_list[0]
+        positional_args, kw_args = ph.report_event.call_args_list[0] # pylint: disable=unused-variable
         self.assertTrue(re.match(r'Provisioning failed: \[ProvisionError\] --unit-test-- \(\d+\.\d+s\)', positional_args[0]) is not None)
 
     @patch('azurelinuxagent.pa.provision.default.ProvisionHandler.write_agent_disabled')
@@ -291,7 +291,7 @@ class TestProvision(AgentTestCase):
                                           distro_name,
                                           distro_version,
                                           distro_full_name):
-        ph = get_provision_handler(distro_name,
+        ph = get_provision_handler(distro_name, # pylint: disable=invalid-name
                                    distro_version,
                                    distro_full_name)
 
@@ -334,8 +334,8 @@ class TestProvision(AgentTestCase):
     )
     def test_get_provision_handler_config_auto_no_cloudinit(
             self,
-            patch_cloud_init_is_enabled,
-            patch_get_provisioning_agent):
+            patch_cloud_init_is_enabled, # pylint: disable=unused-argument
+            patch_get_provisioning_agent): # pylint: disable=unused-argument
         provisioning_handler = get_provision_handler()
         self.assertIsInstance(provisioning_handler, ProvisionHandler, 'Auto provisioning handler should be waagent if cloud-init is not enabled')
 
@@ -349,8 +349,8 @@ class TestProvision(AgentTestCase):
     )
     def test_get_provision_handler_config_waagent(
             self,
-            patch_cloud_init_is_enabled,
-            patch_get_provisioning_agent):
+            patch_cloud_init_is_enabled, # pylint: disable=unused-argument
+            patch_get_provisioning_agent): # pylint: disable=unused-argument
         provisioning_handler = get_provision_handler()
         self.assertIsInstance(provisioning_handler, ProvisionHandler, 'Provisioning handler should be waagent if agent is set to waagent')
 
@@ -364,8 +364,8 @@ class TestProvision(AgentTestCase):
     )
     def test_get_provision_handler_config_auto_cloudinit(
             self,
-            patch_cloud_init_is_enabled,
-            patch_get_provisioning_agent):
+            patch_cloud_init_is_enabled, # pylint: disable=unused-argument
+            patch_get_provisioning_agent): # pylint: disable=unused-argument
         provisioning_handler = get_provision_handler()
         self.assertIsInstance(provisioning_handler, CloudInitProvisionHandler, 'Auto provisioning handler should be cloud-init if cloud-init is enabled')
 
@@ -375,7 +375,7 @@ class TestProvision(AgentTestCase):
     )
     def test_get_provision_handler_config_cloudinit(
             self,
-            patch_get_provisioning_agent):
+            patch_get_provisioning_agent): # pylint: disable=unused-argument
         provisioning_handler = get_provision_handler()
         self.assertIsInstance(provisioning_handler, CloudInitProvisionHandler, 'Provisioning handler should be cloud-init if agent is set to cloud-init')
 

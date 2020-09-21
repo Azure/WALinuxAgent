@@ -24,7 +24,8 @@ import tempfile
 
 from nose.plugins.attrib import attr
 
-from azurelinuxagent.common.cgroupapi import CGroupsApi, FileSystemCgroupsApi, SystemdCgroupsApi, VM_AGENT_CGROUP_NAME
+from azurelinuxagent.common.cgroupapi import CGroupsApi, FileSystemCgroupsApi, SystemdCgroupsApi, VM_AGENT_CGROUP_NAME, \
+    SYSTEMD_RUN_PATH
 from azurelinuxagent.common.cgroupstelemetry import CGroupsTelemetry
 from azurelinuxagent.common.exception import ExtensionError, ExtensionErrorCodes
 from azurelinuxagent.common.future import ustr
@@ -65,30 +66,30 @@ class CGroupsApiTestCase(_MockedFileSystemTestCase):
             (['redhat', '7.7.1908', 'Core'], False),
             (['bigip', '15.0.1', 'Final'], False),
             (['gaia', '273.562', 'R80.30'], False),
-            (['debian' '9.1', ''], False),
+            (['debian', '9.1', ''], False),
         ]
 
         for (distro, supported) in test_cases:
             with patch("azurelinuxagent.common.cgroupapi.get_distro", return_value=distro):
                 self.assertEqual(CGroupsApi.cgroups_supported(), supported, "cgroups_supported() failed on {0}".format(distro))
 
-    def test_create_should_return_a_SystemdCgroupsApi_on_systemd_platforms(self):
-        with patch("azurelinuxagent.common.cgroupapi.CGroupsApi._is_systemd", return_value=True):
+    def test_create_should_return_a_SystemdCgroupsApi_on_systemd_platforms(self): # pylint: disable=invalid-name
+        with patch("azurelinuxagent.common.cgroupapi.CGroupsApi.is_systemd", return_value=True):
             api = CGroupsApi.create()
 
-        self.assertTrue(type(api) == SystemdCgroupsApi)
+        self.assertTrue(type(api) == SystemdCgroupsApi) # pylint: disable=unidiomatic-typecheck
 
-    def test_create_should_return_a_FileSystemCgroupsApi_on_non_systemd_platforms(self):
-        with patch("azurelinuxagent.common.cgroupapi.CGroupsApi._is_systemd", return_value=False):
+    def test_create_should_return_a_FileSystemCgroupsApi_on_non_systemd_platforms(self): # pylint: disable=invalid-name
+        with patch("azurelinuxagent.common.cgroupapi.CGroupsApi.is_systemd", return_value=False):
             api = CGroupsApi.create()
 
-        self.assertTrue(type(api) == FileSystemCgroupsApi)
+        self.assertTrue(type(api) == FileSystemCgroupsApi) # pylint: disable=unidiomatic-typecheck
 
     def test_is_systemd_should_return_true_when_systemd_manages_current_process(self):
         path_exists = os.path.exists
 
         def mock_path_exists(path):
-            if path == "/run/systemd/system/":
+            if path == SYSTEMD_RUN_PATH:
                 mock_path_exists.path_tested = True
                 return True
             return path_exists(path)
@@ -96,7 +97,7 @@ class CGroupsApiTestCase(_MockedFileSystemTestCase):
         mock_path_exists.path_tested = False
 
         with patch("azurelinuxagent.common.cgroupapi.os.path.exists", mock_path_exists):
-            is_systemd = CGroupsApi._is_systemd()
+            is_systemd = CGroupsApi.is_systemd() # pylint: disable=protected-access
 
         self.assertTrue(is_systemd)
 
@@ -106,7 +107,7 @@ class CGroupsApiTestCase(_MockedFileSystemTestCase):
         path_exists = os.path.exists
 
         def mock_path_exists(path):
-            if path == "/run/systemd/system/":
+            if path == SYSTEMD_RUN_PATH:
                 mock_path_exists.path_tested = True
                 return False
             return path_exists(path)
@@ -114,7 +115,7 @@ class CGroupsApiTestCase(_MockedFileSystemTestCase):
         mock_path_exists.path_tested = False
 
         with patch("azurelinuxagent.common.cgroupapi.os.path.exists", mock_path_exists):
-            is_systemd = CGroupsApi._is_systemd()
+            is_systemd = CGroupsApi.is_systemd() # pylint: disable=protected-access
 
         self.assertFalse(is_systemd)
 
@@ -126,7 +127,7 @@ class CGroupsApiTestCase(_MockedFileSystemTestCase):
         def controller_operation(controller):
             executed_controllers.append(controller)
 
-        CGroupsApi._foreach_controller(controller_operation, 'A dummy message')
+        CGroupsApi._foreach_controller(controller_operation, 'A dummy message') # pylint: disable=protected-access
 
         # The setUp method mocks azurelinuxagent.common.cgroupapi.CGROUPS_FILE_SYSTEM_ROOT to have the cpu and memory controllers mounted
         self.assertIn('cpu', executed_controllers, 'The operation was not executed on the cpu controller')
@@ -143,17 +144,17 @@ class CGroupsApiTestCase(_MockedFileSystemTestCase):
             successful_controllers.append(controller)
 
         with patch("azurelinuxagent.common.cgroupapi.logger.warn") as mock_logger_warn:
-            CGroupsApi._foreach_controller(controller_operation, 'A dummy message')
+            CGroupsApi._foreach_controller(controller_operation, 'A dummy message') # pylint: disable=protected-access
 
             self.assertIn('memory', successful_controllers, 'The operation was not executed on the memory controller')
             self.assertEqual(len(successful_controllers), 1, 'The operation was not executed on unexpected controllers: {0}'.format(successful_controllers))
 
-            args, kwargs = mock_logger_warn.call_args
+            args, kwargs = mock_logger_warn.call_args # pylint: disable=unused-variable
             (message_format, controller, error, message) = args
-            self.assertEquals(message_format, 'Error in cgroup controller "{0}": {1}. {2}')
-            self.assertEquals(controller, 'cpu')
-            self.assertEquals(error, 'A test exception')
-            self.assertEquals(message, 'A dummy message')
+            self.assertEqual(message_format, 'Error in cgroup controller "{0}": {1}. {2}')
+            self.assertEqual(controller, 'cpu')
+            self.assertEqual(error, 'A test exception')
+            self.assertEqual(message, 'A dummy message')
 
 
 class MountCgroupsTestCase(AgentTestCase):
@@ -171,7 +172,7 @@ class MountCgroupsTestCase(AgentTestCase):
     def _get_mount_commands(mock):
         mount_commands = ''
         for call_args in mock.call_args_list:
-            args, kwargs = call_args
+            args, kwargs = call_args # pylint: disable=unused-variable
             mount_commands += ';' + args[0]
         return mount_commands
 
@@ -260,7 +261,7 @@ class MountCgroupsTestCase(AgentTestCase):
                 self.assertRegex(mount_commands, ';mount.* cpu,cpuacct ', 'The cpu controller was not mounted')
 
                 # A warning should have been logged for the memory controller
-                args, kwargs = mock_logger_warn.call_args
+                args, kwargs = mock_logger_warn.call_args # pylint: disable=unused-variable
                 self.assertIn('A test exception mounting the memory controller', args)
 
     def test_mount_cgroups_should_raise_when_the_cgroups_filesystem_fails_to_mount(self):
@@ -313,7 +314,7 @@ class MountCgroupsTestCase(AgentTestCase):
             with patch("azurelinuxagent.common.osutil.default.os.symlink") as patch_symlink:
                 FileSystemCgroupsApi.mount_cgroups()
 
-                self.assertEquals(patch_symlink.call_count, 0, 'A symbolic link should not have been created')
+                self.assertEqual(patch_symlink.call_count, 0, 'A symbolic link should not have been created')
 
 
 class FileSystemCgroupsApiTestCase(_MockedFileSystemTestCase):
@@ -346,7 +347,7 @@ class FileSystemCgroupsApiTestCase(_MockedFileSystemTestCase):
         self.assertFalse(os.path.exists(legacy_memory_cgroup))
 
         # Assert the event parameters that were sent out
-        self.assertEquals(len(mock_add_event.call_args_list), 2)
+        self.assertEqual(len(mock_add_event.call_args_list), 2)
         self.assertTrue(all(kwargs['op'] == 'CGroupsCleanUp' for _, kwargs in mock_add_event.call_args_list))
         self.assertTrue(all(kwargs['is_success'] for _, kwargs in mock_add_event.call_args_list))
         self.assertTrue(any(
@@ -414,7 +415,7 @@ class FileSystemCgroupsApiTestCase(_MockedFileSystemTestCase):
             with patch("azurelinuxagent.common.cgroupapi.os.rmdir", side_effect=OSError(16, "Device or resource busy")):
                 api.remove_extension_cgroups("Microsoft.Compute.TestExtension-1.2.3")
 
-            args, kwargs = mock_logger_warn.call_args
+            args, kwargs = mock_logger_warn.call_args # pylint: disable=unused-variable
             message = args[0]
             self.assertIn("still has active tasks", message)
 
@@ -431,7 +432,7 @@ class FileSystemCgroupsApiTestCase(_MockedFileSystemTestCase):
             self.assertTrue(any(retrieved_cgroup.path == cgroup.path for retrieved_cgroup in retrieved))
 
     @patch('time.sleep', side_effect=lambda _: mock_sleep())
-    def test_start_extension_command_should_add_the_child_process_to_the_extension_cgroup(self, _):
+    def test_start_extension_command_should_add_the_child_process_to_the_extension_cgroup(self, _): # pylint: disable=too-many-locals
         api = FileSystemCgroupsApi()
         api.create_extension_cgroups_root()
 
@@ -449,20 +450,20 @@ class FileSystemCgroupsApiTestCase(_MockedFileSystemTestCase):
 
         # The expected format of the process output is [stdout]\n{PID}\n\n\n[stderr]\n"
         pattern = re.compile(r"\[stdout\]\n(\d+)\n\n\n\[stderr\]\n")
-        m = pattern.match(process_output)
+        m = pattern.match(process_output) # pylint: disable=invalid-name
 
         try:
             pid_from_output = int(m.group(1))
-        except Exception as e:
+        except Exception as e: # pylint: disable=invalid-name
             self.fail("No PID could be extracted from the process output! Error: {0}".format(ustr(e)))
 
         for cgroup in extension_cgroups:
             cgroups_procs_path = os.path.join(cgroup.path, "cgroup.procs")
-            with open(cgroups_procs_path, "r") as f:
+            with open(cgroups_procs_path, "r") as f: # pylint: disable=invalid-name
                 contents = f.read()
             pid_from_cgroup = int(contents)
 
-            self.assertEquals(pid_from_output, pid_from_cgroup,
+            self.assertEqual(pid_from_output, pid_from_cgroup,
                               "The PID from the process output ({0}) does not match the PID found in the"
                               "process cgroup {1} ({2})".format(pid_from_output, cgroups_procs_path, pid_from_cgroup))
 
@@ -472,26 +473,26 @@ class SystemdCgroupsApiTestCase(AgentTestCase):
     def test_get_systemd_version_should_return_a_version_number(self):
         with mock_cgroup_commands():
             version_info = SystemdCgroupsApi.get_systemd_version()
-            found = re.search("systemd \d+", version_info) is not None
+            found = re.search(r"systemd \d+", version_info) is not None
             self.assertTrue(found, "Could not determine the systemd version: {0}".format(version_info))
 
     def test_get_cpu_and_memory_mount_points_should_return_the_cgroup_mount_points(self):
         with mock_cgroup_commands():
             cpu, memory = SystemdCgroupsApi().get_cgroup_mount_points()
-            self.assertEquals(cpu, '/sys/fs/cgroup/cpu,cpuacct', "The mount point for the CPU controller is incorrect")
-            self.assertEquals(memory, '/sys/fs/cgroup/memory', "The mount point for the memory controller is incorrect")
+            self.assertEqual(cpu, '/sys/fs/cgroup/cpu,cpuacct', "The mount point for the CPU controller is incorrect")
+            self.assertEqual(memory, '/sys/fs/cgroup/memory', "The mount point for the memory controller is incorrect")
 
     def test_get_cpu_and_memory_cgroup_relative_paths_for_process_should_return_the_cgroup_relative_paths(self):
         with mock_cgroup_commands():
             cpu, memory = SystemdCgroupsApi.get_process_cgroup_relative_paths('self')
-            self.assertEquals(cpu, "system.slice/walinuxagent.service", "The relative path for the CPU cgroup is incorrect")
-            self.assertEquals(memory, "system.slice/walinuxagent.service", "The relative memory for the CPU cgroup is incorrect")
+            self.assertEqual(cpu, "system.slice/walinuxagent.service", "The relative path for the CPU cgroup is incorrect")
+            self.assertEqual(memory, "system.slice/walinuxagent.service", "The relative memory for the CPU cgroup is incorrect")
 
     def test_get_cgroup2_controllers_should_return_the_v2_cgroup_controllers(self):
         with mock_cgroup_commands():
             mount_point, controllers = SystemdCgroupsApi.get_cgroup2_controllers()
 
-            self.assertEquals(mount_point, "/sys/fs/cgroup/unified", "Invalid mount point for V2 cgroups")
+            self.assertEqual(mount_point, "/sys/fs/cgroup/unified", "Invalid mount point for V2 cgroups")
             self.assertIn("cpu", controllers, "The CPU controller is not in the list of V2 controllers")
             self.assertIn("memory", controllers, "The memory controller is not in the list of V2 controllers")
 
@@ -499,15 +500,15 @@ class SystemdCgroupsApiTestCase(AgentTestCase):
         with mock_cgroup_commands():
             cpu_accounting = SystemdCgroupsApi.get_unit_property("walinuxagent.service", "CPUAccounting")
 
-            self.assertEquals(cpu_accounting, "no", "Property {0} of {1} is incorrect".format("CPUAccounting", "walinuxagent.service"))
+            self.assertEqual(cpu_accounting, "no", "Property {0} of {1} is incorrect".format("CPUAccounting", "walinuxagent.service"))
 
     def test_get_extensions_slice_root_name_should_return_the_root_slice_for_extensions(self):
-        root_slice_name = SystemdCgroupsApi()._get_extensions_slice_root_name()
+        root_slice_name = SystemdCgroupsApi()._get_extensions_slice_root_name() # pylint: disable=protected-access
         self.assertEqual(root_slice_name, "system-walinuxagent.extensions.slice")
 
     def test_get_extension_slice_name_should_return_the_slice_for_the_given_extension(self):
         extension_name = "Microsoft.Azure.DummyExtension-1.0"
-        extension_slice_name = SystemdCgroupsApi()._get_extension_slice_name(extension_name)
+        extension_slice_name = SystemdCgroupsApi()._get_extension_slice_name(extension_name) # pylint: disable=protected-access
         self.assertEqual(extension_slice_name, "system-walinuxagent.extensions-Microsoft.Azure.DummyExtension_1.0.slice")
 
     @attr('requires_sudo')
@@ -516,7 +517,7 @@ class SystemdCgroupsApiTestCase(AgentTestCase):
 
         SystemdCgroupsApi().create_extension_cgroups_root()
 
-        unit_name = SystemdCgroupsApi()._get_extensions_slice_root_name()
+        unit_name = SystemdCgroupsApi()._get_extensions_slice_root_name() # pylint: disable=protected-access
         _, status = shellutil.run_get_output("systemctl status {0}".format(unit_name))
         self.assertIn("Loaded: loaded", status)
         self.assertIn("Active: active", status)
@@ -536,7 +537,7 @@ class SystemdCgroupsApiTestCase(AgentTestCase):
             daemon_present = any("waagent -daemon" in command for (pid, command) in processes)
             self.assertTrue(daemon_present, "Could not find the daemon in the cgroup: [{0}]".format(processes))
 
-            extension_handler_present = any(re.search("(WALinuxAgent-.+\.egg|waagent) -run-exthandlers", command) for (pid, command) in processes)
+            extension_handler_present = any(re.search(r"(WALinuxAgent-.+\.egg|waagent) -run-exthandlers", command) for (pid, command) in processes)
             self.assertTrue(extension_handler_present, "Could not find the extension handler in the cgroup: [{0}]".format(processes))
 
     @attr('requires_sudo')
@@ -549,7 +550,7 @@ class SystemdCgroupsApiTestCase(AgentTestCase):
         self.assertEqual(cpu_cgroup.path, "/sys/fs/cgroup/cpu/system.slice/Microsoft.Azure.DummyExtension_1.0")
         self.assertEqual(memory_cgroup.path, "/sys/fs/cgroup/memory/system.slice/Microsoft.Azure.DummyExtension_1.0")
 
-        unit_name = SystemdCgroupsApi()._get_extension_slice_name(extension_name)
+        unit_name = SystemdCgroupsApi()._get_extension_slice_name(extension_name) # pylint: disable=protected-access
         self.assertEqual("system-walinuxagent.extensions-Microsoft.Azure.DummyExtension_1.0.slice", unit_name)
 
         _, status = shellutil.run_get_output("systemctl status {0}".format(unit_name))
@@ -591,9 +592,9 @@ class SystemdCgroupsApiTestCase(AgentTestCase):
                 command = "echo TEST_OUTPUT"
             return original_popen(command, *args, **kwargs)
 
-        with mock_cgroup_commands() as mock_commands:
+        with mock_cgroup_commands() as mock_commands: # pylint: disable=unused-variable
             with tempfile.TemporaryFile(dir=self.tmp_dir, mode="w+b") as output_file:
-                with patch("azurelinuxagent.common.cgroupapi.subprocess.Popen", side_effect=mock_popen) as popen_patch:
+                with patch("azurelinuxagent.common.cgroupapi.subprocess.Popen", side_effect=mock_popen) as popen_patch: # pylint: disable=unused-variable
                     command_output = SystemdCgroupsApi().start_extension_command(
                         extension_name="Microsoft.Compute.TestExtension-1.2.3",
                         command="A_TEST_COMMAND",
@@ -619,7 +620,7 @@ class SystemdCgroupsApiTestCase(AgentTestCase):
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE)
 
-            tracked = CGroupsTelemetry._tracked
+            tracked = CGroupsTelemetry._tracked # pylint: disable=protected-access
 
             self.assertTrue(
                 any(cg for cg in tracked if cg.name == 'Microsoft.Compute.TestExtension-1.2.3' and 'cpu' in cg.path),
@@ -644,7 +645,7 @@ class SystemdCgroupsApiTestCase(AgentTestCase):
 
                 extension_calls = [args[0] for (args, _) in popen_patch.call_args_list if "the-test-extension-command" in args[0]]
 
-                self.assertEquals(1, len(extension_calls), "The extension should have been invoked exactly once")
+                self.assertEqual(1, len(extension_calls), "The extension should have been invoked exactly once")
                 self.assertIn("systemd-run --unit=Microsoft.Compute.TestExtension_1.2.3", extension_calls[0], "The extension should have been invoked using systemd")
 
     @patch('time.sleep', side_effect=lambda _: mock_sleep())
@@ -679,18 +680,18 @@ class SystemdCgroupsApiTestCase(AgentTestCase):
                                   kwargs['message'])
                     self.assertIn("Failed to find executable syntax_error: No such file or directory",
                                   kwargs['message'])
-                    self.assertEquals(False, kwargs['is_success'])
-                    self.assertEquals('InvokeCommandUsingSystemd', kwargs['op'])
+                    self.assertEqual(False, kwargs['is_success'])
+                    self.assertEqual('InvokeCommandUsingSystemd', kwargs['op'])
 
                     extension_calls = [args[0] for (args, _) in popen_patch.call_args_list if command in args[0]]
 
-                    self.assertEquals(2, len(extension_calls), "The extension should have been invoked exactly twice")
+                    self.assertEqual(2, len(extension_calls), "The extension should have been invoked exactly twice")
                     self.assertIn("systemd-run --unit=Microsoft.Compute.TestExtension_1.2.3", extension_calls[0],
                                   "The first call to the extension should have used systemd")
-                    self.assertEquals(command, extension_calls[1],
+                    self.assertEqual(command, extension_calls[1],
                                       "The second call to the extension should not have used systemd")
 
-                    self.assertEquals(len(CGroupsTelemetry._tracked), 0, "No cgroups should have been created")
+                    self.assertEqual(len(CGroupsTelemetry._tracked), 0, "No cgroups should have been created") # pylint: disable=protected-access
 
                     self.assertIn("TEST_OUTPUT\n", command_output, "The test output was not captured")
 
@@ -728,11 +729,11 @@ class SystemdCgroupsApiTestCase(AgentTestCase):
 
                     extension_calls = [args[0] for (args, _) in popen_patch.call_args_list if "echo 'success'" in args[0]]
 
-                    self.assertEquals(2, len(extension_calls), "The extension should have been invoked exactly twice")
+                    self.assertEqual(2, len(extension_calls), "The extension should have been invoked exactly twice")
                     self.assertIn("systemd-run --unit=Microsoft.Compute.TestExtension_1.2.3", extension_calls[0], "The first call to the extension should have used systemd")
-                    self.assertEquals("echo 'success'", extension_calls[1], "The second call to the extension should not have used systemd")
+                    self.assertEqual("echo 'success'", extension_calls[1], "The second call to the extension should not have used systemd")
 
-                    self.assertEquals(len(CGroupsTelemetry._tracked), 0, "No cgroups should have been created")
+                    self.assertEqual(len(CGroupsTelemetry._tracked), 0, "No cgroups should have been created") # pylint: disable=protected-access
 
     @attr('requires_sudo')
     @patch("azurelinuxagent.common.cgroupapi.add_event")
@@ -757,11 +758,11 @@ class SystemdCgroupsApiTestCase(AgentTestCase):
 
                     extension_calls = [args[0] for (args, _) in popen_patch.call_args_list if command in args[0]]
 
-                    self.assertEquals(1, len(extension_calls), "The extension should have been invoked exactly once")
+                    self.assertEqual(1, len(extension_calls), "The extension should have been invoked exactly once")
                     self.assertIn("systemd-run --unit=Microsoft.Compute.TestExtension_1.2.3", extension_calls[0],
                                   "The first call to the extension should have used systemd")
 
-                    self.assertEquals(context_manager.exception.code, ExtensionErrorCodes.PluginUnknownFailure)
+                    self.assertEqual(context_manager.exception.code, ExtensionErrorCodes.PluginUnknownFailure)
                     self.assertIn("Non-zero exit code", ustr(context_manager.exception))
                     # The scope name should appear in the process output since systemd-run was invoked and stderr
                     # wasn't truncated.
@@ -793,11 +794,11 @@ class SystemdCgroupsApiTestCase(AgentTestCase):
 
                     extension_calls = [args[0] for (args, _) in popen_patch.call_args_list if long_stdout_stderr_command in args[0]]
 
-                    self.assertEquals(1, len(extension_calls), "The extension should have been invoked exactly once")
+                    self.assertEqual(1, len(extension_calls), "The extension should have been invoked exactly once")
                     self.assertIn("systemd-run --unit=Microsoft.Compute.TestExtension_1.2.3", extension_calls[0],
                                   "The first call to the extension should have used systemd")
 
-                    self.assertEquals(context_manager.exception.code, ExtensionErrorCodes.PluginUnknownFailure)
+                    self.assertEqual(context_manager.exception.code, ExtensionErrorCodes.PluginUnknownFailure)
                     self.assertIn("Non-zero exit code", ustr(context_manager.exception))
                     # stdout and stderr should have been truncated, so the scope name doesn't appear in stderr
                     # even though systemd-run ran
@@ -805,7 +806,7 @@ class SystemdCgroupsApiTestCase(AgentTestCase):
 
     @attr('requires_sudo')
     @patch("azurelinuxagent.common.cgroupapi.add_event")
-    def test_start_extension_command_should_not_use_fallback_option_if_extension_times_out(self, *args):
+    def test_start_extension_command_should_not_use_fallback_option_if_extension_times_out(self, *args): # pylint: disable=unused-argument
         self.assertTrue(i_am_root(), "Test does not run when non-root")
 
         with tempfile.TemporaryFile(dir=self.tmp_dir, mode="w+b") as stdout:
@@ -825,7 +826,7 @@ class SystemdCgroupsApiTestCase(AgentTestCase):
                                 stdout=stdout,
                                 stderr=stderr)
 
-                        self.assertEquals(context_manager.exception.code,
+                        self.assertEqual(context_manager.exception.code,
                                           ExtensionErrorCodes.PluginHandlerScriptTimedout)
                         self.assertIn("Timeout", ustr(context_manager.exception))
 
@@ -856,7 +857,7 @@ class SystemdCgroupsApiTestCase(AgentTestCase):
                             stdout=stdout,
                             stderr=stderr)
 
-                        self.assertEquals(expected_output.format("very specific test message"), process_output)
+                        self.assertEqual(expected_output.format("very specific test message"), process_output)
 
 
 class SystemdCgroupsApiMockedFileSystemTestCase(_MockedFileSystemTestCase):
@@ -869,10 +870,10 @@ class SystemdCgroupsApiMockedFileSystemTestCase(_MockedFileSystemTestCase):
         legacy_cpu_cgroup = CGroupsTools.create_legacy_agent_cgroup(self.cgroups_file_system_root, "cpu", '')
         legacy_memory_cgroup = CGroupsTools.create_legacy_agent_cgroup(self.cgroups_file_system_root, "memory", '')
 
-        with patch("azurelinuxagent.common.cgroupapi.add_event") as mock_add_event:
+        with patch("azurelinuxagent.common.cgroupapi.add_event") as mock_add_event: # pylint: disable=unused-variable
             with patch("azurelinuxagent.common.cgroupapi.get_agent_pid_file_path", return_value=daemon_pid_file):
                 legacy_cgroups = SystemdCgroupsApi().cleanup_legacy_cgroups()
 
-        self.assertEquals(legacy_cgroups, 2, "cleanup_legacy_cgroups() did not find all the expected cgroups")
+        self.assertEqual(legacy_cgroups, 2, "cleanup_legacy_cgroups() did not find all the expected cgroups")
         self.assertFalse(os.path.exists(legacy_cpu_cgroup), "cleanup_legacy_cgroups() did not remove the CPU legacy cgroup")
         self.assertFalse(os.path.exists(legacy_memory_cgroup), "cleanup_legacy_cgroups() did not remove the memory legacy cgroup")

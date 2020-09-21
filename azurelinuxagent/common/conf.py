@@ -19,11 +19,11 @@
 
 """
 Module conf loads and parses configuration file
-"""
+""" # pylint: disable=W0105
 import os
 import os.path
 
-import azurelinuxagent.common.utils.fileutil as fileutil
+from azurelinuxagent.common.utils.fileutil import read_file #pylint: disable=R0401
 from azurelinuxagent.common.exception import AgentConfigError
 
 DISABLE_AGENT_FILE = 'disable_agent'
@@ -55,7 +55,7 @@ class ConfigurationProvider(object):
 
     def get_switch(self, key, default_val):
         val = self.values.get(key)
-        if val is not None and val.lower() == 'y':
+        if val is not None and val.lower() == 'y': # pylint: disable=R1705
             return True
         elif val is not None and val.lower() == 'n':
             return False
@@ -77,11 +77,11 @@ def load_conf_from_file(conf_file_path, conf=__conf__):
     """
     Load conf file from: conf_file_path
     """
-    if os.path.isfile(conf_file_path) == False:
+    if os.path.isfile(conf_file_path) == False: # pylint: disable=C0121
         raise AgentConfigError(("Missing configuration in {0}"
                                 "").format(conf_file_path))
     try:
-        content = fileutil.read_file(conf_file_path)
+        content = read_file(conf_file_path)
         conf.load(content)
     except IOError as err:
         raise AgentConfigError(("Failed to load conf file:{0}, {1}"
@@ -97,6 +97,7 @@ __SWITCH_OPTIONS__ = {
     "OS.CheckRdmaDriver": False,
     "Logs.Verbose": False,
     "Logs.Console": True,
+    "Logs.Collect": False,
     "Extensions.Enabled": True,
     "Provisioning.AllowResetSysUser": False,
     "Provisioning.RegenerateSshHostKeyPair": False,
@@ -149,7 +150,8 @@ __INTEGER_OPTIONS__ = {
     "Provisioning.PasswordCryptSaltLength": 10,
     "HttpProxy.Port": None,
     "ResourceDisk.SwapSizeMB": 0,
-    "Autoupdate.Frequency": 3600
+    "Autoupdate.Frequency": 3600,
+    "Logs.CollectPeriod": 3600
 }
 
 
@@ -223,6 +225,14 @@ def get_logs_console(conf=__conf__):
     return conf.get_switch("Logs.Console", True)
 
 
+def get_collect_logs(conf=__conf__):
+    return conf.get_switch("Logs.Collect", False)
+
+
+def get_collect_logs_period(conf=__conf__):
+    return conf.get_int("Logs.CollectPeriod", 3600)
+
+
 def get_lib_dir(conf=__conf__):
     return conf.get("Lib.Dir", "/var/lib/waagent")
 
@@ -285,12 +295,12 @@ def get_ssh_key_glob(conf=__conf__):
 
 def get_ssh_key_private_path(conf=__conf__):
     return os.path.join(get_ssh_dir(conf),
-        'ssh_host_{0}_key'.format(get_ssh_host_keypair_type(conf)))
+        'ssh_host_{0}_key'.format(get_ssh_host_keypair_type(conf))) 
 
 
 def get_ssh_key_public_path(conf=__conf__):
     return os.path.join(get_ssh_dir(conf),
-        'ssh_host_{0}_key.pub'.format(get_ssh_host_keypair_type(conf)))
+        'ssh_host_{0}_key.pub'.format(get_ssh_host_keypair_type(conf))) 
 
 
 def get_root_device_scsi_timeout(conf=__conf__):
@@ -376,8 +386,10 @@ def get_password_crypt_salt_len(conf=__conf__):
 def get_monitor_hostname(conf=__conf__):
     return conf.get_switch("Provisioning.MonitorHostName", False)
 
+
 def get_monitor_hostname_period(conf=__conf__):
     return conf.get_int("Provisioning.MonitorHostNamePeriod", 30)
+
 
 def get_httpproxy_host(conf=__conf__):
     return conf.get("HttpProxy.Host", None)
@@ -397,9 +409,11 @@ def get_resourcedisk_format(conf=__conf__):
 
 def get_resourcedisk_enable_swap(conf=__conf__):
     return conf.get_switch("ResourceDisk.EnableSwap", False)
-    
+
+
 def get_resourcedisk_enable_swap_encryption(conf=__conf__):
     return conf.get_switch("ResourceDisk.EnableSwapEncryption", False)
+
 
 def get_resourcedisk_mountpoint(conf=__conf__):
     return conf.get("ResourceDisk.MountPoint", "/mnt/resource")
@@ -447,4 +461,4 @@ def get_cgroups_enforce_limits(conf=__conf__):
 
 def get_cgroups_excluded(conf=__conf__):
     excluded_value = conf.get("CGroups.Excluded", "customscript, runcommand")
-    return [s for s in [i.strip().lower() for i in excluded_value.split(',')] if len(s) > 0] if excluded_value else []
+    return [s for s in [i.strip().lower() for i in excluded_value.split(',')] if len(s) > 0] if excluded_value else [] # pylint: disable=len-as-condition

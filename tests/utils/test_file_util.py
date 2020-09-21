@@ -15,7 +15,7 @@
 # Requires Python 2.6+ and Openssl 1.0+
 #
 
-import errno as errno
+import errno as errno # pylint: disable=useless-import-alias
 import glob
 import random
 import string
@@ -39,10 +39,10 @@ class TestFileOperations(AgentTestCase):
         fileutil.write_file(test_file, content)
 
         content_read = fileutil.read_file(test_file)
-        self.assertEquals(content, content_read)
+        self.assertEqual(content, content_read)
         os.remove(test_file)
 
-    def test_write_file_content_is_None(self):
+    def test_write_file_content_is_None(self): # pylint: disable=invalid-name
         """
         write_file throws when content is None. No file is created.
         """
@@ -51,8 +51,8 @@ class TestFileOperations(AgentTestCase):
             fileutil.write_file(test_file, None)
 
             self.fail("expected write_file to throw an exception")
-        except:
-            self.assertEquals(False, os.path.exists(test_file))
+        except: # pylint: disable=bare-except
+            self.assertEqual(False, os.path.exists(test_file))
 
     def test_rw_utf8_file(self):
         test_file=os.path.join(self.tmp_dir, self.test_file)
@@ -60,7 +60,7 @@ class TestFileOperations(AgentTestCase):
         fileutil.write_file(test_file, content, encoding="utf-8")
 
         content_read = fileutil.read_file(test_file)
-        self.assertEquals(content, content_read)
+        self.assertEqual(content, content_read)
         os.remove(test_file)
 
     def test_remove_bom(self):
@@ -68,7 +68,7 @@ class TestFileOperations(AgentTestCase):
         data = b'\xef\xbb\xbfhehe'
         fileutil.write_file(test_file, data, asbin=True)
         data = fileutil.read_file(test_file, remove_bom=True)
-        self.assertNotEquals(0xbb, ord(data[0]))
+        self.assertNotEqual(0xbb, ord(data[0]))
    
     def test_append_file(self):
         test_file=os.path.join(self.tmp_dir, self.test_file)
@@ -76,13 +76,13 @@ class TestFileOperations(AgentTestCase):
         fileutil.append_file(test_file, content)
 
         content_read = fileutil.read_file(test_file)
-        self.assertEquals(content, content_read)
+        self.assertEqual(content, content_read)
 
         os.remove(test_file)
 
     def test_findre_in_file(self):
-        fp = tempfile.mktemp()
-        with open(fp, 'w') as f:
+        fp = tempfile.mktemp() # pylint: disable=invalid-name
+        with open(fp, 'w') as f: # pylint: disable=invalid-name
             f.write(
 '''
 First line
@@ -91,25 +91,25 @@ Third line with more words
 '''
             )
 
-        self.assertNotEquals(
+        self.assertNotEqual(
             None,
             fileutil.findre_in_file(fp, ".*rst line$"))
-        self.assertNotEquals(
+        self.assertNotEqual(
             None,
             fileutil.findre_in_file(fp, ".*ond line$"))
-        self.assertNotEquals(
+        self.assertNotEqual(
             None,
             fileutil.findre_in_file(fp, ".*with more.*"))
-        self.assertNotEquals(
+        self.assertNotEqual(
             None,
             fileutil.findre_in_file(fp, "^Third.*"))
-        self.assertEquals(
+        self.assertEqual(
             None,
             fileutil.findre_in_file(fp, "^Do not match.*"))
 
     def test_findstr_in_file(self):
-        fp = tempfile.mktemp()
-        with open(fp, 'w') as f:
+        fp = tempfile.mktemp() # pylint: disable=invalid-name
+        with open(fp, 'w') as f: # pylint: disable=invalid-name
             f.write(
 '''
 First line
@@ -127,11 +127,11 @@ Third line with more words
     def test_get_last_path_element(self):
         filepath = '/tmp/abc.def'
         filename = fileutil.base_name(filepath)
-        self.assertEquals('abc.def', filename)
+        self.assertEqual('abc.def', filename)
 
         filepath = '/tmp/abc'
         filename = fileutil.base_name(filepath)
-        self.assertEquals('abc', filename)
+        self.assertEqual('abc', filename)
 
     def test_remove_files(self):
         random_word = lambda : ''.join(random.choice(string.ascii_uppercase + string.digits) for _ in range(5))
@@ -141,7 +141,7 @@ Third line with more words
         test_file2 = os.path.join(self.tmp_dir, 'another_file')
         test_files = [test_file + random_word() for _ in range(5)] + \
                      [test_file2 + random_word() for _ in range(5)]
-        for file in test_files:
+        for file in test_files: # pylint: disable=redefined-builtin
             open(file, 'a').close()
 
         #Remove files using fileutil.rm_files
@@ -154,22 +154,22 @@ Third line with more words
 
     def test_remove_dirs(self):
         dirs = []
-        for n in range(0,5):
+        for n in range(0,5): # pylint: disable=invalid-name
             dirs.append(tempfile.mkdtemp())
-        for d in dirs:
-            for n in range(0, random.choice(range(0,10))):
+        for d in dirs: # pylint: disable=invalid-name
+            for n in range(0, random.choice(range(0,10))): # pylint: disable=invalid-name
                 fileutil.write_file(os.path.join(d, "test"+str(n)), "content")
-            for n in range(0, random.choice(range(0,10))):
-                dd = os.path.join(d, "testd"+str(n))
+            for n in range(0, random.choice(range(0,10))): # pylint: disable=invalid-name
+                dd = os.path.join(d, "testd"+str(n)) # pylint: disable=invalid-name
                 os.mkdir(dd)
-                for nn in range(0, random.choice(range(0,10))):
+                for nn in range(0, random.choice(range(0,10))): # pylint: disable=invalid-name
                     os.symlink(dd, os.path.join(dd, "sym"+str(nn)))
-            for n in range(0, random.choice(range(0,10))):
+            for n in range(0, random.choice(range(0,10))): # pylint: disable=invalid-name
                 os.symlink(d, os.path.join(d, "sym"+str(n)))
 
         fileutil.rm_dirs(*dirs)
 
-        for d in dirs:
+        for d in dirs: # pylint: disable=invalid-name
             self.assertEqual(len(os.listdir(d)), 0)
 
     def test_get_all_files(self):
@@ -188,7 +188,7 @@ Third line with more words
         expected_files.extend([test_file_in_subdir + random_word() for _ in range(5)] + \
                      [test_file_in_subdir2 + random_word() for _ in range(5)])
 
-        for file in expected_files:
+        for file in expected_files: # pylint: disable=redefined-builtin
             open(file, 'a').close()
 
         # Get All files using fileutil.get_all_files
@@ -258,7 +258,7 @@ DHCP_HOSTNAME=test\n"
                 patch_write.assert_called_once_with(path, updated_file)
 
     def test_clean_ioerror_ignores_missing(self):
-        e = IOError()
+        e = IOError() # pylint: disable=invalid-name
         e.errno = errno.ENOSPC
 
         # Send no paths
@@ -269,19 +269,19 @@ DHCP_HOSTNAME=test\n"
 
     def test_clean_ioerror_ignores_unless_ioerror(self):
         try:
-            d = tempfile.mkdtemp()
-            fd, f = tempfile.mkstemp()
+            d = tempfile.mkdtemp() # pylint: disable=invalid-name
+            fd, f = tempfile.mkstemp() # pylint: disable=invalid-name
             os.close(fd)
             fileutil.write_file(f, 'Not empty')
 
             # Send non-IOError exception
-            e = Exception()
+            e = Exception() # pylint: disable=invalid-name
             fileutil.clean_ioerror(e, paths=[d, f])
             self.assertTrue(os.path.isdir(d))
             self.assertTrue(os.path.isfile(f))
 
             # Send unrecognized IOError
-            e = IOError()
+            e = IOError() # pylint: disable=invalid-name
             e.errno = errno.EFAULT
             self.assertFalse(e.errno in fileutil.KNOWN_IOERRORS)
             fileutil.clean_ioerror(e, paths=[d, f])
@@ -293,23 +293,23 @@ DHCP_HOSTNAME=test\n"
             os.remove(f)
 
     def test_clean_ioerror_removes_files(self):
-        fd, f = tempfile.mkstemp()
+        fd, f = tempfile.mkstemp() # pylint: disable=invalid-name
         os.close(fd)
         fileutil.write_file(f, 'Not empty')
 
-        e = IOError()
+        e = IOError() # pylint: disable=invalid-name
         e.errno = errno.ENOSPC
         fileutil.clean_ioerror(e, paths=[f])
         self.assertFalse(os.path.isdir(f))
         self.assertFalse(os.path.isfile(f))
 
     def test_clean_ioerror_removes_directories(self):
-        d1 = tempfile.mkdtemp()
-        d2 = tempfile.mkdtemp()
-        for n in ['foo', 'bar']:
+        d1 = tempfile.mkdtemp() # pylint: disable=invalid-name
+        d2 = tempfile.mkdtemp() # pylint: disable=invalid-name
+        for n in ['foo', 'bar']: # pylint: disable=invalid-name
             fileutil.write_file(os.path.join(d2, n), 'Not empty')
 
-        e = IOError()
+        e = IOError() # pylint: disable=invalid-name
         e.errno = errno.ENOSPC
         fileutil.clean_ioerror(e, paths=[d1, d2])
         self.assertFalse(os.path.isdir(d1))
@@ -319,10 +319,10 @@ DHCP_HOSTNAME=test\n"
 
     def test_clean_ioerror_handles_a_range_of_errors(self):
         for err in fileutil.KNOWN_IOERRORS:
-            e = IOError()
+            e = IOError() # pylint: disable=invalid-name
             e.errno = err
 
-            d = tempfile.mkdtemp()
+            d = tempfile.mkdtemp() # pylint: disable=invalid-name
             fileutil.clean_ioerror(e, paths=[d])
             self.assertFalse(os.path.isdir(d))
             self.assertFalse(os.path.isfile(d))

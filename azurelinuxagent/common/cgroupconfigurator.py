@@ -35,7 +35,7 @@ class CGroupConfigurator(object):
 
     NOTE: with the exception of start_extension_command, none of the methods in this class raise exceptions (cgroup operations should not block extensions)
     """
-    class __impl(object):
+    class __impl(object): # pylint: disable=R0902,C0103
         def __init__(self):
             self._initialized = False
             self._cgroups_supported = False
@@ -46,7 +46,8 @@ class CGroupConfigurator(object):
             self._get_processes_in_agent_cgroup_last_error = None
             self._get_processes_in_agent_cgroup_error_count = 0
 
-        def initialize(self):
+        def initialize(self): # pylint: disable=R0912
+            # pylint: disable=too-many-locals
             try:
                 if self._initialized:
                     return
@@ -80,7 +81,7 @@ class CGroupConfigurator(object):
                     logger.warn(message)
                     add_event(op=WALAEventOperation.CGroupsInfo, message=message, is_success=False, log_event=False)
 
-                log_cgroup_info("systemd version: {0}", self._cgroups_api.get_systemd_version())
+                log_cgroup_info("systemd version: {0}", self._cgroups_api.get_systemd_version()) # pylint: disable=E1101
 
                 #
                 # Older versions of the daemon (2.2.31-2.2.40) wrote their PID to /sys/fs/cgroup/{cpu,memory}/WALinuxAgent/WALinuxAgent.  When running
@@ -95,7 +96,7 @@ class CGroupConfigurator(object):
                 #
                 # check v1 controllers
                 #
-                cpu_controller_root, memory_controller_root = self._cgroups_api.get_cgroup_mount_points()
+                cpu_controller_root, memory_controller_root = self._cgroups_api.get_cgroup_mount_points() # pylint: disable=E1101
 
                 if cpu_controller_root is not None:
                     logger.info("The CPU cgroup controller is mounted at {0}", cpu_controller_root)
@@ -110,25 +111,25 @@ class CGroupConfigurator(object):
                 #
                 # check v2 controllers
                 #
-                cgroup2_mountpoint, cgroup2_controllers = self._cgroups_api.get_cgroup2_controllers()
+                cgroup2_mountpoint, cgroup2_controllers = self._cgroups_api.get_cgroup2_controllers() # pylint: disable=E1101
                 if cgroup2_mountpoint is not None:
                     log_cgroup_warn("cgroups v2 mounted at {0}.  Controllers: [{1}]", cgroup2_mountpoint, cgroup2_controllers)
 
                 #
                 # check the cgroups for the agent
                 #
-                agent_unit_name = self._cgroups_api.get_agent_unit_name()
-                cpu_cgroup_relative_path, memory_cgroup_relative_path = self._cgroups_api.get_process_cgroup_relative_paths("self")
+                agent_unit_name = self._cgroups_api.get_agent_unit_name() # pylint: disable=E1101
+                cpu_cgroup_relative_path, memory_cgroup_relative_path = self._cgroups_api.get_process_cgroup_relative_paths("self") # pylint: disable=E1101
                 if cpu_cgroup_relative_path is None:
                     log_cgroup_warn("The agent's process is not within a CPU cgroup")
                 else:
-                    cpu_accounting = self._cgroups_api.get_unit_property(agent_unit_name, "CPUAccounting")
+                    cpu_accounting = self._cgroups_api.get_unit_property(agent_unit_name, "CPUAccounting") # pylint: disable=E1101
                     log_cgroup_info('CPUAccounting: {0}', cpu_accounting)
 
                 if memory_cgroup_relative_path is None:
                     log_cgroup_warn("The agent's process is not within a memory cgroup")
                 else:
-                    memory_accounting = self._cgroups_api.get_unit_property(agent_unit_name, "MemoryAccounting")
+                    memory_accounting = self._cgroups_api.get_unit_property(agent_unit_name, "MemoryAccounting") # pylint: disable=E1101
                     log_cgroup_info('MemoryAccounting: {0}', memory_accounting)
 
                 #
@@ -150,7 +151,7 @@ class CGroupConfigurator(object):
 
                 log_cgroup_info("Agent cgroups: CPU: {0} -- MEMORY: {1}", self._agent_cpu_cgroup_path, self._agent_memory_cgroup_path)
 
-            except Exception as e:
+            except Exception as e: # pylint: disable=C0103
                 message = "Error initializing cgroups: {0}".format(ustr(e))
                 logger.warn(message)
                 add_event(op=WALAEventOperation.CGroupsInitialize, is_success=False, message=message, log_event=False)
@@ -182,12 +183,12 @@ class CGroupConfigurator(object):
 
             try:
                 return operation()
-            except Exception as e:
+            except Exception as e: # pylint: disable=C0103
                 logger.warn("{0} Error: {1}".format(error_message, ustr(e)))
                 if on_error is not None:
                     try:
                         on_error(e)
-                    except Exception as ex:
+                    except Exception as ex: # pylint: disable=W0612
                         logger.warn("CGroupConfigurator._invoke_cgroup_operation: {0}".format(ustr(e)))
 
         def create_extension_cgroups_root(self):
@@ -213,8 +214,7 @@ class CGroupConfigurator(object):
             Deletes the cgroup for the given extension
             """
             def __impl():
-                cgroups = self._cgroups_api.remove_extension_cgroups(name)
-                return cgroups
+                self._cgroups_api.remove_extension_cgroups(name)
 
             self._invoke_cgroup_operation(__impl, "Failed to delete cgroups for extension '{0}'.".format(name))
 
@@ -227,7 +227,7 @@ class CGroupConfigurator(object):
             def __impl():
                 if self._agent_cpu_cgroup_path is None:
                     return []
-                return self._cgroups_api.get_processes_in_cgroup(self._agent_cpu_cgroup_path)
+                return self._cgroups_api.get_processes_in_cgroup(self._agent_cpu_cgroup_path) # pylint: disable=E1101
 
             def __on_error(exception):
                 #
@@ -242,7 +242,7 @@ class CGroupConfigurator(object):
 
             return self._invoke_cgroup_operation(__impl, "Failed to list the processes in the agent's cgroup.", on_error=__on_error)
 
-        def start_extension_command(self, extension_name, command, timeout, shell, cwd, env, stdout, stderr,
+        def start_extension_command(self, extension_name, command, timeout, shell, cwd, env, stdout, stderr, # pylint: disable=R0913
                                     error_code=ExtensionErrorCodes.PluginUnknownFailure):
             """
             Starts a command (install/enable/etc) for an extension and adds the command's PID to the extension's cgroup
@@ -257,7 +257,7 @@ class CGroupConfigurator(object):
             :param error_code: Extension error code to raise in case of error
             """
             if not self.enabled():
-                process = subprocess.Popen(command,
+                process = subprocess.Popen(command, # pylint: disable=W1509
                                            shell=shell,
                                            cwd=cwd,
                                            env=env,
@@ -273,14 +273,14 @@ class CGroupConfigurator(object):
                                                            error_code=error_code)
             else:
                 process_output = self._cgroups_api.start_extension_command(extension_name,
-                                                                          command,
-                                                                          timeout,
-                                                                          shell=shell,
-                                                                          cwd=cwd,
-                                                                          env=env,
-                                                                          stdout=stdout,
-                                                                          stderr=stderr,
-                                                                          error_code=error_code)
+                                                                          command, 
+                                                                          timeout, 
+                                                                          shell=shell, 
+                                                                          cwd=cwd, 
+                                                                          env=env, 
+                                                                          stdout=stdout, 
+                                                                          stderr=stderr, 
+                                                                          error_code=error_code) 
 
             return process_output
 
@@ -326,7 +326,7 @@ class CGroupConfigurator(object):
             #
             r"^ifdown .+ && ifup .+",
         ]
-        for p in patterns:
+        for p in patterns: # pylint: disable=C0103
             if re.match(p, command_line) is not None:
                 return True
         return False

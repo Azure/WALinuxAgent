@@ -28,7 +28,7 @@ from tests.tools import patch, data_dir
 #
 # The output comes from an Ubuntu 18 system
 #
-_default_commands = [
+_default_commands = [ # pylint: disable=invalid-name
     (r"^systemctl --version$",
 '''systemd 237
 +PAM +AUDIT +SELINUX +IMA +APPARMOR +SMACK +SYSVINIT +UTMP +LIBCRYPTSETUP +GCRYPT +GNUTLS +ACL +XZ +LZ4 +SECCOMP +BLKID +ELFUTILS +KMOD -IDN2 +IDN -PCRE2 default-hierarchy=hybrid
@@ -48,9 +48,8 @@ cgroup on /sys/fs/cgroup/devices type cgroup (rw,nosuid,nodev,noexec,relatime,de
 cgroup on /sys/fs/cgroup/cpu,cpuacct type cgroup (rw,nosuid,nodev,noexec,relatime,cpu,cpuacct)
 cgroup on /sys/fs/cgroup/blkio type cgroup (rw,nosuid,nodev,noexec,relatime,blkio)
 '''),
-
     (r"^mount -t cgroup2$",
-'''cgroup on /sys/fs/cgroup/unified type cgroup2 (rw,nosuid,nodev,noexec,relatime)
+'''cgroup on /sys/fs/cgroup/unified type cgroup2 (rw,nosuid,nodev,noexec,relatime) 
 '''),
 
     (r"^systemctl show walinuxagent\.service --property CPUAccounting$",
@@ -62,7 +61,7 @@ cgroup on /sys/fs/cgroup/blkio type cgroup (rw,nosuid,nodev,noexec,relatime,blki
 '''),
 
     (r"^systemd-run --unit=([^\s]+) --scope ([^\s]+)",
-'''
+''' 
 Running scope as unit: TEST_UNIT.scope
 Thu 28 May 2020 07:25:55 AM PDT
 '''),
@@ -75,7 +74,7 @@ Directory /sys/fs/cgroup/cpu/system.slice/walinuxagent.service:
 '''),
 ]
 
-_default_files = [
+_default_files = [ # pylint: disable=invalid-name
     (r"^/proc/self/cgroup$", os.path.join(data_dir, 'cgroups', 'proc_self_cgroup')),
     (r"^/proc/[0-9]+/cgroup$", os.path.join(data_dir, 'cgroups', 'proc_pid_cgroup')),
     (r"^/sys/fs/cgroup/unified/cgroup.controllers$", os.path.join(data_dir, 'cgroups', 'sys_fs_cgroup_unified_cgroup.controllers')),
@@ -105,14 +104,14 @@ def mock_cgroup_commands():
         return original_popen(command, *args, **kwargs)
     
     def mock_read_file(filepath, **kwargs):
-        for file in patcher.files:
+        for file in patcher.files: # pylint: disable=redefined-builtin
             match = re.match(file[0], filepath)
             if match is not None:
                 filepath = file[1]
         return original_read_file(filepath, **kwargs)
 
     def mock_path_exists(path):
-        for file in patcher.files:
+        for file in patcher.files: # pylint: disable=redefined-builtin
             match = re.match(file[0], path)
             if match is not None:
                 return True
@@ -122,7 +121,7 @@ def mock_cgroup_commands():
         with patch("azurelinuxagent.common.cgroupapi.os.path.exists", side_effect=mock_path_exists):
             with patch("azurelinuxagent.common.cgroupapi.fileutil.read_file", side_effect=mock_read_file):
                 with patch('azurelinuxagent.common.cgroupapi.CGroupsApi.cgroups_supported', return_value=True):
-                    with patch('azurelinuxagent.common.cgroupapi.CGroupsApi._is_systemd', return_value=True):
+                    with patch('azurelinuxagent.common.cgroupapi.CGroupsApi.is_systemd', return_value=True):
                         patcher.commands = _default_commands[:]
                         patcher.files = _default_files[:]
                         patcher.add_command = add_command

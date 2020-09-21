@@ -22,26 +22,26 @@ matrix:
       env:
         - >-
           NOSEOPTS="--verbose --with-timer" SETUPOPTS=""
-          PYLINTOPTS="--rcfile=2.7.pylintrc"
-          PYLINTFILES="azurelinuxagent/daemon"
+          PYLINTOPTS="--rcfile=ci/2.7.pylintrc"
+          PYLINTFILES="azurelinuxagent setup.py makepkg.py tests"
     - python: 3.4
       env:
         - >-
           NOSEOPTS="--verbose --with-timer" SETUPOPTS=""
-          PYLINTOPTS="--rcfile=2.7.pylintrc"
-          PYLINTFILES="azurelinuxagent/daemon"
+          PYLINTOPTS="--rcfile=ci/2.7.pylintrc"
+          PYLINTFILES="azurelinuxagent setup.py makepkg.py tests"
     - python: 3.6
       env:
         - >-
           NOSEOPTS="--verbose --with-timer" SETUPOPTS=""
-          PYLINTOPTS="--rcfile=3.6.pylintrc"
-          PYLINTFILES="azurelinuxagent/daemon"
+          PYLINTOPTS="--rcfile=ci/3.6.pylintrc"
+          PYLINTFILES="azurelinuxagent setup.py makepkg.py tests"
     - python: 3.7
       env:
         - >-
           NOSEOPTS="--verbose --with-timer" SETUPOPTS=""
-          PYLINTOPTS="--rcfile=3.6.pylintrc"
-          PYLINTFILES="azurelinuxagent/daemon"
+          PYLINTOPTS="--rcfile=ci/3.6.pylintrc"
+          PYLINTFILES="azurelinuxagent setup.py makepkg.py tests"
     - python: 3.8
       env:
         - >-
@@ -49,17 +49,16 @@ matrix:
           --cover-min-percentage=60 --cover-branches
           --cover-package=azurelinuxagent --cover-xml"
           SETUPOPTS=""
-          PYLINTOPTS="--rcfile=3.6.pylintrc"
-          PYLINTFILES="azurelinuxagent/daemon"
+          PYLINTOPTS="--rcfile=ci/3.6.pylintrc"
+          PYLINTFILES="azurelinuxagent setup.py makepkg.py tests"
 
 install:
   - pip install -r requirements.txt
   - pip install -r test-requirements.txt
 
 script:
-  - if [[ $TRAVIS_PYTHON_VERSION != 2.6 ]]; then pylint $PYLINTOPTS $PYLINTFILES; fi
-  - nosetests $NOSEOPTS --attr '!requires_sudo' tests
-  - sudo env "PATH=$PATH" nosetests $NOSEOPTS --verbose --attr 'requires_sudo' tests
+  - if [[ $TRAVIS_PYTHON_VERSION != 2.6 ]]; then ./ci/pylint_and_nosetests.sh; fi
+  - if [[ $TRAVIS_PYTHON_VERSION == 2.6 ]]; then ./ci/nosetests_only.sh; fi
   - if [ ! -z "$SETUPOPTS" ]; then /usr/bin/env python setup.py $SETUPOPTS; fi
 
 after_success:

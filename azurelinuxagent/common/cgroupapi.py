@@ -41,6 +41,7 @@ CGROUP_CONTROLLERS = ["cpu", "memory"]
 VM_AGENT_CGROUP_NAME = "walinuxagent.service"
 EXTENSIONS_ROOT_CGROUP_NAME = "walinuxagent.extensions"
 UNIT_FILES_FILE_SYSTEM_PATH = "/etc/systemd/system"
+SYSTEMD_RUN_PATH = "/run/systemd/system/"
 
 
 class CGroupsApi(object):
@@ -59,7 +60,7 @@ class CGroupsApi(object):
     def get_extension_cgroups(self, extension_name):
         raise NotImplementedError()
 
-    def start_extension_command(self, extension_name, command, timeout, shell, cwd, env, stdout, stderr, error_code):
+    def start_extension_command(self, extension_name, command, timeout, shell, cwd, env, stdout, stderr, error_code): # pylint: disable=R0913
         raise NotImplementedError()
 
     def cleanup_legacy_cgroups(self):
@@ -80,7 +81,7 @@ class CGroupsApi(object):
         try:
             for cgroup in extension_cgroups:
                 CGroupsTelemetry.track_cgroup(cgroup)
-        except Exception as e:
+        except Exception as e: # pylint: disable=C0103
             logger.warn("Cannot add cgroup '{0}' to tracking list; resource usage will not be tracked. "
                         "Error: {1}".format(cgroup.path, ustr(e)))
 
@@ -94,15 +95,15 @@ class CGroupsApi(object):
         """
         Factory method to create the correct API for the current platform
         """
-        return SystemdCgroupsApi() if CGroupsApi._is_systemd() else FileSystemCgroupsApi()
+        return SystemdCgroupsApi() if CGroupsApi.is_systemd() else FileSystemCgroupsApi()
 
     @staticmethod
-    def _is_systemd():
+    def is_systemd():
         """
         Determine if systemd is managing system services; the implementation follows the same strategy as, for example,
         sd_booted() in libsystemd, or /usr/sbin/service
         """
-        return os.path.exists('/run/systemd/system/')
+        return os.path.exists(SYSTEMD_RUN_PATH)
 
     @staticmethod
     def _foreach_controller(operation, message):
@@ -119,7 +120,7 @@ class CGroupsApi(object):
                     logger.warn('Cgroup controller "{0}" is not mounted. {1}', controller, message)
                 else:
                     operation(controller)
-            except Exception as e:
+            except Exception as e: # pylint: disable=C0103
                 logger.warn('Error in cgroup controller "{0}": {1}. {2}', controller, ustr(e), message)
 
     @staticmethod
@@ -175,9 +176,9 @@ class FileSystemCgroupsApi(CGroupsApi):
         if not os.path.isdir(path):
             try:
                 os.makedirs(path, 0o755)
-            except OSError as e:
+            except OSError as e: # pylint: disable=C0103
                 if e.errno == errno.EEXIST:
-                    if not os.path.isdir(path):
+                    if not os.path.isdir(path): # pylint: disable=R1720
                         raise CGroupsException("Create directory for cgroup {0}: normal file already exists with that name".format(path))
                     else:
                         pass  # There was a race to create the directory, but it's there now, and that's fine
@@ -225,9 +226,9 @@ class FileSystemCgroupsApi(CGroupsApi):
             if not os.path.exists(path):
                 fileutil.mkdir(path)
                 osutil.mount(device='cgroup_root',
-                           mount_point=path,
-                           option="-t tmpfs",
-                           chk_err=False)
+                           mount_point=path, 
+                           option="-t tmpfs", 
+                           chk_err=False) 
             elif not os.path.isdir(cgroup_path()):
                 logger.error("Could not mount cgroups: ordinary file at {0}", path)
                 return
@@ -241,9 +242,9 @@ class FileSystemCgroupsApi(CGroupsApi):
                     if not os.path.exists(target_path):
                         fileutil.mkdir(target_path)
                         osutil.mount(device=controller,
-                                   mount_point=target_path,
-                                   option="-t cgroup -o {0}".format(controller),
-                                   chk_err=False)
+                                   mount_point=target_path, 
+                                   option="-t cgroup -o {0}".format(controller), 
+                                   chk_err=False) 
                         if controller == 'cpu,cpuacct':
                             cpu_mounted = True
                 except Exception as exception:
@@ -258,11 +259,11 @@ class FileSystemCgroupsApi(CGroupsApi):
                     if not os.path.exists(target_path):
                         os.symlink(cgroup_path('cpu,cpuacct'), target_path)
 
-        except OSError as oe:
+        except OSError as oe: # pylint: disable=C0103
             # log a warning for read-only file systems
             logger.warn("Could not mount cgroups: {0}", ustr(oe))
             raise
-        except Exception as e:
+        except Exception as e: # pylint: disable=C0103
             logger.error("Could not mount cgroups: {0}", ustr(e))
             raise
 
@@ -302,7 +303,7 @@ class FileSystemCgroupsApi(CGroupsApi):
 
         self._foreach_controller(create_cgroup, 'Failed to create a cgroup for the VM Agent; resource usage will not be tracked')
 
-        if len(cgroups) == 0:
+        if len(cgroups) == 0: # pylint: disable=len-as-condition
             raise CGroupsException("Failed to create any cgroup for the VM Agent")
 
         return cgroups
@@ -371,7 +372,7 @@ class FileSystemCgroupsApi(CGroupsApi):
 
         return cgroups
 
-    def start_extension_command(self, extension_name, command, timeout, shell, cwd, env, stdout, stderr,
+    def start_extension_command(self, extension_name, command, timeout, shell, cwd, env, stdout, stderr, # pylint: disable=R0913
                                 error_code=ExtensionErrorCodes.PluginUnknownFailure):
         """
         Starts a command (install/enable/etc) for an extension and adds the command's PID to the extension's cgroup
@@ -384,6 +385,7 @@ class FileSystemCgroupsApi(CGroupsApi):
         :param stderr: File object to redirect stderr to
         :param error_code: Extension error code to raise in case of error
         """
+        # pylint: disable=too-many-locals
         try:
             extension_cgroups = self.create_extension_cgroups(extension_name)
         except Exception as exception:
@@ -405,11 +407,11 @@ class FileSystemCgroupsApi(CGroupsApi):
                                     "Resource usage will not be tracked. Error: {2}".format(pid,
                                                                                             extension_name,
                                                                                             ustr(exception)))
-            except Exception as e:
+            except Exception as e: # pylint: disable=C0103
                 logger.warn("Failed to add extension {0} to its cgroup. Resource usage will not be tracked. "
                             "Error: {1}".format(extension_name, ustr(e)))
 
-        process = subprocess.Popen(command,
+        process = subprocess.Popen(command, # pylint: disable=W1509
                                    shell=shell,
                                    cwd=cwd,
                                    env=env,
@@ -542,7 +544,7 @@ class SystemdCgroupsApi(CGroupsApi):
         output = shellutil.run_command(["systemctl", "show", unit_name, "--property", property_name])
         match = re.match("[^=]+=(?P<value>.+)", output)
         if match is None:
-            raise ValueError("Can't find property {0} of {1}", property_name, unit_name)
+            raise ValueError("Can't find property {0} of {1}", property_name, unit_name) # pylint: disable=W0715
         return match.group('value')
 
     @staticmethod
@@ -552,7 +554,7 @@ class SystemdCgroupsApi(CGroupsApi):
             fileutil.write_file(unit_path, unit_contents)
             shellutil.run_command(["systemctl", "daemon-reload"])
             shellutil.run_command(["systemctl", "start", unit_filename])
-        except Exception as e:
+        except Exception as e: # pylint: disable=C0103
             raise CGroupsException("Failed to create and start {0}. Error: {1}".format(unit_filename, ustr(e)))
 
     @staticmethod
@@ -575,7 +577,7 @@ After=system.slice"""
         logger.info("Created slice for walinuxagent extensions {0}".format(unit_filename))
 
     def create_extension_cgroups(self, extension_name):
-        # TODO: The slice created by this function is not used currently. We need to create the extension scopes within
+        # TODO: The slice created by this function is not used currently. We need to create the extension scopes within # pylint: disable=W0511
         #  this slice and use the slice to monitor the cgroups. Also see comment in get_extension_cgroups.
         # the slice.
         unit_contents = """
@@ -605,11 +607,11 @@ After=system-{1}.slice""".format(extension_name, EXTENSIONS_ROOT_CGROUP_NAME)
             shellutil.run_command(["systemctl", "stop", unit_filename])
             fileutil.rm_files(unit_path)
             shellutil.run_command(["systemctl", "daemon-reload"])
-        except Exception as e:
+        except Exception as e: # pylint: disable=C0103
             raise CGroupsException("Failed to remove {0}. Error: {1}".format(unit_filename, ustr(e)))
 
     def get_extension_cgroups(self, extension_name):
-        # TODO: The slice returned by this function is not used currently. We need to create the extension scopes within
+        # TODO: The slice returned by this function is not used currently. We need to create the extension scopes within # pylint: disable=W0511
         #  this slice and use the slice to monitor the cgroups. Also see comment in create_extension_cgroups.
         slice_name = self._get_extension_cgroup_name(extension_name)
 
@@ -646,7 +648,7 @@ After=system-{1}.slice""".format(extension_name, EXTENSIONS_ROOT_CGROUP_NAME)
         processes = []
 
         for line in output.splitlines():
-            match = re.match('[^\d]*(?P<pid>\d+)\s+(?P<command>.+)', line)
+            match = re.match('[^\d]*(?P<pid>\d+)\s+(?P<command>.+)', line) # pylint: disable=W1401
             if match is not None:
                 processes.append((match.group('pid'), match.group('command')))
 
@@ -659,11 +661,11 @@ After=system-{1}.slice""".format(extension_name, EXTENSIONS_ROOT_CGROUP_NAME)
         unit_not_found = "Unit {0} not found.".format(scope_name)
         return unit_not_found in stderr or scope_name not in stderr
 
-    def start_extension_command(self, extension_name, command, timeout, shell, cwd, env, stdout, stderr,
+    def start_extension_command(self, extension_name, command, timeout, shell, cwd, env, stdout, stderr, # pylint: disable=R0913,R0914
                                 error_code=ExtensionErrorCodes.PluginUnknownFailure):
         scope = "{0}_{1}".format(self._get_extension_cgroup_name(extension_name), uuid.uuid4())
 
-        process = subprocess.Popen(
+        process = subprocess.Popen( # pylint: disable=W1509
             "systemd-run --unit={0} --scope {1}".format(scope, command),
             shell=shell,
             cwd=cwd,
@@ -694,11 +696,11 @@ After=system-{1}.slice""".format(extension_name, EXTENSIONS_ROOT_CGROUP_NAME)
                 memory_cgroup_path = os.path.join(memory_cgroup_mountpoint, cgroup_relative_path)
                 CGroupsTelemetry.track_cgroup(MemoryCgroup(extension_name, memory_cgroup_path))
 
-        except IOError as e:
+        except IOError as e: # pylint: disable=C0103
             if e.errno == 2:  # 'No such file or directory'
                 logger.info("The extension command already completed; will not track resource usage")
             logger.info("Failed to start tracking resource usage for the extension: {0}", ustr(e))
-        except Exception as e:
+        except Exception as e: # pylint: disable=C0103
             logger.info("Failed to start tracking resource usage for the extension: {0}", ustr(e))
 
         # Wait for process completion or timeout
@@ -709,19 +711,22 @@ After=system-{1}.slice""".format(extension_name, EXTENSIONS_ROOT_CGROUP_NAME)
                                                        stdout=stdout,
                                                        stderr=stderr,
                                                        error_code=error_code)
-        except ExtensionError as e:
+        except ExtensionError as e: # pylint: disable=C0103
             # The extension didn't terminate successfully. Determine whether it was due to systemd errors or
             # extension errors.
             systemd_failure = self._is_systemd_failure(scope, stderr)
             process_output = read_output(stdout, stderr)
 
-            if not systemd_failure:
+            if not systemd_failure: # pylint: disable=R1720
                 # There was an extension error; it either timed out or returned a non-zero exit code. Re-raise the error
                 raise
             else:
                 # There was an issue with systemd-run. We need to log it and retry the extension without systemd.
-                err_msg = 'Systemd process exited with code %s and output %s' % (e.exit_code, process_output) \
-                    if isinstance(e, ExtensionOperationError) else "Systemd timed-out, output: %s" % process_output
+                if isinstance(e, ExtensionOperationError):
+                    err_msg = 'Systemd process exited with code %s and output %s' % (e.exit_code, process_output) # pylint: disable=no-member
+                else:
+                    err_msg = "Systemd timed-out, output: %s" % process_output
+                    
                 event_msg = 'Failed to run systemd-run for unit {0}.scope. ' \
                             'Will retry invoking the extension without systemd. ' \
                             'Systemd-run error: {1}'.format(scope, err_msg)
@@ -735,7 +740,7 @@ After=system-{1}.slice""".format(extension_name, EXTENSIONS_ROOT_CGROUP_NAME)
                 # Try invoking the process again, this time without systemd-run
                 logger.info('Extension invocation using systemd failed, falling back to regular invocation '
                             'without cgroups tracking.')
-                process = subprocess.Popen(command,
+                process = subprocess.Popen(command, # pylint: disable=W1509
                                            shell=shell,
                                            cwd=cwd,
                                            env=env,

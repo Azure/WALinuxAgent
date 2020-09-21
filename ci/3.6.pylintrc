@@ -1,14 +1,11 @@
-# python 3.6+ uses the latest pylint version, whose docs can be found here: http://pylint.pycqa.org/en/latest/technical_reference/features.html
+# python 3.6+ uses the latest pylint version, whose docs can be found here: http://pylint.pycqa.org/en/stable/technical_reference/features.html
 
 # The source code suppresses the following errors in python3.6+:
 
-# anomalous-backslash-in-string<W1401>: (hi-pri) Used when a backslash is in a literal string but not as an escape.
-# arguments-differ<W0221>: (hi-pri) Used when a method has a different number of arguments than in the implemented interface or in an overridden method.
-# assignment-from-no-return<E1111>: (hi-pri) Used when an assignment is done on a function call but the inferred function doesn't return anything.
 # assignment-from-none<E1128>: (hi-pri) Used when an assignment is done on a function call but the inferred function returns nothing but None.
 # attribute-defined-outside-init<W0201>: (hi-pri) Used when an instance attribute is defined outside the __init__ method.
-# bad-continuation<C0330>: (needs review) **REMOVED in pylint-2.6.0**
 # bad-indentation<W0311>: (hi-pri) Used when an unexpected number of indentation's tabulations or spaces has been found.
+# bad-open-mode<W1501>: (hi-pri) Python supports: r, w, a[, x] modes with b, +, and U (only with r) options.
 # bad-super-call<E1003>: (hi-pri) Used when another argument than the current class is given as first argument of the super builtin.
 # bare-except<W0702>: (hi-pri) Used when an except clause doesn't specify exceptions type to catch.
 # cell-var-from-loop<W0640>: (hi-pri) A variable used in a closure is defined in a loop. This will result in all closures using the same value for the closed-over variable.
@@ -18,16 +15,20 @@
 # consider-using-in<R1714>: To check if a variable is equal to one of many values,combine the values into a tuple and check if the variable is contained "in" it instead of checking for equality against each of the values.
 # cyclic-import<R0401>: (hi-pri) Used when a cyclic import between two or more modules is detected.
 # dangerous-default-value<W0102>: (hi-pri) Used when a mutable value as list or dictionary is detected in a default value for an argument.
-# deprecated-method<W1505>: (hi-pri) The method is marked as deprecated and will be removed in a future version of Python
+# duplicate-code<R0801>: (hi-pri) Indicates that a set of similar lines has been detected among multiple file. (also disabled globally)
 # duplicate-string-formatting-argument<W1308>: (hi-pri) Used when we detect that a string formatting is repeating an argument instead of using named string arguments
+# expression-not-assigned<W0106>: (hi-pri) Used when an expression that is not a function call is assigned to nothing.
 # fixme<W0511>: Used when a warning note as FIXME or TODO is detected
+# function-redefined<E0102>: (hi-pri) Used when a function / class / method is redefined.
 # global-statement<W0603>: Used when you use the "global" statement to update a global variable.
 # implicit-str-concat<W1404>: (hi-pri) String literals are implicitly concatenated in a literal iterable definition : maybe a comma is missing ?
 # import-error<E0401>: (hi-pri) Used when pylint has been unable to import a module.
 # inconsistent-return-statements<R1710>: (hi-pri) if any return statement returns an expression, any return statements where no value is returned should explicitly state this as return None, and an explicit return statement should be present at the end of the function
 # invalid-name<C0103>: (needs review) Used when the name doesn't conform to naming rules associated to its type (constant, variable, class...).
+# keyword-arg-before-vararg<W1113>: (hi-pri) When defining a keyword argument before variable positional arguments, one can end up in having multiple values passed for the aforementioned parameter in case the method is called with keyword arguments.
 # len-as-condition<C1801>: (hi-pri) Used when Pylint detects that len(sequence) is being used without explicit comparison inside a condition to determine if a sequence is empty.
-# logging-format-interpolation<W1202>: (hi-pri) Used when a logging statement has a call form of "logging.<logging method>(format_string.format(format_args...))". Use another type of string formatting instead.
+# multiple-imports<C0410>: (hi-pri) Used when import statement importing multiple modules is detected.
+# lost-exception<W0150>: (needs review) Used when a break or a return statement is found inside the finally clause of a try...finally block: the exceptions raised in the try clause will be silently swallowed instead of being re-raised.
 # no-else-break<R1723>: (hi-pri) Used in order to highlight an unnecessary block of code following an if containing a break statement.
 # no-else-continue<R1724>: (hi-pri) Used in order to highlight an unnecessary block of code following an if containing a continue statement.
 # no-else-raise<R1720>: (hi-pri) Used in order to highlight an unnecessary block of code following an if containing a raise statement. 
@@ -39,6 +40,7 @@
 # raising-format-tuple<W0715>: (hi-pri) Used when passing multiple arguments to an exception constructor, the first of them a string literal containing what appears to be placeholders intended for formatting
 # redefined-builtin<W0622>: (hi-pri) Used when a variable or function override a built-in.
 # redefined-outer-name<W0621>: (hi-pri) Used when a variable's name hides a name defined in the outer scope.
+# redundant-unittest-assert<W1503>: (hi-pri) The first argument of assertTrue and assertFalse is a condition. If a constant is passed as parameter, that condition will be always true.
 # reimported<W0404>: (hi-pri) Used when a module is reimported multiple times.
 # signature-differs<W0222>: (hi-pri) Used when a method signature is different than in the implemented interface or in an overridden method.
 # simplifiable-if-expression<R1719>: Used when an if expression can be replaced with 'bool(test)'.
@@ -47,6 +49,7 @@
 # subprocess-popen-preexec-fn<W1509>: (hi-pri) The preexec_fn parameter is not safe to use in the presence of threads in your application. The child process could deadlock before exec is called.
 # super-init-not-called<W0231>: (hi-pri) Used when an ancestor class method has an __init__ method which is not called by a derived class.
 # too-few-public-methods<R0903>: Used when class has too few public methods, so be sure it's really worth it.
+# too-many-ancestors<R0901>: (hi-pri) Used when class has too many parent classes, try to reduce this to get a simpler (and so easier to use) class.
 # too-many-arguments<R0913>: Used when a function or method takes too many arguments.
 # too-many-branches<R0912>: Used when a function or method has too many branches, making it hard to follow.
 # too-many-instance-attributes<R0902>: Used when class has too many instance attributes, try to reduce this to get a simpler (and so easier to use) class.
@@ -55,9 +58,9 @@
 # too-many-nested-blocks<R1702>: Used when a function or a method has too many nested blocks. 
 # too-many-public-methods<R0904>: Used when class has too many public methods, try to reduce this to get a simpler (and so easier to use) class.
 # too-many-return-statements<R0911>: Used when a function or method has too many return statement, making it hard to follow.
-# undefined-variable<E0602>: (hi-pri) Used when an undefined variable is accessed.
 # ungrouped-imports<C0412>: (needs review) Used when imports are not grouped by packages
 # unidiomatic-typecheck<C0123>: (hi-pri) The idiomatic way to perform an explicit typecheck in Python is to use isinstance(x, Y) rather than type(x) == Y, type(x) is Y.
+# unnecessary-comprehension<R1721>: (hi-pri) Instead of using an identity comprehension, consider using the list, dict or set constructor.
 # unnecessary-lambda<W0108>: Used when the body of a lambda expression is a function call on the same argument list as the lambda itself
 # unnecessary-pass<W0107>: (hi-pri) Used when a "pass" statement that can be avoided is encountered.
 # unnecessary-semicolon<W0301>: Used when a statement is ended by a semi-colon (";"), which isn't necessary
@@ -65,6 +68,7 @@
 # unused-argument<W0613>: (hi-pri) Used when a function or method argument is not used.
 # unused-import<W0611>: (hi-pri) Used when an imported module or variable is not used.
 # unused-variable<W0612>: (hi-pri) Used when a variable is defined but not used.
+# used-before-assignment<E0601>: (hi-pri) Used when a local variable is accessed before its assignment.
 # useless-else-on-loop<W0120>: (hi-pri) Loops should only have an else clause if they can exit early with a break statement, otherwise the statements under else should be on the same scope as the loop itself.
 # useless-import-alias<C0414>: (hi-pri) Used when an import alias is same as original package.e.g using import numpy as numpy instead of import numpy as np
 # useless-return<R1711>: (hi-pri) Emitted when a single "return" or "return None" statement is found at the end of function or method definition.
@@ -89,7 +93,9 @@ disable=bad-whitespace, # Used when a wrong number of spaces is used around an o
     missing-module-docstring, # Used when a module has no docstring.
     multiple-statements, # Used when more than on statement are found on the same line.
     no-self-use, # Used when a method doesn’t use its bound instance, and so could be written as a function.
+    raise-missing-from, # Python 3's exception chaining means it shows the traceback of the current exception, but also the original exception. Not using raise from makes the traceback inaccurate, because the message implies there is a bug in the exception-handling code itself, which is a separate situation than wrapping an exception.
     superfluous-parens, # Used when a single item in parentheses follows an if, for, or other keyword.
+    super-with-arguments, # Emitted when calling the super() builtin with the current class and instance. On Python 3 these arguments are the default and they can be omitted.
     too-many-statements, # Used when a function or method has too many statements. You should then split it in smaller functions / methods.
     trailing-newlines, # Used when there are trailing blank lines in a file.
     trailing-whitespace, # Used when there is whitespace between the end of a line and the newline.

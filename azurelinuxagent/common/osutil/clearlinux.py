@@ -16,22 +16,24 @@
 # Requires Python 2.6+ and Openssl 1.0+
 #
 
-import os
-import re
-import pwd
-import shutil
-import socket
-import array
-import struct
-import fcntl
-import time
-import base64
+import os # pylint: disable=W0611
+import re # pylint: disable=W0611
+import pwd # pylint: disable=W0611
+import shutil # pylint: disable=W0611
+import socket # pylint: disable=W0611
+import array # pylint: disable=W0611
+import struct # pylint: disable=W0611
+import fcntl # pylint: disable=W0611
+import time # pylint: disable=W0611
+import base64 # pylint: disable=W0611
+import errno
 import azurelinuxagent.common.conf as conf
-import azurelinuxagent.common.logger as logger
+import azurelinuxagent.common.logger as logger # pylint: disable=W0611
 import azurelinuxagent.common.utils.fileutil as fileutil
 import azurelinuxagent.common.utils.shellutil as shellutil
-import azurelinuxagent.common.utils.textutil as textutil
+import azurelinuxagent.common.utils.textutil as textutil # pylint: disable=W0611
 from azurelinuxagent.common.osutil.default import DefaultOSUtil
+from azurelinuxagent.common.exception import OSUtilError
 
 class ClearLinuxUtil(DefaultOSUtil):
 
@@ -46,7 +48,7 @@ class ClearLinuxUtil(DefaultOSUtil):
     def start_network(self) :
         return shellutil.run("systemctl start systemd-networkd", chk_err=False)
 
-    def restart_if(self, iface):
+    def restart_if(self, ifname=None, retries=None, wait=None):
         shellutil.run("systemctl restart systemd-networkd")
 
     def restart_ssh_service(self):
@@ -79,14 +81,16 @@ class ClearLinuxUtil(DefaultOSUtil):
                 passwd_content = fileutil.read_file(passwd_file_path)
                 if not passwd_content:
                     # Empty file is no better than no file
-                    raise FileNotFoundError
-            except FileNotFoundError:
+                    raise IOError(errno.ENOENT, "Empty File", passwd_file_path)
+            except (IOError, OSError) as file_read_err:
+                if file_read_err.errno != errno.ENOENT:
+                    raise
                 new_passwd = ["root:*LOCK*:14600::::::"]
             else:
                 passwd = passwd_content.split('\n')
                 new_passwd = [x for x in passwd if not x.startswith("root:")]
                 new_passwd.insert(0, "root:*LOCK*:14600::::::")
             fileutil.write_file(passwd_file_path, "\n".join(new_passwd))
-        except IOError as e:
+        except IOError as e: # pylint: disable=C0103
             raise OSUtilError("Failed to delete root password:{0}".format(e))
-        pass
+        pass # pylint: disable=W0107

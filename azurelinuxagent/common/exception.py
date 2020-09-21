@@ -87,7 +87,7 @@ class ExtensionUpdateError(ExtensionError):
     When failed to update an extension
     """
 
-    def __init__(self, msg=None, inner=None, code=-1):
+    def __init__(self, msg=None, inner=None, code=-1): # pylint: disable=W0235
         super(ExtensionUpdateError, self).__init__(msg, inner, code)
 
 
@@ -96,7 +96,7 @@ class ExtensionDownloadError(ExtensionError):
     When failed to download and setup an extension
     """
 
-    def __init__(self, msg=None, inner=None, code=-1):
+    def __init__(self, msg=None, inner=None, code=-1): # pylint: disable=W0235
         super(ExtensionDownloadError, self).__init__(msg, inner, code)
 
 
@@ -150,7 +150,7 @@ class ProtocolNotFoundError(ProtocolError):
     Azure protocol endpoint not found
     """
 
-    def __init__(self, msg=None, inner=None):
+    def __init__(self, msg=None, inner=None): # pylint: disable=W0235
         super(ProtocolNotFoundError, self).__init__(msg, inner)
 
 
@@ -168,7 +168,7 @@ class InvalidContainerError(HttpError):
     Container id sent in the header is invalid
     """
 
-    def __init__(self, msg=None, inner=None):
+    def __init__(self, msg=None, inner=None): # pylint: disable=W0235
         super(InvalidContainerError, self).__init__(msg, inner)
 
 
@@ -223,7 +223,7 @@ class InvalidExtensionEventError(AgentError):
         super(InvalidExtensionEventError, self).__init__(msg, inner)
 
 
-class ExtensionErrorCodes(object):
+class ExtensionErrorCodes(object): # pylint: disable=R0903
     """
     Common Error codes used across by Compute RP for better understanding
     the cause and clarify common occurring errors

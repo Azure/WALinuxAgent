@@ -55,7 +55,7 @@ class Ubuntu14OSUtil(DefaultOSUtil):
 
 
 class Ubuntu12OSUtil(Ubuntu14OSUtil):
-    def __init__(self):
+    def __init__(self): # pylint: disable=W0235
         super(Ubuntu12OSUtil, self).__init__()
 
     # Override
@@ -109,7 +109,7 @@ class Ubuntu18OSUtil(Ubuntu16OSUtil):
 
 
 class UbuntuOSUtil(Ubuntu16OSUtil):
-    def __init__(self):
+    def __init__(self): # pylint: disable=W0235
         super(UbuntuOSUtil, self).__init__()
 
     def restart_if(self, ifname, retries=3, wait=5):

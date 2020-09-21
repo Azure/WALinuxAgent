@@ -23,7 +23,7 @@ import time
 
 import azurelinuxagent.common.conf as conf
 from azurelinuxagent.common.exception import OSUtilError
-from azurelinuxagent.common.future import ustr, bytebuffer
+from azurelinuxagent.common.future import ustr, bytebuffer, range, int # pylint: disable=redefined-builtin
 import azurelinuxagent.common.logger as logger
 from azurelinuxagent.common.osutil.default import DefaultOSUtil
 from azurelinuxagent.common.utils.cryptutil import CryptUtil
@@ -34,22 +34,22 @@ import azurelinuxagent.common.utils.textutil as textutil
 
 class GaiaOSUtil(DefaultOSUtil):
 
-    def __init__(self):
+    def __init__(self): # pylint: disable=W0235
         super(GaiaOSUtil, self).__init__()
 
     def _run_clish(self, cmd):
         ret = 0
         out = ""
-        for i in xrange(10):
+        for i in range(10): # pylint: disable=W0612
             try:
                 final_command = ["/bin/clish", "-s", "-c", "'{0}'".format(cmd)]
                 out = shellutil.run_command(final_command, log_error=True)
                 ret = 0
                 break
-            except shellutil.CommandError as e:
+            except shellutil.CommandError as e: # pylint: disable=C0103
                 ret = e.returncode
                 out = e.stdout
-            except Exception as e:
+            except Exception as e: # pylint: disable=C0103
                 ret = -1
                 out = ustr(e)
 
@@ -59,7 +59,7 @@ class GaiaOSUtil(DefaultOSUtil):
             time.sleep(2)
         return ret, out
 
-    def useradd(self, username, expiration=None):
+    def useradd(self, username, expiration=None, comment=None):
         logger.warn('useradd is not supported on GAiA')
 
     def chpasswd(self, username, password, crypt_id=6, salt_len=10):
@@ -76,7 +76,7 @@ class GaiaOSUtil(DefaultOSUtil):
 
     def del_root_password(self):
         logger.info('del_root_password')
-        ret, out = self._run_clish('set user admin password-hash *LOCK*')
+        ret, out = self._run_clish('set user admin password-hash *LOCK*') # pylint: disable=W0612
         if ret != 0:
             raise OSUtilError("Failed to delete root password")
 
@@ -96,6 +96,7 @@ class GaiaOSUtil(DefaultOSUtil):
             username, (path, thumbprint))
 
     def openssl_to_openssh(self, input_file, output_file):
+        # pylint: disable=too-many-locals
         cryptutil = CryptUtil(conf.get_openssl_cmd())
         ret, out = shellutil.run_get_output(
             conf.get_openssl_cmd() +
@@ -121,10 +122,10 @@ class GaiaOSUtil(DefaultOSUtil):
         def text_to_num(buf):
             if len(buf) == 1:
                 return int(buf[0].split()[1])
-            return long(''.join(buf[1:]), 16)
+            return int(''.join(buf[1:]), 16)
 
-        n = text_to_num(modulus)
-        e = text_to_num(exponent)
+        n = text_to_num(modulus) # pylint: disable=C0103
+        e = text_to_num(exponent) # pylint: disable=C0103
 
         keydata = bytearray()
         keydata.extend(struct.pack('>I', len('ssh-rsa')))
@@ -188,7 +189,7 @@ class GaiaOSUtil(DefaultOSUtil):
             cidr = self._address_to_string(net) + '/' + self._get_prefix(
                 self._address_to_string(mask))
 
-        ret, out = self._run_clish(
+        ret, out = self._run_clish( # pylint: disable=W0612
             'set static-route ' + cidr +
             ' nexthop gateway address ' +
             self._address_to_string(gateway) + ' on')

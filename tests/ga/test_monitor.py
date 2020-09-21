@@ -26,7 +26,7 @@ import string
 import tempfile
 import time
 import uuid
-from datetime import timedelta
+from datetime import timedelta # pylint: disable=ungrouped-imports
 
 from azurelinuxagent.common.protocol.util import ProtocolUtil
 
@@ -55,7 +55,7 @@ def random_generator(size=6, chars=string.ascii_uppercase + string.digits + stri
     return ''.join(random.choice(chars) for x in range(size))
 
 @contextlib.contextmanager
-def _create_monitor_handler(enabled_operations=[], iterations=1):
+def _create_monitor_handler(enabled_operations=[], iterations=1): # pylint: disable=dangerous-default-value
     """
     Creates an instance of MonitorHandler that
         * Uses a mock_wire_protocol for network requests,
@@ -69,7 +69,7 @@ def _create_monitor_handler(enabled_operations=[], iterations=1):
 
     """
     def run(self):
-        if len(enabled_operations) == 0 or self._name in enabled_operations:
+        if len(enabled_operations) == 0 or self._name in enabled_operations: # pylint: disable=protected-access,len-as-condition
             run.original_definition(self)
     run.original_definition = PeriodicOperation.run
 
@@ -180,7 +180,7 @@ class TestEventMonitoring(AgentTestCase, HttpRequestPredicates):
 
     _TEST_EVENT_PROVIDER_ID = "XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX"
 
-    def _create_extension_event(self,
+    def _create_extension_event(self, # pylint: disable=invalid-name,too-many-arguments
                                size=0,
                                name="DummyExtension",
                                op=WALAEventOperation.Unknown,
@@ -195,12 +195,12 @@ class TestEventMonitoring(AgentTestCase, HttpRequestPredicates):
                 version=version,
                 message=random_generator(size) if size != 0 else message)
         event_file = os.path.join(self.event_dir, "{0}.tld".format(int(time.time() * 1000000)))
-        with open(event_file, 'wb+') as fd:
+        with open(event_file, 'wb+') as fd: # pylint: disable=invalid-name
             fd.write(event_data.encode('utf-8'))
 
     @staticmethod
-    def _get_event_data(duration, is_success, message, name, op, version, eventId=1):
-        event = TelemetryEvent(eventId, TestEventMonitoring._TEST_EVENT_PROVIDER_ID)
+    def _get_event_data(duration, is_success, message, name, op, version, eventId=1): # pylint: disable=invalid-name,too-many-arguments
+        event = TelemetryEvent(eventId, TestEventMonitoring._TEST_EVENT_PROVIDER_ID) # pylint: disable=redefined-outer-name
         event.parameters.append(TelemetryEventParam(GuestAgentExtensionEventsSchema.Name, name))
         event.parameters.append(TelemetryEventParam(GuestAgentExtensionEventsSchema.Version, str(version)))
         event.parameters.append(TelemetryEventParam(GuestAgentExtensionEventsSchema.Operation, op))
@@ -243,7 +243,7 @@ class TestEventMonitoring(AgentTestCase, HttpRequestPredicates):
 
             # Validating the crafted message by the collect_and_send_events call.
             self.assertEqual(1, patch_send_event.call_count)
-            send_event_call_args = monitor_handler.get_mock_wire_protocol().client.send_encoded_event.call_args[0]
+            send_event_call_args = monitor_handler.get_mock_wire_protocol().client.send_encoded_event.call_args[0] # pylint: disable=no-member
 
             # Some of those expected values come from the mock protocol and imds client set up during test initialization
             osutil = get_osutil()
@@ -281,7 +281,7 @@ class TestEventMonitoring(AgentTestCase, HttpRequestPredicates):
                                                   test_eventpid, test_taskname, osversion, int(osutil.get_total_mem()),
                                                   osutil.get_processor_cores())
 
-            self.maxDiff = None
+            self.maxDiff = None # pylint: disable=invalid-name
             self.assertEqual(sample_message.encode('utf-8'), send_event_call_args[1])
 
     @patch("azurelinuxagent.common.protocol.wire.WireClient.send_encoded_event")
@@ -354,7 +354,7 @@ class TestEventMonitoring(AgentTestCase, HttpRequestPredicates):
 
 
     @patch("azurelinuxagent.common.conf.get_lib_dir")
-    def test_collect_and_send_with_send_event_generating_exception(self, mock_lib_dir, *args):
+    def test_collect_and_send_with_send_event_generating_exception(self, mock_lib_dir, *args): # pylint: disable=unused-argument
         mock_lib_dir.return_value = self.lib_dir
         fileutil.mkdir(self.event_dir)
 
@@ -377,7 +377,7 @@ class TestEventMonitoring(AgentTestCase, HttpRequestPredicates):
                     self._assert_error_event_reported(mock_add_event, test_str)
 
     @patch("azurelinuxagent.common.conf.get_lib_dir")
-    def test_collect_and_send_with_call_wireserver_returns_http_error_and_reports_event(self, mock_lib_dir, *args):
+    def test_collect_and_send_with_call_wireserver_returns_http_error_and_reports_event(self, mock_lib_dir, *args): # pylint: disable=unused-argument
         mock_lib_dir.return_value = self.lib_dir
         fileutil.mkdir(self.event_dir)
         add_event(name="MonitorTests", op=WALAEventOperation.HeartBeat, is_success=True, message="Test heartbeat")
@@ -423,7 +423,7 @@ class TestExtensionMetricsDataTelemetry(AgentTestCase):
     @patch('azurelinuxagent.common.event.EventLogger.add_metric')
     @patch('azurelinuxagent.common.event.EventLogger.add_event')
     @patch("azurelinuxagent.common.cgroupstelemetry.CGroupsTelemetry.poll_all_tracked")
-    def test_send_extension_metrics_telemetry(self, patch_poll_all_tracked, patch_add_event,
+    def test_send_extension_metrics_telemetry(self, patch_poll_all_tracked, patch_add_event, # pylint: disable=unused-argument
                                               patch_add_metric, *args):
         patch_poll_all_tracked.return_value = [MetricValue("Process", "% Processor Time", 1, 1),
                                                MetricValue("Memory", "Total Memory Usage", 1, 1),
@@ -436,7 +436,7 @@ class TestExtensionMetricsDataTelemetry(AgentTestCase):
     @patch('azurelinuxagent.common.event.EventLogger.add_metric')
     @patch('azurelinuxagent.common.event.EventLogger.add_event')
     @patch("azurelinuxagent.common.cgroupstelemetry.CGroupsTelemetry.poll_all_tracked")
-    def test_send_extension_metrics_telemetry_for_empty_cgroup(self, patch_poll_all_tracked,
+    def test_send_extension_metrics_telemetry_for_empty_cgroup(self, patch_poll_all_tracked, # pylint: disable=unused-argument
                                                                patch_add_event, patch_add_metric,*args):
         patch_poll_all_tracked.return_value = []
 
@@ -448,14 +448,14 @@ class TestExtensionMetricsDataTelemetry(AgentTestCase):
     @patch('azurelinuxagent.common.event.EventLogger.add_metric')
     @patch("azurelinuxagent.common.cgroup.MemoryCgroup.get_memory_usage")
     @patch('azurelinuxagent.common.logger.Logger.periodic_warn')
-    def test_send_extension_metrics_telemetry_handling_memory_cgroup_exceptions_errno2(self, patch_periodic_warn,
+    def test_send_extension_metrics_telemetry_handling_memory_cgroup_exceptions_errno2(self, patch_periodic_warn, # pylint: disable=unused-argument
                                                                                        patch_get_memory_usage,
                                                                                        patch_add_metric, *args):
         ioerror = IOError()
         ioerror.errno = 2
         patch_get_memory_usage.side_effect = ioerror
 
-        CGroupsTelemetry._tracked.append(MemoryCgroup("cgroup_name", "/test/path"))
+        CGroupsTelemetry._tracked.append(MemoryCgroup("cgroup_name", "/test/path")) # pylint: disable=protected-access
 
         PollResourceUsageOperation().run()
         self.assertEqual(0, patch_periodic_warn.call_count)
@@ -464,14 +464,14 @@ class TestExtensionMetricsDataTelemetry(AgentTestCase):
     @patch('azurelinuxagent.common.event.EventLogger.add_metric')
     @patch("azurelinuxagent.common.cgroup.CpuCgroup.get_cpu_usage")
     @patch('azurelinuxagent.common.logger.Logger.periodic_warn')
-    def test_send_extension_metrics_telemetry_handling_cpu_cgroup_exceptions_errno2(self, patch_periodic_warn,
+    def test_send_extension_metrics_telemetry_handling_cpu_cgroup_exceptions_errno2(self, patch_periodic_warn, # pylint: disable=unused-argument
                                                                                     patch_cpu_usage, patch_add_metric,
                                                                                     *args):
         ioerror = IOError()
         ioerror.errno = 2
         patch_cpu_usage.side_effect = ioerror
 
-        CGroupsTelemetry._tracked.append(CpuCgroup("cgroup_name", "/test/path"))
+        CGroupsTelemetry._tracked.append(CpuCgroup("cgroup_name", "/test/path")) # pylint: disable=protected-access
 
         PollResourceUsageOperation().run()
         self.assertEqual(0, patch_periodic_warn.call_count)
@@ -479,14 +479,14 @@ class TestExtensionMetricsDataTelemetry(AgentTestCase):
 
     @patch('azurelinuxagent.common.event.EventLogger.add_metric')
     @patch('azurelinuxagent.common.logger.Logger.periodic_warn')
-    def test_send_extension_metrics_telemetry_for_unsupported_cgroup(self, patch_periodic_warn, patch_add_metric, *args):
-        CGroupsTelemetry._tracked.append(CGroup("cgroup_name", "/test/path", "io"))
+    def test_send_extension_metrics_telemetry_for_unsupported_cgroup(self, patch_periodic_warn, patch_add_metric, *args): # pylint: disable=unused-argument
+        CGroupsTelemetry._tracked.append(CGroup("cgroup_name", "/test/path", "io")) # pylint: disable=protected-access
 
         PollResourceUsageOperation().run()
         self.assertEqual(1, patch_periodic_warn.call_count)
         self.assertEqual(0, patch_add_metric.call_count)  # No metrics should be sent.
 
-    def test_generate_extension_metrics_telemetry_dictionary(self, *args):
+    def test_generate_extension_metrics_telemetry_dictionary(self, *args): # pylint: disable=unused-argument
         num_polls = 10
         num_extensions = 1
 
@@ -506,7 +506,7 @@ class TestExtensionMetricsDataTelemetry(AgentTestCase):
                                                     "dummy_extension_{0}".format(i))
                 CGroupsTelemetry.track_cgroup(dummy_memory_cgroup)
 
-        self.assertEqual(2 * num_extensions, len(CGroupsTelemetry._tracked))
+        self.assertEqual(2 * num_extensions, len(CGroupsTelemetry._tracked)) # pylint: disable=protected-access
 
         with patch("azurelinuxagent.common.cgroup.MemoryCgroup.get_max_memory_usage") as patch_get_memory_max_usage:
             with patch("azurelinuxagent.common.cgroup.MemoryCgroup.get_memory_usage") as patch_get_memory_usage:
@@ -525,19 +525,19 @@ class PollResourceUsageOperationTestCase(AgentTestCase):
     def setUpClass(cls):
         AgentTestCase.setUpClass()
         # ensure cgroups are enabled by forcing a new instance
-        CGroupConfigurator._instance = None
+        CGroupConfigurator._instance = None # pylint: disable=protected-access
         with mock_cgroup_commands():
             CGroupConfigurator.get_instance().initialize()
 
     @classmethod
     def tearDownClass(cls):
-        CGroupConfigurator._instance = None
+        CGroupConfigurator._instance = None # pylint: disable=protected-access
         AgentTestCase.tearDownClass()
 
     def test_it_should_report_processes_that_do_not_belong_to_the_agent_cgroup(self):
         with mock_cgroup_commands() as mock_commands:
             mock_commands.add_command(r'^systemd-cgls.+/walinuxagent.service$',
-'''
+''' 
 Directory /sys/fs/cgroup/cpu/system.slice/walinuxagent.service:
 ├─27519 /usr/bin/python3 -u /usr/sbin/waagent -daemon
 ├─27547 python3 -u bin/WALinuxAgent-2.2.48.1-py2.7.egg -run-exthandlers
@@ -569,14 +569,14 @@ Directory /sys/fs/cgroup/cpu/system.slice/walinuxagent.service:
                     '/bin/sh /var/lib/waagent/run-command/download/1/script.sh',
                 ]
 
-                for fp in unexpected_processes:
+                for fp in unexpected_processes: # pylint: disable=invalid-name
                     self.assertIn(fp, messages[0], "[{0}] was not reported as an unexpected process. Events: {1}".format(fp, messages))
 
                 # The list of processes in the message is an array of strings: "['foo', ..., 'bar']"
                 search = re.search(r'\[(?P<processes>.+)\]', messages[0])
                 self.assertIsNotNone(search, "The event message is not in the expected format: {0}".format(messages[0]))
                 processes = search.group('processes')
-                self.assertEquals(5, len(processes.split(',')), 'Extra processes were reported as unexpected: {0}'.format(processes))
+                self.assertEqual(5, len(processes.split(',')), 'Extra processes were reported as unexpected: {0}'.format(processes))
 
 
 @patch("azurelinuxagent.common.utils.restutil.http_post")
@@ -586,7 +586,7 @@ Directory /sys/fs/cgroup/cpu/system.slice/walinuxagent.service:
 class TestMonitorFailure(AgentTestCase):
 
     @patch("azurelinuxagent.common.protocol.healthservice.HealthService.report_host_plugin_heartbeat")
-    def test_error_heartbeat_creates_no_signal(self, patch_report_heartbeat, patch_http_get, patch_add_event, *args):
+    def test_error_heartbeat_creates_no_signal(self, patch_report_heartbeat, patch_http_get, patch_add_event, *args): # pylint: disable=unused-argument
 
         monitor_handler = get_monitor_handler()
         protocol = WireProtocol('endpoint')

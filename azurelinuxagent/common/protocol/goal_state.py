@@ -55,7 +55,7 @@ class UpdateType(object):
     GoalStateForced = 2
 
 
-class GoalState(object):
+class GoalState(object): # pylint: disable=R0902
     #
     # Some modules (e.g. telemetry) require an up-to-date container ID. We update this variable each time we
     # fetch the goal state.
@@ -175,7 +175,7 @@ class GoalState(object):
             else:
                 xml_text = wire_client.fetch_config(uri, wire_client.get_header_for_cert())
                 self.remote_access = RemoteAccess(xml_text)
-        except Exception as e:
+        except Exception as e: # pylint: disable=C0103
             self._log_document_retrieval_failure("remove access", e)
             raise
 
@@ -194,7 +194,7 @@ class GoalState(object):
             logger.warn("Fetching the {0} failed: {1}, {2}", component_name, ustr(e), traceback.format_exc())
 
 
-class HostingEnv(object):
+class HostingEnv(object): # pylint: disable=R0903
     def __init__(self, xml_text):
         self.xml_text = xml_text
         xml_doc = parse_doc(xml_text)
@@ -206,13 +206,13 @@ class HostingEnv(object):
         self.deployment_name = getattrib(deployment, "name")
 
 
-class SharedConfig(object):
+class SharedConfig(object): # pylint: disable=R0903
     def __init__(self, xml_text):
         self.xml_text = xml_text
 
 
-class Certificates(object):
-    def __init__(self, xml_text):
+class Certificates(object): # pylint: disable=R0903
+    def __init__(self, xml_text): # pylint: disable=R0912,R0914
         self.cert_list = CertList()
 
         # Save the certificates
@@ -226,14 +226,14 @@ class Certificates(object):
             return
 
         # if the certificates format is not Pkcs7BlobWithPfxContents do not parse it
-        certificateFormat = findtext(xml_doc, "Format")
+        certificateFormat = findtext(xml_doc, "Format") # pylint: disable=C0103
         if certificateFormat and certificateFormat != "Pkcs7BlobWithPfxContents":
             logger.warn("The Format is not Pkcs7BlobWithPfxContents. Format is " + certificateFormat)
             return
 
         cryptutil = CryptUtil(conf.get_openssl_cmd())
         p7m_file = os.path.join(conf.get_lib_dir(), P7M_FILE_NAME)
-        p7m = ("MIME-Version:1.0\n"
+        p7m = ("MIME-Version:1.0\n" # pylint: disable=W1308
                "Content-Disposition: attachment; filename=\"{0}\"\n"
                "Content-Type: application/x-pkcs7-mime; name=\"{1}\"\n"
                "Content-Transfer-Encoding: base64\n"
@@ -250,8 +250,8 @@ class Certificates(object):
 
         # The parsing process use public key to match prv and crt.
         buf = []
-        begin_crt = False
-        begin_prv = False
+        begin_crt = False # pylint: disable=W0612
+        begin_prv = False # pylint: disable=W0612
         prvs = {}
         thumbprints = {}
         index = 0
@@ -318,8 +318,8 @@ class Certificates(object):
         return file_name
 
 
-class ExtensionsConfig(object):
-    def __init__(self, xml_text):
+class ExtensionsConfig(object): # pylint: disable=R0903
+    def __init__(self, xml_text): # pylint: disable=R0914
         self.xml_text = xml_text
         self.ext_handlers = ExtHandlerList()
         self.vmagent_manifests = VMAgentManifestList()
@@ -348,7 +348,7 @@ class ExtensionsConfig(object):
             manifest = VMAgentManifest()
             manifest.family = family
             for uri in uris:
-                manifestUri = VMAgentManifestUri(uri=gettext(uri))
+                manifestUri = VMAgentManifestUri(uri=gettext(uri)) # pylint: disable=C0103
                 manifest.versionsManifestUris.append(manifestUri)
             self.vmagent_manifests.vmAgentManifests.append(manifest)
 
@@ -384,7 +384,7 @@ class ExtensionsConfig(object):
         return ext_handler
 
     @staticmethod
-    def _parse_plugin_settings(ext_handler, plugin_settings):
+    def _parse_plugin_settings(ext_handler, plugin_settings): # pylint: disable=R0914
         if plugin_settings is None:
             return
 
@@ -392,17 +392,17 @@ class ExtensionsConfig(object):
         version = ext_handler.properties.version
 
         ext_handler_plugin_settings = [x for x in plugin_settings if getattrib(x, "name") == name]
-        if ext_handler_plugin_settings is None or len(ext_handler_plugin_settings) == 0:
+        if ext_handler_plugin_settings is None or len(ext_handler_plugin_settings) == 0: # pylint: disable=len-as-condition
             return
 
         settings = [x for x in ext_handler_plugin_settings if getattrib(x, "version") == version]
         if len(settings) != len(ext_handler_plugin_settings):
             msg = "ExtHandler PluginSettings Version Mismatch! Expected PluginSettings version: {0} for Handler: " \
                   "{1} but found versions: ({2})".format(version, name, ', '.join(
-                set([getattrib(x, "version") for x in ext_handler_plugin_settings])))
+                set([getattrib(x, "version") for x in ext_handler_plugin_settings]))) 
             add_event(AGENT_NAME, op=WALAEventOperation.PluginSettingsVersionMismatch, message=msg, log_event=False,
                       is_success=False)
-            if len(settings) == 0:
+            if len(settings) == 0: # pylint: disable=len-as-condition
                 # If there is no corresponding settings for the specific extension handler, we will not process it at all,
                 # this is an unexpected error as we always expect both versions to be in sync.
                 logger.error(msg)
@@ -411,12 +411,12 @@ class ExtensionsConfig(object):
 
         runtime_settings = None
         runtime_settings_node = find(settings[0], "RuntimeSettings")
-        seqNo = getattrib(runtime_settings_node, "seqNo")
+        seqNo = getattrib(runtime_settings_node, "seqNo") # pylint: disable=C0103
         runtime_settings_str = gettext(runtime_settings_node)
         if runtime_settings_str is not None:
             try:
                 runtime_settings = json.loads(runtime_settings_str)
-            except ValueError as e:
+            except ValueError as e: # pylint: disable=W0612,C0103
                 logger.error("Invalid extension settings")
                 return
 
@@ -446,7 +446,7 @@ class ExtensionsConfig(object):
                 ext_handler.properties.extensions.append(ext)
 
 
-class RemoteAccess(object):
+class RemoteAccess(object): # pylint: disable=R0903
     """
     Object containing information about user accounts
     """
@@ -469,7 +469,7 @@ class RemoteAccess(object):
         self.incarnation = None
         self.user_list = RemoteAccessUsersList()
 
-        if self.xml_text is None or len(self.xml_text) == 0:
+        if self.xml_text is None or len(self.xml_text) == 0: # pylint: disable=len-as-condition
             return
 
         xml_doc = parse_doc(self.xml_text)

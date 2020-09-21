@@ -29,6 +29,7 @@ from azurelinuxagent.common.event import EVENTS_DIRECTORY, TELEMETRY_LOG_EVENT_I
     TELEMETRY_LOG_PROVIDER_ID, add_event, WALAEventOperation, add_log_event, get_event_logger
 from azurelinuxagent.common.exception import InvalidExtensionEventError
 from azurelinuxagent.common.future import ustr
+from azurelinuxagent.common.interfaces import ThreadHandlerInterface
 from azurelinuxagent.common.telemetryevent import TelemetryEventList, TelemetryEvent, TelemetryEventParam, \
     GuestAgentGenericLogsSchema
 from azurelinuxagent.ga.exthandlers import HANDLER_NAME_PATTERN
@@ -38,7 +39,7 @@ from azurelinuxagent.ga.periodic_operation import PeriodicOperation
 def get_extension_telemetry_handler(protocol_util):
     return ExtensionTelemetryHandler(protocol_util)
 
-class ExtensionEventSchema(object):
+class ExtensionEventSchema(object): # pylint: disable=R0903
     """
     Class for defining the schema for Extension Events.
     """
@@ -79,7 +80,7 @@ class ProcessExtensionTelemetry(PeriodicOperation):
     def _collect_and_send_events(self):
         event_list = self._collect_extension_events()
 
-        if len(event_list.events) > 0:
+        if len(event_list.events) > 0: # pylint: disable=C1801
             self._protocol.report_event(event_list)
 
     def _collect_extension_events(self):
@@ -89,7 +90,7 @@ class ProcessExtensionTelemetry(PeriodicOperation):
         try:
             extension_handler_with_event_dirs = self._get_extension_events_dir_with_handler_name(conf.get_ext_log_dir())
 
-            if len(extension_handler_with_event_dirs) == 0:
+            if len(extension_handler_with_event_dirs) == 0: # pylint: disable=C1801
                 logger.verbose("No Extension events directory exist")
                 return events_list
 
@@ -97,7 +98,7 @@ class ProcessExtensionTelemetry(PeriodicOperation):
                 handler_name = extension_handler_with_event_dir[0]
                 handler_event_dir_path = extension_handler_with_event_dir[1]
                 self._capture_extension_events(handler_name, handler_event_dir_path, events_list)
-        except Exception as e:
+        except Exception as e: # pylint: disable=C0103
             msg = "Unknown error occurred when trying to collect extension events. Error: {0}".format(ustr(e))
             add_event(op=WALAEventOperation.ExtensionTelemetryEventProcessing, message=msg, is_success=False)
         finally:
@@ -129,7 +130,7 @@ class ProcessExtensionTelemetry(PeriodicOperation):
 
         return extension_handler_with_event_dirs
 
-    def _capture_extension_events(self, handler_name, handler_event_dir_path, events_list):
+    def _capture_extension_events(self, handler_name, handler_event_dir_path, events_list): # pylint: disable=R0914
         """
         Capture Extension events and add them to the events_list
         :param handler_name: Complete Handler Name. Eg: Microsoft.CPlat.Core.RunCommandLinux
@@ -179,14 +180,14 @@ class ProcessExtensionTelemetry(PeriodicOperation):
                     add_log_event(level=logger.LogLevel.WARNING, message=msg, forced=True)
                     break
 
-            except Exception as e:
+            except Exception as e: # pylint: disable=C0103
                 msg = "Failed to process event file {0}: {1}", event_file, ustr(e)
                 logger.warn(msg)
                 add_log_event(level=logger.LogLevel.WARNING, message=msg, forced=True)
             finally:
                 os.remove(event_file_path)
 
-        if dropped_events_with_error_count is not None and len(dropped_events_with_error_count) > 0:
+        if dropped_events_with_error_count is not None and len(dropped_events_with_error_count) > 0: # pylint: disable=C1801
             msg = "Dropped events for Extension: {0}; Details:\n\t{1}".format(handler_name, '\n\t'.join(
                 ["Reason: {0}; Dropped Count: {1}".format(k, v) for k, v in dropped_events_with_error_count.items()]))
             logger.warn(msg)
@@ -197,7 +198,7 @@ class ProcessExtensionTelemetry(PeriodicOperation):
 
     @staticmethod
     def _ensure_all_events_directories_empty(extension_events_directories):
-        if len(extension_events_directories) == 0:
+        if len(extension_events_directories) == 0: # pylint: disable=C1801
             return
 
         for extension_handler_with_event_dir in extension_events_directories:
@@ -210,7 +211,7 @@ class ProcessExtensionTelemetry(PeriodicOperation):
             for residue_file in os.listdir(event_dir_path):
                 try:
                     os.remove(os.path.join(event_dir_path, residue_file))
-                except Exception as e:
+                except Exception as e: # pylint: disable=C0103
                     # Only log the first error once per handler per run if unable to clean off residue files
                     err = ustr(e) if err is None else err
 
@@ -223,7 +224,7 @@ class ProcessExtensionTelemetry(PeriodicOperation):
         event_file_time = datetime.datetime.fromtimestamp(os.path.getmtime(event_file_path))
 
         # Read event file and decode it properly
-        with open(event_file_path, "rb") as fd:
+        with open(event_file_path, "rb") as fd: # pylint: disable=C0103
             event_data = fd.read().decode("utf-8")
 
         # Parse the string and get the list of events
@@ -238,13 +239,13 @@ class ProcessExtensionTelemetry(PeriodicOperation):
             try:
                 events_list.append(self._parse_telemetry_event(handler_name, event, event_file_time))
                 captured_events_count += 1
-            except InvalidExtensionEventError as e:
+            except InvalidExtensionEventError as e: # pylint: disable=C0103
                 # These are the errors thrown if there's an error parsing the event. We want to report these back to the
                 # extension publishers so that they are aware of the issues.
                 # The error messages are all static messages, we will use this to create a dict and emit an event at the
                 # end of each run to notify if there were any errors parsing events for the extension
                 dropped_events_with_error_count[ustr(e)] += 1
-            except Exception as e:
+            except Exception as e: # pylint: disable=C0103
                 logger.warn("Unable to parse and transmit event, error: {0}".format(e))
 
             if captured_events_count >= self._MAX_NUMBER_OF_EVENTS_PER_EXTENSION_PER_PERIOD:
@@ -306,7 +307,7 @@ class ProcessExtensionTelemetry(PeriodicOperation):
             raise InvalidExtensionEventError(
                 key_err_msg.format(InvalidExtensionEventError.MissingKeyError, ExtensionEventSchema.Message))
 
-        if event[message_key] is None or len(event[message_key]) == 0:
+        if event[message_key] is None or len(event[message_key]) == 0: # pylint: disable=C1801
             raise InvalidExtensionEventError(
                 "{0}: {1} should not be empty".format(InvalidExtensionEventError.EmptyMessageError,
                                                      ExtensionEventSchema.Message))
@@ -347,7 +348,7 @@ class ProcessExtensionTelemetry(PeriodicOperation):
         reporter.add_common_event_parameters(event, event_time)
 
 
-class ExtensionTelemetryHandler(object):
+class ExtensionTelemetryHandler(ThreadHandlerInterface):
     """
     This Handler takes care of fetching the Extension Telemetry events from the {extension_events_dir} and sends it to
     Kusto for advanced debuggability.
@@ -389,13 +390,13 @@ class ExtensionTelemetryHandler(object):
         return not self.should_run
 
     def daemon(self):
-        op = ProcessExtensionTelemetry(self.protocol_util)
+        op = ProcessExtensionTelemetry(self.protocol_util) # pylint: disable=C0103
         logger.info("Successfully started the {0} thread".format(self.get_thread_name()))
         while not self.stopped():
             try:
                 op.run()
 
-            except Exception as e:
+            except Exception as e: # pylint: disable=C0103
                 logger.warn(
                     "An error occurred in the Telemetry Extension thread main loop; will skip the current iteration.\n{0}",
                     ustr(e))

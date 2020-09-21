@@ -16,8 +16,8 @@
 #
 import xml
 
-from azurelinuxagent.common.protocol.goal_state import GoalState, RemoteAccess
-from tests.tools import AgentTestCase, load_data, patch, Mock
+from azurelinuxagent.common.protocol.goal_state import GoalState, RemoteAccess # pylint: disable=unused-import
+from tests.tools import AgentTestCase, load_data, patch, Mock # pylint: disable=unused-import
 from tests.protocol import mockwiredata
 from tests.protocol.mocks import mock_wire_protocol
 
@@ -26,12 +26,12 @@ class TestRemoteAccess(AgentTestCase):
     def test_parse_remote_access(self):
         data_str = load_data('wire/remote_access_single_account.xml')
         remote_access = RemoteAccess(data_str)
-        self.assertNotEquals(None, remote_access)
-        self.assertEquals("1", remote_access.incarnation)
-        self.assertEquals(1, len(remote_access.user_list.users), "User count does not match.")
-        self.assertEquals("testAccount", remote_access.user_list.users[0].name, "Account name does not match")
-        self.assertEquals("encryptedPasswordString", remote_access.user_list.users[0].encrypted_password, "Encrypted password does not match.")
-        self.assertEquals("2019-01-01", remote_access.user_list.users[0].expiration, "Expiration does not match.")
+        self.assertNotEqual(None, remote_access)
+        self.assertEqual("1", remote_access.incarnation)
+        self.assertEqual(1, len(remote_access.user_list.users), "User count does not match.")
+        self.assertEqual("testAccount", remote_access.user_list.users[0].name, "Account name does not match")
+        self.assertEqual("encryptedPasswordString", remote_access.user_list.users[0].encrypted_password, "Encrypted password does not match.")
+        self.assertEqual("2019-01-01", remote_access.user_list.users[0].expiration, "Expiration does not match.")
 
     def test_goal_state_with_no_remote_access(self):
         with mock_wire_protocol(mockwiredata.DATA_FILE) as protocol:
@@ -40,46 +40,46 @@ class TestRemoteAccess(AgentTestCase):
     def test_parse_two_remote_access_accounts(self):
         data_str = load_data('wire/remote_access_two_accounts.xml')
         remote_access = RemoteAccess(data_str)
-        self.assertNotEquals(None, remote_access)
-        self.assertEquals("1", remote_access.incarnation)
-        self.assertEquals(2, len(remote_access.user_list.users), "User count does not match.")
-        self.assertEquals("testAccount1", remote_access.user_list.users[0].name, "Account name does not match")
-        self.assertEquals("encryptedPasswordString", remote_access.user_list.users[0].encrypted_password, "Encrypted password does not match.")
-        self.assertEquals("2019-01-01", remote_access.user_list.users[0].expiration, "Expiration does not match.")
-        self.assertEquals("testAccount2", remote_access.user_list.users[1].name, "Account name does not match")
-        self.assertEquals("encryptedPasswordString", remote_access.user_list.users[1].encrypted_password, "Encrypted password does not match.")
-        self.assertEquals("2019-01-01", remote_access.user_list.users[1].expiration, "Expiration does not match.")
+        self.assertNotEqual(None, remote_access)
+        self.assertEqual("1", remote_access.incarnation)
+        self.assertEqual(2, len(remote_access.user_list.users), "User count does not match.")
+        self.assertEqual("testAccount1", remote_access.user_list.users[0].name, "Account name does not match")
+        self.assertEqual("encryptedPasswordString", remote_access.user_list.users[0].encrypted_password, "Encrypted password does not match.")
+        self.assertEqual("2019-01-01", remote_access.user_list.users[0].expiration, "Expiration does not match.")
+        self.assertEqual("testAccount2", remote_access.user_list.users[1].name, "Account name does not match")
+        self.assertEqual("encryptedPasswordString", remote_access.user_list.users[1].encrypted_password, "Encrypted password does not match.")
+        self.assertEqual("2019-01-01", remote_access.user_list.users[1].expiration, "Expiration does not match.")
 
     def test_parse_ten_remote_access_accounts(self):
         data_str = load_data('wire/remote_access_10_accounts.xml')
         remote_access = RemoteAccess(data_str)
-        self.assertNotEquals(None, remote_access)
-        self.assertEquals(10, len(remote_access.user_list.users), "User count does not match.")
+        self.assertNotEqual(None, remote_access)
+        self.assertEqual(10, len(remote_access.user_list.users), "User count does not match.")
 
     def test_parse_duplicate_remote_access_accounts(self):
         data_str = load_data('wire/remote_access_duplicate_accounts.xml')
         remote_access = RemoteAccess(data_str)
-        self.assertNotEquals(None, remote_access)
-        self.assertEquals(2, len(remote_access.user_list.users), "User count does not match.")
-        self.assertEquals("testAccount", remote_access.user_list.users[0].name, "Account name does not match")
-        self.assertEquals("encryptedPasswordString", remote_access.user_list.users[0].encrypted_password, "Encrypted password does not match.")
-        self.assertEquals("2019-01-01", remote_access.user_list.users[0].expiration, "Expiration does not match.")
-        self.assertEquals("testAccount", remote_access.user_list.users[1].name, "Account name does not match")
-        self.assertEquals("encryptedPasswordString", remote_access.user_list.users[1].encrypted_password, "Encrypted password does not match.")
-        self.assertEquals("2019-01-01", remote_access.user_list.users[1].expiration, "Expiration does not match.")
+        self.assertNotEqual(None, remote_access)
+        self.assertEqual(2, len(remote_access.user_list.users), "User count does not match.")
+        self.assertEqual("testAccount", remote_access.user_list.users[0].name, "Account name does not match")
+        self.assertEqual("encryptedPasswordString", remote_access.user_list.users[0].encrypted_password, "Encrypted password does not match.")
+        self.assertEqual("2019-01-01", remote_access.user_list.users[0].expiration, "Expiration does not match.")
+        self.assertEqual("testAccount", remote_access.user_list.users[1].name, "Account name does not match")
+        self.assertEqual("encryptedPasswordString", remote_access.user_list.users[1].encrypted_password, "Encrypted password does not match.")
+        self.assertEqual("2019-01-01", remote_access.user_list.users[1].expiration, "Expiration does not match.")
 
     def test_parse_zero_remote_access_accounts(self):
         data_str = load_data('wire/remote_access_no_accounts.xml')
         remote_access = RemoteAccess(data_str)
-        self.assertNotEquals(None, remote_access)
-        self.assertEquals(0, len(remote_access.user_list.users), "User count does not match.")
+        self.assertNotEqual(None, remote_access)
+        self.assertEqual(0, len(remote_access.user_list.users), "User count does not match.")
 
     def test_update_remote_access_conf_remote_access(self):
         with mock_wire_protocol(mockwiredata.DATA_FILE_REMOTE_ACCESS) as protocol:
             self.assertIsNotNone(protocol.client.get_remote_access())
-            self.assertEquals(1, len(protocol.client.get_remote_access().user_list.users))
-            self.assertEquals('testAccount', protocol.client.get_remote_access().user_list.users[0].name)
-            self.assertEquals('encryptedPasswordString', protocol.client.get_remote_access().user_list.users[0].encrypted_password)
+            self.assertEqual(1, len(protocol.client.get_remote_access().user_list.users))
+            self.assertEqual('testAccount', protocol.client.get_remote_access().user_list.users[0].name)
+            self.assertEqual('encryptedPasswordString', protocol.client.get_remote_access().user_list.users[0].encrypted_password)
 
     def test_parse_bad_remote_access_data(self):
         data = "foobar"

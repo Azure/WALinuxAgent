@@ -31,12 +31,12 @@ from tests.tools import AgentTestCase, patch, mock_sleep
 class CGroupConfiguratorSystemdTestCase(AgentTestCase):
     @classmethod
     def tearDownClass(cls):
-        CGroupConfigurator._instance = None
+        CGroupConfigurator._instance = None # pylint: disable=protected-access
         AgentTestCase.tearDownClass()
 
     @staticmethod
     def _get_new_cgroup_configurator_instance(initialize=True):
-        CGroupConfigurator._instance = None
+        CGroupConfigurator._instance = None # pylint: disable=protected-access
         configurator = CGroupConfigurator.get_instance()
         if initialize:
             with mock_cgroup_commands():
@@ -46,7 +46,7 @@ class CGroupConfiguratorSystemdTestCase(AgentTestCase):
     def test_initialize_should_start_tracking_the_agent_cgroups(self):
         CGroupConfiguratorSystemdTestCase._get_new_cgroup_configurator_instance()
 
-        tracked = CGroupsTelemetry._tracked
+        tracked = CGroupsTelemetry._tracked # pylint: disable=protected-access
 
         self.assertTrue(
             any(cg for cg in tracked if cg.name == 'walinuxagent.service' and 'cpu' in cg.path),
@@ -66,7 +66,7 @@ class CGroupConfiguratorSystemdTestCase(AgentTestCase):
         configurator.enable()
         self.assertTrue(configurator.enabled(), "enable() should enable the CGroupConfigurator")
 
-    def test_enable_should_raise_CGroupsException_when_cgroups_are_not_supported(self):
+    def test_enable_should_raise_CGroupsException_when_cgroups_are_not_supported(self): # pylint: disable=invalid-name
         with patch("azurelinuxagent.common.cgroupapi.CGroupsApi.cgroups_supported", return_value=False):
             configurator = CGroupConfiguratorSystemdTestCase._get_new_cgroup_configurator_instance(initialize=False)
             configurator.initialize()
@@ -82,7 +82,7 @@ class CGroupConfiguratorSystemdTestCase(AgentTestCase):
 
         CGroupConfiguratorSystemdTestCase._get_new_cgroup_configurator_instance().disable()
 
-        self.assertEquals(len(CGroupsTelemetry._tracked), 0)
+        self.assertEqual(len(CGroupsTelemetry._tracked), 0) # pylint: disable=protected-access
 
     def test_cgroup_operations_should_not_invoke_the_cgroup_api_when_cgroups_are_not_enabled(self):
         configurator = CGroupConfiguratorSystemdTestCase._get_new_cgroup_configurator_instance()
@@ -90,12 +90,12 @@ class CGroupConfiguratorSystemdTestCase(AgentTestCase):
 
         # List of operations to test, and the functions to mock used in order to do verifications
         operations = [
-            [lambda: configurator.create_extension_cgroups_root(),           "azurelinuxagent.common.cgroupapi.SystemdCgroupsApi.create_extension_cgroups_root"],
+            [lambda: configurator.create_extension_cgroups_root(),           "azurelinuxagent.common.cgroupapi.SystemdCgroupsApi.create_extension_cgroups_root"], # pylint: disable=unnecessary-lambda
             [lambda: configurator.create_extension_cgroups("A.B.C-1.0.0"),   "azurelinuxagent.common.cgroupapi.SystemdCgroupsApi.create_extension_cgroups"],
             [lambda: configurator.remove_extension_cgroups("A.B.C-1.0.0"),   "azurelinuxagent.common.cgroupapi.SystemdCgroupsApi.remove_extension_cgroups"]
         ]
 
-        for op in operations:
+        for op in operations: # pylint: disable=invalid-name
             with patch(op[1]) as mock_cgroup_api_operation:
                 op[0]()
 
@@ -108,7 +108,7 @@ class CGroupConfiguratorSystemdTestCase(AgentTestCase):
         with patch.object(configurator, "disable"):
             # List of operations to test, and the functions to mock in order to raise exceptions
             operations = [
-                [lambda: configurator.create_extension_cgroups_root(),           "azurelinuxagent.common.cgroupapi.SystemdCgroupsApi.create_extension_cgroups_root"],
+                [lambda: configurator.create_extension_cgroups_root(),           "azurelinuxagent.common.cgroupapi.SystemdCgroupsApi.create_extension_cgroups_root"], # pylint: disable=unnecessary-lambda
                 [lambda: configurator.create_extension_cgroups("A.B.C-1.0.0"),   "azurelinuxagent.common.cgroupapi.SystemdCgroupsApi.create_extension_cgroups"],
                 [lambda: configurator.remove_extension_cgroups("A.B.C-1.0.0"),   "azurelinuxagent.common.cgroupapi.SystemdCgroupsApi.remove_extension_cgroups"]
             ]
@@ -116,14 +116,14 @@ class CGroupConfiguratorSystemdTestCase(AgentTestCase):
             def raise_exception(*_):
                 raise Exception("A TEST EXCEPTION")
 
-            for op in operations:
+            for op in operations: # pylint: disable=invalid-name
                 with patch("azurelinuxagent.common.cgroupconfigurator.logger.warn") as mock_logger_warn:
                     with patch(op[1], raise_exception):
                         op[0]()
 
-                    self.assertEquals(mock_logger_warn.call_count, 1)
+                    self.assertEqual(mock_logger_warn.call_count, 1)
 
-                    args, kwargs = mock_logger_warn.call_args
+                    args, kwargs = mock_logger_warn.call_args # pylint: disable=unused-variable
                     message = args[0]
                     self.assertIn("A TEST EXCEPTION", message)
 
@@ -139,7 +139,7 @@ class CGroupConfiguratorSystemdTestCase(AgentTestCase):
             daemon_present = any("waagent -daemon" in command for (pid, command) in processes)
             self.assertTrue(daemon_present, "Could not find the daemon in the cgroup: [{0}]".format(processes))
 
-            extension_handler_present = any(re.search("(WALinuxAgent-.+\.egg|waagent) -run-exthandlers", command) for (pid, command) in processes)
+            extension_handler_present = any(re.search(r"(WALinuxAgent-.+\.egg|waagent) -run-exthandlers", command) for (pid, command) in processes)
             self.assertTrue(extension_handler_present, "Could not find the extension handler in the cgroup: [{0}]".format(processes))
 
     @patch('time.sleep', side_effect=lambda _: mock_sleep())
@@ -197,7 +197,7 @@ class CGroupConfiguratorSystemdTestCase(AgentTestCase):
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE)
 
-        tracked = CGroupsTelemetry._tracked
+        tracked = CGroupsTelemetry._tracked # pylint: disable=protected-access
 
         self.assertTrue(
             any(cg for cg in tracked if cg.name == 'Microsoft.Compute.TestExtension-1.2.3' and 'cpu' in cg.path),
@@ -216,7 +216,7 @@ class CGroupConfiguratorSystemdTestCase(AgentTestCase):
                 raise Exception("A TEST EXCEPTION")
             return original_popen(command_arg, *args, **kwargs)
 
-        with patch("azurelinuxagent.common.cgroupapi.subprocess.Popen", side_effect=mock_popen) as patcher:
+        with patch("azurelinuxagent.common.cgroupapi.subprocess.Popen", side_effect=mock_popen) as patcher: # pylint: disable=unused-variable
             with self.assertRaises(Exception) as context_manager:
                 configurator.start_extension_command(
                     extension_name="Microsoft.Compute.TestExtension-1.2.3",

@@ -3,32 +3,37 @@
 
 # The source code supresses the following error types common between python2.7 and python3.4:
 
-# anomalous-backslash-in-string<W1401>: (hi-pri) Used when a backslash is in a literal string but not as an escape.
-# arguments-differ<W0221>: (hi-pri) Used when a method has a different number of arguments than in the implemented interface or in an overridden method.
 # attribute-defined-outside-init<W0201>: (hi-pri) Used when an instance attribute is defined outside the __init__ method.
-# bad-continuation<C0330>: (needs review) **REMOVED in pylint-2.6.0**
 # bad-indentation<W0311>: (hi-pri) Used when an unexpected number of indentation's tabulations or spaces has been found.
+# bad-open-mode<W1501>: (hi-pri) Python supports: r, w, a[, x] modes with b, +, and U (only with r) options.
 # bad-super-call<E1003>: (hi-pri) Used when another argument than the current class is given as first argument of the super builtin.
 # bare-except<W0702>: (hi-pri) Used when an except clause doesn't specify exceptions type to catch.
+# blacklisted-name<C0102>: (needs review) Used when the name is listed in the black list (unauthorized names).
 # cell-var-from-loop<W0640>: (hi-pri) A variable used in a closure is defined in a loop. This will result in all closures using the same value for the closed-over variable.
 # cyclic-import<R0401>: (hi-pri) Used when a cyclic import between two or more modules is detected.
 # dangerous-default-value<W0102>: (hi-pri) Used when a mutable value as list or dictionary is detected in a default value for an argument.
+# expression-not-assigned<W0106>: (hi-pri) Used when an expression that is not a function call is assigned to nothing.
+# duplicate-code<R0801>: (hi-pri) Indicates that a set of similar lines has been detected among multiple file. (also disabled globally)
 # fixme<W0511>: Used when a warning note as FIXME or TODO is detected
+# function-redefined<E0102>: (hi-pri) Used when a function / class / method is redefined.
 # global-statement<W0603>: Used when you use the "global" statement to update a global variable.
 # import-error<E0401>: (hi-pri) Used when pylint has been unable to import a module.
 # inconsistent-return-statements<R1710>: (hi-pri) if any return statement returns an expression, any return statements where no value is returned should explicitly state this as return None, and an explicit return statement should be present at the end of the function
 # invalid-name<C0103>: (needs review) Used when the name doesn't conform to naming rules associated to its type (constant, variable, class...).
+# keyword-arg-before-vararg<W1113>: (hi-pri) When defining a keyword argument before variable positional arguments, one can end up in having multiple values passed for the aforementioned parameter in case the method is called with keyword arguments.
 # len-as-condition<C1801>: (hi-pri) Used when Pylint detects that len(sequence) is being used without explicit comparison inside a condition to determine if a sequence is empty.
-# logging-format-interpolation<W1202>: (hi-pri) Used when a logging statement has a call form of "logging.<logging method>(format_string.format(format_args...))". Use another type of string formatting instead.
+# multiple-imports<C0410>: (hi-pri) Used when import statement importing multiple modules is detected.
 # no-else-return<R1705>: (hi-pri) Used in order to highlight an unnecessary block of code following an if containing a return statement.
 # no-member<E1101>: (hi-pri) Used when a variable is accessed for an unexistent member.
 # no-name-in-module<E0611>: (hi-pri) Used when a name cannot be found in a module.
 # no-value-for-parameter<E1120>: (hi-pri) Used when a function call passes too few arguments.
+# pointless-statement<W0104>: (hi-pri) Used when a statement doesn’t have (or at least seems to) any effect.
 # pointless-string-statement<W0105>: (hi-pri) Used when a string is used as a statement (which of course has no effect). This is a particular case of W0104 with its own message so you can easily disable it if you're using those strings as documentation, instead of comments.
 # protected-access<W0212>: Used when a protected member (i.e. class member with a name beginning with an underscore) is access outside the class or a descendant of the class where it's defined.
 # raising-format-tuple<W0715>: (hi-pri) Used when passing multiple arguments to an exception constructor, the first of them a string literal containing what appears to be placeholders intended for formatting
 # redefined-builtin<W0622>: (hi-pri) Used when a variable or function override a built-in.
 # redefined-outer-name<W0621>: (hi-pri) Used when a variable's name hides a name defined in the outer scope.
+# redundant-unittest-assert<W1503>: (hi-pri) The first argument of assertTrue and assertFalse is a condition. If a constant is passed as parameter, that condition will be always true.
 # reimported<W0404>: (hi-pri) Used when a module is reimported multiple times.
 # simplifiable-if-statement<R1703>: Used when an if statement can be replaced with 'bool(test)'.
 # singleton-comparison<C0121>: (hi-pri) Used when an expression is compared to singleton values like True, False or None.
@@ -42,7 +47,6 @@
 # too-many-nested-blocks<R1702>: Used when a function or a method has too many nested blocks. 
 # too-many-public-methods<R0904>: Used when class has too many public methods, try to reduce this to get a simpler (and so easier to use) class.
 # too-many-return-statements<R0911>: Used when a function or method has too many return statement, making it hard to follow.
-# undefined-variable<E0602>: (hi-pri) Used when an undefined variable is accessed.
 # ungrouped-imports<C0412>: (needs review) Used when imports are not grouped by packages
 # unidiomatic-typecheck<C0123>: (hi-pri) The idiomatic way to perform an explicit typecheck in Python is to use isinstance(x, Y) rather than type(x) == Y, type(x) is Y.
 # unnecessary-lambda<W0108>: Used when the body of a lambda expression is a function call on the same argument list as the lambda itself
@@ -78,7 +82,8 @@
 
 [MESSAGES CONTROL]
 
-disable=bad-option-value, # pylint does not recognize the error code/symbol (needed to supress breaking changes across pylint versions)
+disable=bad-continuation, # Buggy, **REMOVED in pylint-2.6.0**
+    bad-option-value, # pylint does not recognize the error code/symbol (needed to supress breaking changes across pylint versions)
     bad-whitespace, # Used when a wrong number of spaces is used around an operator, bracket or block opener.
     broad-except, # Used when an except catches a too general exception, possibly burying unrelated errors.
     consider-iterating-dictionary, # Emitted when the keys of a dictionary are iterated through the .keys() method.

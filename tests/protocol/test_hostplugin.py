@@ -27,7 +27,7 @@ import azurelinuxagent.common.protocol.restapi as restapi
 import azurelinuxagent.common.protocol.wire as wire
 from azurelinuxagent.common.errorstate import ErrorState
 from azurelinuxagent.common.exception import HttpError, ResourceGoneError
-from azurelinuxagent.common.future import ustr
+from azurelinuxagent.common.future import ustr, httpclient
 from azurelinuxagent.common.osutil.default import UUID_PATTERN
 from azurelinuxagent.common.protocol.hostplugin import API_VERSION
 from azurelinuxagent.common.utils import restutil
@@ -37,34 +37,27 @@ from tests.protocol.mockwiredata import DATA_FILE, DATA_FILE_NO_EXT
 from tests.protocol.test_wire import MockResponse as TestWireMockResponse
 from tests.tools import AgentTestCase, PY_VERSION_MAJOR, Mock, patch
 
-if sys.version_info[0] == 3:
-    import http.client as httpclient
-    bytebuffer = memoryview
-elif sys.version_info[0] == 2:
-    import httplib as httpclient
-    bytebuffer = buffer
 
+hostplugin_status_url = "http://168.63.129.16:32526/status" # pylint: disable=invalid-name
+hostplugin_versions_url = "http://168.63.129.16:32526/versions" # pylint: disable=invalid-name
+health_service_url = 'http://168.63.129.16:80/HealthService' # pylint: disable=invalid-name
+hostplugin_logs_url = "http://168.63.129.16:32526/vmAgentLog" # pylint: disable=invalid-name
+sas_url = "http://sas_url" # pylint: disable=invalid-name
+wireserver_url = "168.63.129.16" # pylint: disable=invalid-name
 
-hostplugin_status_url = "http://168.63.129.16:32526/status"
-hostplugin_versions_url = "http://168.63.129.16:32526/versions"
-health_service_url = 'http://168.63.129.16:80/HealthService'
-hostplugin_logs_url = "http://168.63.129.16:32526/vmAgentLog"
-sas_url = "http://sas_url"
-wireserver_url = "168.63.129.16"
+block_blob_type = 'BlockBlob' # pylint: disable=invalid-name
+page_blob_type = 'PageBlob' # pylint: disable=invalid-name
 
-block_blob_type = 'BlockBlob'
-page_blob_type = 'PageBlob'
+api_versions = '["2015-09-01"]' # pylint: disable=invalid-name
+storage_version = "2014-02-14" # pylint: disable=invalid-name
 
-api_versions = '["2015-09-01"]'
-storage_version = "2014-02-14"
-
-faux_status = "{ 'dummy' : 'data' }"
-faux_status_b64 = base64.b64encode(bytes(bytearray(faux_status, encoding='utf-8')))
+faux_status = "{ 'dummy' : 'data' }" # pylint: disable=invalid-name
+faux_status_b64 = base64.b64encode(bytes(bytearray(faux_status, encoding='utf-8'))) # pylint: disable=invalid-name
 if PY_VERSION_MAJOR > 2:
-    faux_status_b64 = faux_status_b64.decode('utf-8')
+    faux_status_b64 = faux_status_b64.decode('utf-8') # pylint: disable=invalid-name
 
 
-class TestHostPlugin(HttpRequestPredicates, AgentTestCase):
+class TestHostPlugin(HttpRequestPredicates, AgentTestCase): # pylint: disable=too-many-public-methods
 
     def _init_host(self):
         with mock_wire_protocol(DATA_FILE) as protocol:
@@ -102,13 +95,13 @@ class TestHostPlugin(HttpRequestPredicates, AgentTestCase):
         expected['headers'] = self._relax_timestamp(expected['headers'])
 
         for k in iter(expected.keys()):
-            if k == 'content' or k == 'requestUri':
+            if k == 'content' or k == 'requestUri': # pylint: disable=consider-using-in
                 if actual[k] != expected[k]:
                     print("Mismatch: Actual '{0}'='{1}', "
                           "Expected '{0}'='{2}'".format(k, actual[k], expected[k]))
                     return False
             elif k == 'headers':
-                for h in expected['headers']:
+                for h in expected['headers']: # pylint: disable=invalid-name
                     if not (h in actual['headers']):
                         print("Missing Header: '{0}'".format(h))
                         return False
@@ -130,9 +123,9 @@ class TestHostPlugin(HttpRequestPredicates, AgentTestCase):
             'headers': headers
         }
         if not content is None:
-            s = base64.b64encode(bytes(content))
+            s = base64.b64encode(bytes(content)) # pylint: disable=invalid-name
             if PY_VERSION_MAJOR > 2:
-                s = s.decode('utf-8')
+                s = s.decode('utf-8') # pylint: disable=invalid-name
             data['content'] = s
         return data
 
@@ -144,7 +137,7 @@ class TestHostPlugin(HttpRequestPredicates, AgentTestCase):
             'x-ms-host-config-name': goal_state.role_config_name
         }
 
-    def _validate_hostplugin_args(self, args, goal_state, exp_method, exp_url, exp_data):
+    def _validate_hostplugin_args(self, args, goal_state, exp_method, exp_url, exp_data): # pylint: disable=too-many-arguments
         args, kwargs = args
         self.assertEqual(exp_method, args[0])
         self.assertEqual(exp_url, args[1])
@@ -174,7 +167,7 @@ class TestHostPlugin(HttpRequestPredicates, AgentTestCase):
     @patch("azurelinuxagent.common.protocol.healthservice.HealthService.report_host_plugin_versions")
     @patch("azurelinuxagent.ga.update.restutil.http_get")
     @patch("azurelinuxagent.common.protocol.hostplugin.add_event")
-    def assert_ensure_initialized(self, patch_event, patch_http_get, patch_report_health,
+    def assert_ensure_initialized(self, patch_event, patch_http_get, patch_report_health, # pylint: disable=too-many-arguments
                                   response_body,
                                   response_status_code,
                                   should_initialize,
@@ -211,32 +204,32 @@ class TestHostPlugin(HttpRequestPredicates, AgentTestCase):
         """
         Test calls to ensure_initialized
         """
-        self.assert_ensure_initialized(response_body=api_versions,
+        self.assert_ensure_initialized(response_body=api_versions, # pylint: disable=no-value-for-parameter
                                        response_status_code=200,
                                        should_initialize=True,
                                        should_report_healthy=True)
 
-        self.assert_ensure_initialized(response_body='invalid ip',
+        self.assert_ensure_initialized(response_body='invalid ip', # pylint: disable=no-value-for-parameter
                                        response_status_code=400,
                                        should_initialize=False,
                                        should_report_healthy=True)
 
-        self.assert_ensure_initialized(response_body='generic bad request',
+        self.assert_ensure_initialized(response_body='generic bad request', # pylint: disable=no-value-for-parameter
                                        response_status_code=400,
                                        should_initialize=False,
                                        should_report_healthy=True)
 
-        self.assert_ensure_initialized(response_body='resource gone',
+        self.assert_ensure_initialized(response_body='resource gone', # pylint: disable=no-value-for-parameter
                                        response_status_code=410,
                                        should_initialize=False,
                                        should_report_healthy=True)
 
-        self.assert_ensure_initialized(response_body='generic error',
+        self.assert_ensure_initialized(response_body='generic error', # pylint: disable=no-value-for-parameter
                                        response_status_code=500,
                                        should_initialize=False,
                                        should_report_healthy=False)
 
-        self.assert_ensure_initialized(response_body='upstream error',
+        self.assert_ensure_initialized(response_body='upstream error', # pylint: disable=no-value-for-parameter
                                        response_status_code=502,
                                        should_initialize=False,
                                        should_report_healthy=True)
@@ -390,7 +383,7 @@ class TestHostPlugin(HttpRequestPredicates, AgentTestCase):
                         # http_put having a side effect of "put_error"
                         #
                         # The agent tries to upload using a direct connection, and that succeeds.
-                        self.assertEqual(1, wire_protocol_client.status_blob.upload.call_count)
+                        self.assertEqual(1, wire_protocol_client.status_blob.upload.call_count) # pylint: disable=no-member
                         # The agent never touches the default protocol is this code path, so no change.
                         self.assertFalse(wire.HostPluginProtocol.is_default_channel())
                         # The agent never logs telemetry event for direct fallback
@@ -403,7 +396,7 @@ class TestHostPlugin(HttpRequestPredicates, AgentTestCase):
         """Validate correct set of data is sent to HostGAPlugin when reporting VM status"""
 
         with mock_wire_protocol(DATA_FILE) as protocol:
-            test_goal_state = protocol.client._goal_state
+            test_goal_state = protocol.client._goal_state # pylint: disable=protected-access
             plugin = protocol.client.get_host_plugin()
 
             status_blob = protocol.client.status_blob
@@ -437,7 +430,7 @@ class TestHostPlugin(HttpRequestPredicates, AgentTestCase):
 
     def test_validate_block_blob(self):
         with mock_wire_protocol(DATA_FILE) as protocol:
-            test_goal_state = protocol.client._goal_state
+            test_goal_state = protocol.client._goal_state # pylint: disable=protected-access
 
             host_client = wire.HostPluginProtocol(wireserver_url,
                                                   test_goal_state.container_id,
@@ -480,7 +473,7 @@ class TestHostPlugin(HttpRequestPredicates, AgentTestCase):
     def test_validate_page_blobs(self):
         """Validate correct set of data is sent for page blobs"""
         with mock_wire_protocol(DATA_FILE) as protocol:
-            test_goal_state = protocol.client._goal_state
+            test_goal_state = protocol.client._goal_state # pylint: disable=protected-access
 
             host_client = wire.HostPluginProtocol(wireserver_url,
                                                   test_goal_state.container_id,
@@ -538,7 +531,7 @@ class TestHostPlugin(HttpRequestPredicates, AgentTestCase):
                         exp_method, exp_url, exp_data)
 
     def test_validate_http_request_for_put_vm_log(self):
-        def http_put_handler(url, *args, **kwargs):
+        def http_put_handler(url, *args, **kwargs): # pylint: disable=inconsistent-return-statements
             if self.is_host_plugin_put_logs_request(url):
                 http_put_handler.args, http_put_handler.kwargs = args, kwargs
                 return MockResponse(body=b'', status_code=200)
@@ -580,7 +573,7 @@ class TestHostPlugin(HttpRequestPredicates, AgentTestCase):
             self.assertTrue(UUID_PATTERN.match(headers["x-ms-client-correlationid"]), "Correlation id is not in GUID form!")
 
     def test_put_vm_log_should_raise_an_exception_when_request_fails(self):
-        def http_put_handler(url, *args, **kwargs):
+        def http_put_handler(url, *args, **kwargs): # pylint: disable=inconsistent-return-statements
             if self.is_host_plugin_put_logs_request(url):
                 http_put_handler.args, http_put_handler.kwargs = args, kwargs
                 return MockResponse(body=ustr('Gone'), status_code=410)
@@ -606,7 +599,7 @@ class TestHostPlugin(HttpRequestPredicates, AgentTestCase):
 
     def test_validate_get_extension_artifacts(self):
         with mock_wire_protocol(DATA_FILE) as protocol:
-            test_goal_state = protocol.client._goal_state
+            test_goal_state = protocol.client._goal_state # pylint: disable=protected-access
 
             expected_url = hostplugin.URI_FORMAT_GET_EXTENSION_ARTIFACT.format(wireserver_url, hostplugin.HOST_PLUGIN_PORT)
             expected_headers = {'x-ms-version': '2015-09-01',
@@ -621,7 +614,7 @@ class TestHostPlugin(HttpRequestPredicates, AgentTestCase):
             self.assertTrue(host_client.api_versions is None)
             self.assertTrue(host_client.health_service is not None)
 
-            with patch.object(wire.HostPluginProtocol, "get_api_versions", return_value=api_versions) as patch_get:
+            with patch.object(wire.HostPluginProtocol, "get_api_versions", return_value=api_versions) as patch_get: # pylint: disable=unused-variable
                 actual_url, actual_headers = host_client.get_artifact_request(sas_url)
                 self.assertTrue(host_client.is_initialized)
                 self.assertFalse(host_client.api_versions is None)
@@ -859,7 +852,7 @@ class TestHostPlugin(HttpRequestPredicates, AgentTestCase):
         self.assertEqual(False, actual)
 
 
-class MockResponse:
+class MockResponse: # pylint: disable=too-few-public-methods
     def __init__(self, body, status_code, reason=''):
         self.body = body
         self.status = status_code
