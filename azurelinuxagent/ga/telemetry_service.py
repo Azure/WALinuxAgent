@@ -91,7 +91,8 @@ class TelemetryServiceHandler(object):
         try:
             # On demand wait, start processing as soon as there is any data available in the queue
             # In worst case, also keep checking every 5 mins to ensure that no data is being missed
-            while self._should_process_events.wait(timeout=TelemetryServiceHandler._MAX_TIMEOUT):
+            while not self.stopped():
+                self._should_process_events.wait(timeout=TelemetryServiceHandler._MAX_TIMEOUT)
                 self._send_events_in_queue()
 
         except Exception as error:
@@ -101,16 +102,14 @@ class TelemetryServiceHandler(object):
     def _get_events_in_queue(self):
         while not self._queue.empty():
             try:
-                # _, __, event = self._queue.get()
                 event = self._queue.get()
-                # logger.verbose("Fetched event Priority: {0}, Counter: {1}, Event: {2}".format(_, __, event))
                 logger.verbose("Fetched event Priority: {0}, Event: {1}".format(event.priority if event is not None else 100, event))
                 yield event
                 # Mark task_done once data processed. Do not mark task_done if error fetching from queue, else that will raise errors
                 logger.verbose("Marking event as done now: {0}".format(event))
                 self._queue.task_done()
-            except Exception as e:
-                logger.error("Some exception when fetching event from queue: {0}".format(ustr(e)))
+            except Exception as error:
+                logger.error("Some exception when fetching event from queue: {0}".format(ustr(error)))
 
     def _send_events_in_queue(self):
         # Process everything in Queue
