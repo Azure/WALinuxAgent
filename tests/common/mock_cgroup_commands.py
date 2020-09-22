@@ -28,7 +28,7 @@ from tests.tools import patch, data_dir
 #
 # The output comes from an Ubuntu 18 system
 #
-_default_commands = [
+__DEFAULT_COMMANDS = [
     (r"^systemctl --version$",
 '''systemd 237
 +PAM +AUDIT +SELINUX +IMA +APPARMOR +SMACK +SYSVINIT +UTMP +LIBCRYPTSETUP +GCRYPT +GNUTLS +ACL +XZ +LZ4 +SECCOMP +BLKID +ELFUTILS +KMOD -IDN2 +IDN -PCRE2 default-hierarchy=hybrid
@@ -74,7 +74,7 @@ Directory /sys/fs/cgroup/cpu/system.slice/walinuxagent.service:
 '''),
 ]
 
-_default_files = [
+__DEFAULT_FILES = [
     (r"^/proc/self/cgroup$", os.path.join(data_dir, 'cgroups', 'proc_self_cgroup')),
     (r"^/proc/[0-9]+/cgroup$", os.path.join(data_dir, 'cgroups', 'proc_pid_cgroup')),
     (r"^/sys/fs/cgroup/unified/cgroup.controllers$", os.path.join(data_dir, 'cgroups', 'sys_fs_cgroup_unified_cgroup.controllers')),
@@ -125,8 +125,8 @@ def mock_cgroup_commands():
             with patch("azurelinuxagent.common.cgroupapi.fileutil.read_file", side_effect=mock_read_file):
                 with patch('azurelinuxagent.common.cgroupapi.CGroupsApi.cgroups_supported', return_value=True):
                     with patch('azurelinuxagent.common.cgroupapi.CGroupsApi.is_systemd', return_value=True):
-                        patcher.commands = _default_commands[:]
-                        patcher.files = _default_files[:]
+                        patcher.commands = __DEFAULT_COMMANDS[:]
+                        patcher.files = __DEFAULT_FILES[:]
                         patcher.add_file = add_file
                         patcher.add_command = add_command
                         yield patcher

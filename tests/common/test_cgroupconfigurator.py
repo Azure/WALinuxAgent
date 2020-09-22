@@ -17,7 +17,6 @@
 
 from __future__ import print_function
 
-import os
 import re
 import subprocess
 
@@ -26,7 +25,7 @@ from azurelinuxagent.common.cgroupconfigurator import CGroupConfigurator
 from azurelinuxagent.common.cgroupstelemetry import CGroupsTelemetry
 from azurelinuxagent.common.exception import CGroupsException
 from tests.common.mock_cgroup_commands import mock_cgroup_commands
-from tests.tools import AgentTestCase, patch, mock_sleep, data_dir
+from tests.tools import AgentTestCase, patch, mock_sleep
 
 
 class CGroupConfiguratorSystemdTestCase(AgentTestCase):
@@ -109,7 +108,7 @@ cgroup on /sys/fs/cgroup/blkio type cgroup (rw,nosuid,nodev,noexec,relatime,blki
         tracked = CGroupsTelemetry._tracked  # pylint: disable=protected-access
 
         self.assertFalse(configurator.enabled(), "Cgroups should not be enabled")
-        self.assertEquals(len(tracked), 0, "No cgroups should be tracked. Tracked: {0}".format(tracked))
+        self.assertEqual(len(tracked), 0, "No cgroups should be tracked. Tracked: {0}".format(tracked))
 
     def test_initialize_should_not_enable_cgroups_when_the_agent_is_not_in_the_system_slice(self):
         configurator = CGroupConfiguratorSystemdTestCase._get_new_cgroup_configurator_instance(
@@ -130,7 +129,7 @@ cgroup on /sys/fs/cgroup/blkio type cgroup (rw,nosuid,nodev,noexec,relatime,blki
         tracked = CGroupsTelemetry._tracked  # pylint: disable=protected-access
 
         self.assertFalse(configurator.enabled(), "Cgroups should not be enabled")
-        self.assertEquals(len(tracked), 0, "No cgroups should be tracked. Tracked: {0}".format(tracked))
+        self.assertEqual(len(tracked), 0, "No cgroups should be tracked. Tracked: {0}".format(tracked))
 
     def test_enable_and_disable_should_change_the_enabled_state_of_cgroups(self):
         configurator = CGroupConfiguratorSystemdTestCase._get_new_cgroup_configurator_instance()
