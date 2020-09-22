@@ -86,8 +86,8 @@ def mock_cgroup_commands():
     original_read_file = fileutil.read_file
     original_path_exists = os.path.exists
 
-    def add_file(pattern, file):
-        patcher.files.insert(0, (pattern, file))
+    def add_file(pattern, file_path):
+        patcher.files.insert(0, (pattern, file_path))
 
     def add_command(pattern, output):
         patcher.commands.insert(0, (pattern, output))
