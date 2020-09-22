@@ -36,7 +36,9 @@ from azurelinuxagent.common.telemetryevent import TelemetryEventList, GuestAgent
     TelemetryEventParam, TelemetryEvent
 from azurelinuxagent.common.utils import restutil
 from azurelinuxagent.common.version import CURRENT_VERSION, DISTRO_NAME, DISTRO_VERSION
+from azurelinuxagent.ga.exthandlers import get_exthandlers_handler
 from tests.ga.test_monitor import random_generator
+from tests.ga.extension_emulator import extension_emulator, generate_put_handler, enable_invocations, ExtensionCommandNames
 from tests.protocol import mockwiredata
 from tests.protocol.mocks import mock_wire_protocol, HttpRequestPredicates
 from tests.protocol.mockwiredata import DATA_FILE_NO_EXT
@@ -1061,6 +1063,26 @@ class TryUpdateGoalStateTestCase(HttpRequestPredicates, AgentTestCase):
     """
     def test_it_should_return_true_on_success(self):
         with mock_wire_protocol(mockwiredata.DATA_FILE) as protocol:
+            self.assertTrue(protocol.client.try_update_goal_state(), "try_update_goal_state should have succeeded")
+
+    def test_noop_gs_should_skip(self):
+        first_ext = extension_emulator()
+
+        with mock_wire_protocol(mockwiredata.DATA_FILE, http_put_handler=generate_put_handler(first_ext)) as protocol:
+            exthandlers_handler = get_exthandlers_handler(protocol)
+
+            with enable_invocations(first_ext) as invocation_record:
+                exthandlers_handler.run()
+
+                invocation_record.compare(
+                    (first_ext, ExtensionCommandNames.INSTALL),
+                    (first_ext, ExtensionCommandNames.ENABLE)
+                )
+
+            protocol.mock_wire_data.data_files['goal_state'] = "wire/goal_state_noop.xml"
+            protocol.mock_wire_data.reload()
+            protocol.mock_wire_data.set_incarnation(2)
+
             self.assertTrue(protocol.client.try_update_goal_state(), "try_update_goal_state should have succeeded")
 
     def test_it_should_return_false_on_failure(self):
