@@ -243,7 +243,7 @@ class UpdateHandler(object): # pylint: disable=R0902
         self.child_process = None
         return
 
-    def run(self, debug=False): # pylint: disable=R0912,R0914
+    def run(self, debug=False):  # pylint: disable=R0912,R0914
         """
         This is the main loop which watches for agent and extension updates.
         """
@@ -258,6 +258,7 @@ class UpdateHandler(object): # pylint: disable=R0902
             protocol = self.protocol_util.get_protocol()
             protocol.update_goal_state()
 
+            # Initialize the common parameters for telemetry events
             initialize_event_logger_vminfo_common_parameters(protocol)
 
             # Log OS-specific info.
@@ -266,6 +267,24 @@ class UpdateHandler(object): # pylint: disable=R0902
                 PY_VERSION_MINOR, PY_VERSION_MICRO)
             logger.info(os_info_msg)
             add_event(AGENT_NAME, op=WALAEventOperation.OSInfo, message=os_info_msg)
+
+            #
+            # Perform initialization tasks
+            #
+            from azurelinuxagent.ga.exthandlers import get_exthandlers_handler, migrate_handler_state
+            exthandlers_handler = get_exthandlers_handler(protocol)
+            migrate_handler_state()
+
+            from azurelinuxagent.ga.remoteaccess import get_remote_access_handler
+            remote_access_handler = get_remote_access_handler(protocol)
+
+            self._ensure_no_orphans()
+            self._emit_restart_event()
+            self._emit_changes_in_default_configuration()
+            self._ensure_partition_assigned()
+            self._ensure_readonly_files()
+            self._ensure_cgroups_initialized()
+            self._ensure_extension_telemetry_state_configured_properly(protocol)
 
             # Get all thread handlers
             all_thread_handlers = [
@@ -283,21 +302,6 @@ class UpdateHandler(object): # pylint: disable=R0902
             # Launch all monitoring threads
             for thread_handler in all_thread_handlers:
                 thread_handler.run()
-
-            from azurelinuxagent.ga.exthandlers import get_exthandlers_handler, migrate_handler_state
-            exthandlers_handler = get_exthandlers_handler(protocol)
-            migrate_handler_state()
-
-            from azurelinuxagent.ga.remoteaccess import get_remote_access_handler
-            remote_access_handler = get_remote_access_handler(protocol)
-
-            self._ensure_no_orphans()
-            self._emit_restart_event()
-            self._emit_changes_in_default_configuration()
-            self._ensure_partition_assigned()
-            self._ensure_readonly_files()
-            self._ensure_cgroups_initialized()
-            self._ensure_extension_telemetry_state_configured_properly(protocol)
 
             goal_state_interval = conf.get_goal_state_period() if conf.get_extensions_enabled() else GOAL_STATE_INTERVAL_DISABLED
 

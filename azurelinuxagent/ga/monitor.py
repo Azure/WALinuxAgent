@@ -70,11 +70,11 @@ class PollResourceUsageOperation(PeriodicOperation):
                     if not CGroupConfigurator.is_agent_process(command_line):
                         unexpected_processes.append(command_line)
 
-                if len(unexpected_processes) > 0: # pylint: disable=len-as-condition
+                if unexpected_processes:
                     unexpected_processes.sort()
                     processes_check_error = "The agent's cgroup includes unexpected processes: {0}".format(ustr(unexpected_processes))
-        except Exception as e: # pylint: disable=C0103
-            processes_check_error = "Failed to check the processes in the agent's cgroup: {0}".format(ustr(e))
+        except Exception as exception:
+            processes_check_error = "Failed to check the processes in the agent's cgroup: {0}".format(ustr(exception))
 
         # Report a small sample of errors
         if processes_check_error != self._last_error and self._error_count < 5:
@@ -181,11 +181,13 @@ class MonitorHandler(ThreadHandlerInterface): # pylint: disable=R0902
             ResetPeriodicLogMessagesOperation(),
             PeriodicOperation("collect_and_send_events", self.collect_and_send_events, self.EVENT_COLLECTION_PERIOD),
             ReportNetworkErrorsOperation(),
-            PollResourceUsageOperation(),
             PeriodicOperation("send_host_plugin_heartbeat", self.send_host_plugin_heartbeat, self.HOST_PLUGIN_HEARTBEAT_PERIOD),
             PeriodicOperation("send_imds_heartbeat", self.send_imds_heartbeat, self.IMDS_HEARTBEAT_PERIOD),
             ReportNetworkConfigurationChangesOperation(),
         ]
+        if CGroupConfigurator.get_instance().enabled():
+            self._periodic_operations.append(PollResourceUsageOperation())
+
         self.protocol = None
         self.protocol_util = None
         self.health_service = None
