@@ -44,8 +44,9 @@ class CryptUtil(object):
         cmd = ("{0} req -x509 -nodes -subj /CN=LinuxTransport -days 730 "
                "-newkey rsa:2048 -keyout {1} "
                "-out {2}").format(self.openssl_cmd, prv_file, crt_file)
-        rc = shellutil.run(cmd) # pylint: disable=C0103
-        if rc != 0:
+        try:
+            shellutil.run_command(cmd)
+        except shellutil.CommandError:
             logger.error("Failed to create {0} and {1} certificates".format(prv_file, crt_file))
 
     def get_pubkey_from_prv(self, file_name):
@@ -83,14 +84,17 @@ class CryptUtil(object):
                    "| {4} pkcs12 -nodes -password pass: -out {5}"
                    "").format(self.openssl_cmd, p7m_file, trans_prv_file,
                               trans_cert_file, self.openssl_cmd, pem_file)
-            shellutil.run(cmd)
-            rc = shellutil.run(cmd) # pylint: disable=C0103
-            if rc != 0:
+            try:
+                shellutil.run_command(cmd)
+            except shellutil.CommandError:
                 logger.error("Failed to decrypt {0}".format(p7m_file))
 
     def crt_to_ssh(self, input_file, output_file):
-        shellutil.run("ssh-keygen -i -m PKCS8 -f {0} >> {1}".format(input_file,
+        try:
+            shellutil.run_command("ssh-keygen -i -m PKCS8 -f {0} >> {1}".format(input_file,
                                                                     output_file))
+        except shellutil.CommandError:
+            pass
 
     def asn1_to_ssh(self, pubkey):
         lines = pubkey.split("\n")
