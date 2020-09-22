@@ -1078,8 +1078,8 @@ class TryUpdateGoalStateTestCase(HttpRequestPredicates, AgentTestCase):
                     (first_ext, ExtensionCommandNames.INSTALL),
                     (first_ext, ExtensionCommandNames.ENABLE)
                 )
-
-            protocol.mock_wire_data.data_files['goal_state'] = "wire/goal_state_noop.xml"
+            
+            protocol.mock_wire_data.data_files = mockwiredata.DATA_FILE_NOOP_GS
             protocol.mock_wire_data.reload()
             protocol.mock_wire_data.set_incarnation(2)
 
