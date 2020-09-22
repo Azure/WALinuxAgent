@@ -639,7 +639,7 @@ class DefaultOSUtil(object): # pylint: disable=R0904
             shellutil.run_command("eject {0}".format(dvd))
         except shellutil.CommandError as cmd_err:
             if chk_err:
-                raise OSUtilError("Failed to eject dvd: ret={0}".format(cmd_err.retcode))
+                raise OSUtilError("Failed to eject dvd: ret={0}".format(cmd_err.returncode))
 
     def try_load_atapiix_mod(self):
         try:
@@ -680,7 +680,7 @@ class DefaultOSUtil(object): # pylint: disable=R0904
         try:
             output = shellutil.run_command(cmd, log_error=chk_err)
         except shellutil.CommandError as cmd_err:
-            detail = "[{0}] returned {1}:\n stdout: {2}\n\nstderr: {3}".format(cmd, cmd_err.retcode,
+            detail = "[{0}] returned {1}:\n stdout: {2}\n\nstderr: {3}".format(cmd, cmd_err.returncode,
                 cmd_err.stdout, cmd_err.stderr)
             return cmd_err.returncode, detail
 
