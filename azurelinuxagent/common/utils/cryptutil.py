@@ -92,7 +92,7 @@ class CryptUtil(object):
 
     def crt_to_ssh(self, input_file, output_file):
         try:
-            with open(output_file, "wa") as file:
+            with open(output_file, "a") as file:
                 output = shellutil.run_command(["ssh-keygen", "-i -m PKCS8 -f", input_file])
                 file.write(output)
         except shellutil.CommandError:
