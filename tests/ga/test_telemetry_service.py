@@ -191,8 +191,6 @@ class TestTelemetryServiceHandler(AgentTestCase, HttpRequestPredicates):
                 telemetry_handler.enqueue_event(test_event)
 
             telemetry_handler.start()
-            # Give the thread some time to start up, this was causing concurrency issues in UTs
-            time.sleep(0.005)
             self.assertTrue(telemetry_handler.is_alive(), "Thread not alive")
             self._assert_test_data_in_event_body(telemetry_handler, events)
 

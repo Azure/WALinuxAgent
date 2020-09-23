@@ -24,13 +24,14 @@ import traceback
 from azurelinuxagent.common import logger
 from azurelinuxagent.common.event import add_event, WALAEventOperation
 from azurelinuxagent.common.future import ustr, PriorityQueue
+from azurelinuxagent.common.interfaces import ThreadHandlerInterface
 
 
 def get_telemetry_service_handler(protocol_util):
     return TelemetryServiceHandler(protocol_util)
 
 
-class TelemetryServiceHandler(object):
+class TelemetryServiceHandler(ThreadHandlerInterface):
     """
     This Handler takes care of sending all telemetry out of the agent to Wireserver. It sends out data as soon as
     there's any data available in the queue to send.

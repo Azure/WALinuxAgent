@@ -28,7 +28,6 @@ from azurelinuxagent.common.event import add_event, WALAEventOperation, report_m
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.interfaces import ThreadHandlerInterface
 from azurelinuxagent.common.osutil import get_osutil
-from azurelinuxagent.common.protocol.util import get_protocol_util
 from azurelinuxagent.common.protocol.healthservice import HealthService
 from azurelinuxagent.common.protocol.imds import get_imds_client
 from azurelinuxagent.common.protocol.util import get_protocol_util
