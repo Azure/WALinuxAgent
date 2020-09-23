@@ -79,13 +79,11 @@ class TelemetryServiceHandler(ThreadHandlerInterface):
     def stopped(self):
         return not self.should_run
 
-    def enqueue_event(self, event):
+    def enqueue_event_func(self, event):
         # Add event to queue and set event
         self._queue.put(event)
-        # self._queue.put((priority, self._queue_counter.value, event))
-        logger.verbose("Added event for {0}, Priority: {1}, Event: {2}", self.get_thread_name(), event.priority, event)
 
-        # Always set the event if any enqueue happens (even if already set)
+        # Set the event if any enqueue happens (even if already set) to trigger sending those events
         self._should_process_events.set()
 
     def _process_telemetry_thread(self):
@@ -106,23 +104,19 @@ class TelemetryServiceHandler(ThreadHandlerInterface):
         while not self._queue.empty():
             try:
                 event = self._queue.get()
-                logger.verbose("Fetched event Priority: {0}, Event: {1}".format(event.priority if event is not None else 100, event))
                 yield event
-                # Mark task_done once data processed. Do not mark task_done if error fetching from queue, else that will raise errors
-                logger.verbose("Marking event as done now: {0}".format(event))
             except Exception as error:
-                logger.error("Some exception when fetching event from queue: {0}".format(ustr(error)))
+                logger.error("Some exception when fetching event from queue: {0}, {1}".format(ustr(error),
+                                                                                              traceback.format_exc()))
             finally:
                 self._queue.task_done()
 
     def _send_events_in_queue(self):
         # Process everything in Queue
-        logger.verbose("Processing data in the telemetry service queue, approx qsize: {0}", self._queue.qsize())
         if not self._queue.empty():
             self._protocol.report_event(self._get_events_in_queue)
 
-        # Clear event when done
-        # There might be a rare race condition where the loop exits and we get a new event, in that case not unsetting the event.
+        # Reset the event when done processing all events in queue
         if self._should_process_events.is_set() and self._queue.empty():
             logger.verbose("Resetting the event")
             self._should_process_events.clear()

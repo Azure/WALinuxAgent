@@ -21,7 +21,6 @@ import os
 import random
 import re
 import string
-from datetime import timedelta  # pylint: disable=ungrouped-imports
 
 from azurelinuxagent.common import event, logger
 from azurelinuxagent.common.cgroup import CGroup, CpuCgroup, MemoryCgroup, MetricValue
@@ -56,15 +55,12 @@ def _create_monitor_handler(enabled_operations=[], iterations=1): # pylint: disa
         * run_and_wait() - invokes run() and wait() on the MonitorHandler
 
     """
-    event_list = []
-    def _enqueue_events(telemetry_event):
-        event_list.append(telemetry_event)
-    
     def run(self):
         if len(enabled_operations) == 0 or self._name in enabled_operations: # pylint: disable=protected-access,len-as-condition
             run.original_definition(self)
     run.original_definition = PeriodicOperation.run
 
+    event_list = []
     with mock_wire_protocol(DATA_FILE) as protocol:
         protocol_util = MagicMock()
         protocol_util.get_protocol = Mock(return_value=protocol)
@@ -76,7 +72,7 @@ def _create_monitor_handler(enabled_operations=[], iterations=1): # pylint: disa
                             monitor_handler.run()
                             monitor_handler.join()
 
-                        monitor_handler = get_monitor_handler(_enqueue_events)
+                        monitor_handler = get_monitor_handler(event_list.append)
                         monitor_handler.get_mock_wire_protocol = lambda: protocol
                         monitor_handler.run_and_wait = run_and_wait
                         monitor_handler.event_list = event_list
@@ -354,7 +350,7 @@ class TestMonitorFailure(AgentTestCase):
         protocol.update_goal_state = MagicMock()
         with patch('azurelinuxagent.common.protocol.util.ProtocolUtil.get_protocol', return_value=protocol):
             monitor_handler.init_protocols()
-            monitor_handler.last_host_plugin_heartbeat = datetime.datetime.utcnow() - timedelta(hours=1)
+            monitor_handler.last_host_plugin_heartbeat = datetime.datetime.utcnow() - datetime.timedelta(hours=1)
 
             patch_http_get.side_effect = IOError('client error')
             monitor_handler.send_host_plugin_heartbeat()

@@ -37,8 +37,8 @@ from azurelinuxagent.common.version import AGENT_NAME, CURRENT_VERSION
 from azurelinuxagent.ga.periodic_operation import PeriodicOperation
 
 
-def get_monitor_handler(enqueue_event):
-    return MonitorHandler(enqueue_event)
+def get_monitor_handler(enqueue_event_func):
+    return MonitorHandler(enqueue_event_func)
 
 
 class PollResourceUsageOperation(PeriodicOperation):
@@ -115,19 +115,19 @@ class CollectAndEnqueueEventsPeriodicOperation(PeriodicOperation):
 
     _EVENT_COLLECTION_PERIOD = datetime.timedelta(minutes=1)
 
-    def __init__(self, enqueue_event):
+    def __init__(self, enqueue_event_func):
         super(CollectAndEnqueueEventsPeriodicOperation, self).__init__(
             name="collect_and_enqueue_events",
             operation=self._collect_and_enqueue_events,
             period=CollectAndEnqueueEventsPeriodicOperation._EVENT_COLLECTION_PERIOD)
-        self.enqueue_events = enqueue_event
+        self._enqueue_event_func = enqueue_event_func
 
     def _collect_and_enqueue_events(self):
         """
         Periodically send any events located in the events folder
         """
         try:
-            collect_events(self.enqueue_events)
+            collect_events(self._enqueue_event_func)
         except Exception as error:
             err_msg = "Failure in collecting Agent events: {0}".format(ustr(error))
             add_event(op=WALAEventOperation.UnhandledError, message=err_msg, is_success=False)
@@ -197,14 +197,14 @@ class MonitorHandler(ThreadHandlerInterface): # pylint: disable=R0902
     def get_thread_name():
         return MonitorHandler._THREAD_NAME
 
-    def __init__(self, enqueue_event):
+    def __init__(self, enqueue_event_func):
         self.osutil = get_osutil()
         self.imds_client = None
 
         self.event_thread = None
         self._periodic_operations = [
             ResetPeriodicLogMessagesOperation(),
-            CollectAndEnqueueEventsPeriodicOperation(enqueue_event),
+            CollectAndEnqueueEventsPeriodicOperation(enqueue_event_func),
             ReportNetworkErrorsOperation(),
             PollResourceUsageOperation(),
             PeriodicOperation("send_host_plugin_heartbeat", self.send_host_plugin_heartbeat, self.HOST_PLUGIN_HEARTBEAT_PERIOD),

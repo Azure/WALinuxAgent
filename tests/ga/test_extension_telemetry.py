@@ -169,10 +169,7 @@ class TestExtensionTelemetryHandler(AgentTestCase, HttpRequestPredicates):
     def _create_extension_telemetry_processor(self):
 
         event_list = []
-        def _enqueue_events(telemetry_event):
-            event_list.append(telemetry_event)
-
-        extension_telemetry_processor = ProcessExtensionTelemetry(_enqueue_events)
+        extension_telemetry_processor = ProcessExtensionTelemetry(event_list.append)
         extension_telemetry_processor.event_list = event_list
         yield extension_telemetry_processor
 

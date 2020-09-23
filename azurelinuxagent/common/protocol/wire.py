@@ -190,8 +190,8 @@ class WireProtocol(DataContract):
         validate_param("ext_status", ext_status, ExtensionStatus)
         self.client.status_blob.set_ext_status(ext_handler_name, ext_status)
 
-    def report_event(self, events):
-        self.client.report_event(events)
+    def report_event(self, get_events_in_queue):
+        self.client.report_event(get_events_in_queue)
 
     def upload_logs(self, logs):
         self.client.upload_logs(logs)
@@ -1098,8 +1098,8 @@ class WireClient(object): # pylint: disable=R0904
             raise ProtocolError(
                 "Failed to send events:{0}".format(resp.status))
 
-    # Pylint too-many-locals: Disabling this here as a lot of the locals are used for error debugging
-    def report_event(self, get_events): # pylint: disable=too-many-locals
+    # too-many-locals<R0914> Disabled: Most of the locals are used for error debugging
+    def report_event(self, get_events_in_queue): # pylint: disable=too-many-locals
         max_send_errors_to_report = 5
         buf = {}
         events_per_request = defaultdict(int)
@@ -1123,7 +1123,7 @@ class WireClient(object): # pylint: disable=R0904
 
 
         # Group events by providerId
-        for event in get_events():
+        for event in get_events_in_queue():
             try:
                 if event.providerId not in buf:
                     buf[event.providerId] = b''

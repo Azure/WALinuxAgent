@@ -42,7 +42,7 @@ def get_extension_telemetry_handler(enqueue_events):
     return ExtensionTelemetryHandler(enqueue_events)
 
 
-# Pylint R0903 (too-few-public-methods) : Disabling here because this class is an Enum, no public methods needed.
+# too-few-public-methods<R0903> Disabled: This class is used as an Enum
 class ExtensionEventSchema(object): # pylint: disable=R0903
     """
     Class for defining the schema for Extension Events.
@@ -73,13 +73,13 @@ class ProcessExtensionTelemetry(PeriodicOperation):
     _EXTENSION_EVENT_REQUIRED_FIELDS = [attr.lower() for attr in dir(ExtensionEventSchema) if
                                         not callable(getattr(ExtensionEventSchema, attr)) and not attr.startswith("__")]
 
-    def __init__(self, enqueue_event):
+    def __init__(self, enqueue_event_func):
         super(ProcessExtensionTelemetry, self).__init__(
             name="collect_and_enqueue_extension_events",
             operation=self._collect_and_enqueue_extension_events,
             period=ProcessExtensionTelemetry._EXTENSION_EVENT_COLLECTION_PERIOD)
 
-        self._enqueue_event = enqueue_event
+        self._enqueue_event_func = enqueue_event_func
 
     def _collect_and_enqueue_extension_events(self):
         extension_handler_with_event_dirs = []
@@ -235,7 +235,7 @@ class ProcessExtensionTelemetry(PeriodicOperation):
 
         for event in events:
             try:
-                self._enqueue_event(self._parse_telemetry_event(handler_name, event, event_file_time))
+                self._enqueue_event_func(self._parse_telemetry_event(handler_name, event, event_file_time))
                 captured_events_count += 1
             except InvalidExtensionEventError as invalid_error:
                 # These are the errors thrown if there's an error parsing the event. We want to report these back to the
@@ -355,10 +355,10 @@ class ExtensionTelemetryHandler(ThreadHandlerInterface):
 
     _THREAD_NAME = "ExtensionTelemetryHandler"
 
-    def __init__(self, enqueue_events):
+    def __init__(self, enqueue_event_func):
         self.should_run = True
         self.thread = None
-        self._enqueue_event = enqueue_events
+        self._enqueue_event_func = enqueue_event_func
 
     @staticmethod
     def get_thread_name():
@@ -389,7 +389,7 @@ class ExtensionTelemetryHandler(ThreadHandlerInterface):
         return not self.should_run
 
     def daemon(self):
-        periodic_operation = ProcessExtensionTelemetry(self._enqueue_event)
+        periodic_operation = ProcessExtensionTelemetry(self._enqueue_event_func)
         logger.info("Successfully started the {0} thread".format(self.get_thread_name()))
         while not self.stopped():
             try:

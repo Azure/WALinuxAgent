@@ -124,7 +124,7 @@ class TestTelemetryServiceHandler(AgentTestCase, HttpRequestPredicates):
             telemetry_handler.get_mock_wire_protocol().set_http_handlers(http_post_handler=http_post_handler)
 
             with patch("azurelinuxagent.common.event.add_event") as mock_add_event:
-                telemetry_handler.enqueue_event(TelemetryEvent())
+                telemetry_handler.enqueue_event_func(TelemetryEvent())
                 TestTelemetryServiceHandler._stop_handler(telemetry_handler)
                 for msg in expected_msgs:
                     self._assert_error_event_reported(mock_add_event, msg)
@@ -134,7 +134,7 @@ class TestTelemetryServiceHandler(AgentTestCase, HttpRequestPredicates):
 
         with self._create_telemetry_service_handler() as telemetry_handler:
             for test_event in events:
-                telemetry_handler.enqueue_event(test_event)
+                telemetry_handler.enqueue_event_func(test_event)
 
             self._assert_test_data_in_event_body(telemetry_handler, events)
 
@@ -144,7 +144,7 @@ class TestTelemetryServiceHandler(AgentTestCase, HttpRequestPredicates):
         with self._create_telemetry_service_handler() as telemetry_handler:
             test_start_time = datetime.now()
             for test_event in events:
-                telemetry_handler.enqueue_event(test_event)
+                telemetry_handler.enqueue_event_func(test_event)
 
             self._assert_test_data_in_event_body(telemetry_handler, events)
 
@@ -166,7 +166,7 @@ class TestTelemetryServiceHandler(AgentTestCase, HttpRequestPredicates):
 
             # Now enqueue data and verify telemetry_service sends them asap
             for test_event in events:
-                telemetry_handler.enqueue_event(test_event)
+                telemetry_handler.enqueue_event_func(test_event)
 
             self._assert_test_data_in_event_body(telemetry_handler, events)
 
@@ -188,7 +188,7 @@ class TestTelemetryServiceHandler(AgentTestCase, HttpRequestPredicates):
             for test_event in events:
                 test_event.parameters.append(TelemetryEventParam("Priority", test_event.priority))
                 expected_priority_order.append(str(test_event.priority))
-                telemetry_handler.enqueue_event(test_event)
+                telemetry_handler.enqueue_event_func(test_event)
 
             telemetry_handler.start()
             self.assertTrue(telemetry_handler.is_alive(), "Thread not alive")
@@ -201,7 +201,7 @@ class TestTelemetryServiceHandler(AgentTestCase, HttpRequestPredicates):
 
             self.assertEqual(sorted(expected_priority_order), priorities, "Priorities dont match")
 
-    def test_telemetry_service_with_call_wireserver_returns_http_error_and_reports_event(self):
+    def test_telemetry_service_should_report_event_if_wireserver_returns_http_error(self):
 
         test_str = "A test exception, Guid: {0}".format(str(uuid.uuid4()))
 
@@ -228,44 +228,35 @@ class TestTelemetryServiceHandler(AgentTestCase, HttpRequestPredicates):
 
         with self._create_telemetry_service_handler(timeout=0.1) as telemetry_handler:
 
-            # This test validates that if we hit an issue while sending an event, we never send it again.
             with patch("azurelinuxagent.ga.telemetry_service.add_event") as mock_add_event:
                 with patch("azurelinuxagent.common.protocol.wire.WireClient.report_event") as patch_report_event:
                     test_str = "Test exception, Guid: {0}".format(str(uuid.uuid4()))
                     patch_report_event.side_effect = Exception(test_str)
 
-                    telemetry_handler.enqueue_event(TelemetryEvent())
+                    telemetry_handler.enqueue_event_func(TelemetryEvent())
                     TestTelemetryServiceHandler._stop_handler(telemetry_handler, timeout=0.01)
 
                     self._assert_error_event_reported(mock_add_event, test_str, operation=WALAEventOperation.UnhandledError)
 
-    def _create_extension_event(self, # pylint: disable=invalid-name,too-many-arguments
+    def _create_extension_event(self,
                                size=0,
                                name="DummyExtension",
-                               op=WALAEventOperation.Unknown,
-                               is_success=True,
-                               duration=0,
-                               version=CURRENT_VERSION,
                                message="DummyMessage"):
         event_data = self._get_event_data(name=size if size != 0 else name,
-                op=op,
-                is_success=is_success,
-                duration=duration,
-                version=version,
                 message=random_generator(size) if size != 0 else message)
         event_file = os.path.join(self.event_dir, "{0}.tld".format(int(time.time() * 1000000)))
-        with open(event_file, 'wb+') as fd: # pylint: disable=invalid-name
-            fd.write(event_data.encode('utf-8'))
+        with open(event_file, 'wb+') as file_descriptor:
+            file_descriptor.write(event_data.encode('utf-8'))
 
     @staticmethod
-    def _get_event_data(duration, is_success, message, name, op, version, eventId=1): # pylint: disable=invalid-name,too-many-arguments
-        event = TelemetryEvent(eventId, TestTelemetryServiceHandler._TEST_EVENT_PROVIDER_ID) # pylint: disable=redefined-outer-name
+    def _get_event_data(message, name):
+        event = TelemetryEvent(1, TestTelemetryServiceHandler._TEST_EVENT_PROVIDER_ID)
         event.parameters.append(TelemetryEventParam(GuestAgentExtensionEventsSchema.Name, name))
-        event.parameters.append(TelemetryEventParam(GuestAgentExtensionEventsSchema.Version, str(version)))
-        event.parameters.append(TelemetryEventParam(GuestAgentExtensionEventsSchema.Operation, op))
-        event.parameters.append(TelemetryEventParam(GuestAgentExtensionEventsSchema.OperationSuccess, is_success))
+        event.parameters.append(TelemetryEventParam(GuestAgentExtensionEventsSchema.Version, str(CURRENT_VERSION)))
+        event.parameters.append(TelemetryEventParam(GuestAgentExtensionEventsSchema.Operation, WALAEventOperation.Unknown))
+        event.parameters.append(TelemetryEventParam(GuestAgentExtensionEventsSchema.OperationSuccess, True))
         event.parameters.append(TelemetryEventParam(GuestAgentExtensionEventsSchema.Message, message))
-        event.parameters.append(TelemetryEventParam(GuestAgentExtensionEventsSchema.Duration, duration))
+        event.parameters.append(TelemetryEventParam(GuestAgentExtensionEventsSchema.Duration, 0))
 
         data = get_properties(event)
         return json.dumps(data)
@@ -276,7 +267,7 @@ class TestTelemetryServiceHandler(AgentTestCase, HttpRequestPredicates):
         mock_lib_dir.return_value = self.lib_dir
 
         with self._create_telemetry_service_handler() as telemetry_handler:
-            monitor_handler = CollectAndEnqueueEventsPeriodicOperation(telemetry_handler.enqueue_event)
+            monitor_handler = CollectAndEnqueueEventsPeriodicOperation(telemetry_handler.enqueue_event_func)
             self._create_extension_event(message="Message-Test")
 
             test_mtime = 1000  # epoch time, in ms
@@ -347,7 +338,7 @@ class TestTelemetryServiceHandler(AgentTestCase, HttpRequestPredicates):
                 size = 2 ** power
                 self._create_extension_event(size)
 
-            CollectAndEnqueueEventsPeriodicOperation(telemetry_handler.enqueue_event).run()
+            CollectAndEnqueueEventsPeriodicOperation(telemetry_handler.enqueue_event_func).run()
 
             # The send_event call would be called each time, as we are filling up the buffer up to the brim for each call.
             TestTelemetryServiceHandler._stop_handler(telemetry_handler)
@@ -365,7 +356,7 @@ class TestTelemetryServiceHandler(AgentTestCase, HttpRequestPredicates):
                 self._create_extension_event(size)
 
             with patch("azurelinuxagent.common.logger.periodic_warn") as patch_periodic_warn:
-                CollectAndEnqueueEventsPeriodicOperation(telemetry_handler.enqueue_event).run()
+                CollectAndEnqueueEventsPeriodicOperation(telemetry_handler.enqueue_event_func).run()
                 TestTelemetryServiceHandler._stop_handler(telemetry_handler)
                 self.assertEqual(3, patch_periodic_warn.call_count)
 

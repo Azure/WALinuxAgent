@@ -29,8 +29,9 @@ if sys.version_info[0] == 3:
     # to import from this module in others.
     # Additionally, python2 doesn't have this, so we need to disable import-error
     # as well.
-    from builtins import int, range # pylint: disable=unused-import,import-error
 
+    # unused-import<W0611>, import-error<E0401> Disabled: Due to backward compatibility between py2 and py3
+    from builtins import int, range # pylint: disable=unused-import,import-error
     from collections import OrderedDict # pylint: disable=W0611
     from queue import PriorityQueue # pylint: disable=W0611,import-error
 

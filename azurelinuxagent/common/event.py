@@ -587,7 +587,7 @@ class EventLogger(object):
                       message=err_msg_format.format(count, max_errors_to_report, ', '.join(errors)),
                       is_success=False)
 
-    def collect_events(self, enqueue_event): # pylint: disable=R0914
+    def collect_events(self, enqueue_event_func): # pylint: disable=R0914
         """
         Retuns a list of events that need to be sent to the telemetry pipeline and deletes the corresponding files
         from the events directory.
@@ -629,7 +629,7 @@ class EventLogger(object):
                         else:
                             self._update_legacy_agent_event(event, event_file_creation_time)
 
-                    enqueue_event(event)
+                    enqueue_event_func(event)
                 finally:
                     os.remove(event_file_path)
             except UnicodeError as uni_err:
@@ -771,8 +771,8 @@ def add_periodic(delta, name, op=WALAEventOperation.Unknown, is_success=True, du
                           message=message, log_event=log_event, force=force)
 
 
-def collect_events(enqueue_event, reporter=__event_logger__):
-    return reporter.collect_events(enqueue_event)
+def collect_events(enqueue_event_func, reporter=__event_logger__):
+    return reporter.collect_events(enqueue_event_func)
 
 
 def mark_event_status(name, version, op, status): # pylint: disable=C0103

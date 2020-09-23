@@ -123,7 +123,7 @@ class TestEvent(HttpRequestPredicates, AgentTestCase): # pylint: disable=too-man
         def create_event_and_return_container_id(): # pylint: disable=inconsistent-return-statements
             event.add_event(name='Event')
             event_list = self._collect_events()
-            self.assertEquals(len(event_list), 1, "Could not find the event created by add_event") # pylint: disable=deprecated-method
+            self.assertEqual(len(event_list), 1, "Could not find the event created by add_event")
 
             for p in event_list[0].parameters: # pylint: disable=invalid-name
                 if p.name == CommonTelemetryEventSchema.ContainerId:
