@@ -42,10 +42,11 @@ PEM_FILE_NAME = "Certificates.pem"
 TRANSPORT_CERT_FILE_NAME = "TransportCert.pem"
 TRANSPORT_PRV_FILE_NAME = "TransportPrivate.pem"
 
+
 # too-many-instance-attributes<R0902> Disabled: The goal state consists of a good number of properties
 class GoalState(object):  # pylint: disable=R0902
-
-    def __init__(self, wire_client, full_goal_state=False, base_incarnation=None):
+    # too-many-branches<R0912> Disable: Branches are sequential, not nested
+    def __init__(self, wire_client, full_goal_state=False, base_incarnation=None):  # pylint: disable=R0912
         """
         Fetches the goal state using the given wire client.
 
