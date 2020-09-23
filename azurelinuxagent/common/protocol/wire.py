@@ -39,7 +39,7 @@ from azurelinuxagent.common.protocol.goal_state import GoalState, TRANSPORT_CERT
 from azurelinuxagent.common.protocol.hostplugin import HostPluginProtocol
 from azurelinuxagent.common.protocol.restapi import DataContract, ExtensionStatus, ExtHandlerPackage, \
     ExtHandlerPackageList, ExtHandlerVersionUri, ProvisionStatus, VMInfo, VMStatus
-from azurelinuxagent.common.telemetryevent import TelemetryEventList, GuestAgentExtensionEventsSchema
+from azurelinuxagent.common.telemetryevent import GuestAgentExtensionEventsSchema
 from azurelinuxagent.common.utils import fileutil, restutil
 from azurelinuxagent.common.utils.archive import StateFlusher
 from azurelinuxagent.common.utils.cryptutil import CryptUtil
@@ -191,7 +191,6 @@ class WireProtocol(DataContract):
         self.client.status_blob.set_ext_status(ext_handler_name, ext_status)
 
     def report_event(self, events):
-        # validate_param(EVENTS_DIRECTORY, events, TelemetryEventList)
         self.client.report_event(events)
 
     def upload_logs(self, logs):
@@ -1103,8 +1102,24 @@ class WireClient(object): # pylint: disable=R0904
         max_send_errors_to_report = 5
         buf = {}
         events_per_request = defaultdict(int)
-        unicode_error_count, unicode_errors = 0, []
-        event_report_error_count, event_report_errors = 0, []
+        unicode_error_count, unicode_errors = 0, set()
+        event_report_error_count, event_report_errors = 0, set()
+
+        def _send_event(provider_id):
+            uni_err_count, err_count = 0, 0
+            try:
+                self.send_encoded_event(provider_id, buf[provider_id])
+            except UnicodeError as uni_error:
+                uni_err_count += 1
+                if len(unicode_errors) < max_send_errors_to_report:
+                    unicode_errors.add("{0}: {1}".format(ustr(uni_error), traceback.format_exc()))
+            except Exception as error:
+                err_count += 1
+                if len(event_report_errors) < max_send_errors_to_report:
+                    event_report_errors.add("{0}: {1}".format(ustr(error), traceback.format_exc()))
+
+            return uni_err_count, err_count
+
 
         # Group events by providerId
         for event in get_events():
@@ -1123,32 +1138,30 @@ class WireClient(object): # pylint: disable=R0904
                     continue
                 if len(buf[event.providerId] + event_str) >= MAX_EVENT_BUFFER_SIZE:
                     logger.verbose("No of events this request = {0}".format(events_per_request[event.providerId]))
-                    self.send_encoded_event(event.providerId, buf[event.providerId])
+                    uni_err_count, err_count = _send_event(event.providerId)
+                    unicode_error_count += uni_err_count
+                    event_report_error_count += err_count
                     buf[event.providerId] = b''
                     events_per_request[event.providerId] = 0
                 buf[event.providerId] = buf[event.providerId] + event_str
                 events_per_request[event.providerId] += 1
-            except UnicodeError as e: # pylint: disable=C0103
-                unicode_error_count += 1
-                if len(unicode_errors) < max_send_errors_to_report:
-                    unicode_errors.append(ustr(e))
-            except Exception as e: # pylint: disable=C0103
-                event_report_error_count += 1
-                if len(event_report_errors) < max_send_errors_to_report:
-                    event_report_errors.append(ustr(e))
+            except Exception as error:
+                logger.warn("Unexpected error when generating Events: {0}, {1}", ustr(error), traceback.format_exc())
             logger.verbose("done reporting for Event {0}".format(event))
+
+        # Send out all events left in buffer.
+        for provider_id in list(buf.keys()):
+            if buf[provider_id]:
+                logger.verbose("No of events this request = {0}".format(events_per_request[provider_id]))
+                uni_err_count, err_count = _send_event(provider_id)
+                unicode_error_count += uni_err_count
+                event_report_error_count += err_count
 
         EventLogger.report_dropped_events_error(event_report_error_count, event_report_errors,
                                                 WALAEventOperation.ReportEventErrors, max_send_errors_to_report)
         EventLogger.report_dropped_events_error(unicode_error_count, unicode_errors,
                                                 WALAEventOperation.ReportEventUnicodeErrors,
                                                 max_send_errors_to_report)
-
-        # Send out all events left in buffer.
-        for provider_id in list(buf.keys()):
-            if len(buf[provider_id]) > 0: # pylint: disable=len-as-condition
-                logger.verbose("No of events this request = {0}".format(events_per_request[provider_id]))
-                self.send_encoded_event(provider_id, buf[provider_id])
 
     def report_status_event(self, message, is_success):
         report_event(op=WALAEventOperation.ReportStatus,

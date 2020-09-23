@@ -20,8 +20,11 @@ import time
 import uuid
 from datetime import datetime, timedelta
 
+from azurelinuxagent.common.utils import restutil
 from mock import MagicMock, Mock, patch
 
+from azurelinuxagent.common.event import WALAEventOperation
+from azurelinuxagent.common.exception import HttpError
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.protocol.util import ProtocolUtil
 from azurelinuxagent.common.protocol.wire import event_to_v1_encoded
@@ -51,6 +54,7 @@ class TestExtensionTelemetryHandler(AgentTestCase, HttpRequestPredicates):
             telemetry_service_handler = get_telemetry_service_handler(protocol_util)
             telemetry_service_handler.event_calls = []
             with patch("azurelinuxagent.ga.telemetry_service.TelemetryServiceHandler._MAX_TIMEOUT", timeout):
+                telemetry_service_handler.get_mock_wire_protocol = lambda: protocol
                 if start_thread:
                     telemetry_service_handler.start()
                     self.assertTrue(telemetry_service_handler.is_alive(), "Thread didn't start properly!")
@@ -69,6 +73,26 @@ class TestExtensionTelemetryHandler(AgentTestCase, HttpRequestPredicates):
                     break
 
             self.assertTrue(found, "Event {0} not found in any telemetry calls".format(event_str))
+
+    def _assert_error_event_reported(self, mock_add_event, expected_msg, op=WALAEventOperation.ReportEventErrors):
+        found_msg = False
+        for call_args in mock_add_event.call_args_list:
+            _, kwargs = call_args
+            if expected_msg in kwargs['message'] and kwargs['op'] == op:
+                found_msg = True
+                break
+        self.assertTrue(found_msg, "Error msg: {0} not reported".format(expected_msg))
+
+    def _setup_and_assert_bad_request_scenarios(self, http_post_handler, expected_msgs):
+        with self._create_telemetry_service_handler() as telemetry_handler:
+
+            telemetry_handler.get_mock_wire_protocol().set_http_handlers(http_post_handler=http_post_handler)
+
+            with patch("azurelinuxagent.common.event.add_event") as mock_add_event:
+                telemetry_handler.enqueue_event(TelemetryEvent())
+                telemetry_handler.stop()
+                for msg in expected_msgs:
+                    self._assert_error_event_reported(mock_add_event, msg)
 
     def test_it_should_send_events_properly(self):
         events = [TelemetryEvent(eventId=ustr(uuid.uuid4())), TelemetryEvent(eventId=ustr(uuid.uuid4()))]
@@ -143,3 +167,42 @@ class TestExtensionTelemetryHandler(AgentTestCase, HttpRequestPredicates):
                 priorities.extend(re.findall(regex_pattern, event_body))
 
             self.assertEqual(sorted(expected_priority_order), priorities, "Priorities dont match")
+
+    def test_telemetry_service_with_call_wireserver_returns_http_error_and_reports_event(self):
+
+        test_str = "A test exception, Guid: {0}".format(str(uuid.uuid4()))
+
+        def http_post_handler(url, _, **__):
+            if self.is_telemetry_request(url):
+                return HttpError(test_str)
+            return None
+
+        self._setup_and_assert_bad_request_scenarios(http_post_handler, [test_str])
+
+    def test_telemetry_service_should_report_event_when_http_post_returning_503(self):
+
+        def http_post_handler(url, _, **__):
+            if self.is_telemetry_request(url):
+                return MockHttpResponse(restutil.httpclient.SERVICE_UNAVAILABLE)
+            return None
+
+        expected_msgs = ["[ProtocolError] [Wireserver Exception] [ProtocolError] [Wireserver Failed]",
+                        "[HTTP Failed] Status Code 503"]
+
+        self._setup_and_assert_bad_request_scenarios(http_post_handler, expected_msgs)
+
+    def test_telemetry_service_should_add_event_on_unexpected_errors(self):
+
+        with self._create_telemetry_service_handler() as telemetry_handler:
+
+            # This test validates that if we hit an issue while sending an event, we never send it again.
+            with patch("azurelinuxagent.ga.telemetry_service.add_event") as mock_add_event:
+                with patch("azurelinuxagent.common.protocol.wire.WireClient.report_event") as patch_report_event:
+                    test_str = "Test exception, Guid: {0}".format(str(uuid.uuid4()))
+                    patch_report_event.side_effect = Exception(test_str)
+
+                    telemetry_handler.enqueue_event(TelemetryEvent())
+                    time.sleep(0.05)
+                    telemetry_handler.stop()
+
+                    self._assert_error_event_reported(mock_add_event, test_str, op=WALAEventOperation.UnhandledError)

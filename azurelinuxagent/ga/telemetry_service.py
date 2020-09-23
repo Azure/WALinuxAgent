@@ -22,6 +22,7 @@ import threading
 import traceback
 
 from azurelinuxagent.common import logger
+from azurelinuxagent.common.event import add_event, WALAEventOperation
 from azurelinuxagent.common.future import ustr, PriorityQueue
 
 
@@ -96,8 +97,9 @@ class TelemetryServiceHandler(object):
                 self._send_events_in_queue()
 
         except Exception as error:
-            logger.warn("An unknown error occurred in the {0} thread main loop, stopping thread. Error: {1}, Stack: {2}",
-                        self.get_thread_name(), ustr(error), traceback.format_exc())
+            err_msg = "An unknown error occurred in the {0} thread main loop, stopping thread. Error: {1}, Stack: {2}".format(
+                self.get_thread_name(), ustr(error), traceback.format_exc())
+            add_event(op=WALAEventOperation.UnhandledError, message=err_msg, is_success=False)
 
     def _get_events_in_queue(self):
         while not self._queue.empty():
@@ -107,9 +109,10 @@ class TelemetryServiceHandler(object):
                 yield event
                 # Mark task_done once data processed. Do not mark task_done if error fetching from queue, else that will raise errors
                 logger.verbose("Marking event as done now: {0}".format(event))
-                self._queue.task_done()
             except Exception as error:
                 logger.error("Some exception when fetching event from queue: {0}".format(ustr(error)))
+            finally:
+                self._queue.task_done()
 
     def _send_events_in_queue(self):
         # Process everything in Queue

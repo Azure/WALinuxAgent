@@ -119,20 +119,16 @@ class CollectAndEnqueueEventsPeriodicOperation(PeriodicOperation):
     def __init__(self, enqueue_event):
         super(CollectAndEnqueueEventsPeriodicOperation, self).__init__(
             name="collect_and_enqueue_events",
-            operation=self.collect_and_enqueue_events,
+            operation=self._collect_and_enqueue_events,
             period=CollectAndEnqueueEventsPeriodicOperation._EVENT_COLLECTION_PERIOD)
         self.enqueue_events = enqueue_event
 
-    def collect_and_enqueue_events(self):
+    def _collect_and_enqueue_events(self):
         """
         Periodically send any events located in the events folder
         """
         try:
-            # event_list = collect_events()
             collect_events(self.enqueue_events)
-
-            # if len(event_list.events) > 0: # pylint: disable=len-as-condition
-            #     self.protocol.report_event(event_list)
         except Exception as error:
             err_msg = "Failure in collecting Agent events: {0}".format(ustr(error))
             add_event(op=WALAEventOperation.UnhandledError, message=err_msg, is_success=False)

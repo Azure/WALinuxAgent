@@ -38,7 +38,6 @@ from azurelinuxagent.common.telemetryevent import TelemetryEventParam, Telemetry
 from azurelinuxagent.common.utils import fileutil, textutil
 from azurelinuxagent.common.utils.textutil import parse_doc, findall, find, getattrib
 from azurelinuxagent.common.version import CURRENT_VERSION, CURRENT_AGENT, AGENT_NAME, DISTRO_NAME, DISTRO_VERSION, DISTRO_CODE_NAME, AGENT_EXECUTION_MODE
-from azurelinuxagent.common.telemetryevent import TelemetryEventList
 from azurelinuxagent.common.protocol.imds import get_imds_client
 
 EVENTS_DIRECTORY = "events"
@@ -580,7 +579,7 @@ class EventLogger(object):
         event.parameters = trimmed_params
 
     @staticmethod
-    def report_dropped_events_error(count, errors, op, max_errors_to_report): # pylint: disable=C0103
+    def report_dropped_events_error(count, errors, op, max_errors_to_report):
         err_msg_format = "DroppedEventsCount: {0}\nReasons (first {1} errors): {2}"
         if count > 0:
             add_event(op=op,
@@ -593,10 +592,9 @@ class EventLogger(object):
         from the events directory.
         """
         max_collect_errors_to_report = 5
-        # event_list = TelemetryEventList()
         event_directory_full_path = os.path.join(conf.get_lib_dir(), EVENTS_DIRECTORY)
         event_files = os.listdir(event_directory_full_path)
-        unicode_error_count, unicode_errors = 0, []
+        unicode_error_count, unicode_errors = 0, set()
         collect_event_error_count, collect_event_errors = 0, set()
 
         for event_file in event_files:
@@ -630,26 +628,23 @@ class EventLogger(object):
                         else:
                             self._update_legacy_agent_event(event, event_file_creation_time)
 
-                    # event_list.events.append(event)
                     enqueue_event(event)
                 finally:
                     os.remove(event_file_path)
-            except UnicodeError as e: # pylint: disable=C0103
+            except UnicodeError as uni_err:
                 unicode_error_count += 1
                 if len(unicode_errors) < max_collect_errors_to_report:
-                    unicode_errors.append(ustr(e))
-            except Exception as e: # pylint: disable=C0103
+                    unicode_errors.add("{0}: {1}".format(ustr(uni_err), traceback.format_exc()))
+            except Exception as error:
                 collect_event_error_count += 1
                 if len(collect_event_errors) < max_collect_errors_to_report:
-                    collect_event_errors.add(traceback.format_exc())
+                    collect_event_errors.add("{0}: {1}".format(ustr(error), traceback.format_exc()))
 
         EventLogger.report_dropped_events_error(collect_event_error_count, collect_event_errors,
                                                 WALAEventOperation.CollectEventErrors, max_collect_errors_to_report)
         EventLogger.report_dropped_events_error(unicode_error_count, unicode_errors,
                                                 WALAEventOperation.CollectEventUnicodeErrors,
                                                 max_collect_errors_to_report)
-
-        # return event_list
 
     def _update_legacy_agent_event(self, event, event_creation_time):
         # Ensure that if an agent event is missing a field from the schema defined since 2.2.47, the missing fields

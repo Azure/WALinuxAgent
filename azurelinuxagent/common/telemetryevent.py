@@ -144,8 +144,3 @@ class TelemetryEvent(DataContract):
             if param.name == GuestAgentExtensionEventsSchema.Version:
                 return param.value
         return None
-
-
-class TelemetryEventList(DataContract): # pylint: disable=R0903
-    def __init__(self):
-        self.events = DataContractList(TelemetryEvent)
