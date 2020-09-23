@@ -29,6 +29,7 @@ from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.protocol.restapi import Cert, CertList, Extension, ExtHandler, ExtHandlerList, \
     ExtHandlerVersionUri, RemoteAccessUser, RemoteAccessUsersList, \
     VMAgentManifest, VMAgentManifestList, VMAgentManifestUri
+from azurelinuxagent.common.exception import IncompleteGoalStateError
 from azurelinuxagent.common.utils import fileutil
 from azurelinuxagent.common.utils.cryptutil import CryptUtil
 from azurelinuxagent.common.utils.textutil import parse_doc, findall, find, findtext, getattrib, gettext
@@ -59,12 +60,20 @@ class GoalState(object): # pylint: disable=R0902
 
         """
         uri = GOAL_STATE_URI.format(wire_client.get_endpoint())
-        self.xml_text = wire_client.fetch_config(uri, wire_client.get_header())
-        xml_doc = parse_doc(self.xml_text)
+
+        for attempt in range(1, 6):
+            self.xml_text = wire_client.fetch_config(uri, wire_client.get_header())
+            xml_doc = parse_doc(self.xml_text)
+
+            role_instance = find(xml_doc, "RoleInstance")
+            if role_instance:
+                break
+        else:
+            raise IncompleteGoalStateError("Goal State doesn't have a RoleInstance.")
 
         self.incarnation = findtext(xml_doc, "Incarnation")
         self.expected_state = findtext(xml_doc, "ExpectedState")
-        role_instance = find(xml_doc, "RoleInstance")
+
         self.role_instance_id = findtext(role_instance, "InstanceId")
         role_config = find(role_instance, "Configuration")
         self.role_config_name = findtext(role_config, "ConfigName")
@@ -75,9 +84,9 @@ class GoalState(object): # pylint: disable=R0902
 
         AgentGlobals.update_container_id(self.container_id)
 
-        if full_goal_state and role_config:
+        if full_goal_state:
             reason = 'force update'
-        elif base_incarnation not in (None, self.incarnation) and role_config:
+        elif base_incarnation not in (None, self.incarnation):
             reason = 'new incarnation'
         else:
             self.hosting_env = None
@@ -145,14 +154,7 @@ class GoalState(object): # pylint: disable=R0902
         """
         Fetches the full goal state, including nested properties (such as extension config).
         """
-        goal_state = GoalState(wire_client, full_goal_state=True)
-
-        try:
-            GoalState._verify_gs_for_noop(goal_state)
-        except ValueError:
-            return None
-
-        return goal_state
+        return GoalState(wire_client, full_goal_state=True)
 
     @staticmethod
     def fetch_full_goal_state_if_incarnation_different_than(wire_client, incarnation):
@@ -160,12 +162,6 @@ class GoalState(object): # pylint: disable=R0902
         Fetches the full goal state if the new incarnation is different than 'incarnation', otherwise returns None.
         """
         goal_state = GoalState(wire_client, base_incarnation=incarnation)
-
-        try:
-            GoalState._verify_gs_for_noop(goal_state)
-        except ValueError:
-            return None
-
         return goal_state if goal_state.incarnation != incarnation else None
 
 

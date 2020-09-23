@@ -1083,7 +1083,7 @@ class TryUpdateGoalStateTestCase(HttpRequestPredicates, AgentTestCase):
             protocol.mock_wire_data.reload()
             protocol.mock_wire_data.set_incarnation(2)
 
-            self.assertTrue(protocol.client.try_update_goal_state(), "try_update_goal_state should have succeeded")
+            self.assertFalse(protocol.client.try_update_goal_state(), "try_update_goal_state should fail")
 
     def test_it_should_return_false_on_failure(self):
         with mock_wire_protocol(mockwiredata.DATA_FILE) as protocol:
