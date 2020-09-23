@@ -41,8 +41,8 @@ class CryptUtil(object):
         """
         Create ssl certificate for https communication with endpoint server.
         """
-        cmd = [self.openssl_cmd, "req -x509 -nodes -subj /CN=LinuxTransport -days 730",
-            "-newkey rsa:2048 -keyout", prv_file, "-out", crt_file]
+        cmd = [self.openssl_cmd, "req", "-x509", "-nodes", "-subj", "/CN=LinuxTransport", 
+            "-days", "730", "-newkey", "rsa:2048", "-keyout", prv_file, "-out", crt_file]
         try:
             shellutil.run_command(cmd)
         except shellutil.CommandError:
@@ -79,14 +79,13 @@ class CryptUtil(object):
         elif not os.path.exists(trans_prv_file):
             raise IOError(errno.ENOENT, "File not found", trans_prv_file)
         else:
-            cmd = [self.openssl_cmd, "cms -decrypt -in", p7m_file, "-inkey",
-                trans_prv_file, "-recip",]
-            cmd = ("{0} cms -decrypt -in {1} -inkey {2} -recip {3} "
-                   "| {4} pkcs12 -nodes -password pass: -out {5}"
-                   "").format(self.openssl_cmd, p7m_file, trans_prv_file,
-                              trans_cert_file, self.openssl_cmd, pem_file)
+            first_cmd = [self.openssl_cmd, "cms", "-decrypt", "-in", p7m_file, "-inkey",
+                trans_prv_file, "-recip", trans_cert_file]
+            second_cmd = [self.openssl_cmd, "pkcs12", "-nodes", "-password", "pass:", 
+                "-out", pem_file]
             try:
-                shellutil.run_command(cmd)
+                first_cmd_output = shellutil.run_command(first_cmd)
+                shellutil.run_command(second_cmd, cmd_input=first_cmd_output)
             except shellutil.CommandError:
                 logger.error("Failed to decrypt {0}".format(p7m_file))
 
