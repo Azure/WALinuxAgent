@@ -220,8 +220,12 @@ def _build_health_report(incarnation, container_id, role_instance_id, # pylint: 
                          status, substatus, description):
     # Escape '&', '<' and '>'
     description = saxutils.escape(ustr(description))
+
+    # The max description that can be sent to WireServer is 4096 bytes.
+    # Exceeding this max can result in a failure to report health.
     max_description_length = 4096
     description = description[-max_description_length:]
+
     detail = u''
     if substatus is not None:
         substatus = saxutils.escape(ustr(substatus))
