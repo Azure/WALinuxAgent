@@ -24,13 +24,13 @@ import time
 import traceback
 import xml.sax.saxutils as saxutils
 from collections import defaultdict
-from datetime import datetime # pylint: disable=ungrouped-imports
+from datetime import datetime  # pylint: disable=ungrouped-imports
 
 import azurelinuxagent.common.conf as conf
 import azurelinuxagent.common.logger as logger
 import azurelinuxagent.common.utils.textutil as textutil
 from azurelinuxagent.common.datacontract import validate_param
-from azurelinuxagent.common.event import add_event, add_periodic, WALAEventOperation, EVENTS_DIRECTORY, EventLogger, \
+from azurelinuxagent.common.event import add_event, add_periodic, WALAEventOperation, EventLogger, \
     report_event
 from azurelinuxagent.common.exception import ProtocolNotFoundError, \
     ResourceGoneError, ExtensionDownloadError, InvalidContainerError, ProtocolError, HttpError

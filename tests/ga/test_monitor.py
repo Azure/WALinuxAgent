@@ -15,40 +15,28 @@
 #
 # Requires Python 2.6+ and Openssl 1.0+
 #
-import datetime
 import contextlib
-import json
+import datetime
 import os
-import platform
 import random
 import re
 import string
-import tempfile
-import time
-import uuid
-from datetime import timedelta # pylint: disable=ungrouped-imports
-
-from azurelinuxagent.common.protocol.util import ProtocolUtil
+from datetime import timedelta  # pylint: disable=ungrouped-imports
 
 from azurelinuxagent.common import event, logger
 from azurelinuxagent.common.cgroup import CGroup, CpuCgroup, MemoryCgroup, MetricValue
 from azurelinuxagent.common.cgroupconfigurator import CGroupConfigurator
 from azurelinuxagent.common.cgroupstelemetry import CGroupsTelemetry
-from azurelinuxagent.common.datacontract import get_properties
-from azurelinuxagent.common.event import add_event, WALAEventOperation, EVENTS_DIRECTORY
-from azurelinuxagent.common.exception import HttpError
+from azurelinuxagent.common.event import EVENTS_DIRECTORY
 from azurelinuxagent.common.logger import Logger
-from azurelinuxagent.common.osutil import get_osutil
+from azurelinuxagent.common.protocol.util import ProtocolUtil
 from azurelinuxagent.common.protocol.wire import WireProtocol
-from azurelinuxagent.common.telemetryevent import TelemetryEvent, TelemetryEventParam, GuestAgentExtensionEventsSchema
-from azurelinuxagent.common.utils import fileutil, restutil
-from azurelinuxagent.common.version import AGENT_VERSION, CURRENT_VERSION, CURRENT_AGENT, DISTRO_NAME, DISTRO_VERSION, DISTRO_CODE_NAME
-from azurelinuxagent.ga.monitor import get_monitor_handler, MonitorHandler, PeriodicOperation, ResetPeriodicLogMessagesOperation, PollResourceUsageOperation
+from azurelinuxagent.ga.monitor import get_monitor_handler, MonitorHandler, PeriodicOperation, \
+    ResetPeriodicLogMessagesOperation, PollResourceUsageOperation
 from tests.common.mock_cgroup_commands import mock_cgroup_commands
-from tests.protocol.mockwiredata import DATA_FILE
 from tests.protocol.mocks import mock_wire_protocol, HttpRequestPredicates, MockHttpResponse
-from tests.tools import Mock, MagicMock, patch, AgentTestCase, clear_singleton_instances, PropertyMock
-from tests.utils.event_logger_tools import EventLoggerTools
+from tests.protocol.mockwiredata import DATA_FILE
+from tests.tools import Mock, MagicMock, patch, AgentTestCase, clear_singleton_instances
 
 
 def random_generator(size=6, chars=string.ascii_uppercase + string.digits + string.ascii_lowercase):

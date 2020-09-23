@@ -28,15 +28,15 @@ import json
 
 import platform
 
+from mock import MagicMock, Mock, patch, PropertyMock
 from azurelinuxagent.common.osutil.factory import get_osutil
 
-from azurelinuxagent.common import event, logger
+from azurelinuxagent.common import logger
 from azurelinuxagent.common.datacontract import get_properties
 
 from azurelinuxagent.common.utils import restutil, fileutil
-from mock import MagicMock, Mock, patch, PropertyMock
 
-from azurelinuxagent.common.event import WALAEventOperation
+from azurelinuxagent.common.event import WALAEventOperation, EVENTS_DIRECTORY
 from azurelinuxagent.common.exception import HttpError
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.protocol.util import ProtocolUtil
@@ -59,7 +59,7 @@ class TestTelemetryServiceHandler(AgentTestCase, HttpRequestPredicates):
         AgentTestCase.setUp(self)
         clear_singleton_instances(ProtocolUtil)
         self.lib_dir = tempfile.mkdtemp()
-        self.event_dir = os.path.join(self.lib_dir, event.EVENTS_DIRECTORY)
+        self.event_dir = os.path.join(self.lib_dir, EVENTS_DIRECTORY)
 
         EventLoggerTools.initialize_event_logger(self.event_dir)
 
@@ -99,8 +99,8 @@ class TestTelemetryServiceHandler(AgentTestCase, HttpRequestPredicates):
         # Stop the thread and Wait for the queue and thread to join
         TestTelemetryServiceHandler._stop_handler(telemetry_handler)
 
-        for event in test_events:
-            event_str = event_to_v1_encoded(event)
+        for telemetry_event in test_events:
+            event_str = event_to_v1_encoded(telemetry_event)
             found = False
             for _, event_body in telemetry_handler.event_calls:
                 if event_str in event_body:
@@ -109,11 +109,11 @@ class TestTelemetryServiceHandler(AgentTestCase, HttpRequestPredicates):
 
             self.assertTrue(found, "Event {0} not found in any telemetry calls".format(event_str))
 
-    def _assert_error_event_reported(self, mock_add_event, expected_msg, op=WALAEventOperation.ReportEventErrors):
+    def _assert_error_event_reported(self, mock_add_event, expected_msg, operation=WALAEventOperation.ReportEventErrors):
         found_msg = False
         for call_args in mock_add_event.call_args_list:
             _, kwargs = call_args
-            if expected_msg in kwargs['message'] and kwargs['op'] == op:
+            if expected_msg in kwargs['message'] and kwargs['op'] == operation:
                 found_msg = True
                 break
         self.assertTrue(found_msg, "Error msg: {0} not reported".format(expected_msg))
@@ -239,7 +239,7 @@ class TestTelemetryServiceHandler(AgentTestCase, HttpRequestPredicates):
                     telemetry_handler.enqueue_event(TelemetryEvent())
                     TestTelemetryServiceHandler._stop_handler(telemetry_handler, timeout=0.01)
 
-                    self._assert_error_event_reported(mock_add_event, test_str, op=WALAEventOperation.UnhandledError)
+                    self._assert_error_event_reported(mock_add_event, test_str, operation=WALAEventOperation.UnhandledError)
 
     def _create_extension_event(self, # pylint: disable=invalid-name,too-many-arguments
                                size=0,

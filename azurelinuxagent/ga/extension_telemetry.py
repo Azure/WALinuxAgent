@@ -388,15 +388,15 @@ class ExtensionTelemetryHandler(object):
         return not self.should_run
 
     def daemon(self):
-        op = ProcessExtensionTelemetry(self._enqueue_event)
+        periodic_operation = ProcessExtensionTelemetry(self._enqueue_event)
         logger.info("Successfully started the {0} thread".format(self.get_thread_name()))
         while not self.stopped():
             try:
-                op.run()
+                periodic_operation.run()
 
             except Exception as error:
                 logger.warn(
                     "An error occurred in the Telemetry Extension thread main loop; will skip the current iteration.\n{0}",
                     ustr(error))
             finally:
-                PeriodicOperation.sleep_until_next_operation([op])
+                PeriodicOperation.sleep_until_next_operation([periodic_operation])
