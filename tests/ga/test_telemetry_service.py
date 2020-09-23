@@ -34,7 +34,7 @@ from azurelinuxagent.common.osutil.factory import get_osutil
 from azurelinuxagent.common import logger
 from azurelinuxagent.common.datacontract import get_properties
 
-from azurelinuxagent.common.utils import restutil, fileutil
+from azurelinuxagent.common.utils import restutil, fileutil, textutil
 
 from azurelinuxagent.common.event import WALAEventOperation, EVENTS_DIRECTORY
 from azurelinuxagent.common.exception import HttpError
@@ -199,7 +199,7 @@ class TestTelemetryServiceHandler(AgentTestCase, HttpRequestPredicates):
             priorities = []
             regex_pattern = r'<Param Name="Priority" Value="(\d+)" T="mt:uint64" />'
             for _, event_body in telemetry_handler.event_calls:
-                priorities.extend(re.findall(regex_pattern, event_body))
+                priorities.extend(re.findall(regex_pattern, textutil.str_to_encoded_ustr(event_body)))
 
             self.assertEqual(sorted(expected_priority_order), priorities, "Priorities dont match")
 
