@@ -100,6 +100,7 @@ class WALAEventOperation: # pylint: disable=R0903,no-init
     InitializeHostPlugin = "InitializeHostPlugin"
     InvokeCommandUsingSystemd = "InvokeCommandUsingSystemd"
     Log = "Log"
+    LogCollection = "LogCollection"
     OSInfo = "OSInfo"
     Partition = "Partition"
     PluginSettingsVersionMismatch = "PluginSettingsVersionMismatch"

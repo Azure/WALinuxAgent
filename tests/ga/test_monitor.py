@@ -337,7 +337,7 @@ Directory /sys/fs/cgroup/cpu/system.slice/walinuxagent.service:
                 search = re.search(r'\[(?P<processes>.+)\]', messages[0])
                 self.assertIsNotNone(search, "The event message is not in the expected format: {0}".format(messages[0]))
                 processes = search.group('processes')
-                self.assertEquals(5, len(processes.split(',')), 'Extra processes were reported as unexpected: {0}'.format(processes)) # pylint: disable=deprecated-method
+                self.assertEqual(5, len(processes.split(',')), 'Extra processes were reported as unexpected: {0}'.format(processes))
 
 
 @patch("azurelinuxagent.common.utils.restutil.http_post")

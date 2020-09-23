@@ -28,6 +28,7 @@ import azurelinuxagent.common.logger as logger
 from azurelinuxagent.common.dhcp import get_dhcp_handler
 from azurelinuxagent.common.event import add_periodic, WALAEventOperation
 from azurelinuxagent.common.future import ustr
+from azurelinuxagent.common.interfaces import ThreadHandlerInterface
 from azurelinuxagent.common.osutil import get_osutil
 from azurelinuxagent.common.protocol.util import get_protocol_util
 from azurelinuxagent.common.utils.archive import StateArchiver
@@ -42,11 +43,12 @@ CACHE_PATTERNS = [
 
 MAXIMUM_CACHED_FILES = 50
 
+
 def get_env_handler():
     return EnvHandler()
 
 
-class EnvHandler(object): # pylint: disable=R0902
+class EnvHandler(ThreadHandlerInterface): # pylint: disable=R0902
     """
     Monitor changes to dhcp and hostname.
     If dhcp client process re-start has occurred, reset routes, dhcp with fabric.

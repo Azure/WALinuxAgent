@@ -24,7 +24,8 @@ import tempfile
 
 from nose.plugins.attrib import attr
 
-from azurelinuxagent.common.cgroupapi import CGroupsApi, FileSystemCgroupsApi, SystemdCgroupsApi, VM_AGENT_CGROUP_NAME
+from azurelinuxagent.common.cgroupapi import CGroupsApi, FileSystemCgroupsApi, SystemdCgroupsApi, VM_AGENT_CGROUP_NAME, \
+    SYSTEMD_RUN_PATH
 from azurelinuxagent.common.cgroupstelemetry import CGroupsTelemetry
 from azurelinuxagent.common.exception import ExtensionError, ExtensionErrorCodes
 from azurelinuxagent.common.future import ustr
@@ -73,13 +74,13 @@ class CGroupsApiTestCase(_MockedFileSystemTestCase):
                 self.assertEqual(CGroupsApi.cgroups_supported(), supported, "cgroups_supported() failed on {0}".format(distro))
 
     def test_create_should_return_a_SystemdCgroupsApi_on_systemd_platforms(self): # pylint: disable=invalid-name
-        with patch("azurelinuxagent.common.cgroupapi.CGroupsApi._is_systemd", return_value=True):
+        with patch("azurelinuxagent.common.cgroupapi.CGroupsApi.is_systemd", return_value=True):
             api = CGroupsApi.create()
 
         self.assertTrue(type(api) == SystemdCgroupsApi) # pylint: disable=unidiomatic-typecheck
 
     def test_create_should_return_a_FileSystemCgroupsApi_on_non_systemd_platforms(self): # pylint: disable=invalid-name
-        with patch("azurelinuxagent.common.cgroupapi.CGroupsApi._is_systemd", return_value=False):
+        with patch("azurelinuxagent.common.cgroupapi.CGroupsApi.is_systemd", return_value=False):
             api = CGroupsApi.create()
 
         self.assertTrue(type(api) == FileSystemCgroupsApi) # pylint: disable=unidiomatic-typecheck
@@ -88,7 +89,7 @@ class CGroupsApiTestCase(_MockedFileSystemTestCase):
         path_exists = os.path.exists
 
         def mock_path_exists(path):
-            if path == "/run/systemd/system/":
+            if path == SYSTEMD_RUN_PATH:
                 mock_path_exists.path_tested = True
                 return True
             return path_exists(path)
@@ -96,7 +97,7 @@ class CGroupsApiTestCase(_MockedFileSystemTestCase):
         mock_path_exists.path_tested = False
 
         with patch("azurelinuxagent.common.cgroupapi.os.path.exists", mock_path_exists):
-            is_systemd = CGroupsApi._is_systemd() # pylint: disable=protected-access
+            is_systemd = CGroupsApi.is_systemd() # pylint: disable=protected-access
 
         self.assertTrue(is_systemd)
 
@@ -106,7 +107,7 @@ class CGroupsApiTestCase(_MockedFileSystemTestCase):
         path_exists = os.path.exists
 
         def mock_path_exists(path):
-            if path == "/run/systemd/system/":
+            if path == SYSTEMD_RUN_PATH:
                 mock_path_exists.path_tested = True
                 return False
             return path_exists(path)
@@ -114,7 +115,7 @@ class CGroupsApiTestCase(_MockedFileSystemTestCase):
         mock_path_exists.path_tested = False
 
         with patch("azurelinuxagent.common.cgroupapi.os.path.exists", mock_path_exists):
-            is_systemd = CGroupsApi._is_systemd() # pylint: disable=protected-access
+            is_systemd = CGroupsApi.is_systemd() # pylint: disable=protected-access
 
         self.assertFalse(is_systemd)
 
@@ -150,10 +151,10 @@ class CGroupsApiTestCase(_MockedFileSystemTestCase):
 
             args, kwargs = mock_logger_warn.call_args # pylint: disable=unused-variable
             (message_format, controller, error, message) = args
-            self.assertEquals(message_format, 'Error in cgroup controller "{0}": {1}. {2}') # pylint: disable=deprecated-method
-            self.assertEquals(controller, 'cpu') # pylint: disable=deprecated-method
-            self.assertEquals(error, 'A test exception') # pylint: disable=deprecated-method
-            self.assertEquals(message, 'A dummy message') # pylint: disable=deprecated-method
+            self.assertEqual(message_format, 'Error in cgroup controller "{0}": {1}. {2}')
+            self.assertEqual(controller, 'cpu')
+            self.assertEqual(error, 'A test exception')
+            self.assertEqual(message, 'A dummy message')
 
 
 class MountCgroupsTestCase(AgentTestCase):
@@ -313,7 +314,7 @@ class MountCgroupsTestCase(AgentTestCase):
             with patch("azurelinuxagent.common.osutil.default.os.symlink") as patch_symlink:
                 FileSystemCgroupsApi.mount_cgroups()
 
-                self.assertEquals(patch_symlink.call_count, 0, 'A symbolic link should not have been created') # pylint: disable=deprecated-method
+                self.assertEqual(patch_symlink.call_count, 0, 'A symbolic link should not have been created')
 
 
 class FileSystemCgroupsApiTestCase(_MockedFileSystemTestCase):
@@ -346,7 +347,7 @@ class FileSystemCgroupsApiTestCase(_MockedFileSystemTestCase):
         self.assertFalse(os.path.exists(legacy_memory_cgroup))
 
         # Assert the event parameters that were sent out
-        self.assertEquals(len(mock_add_event.call_args_list), 2) # pylint: disable=deprecated-method
+        self.assertEqual(len(mock_add_event.call_args_list), 2)
         self.assertTrue(all(kwargs['op'] == 'CGroupsCleanUp' for _, kwargs in mock_add_event.call_args_list))
         self.assertTrue(all(kwargs['is_success'] for _, kwargs in mock_add_event.call_args_list))
         self.assertTrue(any(
@@ -462,7 +463,7 @@ class FileSystemCgroupsApiTestCase(_MockedFileSystemTestCase):
                 contents = f.read()
             pid_from_cgroup = int(contents)
 
-            self.assertEquals(pid_from_output, pid_from_cgroup, # pylint: disable=deprecated-method
+            self.assertEqual(pid_from_output, pid_from_cgroup,
                               "The PID from the process output ({0}) does not match the PID found in the"
                               "process cgroup {1} ({2})".format(pid_from_output, cgroups_procs_path, pid_from_cgroup))
 
@@ -472,26 +473,26 @@ class SystemdCgroupsApiTestCase(AgentTestCase):
     def test_get_systemd_version_should_return_a_version_number(self):
         with mock_cgroup_commands():
             version_info = SystemdCgroupsApi.get_systemd_version()
-            found = re.search("systemd \d+", version_info) is not None # pylint: disable=anomalous-backslash-in-string
+            found = re.search(r"systemd \d+", version_info) is not None
             self.assertTrue(found, "Could not determine the systemd version: {0}".format(version_info))
 
     def test_get_cpu_and_memory_mount_points_should_return_the_cgroup_mount_points(self):
         with mock_cgroup_commands():
             cpu, memory = SystemdCgroupsApi().get_cgroup_mount_points()
-            self.assertEquals(cpu, '/sys/fs/cgroup/cpu,cpuacct', "The mount point for the CPU controller is incorrect") # pylint: disable=deprecated-method
-            self.assertEquals(memory, '/sys/fs/cgroup/memory', "The mount point for the memory controller is incorrect") # pylint: disable=deprecated-method
+            self.assertEqual(cpu, '/sys/fs/cgroup/cpu,cpuacct', "The mount point for the CPU controller is incorrect")
+            self.assertEqual(memory, '/sys/fs/cgroup/memory', "The mount point for the memory controller is incorrect")
 
     def test_get_cpu_and_memory_cgroup_relative_paths_for_process_should_return_the_cgroup_relative_paths(self):
         with mock_cgroup_commands():
             cpu, memory = SystemdCgroupsApi.get_process_cgroup_relative_paths('self')
-            self.assertEquals(cpu, "system.slice/walinuxagent.service", "The relative path for the CPU cgroup is incorrect") # pylint: disable=deprecated-method
-            self.assertEquals(memory, "system.slice/walinuxagent.service", "The relative memory for the CPU cgroup is incorrect") # pylint: disable=deprecated-method
+            self.assertEqual(cpu, "system.slice/walinuxagent.service", "The relative path for the CPU cgroup is incorrect")
+            self.assertEqual(memory, "system.slice/walinuxagent.service", "The relative memory for the CPU cgroup is incorrect")
 
     def test_get_cgroup2_controllers_should_return_the_v2_cgroup_controllers(self):
         with mock_cgroup_commands():
             mount_point, controllers = SystemdCgroupsApi.get_cgroup2_controllers()
 
-            self.assertEquals(mount_point, "/sys/fs/cgroup/unified", "Invalid mount point for V2 cgroups") # pylint: disable=deprecated-method
+            self.assertEqual(mount_point, "/sys/fs/cgroup/unified", "Invalid mount point for V2 cgroups")
             self.assertIn("cpu", controllers, "The CPU controller is not in the list of V2 controllers")
             self.assertIn("memory", controllers, "The memory controller is not in the list of V2 controllers")
 
@@ -499,7 +500,7 @@ class SystemdCgroupsApiTestCase(AgentTestCase):
         with mock_cgroup_commands():
             cpu_accounting = SystemdCgroupsApi.get_unit_property("walinuxagent.service", "CPUAccounting")
 
-            self.assertEquals(cpu_accounting, "no", "Property {0} of {1} is incorrect".format("CPUAccounting", "walinuxagent.service")) # pylint: disable=deprecated-method
+            self.assertEqual(cpu_accounting, "no", "Property {0} of {1} is incorrect".format("CPUAccounting", "walinuxagent.service"))
 
     def test_get_extensions_slice_root_name_should_return_the_root_slice_for_extensions(self):
         root_slice_name = SystemdCgroupsApi()._get_extensions_slice_root_name() # pylint: disable=protected-access
@@ -536,7 +537,7 @@ class SystemdCgroupsApiTestCase(AgentTestCase):
             daemon_present = any("waagent -daemon" in command for (pid, command) in processes)
             self.assertTrue(daemon_present, "Could not find the daemon in the cgroup: [{0}]".format(processes))
 
-            extension_handler_present = any(re.search("(WALinuxAgent-.+\.egg|waagent) -run-exthandlers", command) for (pid, command) in processes) # pylint: disable=anomalous-backslash-in-string
+            extension_handler_present = any(re.search(r"(WALinuxAgent-.+\.egg|waagent) -run-exthandlers", command) for (pid, command) in processes)
             self.assertTrue(extension_handler_present, "Could not find the extension handler in the cgroup: [{0}]".format(processes))
 
     @attr('requires_sudo')
@@ -644,7 +645,7 @@ class SystemdCgroupsApiTestCase(AgentTestCase):
 
                 extension_calls = [args[0] for (args, _) in popen_patch.call_args_list if "the-test-extension-command" in args[0]]
 
-                self.assertEquals(1, len(extension_calls), "The extension should have been invoked exactly once") # pylint: disable=deprecated-method
+                self.assertEqual(1, len(extension_calls), "The extension should have been invoked exactly once")
                 self.assertIn("systemd-run --unit=Microsoft.Compute.TestExtension_1.2.3", extension_calls[0], "The extension should have been invoked using systemd")
 
     @patch('time.sleep', side_effect=lambda _: mock_sleep())
@@ -679,18 +680,18 @@ class SystemdCgroupsApiTestCase(AgentTestCase):
                                   kwargs['message'])
                     self.assertIn("Failed to find executable syntax_error: No such file or directory",
                                   kwargs['message'])
-                    self.assertEquals(False, kwargs['is_success']) # pylint: disable=deprecated-method
-                    self.assertEquals('InvokeCommandUsingSystemd', kwargs['op']) # pylint: disable=deprecated-method
+                    self.assertEqual(False, kwargs['is_success'])
+                    self.assertEqual('InvokeCommandUsingSystemd', kwargs['op'])
 
                     extension_calls = [args[0] for (args, _) in popen_patch.call_args_list if command in args[0]]
 
-                    self.assertEquals(2, len(extension_calls), "The extension should have been invoked exactly twice") # pylint: disable=deprecated-method
+                    self.assertEqual(2, len(extension_calls), "The extension should have been invoked exactly twice")
                     self.assertIn("systemd-run --unit=Microsoft.Compute.TestExtension_1.2.3", extension_calls[0],
                                   "The first call to the extension should have used systemd")
-                    self.assertEquals(command, extension_calls[1], # pylint: disable=deprecated-method
+                    self.assertEqual(command, extension_calls[1],
                                       "The second call to the extension should not have used systemd")
 
-                    self.assertEquals(len(CGroupsTelemetry._tracked), 0, "No cgroups should have been created") # pylint: disable=deprecated-method,protected-access
+                    self.assertEqual(len(CGroupsTelemetry._tracked), 0, "No cgroups should have been created") # pylint: disable=protected-access
 
                     self.assertIn("TEST_OUTPUT\n", command_output, "The test output was not captured")
 
@@ -728,11 +729,11 @@ class SystemdCgroupsApiTestCase(AgentTestCase):
 
                     extension_calls = [args[0] for (args, _) in popen_patch.call_args_list if "echo 'success'" in args[0]]
 
-                    self.assertEquals(2, len(extension_calls), "The extension should have been invoked exactly twice") # pylint: disable=deprecated-method
+                    self.assertEqual(2, len(extension_calls), "The extension should have been invoked exactly twice")
                     self.assertIn("systemd-run --unit=Microsoft.Compute.TestExtension_1.2.3", extension_calls[0], "The first call to the extension should have used systemd")
-                    self.assertEquals("echo 'success'", extension_calls[1], "The second call to the extension should not have used systemd") # pylint: disable=deprecated-method
+                    self.assertEqual("echo 'success'", extension_calls[1], "The second call to the extension should not have used systemd")
 
-                    self.assertEquals(len(CGroupsTelemetry._tracked), 0, "No cgroups should have been created") # pylint: disable=deprecated-method,protected-access
+                    self.assertEqual(len(CGroupsTelemetry._tracked), 0, "No cgroups should have been created") # pylint: disable=protected-access
 
     @attr('requires_sudo')
     @patch("azurelinuxagent.common.cgroupapi.add_event")
@@ -757,11 +758,11 @@ class SystemdCgroupsApiTestCase(AgentTestCase):
 
                     extension_calls = [args[0] for (args, _) in popen_patch.call_args_list if command in args[0]]
 
-                    self.assertEquals(1, len(extension_calls), "The extension should have been invoked exactly once") # pylint: disable=deprecated-method
+                    self.assertEqual(1, len(extension_calls), "The extension should have been invoked exactly once")
                     self.assertIn("systemd-run --unit=Microsoft.Compute.TestExtension_1.2.3", extension_calls[0],
                                   "The first call to the extension should have used systemd")
 
-                    self.assertEquals(context_manager.exception.code, ExtensionErrorCodes.PluginUnknownFailure) # pylint: disable=deprecated-method
+                    self.assertEqual(context_manager.exception.code, ExtensionErrorCodes.PluginUnknownFailure)
                     self.assertIn("Non-zero exit code", ustr(context_manager.exception))
                     # The scope name should appear in the process output since systemd-run was invoked and stderr
                     # wasn't truncated.
@@ -793,11 +794,11 @@ class SystemdCgroupsApiTestCase(AgentTestCase):
 
                     extension_calls = [args[0] for (args, _) in popen_patch.call_args_list if long_stdout_stderr_command in args[0]]
 
-                    self.assertEquals(1, len(extension_calls), "The extension should have been invoked exactly once") # pylint: disable=deprecated-method
+                    self.assertEqual(1, len(extension_calls), "The extension should have been invoked exactly once")
                     self.assertIn("systemd-run --unit=Microsoft.Compute.TestExtension_1.2.3", extension_calls[0],
                                   "The first call to the extension should have used systemd")
 
-                    self.assertEquals(context_manager.exception.code, ExtensionErrorCodes.PluginUnknownFailure) # pylint: disable=deprecated-method
+                    self.assertEqual(context_manager.exception.code, ExtensionErrorCodes.PluginUnknownFailure)
                     self.assertIn("Non-zero exit code", ustr(context_manager.exception))
                     # stdout and stderr should have been truncated, so the scope name doesn't appear in stderr
                     # even though systemd-run ran
@@ -825,7 +826,7 @@ class SystemdCgroupsApiTestCase(AgentTestCase):
                                 stdout=stdout,
                                 stderr=stderr)
 
-                        self.assertEquals(context_manager.exception.code, # pylint: disable=deprecated-method
+                        self.assertEqual(context_manager.exception.code,
                                           ExtensionErrorCodes.PluginHandlerScriptTimedout)
                         self.assertIn("Timeout", ustr(context_manager.exception))
 
@@ -856,7 +857,7 @@ class SystemdCgroupsApiTestCase(AgentTestCase):
                             stdout=stdout,
                             stderr=stderr)
 
-                        self.assertEquals(expected_output.format("very specific test message"), process_output) # pylint: disable=deprecated-method
+                        self.assertEqual(expected_output.format("very specific test message"), process_output)
 
 
 class SystemdCgroupsApiMockedFileSystemTestCase(_MockedFileSystemTestCase):
@@ -873,6 +874,6 @@ class SystemdCgroupsApiMockedFileSystemTestCase(_MockedFileSystemTestCase):
             with patch("azurelinuxagent.common.cgroupapi.get_agent_pid_file_path", return_value=daemon_pid_file):
                 legacy_cgroups = SystemdCgroupsApi().cleanup_legacy_cgroups()
 
-        self.assertEquals(legacy_cgroups, 2, "cleanup_legacy_cgroups() did not find all the expected cgroups") # pylint: disable=deprecated-method
+        self.assertEqual(legacy_cgroups, 2, "cleanup_legacy_cgroups() did not find all the expected cgroups")
         self.assertFalse(os.path.exists(legacy_cpu_cgroup), "cleanup_legacy_cgroups() did not remove the CPU legacy cgroup")
         self.assertFalse(os.path.exists(legacy_memory_cgroup), "cleanup_legacy_cgroups() did not remove the memory legacy cgroup")

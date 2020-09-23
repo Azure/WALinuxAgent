@@ -25,6 +25,12 @@ if sys.version_info[0] == 3:
 
     bytebuffer = memoryview # pylint: disable=C0103
 
+    # We aren't using these imports in this file, but we want them to be available
+    # to import from this module in others.
+    # Additionally, python2 doesn't have this, so we need to disable import-error
+    # as well.
+    from builtins import int, range # pylint: disable=unused-import,import-error
+
     from collections import OrderedDict # pylint: disable=W0611
     from queue import PriorityQueue # pylint: disable=W0611,import-error
 
@@ -33,10 +39,26 @@ elif sys.version_info[0] == 2:
     from urlparse import urlparse # pylint: disable=E0401
     from Queue import PriorityQueue # pylint: disable=W0611,import-error
 
-    """Rename Python2 unicode to ustr""" # pylint: disable=W0105
-    ustr = unicode # pylint: disable=E0602,invalid-name
+    
+    # We want to suppress the following:
+    #   -   undefined-variable<E0602>: 
+    #           These builtins are not defined in python3
+    #   -   invalid-name<C0103>: 
+    #           The defined variables are constants, but don't use UPPER_SNAKE_CASE 
+    #           as we're redefining some builtins that also do not use that format.
+    #   -   redefined-builtin<W0622>:
+    #           This is intentional, so that code that wants to use builtins we're
+    #           assigning new names to doesn't need to check python versions before
+    #           doing so.
 
-    bytebuffer = buffer # pylint: disable=E0602,invalid-name
+    # pylint: disable=undefined-variable,invalid-name,redefined-builtin
+
+    ustr = unicode # Rename Python2 unicode to ustr 
+    bytebuffer = buffer
+    range = xrange
+    int = long
+
+    # pylint: enable=undefined-variable,invalid-name,redefined-builtin
 
     if sys.version_info[1] >= 7:
         from collections import OrderedDict  # For Py 2.7+ # pylint: disable=C0412

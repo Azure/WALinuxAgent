@@ -27,7 +27,7 @@ from azurelinuxagent.common.protocol.restapi import ExtensionStatus, Extension, 
 from azurelinuxagent.common.protocol.util import ProtocolUtil
 from azurelinuxagent.common.utils.extensionprocessutil import TELEMETRY_MESSAGE_MAX_LEN, format_stdout_stderr, \
     read_output
-from azurelinuxagent.ga.exthandlers import parse_ext_status, ExtHandlerInstance, ExtCommandEnvVariable
+from azurelinuxagent.ga.exthandlers import parse_ext_status, ExtHandlerInstance, ExtCommandEnvVariable, ExtensionStatusError
 from tests.protocol import mockwiredata
 from tests.protocol.mocks import mock_wire_protocol
 from tests.tools import AgentTestCase, patch, mock_sleep, clear_singleton_instances
@@ -40,6 +40,26 @@ class TestExtHandlers(AgentTestCase):
         # Since ProtocolUtil is a singleton per thread, we need to clear it to ensure that the test cases do not
         # reuse a previous state
         clear_singleton_instances(ProtocolUtil)
+
+    def test_parse_ext_status_should_raise_on_non_array(self):
+        status = json.loads('''
+            {{
+                "status": {{
+                    "status": "transitioning",
+                    "operation": "Enabling Handler",
+                    "code": 0,
+                    "name": "Microsoft.Azure.RecoveryServices.SiteRecovery.Linux"
+                }},
+                "version": 1.0,
+                "timestampUTC": "2020-01-14T15:04:43Z",
+                "longText": "{0}"
+            }}'''.format("*" * 5 * 1024))
+
+        with self.assertRaises(ExtensionStatusError) as context_manager:
+            parse_ext_status(ExtensionStatus(seq_no=0), status)
+        error_message = str(context_manager.exception)
+        self.assertIn("The extension status must be an array", error_message)
+        self.assertTrue(0 < len(error_message) - 64 < 4096, "The error message should not be much longer than 4K characters: [{0}]".format(error_message))
 
     def test_parse_extension_status00(self):
         """
@@ -348,7 +368,8 @@ sys.stderr.write("{1}")
 
         self.assertListEqual(files_before, files_after, "Not all temporary files were deleted. File list: {0}".format(files_after))
 
-    def test_it_should_raise_an_exception_when_the_command_times_out(self):
+    # R0914: "Too many local variables" - The use of locals in this function is currently acceptable.
+    def test_it_should_raise_an_exception_when_the_command_times_out(self):  # pylint: disable=R0914
         extension_error_code = ExtensionErrorCodes.PluginHandlerScriptTimedout
         stdout = "stdout" * 7
         stderr = "stderr" * 7
@@ -375,11 +396,10 @@ with open("{2}", "w") as file:
 '''.format(stdout, stderr, signal_file))
 
         # mock time.sleep to wait for the signal file (launch_command implements the time out using polling and sleep)
-        original_sleep = time.sleep
-
         def sleep(seconds):
             if not os.path.exists(signal_file):
-                original_sleep(seconds)
+                sleep.original_sleep(seconds)
+        sleep.original_sleep = time.sleep
 
         timeout = 60
 
@@ -396,13 +416,24 @@ with open("{2}", "w") as file:
             self.assertRegex(message, r"Timeout\(\d+\):\s+{0}\s+{1}".format(command_full_path, LaunchCommandTestCase._output_regex(stdout, stderr)))
 
             # the exception code should be as specified in the call to launch_command
-            self.assertEquals(context_manager.exception.code, extension_error_code) # pylint: disable=deprecated-method
+            self.assertEqual(context_manager.exception.code, extension_error_code)
 
             # the timeout period should have elapsed
             self.assertGreaterEqual(mock_sleep.call_count, timeout)
 
-            # the command should have been terminated
-            self.assertFalse(LaunchCommandTestCase._find_process(command), "The command was not terminated")
+            # The command should have been terminated.
+            # The /proc file system may still include the process when we do this check so we try a few times after a short delay; note that we
+            # are mocking sleep, so we need to use the original implementation.
+            terminated = False
+            i = 0
+            while not terminated and i < 4:
+                if not LaunchCommandTestCase._find_process(command):
+                    terminated = True
+                else:
+                    sleep.original_sleep(0.25)
+                i += 1
+
+            self.assertTrue(terminated, "The command was not terminated")
 
         # as a check for the test itself, verify it completed in just a few seconds
         self.assertLessEqual(time.time() - start_time, 5)
@@ -429,7 +460,7 @@ exit({2})
         message = str(context_manager.exception)
         self.assertRegex(message, r"Non-zero exit code: {0}.+{1}\s+{2}".format(exit_code, command, LaunchCommandTestCase._output_regex(stdout, stderr)))
 
-        self.assertEquals(context_manager.exception.code, extension_error_code) # pylint: disable=deprecated-method
+        self.assertEqual(context_manager.exception.code, extension_error_code)
 
     def test_it_should_not_wait_for_child_process(self):
         stdout = "stdout"
@@ -570,7 +601,7 @@ echo {1}
 
         with open(command_output_file, "r") as command_output:
             output = command_output.read()
-            self.assertEquals(output, "{0}\n{1}\n".format(stdout, stderr)) # pylint: disable=deprecated-method
+            self.assertEqual(output, "{0}\n{1}\n".format(stdout, stderr))
 
     def test_it_should_truncate_the_command_output(self):
         stdout = "STDOUT"

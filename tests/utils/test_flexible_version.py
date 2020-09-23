@@ -88,7 +88,7 @@ class TestFlexibleVersion(unittest.TestCase):
     def test_compile_pattern_sep(self): # pylint: disable=useless-return
         self.v.sep = '-'
         self.v._compile_pattern() # pylint: disable=protected-access
-        tests = { # pylint: disable=duplicate-key
+        tests = { 
             '1': True,
             '1-2': True,
             '1-2-3': True,
@@ -97,9 +97,7 @@ class TestFlexibleVersion(unittest.TestCase):
 
             '1alpha': True,
             '1-alpha': True,
-            '1-alpha': True,
             '1alpha0': True,
-            '1-alpha0': True,
             '1-alpha0': True,
             '1-2alpha': True,
             '1-2.alpha': True,
@@ -110,9 +108,7 @@ class TestFlexibleVersion(unittest.TestCase):
 
             '1beta': True,
             '1-beta': True,
-            '1-beta': True,
             '1beta0': True,
-            '1-beta0': True,
             '1-beta0': True,
             '1-2beta': True,
             '1-2.beta': True,
@@ -123,9 +119,7 @@ class TestFlexibleVersion(unittest.TestCase):
 
             '1rc': True,
             '1-rc': True,
-            '1-rc': True,
             '1rc0': True,
-            '1-rc0': True,
             '1-rc0': True,
             '1-2rc': True,
             '1-2.rc': True,

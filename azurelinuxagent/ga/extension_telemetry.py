@@ -33,6 +33,7 @@ from azurelinuxagent.common.exception import InvalidExtensionEventError
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.telemetryevent import TelemetryEvent, TelemetryEventParam, \
     GuestAgentGenericLogsSchema, TelemetryEventPriorities
+from azurelinuxagent.common.interfaces import ThreadHandlerInterface
 from azurelinuxagent.ga.exthandlers import HANDLER_NAME_PATTERN
 from azurelinuxagent.ga.periodic_operation import PeriodicOperation
 
@@ -346,7 +347,7 @@ class ProcessExtensionTelemetry(PeriodicOperation):
         reporter.add_common_event_parameters(event, event_time)
 
 
-class ExtensionTelemetryHandler(object):
+class ExtensionTelemetryHandler(ThreadHandlerInterface):
     """
     This Handler takes care of fetching the Extension Telemetry events from the {extension_events_dir} and sends it to
     Kusto for advanced debuggability.

@@ -34,7 +34,7 @@ class TestCryptoUtilOperations(AgentTestCase):
         secret = ']aPPEv}uNg1FPnl?'
         crypto = CryptUtil(conf.get_openssl_cmd())
         decrypted_string = crypto.decrypt_secret(encrypted_string, prv_key)
-        self.assertEquals(secret, decrypted_string, "decrypted string does not match expected") # pylint: disable=deprecated-method
+        self.assertEqual(secret, decrypted_string, "decrypted string does not match expected")
 
     def test_decrypt_encrypted_text_missing_private_key(self):
         encrypted_string = load_data("wire/encrypted.enc")

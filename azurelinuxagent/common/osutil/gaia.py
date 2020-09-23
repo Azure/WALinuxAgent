@@ -23,7 +23,7 @@ import time
 
 import azurelinuxagent.common.conf as conf
 from azurelinuxagent.common.exception import OSUtilError
-from azurelinuxagent.common.future import ustr, bytebuffer
+from azurelinuxagent.common.future import ustr, bytebuffer, range, int # pylint: disable=redefined-builtin
 import azurelinuxagent.common.logger as logger
 from azurelinuxagent.common.osutil.default import DefaultOSUtil
 from azurelinuxagent.common.utils.cryptutil import CryptUtil
@@ -40,7 +40,7 @@ class GaiaOSUtil(DefaultOSUtil):
     def _run_clish(self, cmd):
         ret = 0
         out = ""
-        for i in xrange(10): # pylint: disable=E0602,W0612
+        for i in range(10): # pylint: disable=W0612
             try:
                 final_command = ["/bin/clish", "-s", "-c", "'{0}'".format(cmd)]
                 out = shellutil.run_command(final_command, log_error=True)
@@ -59,7 +59,7 @@ class GaiaOSUtil(DefaultOSUtil):
             time.sleep(2)
         return ret, out
 
-    def useradd(self, username, expiration=None): # pylint: disable=W0221
+    def useradd(self, username, expiration=None, comment=None):
         logger.warn('useradd is not supported on GAiA')
 
     def chpasswd(self, username, password, crypt_id=6, salt_len=10):
@@ -122,7 +122,7 @@ class GaiaOSUtil(DefaultOSUtil):
         def text_to_num(buf):
             if len(buf) == 1:
                 return int(buf[0].split()[1])
-            return long(''.join(buf[1:]), 16) # pylint: disable=E0602
+            return int(''.join(buf[1:]), 16)
 
         n = text_to_num(modulus) # pylint: disable=C0103
         e = text_to_num(exponent) # pylint: disable=C0103
