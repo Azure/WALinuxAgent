@@ -708,8 +708,8 @@ class WireClient(object): # pylint: disable=R0904
                 self._save_goal_state()
                 self._update_host_plugin(new_goal_state.container_id, new_goal_state.role_config_name)
 
-        except Exception as e: # pylint: disable=C0103
-            raise ProtocolError("Error processing goal state: {0}".format(ustr(e)))
+        except Exception as exception:
+            raise ProtocolError("Error processing goal state: {0}".format(ustr(exception)))
 
     def try_update_goal_state(self):
         """
