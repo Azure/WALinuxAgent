@@ -1098,7 +1098,8 @@ class WireClient(object): # pylint: disable=R0904
             raise ProtocolError(
                 "Failed to send events:{0}".format(resp.status))
 
-    def report_event(self, get_events):
+    # Pylint too-many-locals: Disabling this here as a lot of the locals are used for error debugging
+    def report_event(self, get_events): # pylint: disable=too-many-locals
         max_send_errors_to_report = 5
         buf = {}
         events_per_request = defaultdict(int)

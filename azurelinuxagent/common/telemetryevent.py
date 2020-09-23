@@ -82,7 +82,8 @@ class TelemetryEventParam(DataContract): # pylint: disable=R0903
         return isinstance(other, TelemetryEventParam) and other.name == self.name and other.value == self.value
 
 
-class TelemetryEventPriorities(object):
+# Pylint R0903 (too-few-public-methods) : Disabling here as this class is used as an Enum
+class TelemetryEventPriorities(object): # pylint: disable=R0903
     """
     Class defining the priorities for telemetry events. Lower the number, higher the priority
 
