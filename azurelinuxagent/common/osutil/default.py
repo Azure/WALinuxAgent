@@ -556,7 +556,7 @@ class DefaultOSUtil(object): # pylint: disable=R0904
                 return 1
             
             try:
-                shellutil.run_command('chcon ' + con + ' ' + path)
+                shellutil.run_command(['chcon', con, path])
             except shellutil.CommandError as cmd_err:
                 return cmd_err.returncode
             return 0
@@ -636,7 +636,7 @@ class DefaultOSUtil(object): # pylint: disable=R0904
     def eject_dvd(self, chk_err=True):
         dvd = self.get_dvd_device()
         try:
-            shellutil.run_command("eject {0}".format(dvd))
+            shellutil.run_command(["eject", dvd])
         except shellutil.CommandError as cmd_err:
             if chk_err:
                 raise OSUtilError("Failed to eject dvd: ret={0}".format(cmd_err.returncode))
@@ -676,7 +676,7 @@ class DefaultOSUtil(object): # pylint: disable=R0904
         return False
 
     def mount(self, device, mount_point, option="", chk_err=True):
-        cmd = "mount {0} {1} {2}".format(option, device, mount_point)
+        cmd = ["mount", option, device, mount_point]
         try:
             output = shellutil.run_command(cmd, log_error=chk_err)
         except shellutil.CommandError as cmd_err:
@@ -688,7 +688,7 @@ class DefaultOSUtil(object): # pylint: disable=R0904
 
     def umount(self, mount_point, chk_err=True):
         try:
-            shellutil.run_command("umount {0}".format(mount_point), log_error=chk_err)
+            shellutil.run_command(["umount", mount_point], log_error=chk_err)
         except shellutil.CommandError as cmd_err:
             return cmd_err.returncode
         return 0
@@ -1127,7 +1127,8 @@ class DefaultOSUtil(object): # pylint: disable=R0904
         retry_limit=retries+1
         for attempt in range(1, retry_limit):
             try:
-                shellutil.run_command("ifdown {0} && ifup {0}".format(ifname))
+                shellutil.run_command(["ifdown", ifname])
+                shellutil.run_command(["ifup", ifname])
                 return
             except shellutil.CommandError as cmd_err:
                 logger.warn("failed to restart {0}: return code {1}".format(ifname, cmd_err.returncode))

@@ -41,9 +41,8 @@ class CryptUtil(object):
         """
         Create ssl certificate for https communication with endpoint server.
         """
-        cmd = ("{0} req -x509 -nodes -subj /CN=LinuxTransport -days 730 "
-               "-newkey rsa:2048 -keyout {1} "
-               "-out {2}").format(self.openssl_cmd, prv_file, crt_file)
+        cmd = [self.openssl_cmd, "req -x509 -nodes -subj /CN=LinuxTransport -days 730",
+            "-newkey rsa:2048 -keyout", prv_file, "-out", crt_file]
         try:
             shellutil.run_command(cmd)
         except shellutil.CommandError:
@@ -80,6 +79,8 @@ class CryptUtil(object):
         elif not os.path.exists(trans_prv_file):
             raise IOError(errno.ENOENT, "File not found", trans_prv_file)
         else:
+            cmd = [self.openssl_cmd, "cms -decrypt -in", p7m_file, "-inkey",
+                trans_prv_file, "-recip",]
             cmd = ("{0} cms -decrypt -in {1} -inkey {2} -recip {3} "
                    "| {4} pkcs12 -nodes -password pass: -out {5}"
                    "").format(self.openssl_cmd, p7m_file, trans_prv_file,
@@ -91,8 +92,9 @@ class CryptUtil(object):
 
     def crt_to_ssh(self, input_file, output_file):
         try:
-            shellutil.run_command("ssh-keygen -i -m PKCS8 -f {0} >> {1}".format(input_file,
-                                                                    output_file))
+            with open(output_file, "wa") as file:
+                output = shellutil.run_command(["ssh-keygen", "-i -m PKCS8 -f", input_file])
+                file.write(output)
         except shellutil.CommandError:
             pass
 

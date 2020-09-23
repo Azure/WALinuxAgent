@@ -40,14 +40,14 @@ class Ubuntu14OSUtil(DefaultOSUtil):
 
     def stop_agent_service(self):
         try:
-            shellutil.run_command("service {0} stop".format(self.service_name))
+            shellutil.run_command(["service", self.service_name, "stop"])
         except shellutil.CommandError as cmd_err:
             return cmd_err.returncode
         return 0
 
     def start_agent_service(self):
         try:
-            shellutil.run_command("service {0} start".format(self.service_name))
+            shellutil.run_command(["service", self.service_name, "start"])
         except shellutil.CommandError as cmd_err:
             return cmd_err.returncode
         return 0
@@ -128,7 +128,8 @@ class UbuntuOSUtil(Ubuntu16OSUtil):
         retry_limit=retries+1
         for attempt in range(1, retry_limit):
             try:
-                shellutil.run_command("ip link set {0} down && ip link set {0} up".format(ifname))
+                shellutil.run_command(["ip", "link", "set", ifname, "down"])
+                shellutil.run_command(["ip", "link", "set", ifname, "up"])
                 return
             except shellutil.CommandError as cmd_err:
                 logger.warn("failed to restart {0}: return code {1}".format(ifname, cmd_err.returncode))
