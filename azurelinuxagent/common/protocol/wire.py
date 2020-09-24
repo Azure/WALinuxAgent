@@ -223,8 +223,18 @@ def _build_health_report(incarnation, container_id, role_instance_id, # pylint: 
 
     # The max description that can be sent to WireServer is 4096 bytes.
     # Exceeding this max can result in a failure to report health.
-    max_description_length = 4096
-    description = description[-max_description_length:]
+    # This max leaves about a 7% buffer in case the platform does any
+    # formatting on this description string prior to being received
+    # by WireServer.
+    max_description_length = 3840
+    current_description_length = len(description)
+    if current_description_length > max_description_length:
+        logger.info(
+            'Trimmed health report description by {0} characters'.format(
+                current_description_length - max_description_length
+            )
+        )
+        description = description[-max_description_length:]
 
     detail = u''
     if substatus is not None:
