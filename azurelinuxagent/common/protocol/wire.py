@@ -218,23 +218,24 @@ def _build_role_properties(container_id, role_instance_id, thumbprint):
 
 def _build_health_report(incarnation, container_id, role_instance_id, # pylint: disable=R0913
                          status, substatus, description):
-    # Escape '&', '<' and '>'
-    description = saxutils.escape(ustr(description))
-
     # The max description that can be sent to WireServer is 4096 bytes.
     # Exceeding this max can result in a failure to report health.
-    # This max leaves about a 7% buffer in case the platform does any
-    # formatting on this description string prior to being received
-    # by WireServer.
-    max_description_length = 3840
-    current_description_length = len(description)
-    if current_description_length > max_description_length:
-        logger.info(
-            'Trimmed health report description by {0} characters'.format(
-                current_description_length - max_description_length
+    # To keep this simple, we will keep a 10% buffer and trim before
+    # encoding the description.
+    if description:
+        max_chars_before_encoding = 3686
+        len_before_trim = len(description)
+        description = description[:max_chars_before_encoding]
+        trimmed_char_count = len_before_trim - len(description)
+        if trimmed_char_count > 0:
+            logger.info(
+                'Trimmed health report description by {0} characters'.format(
+                    trimmed_char_count
+                )
             )
-        )
-        description = description[-max_description_length:]
+
+        # Escape '&', '<' and '>'
+        description = saxutils.escape(ustr(description))
 
     detail = u''
     if substatus is not None:
