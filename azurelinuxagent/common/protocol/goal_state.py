@@ -63,7 +63,7 @@ class GoalState(object):  # pylint: disable=R0902
         """
         uri = GOAL_STATE_URI.format(wire_client.get_endpoint())
 
-        for attempt in range(1, 6):
+        for _ in range(1, 6):
             self.xml_text = wire_client.fetch_config(uri, wire_client.get_header())
             xml_doc = parse_doc(self.xml_text)
 

@@ -158,7 +158,7 @@ class IncompleteGoalStateError(ProtocolError):
     Goal state is returned incomplete.
     """
 
-    def __init__(self, msg=None, inner=None):
+    def __init__(self, msg=None, inner=None): # pylint: disable=W0235
         super(IncompleteGoalStateError, self).__init__(msg, inner)
 
 
