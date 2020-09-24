@@ -146,15 +146,6 @@ class GoalState(object):  # pylint: disable=R0902
         return GoalState(wire_client)
 
     @staticmethod
-    def _verify_gs_for_noop(goal_state):
-        noop_gs_msg_format = "[PERIODIC] Goal State [incarnation {inc}] retrieved, but its a no-op."
-
-        if not goal_state.ext_conf:
-            logger.periodic_warn(logger.EVERY_SIX_HOURS, noop_gs_msg_format.format(inc=goal_state.incarnation))
-            raise ValueError("Goal State is a no-op")
-
-
-    @staticmethod
     def fetch_full_goal_state(wire_client):
         """
         Fetches the full goal state, including nested properties (such as extension config).
