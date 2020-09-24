@@ -52,7 +52,7 @@ class Agent(object):
         self.osutil = get_osutil()
 
         # Init stdout log
-        level = logger.LogLevel.VERBOSE if verbose else logger.LogLevel.INFO
+        level = logger.LogLevel.VERBOSE if verbose else logger.LogLevel.WARNING
         logger.add_logger_appender(logger.AppenderType.STDOUT, level)
 
         # Init config
@@ -66,6 +66,8 @@ class Agent(object):
         level = logger.LogLevel.VERBOSE if verbose else logger.LogLevel.INFO
         logger.add_logger_appender(logger.AppenderType.FILE, level,
                                    path=conf.get_agent_log_file())
+
+        level = logger.LogLevel.VERBOSE if verbose else logger.LogLevel.WARNING
         if conf.get_logs_console():
             logger.add_logger_appender(logger.AppenderType.CONSOLE, level,
                                        path="/dev/console")
