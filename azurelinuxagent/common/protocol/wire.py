@@ -686,27 +686,30 @@ class WireClient(object): # pylint: disable=R0904
                 raise
         return resp
 
-    # Type of update performed by _update_from_goal_state()
-    class _UpdateType(object): # pylint: disable=R0903
-        # Update the Host GA Plugin client (Container ID and RoleConfigName)
-        HostPlugin = 0
-        # Update the full goal state only if the incarnation has changed
-        GoalState = 1
-        # Update the full goal state unconditionally
-        GoalStateForced = 2
-
     def update_host_plugin_from_goal_state(self):
         """
         Fetches a new goal state and updates the Container ID and Role Config Name of the host plugin client
         """
-        self._update_from_goal_state(WireClient._UpdateType.HostPlugin)
+        goal_state = GoalState.fetch_goal_state(self)
+        self._update_host_plugin(goal_state.container_id, goal_state.role_config_name)
 
     def update_goal_state(self, forced=False):
         """
         Updates the goal state if the incarnation changed or if 'forced' is True
         """
-        self._update_from_goal_state(
-            WireClient._UpdateType.GoalStateForced if forced else WireClient._UpdateType.GoalState)
+        try:
+            if self._goal_state is None or forced:
+                new_goal_state = GoalState.fetch_full_goal_state(self)
+            else:
+                new_goal_state = GoalState.fetch_full_goal_state_if_incarnation_different_than(self, self._goal_state.incarnation)
+
+            if new_goal_state is not None:
+                self._goal_state = new_goal_state
+                self._save_goal_state()
+                self._update_host_plugin(new_goal_state.container_id, new_goal_state.role_config_name)
+
+        except Exception as exception:
+            raise ProtocolError("Error processing goal state: {0}".format(ustr(exception)))
 
     def try_update_goal_state(self):
         """
@@ -731,45 +734,6 @@ class WireClient(object): # pylint: disable=R0904
             logger.periodic_warn(logger.EVERY_SIX_HOURS, "[PERIODIC] {0}".format(message))
             return False
         return True
-
-    def _update_from_goal_state(self, refresh_type):
-        """
-        Fetches a new goal state and updates the internal state of the WireClient according to the requested 'refresh_type'
-        """
-        max_retry = 3
-
-        for retry in range(1, max_retry + 1):
-            try:
-                if refresh_type == WireClient._UpdateType.HostPlugin:
-                    goal_state = GoalState.fetch_goal_state(self)
-                    self._update_host_plugin(goal_state.container_id, goal_state.role_config_name)
-                    return
-                
-                if self._goal_state or refresh_type == WireClient._UpdateType.GoalStateForced:
-                    new_goal_state = GoalState.fetch_full_goal_state(self)
-                else:
-                    new_goal_state = GoalState.fetch_full_goal_state_if_incarnation_different_than(self, self._goal_state.incarnation)
-
-                if new_goal_state is not None:
-                    self._goal_state = new_goal_state
-                    self._save_goal_state()
-                    self._update_host_plugin(new_goal_state.container_id, new_goal_state.role_config_name)
-
-                return
-
-            except IOError as e: # pylint: disable=C0103
-                logger.warn("IOError processing goal state (attempt {0}/{1}) [{2}]", retry, max_retry, ustr(e))
-
-            except ResourceGoneError:
-                logger.info("Goal state is stale, re-fetching (attempt {0}/{1})", retry, max_retry)
-
-            except ProtocolError as e: # pylint: disable=C0103
-                logger.verbose("ProtocolError processing goal state (attempt {0}/{1}) [{2}]", retry, max_retry, ustr(e))
-
-            except Exception as e: # pylint: disable=C0103
-                logger.verbose("Exception processing goal state (attempt {0}/{1}) [{2}]", retry, max_retry, ustr(e))
-
-        raise ProtocolError("Exceeded max retry updating goal state")
 
     def _update_host_plugin(self, container_id, role_config_name):
         if self._host_plugin is not None:

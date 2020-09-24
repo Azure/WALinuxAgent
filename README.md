@@ -82,7 +82,7 @@ authentication.
 
 The following systems have been tested and are known to work with the Azure
 Linux Agent.  Please note that this list may differ from the official list
-of supported systems on the Microsoft Azure Platform as described [here](http://support.microsoft.com/kb/2805216).
+of supported systems on the Microsoft Azure Platform as described [here](https://docs.microsoft.com/en-us/azure/virtual-machines/linux/endorsed-distros).
 
 Waagent depends on some system packages in order to function properly:
 
