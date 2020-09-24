@@ -83,11 +83,14 @@ class CryptUtil(object):
                 trans_prv_file, "-recip", trans_cert_file]
             second_cmd = [self.openssl_cmd, "pkcs12", "-nodes", "-password", "pass:", 
                 "-out", pem_file]
-            try:
-                first_cmd_output = shellutil.run_command(first_cmd)
-                shellutil.run_command(second_cmd, cmd_input=first_cmd_output)
-            except shellutil.CommandError:
+
+            first_proc = subprocess.Popen(first_cmd, stdout=subprocess.PIPE)
+            second_proc = subprocess.Popen(second_cmd, stdin=first_proc.stdout, stdout=subprocess.PIPE)
+            second_proc.wait()
+
+            if first_proc.returncode or second_proc.returncode:
                 logger.error("Failed to decrypt {0}".format(p7m_file))
+            
 
     def crt_to_ssh(self, input_file, output_file):
         try:
