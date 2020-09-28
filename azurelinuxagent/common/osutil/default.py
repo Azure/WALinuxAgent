@@ -556,7 +556,7 @@ class DefaultOSUtil(object): # pylint: disable=R0904
                 return 1
             
             try:
-                shellutil.run_command(['chcon', con, path])
+                shellutil.run_command(['chcon', con, path], log_error=True)
             except shellutil.CommandError as cmd_err:
                 return cmd_err.returncode
             return 0
@@ -639,7 +639,16 @@ class DefaultOSUtil(object): # pylint: disable=R0904
             shellutil.run_command(["eject", dvd])
         except shellutil.CommandError as cmd_err:
             if chk_err:
-                raise OSUtilError("Failed to eject dvd: ret={0}".format(cmd_err.returncode))
+                
+                msg = """Failed to eject dvd: ret={0}
+                [stdout]
+                {1}
+
+                [stderr]
+                {2}
+                """.format(cmd_err.returncode, cmd_err.stdout, cmd_err.stderr)
+
+                raise OSUtilError(msg)
 
     def try_load_atapiix_mod(self):
         try:
@@ -1131,7 +1140,16 @@ class DefaultOSUtil(object): # pylint: disable=R0904
                 shellutil.run_command(["ifup", ifname])
                 return
             except shellutil.CommandError as cmd_err:
-                logger.warn("failed to restart {0}: return code {1}".format(ifname, cmd_err.returncode))
+                
+                msg = """failed to restart {0}: returncode={1}
+                [stdout]
+                {2}
+                
+                [stderr]
+                {3}
+                """.format(ifname, cmd_err.returncode, cmd_err.stdout, cmd_err.stderr)
+                logger.warn(msg)
+
                 if attempt < retry_limit:
                     logger.info("retrying in {0} seconds".format(wait))
                     time.sleep(wait)

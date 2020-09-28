@@ -45,8 +45,15 @@ class CryptUtil(object):
             "-days", "730", "-newkey", "rsa:2048", "-keyout", prv_file, "-out", crt_file]
         try:
             shellutil.run_command(cmd)
-        except shellutil.CommandError:
-            logger.error("Failed to create {0} and {1} certificates".format(prv_file, crt_file))
+        except shellutil.CommandError as cmd_err:
+            msg = """Failed to create {0} and {1} certificates.
+            [stdout]
+            {2}
+
+            [stderr]
+            {3}
+            """.format(prv_file, crt_file, cmd_err.stdout, cmd_err.stderr)
+            logger.error(msg)
 
     def get_pubkey_from_prv(self, file_name):
         if not os.path.exists(file_name): # pylint: disable=R1720
@@ -86,19 +93,29 @@ class CryptUtil(object):
 
             first_proc = subprocess.Popen(first_cmd, stdout=subprocess.PIPE)
             second_proc = subprocess.Popen(second_cmd, stdin=first_proc.stdout, stdout=subprocess.PIPE)
-            second_proc.wait()
+            stdout, stderr = second_proc.communicate()
 
-            if first_proc.returncode or second_proc.returncode:
-                logger.error("Failed to decrypt {0}".format(p7m_file))
+            if first_proc.returncode != 0 or second_proc.returncode != 0:
+                msg = """Failed to decrypt {0}
+                [stdout]
+                {1}
+
+                [stderr]
+                {2}
+                """.format(p7m_file, stdout, stderr)
+                logger.error(msg)
             
 
     def crt_to_ssh(self, input_file, output_file):
-        try:
-            with open(output_file, "a") as file_out:
-                output = shellutil.run_command(["ssh-keygen", "-i -m PKCS8 -f", input_file])
-                file_out.write(output)
-        except shellutil.CommandError:
-            pass
+        with open(output_file, "a") as file_out:
+            keygen_proc = subprocess.Popen(["ssh-keygen", "-i", "-m", "PKCS8", "-f", input_file])
+            stdout, _ = keygen_proc.communicate()
+
+            if keygen_proc.returncode != 0:
+                return
+
+            file_out.write(stdout)
+
 
     def asn1_to_ssh(self, pubkey):
         lines = pubkey.split("\n")
