@@ -27,7 +27,7 @@ import uuid
 
 from azurelinuxagent.common.exception import InvalidContainerError, ResourceGoneError, ProtocolError, \
     ExtensionDownloadError, HttpError
-from azurelinuxagent.common.protocol.goal_state import ExtensionsConfig
+from azurelinuxagent.common.protocol.goal_state import ExtensionsConfig, GoalState
 from azurelinuxagent.common.protocol.hostplugin import HostPluginProtocol
 from azurelinuxagent.common.protocol.restapi import VMAgentManifestUri
 from azurelinuxagent.common.protocol.wire import WireProtocol, WireClient, \
@@ -35,6 +35,7 @@ from azurelinuxagent.common.protocol.wire import WireProtocol, WireClient, \
 from azurelinuxagent.common.telemetryevent import TelemetryEventList, GuestAgentExtensionEventsSchema, \
     TelemetryEventParam, TelemetryEvent
 from azurelinuxagent.common.utils import restutil
+from azurelinuxagent.common.exception import IncompleteGoalStateError
 from azurelinuxagent.common.version import CURRENT_VERSION, DISTRO_NAME, DISTRO_VERSION
 from azurelinuxagent.ga.exthandlers import get_exthandlers_handler
 from tests.ga.test_monitor import random_generator
@@ -1065,25 +1066,17 @@ class TryUpdateGoalStateTestCase(HttpRequestPredicates, AgentTestCase):
         with mock_wire_protocol(mockwiredata.DATA_FILE) as protocol:
             self.assertTrue(protocol.client.try_update_goal_state(), "try_update_goal_state should have succeeded")
 
-    def test_noop_gs_should_skip(self):
-        first_ext = extension_emulator()
+    def test_incomplete_gs_should_fail(self):
 
-        with mock_wire_protocol(mockwiredata.DATA_FILE, http_put_handler=generate_put_handler(first_ext)) as protocol:
-            exthandlers_handler = get_exthandlers_handler(protocol)
+        with mock_wire_protocol(mockwiredata.DATA_FILE) as protocol:
+            gs = GoalState.fetch_full_goal_state(protocol.client)
 
-            with enable_invocations(first_ext) as invocation_record:
-                exthandlers_handler.run()
-
-                invocation_record.compare(
-                    (first_ext, ExtensionCommandNames.INSTALL),
-                    (first_ext, ExtensionCommandNames.ENABLE)
-                )
-            
             protocol.mock_wire_data.data_files = mockwiredata.DATA_FILE_NOOP_GS
             protocol.mock_wire_data.reload()
             protocol.mock_wire_data.set_incarnation(2)
 
-            self.assertFalse(protocol.client.try_update_goal_state(), "try_update_goal_state should fail")
+            with self.assertRaises(IncompleteGoalStateError):
+                gs = GoalState.fetch_full_goal_state_if_incarnation_different_than(protocol.client, 1)
 
     def test_it_should_return_false_on_failure(self):
         with mock_wire_protocol(mockwiredata.DATA_FILE) as protocol:

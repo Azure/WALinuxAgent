@@ -43,6 +43,8 @@ PEM_FILE_NAME = "Certificates.pem"
 TRANSPORT_CERT_FILE_NAME = "TransportCert.pem"
 TRANSPORT_PRV_FILE_NAME = "TransportPrivate.pem"
 
+NUM_GS_FETCH_RETRIES = 3
+
 
 # too-many-instance-attributes<R0902> Disabled: The goal state consists of a good number of properties
 class GoalState(object):  # pylint: disable=R0902
@@ -63,18 +65,19 @@ class GoalState(object):  # pylint: disable=R0902
         """
         uri = GOAL_STATE_URI.format(wire_client.get_endpoint())
 
-        for _ in range(1, 6):
+        for _ in range(1, NUM_GS_FETCH_RETRIES + 1):
             self.xml_text = wire_client.fetch_config(uri, wire_client.get_header())
             xml_doc = parse_doc(self.xml_text)
+            self.incarnation = findtext(xml_doc, "Incarnation")
 
             role_instance = find(xml_doc, "RoleInstance")
             if role_instance:
                 break
         else:
+            logger.warn("Fetched goal state [inc {inc}], but it was invalid.".format(inc=self.incarnation))
             raise IncompleteGoalStateError("Goal State doesn't have a RoleInstance.")
 
         try:
-            self.incarnation = findtext(xml_doc, "Incarnation")
             self.expected_state = findtext(xml_doc, "ExpectedState")
             self.role_instance_id = findtext(role_instance, "InstanceId")
             role_config = find(role_instance, "Configuration")
