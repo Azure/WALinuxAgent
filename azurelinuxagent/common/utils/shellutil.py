@@ -17,16 +17,10 @@
 # Requires Python 2.6+ and Openssl 1.0+
 #
 
-import platform
 import subprocess
 
 import azurelinuxagent.common.logger as logger
 from azurelinuxagent.common.future import ustr
-
-
-def get_python_cmd():
-    major_version = platform.python_version_tuple()[0]
-    return "python" if int(major_version) <= 2 else "python{0}".format(major_version)
 
 
 if not hasattr(subprocess, 'check_output'):

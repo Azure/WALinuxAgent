@@ -48,10 +48,9 @@ from azurelinuxagent.common.osutil import get_osutil
 from azurelinuxagent.common.protocol.util import get_protocol_util
 from azurelinuxagent.common.protocol.hostplugin import HostPluginProtocol
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
-from azurelinuxagent.common.utils.shellutil import get_python_cmd
 from azurelinuxagent.common.version import AGENT_NAME, AGENT_VERSION, AGENT_DIR_PATTERN, CURRENT_AGENT,\
-    CURRENT_VERSION, DISTRO_NAME, DISTRO_VERSION, is_current_agent_installed, PY_VERSION_MAJOR, PY_VERSION_MINOR, \
-    PY_VERSION_MICRO
+    CURRENT_VERSION, DISTRO_NAME, DISTRO_VERSION, is_current_agent_installed, get_lis_version, PY_VERSION_MAJOR, \
+    PY_VERSION_MINOR, PY_VERSION_MICRO
 from azurelinuxagent.ga.collect_logs import get_collect_logs_handler, is_log_collection_allowed
 from azurelinuxagent.ga.env import get_env_handler
 from azurelinuxagent.ga.extension_telemetry import get_extension_telemetry_handler
@@ -154,7 +153,7 @@ class UpdateHandler(object): # pylint: disable=R0902
             # Launch the correct Python version for python-based agents
             cmds = textutil.safe_shlex_split(agent_cmd)
             if cmds[0].lower() == "python":
-                cmds[0] = get_python_cmd()
+                cmds[0] = sys.executable
                 agent_cmd = " ".join(cmds)
 
             self._evaluate_agent_health(latest_agent)
@@ -244,7 +243,7 @@ class UpdateHandler(object): # pylint: disable=R0902
         self.child_process = None
         return
 
-    def run(self, debug=False): # pylint: disable=R0912,R0914
+    def run(self, debug=False):  # pylint: disable=R0912,R0914
         """
         This is the main loop which watches for agent and extension updates.
         """
@@ -259,14 +258,33 @@ class UpdateHandler(object): # pylint: disable=R0902
             protocol = self.protocol_util.get_protocol()
             protocol.update_goal_state()
 
+            # Initialize the common parameters for telemetry events
             initialize_event_logger_vminfo_common_parameters(protocol)
 
             # Log OS-specific info.
-            os_info_msg = u"Distro: {0}-{1}; OSUtil: {2}; AgentService: {3}; Python: {4}.{5}.{6}".format(
+            os_info_msg = u"Distro: {0}-{1}; OSUtil: {2}; AgentService: {3}; Python: {4}.{5}.{6}; LISDrivers: {7}".format(
                 DISTRO_NAME, DISTRO_VERSION, type(self.osutil).__name__, self.osutil.service_name, PY_VERSION_MAJOR,
-                PY_VERSION_MINOR, PY_VERSION_MICRO)
+                PY_VERSION_MINOR, PY_VERSION_MICRO, get_lis_version())
             logger.info(os_info_msg)
             add_event(AGENT_NAME, op=WALAEventOperation.OSInfo, message=os_info_msg)
+
+            #
+            # Perform initialization tasks
+            #
+            from azurelinuxagent.ga.exthandlers import get_exthandlers_handler, migrate_handler_state
+            exthandlers_handler = get_exthandlers_handler(protocol)
+            migrate_handler_state()
+
+            from azurelinuxagent.ga.remoteaccess import get_remote_access_handler
+            remote_access_handler = get_remote_access_handler(protocol)
+
+            self._ensure_no_orphans()
+            self._emit_restart_event()
+            self._emit_changes_in_default_configuration()
+            self._ensure_partition_assigned()
+            self._ensure_readonly_files()
+            self._ensure_cgroups_initialized()
+            self._ensure_extension_telemetry_state_configured_properly(protocol)
 
             # Get all thread handlers
             all_thread_handlers = [
@@ -284,21 +302,6 @@ class UpdateHandler(object): # pylint: disable=R0902
             # Launch all monitoring threads
             for thread_handler in all_thread_handlers:
                 thread_handler.run()
-
-            from azurelinuxagent.ga.exthandlers import get_exthandlers_handler, migrate_handler_state
-            exthandlers_handler = get_exthandlers_handler(protocol)
-            migrate_handler_state()
-
-            from azurelinuxagent.ga.remoteaccess import get_remote_access_handler
-            remote_access_handler = get_remote_access_handler(protocol)
-
-            self._ensure_no_orphans()
-            self._emit_restart_event()
-            self._emit_changes_in_default_configuration()
-            self._ensure_partition_assigned()
-            self._ensure_readonly_files()
-            self._ensure_cgroups_initialized()
-            self._ensure_extension_telemetry_state_configured_properly(protocol)
 
             goal_state_interval = conf.get_goal_state_period() if conf.get_extensions_enabled() else GOAL_STATE_INTERVAL_DISABLED
 

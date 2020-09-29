@@ -433,7 +433,7 @@ class FreeBSDOSUtil(DefaultOSUtil): # pylint: disable=R0904
         if chk_err and retcode != 0:
             raise OSUtilError("Failed to eject dvd: ret={0}".format(retcode))
 
-    def restart_if(self, ifname): # pylint: disable=W0221
+    def restart_if(self, ifname, retries=None, wait=None):
         # Restart dhclient only to publish hostname
         shellutil.run("/etc/rc.d/dhclient restart {0}".format(ifname), chk_err=False)
 

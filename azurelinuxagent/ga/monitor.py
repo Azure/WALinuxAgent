@@ -19,8 +19,6 @@ import datetime
 import threading
 import uuid
 
-from azurelinuxagent.common.utils import textutil # pylint: disable=W0611
-
 import azurelinuxagent.common.logger as logger
 import azurelinuxagent.common.utils.networkutil as networkutil
 from azurelinuxagent.common.cgroupconfigurator import CGroupConfigurator
@@ -28,10 +26,11 @@ from azurelinuxagent.common.cgroupstelemetry import CGroupsTelemetry
 from azurelinuxagent.common.errorstate import ErrorState
 from azurelinuxagent.common.event import add_event, WALAEventOperation, report_metric, collect_events
 from azurelinuxagent.common.future import ustr
+from azurelinuxagent.common.interfaces import ThreadHandlerInterface
 from azurelinuxagent.common.osutil import get_osutil
-from azurelinuxagent.common.protocol.util import get_protocol_util
 from azurelinuxagent.common.protocol.healthservice import HealthService
 from azurelinuxagent.common.protocol.imds import get_imds_client
+from azurelinuxagent.common.protocol.util import get_protocol_util
 from azurelinuxagent.common.utils.restutil import IOErrorCounter
 from azurelinuxagent.common.utils.textutil import hash_strings
 from azurelinuxagent.common.version import AGENT_NAME, CURRENT_VERSION
@@ -71,11 +70,11 @@ class PollResourceUsageOperation(PeriodicOperation):
                     if not CGroupConfigurator.is_agent_process(command_line):
                         unexpected_processes.append(command_line)
 
-                if len(unexpected_processes) > 0: # pylint: disable=len-as-condition
+                if unexpected_processes:
                     unexpected_processes.sort()
                     processes_check_error = "The agent's cgroup includes unexpected processes: {0}".format(ustr(unexpected_processes))
-        except Exception as e: # pylint: disable=C0103
-            processes_check_error = "Failed to check the processes in the agent's cgroup: {0}".format(ustr(e))
+        except Exception as exception:
+            processes_check_error = "Failed to check the processes in the agent's cgroup: {0}".format(ustr(exception))
 
         # Report a small sample of errors
         if processes_check_error != self._last_error and self._error_count < 5:
@@ -157,7 +156,7 @@ class ReportNetworkConfigurationChangesOperation(PeriodicOperation):
             self.last_nic_state = nic_state
 
 
-class MonitorHandler(object): # pylint: disable=R0902
+class MonitorHandler(ThreadHandlerInterface): # pylint: disable=R0902
     # telemetry
     EVENT_COLLECTION_PERIOD = datetime.timedelta(minutes=1)
     # host plugin
@@ -182,11 +181,13 @@ class MonitorHandler(object): # pylint: disable=R0902
             ResetPeriodicLogMessagesOperation(),
             PeriodicOperation("collect_and_send_events", self.collect_and_send_events, self.EVENT_COLLECTION_PERIOD),
             ReportNetworkErrorsOperation(),
-            PollResourceUsageOperation(),
             PeriodicOperation("send_host_plugin_heartbeat", self.send_host_plugin_heartbeat, self.HOST_PLUGIN_HEARTBEAT_PERIOD),
             PeriodicOperation("send_imds_heartbeat", self.send_imds_heartbeat, self.IMDS_HEARTBEAT_PERIOD),
             ReportNetworkConfigurationChangesOperation(),
         ]
+        if CGroupConfigurator.get_instance().enabled():
+            self._periodic_operations.append(PollResourceUsageOperation())
+
         self.protocol = None
         self.protocol_util = None
         self.health_service = None
@@ -197,7 +198,7 @@ class MonitorHandler(object): # pylint: disable=R0902
         self.imds_errorstate = ErrorState(min_timedelta=MonitorHandler.IMDS_HEALTH_PERIOD)
 
     def run(self):
-        self.start(init_data=True)
+        self.start()
 
     def stop(self):
         self.should_run = False
@@ -225,16 +226,18 @@ class MonitorHandler(object): # pylint: disable=R0902
     def is_alive(self):
         return self.event_thread is not None and self.event_thread.is_alive()
 
-    def start(self, init_data=False):
-        self.event_thread = threading.Thread(target=self.daemon, args=(init_data,))
+    def start(self):
+        self.event_thread = threading.Thread(target=self.daemon)
         self.event_thread.setDaemon(True)
         self.event_thread.setName(self.get_thread_name())
         self.event_thread.start()
 
-    def daemon(self, init_data=False):
+    def daemon(self):
         try:
-            if init_data:
+            if self.protocol_util is None or self.protocol is None:
                 self.init_protocols()
+
+            if self.imds_client is None:
                 self.init_imds_client()
 
             while not self.stopped():
