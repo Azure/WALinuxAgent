@@ -49,8 +49,8 @@ from azurelinuxagent.common.protocol.util import get_protocol_util
 from azurelinuxagent.common.protocol.hostplugin import HostPluginProtocol
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
 from azurelinuxagent.common.version import AGENT_NAME, AGENT_VERSION, AGENT_DIR_PATTERN, CURRENT_AGENT,\
-    CURRENT_VERSION, DISTRO_NAME, DISTRO_VERSION, is_current_agent_installed, PY_VERSION_MAJOR, PY_VERSION_MINOR, \
-    PY_VERSION_MICRO
+    CURRENT_VERSION, DISTRO_NAME, DISTRO_VERSION, is_current_agent_installed, get_lis_version, PY_VERSION_MAJOR, \
+    PY_VERSION_MINOR, PY_VERSION_MICRO
 from azurelinuxagent.ga.collect_logs import get_collect_logs_handler, is_log_collection_allowed
 from azurelinuxagent.ga.env import get_env_handler
 from azurelinuxagent.ga.extension_telemetry import get_extension_telemetry_handler
@@ -262,9 +262,9 @@ class UpdateHandler(object): # pylint: disable=R0902
             initialize_event_logger_vminfo_common_parameters(protocol)
 
             # Log OS-specific info.
-            os_info_msg = u"Distro: {0}-{1}; OSUtil: {2}; AgentService: {3}; Python: {4}.{5}.{6}".format(
+            os_info_msg = u"Distro: {0}-{1}; OSUtil: {2}; AgentService: {3}; Python: {4}.{5}.{6}; LISDrivers: {7}".format(
                 DISTRO_NAME, DISTRO_VERSION, type(self.osutil).__name__, self.osutil.service_name, PY_VERSION_MAJOR,
-                PY_VERSION_MINOR, PY_VERSION_MICRO)
+                PY_VERSION_MINOR, PY_VERSION_MICRO, get_lis_version())
             logger.info(os_info_msg)
             add_event(AGENT_NAME, op=WALAEventOperation.OSInfo, message=os_info_msg)
 
