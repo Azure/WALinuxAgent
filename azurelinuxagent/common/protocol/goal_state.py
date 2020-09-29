@@ -74,8 +74,7 @@ class GoalState(object):  # pylint: disable=R0902
             if role_instance:
                 break
         else:
-            logger.warn("Fetched goal state [inc {inc}], but it was invalid.".format(inc=self.incarnation))
-            raise IncompleteGoalStateError("Goal State doesn't have a RoleInstance.")
+            raise IncompleteGoalStateError("Fetched goal state without a RoleInstance [incarnation {inc}]".format(inc=self.incarnation))
 
         try:
             self.expected_state = findtext(xml_doc, "ExpectedState")
