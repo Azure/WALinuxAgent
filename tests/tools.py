@@ -193,7 +193,7 @@ class AgentTestCase(unittest.TestCase):
 
     def tearDown(self):
         if not debug and self.tmp_dir is not None:
-            shutil.rmtree(self.tmp_dir)
+            shutil.rmtree(self.tmp_dir, ignore_errors=True)
 
     def emulate_assertIn(self, a, b, msg=None): # pylint: disable=invalid-name
         if a not in b:
