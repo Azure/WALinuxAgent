@@ -157,7 +157,6 @@ class IncompleteGoalStateError(ProtocolError):
     """
     Goal state is returned incomplete.
     """
-    pass
 
 class HttpError(AgentError):
     """

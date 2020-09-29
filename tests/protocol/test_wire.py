@@ -37,9 +37,7 @@ from azurelinuxagent.common.telemetryevent import TelemetryEventList, GuestAgent
 from azurelinuxagent.common.utils import restutil
 from azurelinuxagent.common.exception import IncompleteGoalStateError
 from azurelinuxagent.common.version import CURRENT_VERSION, DISTRO_NAME, DISTRO_VERSION
-from azurelinuxagent.ga.exthandlers import get_exthandlers_handler
 from tests.ga.test_monitor import random_generator
-from tests.ga.extension_emulator import extension_emulator, generate_put_handler, enable_invocations, ExtensionCommandNames
 from tests.protocol import mockwiredata
 from tests.protocol.mocks import mock_wire_protocol, HttpRequestPredicates
 from tests.protocol.mockwiredata import DATA_FILE_NO_EXT
@@ -1069,14 +1067,14 @@ class TryUpdateGoalStateTestCase(HttpRequestPredicates, AgentTestCase):
     def test_incomplete_gs_should_fail(self):
 
         with mock_wire_protocol(mockwiredata.DATA_FILE) as protocol:
-            gs = GoalState.fetch_full_goal_state(protocol.client)
+            GoalState.fetch_full_goal_state(protocol.client)
 
             protocol.mock_wire_data.data_files = mockwiredata.DATA_FILE_NOOP_GS
             protocol.mock_wire_data.reload()
             protocol.mock_wire_data.set_incarnation(2)
 
             with self.assertRaises(IncompleteGoalStateError):
-                gs = GoalState.fetch_full_goal_state_if_incarnation_different_than(protocol.client, 1)
+                GoalState.fetch_full_goal_state_if_incarnation_different_than(protocol.client, 1)
 
     def test_it_should_return_false_on_failure(self):
         with mock_wire_protocol(mockwiredata.DATA_FILE) as protocol:
