@@ -153,6 +153,10 @@ class ProtocolNotFoundError(ProtocolError):
     def __init__(self, msg=None, inner=None): # pylint: disable=W0235
         super(ProtocolNotFoundError, self).__init__(msg, inner)
 
+class IncompleteGoalStateError(ProtocolError):
+    """
+    Goal state is returned incomplete.
+    """
 
 class HttpError(AgentError):
     """
