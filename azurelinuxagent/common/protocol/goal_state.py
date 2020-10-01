@@ -30,6 +30,7 @@ from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.protocol.restapi import Cert, CertList, Extension, ExtHandler, ExtHandlerList, \
     ExtHandlerVersionUri, RemoteAccessUser, RemoteAccessUsersList, \
     VMAgentManifest, VMAgentManifestList, VMAgentManifestUri
+from azurelinuxagent.common.exception import IncompleteGoalStateError
 from azurelinuxagent.common.utils import fileutil
 from azurelinuxagent.common.utils.cryptutil import CryptUtil
 from azurelinuxagent.common.utils.textutil import parse_doc, findall, find, findtext, getattrib, gettext
@@ -41,6 +42,8 @@ P7M_FILE_NAME = "Certificates.p7m"
 PEM_FILE_NAME = "Certificates.pem"
 TRANSPORT_CERT_FILE_NAME = "TransportCert.pem"
 TRANSPORT_PRV_FILE_NAME = "TransportPrivate.pem"
+
+NUM_GS_FETCH_RETRIES = 3
 
 
 # too-many-instance-attributes<R0902> Disabled: The goal state consists of a good number of properties
@@ -60,14 +63,21 @@ class GoalState(object):  # pylint: disable=R0902
         directly.
 
         """
-        try:
-            uri = GOAL_STATE_URI.format(wire_client.get_endpoint())
+        uri = GOAL_STATE_URI.format(wire_client.get_endpoint())
+
+        for _ in range(1, NUM_GS_FETCH_RETRIES + 1):
             self.xml_text = wire_client.fetch_config(uri, wire_client.get_header())
             xml_doc = parse_doc(self.xml_text)
-
             self.incarnation = findtext(xml_doc, "Incarnation")
-            self.expected_state = findtext(xml_doc, "ExpectedState")
+
             role_instance = find(xml_doc, "RoleInstance")
+            if role_instance:
+                break
+        else:
+            raise IncompleteGoalStateError("Fetched goal state without a RoleInstance [incarnation {inc}]".format(inc=self.incarnation))
+
+        try:
+            self.expected_state = findtext(xml_doc, "ExpectedState")
             self.role_instance_id = findtext(role_instance, "InstanceId")
             role_config = find(role_instance, "Configuration")
             self.role_config_name = findtext(role_config, "ConfigName")
@@ -78,15 +88,11 @@ class GoalState(object):  # pylint: disable=R0902
 
             AgentGlobals.update_container_id(self.container_id)
 
-            fetch_full_goal_state = False
             if full_goal_state:
-                fetch_full_goal_state = True
                 reason = 'force update'
-            elif base_incarnation is not None and self.incarnation != base_incarnation:
-                fetch_full_goal_state = True
+            elif base_incarnation not in (None, self.incarnation):
                 reason = 'new incarnation'
-
-            if not fetch_full_goal_state:
+            else:
                 self.hosting_env = None
                 self.shared_conf = None
                 self.certs = None
