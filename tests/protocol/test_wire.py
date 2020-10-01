@@ -310,8 +310,8 @@ class TestWireProtocol(AgentTestCase):
             # ensure response is empty
             self.assertEqual(None, in_vm_artifacts_profile)
 
-            # ensure event is logged. First call is to initialize hostGAPlugin
-            self.assertEqual(2, patch_event.call_count)
+            # ensure event is logged.
+            self.assertEqual(1, patch_event.call_count)
             self.assertFalse(patch_event.call_args[1]['is_success'])
             self.assertTrue('invalid json' in patch_event.call_args[1]['message'])
             self.assertEqual('ArtifactsProfileBlob', patch_event.call_args[1]['op'])
@@ -782,7 +782,7 @@ class TestWireClient(HttpRequestPredicates, AgentTestCase):
             if self.is_goal_state_request(url):
                 protocol.track_url(url)
             return None
-        http_get_handler.host_plugin_calls = 2
+        http_get_handler.host_plugin_calls = 1
 
         with mock_wire_protocol(mockwiredata.DATA_FILE_IN_VM_ARTIFACTS_PROFILE) as protocol:
             HostPluginProtocol.set_default_channel(False)
@@ -799,12 +799,10 @@ class TestWireClient(HttpRequestPredicates, AgentTestCase):
                 self.assertIsInstance(return_value, InVMArtifactsProfile, 'The request did not return a valid artifacts profile: {0}'.format(return_value))
                 self.assertTrue(return_value.onHold, 'The OnHold property should be True') # pylint: disable=no-member
                 urls = protocol.get_tracked_urls()
-                self.assertEqual(len(urls), 4, "Invalid number of requests: [{0}]".format(urls))
-                self.assertTrue(self.is_in_vm_artifacts_profile_request(urls[0]), "The first request should have been over the direct channel")
-                self.assertTrue(self.is_host_plugin_extension_artifact_request(urls[1]), "The second request should have been over the host channel")
-                self.assertTrue(self.is_goal_state_request(urls[2]), "The goal state should have been refreshed before retrying the host channel")
-                self.assertTrue(self.is_host_plugin_extension_artifact_request(urls[3]), "The retry request should have been over the host channel")
-                self.assertEqual(HostPluginProtocol.is_default_channel(), True, "The default channel should have changed to the host")
+                self.assertEqual(len(urls), 3, "Invalid number of requests: [{0}]".format(urls))
+                self.assertTrue(self.is_host_plugin_extension_artifact_request(urls[0]), "The second request should have been over the host channel")
+                self.assertTrue(self.is_goal_state_request(urls[1]), "The goal state should have been refreshed before retrying the host channel")
+                self.assertTrue(self.is_host_plugin_extension_artifact_request(urls[2]), "The retry request should have been over the host channel")
             finally:
                 HostPluginProtocol.set_default_channel(False)
 
@@ -831,11 +829,10 @@ class TestWireClient(HttpRequestPredicates, AgentTestCase):
             self.assertIsNone(return_value, "The artifacts profile request should have failed")
             urls = protocol.get_tracked_urls()
 
-            self.assertEqual(len(urls), 4, "Invalid number of requests: [{0}]".format(urls))
-            self.assertTrue(self.is_in_vm_artifacts_profile_request(urls[0]), "The first request should have been over the direct channel")
-            self.assertTrue(self.is_host_plugin_extension_artifact_request(urls[1]), "The second request should have been over the host channel")
-            self.assertTrue(self.is_goal_state_request(urls[2]), "The goal state should have been refreshed before retrying the host channel")
-            self.assertTrue(self.is_host_plugin_extension_artifact_request(urls[3]), "The retry request should have been over the host channel")
+            self.assertEqual(len(urls), 3, "Invalid number of requests: [{0}]".format(urls))
+            self.assertTrue(self.is_host_plugin_extension_artifact_request(urls[0]), "The second request should have been over the host channel")
+            self.assertTrue(self.is_goal_state_request(urls[1]), "The goal state should have been refreshed before retrying the host channel")
+            self.assertTrue(self.is_host_plugin_extension_artifact_request(urls[2]), "The retry request should have been over the host channel")
             self.assertEqual(HostPluginProtocol.is_default_channel(), False, "The default channel should not have changed")
 
     def test_send_request_hostplugin_first_should_invoke_hostplugin_when_not_default(self, *args):

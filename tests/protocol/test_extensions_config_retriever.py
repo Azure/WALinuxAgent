@@ -472,7 +472,7 @@ class TestExtensionsConfigRetriever(AgentTestCase):
         self.assertTrue(FastTrackChangeDetail.RETRIEVED in ext_conf.get_description())
 
     @staticmethod
-    def get_test_data(self, ext_conf="wire/ext_conf_in_vm_artifacts_profile.xml",
+    def get_test_data(ext_conf="wire/ext_conf_in_vm_artifacts_profile.xml",
                              artifacts_profile="wire/in_vm_artifacts_profile_blob.json"):
         test_data_file = DATA_FILE.copy()
         test_data_file["vm_artifacts_profile"] = artifacts_profile
@@ -481,7 +481,7 @@ class TestExtensionsConfigRetriever(AgentTestCase):
         return test_data_file
 
     @staticmethod
-    def create_retriever(self, test_data_file):
+    def create_retriever(test_data_file):
         test_data = WireProtocolData(test_data_file)
         profile = InVMArtifactsProfile(test_data.vm_artifacts_profile)
         wire_client = MockWireClient(test_data.ext_conf, profile)

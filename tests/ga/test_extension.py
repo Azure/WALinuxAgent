@@ -1102,8 +1102,7 @@ class TestExtension(ExtensionTestCase):
         mock_fileutil.write_file.return_value = IOError("Mock IO Error")
         exthandlers_handler.run()
 
-<<<<<<< HEAD
-    def test_extension_processing_allowed(self, *args):
+    def test_extension_processing_allowed(self, *args): # pylint: disable=unused-argument
         test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE)
         exthandlers_handler, protocol = self._create_mock(test_data, *args)
         exthandlers_handler.ext_config = protocol.get_ext_config()
@@ -1111,10 +1110,6 @@ class TestExtension(ExtensionTestCase):
         mock_in_vm_artifacts_profile.is_on_hold = Mock(return_value=True)
         mock_in_vm_artifacts_profile.get_sequence_number = Mock(return_value=1)
         protocol.client.get_artifacts_profile = Mock(return_value=mock_in_vm_artifacts_profile)
-=======
-    def test_extension_processing_allowed(self, *args): # pylint: disable=unused-argument
-        exthandlers_handler = get_exthandlers_handler(Mock())
->>>>>>> upstream/develop
 
         # disable extension handling in configuration
         with patch.object(conf, 'get_extensions_enabled', return_value=False):
@@ -1140,7 +1135,6 @@ class TestExtension(ExtensionTestCase):
 
     def test_handle_ext_handlers_on_hold_true(self, *args):
         test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE)
-<<<<<<< HEAD
         exthandlers_handler, protocol = self._create_mock(test_data, *args)
         exthandlers_handler.ext_config = protocol.get_ext_config()
         exthandlers_handler.ext_handlers = exthandlers_handler.ext_config.ext_handlers
@@ -1148,11 +1142,6 @@ class TestExtension(ExtensionTestCase):
         mock_in_vm_artifacts_profile.is_on_hold = Mock(return_value=True)
         mock_in_vm_artifacts_profile.get_sequence_number = Mock(return_value=1)
         protocol.client.get_artifacts_profile = Mock(return_value=mock_in_vm_artifacts_profile)
-=======
-        exthandlers_handler, protocol = self._create_mock(test_data, *args) # pylint: disable=no-value-for-parameter
-        exthandlers_handler.ext_handlers, exthandlers_handler.last_etag = protocol.get_ext_handlers()
-        protocol.get_artifacts_profile = MagicMock()
->>>>>>> upstream/develop
         exthandlers_handler.protocol = protocol
 
         # Disable extension handling blocking
@@ -1170,14 +1159,9 @@ class TestExtension(ExtensionTestCase):
 
     def test_handle_ext_handlers_on_hold_false(self, *args):
         test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE)
-<<<<<<< HEAD
-        exthandlers_handler, protocol = self._create_mock(test_data, *args)
+        exthandlers_handler, protocol = self._create_mock(test_data, *args) # pylint: disable=no-value-for-parameter
         exthandlers_handler.ext_config = protocol.get_ext_config()
         exthandlers_handler.ext_handlers = exthandlers_handler.ext_config.ext_handlers
-=======
-        exthandlers_handler, protocol = self._create_mock(test_data, *args) # pylint: disable=no-value-for-parameter
-        exthandlers_handler.ext_handlers, exthandlers_handler.last_etag = protocol.get_ext_handlers()
->>>>>>> upstream/develop
         exthandlers_handler.protocol = protocol
 
         # enable extension handling blocking
@@ -1202,16 +1186,11 @@ class TestExtension(ExtensionTestCase):
 
     def test_last_incarnation_on_extension_processing(self, *args):
         test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE)
-<<<<<<< HEAD
-        exthandlers_handler, protocol = self._create_mock(test_data, *args)
+        exthandlers_handler, protocol = self._create_mock(test_data, *args)# pylint: disable=no-value-for-parameter
         mock_in_vm_artifacts_profile = InVMArtifactsProfile(MagicMock())
         mock_in_vm_artifacts_profile.is_on_hold = Mock(return_value=True)
         mock_in_vm_artifacts_profile.get_sequence_number = Mock(return_value=1)
         protocol.client.get_artifacts_profile = Mock(return_value=mock_in_vm_artifacts_profile)
-=======
-        exthandlers_handler, protocol = self._create_mock(test_data, *args) # pylint: disable=no-value-for-parameter
-        exthandlers_handler.ext_handlers, etag = protocol.get_ext_handlers()
->>>>>>> upstream/develop
         exthandlers_handler.protocol = protocol
 
         # Disable extension handling blocking in the first run and enable in the 2nd run
@@ -1427,17 +1406,10 @@ class TestExtension(ExtensionTestCase):
                     else:
                         datafile = mockwiredata.DATA_FILE
 
-<<<<<<< HEAD
-                _, protocol = self._create_mock(mockwiredata.WireProtocolData(datafile), *args)
+                _, protocol = self._create_mock(mockwiredata.WireProtocolData(datafile), *args)# pylint: disable=no-value-for-parameter
                 ext_config = protocol.get_ext_config()
                 self.assertEqual(1, len(ext_config.ext_handlers.extHandlers))
                 ext_handler = ext_config.ext_handlers.extHandlers[0]
-=======
-                _, protocol = self._create_mock(mockwiredata.WireProtocolData(datafile), *args) # pylint: disable=no-value-for-parameter
-                ext_handlers, _ = protocol.get_ext_handlers()
-                self.assertEqual(1, len(ext_handlers.extHandlers))
-                ext_handler = ext_handlers.extHandlers[0]
->>>>>>> upstream/develop
                 self.assertEqual('OSTCExtensions.ExampleHandlerLinux', ext_handler.name)
                 self.assertEqual(config_version, ext_handler.properties.version, "config version.")
                 ExtHandlerInstance(ext_handler, protocol).decide_version()
@@ -1743,12 +1715,8 @@ class TestExtension(ExtensionTestCase):
 
             # Ensure we are processing the same goal state only once
             loop_run = 5
-<<<<<<< HEAD
-            for x in range(loop_run):
-                protocol.update_goal_state()
-=======
             for x in range(loop_run): # pylint: disable=unused-variable,invalid-name
->>>>>>> upstream/develop
+                protocol.update_goal_state()
                 exthandlers_handler.run()
 
             update_command_count = len([extension_call for extension_call in extension_calls
@@ -1790,12 +1758,8 @@ class TestExtension(ExtensionTestCase):
 
             # Ensure we are processing the same goal state only once
             loop_run = 5
-<<<<<<< HEAD
-            for x in range(loop_run):
-                protocol.update_goal_state()
-=======
             for x in range(loop_run): # pylint: disable=unused-variable,invalid-name
->>>>>>> upstream/develop
+                protocol.update_goal_state()
                 exthandlers_handler.run()
 
             self.assertEqual(1, patch_get_disable_command.call_count)
@@ -1818,12 +1782,8 @@ class TestExtension(ExtensionTestCase):
 
             # Ensure we are processing the same goal state only once
             loop_run = 5
-<<<<<<< HEAD
-            for x in range(loop_run):
-                protocol.update_goal_state()
-=======
             for x in range(loop_run): # pylint: disable=unused-variable,invalid-name
->>>>>>> upstream/develop
+                protocol.update_goal_state()
                 exthandlers_handler.run()
 
             self.assertEqual(1, patch_get_disable_command.call_count)

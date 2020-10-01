@@ -57,10 +57,10 @@ MAXIMUM_PAGEBLOB_PAGE_SIZE = 4 * 1024 * 1024  # Max page size: 4MB
 
 # Indicates HostGAPlugin should download the VMArtifactsProfile blob
 # if it hasn't already done so to check if the manifest url is whitelisted
-HEADER_VERIFY_FROM_ARTIFACTS_BLOB = "x-ms-verify-from-artifacts-blob"
+_HEADER_VERIFY_FROM_ARTIFACTS_BLOB = "x-ms-verify-from-artifacts-blob"
 
 # RFC 7232, section 3.2
-HEADER_IF_NONE_MATCH = "if-none-match"
+_HEADER_IF_NONE_MATCH = "if-none-match"
 
 class HostPluginProtocol(object): # pylint: disable=R0902
     _is_default_channel = False
@@ -163,17 +163,17 @@ class HostPluginProtocol(object): # pylint: disable=R0902
 
         url = URI_FORMAT_GET_EXTENSION_ARTIFACT.format(self.endpoint,
                                                        HOST_PLUGIN_PORT)
-        headers = {HEADER_VERSION: API_VERSION,
-                   HEADER_CONTAINER_ID: self.container_id,
-                   HEADER_HOST_CONFIG_NAME: self.role_config_name,
-                   HEADER_ARTIFACT_LOCATION: artifact_url,
-                   HEADER_VERIFY_FROM_ARTIFACTS_BLOB: "true"}
+        headers = {_HEADER_VERSION: API_VERSION,
+                   _HEADER_CONTAINER_ID: self.container_id,
+                   _HEADER_HOST_CONFIG_NAME: self.role_config_name,
+                   _HEADER_ARTIFACT_LOCATION: artifact_url,
+                   _HEADER_VERIFY_FROM_ARTIFACTS_BLOB: "true"}
 
         if artifact_manifest_url is not None:
             headers[_HEADER_ARTIFACT_MANIFEST_LOCATION] = artifact_manifest_url
 
         if etag is not None:
-            headers[HEADER_IF_NONE_MATCH] = etag
+            headers[_HEADER_IF_NONE_MATCH] = etag
 
         return url, headers
 

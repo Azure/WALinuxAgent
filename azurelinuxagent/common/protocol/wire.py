@@ -162,7 +162,7 @@ class WireProtocol(DataContract):
 
         try:
             success = self.client.send_request_using_appropriate_channel(direct_func, host_func)
-        except Exception:
+        except Exception as e:
             success = False
 
         return success
@@ -927,7 +927,7 @@ class WireClient(object): # pylint: disable=R0904
                      "advised by Fabric.").format(PROTOCOL_VERSION)
             raise ProtocolNotFoundError(error)
 
-    def call_hostplugin_with_container_check(self, host_func, uses_etag):
+    def _call_hostplugin_with_container_check(self, host_func, uses_etag):
         ret = None
         etag = None
         not_modified = False         # Corresponds to a 304 NOT MODIFIED response from the server
@@ -993,7 +993,7 @@ class WireClient(object): # pylint: disable=R0904
         # supports the If-None-Match header that reduces how often we need to parse
 
         # note that this method requires a lambda that returns three values
-        ret, etag, not_modified = self.call_hostplugin_with_container_check(host_func, uses_etag=True)
+        ret, etag, not_modified = self._call_hostplugin_with_container_check(host_func, uses_etag=True)
         if ret or not_modified:
             return ret, etag
 
@@ -1030,45 +1030,6 @@ class WireClient(object): # pylint: disable=R0904
                 if not ret:
                     logger.periodic_info(logger.EVERY_HOUR, "[PERIODIC] Request failed using the direct channel, "
                                                             "switching to host plugin.")
-            except (ResourceGoneError, InvalidContainerError) as e:
-                logger.periodic_info(logger.EVERY_HOUR, "[PERIODIC] Request failed using the direct channel, "
-                                                        "switching to host plugin. Error: {0}".format(ustr(e)))
-
-            if ret:
-                return ret
-        else:
-            logger.periodic_info(logger.EVERY_HALF_DAY, "[PERIODIC] Using host plugin as default channel.")
-
-        ret, _, _ = self.call_hostplugin_with_container_check(host_func, uses_etag=False)
-
-        return ret
-
-    def send_request_using_appropriate_channel(self, direct_func, host_func):
-        # A wrapper method for all function calls that send HTTP requests. The purpose of the method is to
-        # define which channel to use, direct or through the host plugin. For the host plugin channel,
-        # also implement a retry mechanism.
-
-        # By default, the direct channel is the default channel. If that is the case, try getting a response
-        # through that channel. On failure, fall back to the host plugin channel.
-
-        # When using the host plugin channel, regardless if it's set as default or not, try sending the request first.
-        # On specific failures that indicate a stale goal state (such as resource gone or invalid container parameter),
-        # refresh the goal state and try again. If successful, set the host plugin channel as default. If failed,
-        # raise the exception.
-
-        # NOTE: direct_func and host_func are passed as lambdas. Be careful about capturing goal state data in them as
-        # they will not be refreshed even if a goal state refresh is called before retrying the host_func.
-
-        if not HostPluginProtocol.is_default_channel():
-            ret = None
-            try:
-                ret = direct_func()
-
-                # Different direct channel functions report failure in different ways: by returning None, False,
-                # or raising ResourceGone or InvalidContainer exceptions.
-                if not ret:
-                    logger.periodic_info(logger.EVERY_HOUR, "[PERIODIC] Request failed using the direct channel, "
-                                                            "switching to host plugin.")
             except (ResourceGoneError, InvalidContainerError) as e: # pylint: disable=C0103
                 logger.periodic_info(logger.EVERY_HOUR, "[PERIODIC] Request failed using the direct channel, "
                                                         "switching to host plugin. Error: {0}".format(ustr(e)))
@@ -1078,7 +1039,7 @@ class WireClient(object): # pylint: disable=R0904
         else:
             logger.periodic_info(logger.EVERY_HALF_DAY, "[PERIODIC] Using host plugin as default channel.")
 
-        ret = self._call_hostplugin_with_container_check(host_func)
+        ret, _, _ = self._call_hostplugin_with_container_check(host_func, uses_etag=False)
 
         if not HostPluginProtocol.is_default_channel():
             logger.info("Setting host plugin as default channel from now on. "
@@ -1363,7 +1324,7 @@ class WireClient(object): # pylint: disable=R0904
 
     def upload_logs(self, content):
         host_func = lambda: self._upload_logs_through_host(content)
-        return self._call_hostplugin_with_container_check(host_func)
+        return self._call_hostplugin_with_container_check(host_func, uses_etag=False)
 
     def _upload_logs_through_host(self, content):
         host = self.get_host_plugin()
