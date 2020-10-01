@@ -587,6 +587,7 @@ class EventLogger(object):
                       message=err_msg_format.format(count, max_errors_to_report, ', '.join(errors)),
                       is_success=False)
 
+    # too-many-locals<R0914> Disabled: Most local variables are being used for debugging which is acceptable.
     def collect_events(self, enqueue_event_func): # pylint: disable=R0914
         """
         Retuns a list of events that need to be sent to the telemetry pipeline and deletes the corresponding files
