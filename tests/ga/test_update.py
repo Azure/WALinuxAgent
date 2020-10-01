@@ -1582,16 +1582,20 @@ class TestUpdate(UpdateTestCase): # pylint: disable=too-many-public-methods
                 for ext_dir in expected_events_dirs:
                     self.assertTrue(os.path.exists(ext_dir), "Extension directory {0} not created!".format(ext_dir))
 
-                yield update_handler, expected_events_dirs
+                try:
+                    yield update_handler, expected_events_dirs
+                finally:
+                    # Always delete events dir
+                    for events_dir in expected_events_dirs:
+                        shutil.rmtree(events_dir, ignore_errors=True)
 
     def test_it_should_delete_extension_events_directory_if_extension_telemetry_pipeline_disabled(self):
-
-            # Disable extension telemetry pipeline and ensure events directory got deleted
-            with self._setup_test_for_ext_event_dirs_retention() as (update_handler, expected_events_dirs): # pylint: disable=bad-indentation
-                with patch('azurelinuxagent.ga.exthandlers._ENABLE_EXTENSION_TELEMETRY_PIPELINE', False): # pylint: disable=bad-indentation
-                    update_handler.run(debug=True) # pylint: disable=bad-indentation
-                    for ext_dir in expected_events_dirs: # pylint: disable=bad-indentation
-                        self.assertFalse(os.path.exists(ext_dir), "Extension directory {0} still exists!".format(ext_dir)) # pylint: disable=bad-indentation
+        # Disable extension telemetry pipeline and ensure events directory got deleted
+        with self._setup_test_for_ext_event_dirs_retention() as (update_handler, expected_events_dirs):
+            with patch('azurelinuxagent.ga.exthandlers._ENABLE_EXTENSION_TELEMETRY_PIPELINE', False):
+                update_handler.run(debug=True)
+                for ext_dir in expected_events_dirs:
+                    self.assertFalse(os.path.exists(ext_dir), "Extension directory {0} still exists!".format(ext_dir))
 
     def test_it_should_retain_extension_events_directories_if_extension_telemetry_pipeline_enabled(self):
         # Rerun update handler again with extension telemetry pipeline enabled to ensure we dont delete events directories
