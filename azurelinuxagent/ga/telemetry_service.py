@@ -69,6 +69,8 @@ class TelemetryServiceHandler(ThreadHandlerInterface):
         Stop server communication and join the thread to main thread.
         """
         self.should_run = False
+        # Set the event to unblock the thread to ensure that the thread is not blocking shutdown.
+        self._should_process_events.set()
         if self.is_alive():
             self.join()
 
