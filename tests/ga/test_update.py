@@ -1572,22 +1572,22 @@ class TestUpdate(UpdateTestCase): # pylint: disable=too-many-public-methods
 
     @contextlib.contextmanager
     def _setup_test_for_ext_event_dirs_retention(self):
-        with self._get_update_handler(test_data=DATA_FILE_MULTIPLE_EXT) as (update_handler, protocol):
-            with patch('azurelinuxagent.ga.exthandlers._ENABLE_EXTENSION_TELEMETRY_PIPELINE', True):
-                update_handler.run(debug=True)
-                expected_events_dirs = glob.glob(os.path.join(conf.get_ext_log_dir(), "*", EVENTS_DIRECTORY))
-                no_of_extensions = protocol.mock_wire_data.get_no_of_plugins_in_extension_config()
-                # Ensure extensions installed and events directory created
-                self.assertEqual(len(expected_events_dirs), no_of_extensions, "Extension events directories dont match")
-                for ext_dir in expected_events_dirs:
-                    self.assertTrue(os.path.exists(ext_dir), "Extension directory {0} not created!".format(ext_dir))
+        tempdir = tempfile.mkdtemp()
+        try:
+            with patch.object(conf, "get_ext_log_dir", return_value=tempdir):
+                with self._get_update_handler(test_data=DATA_FILE_MULTIPLE_EXT) as (update_handler, protocol):
+                    with patch('azurelinuxagent.ga.exthandlers._ENABLE_EXTENSION_TELEMETRY_PIPELINE', True):
+                        update_handler.run(debug=True)
+                        expected_events_dirs = glob.glob(os.path.join(conf.get_ext_log_dir(), "*", EVENTS_DIRECTORY))
+                        no_of_extensions = protocol.mock_wire_data.get_no_of_plugins_in_extension_config()
+                        # Ensure extensions installed and events directory created
+                        self.assertEqual(len(expected_events_dirs), no_of_extensions, "Extension events directories dont match")
+                        for ext_dir in expected_events_dirs:
+                            self.assertTrue(os.path.exists(ext_dir), "Extension directory {0} not created!".format(ext_dir))
 
-                try:
-                    yield update_handler, expected_events_dirs
-                finally:
-                    # Always delete events dir
-                    for events_dir in expected_events_dirs:
-                        shutil.rmtree(events_dir, ignore_errors=True)
+                        yield update_handler, expected_events_dirs
+        finally:
+            shutil.rmtree(tempdir, ignore_errors=True)
 
     def test_it_should_delete_extension_events_directory_if_extension_telemetry_pipeline_disabled(self):
         # Disable extension telemetry pipeline and ensure events directory got deleted
