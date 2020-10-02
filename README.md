@@ -469,6 +469,23 @@ _Default: n_
 If set, log verbosity is boosted. Waagent logs to /var/log/waagent.log and
 leverages the system logrotate functionality to rotate logs.
 
+
+#### __Logs.Collect__
+
+_Type: Boolean_  
+_Default: n_
+
+If set, agent logs will be periodically collected and uploaded to a secure location for improved supportability.
+
+#### __Logs.CollectPeriod__
+
+_Type: Integer_  
+_Default: 3600_
+
+This configures how frequently to collect and upload logs. Default is each hour.
+
+NOTE: This only takes effect if the Logs.Collect option is enabled.
+
 #### __OS.AllowHTTP__
 
 _Type: Boolean_  
