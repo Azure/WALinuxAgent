@@ -44,7 +44,7 @@ PEM_FILE_NAME = "Certificates.pem"
 TRANSPORT_CERT_FILE_NAME = "TransportCert.pem"
 TRANSPORT_PRV_FILE_NAME = "TransportPrivate.pem"
 
-_NUM_GS_FETCH_RETRIES = 3
+_NUM_GS_FETCH_RETRIES = 6
 
 
 # too-many-instance-attributes<R0902> Disabled: The goal state consists of a good number of properties
@@ -74,7 +74,7 @@ class GoalState(object):  # pylint: disable=R0902
             role_instance = find(xml_doc, "RoleInstance")
             if role_instance:
                 break
-            time.sleep(1.0)
+            time.sleep(0.5)
         else:
             raise IncompleteGoalStateError("Fetched goal state without a RoleInstance [incarnation {inc}]".format(inc=self.incarnation))
 
