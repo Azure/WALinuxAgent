@@ -76,7 +76,7 @@ class GoalState(object):  # pylint: disable=R0902
                 break
             time.sleep(0.5)
         else:
-            raise IncompleteGoalStateError("Fetched goal state without a RoleInstance [incarnation {inc}]".format(inc=self.incarnation))
+            raise IncompleteGoalStateError("NAM -- Fetched goal state without a RoleInstance [incarnation {inc}]".format(inc=self.incarnation))
 
         try:
             self.expected_state = findtext(xml_doc, "ExpectedState")
