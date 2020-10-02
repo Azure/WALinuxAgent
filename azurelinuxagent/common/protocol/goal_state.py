@@ -19,6 +19,7 @@
 import json
 import os
 import re
+import time
 
 import azurelinuxagent.common.conf as conf
 import azurelinuxagent.common.logger as logger
@@ -43,7 +44,7 @@ PEM_FILE_NAME = "Certificates.pem"
 TRANSPORT_CERT_FILE_NAME = "TransportCert.pem"
 TRANSPORT_PRV_FILE_NAME = "TransportPrivate.pem"
 
-NUM_GS_FETCH_RETRIES = 3
+_NUM_GS_FETCH_RETRIES = 3
 
 
 # too-many-instance-attributes<R0902> Disabled: The goal state consists of a good number of properties
@@ -65,7 +66,7 @@ class GoalState(object):  # pylint: disable=R0902
         """
         uri = GOAL_STATE_URI.format(wire_client.get_endpoint())
 
-        for _ in range(1, NUM_GS_FETCH_RETRIES + 1):
+        for _ in range(0, _NUM_GS_FETCH_RETRIES):
             self.xml_text = wire_client.fetch_config(uri, wire_client.get_header())
             xml_doc = parse_doc(self.xml_text)
             self.incarnation = findtext(xml_doc, "Incarnation")
@@ -73,6 +74,7 @@ class GoalState(object):  # pylint: disable=R0902
             role_instance = find(xml_doc, "RoleInstance")
             if role_instance:
                 break
+            time.sleep(0.5)
         else:
             raise IncompleteGoalStateError("Fetched goal state without a RoleInstance [incarnation {inc}]".format(inc=self.incarnation))
 
