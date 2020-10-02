@@ -222,7 +222,14 @@ class BigIpOSUtil(DefaultOSUtil):
             if dvd is not None:
                 return "/dev/{0}".format(dvd.group(0))
         raise OSUtilError("Failed to get dvd device")
-
+    
+    # The linter reports that this function's arguments differ from those
+    # of the function this overrides. This doesn't seem to be a problem, however,
+    # because this function accepts any option that could'be been specified for
+    # the original (and, by forwarding the kwargs to the original, will reject any
+    # option _not_ accepted by the original). Additionally, this method allows us
+    # to keep the defaults for mount_dvd in one place (the original function) instead
+    # of having to duplicate it here as well. 
     def mount_dvd(self, **kwargs): # pylint: disable=W0221
         """Mount the DVD containing the provisioningiso.iso file
 

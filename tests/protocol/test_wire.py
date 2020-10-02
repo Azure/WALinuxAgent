@@ -27,7 +27,7 @@ import uuid
 
 from azurelinuxagent.common.exception import InvalidContainerError, ResourceGoneError, ProtocolError, \
     ExtensionDownloadError, HttpError
-from azurelinuxagent.common.protocol.goal_state import ExtensionsConfig
+from azurelinuxagent.common.protocol.goal_state import ExtensionsConfig, GoalState
 from azurelinuxagent.common.protocol.hostplugin import HostPluginProtocol
 from azurelinuxagent.common.protocol.restapi import VMAgentManifestUri
 from azurelinuxagent.common.protocol.wire import WireProtocol, WireClient, \
@@ -35,6 +35,7 @@ from azurelinuxagent.common.protocol.wire import WireProtocol, WireClient, \
 from azurelinuxagent.common.telemetryevent import TelemetryEventList, GuestAgentExtensionEventsSchema, \
     TelemetryEventParam, TelemetryEvent
 from azurelinuxagent.common.utils import restutil
+from azurelinuxagent.common.exception import IncompleteGoalStateError
 from azurelinuxagent.common.version import CURRENT_VERSION, DISTRO_NAME, DISTRO_VERSION
 from tests.ga.test_monitor import random_generator
 from tests.protocol import mockwiredata
@@ -930,6 +931,18 @@ class TryUpdateGoalStateTestCase(HttpRequestPredicates, AgentTestCase):
     def test_it_should_return_true_on_success(self):
         with mock_wire_protocol(mockwiredata.DATA_FILE) as protocol:
             self.assertTrue(protocol.client.try_update_goal_state(), "try_update_goal_state should have succeeded")
+
+    def test_incomplete_gs_should_fail(self):
+
+        with mock_wire_protocol(mockwiredata.DATA_FILE) as protocol:
+            GoalState.fetch_full_goal_state(protocol.client)
+
+            protocol.mock_wire_data.data_files = mockwiredata.DATA_FILE_NOOP_GS
+            protocol.mock_wire_data.reload()
+            protocol.mock_wire_data.set_incarnation(2)
+
+            with self.assertRaises(IncompleteGoalStateError):
+                GoalState.fetch_full_goal_state_if_incarnation_different_than(protocol.client, 1)
 
     def test_it_should_return_false_on_failure(self):
         with mock_wire_protocol(mockwiredata.DATA_FILE) as protocol:

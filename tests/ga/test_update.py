@@ -37,7 +37,7 @@ from azurelinuxagent.common.version import AGENT_PKG_GLOB, AGENT_DIR_GLOB, AGENT
 from azurelinuxagent.ga.exthandlers import ExtHandlerInstance, HandlerEnvironment
 from azurelinuxagent.ga.update import GuestAgent, GuestAgentError, MAX_FAILURE, AGENT_MANIFEST_FILE, \
     get_update_handler, ORPHAN_POLL_INTERVAL, AGENT_PARTITION_FILE, AGENT_ERROR_FILE, ORPHAN_WAIT_INTERVAL, \
-    CHILD_LAUNCH_RESTART_MAX, get_python_cmd, CHILD_HEALTH_INTERVAL, UpdateHandler
+    CHILD_LAUNCH_RESTART_MAX, CHILD_HEALTH_INTERVAL, UpdateHandler
 from tests.protocol.mocks import mock_wire_protocol
 from tests.protocol.mockwiredata import DATA_FILE, DATA_FILE_MULTIPLE_EXT
 from tests.tools import AgentTestCase, call, data_dir, DEFAULT, patch, load_bin_data, load_data, Mock, MagicMock, \
@@ -1085,11 +1085,11 @@ class TestUpdate(UpdateTestCase): # pylint: disable=too-many-public-methods
         args = args[0]
         cmds = textutil.safe_shlex_split(agent.get_agent_cmd())
         if cmds[0].lower() == "python":
-            cmds[0] = get_python_cmd()
+            cmds[0] = sys.executable
 
         self.assertEqual(args, cmds)
         self.assertTrue(len(args) > 1)
-        self.assertTrue(args[0].startswith("python"))
+        self.assertRegex(args[0], r"^(/.*/python[\d.]*)$", "The command doesn't contain full python path")
         self.assertEqual("-run-exthandlers", args[len(args) - 1])
         self.assertEqual(True, 'cwd' in kwargs)
         self.assertEqual(agent.get_agent_dir(), kwargs['cwd'])
@@ -1103,7 +1103,7 @@ class TestUpdate(UpdateTestCase): # pylint: disable=too-many-public-methods
         args = args[0]
 
         self.assertTrue(len(args) > 1)
-        self.assertTrue(args[0].startswith("python"))
+        self.assertRegex(args[0], r"^(/.*/python[\d.]*)$", "The command doesn't contain full python path")
         self.assertEqual("AnArgument", args[len(args) - 1])
 
     def test_run_latest_polls_and_waits_for_success(self):
@@ -1145,7 +1145,7 @@ class TestUpdate(UpdateTestCase): # pylint: disable=too-many-public-methods
 
         args, kwargs = self._test_run_latest()
 
-        self.assertEqual(args[0], [get_python_cmd(), "-u", sys.argv[0], "-run-exthandlers"])
+        self.assertEqual(args[0], [sys.executable, "-u", sys.argv[0], "-run-exthandlers"])
         self.assertEqual(True, 'cwd' in kwargs)
         self.assertEqual(os.getcwd(), kwargs['cwd'])
 
@@ -1256,25 +1256,28 @@ class TestUpdate(UpdateTestCase): # pylint: disable=too-many-public-methods
             with patch('azurelinuxagent.ga.remoteaccess.get_remote_access_handler') as mock_ra_handler:
                 with patch('azurelinuxagent.ga.update.get_monitor_handler') as mock_monitor:
                     with patch('azurelinuxagent.ga.update.get_env_handler') as mock_env:
-                        with patch('azurelinuxagent.ga.update.initialize_event_logger_vminfo_common_parameters'):
-                            with patch('time.sleep', side_effect=iterator) as mock_sleep: # pylint: disable=redefined-outer-name
-                                with patch('sys.exit') as mock_exit:
-                                    if isinstance(os.getppid, MagicMock):
-                                        self.update_handler.run()
-                                    else:
-                                        with patch('os.getppid', return_value=42):
-                                            self.update_handler.run()
+                        with patch('azurelinuxagent.ga.update.get_collect_logs_handler') as mock_collect_logs:
+                            with patch('azurelinuxagent.ga.update.initialize_event_logger_vminfo_common_parameters'):
+                                with patch('azurelinuxagent.ga.update.is_log_collection_allowed', return_value=True):
+                                    with patch('time.sleep', side_effect=iterator) as mock_sleep: # pylint: disable=redefined-outer-name
+                                        with patch('sys.exit') as mock_exit:
+                                            if isinstance(os.getppid, MagicMock):
+                                                self.update_handler.run()
+                                            else:
+                                                with patch('os.getppid', return_value=42):
+                                                    self.update_handler.run()
 
-                                    self.assertEqual(1, mock_handler.call_count)
-                                    self.assertEqual(mock_handler.return_value.method_calls, calls)
-                                    self.assertEqual(1, mock_ra_handler.call_count)
-                                    self.assertEqual(mock_ra_handler.return_value.method_calls, calls)
-                                    self.assertEqual(invocations, mock_sleep.call_count)
-                                    if invocations > 0:
-                                        self.assertEqual(sleep_interval, mock_sleep.call_args[0])
-                                    self.assertEqual(1, mock_monitor.call_count)
-                                    self.assertEqual(1, mock_env.call_count)
-                                    self.assertEqual(1, mock_exit.call_count)
+                                        self.assertEqual(1, mock_handler.call_count)
+                                        self.assertEqual(mock_handler.return_value.method_calls, calls)
+                                        self.assertEqual(1, mock_ra_handler.call_count)
+                                        self.assertEqual(mock_ra_handler.return_value.method_calls, calls)
+                                        self.assertEqual(invocations, mock_sleep.call_count)
+                                        if invocations > 0:
+                                            self.assertEqual(sleep_interval, mock_sleep.call_args[0])
+                                        self.assertEqual(1, mock_monitor.call_count)
+                                        self.assertEqual(1, mock_env.call_count)
+                                        self.assertEqual(1, mock_collect_logs.call_count)
+                                        self.assertEqual(1, mock_exit.call_count)
 
     def test_run(self):
         self._test_run()
@@ -1569,36 +1572,40 @@ class TestUpdate(UpdateTestCase): # pylint: disable=too-many-public-methods
 
     @contextlib.contextmanager
     def _setup_test_for_ext_event_dirs_retention(self):
-        with self._get_update_handler(test_data=DATA_FILE_MULTIPLE_EXT) as (update_handler, protocol):
-            with patch('azurelinuxagent.ga.exthandlers._ENABLE_EXTENSION_TELEMETRY_PIPELINE', True):
-                update_handler.run(debug=True)
-                expected_events_dirs = glob.glob(os.path.join(conf.get_ext_log_dir(), "*", EVENTS_DIRECTORY))
-                no_of_extensions = protocol.mock_wire_data.get_no_of_plugins_in_extension_config()
-                # Ensure extensions installed and events directory created
-                self.assertEqual(len(expected_events_dirs), no_of_extensions, "Extension events directories dont match")
-                for ext_dir in expected_events_dirs:
-                    self.assertTrue(os.path.exists(ext_dir), "Extension directory {0} not created!".format(ext_dir))
+        tempdir = tempfile.mkdtemp()
+        try:
+            with patch.object(conf, "get_ext_log_dir", return_value=tempdir):
+                with self._get_update_handler(test_data=DATA_FILE_MULTIPLE_EXT) as (update_handler, protocol):
+                    with patch('azurelinuxagent.ga.exthandlers._ENABLE_EXTENSION_TELEMETRY_PIPELINE', True):
+                        update_handler.run(debug=True)
+                        expected_events_dirs = glob.glob(os.path.join(conf.get_ext_log_dir(), "*", EVENTS_DIRECTORY))
+                        no_of_extensions = protocol.mock_wire_data.get_no_of_plugins_in_extension_config()
+                        # Ensure extensions installed and events directory created
+                        self.assertEqual(len(expected_events_dirs), no_of_extensions, "Extension events directories dont match")
+                        for ext_dir in expected_events_dirs:
+                            self.assertTrue(os.path.exists(ext_dir), "Extension directory {0} not created!".format(ext_dir))
 
-                yield update_handler, expected_events_dirs
+                        yield update_handler, expected_events_dirs
+        finally:
+            shutil.rmtree(tempdir, ignore_errors=True)
 
     def test_it_should_delete_extension_events_directory_if_extension_telemetry_pipeline_disabled(self):
-
-            # Disable extension telemetry pipeline and ensure events directory got deleted
-            with self._setup_test_for_ext_event_dirs_retention() as (update_handler, expected_events_dirs): # pylint: disable=bad-indentation
-                with patch('azurelinuxagent.ga.exthandlers._ENABLE_EXTENSION_TELEMETRY_PIPELINE', False): # pylint: disable=bad-indentation
-                    update_handler.run(debug=True) # pylint: disable=bad-indentation
-                    for ext_dir in expected_events_dirs: # pylint: disable=bad-indentation
-                        self.assertFalse(os.path.exists(ext_dir), "Extension directory {0} still exists!".format(ext_dir)) # pylint: disable=bad-indentation
+        # Disable extension telemetry pipeline and ensure events directory got deleted
+        with self._setup_test_for_ext_event_dirs_retention() as (update_handler, expected_events_dirs):
+            with patch('azurelinuxagent.ga.exthandlers._ENABLE_EXTENSION_TELEMETRY_PIPELINE', False):
+                update_handler.run(debug=True)
+                for ext_dir in expected_events_dirs:
+                    self.assertFalse(os.path.exists(ext_dir), "Extension directory {0} still exists!".format(ext_dir))
 
     def test_it_should_retain_extension_events_directories_if_extension_telemetry_pipeline_enabled(self):
+        # Rerun update handler again with extension telemetry pipeline enabled to ensure we dont delete events directories
+        with self._setup_test_for_ext_event_dirs_retention() as (update_handler, expected_events_dirs):
+            update_handler.run(debug=True)
+            for ext_dir in expected_events_dirs:
+                self.assertTrue(os.path.exists(ext_dir), "Extension directory {0} should exist!".format(ext_dir))
 
-            # Rerun update handler again with extension telemetry pipeline enabled to ensure we dont delete events directories
-            with self._setup_test_for_ext_event_dirs_retention() as (update_handler, expected_events_dirs): # pylint: disable=bad-indentation
-                update_handler.run(debug=True) # pylint: disable=bad-indentation
-                for ext_dir in expected_events_dirs: # pylint: disable=bad-indentation
-                    self.assertTrue(os.path.exists(ext_dir), "Extension directory {0} should exist!".format(ext_dir)) # pylint: disable=bad-indentation
 
-
+@patch('azurelinuxagent.ga.update.get_collect_logs_handler')
 @patch('azurelinuxagent.ga.update.get_monitor_handler')
 @patch('azurelinuxagent.ga.update.get_env_handler')
 class MonitorThreadTest(AgentTestCase):
@@ -1626,9 +1633,10 @@ class MonitorThreadTest(AgentTestCase):
                     with patch('azurelinuxagent.ga.remoteaccess.get_remote_access_handler'):
                         with patch('azurelinuxagent.ga.update.initialize_event_logger_vminfo_common_parameters'):
                             with patch('azurelinuxagent.common.cgroupapi.CGroupsApi.cgroups_supported', return_value=False):  # skip all cgroup stuff
-                                with patch('time.sleep', side_effect=iterator):
-                                    with patch('sys.exit'):
-                                        self.update_handler.run()
+                                with patch('azurelinuxagent.ga.update.is_log_collection_allowed', return_value=True):
+                                    with patch('time.sleep', side_effect=iterator):
+                                        with patch('sys.exit'):
+                                            self.update_handler.run()
 
     def _setup_mock_thread_and_start_test_run(self, mock_thread, is_alive=True, invocations=0):
         self.assertTrue(self.update_handler.running)
@@ -1642,7 +1650,7 @@ class MonitorThreadTest(AgentTestCase):
         self._test_run(invocations=invocations)
         return thread
 
-    def test_start_threads(self, mock_env, mock_monitor):
+    def test_start_threads(self, mock_env, mock_monitor, mock_collect_logs):
         self.assertTrue(self.update_handler.running)
 
         mock_monitor_thread = MagicMock()
@@ -1653,48 +1661,54 @@ class MonitorThreadTest(AgentTestCase):
         mock_env_thread.run = MagicMock()
         mock_env.return_value = mock_env_thread
 
+        mock_collect_logs_thread = MagicMock()
+        mock_collect_logs_thread.run = MagicMock()
+        mock_collect_logs.return_value = mock_collect_logs_thread
+
         self._test_run(invocations=0)
         self.assertEqual(1, mock_monitor.call_count)
         self.assertEqual(1, mock_monitor_thread.run.call_count)
         self.assertEqual(1, mock_env.call_count)
         self.assertEqual(1, mock_env_thread.run.call_count)
+        self.assertEqual(1, mock_collect_logs.call_count)
+        self.assertEqual(1, mock_collect_logs_thread.run.call_count)
 
-    def test_check_if_monitor_thread_is_alive(self, mock_env, mock_monitor): # pylint: disable=unused-argument
+    def test_check_if_monitor_thread_is_alive(self, mock_env, mock_monitor, mock_collect_logs): # pylint: disable=unused-argument
         mock_monitor_thread = self._setup_mock_thread_and_start_test_run(mock_monitor, is_alive=True, invocations=0)
         self.assertEqual(1, mock_monitor.call_count)
         self.assertEqual(1, mock_monitor_thread.run.call_count)
         self.assertEqual(1, mock_monitor_thread.is_alive.call_count)
         self.assertEqual(0, mock_monitor_thread.start.call_count)
 
-    def test_check_if_env_thread_is_alive(self, mock_env, mock_monitor): # pylint: disable=unused-argument
+    def test_check_if_env_thread_is_alive(self, mock_env, mock_monitor, mock_collect_logs): # pylint: disable=unused-argument
         mock_env_thread = self._setup_mock_thread_and_start_test_run(mock_env, is_alive=True, invocations=1)
         self.assertEqual(1, mock_env.call_count)
         self.assertEqual(1, mock_env_thread.run.call_count)
         self.assertEqual(1, mock_env_thread.is_alive.call_count)
         self.assertEqual(0, mock_env_thread.start.call_count)
 
-    def test_restart_monitor_thread_if_not_alive(self, mock_env, mock_monitor): # pylint: disable=unused-argument
+    def test_restart_monitor_thread_if_not_alive(self, mock_env, mock_monitor, mock_collect_logs): # pylint: disable=unused-argument
         mock_monitor_thread = self._setup_mock_thread_and_start_test_run(mock_monitor, is_alive=False, invocations=1)
         self.assertEqual(1, mock_monitor.call_count)
         self.assertEqual(1, mock_monitor_thread.run.call_count)
         self.assertEqual(1, mock_monitor_thread.is_alive.call_count)
         self.assertEqual(1, mock_monitor_thread.start.call_count)
 
-    def test_restart_env_thread_if_not_alive(self, mock_env, mock_monitor): # pylint: disable=unused-argument
+    def test_restart_env_thread_if_not_alive(self, mock_env, mock_monitor, mock_collect_logs): # pylint: disable=unused-argument
         mock_env_thread = self._setup_mock_thread_and_start_test_run(mock_env, is_alive=False, invocations=1)
         self.assertEqual(1, mock_env.call_count)
         self.assertEqual(1, mock_env_thread.run.call_count)
         self.assertEqual(1, mock_env_thread.is_alive.call_count)
         self.assertEqual(1, mock_env_thread.start.call_count)
 
-    def test_restart_monitor_thread(self, mock_env, mock_monitor): # pylint: disable=unused-argument
+    def test_restart_monitor_thread(self, mock_env, mock_monitor, mock_collect_logs): # pylint: disable=unused-argument
         mock_monitor_thread = self._setup_mock_thread_and_start_test_run(mock_monitor, is_alive=False, invocations=0)
         self.assertEqual(True, mock_monitor.called)
         self.assertEqual(True, mock_monitor_thread.run.called)
         self.assertEqual(True, mock_monitor_thread.is_alive.called)
         self.assertEqual(True, mock_monitor_thread.start.called)
 
-    def test_restart_env_thread(self, mock_env, mock_monitor): # pylint: disable=unused-argument
+    def test_restart_env_thread(self, mock_env, mock_monitor, mock_collect_logs): # pylint: disable=unused-argument
         mock_env_thread = self._setup_mock_thread_and_start_test_run(mock_env, is_alive=False, invocations=0)
         self.assertEqual(True, mock_env.called)
         self.assertEqual(True, mock_env_thread.run.called)

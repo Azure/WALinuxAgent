@@ -19,7 +19,6 @@
 import glob
 import json
 import os
-import platform
 import random
 import re
 import shutil
@@ -46,9 +45,10 @@ from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.osutil import get_osutil
 from azurelinuxagent.common.protocol.util import get_protocol_util
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
-from azurelinuxagent.common.version import AGENT_NAME, AGENT_VERSION, AGENT_DIR_PATTERN, CURRENT_AGENT, \
-    CURRENT_VERSION, DISTRO_NAME, DISTRO_VERSION, is_current_agent_installed, PY_VERSION_MAJOR, PY_VERSION_MINOR, \
-    PY_VERSION_MICRO
+from azurelinuxagent.common.version import AGENT_NAME, AGENT_VERSION, AGENT_DIR_PATTERN, CURRENT_AGENT,\
+    CURRENT_VERSION, DISTRO_NAME, DISTRO_VERSION, is_current_agent_installed, get_lis_version, PY_VERSION_MAJOR, \
+    PY_VERSION_MINOR, PY_VERSION_MICRO
+from azurelinuxagent.ga.collect_logs import get_collect_logs_handler, is_log_collection_allowed
 from azurelinuxagent.ga.env import get_env_handler
 from azurelinuxagent.ga.extension_telemetry import get_extension_telemetry_handler
 from azurelinuxagent.ga.exthandlers import HandlerManifest, get_traceback, ExtHandlersHandler, \
@@ -88,13 +88,7 @@ def get_update_handler():
     return UpdateHandler()
 
 
-def get_python_cmd():
-    major_version = platform.python_version_tuple()[0]
-    return "python" if int(major_version) <= 2 else "python{0}".format(major_version)
-
-
 class UpdateHandler(object): # pylint: disable=R0902
-
     TELEMETRY_HEARTBEAT_PERIOD = timedelta(minutes=30)
 
     def __init__(self):
@@ -155,7 +149,7 @@ class UpdateHandler(object): # pylint: disable=R0902
             # Launch the correct Python version for python-based agents
             cmds = textutil.safe_shlex_split(agent_cmd)
             if cmds[0].lower() == "python":
-                cmds[0] = get_python_cmd()
+                cmds[0] = sys.executable
                 agent_cmd = " ".join(cmds)
 
             self._evaluate_agent_health(latest_agent)
@@ -245,7 +239,7 @@ class UpdateHandler(object): # pylint: disable=R0902
         self.child_process = None
         return
 
-    def run(self, debug=False): # pylint: disable=R0912,R0914
+    def run(self, debug=False):  # pylint: disable=R0912,R0914
         """
         This is the main loop which watches for agent and extension updates.
         """
@@ -260,29 +254,19 @@ class UpdateHandler(object): # pylint: disable=R0902
             protocol = self.protocol_util.get_protocol()
             protocol.update_goal_state()
 
+            # Initialize the common parameters for telemetry events
             initialize_event_logger_vminfo_common_parameters(protocol)
 
             # Log OS-specific info.
-            os_info_msg = u"Distro: {0}-{1}; OSUtil: {2}; AgentService: {3}; Python: {4}.{5}.{6}".format(
+            os_info_msg = u"Distro: {0}-{1}; OSUtil: {2}; AgentService: {3}; Python: {4}.{5}.{6}; LISDrivers: {7}".format(
                 DISTRO_NAME, DISTRO_VERSION, type(self.osutil).__name__, self.osutil.service_name, PY_VERSION_MAJOR,
-                PY_VERSION_MINOR, PY_VERSION_MICRO)
+                PY_VERSION_MINOR, PY_VERSION_MICRO, get_lis_version())
             logger.info(os_info_msg)
             add_event(AGENT_NAME, op=WALAEventOperation.OSInfo, message=os_info_msg)
 
-            # Get all thread handlers
-            all_thread_handlers = [
-                get_monitor_handler(),
-                get_env_handler()
-            ]
-
-            if is_extension_telemetry_pipeline_enabled():
-                # Reuse the same protocol_util as the UpdateHandler class to avoid new initializations
-                all_thread_handlers.append(get_extension_telemetry_handler(self.protocol_util))
-
-            # Launch all monitoring threads
-            for thread_handler in all_thread_handlers:
-                thread_handler.run()
-
+            #
+            # Perform initialization tasks
+            #
             from azurelinuxagent.ga.exthandlers import get_exthandlers_handler, migrate_handler_state
             exthandlers_handler = get_exthandlers_handler(protocol)
             migrate_handler_state()
@@ -297,6 +281,23 @@ class UpdateHandler(object): # pylint: disable=R0902
             self._ensure_readonly_files()
             self._ensure_cgroups_initialized()
             self._ensure_extension_telemetry_state_configured_properly(protocol)
+
+            # Get all thread handlers
+            all_thread_handlers = [
+                get_monitor_handler(),
+                get_env_handler()
+            ]
+
+            if is_log_collection_allowed():
+                all_thread_handlers.append(get_collect_logs_handler())
+
+            if is_extension_telemetry_pipeline_enabled():
+                # Reuse the same protocol_util as the UpdateHandler class to avoid new initializations
+                all_thread_handlers.append(get_extension_telemetry_handler(self.protocol_util))
+
+            # Launch all monitoring threads
+            for thread_handler in all_thread_handlers:
+                thread_handler.run()
 
             goal_state_interval = conf.get_goal_state_period() if conf.get_extensions_enabled() else GOAL_STATE_INTERVAL_DISABLED
 
@@ -753,20 +754,23 @@ class UpdateHandler(object): # pylint: disable=R0902
         if datetime.utcnow() >= (self._last_telemetry_heartbeat + UpdateHandler.TELEMETRY_HEARTBEAT_PERIOD):
             dropped_packets = self.osutil.get_firewall_dropped_packets(protocol.get_endpoint())
             auto_update_enabled = 1 if conf.get_autoupdate_enabled() else 0
+
             telemetry_msg = "{0};{1};{2};{3};{4}".format(self._heartbeat_counter, self._heartbeat_id, dropped_packets,
                                                          self._heartbeat_update_goal_state_error_count, auto_update_enabled)
-
-            add_event(name=AGENT_NAME, version=CURRENT_VERSION, op=WALAEventOperation.HeartBeat, is_success=True,
-                      message=telemetry_msg, log_event=False)
-            self._heartbeat_counter += 1
-            self._heartbeat_update_goal_state_error_count = 0
-
             debug_log_msg = "[DEBUG HeartbeatCounter: {0};HeartbeatId: {1};DroppedPackets: {2};" \
                             "UpdateGSErrors: {3};AutoUpdate: {4}]".format(self._heartbeat_counter,
                                                                           self._heartbeat_id, dropped_packets,
                                                                           self._heartbeat_update_goal_state_error_count,
                                                                           auto_update_enabled)
+
+            # Write Heartbeat events/logs
+            add_event(name=AGENT_NAME, version=CURRENT_VERSION, op=WALAEventOperation.HeartBeat, is_success=True,
+                      message=telemetry_msg, log_event=False)
             logger.info(u"[HEARTBEAT] Agent {0} is running as the goal state agent {1}", CURRENT_AGENT, debug_log_msg)
+
+            # Update/Reset the counters
+            self._heartbeat_counter += 1
+            self._heartbeat_update_goal_state_error_count = 0
             self._last_telemetry_heartbeat = datetime.utcnow()
 
     @staticmethod

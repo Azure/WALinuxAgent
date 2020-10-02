@@ -25,10 +25,12 @@ import azurelinuxagent.common.logger as logger
 from azurelinuxagent.common.AgentGlobals import AgentGlobals
 from azurelinuxagent.common.datacontract import set_properties
 from azurelinuxagent.common.event import add_event, WALAEventOperation
+from azurelinuxagent.common.exception import ProtocolError
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.protocol.restapi import Cert, CertList, Extension, ExtHandler, ExtHandlerList, \
     ExtHandlerVersionUri, RemoteAccessUser, RemoteAccessUsersList, \
     VMAgentManifest, VMAgentManifestList, VMAgentManifestUri
+from azurelinuxagent.common.exception import IncompleteGoalStateError
 from azurelinuxagent.common.utils import fileutil
 from azurelinuxagent.common.utils.cryptutil import CryptUtil
 from azurelinuxagent.common.utils.textutil import parse_doc, findall, find, findtext, getattrib, gettext
@@ -41,10 +43,13 @@ PEM_FILE_NAME = "Certificates.pem"
 TRANSPORT_CERT_FILE_NAME = "TransportCert.pem"
 TRANSPORT_PRV_FILE_NAME = "TransportPrivate.pem"
 
+NUM_GS_FETCH_RETRIES = 3
 
-class GoalState(object): # pylint: disable=R0902
 
-    def __init__(self, wire_client, full_goal_state=False, base_incarnation=None):
+# too-many-instance-attributes<R0902> Disabled: The goal state consists of a good number of properties
+class GoalState(object):  # pylint: disable=R0902
+    # too-many-branches<R0912> Disable: Branches are sequential, not nested
+    def __init__(self, wire_client, full_goal_state=False, base_incarnation=None):  # pylint: disable=R0912
         """
         Fetches the goal state using the given wire client.
 
@@ -59,41 +64,48 @@ class GoalState(object): # pylint: disable=R0902
 
         """
         uri = GOAL_STATE_URI.format(wire_client.get_endpoint())
-        self.xml_text = wire_client.fetch_config(uri, wire_client.get_header())
-        xml_doc = parse_doc(self.xml_text)
 
-        self.incarnation = findtext(xml_doc, "Incarnation")
-        self.expected_state = findtext(xml_doc, "ExpectedState")
-        role_instance = find(xml_doc, "RoleInstance")
-        self.role_instance_id = findtext(role_instance, "InstanceId")
-        role_config = find(role_instance, "Configuration")
-        self.role_config_name = findtext(role_config, "ConfigName")
-        container = find(xml_doc, "Container")
-        self.container_id = findtext(container, "ContainerId")
-        lbprobe_ports = find(xml_doc, "LBProbePorts")
-        self.load_balancer_probe_port = findtext(lbprobe_ports, "Port")
+        for _ in range(1, NUM_GS_FETCH_RETRIES + 1):
+            self.xml_text = wire_client.fetch_config(uri, wire_client.get_header())
+            xml_doc = parse_doc(self.xml_text)
+            self.incarnation = findtext(xml_doc, "Incarnation")
 
-        AgentGlobals.update_container_id(self.container_id)
-
-        fetch_full_goal_state = False
-        if full_goal_state:
-            fetch_full_goal_state = True
-            reason = 'force update'
-        elif base_incarnation is not None and self.incarnation != base_incarnation:
-            fetch_full_goal_state = True
-            reason = 'new incarnation'
-
-        if not fetch_full_goal_state:
-            self.hosting_env = None
-            self.shared_conf = None
-            self.certs = None
-            self.ext_conf = None
-            self.remote_access = None
-            return
-
-        logger.info('Fetching new goal state [incarnation {0} ({1})]', self.incarnation, reason)
+            role_instance = find(xml_doc, "RoleInstance")
+            if role_instance:
+                break
+        else:
+            raise IncompleteGoalStateError("Fetched goal state without a RoleInstance [incarnation {inc}]".format(inc=self.incarnation))
 
         try:
+            self.expected_state = findtext(xml_doc, "ExpectedState")
+            self.role_instance_id = findtext(role_instance, "InstanceId")
+            role_config = find(role_instance, "Configuration")
+            self.role_config_name = findtext(role_config, "ConfigName")
+            container = find(xml_doc, "Container")
+            self.container_id = findtext(container, "ContainerId")
+            lbprobe_ports = find(xml_doc, "LBProbePorts")
+            self.load_balancer_probe_port = findtext(lbprobe_ports, "Port")
+
+            AgentGlobals.update_container_id(self.container_id)
+
+            if full_goal_state:
+                reason = 'force update'
+            elif base_incarnation not in (None, self.incarnation):
+                reason = 'new incarnation'
+            else:
+                self.hosting_env = None
+                self.shared_conf = None
+                self.certs = None
+                self.ext_conf = None
+                self.remote_access = None
+                return
+        except Exception as exception:
+            # We don't log the error here since fetching the goal state is done every few seconds
+            raise ProtocolError(msg="Error fetching goal state", inner=exception)
+
+        try:
+            logger.info('Fetching new goal state [incarnation {0} ({1})]', self.incarnation, reason)
+
             uri = findtext(xml_doc, "HostingEnvironmentConfig")
             xml_text = wire_client.fetch_config(uri, wire_client.get_header())
             self.hosting_env = HostingEnv(xml_text)
@@ -122,9 +134,9 @@ class GoalState(object): # pylint: disable=R0902
             else:
                 xml_text = wire_client.fetch_config(uri, wire_client.get_header_for_cert())
                 self.remote_access = RemoteAccess(xml_text)
-        except Exception as e: # pylint: disable=C0103
-            logger.warn("Fetching the goal state failed: {0}", ustr(e))
-            raise
+        except Exception as exception:
+            logger.warn("Fetching the goal state failed: {0}", ustr(exception))
+            raise ProtocolError(msg="Error fetching goal state", inner=exception)
         finally:
             logger.info('Fetch goal state completed')
 
@@ -151,7 +163,8 @@ class GoalState(object): # pylint: disable=R0902
         return goal_state if goal_state.incarnation != incarnation else None
 
 
-class HostingEnv(object): # pylint: disable=R0903
+# too-few-public-methods<R0903> Disabled: This is just a data object that does not need any public methods
+class HostingEnv(object):  # pylint: disable=R0903
     def __init__(self, xml_text):
         self.xml_text = xml_text
         xml_doc = parse_doc(xml_text)
@@ -163,12 +176,14 @@ class HostingEnv(object): # pylint: disable=R0903
         self.deployment_name = getattrib(deployment, "name")
 
 
-class SharedConfig(object): # pylint: disable=R0903
+# too-few-public-methods<R0903> Disabled: This is just a data object that does not need any public methods
+class SharedConfig(object):  # pylint: disable=R0903
     def __init__(self, xml_text):
         self.xml_text = xml_text
 
 
-class Certificates(object): # pylint: disable=R0903
+# too-few-public-methods<R0903> Disabled: This is just a data object that does not need any public methods
+class Certificates(object):  # pylint: disable=R0903
     def __init__(self, xml_text): # pylint: disable=R0912,R0914
         self.cert_list = CertList()
 
@@ -275,8 +290,10 @@ class Certificates(object): # pylint: disable=R0903
         return file_name
 
 
-class ExtensionsConfig(object): # pylint: disable=R0903
-    def __init__(self, xml_text): # pylint: disable=R0914
+# too-few-public-methods<R0903> Disabled: This is just a data object that does not need any public methods
+class ExtensionsConfig(object):  # pylint: disable=R0903
+    # too-many-locals<R0914> Disabled: The number of local variables is OK
+    def __init__(self, xml_text):  # pylint: disable=R0914
         self.xml_text = xml_text
         self.ext_handlers = ExtHandlerList()
         self.vmagent_manifests = VMAgentManifestList()
@@ -396,7 +413,8 @@ class ExtensionsConfig(object): # pylint: disable=R0903
             ext_handler.properties.extensions.append(ext)
 
 
-class RemoteAccess(object): # pylint: disable=R0903
+# too-few-public-methods<R0903> Disabled: This is just a data object that does not need any public methods
+class RemoteAccess(object):  # pylint: disable=R0903
     """
     Object containing information about user accounts
     """
