@@ -180,6 +180,8 @@ For CoreOS, use:
 
 `-start`: Run waagent as a background process
 
+`-collect-logs [-full]`: Runs the log collector utility that produces a zip with the relevant log files useful for support. Use flag `-full` for more exhaustive log collection. 
+
 ## Configuration
 
 A configuration file (/etc/waagent.conf) controls the actions of waagent. Blank lines and lines whose first character is a `#` are ignored (end-of-line comments are *not* supported).
