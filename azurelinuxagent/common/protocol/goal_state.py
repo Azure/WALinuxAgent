@@ -74,9 +74,9 @@ class GoalState(object):  # pylint: disable=R0902
             role_instance = find(xml_doc, "RoleInstance")
             if role_instance:
                 break
-            time.sleep(0.5)
+            time.sleep(1.0)
         else:
-            raise IncompleteGoalStateError("NAM -- Fetched goal state without a RoleInstance [incarnation {inc}]".format(inc=self.incarnation))
+            raise IncompleteGoalStateError("Fetched goal state without a RoleInstance [incarnation {inc}]".format(inc=self.incarnation))
 
         try:
             self.expected_state = findtext(xml_doc, "ExpectedState")
