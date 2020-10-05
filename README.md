@@ -180,7 +180,7 @@ For CoreOS, use:
 
 `-start`: Run waagent as a background process
 
-`-collect-logs [-full]`: Runs the log collector utility that produces a zip with the relevant log files useful for support. Use flag `-full` for more exhaustive log collection. 
+`-collect-logs [-full]`: Runs the log collector utility that collects relevant agent logs for debugging and stores them in the agent folder on disk. Exact location will be shown when run. Use flag `-full` for more exhaustive log collection. 
 
 ## Configuration
 
