@@ -1255,12 +1255,12 @@ class TestUpdate(UpdateTestCase): # pylint: disable=too-many-public-methods
 
         with patch('azurelinuxagent.ga.exthandlers.get_exthandlers_handler') as mock_handler:
             with patch('azurelinuxagent.ga.remoteaccess.get_remote_access_handler') as mock_remote_access_handler:
-                with patch('azurelinuxagent.ga.monitor.get_monitor_handler') as mock_monitor:
-                    with patch('azurelinuxagent.ga.env.get_env_handler') as mock_env:
+                with patch('azurelinuxagent.ga.update.get_monitor_handler') as mock_monitor:
+                    with patch('azurelinuxagent.ga.update.get_env_handler') as mock_env:
                         with patch('azurelinuxagent.ga.update.get_collect_logs_handler') as mock_collect_logs:
                             with patch('azurelinuxagent.ga.update.initialize_event_logger_vminfo_common_parameters'):
                                 with patch('azurelinuxagent.ga.update.is_log_collection_allowed', return_value=True):
-                                    with patch('time.sleep', side_effect=iterator) as mock_sleep:
+                                    with patch('azurelinuxagent.ga.update.UpdateHandler._goal_state_interval_sleep', side_effect=iterator) as mock_sleep:
                                         with patch('sys.exit') as mock_exit:
                                             if isinstance(os.getppid, MagicMock):
                                                 self.update_handler.run()
@@ -1574,26 +1574,32 @@ class TestUpdate(UpdateTestCase): # pylint: disable=too-many-public-methods
 
     @contextlib.contextmanager
     def _setup_test_for_ext_event_dirs_retention(self):
-        with self._get_update_handler(test_data=DATA_FILE_MULTIPLE_EXT) as (update_handler, protocol):
-            with patch('azurelinuxagent.ga.exthandlers._ENABLE_EXTENSION_TELEMETRY_PIPELINE', True):
-                update_handler.run(debug=True)
-                expected_events_dirs = glob.glob(os.path.join(conf.get_ext_log_dir(), "*", EVENTS_DIRECTORY))
-                no_of_extensions = protocol.mock_wire_data.get_no_of_plugins_in_extension_config()
-                # Ensure extensions installed and events directory created
-                self.assertEqual(len(expected_events_dirs), no_of_extensions, "Extension events directories dont match")
-                for ext_dir in expected_events_dirs:
-                    self.assertTrue(os.path.exists(ext_dir), "Extension directory {0} not created!".format(ext_dir))
+        tempdir = tempfile.mkdtemp()
+        try:
+            with patch.object(conf, "get_ext_log_dir", return_value=tempdir):
+                with self._get_update_handler(test_data=DATA_FILE_MULTIPLE_EXT) as (update_handler, protocol):
+                    with patch('azurelinuxagent.ga.exthandlers._ENABLE_EXTENSION_TELEMETRY_PIPELINE', True):
+                        update_handler.run(debug=True)
+                        expected_events_dirs = glob.glob(os.path.join(conf.get_ext_log_dir(), "*", EVENTS_DIRECTORY))
+                        no_of_extensions = protocol.mock_wire_data.get_no_of_plugins_in_extension_config()
+                        # Ensure extensions installed and events directory created
+                        self.assertEqual(len(expected_events_dirs), no_of_extensions,
+                                         "Extension events directories dont match")
+                        for ext_dir in expected_events_dirs:
+                            self.assertTrue(os.path.exists(ext_dir),
+                                            "Extension directory {0} not created!".format(ext_dir))
 
-                yield update_handler, expected_events_dirs
+                        yield update_handler, expected_events_dirs
+        finally:
+            shutil.rmtree(tempdir, ignore_errors=True)
 
     def test_it_should_delete_extension_events_directory_if_extension_telemetry_pipeline_disabled(self):
-
-            # Disable extension telemetry pipeline and ensure events directory got deleted
-            with self._setup_test_for_ext_event_dirs_retention() as (update_handler, expected_events_dirs): # pylint: disable=bad-indentation
-                with patch('azurelinuxagent.ga.exthandlers._ENABLE_EXTENSION_TELEMETRY_PIPELINE', False): # pylint: disable=bad-indentation
-                    update_handler.run(debug=True) # pylint: disable=bad-indentation
-                    for ext_dir in expected_events_dirs: # pylint: disable=bad-indentation
-                        self.assertFalse(os.path.exists(ext_dir), "Extension directory {0} still exists!".format(ext_dir)) # pylint: disable=bad-indentation
+        # Disable extension telemetry pipeline and ensure events directory got deleted
+        with self._setup_test_for_ext_event_dirs_retention() as (update_handler, expected_events_dirs):
+            with patch('azurelinuxagent.ga.exthandlers._ENABLE_EXTENSION_TELEMETRY_PIPELINE', False):
+                update_handler.run(debug=True)
+                for ext_dir in expected_events_dirs:
+                    self.assertFalse(os.path.exists(ext_dir), "Extension directory {0} still exists!".format(ext_dir))
 
     def test_it_should_retain_extension_events_directories_if_extension_telemetry_pipeline_enabled(self):
         # Rerun update handler again with extension telemetry pipeline enabled to ensure we dont delete events directories

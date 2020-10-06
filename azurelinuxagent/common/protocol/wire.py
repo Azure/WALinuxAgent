@@ -1419,6 +1419,8 @@ class InVMArtifactsProfile(object): # pylint: disable=R0903
     * encryptedHealthChecks (optional)
     * encryptedApplicationProfile (optional)
     * extensionGoalStates (optional)
+    * createdOnTicks (optional)
+    * schemaVersion (optional)
     """
 
     def __init__(self, artifacts_profile):
@@ -1439,6 +1441,11 @@ class InVMArtifactsProfile(object): # pylint: disable=R0903
     def get_created_on_ticks(self):
         if 'createdOnTicks' in self.__dict__:
             return int(self.createdOnTicks)
+        return 0
+
+    def get_schema_version(self):
+        if 'schemaVersion' in self.__dict__:
+            return int(self.schemaVersion)
         return None
 
     def has_extensions(self):

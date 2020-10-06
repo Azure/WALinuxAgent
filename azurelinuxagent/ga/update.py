@@ -356,7 +356,7 @@ class UpdateHandler(object): # pylint: disable=R0902
                             message=description)
 
                 self._send_heartbeat_telemetry(protocol)
-                time.sleep(goal_state_interval)
+                self._goal_state_interval_sleep(goal_state_interval)
 
         except Exception as e: # pylint: disable=C0103
             msg = u"Agent {0} failed with exception: {1}".format(CURRENT_AGENT, ustr(e))
@@ -369,6 +369,9 @@ class UpdateHandler(object): # pylint: disable=R0902
 
         self._shutdown()
         sys.exit(0)
+
+    def _goal_state_interval_sleep(self, goal_state_interval):
+        time.sleep(goal_state_interval)
 
     def forward_signal(self, signum, frame):
         if signum == signal.SIGTERM:

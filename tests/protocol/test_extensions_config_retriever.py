@@ -4,7 +4,7 @@ from nose.plugins.attrib import attr
 from azurelinuxagent.common import conf
 from azurelinuxagent.common.protocol.wire import WireProtocol, InVMArtifactsProfile
 from azurelinuxagent.common.protocol.extensions_config_retriever import ExtensionsConfigRetriever, \
-    GOAL_STATE_SOURCE_FABRIC, GOAL_STATE_SOURCE_FASTTRACK, ExtensionsConfigReasons, FastTrackChangeDetail, \
+    GOAL_STATE_SOURCE_FABRIC, GOAL_STATE_SOURCE_FAST_TRACK, ExtensionsConfigReasons, FastTrackChangeDetail, \
     FabricChangeDetail
 from tests.protocol.mockwiredata import WireProtocolData, DATA_FILE
 from tests.tools import AgentTestCase, patch, clear_singleton_instances, i_am_root
@@ -89,7 +89,7 @@ class TestExtensionsConfigRetriever(AgentTestCase):
         self.assertTrue(ext_conf.changed)
         self.assertTrue(ext_conf.is_fabric_change)
         self.assertEqual(0, len(ext_conf.ext_handlers.extHandlers))
-        self.assertTrue(ExtensionsConfigReasons.STARTUP_FABRIC_NEWER in ext_conf.get_description())
+        self.assertTrue(ExtensionsConfigReasons.ABRIC_NEWER in ext_conf.get_description())
         self.assertTrue(FastTrackChangeDetail.RETRIEVED in ext_conf.get_description())
 
     def test_ext_config_startup_fast_track_no_extensions(self):
@@ -134,7 +134,7 @@ class TestExtensionsConfigRetriever(AgentTestCase):
         self.assertTrue(ext_conf.changed)
         self.assertTrue(ext_conf.is_fabric_change)
         self.assertEqual(1, len(ext_conf.ext_handlers.extHandlers))
-        self.assertTrue(ExtensionsConfigReasons.STARTUP_FABRIC_NEWER in ext_conf.get_description())
+        self.assertTrue(ExtensionsConfigReasons.ABRIC_NEWER in ext_conf.get_description())
         self.assertTrue(FastTrackChangeDetail.RETRIEVED in ext_conf.get_description())
 
     def test_ext_config_startup_fast_track_newer(self):
@@ -167,7 +167,7 @@ class TestExtensionsConfigRetriever(AgentTestCase):
         self.assertTrue(ext_conf.changed)
         self.assertTrue(ext_conf.is_fabric_change)
         self.assertEqual(1, len(ext_conf.ext_handlers.extHandlers))
-        self.assertTrue(ExtensionsConfigReasons.STARTUP_FABRIC_NEWER in ext_conf.get_description())
+        self.assertTrue(ExtensionsConfigReasons.ABRIC_NEWER in ext_conf.get_description())
         self.assertTrue(FastTrackChangeDetail.RETRIEVED in ext_conf.get_description())
 
     def test_ext_config_post_startup_no_profile(self):
@@ -468,7 +468,7 @@ class TestExtensionsConfigRetriever(AgentTestCase):
         self.assertTrue(ext_conf.changed)
         self.assertTrue(ext_conf.is_fabric_change)
         self.assertEqual(1, len(ext_conf.ext_handlers.extHandlers))
-        self.assertTrue(ExtensionsConfigReasons.STARTUP_FABRIC_NEWER in ext_conf.get_description())
+        self.assertTrue(ExtensionsConfigReasons.ABRIC_NEWER in ext_conf.get_description())
         self.assertTrue(FastTrackChangeDetail.RETRIEVED in ext_conf.get_description())
 
     @staticmethod

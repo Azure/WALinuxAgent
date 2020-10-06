@@ -366,6 +366,8 @@ class ExtensionsConfig(object): # pylint: disable=R0903
         if goal_state_metadata_node is not None:
             self.svd_seqNo = getattrib(goal_state_metadata_node, "inSvdSeqNo")
             self.created_on_ticks = getattrib(goal_state_metadata_node, "createdOnTicks")
+            if self.created_on_ticks is None:
+                self.created_on_ticks = 0
             logger.verbose("Read inSvdSeqNo of {0} and createdOnTicks of {1}", self.svd_seqNo, self.created_on_ticks)
 
     @staticmethod
