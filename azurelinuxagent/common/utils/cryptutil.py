@@ -96,14 +96,16 @@ class CryptUtil(object):
             stdout, stderr = second_proc.communicate()
 
             if first_proc.returncode != 0 or second_proc.returncode != 0:
+                stdout = ustr(stdout, encoding='utf-8', errors="backslashreplace") if stdout else ""
+                stderr =  ustr(stderr, encoding='utf-8', errors="backslashreplace") if stderr else ""
+
                 msg = """Failed to decrypt {0}
                 [stdout]
                 {1}
 
                 [stderr]
                 {2}
-                """.format(p7m_file, ustr(stdout, encoding='utf-8', errors="backslashreplace"), 
-                    ustr(stderr, encoding='utf-8', errors="backslashreplace"))
+                """.format(p7m_file, stdout, stderr)
                 logger.error(msg)
             
 
