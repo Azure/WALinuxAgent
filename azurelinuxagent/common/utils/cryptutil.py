@@ -102,7 +102,8 @@ class CryptUtil(object):
 
                 [stderr]
                 {2}
-                """.format(p7m_file, stdout, stderr)
+                """.format(p7m_file, ustr(stdout, encoding='utf-8', errors="backslashreplace"), 
+                    ustr(stderr, encoding='utf-8', errors="backslashreplace"))
                 logger.error(msg)
             
 

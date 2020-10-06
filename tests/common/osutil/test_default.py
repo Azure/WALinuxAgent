@@ -70,7 +70,7 @@ class TestOSUtil(AgentTestCase): # pylint: disable=too-many-public-methods
                 self.assertEqual(cmd_queue.pop(0), ["ifdown", ifname])
                 # We don't expect the following command to be called because 'dummy' does
                 # not exist.
-                # self.assertEqual(cmd_queue.pop(0), ["ifup", ifname])
+                self.assertNotEqual(cmd_queue[0] if cmd_queue else None, ["ifup", ifname])
 
 
     def test_get_dvd_device_success(self):

@@ -130,7 +130,7 @@ class UbuntuOSUtil(Ubuntu16OSUtil):
             try:
                 shellutil.run_command(["ip", "link", "set", ifname, "down"])
                 shellutil.run_command(["ip", "link", "set", ifname, "up"])
-                return
+
             except shellutil.CommandError as cmd_err:
                 logger.warn("failed to restart {0}: return code {1}".format(ifname, cmd_err.returncode))
                 if attempt < retry_limit:
