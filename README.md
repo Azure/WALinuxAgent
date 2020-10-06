@@ -180,6 +180,8 @@ For CoreOS, use:
 
 `-start`: Run waagent as a background process
 
+`-collect-logs [-full]`: Runs the log collector utility that collects relevant agent logs for debugging and stores them in the agent folder on disk. Exact location will be shown when run. Use flag `-full` for more exhaustive log collection. 
+
 ## Configuration
 
 A configuration file (/etc/waagent.conf) controls the actions of waagent. Blank lines and lines whose first character is a `#` are ignored (end-of-line comments are *not* supported).
@@ -207,6 +209,8 @@ ResourceDisk.EnableSwap=n
 ResourceDisk.EnableSwapEncryption=n
 ResourceDisk.SwapSizeMB=0
 Logs.Verbose=n
+Logs.Collect=n
+Logs.CollectPeriod=3600
 OS.AllowHTTP=n
 OS.RootDeviceScsiTimeout=300
 OS.EnableFIPS=n
@@ -468,6 +472,23 @@ _Default: n_
 
 If set, log verbosity is boosted. Waagent logs to /var/log/waagent.log and
 leverages the system logrotate functionality to rotate logs.
+
+
+#### __Logs.Collect__
+
+_Type: Boolean_  
+_Default: n_
+
+If set, agent logs will be periodically collected and uploaded to a secure location for improved supportability.
+
+#### __Logs.CollectPeriod__
+
+_Type: Integer_  
+_Default: 3600_
+
+This configures how frequently to collect and upload logs. Default is each hour.
+
+NOTE: This only takes effect if the Logs.Collect option is enabled.
 
 #### __OS.AllowHTTP__
 
