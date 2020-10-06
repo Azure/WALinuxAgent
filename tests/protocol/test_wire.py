@@ -636,7 +636,6 @@ class TestWireClient(HttpRequestPredicates, AgentTestCase):
                 self.fail('The direct channel should not have been used')
             if self.is_host_plugin_in_vm_artifacts_profile_request(url, kwargs):
                 protocol.track_url(url)
-            return None
 
         with mock_wire_protocol(mockwiredata.DATA_FILE_IN_VM_ARTIFACTS_PROFILE, http_get_handler=http_get_handler) as protocol:
             return_value = protocol.client.get_artifacts_profile()

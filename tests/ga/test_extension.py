@@ -364,6 +364,7 @@ class ExtensionTestCase(AgentTestCase):
 @patch('time.sleep', side_effect=lambda _: mock_sleep(0.001))
 @patch("azurelinuxagent.common.protocol.wire.CryptUtil")
 @patch("azurelinuxagent.common.utils.restutil.http_get")
+@patch("azurelinuxagent.common.utils.restutil.http_post")
 class TestExtension(ExtensionTestCase):
     def setUp(self):
         AgentTestCase.setUp(self)
@@ -398,8 +399,9 @@ class TestExtension(ExtensionTestCase):
         self.assertEqual(0, len(vm_status.vmAgent.extensionHandlers))
         return
 
-    def _create_mock(self, test_data, mock_http_get, MockCryptUtil, *args): # pylint: disable=unused-argument,invalid-name
+    def _create_mock(self, test_data, mock_http_post, mock_http_get, MockCryptUtil, *args): # pylint: disable=unused-argument,invalid-name
         # Mock protocol to return test data
+        mock_http_post.side_effect = test_data.mock_http_post
         mock_http_get.side_effect = test_data.mock_http_get
         MockCryptUtil.side_effect = test_data.mock_crypt_util
 
