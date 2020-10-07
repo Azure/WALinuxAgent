@@ -124,7 +124,7 @@ class TestTelemetryServiceHandler(AgentTestCase, HttpRequestPredicates):
             telemetry_handler.get_mock_wire_protocol().set_http_handlers(http_post_handler=http_post_handler)
 
             with patch("azurelinuxagent.common.event.add_event") as mock_add_event:
-                telemetry_handler.enqueue_event_func(TelemetryEvent())
+                telemetry_handler.enqueue_event(TelemetryEvent())
                 TestTelemetryServiceHandler._stop_handler(telemetry_handler)
                 for msg in expected_msgs:
                     self._assert_error_event_reported(mock_add_event, msg)
@@ -134,7 +134,7 @@ class TestTelemetryServiceHandler(AgentTestCase, HttpRequestPredicates):
 
         with self._create_telemetry_service_handler() as telemetry_handler:
             for test_event in events:
-                telemetry_handler.enqueue_event_func(test_event)
+                telemetry_handler.enqueue_event(test_event)
 
             self._assert_test_data_in_event_body(telemetry_handler, events)
 
@@ -144,7 +144,7 @@ class TestTelemetryServiceHandler(AgentTestCase, HttpRequestPredicates):
         with self._create_telemetry_service_handler() as telemetry_handler:
             test_start_time = datetime.now()
             for test_event in events:
-                telemetry_handler.enqueue_event_func(test_event)
+                telemetry_handler.enqueue_event(test_event)
 
             self._assert_test_data_in_event_body(telemetry_handler, events)
 
@@ -166,7 +166,7 @@ class TestTelemetryServiceHandler(AgentTestCase, HttpRequestPredicates):
 
             # Now enqueue data and verify telemetry_service sends them asap
             for test_event in events:
-                telemetry_handler.enqueue_event_func(test_event)
+                telemetry_handler.enqueue_event(test_event)
 
             self._assert_test_data_in_event_body(telemetry_handler, events)
 
@@ -188,7 +188,7 @@ class TestTelemetryServiceHandler(AgentTestCase, HttpRequestPredicates):
             for test_event in events:
                 test_event.parameters.append(TelemetryEventParam("Priority", test_event.priority))
                 expected_priority_order.append(str(test_event.priority))
-                telemetry_handler.enqueue_event_func(test_event)
+                telemetry_handler.enqueue_event(test_event)
 
             telemetry_handler.start()
             self.assertTrue(telemetry_handler.is_alive(), "Thread not alive")
@@ -233,7 +233,7 @@ class TestTelemetryServiceHandler(AgentTestCase, HttpRequestPredicates):
                     test_str = "Test exception, Guid: {0}".format(str(uuid.uuid4()))
                     patch_report_event.side_effect = Exception(test_str)
 
-                    telemetry_handler.enqueue_event_func(TelemetryEvent())
+                    telemetry_handler.enqueue_event(TelemetryEvent())
                     TestTelemetryServiceHandler._stop_handler(telemetry_handler, timeout=0.01)
 
                     self._assert_error_event_reported(mock_add_event, test_str, operation=WALAEventOperation.UnhandledError)
@@ -267,7 +267,7 @@ class TestTelemetryServiceHandler(AgentTestCase, HttpRequestPredicates):
         mock_lib_dir.return_value = self.lib_dir
 
         with self._create_telemetry_service_handler() as telemetry_handler:
-            monitor_handler = CollectAndEnqueueEventsPeriodicOperation(telemetry_handler.enqueue_event_func)
+            monitor_handler = CollectAndEnqueueEventsPeriodicOperation(telemetry_handler.enqueue_event)
             self._create_extension_event(message="Message-Test")
 
             test_mtime = 1000  # epoch time, in ms
@@ -338,7 +338,7 @@ class TestTelemetryServiceHandler(AgentTestCase, HttpRequestPredicates):
                 size = 2 ** power
                 self._create_extension_event(size)
 
-            CollectAndEnqueueEventsPeriodicOperation(telemetry_handler.enqueue_event_func).run()
+            CollectAndEnqueueEventsPeriodicOperation(telemetry_handler.enqueue_event).run()
 
             # The send_event call would be called each time, as we are filling up the buffer up to the brim for each call.
             TestTelemetryServiceHandler._stop_handler(telemetry_handler)
@@ -356,7 +356,7 @@ class TestTelemetryServiceHandler(AgentTestCase, HttpRequestPredicates):
                 self._create_extension_event(size)
 
             with patch("azurelinuxagent.common.logger.periodic_warn") as patch_periodic_warn:
-                CollectAndEnqueueEventsPeriodicOperation(telemetry_handler.enqueue_event_func).run()
+                CollectAndEnqueueEventsPeriodicOperation(telemetry_handler.enqueue_event).run()
                 TestTelemetryServiceHandler._stop_handler(telemetry_handler)
                 self.assertEqual(3, patch_periodic_warn.call_count)
 

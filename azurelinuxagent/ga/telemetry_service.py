@@ -81,7 +81,7 @@ class TelemetryServiceHandler(ThreadHandlerInterface):
     def stopped(self):
         return not self.should_run
 
-    def enqueue_event_func(self, event):
+    def enqueue_event(self, event):
         # Add event to queue and set event
         self._queue.put(event)
 

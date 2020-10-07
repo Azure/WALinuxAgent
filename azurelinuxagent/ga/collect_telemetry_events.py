@@ -73,13 +73,13 @@ class ProcessExtensionTelemetry(PeriodicOperation):
     _EXTENSION_EVENT_REQUIRED_FIELDS = [attr.lower() for attr in dir(ExtensionEventSchema) if
                                         not callable(getattr(ExtensionEventSchema, attr)) and not attr.startswith("__")]
 
-    def __init__(self, enqueue_event_func):
+    def __init__(self, enqueue_event):
         super(ProcessExtensionTelemetry, self).__init__(
             name="collect_and_enqueue_extension_events",
             operation=self._collect_and_enqueue_extension_events,
             period=ProcessExtensionTelemetry._EXTENSION_EVENT_COLLECTION_PERIOD)
 
-        self._enqueue_event_func = enqueue_event_func
+        self._enqueue_event = enqueue_event
 
     def _collect_and_enqueue_extension_events(self):
         extension_handler_with_event_dirs = []
@@ -235,7 +235,7 @@ class ProcessExtensionTelemetry(PeriodicOperation):
 
         for event in events:
             try:
-                self._enqueue_event_func(self._parse_telemetry_event(handler_name, event, event_file_time))
+                self._enqueue_event(self._parse_telemetry_event(handler_name, event, event_file_time))
                 captured_events_count += 1
             except InvalidExtensionEventError as invalid_error:
                 # These are the errors thrown if there's an error parsing the event. We want to report these back to the
@@ -354,19 +354,19 @@ class CollectAndEnqueueEventsPeriodicOperation(PeriodicOperation):
 
     _EVENT_COLLECTION_PERIOD = datetime.timedelta(minutes=1)
 
-    def __init__(self, enqueue_event_func):
+    def __init__(self, enqueue_event):
         super(CollectAndEnqueueEventsPeriodicOperation, self).__init__(
             name="collect_and_enqueue_events",
             operation=self._collect_and_enqueue_events,
             period=CollectAndEnqueueEventsPeriodicOperation._EVENT_COLLECTION_PERIOD)
-        self._enqueue_event_func = enqueue_event_func
+        self._enqueue_event = enqueue_event
 
     def _collect_and_enqueue_events(self):
         """
         Periodically send any events located in the events folder
         """
         try:
-            collect_events(self._enqueue_event_func)
+            collect_events(self._enqueue_event)
         except Exception as error:
             err_msg = "Failure in collecting Agent events: {0}".format(ustr(error))
             add_event(op=WALAEventOperation.UnhandledError, message=err_msg, is_success=False)
@@ -380,10 +380,10 @@ class ExtensionTelemetryHandler(ThreadHandlerInterface):
 
     _THREAD_NAME = "ExtensionTelemetryHandler"
 
-    def __init__(self, enqueue_event_func):
+    def __init__(self, enqueue_event):
         self.should_run = True
         self.thread = None
-        self._enqueue_event_func = enqueue_event_func
+        self._enqueue_event = enqueue_event
 
     @staticmethod
     def get_thread_name():
@@ -415,8 +415,8 @@ class ExtensionTelemetryHandler(ThreadHandlerInterface):
 
     def daemon(self):
         periodic_operations = [
-            CollectAndEnqueueEventsPeriodicOperation(self._enqueue_event_func),
-            ProcessExtensionTelemetry(self._enqueue_event_func)
+            CollectAndEnqueueEventsPeriodicOperation(self._enqueue_event),
+            ProcessExtensionTelemetry(self._enqueue_event)
         ]
         logger.info("Successfully started the {0} thread".format(self.get_thread_name()))
         while not self.stopped():

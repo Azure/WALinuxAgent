@@ -1102,7 +1102,6 @@ class WireClient(object): # pylint: disable=R0904
 
             return uni_err_count, err_count
 
-
         # Group events by providerId
         for event in get_events_in_queue():
             try:

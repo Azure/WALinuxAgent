@@ -37,8 +37,8 @@ from azurelinuxagent.common.version import AGENT_NAME, CURRENT_VERSION
 from azurelinuxagent.ga.periodic_operation import PeriodicOperation
 
 
-def get_monitor_handler(enqueue_event_func):
-    return MonitorHandler(enqueue_event_func)
+def get_monitor_handler():
+    return MonitorHandler()
 
 
 class PollResourceUsageOperation(PeriodicOperation):
@@ -172,7 +172,7 @@ class MonitorHandler(ThreadHandlerInterface): # pylint: disable=R0902
     def get_thread_name():
         return MonitorHandler._THREAD_NAME
 
-    def __init__(self, enqueue_event_func):
+    def __init__(self):
         self.osutil = get_osutil()
         self.imds_client = None
 
