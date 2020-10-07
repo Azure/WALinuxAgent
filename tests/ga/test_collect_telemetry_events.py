@@ -36,7 +36,7 @@ from azurelinuxagent.common.protocol.util import ProtocolUtil
 from azurelinuxagent.common.telemetryevent import GuestAgentGenericLogsSchema, \
     CommonTelemetryEventSchema
 from azurelinuxagent.common.utils import fileutil, textutil
-from azurelinuxagent.ga.extension_telemetry import ExtensionEventSchema, ProcessExtensionTelemetry
+from azurelinuxagent.ga.collect_telemetry_events import ExtensionEventSchema, ProcessExtensionTelemetry
 from tests.protocol.mocks import HttpRequestPredicates
 from tests.tools import AgentTestCase, clear_singleton_instances, data_dir
 
@@ -251,7 +251,7 @@ class TestExtensionTelemetryHandler(AgentTestCase, HttpRequestPredicates):
 
     def test_it_should_limit_max_no_of_events_to_send_per_run_per_extension_and_report_event(self):
         max_events = 5
-        with patch("azurelinuxagent.ga.extension_telemetry.add_log_event") as mock_event:
+        with patch("azurelinuxagent.ga.collect_telemetry_events.add_log_event") as mock_event:
             with self._create_extension_telemetry_processor() as extension_telemetry_processor:
                 with patch.object(extension_telemetry_processor, "_MAX_NUMBER_OF_EVENTS_PER_EXTENSION_PER_PERIOD", max_events):
                     ext_names_with_count = self._create_random_extension_events_dir_with_events(5, self._WELL_FORMED_FILES)
@@ -355,7 +355,7 @@ class TestExtensionTelemetryHandler(AgentTestCase, HttpRequestPredicates):
     def test_it_should_trim_message_if_more_than_limit(self):
         max_len = 100
         no_of_extensions = 2
-        with patch("azurelinuxagent.ga.extension_telemetry.ProcessExtensionTelemetry._EXTENSION_EVENT_MAX_MSG_LEN", max_len):
+        with patch("azurelinuxagent.ga.collect_telemetry_events.ProcessExtensionTelemetry._EXTENSION_EVENT_MAX_MSG_LEN", max_len):
             handler_name_with_count, event_list = self._setup_and_assert_tests_for_max_sizes() # pylint: disable=unused-variable
             context1_vals = self._get_param_value_from_event_body_if_exists(event_list,
                                                                             GuestAgentGenericLogsSchema.Context1)
@@ -368,8 +368,8 @@ class TestExtensionTelemetryHandler(AgentTestCase, HttpRequestPredicates):
     def test_it_should_skip_events_larger_than_max_size_and_report_event(self):
         max_size = 1000
         no_of_extensions = 3
-        with patch("azurelinuxagent.ga.extension_telemetry.add_log_event") as mock_event:
-            with patch("azurelinuxagent.ga.extension_telemetry.ProcessExtensionTelemetry._EXTENSION_EVENT_MAX_SIZE",
+        with patch("azurelinuxagent.ga.collect_telemetry_events.add_log_event") as mock_event:
+            with patch("azurelinuxagent.ga.collect_telemetry_events.ProcessExtensionTelemetry._EXTENSION_EVENT_MAX_SIZE",
                        max_size):
                 handler_name_with_count, _ = self._setup_and_assert_tests_for_max_sizes(no_of_extensions, expected_count=0)
                 self._assert_invalid_extension_error_event_reported(mock_event, handler_name_with_count,
@@ -378,8 +378,8 @@ class TestExtensionTelemetryHandler(AgentTestCase, HttpRequestPredicates):
     def test_it_should_skip_large_files_greater_than_max_file_size_and_report_event(self):
         max_file_size = 10000
         no_of_extensions = 5
-        with patch("azurelinuxagent.ga.extension_telemetry.add_log_event") as mock_event:
-            with patch("azurelinuxagent.ga.extension_telemetry.ProcessExtensionTelemetry._EXTENSION_EVENT_FILE_MAX_SIZE",
+        with patch("azurelinuxagent.ga.collect_telemetry_events.add_log_event") as mock_event:
+            with patch("azurelinuxagent.ga.collect_telemetry_events.ProcessExtensionTelemetry._EXTENSION_EVENT_FILE_MAX_SIZE",
                        max_file_size):
                 handler_name_with_count, _ = self._setup_and_assert_tests_for_max_sizes(no_of_extensions, expected_count=0)
 
@@ -473,7 +473,7 @@ class TestExtensionTelemetryHandler(AgentTestCase, HttpRequestPredicates):
                                  "Unwanted param {0} found".format(param))
 
     def test_it_should_not_send_events_which_dont_have_all_required_keys_and_report_event(self):
-        with patch("azurelinuxagent.ga.extension_telemetry.add_log_event") as mock_event:
+        with patch("azurelinuxagent.ga.collect_telemetry_events.add_log_event") as mock_event:
             with self._create_extension_telemetry_processor() as extension_telemetry_processor:
                 extensions_with_count = self._create_random_extension_events_dir_with_events(3, os.path.join(
                     self._TEST_DATA_DIR, "missing_parameters"))
@@ -516,7 +516,7 @@ class TestExtensionTelemetryHandler(AgentTestCase, HttpRequestPredicates):
                 self.assertEqual(len(extensions_with_count), 0, "All extension events not matched")
 
     def test_it_should_not_send_event_where_message_is_empty_and_report_event(self):
-        with patch("azurelinuxagent.ga.extension_telemetry.add_log_event") as mock_event:
+        with patch("azurelinuxagent.ga.collect_telemetry_events.add_log_event") as mock_event:
             with self._create_extension_telemetry_processor() as extension_telemetry_processor:
                 extensions_with_count = self._create_random_extension_events_dir_with_events(3, os.path.join(
                     self._TEST_DATA_DIR, "empty_message"))

@@ -28,7 +28,7 @@ import traceback
 import azurelinuxagent.common.logger as logger
 from azurelinuxagent.common import conf
 from azurelinuxagent.common.event import EVENTS_DIRECTORY, TELEMETRY_LOG_EVENT_ID, \
-    TELEMETRY_LOG_PROVIDER_ID, add_event, WALAEventOperation, add_log_event, get_event_logger
+    TELEMETRY_LOG_PROVIDER_ID, add_event, WALAEventOperation, add_log_event, get_event_logger, collect_events
 from azurelinuxagent.common.exception import InvalidExtensionEventError
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.telemetryevent import TelemetryEvent, TelemetryEventParam, \
@@ -347,6 +347,31 @@ class ProcessExtensionTelemetry(PeriodicOperation):
         reporter.add_common_event_parameters(event, event_time)
 
 
+class CollectAndEnqueueEventsPeriodicOperation(PeriodicOperation):
+    """
+    Periodic operation to collect and send telemetry events located in the events folder
+    """
+
+    _EVENT_COLLECTION_PERIOD = datetime.timedelta(minutes=1)
+
+    def __init__(self, enqueue_event_func):
+        super(CollectAndEnqueueEventsPeriodicOperation, self).__init__(
+            name="collect_and_enqueue_events",
+            operation=self._collect_and_enqueue_events,
+            period=CollectAndEnqueueEventsPeriodicOperation._EVENT_COLLECTION_PERIOD)
+        self._enqueue_event_func = enqueue_event_func
+
+    def _collect_and_enqueue_events(self):
+        """
+        Periodically send any events located in the events folder
+        """
+        try:
+            collect_events(self._enqueue_event_func)
+        except Exception as error:
+            err_msg = "Failure in collecting Agent events: {0}".format(ustr(error))
+            add_event(op=WALAEventOperation.UnhandledError, message=err_msg, is_success=False)
+
+
 class ExtensionTelemetryHandler(ThreadHandlerInterface):
     """
     This Handler takes care of fetching the Extension Telemetry events from the {extension_events_dir} and sends it to
@@ -389,15 +414,19 @@ class ExtensionTelemetryHandler(ThreadHandlerInterface):
         return not self.should_run
 
     def daemon(self):
-        periodic_operation = ProcessExtensionTelemetry(self._enqueue_event_func)
+        periodic_operations = [
+            CollectAndEnqueueEventsPeriodicOperation(self._enqueue_event_func),
+            ProcessExtensionTelemetry(self._enqueue_event_func)
+        ]
         logger.info("Successfully started the {0} thread".format(self.get_thread_name()))
         while not self.stopped():
             try:
-                periodic_operation.run()
+                for periodic_op in periodic_operations:
+                    periodic_op.run()
 
             except Exception as error:
                 logger.warn(
                     "An error occurred in the Telemetry Extension thread main loop; will skip the current iteration.\n{0}",
                     ustr(error))
             finally:
-                PeriodicOperation.sleep_until_next_operation([periodic_operation])
+                PeriodicOperation.sleep_until_next_operation(periodic_operations)

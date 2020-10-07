@@ -24,7 +24,7 @@ import azurelinuxagent.common.utils.networkutil as networkutil
 from azurelinuxagent.common.cgroupconfigurator import CGroupConfigurator
 from azurelinuxagent.common.cgroupstelemetry import CGroupsTelemetry
 from azurelinuxagent.common.errorstate import ErrorState
-from azurelinuxagent.common.event import add_event, WALAEventOperation, report_metric, collect_events
+from azurelinuxagent.common.event import add_event, WALAEventOperation, report_metric
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.interfaces import ThreadHandlerInterface
 from azurelinuxagent.common.osutil import get_osutil
@@ -108,31 +108,6 @@ class ResetPeriodicLogMessagesOperation(PeriodicOperation):
         logger.reset_periodic()
 
 
-class CollectAndEnqueueEventsPeriodicOperation(PeriodicOperation):
-    """
-    Periodic operation to collect and send telemetry events located in the events folder
-    """
-
-    _EVENT_COLLECTION_PERIOD = datetime.timedelta(minutes=1)
-
-    def __init__(self, enqueue_event_func):
-        super(CollectAndEnqueueEventsPeriodicOperation, self).__init__(
-            name="collect_and_enqueue_events",
-            operation=self._collect_and_enqueue_events,
-            period=CollectAndEnqueueEventsPeriodicOperation._EVENT_COLLECTION_PERIOD)
-        self._enqueue_event_func = enqueue_event_func
-
-    def _collect_and_enqueue_events(self):
-        """
-        Periodically send any events located in the events folder
-        """
-        try:
-            collect_events(self._enqueue_event_func)
-        except Exception as error:
-            err_msg = "Failure in collecting Agent events: {0}".format(ustr(error))
-            add_event(op=WALAEventOperation.UnhandledError, message=err_msg, is_success=False)
-
-
 class ReportNetworkErrorsOperation(PeriodicOperation):
     def __init__(self):
         super(ReportNetworkErrorsOperation, self).__init__(
@@ -204,7 +179,6 @@ class MonitorHandler(ThreadHandlerInterface): # pylint: disable=R0902
         self.event_thread = None
         self._periodic_operations = [
             ResetPeriodicLogMessagesOperation(),
-            CollectAndEnqueueEventsPeriodicOperation(enqueue_event_func),
             ReportNetworkErrorsOperation(),
             PeriodicOperation("send_host_plugin_heartbeat", self.send_host_plugin_heartbeat, self.HOST_PLUGIN_HEARTBEAT_PERIOD),
             PeriodicOperation("send_imds_heartbeat", self.send_imds_heartbeat, self.IMDS_HEARTBEAT_PERIOD),

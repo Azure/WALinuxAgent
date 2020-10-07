@@ -53,7 +53,7 @@ from azurelinuxagent.common.version import AGENT_NAME, AGENT_VERSION, AGENT_DIR_
     PY_VERSION_MINOR, PY_VERSION_MICRO
 from azurelinuxagent.ga.collect_logs import get_collect_logs_handler, is_log_collection_allowed
 from azurelinuxagent.ga.env import get_env_handler
-from azurelinuxagent.ga.extension_telemetry import get_extension_telemetry_handler
+from azurelinuxagent.ga.collect_telemetry_events import get_extension_telemetry_handler
 
 from azurelinuxagent.ga.exthandlers import HandlerManifest, get_traceback, ExtHandlersHandler, \
     is_extension_telemetry_pipeline_enabled, list_agent_lib_directory
