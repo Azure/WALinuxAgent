@@ -20,6 +20,7 @@ import datetime
 import threading
 
 import traceback
+import time
 
 from azurelinuxagent.common import logger
 from azurelinuxagent.common.event import add_event, WALAEventOperation
@@ -39,6 +40,9 @@ class TelemetryServiceHandler(ThreadHandlerInterface):
 
     _THREAD_NAME = "TelemetryServiceHandler"
     _MAX_TIMEOUT = datetime.timedelta(minutes=5).seconds
+    _MIN_QUEUE_LIMIT = 30
+    _MIN_WAIT_TIME = datetime.timedelta(seconds=5)
+
 
     def __init__(self, protocol_util):
         self._protocol = protocol_util.get_protocol()
@@ -105,7 +109,7 @@ class TelemetryServiceHandler(ThreadHandlerInterface):
     def _get_events_in_queue(self):
         while not self._queue.empty():
             try:
-                event = self._queue.get()
+                event = self._queue.get_nowait()
                 yield event
             except Exception as error:
                 logger.error("Some exception when fetching event from queue: {0}, {1}".format(ustr(error),
@@ -116,6 +120,12 @@ class TelemetryServiceHandler(ThreadHandlerInterface):
     def _send_events_in_queue(self):
         # Process everything in Queue
         if not self._queue.empty():
+            start_time = datetime.datetime.utcnow()
+            while self._queue.qsize() < self._MIN_QUEUE_LIMIT or \
+                    (start_time + self._MIN_WAIT_TIME) <= datetime.datetime.utcnow():
+                # To promote batching, we either wait for atleast 30 events or 5 secs before sending out the first
+                # request to wireserver
+                time.sleep(secs=1)
             self._protocol.report_event(self._get_events_in_queue)
 
         # Reset the event when done processing all events in queue
