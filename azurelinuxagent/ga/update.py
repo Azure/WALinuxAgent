@@ -299,7 +299,7 @@ class UpdateHandler(object): # pylint: disable=R0902
                 all_thread_handlers.append(get_collect_logs_handler())
 
             if is_extension_telemetry_pipeline_enabled():
-                all_thread_handlers.append(get_extension_telemetry_handler(telemetry_handler.enqueue_event))
+                all_thread_handlers.append(get_extension_telemetry_handler(telemetry_handler))
 
             # Launch all monitoring threads
             for thread_handler in all_thread_handlers:

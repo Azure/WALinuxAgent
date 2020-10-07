@@ -29,7 +29,7 @@ from datetime import datetime
 import azurelinuxagent.common.conf as conf
 import azurelinuxagent.common.logger as logger
 from azurelinuxagent.common.AgentGlobals import AgentGlobals
-from azurelinuxagent.common.exception import EventError, OSUtilError
+from azurelinuxagent.common.exception import EventError, OSUtilError, ServiceStoppedError
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.datacontract import get_properties, set_properties
 from azurelinuxagent.common.osutil import get_osutil
@@ -633,6 +633,10 @@ class EventLogger(object):
                     enqueue_event(event)
                 finally:
                     os.remove(event_file_path)
+            except ServiceStoppedError as stopped_error:
+                logger.error(
+                    "Unable to enqueue events as service stopped: {0}, skipping events collection".format(
+                        ustr(stopped_error)))
             except UnicodeError as uni_err:
                 unicode_error_count += 1
                 if len(unicode_errors) < max_collect_errors_to_report:

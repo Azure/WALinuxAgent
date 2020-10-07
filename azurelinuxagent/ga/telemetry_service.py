@@ -23,6 +23,7 @@ import traceback
 
 from azurelinuxagent.common import logger
 from azurelinuxagent.common.event import add_event, WALAEventOperation
+from azurelinuxagent.common.exception import ServiceStoppedError
 from azurelinuxagent.common.future import ustr, Queue
 from azurelinuxagent.common.interfaces import ThreadHandlerInterface
 
@@ -86,6 +87,9 @@ class TelemetryServiceHandler(ThreadHandlerInterface):
 
     def enqueue_event(self, event):
         # Add event to queue and set event
+        if self.stopped():
+            raise ServiceStoppedError("{0} is stopped, not accepting anymore events".format(self.get_thread_name()))
+
         self._queue.put(event)
 
         # Set the event if any enqueue happens (even if already set) to trigger sending those events

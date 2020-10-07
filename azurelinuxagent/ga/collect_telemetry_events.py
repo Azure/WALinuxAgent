@@ -29,7 +29,7 @@ import azurelinuxagent.common.logger as logger
 from azurelinuxagent.common import conf
 from azurelinuxagent.common.event import EVENTS_DIRECTORY, TELEMETRY_LOG_EVENT_ID, \
     TELEMETRY_LOG_PROVIDER_ID, add_event, WALAEventOperation, add_log_event, get_event_logger, collect_events
-from azurelinuxagent.common.exception import InvalidExtensionEventError
+from azurelinuxagent.common.exception import InvalidExtensionEventError, ServiceStoppedError
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.telemetryevent import TelemetryEvent, TelemetryEventParam, \
     GuestAgentGenericLogsSchema
@@ -38,8 +38,8 @@ from azurelinuxagent.ga.exthandlers import HANDLER_NAME_PATTERN
 from azurelinuxagent.ga.periodic_operation import PeriodicOperation
 
 
-def get_extension_telemetry_handler(enqueue_events):
-    return ExtensionTelemetryHandler(enqueue_events)
+def get_extension_telemetry_handler(telemetry_service_handler):
+    return ExtensionTelemetryHandler(telemetry_service_handler)
 
 
 # too-few-public-methods<R0903> Disabled: This class is used as an Enum
@@ -73,15 +73,22 @@ class ProcessExtensionTelemetry(PeriodicOperation):
     _EXTENSION_EVENT_REQUIRED_FIELDS = [attr.lower() for attr in dir(ExtensionEventSchema) if
                                         not callable(getattr(ExtensionEventSchema, attr)) and not attr.startswith("__")]
 
-    def __init__(self, enqueue_event):
+    def __init__(self, telemetry_service_handler):
         super(ProcessExtensionTelemetry, self).__init__(
             name="collect_and_enqueue_extension_events",
             operation=self._collect_and_enqueue_extension_events,
             period=ProcessExtensionTelemetry._EXTENSION_EVENT_COLLECTION_PERIOD)
 
-        self._enqueue_event = enqueue_event
+        self._telemetry_service_handler = telemetry_service_handler
 
     def _collect_and_enqueue_extension_events(self):
+
+        if self._telemetry_service_handler.stopped():
+            logger.warn("{0} service is not running, skipping current iteration".format(
+                self._telemetry_service_handler.get_thread_name()))
+            return
+
+        delete_all_event_files = True
         extension_handler_with_event_dirs = []
 
         try:
@@ -95,14 +102,19 @@ class ProcessExtensionTelemetry(PeriodicOperation):
                 handler_name = extension_handler_with_event_dir[0]
                 handler_event_dir_path = extension_handler_with_event_dir[1]
                 self._capture_extension_events(handler_name, handler_event_dir_path)
+        except ServiceStoppedError:
+            # Since the service stopped, we should not delete the extension files and retry sending them whenever
+            # the telemetry service comes back up
+            delete_all_event_files = False
         except Exception as error:
             msg = "Unknown error occurred when trying to collect extension events. Error: {0}, Stack: {1}".format(
                 ustr(error), traceback.format_exc())
             add_event(op=WALAEventOperation.ExtensionTelemetryEventProcessing, message=msg, is_success=False)
         finally:
-            # Always ensure that the events directory are being deleted each run,
+            # Always ensure that the events directory are being deleted each run except when Telemetry Service is stopped,
             # even if we run into an error and dont process them this run.
-            self._ensure_all_events_directories_empty(extension_handler_with_event_dirs)
+            if delete_all_event_files:
+                self._ensure_all_events_directories_empty(extension_handler_with_event_dirs)
 
     @staticmethod
     def _get_extension_events_dir_with_handler_name(extension_log_dir):
@@ -155,44 +167,49 @@ class ProcessExtensionTelemetry(PeriodicOperation):
         captured_extension_events_count = 0
         dropped_events_with_error_count = defaultdict(int)
 
-        for event_file in event_files:
+        try:
+            for event_file in event_files:
 
-            event_file_path = os.path.join(handler_event_dir_path, event_file)
-            try:
-                logger.verbose("Processing event file: {0}", event_file_path)
+                event_file_path = os.path.join(handler_event_dir_path, event_file)
+                try:
+                    logger.verbose("Processing event file: {0}", event_file_path)
 
-                if not self._event_file_size_allowed(event_file_path):
-                    continue
+                    if not self._event_file_size_allowed(event_file_path):
+                        continue
 
-                # We support multiple events in a file, read the file and parse events.
-                captured_extension_events_count = self._get_captured_events_count(handler_name, event_file_path,
-                                                                captured_extension_events_count,
-                                                                dropped_events_with_error_count)
+                    # We support multiple events in a file, read the file and parse events.
+                    captured_extension_events_count = self._get_captured_events_count(handler_name, event_file_path,
+                                                                    captured_extension_events_count,
+                                                                    dropped_events_with_error_count)
 
-                # We only allow MAX_NUMBER_OF_EVENTS_PER_EXTENSION_PER_PERIOD=300 maximum events per period per handler
-                if captured_extension_events_count >= self._MAX_NUMBER_OF_EVENTS_PER_EXTENSION_PER_PERIOD:
-                    msg = "Reached max count for the extension: {0}; Max Limit: {1}. Skipping the rest.".format(
-                        handler_name, self._MAX_NUMBER_OF_EVENTS_PER_EXTENSION_PER_PERIOD)
+                    # We only allow MAX_NUMBER_OF_EVENTS_PER_EXTENSION_PER_PERIOD=300 maximum events per period per handler
+                    if captured_extension_events_count >= self._MAX_NUMBER_OF_EVENTS_PER_EXTENSION_PER_PERIOD:
+                        msg = "Reached max count for the extension: {0}; Max Limit: {1}. Skipping the rest.".format(
+                            handler_name, self._MAX_NUMBER_OF_EVENTS_PER_EXTENSION_PER_PERIOD)
+                        logger.warn(msg)
+                        add_log_event(level=logger.LogLevel.WARNING, message=msg, forced=True)
+                        break
+                except ServiceStoppedError:
+                    # Not logging here as already logged once, re-raising
+                    # Since we already started processing this file, deleting it as we could've already sent some events out
+                    raise
+                except Exception as error:
+                    msg = "Failed to process event file {0}: {1}, {2}".format(event_file, ustr(error),
+                                                                              traceback.format_exc())
                     logger.warn(msg)
                     add_log_event(level=logger.LogLevel.WARNING, message=msg, forced=True)
-                    break
+                finally:
+                    os.remove(event_file_path)
 
-            except Exception as error:
-                msg = "Failed to process event file {0}: {1}, {2}".format(event_file, ustr(error),
-                                                                          traceback.format_exc())
+        finally:
+            if dropped_events_with_error_count:
+                msg = "Dropped events for Extension: {0}; Details:\n\t{1}".format(handler_name, '\n\t'.join(
+                    ["Reason: {0}; Dropped Count: {1}".format(k, v) for k, v in dropped_events_with_error_count.items()]))
                 logger.warn(msg)
                 add_log_event(level=logger.LogLevel.WARNING, message=msg, forced=True)
-            finally:
-                os.remove(event_file_path)
 
-        if dropped_events_with_error_count:
-            msg = "Dropped events for Extension: {0}; Details:\n\t{1}".format(handler_name, '\n\t'.join(
-                ["Reason: {0}; Dropped Count: {1}".format(k, v) for k, v in dropped_events_with_error_count.items()]))
-            logger.warn(msg)
-            add_log_event(level=logger.LogLevel.WARNING, message=msg, forced=True)
-
-        if captured_extension_events_count > 0:
-            logger.info("Collected {0} events for extension: {1}".format(captured_extension_events_count, handler_name))
+            if captured_extension_events_count > 0:
+                logger.info("Collected {0} events for extension: {1}".format(captured_extension_events_count, handler_name))
 
     @staticmethod
     def _ensure_all_events_directories_empty(extension_events_directories):
@@ -235,7 +252,9 @@ class ProcessExtensionTelemetry(PeriodicOperation):
 
         for event in events:
             try:
-                self._enqueue_event(self._parse_telemetry_event(handler_name, event, event_file_time))
+                self._telemetry_service_handler.enqueue_event(
+                    self._parse_telemetry_event(handler_name, event, event_file_time)
+                )
                 captured_events_count += 1
             except InvalidExtensionEventError as invalid_error:
                 # These are the errors thrown if there's an error parsing the event. We want to report these back to the
@@ -243,6 +262,11 @@ class ProcessExtensionTelemetry(PeriodicOperation):
                 # The error messages are all static messages, we will use this to create a dict and emit an event at the
                 # end of each run to notify if there were any errors parsing events for the extension
                 dropped_events_with_error_count[ustr(invalid_error)] += 1
+            except ServiceStoppedError as stopped_error:
+                logger.error(
+                    "Unable to enqueue events as service stopped: {0}. Stopping collecting extension events".format(
+                        ustr(stopped_error)))
+                raise
             except Exception as error:
                 logger.warn("Unable to parse and transmit event, error: {0}".format(error))
 
@@ -353,19 +377,24 @@ class CollectAndEnqueueEventsPeriodicOperation(PeriodicOperation):
 
     _EVENT_COLLECTION_PERIOD = datetime.timedelta(minutes=1)
 
-    def __init__(self, enqueue_event):
+    def __init__(self, telemetry_service_handler):
         super(CollectAndEnqueueEventsPeriodicOperation, self).__init__(
             name="collect_and_enqueue_events",
             operation=self._collect_and_enqueue_events,
             period=CollectAndEnqueueEventsPeriodicOperation._EVENT_COLLECTION_PERIOD)
-        self._enqueue_event = enqueue_event
+        self._telemetry_service_handler = telemetry_service_handler
 
     def _collect_and_enqueue_events(self):
         """
         Periodically send any events located in the events folder
         """
         try:
-            collect_events(self._enqueue_event)
+            if self._telemetry_service_handler.stopped():
+                logger.warn("{0} service is not running, skipping iteration.".format(
+                    self._telemetry_service_handler.get_thread_name()))
+                return
+
+            collect_events(self._telemetry_service_handler.enqueue_event)
         except Exception as error:
             err_msg = "Failure in collecting Agent events: {0}".format(ustr(error))
             add_event(op=WALAEventOperation.UnhandledError, message=err_msg, is_success=False)
@@ -379,10 +408,10 @@ class ExtensionTelemetryHandler(ThreadHandlerInterface):
 
     _THREAD_NAME = "ExtensionTelemetryHandler"
 
-    def __init__(self, enqueue_event):
+    def __init__(self, telemetry_service_handler):
         self.should_run = True
         self.thread = None
-        self._enqueue_event = enqueue_event
+        self._telemetry_service_handler = telemetry_service_handler
 
     @staticmethod
     def get_thread_name():
@@ -414,8 +443,8 @@ class ExtensionTelemetryHandler(ThreadHandlerInterface):
 
     def daemon(self):
         periodic_operations = [
-            CollectAndEnqueueEventsPeriodicOperation(self._enqueue_event),
-            ProcessExtensionTelemetry(self._enqueue_event)
+            CollectAndEnqueueEventsPeriodicOperation(self._telemetry_service_handler),
+            ProcessExtensionTelemetry(self._telemetry_service_handler)
         ]
         logger.info("Successfully started the {0} thread".format(self.get_thread_name()))
         while not self.stopped():
