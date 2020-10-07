@@ -33,12 +33,12 @@ if sys.version_info[0] == 3:
     # unused-import<W0611>, import-error<E0401> Disabled: Due to backward compatibility between py2 and py3
     from builtins import int, range # pylint: disable=unused-import,import-error
     from collections import OrderedDict # pylint: disable=W0611
-    from queue import PriorityQueue # pylint: disable=W0611,import-error
+    from queue import Queue # pylint: disable=W0611,import-error
 
 elif sys.version_info[0] == 2:
     import httplib as httpclient # pylint: disable=E0401,W0611
     from urlparse import urlparse # pylint: disable=E0401
-    from Queue import PriorityQueue # pylint: disable=W0611,import-error
+    from Queue import Queue # pylint: disable=W0611,import-error
 
     
     # We want to suppress the following:

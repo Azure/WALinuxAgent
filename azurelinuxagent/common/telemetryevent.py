@@ -83,51 +83,51 @@ class TelemetryEventParam(DataContract): # pylint: disable=R0903
 
 
 # too-few-public-methods<R0903> Disabled: This class is used as an Enum
-class TelemetryEventPriorities(object): # pylint: disable=R0903
-    """
-    Class defining the priorities for telemetry events. Lower the number, higher the priority
-
-    Note: 0 is reserved for a feature like QuickLog in the Windows Agent (i.e. the ability to send out telemetry
-    instantly rather than waiting for a minute for the monitor thread to pick up the events)
-    """
-    AGENT_EVENT = 1 # Agent events always get the highest priority
-    EXTENSION_EVENT_NEW_PIPELINE = 2    # Prioritize extensions using the new dedicated pipeline over extensions hijacking the agent pipeline
-    EXTENSION_EVENT_OLD_PIPELINE = 3
+# class TelemetryEventPriorities(object): # pylint: disable=R0903
+#     """
+#     Class defining the priorities for telemetry events. Lower the number, higher the priority
+#
+#     Note: 0 is reserved for a feature like QuickLog in the Windows Agent (i.e. the ability to send out telemetry
+#     instantly rather than waiting for a minute for the monitor thread to pick up the events)
+#     """
+#     AGENT_EVENT = 1 # Agent events always get the highest priority
+#     EXTENSION_EVENT_NEW_PIPELINE = 2    # Prioritize extensions using the new dedicated pipeline over extensions hijacking the agent pipeline
+#     EXTENSION_EVENT_OLD_PIPELINE = 3
 
 
 class TelemetryEvent(DataContract):
-    def __init__(self, eventId=None, providerId=None, priority=TelemetryEventPriorities.AGENT_EVENT):
+    def __init__(self, eventId=None, providerId=None):
         self.eventId = eventId # pylint: disable=C0103
         self.providerId = providerId # pylint: disable=C0103
         self.parameters = DataContractList(TelemetryEventParam)
         self.file_type = ""
-        self._priority = priority
+        # self._priority = priority
 
     # Checking if the particular param name is in the TelemetryEvent.
     def __contains__(self, param_name):
         return param_name in [param.name for param in self.parameters]
 
-    def __le__(self, other):
-        return self.priority <= other.priority
+    # def __le__(self, other):
+    #     return self.priority <= other.priority
+    #
+    # def __ge__(self, other):
+    #     return self.priority >= other.priority
+    #
+    # def __eq__(self, other):
+    #     return self.priority == other.priority
+    #
+    # def __lt__(self, other):
+    #     return self.priority < other.priority
+    #
+    # def __gt__(self, other):
+    #     return self.priority > other.priority
+    #
+    # def __ne__(self, other):
+    #     return self.priority != other.priority
 
-    def __ge__(self, other):
-        return self.priority >= other.priority
-
-    def __eq__(self, other):
-        return self.priority == other.priority
-
-    def __lt__(self, other):
-        return self.priority < other.priority
-
-    def __gt__(self, other):
-        return self.priority > other.priority
-
-    def __ne__(self, other):
-        return self.priority != other.priority
-
-    @property
-    def priority(self):
-        return self._priority
+    # @property
+    # def priority(self):
+    #     return self._priority
 
     def is_extension_event(self):
         # Events originating from the agent have "WALinuxAgent" as the Name parameter, or they don't have a Name
@@ -136,7 +136,7 @@ class TelemetryEvent(DataContract):
         for param in self.parameters:
             if param.name == GuestAgentExtensionEventsSchema.Name:
                 if param.value != AGENT_NAME:
-                    self._priority = TelemetryEventPriorities.EXTENSION_EVENT_OLD_PIPELINE
+                    # self._priority = TelemetryEventPriorities.EXTENSION_EVENT_OLD_PIPELINE
                     return True
         return False
 

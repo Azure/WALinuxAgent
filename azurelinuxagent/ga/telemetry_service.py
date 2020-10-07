@@ -18,13 +18,12 @@
 #
 import datetime
 import threading
-
-import traceback
 import time
+import traceback
 
 from azurelinuxagent.common import logger
 from azurelinuxagent.common.event import add_event, WALAEventOperation
-from azurelinuxagent.common.future import ustr, PriorityQueue
+from azurelinuxagent.common.future import ustr, Queue
 from azurelinuxagent.common.interfaces import ThreadHandlerInterface
 
 
@@ -49,7 +48,7 @@ class TelemetryServiceHandler(ThreadHandlerInterface):
         self.should_run = True
         self._thread = None
         self._should_process_events = threading.Event()
-        self._queue = PriorityQueue()
+        self._queue = Queue() #PriorityQueue()
 
     @staticmethod
     def get_thread_name():

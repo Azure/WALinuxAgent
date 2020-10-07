@@ -32,7 +32,7 @@ from azurelinuxagent.common.event import EVENTS_DIRECTORY, TELEMETRY_LOG_EVENT_I
 from azurelinuxagent.common.exception import InvalidExtensionEventError
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.telemetryevent import TelemetryEvent, TelemetryEventParam, \
-    GuestAgentGenericLogsSchema, TelemetryEventPriorities
+    GuestAgentGenericLogsSchema
 from azurelinuxagent.common.interfaces import ThreadHandlerInterface
 from azurelinuxagent.ga.exthandlers import HANDLER_NAME_PATTERN
 from azurelinuxagent.ga.periodic_operation import PeriodicOperation
@@ -262,8 +262,7 @@ class ProcessExtensionTelemetry(PeriodicOperation):
         # Create a telemetry event, add all common parameters to the event
         # and then overwrite all the common params with extension events params if same
 
-        event = TelemetryEvent(TELEMETRY_LOG_EVENT_ID, TELEMETRY_LOG_PROVIDER_ID,
-                               priority=TelemetryEventPriorities.EXTENSION_EVENT_NEW_PIPELINE)
+        event = TelemetryEvent(TELEMETRY_LOG_EVENT_ID, TELEMETRY_LOG_PROVIDER_ID)
         event.file_type = "json"
         self.add_common_params_to_extension_event(event, event_file_time)
 

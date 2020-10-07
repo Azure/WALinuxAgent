@@ -41,11 +41,11 @@ from azurelinuxagent.common.exception import HttpError
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.protocol.util import ProtocolUtil
 from azurelinuxagent.common.protocol.wire import event_to_v1_encoded
-from azurelinuxagent.common.telemetryevent import TelemetryEvent, TelemetryEventPriorities, TelemetryEventParam, \
+from azurelinuxagent.common.telemetryevent import TelemetryEvent, TelemetryEventParam, \
     GuestAgentExtensionEventsSchema
 from azurelinuxagent.common.version import CURRENT_VERSION, DISTRO_NAME, DISTRO_VERSION, AGENT_VERSION, CURRENT_AGENT, \
     DISTRO_CODE_NAME
-from azurelinuxagent.ga.monitor import CollectAndEnqueueEventsPeriodicOperation
+from azurelinuxagent.ga.collect_telemetry_events import CollectAndEnqueueEventsPeriodicOperation
 from azurelinuxagent.ga.telemetry_service import get_telemetry_service_handler
 from tests.ga.test_monitor import random_generator
 from tests.protocol.mocks import MockHttpResponse, mock_wire_protocol, HttpRequestPredicates
@@ -170,36 +170,36 @@ class TestTelemetryServiceHandler(AgentTestCase, HttpRequestPredicates):
 
             self._assert_test_data_in_event_body(telemetry_handler, events)
 
-    def test_it_should_honour_the_priority_order_of_events(self):
-
-        # In general, lower the number, higher the priority
-        # Priority Order: AGENT_EVENT > EXTENSION_EVENT_NEW_PIPELINE > EXTENSION_EVENT_OLD_PIPELINE
-        events = [
-            TelemetryEvent(eventId=ustr(uuid.uuid4()), priority=TelemetryEventPriorities.EXTENSION_EVENT_OLD_PIPELINE),
-            TelemetryEvent(eventId=ustr(uuid.uuid4()), priority=TelemetryEventPriorities.EXTENSION_EVENT_OLD_PIPELINE),
-            TelemetryEvent(eventId=ustr(uuid.uuid4()), priority=TelemetryEventPriorities.AGENT_EVENT),
-            TelemetryEvent(eventId=ustr(uuid.uuid4()), priority=TelemetryEventPriorities.EXTENSION_EVENT_NEW_PIPELINE),
-            TelemetryEvent(eventId=ustr(uuid.uuid4()), priority=TelemetryEventPriorities.EXTENSION_EVENT_NEW_PIPELINE),
-            TelemetryEvent(eventId=ustr(uuid.uuid4()), priority=TelemetryEventPriorities.AGENT_EVENT)
-        ]
-        expected_priority_order = []
-
-        with self._create_telemetry_service_handler(timeout=0.3, start_thread=False) as telemetry_handler:
-            for test_event in events:
-                test_event.parameters.append(TelemetryEventParam("Priority", test_event.priority))
-                expected_priority_order.append(str(test_event.priority))
-                telemetry_handler.enqueue_event(test_event)
-
-            telemetry_handler.start()
-            self.assertTrue(telemetry_handler.is_alive(), "Thread not alive")
-            self._assert_test_data_in_event_body(telemetry_handler, events)
-
-            priorities = []
-            regex_pattern = r'<Param Name="Priority" Value="(\d+)" T="mt:uint64" />'
-            for _, event_body in telemetry_handler.event_calls:
-                priorities.extend(re.findall(regex_pattern, textutil.str_to_encoded_ustr(event_body)))
-
-            self.assertEqual(sorted(expected_priority_order), priorities, "Priorities dont match")
+    # def test_it_should_honour_the_priority_order_of_events(self):
+    #
+    #     # In general, lower the number, higher the priority
+    #     # Priority Order: AGENT_EVENT > EXTENSION_EVENT_NEW_PIPELINE > EXTENSION_EVENT_OLD_PIPELINE
+    #     events = [
+    #         TelemetryEvent(eventId=ustr(uuid.uuid4()), priority=TelemetryEventPriorities.EXTENSION_EVENT_OLD_PIPELINE),
+    #         TelemetryEvent(eventId=ustr(uuid.uuid4()), priority=TelemetryEventPriorities.EXTENSION_EVENT_OLD_PIPELINE),
+    #         TelemetryEvent(eventId=ustr(uuid.uuid4()), priority=TelemetryEventPriorities.AGENT_EVENT),
+    #         TelemetryEvent(eventId=ustr(uuid.uuid4()), priority=TelemetryEventPriorities.EXTENSION_EVENT_NEW_PIPELINE),
+    #         TelemetryEvent(eventId=ustr(uuid.uuid4()), priority=TelemetryEventPriorities.EXTENSION_EVENT_NEW_PIPELINE),
+    #         TelemetryEvent(eventId=ustr(uuid.uuid4()), priority=TelemetryEventPriorities.AGENT_EVENT)
+    #     ]
+    #     expected_priority_order = []
+    #
+    #     with self._create_telemetry_service_handler(timeout=0.3, start_thread=False) as telemetry_handler:
+    #         for test_event in events:
+    #             test_event.parameters.append(TelemetryEventParam("Priority", test_event.priority))
+    #             expected_priority_order.append(str(test_event.priority))
+    #             telemetry_handler.enqueue_event(test_event)
+    #
+    #         telemetry_handler.start()
+    #         self.assertTrue(telemetry_handler.is_alive(), "Thread not alive")
+    #         self._assert_test_data_in_event_body(telemetry_handler, events)
+    #
+    #         priorities = []
+    #         regex_pattern = r'<Param Name="Priority" Value="(\d+)" T="mt:uint64" />'
+    #         for _, event_body in telemetry_handler.event_calls:
+    #             priorities.extend(re.findall(regex_pattern, textutil.str_to_encoded_ustr(event_body)))
+    #
+    #         self.assertEqual(sorted(expected_priority_order), priorities, "Priorities dont match")
 
     def test_telemetry_service_should_report_event_if_wireserver_returns_http_error(self):
 
