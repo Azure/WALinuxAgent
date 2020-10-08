@@ -92,6 +92,8 @@ class CryptUtil(object):
                 "-out", pem_file]
 
             first_proc = subprocess.Popen(first_cmd, stdout=subprocess.PIPE)
+            first_proc.wait()
+
             second_proc = subprocess.Popen(second_cmd, stdin=first_proc.stdout, stdout=subprocess.PIPE)
             stdout, stderr = second_proc.communicate()
 
