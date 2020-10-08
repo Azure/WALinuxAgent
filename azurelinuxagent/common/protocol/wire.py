@@ -31,7 +31,7 @@ import azurelinuxagent.common.logger as logger
 import azurelinuxagent.common.utils.textutil as textutil
 from azurelinuxagent.common.datacontract import validate_param
 from azurelinuxagent.common.event import add_event, add_periodic, WALAEventOperation, EventLogger, \
-    report_event
+    report_event, EventDebugInfo
 from azurelinuxagent.common.exception import ProtocolNotFoundError, \
     ResourceGoneError, ExtensionDownloadError, InvalidContainerError, ProtocolError, HttpError
 from azurelinuxagent.common.future import httpclient, bytebuffer, ustr
@@ -1079,28 +1079,18 @@ class WireClient(object): # pylint: disable=R0904
             raise ProtocolError(
                 "Failed to send events:{0}".format(resp.status))
 
-    # too-many-locals<R0914> Disabled: Most of the locals are used for error debugging
-    def report_event(self, get_events_in_queue): # pylint: disable=too-many-locals
-        max_send_errors_to_report = 5
+    def report_event(self, get_events_in_queue):
         buf = {}
+        debug_info = EventDebugInfo(operation=EventDebugInfo.OP_REPORT)
         events_per_request = defaultdict(int)
-        unicode_error_count, unicode_errors = 0, set()
-        event_report_error_count, event_report_errors = 0, set()
 
-        def _send_event(provider_id):
-            uni_err_count, err_count = 0, 0
+        def _send_event(provider_id, debug_info):
             try:
                 self.send_encoded_event(provider_id, buf[provider_id])
             except UnicodeError as uni_error:
-                uni_err_count += 1
-                if len(unicode_errors) < max_send_errors_to_report:
-                    unicode_errors.add("{0}: {1}".format(ustr(uni_error), traceback.format_exc()))
+                debug_info.update_unicode_error(uni_error)
             except Exception as error:
-                err_count += 1
-                if len(event_report_errors) < max_send_errors_to_report:
-                    event_report_errors.add("{0}: {1}".format(ustr(error), traceback.format_exc()))
-
-            return uni_err_count, err_count
+                debug_info.update_op_error(error)
 
         # Group events by providerId
         for event in get_events_in_queue():
@@ -1108,7 +1098,9 @@ class WireClient(object): # pylint: disable=R0904
                 if event.providerId not in buf:
                     buf[event.providerId] = b''
                 event_str = event_to_v1_encoded(event)
+
                 if len(event_str) >= MAX_EVENT_BUFFER_SIZE:
+                    # Ignore single events that are too large to send out
                     details_of_event = [ustr(x.name) + ":" + ustr(x.value) for x in event.parameters if x.name in
                                         [GuestAgentExtensionEventsSchema.Name, GuestAgentExtensionEventsSchema.Version,
                                          GuestAgentExtensionEventsSchema.Operation,
@@ -1117,15 +1109,18 @@ class WireClient(object): # pylint: disable=R0904
                                          "Single event too large: {0}, with the length: {1} more than the limit({2})"
                                          .format(str(details_of_event), len(event_str), MAX_EVENT_BUFFER_SIZE))
                     continue
+
+                # If buffer is full, send out the events in buffer and reset buffer
                 if len(buf[event.providerId] + event_str) >= MAX_EVENT_BUFFER_SIZE:
                     logger.verbose("No of events this request = {0}".format(events_per_request[event.providerId]))
-                    uni_err_count, err_count = _send_event(event.providerId)
-                    unicode_error_count += uni_err_count
-                    event_report_error_count += err_count
+                    _send_event(event.providerId, debug_info)
                     buf[event.providerId] = b''
                     events_per_request[event.providerId] = 0
+
+                # Add encoded events to the buffer
                 buf[event.providerId] = buf[event.providerId] + event_str
                 events_per_request[event.providerId] += 1
+
             except Exception as error:
                 logger.warn("Unexpected error when generating Events: {0}, {1}", ustr(error), traceback.format_exc())
             logger.verbose("done reporting for Event {0}".format(event))
@@ -1134,15 +1129,9 @@ class WireClient(object): # pylint: disable=R0904
         for provider_id in list(buf.keys()):
             if buf[provider_id]:
                 logger.verbose("No of events this request = {0}".format(events_per_request[provider_id]))
-                uni_err_count, err_count = _send_event(provider_id)
-                unicode_error_count += uni_err_count
-                event_report_error_count += err_count
+                _send_event(provider_id, debug_info)
 
-        EventLogger.report_dropped_events_error(event_report_error_count, event_report_errors,
-                                                WALAEventOperation.ReportEventErrors, max_send_errors_to_report)
-        EventLogger.report_dropped_events_error(unicode_error_count, unicode_errors,
-                                                WALAEventOperation.ReportEventUnicodeErrors,
-                                                max_send_errors_to_report)
+        debug_info.report_debug_info()
 
     def report_status_event(self, message, is_success):
         report_event(op=WALAEventOperation.ReportStatus,

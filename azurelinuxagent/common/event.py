@@ -281,6 +281,51 @@ def _log_event(name, op, message, duration, is_success=True): # pylint: disable=
         logger.info(_EVENT_MSG, name, op, message, duration)
 
 
+class EventDebugInfo(object):
+    MAX_ERRORS = 5
+    OP_REPORT = "Report"
+    OP_COLLECT = "Collect"
+
+    def __init__(self, operation=OP_REPORT):
+        self.unicode_error_count = 0
+        self.unicode_errors = set()
+        self.op_error_count = 0
+        self.op_errors = set()
+
+        if operation == self.OP_REPORT:
+            self.unicode_error_event = WALAEventOperation.ReportEventUnicodeErrors
+            self.op_errors_event = WALAEventOperation.ReportEventErrors
+        elif operation == self.OP_COLLECT:
+            self.unicode_error_event = WALAEventOperation.CollectEventUnicodeErrors
+            self.op_errors_event = WALAEventOperation.CollectEventErrors
+
+    def report_debug_info(self):
+
+        def report_dropped_events_error(count, errors, operation_name):
+            err_msg_format = "DroppedEventsCount: {0}\nReasons (first {1} errors): {2}"
+            if count > 0:
+                add_event(op=operation_name,
+                          message=err_msg_format.format(count, EventDebugInfo.MAX_ERRORS, ', '.join(errors)),
+                          is_success=False)
+
+        report_dropped_events_error(self.op_error_count, self.op_errors, self.op_errors_event)
+        report_dropped_events_error(self.unicode_error_count, self.unicode_errors, self.unicode_error_event)
+
+    @staticmethod
+    def _update_errors_and_get_count(error_count, errors, error):
+        error_count += 1
+        if len(errors) < EventDebugInfo.MAX_ERRORS:
+            errors.add("{0}: {1}".format(ustr(error), traceback.format_exc()))
+        return error_count
+
+    def update_unicode_error(self, unicode_err):
+        self.unicode_error_count = self._update_errors_and_get_count(self.unicode_error_count, self.unicode_errors,
+                                                                     unicode_err)
+
+    def update_op_error(self, op_err):
+        self.op_error_count = self._update_errors_and_get_count(self.op_error_count, self.op_errors, op_err)
+
+
 class EventLogger(object):
     def __init__(self):
         self.event_dir = None
@@ -587,17 +632,14 @@ class EventLogger(object):
                       message=err_msg_format.format(count, max_errors_to_report, ', '.join(errors)),
                       is_success=False)
 
-    # too-many-locals<R0914> Disabled: Most local variables are being used for debugging which is acceptable.
-    def collect_events(self, enqueue_event): # pylint: disable=R0914
+    def collect_events(self, enqueue_event):
         """
         Retuns a list of events that need to be sent to the telemetry pipeline and deletes the corresponding files
         from the events directory.
         """
-        max_collect_errors_to_report = 5
         event_directory_full_path = os.path.join(conf.get_lib_dir(), EVENTS_DIRECTORY)
         event_files = os.listdir(event_directory_full_path)
-        unicode_error_count, unicode_errors = 0, set()
-        collect_event_error_count, collect_event_errors = 0, set()
+        debug_info = EventDebugInfo(operation=EventDebugInfo.OP_COLLECT)
 
         for event_file in event_files:
             try:
@@ -638,19 +680,11 @@ class EventLogger(object):
                     "Unable to enqueue events as service stopped: {0}, skipping events collection".format(
                         ustr(stopped_error)))
             except UnicodeError as uni_err:
-                unicode_error_count += 1
-                if len(unicode_errors) < max_collect_errors_to_report:
-                    unicode_errors.add("{0}: {1}".format(ustr(uni_err), traceback.format_exc()))
+                debug_info.update_unicode_error(uni_err)
             except Exception as error:
-                collect_event_error_count += 1
-                if len(collect_event_errors) < max_collect_errors_to_report:
-                    collect_event_errors.add("{0}: {1}".format(ustr(error), traceback.format_exc()))
+                debug_info.update_op_error(error)
 
-        EventLogger.report_dropped_events_error(collect_event_error_count, collect_event_errors,
-                                                WALAEventOperation.CollectEventErrors, max_collect_errors_to_report)
-        EventLogger.report_dropped_events_error(unicode_error_count, unicode_errors,
-                                                WALAEventOperation.CollectEventUnicodeErrors,
-                                                max_collect_errors_to_report)
+        debug_info.report_debug_info()
 
     def _update_legacy_agent_event(self, event, event_creation_time):
         # Ensure that if an agent event is missing a field from the schema defined since 2.2.47, the missing fields
