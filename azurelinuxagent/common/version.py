@@ -147,6 +147,20 @@ def get_lis_version():
         # imported in this module or we'd log this too.
         return "Failed"
 
+def has_logrotate():
+    """
+    """
+
+    try:
+        logrotate_version = shellutil.run_command(["logrotate", "--version"]).split("\n")[0]
+        return logrotate_version
+    except shellutil.CommandError:
+        # A non-zero return code means that logrotate isn't present on 
+        # the system; --version shouldn't fail otherwise.
+        return "Absent"
+    except Exception:
+        return "Failed"
+
 
 AGENT_NAME = "WALinuxAgent"
 AGENT_LONG_NAME = "Azure Linux Agent"
