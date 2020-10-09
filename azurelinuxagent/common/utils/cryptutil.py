@@ -95,6 +95,7 @@ class CryptUtil(object):
             second_proc = subprocess.Popen(second_cmd, stdin=first_proc.stdout, stdout=subprocess.PIPE)
             first_proc.stdout.close()  # see https://docs.python.org/2/library/subprocess.html#replacing-shell-pipeline
             stdout, stderr = second_proc.communicate()
+            first_proc.poll()  # ensure that returncode is initialized
 
             if first_proc.returncode != 0 or second_proc.returncode != 0:
                 stdout = ustr(stdout, encoding='utf-8', errors="backslashreplace") if stdout else ""
