@@ -34,7 +34,7 @@ from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.telemetryevent import TelemetryEvent, TelemetryEventParam, \
     GuestAgentGenericLogsSchema
 from azurelinuxagent.common.interfaces import ThreadHandlerInterface
-from azurelinuxagent.ga.exthandlers import HANDLER_NAME_PATTERN
+from azurelinuxagent.ga.exthandlers import HANDLER_NAME_PATTERN, is_extension_telemetry_pipeline_enabled
 from azurelinuxagent.ga.periodic_operation import PeriodicOperation
 
 
@@ -72,12 +72,6 @@ class ProcessExtensionTelemetry(PeriodicOperation):
 
     _EXTENSION_EVENT_REQUIRED_FIELDS = [attr.lower() for attr in dir(ExtensionEventSchema) if
                                         not callable(getattr(ExtensionEventSchema, attr)) and not attr.startswith("__")]
-
-    _ENABLE_EXTENSION_TELEMETRY_PIPELINE = False
-
-    @staticmethod
-    def is_extension_telemetry_pipeline_enabled():
-        return ProcessExtensionTelemetry._ENABLE_EXTENSION_TELEMETRY_PIPELINE
 
     def __init__(self, telemetry_service_handler):
         super(ProcessExtensionTelemetry, self).__init__(
@@ -453,8 +447,8 @@ class CollectTelemetryEventsHandler(ThreadHandlerInterface):
         ]
 
         logger.info("Extension Telemetry pipeline enabled: {0}".format(
-            ProcessExtensionTelemetry.is_extension_telemetry_pipeline_enabled()))
-        if ProcessExtensionTelemetry.is_extension_telemetry_pipeline_enabled():
+            is_extension_telemetry_pipeline_enabled()))
+        if is_extension_telemetry_pipeline_enabled():
             periodic_operations.append(ProcessExtensionTelemetry(self._telemetry_service_handler))
 
         logger.info("Successfully started the {0} thread".format(self.get_thread_name()))

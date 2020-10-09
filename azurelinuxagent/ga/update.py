@@ -53,9 +53,10 @@ from azurelinuxagent.common.version import AGENT_NAME, AGENT_VERSION, AGENT_DIR_
     PY_VERSION_MINOR, PY_VERSION_MICRO
 from azurelinuxagent.ga.collect_logs import get_collect_logs_handler, is_log_collection_allowed
 from azurelinuxagent.ga.env import get_env_handler
-from azurelinuxagent.ga.collect_telemetry_events import get_telemetry_collector_handler, ProcessExtensionTelemetry
+from azurelinuxagent.ga.collect_telemetry_events import get_telemetry_collector_handler
 
-from azurelinuxagent.ga.exthandlers import HandlerManifest, get_traceback, ExtHandlersHandler, list_agent_lib_directory
+from azurelinuxagent.ga.exthandlers import HandlerManifest, get_traceback, ExtHandlersHandler, list_agent_lib_directory, \
+    is_extension_telemetry_pipeline_enabled
 from azurelinuxagent.ga.monitor import get_monitor_handler
 
 # pylint: disable=C0302
@@ -800,7 +801,7 @@ class UpdateHandler(object): # pylint: disable=R0902
                 continue
 
         try:
-            if not ProcessExtensionTelemetry.is_extension_telemetry_pipeline_enabled():
+            if not is_extension_telemetry_pipeline_enabled():
                 # If extension telemetry pipeline is disabled, ensure we delete all existing extension events directory
                 # because the agent will not be listening on those events.
                 extension_event_dirs = glob.glob(os.path.join(conf.get_ext_log_dir(), "*", EVENTS_DIRECTORY))
