@@ -98,8 +98,6 @@ class CryptUtil(object):
             stdout, stderr = second_proc.communicate()
 
             if first_proc.returncode != 0 or second_proc.returncode != 0:
-                logger.info("first_proc: {0}, second_proc: {1}".format(first_proc.returncode, second_proc.returncode))
-                
                 stdout = ustr(stdout, encoding='utf-8', errors="backslashreplace") if stdout else ""
                 stderr =  ustr(stderr, encoding='utf-8', errors="backslashreplace") if stderr else ""
 
