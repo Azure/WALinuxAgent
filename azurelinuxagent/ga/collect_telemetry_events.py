@@ -38,8 +38,8 @@ from azurelinuxagent.ga.exthandlers import HANDLER_NAME_PATTERN
 from azurelinuxagent.ga.periodic_operation import PeriodicOperation
 
 
-def get_extension_telemetry_handler(telemetry_service_handler):
-    return ExtensionTelemetryHandler(telemetry_service_handler)
+def get_telemetry_collector_handler(telemetry_service_handler):
+    return CollectTelemetryEventsHandler(telemetry_service_handler)
 
 
 # too-few-public-methods<R0903> Disabled: This class is used as an Enum
@@ -72,6 +72,12 @@ class ProcessExtensionTelemetry(PeriodicOperation):
 
     _EXTENSION_EVENT_REQUIRED_FIELDS = [attr.lower() for attr in dir(ExtensionEventSchema) if
                                         not callable(getattr(ExtensionEventSchema, attr)) and not attr.startswith("__")]
+
+    _ENABLE_EXTENSION_TELEMETRY_PIPELINE = False
+
+    @staticmethod
+    def is_extension_telemetry_pipeline_enabled():
+        return ProcessExtensionTelemetry._ENABLE_EXTENSION_TELEMETRY_PIPELINE
 
     def __init__(self, telemetry_service_handler):
         super(ProcessExtensionTelemetry, self).__init__(
@@ -400,7 +406,7 @@ class CollectAndEnqueueEventsPeriodicOperation(PeriodicOperation):
             add_event(op=WALAEventOperation.UnhandledError, message=err_msg, is_success=False)
 
 
-class ExtensionTelemetryHandler(ThreadHandlerInterface):
+class CollectTelemetryEventsHandler(ThreadHandlerInterface):
     """
     This Handler takes care of fetching the Extension Telemetry events from the {extension_events_dir} and sends it to
     Kusto for advanced debuggability.
@@ -415,7 +421,7 @@ class ExtensionTelemetryHandler(ThreadHandlerInterface):
 
     @staticmethod
     def get_thread_name():
-        return ExtensionTelemetryHandler._THREAD_NAME
+        return CollectTelemetryEventsHandler._THREAD_NAME
 
     def run(self):
         logger.info("Start Extension Telemetry service.")
@@ -427,7 +433,7 @@ class ExtensionTelemetryHandler(ThreadHandlerInterface):
     def start(self):
         self.thread = threading.Thread(target=self.daemon)
         self.thread.setDaemon(True)
-        self.thread.setName(ExtensionTelemetryHandler.get_thread_name())
+        self.thread.setName(CollectTelemetryEventsHandler.get_thread_name())
         self.thread.start()
 
     def stop(self):
@@ -443,9 +449,14 @@ class ExtensionTelemetryHandler(ThreadHandlerInterface):
 
     def daemon(self):
         periodic_operations = [
-            CollectAndEnqueueEventsPeriodicOperation(self._telemetry_service_handler),
-            ProcessExtensionTelemetry(self._telemetry_service_handler)
+            CollectAndEnqueueEventsPeriodicOperation(self._telemetry_service_handler)
         ]
+
+        logger.info("Extension Telemetry pipeline enabled: {0}".format(
+            ProcessExtensionTelemetry.is_extension_telemetry_pipeline_enabled()))
+        if ProcessExtensionTelemetry.is_extension_telemetry_pipeline_enabled():
+            periodic_operations.append(ProcessExtensionTelemetry(self._telemetry_service_handler))
+
         logger.info("Successfully started the {0} thread".format(self.get_thread_name()))
         while not self.stopped():
             try:

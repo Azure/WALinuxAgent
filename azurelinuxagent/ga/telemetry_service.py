@@ -24,7 +24,7 @@ import traceback
 from azurelinuxagent.common import logger
 from azurelinuxagent.common.event import add_event, WALAEventOperation
 from azurelinuxagent.common.exception import ServiceStoppedError
-from azurelinuxagent.common.future import ustr, Queue
+from azurelinuxagent.common.future import ustr, Queue, Full
 from azurelinuxagent.common.interfaces import ThreadHandlerInterface
 
 
@@ -39,9 +39,9 @@ class TelemetryServiceHandler(ThreadHandlerInterface):
     """
 
     _THREAD_NAME = "TelemetryServiceHandler"
-    _MAX_TIMEOUT = datetime.timedelta(minutes=5).seconds
+    _MAX_TIMEOUT = datetime.timedelta(seconds=5).seconds
     _MIN_QUEUE_LIMIT = 30
-    _MIN_WAIT_TIME = datetime.timedelta(seconds=5)
+    _MIN_BATCH_WAIT_TIME = datetime.timedelta(seconds=5)
 
 
     def __init__(self, protocol_util):
@@ -90,7 +90,12 @@ class TelemetryServiceHandler(ThreadHandlerInterface):
         if self.stopped():
             raise ServiceStoppedError("{0} is stopped, not accepting anymore events".format(self.get_thread_name()))
 
-        self._queue.put(event)
+        # Queue.put() can block if the queue is full which can be an uninterruptible wait. Blocking for a max of
+        # TelemetryServiceHandler._MAX_TIMEOUT seconds and raising a ServiceStoppedError to retry later.
+        try:
+            self._queue.put(event, timeout=TelemetryServiceHandler._MAX_TIMEOUT)
+        except Full as error:
+            raise ServiceStoppedError("Queue full, stopping any more enqueuing until the next run. {0}", ustr(error))
 
         # Set the event if any enqueue happens (even if already set) to trigger sending those events
         self._should_process_events.set()
@@ -98,8 +103,8 @@ class TelemetryServiceHandler(ThreadHandlerInterface):
     def _process_telemetry_thread(self):
         logger.info("Successfully started the {0} thread".format(self.get_thread_name()))
         try:
-            # On demand wait, start processing as soon as there is any data available in the queue
-            # In worst case, also keep checking every 5 mins to ensure that no data is being missed
+            # On demand wait, start processing as soon as there is any data available in the queue. In worst case,
+            # also keep checking every TelemetryServiceHandler._MAX_TIMEOUT secs to avoid uninterruptible waits
             while not self.stopped():
                 self._should_process_events.wait(timeout=TelemetryServiceHandler._MAX_TIMEOUT)
                 self._send_events_in_queue()
@@ -125,9 +130,9 @@ class TelemetryServiceHandler(ThreadHandlerInterface):
         if not self._queue.empty():
             start_time = datetime.datetime.utcnow()
             while self._queue.qsize() < self._MIN_QUEUE_LIMIT or \
-                    (start_time + self._MIN_WAIT_TIME) <= datetime.datetime.utcnow():
-                # To promote batching, we either wait for atleast 30 events or 5 secs before sending out the first
-                # request to wireserver
+                    (start_time + self._MIN_BATCH_WAIT_TIME) <= datetime.datetime.utcnow():
+                # To promote batching, we either wait for atleast _MIN_QUEUE_LIMIT events or _MIN_BATCH_WAIT_TIME secs
+                # before sending out the first request to wireserver
                 time.sleep(secs=1)
             self._protocol.report_event(self._get_events_in_queue)
 

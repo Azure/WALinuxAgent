@@ -1557,7 +1557,7 @@ class TestUpdate(UpdateTestCase): # pylint: disable=too-many-public-methods
 
             # Rerun the update handler and ensure that the HandlerEnvironment file is recreated with eventsFolder
             # flag in HandlerEnvironment.json file
-            with patch('azurelinuxagent.ga.exthandlers._ENABLE_EXTENSION_TELEMETRY_PIPELINE',
+            with patch('azurelinuxagent.ga.collect_telemetry_events.ProcessExtensionTelemetry.is_extension_telemetry_pipeline_enabled',
                        return_value=True):
                 update_handler.set_iterations(1)
                 update_handler.run(debug=True)

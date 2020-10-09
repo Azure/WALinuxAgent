@@ -53,10 +53,9 @@ from azurelinuxagent.common.version import AGENT_NAME, AGENT_VERSION, AGENT_DIR_
     PY_VERSION_MINOR, PY_VERSION_MICRO
 from azurelinuxagent.ga.collect_logs import get_collect_logs_handler, is_log_collection_allowed
 from azurelinuxagent.ga.env import get_env_handler
-from azurelinuxagent.ga.collect_telemetry_events import get_extension_telemetry_handler
+from azurelinuxagent.ga.collect_telemetry_events import get_telemetry_collector_handler, ProcessExtensionTelemetry
 
-from azurelinuxagent.ga.exthandlers import HandlerManifest, get_traceback, ExtHandlersHandler, \
-    is_extension_telemetry_pipeline_enabled, list_agent_lib_directory
+from azurelinuxagent.ga.exthandlers import HandlerManifest, get_traceback, ExtHandlersHandler, list_agent_lib_directory
 from azurelinuxagent.ga.monitor import get_monitor_handler
 
 # pylint: disable=C0302
@@ -292,14 +291,12 @@ class UpdateHandler(object): # pylint: disable=R0902
             all_thread_handlers = [
                 get_monitor_handler(),
                 get_env_handler(),
-                telemetry_handler
+                telemetry_handler,
+                get_telemetry_collector_handler(telemetry_handler)
             ]
 
             if is_log_collection_allowed():
                 all_thread_handlers.append(get_collect_logs_handler())
-
-            if is_extension_telemetry_pipeline_enabled():
-                all_thread_handlers.append(get_extension_telemetry_handler(telemetry_handler))
 
             # Launch all monitoring threads
             for thread_handler in all_thread_handlers:
@@ -803,7 +800,7 @@ class UpdateHandler(object): # pylint: disable=R0902
                 continue
 
         try:
-            if not is_extension_telemetry_pipeline_enabled():
+            if not ProcessExtensionTelemetry.is_extension_telemetry_pipeline_enabled():
                 # If extension telemetry pipeline is disabled, ensure we delete all existing extension events directory
                 # because the agent will not be listening on those events.
                 extension_event_dirs = glob.glob(os.path.join(conf.get_ext_log_dir(), "*", EVENTS_DIRECTORY))
