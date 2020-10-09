@@ -60,7 +60,6 @@ def _create_monitor_handler(enabled_operations=[], iterations=1): # pylint: disa
             run.original_definition(self)
     run.original_definition = PeriodicOperation.run
 
-    event_list = []
     with mock_wire_protocol(DATA_FILE) as protocol:
         protocol_util = MagicMock()
         protocol_util.get_protocol = Mock(return_value=protocol)
@@ -72,10 +71,9 @@ def _create_monitor_handler(enabled_operations=[], iterations=1): # pylint: disa
                             monitor_handler.run()
                             monitor_handler.join()
 
-                        monitor_handler = get_monitor_handler(event_list.append)
+                        monitor_handler = get_monitor_handler()
                         monitor_handler.get_mock_wire_protocol = lambda: protocol
                         monitor_handler.run_and_wait = run_and_wait
-                        monitor_handler.event_list = event_list
                         yield monitor_handler
 
 
@@ -345,7 +343,7 @@ class TestMonitorFailure(AgentTestCase):
     @patch("azurelinuxagent.common.protocol.healthservice.HealthService.report_host_plugin_heartbeat")
     def test_error_heartbeat_creates_no_signal(self, patch_report_heartbeat, patch_http_get, patch_add_event, *args): # pylint: disable=unused-argument
 
-        monitor_handler = get_monitor_handler(MagicMock())
+        monitor_handler = get_monitor_handler()
         protocol = WireProtocol('endpoint')
         protocol.update_goal_state = MagicMock()
         with patch('azurelinuxagent.common.protocol.util.ProtocolUtil.get_protocol', return_value=protocol):
