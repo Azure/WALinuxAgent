@@ -1,7 +1,6 @@
 {
   "inVMArtifactsProfileBlobSeqNo": 1,
   "createdOnTicks": 637282736549645571,
-  "schemaVersion": 1,
   "inVMMetadata": {
     "subscriptionId": "00000000-0000-0000-0000-000000000000",
     "resourceGroupName": "TestRG",
@@ -24,6 +23,26 @@
       "tag_key": "tag_value"
     }
   },
+  "extensionGoalStates": [
+  {
+      "name": "OSTCExtensions.ExampleHandlerLinux",
+      "version": "1.0.0",
+      "location": "http://rdfepirv2hknprdstr03.blob.core.windows.net/b01058962be54ceca550a390fa5ff064/Microsoft.OSTCExtensions_ExampleHandlerLinux_asiaeast_manifest.xml",
+      "state": "enabled",
+      "autoUpgrade": false,
+      "failoverlocation": "http://rdfepirv2hknprdstr04.blob.core.windows.net/b01058962be54ceca550a390fa5ff064/Microsoft.OSTCExtensions_ExampleHandlerLinux_asiaeast_manifest.xml",
+      "runAsStartupTask": false,
+      "useExactVersion": false,
+      "settingsSeqNo": 1,
+      "settings": [
+        {
+          "protectedSettingsCertThumbprint": "4037FBF5F1F3014F99B5D6C7799E9B20E6871CB3",
+          "protectedSettings": "MIICWgYJK",
+          "publicSettings": { "foo": "bar" }
+        }
+      ]
+    }
+  ],
   "VM": {
     "id": "resourceId",
     "properties": {

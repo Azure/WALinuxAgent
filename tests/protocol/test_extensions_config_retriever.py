@@ -1,13 +1,9 @@
-from azurelinuxagent.common.protocol.goal_state import ExtensionsConfig
 from azurelinuxagent.common.protocol.util import ProtocolUtil
-from nose.plugins.attrib import attr
-from azurelinuxagent.common import conf
-from azurelinuxagent.common.protocol.wire import WireProtocol, InVMArtifactsProfile
+from azurelinuxagent.common.protocol.wire import InVMArtifactsProfile
 from azurelinuxagent.common.protocol.extensions_config_retriever import ExtensionsConfigRetriever, \
-    GOAL_STATE_SOURCE_FABRIC, GOAL_STATE_SOURCE_FAST_TRACK, ExtensionsConfigReasons, FastTrackChangeDetail, \
-    FabricChangeDetail
+    FastTrackChangeDetail, GOAL_STATE_SOURCE_FABRIC, GOAL_STATE_SOURCE_FAST_TRACK
 from tests.protocol.mockwiredata import WireProtocolData, DATA_FILE
-from tests.tools import AgentTestCase, patch, clear_singleton_instances, i_am_root
+from tests.tools import AgentTestCase, patch, clear_singleton_instances
 
 
 class TestExtensionsConfigRetriever(AgentTestCase):
@@ -30,7 +26,8 @@ class TestExtensionsConfigRetriever(AgentTestCase):
         self.assertTrue(ext_conf.changed)
         self.assertTrue(retriever.get_is_on_hold())
 
-        test_data_file = TestExtensionsConfigRetriever.get_test_data(artifacts_profile="wire/in_vm_artifacts_profile_blob.json")
+        test_data_file = TestExtensionsConfigRetriever.get_test_data(artifacts_profile=
+                                                                     "wire/in_vm_artifacts_profile_blob.json")
         retriever, _ = TestExtensionsConfigRetriever.create_retriever(test_data_file)
 
         ext_conf = retriever.get_ext_config(1, TestExtensionsConfigRetriever.SAMPLE_URL)
@@ -56,7 +53,7 @@ class TestExtensionsConfigRetriever(AgentTestCase):
         self.assertTrue(ext_conf.changed)
         self.assertTrue(ext_conf.is_fabric_change)
         self.assertEqual(1, len(ext_conf.ext_handlers.extHandlers))
-        self.assertTrue(ExtensionsConfigReasons.STARTUP_NO_FAST_TRACK in ext_conf.get_description())
+        self.assertTrue(ext_conf.get_description().startswith(GOAL_STATE_SOURCE_FABRIC))
         self.assertTrue(FastTrackChangeDetail.NO_PROFILE in ext_conf.get_description())
 
     def test_ext_config_startup_no_profile_uri(self):
@@ -67,18 +64,31 @@ class TestExtensionsConfigRetriever(AgentTestCase):
         self.assertTrue(ext_conf.changed)
         self.assertTrue(ext_conf.is_fabric_change)
         self.assertEqual(1, len(ext_conf.ext_handlers.extHandlers))
-        self.assertTrue(ExtensionsConfigReasons.STARTUP_NO_FAST_TRACK in ext_conf.get_description())
+        self.assertTrue(ext_conf.get_description().startswith(GOAL_STATE_SOURCE_FABRIC))
         self.assertTrue(FastTrackChangeDetail.NO_PROFILE_URI in ext_conf.get_description())
 
     def test_ext_config_startup_no_created_on_ticks(self):
-        test_data_file = TestExtensionsConfigRetriever.get_test_data(artifacts_profile="wire/in_vm_artifacts_profile_blob_no_ticks.json")
+        test_data_file = TestExtensionsConfigRetriever.get_test_data(artifacts_profile=
+                                                                     "wire/in_vm_artifacts_profile_blob_no_ticks.json")
         retriever, _ = TestExtensionsConfigRetriever.create_retriever(test_data_file)
 
         ext_conf = retriever.get_ext_config(1, TestExtensionsConfigRetriever.SAMPLE_URL)
         self.assertTrue(ext_conf.changed)
         self.assertTrue(ext_conf.is_fabric_change)
         self.assertEqual(1, len(ext_conf.ext_handlers.extHandlers))
-        self.assertTrue(ExtensionsConfigReasons.STARTUP_NO_FAST_TRACK in ext_conf.get_description())
+        self.assertTrue(ext_conf.get_description().startswith(GOAL_STATE_SOURCE_FABRIC))
+        self.assertTrue(FastTrackChangeDetail.DISABLED in ext_conf.get_description())
+
+    def test_ext_config_startup_no_created_on_schema_version(self):
+        test_data_file = TestExtensionsConfigRetriever.get_test_data(
+            artifacts_profile="wire/in_vm_artifacts_profile_no_schema_version.json")
+        retriever, _ = TestExtensionsConfigRetriever.create_retriever(test_data_file)
+
+        ext_conf = retriever.get_ext_config(1, TestExtensionsConfigRetriever.SAMPLE_URL)
+        self.assertTrue(ext_conf.changed)
+        self.assertTrue(ext_conf.is_fabric_change)
+        self.assertEqual(1, len(ext_conf.ext_handlers.extHandlers))
+        self.assertTrue(ext_conf.get_description().startswith(GOAL_STATE_SOURCE_FABRIC))
         self.assertTrue(FastTrackChangeDetail.DISABLED in ext_conf.get_description())
 
     def test_ext_config_startup_fabric_no_extensions(self):
@@ -89,41 +99,43 @@ class TestExtensionsConfigRetriever(AgentTestCase):
         self.assertTrue(ext_conf.changed)
         self.assertTrue(ext_conf.is_fabric_change)
         self.assertEqual(0, len(ext_conf.ext_handlers.extHandlers))
-        self.assertTrue(ExtensionsConfigReasons.ABRIC_NEWER in ext_conf.get_description())
-        self.assertTrue(FastTrackChangeDetail.RETRIEVED in ext_conf.get_description())
+        self.assertTrue(ext_conf.get_description().startswith(GOAL_STATE_SOURCE_FABRIC))
 
     def test_ext_config_startup_fast_track_no_extensions(self):
-        test_data_file = TestExtensionsConfigRetriever.get_test_data(artifacts_profile="wire/in_vm_artifacts_profile_no_extensions.json")
+        test_data_file = TestExtensionsConfigRetriever.get_test_data(artifacts_profile=
+                                                                     "wire/in_vm_artifacts_profile_no_extensions.json")
         retriever, _ = TestExtensionsConfigRetriever.create_retriever(test_data_file)
 
         ext_conf = retriever.get_ext_config(1, TestExtensionsConfigRetriever.SAMPLE_URL)
         self.assertTrue(ext_conf.changed)
         self.assertTrue(ext_conf.is_fabric_change)
         self.assertEqual(1, len(ext_conf.ext_handlers.extHandlers))
-        self.assertTrue(ExtensionsConfigReasons.STARTUP_NO_FAST_TRACK in ext_conf.get_description())
+        self.assertTrue(ext_conf.get_description().startswith(GOAL_STATE_SOURCE_FABRIC))
         self.assertTrue(FastTrackChangeDetail.NO_EXTENSIONS in ext_conf.get_description())
 
     def test_ext_config_startup_fast_track_no_extension_data(self):
-        test_data_file = TestExtensionsConfigRetriever.get_test_data(artifacts_profile="wire/in_vm_artifacts_profile_no_ext_config.json")
+        test_data_file = TestExtensionsConfigRetriever.get_test_data(artifacts_profile=
+                                                                     "wire/in_vm_artifacts_profile_no_ext_config.json")
         retriever, _ = TestExtensionsConfigRetriever.create_retriever(test_data_file)
 
         ext_conf = retriever.get_ext_config(1, TestExtensionsConfigRetriever.SAMPLE_URL)
         self.assertTrue(ext_conf.changed)
         self.assertTrue(ext_conf.is_fabric_change)
         self.assertEqual(1, len(ext_conf.ext_handlers.extHandlers))
-        self.assertTrue(ExtensionsConfigReasons.STARTUP_NO_FAST_TRACK in ext_conf.get_description())
+        self.assertTrue(ext_conf.get_description().startswith(GOAL_STATE_SOURCE_FABRIC))
         self.assertTrue(FastTrackChangeDetail.NO_EXTENSIONS in ext_conf.get_description())
 
     @patch("azurelinuxagent.common.conf.get_extensions_fast_track_enabled", return_value=False)
     def test_ext_config_startup_fast_track_disabled(self, conf_get_fast_track_enabled):
-        test_data_file = TestExtensionsConfigRetriever.get_test_data(artifacts_profile="wire/in_vm_artifacts_profile_blob_newer.json")
+        test_data_file = TestExtensionsConfigRetriever.get_test_data(artifacts_profile=
+                                                                     "wire/in_vm_artifacts_profile_blob_newer.json")
         retriever, _ = TestExtensionsConfigRetriever.create_retriever(test_data_file)
 
         ext_conf = retriever.get_ext_config(1, TestExtensionsConfigRetriever.SAMPLE_URL)
         self.assertTrue(ext_conf.changed)
         self.assertTrue(ext_conf.is_fabric_change)
         self.assertEqual(1, len(ext_conf.ext_handlers.extHandlers))
-        self.assertTrue(ExtensionsConfigReasons.STARTUP_NO_FAST_TRACK in ext_conf.get_description())
+        self.assertTrue(ext_conf.get_description().startswith(GOAL_STATE_SOURCE_FABRIC))
         self.assertTrue(FastTrackChangeDetail.TURNED_OFF_IN_CONFIG in ext_conf.get_description())
 
     def test_ext_config_startup_fabric_newer(self):
@@ -134,30 +146,32 @@ class TestExtensionsConfigRetriever(AgentTestCase):
         self.assertTrue(ext_conf.changed)
         self.assertTrue(ext_conf.is_fabric_change)
         self.assertEqual(1, len(ext_conf.ext_handlers.extHandlers))
-        self.assertTrue(ExtensionsConfigReasons.ABRIC_NEWER in ext_conf.get_description())
-        self.assertTrue(FastTrackChangeDetail.RETRIEVED in ext_conf.get_description())
+        self.assertTrue(ext_conf.get_description().startswith(GOAL_STATE_SOURCE_FABRIC))
+        self.assertTrue(FastTrackChangeDetail.SEQ_NO_CHANGED in ext_conf.get_description())
 
     def test_ext_config_startup_fast_track_newer(self):
-        test_data_file = TestExtensionsConfigRetriever.get_test_data(artifacts_profile="wire/in_vm_artifacts_profile_blob_newer.json")
+        test_data_file = TestExtensionsConfigRetriever.get_test_data(
+            artifacts_profile="wire/in_vm_artifacts_profile_blob_newer.json")
         retriever, _ = TestExtensionsConfigRetriever.create_retriever(test_data_file)
 
         ext_conf = retriever.get_ext_config(1, TestExtensionsConfigRetriever.SAMPLE_URL)
         self.assertTrue(ext_conf.changed)
         self.assertFalse(ext_conf.is_fabric_change)
         self.assertEqual(1, len(ext_conf.ext_handlers.extHandlers))
-        self.assertTrue(ExtensionsConfigReasons.STARTUP_FAST_TRACK_NEWER in ext_conf.get_description())
-        self.assertTrue(FastTrackChangeDetail.RETRIEVED in ext_conf.get_description())
+        self.assertTrue(ext_conf.get_description().startswith(GOAL_STATE_SOURCE_FAST_TRACK))
+        self.assertTrue(FastTrackChangeDetail.SEQ_NO_CHANGED in ext_conf.get_description())
 
     def test_ext_config_startup_fast_track_no_settings(self):
-        test_data_file = TestExtensionsConfigRetriever.get_test_data(artifacts_profile="wire/in_vm_artifacts_profile_no_settings.json")
+        test_data_file = TestExtensionsConfigRetriever.get_test_data(
+            artifacts_profile="wire/in_vm_artifacts_profile_no_settings.json")
         retriever, _ = TestExtensionsConfigRetriever.create_retriever(test_data_file)
 
         ext_conf = retriever.get_ext_config(1, TestExtensionsConfigRetriever.SAMPLE_URL)
         self.assertTrue(ext_conf.changed)
         self.assertFalse(ext_conf.is_fabric_change)
         self.assertEqual(1, len(ext_conf.ext_handlers.extHandlers))
-        self.assertTrue(ExtensionsConfigReasons.STARTUP_FAST_TRACK_NEWER in ext_conf.get_description())
-        self.assertTrue(FastTrackChangeDetail.RETRIEVED in ext_conf.get_description())
+        self.assertTrue(ext_conf.get_description().startswith(GOAL_STATE_SOURCE_FAST_TRACK))
+        self.assertTrue(FastTrackChangeDetail.SEQ_NO_CHANGED in ext_conf.get_description())
 
     def test_ext_config_startup_same_ticks(self):
         test_data_file = TestExtensionsConfigRetriever.get_test_data(artifacts_profile="wire/in_vm_artifacts_profile_blob_same_ticks.json")
@@ -168,7 +182,7 @@ class TestExtensionsConfigRetriever(AgentTestCase):
         self.assertTrue(ext_conf.is_fabric_change)
         self.assertEqual(1, len(ext_conf.ext_handlers.extHandlers))
         self.assertTrue(ExtensionsConfigReasons.ABRIC_NEWER in ext_conf.get_description())
-        self.assertTrue(FastTrackChangeDetail.RETRIEVED in ext_conf.get_description())
+        self.assertTrue(FastTrackChangeDetail.SEQ_NO_CHANGED in ext_conf.get_description())
 
     def test_ext_config_post_startup_no_profile(self):
         # Run the startup goal state

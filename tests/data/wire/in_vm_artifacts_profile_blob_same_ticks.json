@@ -1,6 +1,7 @@
 {
   "inVMArtifactsProfileBlobSeqNo": 2,
   "createdOnTicks": 637282736549645575,
+  "schemaVersion": 1,
   "inVMMetadata": {
     "subscriptionId": "00000000-0000-0000-0000-000000000000",
     "resourceGroupName": "TestRG",

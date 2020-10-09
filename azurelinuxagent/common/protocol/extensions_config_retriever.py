@@ -88,12 +88,12 @@ class ExtensionsConfigRetriever(object):
         self._current_ext_conf = None
         self._last_fabric_incarnation = None
         self._last_fast_track_seq_no = None
-        self._last_created_on_ticks = None
+        self._last_created_on_ticks = 0
         self._last_mode = None
         self._is_startup = True
         self._pending_fast_track_seq_no = None
         self._pending_fabric_incarnation = None
-        self._pending_created_on_ticks = None
+        self._pending_created_on_ticks = 0
         self._fast_track_changed_detail = None
         self._fast_track_conf_uri = None
         self._artifacts_profile_uri = None
@@ -101,9 +101,10 @@ class ExtensionsConfigRetriever(object):
     def get_ext_config(self, incarnation, fabric_ext_conf_uri):
         # If we don't have a uri, return an empty extensions config
         if fabric_ext_conf_uri is None or incarnation is None:
-            return GenericExtensionsConfig(ExtensionsConfig(None), False, self)
+            return GenericExtensionsConfig(ExtensionsConfig(None), False, self, None, None)
 
         # Logic for choosing the goal state is the following
+        # Note that if createdOnTicks is 0 for FastTrack, we'll always use Fabric
         # 1) If we cannot retrieve either goal state successfully we'll just skip this iteration since we can't
         # guarantee we'll choose correctly
         # 2) If we don't have a FastTrack goal state, and this is startup, then we'll use fabric
@@ -117,14 +118,6 @@ class ExtensionsConfigRetriever(object):
         # least one extension config with a positive createdOnTicks or we have a new deployment.We need to check the
         # artifactsProfileSchemaVersion to know if CRP has the fix to set createdOnTicks in the VMArtifactsProfile to 0
         # when using a Fabric goal state.If it does have the fix, then we simply need to take the higher value.
-        # 6) If either createdOnTicks value is greater than our cached value, and the fix is not in CRP, then we have
-        # no true way of knowing which is more recent.So, we try taking the newer createdOnTicks.If this is FastTrack
-        # and it has no extensions but Fabric does, then we'll use Fabric instead.
-        # 7) If both have createdOnTicks == 0, then there are two possibilities. Both apply only to startup.
-        # a) The goal states were created before CRP was updated to createdOnTicks.Choose the one that has extensions,
-        # or Fabric if neither has extensions
-        # b) This is an RDFE goal state, in which case FastTrack will never have extensions, so the logic for a)
-        # applies here too
 
         fabric_ext_conf = self._retrieve_fabric_ext_conf_if_changed(incarnation, fabric_ext_conf_uri)
         artifacts_profile = self._get_artifacts_profile()
@@ -136,8 +129,8 @@ class ExtensionsConfigRetriever(object):
                 incarnation, fabric_ext_conf, artifacts_profile)
             return self._create_fabric_ext_conf(incarnation, fabric_ext_conf, artifacts_profile)
 
-        fabric_created_on_ticks = fabric_ext_conf.created_on_ticks
-        fast_track_created_on_ticks = artifacts_profile.get_created_on_ticks()
+        fabric_created_on_ticks = int(fabric_ext_conf.created_on_ticks)
+        fast_track_created_on_ticks = int(artifacts_profile.get_created_on_ticks())
 
         if not self._is_startup and incarnation != self._last_fabric_incarnation:
             if fabric_ext_conf.created_on_ticks <= self._last_created_on_ticks and self._last_created_on_ticks > 0:
@@ -156,25 +149,7 @@ class ExtensionsConfigRetriever(object):
 
         if fabric_created_on_ticks > self._last_created_on_ticks or \
                 fast_track_created_on_ticks > self._last_created_on_ticks:
-            if artifacts_profile.get_schema_version() >= _SCHEMA_VERSION_FAST_TRACK_CREATED_ON_TICKS:
-                # Scenario 5 above
-                return self._get_most_recent_ext_conf(incarnation, fabric_ext_conf, artifacts_profile)
-            else:
-                # Scenario 7 above
-                return self._handle_legacy_ext_conf(incarnation, fabric_ext_conf, artifacts_profile)
-
-        if self._is_startup and fabric_created_on_ticks == 0 and fast_track_created_on_ticks == 0:
-            # Scenario 6 above.Choose the one that has extensions, or else Fabric
-            if artifacts_profile.has_extensions:
-                self._trace_goal_state_selection_decision(
-                    "CreatedOnTicks is 0, but processing the FastTrack extension config because it has extensions.",
-                    incarnation, fabric_ext_conf, artifacts_profile)
-                return self._create_fast_track_ext_conf(incarnation, artifacts_profile)
-            else:
-                self._trace_goal_state_selection_decision(
-                    "CreatedOnTicks is 0. Processing the Fabric extension config.",
-                    incarnation, fabric_ext_conf, artifacts_profile)
-                return self._create_fabric_ext_conf(incarnation, fabric_ext_conf, artifacts_profile)
+            return self._get_most_recent_ext_conf(incarnation, fabric_ext_conf, artifacts_profile)
 
         # There are no extension config changes to process.Skip this iteration.
         # Nothing changed, so use the last extensions config but mark it as unchanged
@@ -196,8 +171,8 @@ class ExtensionsConfigRetriever(object):
         return is_on_hold
 
     def _get_most_recent_ext_conf(self, incarnation, fabric_ext_conf, artifacts_profile):
-        fabric_created_on_ticks = fabric_ext_conf.created_on_ticks
-        fast_track_created_on_ticks = artifacts_profile.get_created_on_ticks()
+        fabric_created_on_ticks = int(fabric_ext_conf.created_on_ticks)
+        fast_track_created_on_ticks = int(artifacts_profile.get_created_on_ticks())
 
         if fast_track_created_on_ticks > fabric_created_on_ticks:
             self._trace_goal_state_selection_decision(
@@ -210,34 +185,13 @@ class ExtensionsConfigRetriever(object):
                 incarnation, fabric_ext_conf, artifacts_profile)
             return self._create_fabric_ext_conf(incarnation, fabric_ext_conf, artifacts_profile)
 
-    def _handle_legacy_ext_conf(self, incarnation, fabric_ext_conf, artifacts_profile):
-        fabric_created_on_ticks = fabric_ext_conf.created_on_ticks
-        fast_track_created_on_ticks = artifacts_profile.get_created_on_ticks()
-
-        fabric_has_extensions = False
-        if fabric_ext_conf.ext_handlers is not None and fabric_ext_conf.ext_handlers.extHandlers is not None and \
-                len(fabric_ext_conf.ext_handlers.extHandlers) > 0:
-            fabric_has_extensions = True
-
-        if fast_track_created_on_ticks > fabric_created_on_ticks and (artifacts_profile.has_extensions or
-                                                                      fabric_has_extensions):
-            self._trace_goal_state_selection_decision(
-                "Processing the legacy FastTrack extension config.",
-                incarnation, fabric_ext_conf, artifacts_profile)
-            return self._create_fast_track_ext_conf(incarnation, artifacts_profile)
-        else:
-            self._trace_goal_state_selection_decision(
-                "Processing the legacy Fabric goal state.",
-                incarnation, fabric_ext_conf, artifacts_profile)
-            return self._create_fabric_ext_conf(incarnation, fabric_ext_conf, artifacts_profile)
-
     def _create_fast_track_ext_conf(self, incarnation, artifacts_profile):
         self._pending_created_on_ticks = artifacts_profile.get_created_on_ticks()
         self._pending_fabric_incarnation = incarnation
         self._pending_fast_track_seq_no = artifacts_profile.get_sequence_number()
         self._last_mode = GOAL_STATE_SOURCE_FAST_TRACK
 
-        description = "{0} SeqNo={1}, FastTrack={2}".format(_EXT_CONFIG_FAST_TRACK,
+        description = "{0} SeqNo={1}, FastTrack={2}".format(GOAL_STATE_SOURCE_FAST_TRACK,
                                                             artifacts_profile.get_sequence_number(),
                                                             self._fast_track_changed_detail)
         file_name = _EXT_CONF_FILE_NAME.format(_EXT_CONFIG_FAST_TRACK, self._last_fast_track_seq_no)
@@ -248,13 +202,16 @@ class ExtensionsConfigRetriever(object):
     def _create_fabric_ext_conf(self, incarnation, fabric_ext_conf, artifacts_profile):
         self._pending_created_on_ticks = fabric_ext_conf.created_on_ticks
         self._pending_fabric_incarnation = incarnation
-        self._pending_fast_track_seq_no = artifacts_profile.get_sequence_number()
         self._last_mode = GOAL_STATE_SOURCE_FABRIC
+        if artifacts_profile is not None:
+            self._pending_fast_track_seq_no = artifacts_profile.get_sequence_number()
 
-        description = "{0} Incarnation={1}, FastTrack={2}".format(_EXT_CONFIG_FABRIC, self._last_fabric_incarnation,
+        description = "{0} Incarnation={1}, FastTrack={2}".format(GOAL_STATE_SOURCE_FABRIC,
+                                                                  self._last_fabric_incarnation,
                                                                   self._fast_track_changed_detail)
         file_name = _EXT_CONF_FILE_NAME.format(_EXT_CONFIG_FABRIC, self._last_fabric_incarnation)
         self._current_ext_conf = GenericExtensionsConfig(fabric_ext_conf, True, self, description, file_name)
+        self._current_ext_conf.is_fabric_change = True
         return self._current_ext_conf
 
     def _trace_goal_state_selection_decision(self, decision, incarnation, fabric_ext_conf, artifacts_profile):
@@ -305,8 +262,13 @@ class ExtensionsConfigRetriever(object):
                 # Read OnHold from the artifacts profile since we have it
                 self._is_on_hold = artifacts_profile.is_on_hold()
 
-                if artifacts_profile.get_created_on_ticks() is None:
+                if artifacts_profile.get_created_on_ticks() == 0:
                     # If we don't have a createdOnTicks property, then we won't support FastTrack
+                    logger.periodic_info(logger.EVERY_DAY, _MSG_FAST_TRACK_NOT_SUPPORTED)
+                    self._fast_track_changed_detail = FastTrackChangeDetail.DISABLED
+                    artifacts_profile = None
+                elif artifacts_profile.get_schema_version() < _SCHEMA_VERSION_FAST_TRACK_CREATED_ON_TICKS:
+                    # If we don't have a schemaVersion indicating the latest FastTrack, then we won't support FastTrack
                     logger.periodic_info(logger.EVERY_DAY, _MSG_FAST_TRACK_NOT_SUPPORTED)
                     self._fast_track_changed_detail = FastTrackChangeDetail.DISABLED
                     artifacts_profile = None

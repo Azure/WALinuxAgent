@@ -1446,7 +1446,7 @@ class InVMArtifactsProfile(object): # pylint: disable=R0903
     def get_schema_version(self):
         if 'schemaVersion' in self.__dict__:
             return int(self.schemaVersion)
-        return None
+        return 0
 
     def has_extensions(self):
         if 'extensionGoalStates' in self.__dict__:
