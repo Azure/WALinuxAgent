@@ -16,23 +16,23 @@
 # Requires Python 2.6+ and Openssl 1.0+
 #
 
-import os
-import re
-import pwd
-import shutil
-import socket
-import array
-import struct
-import fcntl
-import time
-import base64
+import os # pylint: disable=W0611
+import re # pylint: disable=W0611
+import pwd # pylint: disable=W0611
+import shutil # pylint: disable=W0611
+import socket # pylint: disable=W0611
+import array # pylint: disable=W0611
+import struct # pylint: disable=W0611
+import fcntl # pylint: disable=W0611
+import time # pylint: disable=W0611
+import base64 # pylint: disable=W0611
 import azurelinuxagent.common.conf as conf
 import azurelinuxagent.common.logger as logger
-from azurelinuxagent.common.future import ustr, bytebuffer
+from azurelinuxagent.common.future import ustr, bytebuffer # pylint: disable=W0611
 from azurelinuxagent.common.exception import OSUtilError, CryptError
 import azurelinuxagent.common.utils.fileutil as fileutil
 import azurelinuxagent.common.utils.shellutil as shellutil
-import azurelinuxagent.common.utils.textutil as textutil
+import azurelinuxagent.common.utils.textutil as textutil # pylint: disable=W0611
 from azurelinuxagent.common.utils.cryptutil import CryptUtil
 from azurelinuxagent.common.osutil.default import DefaultOSUtil
 
@@ -66,7 +66,7 @@ class Redhat6xOSUtil(DefaultOSUtil):
         try:
             cryptutil = CryptUtil(conf.get_openssl_cmd())
             ssh_rsa_pubkey = cryptutil.asn1_to_ssh(pubkey)
-        except CryptError as e:
+        except CryptError as e: # pylint: disable=C0103
             raise OSUtilError(ustr(e))
         fileutil.append_file(output_file, ssh_rsa_pubkey)
 
@@ -81,7 +81,7 @@ class Redhat6xOSUtil(DefaultOSUtil):
         fileutil.update_conf_file('/etc/sysconfig/network',
                                   'HOSTNAME',
                                   'HOSTNAME={0}'.format(hostname))
-        shellutil.run("hostname {0}".format(hostname), chk_err=False)
+        self._run_command_without_raising(["hostname", hostname], log_error=False)
 
     def set_dhcp_hostname(self, hostname):
         ifname = self.get_if_name()
@@ -105,9 +105,9 @@ class RedhatOSUtil(Redhat6xOSUtil):
         Due to a bug in systemd in Centos-7.0, if this call fails, fallback
         to hostname.
         """
-        hostnamectl_cmd = "hostnamectl set-hostname {0} --static".format(hostname)
-        if shellutil.run(hostnamectl_cmd, chk_err=False) != 0:
-            logger.warn("[{0}] failed, attempting fallback".format(hostnamectl_cmd))
+        hostnamectl_cmd = ['hostnamectl', 'set-hostname', hostname, '--static']
+        if self._run_command_without_raising(hostnamectl_cmd, log_error=False) != 0:
+            logger.warn("[{0}] failed, attempting fallback".format(' '.join(hostnamectl_cmd)))
             DefaultOSUtil.set_hostname(self, hostname)
 
     def publish_hostname(self, hostname):

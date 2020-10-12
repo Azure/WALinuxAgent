@@ -1,5 +1,9 @@
 codecov
 coverage
-flake8; python_version >= '2.7'
-mock
+mock==2.0.0; python_version == '2.6'
+mock==3.0.5; python_version >= '2.7' and python_version <= '3.5'
+mock==4.0.2; python_version >= '3.6'
+distro; python_version >= '3.8'
 nose
+nose-timer; python_version >= '2.7'
+pylint; python_version > '2.6'

@@ -16,17 +16,12 @@
 #
 
 import os
-import sys
 import unittest
 
 import azurelinuxagent.common.conf as conf
 from azurelinuxagent.common.exception import CryptError
 from azurelinuxagent.common.utils.cryptutil import CryptUtil
-from tests.tools import AgentTestCase, data_dir, load_data, skip_if_predicate_true
-
-
-def is_python_version_26():
-    return sys.version_info[0] == 2 and sys.version_info[1] == 6
+from tests.tools import AgentTestCase, data_dir, load_data, is_python_version_26, skip_if_predicate_true
 
 
 class TestCryptoUtilOperations(AgentTestCase):
@@ -34,12 +29,12 @@ class TestCryptoUtilOperations(AgentTestCase):
     def test_decrypt_encrypted_text(self):
         encrypted_string = load_data("wire/encrypted.enc")
         prv_key = os.path.join(self.tmp_dir, "TransportPrivate.pem") 
-        with open(prv_key, 'w+') as c:
+        with open(prv_key, 'w+') as c: # pylint: disable=invalid-name
             c.write(load_data("wire/sample.pem"))
         secret = ']aPPEv}uNg1FPnl?'
         crypto = CryptUtil(conf.get_openssl_cmd())
         decrypted_string = crypto.decrypt_secret(encrypted_string, prv_key)
-        self.assertEquals(secret, decrypted_string, "decrypted string does not match expected")
+        self.assertEqual(secret, decrypted_string, "decrypted string does not match expected")
 
     def test_decrypt_encrypted_text_missing_private_key(self):
         encrypted_string = load_data("wire/encrypted.enc")
@@ -51,7 +46,7 @@ class TestCryptoUtilOperations(AgentTestCase):
     def test_decrypt_encrypted_text_wrong_private_key(self):
         encrypted_string = load_data("wire/encrypted.enc")
         prv_key = os.path.join(self.tmp_dir, "wrong.pem")
-        with open(prv_key, 'w+') as c:
+        with open(prv_key, 'w+') as c: # pylint: disable=invalid-name
             c.write(load_data("wire/trans_prv"))
         crypto = CryptUtil(conf.get_openssl_cmd())
         self.assertRaises(CryptError, crypto.decrypt_secret, encrypted_string, prv_key)
@@ -59,7 +54,7 @@ class TestCryptoUtilOperations(AgentTestCase):
     def test_decrypt_encrypted_text_text_not_encrypted(self):
         encrypted_string = "abc@123"
         prv_key = os.path.join(self.tmp_dir, "TransportPrivate.pem")
-        with open(prv_key, 'w+') as c:
+        with open(prv_key, 'w+') as c: # pylint: disable=invalid-name
             c.write(load_data("wire/sample.pem"))
         crypto = CryptUtil(conf.get_openssl_cmd())
         self.assertRaises(CryptError, crypto.decrypt_secret, encrypted_string, prv_key)
@@ -69,7 +64,7 @@ class TestCryptoUtilOperations(AgentTestCase):
         prv_key = os.path.join(data_dir, "wire", "trans_prv")
         expected_pub_key = os.path.join(data_dir, "wire", "trans_pub")
 
-        with open(expected_pub_key) as fh:
+        with open(expected_pub_key) as fh: # pylint: disable=invalid-name
             self.assertEqual(fh.read(), crypto.get_pubkey_from_prv(prv_key))
 
     def test_get_pubkey_from_crt_invalid_file(self):

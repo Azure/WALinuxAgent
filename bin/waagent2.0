@@ -1744,7 +1744,11 @@ bsd_activate_resource_disk_txt="""\
 
 import os
 import sys
-import imp
+
+if sys.version_info[0] == 2:
+    import imp
+else:
+    import importlib
 
 # waagent has no '.py' therefore create waagent module import manually.
 __name__='setupmain' #prevent waagent.__main__ from executing

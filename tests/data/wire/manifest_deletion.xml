@@ -4,7 +4,7 @@
         <Plugin>
             <Version>1.0.0</Version>
             <Uris>
-                <Uri>http://foo.bar/zar/OSTCExtensions.ExampleHandlerLinux__1.0.0</Uri>
+                <Uri>http://mock-goal-state/foo.bar/zar/OSTCExtensions.ExampleHandlerLinux__1.0.0</Uri>
             </Uris>
         </Plugin>
     </Plugins>

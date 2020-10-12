@@ -1,0 +1,13 @@
+12:devices:/system.slice/Microsoft.A.Sample.Extension_1.0.1_aeac05dc-8c24-4542-95f2-a0d6be1c5ba7.scope
+11:perf_event:/
+10:rdma:/
+9:blkio:/system.slice/Microsoft.A.Sample.Extension_1.0.1_aeac05dc-8c24-4542-95f2-a0d6be1c5ba7.scope
+8:net_cls,net_prio:/
+7:freezer:/
+6:hugetlb:/
+5:memory:/system.slice/Microsoft.A.Sample.Extension_1.0.1_aeac05dc-8c24-4542-95f2-a0d6be1c5ba7.scope
+4:cpuset:/
+3:cpu,cpuacct:/system.slice/Microsoft.A.Sample.Extension_1.0.1_aeac05dc-8c24-4542-95f2-a0d6be1c5ba7.scope
+2:pids:/system.slice/Microsoft.A.Sample.Extension_1.0.1_aeac05dc-8c24-4542-95f2-a0d6be1c5ba7.scope
+1:name=systemd:/system.slice/Microsoft.A.Sample.Extension_1.0.1_aeac05dc-8c24-4542-95f2-a0d6be1c5ba7.scope
+0::/system.slice/Microsoft.A.Sample.Extension_1.0.1_aeac05dc-8c24-4542-95f2-a0d6be1c5ba7.scope

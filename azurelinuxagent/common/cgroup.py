@@ -13,6 +13,8 @@
 # limitations under the License.
 #
 # Requires Python 2.6+ and Openssl 1.0+
+from collections import namedtuple
+
 import errno
 import os
 import re
@@ -23,7 +25,27 @@ from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.osutil import get_osutil
 from azurelinuxagent.common.utils import fileutil
 
-re_user_system_times = re.compile(r'user (\d+)\nsystem (\d+)\n')
+
+MetricValue = namedtuple('Metric', ['category', 'counter', 'instance', 'value'])
+
+
+class MetricsCategory(object): # pylint: disable=R0903
+    MEMORY_CATEGORY = "Memory"
+    CPU_CATEGORY = "CPU"
+
+
+class MetricsCounter(object): # pylint: disable=R0903
+    PROCESSOR_PERCENT_TIME = "% Processor Time"
+    TOTAL_MEM_USAGE = "Total Memory Usage"
+    MAX_MEM_USAGE = "Max Memory Usage"
+
+
+re_user_system_times = re.compile(r'user (\d+)\nsystem (\d+)\n') # pylint: disable=invalid-name
+
+
+class CGroupContollers(object): # pylint: disable=R0903
+    CPU = "cpu"
+    MEMORY = "memory"
 
 
 class CGroup(object):
@@ -32,9 +54,9 @@ class CGroup(object):
         """
         Factory method to create the correct CGroup.
         """
-        if controller == "cpu":
+        if controller == CGroupContollers.CPU:
             return CpuCgroup(extension_name, cgroup_path)
-        if controller == "memory":
+        if controller == CGroupContollers.MEMORY:
             return MemoryCgroup(extension_name, cgroup_path)
         raise CGroupsException('CGroup controller {0} is not supported'.format(controller))
 
@@ -61,13 +83,9 @@ class CGroup(object):
         :return: Entire contents of the file
         :rtype: str
         """
-
         parameter_file = self._get_cgroup_file(file_name)
 
-        try:
-            return fileutil.read_file(parameter_file)
-        except Exception:
-            raise
+        return fileutil.read_file(parameter_file)
 
     def _get_parameters(self, parameter_name, first_line_only=False):
         """
@@ -87,8 +105,8 @@ class CGroup(object):
             parameter_filename = self._get_cgroup_file(parameter_name)
             logger.error("File {0} is empty but should not be".format(parameter_filename))
             raise CGroupsException("File {0} is empty but should not be".format(parameter_filename))
-        except Exception as e:
-            if isinstance(e, (IOError, OSError)) and e.errno == errno.ENOENT:
+        except Exception as e: # pylint: disable=C0103
+            if isinstance(e, (IOError, OSError)) and e.errno == errno.ENOENT: # pylint: disable=E1101
                 raise e
             parameter_filename = self._get_cgroup_file(parameter_name)
             raise CGroupsException("Exception while attempting to read {0}".format(parameter_filename), e)
@@ -98,8 +116,8 @@ class CGroup(object):
         try:
             tasks = self._get_parameters("tasks")
             if tasks:
-                return len(tasks) != 0
-        except (IOError, OSError) as e:
+                return len(tasks) != 0 # pylint: disable=len-as-condition
+        except (IOError, OSError) as e: # pylint: disable=C0103
             if e.errno == errno.ENOENT:
                 # only suppressing file not found exceptions.
                 pass
@@ -107,87 +125,119 @@ class CGroup(object):
                 logger.periodic_warn(logger.EVERY_HALF_HOUR,
                                      'Could not get list of tasks from "tasks" file in the cgroup: {0}.'
                                      ' Internal error: {1}'.format(self.path, ustr(e)))
-        except CGroupsException as e:
+        except CGroupsException as e: # pylint: disable=C0103
             logger.periodic_warn(logger.EVERY_HALF_HOUR,
                                  'Could not get list of tasks from "tasks" file in the cgroup: {0}.'
                                  ' Internal error: {1}'.format(self.path, ustr(e)))
-            return False
-
         return False
+
+    def get_tracked_processes(self):
+        """
+        :return: List of Str (Pids). Will return an empty string if we couldn't fetch any tracked processes.
+        """
+        procs = []
+        try:
+            procs = self._get_parameters("cgroup.procs")
+        except (IOError, OSError) as e: # pylint: disable=C0103
+            if e.errno == errno.ENOENT:
+                # only suppressing file not found exceptions.
+                pass
+            else:
+                logger.periodic_warn(logger.EVERY_HALF_HOUR,
+                                     'Could not get list of procs from "cgroup.procs" file in the cgroup: {0}.'
+                                     ' Internal error: {1}'.format(self.path, ustr(e)))
+        except CGroupsException as e: # pylint: disable=C0103
+            logger.periodic_warn(logger.EVERY_HALF_HOUR,
+                                 'Could not get list of tasks from "cgroup.procs" file in the cgroup: {0}.'
+                                 ' Internal error: {1}'.format(self.path, ustr(e)))
+        return procs
+
+    def get_tracked_metrics(self):
+        """
+        Retrieves the current value of the metrics tracked for this cgroup and returns them as an array
+        """
+        raise NotImplementedError()
 
 
 class CpuCgroup(CGroup):
     def __init__(self, name, cgroup_path):
-        """
-        Initialize _data collection for the Cpu controller. User must call update() before attempting to get
-        any useful metrics.
-
-        :return: CpuCgroup
-        """
-        super(CpuCgroup, self).__init__(name, cgroup_path, "cpu")
+        super(CpuCgroup, self).__init__(name, cgroup_path, CGroupContollers.CPU)
 
         self._osutil = get_osutil()
-        self._current_cpu_total = 0
-        self._previous_cpu_total = 0
-        self._current_system_cpu = self._osutil.get_total_cpu_ticks_since_boot()
-        self._previous_system_cpu = 0
+        self._previous_cgroup_cpu = None
+        self._previous_system_cpu = None
+        self._current_cgroup_cpu = None
+        self._current_system_cpu = None
 
     def __str__(self):
         return "cgroup: Name: {0}, cgroup_path: {1}; Controller: {2}".format(
             self.name, self.path, self.controller
         )
 
-    def _get_current_cpu_total(self):
+    def _get_cpu_ticks(self, allow_no_such_file_or_directory_error=False):
         """
-        Compute the number of USER_HZ of CPU time (user and system) consumed by this cgroup since boot.
+        Returns the number of USER_HZ of CPU time (user and system) consumed by this cgroup.
 
-        :return: int
+        If allow_no_such_file_or_directory_error is set to True and cpuacct.stat does not exist the function
+        returns 0; this is useful when the function can be called before the cgroup has been created.
         """
-        cpu_total = 0
         try:
             cpu_stat = self._get_file_contents('cpuacct.stat')
-        except Exception as e:
-            if isinstance(e, (IOError, OSError)) and e.errno == errno.ENOENT:
+        except Exception as e: # pylint: disable=C0103
+            if not isinstance(e, (IOError, OSError)) or e.errno != errno.ENOENT: # pylint: disable=E1101
+                raise CGroupsException("Failed to read cpuacct.stat: {0}".format(ustr(e)))
+            if not allow_no_such_file_or_directory_error:
                 raise e
-            raise CGroupsException("Exception while attempting to read {0}".format("cpuacct.stat"), e)
+            cpu_stat = None
 
-        if cpu_stat:
-            m = re_user_system_times.match(cpu_stat)
-            if m:
-                cpu_total = int(m.groups()[0]) + int(m.groups()[1])
-        return cpu_total
+        cpu_ticks = 0
 
-    def _update_cpu_data(self):
+        if cpu_stat is not None:
+            match = re_user_system_times.match(cpu_stat)
+            if not match:
+                raise CGroupsException("The contents of {0} are invalid: {1}".format(self._get_cgroup_file('cpuacct.stat'), cpu_stat))
+            cpu_ticks = int(match.groups()[0]) + int(match.groups()[1])
+
+        return cpu_ticks
+
+    def _cpu_usage_initialized(self):
+        return self._current_cgroup_cpu is not None and self._current_system_cpu is not None
+
+    def initialize_cpu_usage(self):
         """
-        Update all raw _data required to compute metrics of interest. The intent is to call update() once, then
-        call the various get_*() methods which use this _data, which we've collected exactly once.
+        Sets the initial values of CPU usage. This function must be invoked before calling get_cpu_usage().
         """
-        self._previous_cpu_total = self._current_cpu_total
-        self._previous_system_cpu = self._current_system_cpu
-        self._current_cpu_total = self._get_current_cpu_total()
+        if self._cpu_usage_initialized():
+            raise CGroupsException("initialize_cpu_usage() should be invoked only once")
+        self._current_cgroup_cpu = self._get_cpu_ticks(allow_no_such_file_or_directory_error=True)
         self._current_system_cpu = self._osutil.get_total_cpu_ticks_since_boot()
-
-    def _get_cpu_percent(self):
-        """
-        Compute the percent CPU time used by this cgroup over the elapsed time since the last time this instance was
-        update()ed.  If the cgroup fully consumed 2 cores on a 4 core system, return 200.
-
-        :return: CPU usage in percent of a single core
-        :rtype: float
-        """
-        cpu_delta = self._current_cpu_total - self._previous_cpu_total
-        system_delta = max(1, self._current_system_cpu - self._previous_system_cpu)
-
-        return round(float(cpu_delta * self._osutil.get_processor_cores() * 100) / float(system_delta), 3)
 
     def get_cpu_usage(self):
         """
-        Collects and return the cpu usage.
+        Computes the CPU used by the cgroup since the last call to this function.
 
-        :rtype: float
+        The usage is measured as a percentage of utilization of all cores in the system. For example,
+        using 1 core at 100% on a 4-core system would be reported as 25%.
+
+        NOTE: initialize_cpu_usage() must be invoked before calling get_cpu_usage()
         """
-        self._update_cpu_data()
-        return self._get_cpu_percent()
+        if not self._cpu_usage_initialized():
+            raise CGroupsException("initialize_cpu_usage() must be invoked before the first call to get_cpu_usage()")
+
+        self._previous_cgroup_cpu = self._current_cgroup_cpu
+        self._previous_system_cpu = self._current_system_cpu
+        self._current_cgroup_cpu = self._get_cpu_ticks()
+        self._current_system_cpu = self._osutil.get_total_cpu_ticks_since_boot()
+
+        cgroup_delta = self._current_cgroup_cpu - self._previous_cgroup_cpu
+        system_delta = max(1, self._current_system_cpu - self._previous_system_cpu)
+
+        return round(100.0 * float(cgroup_delta) / float(system_delta), 3)
+
+    def get_tracked_metrics(self):
+        return [
+            MetricValue(MetricsCategory.CPU_CATEGORY, MetricsCounter.PROCESSOR_PERCENT_TIME, self.name, self.get_cpu_usage()),
+        ]
 
 
 class MemoryCgroup(CGroup):
@@ -197,7 +247,7 @@ class MemoryCgroup(CGroup):
 
         :return: MemoryCgroup
         """
-        super(MemoryCgroup, self).__init__(name, cgroup_path, "memory")
+        super(MemoryCgroup, self).__init__(name, cgroup_path, CGroupContollers.MEMORY)
 
     def __str__(self):
         return "cgroup: Name: {0}, cgroup_path: {1}; Controller: {2}".format(
@@ -212,18 +262,13 @@ class MemoryCgroup(CGroup):
         :rtype: int
         """
         usage = None
-
         try:
             usage = self._get_parameters('memory.usage_in_bytes', first_line_only=True)
-        except (IOError, OSError) as e:
-            if e.errno == errno.ENOENT:
-                # only suppressing file not found exceptions.
-                pass
-            else:
-                raise e
+        except Exception as e: # pylint: disable=C0103
+            if isinstance(e, (IOError, OSError)) and e.errno == errno.ENOENT: # pylint: disable=E1101
+                raise
+            raise CGroupsException("Exception while attempting to read {0}".format("memory.usage_in_bytes"), e)
 
-        if not usage:
-            usage = "0"
         return int(usage)
 
     def get_max_memory_usage(self):
@@ -236,12 +281,15 @@ class MemoryCgroup(CGroup):
         usage = None
         try:
             usage = self._get_parameters('memory.max_usage_in_bytes', first_line_only=True)
-        except (IOError, OSError) as e:
-            if e.errno == errno.ENOENT:
-                # only suppressing file not found exceptions.
-                pass
-            else:
-                raise e
-        if not usage:
-            usage = "0"
+        except Exception as e: # pylint: disable=C0103
+            if isinstance(e, (IOError, OSError)) and e.errno == errno.ENOENT: # pylint: disable=E1101
+                raise
+            raise CGroupsException("Exception while attempting to read {0}".format("memory.usage_in_bytes"), e)
+
         return int(usage)
+
+    def get_tracked_metrics(self):
+        return [
+            MetricValue(MetricsCategory.MEMORY_CATEGORY, MetricsCounter.TOTAL_MEM_USAGE, self.name, self.get_memory_usage()),
+            MetricValue(MetricsCategory.MEMORY_CATEGORY, MetricsCounter.MAX_MEM_USAGE, self.name, self.get_max_memory_usage()),
+        ]

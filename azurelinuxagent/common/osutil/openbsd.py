@@ -36,7 +36,7 @@ UUID_PATTERN = re.compile(
     re.IGNORECASE)
 
 
-class OpenBSDOSUtil(DefaultOSUtil):
+class OpenBSDOSUtil(DefaultOSUtil): # pylint: disable=R0904
 
     def __init__(self):
         super(OpenBSDOSUtil, self).__init__()
@@ -51,7 +51,7 @@ class OpenBSDOSUtil(DefaultOSUtil):
 
     def set_hostname(self, hostname):
         fileutil.write_file("/etc/myname", "{}\n".format(hostname))
-        shellutil.run("hostname {0}".format(hostname), chk_err=False)
+        self._run_command_without_raising(["hostname", hostname], log_error=False)
 
     def restart_ssh_service(self):
         return shellutil.run('rcctl restart sshd', chk_err=False)
@@ -71,10 +71,9 @@ class OpenBSDOSUtil(DefaultOSUtil):
 
     def del_account(self, username):
         if self.is_sys_user(username):
-            logger.error("{0} is a system user. Will not delete it.",
-                         username)
-        shellutil.run("> /var/run/utmp")
-        shellutil.run("userdel -r " + username)
+            logger.error("{0} is a system user. Will not delete it.", username)
+        self._run_command_without_raising(["touch", "/var/run/utmp"])
+        self._run_command_without_raising(["userdel", "-r", username])
         self.conf_sudoer(username, remove=True)
 
     def conf_sudoer(self, username, nopasswd=False, remove=False):
@@ -107,17 +106,11 @@ class OpenBSDOSUtil(DefaultOSUtil):
         if self.is_sys_user(username):
             raise OSUtilError(("User {0} is a system user. "
                                "Will not set passwd.").format(username))
-        cmd = "echo -n {0}|encrypt".format(password)
-        ret, output = shellutil.run_get_output(cmd, log_cmd=False)
-        if ret != 0:
-            raise OSUtilError(("Failed to encrypt password for {0}: {1}"
-                               "").format(username, output))
+        output = self._run_command_raising_OSUtilError(['encrypt'], cmd_input=password,
+                                                       err_msg="Failed to encrypt password for {0}".format(username))
         passwd_hash = output.strip()
-        cmd = "usermod -p '{0}' {1}".format(passwd_hash, username)
-        ret, output = shellutil.run_get_output(cmd, log_cmd=False)
-        if ret != 0:
-            raise OSUtilError(("Failed to set password for {0}: {1}"
-                               "").format(username, output))
+        self._run_command_raising_OSUtilError(['usermod', '-p', passwd_hash, username],
+                                              err_msg="Failed to set password for {0}".format(username))
 
     def del_root_password(self):
         ret, output = shellutil.run_get_output('usermod -p "*" root')
@@ -153,21 +146,21 @@ class OpenBSDOSUtil(DefaultOSUtil):
     def stop_dhcp_service(self):
         pass
 
-    def get_dhcp_lease_endpoint(self):
+    def get_dhcp_lease_endpoint(self): # pylint: disable=R0912,R0914
         """
         OpenBSD has a sligthly different lease file format.
         """
         endpoint = None
         pathglob = '/var/db/dhclient.leases.{}'.format(self.get_first_if()[0])
 
-        HEADER_LEASE = "lease"
-        HEADER_OPTION = "option option-245"
-        HEADER_EXPIRE = "expire"
-        FOOTER_LEASE = "}"
-        FORMAT_DATETIME = "%Y/%m/%d %H:%M:%S %Z"
+        HEADER_LEASE = "lease" # pylint: disable=C0103
+        HEADER_OPTION = "option option-245" # pylint: disable=C0103
+        HEADER_EXPIRE = "expire" # pylint: disable=C0103
+        FOOTER_LEASE = "}" # pylint: disable=C0103
+        FORMAT_DATETIME = "%Y/%m/%d %H:%M:%S %Z" # pylint: disable=C0103
 
         logger.info("looking for leases in path [{0}]".format(pathglob))
-        for lease_file in glob.glob(pathglob):
+        for lease_file in glob.glob(pathglob): # pylint: disable=R1702
             leases = open(lease_file).read()
             if HEADER_OPTION in leases:
                 cached_endpoint = None
@@ -235,7 +228,7 @@ class OpenBSDOSUtil(DefaultOSUtil):
                 return "/dev/{0}".format(dvd.group(0))
         raise OSUtilError("Failed to get DVD device")
 
-    def mount_dvd(self,
+    def mount_dvd(self, # pylint: disable=R0913
                   max_retry=6,
                   chk_err=True,
                   dvd_device=None,
@@ -250,9 +243,9 @@ class OpenBSDOSUtil(DefaultOSUtil):
 
         for retry in range(0, max_retry):
             retcode = self.mount(dvd_device,
-                                mount_point,
-                                option="-o ro -t udf",
-                                chk_err=False)
+                                mount_point, 
+                                option="-o ro -t udf", 
+                                chk_err=False) 
             if retcode == 0:
                 logger.info("Successfully mounted DVD")
                 return
@@ -300,7 +293,7 @@ class OpenBSDOSUtil(DefaultOSUtil):
     def set_scsi_disks_timeout(self, timeout):
         pass
 
-    def check_pid_alive(self, pid):
+    def check_pid_alive(self, pid): # pylint: disable=R1710
         if not pid:
             return
         return shellutil.run('ps -p {0}'.format(pid), chk_err=False) == 0

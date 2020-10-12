@@ -9,6 +9,7 @@
 # when there are requests for changes in the provisioning agent. For any
 # questions, please feel free to reach out to thstring@microsoft.com.
 /azurelinuxagent/pa/ @trstringer @anhvoms
+/tests/pa/ @trstringer @anhvoms
 
 #
 # RDMA
@@ -19,4 +20,4 @@
 #
 # Linux Agent team
 #
-* @narrieta @vrdmr @pgombar @larohra
+* @narrieta @pgombar @larohra @kevinclark19a @ZhidongPeng

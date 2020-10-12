@@ -1,0 +1,10 @@
+{
+        "EventLevel": "INFO",
+        "Message": "Non-English message -  此文字不是英文的",
+        "Version": "1",
+        "TaskName": "Downloading files",
+        "EventPid": "3228",
+        "EventTid": "1",
+        "OpErAtiOnID": "519e4beb-018a-4bd9-8d8e-c5226cf7f56e",
+        "TimeStamp": "2019-12-12T01:21:05.1960563Z"
+}

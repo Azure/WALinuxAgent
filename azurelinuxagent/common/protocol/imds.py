@@ -9,7 +9,6 @@ from azurelinuxagent.common.exception import HttpError, ResourceGoneError
 from azurelinuxagent.common.future import ustr
 import azurelinuxagent.common.logger as logger
 from azurelinuxagent.common.datacontract import DataContract, set_properties
-from azurelinuxagent.common.protocol.util import get_protocol_util
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
 
 IMDS_ENDPOINT = '169.254.169.254'
@@ -28,8 +27,8 @@ IMDS_CONNECTION_ERROR = 2
 IMDS_INTERNAL_SERVER_ERROR = 3
 
 
-def get_imds_client():
-    return ImdsClient()
+def get_imds_client(wireserver_endpoint):
+    return ImdsClient(wireserver_endpoint)
 
 
 # A *slightly* future proof list of endorsed distros.
@@ -140,7 +139,7 @@ ENDORSED_IMAGE_INFO_MATCHER_JSON = """{
 }"""
 
 
-class ImageInfoMatcher(object):
+class ImageInfoMatcher(object): # pylint: disable=R0903
     def __init__(self, doc):
         self.doc = json.loads(doc)
 
@@ -170,10 +169,10 @@ class ImageInfoMatcher(object):
         return _is_match_walk(self.doc, [ publisher, offer, sku, version ])
 
 
-class ComputeInfo(DataContract):
+class ComputeInfo(DataContract): # pylint: disable=R0902
     __matcher = ImageInfoMatcher(ENDORSED_IMAGE_INFO_MATCHER_JSON)
 
-    def __init__(self,
+    def __init__(self, # pylint: disable=R0913,R0914
                  location=None,
                  name=None,
                  offer=None,
@@ -194,19 +193,19 @@ class ComputeInfo(DataContract):
         self.location = location
         self.name = name
         self.offer = offer
-        self.osType = osType
-        self.placementGroupId = placementGroupId
-        self.platformFaultDomain = platformFaultDomain
-        self.platformUpdateDomain = placementUpdateDomain
+        self.osType = osType # pylint: disable=C0103
+        self.placementGroupId = placementGroupId # pylint: disable=C0103
+        self.platformFaultDomain = platformFaultDomain # pylint: disable=C0103
+        self.platformUpdateDomain = placementUpdateDomain # pylint: disable=C0103
         self.publisher = publisher
-        self.resourceGroupName = resourceGroupName
+        self.resourceGroupName = resourceGroupName # pylint: disable=C0103
         self.sku = sku
-        self.subscriptionId = subscriptionId
+        self.subscriptionId = subscriptionId # pylint: disable=C0103
         self.tags = tags
         self.version = version
-        self.vmId = vmId
-        self.vmSize = vmSize
-        self.vmScaleSetName = vmScaleSetName
+        self.vmId = vmId # pylint: disable=C0103
+        self.vmSize = vmSize # pylint: disable=C0103
+        self.vmScaleSetName = vmScaleSetName # pylint: disable=C0103
         self.zone = zone
 
     @property
@@ -228,19 +227,19 @@ class ComputeInfo(DataContract):
             if self.publisher == "":
                 return IMDS_IMAGE_ORIGIN_CUSTOM
 
-            if ComputeInfo.__matcher.is_match(self.publisher, self.offer, self.sku, self.version):
+            if ComputeInfo.__matcher.is_match(self.publisher, self.offer, self.sku, self.version): # pylint: disable=R1705
                 return IMDS_IMAGE_ORIGIN_ENDORSED
             else:
                 return IMDS_IMAGE_ORIGIN_PLATFORM
 
-        except Exception as e:
+        except Exception as e: # pylint: disable=C0103
             logger.periodic_warn(logger.EVERY_FIFTEEN_MINUTES,
                                  "[PERIODIC] Could not determine the image origin from IMDS: {0}".format(ustr(e)))
             return IMDS_IMAGE_ORIGIN_UNKNOWN
 
 
 class ImdsClient(object):
-    def __init__(self, version=APIVERSION):
+    def __init__(self, wireserver_endpoint, version=APIVERSION):
         self._api_version = version
         self._headers = {
             'User-Agent': restutil.HTTP_USER_AGENT,
@@ -252,7 +251,7 @@ class ImdsClient(object):
         }
         self._regex_ioerror = re.compile(r".*HTTP Failed. GET http://[^ ]+ -- IOError .*")
         self._regex_throttled = re.compile(r".*HTTP Retry. GET http://[^ ]+ -- Status Code 429 .*")
-        self._protocol_util = get_protocol_util()
+        self._wireserver_endpoint = wireserver_endpoint
 
     def _get_metadata_url(self, endpoint, resource_path):
         return BASE_METADATA_URI.format(endpoint, resource_path, self._api_version)
@@ -261,7 +260,7 @@ class ImdsClient(object):
         url = self._get_metadata_url(endpoint, resource_path)
         return restutil.http_get(url, headers=headers, use_proxy=False)
 
-    def _get_metadata_from_endpoint(self, endpoint, resource_path, headers):
+    def _get_metadata_from_endpoint(self, endpoint, resource_path, headers): # pylint: disable=R0911
         """
         Get metadata from one of the IMDS endpoints.
 
@@ -277,7 +276,7 @@ class ImdsClient(object):
             resp = self._http_get(endpoint=endpoint, resource_path=resource_path, headers=headers)
         except ResourceGoneError:
             return IMDS_INTERNAL_SERVER_ERROR, "IMDS error in /metadata/{0}: HTTP Failed with Status Code 410: Gone".format(resource_path)
-        except HttpError as e:
+        except HttpError as e: # pylint: disable=C0103
             msg = str(e)
             if self._regex_throttled.match(msg):
                 return IMDS_RESPONSE_ERROR, "IMDS error in /metadata/{0}: Throttled".format(resource_path)
@@ -289,11 +288,11 @@ class ImdsClient(object):
 
         if resp.status >= 500:
             return IMDS_INTERNAL_SERVER_ERROR, "IMDS error in /metadata/{0}: {1}".format(
-                                               resource_path, restutil.read_response_error(resp))
+                                               resource_path, restutil.read_response_error(resp)) 
 
         if restutil.request_failed(resp):
             return IMDS_RESPONSE_ERROR, "IMDS error in /metadata/{0}: {1}".format(
-                                        resource_path, restutil.read_response_error(resp))
+                                        resource_path, restutil.read_response_error(resp)) 
 
         return IMDS_RESPONSE_SUCCESS, resp.read()
 
@@ -311,10 +310,10 @@ class ImdsClient(object):
 
         status, resp = self._get_metadata_from_endpoint(endpoint, resource_path, headers)
         if status == IMDS_CONNECTION_ERROR:
-            endpoint = self._protocol_util.get_wireserver_endpoint()
+            endpoint = self._wireserver_endpoint
             status, resp = self._get_metadata_from_endpoint(endpoint, resource_path, headers)
 
-        if status == IMDS_RESPONSE_SUCCESS:
+        if status == IMDS_RESPONSE_SUCCESS: # pylint: disable=R1705
             return MetadataResult(True, False, resp)
         elif status == IMDS_INTERNAL_SERVER_ERROR:
             return MetadataResult(False, True, resp)
@@ -360,12 +359,12 @@ class ImdsClient(object):
         # ensure the response is valid json
         try:
             json_data = json.loads(ustr(result.response, encoding="utf-8"))
-        except Exception as e:
+        except Exception as e: # pylint: disable=C0103
             return False, "JSON parsing failed: {0}".format(ustr(e))
 
         # ensure all expected fields are present and have a value
         try:
-            # TODO: compute fields cannot be verified yet since we need to exclude rdfe vms (#1249)
+            # TODO: compute fields cannot be verified yet since we need to exclude rdfe vms (#1249) # pylint: disable=W0511
 
             self.check_field(json_data, 'network')
             self.check_field(json_data['network'], 'interface')
@@ -373,7 +372,7 @@ class ImdsClient(object):
             self.check_field(json_data['network']['interface'][0], 'ipv4')
             self.check_field(json_data['network']['interface'][0]['ipv4'], 'ipAddress')
             self.check_field(json_data['network']['interface'][0]['ipv4']['ipAddress'][0], 'privateIpAddress')
-        except ValueError as v:
+        except ValueError as v: # pylint: disable=C0103
             return False, ustr(v)
 
         return True, ''
@@ -383,5 +382,5 @@ class ImdsClient(object):
         if field not in dict_obj or dict_obj[field] is None:
             raise ValueError('Missing field: [{0}]'.format(field))
 
-        if len(dict_obj[field]) == 0:
+        if len(dict_obj[field]) == 0: # pylint: disable=len-as-condition
             raise ValueError('Empty field: [{0}]'.format(field))

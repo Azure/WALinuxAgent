@@ -3,39 +3,39 @@
     <GAFamily>
       <Name>Win8</Name>
       <Uris>
-        <Uri>http://rdfepirv2hknprdstr03.blob.core.windows.net/bfd5c281a7dc4e4b84381eb0b47e3aaf/Microsoft.WindowsAzure.GuestAgent_Win8_asiaeast_manifest.xml</Uri>
-        <Uri>http://rdfepirv2hknprdstr04.blob.core.windows.net/bfd5c281a7dc4e4b84381eb0b47e3aaf/Microsoft.WindowsAzure.GuestAgent_Win8_asiaeast_manifest.xml</Uri>
-        <Uri>http://rdfepirv2hknprdstr05.blob.core.windows.net/bfd5c281a7dc4e4b84381eb0b47e3aaf/Microsoft.WindowsAzure.GuestAgent_Win8_asiaeast_manifest.xml</Uri>
-        <Uri>http://rdfepirv2hknprdstr06.blob.core.windows.net/bfd5c281a7dc4e4b84381eb0b47e3aaf/Microsoft.WindowsAzure.GuestAgent_Win8_asiaeast_manifest.xml</Uri>
-        <Uri>http://rdfepirv2hknprdstr07.blob.core.windows.net/bfd5c281a7dc4e4b84381eb0b47e3aaf/Microsoft.WindowsAzure.GuestAgent_Win8_asiaeast_manifest.xml</Uri>
-        <Uri>http://rdfepirv2hknprdstr08.blob.core.windows.net/bfd5c281a7dc4e4b84381eb0b47e3aaf/Microsoft.WindowsAzure.GuestAgent_Win8_asiaeast_manifest.xml</Uri>
-        <Uri>http://rdfepirv2hknprdstr09.blob.core.windows.net/bfd5c281a7dc4e4b84381eb0b47e3aaf/Microsoft.WindowsAzure.GuestAgent_Win8_asiaeast_manifest.xml</Uri>
-        <Uri>http://rdfepirv2hknprdstr10.blob.core.windows.net/bfd5c281a7dc4e4b84381eb0b47e3aaf/Microsoft.WindowsAzure.GuestAgent_Win8_asiaeast_manifest.xml</Uri>
-        <Uri>http://rdfepirv2hknprdstr11.blob.core.windows.net/bfd5c281a7dc4e4b84381eb0b47e3aaf/Microsoft.WindowsAzure.GuestAgent_Win8_asiaeast_manifest.xml</Uri>
-        <Uri>http://rdfepirv2hknprdstr12.blob.core.windows.net/bfd5c281a7dc4e4b84381eb0b47e3aaf/Microsoft.WindowsAzure.GuestAgent_Win8_asiaeast_manifest.xml</Uri>
-        <Uri>http://zrdfepirv2hk2prdstr01.blob.core.windows.net/bfd5c281a7dc4e4b84381eb0b47e3aaf/Microsoft.WindowsAzure.GuestAgent_Win8_asiaeast_manifest.xml</Uri>
+        <Uri>http://mock-goal-state/rdfepirv2hknprdstr03.blob.core.windows.net/bfd5c281a7dc4e4b84381eb0b47e3aaf/Microsoft.WindowsAzure.GuestAgent_Win8_asiaeast_manifest.xml</Uri>
+        <Uri>http://mock-goal-state/rdfepirv2hknprdstr04.blob.core.windows.net/bfd5c281a7dc4e4b84381eb0b47e3aaf/Microsoft.WindowsAzure.GuestAgent_Win8_asiaeast_manifest.xml</Uri>
+        <Uri>http://mock-goal-state/rdfepirv2hknprdstr05.blob.core.windows.net/bfd5c281a7dc4e4b84381eb0b47e3aaf/Microsoft.WindowsAzure.GuestAgent_Win8_asiaeast_manifest.xml</Uri>
+        <Uri>http://mock-goal-state/rdfepirv2hknprdstr06.blob.core.windows.net/bfd5c281a7dc4e4b84381eb0b47e3aaf/Microsoft.WindowsAzure.GuestAgent_Win8_asiaeast_manifest.xml</Uri>
+        <Uri>http://mock-goal-state/rdfepirv2hknprdstr07.blob.core.windows.net/bfd5c281a7dc4e4b84381eb0b47e3aaf/Microsoft.WindowsAzure.GuestAgent_Win8_asiaeast_manifest.xml</Uri>
+        <Uri>http://mock-goal-state/rdfepirv2hknprdstr08.blob.core.windows.net/bfd5c281a7dc4e4b84381eb0b47e3aaf/Microsoft.WindowsAzure.GuestAgent_Win8_asiaeast_manifest.xml</Uri>
+        <Uri>http://mock-goal-state/rdfepirv2hknprdstr09.blob.core.windows.net/bfd5c281a7dc4e4b84381eb0b47e3aaf/Microsoft.WindowsAzure.GuestAgent_Win8_asiaeast_manifest.xml</Uri>
+        <Uri>http://mock-goal-state/rdfepirv2hknprdstr10.blob.core.windows.net/bfd5c281a7dc4e4b84381eb0b47e3aaf/Microsoft.WindowsAzure.GuestAgent_Win8_asiaeast_manifest.xml</Uri>
+        <Uri>http://mock-goal-state/rdfepirv2hknprdstr11.blob.core.windows.net/bfd5c281a7dc4e4b84381eb0b47e3aaf/Microsoft.WindowsAzure.GuestAgent_Win8_asiaeast_manifest.xml</Uri>
+        <Uri>http://mock-goal-state/rdfepirv2hknprdstr12.blob.core.windows.net/bfd5c281a7dc4e4b84381eb0b47e3aaf/Microsoft.WindowsAzure.GuestAgent_Win8_asiaeast_manifest.xml</Uri>
+        <Uri>http://mock-goal-state/zrdfepirv2hk2prdstr01.blob.core.windows.net/bfd5c281a7dc4e4b84381eb0b47e3aaf/Microsoft.WindowsAzure.GuestAgent_Win8_asiaeast_manifest.xml</Uri>
       </Uris>
     </GAFamily>
     <GAFamily>
       <Name>Win7</Name>
       <Uris>
-        <Uri>http://rdfepirv2hknprdstr03.blob.core.windows.net/bfd5c281a7dc4e4b84381eb0b47e3aaf/Microsoft.WindowsAzure.GuestAgent_Win7_asiaeast_manifest.xml</Uri>
-        <Uri>http://rdfepirv2hknprdstr04.blob.core.windows.net/bfd5c281a7dc4e4b84381eb0b47e3aaf/Microsoft.WindowsAzure.GuestAgent_Win7_asiaeast_manifest.xml</Uri>
-        <Uri>http://rdfepirv2hknprdstr05.blob.core.windows.net/bfd5c281a7dc4e4b84381eb0b47e3aaf/Microsoft.WindowsAzure.GuestAgent_Win7_asiaeast_manifest.xml</Uri>
-        <Uri>http://rdfepirv2hknprdstr06.blob.core.windows.net/bfd5c281a7dc4e4b84381eb0b47e3aaf/Microsoft.WindowsAzure.GuestAgent_Win7_asiaeast_manifest.xml</Uri>
-        <Uri>http://rdfepirv2hknprdstr07.blob.core.windows.net/bfd5c281a7dc4e4b84381eb0b47e3aaf/Microsoft.WindowsAzure.GuestAgent_Win7_asiaeast_manifest.xml</Uri>
-        <Uri>http://rdfepirv2hknprdstr08.blob.core.windows.net/bfd5c281a7dc4e4b84381eb0b47e3aaf/Microsoft.WindowsAzure.GuestAgent_Win7_asiaeast_manifest.xml</Uri>
-        <Uri>http://rdfepirv2hknprdstr09.blob.core.windows.net/bfd5c281a7dc4e4b84381eb0b47e3aaf/Microsoft.WindowsAzure.GuestAgent_Win7_asiaeast_manifest.xml</Uri>
-        <Uri>http://rdfepirv2hknprdstr10.blob.core.windows.net/bfd5c281a7dc4e4b84381eb0b47e3aaf/Microsoft.WindowsAzure.GuestAgent_Win7_asiaeast_manifest.xml</Uri>
-        <Uri>http://rdfepirv2hknprdstr11.blob.core.windows.net/bfd5c281a7dc4e4b84381eb0b47e3aaf/Microsoft.WindowsAzure.GuestAgent_Win7_asiaeast_manifest.xml</Uri>
-        <Uri>http://rdfepirv2hknprdstr12.blob.core.windows.net/bfd5c281a7dc4e4b84381eb0b47e3aaf/Microsoft.WindowsAzure.GuestAgent_Win7_asiaeast_manifest.xml</Uri>
-        <Uri>http://zrdfepirv2hk2prdstr01.blob.core.windows.net/bfd5c281a7dc4e4b84381eb0b47e3aaf/Microsoft.WindowsAzure.GuestAgent_Win7_asiaeast_manifest.xml</Uri>
+        <Uri>http://mock-goal-state/rdfepirv2hknprdstr03.blob.core.windows.net/bfd5c281a7dc4e4b84381eb0b47e3aaf/Microsoft.WindowsAzure.GuestAgent_Win7_asiaeast_manifest.xml</Uri>
+        <Uri>http://mock-goal-state/rdfepirv2hknprdstr04.blob.core.windows.net/bfd5c281a7dc4e4b84381eb0b47e3aaf/Microsoft.WindowsAzure.GuestAgent_Win7_asiaeast_manifest.xml</Uri>
+        <Uri>http://mock-goal-state/rdfepirv2hknprdstr05.blob.core.windows.net/bfd5c281a7dc4e4b84381eb0b47e3aaf/Microsoft.WindowsAzure.GuestAgent_Win7_asiaeast_manifest.xml</Uri>
+        <Uri>http://mock-goal-state/rdfepirv2hknprdstr06.blob.core.windows.net/bfd5c281a7dc4e4b84381eb0b47e3aaf/Microsoft.WindowsAzure.GuestAgent_Win7_asiaeast_manifest.xml</Uri>
+        <Uri>http://mock-goal-state/rdfepirv2hknprdstr07.blob.core.windows.net/bfd5c281a7dc4e4b84381eb0b47e3aaf/Microsoft.WindowsAzure.GuestAgent_Win7_asiaeast_manifest.xml</Uri>
+        <Uri>http://mock-goal-state/rdfepirv2hknprdstr08.blob.core.windows.net/bfd5c281a7dc4e4b84381eb0b47e3aaf/Microsoft.WindowsAzure.GuestAgent_Win7_asiaeast_manifest.xml</Uri>
+        <Uri>http://mock-goal-state/rdfepirv2hknprdstr09.blob.core.windows.net/bfd5c281a7dc4e4b84381eb0b47e3aaf/Microsoft.WindowsAzure.GuestAgent_Win7_asiaeast_manifest.xml</Uri>
+        <Uri>http://mock-goal-state/rdfepirv2hknprdstr10.blob.core.windows.net/bfd5c281a7dc4e4b84381eb0b47e3aaf/Microsoft.WindowsAzure.GuestAgent_Win7_asiaeast_manifest.xml</Uri>
+        <Uri>http://mock-goal-state/rdfepirv2hknprdstr11.blob.core.windows.net/bfd5c281a7dc4e4b84381eb0b47e3aaf/Microsoft.WindowsAzure.GuestAgent_Win7_asiaeast_manifest.xml</Uri>
+        <Uri>http://mock-goal-state/rdfepirv2hknprdstr12.blob.core.windows.net/bfd5c281a7dc4e4b84381eb0b47e3aaf/Microsoft.WindowsAzure.GuestAgent_Win7_asiaeast_manifest.xml</Uri>
+        <Uri>http://mock-goal-state/zrdfepirv2hk2prdstr01.blob.core.windows.net/bfd5c281a7dc4e4b84381eb0b47e3aaf/Microsoft.WindowsAzure.GuestAgent_Win7_asiaeast_manifest.xml</Uri>
       </Uris>
     </GAFamily>
   </GAFamilies>
 </GuestAgentExtension>
 <Plugins>
-  <Plugin name="OSTCExtensions.ExampleHandlerLinux" version="1.0" location="http://rdfepirv2hknprdstr03.blob.core.windows.net/b01058962be54ceca550a390fa5ff064/Microsoft.OSTCExtensions_ExampleHandlerLinux_asiaeast_manifest.xml" config="" state="enabled" autoUpgrade="false" failoverlocation="http://rdfepirv2hknprdstr04.blob.core.windows.net/b01058962be54ceca550a390fa5ff064/Microsoft.OSTCExtensions_ExampleHandlerLinux_asiaeast_manifest.xml" runAsStartupTask="false" isJson="true" />
+  <Plugin name="OSTCExtensions.ExampleHandlerLinux" version="1.0" location="http://mock-goal-state/rdfepirv2hknprdstr03.blob.core.windows.net/b01058962be54ceca550a390fa5ff064/Microsoft.OSTCExtensions_ExampleHandlerLinux_asiaeast_manifest.xml" config="" state="enabled" autoUpgrade="false" failoverlocation="http://mock-goal-state/rdfepirv2hknprdstr04.blob.core.windows.net/b01058962be54ceca550a390fa5ff064/Microsoft.OSTCExtensions_ExampleHandlerLinux_asiaeast_manifest.xml" runAsStartupTask="false" isJson="true" />
 </Plugins>
 <StatusUploadBlob>https://test.blob.core.windows.net/vhds/test-cs12.test-cs12.test-cs12.status?sr=b&amp;sp=rw&amp;se=9999-01-01&amp;sk=key1&amp;sv=2014-02-14&amp;sig=hfRh7gzUE7sUtYwke78IOlZOrTRCYvkec4hGZ9zZzXo</StatusUploadBlob></Extensions>
 

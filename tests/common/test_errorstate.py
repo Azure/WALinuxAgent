@@ -1,6 +1,7 @@
 import unittest
+from datetime import timedelta, datetime
 
-from azurelinuxagent.common.errorstate import *
+from azurelinuxagent.common.errorstate import ErrorState
 from tests.tools import Mock, patch
 
 
@@ -45,7 +46,7 @@ class TestErrorState(unittest.TestCase):
         """
         test_subject = ErrorState(timedelta(minutes=15))
 
-        for x in range(1, 10):
+        for x in range(1, 10): # pylint: disable=invalid-name
             mock_time.utcnow = Mock(return_value=datetime.utcnow() + timedelta(minutes=x))
 
             test_subject.incr()

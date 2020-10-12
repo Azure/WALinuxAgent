@@ -24,21 +24,23 @@ Module agent
 from __future__ import print_function
 
 import os
-import sys
 import re
 import subprocess
+import sys
 import threading
 import traceback
 
-import azurelinuxagent.common.logger as logger
-import azurelinuxagent.common.event as event
 import azurelinuxagent.common.conf as conf
-from azurelinuxagent.common.version import AGENT_NAME, AGENT_LONG_VERSION, \
-                                     DISTRO_NAME, DISTRO_VERSION, \
-                                     PY_VERSION_MAJOR, PY_VERSION_MINOR, \
-                                     PY_VERSION_MICRO, GOAL_STATE_AGENT_VERSION
+import azurelinuxagent.common.event as event
+import azurelinuxagent.common.logger as logger
+from azurelinuxagent.common.future import ustr
+from azurelinuxagent.common.logcollector import LogCollector, OUTPUT_RESULTS_FILE_PATH
 from azurelinuxagent.common.osutil import get_osutil
 from azurelinuxagent.common.utils import fileutil
+from azurelinuxagent.common.version import AGENT_NAME, AGENT_LONG_VERSION, \
+    DISTRO_NAME, DISTRO_VERSION, \
+    PY_VERSION_MAJOR, PY_VERSION_MINOR, \
+    PY_VERSION_MICRO, GOAL_STATE_AGENT_VERSION
 
 
 class Agent(object):
@@ -49,28 +51,26 @@ class Agent(object):
         self.conf_file_path = conf_file_path
         self.osutil = get_osutil()
 
-        #Init stdout log
+        # Init stdout log
         level = logger.LogLevel.VERBOSE if verbose else logger.LogLevel.INFO
         logger.add_logger_appender(logger.AppenderType.STDOUT, level)
 
-        #Init config
+        # Init config
         conf_file_path = self.conf_file_path \
                 if self.conf_file_path is not None \
                     else self.osutil.get_agent_conf_file_path()
         conf.load_conf_from_file(conf_file_path)
 
-        #Init log
+        # Init log
         verbose = verbose or conf.get_logs_verbose()
         level = logger.LogLevel.VERBOSE if verbose else logger.LogLevel.INFO
         logger.add_logger_appender(logger.AppenderType.FILE, level,
-                                 path="/var/log/waagent.log")
-        if conf.get_logs_console():
-            logger.add_logger_appender(logger.AppenderType.CONSOLE, level,
-                    path="/dev/console")
-        # See issue #1035
-        # logger.add_logger_appender(logger.AppenderType.TELEMETRY,
-        #                            logger.LogLevel.WARNING,
-        #                            path=event.add_log_event)
+                                   path=conf.get_agent_log_file())
+
+        if event.send_logs_to_telemetry():
+            logger.add_logger_appender(logger.AppenderType.TELEMETRY,
+                                       logger.LogLevel.WARNING,
+                                       path=event.add_log_event)
 
         ext_log_dir = conf.get_ext_log_dir()
         try:
@@ -78,14 +78,19 @@ class Agent(object):
                 raise Exception("{0} is a file".format(ext_log_dir))
             if not os.path.isdir(ext_log_dir):
                 fileutil.mkdir(ext_log_dir, mode=0o755, owner="root")
-        except Exception as e:
+        except Exception as e: # pylint: disable=C0103
             logger.error(
                 "Exception occurred while creating extension "
                 "log directory {0}: {1}".format(ext_log_dir, e))
 
-        #Init event reporter
+        # Init event reporter
+        # Note that the reporter is not fully initialized here yet. Some telemetry fields are filled with data
+        # originating from the goal state or IMDS, which requires a WireProtocol instance. Once a protocol
+        # has been established, those fields must be explicitly initialized using
+        # initialize_event_logger_vminfo_common_parameters(). Any events created before that initialization
+        # will contain dummy values on those fields.
         event.init_event_status(conf.get_lib_dir())
-        event_dir = os.path.join(conf.get_lib_dir(), "events")
+        event_dir = os.path.join(conf.get_lib_dir(), event.EVENTS_DIRECTORY)
         event.init_event_logger(event_dir)
         event.enable_unhandled_err_dump("WALA")
 
@@ -98,7 +103,6 @@ class Agent(object):
         child_args = None \
             if self.conf_file_path is None \
                 else "-configuration-path:{0}".format(self.conf_file_path)
-
         from azurelinuxagent.daemon import get_daemon_handler
         daemon_handler = get_daemon_handler()
         daemon_handler.run(child_args=child_args)
@@ -145,15 +149,31 @@ class Agent(object):
         for k in sorted(configuration.keys()):
             print("{0} = {1}".format(k, configuration[k]))
 
+    def collect_logs(self, is_full_mode):
+        if is_full_mode:
+            print("Running log collector mode full")
+        else:
+            print("Running log collector mode normal")
 
-def main(args=[]):
+        try:
+            log_collector = LogCollector(is_full_mode)
+            archive = log_collector.collect_logs_and_get_archive()
+            print("Log collection successfully completed. Archive can be found at {0} "
+                  "and detailed log output can be found at {1}".format(archive, OUTPUT_RESULTS_FILE_PATH))
+        except Exception as e: # pylint: disable=C0103
+            print("Log collection completed unsuccessfully. Error: {0}".format(ustr(e)))
+            print("Detailed log output can be found at {0}".format(OUTPUT_RESULTS_FILE_PATH))
+            sys.exit(1)
+
+
+def main(args=[]): # pylint: disable=R0912,W0102
     """
     Parse command line arguments, exit with usage() on error.
     Invoke different methods according to different command
     """
-    if len(args) <= 0:
+    if len(args) <= 0: # pylint: disable=len-as-condition
         args = sys.argv[1:]
-    command, force, verbose, debug, conf_file_path = parse_args(args)
+    command, force, verbose, debug, conf_file_path, log_collector_full_mode = parse_args(args)
     if command == "version":
         version()
     elif command == "help":
@@ -177,12 +197,15 @@ def main(args=[]):
                 agent.run_exthandlers(debug)
             elif command == "show-configuration":
                 agent.show_configuration()
+            elif command == "collect-logs":
+                agent.collect_logs(log_collector_full_mode)
         except Exception:
             logger.error(u"Failed to run '{0}': {1}",
                          command,
                          traceback.format_exc())
 
-def parse_args(sys_args):
+
+def parse_args(sys_args): # pylint: disable=R0912
     """
     Parse command line arguments
     """
@@ -191,45 +214,50 @@ def parse_args(sys_args):
     verbose = False
     debug = False
     conf_file_path = None
-    for a in sys_args:
-        m = re.match("^(?:[-/]*)configuration-path:([\w/\.\-_]+)", a)
+    log_collector_full_mode = False
+
+    for arg in sys_args:
+        m = re.match("^(?:[-/]*)configuration-path:([\w/\.\-_]+)", arg) # pylint: disable=W1401,C0103
         if not m is None:
             conf_file_path = m.group(1)
             if not os.path.exists(conf_file_path):
                 print("Error: Configuration file {0} does not exist".format(
-                        conf_file_path), file=sys.stderr)
-                usage()
+                        conf_file_path), file=sys.stderr) 
+                print(usage())
                 sys.exit(1)
-        
-        elif re.match("^([-/]*)deprovision\\+user", a):
+        elif re.match("^([-/]*)deprovision\\+user", arg):
             cmd = "deprovision+user"
-        elif re.match("^([-/]*)deprovision", a):
+        elif re.match("^([-/]*)deprovision", arg):
             cmd = "deprovision"
-        elif re.match("^([-/]*)daemon", a):
+        elif re.match("^([-/]*)daemon", arg):
             cmd = "daemon"
-        elif re.match("^([-/]*)start", a):
+        elif re.match("^([-/]*)start", arg):
             cmd = "start"
-        elif re.match("^([-/]*)register-service", a):
+        elif re.match("^([-/]*)register-service", arg):
             cmd = "register-service"
-        elif re.match("^([-/]*)run-exthandlers", a):
+        elif re.match("^([-/]*)run-exthandlers", arg):
             cmd = "run-exthandlers"
-        elif re.match("^([-/]*)version", a):
+        elif re.match("^([-/]*)version", arg):
             cmd = "version"
-        elif re.match("^([-/]*)verbose", a):
+        elif re.match("^([-/]*)verbose", arg):
             verbose = True
-        elif re.match("^([-/]*)debug", a):
+        elif re.match("^([-/]*)debug", arg):
             debug = True
-        elif re.match("^([-/]*)force", a):
+        elif re.match("^([-/]*)force", arg):
             force = True
-        elif re.match("^([-/]*)show-configuration", a):
+        elif re.match("^([-/]*)show-configuration", arg):
             cmd = "show-configuration"
-        elif re.match("^([-/]*)(help|usage|\\?)", a):
+        elif re.match("^([-/]*)(help|usage|\\?)", arg):
             cmd = "help"
+        elif re.match("^([-/]*)collect-logs", arg):
+            cmd = "collect-logs"
+        elif re.match("^([-/]*)full", arg):
+            log_collector_full_mode = True
         else:
             cmd = "help"
             break
 
-    return cmd, force, verbose, debug, conf_file_path
+    return cmd, force, verbose, debug, conf_file_path, log_collector_full_mode
 
 
 def version():
@@ -244,18 +272,20 @@ def version():
                                        PY_VERSION_MICRO))
     print("Goal state agent: {0}".format(GOAL_STATE_AGENT_VERSION))
 
+
 def usage():
     """
     Return agent usage message
     """
-    s  = "\n"
-    s += ("usage: {0} [-verbose] [-force] [-help] "
-           "-configuration-path:<path to configuration file>"
+    s  = "\n" # pylint: disable=C0103
+    s += ("usage: {0} [-verbose] [-force] [-help] " # pylint: disable=C0103
+           "-configuration-path:<path to configuration file>" 
            "-deprovision[+user]|-register-service|-version|-daemon|-start|"
-           "-run-exthandlers|-show-configuration]"
+           "-run-exthandlers|-show-configuration|-collect-logs [-full]"
            "").format(sys.argv[0])
-    s += "\n"
+    s += "\n" # pylint: disable=C0103
     return s
+
 
 def start(conf_file_path=None):
     """
@@ -267,6 +297,7 @@ def start(conf_file_path=None):
     if conf_file_path is not None:
         args.append('-configuration-path:{0}'.format(conf_file_path))
     subprocess.Popen(args, stdout=devnull, stderr=devnull)
+
 
 if __name__ == '__main__' :
     main()

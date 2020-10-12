@@ -26,12 +26,11 @@ import azurelinuxagent.common.conf as conf
 import azurelinuxagent.common.logger as logger
 import azurelinuxagent.common.utils.fileutil as fileutil
 
-from azurelinuxagent.common.cgroupconfigurator import CGroupConfigurator
-from azurelinuxagent.common.event import add_event, WALAEventOperation
+from azurelinuxagent.common.event import add_event, WALAEventOperation, initialize_event_logger_vminfo_common_parameters
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.osutil import get_osutil
-from azurelinuxagent.common.protocol import get_protocol_util
-from azurelinuxagent.common.protocol.wire import WireClient
+from azurelinuxagent.common.protocol.util import get_protocol_util
+from azurelinuxagent.common.protocol.wire import WireProtocol
 from azurelinuxagent.common.rdma import setup_rdma_device
 from azurelinuxagent.common.version import AGENT_NAME, AGENT_LONG_NAME, \
     AGENT_VERSION, \
@@ -50,7 +49,7 @@ def get_daemon_handler():
     return DaemonHandler()
 
 
-class DaemonHandler(object):
+class DaemonHandler(object): # pylint: disable=R0902
     """
     Main thread of daemon. It will invoke other threads to do actual work
     """
@@ -60,15 +59,18 @@ class DaemonHandler(object):
         self.osutil = get_osutil()
 
     def run(self, child_args=None):
+        #
+        # The Container ID in telemetry events is retrieved from the goal state. We can fetch the goal state
+        # only after protocol detection, which is done during provisioning.
+        #
+        # Be aware that telemetry events emitted before that will not include the Container ID.
+        #
         logger.info("{0} Version:{1}", AGENT_LONG_NAME, AGENT_VERSION)
         logger.info("OS: {0} {1}", DISTRO_NAME, DISTRO_VERSION)
-        logger.info("Python: {0}.{1}.{2}", PY_VERSION_MAJOR, PY_VERSION_MINOR,
-                    PY_VERSION_MICRO)
+        logger.info("Python: {0}.{1}.{2}", PY_VERSION_MAJOR, PY_VERSION_MINOR, PY_VERSION_MICRO)
 
         self.check_pid()
         self.initialize_environment()
-
-        CGroupConfigurator.get_instance().create_agent_cgroups(track_cgroups=False)
 
         # If FIPS is enabled, set the OpenSSL environment variable
         # Note:
@@ -79,7 +81,7 @@ class DaemonHandler(object):
         while self.running:
             try:
                 self.daemon(child_args)
-            except Exception as e:
+            except Exception as e: # pylint: disable=W0612,C0103
                 err_msg = traceback.format_exc()
                 add_event(name=AGENT_NAME, is_success=False, message=ustr(err_msg),
                           op=WALAEventOperation.UnhandledError)
@@ -116,15 +118,19 @@ class DaemonHandler(object):
             fileutil.mkdir(conf.get_lib_dir(), mode=0o700)
             os.chdir(conf.get_lib_dir())
 
+    def _initialize_telemetry(self):
+        protocol = self.protocol_util.get_protocol()
+        initialize_event_logger_vminfo_common_parameters(protocol)
+
     def daemon(self, child_args=None):
         logger.info("Run daemon")
 
-        self.protocol_util = get_protocol_util()
-        self.scvmm_handler = get_scvmm_handler()
-        self.resourcedisk_handler = get_resourcedisk_handler()
-        self.rdma_handler = get_rdma_handler()
-        self.provision_handler = get_provision_handler()
-        self.update_handler = get_update_handler()
+        self.protocol_util = get_protocol_util() # pylint: disable=W0201
+        self.scvmm_handler = get_scvmm_handler() # pylint: disable=W0201
+        self.resourcedisk_handler = get_resourcedisk_handler() # pylint: disable=W0201
+        self.rdma_handler = get_rdma_handler() # pylint: disable=W0201
+        self.provision_handler = get_provision_handler() # pylint: disable=W0201
+        self.update_handler = get_update_handler() # pylint: disable=W0201
 
         if conf.get_detect_scvmm_env():
             self.scvmm_handler.run()
@@ -138,6 +144,10 @@ class DaemonHandler(object):
 
         self.provision_handler.run()
 
+        # Once we have the protocol, complete initialization of the telemetry fields
+        # that require the goal state and IMDS
+        self._initialize_telemetry()
+
         # Enable RDMA, continue in errors
         if conf.enable_rdma():
             nd_version = self.rdma_handler.get_rdma_version()
@@ -150,13 +160,13 @@ class DaemonHandler(object):
                 #   incarnation number. A forced update ensures the most
                 #   current values.
                 protocol = self.protocol_util.get_protocol()
-                client = protocol.client
-                if client is None or type(client) is not WireClient:
+                if type(protocol) is not WireProtocol: # pylint: disable=C0123
                     raise Exception("Attempt to setup RDMA without Wireserver")
-                client.update_goal_state(forced=True)
 
-                setup_rdma_device(nd_version)
-            except Exception as e:
+                protocol.client.update_goal_state(forced=True)
+
+                setup_rdma_device(nd_version, protocol.client.get_shared_conf())
+            except Exception as e: # pylint: disable=C0103
                 logger.error("Error setting up rdma device: %s" % e)
         else:
             logger.info("RDMA capabilities are not enabled, skipping")

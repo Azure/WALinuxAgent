@@ -22,13 +22,13 @@ import binascii
 import azurelinuxagent.common.utils.fileutil as fileutil
 import azurelinuxagent.common.utils.shellutil as shellutil
 import azurelinuxagent.common.utils.textutil as textutil
-from azurelinuxagent.common.utils.networkutil import RouteEntry
+from azurelinuxagent.common.utils.networkutil import RouteEntry # pylint: disable=W0611
 import azurelinuxagent.common.logger as logger
 from azurelinuxagent.common.exception import OSUtilError
 from azurelinuxagent.common.osutil.default import DefaultOSUtil
 from azurelinuxagent.common.future import ustr
 
-class FreeBSDOSUtil(DefaultOSUtil):
+class FreeBSDOSUtil(DefaultOSUtil): # pylint: disable=R0904
 
     def __init__(self):
         super(FreeBSDOSUtil, self).__init__()
@@ -40,7 +40,7 @@ class FreeBSDOSUtil(DefaultOSUtil):
         conf_file = fileutil.read_file(rc_file_path).split("\n")
         textutil.set_ini_config(conf_file, "hostname", hostname)
         fileutil.write_file(rc_file_path, "\n".join(conf_file))
-        shellutil.run("hostname {0}".format(hostname), chk_err=False)
+        self._run_command_without_raising(["hostname", hostname], log_error=False)
 
     def restart_ssh_service(self):
         return shellutil.run('service sshd restart', chk_err=False)
@@ -54,22 +54,19 @@ class FreeBSDOSUtil(DefaultOSUtil):
             logger.warn("User {0} already exists, skip useradd", username)
             return
         if expiration is not None:
-            cmd = "pw useradd {0} -e {1} -m".format(username, expiration)
+            cmd = ["pw", "useradd", username, "-e", expiration, "-m"]
         else:
-            cmd = "pw useradd {0} -m".format(username)
+            cmd = ["pw", "useradd", username, "-m"]
         if comment is not None:
-            cmd += " -c {0}".format(comment)
-        retcode, out = shellutil.run_get_output(cmd)
-        if retcode != 0:
-            raise OSUtilError(("Failed to create user account:{0}, "
-                               "retcode:{1}, "
-                               "output:{2}").format(username, retcode, out))
+            cmd.extend(["-c", comment])
+
+        self._run_command_raising_OSUtilError(cmd, err_msg="Failed to create user account:{0}".format(username))
 
     def del_account(self, username):
         if self.is_sys_user(username):
             logger.error("{0} is a system user. Will not delete it.", username)
-        shellutil.run('> /var/run/utx.active')
-        shellutil.run('rmuser -y ' + username)
+        self._run_command_without_raising(['touch', '/var/run/utx.active'])
+        self._run_command_without_raising(['rmuser', '-y', username])
         self.conf_sudoer(username, remove=True)
 
     def chpasswd(self, username, password, crypt_id=6, salt_len=10):
@@ -77,11 +74,8 @@ class FreeBSDOSUtil(DefaultOSUtil):
             raise OSUtilError(("User {0} is a system user, "
                                "will not set password.").format(username))
         passwd_hash = textutil.gen_password_hash(password, crypt_id, salt_len)
-        cmd = "echo '{0}'|pw usermod {1} -H 0 ".format(passwd_hash, username)
-        ret, output = shellutil.run_get_output(cmd, log_cmd=False)
-        if ret != 0:
-            raise OSUtilError(("Failed to set password for {0}: {1}"
-                               "").format(username, output))
+        self._run_command_raising_OSUtilError(['pw', 'usermod', username, '-H', '0'], cmd_input=passwd_hash,
+                                              err_msg="Failed to set password for {0}".format(username))
 
     def del_root_password(self):
         err = shellutil.run('pw usermod root -h -')
@@ -133,7 +127,7 @@ class FreeBSDOSUtil(DefaultOSUtil):
         :rtype: list(str)
         """
             
-        def _get_netstat_rn_ipv4_routes():
+        def _get_netstat_rn_ipv4_routes(): # pylint: disable=too-many-locals
             """
             Runs `netstat -rn -f inet` and parses its output and returns a list of routes where the key is the column name
             and the value is the value in the column, stripped of leading and trailing whitespace.
@@ -243,10 +237,10 @@ class FreeBSDOSUtil(DefaultOSUtil):
             :rtype: int
             """
             bitmask_flags = 0
-            RTF_UP = 0x0001
-            RTF_GATEWAY = 0x0002
-            RTF_HOST = 0x0004
-            RTF_DYNAMIC = 0x0010
+            RTF_UP = 0x0001 # pylint: disable=C0103
+            RTF_GATEWAY = 0x0002 # pylint: disable=C0103
+            RTF_HOST = 0x0004 # pylint: disable=C0103
+            RTF_DYNAMIC = 0x0010 # pylint: disable=C0103
             if "U" in ascii_route_flags:
                 bitmask_flags |= RTF_UP
             if "G" in ascii_route_flags:
@@ -297,7 +291,7 @@ class FreeBSDOSUtil(DefaultOSUtil):
             netstat_routes = _get_netstat_rn_ipv4_routes()
             # Make sure the `netstat -rn -f inet` contains columns for Netif, Destination, Gateway and Flags which are needed to convert
             # to the Linux Format
-            if len(netstat_routes) > 0:
+            if len(netstat_routes) > 0: # pylint: disable=len-as-condition
                 missing_headers = []
                 if "Netif" not in netstat_routes[0]:
                     missing_headers.append("Netif")
@@ -317,7 +311,7 @@ class FreeBSDOSUtil(DefaultOSUtil):
                     except Exception:
                         # Skip the route
                         continue
-        except Exception as e:
+        except Exception as e: # pylint: disable=C0103
             logger.error("Cannot read route table [{0}]", ustr(e))
         return linux_style_route_file
 
@@ -348,8 +342,8 @@ class FreeBSDOSUtil(DefaultOSUtil):
         the primary has the lowest Metric.
         :return: the interface which has the default route
         """
-        RTF_GATEWAY = 0x0002
-        DEFAULT_DEST = "00000000"
+        RTF_GATEWAY = 0x0002 # pylint: disable=C0103
+        DEFAULT_DEST = "00000000" # pylint: disable=C0103
         
         primary_interface = None
 
@@ -363,7 +357,7 @@ class FreeBSDOSUtil(DefaultOSUtil):
 
         candidates = list(filter(is_default, self.get_list_of_routes(route_table)))
 
-        if len(candidates) > 0:
+        if len(candidates) > 0: # pylint: disable=len-as-condition
             def get_metric(route):
                 return int(route.metric)
             primary_route = min(candidates, key=get_metric)
@@ -405,14 +399,14 @@ class FreeBSDOSUtil(DefaultOSUtil):
         specify the route manually to get it work in a VNET environment.
         SEE ALSO: man ip(4) IP_ONESBCAST,
         """
-        RTF_GATEWAY = 0x0002
-        DEFAULT_DEST = "00000000"
+        RTF_GATEWAY = 0x0002 # pylint: disable=C0103
+        DEFAULT_DEST = "00000000" # pylint: disable=C0103
 
         route_table = self.read_route_table()
         routes = self.get_list_of_routes(route_table)
         for route in routes:
             if (route.destination == DEFAULT_DEST) and (RTF_GATEWAY & route.flags):
-               return False
+               return False # pylint: disable=W0311
         return True
 
     def is_dhcp_enabled(self):
@@ -439,7 +433,7 @@ class FreeBSDOSUtil(DefaultOSUtil):
         if chk_err and retcode != 0:
             raise OSUtilError("Failed to eject dvd: ret={0}".format(retcode))
 
-    def restart_if(self, ifname):
+    def restart_if(self, ifname, retries=None, wait=None):
         # Restart dhclient only to publish hostname
         shellutil.run("/etc/rc.d/dhclient restart {0}".format(ifname), chk_err=False)
 
@@ -515,33 +509,39 @@ class FreeBSDOSUtil(DefaultOSUtil):
         """
         if port_id > 3:
             return None
-        g0 = "00000000"
+        g0 = "00000000" # pylint: disable=C0103
         if port_id > 1:
-            g0 = "00000001"
+            g0 = "00000001" # pylint: disable=C0103
             port_id = port_id - 2
         err, output = shellutil.run_get_output('sysctl dev.storvsc | grep pnpinfo | grep deviceid=')
         if err:
             return None
-        g1 = "000" + ustr(port_id)
+        g1 = "000" + ustr(port_id) # pylint: disable=C0103
         g0g1 = "{0}-{1}".format(g0, g1)
+
+        # pylint: disable=W0105
         """
         search 'X' from 'dev.storvsc.X.%pnpinfo: classid=32412632-86cb-44a2-9b5c-50d1417354f5 deviceid=00000000-0001-8899-0000-000000000000'
         """
+        # pylint: enable=W0105
+        
         cmd_search_ide = "sysctl dev.storvsc | grep pnpinfo | grep deviceid={0}".format(g0g1)
         err, output = shellutil.run_get_output(cmd_search_ide)
         if err:
             return None
         cmd_extract_id = cmd_search_ide + "|awk -F . '{print $3}'"
         err, output = shellutil.run_get_output(cmd_extract_id)
+        # pylint: disable=W0105
         """
         try to search 'blkvscX' and 'storvscX' to find device name
-        """
+        """ 
+        # pylint: enable=W0105
         output = output.rstrip()
         cmd_search_blkvsc = "camcontrol devlist -b | grep blkvsc{0} | awk '{{print $1}}'".format(output)
         err, output = shellutil.run_get_output(cmd_search_blkvsc)
         if err == 0:
             output = output.rstrip()
-            cmd_search_dev="camcontrol devlist | grep {0} | awk -F \( '{{print $2}}'|sed -e 's/.*(//'| sed -e 's/).*//'".format(output)
+            cmd_search_dev="camcontrol devlist | grep {0} | awk -F \( '{{print $2}}'|sed -e 's/.*(//'| sed -e 's/).*//'".format(output) # pylint: disable=W1401
             err, output = shellutil.run_get_output(cmd_search_dev)
             if err == 0:
                 for possible in output.rstrip().split(','):
@@ -552,7 +552,7 @@ class FreeBSDOSUtil(DefaultOSUtil):
         err, output = shellutil.run_get_output(cmd_search_storvsc)
         if err == 0:
             output = output.rstrip()
-            cmd_search_dev="camcontrol devlist | grep {0} | awk -F \( '{{print $2}}'|sed -e 's/.*(//'| sed -e 's/).*//'".format(output)
+            cmd_search_dev="camcontrol devlist | grep {0} | awk -F \( '{{print $2}}'|sed -e 's/.*(//'| sed -e 's/).*//'".format(output) # pylint: disable=W1401
             err, output = shellutil.run_get_output(cmd_search_dev)
             if err == 0:
                 for possible in output.rstrip().split(','):

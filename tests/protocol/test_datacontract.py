@@ -16,14 +16,14 @@
 #
 
 import unittest
-from azurelinuxagent.common.datacontract import get_properties, set_properties
-from azurelinuxagent.common.protocol.restapi import *
+
+from azurelinuxagent.common.datacontract import get_properties, set_properties, DataContract, DataContractList
 
 
-class SampleDataContract(DataContract):
+class SampleDataContract(DataContract): # pylint: disable=too-few-public-methods
     def __init__(self):
-        self.foo = None
-        self.bar = DataContractList(int)
+        self.foo = None # pylint: disable=blacklisted-name
+        self.bar = DataContractList(int) # pylint: disable=blacklisted-name
 
 
 class TestDataContract(unittest.TestCase):
@@ -32,13 +32,13 @@ class TestDataContract(unittest.TestCase):
         obj.foo = "foo"
         obj.bar.append(1)
         data = get_properties(obj)
-        self.assertEquals("foo", data["foo"])
-        self.assertEquals(list, type(data["bar"]))
+        self.assertEqual("foo", data["foo"])
+        self.assertEqual(list, type(data["bar"]))
 
     def test_set_properties(self):
         obj = SampleDataContract()
         data = {
-                'foo' : 1, 
+                'foo' : 1,
                 'baz': 'a'
         }
         set_properties('sample', obj, data)

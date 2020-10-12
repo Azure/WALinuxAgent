@@ -19,7 +19,7 @@ import azurelinuxagent.common.utils.shellutil as shellutil
 import azurelinuxagent.common.logger as logger
 from azurelinuxagent.common.exception import OSUtilError
 from azurelinuxagent.common.osutil.freebsd import FreeBSDOSUtil
-import os
+import os # pylint: disable=C0411
 
 class NSBSDOSUtil(FreeBSDOSUtil):
 
@@ -39,23 +39,23 @@ class NSBSDOSUtil(FreeBSDOSUtil):
             self.resolver = dns.resolver.Resolver()
             servers = []
             cmd = "getconf /usr/Firewall/ConfigFiles/dns Servers | tail -n +2"
-            ret, output = shellutil.run_get_output(cmd)
+            ret, output = shellutil.run_get_output(cmd) # pylint: disable=W0612
             for server in output.split("\n"):
                 if server == '':
                     break
                 server = server[:-1] # remove last '='
                 cmd = "grep '{}' /etc/hosts".format(server) + " | awk '{print $1}'"
-                ret, ip = shellutil.run_get_output(cmd)
+                ret, ip = shellutil.run_get_output(cmd) # pylint: disable=C0103
                 servers.append(ip)
             self.resolver.nameservers = servers
             dns.resolver.override_system_resolver(self.resolver)
 
     def set_hostname(self, hostname):
-        shellutil.run("/usr/Firewall/sbin/setconf /usr/Firewall/System/global SystemName {0}".format(hostname))
-        shellutil.run("/usr/Firewall/sbin/enlog")
-        shellutil.run("/usr/Firewall/sbin/enproxy -u")
-        shellutil.run("/usr/Firewall/sbin/ensl -u")
-        shellutil.run("/usr/Firewall/sbin/ennetwork -f")
+        self._run_command_without_raising(['/usr/Firewall/sbin/setconf', '/usr/Firewall/System/global', 'SystemName', hostname])
+        self._run_command_without_raising(["/usr/Firewall/sbin/enlog"])
+        self._run_command_without_raising(["/usr/Firewall/sbin/enproxy", "-u"])
+        self._run_command_without_raising(["/usr/Firewall/sbin/ensl", "-u"])
+        self._run_command_without_raising(["/usr/Firewall/sbin/ennetwork", "-f"])
 
     def restart_ssh_service(self):
         return shellutil.run('/usr/Firewall/sbin/enservice', chk_err=False)
@@ -72,12 +72,11 @@ class NSBSDOSUtil(FreeBSDOSUtil):
         logger.info("{0} SSH password-based authentication methods."
                     .format("Disabled" if disable_password else "Enabled"))
 
-    def useradd(self, username, expiration=None):
+    def useradd(self, username, expiration=None, comment=None):
         """
         Create user account with 'username'
         """
         logger.warn("User creation disabled")
-        return
 
     def del_account(self, username):
         logger.warn("User deletion disabled")
@@ -86,25 +85,23 @@ class NSBSDOSUtil(FreeBSDOSUtil):
         logger.warn("Sudo is not enabled")
 
     def chpasswd(self, username, password, crypt_id=6, salt_len=10):
-        cmd = "/usr/Firewall/sbin/fwpasswd -p {0}".format(password)
-        ret, output = shellutil.run_get_output(cmd, log_cmd=False)
-        if ret != 0:
-            raise OSUtilError(("Failed to set password for admin: {0}"
-                               "").format(output))
+        self._run_command_raising_OSUtilError(["/usr/Firewall/sbin/fwpasswd", "-p", password],
+                                              err_msg="Failed to set password for admin")
 
         # password set, activate webadmin and ssh access
-        shellutil.run('setconf /usr/Firewall/ConfigFiles/webadmin ACL any && ensl',
-                      chk_err=False)
+        commands = [['setconf', '/usr/Firewall/ConfigFiles/webadmin', 'ACL', 'any'], ['ensl']]
+        self._run_multiple_commands_without_raising(commands, log_error=False, continue_on_error=False)
+
 
     def deploy_ssh_pubkey(self, username, pubkey):
         """
         Deploy authorized_key
         """
-        path, thumbprint, value = pubkey
+        path, thumbprint, value = pubkey # pylint: disable=W0612
 
         #overide parameters
         super(NSBSDOSUtil, self).deploy_ssh_pubkey('admin',
-            ["/usr/Firewall/.ssh/authorized_keys", thumbprint, value])
+            ["/usr/Firewall/.ssh/authorized_keys", thumbprint, value]) 
 
     def del_root_password(self):
         logger.warn("Root password deletion disabled")
@@ -126,7 +123,7 @@ class NSBSDOSUtil(FreeBSDOSUtil):
     def eject_dvd(self, chk_err=True):
         pass
 
-    def restart_if(self, ifname):
+    def restart_if(self, ifname=None, retries=None, wait=None):
         # Restart dhclient only to publish hostname
         shellutil.run("ennetwork", chk_err=False)
 

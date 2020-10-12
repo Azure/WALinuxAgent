@@ -21,7 +21,7 @@ import platform
 import sys
 
 import azurelinuxagent.common.conf as conf
-import azurelinuxagent.common.utils.fileutil as fileutil
+import azurelinuxagent.common.utils.shellutil as shellutil
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
 from azurelinuxagent.common.future import ustr, get_linux_distribution
 
@@ -33,10 +33,10 @@ def get_f5_platform():
     the version and product information is contained in the /VERSION file.
     """
     result = [None, None, None, None]
-    f5_version = re.compile("^Version: (\d+\.\d+\.\d+)")
-    f5_product = re.compile("^Product: ([\w-]+)")
+    f5_version = re.compile("^Version: (\d+\.\d+\.\d+)") # pylint: disable=W1401
+    f5_product = re.compile("^Product: ([\w-]+)") # pylint: disable=W1401
 
-    with open('/VERSION', 'r') as fh:
+    with open('/VERSION', 'r') as fh: # pylint: disable=C0103
         content = fh.readlines()
         for line in content:
             version_matches = f5_version.match(line)
@@ -60,10 +60,10 @@ def get_f5_platform():
 def get_checkpoint_platform():
     take = build = release = ""
     full_name = open("/etc/cp-release").read().strip()
-    with open("/etc/cloud-version") as f:
+    with open("/etc/cloud-version") as f: # pylint: disable=C0103
         for line in f:
-            k, _, v = line.partition(": ")
-            v = v.strip()
+            k, _, v = line.partition(": ") # pylint: disable=C0103
+            v = v.strip() # pylint: disable=C0103
             if k == "release":
                 release = v
             elif k == "take":
@@ -75,21 +75,21 @@ def get_checkpoint_platform():
 
 def get_distro():
     if 'FreeBSD' in platform.system():
-        release = re.sub('\-.*\Z', '', ustr(platform.release()))
+        release = re.sub('\-.*\Z', '', ustr(platform.release())) # pylint: disable=W1401
         osinfo = ['freebsd', release, '', 'freebsd']
     elif 'OpenBSD' in platform.system():
-        release = re.sub('\-.*\Z', '', ustr(platform.release()))
+        release = re.sub('\-.*\Z', '', ustr(platform.release())) # pylint: disable=W1401
         osinfo = ['openbsd', release, '', 'openbsd']
     elif 'Linux' in platform.system():
         osinfo = get_linux_distribution(0, 'alpine')
     elif 'NS-BSD' in platform.system():
-        release = re.sub('\-.*\Z', '', ustr(platform.release()))
+        release = re.sub('\-.*\Z', '', ustr(platform.release())) # pylint: disable=W1401
         osinfo = ['nsbsd', release, '', 'nsbsd']
     else:
         try:
-            # dist() removed in Python 3.7
-            osinfo = list(platform.dist()) + ['']
-        except:
+            # dist() removed in Python 3.8
+            osinfo = list(platform.dist()) + [''] # pylint: disable=W1505,E1101
+        except Exception:
             osinfo = ['UNKNOWN', 'FFFF', '', '']
 
     # The platform.py lib has issue with detecting oracle linux distribution.
@@ -117,9 +117,40 @@ def get_distro():
     return osinfo
 
 
+def get_lis_version():
+    """
+    This uses the Linux kernel's 'modinfo' command to retrieve the
+    "version" field for the "hv_vmbus" kernel module (the LIS
+    drivers). This is the documented method to retrieve the LIS module
+    version. Every Linux guest on Hyper-V will have this driver, but
+    it may not be installed as a module (it could instead be built
+    into the kernel). In that case, this will return "Absent" instead
+    of the version, indicating the driver version can be deduced from
+    the kernel version. It will only return "Failed" in the presence
+    of an exception.
+
+    This function is used to generate telemetry for the version of the
+    LIS drivers installed on the VM. The function and associated
+    telemetry can be removed after a few releases.
+    """
+    try:
+        modinfo_output = shellutil.run_command(["modinfo", "-F", "version", "hv_vmbus"])
+        if modinfo_output:
+            return modinfo_output
+        # If the system doesn't have LIS drivers, 'modinfo' will
+        # return nothing on stdout, which will cause 'run_command'
+        # to return an empty string.
+        return "Absent"
+    except Exception:
+        # Ignore almost every possible exception because this is in a
+        # critical code path. Unfortunately the logger isn't already
+        # imported in this module or we'd log this too.
+        return "Failed"
+
+
 AGENT_NAME = "WALinuxAgent"
 AGENT_LONG_NAME = "Azure Linux Agent"
-AGENT_VERSION = '2.2.45'
+AGENT_VERSION = '2.2.52'
 AGENT_LONG_VERSION = "{0}-{1}".format(AGENT_NAME, AGENT_VERSION)
 AGENT_DESCRIPTION = """
 The Azure Linux Agent supports the provisioning and running of Linux
@@ -132,13 +163,13 @@ AGENT_PKG_GLOB = "{0}-*.zip".format(AGENT_NAME)
 
 AGENT_PATTERN = "{0}-(.*)".format(AGENT_NAME)
 AGENT_NAME_PATTERN = re.compile(AGENT_PATTERN)
-AGENT_PKG_PATTERN = re.compile(AGENT_PATTERN+"\.zip")
+AGENT_PKG_PATTERN = re.compile(AGENT_PATTERN+"\.zip") # pylint: disable=W1401
 AGENT_DIR_PATTERN = re.compile(".*/{0}".format(AGENT_PATTERN))
 
 # The execution mode of the VM - IAAS or PAAS. Linux VMs are only executed in IAAS mode.
 AGENT_EXECUTION_MODE = "IAAS"
 
-EXT_HANDLER_PATTERN = b".*/WALinuxAgent-(\d+.\d+.\d+[.\d+]*).*-run-exthandlers"
+EXT_HANDLER_PATTERN = b".*/WALinuxAgent-(\d+.\d+.\d+[.\d+]*).*-run-exthandlers" # pylint: disable=W1401
 EXT_HANDLER_REGEX = re.compile(EXT_HANDLER_PATTERN)
 
 __distro__ = get_distro()
@@ -211,19 +242,3 @@ GOAL_STATE_AGENT_VERSION = set_goal_state_agent()
 
 def is_current_agent_installed():
     return CURRENT_AGENT == AGENT_LONG_VERSION
-
-
-def is_snappy():
-    """
-    Add this workaround for detecting Snappy Ubuntu Core temporarily,
-    until ubuntu fixed this bug: https://bugs.launchpad.net/snappy/+bug/1481086
-    """
-    if os.path.exists("/etc/motd"):
-        motd = fileutil.read_file("/etc/motd")
-        if "snappy" in motd:
-            return True
-    return False
-
-
-if is_snappy():
-    DISTRO_FULL_NAME = "Snappy Ubuntu Core"

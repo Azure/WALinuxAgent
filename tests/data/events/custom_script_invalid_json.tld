@@ -1,0 +1,30 @@
+{
+    "eventId": 1,
+    "providerId": "69B669B9-4AF8-4C50-BDC4-6006FA76E975",
+    "parameters": [
+        {
+            "name": "Name",
+            "value": "Microsoft.Azure.Extensions.CustomScript"
+        },
+        {
+            "name": "Version",
+            "value": "2.0.4"
+        },
+        {
+            "name": "Operation",
+            "value": "Scenario"
+        },
+        {
+            "name": "OperationSuccess",
+            "value": true
+        },
+        {
+            "name": "Message",
+            value: "THIS IS NOT VALID JSON - this object's name is not quoted"
+        },
+        {
+            "name": "Duration",
+            "value": 150000
+        }
+    ]
+}
