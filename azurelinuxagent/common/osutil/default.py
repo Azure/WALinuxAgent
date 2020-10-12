@@ -609,7 +609,7 @@ class DefaultOSUtil(object): # pylint: disable=R0904
         for retry in range(1, max_retry):
             return_code, err = self.mount(dvd_device,
                                           mount_point,
-                                          option="-o ro -t udf,iso9660",
+                                          option=["-o", "ro", "-t", "udf,iso9660"],
                                           chk_err=False)
             if return_code == 0: # pylint: disable=R1705
                 logger.info("Successfully mounted dvd")
@@ -684,8 +684,10 @@ class DefaultOSUtil(object): # pylint: disable=R0904
                 time.sleep(1)
         return False
 
-    def mount(self, device, mount_point, option="", chk_err=True):
-        cmd = ["mount", option, device, mount_point]
+    def mount(self, device, mount_point, option=[], chk_err=True):
+        cmd = ["mount"]
+        cmd.extend(option + [device, mount_point])
+
         try:
             output = shellutil.run_command(cmd, log_error=chk_err)
         except shellutil.CommandError as cmd_err:
