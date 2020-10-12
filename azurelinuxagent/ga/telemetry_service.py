@@ -129,11 +129,12 @@ class TelemetryServiceHandler(ThreadHandlerInterface):
         # Process everything in Queue
         if not self._queue.empty():
             start_time = datetime.datetime.utcnow()
-            while self._queue.qsize() < self._MIN_QUEUE_LIMIT or \
-                    (start_time + self._MIN_BATCH_WAIT_TIME) <= datetime.datetime.utcnow():
+            while not self.stopped() and self._queue.qsize() < self._MIN_QUEUE_LIMIT and (
+                    start_time + self._MIN_BATCH_WAIT_TIME) > datetime.datetime.utcnow():
                 # To promote batching, we either wait for atleast _MIN_QUEUE_LIMIT events or _MIN_BATCH_WAIT_TIME secs
-                # before sending out the first request to wireserver
-                time.sleep(secs=1)
+                # before sending out the first request to wireserver.
+                # If the thread is requested to stop midway, we skip batching and send whatever we have in the queue.
+                time.sleep(1)
             self._protocol.report_event(self._get_events_in_queue)
 
         # Reset the event when done processing all events in queue

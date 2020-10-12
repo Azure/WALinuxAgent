@@ -26,11 +26,11 @@ import string
 import uuid
 from collections import defaultdict
 
-from mock import patch
+from mock import patch, MagicMock
 
 from azurelinuxagent.common import conf
 from azurelinuxagent.common.event import EVENTS_DIRECTORY
-from azurelinuxagent.common.exception import InvalidExtensionEventError
+from azurelinuxagent.common.exception import InvalidExtensionEventError, ServiceStoppedError
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.protocol.util import ProtocolUtil
 from azurelinuxagent.common.telemetryevent import GuestAgentGenericLogsSchema, \
@@ -166,10 +166,14 @@ class TestExtensionTelemetryHandler(AgentTestCase, HttpRequestPredicates):
 
 
     @contextlib.contextmanager
-    def _create_extension_telemetry_processor(self):
+    def _create_extension_telemetry_processor(self, telemetry_handler=None):
 
         event_list = []
-        extension_telemetry_processor = ProcessExtensionTelemetry(event_list.append)
+        if not telemetry_handler:
+            telemetry_handler = MagicMock(autospec=True)
+            telemetry_handler.stopped = MagicMock(return_value=False)
+            telemetry_handler.enqueue_event = MagicMock(wraps=event_list.append)
+        extension_telemetry_processor = ProcessExtensionTelemetry(telemetry_handler)
         extension_telemetry_processor.event_list = event_list
         yield extension_telemetry_processor
 
@@ -528,3 +532,40 @@ class TestExtensionTelemetryHandler(AgentTestCase, HttpRequestPredicates):
                 self._assert_invalid_extension_error_event_reported(mock_event, extensions_with_count,
                                                                     InvalidExtensionEventError.EmptyMessageError,
                                                                     expected_drop_count=1)
+
+    def test_it_should_not_process_events_if_telemetry_service_stopped(self):
+        event_list = []
+        telemetry_handler = MagicMock(autospec=True)
+        telemetry_handler.stopped = MagicMock(return_value=True)
+        telemetry_handler.enqueue_event = MagicMock(wraps=event_list.append)
+
+        with self._create_extension_telemetry_processor(telemetry_handler) as extension_telemetry_processor:
+            self._create_random_extension_events_dir_with_events(3, self._WELL_FORMED_FILES)
+            extension_telemetry_processor.run()
+
+            self.assertEqual(0, len(event_list), "No events should have been enqueued")
+
+    def test_it_should_not_delete_event_files_except_current_one_if_service_stopped_midway(self):
+        event_list = []
+        telemetry_handler = MagicMock(autospec=True)
+        telemetry_handler.stopped = MagicMock(return_value=False)
+        telemetry_handler.enqueue_event = MagicMock(side_effect=ServiceStoppedError("Telemetry service stopped"),
+                                                    wraps=event_list.append)
+        no_of_extensions = 3
+        # self._WELL_FORMED_FILES has 3 event files, i.e. total files for 3 extensions = 3 * 3 = 9
+        # But since we delete the file that we were processing last, expected count = 8
+        expected_event_file_count = 8
+
+        with self._create_extension_telemetry_processor(telemetry_handler) as extension_telemetry_processor:
+            ext_names = self._create_random_extension_events_dir_with_events(no_of_extensions, self._WELL_FORMED_FILES)
+            extension_telemetry_processor.run()
+
+            self.assertEqual(0, len(event_list), "No events should have been enqueued")
+            total_file_count = 0
+            for ext_name in ext_names:
+                event_dir = os.path.join(conf.get_ext_log_dir(), ext_name, EVENTS_DIRECTORY)
+                file_count = len(os.listdir(event_dir))
+                self.assertGreater(file_count, 0, "Some event files should still be there")
+                total_file_count += file_count
+
+            self.assertEqual(expected_event_file_count, total_file_count, "Expected File count doesn't match")
