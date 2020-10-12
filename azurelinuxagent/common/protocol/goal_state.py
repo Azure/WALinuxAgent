@@ -100,7 +100,7 @@ class GoalState(object): # pylint: disable=R0902
             if self.ext_conf is not None or retrieval_mode == UpdateType.GoalStateForced:
                 # We only need to retrieve the certificates if there's a Fabric incarnation change.
                 # FastTrack doesn't affect them
-                if self.ext_conf.is_fabric_change or retrieval_mode == UpdateType.GoalStateForced:
+                if (self.ext_conf.is_fabric_change and self.ext_conf.changed) or retrieval_mode == UpdateType.GoalStateForced:
                     self._retrieve_certificates(xml_doc, wire_client)
 
                 # Retrieve the other documents if we have either a Fabric or FastTrack change
@@ -324,7 +324,7 @@ class ExtensionsConfig(object): # pylint: disable=R0903
         self.ext_handlers = ExtHandlerList()
         self.vmagent_manifests = VMAgentManifestList()
         self.svd_seqNo = None
-        self.created_on_ticks = None
+        self.created_on_ticks = 0
 
         if xml_text is None:
             return

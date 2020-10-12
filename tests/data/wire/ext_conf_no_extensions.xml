@@ -17,7 +17,7 @@
 <Plugins />
 <PluginSettings />
 <StatusUploadBlob statusBlobType="BlockBlob">https://test.blob.core.windows.net/vhds/test-cs12.test-cs12.test-cs12.status?sr=b&amp;sp=rw&amp;se=9999-01-01&amp;sk=key1&amp;sv=2014-02-14&amp;sig=hfRh7gzUE7sUtYwke78IOlZOrTRCYvkec4hGZ9zZzXo</StatusUploadBlob>
-<InVMGoalStateMetaData inSvdSeqNo="2" createdOnTicks="637282736549645575"/>
+<InVMGoalStateMetaData inSvdSeqNo="2" createdOnTicks="637282736549645699"/>
 <InVMArtifactsProfileBlob statusBlobType="BlockBlob">https://mock-goal-state/test.blob.core.windows.net/$system/test-cs12.test-cs12.test-cs12.vmSettings?sv=2016-05-31&amp;sr=b&amp;sk=system-1&amp;sig=saskey;se=9999-01-01T00%3a00%3a00Z&amp;sp=r</InVMArtifactsProfileBlob>
 </Extensions>
 
