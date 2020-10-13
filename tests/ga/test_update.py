@@ -1576,6 +1576,10 @@ class TestUpdate(UpdateTestCase): # pylint: disable=too-many-public-methods
 
     @contextlib.contextmanager
     def _setup_test_for_ext_event_dirs_retention(self):
+        # This test class creates some files in the lib dir on setup, since we're using a new temp dir for our test,
+        # making sure the dir created by TestUpdate.setUp() is always clean for this test.
+        shutil.rmtree(conf.get_lib_dir(), ignore_errors=True)
+
         temp_ext_log_dir = tempfile.mkdtemp()
         temp_lib_dir = tempfile.mkdtemp()
         try:
