@@ -1122,7 +1122,6 @@ class WireClient(object): # pylint: disable=R0904
 
             except Exception as error:
                 logger.warn("Unexpected error when generating Events: {0}, {1}", ustr(error), traceback.format_exc())
-            logger.verbose("done reporting for Event {0}".format(event))
 
         # Send out all events left in buffer.
         for provider_id in list(buf.keys()):
