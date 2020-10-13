@@ -27,6 +27,8 @@ import sys
 import zlib
 import xml.dom.minidom as minidom
 
+from azurelinuxagent.common.future import ustr
+
 
 def parse_doc(xml_text):
     """
@@ -45,7 +47,7 @@ def findall(root, tag, namespace=None):
     if root is None:
         return []
 
-    if namespace is None:
+    if namespace is None: # pylint: disable=R1705
         return root.getElementsByTagName(tag)
     else:
         return root.getElementsByTagNameNS(namespace, tag)
@@ -56,7 +58,7 @@ def find(root, tag, namespace=None):
     Get first node by tag and namespace under Node root.
     """
     nodes = findall(root, tag, namespace=namespace)
-    if nodes is not None and len(nodes) >= 1:
+    if nodes is not None and len(nodes) >= 1: # pylint: disable=R1705
         return nodes[0]
     else:
         return None
@@ -87,13 +89,13 @@ def getattrib(node, attr_name):
     """
     Get attribute of xml node
     """
-    if node is not None:
+    if node is not None: # pylint: disable=R1705
         return node.getAttribute(attr_name)
     else:
         return None
 
 
-def unpack(buf, offset, range):
+def unpack(buf, offset, range): # pylint: disable=W0622
     """
     Unpack bytes into python values.
     """
@@ -131,14 +133,14 @@ def hex_dump2(buf):
     return hex_dump3(buf, 0, len(buf))
 
 
-def is_in_range(a, low, high):
+def is_in_range(a, low, high): # pylint: disable=C0103
     """
     Return True if 'a' in 'low' <= a >= 'high'
     """
-    return (a >= low and a <= high)
+    return (a >= low and a <= high) # pylint: disable=R1716
 
 
-def is_printable(ch):
+def is_printable(ch): # pylint: disable=C0103
     """
     Return True if character is displayable.
     """
@@ -147,7 +149,7 @@ def is_printable(ch):
             or is_in_range(ch, str_to_ord('0'), str_to_ord('9')))
 
 
-def hex_dump(buffer, size):
+def hex_dump(buffer, size): # pylint: disable=redefined-builtin
     """
     Return Hex formated dump of a 'buffer' of 'size'.
     """
@@ -158,7 +160,7 @@ def hex_dump(buffer, size):
         if (i % 16) == 0:
             result += "%06X: " % i
         byte = buffer[i]
-        if type(byte) == str:
+        if type(byte) == str: # pylint: disable=C0123
             byte = ord(byte.decode('latin1'))
         result += "%02X " % byte
         if (i & 15) == 7:
@@ -173,7 +175,7 @@ def hex_dump(buffer, size):
             result += " "
             for j in range(i - (i % 16), i + 1):
                 byte = buffer[j]
-                if type(byte) == str:
+                if type(byte) == str: # pylint: disable=C0123
                     byte = str_to_ord(byte.decode('latin1'))
                 k = '.'
                 if is_printable(byte):
@@ -184,24 +186,24 @@ def hex_dump(buffer, size):
     return result
 
 
-def str_to_ord(a):
+def str_to_ord(a): # pylint: disable=C0103
     """
     Allows indexing into a string or an array of integers transparently.
     Generic utility function.
     """
-    if type(a) == type(b'') or type(a) == type(u''):
+    if type(a) == type(b'') or type(a) == type(u''): # pylint: disable=C0123
         a = ord(a)
     return a
 
 
-def compare_bytes(a, b, start, length):
+def compare_bytes(a, b, start, length): # pylint: disable=C0103
     for offset in range(start, start + length):
         if str_to_ord(a[offset]) != str_to_ord(b[offset]):
             return False
     return True
 
 
-def int_to_ip4_addr(a):
+def int_to_ip4_addr(a): # pylint: disable=C0103
     """
     Build DHCP request string.
     """
@@ -211,13 +213,13 @@ def int_to_ip4_addr(a):
                             (a) & 0xFF)
 
 
-def hexstr_to_bytearray(a):
+def hexstr_to_bytearray(a): # pylint: disable=C0103
     """
     Return hex string packed into a binary struct.
     """
-    b = b""
-    for c in range(0, len(a) // 2):
-        b += struct.pack("B", int(a[c * 2:c * 2 + 2], 16))
+    b = b"" # pylint: disable=C0103
+    for c in range(0, len(a) // 2): # pylint: disable=C0103
+        b += struct.pack("B", int(a[c * 2:c * 2 + 2], 16)) # pylint: disable=C0103
     return b
 
 
@@ -226,7 +228,7 @@ def set_ssh_config(config, name, val):
     no_match = -1
 
     match_start = no_match
-    for i in range(0, len(config)):
+    for i in range(0, len(config)): # pylint: disable=C0200
         if config[i].startswith(name) and match_start == no_match:
             config[i] = "{0} {1}".format(name, val)
             found = True
@@ -246,7 +248,7 @@ def set_ssh_config(config, name, val):
 
 def set_ini_config(config, name, val):
     notfound = True
-    nameEqual = name + '='
+    nameEqual = name + '=' # pylint: disable=C0103
     length = len(config)
     text = "{0}=\"{1}\"".format(name, val)
 
@@ -263,7 +265,7 @@ def set_ini_config(config, name, val):
 def replace_non_ascii(incoming, replace_char=''):
     outgoing = ''
     if incoming is not None:
-        for c in incoming:
+        for c in incoming: # pylint: disable=C0103
             if str_to_ord(c) > 128:
                 outgoing += replace_char
             else:
@@ -271,7 +273,7 @@ def replace_non_ascii(incoming, replace_char=''):
     return outgoing
 
 
-def remove_bom(c):
+def remove_bom(c): # pylint: disable=C0103
     """
     bom is comprised of a sequence of three chars,0xef, 0xbb, 0xbf, in case of utf-8.
     """
@@ -302,7 +304,7 @@ def get_bytes_from_pem(pem_str):
     return base64_bytes
 
 
-def compress(s):
+def compress(s): # pylint: disable=C0103
     """
     Compress a string, and return the base64 encoded result of the compression.
 
@@ -317,21 +319,21 @@ def compress(s):
     return base64.b64encode(zlib.compress(s))
 
 
-def b64encode(s):
+def b64encode(s): # pylint: disable=C0103
     from azurelinuxagent.common.version import PY_VERSION_MAJOR
     if PY_VERSION_MAJOR > 2:
         return base64.b64encode(bytes(s, 'utf-8')).decode('utf-8')
     return base64.b64encode(s)
 
 
-def b64decode(s):
+def b64decode(s): # pylint: disable=C0103
     from azurelinuxagent.common.version import PY_VERSION_MAJOR
     if PY_VERSION_MAJOR > 2:
         return base64.b64decode(s).decode('utf-8')
     return base64.b64decode(s)
 
 
-def safe_shlex_split(s):
+def safe_shlex_split(s): # pylint: disable=C0103
     import shlex
     from azurelinuxagent.common.version import PY_VERSION
     if PY_VERSION[:2] == (2, 6):
@@ -339,16 +341,16 @@ def safe_shlex_split(s):
     return shlex.split(s)
 
 
-def swap_hexstring(s, width=2):
-    r = len(s) % width
+def swap_hexstring(s, width=2): # pylint: disable=C0103
+    r = len(s) % width # pylint: disable=C0103
     if r != 0:
         s = ('0' * (width - (len(s) % width))) + s
 
     return ''.join(reversed(
-                        re.findall(
-                                r'[a-f0-9]{{{0}}}'.format(width),
-                                s,
-                                re.IGNORECASE)))
+                        re.findall( 
+                                r'[a-f0-9]{{{0}}}'.format(width), 
+                                s, 
+                                re.IGNORECASE))) 
 
 
 def parse_json(json_str):
@@ -364,11 +366,11 @@ def parse_json(json_str):
     return result
 
 
-def is_str_none_or_whitespace(s):
+def is_str_none_or_whitespace(s): # pylint: disable=C0103
     return s is None or len(s) == 0 or s.isspace()
 
 
-def is_str_empty(s):
+def is_str_empty(s): # pylint: disable=C0103
     return is_str_none_or_whitespace(s) or is_str_none_or_whitespace(s.rstrip(' \t\r\n\0'))
 
 
@@ -396,3 +398,35 @@ def format_memory_value(unit, value):
         raise TypeError('Value must be convertible to a float')
 
     return int(value * units[unit])
+
+def str_to_encoded_ustr(s, encoding='utf-8'): # pylint: disable=C0103
+    """
+    This function takes the string and converts it into the corresponding encoded ustr if its not already a ustr.
+    The encoding is utf-8 by default if not specified.
+    Note: ustr() is a unicode object for Py2 and a str object for Py3.
+    :param s: The string to convert to ustr
+    :param encoding: Encoding to use. Utf-8 by default
+    :return: Returns the corresponding ustr string. Returns None if input is None.
+    """
+
+    # TODO: Import at the top of the file instead of a local import (using local import here to avoid cyclic dependency) # pylint: disable=W0511
+    from azurelinuxagent.common.version import PY_VERSION_MAJOR
+
+    if s is None or type(s) is ustr: # pylint: disable=C0123
+        # If its already a ustr/None then return as is
+        return s
+    if PY_VERSION_MAJOR > 2:
+        try:
+            # For py3+, str() is unicode by default
+            if isinstance(s, bytes): # pylint: disable=R1705
+                # str.encode() returns bytes which should be decoded to get the str.
+                return s.decode(encoding)
+            else:
+                # If its not encoded, just return the string
+                return ustr(s)
+        except Exception:
+            # If some issues in decoding, just return the string
+            return ustr(s)
+
+    # For Py2, explicitly convert the string to unicode with the specified encoding
+    return ustr(s, encoding=encoding)

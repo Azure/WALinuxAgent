@@ -1,1 +1,119 @@
-{"eventId": 1, "providerId": "69B669B9-4AF8-4C50-BDC4-6006FA76E975", "parameters": [{"name": "Name", "value": "WALinuxAgent"}, {"name": "Version", "value": "2.2.44"}, {"name": "IsInternal", "value": false}, {"name": "Operation", "value": "ProcessGoalState"}, {"name": "OperationSuccess", "value": true}, {"name": "Message", "value": "Incarnation 12"}, {"name": "Duration", "value": 16610}, {"name": "ExtensionType", "value": ""}, {"name": "GAVersion", "value": "WALinuxAgent-2.2.44"}, {"name": "ContainerId", "value": "TEST-CONTAINER-ID-ALREADY-PRESENT-GUID"}, {"name": "OpcodeName", "value": "2019-11-02 01:42:49.188030"}, {"name": "EventTid", "value": 140240384030528}, {"name": "EventPid", "value": 108573}, {"name": "TaskName", "value": "ExtHandler"}, {"name": "KeywordName", "value": ""}]}
+{
+  "eventId": 1,
+  "providerId": "69B669B9-4AF8-4C50-BDC4-6006FA76E975",
+  "parameters": [
+    {
+      "name": "Name",
+      "value": "dummy_name"
+    },
+    {
+      "name": "Version",
+      "value": "2.2.46"
+    },
+    {
+      "name": "Operation",
+      "value": "Unknown"
+    },
+    {
+      "name": "OperationSuccess",
+      "value": true
+    },
+    {
+      "name": "Message",
+      "value": ""
+    },
+    {
+      "name": "Duration",
+      "value": 0
+    },
+    {
+      "name": "GAVersion",
+      "value": "WALinuxAgent-2.2.46"
+    },
+    {
+      "name": "ContainerId",
+      "value": "UNINITIALIZED"
+    },
+    {
+      "name": "OpcodeName",
+      "value": "2020-01-31T00:06:54.074757Z"
+    },
+    {
+      "name": "EventTid",
+      "value": 139628215564096
+    },
+    {
+      "name": "EventPid",
+      "value": 10681
+    },
+    {
+      "name": "TaskName",
+      "value": "MainThread"
+    },
+    {
+      "name": "KeywordName",
+      "value": ""
+    },
+    {
+      "name": "ExtensionType",
+      "value": ""
+    },
+    {
+      "name": "IsInternal",
+      "value": false
+    },
+    {
+      "name": "OSVersion",
+      "value": "TEST_OSVersion"
+    },
+    {
+      "name": "ExecutionMode",
+      "value": "TEST_ExecutionMode"
+    },
+    {
+      "name": "RAM",
+      "value": 512
+    },
+    {
+      "name": "Processors",
+      "value": 2
+    },
+    {
+      "name": "VMName",
+      "value": "TEST_VMName"
+    },
+    {
+      "name": "TenantName",
+      "value": "TEST_TenantName"
+    },
+    {
+      "name": "RoleName",
+      "value": "TEST_RoleName"
+    },
+    {
+      "name": "RoleInstanceName",
+      "value": "TEST_RoleInstanceName"
+    },
+    {
+      "name": "Location",
+      "value": "TEST_Location"
+    },
+    {
+      "name": "SubscriptionId",
+      "value": "TEST_SubscriptionId"
+    },
+    {
+      "name": "ResourceGroupName",
+      "value": "TEST_ResourceGroupName"
+    },
+    {
+      "name": "VMId",
+      "value": "TEST_VMId"
+    },
+    {
+      "name": "ImageOrigin",
+      "value": 1
+    }
+  ],
+  "file_type": "json"
+}

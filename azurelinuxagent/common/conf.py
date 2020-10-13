@@ -19,11 +19,11 @@
 
 """
 Module conf loads and parses configuration file
-"""
+""" # pylint: disable=W0105
 import os
 import os.path
 
-import azurelinuxagent.common.utils.fileutil as fileutil
+from azurelinuxagent.common.utils.fileutil import read_file #pylint: disable=R0401
 from azurelinuxagent.common.exception import AgentConfigError
 
 DISABLE_AGENT_FILE = 'disable_agent'
@@ -55,7 +55,7 @@ class ConfigurationProvider(object):
 
     def get_switch(self, key, default_val):
         val = self.values.get(key)
-        if val is not None and val.lower() == 'y':
+        if val is not None and val.lower() == 'y': # pylint: disable=R1705
             return True
         elif val is not None and val.lower() == 'n':
             return False
@@ -77,11 +77,11 @@ def load_conf_from_file(conf_file_path, conf=__conf__):
     """
     Load conf file from: conf_file_path
     """
-    if os.path.isfile(conf_file_path) == False:
+    if os.path.isfile(conf_file_path) == False: # pylint: disable=C0121
         raise AgentConfigError(("Missing configuration in {0}"
                                 "").format(conf_file_path))
     try:
-        content = fileutil.read_file(conf_file_path)
+        content = read_file(conf_file_path)
         conf.load(content)
     except IOError as err:
         raise AgentConfigError(("Failed to load conf file:{0}, {1}"
@@ -97,6 +97,7 @@ __SWITCH_OPTIONS__ = {
     "OS.CheckRdmaDriver": False,
     "Logs.Verbose": False,
     "Logs.Console": True,
+    "Logs.Collect": False,
     "Extensions.Enabled": True,
     "Provisioning.AllowResetSysUser": False,
     "Provisioning.RegenerateSshHostKeyPair": False,
@@ -138,11 +139,19 @@ __STRING_OPTIONS__ = {
 
 
 __INTEGER_OPTIONS__ = {
+    "Extensions.GoalStatePeriod": 6,
+    "Extensions.GoalStateHistoryCleanupPeriod": 86400,
+    "OS.EnableFirewallPeriod": 30,
+    "OS.RemovePersistentNetRulesPeriod": 30,
+    "OS.RootDeviceScsiTimeoutPeriod": 30,
+    "OS.MonitorDhcpClientRestartPeriod": 30,
     "OS.SshClientAliveInterval": 180,
+    "Provisioning.MonitorHostNamePeriod": 30,
     "Provisioning.PasswordCryptSaltLength": 10,
     "HttpProxy.Port": None,
     "ResourceDisk.SwapSizeMB": 0,
-    "Autoupdate.Frequency": 3600
+    "Autoupdate.Frequency": 3600,
+    "Logs.CollectPeriod": 3600
 }
 
 
@@ -160,8 +169,38 @@ def get_configuration(conf=__conf__):
     return options
 
 
+def get_default_value(option):
+    if option in __STRING_OPTIONS__:
+        return __STRING_OPTIONS__[option]
+    raise ValueError("{0} is not a valid configuration parameter.".format(option))
+
+
+def get_int_default_value(option):
+    if option in __INTEGER_OPTIONS__:
+        return int(__INTEGER_OPTIONS__[option])
+    raise ValueError("{0} is not a valid configuration parameter.".format(option))
+
+
+def get_switch_default_value(option):
+    if option in __SWITCH_OPTIONS__:
+        return __SWITCH_OPTIONS__[option]
+    raise ValueError("{0} is not a valid configuration parameter.".format(option))
+
+
 def enable_firewall(conf=__conf__):
     return conf.get_switch("OS.EnableFirewall", False)
+
+
+def get_enable_firewall_period(conf=__conf__):
+    return conf.get_int("OS.EnableFirewallPeriod", 30)
+
+
+def get_remove_persistent_net_rules_period(conf=__conf__):
+    return conf.get_int("OS.RemovePersistentNetRulesPeriod", 30)
+
+
+def get_monitor_dhcp_client_restart_period(conf=__conf__):
+    return conf.get_int("OS.MonitorDhcpClientRestartPeriod", 30)
 
 
 def enable_rdma(conf=__conf__):
@@ -173,14 +212,26 @@ def enable_rdma(conf=__conf__):
 def enable_rdma_update(conf=__conf__):
     return conf.get_switch("OS.UpdateRdmaDriver", False)
 
+
 def enable_check_rdma_driver(conf=__conf__):
     return conf.get_switch("OS.CheckRdmaDriver", True)
+
 
 def get_logs_verbose(conf=__conf__):
     return conf.get_switch("Logs.Verbose", False)
 
+
 def get_logs_console(conf=__conf__):
     return conf.get_switch("Logs.Console", True)
+
+
+def get_collect_logs(conf=__conf__):
+    return conf.get_switch("Logs.Collect", False)
+
+
+def get_collect_logs_period(conf=__conf__):
+    return conf.get_int("Logs.CollectPeriod", 3600)
+
 
 def get_lib_dir(conf=__conf__):
     return conf.get("Lib.Dir", "/var/lib/waagent")
@@ -200,6 +251,10 @@ def get_agent_pid_file_path(conf=__conf__):
 
 def get_ext_log_dir(conf=__conf__):
     return conf.get("Extension.LogDir", "/var/log/azure")
+
+
+def get_agent_log_file():
+    return "/var/log/waagent.log"
 
 
 def get_fips_enabled(conf=__conf__):
@@ -240,16 +295,20 @@ def get_ssh_key_glob(conf=__conf__):
 
 def get_ssh_key_private_path(conf=__conf__):
     return os.path.join(get_ssh_dir(conf),
-        'ssh_host_{0}_key'.format(get_ssh_host_keypair_type(conf)))
+        'ssh_host_{0}_key'.format(get_ssh_host_keypair_type(conf))) 
 
 
 def get_ssh_key_public_path(conf=__conf__):
     return os.path.join(get_ssh_dir(conf),
-        'ssh_host_{0}_key.pub'.format(get_ssh_host_keypair_type(conf)))
+        'ssh_host_{0}_key.pub'.format(get_ssh_host_keypair_type(conf))) 
 
 
 def get_root_device_scsi_timeout(conf=__conf__):
     return conf.get("OS.RootDeviceScsiTimeout", None)
+
+
+def get_root_device_scsi_timeout_period(conf=__conf__):
+    return conf.get_int("OS.RootDeviceScsiTimeoutPeriod", 30)
 
 
 def get_ssh_host_keypair_type(conf=__conf__):
@@ -269,6 +328,14 @@ def get_ssh_host_keypair_mode(conf=__conf__):
 
 def get_extensions_enabled(conf=__conf__):
     return conf.get_switch("Extensions.Enabled", True)
+
+
+def get_goal_state_period(conf=__conf__):
+    return conf.get_int("Extensions.GoalStatePeriod", 6)
+
+
+def get_goal_state_history_cleanup_period(conf=__conf__):
+    return conf.get_int("Extensions.GoalStateHistoryCleanupPeriod", 86400)
 
 
 def get_allow_reset_sys_user(conf=__conf__):
@@ -318,6 +385,10 @@ def get_monitor_hostname(conf=__conf__):
     return conf.get_switch("Provisioning.MonitorHostName", False)
 
 
+def get_monitor_hostname_period(conf=__conf__):
+    return conf.get_int("Provisioning.MonitorHostNamePeriod", 30)
+
+
 def get_httpproxy_host(conf=__conf__):
     return conf.get("HttpProxy.Host", None)
 
@@ -336,9 +407,11 @@ def get_resourcedisk_format(conf=__conf__):
 
 def get_resourcedisk_enable_swap(conf=__conf__):
     return conf.get_switch("ResourceDisk.EnableSwap", False)
-    
+
+
 def get_resourcedisk_enable_swap_encryption(conf=__conf__):
     return conf.get_switch("ResourceDisk.EnableSwapEncryption", False)
+
 
 def get_resourcedisk_mountpoint(conf=__conf__):
     return conf.get("ResourceDisk.MountPoint", "/mnt/resource")
@@ -386,4 +459,4 @@ def get_cgroups_enforce_limits(conf=__conf__):
 
 def get_cgroups_excluded(conf=__conf__):
     excluded_value = conf.get("CGroups.Excluded", "customscript, runcommand")
-    return [s for s in [i.strip().lower() for i in excluded_value.split(',')] if len(s) > 0] if excluded_value else []
+    return [s for s in [i.strip().lower() for i in excluded_value.split(',')] if len(s) > 0] if excluded_value else [] # pylint: disable=len-as-condition

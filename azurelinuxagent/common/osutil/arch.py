@@ -16,7 +16,7 @@
 # Requires Python 2.6+ and Openssl 1.0+
 #
 
-import os
+import os # pylint: disable=W0611
 import azurelinuxagent.common.utils.shellutil as shellutil
 from azurelinuxagent.common.osutil.default import DefaultOSUtil
 
@@ -32,7 +32,7 @@ class ArchUtil(DefaultOSUtil):
     def start_network(self):
         return shellutil.run("systemctl start systemd-networkd", chk_err=False)
 
-    def restart_if(self, iface):
+    def restart_if(self, ifname=None, retries=None, wait=None):
         shellutil.run("systemctl restart systemd-networkd")
 
     def restart_ssh_service(self):

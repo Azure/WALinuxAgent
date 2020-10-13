@@ -27,18 +27,18 @@ from datetime import datetime
 import azurelinuxagent.common.conf as conf
 import azurelinuxagent.common.logger as logger
 import azurelinuxagent.common.utils.fileutil as fileutil
-import azurelinuxagent.common.utils.shellutil as shellutil
+import azurelinuxagent.common.utils.shellutil as shellutil # pylint: disable=W0611
 
-from azurelinuxagent.common.event import elapsed_milliseconds, WALAEventOperation
+from azurelinuxagent.common.event import elapsed_milliseconds, WALAEventOperation # pylint: disable=W0611
 from azurelinuxagent.common.exception import ProvisionError, ProtocolError
 from azurelinuxagent.common.future import ustr
-from azurelinuxagent.common.protocol import OVF_FILE_NAME
+from azurelinuxagent.common.protocol.util import OVF_FILE_NAME
 from azurelinuxagent.common.protocol.ovfenv import OvfEnv
 from azurelinuxagent.pa.provision.default import ProvisionHandler
 
 
 class CloudInitProvisionHandler(ProvisionHandler):
-    def __init__(self):
+    def __init__(self): # pylint: disable=W0235
         super(CloudInitProvisionHandler, self).__init__()
 
     def run(self):
@@ -53,16 +53,16 @@ class CloudInitProvisionHandler(ProvisionHandler):
             self.protocol_util.get_protocol()
             self.report_not_ready("Provisioning", "Starting")
 
-            thumbprint = self.wait_for_ssh_host_key()
+            thumbprint = self.wait_for_ssh_host_key() # pylint: disable=W0612
             self.write_provisioned()
             logger.info("Finished provisioning")
 
-            self.report_ready(thumbprint)
+            self.report_ready()
             self.report_event("Provisioning with cloud-init succeeded ({0}s)".format(self._get_uptime_seconds()),
                 is_success=True,
                 duration=elapsed_milliseconds(utc_start))
 
-        except ProvisionError as e:
+        except ProvisionError as e: # pylint: disable=C0103
             msg = "Provisioning with cloud-init failed: {0} ({1}s)".format(ustr(e), self._get_uptime_seconds())
             logger.error(msg)
             self.report_not_ready("ProvisioningFailed", ustr(e))
@@ -80,7 +80,7 @@ class CloudInitProvisionHandler(ProvisionHandler):
                     ovf_env = OvfEnv(fileutil.read_file(ovf_file_path))
                     self.handle_provision_guest_agent(ovf_env.provision_guest_agent)
                     return
-                except ProtocolError as pe:
+                except ProtocolError as pe: # pylint: disable=C0103
                     raise ProvisionError("OVF xml could not be parsed "
                                          "[{0}]: {1}".format(ovf_file_path,
                                                              ustr(pe)))
@@ -103,7 +103,7 @@ class CloudInitProvisionHandler(ProvisionHandler):
         """
         Wait for cloud-init to generate ssh host key
         """
-        keypair_type = conf.get_ssh_host_keypair_type()
+        keypair_type = conf.get_ssh_host_keypair_type() # pylint: disable=W0612
         path = conf.get_ssh_key_public_path()
         for retry in range(0, max_retry):
             if os.path.isfile(path):

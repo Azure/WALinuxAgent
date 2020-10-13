@@ -17,7 +17,7 @@
 
 import unittest
 
-from tests.tools import AgentTestCase
+from tests.tools import AgentTestCase, patch, DEFAULT
 from azurelinuxagent.daemon.resourcedisk.default import ResourceDiskHandler
 
 
@@ -26,7 +26,7 @@ class TestResourceDisk(AgentTestCase):
         partition = '/dev/sdb1'
         mountpoint = '/mnt/resource'
         options = None
-        expected = 'mount /dev/sdb1 /mnt/resource'
+        expected = 'mount -t ext3 /dev/sdb1 /mnt/resource'
         rdh = ResourceDiskHandler()
         mount_string = rdh.get_mount_string(options, partition, mountpoint)
         self.assertEqual(expected, mount_string)
@@ -35,10 +35,51 @@ class TestResourceDisk(AgentTestCase):
         partition = '/dev/sdb1'
         mountpoint = '/mnt/resource'
         options = 'noexec,noguid,nodev'
-        expected = 'mount -o noexec,noguid,nodev /dev/sdb1 /mnt/resource'
+        expected = 'mount -t ext3 -o noexec,noguid,nodev /dev/sdb1 /mnt/resource'
         rdh = ResourceDiskHandler()
         mount_string = rdh.get_mount_string(options, partition, mountpoint)
         self.assertEqual(expected, mount_string)
+
+    @patch('azurelinuxagent.common.utils.shellutil.run_get_output')
+    @patch('azurelinuxagent.common.utils.shellutil.run')
+    @patch('azurelinuxagent.daemon.resourcedisk.default.ResourceDiskHandler.mkfile')
+    @patch('azurelinuxagent.daemon.resourcedisk.default.os.path.isfile', return_value=False)
+    @patch(
+        'azurelinuxagent.daemon.resourcedisk.default.ResourceDiskHandler.check_existing_swap_file',
+        return_value=False)
+    def test_create_swap_space( # pylint: disable=too-many-arguments
+            self,
+            mock_check_existing_swap_file, # pylint: disable=unused-argument
+            mock_isfile, # pylint: disable=unused-argument
+            mock_mkfile, # pylint: disable=unused-argument
+            mock_run,
+            mock_run_get_output):
+        mount_point = '/mnt/resource'
+        size_mb = 128
+
+        rdh = ResourceDiskHandler()
+
+        def rgo_side_effect(*args, **kwargs): # pylint: disable=unused-argument
+            if args[0] == 'swapon -s':
+                return (0, 'Filename\t\t\t\tType\t\tSize\tUsed\tPriority\n/mnt/resource/swapfile                 \tfile    \t131068\t0\t-2\n')
+            return DEFAULT
+
+        def run_side_effect(*args, **kwargs): # pylint: disable=unused-argument
+            # We have to change the default mock behavior to return a falsey value
+            # (instead of the default truthy of the mock), because we are testing
+            # really for the exit code of the the swapon command to return 0.
+            if 'swapon' in args[0]:
+                return 0
+            return None
+
+        mock_run_get_output.side_effect = rgo_side_effect
+        mock_run.side_effect = run_side_effect
+
+        rdh.create_swap_space(
+            mount_point=mount_point,
+            size_mb=size_mb
+        )
+
 
 if __name__ == '__main__':
     unittest.main()

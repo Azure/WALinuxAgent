@@ -17,17 +17,15 @@
 
 import os
 import unittest
-
 from multiprocessing import Process
 
 import azurelinuxagent.common.conf as conf
-from azurelinuxagent.daemon import *
-from azurelinuxagent.daemon.main import OPENSSL_FIPS_ENVIRONMENT
+from azurelinuxagent.daemon.main import OPENSSL_FIPS_ENVIRONMENT, get_daemon_handler
 from azurelinuxagent.pa.provision.default import ProvisionHandler
 from tests.tools import AgentTestCase, Mock, patch
 
 
-class MockDaemonCall(object):
+class MockDaemonCall(object): # pylint: disable=too-few-public-methods
     def __init__(self, daemon_handler, count):
         self.daemon_handler = daemon_handler
         self.count = count
@@ -54,7 +52,7 @@ class TestDaemon(AgentTestCase):
         daemon_handler.run()
 
         mock_sleep.assert_any_call(15)
-        self.assertEquals(2, daemon_handler.daemon.call_count)
+        self.assertEqual(2, daemon_handler.daemon.call_count)
 
     @patch("time.sleep")
     @patch("azurelinuxagent.daemon.main.conf")
@@ -93,27 +91,30 @@ class TestDaemon(AgentTestCase):
     @patch('azurelinuxagent.common.conf.get_provisioning_agent', return_value='waagent')
     @patch('azurelinuxagent.ga.update.UpdateHandler.run_latest')
     @patch('azurelinuxagent.pa.provision.default.ProvisionHandler.run')
-    def test_daemon_agent_enabled(self, patch_run_provision, patch_run_latest, gpa):
+    def test_daemon_agent_enabled(self, patch_run_provision, patch_run_latest, gpa): # pylint: disable=unused-argument
         """
         Agent should run normally when no disable_agent is found
         """
         with patch('azurelinuxagent.pa.provision.get_provision_handler', return_value=ProvisionHandler()):
-            self.assertFalse(os.path.exists(conf.get_disable_agent_file_path()))
-            daemon_handler = get_daemon_handler()
+            # DaemonHandler._initialize_telemetry requires communication with WireServer and IMDS; since we
+            # are not using telemetry in this test we mock it out
+            with patch('azurelinuxagent.daemon.main.DaemonHandler._initialize_telemetry'):
+                self.assertFalse(os.path.exists(conf.get_disable_agent_file_path()))
+                daemon_handler = get_daemon_handler()
 
-            def stop_daemon(child_args):
-                daemon_handler.running = False
+                def stop_daemon(child_args): # pylint: disable=unused-argument
+                    daemon_handler.running = False
 
-            patch_run_latest.side_effect = stop_daemon
-            daemon_handler.run()
+                patch_run_latest.side_effect = stop_daemon
+                daemon_handler.run()
 
-            self.assertEqual(1, patch_run_provision.call_count)
-            self.assertEqual(1, patch_run_latest.call_count)
+                self.assertEqual(1, patch_run_provision.call_count)
+                self.assertEqual(1, patch_run_latest.call_count)
 
     @patch('azurelinuxagent.common.conf.get_provisioning_agent', return_value='waagent')
     @patch('azurelinuxagent.ga.update.UpdateHandler.run_latest', side_effect=AgentTestCase.fail)
     @patch('azurelinuxagent.pa.provision.default.ProvisionHandler.run', side_effect=ProvisionHandler.write_agent_disabled)
-    def test_daemon_agent_disabled(self, _, patch_run_latest, gpa):
+    def test_daemon_agent_disabled(self, _, patch_run_latest, gpa): # pylint: disable=unused-argument
         """
         Agent should provision, then sleep forever when disable_agent is found
         """

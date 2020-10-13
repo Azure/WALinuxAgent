@@ -1,0 +1,11 @@
+
+  {
+      "EventLevel": "INFO",
+      "Message": "Downloading files specified in configuration...",
+      "Version": "1",
+      "TaskName": "Downloading files",
+      "EventPid": "3228",
+      "EventTid": "1",
+      "OperationId": "519e4beb-018a-4bd9-8d8e-c5226cf7f56e",
+      "TimeStamp": "2019-12-12T01:20:52.9247262Z"
+  }

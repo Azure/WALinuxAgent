@@ -1,0 +1,13 @@
+12:blkio:/system.slice/walinuxagent.service
+11:cpu,cpuacct:/system.slice/walinuxagent.service
+10:devices:/system.slice/walinuxagent.service
+9:pids:/system.slice/walinuxagent.service
+8:memory:/system.slice/walinuxagent.service
+7:freezer:/
+6:hugetlb:/
+5:perf_event:/
+4:net_cls,net_prio:/
+3:cpuset:/
+2:rdma:/
+1:name=systemd:/system.slice/walinuxagent.service
+0::/system.slice/walinuxagent.service

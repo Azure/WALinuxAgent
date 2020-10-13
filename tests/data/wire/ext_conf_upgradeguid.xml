@@ -3,19 +3,19 @@
     <GAFamily>
       <Name>Prod</Name>
       <Uris>
-          <Uri>http://manifest_of_ga.xml</Uri>
+          <Uri>http://mock-goal-state/manifest_of_ga.xml</Uri>
       </Uris>
     </GAFamily>
     <GAFamily>
       <Name>Test</Name>
       <Uris>
-          <Uri>http://manifest_of_ga.xml</Uri>
+          <Uri>http://mock-goal-state/manifest_of_ga.xml</Uri>
         </Uris>
     </GAFamily>
   </GAFamilies>
 </GuestAgentExtension>
 <Plugins>
-  <Plugin name="OSTCExtensions.ExampleHandlerLinux" version="1.0.0" location="http://rdfepirv2hknprdstr03.blob.core.windows.net/b01058962be54ceca550a390fa5ff064/Microsoft.OSTCExtensions_ExampleHandlerLinux_asiaeast_manifest.xml" config="" state="enabled" autoUpgrade="false" failoverlocation="http://rdfepirv2hknprdstr04.blob.core.windows.net/b01058962be54ceca550a390fa5ff064/Microsoft.OSTCExtensions_ExampleHandlerLinux_asiaeast_manifest.xml" runAsStartupTask="false" isJson="true" upgradeGuid="12345678-09AB-ABCD-CDEF-FE0987654321" />
+  <Plugin name="OSTCExtensions.ExampleHandlerLinux" version="1.0.0" location="http://mock-goal-state/rdfepirv2hknprdstr03.blob.core.windows.net/b01058962be54ceca550a390fa5ff064/Microsoft.OSTCExtensions_ExampleHandlerLinux_asiaeast_manifest.xml" config="" state="enabled" autoUpgrade="false" failoverlocation="http://mock-goal-state/rdfepirv2hknprdstr04.blob.core.windows.net/b01058962be54ceca550a390fa5ff064/Microsoft.OSTCExtensions_ExampleHandlerLinux_asiaeast_manifest.xml" runAsStartupTask="false" isJson="true" upgradeGuid="12345678-09AB-ABCD-CDEF-FE0987654321" />
 </Plugins>
 <PluginSettings>
   <Plugin name="OSTCExtensions.ExampleHandlerLinux" version="1.0.0">

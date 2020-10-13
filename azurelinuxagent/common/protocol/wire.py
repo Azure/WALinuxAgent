@@ -1,4 +1,4 @@
-# Microsoft Azure Linux Agent
+# Microsoft Azure Linux Agent # pylint: disable=C0302
 #
 # Copyright 2018 Microsoft Corporation
 #
@@ -20,31 +20,33 @@ import datetime
 import json
 import os
 import random
-import re
 import time
+import traceback
 import xml.sax.saxutils as saxutils
-from datetime import datetime
+from datetime import datetime # pylint: disable=ungrouped-imports
 
 import azurelinuxagent.common.conf as conf
-from azurelinuxagent.common.datacontract import validate_param, set_properties
-from azurelinuxagent.common.event import add_event, add_periodic, WALAEventOperation, CONTAINER_ID_ENV_VARIABLE
+import azurelinuxagent.common.logger as logger
 import azurelinuxagent.common.utils.textutil as textutil
+from azurelinuxagent.common.datacontract import validate_param
+from azurelinuxagent.common.event import add_event, add_periodic, WALAEventOperation, EVENTS_DIRECTORY, EventLogger, \
+    report_event
 from azurelinuxagent.common.exception import ProtocolNotFoundError, \
     ResourceGoneError, ExtensionDownloadError, InvalidContainerError, ProtocolError, HttpError
-from azurelinuxagent.common.future import httpclient, bytebuffer
-import azurelinuxagent.common.logger as logger
-from azurelinuxagent.common.utils import fileutil, restutil
+from azurelinuxagent.common.future import httpclient, bytebuffer, ustr
+from azurelinuxagent.common.protocol.goal_state import GoalState, TRANSPORT_CERT_FILE_NAME, TRANSPORT_PRV_FILE_NAME
 from azurelinuxagent.common.protocol.hostplugin import HostPluginProtocol
-from azurelinuxagent.common.protocol.restapi import *
-from azurelinuxagent.common.telemetryevent import TelemetryEventList
+from azurelinuxagent.common.protocol.restapi import DataContract, ExtensionStatus, ExtHandlerPackage, \
+    ExtHandlerPackageList, ExtHandlerVersionUri, ProvisionStatus, VMInfo, VMStatus
+from azurelinuxagent.common.telemetryevent import TelemetryEventList, GuestAgentExtensionEventsSchema
+from azurelinuxagent.common.utils import fileutil, restutil
 from azurelinuxagent.common.utils.archive import StateFlusher
 from azurelinuxagent.common.utils.cryptutil import CryptUtil
 from azurelinuxagent.common.utils.textutil import parse_doc, findall, find, \
-    findtext, getattrib, gettext, remove_bom, get_bytes_from_pem, parse_json
+    findtext, gettext, remove_bom, get_bytes_from_pem, parse_json
 from azurelinuxagent.common.version import AGENT_NAME, CURRENT_VERSION
 
 VERSION_INFO_URI = "http://{0}/?comp=versions"
-GOAL_STATE_URI = "http://{0}/machine/?comp=goalstate"
 HEALTH_REPORT_URI = "http://{0}/machine?comp=health"
 ROLE_PROP_URI = "http://{0}/machine?comp=roleProperties"
 TELEMETRY_URI = "http://{0}/machine?comp=telemetrydata"
@@ -54,17 +56,9 @@ INCARNATION_FILE_NAME = "Incarnation"
 GOAL_STATE_FILE_NAME = "GoalState.{0}.xml"
 HOSTING_ENV_FILE_NAME = "HostingEnvironmentConfig.xml"
 SHARED_CONF_FILE_NAME = "SharedConfig.xml"
-CERTS_FILE_NAME = "Certificates.xml"
 REMOTE_ACCESS_FILE_NAME = "RemoteAccess.{0}.xml"
-P7M_FILE_NAME = "Certificates.p7m"
-PEM_FILE_NAME = "Certificates.pem"
 EXT_CONF_FILE_NAME = "ExtensionsConfig.{0}.xml"
 MANIFEST_FILE_NAME = "{0}.{1}.manifest.xml"
-AGENTS_MANIFEST_FILE_NAME = "{0}.{1}.agentsManifest"
-TRANSPORT_CERT_FILE_NAME = "TransportCert.pem"
-TRANSPORT_PRV_FILE_NAME = "TransportPrivate.pem"
-# Store the last retrieved container id as an environment variable to be shared between threads for telemetry purposes
-CONTAINER_ID_ENV_VARIABLE = "AZURE_GUEST_AGENT_CONTAINER_ID"
 
 PROTOCOL_VERSION = "2012-11-30"
 ENDPOINT_FINE_NAME = "WireServer"
@@ -78,23 +72,11 @@ class UploadError(HttpError):
     pass
 
 
-class WireProtocol(Protocol):
-    """Slim layer to adapt wire protocol data to metadata protocol interface"""
-
-    # TODO: Clean-up goal state processing
-    #  At present, some methods magically update GoalState (e.g.,
-    #  get_vmagent_manifests), others (e.g., get_vmagent_pkgs)
-    #  assume its presence. A better approach would make an explicit update
-    #  call that returns the incarnation number and
-    #  establishes that number the "context" for all other calls (either by
-    #  updating the internal state of the protocol or
-    #  by having callers pass the incarnation number to the method).
-
+class WireProtocol(DataContract):
     def __init__(self, endpoint):
         if endpoint is None:
             raise ProtocolError("WireProtocol endpoint is None")
-        self.endpoint = endpoint
-        self.client = WireClient(self.endpoint)
+        self.client = WireClient(endpoint)
 
     def detect(self):
         self.client.check_wire_protocol_version()
@@ -106,10 +88,21 @@ class WireProtocol(Protocol):
         cryptutil = CryptUtil(conf.get_openssl_cmd())
         cryptutil.gen_transport_cert(trans_prv_file, trans_cert_file)
 
-        self.update_goal_state(forced=True)
+        # Set the initial goal state
+        logger.info('Initializing goal state during protocol detection')
+        self.client.update_goal_state(forced=True)
 
-    def update_goal_state(self, forced=False, max_retry=3):
-        self.client.update_goal_state(forced=forced, max_retry=max_retry)
+    def update_goal_state(self):
+        self.client.update_goal_state()
+
+    def try_update_goal_state(self):
+        return self.client.try_update_goal_state()
+
+    def update_host_plugin_from_goal_state(self):
+        self.client.update_host_plugin_from_goal_state()
+
+    def get_endpoint(self):
+        return self.client.get_endpoint()
 
     def get_vminfo(self):
         goal_state = self.client.get_goal_state()
@@ -128,15 +121,9 @@ class WireProtocol(Protocol):
         return certificates.cert_list
 
     def get_incarnation(self):
-        path = os.path.join(conf.get_lib_dir(), INCARNATION_FILE_NAME)
-        if os.path.exists(path):
-            return fileutil.read_file(path)
-        else:
-            return 0
+        return self.client.get_goal_state().incarnation
 
     def get_vmagent_manifests(self):
-        # Update goal state to get latest extensions config
-        self.update_goal_state()
         goal_state = self.client.get_goal_state()
         ext_conf = self.client.get_ext_conf()
         return ext_conf.vmagent_manifests, goal_state.incarnation
@@ -144,13 +131,11 @@ class WireProtocol(Protocol):
     def get_vmagent_pkgs(self, vmagent_manifest):
         goal_state = self.client.get_goal_state()
         ga_manifest = self.client.get_gafamily_manifest(vmagent_manifest, goal_state)
-        valid_pkg_list = self.client.filter_package_list(vmagent_manifest.family, ga_manifest, goal_state)
+        valid_pkg_list = ga_manifest.pkg_list
         return valid_pkg_list
 
     def get_ext_handlers(self):
         logger.verbose("Get extension handler config")
-        # Update goal state to get latest extensions config
-        self.update_goal_state()
         goal_state = self.client.get_goal_state()
         ext_conf = self.client.get_ext_conf()
         # In wire protocol, incarnation is equivalent to ETag
@@ -158,25 +143,24 @@ class WireProtocol(Protocol):
 
     def get_ext_handler_pkgs(self, ext_handler):
         logger.verbose("Get extension handler package")
-        goal_state = self.client.get_goal_state()
-        man = self.client.get_ext_manifest(ext_handler, goal_state)
+        man = self.client.get_ext_manifest(ext_handler)
         return man.pkg_list
 
     def get_artifacts_profile(self):
         logger.verbose("Get In-VM Artifacts Profile")
         return self.client.get_artifacts_profile()
 
-    def download_ext_handler_pkg_through_host(self, uri, destination):
+    def _download_ext_handler_pkg_through_host(self, uri, destination):
         host = self.client.get_host_plugin()
         uri, headers = host.get_artifact_request(uri, host.manifest_uri)
         success = self.client.stream(uri, destination, headers=headers, use_proxy=False)
         return success
 
-    def download_ext_handler_pkg(self, uri, destination, headers=None, use_proxy=True):
+    def download_ext_handler_pkg(self, uri, destination, headers=None, use_proxy=True): # pylint: disable=W0613
         direct_func = lambda: self.client.stream(uri, destination, headers=None, use_proxy=True)
         # NOTE: the host_func may be called after refreshing the goal state, be careful about any goal state data
         # in the lambda.
-        host_func = lambda: self.download_ext_handler_pkg_through_host(uri, destination)
+        host_func = lambda: self._download_ext_handler_pkg_through_host(uri, destination)
 
         try:
             success = self.client.send_request_using_appropriate_channel(direct_func, host_func)
@@ -201,13 +185,16 @@ class WireProtocol(Protocol):
         self.client.status_blob.set_vm_status(vm_status)
         self.client.upload_status_blob()
 
-    def report_ext_status(self, ext_handler_name, ext_name, ext_status):
+    def report_ext_status(self, ext_handler_name, ext_name, ext_status): # pylint: disable=W0613
         validate_param("ext_status", ext_status, ExtensionStatus)
         self.client.status_blob.set_ext_status(ext_handler_name, ext_status)
 
     def report_event(self, events):
-        validate_param("events", events, TelemetryEventList)
+        validate_param(EVENTS_DIRECTORY, events, TelemetryEventList)
         self.client.report_event(events)
+
+    def upload_logs(self, logs):
+        self.client.upload_logs(logs)
 
 
 def _build_role_properties(container_id, role_instance_id, thumbprint):
@@ -229,10 +216,27 @@ def _build_role_properties(container_id, role_instance_id, thumbprint):
     return xml
 
 
-def _build_health_report(incarnation, container_id, role_instance_id,
+def _build_health_report(incarnation, container_id, role_instance_id, # pylint: disable=R0913
                          status, substatus, description):
-    # Escape '&', '<' and '>'
-    description = saxutils.escape(ustr(description))
+    # The max description that can be sent to WireServer is 4096 bytes.
+    # Exceeding this max can result in a failure to report health.
+    # To keep this simple, we will keep a 10% buffer and trim before
+    # encoding the description.
+    if description:
+        max_chars_before_encoding = 3686
+        len_before_trim = len(description)
+        description = description[:max_chars_before_encoding]
+        trimmed_char_count = len_before_trim - len(description)
+        if trimmed_char_count > 0:
+            logger.info(
+                'Trimmed health report description by {0} characters'.format(
+                    trimmed_char_count
+                )
+            )
+
+        # Escape '&', '<' and '>'
+        description = saxutils.escape(ustr(description))
+
     detail = u''
     if substatus is not None:
         substatus = saxutils.escape(ustr(substatus))
@@ -328,12 +332,12 @@ def ext_status_to_v1(ext_name, ext_status):
         "version": 1.0,
         "timestampUTC": timestamp
     }
-    if len(v1_sub_status) != 0:
+    if len(v1_sub_status) != 0: # pylint: disable=len-as-condition
         v1_ext_status['status']['substatus'] = v1_sub_status
     return v1_ext_status
 
 
-def ext_handler_status_to_v1(handler_status, ext_statuses, timestamp):
+def ext_handler_status_to_v1(handler_status, ext_statuses, timestamp): # pylint: disable=W0613
     v1_handler_status = {
         'handlerVersion': handler_status.version,
         'handlerName': handler_status.name,
@@ -347,7 +351,7 @@ def ext_handler_status_to_v1(handler_status, ext_statuses, timestamp):
             "message": handler_status.message
         }
 
-    if len(handler_status.extensions) > 0:
+    if len(handler_status.extensions) > 0: # pylint: disable=len-as-condition
         # Currently, no more than one extension per handler
         ext_name = handler_status.extensions[0]
         ext_status = ext_statuses.get(ext_name)
@@ -423,7 +427,7 @@ class StatusBlob(object):
                 self.put_page_blob(url, self.data)
             return True
 
-        except Exception as e:
+        except Exception as e: # pylint: disable=C0103
             logger.verbose("Initial status upload failed: {0}", e)
 
         return False
@@ -505,7 +509,7 @@ class StatusBlob(object):
 
 
 def event_param_to_v1(param):
-    param_format = '<Param Name="{0}" Value={1} T="{2}" />'
+    param_format = ustr('<Param Name="{0}" Value={1} T="{2}" />')
     param_type = type(param.value)
     attr_type = ""
     if param_type is int:
@@ -523,30 +527,27 @@ def event_param_to_v1(param):
                                attr_type)
 
 
-def event_to_v1(event):
+def event_to_v1_encoded(event, encoding='utf-8'):
     params = ""
     for param in event.parameters:
         params += event_param_to_v1(param)
-    event_str = ('<Event id="{0}">'
-                 '<![CDATA[{1}]]>'
-                 '</Event>').format(event.eventId, params)
-    return event_str
+    event_str = ustr('<Event id="{0}"><![CDATA[{1}]]></Event>').format(event.eventId, params)
+    return event_str.encode(encoding)
 
 
-class WireClient(object):
+class WireClient(object): # pylint: disable=R0904
+
     def __init__(self, endpoint):
         logger.info("Wire server endpoint:{0}", endpoint)
-        self.endpoint = endpoint
-        self.goal_state = None
-        self.updated = None
-        self.hosting_env = None
-        self.shared_conf = None
-        self.remote_access = None
-        self.certs = None
-        self.ext_conf = None
-        self.host_plugin = None
+        self._endpoint = endpoint
+        self._goal_state = None
+        self._last_try_update_goal_state_failed = False
+        self._host_plugin = None
         self.status_blob = StatusBlob(self)
         self.goal_state_flusher = StateFlusher(conf.get_lib_dir())
+
+    def get_endpoint(self):
+        return self._endpoint
 
     def call_wireserver(self, http_req, *args, **kwargs):
         try:
@@ -564,7 +565,7 @@ class WireClient(object):
         except ResourceGoneError:
             raise
 
-        except Exception as e:
+        except Exception as e: # pylint: disable=C0103
             raise ProtocolError("[Wireserver Exception] {0}".format(
                 ustr(e)))
 
@@ -588,20 +589,20 @@ class WireClient(object):
             raise ProtocolError("{0} is missing.".format(local_file))
         try:
             return fileutil.read_file(local_file)
-        except IOError as e:
+        except IOError as e: # pylint: disable=C0103
             raise ProtocolError("Failed to read cache: {0}".format(e))
 
     def save_cache(self, local_file, data):
         try:
             fileutil.write_file(local_file, data)
-        except IOError as e:
+        except IOError as e: # pylint: disable=C0103
             fileutil.clean_ioerror(e, paths=[local_file])
             raise ProtocolError("Failed to write cache: {0}".format(e))
 
     @staticmethod
     def call_storage_service(http_req, *args, **kwargs):
         # Default to use the configured HTTP proxy
-        if not 'use_proxy' in kwargs or kwargs['use_proxy'] is None:
+        if not 'use_proxy' in kwargs or kwargs['use_proxy'] is None: # pylint: disable=C0113
             kwargs['use_proxy'] = True
 
         return http_req(*args, **kwargs)
@@ -624,19 +625,19 @@ class WireClient(object):
                 logger.verbose('The specified manifest URL is empty, ignored.')
                 continue
 
-            direct_func = lambda: self.fetch(version.uri)
+            direct_func = lambda: self.fetch(version.uri) # pylint: disable=W0640
             # NOTE: the host_func may be called after refreshing the goal state, be careful about any goal state data
             # in the lambda.
-            host_func = lambda: self.fetch_manifest_through_host(version.uri)
+            host_func = lambda: self.fetch_manifest_through_host(version.uri) # pylint: disable=W0640
 
             try:
                 response = self.send_request_using_appropriate_channel(direct_func, host_func)
 
                 if response:
                     host = self.get_host_plugin()
-                    host.manifest_uri = version.uri
+                    host.update_manifest_uri(version.uri)
                     return response
-            except Exception as e:
+            except Exception as e: # pylint: disable=C0103
                 logger.warn("Exception when fetching manifest. Error: {0}".format(ustr(e)))
 
         raise ExtensionDownloadError("Failed to fetch manifest from all sources")
@@ -656,7 +657,7 @@ class WireClient(object):
                         destination_fh.write(chunk)
                         complete = len(chunk) < chunk_size
                 success = True
-            except Exception as e:
+            except Exception as e: # pylint: disable=C0103
                 logger.error('Error streaming {0} to {1}: {2}'.format(uri, destination, ustr(e)))
 
         return success
@@ -679,277 +680,160 @@ class WireClient(object):
                 headers=headers,
                 use_proxy=use_proxy)
 
-            if restutil.request_failed(resp):
+            host_plugin = self.get_host_plugin()
+
+            if restutil.request_failed(resp): # pylint: disable=R1720
                 error_response = restutil.read_response_error(resp)
                 msg = "Fetch failed from [{0}]: {1}".format(uri, error_response)
                 logger.warn(msg)
-                if self.host_plugin is not None:
-                    self.host_plugin.report_fetch_health(uri,
-                                                         is_healthy=not restutil.request_failed_at_hostplugin(resp),
-                                                         source='WireClient',
-                                                         response=error_response)
+
+                if host_plugin is not None:
+                    host_plugin.report_fetch_health(uri,
+                                                    is_healthy=not restutil.request_failed_at_hostplugin(resp),
+                                                    source='WireClient',
+                                                    response=error_response)
                 raise ProtocolError(msg)
             else:
-                if self.host_plugin is not None:
-                    self.host_plugin.report_fetch_health(uri, source='WireClient')
+                if host_plugin is not None:
+                    host_plugin.report_fetch_health(uri, source='WireClient')
 
-        except (HttpError, ProtocolError, IOError) as e:
+        except (HttpError, ProtocolError, IOError) as e: # pylint: disable=C0103
             logger.verbose("Fetch failed from [{0}]: {1}", uri, e)
-            if isinstance(e, ResourceGoneError) or isinstance(e, InvalidContainerError):
+            if isinstance(e, ResourceGoneError) or isinstance(e, InvalidContainerError): # pylint: disable=R1701
                 raise
         return resp
 
-    def update_hosting_env(self, goal_state):
-        if goal_state.hosting_env_uri is None:
-            raise ProtocolError("HostingEnvironmentConfig uri is empty")
-        local_file = os.path.join(conf.get_lib_dir(), HOSTING_ENV_FILE_NAME)
-        xml_text = self.fetch_config(goal_state.hosting_env_uri,
-                                     self.get_header())
-        self.save_cache(local_file, xml_text)
-        self.hosting_env = HostingEnv(xml_text)
+    def update_host_plugin_from_goal_state(self):
+        """
+        Fetches a new goal state and updates the Container ID and Role Config Name of the host plugin client
+        """
+        goal_state = GoalState.fetch_goal_state(self)
+        self._update_host_plugin(goal_state.container_id, goal_state.role_config_name)
 
-    def update_shared_conf(self, goal_state):
-        if goal_state.shared_conf_uri is None:
-            raise ProtocolError("SharedConfig uri is empty")
-        local_file = os.path.join(conf.get_lib_dir(), SHARED_CONF_FILE_NAME)
-        xml_text = self.fetch_config(goal_state.shared_conf_uri,
-                                     self.get_header())
-        self.save_cache(local_file, xml_text)
-        self.shared_conf = SharedConfig(xml_text)
+    def update_goal_state(self, forced=False):
+        """
+        Updates the goal state if the incarnation changed or if 'forced' is True
+        """
+        try:
+            if self._goal_state is None or forced:
+                new_goal_state = GoalState.fetch_full_goal_state(self)
+            else:
+                new_goal_state = GoalState.fetch_full_goal_state_if_incarnation_different_than(self, self._goal_state.incarnation)
 
-    def update_certs(self, goal_state):
-        if goal_state.certs_uri is None:
-            return
-        local_file = os.path.join(conf.get_lib_dir(), CERTS_FILE_NAME)
-        xml_text = self.fetch_config(goal_state.certs_uri,
-                                     self.get_header_for_cert())
-        self.save_cache(local_file, xml_text)
-        self.certs = Certificates(self, xml_text)
+            if new_goal_state is not None:
+                self._goal_state = new_goal_state
+                self._save_goal_state()
+                self._update_host_plugin(new_goal_state.container_id, new_goal_state.role_config_name)
 
-    def update_remote_access_conf(self, goal_state):
-        if goal_state.remote_access_uri is None:
-            # Nothing in accounts data.  Just return, nothing to do.
-            return
-        xml_text = self.fetch_config(goal_state.remote_access_uri,
-                                     self.get_header_for_cert())
-        self.remote_access = RemoteAccess(xml_text)
-        local_file = os.path.join(conf.get_lib_dir(), REMOTE_ACCESS_FILE_NAME.format(self.remote_access.incarnation))
-        self.save_cache(local_file, xml_text)
+        except Exception as exception:
+            raise ProtocolError("Error processing goal state: {0}".format(ustr(exception)))
 
-    def get_remote_access(self):
-        incarnation_file = os.path.join(conf.get_lib_dir(),
-                                        INCARNATION_FILE_NAME)
-        incarnation = self.fetch_cache(incarnation_file)
-        file_name = REMOTE_ACCESS_FILE_NAME.format(incarnation)
-        remote_access_file = os.path.join(conf.get_lib_dir(), file_name)
-        if not os.path.isfile(remote_access_file):
-            # no remote access data.
-            return None
-        xml_text = self.fetch_cache(remote_access_file)
-        remote_access = RemoteAccess(xml_text)
-        return remote_access
+    def try_update_goal_state(self):
+        """
+        Attempts to update the goal state and returns True on success or False on failure, sending telemetry events about the failures.
+        """
+        try:
+            self.update_goal_state()
 
-    def update_ext_conf(self, goal_state):
-        if goal_state.ext_uri is None:
-            logger.info("ExtensionsConfig.xml uri is empty")
-            self.ext_conf = ExtensionsConfig(None)
-            return
-        incarnation = goal_state.incarnation
-        local_file = os.path.join(conf.get_lib_dir(),
-                                  EXT_CONF_FILE_NAME.format(incarnation))
-        xml_text = self.fetch_config(goal_state.ext_uri, self.get_header())
-        self.save_cache(local_file, xml_text)
-        self.ext_conf = ExtensionsConfig(xml_text)
+            if self._last_try_update_goal_state_failed:
+                self._last_try_update_goal_state_failed = False
+                message = u"Retrieving the goal state recovered from previous errors"
+                add_event(AGENT_NAME, op=WALAEventOperation.FetchGoalState, version=CURRENT_VERSION, is_success=True, message=message, log_event=False)
+                logger.info(message)
+        except Exception as e: # pylint: disable=C0103
+            if not self._last_try_update_goal_state_failed:
+                self._last_try_update_goal_state_failed = True
+                message = u"An error occurred while retrieving the goal state: {0}".format(ustr(e))
+                add_event(AGENT_NAME, op=WALAEventOperation.FetchGoalState, version=CURRENT_VERSION, is_success=False, message=message, log_event=False)
+                message = u"An error occurred while retrieving the goal state: {0}".format(ustr(traceback.format_exc()))
+                logger.warn(message)
+            message = u"Attempts to retrieve the goal state are failing: {0}".format(ustr(e))
+            logger.periodic_warn(logger.EVERY_SIX_HOURS, "[PERIODIC] {0}".format(message))
+            return False
+        return True
 
-    def save_or_update_goal_state_file(self, incarnation, xml_text):
-        # It should create a new file if the incarnation number is new.
-        # It should overwrite the existing file if the incarnation number is the same.
-        file_name = GOAL_STATE_FILE_NAME.format(incarnation)
-        goal_state_file = os.path.join(conf.get_lib_dir(), file_name)
-        self.save_cache(goal_state_file, xml_text)
+    def _update_host_plugin(self, container_id, role_config_name):
+        if self._host_plugin is not None:
+            self._host_plugin.update_container_id(container_id)
+            self._host_plugin.update_role_config_name(role_config_name)
 
-    def update_host_plugin(self, container_id, role_config_name):
-        if self.host_plugin is not None:
-            self.host_plugin.container_id = container_id
-            self.host_plugin.role_config_name = role_config_name
+    def _save_goal_state(self):
+        try:
+            self.goal_state_flusher.flush(datetime.utcnow())
 
-    def update_goal_state(self, forced=False, max_retry=3):
-        incarnation_file = os.path.join(conf.get_lib_dir(), INCARNATION_FILE_NAME)
-        uri = GOAL_STATE_URI.format(self.endpoint)
+        except Exception as e: # pylint: disable=C0103
+            logger.warn("Failed to save the previous goal state to the history folder: {0}", ustr(e))
 
-        current_goal_state_from_configuration = None
-        for retry in range(0, max_retry):
-            try:
-                if current_goal_state_from_configuration is None:
-                    xml_text = self.fetch_config(uri, self.get_header())
-                    current_goal_state_from_configuration = GoalState(xml_text)
+        try:
+            local_file = os.path.join(conf.get_lib_dir(), INCARNATION_FILE_NAME)
+            self.save_cache(local_file, self._goal_state.incarnation)
 
-                    if not forced:
-                        last_incarnation = None
-                        if os.path.isfile(incarnation_file):
-                            last_incarnation = fileutil.read_file(incarnation_file)
-                        new_incarnation = current_goal_state_from_configuration.incarnation
+            def save_if_not_none(goal_state_property, file_name):
+                file_path = os.path.join(conf.get_lib_dir(), file_name)
 
-                        if last_incarnation is not None and last_incarnation == new_incarnation:
-                            # Incarnation number is not updated, but role config file and container ID
-                            # can change without the incarnation number changing. Ensure they are updated in
-                            # the goal state file on disk, as well as in the HostGA plugin instance.
-                            self.goal_state = current_goal_state_from_configuration
-                            self.save_or_update_goal_state_file(new_incarnation, xml_text)
-                            self.update_host_plugin(current_goal_state_from_configuration.container_id,
-                                                    current_goal_state_from_configuration.role_config_name)
+                if goal_state_property is not None and goal_state_property.xml_text is not None:
+                    self.save_cache(file_path, goal_state_property.xml_text)
 
-                            return
-                self.goal_state_flusher.flush(datetime.utcnow())
+            # NOTE: Certificates are saved in Certificate.__init__
+            save_if_not_none(self._goal_state, GOAL_STATE_FILE_NAME.format(self._goal_state.incarnation))
+            save_if_not_none(self._goal_state.hosting_env, HOSTING_ENV_FILE_NAME)
+            save_if_not_none(self._goal_state.shared_conf, SHARED_CONF_FILE_NAME)
+            save_if_not_none(self._goal_state.ext_conf, EXT_CONF_FILE_NAME.format(self._goal_state.incarnation))
+            save_if_not_none(self._goal_state.remote_access, REMOTE_ACCESS_FILE_NAME.format(self._goal_state.incarnation))
 
-                self.goal_state = current_goal_state_from_configuration
-                self.save_or_update_goal_state_file(current_goal_state_from_configuration.incarnation, xml_text)
-                self.update_hosting_env(current_goal_state_from_configuration)
-                self.update_shared_conf(current_goal_state_from_configuration)
-                self.update_certs(current_goal_state_from_configuration)
-                self.update_ext_conf(current_goal_state_from_configuration)
-                self.update_remote_access_conf(current_goal_state_from_configuration)
-                self.save_cache(incarnation_file, current_goal_state_from_configuration.incarnation)
-                self.update_host_plugin(current_goal_state_from_configuration.container_id,
-                                        current_goal_state_from_configuration.role_config_name)
+        except Exception as e: # pylint: disable=C0103
+            logger.warn("Failed to save the goal state to disk: {0}", ustr(e))
 
-                return
-
-            except IOError as e:
-                logger.warn("IOError processing goal state, retrying [{0}]", ustr(e))
-
-            except ResourceGoneError:
-                logger.info("Goal state is stale, re-fetching")
-                current_goal_state_from_configuration = None
-
-            except ProtocolError as e:
-                if retry < max_retry - 1:
-                    logger.verbose("ProtocolError processing goal state, retrying [{0}]", ustr(e))
-                else:
-                    logger.error("ProtocolError processing goal state, giving up [{0}]", ustr(e))
-
-            except Exception as e:
-                if retry < max_retry - 1:
-                    logger.verbose("Exception processing goal state, retrying: [{0}]", ustr(e))
-                else:
-                    logger.error("Exception processing goal state, giving up: [{0}]", ustr(e))
-
-        raise ProtocolError("Exceeded max retry updating goal state")
+    def _set_host_plugin(self, new_host_plugin):
+        if new_host_plugin is None:
+            logger.warn("Setting empty Host Plugin object!")
+        self._host_plugin = new_host_plugin
 
     def get_goal_state(self):
-        if self.goal_state is None:
-            incarnation_file = os.path.join(conf.get_lib_dir(),
-                                            INCARNATION_FILE_NAME)
-            incarnation = self.fetch_cache(incarnation_file)
-
-            file_name = GOAL_STATE_FILE_NAME.format(incarnation)
-            goal_state_file = os.path.join(conf.get_lib_dir(), file_name)
-            xml_text = self.fetch_cache(goal_state_file)
-            self.goal_state = GoalState(xml_text)
-        return self.goal_state
+        if self._goal_state is None:
+            raise ProtocolError("Trying to fetch goal state before initialization!")
+        return self._goal_state
 
     def get_hosting_env(self):
-        if self.hosting_env is None:
-            local_file = os.path.join(conf.get_lib_dir(),
-                                      HOSTING_ENV_FILE_NAME)
-            xml_text = self.fetch_cache(local_file)
-            self.hosting_env = HostingEnv(xml_text)
-        return self.hosting_env
+        if self._goal_state is None:
+            raise ProtocolError("Trying to fetch Hosting Environment before initialization!")
+        return self._goal_state.hosting_env
 
     def get_shared_conf(self):
-        if self.shared_conf is None:
-            local_file = os.path.join(conf.get_lib_dir(),
-                                      SHARED_CONF_FILE_NAME)
-            xml_text = self.fetch_cache(local_file)
-            self.shared_conf = SharedConfig(xml_text)
-        return self.shared_conf
+        if self._goal_state is None:
+            raise ProtocolError("Trying to fetch Shared Conf before initialization!")
+        return self._goal_state.shared_conf
 
     def get_certs(self):
-        if self.certs is None:
-            local_file = os.path.join(conf.get_lib_dir(), CERTS_FILE_NAME)
-            xml_text = self.fetch_cache(local_file)
-            self.certs = Certificates(self, xml_text)
-        if self.certs is None:
-            return None
-        return self.certs
-
-    def get_current_handlers(self):
-        handler_list = list()
-        try:
-            incarnation = self.fetch_cache(os.path.join(conf.get_lib_dir(),
-                                                        INCARNATION_FILE_NAME))
-            ext_conf = ExtensionsConfig(self.fetch_cache(os.path.join(conf.get_lib_dir(),
-                                                                      EXT_CONF_FILE_NAME.format(incarnation))))
-            handler_list = ext_conf.ext_handlers.extHandlers
-        except ProtocolError as pe:
-            # cache file is missing, nothing to do
-            logger.verbose(ustr(pe))
-        except Exception as e:
-            logger.error("Could not obtain current handlers: {0}", ustr(e))
-
-        return handler_list
+        if self._goal_state is None:
+            raise ProtocolError("Trying to fetch Certificates before initialization!")
+        return self._goal_state.certs
 
     def get_ext_conf(self):
-        if self.ext_conf is None:
-            local_goal_state = self.get_goal_state()
-            if local_goal_state.ext_uri is None:
-                self.ext_conf = ExtensionsConfig(None)
-            else:
-                local_file = EXT_CONF_FILE_NAME.format(local_goal_state.incarnation)
-                local_file = os.path.join(conf.get_lib_dir(), local_file)
-                xml_text = self.fetch_cache(local_file)
-                self.ext_conf = ExtensionsConfig(xml_text)
-        return self.ext_conf
+        if self._goal_state is None:
+            raise ProtocolError("Trying to fetch Extension Conf before initialization!")
+        return self._goal_state.ext_conf
 
-    def get_ext_manifest(self, ext_handler, goal_state):
-        local_file = MANIFEST_FILE_NAME.format(ext_handler.name, goal_state.incarnation)
+    def get_ext_manifest(self, ext_handler):
+        if self._goal_state is None:
+            raise ProtocolError("Trying to fetch Extension Manifest before initialization!")
+
+        local_file = MANIFEST_FILE_NAME.format(ext_handler.name, self.get_goal_state().incarnation)
         local_file = os.path.join(conf.get_lib_dir(), local_file)
 
         try:
             xml_text = self.fetch_manifest(ext_handler.versionUris)
             self.save_cache(local_file, xml_text)
             return ExtensionManifest(xml_text)
-        except Exception as e:
+        except Exception as e: # pylint: disable=C0103
             raise ExtensionDownloadError("Failed to retrieve extension manifest. Error: {0}".format(ustr(e)))
 
-    def filter_package_list(self, family, ga_manifest, goal_state):
-        complete_list = ga_manifest.pkg_list
-        agent_manifest = os.path.join(conf.get_lib_dir(),
-                                      AGENTS_MANIFEST_FILE_NAME.format(
-                                          family,
-                                          goal_state.incarnation))
-
-        if not os.path.exists(agent_manifest):
-            # clear memory cache
-            ga_manifest.allowed_versions = None
-
-            # create disk cache
-            with open(agent_manifest, mode='w') as manifest_fh:
-                for version in complete_list.versions:
-                    manifest_fh.write('{0}\n'.format(version.version))
-            fileutil.chmod(agent_manifest, 0o644)
-
-            return complete_list
-
-        else:
-            # use allowed versions from cache, otherwise from disk
-            if ga_manifest.allowed_versions is None:
-                with open(agent_manifest, mode='r') as manifest_fh:
-                    ga_manifest.allowed_versions = [v.strip('\n') for v
-                                                    in manifest_fh.readlines()]
-
-            # use the updated manifest urls for allowed versions
-            allowed_list = ExtHandlerPackageList()
-            allowed_list.versions = [version for version
-                                     in complete_list.versions
-                                     if version.version
-                                     in ga_manifest.allowed_versions]
-
-            return allowed_list
+    def get_remote_access(self):
+        if self._goal_state is None:
+            raise ProtocolError("Trying to fetch Remote Access before initialization!")
+        return self._goal_state.remote_access
 
     def get_gafamily_manifest(self, vmagent_manifest, goal_state):
-        self._remove_stale_agent_manifest(vmagent_manifest.family, goal_state.incarnation)
-
         local_file = MANIFEST_FILE_NAME.format(vmagent_manifest.family, goal_state.incarnation)
         local_file = os.path.join(conf.get_lib_dir(), local_file)
 
@@ -957,30 +841,11 @@ class WireClient(object):
             xml_text = self.fetch_manifest(vmagent_manifest.versionsManifestUris)
             fileutil.write_file(local_file, xml_text)
             return ExtensionManifest(xml_text)
-        except Exception as e:
+        except Exception as e: # pylint: disable=C0103
             raise ProtocolError("Failed to retrieve GAFamily manifest. Error: {0}".format(ustr(e)))
 
-    def _remove_stale_agent_manifest(self, family, incarnation):
-        """
-        The incarnation number can reset at any time, which means there
-        could be a stale agentsManifest on disk.  Stale files are cleaned
-        on demand as new goal states arrive from WireServer. If the stale
-        file is not removed agent upgrade may be delayed.
-
-        :param family: GA family, e.g. Prod or Test
-        :param incarnation: incarnation of the current goal state
-        """
-        fn = AGENTS_MANIFEST_FILE_NAME.format(
-            family,
-            incarnation)
-
-        agent_manifest = os.path.join(conf.get_lib_dir(), fn)
-
-        if os.path.exists(agent_manifest):
-            os.unlink(agent_manifest)
-
     def check_wire_protocol_version(self):
-        uri = VERSION_INFO_URI.format(self.endpoint)
+        uri = VERSION_INFO_URI.format(self.get_endpoint())
         version_info_xml = self.fetch_config(uri, None)
         version_info = VersionInfo(version_info_xml)
 
@@ -994,6 +859,59 @@ class WireClient(object):
             error = ("Agent supported wire protocol version: {0} was not "
                      "advised by Fabric.").format(PROTOCOL_VERSION)
             raise ProtocolNotFoundError(error)
+
+    def _call_hostplugin_with_container_check(self, host_func):
+        ret = None
+        try:
+            ret = host_func()
+        except (ResourceGoneError, InvalidContainerError) as e: # pylint: disable=C0103
+            host_plugin = self.get_host_plugin()
+            old_container_id = host_plugin.container_id
+            old_role_config_name = host_plugin.role_config_name
+
+            msg = "[PERIODIC] Request failed with the current host plugin configuration. " \
+                  "ContainerId: {0}, role config file: {1}. Fetching new goal state and retrying the call." \
+                  "Error: {2}".format(old_container_id, old_role_config_name, ustr(e))
+            logger.periodic_info(logger.EVERY_SIX_HOURS, msg)
+
+            self.update_host_plugin_from_goal_state()
+
+            new_container_id = host_plugin.container_id
+            new_role_config_name = host_plugin.role_config_name
+            msg = "[PERIODIC] Host plugin reconfigured with new parameters. " \
+                  "ContainerId: {0}, role config file: {1}.".format(new_container_id, new_role_config_name)
+            logger.periodic_info(logger.EVERY_SIX_HOURS, msg)
+
+            try:
+                ret = host_func()
+                if ret:
+                    msg = "[PERIODIC] Request succeeded using the host plugin channel after goal state refresh. " \
+                          "ContainerId changed from {0} to {1}, " \
+                          "role config file changed from {2} to {3}.".format(old_container_id, new_container_id,
+                                                                             old_role_config_name, new_role_config_name)
+                    add_periodic(delta=logger.EVERY_SIX_HOURS,
+                                 name=AGENT_NAME,
+                                 version=CURRENT_VERSION,
+                                 op=WALAEventOperation.HostPlugin,
+                                 is_success=True,
+                                 message=msg,
+                                 log_event=True)
+
+            except (ResourceGoneError, InvalidContainerError) as e: # pylint: disable=C0103
+                msg = "[PERIODIC] Request failed using the host plugin channel after goal state refresh. " \
+                      "ContainerId changed from {0} to {1}, role config file changed from {2} to {3}. " \
+                      "Exception type: {4}.".format(old_container_id, new_container_id, old_role_config_name,
+                                                    new_role_config_name, type(e).__name__)
+                add_periodic(delta=logger.EVERY_SIX_HOURS,
+                             name=AGENT_NAME,
+                             version=CURRENT_VERSION,
+                             op=WALAEventOperation.HostPlugin,
+                             is_success=False,
+                             message=msg,
+                             log_event=True)
+                raise
+
+        return ret
 
     def send_request_using_appropriate_channel(self, direct_func, host_func):
         # A wrapper method for all function calls that send HTTP requests. The purpose of the method is to
@@ -1021,7 +939,7 @@ class WireClient(object):
                 if not ret:
                     logger.periodic_info(logger.EVERY_HOUR, "[PERIODIC] Request failed using the direct channel, "
                                                             "switching to host plugin.")
-            except (ResourceGoneError, InvalidContainerError) as e:
+            except (ResourceGoneError, InvalidContainerError) as e: # pylint: disable=C0103
                 logger.periodic_info(logger.EVERY_HOUR, "[PERIODIC] Request failed using the direct channel, "
                                                         "switching to host plugin. Error: {0}".format(ustr(e)))
 
@@ -1030,53 +948,7 @@ class WireClient(object):
         else:
             logger.periodic_info(logger.EVERY_HALF_DAY, "[PERIODIC] Using host plugin as default channel.")
 
-        try:
-            ret = host_func()
-        except (ResourceGoneError, InvalidContainerError) as e:
-            old_container_id = self.host_plugin.container_id
-            old_role_config_name = self.host_plugin.role_config_name
-
-            msg = "[PERIODIC] Request failed with the current host plugin configuration. " \
-                  "ContainerId: {0}, role config file: {1}. Fetching new goal state and retrying the call." \
-                  "Error: {2}".format(old_container_id, old_role_config_name, ustr(e))
-            logger.periodic_info(logger.EVERY_SIX_HOURS, msg)
-
-            self.update_goal_state(forced=True)
-
-            new_container_id = self.host_plugin.container_id
-            new_role_config_name = self.host_plugin.role_config_name
-            msg = "[PERIODIC] Host plugin reconfigured with new parameters. " \
-                  "ContainerId: {0}, role config file: {1}.".format(new_container_id, new_role_config_name)
-            logger.periodic_info(logger.EVERY_SIX_HOURS, msg)
-
-            try:
-                ret = host_func()
-                if ret:
-                    msg = "[PERIODIC] Request succeeded using the host plugin channel after goal state refresh. " \
-                          "ContainerId changed from {0} to {1}, " \
-                          "role config file changed from {2} to {3}.".format(old_container_id, new_container_id,
-                                                                             old_role_config_name, new_role_config_name)
-                    add_periodic(delta=logger.EVERY_SIX_HOURS,
-                                 name=AGENT_NAME,
-                                 version=CURRENT_VERSION,
-                                 op=WALAEventOperation.HostPlugin,
-                                 is_success=True,
-                                 message=msg,
-                                 log_event=True)
-
-            except (ResourceGoneError, InvalidContainerError) as e:
-                msg = "[PERIODIC] Request failed using the host plugin channel after goal state refresh. " \
-                      "ContainerId changed from {0} to {1}, role config file changed from {2} to {3}. " \
-                      "Exception type: {4}.".format(old_container_id, new_container_id, old_role_config_name,
-                                                    new_role_config_name, type(e).__name__)
-                add_periodic(delta=logger.EVERY_SIX_HOURS,
-                             name=AGENT_NAME,
-                             version=CURRENT_VERSION,
-                             op=WALAEventOperation.HostPlugin,
-                             is_success=False,
-                             message=msg,
-                             log_event=True)
-                raise
+        ret = self._call_hostplugin_with_container_check(host_func)
 
         if not HostPluginProtocol.is_default_channel():
             logger.info("Setting host plugin as default channel from now on. "
@@ -1086,10 +958,10 @@ class WireClient(object):
         return ret
 
     def upload_status_blob(self):
-        self.update_goal_state()
         ext_conf = self.get_ext_conf()
 
         if ext_conf.status_upload_blob is None:
+            # the status upload blob is in ExtensionsConfig so force a full goal state refresh
             self.update_goal_state(forced=True)
             ext_conf = self.get_ext_conf()
 
@@ -1103,8 +975,8 @@ class WireClient(object):
 
         try:
             self.status_blob.prepare(blob_type)
-        except Exception as e:
-            raise ProtocolError("Exception creating status blob: {0}", ustr(e))
+        except Exception as e: # pylint: disable=C0103
+            raise ProtocolError("Exception creating status blob: {0}", ustr(e)) # pylint: disable=W0715
 
         # Swap the order of use for the HostPlugin vs. the "direct" route.
         # Prefer the use of HostPlugin. If HostPlugin fails fall back to the
@@ -1120,10 +992,10 @@ class WireClient(object):
             host.put_vm_status(self.status_blob, ext_conf.status_upload_blob, ext_conf.status_upload_blob_type)
             return
         except ResourceGoneError:
-            # do not attempt direct, force goal state update and wait to try again
-            self.update_goal_state(forced=True)
+            # refresh the host plugin client and try again on the next iteration of the main loop
+            self.update_host_plugin_from_goal_state()
             return
-        except Exception as e:
+        except Exception as e: # pylint: disable=C0103
             # for all other errors, fall back to direct
             msg = "Falling back to direct upload: {0}".format(ustr(e))
             self.report_status_event(msg, is_success=True)
@@ -1131,7 +1003,7 @@ class WireClient(object):
         try:
             if self.status_blob.upload(ext_conf.status_upload_blob):
                 return
-        except Exception as e:
+        except Exception as e: # pylint: disable=C0103
             msg = "Exception uploading status blob: {0}".format(ustr(e))
             self.report_status_event(msg, is_success=False)
 
@@ -1143,14 +1015,14 @@ class WireClient(object):
                                            goal_state.role_instance_id,
                                            thumbprint)
         role_prop = role_prop.encode("utf-8")
-        role_prop_uri = ROLE_PROP_URI.format(self.endpoint)
+        role_prop_uri = ROLE_PROP_URI.format(self.get_endpoint())
         headers = self.get_header_for_xml_content()
         try:
             resp = self.call_wireserver(restutil.http_post,
                                         role_prop_uri,
                                         role_prop,
                                         headers=headers)
-        except HttpError as e:
+        except HttpError as e: # pylint: disable=C0103
             raise ProtocolError((u"Failed to send role properties: "
                                  u"{0}").format(e))
         if resp.status != httpclient.ACCEPTED:
@@ -1167,7 +1039,7 @@ class WireClient(object):
                                              substatus,
                                              description)
         health_report = health_report.encode("utf-8")
-        health_report_uri = HEALTH_REPORT_URI.format(self.endpoint)
+        health_report_uri = HEALTH_REPORT_URI.format(self.get_endpoint())
         headers = self.get_header_for_xml_content()
         try:
             # 30 retries with 10s sleep gives ~5min for wireserver updates;
@@ -1179,7 +1051,7 @@ class WireClient(object):
                                         headers=headers,
                                         max_retry=30,
                                         retry_delay=15)
-        except HttpError as e:
+        except HttpError as e: # pylint: disable=C0103
             raise ProtocolError((u"Failed to send provision status: "
                                  u"{0}").format(e))
         if restutil.request_failed(resp):
@@ -1187,20 +1059,19 @@ class WireClient(object):
                                  u",{0}: {1}").format(resp.status,
                                                       resp.read()))
 
-    def send_event(self, provider_id, event_str):
-        uri = TELEMETRY_URI.format(self.endpoint)
-        data_format = ('<?xml version="1.0"?>'
-                       '<TelemetryData version="1.0">'
-                       '<Provider id="{0}">{1}'
-                       '</Provider>'
-                       '</TelemetryData>')
-        data = data_format.format(provider_id, event_str)
+    def send_encoded_event(self, provider_id, event_str, encoding='utf-8'):
+        uri = TELEMETRY_URI.format(self.get_endpoint())
+        data_format_header = ustr('<?xml version="1.0"?><TelemetryData version="1.0"><Provider id="{0}">').format(
+            provider_id).encode(encoding)
+        data_format_footer = ustr('</Provider></TelemetryData>').encode(encoding)
+        # Event string should already be encoded by the time it gets here, to avoid double encoding, dividing it into parts.
+        data = data_format_header + event_str + data_format_footer
         try:
             header = self.get_header_for_xml_content()
             # NOTE: The call to wireserver requests utf-8 encoding in the headers, but the body should not
             #       be encoded: some nodes in the telemetry pipeline do not support utf-8 encoding.
             resp = self.call_wireserver(restutil.http_post, uri, data, header)
-        except HttpError as e:
+        except HttpError as e: # pylint: disable=C0103
             raise ProtocolError("Failed to send events:{0}".format(e))
 
         if restutil.request_failed(resp):
@@ -1209,33 +1080,56 @@ class WireClient(object):
                 "Failed to send events:{0}".format(resp.status))
 
     def report_event(self, event_list):
+        max_send_errors_to_report = 5
         buf = {}
+        events_per_request = 0
+        unicode_error_count, unicode_errors = 0, []
+        event_report_error_count, event_report_errors = 0, []
+
         # Group events by providerId
         for event in event_list.events:
-            if event.providerId not in buf:
-                buf[event.providerId] = ""
-            event_str = event_to_v1(event)
-            if len(event_str) >= MAX_EVENT_BUFFER_SIZE:
-                details_of_event = [ustr(x.name) + ":" + ustr(x.value) for x in event.parameters if x.name in
-                                    ["Name", "Version", "Operation", "OperationSuccess"]]
-                logger.periodic_warn(logger.EVERY_HALF_HOUR,
-                                     "Single event too large: {0}, with the length: {1} more than the limit({2})"
-                                     .format(str(details_of_event), len(event_str), MAX_EVENT_BUFFER_SIZE))
-                continue
-            if len(buf[event.providerId] + event_str) >= MAX_EVENT_BUFFER_SIZE:
-                self.send_event(event.providerId, buf[event.providerId])
-                buf[event.providerId] = ""
-            buf[event.providerId] = buf[event.providerId] + event_str
+            try:
+                if event.providerId not in buf:
+                    buf[event.providerId] = b''
+                event_str = event_to_v1_encoded(event)
+                if len(event_str) >= MAX_EVENT_BUFFER_SIZE:
+                    details_of_event = [ustr(x.name) + ":" + ustr(x.value) for x in event.parameters if x.name in
+                                        [GuestAgentExtensionEventsSchema.Name, GuestAgentExtensionEventsSchema.Version,
+                                         GuestAgentExtensionEventsSchema.Operation,
+                                         GuestAgentExtensionEventsSchema.OperationSuccess]]
+                    logger.periodic_warn(logger.EVERY_HALF_HOUR,
+                                         "Single event too large: {0}, with the length: {1} more than the limit({2})"
+                                         .format(str(details_of_event), len(event_str), MAX_EVENT_BUFFER_SIZE))
+                    continue
+                if len(buf[event.providerId] + event_str) >= MAX_EVENT_BUFFER_SIZE:
+                    self.send_encoded_event(event.providerId, buf[event.providerId])
+                    buf[event.providerId] = b''
+                    logger.verbose("No of events this request = {0}".format(events_per_request))
+                    events_per_request = 0
+                buf[event.providerId] = buf[event.providerId] + event_str
+                events_per_request += 1
+            except UnicodeError as e: # pylint: disable=C0103
+                unicode_error_count += 1
+                if len(unicode_errors) < max_send_errors_to_report:
+                    unicode_errors.append(ustr(e))
+            except Exception as e: # pylint: disable=C0103
+                event_report_error_count += 1
+                if len(event_report_errors) < max_send_errors_to_report:
+                    event_report_errors.append(ustr(e))
+
+        EventLogger.report_dropped_events_error(event_report_error_count, event_report_errors,
+                                                WALAEventOperation.CollectEventErrors, max_send_errors_to_report)
+        EventLogger.report_dropped_events_error(unicode_error_count, unicode_errors,
+                                                WALAEventOperation.CollectEventUnicodeErrors,
+                                                max_send_errors_to_report)
 
         # Send out all events left in buffer.
         for provider_id in list(buf.keys()):
-            if len(buf[provider_id]) > 0:
-                self.send_event(provider_id, buf[provider_id])
+            if len(buf[provider_id]) > 0: # pylint: disable=len-as-condition
+                logger.verbose("No of events this request = {0}".format(events_per_request))
+                self.send_encoded_event(provider_id, buf[provider_id])
 
     def report_status_event(self, message, is_success):
-        from azurelinuxagent.common.event import report_event, \
-            WALAEventOperation
-
         report_event(op=WALAEventOperation.ReportStatus,
                      is_success=is_success,
                      message=message,
@@ -1267,16 +1161,17 @@ class WireClient(object):
         }
 
     def get_host_plugin(self):
-        if self.host_plugin is None:
-            goal_state = self.get_goal_state()
-            self.host_plugin = HostPluginProtocol(self.endpoint,
-                                                  goal_state.container_id,
-                                                  goal_state.role_config_name)
-        return self.host_plugin
+        if self._host_plugin is None:
+            goal_state = GoalState.fetch_goal_state(self)
+            self._set_host_plugin(HostPluginProtocol(self.get_endpoint(),
+                                                     goal_state.container_id,
+                                                     goal_state.role_config_name))
+        return self._host_plugin
 
     def has_artifacts_profile_blob(self):
-        return self.ext_conf and not \
-            textutil.is_str_none_or_whitespace(self.ext_conf.artifacts_profile_blob)
+        ext_conf = self.get_ext_conf()
+        return ext_conf and not \
+            textutil.is_str_none_or_whitespace(ext_conf.artifacts_profile_blob)
 
     def get_artifacts_profile_through_host(self, blob):
         host = self.get_host_plugin()
@@ -1288,7 +1183,7 @@ class WireClient(object):
         artifacts_profile = None
 
         if self.has_artifacts_profile_blob():
-            blob = self.ext_conf.artifacts_profile_blob
+            blob = self.get_ext_conf().artifacts_profile_blob
             direct_func = lambda: self.fetch(blob)
             # NOTE: the host_func may be called after refreshing the goal state, be careful about any goal state data
             # in the lambda.
@@ -1298,7 +1193,7 @@ class WireClient(object):
 
             try:
                 profile = self.send_request_using_appropriate_channel(direct_func, host_func)
-            except Exception as e:
+            except Exception as e: # pylint: disable=C0103
                 logger.warn("Exception retrieving artifacts profile: {0}".format(ustr(e)))
                 return None
 
@@ -1311,13 +1206,20 @@ class WireClient(object):
                     msg = "Content: [{0}]".format(profile)
                     logger.verbose(msg)
 
-                    from azurelinuxagent.common.event import report_event, WALAEventOperation
                     report_event(op=WALAEventOperation.ArtifactsProfileBlob,
                                  is_success=False,
                                  message=msg,
                                  log_event=False)
 
         return artifacts_profile
+
+    def upload_logs(self, content):
+        host_func = lambda: self._upload_logs_through_host(content)
+        return self._call_hostplugin_with_container_check(host_func)
+
+    def _upload_logs_through_host(self, content):
+        host = self.get_host_plugin()
+        return host.put_vm_log(content)
 
 
 class VersionInfo(object):
@@ -1352,408 +1254,15 @@ class VersionInfo(object):
         return self.supported
 
 
-class GoalState(object):
-    def __init__(self, xml_text):
-        if xml_text is None:
-            raise ValueError("GoalState.xml is None")
-        logger.verbose("Load GoalState.xml")
-        self.incarnation = None
-        self.expected_state = None
-        self.hosting_env_uri = None
-        self.shared_conf_uri = None
-        self.remote_access_uri = None
-        self.certs_uri = None
-        self.ext_uri = None
-        self.role_instance_id = None
-        self.role_config_name = None
-        self.container_id = None
-        self.load_balancer_probe_port = None
-        self.xml_text = None
-        self.parse(xml_text)
-
-    def parse(self, xml_text):
-        """
-        Request configuration data from endpoint server.
-        """
-        self.xml_text = xml_text
-        xml_doc = parse_doc(xml_text)
-        self.incarnation = findtext(xml_doc, "Incarnation")
-        self.expected_state = findtext(xml_doc, "ExpectedState")
-        self.hosting_env_uri = findtext(xml_doc, "HostingEnvironmentConfig")
-        self.shared_conf_uri = findtext(xml_doc, "SharedConfig")
-        self.certs_uri = findtext(xml_doc, "Certificates")
-        self.ext_uri = findtext(xml_doc, "ExtensionsConfig")
-        role_instance = find(xml_doc, "RoleInstance")
-        self.role_instance_id = findtext(role_instance, "InstanceId")
-        role_config = find(role_instance, "Configuration")
-        self.role_config_name = findtext(role_config, "ConfigName")
-        container = find(xml_doc, "Container")
-        self.container_id = findtext(container, "ContainerId")
-        os.environ[CONTAINER_ID_ENV_VARIABLE] = self.container_id
-        self.remote_access_uri = findtext(container, "RemoteAccessInfo")
-        lbprobe_ports = find(xml_doc, "LBProbePorts")
-        self.load_balancer_probe_port = findtext(lbprobe_ports, "Port")
-        return self
-
-
-class HostingEnv(object):
-    """
-    parse Hosting enviromnet config and store in
-    HostingEnvironmentConfig.xml
-    """
-
-    def __init__(self, xml_text):
-        if xml_text is None:
-            raise ValueError("HostingEnvironmentConfig.xml is None")
-        logger.verbose("Load HostingEnvironmentConfig.xml")
-        self.vm_name = None
-        self.role_name = None
-        self.deployment_name = None
-        self.xml_text = None
-        self.parse(xml_text)
-
-    def parse(self, xml_text):
-        """
-        parse and create HostingEnvironmentConfig.xml.
-        """
-        self.xml_text = xml_text
-        xml_doc = parse_doc(xml_text)
-        incarnation = find(xml_doc, "Incarnation")
-        self.vm_name = getattrib(incarnation, "instance")
-        role = find(xml_doc, "Role")
-        self.role_name = getattrib(role, "name")
-        deployment = find(xml_doc, "Deployment")
-        self.deployment_name = getattrib(deployment, "name")
-        return self
-
-
-class SharedConfig(object):
-    """
-    parse role endpoint server and goal state config.
-    """
-
-    def __init__(self, xml_text):
-        logger.verbose("Load SharedConfig.xml")
-        self.parse(xml_text)
-
-    def parse(self, xml_text):
-        """
-        parse and write configuration to file SharedConfig.xml.
-        """
-        # Not used currently
-        return self
-
-
-class RemoteAccess(object):
-    """
-    Object containing information about user accounts
-    """
-
-    #
-    # <RemoteAccess>
-    #   <Version/>
-    #   <Incarnation/>
-    #    <Users>
-    #       <User>
-    #         <Name/>
-    #         <Password/>
-    #         <Expiration/>
-    #       </User>
-    #     </Users>
-    #   </RemoteAccess>
-    #
-
-    def __init__(self, xml_text):
-        logger.verbose("Load RemoteAccess.xml")
-        self.version = None
-        self.incarnation = None
-        self.user_list = RemoteAccessUsersList()
-
-        self.xml_text = None
-        self.parse(xml_text)
-
-    def parse(self, xml_text):
-        """
-        Parse xml document containing user account information
-        """
-        if xml_text is None or len(xml_text) == 0:
-            return None
-        self.xml_text = xml_text
-        xml_doc = parse_doc(xml_text)
-        self.incarnation = findtext(xml_doc, "Incarnation")
-        self.version = findtext(xml_doc, "Version")
-        user_collection = find(xml_doc, "Users")
-        users = findall(user_collection, "User")
-
-        for user in users:
-            remote_access_user = self.parse_user(user)
-            self.user_list.users.append(remote_access_user)
-        return self
-
-    def parse_user(self, user):
-        name = findtext(user, "Name")
-        encrypted_password = findtext(user, "Password")
-        expiration = findtext(user, "Expiration")
-        remote_access_user = RemoteAccessUser(name, encrypted_password, expiration)
-        return remote_access_user
-
-
-class UserAccount(object):
-    """
-    Stores information about single user account
-    """
-
-    def __init__(self):
-        self.Name = None
-        self.EncryptedPassword = None
-        self.Password = None
-        self.Expiration = None
-        self.Groups = []
-
-
-class Certificates(object):
-    """
-    Object containing certificates of host and provisioned user.
-    """
-
-    def __init__(self, client, xml_text):
-        logger.verbose("Load Certificates.xml")
-        self.client = client
-        self.cert_list = CertList()
-        self.parse(xml_text)
-
-    def parse(self, xml_text):
-        """
-        Parse multiple certificates into seperate files.
-        """
-        xml_doc = parse_doc(xml_text)
-        data = findtext(xml_doc, "Data")
-        if data is None:
-            return
-
-        # if the certificates format is not Pkcs7BlobWithPfxContents do not parse it
-        certificateFormat = findtext(xml_doc, "Format")
-        if certificateFormat and certificateFormat != "Pkcs7BlobWithPfxContents":
-            logger.warn("The Format is not Pkcs7BlobWithPfxContents. Format is " + certificateFormat)
-            return
-
-        cryptutil = CryptUtil(conf.get_openssl_cmd())
-        p7m_file = os.path.join(conf.get_lib_dir(), P7M_FILE_NAME)
-        p7m = ("MIME-Version:1.0\n"
-               "Content-Disposition: attachment; filename=\"{0}\"\n"
-               "Content-Type: application/x-pkcs7-mime; name=\"{1}\"\n"
-               "Content-Transfer-Encoding: base64\n"
-               "\n"
-               "{2}").format(p7m_file, p7m_file, data)
-
-        self.client.save_cache(p7m_file, p7m)
-
-        trans_prv_file = os.path.join(conf.get_lib_dir(),
-                                      TRANSPORT_PRV_FILE_NAME)
-        trans_cert_file = os.path.join(conf.get_lib_dir(),
-                                       TRANSPORT_CERT_FILE_NAME)
-        pem_file = os.path.join(conf.get_lib_dir(), PEM_FILE_NAME)
-        # decrypt certificates
-        cryptutil.decrypt_p7m(p7m_file, trans_prv_file, trans_cert_file,
-                              pem_file)
-
-        # The parsing process use public key to match prv and crt.
-        buf = []
-        begin_crt = False
-        begin_prv = False
-        prvs = {}
-        thumbprints = {}
-        index = 0
-        v1_cert_list = []
-        with open(pem_file) as pem:
-            for line in pem.readlines():
-                buf.append(line)
-                if re.match(r'[-]+BEGIN.*KEY[-]+', line):
-                    begin_prv = True
-                elif re.match(r'[-]+BEGIN.*CERTIFICATE[-]+', line):
-                    begin_crt = True
-                elif re.match(r'[-]+END.*KEY[-]+', line):
-                    tmp_file = self.write_to_tmp_file(index, 'prv', buf)
-                    pub = cryptutil.get_pubkey_from_prv(tmp_file)
-                    prvs[pub] = tmp_file
-                    buf = []
-                    index += 1
-                    begin_prv = False
-                elif re.match(r'[-]+END.*CERTIFICATE[-]+', line):
-                    tmp_file = self.write_to_tmp_file(index, 'crt', buf)
-                    pub = cryptutil.get_pubkey_from_crt(tmp_file)
-                    thumbprint = cryptutil.get_thumbprint_from_crt(tmp_file)
-                    thumbprints[pub] = thumbprint
-                    # Rename crt with thumbprint as the file name
-                    crt = "{0}.crt".format(thumbprint)
-                    v1_cert_list.append({
-                        "name": None,
-                        "thumbprint": thumbprint
-                    })
-                    os.rename(tmp_file, os.path.join(conf.get_lib_dir(), crt))
-                    buf = []
-                    index += 1
-                    begin_crt = False
-
-        # Rename prv key with thumbprint as the file name
-        for pubkey in prvs:
-            thumbprint = thumbprints[pubkey]
-            if thumbprint:
-                tmp_file = prvs[pubkey]
-                prv = "{0}.prv".format(thumbprint)
-                os.rename(tmp_file, os.path.join(conf.get_lib_dir(), prv))
-                logger.info("Found private key matching thumbprint {0}".format(thumbprint))
-            else:
-                # Since private key has *no* matching certificate,
-                # it will not be named correctly
-                logger.warn("Found NO matching cert/thumbprint for private key!")
-
-        # Log if any certificates were found without matching private keys
-        # This can happen (rarely), and is useful to know for debugging
-        for pubkey in thumbprints:
-            if not pubkey in prvs:
-                msg = "Certificate with thumbprint {0} has no matching private key."
-                logger.info(msg.format(thumbprints[pubkey]))
-
-        for v1_cert in v1_cert_list:
-            cert = Cert()
-            set_properties("certs", cert, v1_cert)
-            self.cert_list.certificates.append(cert)
-
-    def write_to_tmp_file(self, index, suffix, buf):
-        file_name = os.path.join(conf.get_lib_dir(),
-                                 "{0}.{1}".format(index, suffix))
-        self.client.save_cache(file_name, "".join(buf))
-        return file_name
-
-
-class ExtensionsConfig(object):
-    """
-    parse ExtensionsConfig, downloading and unpacking them to /var/lib/waagent.
-    Install if <enabled>true</enabled>, remove if it is set to false.
-    """
-
-    def __init__(self, xml_text):
-        logger.verbose("Load ExtensionsConfig.xml")
-        self.ext_handlers = ExtHandlerList()
-        self.vmagent_manifests = VMAgentManifestList()
-        self.status_upload_blob = None
-        self.status_upload_blob_type = None
-        self.artifacts_profile_blob = None
-        if xml_text is not None:
-            self.parse(xml_text)
-
-    def parse(self, xml_text):
-        """
-        Write configuration to file ExtensionsConfig.xml.
-        """
-        xml_doc = parse_doc(xml_text)
-
-        ga_families_list = find(xml_doc, "GAFamilies")
-        ga_families = findall(ga_families_list, "GAFamily")
-
-        for ga_family in ga_families:
-            family = findtext(ga_family, "Name")
-            uris_list = find(ga_family, "Uris")
-            uris = findall(uris_list, "Uri")
-            manifest = VMAgentManifest()
-            manifest.family = family
-            for uri in uris:
-                manifestUri = VMAgentManifestUri(uri=gettext(uri))
-                manifest.versionsManifestUris.append(manifestUri)
-            self.vmagent_manifests.vmAgentManifests.append(manifest)
-
-        plugins_list = find(xml_doc, "Plugins")
-        plugins = findall(plugins_list, "Plugin")
-        plugin_settings_list = find(xml_doc, "PluginSettings")
-        plugin_settings = findall(plugin_settings_list, "Plugin")
-
-        for plugin in plugins:
-            ext_handler = self.parse_plugin(plugin)
-            self.ext_handlers.extHandlers.append(ext_handler)
-            self.parse_plugin_settings(ext_handler, plugin_settings)
-
-        self.status_upload_blob = findtext(xml_doc, "StatusUploadBlob")
-        self.artifacts_profile_blob = findtext(xml_doc, "InVMArtifactsProfileBlob")
-
-        status_upload_node = find(xml_doc, "StatusUploadBlob")
-        self.status_upload_blob_type = getattrib(status_upload_node,
-                                                 "statusBlobType")
-        logger.verbose("Extension config shows status blob type as [{0}]",
-                       self.status_upload_blob_type)
-
-    def parse_plugin(self, plugin):
-        ext_handler = ExtHandler()
-        ext_handler.name = getattrib(plugin, "name")
-        ext_handler.properties.version = getattrib(plugin, "version")
-        ext_handler.properties.state = getattrib(plugin, "state")
-
-        location = getattrib(plugin, "location")
-        failover_location = getattrib(plugin, "failoverlocation")
-        for uri in [location, failover_location]:
-            version_uri = ExtHandlerVersionUri()
-            version_uri.uri = uri
-            ext_handler.versionUris.append(version_uri)
-        return ext_handler
-
-    def parse_plugin_settings(self, ext_handler, plugin_settings):
-        if plugin_settings is None:
-            return
-
-        name = ext_handler.name
-        version = ext_handler.properties.version
-        settings = [x for x in plugin_settings \
-                    if getattrib(x, "name") == name and \
-                    getattrib(x, "version") == version]
-
-        if settings is None or len(settings) == 0:
-            return
-
-        runtime_settings = None
-        runtime_settings_node = find(settings[0], "RuntimeSettings")
-        seqNo = getattrib(runtime_settings_node, "seqNo")
-        runtime_settings_str = gettext(runtime_settings_node)
-        try:
-            runtime_settings = json.loads(runtime_settings_str)
-        except ValueError as e:
-            logger.error("Invalid extension settings")
-            return
-
-        depends_on_level = 0
-        depends_on_node = find(settings[0], "DependsOn")
-        if depends_on_node != None:
-            try:
-                depends_on_level = int(getattrib(depends_on_node, "dependencyLevel"))
-            except (ValueError, TypeError):
-                logger.warn("Could not parse dependencyLevel for handler {0}. Setting it to 0".format(name))
-                depends_on_level = 0
-
-        for plugin_settings_list in runtime_settings["runtimeSettings"]:
-            handler_settings = plugin_settings_list["handlerSettings"]
-            ext = Extension()
-            # There is no "extension name" in wire protocol.
-            # Put
-            ext.name = ext_handler.name
-            ext.sequenceNumber = seqNo
-            ext.publicSettings = handler_settings.get("publicSettings")
-            ext.protectedSettings = handler_settings.get("protectedSettings")
-            ext.dependencyLevel = depends_on_level
-            thumbprint = handler_settings.get(
-                "protectedSettingsCertThumbprint")
-            ext.certificateThumbprint = thumbprint
-            ext_handler.properties.extensions.append(ext)
-
-
-class ExtensionManifest(object):
+class ExtensionManifest(object): # pylint: disable=R0903
     def __init__(self, xml_text):
         if xml_text is None:
             raise ValueError("ExtensionManifest is None")
         logger.verbose("Load ExtensionManifest.xml")
         self.pkg_list = ExtHandlerPackageList()
-        self.allowed_versions = None
-        self.parse(xml_text)
+        self._parse(xml_text)
 
-    def parse(self, xml_text):
+    def _parse(self, xml_text):
         xml_doc = parse_doc(xml_text)
         self._handle_packages(findall(find(xml_doc,
                                            "Plugins"),
@@ -1790,7 +1299,7 @@ class ExtensionManifest(object):
 
 
 # Do not extend this class
-class InVMArtifactsProfile(object):
+class InVMArtifactsProfile(object): # pylint: disable=R0903
     """
     deserialized json string of InVMArtifactsProfile.
     It is expected to contain the following fields:
@@ -1809,5 +1318,5 @@ class InVMArtifactsProfile(object):
     def is_on_hold(self):
         # hasattr() is not available in Python 2.6
         if 'onHold' in self.__dict__:
-            return str(self.onHold).lower() == 'true'
+            return str(self.onHold).lower() == 'true' # pylint: disable=E1101
         return False

@@ -19,14 +19,14 @@
 """
 Copy and parse ovf-env.xml from provisioning ISO and local cache
 """
-import os
-import re
-import shutil
-import xml.dom.minidom as minidom
+import os # pylint: disable=W0611
+import re # pylint: disable=W0611
+import shutil # pylint: disable=W0611
+import xml.dom.minidom as minidom # pylint: disable=W0611
 import azurelinuxagent.common.logger as logger
 from azurelinuxagent.common.exception import ProtocolError
-from azurelinuxagent.common.future import ustr
-import azurelinuxagent.common.utils.fileutil as fileutil
+from azurelinuxagent.common.future import ustr # pylint: disable=W0611
+import azurelinuxagent.common.utils.fileutil as fileutil # pylint: disable=W0611
 from azurelinuxagent.common.utils.textutil import parse_doc, findall, find, findtext
 
 OVF_VERSION = "1.0"
@@ -37,7 +37,7 @@ def _validate_ovf(val, msg):
     if val is None:
         raise ProtocolError("Failed to validate OVF: {0}".format(msg))
 
-class OvfEnv(object):
+class OvfEnv(object): # pylint: disable=R0903,R0902
     """
     Read, and process provisioning info from provisioning file OvfEnv.xml
     """
@@ -55,7 +55,7 @@ class OvfEnv(object):
         self.provision_guest_agent = None
         self.parse(xml_text)
 
-    def parse(self, xml_text):
+    def parse(self, xml_text): # pylint: disable=R0914
         """
         Parse xml tree, retreiving user and ssh key information.
         Return self.
@@ -94,7 +94,7 @@ class OvfEnv(object):
         
         auth_option = findtext(conf_set, "DisableSshPasswordAuthentication", 
                                namespace=wans)
-        if auth_option is not None and auth_option.lower() == "true":
+        if auth_option is not None and auth_option.lower() == "true": # pylint: disable=simplifiable-if-statement
             self.disable_ssh_password_auth = True
         else:
             self.disable_ssh_password_auth = False

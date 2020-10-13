@@ -17,14 +17,16 @@
 # Implements parts of RFC 2131, 1541, 1497 and
 # http://msdn.microsoft.com/en-us/library/cc227282%28PROT.10%29.aspx
 # http://msdn.microsoft.com/en-us/library/cc227259%28PROT.13%29.aspx
-
-import mock
-from tests.tools import AgentTestCase, Mock, patch
+import os
 import unittest
 
+import mock
+
 import azurelinuxagent.daemon.scvmm as scvmm
-from azurelinuxagent.daemon.main import *
+from azurelinuxagent.common import conf
 from azurelinuxagent.common.osutil.default import DefaultOSUtil
+from azurelinuxagent.common.utils import fileutil
+from tests.tools import AgentTestCase, Mock, patch
 
 
 class TestSCVMM(AgentTestCase):
@@ -35,21 +37,20 @@ class TestSCVMM(AgentTestCase):
         scvmm_file = os.path.join(self.tmp_dir, scvmm.VMM_CONF_FILE_NAME)
         fileutil.write_file(scvmm_file, "")
 
-        with patch.object(scvmm.ScvmmHandler, 'start_scvmm_agent') as po:
+        with patch.object(scvmm.ScvmmHandler, 'start_scvmm_agent') as po: # pylint: disable=invalid-name
             with patch('os.listdir', return_value=["sr0", "sr1", "sr2"]):
                 with patch('time.sleep', return_value=0):
                     # execute
                     failed = False
                     try:
                         scvmm.get_scvmm_handler().run()
-                    except:
+                    except: # pylint: disable=bare-except
                         failed = True
                     # assert
                     self.assertTrue(failed)
                     self.assertTrue(po.call_count == 1)
                     # cleanup
                     os.remove(scvmm_file)
-
 
     def test_scvmm_detection_with_multiple_cdroms(self):
         # setup

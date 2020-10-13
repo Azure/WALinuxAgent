@@ -20,17 +20,19 @@
 from azurelinuxagent.common.exception import ProtocolError
 import azurelinuxagent.common.logger as logger
 
+# pylint: disable=W0105
 """
 Base class for data contracts between guest and host and utilities to manipulate the properties in those contracts
-"""
+""" 
+# pylint: enable=W0105
 
 
-class DataContract(object):
+class DataContract(object): # pylint: disable=R0903
     pass
 
 
 class DataContractList(list):
-    def __init__(self, item_cls):
+    def __init__(self, item_cls): # pylint: disable=W0231
         self.item_cls = item_cls
 
 
@@ -43,7 +45,7 @@ def validate_param(name, val, expected_type):
 
 
 def set_properties(name, obj, data):
-    if isinstance(obj, DataContract):
+    if isinstance(obj, DataContract): # pylint: disable=R1705
         validate_param("Property '{0}'".format(name), data, dict)
         for prob_name, prob_val in data.items():
             prob_full_name = "{0}.{1}".format(name, prob_name)
@@ -67,7 +69,7 @@ def set_properties(name, obj, data):
 
 
 def get_properties(obj):
-    if isinstance(obj, DataContract):
+    if isinstance(obj, DataContract): # pylint: disable=R1705
         data = {}
         props = vars(obj)
         for prob_name, prob in list(props.items()):

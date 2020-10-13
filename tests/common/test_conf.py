@@ -17,9 +17,8 @@
 
 import os.path
 
-from azurelinuxagent.common.conf import *
 import azurelinuxagent.common.conf as conf
-
+from azurelinuxagent.common.utils import fileutil
 from tests.tools import AgentTestCase, data_dir, patch
 
 
@@ -73,8 +72,8 @@ class TestConf(AgentTestCase):
 
     def setUp(self):
         AgentTestCase.setUp(self)
-        self.conf = ConfigurationProvider()
-        load_conf_from_file(
+        self.conf = conf.ConfigurationProvider()
+        conf.load_conf_from_file(
                 os.path.join(data_dir, "test_waagent.conf"),
                 self.conf)
 
@@ -84,29 +83,29 @@ class TestConf(AgentTestCase):
         self.assertEqual("delalloc,rw,noatime,nobarrier,users,mode=777", self.conf.get("FauxKey3", "Bad"))
 
     def test_get_ssh_dir(self):
-        self.assertTrue(get_ssh_dir(self.conf).startswith("/notareal/path"))
+        self.assertTrue(conf.get_ssh_dir(self.conf).startswith("/notareal/path"))
 
     def test_get_sshd_conf_file_path(self):
-        self.assertTrue(get_sshd_conf_file_path(
+        self.assertTrue(conf.get_sshd_conf_file_path(
             self.conf).startswith("/notareal/path"))
 
     def test_get_ssh_key_glob(self):
-        self.assertTrue(get_ssh_key_glob(
+        self.assertTrue(conf.get_ssh_key_glob(
             self.conf).startswith("/notareal/path"))
 
     def test_get_ssh_key_private_path(self):
-        self.assertTrue(get_ssh_key_private_path(
+        self.assertTrue(conf.get_ssh_key_private_path(
             self.conf).startswith("/notareal/path"))
 
     def test_get_ssh_key_public_path(self):
-        self.assertTrue(get_ssh_key_public_path(
+        self.assertTrue(conf.get_ssh_key_public_path(
             self.conf).startswith("/notareal/path"))
 
     def test_get_fips_enabled(self):
-        self.assertTrue(get_fips_enabled(self.conf))
+        self.assertTrue(conf.get_fips_enabled(self.conf))
 
     def test_get_provision_agent(self):
-        self.assertTrue(get_provisioning_agent(self.conf) == 'auto')
+        self.assertTrue(conf.get_provisioning_agent(self.conf) == 'auto')
 
     def test_get_configuration(self):
         configuration = conf.get_configuration(self.conf)
@@ -118,8 +117,8 @@ class TestConf(AgentTestCase):
                 k)
 
     def test_get_agent_disabled_file_path(self):
-        self.assertEqual(get_disable_agent_file_path(self.conf),
-                         os.path.join(self.tmp_dir, DISABLE_AGENT_FILE))
+        self.assertEqual(conf.get_disable_agent_file_path(self.conf),
+                         os.path.join(self.tmp_dir, conf.DISABLE_AGENT_FILE))
 
     def test_write_agent_disabled(self):
         """
@@ -127,14 +126,14 @@ class TestConf(AgentTestCase):
         """
         from azurelinuxagent.pa.provision.default import ProvisionHandler
 
-        disable_file_path = get_disable_agent_file_path(self.conf)
+        disable_file_path = conf.get_disable_agent_file_path(self.conf)
         self.assertFalse(os.path.exists(disable_file_path))
         ProvisionHandler.write_agent_disabled()
         self.assertTrue(os.path.exists(disable_file_path))
         self.assertEqual('', fileutil.read_file(disable_file_path))
 
     def test_get_extensions_enabled(self):
-        self.assertTrue(get_extensions_enabled(self.conf))
+        self.assertTrue(conf.get_extensions_enabled(self.conf))
 
     @patch('azurelinuxagent.common.conf.ConfigurationProvider.get')
     def assert_get_cgroups_excluded(self, patch_get, config, expected_value):
@@ -142,30 +141,30 @@ class TestConf(AgentTestCase):
         self.assertEqual(expected_value, conf.get_cgroups_excluded(self.conf))
 
     def test_get_cgroups_excluded(self):
-        self.assert_get_cgroups_excluded(config=None,
+        self.assert_get_cgroups_excluded(config=None, # pylint: disable=no-value-for-parameter
                                          expected_value=[])
 
-        self.assert_get_cgroups_excluded(config='',
+        self.assert_get_cgroups_excluded(config='', # pylint: disable=no-value-for-parameter
                                          expected_value=[])
 
-        self.assert_get_cgroups_excluded(config='  ',
+        self.assert_get_cgroups_excluded(config='  ', # pylint: disable=no-value-for-parameter
                                          expected_value=[])
 
-        self.assert_get_cgroups_excluded(config='  ,  ,,  ,',
+        self.assert_get_cgroups_excluded(config='  ,  ,,  ,', # pylint: disable=no-value-for-parameter
                                          expected_value=[])
 
         standard_values = ['customscript', 'runcommand']
-        self.assert_get_cgroups_excluded(config='CustomScript, RunCommand',
+        self.assert_get_cgroups_excluded(config='CustomScript, RunCommand', # pylint: disable=no-value-for-parameter
                                          expected_value=standard_values)
 
-        self.assert_get_cgroups_excluded(config='customScript, runCommand  , , ,,',
+        self.assert_get_cgroups_excluded(config='customScript, runCommand  , , ,,', # pylint: disable=no-value-for-parameter
                                          expected_value=standard_values)
 
-        self.assert_get_cgroups_excluded(config='  customscript,runcommand  ',
+        self.assert_get_cgroups_excluded(config='  customscript,runcommand  ', # pylint: disable=no-value-for-parameter
                                          expected_value=standard_values)
 
-        self.assert_get_cgroups_excluded(config='customscript,, runcommand',
+        self.assert_get_cgroups_excluded(config='customscript,, runcommand', # pylint: disable=no-value-for-parameter
                                          expected_value=standard_values)
 
-        self.assert_get_cgroups_excluded(config=',,customscript ,runcommand',
+        self.assert_get_cgroups_excluded(config=',,customscript ,runcommand', # pylint: disable=no-value-for-parameter
                                          expected_value=standard_values)

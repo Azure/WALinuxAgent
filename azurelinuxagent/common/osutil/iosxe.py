@@ -17,11 +17,15 @@
 # Requires Python 2.6+ and Openssl 1.0+
 #
 
+import os
+
 import azurelinuxagent.common.logger as logger
 import azurelinuxagent.common.utils.shellutil as shellutil
-from azurelinuxagent.common.osutil.default import DefaultOSUtil
-from azurelinuxagent.common.osutil.redhat import Redhat6xOSUtil
+from azurelinuxagent.common.future import ustr
+from azurelinuxagent.common.osutil.default import DefaultOSUtil, PRODUCT_ID_FILE, DMIDECODE_CMD, UUID_PATTERN
+from azurelinuxagent.common.utils import textutil, fileutil # pylint: disable=W0611
 
+# pylint: disable=W0105
 '''
 The IOSXE distribution is a variant of the Centos distribution, 
 version 7.1.
@@ -31,8 +35,10 @@ the waagent environment:
  - no provisioning is performed
  - no DHCP-based services are available
 '''
+# pylint: enable=W0105
+
 class IosxeOSUtil(DefaultOSUtil):
-    def __init__(self):
+    def __init__(self): # pylint: disable=W0235
         super(IosxeOSUtil, self).__init__()
 
     def set_hostname(self, hostname):
@@ -41,9 +47,11 @@ class IosxeOSUtil(DefaultOSUtil):
         Due to a bug in systemd in Centos-7.0, if this call fails, fallback
         to hostname.
         """
-        hostnamectl_cmd = "hostnamectl set-hostname {0} --static".format(hostname)
-        if shellutil.run(hostnamectl_cmd, chk_err=False) != 0:
-            logger.warn("[{0}] failed, attempting fallback".format(hostnamectl_cmd))
+        hostnamectl_cmd = ["hostnamectl", "set-hostname", hostname, "--static"]
+        try:
+            shellutil.run_command(hostnamectl_cmd)
+        except Exception as e: # pylint: disable=C0103
+            logger.warn("[{0}] failed with error: {1}, attempting fallback".format(' '.join(hostnamectl_cmd), ustr(e)))
             DefaultOSUtil.set_hostname(self, hostname)
 
     def publish_hostname(self, hostname):
@@ -51,7 +59,7 @@ class IosxeOSUtil(DefaultOSUtil):
         Restart NetworkManager first before publishing hostname
         """
         shellutil.run("service NetworkManager restart")
-        super(RedhatOSUtil, self).publish_hostname(hostname)
+        super(IosxeOSUtil, self).publish_hostname(hostname)
 
     def register_agent_service(self):
         return shellutil.run("systemctl enable waagent", chk_err=False)
@@ -74,11 +82,11 @@ class IosxeOSUtil(DefaultOSUtil):
         '''
         if os.path.isfile(PRODUCT_ID_FILE):
             try:
-                s = fileutil.read_file(PRODUCT_ID_FILE).strip()
+                s = fileutil.read_file(PRODUCT_ID_FILE).strip() # pylint: disable=C0103
                 return self._correct_instance_id(s.strip())
             except IOError:
                 pass
-        rc, s = shellutil.run_get_output(DMIDECODE_CMD)
+        rc, s = shellutil.run_get_output(DMIDECODE_CMD) # pylint: disable=C0103
         if rc != 0 or UUID_PATTERN.match(s) is None:
             return ""
         return self._correct_instance_id(s.strip())

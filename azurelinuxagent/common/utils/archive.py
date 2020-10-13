@@ -11,6 +11,7 @@ from azurelinuxagent.common.utils import fileutil
 import azurelinuxagent.common.logger as logger
 
 
+# pylint: disable=W0105
 """
 archive.py
 
@@ -33,38 +34,39 @@ is /var/lib/waagent.
 
 The timestamp is an ISO8601 formatted value.
 """
+# pylint: enable=W0105
 
 ARCHIVE_DIRECTORY_NAME = 'history'
 
 MAX_ARCHIVED_STATES = 50
 
 CACHE_PATTERNS = [
-    re.compile("^(.*)\.(\d+)\.(agentsManifest)$", re.IGNORECASE),
-    re.compile("^(.*)\.(\d+)\.(manifest\.xml)$", re.IGNORECASE),
-    re.compile("^(.*)\.(\d+)\.(xml)$", re.IGNORECASE)
+    re.compile("^(.*)\.(\d+)\.(agentsManifest)$", re.IGNORECASE), # pylint: disable=W1401
+    re.compile("^(.*)\.(\d+)\.(manifest\.xml)$", re.IGNORECASE), # pylint: disable=W1401
+    re.compile("^(.*)\.(\d+)\.(xml)$", re.IGNORECASE) # pylint: disable=W1401
 ]
 
 # 2018-04-06T08:21:37.142697
 # 2018-04-06T08:21:37.142697.zip
-ARCHIVE_PATTERNS_DIRECTORY = re.compile('^\d{4}\-\d{2}\-\d{2}T\d{2}:\d{2}:\d{2}\.\d+$')
-ARCHIVE_PATTERNS_ZIP       = re.compile('^\d{4}\-\d{2}\-\d{2}T\d{2}:\d{2}:\d{2}\.\d+\.zip$')
+ARCHIVE_PATTERNS_DIRECTORY = re.compile('^\d{4}\-\d{2}\-\d{2}T\d{2}:\d{2}:\d{2}\.\d+$') # pylint: disable=W1401
+ARCHIVE_PATTERNS_ZIP       = re.compile('^\d{4}\-\d{2}\-\d{2}T\d{2}:\d{2}:\d{2}\.\d+\.zip$') # pylint: disable=W1401
 
 
 class StateFlusher(object):
     def __init__(self, lib_dir):
         self._source = lib_dir
 
-        d = os.path.join(self._source, ARCHIVE_DIRECTORY_NAME)
+        d = os.path.join(self._source, ARCHIVE_DIRECTORY_NAME) # pylint: disable=C0103
         if not os.path.exists(d):
             try:
                 fileutil.mkdir(d)
-            except OSError as e:
+            except OSError as e: # pylint: disable=C0103
                 if e.errno != errno.EEXIST:
                     logger.error("{0} : {1}", self._source, e.strerror)
 
     def flush(self, timestamp):
         files = self._get_files_to_archive()
-        if len(files) == 0:
+        if len(files) == 0: # pylint: disable=len-as-condition
             return
 
         if self._mkdir(timestamp):
@@ -77,10 +79,10 @@ class StateFlusher(object):
 
     def _get_files_to_archive(self):
         files = []
-        for f in os.listdir(self._source):
+        for f in os.listdir(self._source): # pylint: disable=C0103
             full_path = os.path.join(self._source, f)
             for pattern in CACHE_PATTERNS:
-                m = pattern.match(f)
+                m = pattern.match(f) # pylint: disable=C0103
                 if m is not None:
                     files.append(full_path)
                     break
@@ -88,26 +90,26 @@ class StateFlusher(object):
         return files
 
     def _archive(self, files, timestamp):
-        for f in files:
+        for f in files: # pylint: disable=C0103
             dst = os.path.join(self.history_dir(timestamp), os.path.basename(f))
             shutil.move(f, dst)
 
     def _purge(self, files):
-        for f in files:
+        for f in files: # pylint: disable=C0103
             os.remove(f)
 
     def _mkdir(self, timestamp):
-        d = self.history_dir(timestamp)
+        d = self.history_dir(timestamp) # pylint: disable=C0103
 
         try:
             fileutil.mkdir(d, mode=0o700)
             return True
-        except IOError as e:
+        except IOError as e: # pylint: disable=C0103
             logger.error("{0} : {1}".format(d, e.strerror))
             return False
 
 
-# TODO: use @total_ordering once RHEL/CentOS and SLES 11 are EOL.
+# TODO: use @total_ordering once RHEL/CentOS and SLES 11 are EOL. # pylint: disable=W0511
 # @total_ordering first appeared in Python 2.7 and 3.2
 # If there are more use cases for @total_ordering, I will
 # consider re-implementing it.
@@ -146,7 +148,7 @@ class State(object):
 
 
 class StateZip(State):
-    def __init__(self, path, timestamp):
+    def __init__(self, path, timestamp): # pylint: disable=W0235
         super(StateZip,self).__init__(path, timestamp)
 
     def delete(self):
@@ -154,7 +156,7 @@ class StateZip(State):
 
 
 class StateDirectory(State):
-    def __init__(self, path, timestamp):
+    def __init__(self, path, timestamp): # pylint: disable=W0235
         super(StateDirectory, self).__init__(path, timestamp)
 
     def delete(self):
@@ -162,10 +164,10 @@ class StateDirectory(State):
 
     def archive(self):
         fn_tmp = "{0}.zip.tmp".format(self._path)
-        fn = "{0}.zip".format(self._path)
+        fn = "{0}.zip".format(self._path) # pylint: disable=C0103
 
         ziph = zipfile.ZipFile(fn_tmp, 'w')
-        for f in os.listdir(self._path):
+        for f in os.listdir(self._path): # pylint: disable=C0103
             full_path = os.path.join(self._path, f)
             ziph.write(full_path, f, zipfile.ZIP_DEFLATED)
 
@@ -182,7 +184,7 @@ class StateArchiver(object):
         if not os.path.isdir(self._source):
             try:
                 fileutil.mkdir(self._source, mode=0o700)
-            except IOError as e:
+            except IOError as e: # pylint: disable=C0103
                 if e.errno != errno.EEXIST:
                     logger.error("{0} : {1}", self._source, e.strerror)
 
@@ -205,13 +207,13 @@ class StateArchiver(object):
 
     def _get_archive_states(self):
         states = []
-        for f in os.listdir(self._source):
+        for f in os.listdir(self._source): # pylint: disable=C0103
             full_path = os.path.join(self._source, f)
-            m = ARCHIVE_PATTERNS_DIRECTORY.match(f)
+            m = ARCHIVE_PATTERNS_DIRECTORY.match(f) # pylint: disable=C0103
             if m is not None:
                 states.append(StateDirectory(full_path, m.group(0)))
 
-            m = ARCHIVE_PATTERNS_ZIP.match(f)
+            m = ARCHIVE_PATTERNS_ZIP.match(f) # pylint: disable=C0103
             if m is not None:
                 states.append(StateZip(full_path, m.group(0)))
 

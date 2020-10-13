@@ -24,8 +24,12 @@
 #
 
 import os
-import imp
 import sys
+
+if sys.version_info[0] == 2:
+    import imp
+else:
+    import importlib
 
 if __name__ == '__main__' :
     import azurelinuxagent.agent as agent

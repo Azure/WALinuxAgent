@@ -28,15 +28,15 @@ from azurelinuxagent.common.exception import OSUtilError
 import azurelinuxagent.common.logger as logger
 from azurelinuxagent.common.osutil.bigip import BigIpOSUtil
 from .test_default import osutil_get_dhcp_pid_should_return_a_list_of_pids
-from tests.tools import AgentTestCase, patch
+from tests.tools import AgentTestCase, patch # pylint: disable=wrong-import-order
 
 
-class TestBigIpOSUtil_wait_until_mcpd_is_initialized(AgentTestCase):
+class TestBigIpOSUtil_wait_until_mcpd_is_initialized(AgentTestCase): # pylint: disable=invalid-name
 
     @patch.object(shellutil, "run", return_value=0)
     @patch.object(logger, "info", return_value=None)
     def test_success(self, *args):
-        result = osutil.BigIpOSUtil._wait_until_mcpd_is_initialized(
+        result = osutil.BigIpOSUtil._wait_until_mcpd_is_initialized( # pylint: disable=protected-access
             osutil.BigIpOSUtil()
         )
         self.assertEqual(result, True)
@@ -48,35 +48,35 @@ class TestBigIpOSUtil_wait_until_mcpd_is_initialized(AgentTestCase):
     @patch.object(shellutil, "run", return_value=1)
     @patch.object(logger, "info", return_value=None)
     @patch.object(time, "sleep", return_value=None)
-    def test_failure(self, *args):
+    def test_failure(self, *args): # pylint: disable=unused-argument
         self.assertRaises(
             OSUtilError,
-            osutil.BigIpOSUtil._wait_until_mcpd_is_initialized,
+            osutil.BigIpOSUtil._wait_until_mcpd_is_initialized, # pylint: disable=protected-access
             osutil.BigIpOSUtil()
         )
 
 
-class TestBigIpOSUtil_save_sys_config(AgentTestCase):
+class TestBigIpOSUtil_save_sys_config(AgentTestCase): # pylint: disable=invalid-name
 
     @patch.object(shellutil, "run", return_value=0)
     @patch.object(logger, "error", return_value=None)
     def test_success(self, *args):
-        result = osutil.BigIpOSUtil._save_sys_config(osutil.BigIpOSUtil())
+        result = osutil.BigIpOSUtil._save_sys_config(osutil.BigIpOSUtil()) # pylint: disable=protected-access
         self.assertEqual(result, 0)
         self.assertEqual(args[0].call_count, 0)
 
     @patch.object(shellutil, "run", return_value=1)
     @patch.object(logger, "error", return_value=None)
     def test_failure(self, *args):
-        result = osutil.BigIpOSUtil._save_sys_config(osutil.BigIpOSUtil())
+        result = osutil.BigIpOSUtil._save_sys_config(osutil.BigIpOSUtil()) # pylint: disable=protected-access
         self.assertEqual(result, 1)
         self.assertEqual(args[0].call_count, 1)
 
 
-class TestBigIpOSUtil_useradd(AgentTestCase):
+class TestBigIpOSUtil_useradd(AgentTestCase): # pylint: disable=invalid-name
 
     @patch.object(osutil.BigIpOSUtil, 'get_userentry', return_value=None)
-    @patch.object(shellutil, "run_get_output")
+    @patch.object(shellutil, "run_command")
     def test_success(self, *args):
         args[0].return_value = (0, None)
         result = osutil.BigIpOSUtil.useradd(
@@ -93,7 +93,7 @@ class TestBigIpOSUtil_useradd(AgentTestCase):
         self.assertEqual(result, None)
 
     @patch.object(shellutil, "run", return_value=1)
-    def test_failure(self, *args):
+    def test_failure(self, *args): # pylint: disable=unused-argument
         self.assertRaises(
             OSUtilError,
             osutil.BigIpOSUtil.useradd,
@@ -101,9 +101,9 @@ class TestBigIpOSUtil_useradd(AgentTestCase):
         )
 
 
-class TestBigIpOSUtil_chpasswd(AgentTestCase):
+class TestBigIpOSUtil_chpasswd(AgentTestCase): # pylint: disable=invalid-name
 
-    @patch.object(shellutil, "run_get_output", return_value=(0, None))
+    @patch.object(shellutil, "run_command")
     @patch.object(osutil.BigIpOSUtil, 'get_userentry', return_value=True)
     @patch.object(osutil.BigIpOSUtil, 'is_sys_user', return_value=False)
     @patch.object(osutil.BigIpOSUtil, '_save_sys_config', return_value=None)
@@ -116,7 +116,7 @@ class TestBigIpOSUtil_chpasswd(AgentTestCase):
         self.assertEqual(args[0].call_count, 1)
 
     @patch.object(osutil.BigIpOSUtil, 'is_sys_user', return_value=True)
-    def test_is_sys_user(self, *args):
+    def test_is_sys_user(self, *args): # pylint: disable=unused-argument
         self.assertRaises(
             OSUtilError,
             osutil.BigIpOSUtil.chpasswd,
@@ -125,7 +125,7 @@ class TestBigIpOSUtil_chpasswd(AgentTestCase):
 
     @patch.object(shellutil, "run_get_output", return_value=(1, None))
     @patch.object(osutil.BigIpOSUtil, 'is_sys_user', return_value=False)
-    def test_failed_to_set_user_password(self, *args):
+    def test_failed_to_set_user_password(self, *args): # pylint: disable=unused-argument
         self.assertRaises(
             OSUtilError,
             osutil.BigIpOSUtil.chpasswd,
@@ -135,7 +135,7 @@ class TestBigIpOSUtil_chpasswd(AgentTestCase):
     @patch.object(shellutil, "run_get_output", return_value=(0, None))
     @patch.object(osutil.BigIpOSUtil, 'is_sys_user', return_value=False)
     @patch.object(osutil.BigIpOSUtil, 'get_userentry', return_value=None)
-    def test_failed_to_get_user_entry(self, *args):
+    def test_failed_to_get_user_entry(self, *args): # pylint: disable=unused-argument
         self.assertRaises(
             OSUtilError,
             osutil.BigIpOSUtil.chpasswd,
@@ -143,17 +143,17 @@ class TestBigIpOSUtil_chpasswd(AgentTestCase):
         )
 
 
-class TestBigIpOSUtil_get_dvd_device(AgentTestCase):
+class TestBigIpOSUtil_get_dvd_device(AgentTestCase): # pylint: disable=invalid-name
 
     @patch.object(os, "listdir", return_value=['tty1','cdrom0'])
-    def test_success(self, *args):
+    def test_success(self, *args): # pylint: disable=unused-argument
         result = osutil.BigIpOSUtil.get_dvd_device(
             osutil.BigIpOSUtil(), '/dev'
         )
         self.assertEqual(result, '/dev/cdrom0')
 
     @patch.object(os, "listdir", return_value=['foo', 'bar'])
-    def test_failure(self, *args):
+    def test_failure(self, *args): # pylint: disable=unused-argument
         self.assertRaises(
             OSUtilError,
             osutil.BigIpOSUtil.get_dvd_device,
@@ -161,83 +161,83 @@ class TestBigIpOSUtil_get_dvd_device(AgentTestCase):
         )
 
 
-class TestBigIpOSUtil_restart_ssh_service(AgentTestCase):
+class TestBigIpOSUtil_restart_ssh_service(AgentTestCase): # pylint: disable=invalid-name
 
     @patch.object(shellutil, "run", return_value=0)
-    def test_success(self, *args):
+    def test_success(self, *args): # pylint: disable=unused-argument
         result = osutil.BigIpOSUtil.restart_ssh_service(
             osutil.BigIpOSUtil()
         )
         self.assertEqual(result, 0)
 
 
-class TestBigIpOSUtil_stop_agent_service(AgentTestCase):
+class TestBigIpOSUtil_stop_agent_service(AgentTestCase): # pylint: disable=invalid-name
 
     @patch.object(shellutil, "run", return_value=0)
-    def test_success(self, *args):
+    def test_success(self, *args): # pylint: disable=unused-argument
         result = osutil.BigIpOSUtil.stop_agent_service(
             osutil.BigIpOSUtil()
         )
         self.assertEqual(result, 0)
 
 
-class TestBigIpOSUtil_start_agent_service(AgentTestCase):
+class TestBigIpOSUtil_start_agent_service(AgentTestCase): # pylint: disable=invalid-name
 
     @patch.object(shellutil, "run", return_value=0)
-    def test_success(self, *args):
+    def test_success(self, *args): # pylint: disable=unused-argument
         result = osutil.BigIpOSUtil.start_agent_service(
             osutil.BigIpOSUtil()
         )
         self.assertEqual(result, 0)
 
 
-class TestBigIpOSUtil_register_agent_service(AgentTestCase):
+class TestBigIpOSUtil_register_agent_service(AgentTestCase): # pylint: disable=invalid-name
 
     @patch.object(shellutil, "run", return_value=0)
-    def test_success(self, *args):
+    def test_success(self, *args): # pylint: disable=unused-argument
         result = osutil.BigIpOSUtil.register_agent_service(
             osutil.BigIpOSUtil()
         )
         self.assertEqual(result, 0)
 
 
-class TestBigIpOSUtil_unregister_agent_service(AgentTestCase):
+class TestBigIpOSUtil_unregister_agent_service(AgentTestCase): # pylint: disable=invalid-name
 
     @patch.object(shellutil, "run", return_value=0)
-    def test_success(self, *args):
+    def test_success(self, *args): # pylint: disable=unused-argument
         result = osutil.BigIpOSUtil.unregister_agent_service(
             osutil.BigIpOSUtil()
         )
         self.assertEqual(result, 0)
 
 
-class TestBigIpOSUtil_set_hostname(AgentTestCase):
+class TestBigIpOSUtil_set_hostname(AgentTestCase): # pylint: disable=invalid-name
 
     @patch.object(os.path, "exists", return_value=False)
     def test_success(self, *args):
-        result = osutil.BigIpOSUtil.set_hostname(
+        result = osutil.BigIpOSUtil.set_hostname( # pylint: disable=assignment-from-none
             osutil.BigIpOSUtil(), None
         )
         self.assertEqual(args[0].call_count, 0)
         self.assertEqual(result, None)
 
 
-class TestBigIpOSUtil_set_dhcp_hostname(AgentTestCase):
+class TestBigIpOSUtil_set_dhcp_hostname(AgentTestCase): # pylint: disable=invalid-name
 
     @patch.object(os.path, "exists", return_value=False)
     def test_success(self, *args):
-        result = osutil.BigIpOSUtil.set_dhcp_hostname(
+        result = osutil.BigIpOSUtil.set_dhcp_hostname( # pylint: disable=assignment-from-none
             osutil.BigIpOSUtil(), None
         )
         self.assertEqual(args[0].call_count, 0)
         self.assertEqual(result, None)
 
 
-class TestBigIpOSUtil_get_first_if(AgentTestCase):
+class TestBigIpOSUtil_get_first_if(AgentTestCase): # pylint: disable=invalid-name
 
     @patch.object(osutil.BigIpOSUtil,
                   '_format_single_interface_name', return_value=b'eth0')
-    def test_success(self, *args):
+    def test_success(self, *args): # pylint: disable=unused-argument
         ifname, ipaddr = osutil.BigIpOSUtil().get_first_if()
         self.assertTrue(ifname.startswith('eth'))
         self.assertTrue(ipaddr is not None)
@@ -248,7 +248,7 @@ class TestBigIpOSUtil_get_first_if(AgentTestCase):
 
     @patch.object(osutil.BigIpOSUtil,
                   '_format_single_interface_name', return_value=b'loenp0s3')
-    def test_success(self, *args):
+    def test_success(self, *args): # pylint: disable=unused-argument,function-redefined
         ifname, ipaddr = osutil.BigIpOSUtil().get_first_if()
         self.assertFalse(ifname.startswith('eth'))
         self.assertTrue(ipaddr is not None)
@@ -258,7 +258,7 @@ class TestBigIpOSUtil_get_first_if(AgentTestCase):
             self.fail("not a valid ip address")
 
 
-class TestBigIpOSUtil_mount_dvd(AgentTestCase):
+class TestBigIpOSUtil_mount_dvd(AgentTestCase): # pylint: disable=invalid-name
 
     @patch.object(shellutil, "run", return_value=0)
     @patch.object(time, "sleep", return_value=None)
@@ -273,7 +273,7 @@ class TestBigIpOSUtil_mount_dvd(AgentTestCase):
         self.assertEqual(args[1].call_count, 1)
 
 
-class TestBigIpOSUtil_route_add(AgentTestCase):
+class TestBigIpOSUtil_route_add(AgentTestCase): # pylint: disable=invalid-name
 
     @patch.object(shellutil, "run", return_value=0)
     def test_success(self, *args):
@@ -283,7 +283,7 @@ class TestBigIpOSUtil_route_add(AgentTestCase):
         self.assertEqual(args[0].call_count, 1)
 
 
-class TestBigIpOSUtil_device_for_ide_port(AgentTestCase):
+class TestBigIpOSUtil_device_for_ide_port(AgentTestCase): # pylint: disable=invalid-name
 
     @patch.object(time, "sleep", return_value=None)
     @patch.object(os.path, "exists", return_value=False)
