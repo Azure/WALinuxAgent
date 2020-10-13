@@ -135,8 +135,8 @@ class TelemetryServiceHandler(ThreadHandlerInterface):
                 # To promote batching, we either wait for atleast _MIN_QUEUE_LIMIT events or _MIN_BATCH_WAIT_TIME secs
                 # before sending out the first request to wireserver.
                 # If the thread is requested to stop midway, we skip batching and send whatever we have in the queue.
-                logger.verbose("Waiting for events to batch. Queue size: {0}, First request time: {1}",
-                               self._queue.qsize(), start_time)
+                logger.verbose("Waiting for events to batch. Queue size: {0}, Time elapsed: {1} secs",
+                               self._queue.qsize(), (datetime.datetime.utcnow() - start_time).seconds)
                 time.sleep(1)
             self._protocol.report_event(self._get_events_in_queue)
 
