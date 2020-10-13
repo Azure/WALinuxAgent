@@ -195,8 +195,7 @@ class TestTelemetryServiceHandler(AgentTestCase, HttpRequestPredicates):
                     for test_event in events:
                         telemetry_handler.enqueue_event(test_event)
 
-                    while len(telemetry_handler.event_calls) == 0 and \
-                            (test_start_time + timedelta(seconds=1)) > datetime.now():
+                    while not telemetry_handler.event_calls and (test_start_time + timedelta(seconds=1)) > datetime.now():
                         # Wait for event calls to be made, wait a max of 1 secs
                         orig_sleep(0.1)
 

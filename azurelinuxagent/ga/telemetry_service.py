@@ -95,7 +95,8 @@ class TelemetryServiceHandler(ThreadHandlerInterface):
         try:
             self._queue.put(event, timeout=TelemetryServiceHandler._MAX_TIMEOUT)
         except Full as error:
-            raise ServiceStoppedError("Queue full, stopping any more enqueuing until the next run. {0}", ustr(error))
+            raise ServiceStoppedError(
+                "Queue full, stopping any more enqueuing until the next run. {0}".format(ustr(error)))
 
         # Set the event if any enqueue happens (even if already set) to trigger sending those events
         self._should_process_events.set()

@@ -1233,7 +1233,8 @@ class TestUpdate(UpdateTestCase): # pylint: disable=too-many-public-methods
         self._test_run_latest()
         self.assertEqual(0, mock_signal.call_count)
 
-    def _test_run(self, invocations=1, calls=[call.run()], enable_updates=False, sleep_interval=(6,)): # pylint: disable=dangerous-default-value
+    # too-many-locals<R0914> Disabled: The number of local variables is OK
+    def _test_run(self, invocations=1, calls=[call.run()], enable_updates=False, sleep_interval=(6,)): # pylint: disable=dangerous-default-value,too-many-locals
         conf.get_autoupdate_enabled = Mock(return_value=enable_updates)
 
         # Note:
@@ -1261,7 +1262,7 @@ class TestUpdate(UpdateTestCase): # pylint: disable=too-many-public-methods
                                 with patch('azurelinuxagent.ga.update.get_telemetry_collector_handler') as mock_event_collector:
                                     with patch('azurelinuxagent.ga.update.initialize_event_logger_vminfo_common_parameters'):
                                         with patch('azurelinuxagent.ga.update.is_log_collection_allowed', return_value=True):
-                                            with patch('time.sleep', side_effect=iterator) as mock_sleep: # pylint: disable=redefined-outer-name
+                                            with patch('time.sleep', side_effect=iterator) as sleep_mock:
                                                 with patch('sys.exit') as mock_exit:
                                                     if isinstance(os.getppid, MagicMock):
                                                         self.update_handler.run()
@@ -1273,9 +1274,9 @@ class TestUpdate(UpdateTestCase): # pylint: disable=too-many-public-methods
                                                 self.assertEqual(mock_handler.return_value.method_calls, calls)
                                                 self.assertEqual(1, mock_ra_handler.call_count)
                                                 self.assertEqual(mock_ra_handler.return_value.method_calls, calls)
-                                                self.assertEqual(invocations, mock_sleep.call_count)
+                                                self.assertEqual(invocations, sleep_mock.call_count)
                                                 if invocations > 0:
-                                                    self.assertEqual(sleep_interval, mock_sleep.call_args[0])
+                                                    self.assertEqual(sleep_interval, sleep_mock.call_args[0])
                                                 self.assertEqual(1, mock_monitor.call_count)
                                                 self.assertEqual(1, mock_env.call_count)
                                                 self.assertEqual(1, mock_collect_logs.call_count)
@@ -1658,7 +1659,8 @@ class MonitorThreadTest(AgentTestCase):
         self._test_run(invocations=invocations)
         return thread
 
-    def test_start_threads(self, mock_env, mock_monitor, mock_collect_logs, mock_telemetry_service, mock_telemetry_collector):
+    # too-many-arguments<R0913> Disabled: The number of arguments maps to the number of threads
+    def test_start_threads(self, mock_env, mock_monitor, mock_collect_logs, mock_telemetry_service, mock_telemetry_collector): # pylint: disable=too-many-arguments
         self.assertTrue(self.update_handler.running)
 
         def _get_mock_thread():
@@ -1666,23 +1668,16 @@ class MonitorThreadTest(AgentTestCase):
             thread.run = MagicMock()
             return thread
 
-        mock_monitor.return_value = _get_mock_thread()
-        mock_env.return_value = _get_mock_thread()
-        mock_collect_logs.return_value = _get_mock_thread()
-        mock_telemetry_service.return_value = _get_mock_thread()
-        mock_telemetry_collector.return_value = _get_mock_thread()
+        all_threads = [mock_telemetry_service, mock_telemetry_collector, mock_env, mock_monitor, mock_collect_logs]
+
+        for thread in all_threads:
+            thread.return_value = _get_mock_thread()
 
         self._test_run(invocations=0)
-        self.assertEqual(1, mock_monitor.call_count)
-        self.assertEqual(1, mock_monitor().run.call_count)
-        self.assertEqual(1, mock_env.call_count)
-        self.assertEqual(1, mock_env().run.call_count)
-        self.assertEqual(1, mock_collect_logs.call_count)
-        self.assertEqual(1, mock_collect_logs().run.call_count)
-        self.assertEqual(1, mock_telemetry_collector.call_count)
-        self.assertEqual(1, mock_telemetry_collector().run.call_count)
-        self.assertEqual(1, mock_telemetry_service.call_count)
-        self.assertEqual(1, mock_telemetry_service().run.call_count)
+
+        for thread in all_threads:
+            self.assertEqual(1, thread.call_count)
+            self.assertEqual(1, thread().run.call_count)
 
     def test_check_if_monitor_thread_is_alive(self, _, mock_monitor, *args): # pylint: disable=unused-argument
         mock_monitor_thread = self._setup_mock_thread_and_start_test_run(mock_monitor, is_alive=True, invocations=0)

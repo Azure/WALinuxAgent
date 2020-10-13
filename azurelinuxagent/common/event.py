@@ -632,7 +632,8 @@ class EventLogger(object):
                       message=err_msg_format.format(count, max_errors_to_report, ', '.join(errors)),
                       is_success=False)
 
-    def collect_events(self, enqueue_event):
+    # too-many-locals<R0914> Disabled: The number of local variables is OK
+    def collect_events(self, enqueue_event): # pylint: disable=too-many-locals
         """
         Retuns a list of events that need to be sent to the telemetry pipeline and deletes the corresponding files
         from the events directory.
@@ -652,8 +653,8 @@ class EventLogger(object):
                 try:
                     logger.verbose("Processing event file: {0}", event_file_path)
 
-                    with open(event_file_path, "rb") as fd: # pylint: disable=C0103
-                        event_data = fd.read().decode("utf-8")
+                    with open(event_file_path, "rb") as event_fd:
+                        event_data = event_fd.read().decode("utf-8")
 
                     event = parse_event(event_data)
 
