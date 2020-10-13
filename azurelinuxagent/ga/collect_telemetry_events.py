@@ -406,7 +406,7 @@ class CollectTelemetryEventsHandler(ThreadHandlerInterface):
     Kusto for advanced debuggability.
     """
 
-    _THREAD_NAME = "ExtensionTelemetryHandler"
+    _THREAD_NAME = "TelemetryEventsCollector"
 
     def __init__(self, telemetry_service_handler):
         self.should_run = True
