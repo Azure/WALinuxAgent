@@ -173,5 +173,10 @@ class DaemonHandler(object): # pylint: disable=R0902
 
         self.sleep_if_disabled()
 
+        # Disable output to /dev/console once provisioning has completed
+        if logger.console_output_enabled():
+            logger.info("End of log to /dev/console. The agent will now check for updates and then will process extensions.")
+            logger.disable_console_output()
+
         while self.running:
             self.update_handler.run_latest(child_args=child_args)

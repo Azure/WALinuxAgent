@@ -66,26 +66,26 @@ class TestProvision(AgentTestCase):
         ph.osutil.get_instance_id = Mock(
                         return_value='B9F3C233-9913-9F42-8EB3-BA656DF32502')
 
-        ph.is_provisioned = Mock()
+        ph.check_provisioned_file = Mock()
         ph.report_ready = Mock()
         ph.write_provisioned = Mock()
 
         ph.run()
 
-        self.assertEqual(0, ph.is_provisioned.call_count)
+        self.assertEqual(0, ph.check_provisioned_file.call_count)
         self.assertEqual(1, ph.report_ready.call_count)
         self.assertEqual(1, ph.write_provisioned.call_count)
 
     @patch('os.path.isfile', return_value=False)
-    def test_is_provisioned_not_provisioned(self, mock_isfile): # pylint: disable=unused-argument
+    def test_check_provisioned_file_not_provisioned(self, mock_isfile): # pylint: disable=unused-argument
         ph = ProvisionHandler() # pylint: disable=invalid-name
-        self.assertFalse(ph.is_provisioned())
+        self.assertFalse(ph.check_provisioned_file())
 
     @patch('os.path.isfile', return_value=True)
     @patch('azurelinuxagent.common.utils.fileutil.read_file',
             return_value="B9F3C233-9913-9F42-8EB3-BA656DF32502")
     @patch('azurelinuxagent.pa.deprovision.get_deprovision_handler')
-    def test_is_provisioned_is_provisioned(self,
+    def test_check_provisioned_file_is_provisioned(self,
             mock_deprovision, mock_read, mock_isfile): # pylint: disable=unused-argument
 
         ph = ProvisionHandler() # pylint: disable=invalid-name
@@ -96,7 +96,7 @@ class TestProvision(AgentTestCase):
         deprovision_handler = Mock()
         mock_deprovision.return_value = deprovision_handler
 
-        self.assertTrue(ph.is_provisioned())
+        self.assertTrue(ph.check_provisioned_file())
         self.assertEqual(1, ph.osutil.is_current_instance_id.call_count)
         self.assertEqual(0, deprovision_handler.run_changed_unique_id.call_count)
 
@@ -104,7 +104,7 @@ class TestProvision(AgentTestCase):
     @patch('azurelinuxagent.common.utils.fileutil.read_file',
             return_value="B9F3C233-9913-9F42-8EB3-BA656DF32502")
     @patch('azurelinuxagent.pa.deprovision.get_deprovision_handler')
-    def test_is_provisioned_not_deprovisioned(self,
+    def test_check_provisioned_file_not_deprovisioned(self,
             mock_deprovision, mock_read, mock_isfile): # pylint: disable=unused-argument
 
         ph = ProvisionHandler() # pylint: disable=invalid-name
@@ -116,7 +116,7 @@ class TestProvision(AgentTestCase):
         deprovision_handler = Mock()
         mock_deprovision.return_value = deprovision_handler
 
-        self.assertTrue(ph.is_provisioned())
+        self.assertTrue(ph.check_provisioned_file())
         self.assertEqual(1, ph.osutil.is_current_instance_id.call_count)
         self.assertEqual(1, deprovision_handler.run_changed_unique_id.call_count)
 

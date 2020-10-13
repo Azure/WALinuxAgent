@@ -25,6 +25,32 @@ import azurelinuxagent.common.utils.shellutil as shellutil
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
 from azurelinuxagent.common.future import ustr, get_linux_distribution
 
+__DAEMON_VERSION_ENV_VARIABLE = '_AZURE_GUEST_AGENT_DAEMON_VERSION_'
+"""
+    The daemon process sets this variable's value to the daemon's version number.
+    The variable is set only on versions >= 2.2.53
+"""
+
+
+def set_daemon_version(flexible_version):
+    """
+    Sets the value of the _AZURE_GUEST_AGENT_DAEMON_VERSION_ environment variable.
+    """
+    os.environ[__DAEMON_VERSION_ENV_VARIABLE] = ustr(flexible_version)
+
+
+def get_daemon_version():
+    """
+    Retrieves the value of the _AZURE_GUEST_AGENT_DAEMON_VERSION_ environment variable.
+    The value indicates the version of the daemon that started the current agent process or, if the current
+    process is the daemon, the version of the current process.
+    If the variable is not set (because the agent is < 2.2.53, or the process was not started by the daemon and
+    the process is not the daemon itself) the function returns "0.0.0.0"
+    """
+    if __DAEMON_VERSION_ENV_VARIABLE in os.environ:
+        return FlexibleVersion(os.environ[__DAEMON_VERSION_ENV_VARIABLE])
+    return FlexibleVersion("0.0.0.0")
+
 
 def get_f5_platform():
     """

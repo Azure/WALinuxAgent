@@ -37,10 +37,13 @@ from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.logcollector import LogCollector, OUTPUT_RESULTS_FILE_PATH
 from azurelinuxagent.common.osutil import get_osutil
 from azurelinuxagent.common.utils import fileutil
-from azurelinuxagent.common.version import AGENT_NAME, AGENT_LONG_VERSION, \
+from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
+from azurelinuxagent.common.version import AGENT_NAME, AGENT_LONG_VERSION, AGENT_VERSION, \
     DISTRO_NAME, DISTRO_VERSION, \
     PY_VERSION_MAJOR, PY_VERSION_MINOR, \
-    PY_VERSION_MICRO, GOAL_STATE_AGENT_VERSION
+    PY_VERSION_MICRO, GOAL_STATE_AGENT_VERSION, \
+    get_daemon_version, set_daemon_version
+from azurelinuxagent.pa.provision.default import ProvisionHandler
 
 
 class Agent(object):
@@ -64,8 +67,11 @@ class Agent(object):
         # Init log
         verbose = verbose or conf.get_logs_verbose()
         level = logger.LogLevel.VERBOSE if verbose else logger.LogLevel.INFO
-        logger.add_logger_appender(logger.AppenderType.FILE, level,
-                                   path=conf.get_agent_log_file())
+        logger.add_logger_appender(logger.AppenderType.FILE, level, path=conf.get_agent_log_file())
+
+        # echo the log to /dev/console if the machine will be provisioned
+        if conf.get_logs_console() and not ProvisionHandler.is_provisioned():
+            self.__add_console_appender(level)
 
         if event.send_logs_to_telemetry():
             logger.add_logger_appender(logger.AppenderType.TELEMETRY,
@@ -94,10 +100,14 @@ class Agent(object):
         event.init_event_logger(event_dir)
         event.enable_unhandled_err_dump("WALA")
 
+    def __add_console_appender(self, level):
+        logger.add_logger_appender(logger.AppenderType.CONSOLE, level, path="/dev/console")
+
     def daemon(self):
         """
         Run agent daemon
         """
+        set_daemon_version(AGENT_VERSION)
         logger.set_prefix("Daemon")
         threading.current_thread().setName("Daemon")
         child_args = None \
@@ -138,6 +148,20 @@ class Agent(object):
         """
         Run the update and extension handler
         """
+        #
+        # Agents < 2.2.53 used to echo the log to the console. Since the extension handler could have been started by
+        # one of those daemons, output a message indicating that output to the console will stop, otherwise users
+        # may think that the agent died if they noticed that output to the console stops abruptly.
+        #
+        # Feel free to remove this code if telemetry shows there are no more agents <= 2.2.53 in the field.
+        #
+        if conf.get_logs_console() and get_daemon_version() < FlexibleVersion("2.2.53"):
+            self.__add_console_appender(logger.LogLevel.INFO)
+            try:
+                logger.info(u"Output to /dev/console will be suppressed for the rest of this run.")
+            finally:
+                logger.disable_console_output()
+
         logger.set_prefix("ExtHandler")
         threading.current_thread().setName("ExtHandler")
         from azurelinuxagent.ga.update import get_update_handler

@@ -64,7 +64,7 @@ class ProvisionHandler(object):
             utc_start = datetime.utcnow()
             thumbprint = None # pylint: disable=W0612
 
-            if self.is_provisioned():
+            if self.check_provisioned_file():
                 logger.info("Provisioning already completed, skipping.")
                 return
 
@@ -165,26 +165,34 @@ class ProvisionHandler(object):
             raise ProvisionError(("Failed to generate ssh host key: "
                                   "ret={0}, out= {1}").format(ret[0], ret[1]))
 
-    def provisioned_file_path(self):
+    @staticmethod
+    def provisioned_file_path():
         return os.path.join(conf.get_lib_dir(), PROVISIONED_FILE)
 
-    def is_provisioned(self):
-        '''
-        A VM is considered provisionend *anytime* the provisioning
+    @staticmethod
+    def is_provisioned():
+        """
+        A VM is considered provisioned *anytime* the provisioning
         sentinel file exists and not provisioned *anytime* the file
         is absent.
+        """
+        return os.path.isfile(ProvisionHandler.provisioned_file_path())
 
+    def check_provisioned_file(self):
+        """
         If the VM was provisioned using an agent that did not record
         the VM unique identifier, the provisioning file will be re-written
         to include the identifier.
 
         A warning is logged *if* the VM unique identifier has changed
         since VM was provisioned.
-        '''
-        if not os.path.isfile(self.provisioned_file_path()):
+
+        Returns False if the VM has not been provisioned.
+        """
+        if not ProvisionHandler.is_provisioned():
             return False
 
-        s = fileutil.read_file(self.provisioned_file_path()).strip() # pylint: disable=C0103
+        s = fileutil.read_file(ProvisionHandler.provisioned_file_path()).strip() # pylint: disable=C0103
         if not self.osutil.is_current_instance_id(s):
             if len(s) > 0: # pylint: disable=len-as-condition
                 logger.warn("VM is provisioned, "
@@ -202,7 +210,7 @@ class ProvisionHandler(object):
 
     def write_provisioned(self):
         fileutil.write_file(
-            self.provisioned_file_path(),
+            ProvisionHandler.provisioned_file_path(),
             get_osutil().get_instance_id())
 
     @staticmethod
