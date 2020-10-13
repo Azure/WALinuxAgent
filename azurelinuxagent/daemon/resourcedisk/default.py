@@ -333,7 +333,7 @@ class ResourceDiskHandler(object):
         # fallocate
         ret = 0
         fn_sh = shellutil.quote((filename,))
-        if self.fs != 'xfs':
+        if self.fs not in ['xfs', 'ext4']:
             # os.posix_fallocate
             if sys.version_info >= (3, 3):
                 # Probable errors:
