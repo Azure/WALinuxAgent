@@ -16,7 +16,6 @@
 #
 # Requires Python 2.6+ and Openssl 1.0+
 
-import datetime
 import json
 import os
 import random
@@ -24,7 +23,7 @@ import time
 import traceback
 import xml.sax.saxutils as saxutils
 from collections import defaultdict
-from datetime import datetime  # pylint: disable=ungrouped-imports
+from datetime import datetime
 
 import azurelinuxagent.common.conf as conf
 import azurelinuxagent.common.logger as logger
