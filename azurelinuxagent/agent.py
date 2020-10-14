@@ -148,6 +148,9 @@ class Agent(object):
         """
         Run the update and extension handler
         """
+        logger.set_prefix("ExtHandler")
+        threading.current_thread().setName("ExtHandler")
+
         #
         # Agents < 2.2.53 used to echo the log to the console. Since the extension handler could have been started by
         # one of those daemons, output a message indicating that output to the console will stop, otherwise users
@@ -162,8 +165,6 @@ class Agent(object):
             finally:
                 logger.disable_console_output()
 
-        logger.set_prefix("ExtHandler")
-        threading.current_thread().setName("ExtHandler")
         from azurelinuxagent.ga.update import get_update_handler
         update_handler = get_update_handler()
         update_handler.run(debug)
