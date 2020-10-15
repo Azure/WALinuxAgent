@@ -563,7 +563,7 @@ class TestAppender(AgentTestCase):
         # Validating only test-error gets logged and not others.
         self.assertEqual(1, mock_sys_stdout.call_count)
 
-    def test_console_output_enabled_should_return_true_when_there_are_no_console_appenders(self):
+    def test_console_output_enabled_should_return_true_when_there_are_console_appenders(self):
         my_logger = logger.Logger()
         my_logger.add_appender(logger.AppenderType.STDOUT, logger.LogLevel.INFO, None)
         my_logger.add_appender(logger.AppenderType.CONSOLE, logger.LogLevel.INFO, None)
