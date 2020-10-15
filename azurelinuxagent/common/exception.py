@@ -229,7 +229,7 @@ class InvalidExtensionEventError(AgentError):
 
 class ServiceStoppedError(AgentError):
     """
-    Error thrown when trying to access a Servive which is stopped
+    Error thrown when trying to access a Service which is stopped
     """
     def __init__(self, msg=None, inner=None):
         super(ServiceStoppedError, self).__init__(msg, inner)

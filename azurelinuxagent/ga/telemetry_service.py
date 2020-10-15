@@ -40,7 +40,7 @@ class TelemetryServiceHandler(ThreadHandlerInterface):
 
     _THREAD_NAME = "TelemetryServiceHandler"
     _MAX_TIMEOUT = datetime.timedelta(seconds=5).seconds
-    _MIN_QUEUE_LIMIT = 30
+    _MIN_EVENTS_TO_BATCH = 30
     _MIN_BATCH_WAIT_TIME = datetime.timedelta(seconds=5)
 
 
@@ -49,7 +49,7 @@ class TelemetryServiceHandler(ThreadHandlerInterface):
         self.should_run = True
         self._thread = None
         self._should_process_events = threading.Event()
-        self._queue = Queue() #PriorityQueue()
+        self._queue = Queue()
 
     @staticmethod
     def get_thread_name():
@@ -130,9 +130,9 @@ class TelemetryServiceHandler(ThreadHandlerInterface):
         # Process everything in Queue
         if not self._queue.empty():
             start_time = datetime.datetime.utcnow()
-            while not self.stopped() and self._queue.qsize() < self._MIN_QUEUE_LIMIT and (
+            while not self.stopped() and self._queue.qsize() < self._MIN_EVENTS_TO_BATCH and (
                     start_time + self._MIN_BATCH_WAIT_TIME) > datetime.datetime.utcnow():
-                # To promote batching, we either wait for atleast _MIN_QUEUE_LIMIT events or _MIN_BATCH_WAIT_TIME secs
+                # To promote batching, we either wait for atleast _MIN_EVENTS_TO_BATCH events or _MIN_BATCH_WAIT_TIME secs
                 # before sending out the first request to wireserver.
                 # If the thread is requested to stop midway, we skip batching and send whatever we have in the queue.
                 logger.verbose("Waiting for events to batch. Queue size: {0}, Time elapsed: {1} secs",

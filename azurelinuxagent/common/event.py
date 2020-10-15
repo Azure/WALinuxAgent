@@ -281,23 +281,29 @@ def _log_event(name, op, message, duration, is_success=True): # pylint: disable=
         logger.info(_EVENT_MSG, name, op, message, duration)
 
 
-class EventDebugInfo(object):
-    MAX_ERRORS = 5
+class CollectOrReportEventDebugInfo(object):
+    """
+    This class is used for capturing and reporting debug info that is captured during event collection and
+    reporting to wireserver.
+    It captures the count of unicode errors and any unexpected errors and also a subset of errors with stacks to help
+    with debugging any potential issues.
+    """
+    __MAX_ERRORS_TO_REPORT = 5
     OP_REPORT = "Report"
     OP_COLLECT = "Collect"
 
     def __init__(self, operation=OP_REPORT):
-        self.unicode_error_count = 0
-        self.unicode_errors = set()
-        self.op_error_count = 0
-        self.op_errors = set()
+        self.__unicode_error_count = 0
+        self.__unicode_errors = set()
+        self.__op_error_count = 0
+        self.__op_errors = set()
 
         if operation == self.OP_REPORT:
-            self.unicode_error_event = WALAEventOperation.ReportEventUnicodeErrors
-            self.op_errors_event = WALAEventOperation.ReportEventErrors
+            self.__unicode_error_event = WALAEventOperation.ReportEventUnicodeErrors
+            self.__op_errors_event = WALAEventOperation.ReportEventErrors
         elif operation == self.OP_COLLECT:
-            self.unicode_error_event = WALAEventOperation.CollectEventUnicodeErrors
-            self.op_errors_event = WALAEventOperation.CollectEventErrors
+            self.__unicode_error_event = WALAEventOperation.CollectEventUnicodeErrors
+            self.__op_errors_event = WALAEventOperation.CollectEventErrors
 
     def report_debug_info(self):
 
@@ -305,25 +311,25 @@ class EventDebugInfo(object):
             err_msg_format = "DroppedEventsCount: {0}\nReasons (first {1} errors): {2}"
             if count > 0:
                 add_event(op=operation_name,
-                          message=err_msg_format.format(count, EventDebugInfo.MAX_ERRORS, ', '.join(errors)),
+                          message=err_msg_format.format(count, CollectOrReportEventDebugInfo.__MAX_ERRORS_TO_REPORT, ', '.join(errors)),
                           is_success=False)
 
-        report_dropped_events_error(self.op_error_count, self.op_errors, self.op_errors_event)
-        report_dropped_events_error(self.unicode_error_count, self.unicode_errors, self.unicode_error_event)
+        report_dropped_events_error(self.__op_error_count, self.__op_errors, self.__op_errors_event)
+        report_dropped_events_error(self.__unicode_error_count, self.__unicode_errors, self.__unicode_error_event)
 
     @staticmethod
     def _update_errors_and_get_count(error_count, errors, error):
         error_count += 1
-        if len(errors) < EventDebugInfo.MAX_ERRORS:
+        if len(errors) < CollectOrReportEventDebugInfo.__MAX_ERRORS_TO_REPORT:
             errors.add("{0}: {1}".format(ustr(error), traceback.format_exc()))
         return error_count
 
     def update_unicode_error(self, unicode_err):
-        self.unicode_error_count = self._update_errors_and_get_count(self.unicode_error_count, self.unicode_errors,
-                                                                     unicode_err)
+        self.__unicode_error_count = self._update_errors_and_get_count(self.__unicode_error_count, self.__unicode_errors,
+                                                                       unicode_err)
 
     def update_op_error(self, op_err):
-        self.op_error_count = self._update_errors_and_get_count(self.op_error_count, self.op_errors, op_err)
+        self.__op_error_count = self._update_errors_and_get_count(self.__op_error_count, self.__op_errors, op_err)
 
 
 class EventLogger(object):
@@ -624,23 +630,15 @@ class EventLogger(object):
 
         event.parameters = trimmed_params
 
-    @staticmethod
-    def report_dropped_events_error(count, errors, operation_name, max_errors_to_report):
-        err_msg_format = "DroppedEventsCount: {0}\nReasons (first {1} errors): {2}"
-        if count > 0:
-            add_event(op=operation_name,
-                      message=err_msg_format.format(count, max_errors_to_report, ', '.join(errors)),
-                      is_success=False)
-
     # too-many-locals<R0914> Disabled: The number of local variables is OK
-    def collect_events(self, enqueue_event): # pylint: disable=too-many-locals
+    def process_events(self, process_event_operation): # pylint: disable=too-many-locals
         """
         Retuns a list of events that need to be sent to the telemetry pipeline and deletes the corresponding files
         from the events directory.
         """
         event_directory_full_path = os.path.join(conf.get_lib_dir(), EVENTS_DIRECTORY)
         event_files = os.listdir(event_directory_full_path)
-        debug_info = EventDebugInfo(operation=EventDebugInfo.OP_COLLECT)
+        debug_info = CollectOrReportEventDebugInfo(operation=CollectOrReportEventDebugInfo.OP_COLLECT)
 
         for event_file in event_files:
             try:
@@ -673,7 +671,7 @@ class EventLogger(object):
                         else:
                             self._update_legacy_agent_event(event, event_file_creation_time)
 
-                    enqueue_event(event)
+                    process_event_operation(event)
                 finally:
                     os.remove(event_file_path)
             except ServiceStoppedError as stopped_error:
@@ -811,8 +809,8 @@ def add_periodic(delta, name, op=WALAEventOperation.Unknown, is_success=True, du
                           message=message, log_event=log_event, force=force)
 
 
-def collect_events(enqueue_event, reporter=__event_logger__):
-    return reporter.collect_events(enqueue_event)
+def process_events(process_event_operation, reporter=__event_logger__):
+    return reporter.process_events(process_event_operation)
 
 
 def mark_event_status(name, version, op, status): # pylint: disable=C0103

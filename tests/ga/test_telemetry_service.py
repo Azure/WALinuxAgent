@@ -82,7 +82,7 @@ class TestTelemetryServiceHandler(AgentTestCase, HttpRequestPredicates):
             protocol_util.get_protocol = Mock(return_value=protocol)
             telemetry_service_handler = get_telemetry_service_handler(protocol_util)
             telemetry_service_handler.event_calls = []
-            with patch("azurelinuxagent.ga.telemetry_service.TelemetryServiceHandler._MIN_QUEUE_LIMIT",
+            with patch("azurelinuxagent.ga.telemetry_service.TelemetryServiceHandler._MIN_EVENTS_TO_BATCH",
                        batching_queue_limit):
                 with patch("azurelinuxagent.ga.telemetry_service.TelemetryServiceHandler._MAX_TIMEOUT", timeout):
 

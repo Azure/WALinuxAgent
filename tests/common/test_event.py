@@ -94,7 +94,7 @@ class TestEvent(HttpRequestPredicates, AgentTestCase): # pylint: disable=too-man
     @staticmethod
     def _collect_events():
         event_list = []
-        event.collect_events(event_list.append)
+        event.process_events(event_list.append)
         return event_list
 
     @staticmethod

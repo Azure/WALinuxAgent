@@ -28,7 +28,7 @@ import traceback
 import azurelinuxagent.common.logger as logger
 from azurelinuxagent.common import conf
 from azurelinuxagent.common.event import EVENTS_DIRECTORY, TELEMETRY_LOG_EVENT_ID, \
-    TELEMETRY_LOG_PROVIDER_ID, add_event, WALAEventOperation, add_log_event, get_event_logger, collect_events
+    TELEMETRY_LOG_PROVIDER_ID, add_event, WALAEventOperation, add_log_event, get_event_logger, process_events
 from azurelinuxagent.common.exception import InvalidExtensionEventError, ServiceStoppedError
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.telemetryevent import TelemetryEvent, TelemetryEventParam, \
@@ -394,7 +394,7 @@ class CollectAndEnqueueEventsPeriodicOperation(PeriodicOperation):
                     self._telemetry_service_handler.get_thread_name()))
                 return
 
-            collect_events(self._telemetry_service_handler.enqueue_event)
+            process_events(self._telemetry_service_handler.enqueue_event)
         except Exception as error:
             err_msg = "Failure in collecting Agent events: {0}".format(ustr(error))
             add_event(op=WALAEventOperation.UnhandledError, message=err_msg, is_success=False)
