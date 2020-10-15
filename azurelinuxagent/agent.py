@@ -161,7 +161,7 @@ class Agent(object):
         if conf.get_logs_console() and get_daemon_version() < FlexibleVersion("2.2.53"):
             self.__add_console_appender(logger.LogLevel.INFO)
             try:
-                logger.info(u"Output to /dev/console will be suppressed for the rest of this run.")
+                logger.info(u"The agent will now check for updates and then will process extensions. Output to /dev/console will be suspended during those operations.")
             finally:
                 logger.disable_console_output()
 
