@@ -32,10 +32,13 @@ __DAEMON_VERSION_ENV_VARIABLE = '_AZURE_GUEST_AGENT_DAEMON_VERSION_'
 """
 
 
-def set_daemon_version(flexible_version):
+def set_daemon_version(version):
     """
     Sets the value of the _AZURE_GUEST_AGENT_DAEMON_VERSION_ environment variable.
+
+    The given 'version' can be a FlexibleVersion or a string that can be parsed into a FlexibleVersion
     """
+    flexible_version = version if isinstance(version, FlexibleVersion) else FlexibleVersion(version)
     os.environ[__DAEMON_VERSION_ENV_VARIABLE] = ustr(flexible_version)
 
 
