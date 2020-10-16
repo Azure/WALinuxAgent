@@ -165,6 +165,18 @@ class Logger(object):
         appender = _create_logger_appender(appender_type, level, path)
         self.appenders.append(appender)
 
+    def console_output_enabled(self):
+        """
+        Returns True if the current list of appenders includes at least one ConsoleAppender
+        """
+        return any(isinstance(appender, ConsoleAppender) for appender in self.appenders)
+
+    def disable_console_output(self):
+        """
+        Removes all ConsoleAppenders from the current list of appenders
+        """
+        self.appenders = [appender for appender in self.appenders if not isinstance(appender, ConsoleAppender)]
+
 
 class Appender(object): # pylint: disable=R0903
     def __init__(self, level):
@@ -254,6 +266,14 @@ class AppenderType(object): # pylint: disable=R0903
 
 def add_logger_appender(appender_type, level=LogLevel.INFO, path=None):
     DEFAULT_LOGGER.add_appender(appender_type, level, path)
+
+
+def console_output_enabled():
+    return DEFAULT_LOGGER.console_output_enabled()
+
+
+def disable_console_output():
+    DEFAULT_LOGGER.disable_console_output()
 
 
 def reset_periodic():
