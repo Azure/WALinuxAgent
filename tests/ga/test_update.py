@@ -1576,29 +1576,24 @@ class TestUpdate(UpdateTestCase): # pylint: disable=too-many-public-methods
 
     @contextlib.contextmanager
     def _setup_test_for_ext_event_dirs_retention(self):
-        # This test class creates some files in the lib dir on setup, since we're using a new temp dir for our test,
-        # making sure the dir created by TestUpdate.setUp() is always clean for this test.
-        shutil.rmtree(conf.get_lib_dir(), ignore_errors=True)
-
-        temp_ext_log_dir = tempfile.mkdtemp()
-        temp_lib_dir = tempfile.mkdtemp()
         try:
-            with patch.object(conf, "get_lib_dir", return_value=temp_lib_dir):
-                with patch.object(conf, "get_ext_log_dir", return_value=temp_ext_log_dir):
-                    with self._get_update_handler(test_data=DATA_FILE_MULTIPLE_EXT) as (update_handler, protocol):
-                        with patch('azurelinuxagent.ga.exthandlers._ENABLE_EXTENSION_TELEMETRY_PIPELINE', True):
-                            update_handler.run(debug=True)
-                            expected_events_dirs = glob.glob(os.path.join(conf.get_ext_log_dir(), "*", EVENTS_DIRECTORY))
-                            no_of_extensions = protocol.mock_wire_data.get_no_of_plugins_in_extension_config()
-                            # Ensure extensions installed and events directory created
-                            self.assertEqual(len(expected_events_dirs), no_of_extensions, "Extension events directories dont match")
-                            for ext_dir in expected_events_dirs:
-                                self.assertTrue(os.path.exists(ext_dir), "Extension directory {0} not created!".format(ext_dir))
+            with self._get_update_handler(test_data=DATA_FILE_MULTIPLE_EXT) as (update_handler, protocol):
+                with patch('azurelinuxagent.ga.exthandlers._ENABLE_EXTENSION_TELEMETRY_PIPELINE', True):
+                    update_handler.run(debug=True)
+                    expected_events_dirs = glob.glob(os.path.join(conf.get_ext_log_dir(), "*", EVENTS_DIRECTORY))
+                    no_of_extensions = protocol.mock_wire_data.get_no_of_plugins_in_extension_config()
+                    # Ensure extensions installed and events directory created
+                    self.assertEqual(len(expected_events_dirs), no_of_extensions, "Extension events directories dont match")
+                    for ext_dir in expected_events_dirs:
+                        self.assertTrue(os.path.exists(ext_dir), "Extension directory {0} not created!".format(ext_dir))
 
-                            yield update_handler, expected_events_dirs
+                    yield update_handler, expected_events_dirs
         finally:
-            shutil.rmtree(temp_ext_log_dir, ignore_errors=True)
-            shutil.rmtree(temp_lib_dir, ignore_errors=True)
+            # The TestUpdate.setUp() initializes the self.tmp_dir to be used as a placeholder
+            # for everything (event logger, status logger, conf.get_lib_dir() and more).
+            # Since we add more data to the dir for this test, ensuring its completely clean before exiting the test.
+            shutil.rmtree(self.tmp_dir, ignore_errors=True)
+            self.tmp_dir = None
 
     def test_it_should_delete_extension_events_directory_if_extension_telemetry_pipeline_disabled(self):
         # Disable extension telemetry pipeline and ensure events directory got deleted
