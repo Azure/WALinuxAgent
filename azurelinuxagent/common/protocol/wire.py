@@ -188,8 +188,8 @@ class WireProtocol(DataContract):
         validate_param("ext_status", ext_status, ExtensionStatus)
         self.client.status_blob.set_ext_status(ext_handler_name, ext_status)
 
-    def report_event(self, get_events_in_queue):
-        self.client.report_event(get_events_in_queue)
+    def report_event(self, events_iterator):
+        self.client.report_event(events_iterator)
 
     def upload_logs(self, logs):
         self.client.upload_logs(logs)
@@ -1077,10 +1077,10 @@ class WireClient(object): # pylint: disable=R0904
             raise ProtocolError(
                 "Failed to send events:{0}".format(resp.status))
 
-    def report_event(self, get_events_in_queue):
+    def report_event(self, events_iterator):
         buf = {}
         debug_info = CollectOrReportEventDebugInfo(operation=CollectOrReportEventDebugInfo.OP_REPORT)
-        events_per_request = defaultdict(int)
+        events_per_provider = defaultdict(int)
 
         def _send_event(provider_id, debug_info):
             try:
@@ -1091,7 +1091,7 @@ class WireClient(object): # pylint: disable=R0904
                 debug_info.update_op_error(error)
 
         # Group events by providerId
-        for event in get_events_in_queue():
+        for event in events_iterator():
             try:
                 if event.providerId not in buf:
                     buf[event.providerId] = b''
@@ -1110,14 +1110,14 @@ class WireClient(object): # pylint: disable=R0904
 
                 # If buffer is full, send out the events in buffer and reset buffer
                 if len(buf[event.providerId] + event_str) >= MAX_EVENT_BUFFER_SIZE:
-                    logger.verbose("No of events this request = {0}".format(events_per_request[event.providerId]))
+                    logger.verbose("No of events this request = {0}".format(events_per_provider[event.providerId]))
                     _send_event(event.providerId, debug_info)
                     buf[event.providerId] = b''
-                    events_per_request[event.providerId] = 0
+                    events_per_provider[event.providerId] = 0
 
                 # Add encoded events to the buffer
                 buf[event.providerId] = buf[event.providerId] + event_str
-                events_per_request[event.providerId] += 1
+                events_per_provider[event.providerId] += 1
 
             except Exception as error:
                 logger.warn("Unexpected error when generating Events: {0}, {1}", ustr(error), traceback.format_exc())
@@ -1125,7 +1125,7 @@ class WireClient(object): # pylint: disable=R0904
         # Send out all events left in buffer.
         for provider_id in list(buf.keys()):
             if buf[provider_id]:
-                logger.verbose("No of events this request = {0}".format(events_per_request[provider_id]))
+                logger.verbose("No of events this request = {0}".format(events_per_provider[provider_id]))
                 _send_event(provider_id, debug_info)
 
         debug_info.report_debug_info()

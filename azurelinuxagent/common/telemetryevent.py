@@ -99,8 +99,7 @@ class TelemetryEvent(DataContract):
         # "WALinuxAgent", it is an extension event.
         for param in self.parameters:
             if param.name == GuestAgentExtensionEventsSchema.Name:
-                if param.value != AGENT_NAME:
-                    return True
+                return param.value != AGENT_NAME
         return False
 
     def get_version(self):
