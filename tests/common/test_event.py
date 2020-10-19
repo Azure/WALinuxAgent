@@ -37,6 +37,7 @@ from azurelinuxagent.common.osutil import get_osutil
 from azurelinuxagent.common.telemetryevent import CommonTelemetryEventSchema, GuestAgentGenericLogsSchema, \
     GuestAgentExtensionEventsSchema, GuestAgentPerfCounterEventsSchema
 from azurelinuxagent.common.version import CURRENT_AGENT, CURRENT_VERSION, AGENT_EXECUTION_MODE
+from azurelinuxagent.ga.collect_telemetry_events import CollectAndEnqueueEventsPeriodicOperation
 from tests.protocol import mockwiredata
 from tests.protocol.mocks import mock_wire_protocol, HttpRequestPredicates, MockHttpResponse
 from tests.tools import AgentTestCase, data_dir, load_data, patch, skip_if_predicate_true
@@ -94,7 +95,7 @@ class TestEvent(HttpRequestPredicates, AgentTestCase): # pylint: disable=too-man
     @staticmethod
     def _collect_events():
         event_list = []
-        event.process_events(event_list.append)
+        CollectAndEnqueueEventsPeriodicOperation.process_events(event_list.append)
         return event_list
 
     @staticmethod

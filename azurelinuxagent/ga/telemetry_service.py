@@ -28,17 +28,17 @@ from azurelinuxagent.common.future import ustr, Queue, Full
 from azurelinuxagent.common.interfaces import ThreadHandlerInterface
 
 
-def get_telemetry_service_handler(protocol_util):
-    return TelemetryServiceHandler(protocol_util)
+def get_send_telemetry_events_handler(protocol_util):
+    return SendTelemetryEventsHandler(protocol_util)
 
 
-class TelemetryServiceHandler(ThreadHandlerInterface):
+class SendTelemetryEventsHandler(ThreadHandlerInterface):
     """
     This Handler takes care of sending all telemetry out of the agent to Wireserver. It sends out data as soon as
     there's any data available in the queue to send.
     """
 
-    _THREAD_NAME = "TelemetryServiceHandler"
+    _THREAD_NAME = "SendTelemetryEventsHandler"
     _MAX_TIMEOUT = datetime.timedelta(seconds=5).seconds
     _MIN_EVENTS_TO_BATCH = 30
     _MIN_BATCH_WAIT_TIME = datetime.timedelta(seconds=5)
@@ -53,7 +53,7 @@ class TelemetryServiceHandler(ThreadHandlerInterface):
 
     @staticmethod
     def get_thread_name():
-        return TelemetryServiceHandler._THREAD_NAME
+        return SendTelemetryEventsHandler._THREAD_NAME
 
     def run(self):
         logger.info("Start Extension Telemetry service.")
@@ -91,9 +91,9 @@ class TelemetryServiceHandler(ThreadHandlerInterface):
             raise ServiceStoppedError("{0} is stopped, not accepting anymore events".format(self.get_thread_name()))
 
         # Queue.put() can block if the queue is full which can be an uninterruptible wait. Blocking for a max of
-        # TelemetryServiceHandler._MAX_TIMEOUT seconds and raising a ServiceStoppedError to retry later.
+        # SendTelemetryEventsHandler._MAX_TIMEOUT seconds and raising a ServiceStoppedError to retry later.
         try:
-            self._queue.put(event, timeout=TelemetryServiceHandler._MAX_TIMEOUT)
+            self._queue.put(event, timeout=SendTelemetryEventsHandler._MAX_TIMEOUT)
         except Full as error:
             raise ServiceStoppedError(
                 "Queue full, stopping any more enqueuing until the next run. {0}".format(ustr(error)))
@@ -105,9 +105,9 @@ class TelemetryServiceHandler(ThreadHandlerInterface):
         logger.info("Successfully started the {0} thread".format(self.get_thread_name()))
         try:
             # On demand wait, start processing as soon as there is any data available in the queue. In worst case,
-            # also keep checking every TelemetryServiceHandler._MAX_TIMEOUT secs to avoid uninterruptible waits
+            # also keep checking every SendTelemetryEventsHandler._MAX_TIMEOUT secs to avoid uninterruptible waits
             while not self.stopped():
-                self._should_process_events.wait(timeout=TelemetryServiceHandler._MAX_TIMEOUT)
+                self._should_process_events.wait(timeout=SendTelemetryEventsHandler._MAX_TIMEOUT)
                 self._send_events_in_queue()
 
         except Exception as error:

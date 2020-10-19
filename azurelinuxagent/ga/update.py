@@ -54,14 +54,14 @@ from azurelinuxagent.common.version import AGENT_NAME, AGENT_VERSION, AGENT_DIR_
     PY_VERSION_MINOR, PY_VERSION_MICRO
 from azurelinuxagent.ga.collect_logs import get_collect_logs_handler, is_log_collection_allowed
 from azurelinuxagent.ga.env import get_env_handler
-from azurelinuxagent.ga.collect_telemetry_events import get_telemetry_collector_handler
+from azurelinuxagent.ga.collect_telemetry_events import get_collect_telemetry_events_handler
 
 from azurelinuxagent.ga.exthandlers import HandlerManifest, get_traceback, ExtHandlersHandler, list_agent_lib_directory, \
     is_extension_telemetry_pipeline_enabled
 from azurelinuxagent.ga.monitor import get_monitor_handler
 
 # pylint: disable=C0302
-from azurelinuxagent.ga.telemetry_service import get_telemetry_service_handler
+from azurelinuxagent.ga.telemetry_service import get_send_telemetry_events_handler
 
 AGENT_ERROR_FILE = "error.json" # File name for agent error record
 AGENT_MANIFEST_FILE = "HandlerManifest.json"
@@ -289,12 +289,12 @@ class UpdateHandler(object): # pylint: disable=R0902
             self._ensure_extension_telemetry_state_configured_properly(protocol)
 
             # Get all thread handlers
-            telemetry_handler = get_telemetry_service_handler(self.protocol_util)
+            telemetry_handler = get_send_telemetry_events_handler(self.protocol_util)
             all_thread_handlers = [
                 get_monitor_handler(),
                 get_env_handler(),
                 telemetry_handler,
-                get_telemetry_collector_handler(telemetry_handler)
+                get_collect_telemetry_events_handler(telemetry_handler)
             ]
 
             if is_log_collection_allowed():

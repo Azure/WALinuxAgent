@@ -1258,8 +1258,8 @@ class TestUpdate(UpdateTestCase): # pylint: disable=too-many-public-methods
                 with patch('azurelinuxagent.ga.update.get_monitor_handler') as mock_monitor:
                     with patch('azurelinuxagent.ga.update.get_env_handler') as mock_env:
                         with patch('azurelinuxagent.ga.update.get_collect_logs_handler') as mock_collect_logs:
-                            with patch('azurelinuxagent.ga.update.get_telemetry_service_handler') as mock_telemetry_service:
-                                with patch('azurelinuxagent.ga.update.get_telemetry_collector_handler') as mock_event_collector:
+                            with patch('azurelinuxagent.ga.update.get_send_telemetry_events_handler') as mock_telemetry_service:
+                                with patch('azurelinuxagent.ga.update.get_collect_telemetry_events_handler') as mock_event_collector:
                                     with patch('azurelinuxagent.ga.update.initialize_event_logger_vminfo_common_parameters'):
                                         with patch('azurelinuxagent.ga.update.is_log_collection_allowed', return_value=True):
                                             with patch('time.sleep', side_effect=iterator) as sleep_mock:
@@ -1611,8 +1611,8 @@ class TestUpdate(UpdateTestCase): # pylint: disable=too-many-public-methods
                 self.assertTrue(os.path.exists(ext_dir), "Extension directory {0} should exist!".format(ext_dir))
 
 
-@patch('azurelinuxagent.ga.update.get_telemetry_collector_handler')
-@patch('azurelinuxagent.ga.update.get_telemetry_service_handler')
+@patch('azurelinuxagent.ga.update.get_collect_telemetry_events_handler')
+@patch('azurelinuxagent.ga.update.get_send_telemetry_events_handler')
 @patch('azurelinuxagent.ga.update.get_collect_logs_handler')
 @patch('azurelinuxagent.ga.update.get_monitor_handler')
 @patch('azurelinuxagent.ga.update.get_env_handler')

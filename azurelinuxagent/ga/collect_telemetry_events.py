@@ -21,25 +21,25 @@ import json
 import os
 import re
 import threading
-from collections import defaultdict
-
 import traceback
+from collections import defaultdict
 
 import azurelinuxagent.common.logger as logger
 from azurelinuxagent.common import conf
 from azurelinuxagent.common.event import EVENTS_DIRECTORY, TELEMETRY_LOG_EVENT_ID, \
-    TELEMETRY_LOG_PROVIDER_ID, add_event, WALAEventOperation, add_log_event, get_event_logger, process_events
+    TELEMETRY_LOG_PROVIDER_ID, add_event, WALAEventOperation, add_log_event, get_event_logger, \
+    CollectOrReportEventDebugInfo, EVENT_FILE_REGEX, parse_event
 from azurelinuxagent.common.exception import InvalidExtensionEventError, ServiceStoppedError
 from azurelinuxagent.common.future import ustr
-from azurelinuxagent.common.telemetryevent import TelemetryEvent, TelemetryEventParam, \
-    GuestAgentGenericLogsSchema
 from azurelinuxagent.common.interfaces import ThreadHandlerInterface
+from azurelinuxagent.common.telemetryevent import TelemetryEvent, TelemetryEventParam, \
+    GuestAgentGenericLogsSchema, GuestAgentExtensionEventsSchema
 from azurelinuxagent.ga.exthandlers import HANDLER_NAME_PATTERN, is_extension_telemetry_pipeline_enabled
 from azurelinuxagent.ga.periodic_operation import PeriodicOperation
 
 
-def get_telemetry_collector_handler(telemetry_service_handler):
-    return CollectTelemetryEventsHandler(telemetry_service_handler)
+def get_collect_telemetry_events_handler(send_telemetry_events_handler):
+    return CollectTelemetryEventsHandler(send_telemetry_events_handler)
 
 
 # too-few-public-methods<R0903> Disabled: This class is used as an Enum
@@ -56,7 +56,8 @@ class ExtensionEventSchema(object): # pylint: disable=R0903
     EventTid = "EventTid"
     OperationId = "OperationId"
 
-class ProcessExtensionTelemetry(PeriodicOperation):
+
+class ProcessExtensionEventsPeriodicOperation(PeriodicOperation):
     """
     Periodic operation for collecting and sending extension telemetry events to Wireserver.
     """
@@ -74,10 +75,10 @@ class ProcessExtensionTelemetry(PeriodicOperation):
                                         not callable(getattr(ExtensionEventSchema, attr)) and not attr.startswith("__")]
 
     def __init__(self, telemetry_service_handler):
-        super(ProcessExtensionTelemetry, self).__init__(
+        super(ProcessExtensionEventsPeriodicOperation, self).__init__(
             name="collect_and_enqueue_extension_events",
             operation=self._collect_and_enqueue_extension_events,
-            period=ProcessExtensionTelemetry._EXTENSION_EVENT_COLLECTION_PERIOD)
+            period=ProcessExtensionEventsPeriodicOperation._EXTENSION_EVENT_COLLECTION_PERIOD)
 
         self._telemetry_service_handler = telemetry_service_handler
 
@@ -288,7 +289,7 @@ class ProcessExtensionTelemetry(PeriodicOperation):
 
         event = TelemetryEvent(TELEMETRY_LOG_EVENT_ID, TELEMETRY_LOG_PROVIDER_ID)
         event.file_type = "json"
-        self.add_common_params_to_extension_event(event, event_file_time)
+        CollectTelemetryEventsHandler.add_common_params_to_telemetry_event(event, event_file_time)
 
         replace_or_add_params = {
             GuestAgentGenericLogsSchema.EventName: "{0}-{1}".format(handler_name, extension_event[
@@ -364,11 +365,6 @@ class ProcessExtensionTelemetry(PeriodicOperation):
         for param_name in replace_or_add_params:
             event.parameters.append(TelemetryEventParam(param_name, replace_or_add_params[param_name]))
 
-    @staticmethod
-    def add_common_params_to_extension_event(event, event_time):
-        reporter = get_event_logger()
-        reporter.add_common_event_parameters(event, event_time)
-
 
 class CollectAndEnqueueEventsPeriodicOperation(PeriodicOperation):
     """
@@ -394,10 +390,113 @@ class CollectAndEnqueueEventsPeriodicOperation(PeriodicOperation):
                     self._telemetry_service_handler.get_thread_name()))
                 return
 
-            process_events(self._telemetry_service_handler.enqueue_event)
+            self.process_events(self._telemetry_service_handler.enqueue_event)
         except Exception as error:
             err_msg = "Failure in collecting Agent events: {0}".format(ustr(error))
             add_event(op=WALAEventOperation.UnhandledError, message=err_msg, is_success=False)
+
+    # too-many-locals<R0914> Disabled: The number of local variables is OK
+    @staticmethod
+    def process_events(process_event_operation):  # pylint: disable=too-many-locals
+        """
+        Retuns a list of events that need to be sent to the telemetry pipeline and deletes the corresponding files
+        from the events directory.
+        """
+        event_directory_full_path = os.path.join(conf.get_lib_dir(), EVENTS_DIRECTORY)
+        event_files = os.listdir(event_directory_full_path)
+        debug_info = CollectOrReportEventDebugInfo(operation=CollectOrReportEventDebugInfo.OP_COLLECT)
+
+        for event_file in event_files:
+            try:
+                match = EVENT_FILE_REGEX.search(event_file)
+                if match is None:
+                    continue
+
+                event_file_path = os.path.join(event_directory_full_path, event_file)
+
+                try:
+                    logger.verbose("Processing event file: {0}", event_file_path)
+
+                    with open(event_file_path, "rb") as event_fd:
+                        event_data = event_fd.read().decode("utf-8")
+
+                    event = parse_event(event_data)
+
+                    # "legacy" events are events produced by previous versions of the agent (<= 2.2.46) and extensions;
+                    # they do not include all the telemetry fields, so we add them here
+                    is_legacy_event = match.group('agent_event') is None
+
+                    if is_legacy_event:
+                        # We'll use the file creation time for the event's timestamp
+                        event_file_creation_time_epoch = os.path.getmtime(event_file_path)
+                        event_file_creation_time = datetime.datetime.fromtimestamp(event_file_creation_time_epoch)
+
+                        if event.is_extension_event():
+                            CollectAndEnqueueEventsPeriodicOperation._trim_legacy_extension_event_parameters(event)
+                            CollectTelemetryEventsHandler.add_common_params_to_telemetry_event(event,
+                                                                                               event_file_creation_time)
+                        else:
+                            CollectAndEnqueueEventsPeriodicOperation._update_legacy_agent_event(event,
+                                                                                                event_file_creation_time)
+
+                    process_event_operation(event)
+                finally:
+                    os.remove(event_file_path)
+            except ServiceStoppedError as stopped_error:
+                logger.error(
+                    "Unable to enqueue events as service stopped: {0}, skipping events collection".format(
+                        ustr(stopped_error)))
+            except UnicodeError as uni_err:
+                debug_info.update_unicode_error(uni_err)
+            except Exception as error:
+                debug_info.update_op_error(error)
+
+        debug_info.report_debug_info()
+
+    @staticmethod
+    def _update_legacy_agent_event(event, event_creation_time):
+        # Ensure that if an agent event is missing a field from the schema defined since 2.2.47, the missing fields
+        # will be appended, ensuring the event schema is complete before the event is reported.
+        new_event = TelemetryEvent()
+        new_event.parameters = []
+        CollectTelemetryEventsHandler.add_common_params_to_telemetry_event(new_event, event_creation_time)
+
+        event_params = dict([(param.name, param.value) for param in event.parameters])
+        new_event_params = dict([(param.name, param.value) for param in new_event.parameters])
+
+        missing_params = set(new_event_params.keys()).difference(set(event_params.keys()))
+        params_to_add = []
+        for param_name in missing_params:
+            params_to_add.append(TelemetryEventParam(param_name, new_event_params[param_name]))
+
+        event.parameters.extend(params_to_add)
+
+    @staticmethod
+    def _trim_legacy_extension_event_parameters(event):
+        """
+        This method is called for extension events before they are sent out. Per the agreement with extension
+        publishers, the parameters that belong to extensions and will be reported intact are Name, Version, Operation,
+        OperationSuccess, Message, and Duration. Since there is nothing preventing extensions to instantiate other
+        fields (which belong to the agent), we call this method to ensure the rest of the parameters are trimmed since
+        they will be replaced with values coming from the agent.
+        :param event: Extension event to trim.
+        :return: Trimmed extension event; containing only extension-specific parameters.
+        """
+        params_to_keep = dict().fromkeys([
+            GuestAgentExtensionEventsSchema.Name,
+            GuestAgentExtensionEventsSchema.Version,
+            GuestAgentExtensionEventsSchema.Operation,
+            GuestAgentExtensionEventsSchema.OperationSuccess,
+            GuestAgentExtensionEventsSchema.Message,
+            GuestAgentExtensionEventsSchema.Duration
+        ])
+        trimmed_params = []
+
+        for param in event.parameters:
+            if param.name in params_to_keep:
+                trimmed_params.append(param)
+
+        event.parameters = trimmed_params
 
 
 class CollectTelemetryEventsHandler(ThreadHandlerInterface):
@@ -408,10 +507,10 @@ class CollectTelemetryEventsHandler(ThreadHandlerInterface):
 
     _THREAD_NAME = "TelemetryEventsCollector"
 
-    def __init__(self, telemetry_service_handler):
+    def __init__(self, send_telemetry_events_handler):
         self.should_run = True
         self.thread = None
-        self._telemetry_service_handler = telemetry_service_handler
+        self._send_telemetry_events_handler = send_telemetry_events_handler
 
     @staticmethod
     def get_thread_name():
@@ -443,13 +542,13 @@ class CollectTelemetryEventsHandler(ThreadHandlerInterface):
 
     def daemon(self):
         periodic_operations = [
-            CollectAndEnqueueEventsPeriodicOperation(self._telemetry_service_handler)
+            CollectAndEnqueueEventsPeriodicOperation(self._send_telemetry_events_handler)
         ]
 
         logger.info("Extension Telemetry pipeline enabled: {0}".format(
             is_extension_telemetry_pipeline_enabled()))
         if is_extension_telemetry_pipeline_enabled():
-            periodic_operations.append(ProcessExtensionTelemetry(self._telemetry_service_handler))
+            periodic_operations.append(ProcessExtensionEventsPeriodicOperation(self._send_telemetry_events_handler))
 
         logger.info("Successfully started the {0} thread".format(self.get_thread_name()))
         while not self.stopped():
@@ -463,3 +562,8 @@ class CollectTelemetryEventsHandler(ThreadHandlerInterface):
                     ustr(error))
             finally:
                 PeriodicOperation.sleep_until_next_operation(periodic_operations)
+
+    @staticmethod
+    def add_common_params_to_telemetry_event(event, event_time):
+        reporter = get_event_logger()
+        reporter.add_common_event_parameters(event, event_time)

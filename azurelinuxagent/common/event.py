@@ -603,105 +603,6 @@ class EventLogger(object):
         event.parameters.extend(common_params)
         event.parameters.extend(self._common_parameters)
 
-    @staticmethod
-    def _trim_extension_event_parameters(event):
-        """
-        This method is called for extension events before they are sent out. Per the agreement with extension
-        publishers, the parameters that belong to extensions and will be reported intact are Name, Version, Operation,
-        OperationSuccess, Message, and Duration. Since there is nothing preventing extensions to instantiate other
-        fields (which belong to the agent), we call this method to ensure the rest of the parameters are trimmed since
-        they will be replaced with values coming from the agent.
-        :param event: Extension event to trim.
-        :return: Trimmed extension event; containing only extension-specific parameters.
-        """
-        params_to_keep = dict().fromkeys([
-            GuestAgentExtensionEventsSchema.Name,
-            GuestAgentExtensionEventsSchema.Version,
-            GuestAgentExtensionEventsSchema.Operation,
-            GuestAgentExtensionEventsSchema.OperationSuccess,
-            GuestAgentExtensionEventsSchema.Message,
-            GuestAgentExtensionEventsSchema.Duration
-        ])
-        trimmed_params = []
-
-        for param in event.parameters:
-            if param.name in params_to_keep:
-                trimmed_params.append(param)
-
-        event.parameters = trimmed_params
-
-    # too-many-locals<R0914> Disabled: The number of local variables is OK
-    def process_events(self, process_event_operation): # pylint: disable=too-many-locals
-        """
-        Retuns a list of events that need to be sent to the telemetry pipeline and deletes the corresponding files
-        from the events directory.
-        """
-        event_directory_full_path = os.path.join(conf.get_lib_dir(), EVENTS_DIRECTORY)
-        event_files = os.listdir(event_directory_full_path)
-        debug_info = CollectOrReportEventDebugInfo(operation=CollectOrReportEventDebugInfo.OP_COLLECT)
-
-        for event_file in event_files:
-            try:
-                match = EVENT_FILE_REGEX.search(event_file)
-                if match is None:
-                    continue
-
-                event_file_path = os.path.join(event_directory_full_path, event_file)
-
-                try:
-                    logger.verbose("Processing event file: {0}", event_file_path)
-
-                    with open(event_file_path, "rb") as event_fd:
-                        event_data = event_fd.read().decode("utf-8")
-
-                    event = parse_event(event_data)
-
-                    # "legacy" events are events produced by previous versions of the agent (<= 2.2.46) and extensions;
-                    # they do not include all the telemetry fields, so we add them here
-                    is_legacy_event = match.group('agent_event') is None
-
-                    if is_legacy_event:
-                        # We'll use the file creation time for the event's timestamp
-                        event_file_creation_time_epoch = os.path.getmtime(event_file_path)
-                        event_file_creation_time = datetime.fromtimestamp(event_file_creation_time_epoch)
-
-                        if event.is_extension_event():
-                            EventLogger._trim_extension_event_parameters(event)
-                            self.add_common_event_parameters(event, event_file_creation_time)
-                        else:
-                            self._update_legacy_agent_event(event, event_file_creation_time)
-
-                    process_event_operation(event)
-                finally:
-                    os.remove(event_file_path)
-            except ServiceStoppedError as stopped_error:
-                logger.error(
-                    "Unable to enqueue events as service stopped: {0}, skipping events collection".format(
-                        ustr(stopped_error)))
-            except UnicodeError as uni_err:
-                debug_info.update_unicode_error(uni_err)
-            except Exception as error:
-                debug_info.update_op_error(error)
-
-        debug_info.report_debug_info()
-
-    def _update_legacy_agent_event(self, event, event_creation_time):
-        # Ensure that if an agent event is missing a field from the schema defined since 2.2.47, the missing fields
-        # will be appended, ensuring the event schema is complete before the event is reported.
-        new_event = TelemetryEvent()
-        new_event.parameters = []
-        self.add_common_event_parameters(new_event, event_creation_time)
-
-        event_params = dict([(param.name, param.value) for param in event.parameters])
-        new_event_params = dict([(param.name, param.value) for param in new_event.parameters])
-
-        missing_params = set(new_event_params.keys()).difference(set(event_params.keys()))
-        params_to_add = []
-        for param_name in missing_params:
-            params_to_add.append(TelemetryEventParam(param_name, new_event_params[param_name]))
-
-        event.parameters.extend(params_to_add)
-
 
 __event_logger__ = EventLogger()
 
@@ -807,10 +708,6 @@ def add_periodic(delta, name, op=WALAEventOperation.Unknown, is_success=True, du
 
     reporter.add_periodic(delta, name, op=op, is_success=is_success, duration=duration, version=str(version),
                           message=message, log_event=log_event, force=force)
-
-
-def process_events(process_event_operation, reporter=__event_logger__):
-    return reporter.process_events(process_event_operation)
 
 
 def mark_event_status(name, version, op, status): # pylint: disable=C0103
