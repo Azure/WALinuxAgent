@@ -26,6 +26,8 @@ import threading
 import xml.dom
 from datetime import datetime, timedelta
 
+from mock import MagicMock
+
 import azurelinuxagent.common.utils.textutil as textutil
 from azurelinuxagent.common import event, logger
 from azurelinuxagent.common.AgentGlobals import AgentGlobals
@@ -95,7 +97,10 @@ class TestEvent(HttpRequestPredicates, AgentTestCase): # pylint: disable=too-man
     @staticmethod
     def _collect_events():
         event_list = []
-        CollectAndEnqueueEventsPeriodicOperation.process_events(event_list.append)
+        telemetry_service = MagicMock()
+        telemetry_service.enqueue_event = MagicMock(wraps=event_list.append)
+        event_collector = CollectAndEnqueueEventsPeriodicOperation(telemetry_service)
+        event_collector.process_events()
         return event_list
 
     @staticmethod

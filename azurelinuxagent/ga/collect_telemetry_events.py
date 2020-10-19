@@ -389,15 +389,13 @@ class CollectAndEnqueueEventsPeriodicOperation(PeriodicOperation):
                 logger.warn("{0} service is not running, skipping iteration.".format(
                     self._telemetry_service_handler.get_thread_name()))
                 return
-
-            self.process_events(self._telemetry_service_handler.enqueue_event)
+            self.process_events()
         except Exception as error:
             err_msg = "Failure in collecting Agent events: {0}".format(ustr(error))
             add_event(op=WALAEventOperation.UnhandledError, message=err_msg, is_success=False)
 
     # too-many-locals<R0914> Disabled: The number of local variables is OK
-    @staticmethod
-    def process_events(process_event_operation):  # pylint: disable=too-many-locals
+    def process_events(self):  # pylint: disable=too-many-locals
         """
         Retuns a list of events that need to be sent to the telemetry pipeline and deletes the corresponding files
         from the events directory.
@@ -439,7 +437,7 @@ class CollectAndEnqueueEventsPeriodicOperation(PeriodicOperation):
                             CollectAndEnqueueEventsPeriodicOperation._update_legacy_agent_event(event,
                                                                                                 event_file_creation_time)
 
-                    process_event_operation(event)
+                    self._telemetry_service_handler.enqueue_event(event)
                 finally:
                     os.remove(event_file_path)
             except ServiceStoppedError as stopped_error:
