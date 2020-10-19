@@ -860,7 +860,7 @@ class WireClient(object): # pylint: disable=R0904
                      "advised by Fabric.").format(PROTOCOL_VERSION)
             raise ProtocolNotFoundError(error)
 
-    def _call_hostplugin_with_container_check(self, host_func):
+    def __call_hostplugin_with_container_check(self, host_func):
         ret = None
         try:
             ret = host_func()
@@ -913,7 +913,53 @@ class WireClient(object): # pylint: disable=R0904
 
         return ret
 
+    def __send_request_using_host_channel(self, host_func):
+        ret = self.__call_hostplugin_with_container_check(host_func)
+
+        if ret and not HostPluginProtocol.is_default_channel():
+            # Set host plugin channel as default if it succeeded.
+            logger.info("Switching default channel to host plugin.")
+            HostPluginProtocol.set_default_channel(True)
+
+        return ret
+
+    def __send_request_using_direct_channel(self, direct_func):
+        ret = None
+        try:
+            ret = direct_func()
+
+            # Different direct channel functions report failure in different ways: by returning None, False,
+            # or raising ResourceGone or InvalidContainer exceptions.
+            if not ret:
+                logger.periodic_info(logger.EVERY_HOUR, "[PERIODIC] Request failed using the direct channel, "
+                                                        "trying host plugin next.")
+        except (ResourceGoneError, InvalidContainerError) as e:  # pylint: disable=C0103
+            logger.periodic_info(logger.EVERY_HOUR, "[PERIODIC] Request failed using the direct channel, "
+                                                    "trying host plugin next. Error: {0}".format(ustr(e)))
+
+        if ret and HostPluginProtocol.is_default_channel():
+            # Set direct channel as default if it succeeded.
+            logger.info("Switching default channel to WireServer.")
+            HostPluginProtocol.set_default_channel(False)
+
+        return ret
+
     def send_request_using_appropriate_channel(self, direct_func, host_func):
+        primary_ret = None
+        try:
+            primary_ret = self.__send_request_using_host_channel(host_func) if HostPluginProtocol.is_default_channel() \
+                else self.__send_request_using_direct_channel(direct_func)
+        except Exception:
+            pass
+
+        if primary_ret:
+            return primary_ret
+
+        secondary_ret = self.__send_request_using_direct_channel(direct_func) if HostPluginProtocol.is_default_channel() \
+            else self.__send_request_using_host_channel(host_func)
+        return secondary_ret
+
+    def old_send_request_using_appropriate_channel(self, direct_func, host_func):
         # A wrapper method for all function calls that send HTTP requests. The purpose of the method is to
         # define which channel to use, direct or through the host plugin. For the host plugin channel,
         # also implement a retry mechanism.
@@ -929,7 +975,10 @@ class WireClient(object): # pylint: disable=R0904
         # NOTE: direct_func and host_func are passed as lambdas. Be careful about capturing goal state data in them as
         # they will not be refreshed even if a goal state refresh is called before retrying the host_func.
 
-        if not HostPluginProtocol.is_default_channel():
+        # Flip flop per request ONLY if a channel succeeds.
+        # Log if default channel changed.
+
+        if not self.is_host_plugin_default_channel():
             ret = None
             try:
                 ret = direct_func()
@@ -948,12 +997,11 @@ class WireClient(object): # pylint: disable=R0904
         else:
             logger.periodic_info(logger.EVERY_HALF_DAY, "[PERIODIC] Using host plugin as default channel.")
 
-        ret = self._call_hostplugin_with_container_check(host_func)
+        ret = self.__call_hostplugin_with_container_check(host_func)
 
-        if not HostPluginProtocol.is_default_channel():
-            logger.info("Setting host plugin as default channel from now on. "
-                        "Restart the agent to reset the default channel.")
-            HostPluginProtocol.set_default_channel(True)
+        if not self.is_host_plugin_default_channel():
+            logger.info("Setting host plugin as default channel until next iteration.")
+            self.set_host_plugin_default_channel(True)
 
         return ret
 
@@ -1215,7 +1263,7 @@ class WireClient(object): # pylint: disable=R0904
 
     def upload_logs(self, content):
         host_func = lambda: self._upload_logs_through_host(content)
-        return self._call_hostplugin_with_container_check(host_func)
+        return self.__call_hostplugin_with_container_check(host_func)
 
     def _upload_logs_through_host(self, content):
         host = self.get_host_plugin()
