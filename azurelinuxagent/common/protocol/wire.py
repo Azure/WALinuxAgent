@@ -130,7 +130,7 @@ class WireProtocol(DataContract):
 
     def get_vmagent_pkgs(self, vmagent_manifest):
         goal_state = self.client.get_goal_state()
-        ga_manifest = self.client.get_gafamily_manifest(vmagent_manifest, goal_state)
+        ga_manifest = self.client.fetch_gafamily_manifest(vmagent_manifest, goal_state)
         valid_pkg_list = ga_manifest.pkg_list
         return valid_pkg_list
 
@@ -833,7 +833,7 @@ class WireClient(object): # pylint: disable=R0904
             raise ProtocolError("Trying to fetch Remote Access before initialization!")
         return self._goal_state.remote_access
 
-    def get_gafamily_manifest(self, vmagent_manifest, goal_state):
+    def fetch_gafamily_manifest(self, vmagent_manifest, goal_state):
         local_file = MANIFEST_FILE_NAME.format(vmagent_manifest.family, goal_state.incarnation)
         local_file = os.path.join(conf.get_lib_dir(), local_file)
 
@@ -958,52 +958,6 @@ class WireClient(object): # pylint: disable=R0904
         secondary_ret = self.__send_request_using_direct_channel(direct_func) if HostPluginProtocol.is_default_channel() \
             else self.__send_request_using_host_channel(host_func)
         return secondary_ret
-
-    def old_send_request_using_appropriate_channel(self, direct_func, host_func):
-        # A wrapper method for all function calls that send HTTP requests. The purpose of the method is to
-        # define which channel to use, direct or through the host plugin. For the host plugin channel,
-        # also implement a retry mechanism.
-
-        # By default, the direct channel is the default channel. If that is the case, try getting a response
-        # through that channel. On failure, fall back to the host plugin channel.
-
-        # When using the host plugin channel, regardless if it's set as default or not, try sending the request first.
-        # On specific failures that indicate a stale goal state (such as resource gone or invalid container parameter),
-        # refresh the goal state and try again. If successful, set the host plugin channel as default. If failed,
-        # raise the exception.
-
-        # NOTE: direct_func and host_func are passed as lambdas. Be careful about capturing goal state data in them as
-        # they will not be refreshed even if a goal state refresh is called before retrying the host_func.
-
-        # Flip flop per request ONLY if a channel succeeds.
-        # Log if default channel changed.
-
-        if not self.is_host_plugin_default_channel():
-            ret = None
-            try:
-                ret = direct_func()
-
-                # Different direct channel functions report failure in different ways: by returning None, False,
-                # or raising ResourceGone or InvalidContainer exceptions.
-                if not ret:
-                    logger.periodic_info(logger.EVERY_HOUR, "[PERIODIC] Request failed using the direct channel, "
-                                                            "switching to host plugin.")
-            except (ResourceGoneError, InvalidContainerError) as e: # pylint: disable=C0103
-                logger.periodic_info(logger.EVERY_HOUR, "[PERIODIC] Request failed using the direct channel, "
-                                                        "switching to host plugin. Error: {0}".format(ustr(e)))
-
-            if ret:
-                return ret
-        else:
-            logger.periodic_info(logger.EVERY_HALF_DAY, "[PERIODIC] Using host plugin as default channel.")
-
-        ret = self.__call_hostplugin_with_container_check(host_func)
-
-        if not self.is_host_plugin_default_channel():
-            logger.info("Setting host plugin as default channel until next iteration.")
-            self.set_host_plugin_default_channel(True)
-
-        return ret
 
     def upload_status_blob(self):
         ext_conf = self.get_ext_conf()

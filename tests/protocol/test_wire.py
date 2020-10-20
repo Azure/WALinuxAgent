@@ -851,99 +851,141 @@ class TestWireClient(HttpRequestPredicates, AgentTestCase):
             self.assertTrue(self.is_host_plugin_put_logs_request(urls[1]),
                             "The second request should have been over the host channel")
 
-    def test_send_request_using_appropriate_channel_should_not_invoke_host_channel_when_direct_channel_succeeds(self):
-        with mock_wire_protocol(mockwiredata.DATA_FILE) as protocol:
-            protocol.client.get_host_plugin().set_default_channel(False)
-
-            def direct_func(*args): # pylint: disable=unused-argument
-                direct_func.counter += 1
-                return 42
-
-            def host_func(*args): # pylint: disable=useless-return,unused-argument
-                host_func.counter += 1
+    @staticmethod
+    def _set_and_fail_helper_channel_functions(fail_direct=False, fail_host=False):
+        def direct_func(*args):  # pylint: disable=unused-argument
+            direct_func.counter += 1
+            if direct_func.fail:
                 return None
+            else:
+                return "direct"
 
-            direct_func.counter = 0
-            host_func.counter = 0
+        def host_func(*args):  # pylint: disable=unused-argument
+            host_func.counter += 1
+            if host_func.fail:
+                return None
+            else:
+                return "host"
 
-            # Assert we've only called the direct channel functions and that it succeeded.
-            ret = protocol.client.send_request_using_appropriate_channel(direct_func, host_func)
-            self.assertEqual(42, ret)
-            self.assertEqual(1, direct_func.counter)
-            self.assertEqual(0, host_func.counter)
+        direct_func.counter = 0
+        direct_func.fail = fail_direct
 
-    def test_send_request_using_appropriate_channel_should_not_use_direct_channel_when_host_channel_is_default(self):
-        with mock_wire_protocol(mockwiredata.DATA_FILE) as protocol:
-            protocol.client.get_host_plugin().set_default_channel(True)
+        host_func.counter = 0
+        host_func.fail = fail_host
 
-            def direct_func(*args): # pylint: disable=unused-argument
-                direct_func.counter += 1
-                return 42
+        return direct_func, host_func
 
-            def host_func(*args): # pylint: disable=unused-argument
-                host_func.counter += 1
-                return 43
-
-            direct_func.counter = 0
-            host_func.counter = 0
-
-            # Assert we've only called the host channel function since it's the default channel
-            ret = protocol.client.send_request_using_appropriate_channel(direct_func, host_func)
-            self.assertEqual(43, ret)
-            self.assertEqual(0, direct_func.counter)
-            self.assertEqual(1, host_func.counter)
-
-    def test_send_request_using_appropriate_channel_should_use_host_channel_when_direct_channel_fails(self):
+    def test_send_request_using_appropriate_channel_should_not_invoke_secondary_when_primary_channel_succeeds(self):
         with mock_wire_protocol(mockwiredata.DATA_FILE) as protocol:
             host = protocol.client.get_host_plugin()
+
+            # Scenario #1: Direct channel default
             host.set_default_channel(False)
 
-            def direct_func(*args): # pylint: disable=unused-argument
-                direct_func.counter += 1
-                raise InvalidContainerError()
+            direct_func, host_func = self._set_and_fail_helper_channel_functions()
+            # Assert we're only calling the primary channel (direct) and that it succeeds.
+            for n in range(5):
+                ret = protocol.client.send_request_using_appropriate_channel(direct_func, host_func)
+                self.assertEqual("direct", ret)
+                self.assertEqual(n + 1, direct_func.counter)
+                self.assertEqual(0, host_func.counter)
+                self.assertFalse(host.is_default_channel())
 
-            def host_func(*args): # pylint: disable=unused-argument
-                host_func.counter += 1
-                return 42
+            # Scenario #2: Host channel default
+            host.set_default_channel(True)
+            direct_func, host_func = self._set_and_fail_helper_channel_functions()
 
-            direct_func.counter = 0
-            host_func.counter = 0
+            # Assert we're only calling the primary channel (host) and that it succeeds.
+            for n in range(5):
+                ret = protocol.client.send_request_using_appropriate_channel(direct_func, host_func)
+                self.assertEqual("host", ret)
+                self.assertEqual(0, direct_func.counter)
+                self.assertEqual(n + 1, host_func.counter)
+                self.assertTrue(host.is_default_channel())
 
-            # Assert we've called both the direct channel function and the host channel function, which succeeded.
-            # After the host channel succeeds, the host plugin should have been set as the default channel.
+    def test_send_request_using_appropriate_channel_should_not_change_default_channel_if_none_succeeds(self):
+        with mock_wire_protocol(mockwiredata.DATA_FILE) as protocol:
+            host = protocol.client.get_host_plugin()
+
+            # Scenario #1: Direct channel is default
+            host.set_default_channel(False)
+            direct_func, host_func = self._set_and_fail_helper_channel_functions(fail_direct=True, fail_host=True)
+
+            # Assert we've called both channels, but the default channel hasn't changed
             ret = protocol.client.send_request_using_appropriate_channel(direct_func, host_func)
-            self.assertEqual(42, ret)
+            self.assertEqual(None, ret)
             self.assertEqual(1, direct_func.counter)
             self.assertEqual(1, host_func.counter)
-            self.assertEqual(True, host.is_default_channel())
+            self.assertFalse(host.is_default_channel())
 
-    def test_send_request_using_appropriate_channel_should_retry_the_host_channel_after_reloading_goal_state(self):
-        with mock_wire_protocol(mockwiredata.DATA_FILE) as protocol:
-            protocol.client.get_host_plugin().set_default_channel(False)
-
-            def direct_func(*args): # pylint: disable=unused-argument
-                direct_func.counter += 1
-                raise InvalidContainerError()
-
-            def host_func(*args): # pylint: disable=unused-argument
-                host_func.counter += 1
-                if host_func.counter == 1:
-                    raise ResourceGoneError("Resource is gone")
-                return 42
-
-            direct_func.counter = 0
-            host_func.counter = 0
-
-            # Assert we've called both the direct channel function (once) and the host channel function (twice).
-            # After the host channel succeeds, the host plugin should have been set as the default channel.
-            with patch(
-                    'azurelinuxagent.common.protocol.wire.WireClient.update_host_plugin_from_goal_state') as mock_update_host_plugin_from_goal_state:
+            # If both channels keep failing, assert we are not changing the default, but keep trying both.
+            for n in range(5):
                 ret = protocol.client.send_request_using_appropriate_channel(direct_func, host_func)
-                self.assertEqual(42, ret)
+                self.assertEqual(None, ret)
+                self.assertEqual(1 + n + 1, direct_func.counter)
+                self.assertEqual(1 + n + 1, host_func.counter)
+                self.assertFalse(host.is_default_channel())
+
+            # Scenario #2: Host channel is default
+            host.set_default_channel(True)
+            direct_func, host_func = self._set_and_fail_helper_channel_functions(fail_direct=True, fail_host=True)
+
+            # Assert we've called both channels, but the default channel hasn't changed
+            ret = protocol.client.send_request_using_appropriate_channel(direct_func, host_func)
+            self.assertEqual(None, ret)
+            self.assertEqual(1, direct_func.counter)
+            self.assertEqual(1, host_func.counter)
+            self.assertTrue(host.is_default_channel())
+
+            # If both channels keep failing, assert we are not changing the default, but keep trying both.
+            for n in range(5):
+                ret = protocol.client.send_request_using_appropriate_channel(direct_func, host_func)
+                self.assertEqual(None, ret)
+                self.assertEqual(1 + n + 1, direct_func.counter)
+                self.assertEqual(1 + n + 1, host_func.counter)
+                self.assertTrue(host.is_default_channel())
+
+    def test_send_request_using_appropriate_channel_should_change_default_channel_when_secondary_succeeds(self):
+        with mock_wire_protocol(mockwiredata.DATA_FILE) as protocol:
+            host = protocol.client.get_host_plugin()
+
+            # Scenario #1: Direct channel is default
+            host.set_default_channel(False)
+            direct_func, host_func = self._set_and_fail_helper_channel_functions(fail_direct=True, fail_host=False)
+
+            # Assert we've called both channels and the default channel changed
+            ret = protocol.client.send_request_using_appropriate_channel(direct_func, host_func)
+            self.assertEqual("host", ret)
+            self.assertEqual(1, direct_func.counter)
+            self.assertEqual(1, host_func.counter)
+            self.assertTrue(host.is_default_channel())
+
+            # If host keeps succeeding, assert we keep calling only that channel and not changing the default.
+            for n in range(5):
+                ret = protocol.client.send_request_using_appropriate_channel(direct_func, host_func)
+                self.assertEqual("host", ret)
                 self.assertEqual(1, direct_func.counter)
-                self.assertEqual(2, host_func.counter)
-                self.assertEqual(1, mock_update_host_plugin_from_goal_state.call_count)
-                self.assertEqual(True, protocol.client.get_host_plugin().is_default_channel())
+                self.assertEqual(1 + n + 1, host_func.counter)
+                self.assertTrue(host.is_default_channel())
+
+            # Scenario #2: Host channel is default
+            host.set_default_channel(True)
+            direct_func, host_func = self._set_and_fail_helper_channel_functions(fail_direct=False, fail_host=True)
+
+            # Assert we've called both channels and the default channel changed
+            ret = protocol.client.send_request_using_appropriate_channel(direct_func, host_func)
+            self.assertEqual("direct", ret)
+            self.assertEqual(1, direct_func.counter)
+            self.assertEqual(1, host_func.counter)
+            self.assertFalse(host.is_default_channel())
+
+            # If direct keeps succeeding, assert we keep calling only that channel and not changing the default.
+            for n in range(5):
+                ret = protocol.client.send_request_using_appropriate_channel(direct_func, host_func)
+                self.assertEqual("direct", ret)
+                self.assertEqual(1 + n + 1, direct_func.counter)
+                self.assertEqual(1, host_func.counter)
+                self.assertFalse(host.is_default_channel())
 
 
 class UpdateGoalStateTestCase(AgentTestCase):
