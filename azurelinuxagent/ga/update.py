@@ -38,6 +38,7 @@ import azurelinuxagent.common.logger as logger
 import azurelinuxagent.common.utils.fileutil as fileutil
 import azurelinuxagent.common.utils.restutil as restutil
 import azurelinuxagent.common.utils.textutil as textutil
+from azurelinuxagent.common.cgroupapi import CGroupsApi
 from azurelinuxagent.common.cgroupconfigurator import CGroupConfigurator
 
 from azurelinuxagent.common.event import add_event, initialize_event_logger_vminfo_common_parameters, \
@@ -265,13 +266,15 @@ class UpdateHandler(object): # pylint: disable=R0902
             os_info_msg = u"Distro: {dist_name}-{dist_ver}; "\
                 u"OSUtil: {util_name}; AgentService: {service_name}; "\
                 u"Python: {py_major}.{py_minor}.{py_micro}; "\
-                u"LISDrivers: {lis_ver}; logrotate: {has_logrotate};".format(
+                u"systemd: {systemd}; "\
+                u"LISDrivers: {lis_ver}; "\
+                u"logrotate: {has_logrotate};".format(
                     dist_name=DISTRO_NAME, dist_ver=DISTRO_VERSION,
                     util_name=type(self.osutil).__name__,
                     service_name=self.osutil.service_name,
                     py_major=PY_VERSION_MAJOR, py_minor=PY_VERSION_MINOR,
-                    py_micro=PY_VERSION_MICRO, lis_ver=get_lis_version(),
-                    has_logrotate=has_logrotate()
+                    py_micro=PY_VERSION_MICRO, systemd=CGroupsApi.is_systemd(),
+                    lis_ver=get_lis_version(), has_logrotate=has_logrotate()
             )
 
             logger.info(os_info_msg)
