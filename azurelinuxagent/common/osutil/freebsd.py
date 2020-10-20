@@ -548,8 +548,7 @@ class FreeBSDOSUtil(DefaultOSUtil):  # pylint: disable=R0904
         err, output = shellutil.run_get_output(cmd_search_blkvsc)
         if err == 0:
             output = output.rstrip()
-            cmd_search_dev = "camcontrol devlist | grep {0} | awk -F \( '{{print $2}}'|sed -e 's/.*(//'| sed -e 's/).*//'".format(
-                output)  # pylint: disable=W1401
+            cmd_search_dev = "camcontrol devlist | grep {0} | awk -F \( '{{print $2}}'|sed -e 's/.*(//'| sed -e 's/).*//'".format(output)  # pylint: disable=W1401
             err, output = shellutil.run_get_output(cmd_search_dev)
             if err == 0:
                 for possible in output.rstrip().split(','):
@@ -560,8 +559,7 @@ class FreeBSDOSUtil(DefaultOSUtil):  # pylint: disable=R0904
         err, output = shellutil.run_get_output(cmd_search_storvsc)
         if err == 0:
             output = output.rstrip()
-            cmd_search_dev = "camcontrol devlist | grep {0} | awk -F \( '{{print $2}}'|sed -e 's/.*(//'| sed -e 's/).*//'".format(
-                output)  # pylint: disable=W1401
+            cmd_search_dev = "camcontrol devlist | grep {0} | awk -F \( '{{print $2}}'|sed -e 's/.*(//'| sed -e 's/).*//'".format(output)  # pylint: disable=W1401
             err, output = shellutil.run_get_output(cmd_search_dev)
             if err == 0:
                 for possible in output.rstrip().split(','):

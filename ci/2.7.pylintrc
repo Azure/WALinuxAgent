@@ -21,7 +21,6 @@
 # invalid-name<C0103>: (needs review) Used when the name doesn't conform to naming rules associated to its type (constant, variable, class...).
 # keyword-arg-before-vararg<W1113>: (hi-pri) When defining a keyword argument before variable positional arguments, one can end up in having multiple values passed for the aforementioned parameter in case the method is called with keyword arguments.
 # len-as-condition<C1801>: (hi-pri) Used when Pylint detects that len(sequence) is being used without explicit comparison inside a condition to determine if a sequence is empty.
-# multiple-imports<C0410>: (hi-pri) Used when import statement importing multiple modules is detected.
 # no-else-return<R1705>: (hi-pri) Used in order to highlight an unnecessary block of code following an if containing a return statement.
 # no-member<E1101>: (hi-pri) Used when a variable is accessed for an unexistent member.
 # no-name-in-module<E0611>: (hi-pri) Used when a name cannot be found in a module.
