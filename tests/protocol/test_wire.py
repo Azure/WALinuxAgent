@@ -25,7 +25,8 @@ import time
 import unittest
 import uuid
 
-from azurelinuxagent.common.exception import InvalidContainerError, ResourceGoneError, ProtocolError, \
+from azurelinuxagent.common.exception import IncompleteGoalStateError
+from azurelinuxagent.common.exception import ResourceGoneError, ProtocolError, \
     ExtensionDownloadError, HttpError
 from azurelinuxagent.common.protocol.goal_state import ExtensionsConfig, GoalState
 from azurelinuxagent.common.protocol.hostplugin import HostPluginProtocol
@@ -35,7 +36,6 @@ from azurelinuxagent.common.protocol.wire import WireProtocol, WireClient, \
 from azurelinuxagent.common.telemetryevent import TelemetryEventList, GuestAgentExtensionEventsSchema, \
     TelemetryEventParam, TelemetryEvent
 from azurelinuxagent.common.utils import restutil
-from azurelinuxagent.common.exception import IncompleteGoalStateError
 from azurelinuxagent.common.version import CURRENT_VERSION, DISTRO_NAME, DISTRO_VERSION
 from tests.ga.test_monitor import random_generator
 from tests.protocol import mockwiredata
@@ -857,15 +857,13 @@ class TestWireClient(HttpRequestPredicates, AgentTestCase):
             direct_func.counter += 1
             if direct_func.fail:
                 return None
-            else:
-                return "direct"
+            return "direct"
 
         def host_func(*args):  # pylint: disable=unused-argument
             host_func.counter += 1
             if host_func.fail:
                 return None
-            else:
-                return "host"
+            return "host"
 
         direct_func.counter = 0
         direct_func.fail = fail_direct
@@ -884,7 +882,7 @@ class TestWireClient(HttpRequestPredicates, AgentTestCase):
 
             direct_func, host_func = self._set_and_fail_helper_channel_functions()
             # Assert we're only calling the primary channel (direct) and that it succeeds.
-            for n in range(5):
+            for n in range(5):  # pylint: disable=invalid-name
                 ret = protocol.client.send_request_using_appropriate_channel(direct_func, host_func)
                 self.assertEqual("direct", ret)
                 self.assertEqual(n + 1, direct_func.counter)
@@ -896,7 +894,7 @@ class TestWireClient(HttpRequestPredicates, AgentTestCase):
             direct_func, host_func = self._set_and_fail_helper_channel_functions()
 
             # Assert we're only calling the primary channel (host) and that it succeeds.
-            for n in range(5):
+            for n in range(5):  # pylint: disable=invalid-name
                 ret = protocol.client.send_request_using_appropriate_channel(direct_func, host_func)
                 self.assertEqual("host", ret)
                 self.assertEqual(0, direct_func.counter)
@@ -919,7 +917,7 @@ class TestWireClient(HttpRequestPredicates, AgentTestCase):
             self.assertFalse(host.is_default_channel())
 
             # If both channels keep failing, assert we are not changing the default, but keep trying both.
-            for n in range(5):
+            for n in range(5):  # pylint: disable=invalid-name
                 ret = protocol.client.send_request_using_appropriate_channel(direct_func, host_func)
                 self.assertEqual(None, ret)
                 self.assertEqual(1 + n + 1, direct_func.counter)
@@ -938,7 +936,7 @@ class TestWireClient(HttpRequestPredicates, AgentTestCase):
             self.assertTrue(host.is_default_channel())
 
             # If both channels keep failing, assert we are not changing the default, but keep trying both.
-            for n in range(5):
+            for n in range(5):  # pylint: disable=invalid-name
                 ret = protocol.client.send_request_using_appropriate_channel(direct_func, host_func)
                 self.assertEqual(None, ret)
                 self.assertEqual(1 + n + 1, direct_func.counter)
@@ -961,7 +959,7 @@ class TestWireClient(HttpRequestPredicates, AgentTestCase):
             self.assertTrue(host.is_default_channel())
 
             # If host keeps succeeding, assert we keep calling only that channel and not changing the default.
-            for n in range(5):
+            for n in range(5):  # pylint: disable=invalid-name
                 ret = protocol.client.send_request_using_appropriate_channel(direct_func, host_func)
                 self.assertEqual("host", ret)
                 self.assertEqual(1, direct_func.counter)
@@ -980,7 +978,7 @@ class TestWireClient(HttpRequestPredicates, AgentTestCase):
             self.assertFalse(host.is_default_channel())
 
             # If direct keeps succeeding, assert we keep calling only that channel and not changing the default.
-            for n in range(5):
+            for n in range(5):  # pylint: disable=invalid-name
                 ret = protocol.client.send_request_using_appropriate_channel(direct_func, host_func)
                 self.assertEqual("direct", ret)
                 self.assertEqual(1 + n + 1, direct_func.counter)
