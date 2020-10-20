@@ -1258,7 +1258,7 @@ class TestUpdate(UpdateTestCase): # pylint: disable=too-many-public-methods
                 with patch('azurelinuxagent.ga.update.get_monitor_handler') as mock_monitor:
                     with patch('azurelinuxagent.ga.update.get_env_handler') as mock_env:
                         with patch('azurelinuxagent.ga.update.get_collect_logs_handler') as mock_collect_logs:
-                            with patch('azurelinuxagent.ga.update.get_send_telemetry_events_handler') as mock_telemetry_service:
+                            with patch('azurelinuxagent.ga.update.get_send_telemetry_events_handler') as mock_telemetry_send_events:
                                 with patch('azurelinuxagent.ga.update.get_collect_telemetry_events_handler') as mock_event_collector:
                                     with patch('azurelinuxagent.ga.update.initialize_event_logger_vminfo_common_parameters'):
                                         with patch('azurelinuxagent.ga.update.is_log_collection_allowed', return_value=True):
@@ -1280,7 +1280,7 @@ class TestUpdate(UpdateTestCase): # pylint: disable=too-many-public-methods
                                                 self.assertEqual(1, mock_monitor.call_count)
                                                 self.assertEqual(1, mock_env.call_count)
                                                 self.assertEqual(1, mock_collect_logs.call_count)
-                                                self.assertEqual(1, mock_telemetry_service.call_count)
+                                                self.assertEqual(1, mock_telemetry_send_events.call_count)
                                                 self.assertEqual(1, mock_event_collector.call_count)
                                                 self.assertEqual(1, mock_exit.call_count)
 
@@ -1659,7 +1659,7 @@ class MonitorThreadTest(AgentTestCase):
         return thread
 
     # too-many-arguments<R0913> Disabled: The number of arguments maps to the number of threads
-    def test_start_threads(self, mock_env, mock_monitor, mock_collect_logs, mock_telemetry_service, mock_telemetry_collector): # pylint: disable=too-many-arguments
+    def test_start_threads(self, mock_env, mock_monitor, mock_collect_logs, mock_telemetry_send_events, mock_telemetry_collector): # pylint: disable=too-many-arguments
         self.assertTrue(self.update_handler.running)
 
         def _get_mock_thread():
@@ -1667,7 +1667,7 @@ class MonitorThreadTest(AgentTestCase):
             thread.run = MagicMock()
             return thread
 
-        all_threads = [mock_telemetry_service, mock_telemetry_collector, mock_env, mock_monitor, mock_collect_logs]
+        all_threads = [mock_telemetry_send_events, mock_telemetry_collector, mock_env, mock_monitor, mock_collect_logs]
 
         for thread in all_threads:
             thread.return_value = _get_mock_thread()

@@ -49,6 +49,10 @@ class SendTelemetryEventsHandler(ThreadHandlerInterface):
         self.should_run = True
         self._thread = None
         self._should_process_events = threading.Event()
+
+        # We're using a Queue for handling the communication between threads. We plan to remove any dependency on the
+        # filesystem in the future and use add_event to directly queue events into the queue rather than writing to
+        # a file and then parsing it later.
         self._queue = Queue()
 
     @staticmethod

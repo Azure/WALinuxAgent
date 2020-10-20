@@ -533,7 +533,7 @@ class TestExtensionTelemetryHandler(AgentTestCase, HttpRequestPredicates):
                                                                     InvalidExtensionEventError.EmptyMessageError,
                                                                     expected_drop_count=1)
 
-    def test_it_should_not_process_events_if_telemetry_service_stopped(self):
+    def test_it_should_not_process_events_if_send_telemetry_events_handler_stopped(self):
         event_list = []
         telemetry_handler = MagicMock(autospec=True)
         telemetry_handler.stopped = MagicMock(return_value=True)

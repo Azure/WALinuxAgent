@@ -97,9 +97,9 @@ class TestEvent(HttpRequestPredicates, AgentTestCase): # pylint: disable=too-man
     @staticmethod
     def _collect_events():
         event_list = []
-        telemetry_service = MagicMock()
-        telemetry_service.enqueue_event = MagicMock(wraps=event_list.append)
-        event_collector = CollectAndEnqueueEventsPeriodicOperation(telemetry_service)
+        send_telemetry_events = MagicMock()
+        send_telemetry_events.enqueue_event = MagicMock(wraps=event_list.append)
+        event_collector = CollectAndEnqueueEventsPeriodicOperation(send_telemetry_events)
         event_collector.process_events()
         return event_list
 

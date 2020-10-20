@@ -74,19 +74,19 @@ class ProcessExtensionEventsPeriodicOperation(PeriodicOperation):
     _EXTENSION_EVENT_REQUIRED_FIELDS = [attr.lower() for attr in dir(ExtensionEventSchema) if
                                         not callable(getattr(ExtensionEventSchema, attr)) and not attr.startswith("__")]
 
-    def __init__(self, telemetry_service_handler):
+    def __init__(self, send_telemetry_events_handler):
         super(ProcessExtensionEventsPeriodicOperation, self).__init__(
             name="collect_and_enqueue_extension_events",
             operation=self._collect_and_enqueue_extension_events,
             period=ProcessExtensionEventsPeriodicOperation._EXTENSION_EVENT_COLLECTION_PERIOD)
 
-        self._telemetry_service_handler = telemetry_service_handler
+        self._send_telemetry_events_handler = send_telemetry_events_handler
 
     def _collect_and_enqueue_extension_events(self):
 
-        if self._telemetry_service_handler.stopped():
+        if self._send_telemetry_events_handler.stopped():
             logger.warn("{0} service is not running, skipping current iteration".format(
-                self._telemetry_service_handler.get_thread_name()))
+                self._send_telemetry_events_handler.get_thread_name()))
             return
 
         delete_all_event_files = True
@@ -253,7 +253,7 @@ class ProcessExtensionEventsPeriodicOperation(PeriodicOperation):
 
         for event in events:
             try:
-                self._telemetry_service_handler.enqueue_event(
+                self._send_telemetry_events_handler.enqueue_event(
                     self._parse_telemetry_event(handler_name, event, event_file_time)
                 )
                 captured_events_count += 1
@@ -373,21 +373,21 @@ class CollectAndEnqueueEventsPeriodicOperation(PeriodicOperation):
 
     _EVENT_COLLECTION_PERIOD = datetime.timedelta(minutes=1)
 
-    def __init__(self, telemetry_service_handler):
+    def __init__(self, send_telemetry_events_handler):
         super(CollectAndEnqueueEventsPeriodicOperation, self).__init__(
             name="collect_and_enqueue_events",
             operation=self._collect_and_enqueue_events,
             period=CollectAndEnqueueEventsPeriodicOperation._EVENT_COLLECTION_PERIOD)
-        self._telemetry_service_handler = telemetry_service_handler
+        self._send_telemetry_events_handler = send_telemetry_events_handler
 
     def _collect_and_enqueue_events(self):
         """
         Periodically send any events located in the events folder
         """
         try:
-            if self._telemetry_service_handler.stopped():
+            if self._send_telemetry_events_handler.stopped():
                 logger.warn("{0} service is not running, skipping iteration.".format(
-                    self._telemetry_service_handler.get_thread_name()))
+                    self._send_telemetry_events_handler.get_thread_name()))
                 return
             self.process_events()
         except Exception as error:
@@ -437,7 +437,7 @@ class CollectAndEnqueueEventsPeriodicOperation(PeriodicOperation):
                             CollectAndEnqueueEventsPeriodicOperation._update_legacy_agent_event(event,
                                                                                                 event_file_creation_time)
 
-                    self._telemetry_service_handler.enqueue_event(event)
+                    self._send_telemetry_events_handler.enqueue_event(event)
                 finally:
                     os.remove(event_file_path)
             except ServiceStoppedError as stopped_error:

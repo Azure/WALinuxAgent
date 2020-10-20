@@ -61,7 +61,7 @@ from azurelinuxagent.ga.exthandlers import HandlerManifest, get_traceback, ExtHa
 from azurelinuxagent.ga.monitor import get_monitor_handler
 
 # pylint: disable=C0302
-from azurelinuxagent.ga.telemetry_service import get_send_telemetry_events_handler
+from azurelinuxagent.ga.send_telemetry_events import get_send_telemetry_events_handler
 
 AGENT_ERROR_FILE = "error.json" # File name for agent error record
 AGENT_MANIFEST_FILE = "HandlerManifest.json"

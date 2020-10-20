@@ -46,7 +46,7 @@ from azurelinuxagent.common.telemetryevent import TelemetryEvent, TelemetryEvent
 from azurelinuxagent.common.version import CURRENT_VERSION, DISTRO_NAME, DISTRO_VERSION, AGENT_VERSION, CURRENT_AGENT, \
     DISTRO_CODE_NAME
 from azurelinuxagent.ga.collect_telemetry_events import CollectAndEnqueueEventsPeriodicOperation
-from azurelinuxagent.ga.telemetry_service import get_send_telemetry_events_handler
+from azurelinuxagent.ga.send_telemetry_events import get_send_telemetry_events_handler
 from tests.ga.test_monitor import random_generator
 from tests.protocol.mocks import MockHttpResponse, mock_wire_protocol, HttpRequestPredicates
 from tests.protocol.mockwiredata import DATA_FILE
@@ -70,27 +70,27 @@ class TestSendTelemetryEventsHandler(AgentTestCase, HttpRequestPredicates):
     _TEST_EVENT_PROVIDER_ID = "XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX"
 
     @contextlib.contextmanager
-    def _create_telemetry_service_handler(self, timeout=0.5, start_thread=True, batching_queue_limit=1):
+    def _create_send_telemetry_events_handler(self, timeout=0.5, start_thread=True, batching_queue_limit=1):
         def http_post_handler(url, body, **__):
             if self.is_telemetry_request(url):
-                telemetry_service_handler.event_calls.append((datetime.now(), body))
+                send_telemetry_events_handler.event_calls.append((datetime.now(), body))
                 return MockHttpResponse(status=200)
             return None
 
         with mock_wire_protocol(DATA_FILE, http_post_handler=http_post_handler) as protocol:
             protocol_util = MagicMock()
             protocol_util.get_protocol = Mock(return_value=protocol)
-            telemetry_service_handler = get_send_telemetry_events_handler(protocol_util)
-            telemetry_service_handler.event_calls = []
-            with patch("azurelinuxagent.ga.telemetry_service.SendTelemetryEventsHandler._MIN_EVENTS_TO_BATCH",
+            send_telemetry_events_handler = get_send_telemetry_events_handler(protocol_util)
+            send_telemetry_events_handler.event_calls = []
+            with patch("azurelinuxagent.ga.send_telemetry_events.SendTelemetryEventsHandler._MIN_EVENTS_TO_BATCH",
                        batching_queue_limit):
-                with patch("azurelinuxagent.ga.telemetry_service.SendTelemetryEventsHandler._MAX_TIMEOUT", timeout):
+                with patch("azurelinuxagent.ga.send_telemetry_events.SendTelemetryEventsHandler._MAX_TIMEOUT", timeout):
 
-                    telemetry_service_handler.get_mock_wire_protocol = lambda: protocol
+                    send_telemetry_events_handler.get_mock_wire_protocol = lambda: protocol
                     if start_thread:
-                        telemetry_service_handler.start()
-                        self.assertTrue(telemetry_service_handler.is_alive(), "Thread didn't start properly!")
-                    yield telemetry_service_handler
+                        send_telemetry_events_handler.start()
+                        self.assertTrue(send_telemetry_events_handler.is_alive(), "Thread didn't start properly!")
+                    yield send_telemetry_events_handler
 
     @staticmethod
     def _stop_handler(telemetry_handler, timeout=0.001):
@@ -122,7 +122,7 @@ class TestSendTelemetryEventsHandler(AgentTestCase, HttpRequestPredicates):
         self.assertTrue(found_msg, "Error msg: {0} not reported".format(expected_msg))
 
     def _setup_and_assert_bad_request_scenarios(self, http_post_handler, expected_msgs):
-        with self._create_telemetry_service_handler() as telemetry_handler:
+        with self._create_send_telemetry_events_handler() as telemetry_handler:
 
             telemetry_handler.get_mock_wire_protocol().set_http_handlers(http_post_handler=http_post_handler)
 
@@ -135,7 +135,7 @@ class TestSendTelemetryEventsHandler(AgentTestCase, HttpRequestPredicates):
     def test_it_should_send_events_properly(self):
         events = [TelemetryEvent(eventId=ustr(uuid.uuid4())), TelemetryEvent(eventId=ustr(uuid.uuid4()))]
 
-        with self._create_telemetry_service_handler() as telemetry_handler:
+        with self._create_send_telemetry_events_handler() as telemetry_handler:
             for test_event in events:
                 telemetry_handler.enqueue_event(test_event)
 
@@ -144,7 +144,7 @@ class TestSendTelemetryEventsHandler(AgentTestCase, HttpRequestPredicates):
     def test_it_should_send_as_soon_as_events_available_in_queue_with_minimal_batching_limits(self):
         events = [TelemetryEvent(eventId=ustr(uuid.uuid4())), TelemetryEvent(eventId=ustr(uuid.uuid4()))]
 
-        with self._create_telemetry_service_handler() as telemetry_handler:
+        with self._create_send_telemetry_events_handler() as telemetry_handler:
             test_start_time = datetime.now()
             for test_event in events:
                 telemetry_handler.enqueue_event(test_event)
@@ -159,7 +159,7 @@ class TestSendTelemetryEventsHandler(AgentTestCase, HttpRequestPredicates):
     def test_thread_should_wait_for_events_to_get_in_queue_before_processing(self):
         events = [TelemetryEvent(eventId=ustr(uuid.uuid4())), TelemetryEvent(eventId=ustr(uuid.uuid4()))]
 
-        with self._create_telemetry_service_handler(timeout=0.1) as telemetry_handler:
+        with self._create_send_telemetry_events_handler(timeout=0.1) as telemetry_handler:
 
             # Do nothing for some time
             time.sleep(0.3)
@@ -167,7 +167,7 @@ class TestSendTelemetryEventsHandler(AgentTestCase, HttpRequestPredicates):
             # Ensure that no events were transmitted by the telemetry handler during this time, i.e. telemetry thread was idle
             self.assertEqual(0, len(telemetry_handler.event_calls), "Unwanted calls to telemetry")
 
-            # Now enqueue data and verify telemetry_service sends them asap
+            # Now enqueue data and verify send_telemetry_events sends them asap
             for test_event in events:
                 telemetry_handler.enqueue_event(test_event)
 
@@ -179,8 +179,8 @@ class TestSendTelemetryEventsHandler(AgentTestCase, HttpRequestPredicates):
         orig_sleep = time.sleep
 
         with patch("time.sleep", lambda *_: orig_sleep(0.01)):
-            with patch("azurelinuxagent.ga.telemetry_service.SendTelemetryEventsHandler._MIN_BATCH_WAIT_TIME", wait_time):
-                with self._create_telemetry_service_handler(batching_queue_limit=5) as telemetry_handler:
+            with patch("azurelinuxagent.ga.send_telemetry_events.SendTelemetryEventsHandler._MIN_BATCH_WAIT_TIME", wait_time):
+                with self._create_send_telemetry_events_handler(batching_queue_limit=5) as telemetry_handler:
                     for test_event in events:
                         telemetry_handler.enqueue_event(test_event)
 
@@ -189,8 +189,8 @@ class TestSendTelemetryEventsHandler(AgentTestCase, HttpRequestPredicates):
 
         wait_time = timedelta(seconds=0.2)
         with patch("time.sleep", lambda *_: orig_sleep(0.05)):
-            with patch("azurelinuxagent.ga.telemetry_service.SendTelemetryEventsHandler._MIN_BATCH_WAIT_TIME", wait_time):
-                with self._create_telemetry_service_handler(batching_queue_limit=5) as telemetry_handler:
+            with patch("azurelinuxagent.ga.send_telemetry_events.SendTelemetryEventsHandler._MIN_BATCH_WAIT_TIME", wait_time):
+                with self._create_send_telemetry_events_handler(batching_queue_limit=5) as telemetry_handler:
                     test_start_time = datetime.now()
                     for test_event in events:
                         telemetry_handler.enqueue_event(test_event)
@@ -211,8 +211,8 @@ class TestSendTelemetryEventsHandler(AgentTestCase, HttpRequestPredicates):
         wait_time = timedelta(seconds=10)
 
         with patch("time.sleep", lambda *_: mock_sleep(0.01)):
-            with patch("azurelinuxagent.ga.telemetry_service.SendTelemetryEventsHandler._MIN_BATCH_WAIT_TIME", wait_time):
-                with self._create_telemetry_service_handler(batching_queue_limit=5) as telemetry_handler:
+            with patch("azurelinuxagent.ga.send_telemetry_events.SendTelemetryEventsHandler._MIN_BATCH_WAIT_TIME", wait_time):
+                with self._create_send_telemetry_events_handler(batching_queue_limit=5) as telemetry_handler:
                     for test_event in events:
                         telemetry_handler.enqueue_event(test_event)
 
@@ -225,7 +225,7 @@ class TestSendTelemetryEventsHandler(AgentTestCase, HttpRequestPredicates):
 
         batch_limit = 5
 
-        with self._create_telemetry_service_handler(batching_queue_limit=batch_limit) as telemetry_handler:
+        with self._create_send_telemetry_events_handler(batching_queue_limit=batch_limit) as telemetry_handler:
             events = []
 
             for _ in range(batch_limit-1):
@@ -243,7 +243,7 @@ class TestSendTelemetryEventsHandler(AgentTestCase, HttpRequestPredicates):
             self._assert_test_data_in_event_body(telemetry_handler, events)
 
     def test_it_should_raise_on_enqueue_if_service_stopped(self):
-        with self._create_telemetry_service_handler(start_thread=False) as telemetry_handler:
+        with self._create_send_telemetry_events_handler(start_thread=False) as telemetry_handler:
             # Ensure the thread is stopped
             telemetry_handler.stop()
             with self.assertRaises(ServiceStoppedError) as context_manager:
@@ -256,7 +256,7 @@ class TestSendTelemetryEventsHandler(AgentTestCase, HttpRequestPredicates):
 
     def test_it_should_honour_the_incoming_order_of_events(self):
 
-        with self._create_telemetry_service_handler(timeout=0.3, start_thread=False) as telemetry_handler:
+        with self._create_send_telemetry_events_handler(timeout=0.3, start_thread=False) as telemetry_handler:
             for index in range(5):
                 telemetry_handler.enqueue_event(TelemetryEvent(eventId=index))
 
@@ -269,7 +269,7 @@ class TestSendTelemetryEventsHandler(AgentTestCase, HttpRequestPredicates):
             self.assertEqual(sorted(event_orders), event_orders, "Events not ordered correctly")
 
 
-    def test_telemetry_service_should_report_event_if_wireserver_returns_http_error(self):
+    def test_send_telemetry_events_should_report_event_if_wireserver_returns_http_error(self):
 
         test_str = "A test exception, Guid: {0}".format(str(uuid.uuid4()))
 
@@ -280,7 +280,7 @@ class TestSendTelemetryEventsHandler(AgentTestCase, HttpRequestPredicates):
 
         self._setup_and_assert_bad_request_scenarios(http_post_handler, [test_str])
 
-    def test_telemetry_service_should_report_event_when_http_post_returning_503(self):
+    def test_send_telemetry_events_should_report_event_when_http_post_returning_503(self):
 
         def http_post_handler(url, _, **__):
             if self.is_telemetry_request(url):
@@ -292,11 +292,11 @@ class TestSendTelemetryEventsHandler(AgentTestCase, HttpRequestPredicates):
 
         self._setup_and_assert_bad_request_scenarios(http_post_handler, expected_msgs)
 
-    def test_telemetry_service_should_add_event_on_unexpected_errors(self):
+    def test_send_telemetry_events_should_add_event_on_unexpected_errors(self):
 
-        with self._create_telemetry_service_handler(timeout=0.1) as telemetry_handler:
+        with self._create_send_telemetry_events_handler(timeout=0.1) as telemetry_handler:
 
-            with patch("azurelinuxagent.ga.telemetry_service.add_event") as mock_add_event:
+            with patch("azurelinuxagent.ga.send_telemetry_events.add_event") as mock_add_event:
                 with patch("azurelinuxagent.common.protocol.wire.WireClient.report_event") as patch_report_event:
                     test_str = "Test exception, Guid: {0}".format(str(uuid.uuid4()))
                     patch_report_event.side_effect = Exception(test_str)
@@ -334,7 +334,7 @@ class TestSendTelemetryEventsHandler(AgentTestCase, HttpRequestPredicates):
     def test_it_should_enqueue_and_send_events_properly(self, mock_lib_dir, *_):
         mock_lib_dir.return_value = self.lib_dir
 
-        with self._create_telemetry_service_handler() as telemetry_handler:
+        with self._create_send_telemetry_events_handler() as telemetry_handler:
             monitor_handler = CollectAndEnqueueEventsPeriodicOperation(telemetry_handler)
             self._create_extension_event(message="Message-Test")
 
@@ -399,7 +399,7 @@ class TestSendTelemetryEventsHandler(AgentTestCase, HttpRequestPredicates):
     def test_collect_and_send_events_with_small_events(self, mock_lib_dir):
         mock_lib_dir.return_value = self.lib_dir
 
-        with self._create_telemetry_service_handler() as telemetry_handler:
+        with self._create_send_telemetry_events_handler() as telemetry_handler:
             sizes = [15, 15, 15, 15]  # get the powers of 2 - 2**16 is the limit
 
             for power in sizes:
@@ -416,7 +416,7 @@ class TestSendTelemetryEventsHandler(AgentTestCase, HttpRequestPredicates):
     def test_collect_and_send_events_with_large_events(self, mock_lib_dir):
         mock_lib_dir.return_value = self.lib_dir
 
-        with self._create_telemetry_service_handler() as telemetry_handler:
+        with self._create_send_telemetry_events_handler() as telemetry_handler:
             sizes = [17, 17, 17]  # get the powers of 2
 
             for power in sizes:
