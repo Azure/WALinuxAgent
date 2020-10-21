@@ -49,7 +49,6 @@
 # unidiomatic-typecheck<C0123>: (hi-pri) The idiomatic way to perform an explicit typecheck in Python is to use isinstance(x, Y) rather than type(x) == Y, type(x) is Y.
 # unnecessary-lambda<W0108>: Used when the body of a lambda expression is a function call on the same argument list as the lambda itself
 # unnecessary-pass<W0107>: (hi-pri) Used when a "pass" statement that can be avoided is encountered.
-# unnecessary-semicolon<W0301>: Used when a statement is ended by a semi-colon (";"), which isn't necessary
 # unneeded-not<C0113>: (needs review) Used when a boolean expression contains an unneeded negation.
 # unused-argument<W0613>: (hi-pri) Used when a function or method argument is not used.
 # unused-import<W0611>: (hi-pri) Used when an imported module or variable is not used.
@@ -74,7 +73,6 @@
 # no-else-raise<R1720>: (hi-pri) Used in order to highlight an unnecessary block of code following an if containing a raise statement. 
 # simplifiable-if-expression<R1719>: Used when an if expression can be replaced with 'bool(test)'.
 # subprocess-popen-preexec-fn<W1509>: (hi-pri) The preexec_fn parameter is not safe to use in the presence of threads in your application. The child process could deadlock before exec is called.
-# useless-import-alias<C0414>: (hi-pri) Used when an import alias is same as original package.e.g using import numpy as numpy instead of import numpy as np
 # useless-return<R1711>: (hi-pri) Emitted when a single "return" or "return None" statement is found at the end of function or method definition.
 
 

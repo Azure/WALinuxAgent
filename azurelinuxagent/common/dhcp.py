@@ -389,7 +389,7 @@ def build_dhcp_request(mac_addr, request_broadcast):
         # set broadcast flag to true to request the dhcp server
         # to respond to a boradcast address,
         # this is useful when user dhclient fails.
-        request[0x0A] = 0x80; # pylint: disable=W0301
+        request[0x0A] = 0x80
 
     # fill in ClientHardwareAddress
     for a in range(0, 6): # pylint: disable=C0103

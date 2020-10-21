@@ -61,14 +61,12 @@
 # unnecessary-comprehension<R1721>: (hi-pri) Instead of using an identity comprehension, consider using the list, dict or set constructor.
 # unnecessary-lambda<W0108>: Used when the body of a lambda expression is a function call on the same argument list as the lambda itself
 # unnecessary-pass<W0107>: (hi-pri) Used when a "pass" statement that can be avoided is encountered.
-# unnecessary-semicolon<W0301>: Used when a statement is ended by a semi-colon (";"), which isn't necessary
 # unneeded-not<C0113>: (needs review) Used when a boolean expression contains an unneeded negation.
 # unused-argument<W0613>: (hi-pri) Used when a function or method argument is not used.
 # unused-import<W0611>: (hi-pri) Used when an imported module or variable is not used.
 # unused-variable<W0612>: (hi-pri) Used when a variable is defined but not used.
 # used-before-assignment<E0601>: (hi-pri) Used when a local variable is accessed before its assignment.
 # useless-else-on-loop<W0120>: (hi-pri) Loops should only have an else clause if they can exit early with a break statement, otherwise the statements under else should be on the same scope as the loop itself.
-# useless-import-alias<C0414>: (hi-pri) Used when an import alias is same as original package.e.g using import numpy as numpy instead of import numpy as np
 # useless-return<R1711>: (hi-pri) Emitted when a single "return" or "return None" statement is found at the end of function or method definition.
 # useless-super-delegation<W0235>: Used whenever we can detect that an overridden method is useless, relying on super() delegation to do the same thing as another method from the MRO.
 # wrong-import-order<C0411>: (hi-pri) Used when PEP8 import order is not respected (standard imports first, then third-party libraries, then local imports)
