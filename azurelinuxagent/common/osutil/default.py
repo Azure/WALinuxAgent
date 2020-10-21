@@ -687,6 +687,7 @@ class DefaultOSUtil(object): # pylint: disable=R0904
     def mount(self, device, mount_point, option=[], chk_err=True):
         cmd = ["mount"]
         cmd.extend(option + [device, mount_point])
+        logger.warn("[KEVIN] mount command: '{cmd}'".format(cmd=" ".join(cmd)))
 
         try:
             output = shellutil.run_command(cmd, log_error=chk_err)
