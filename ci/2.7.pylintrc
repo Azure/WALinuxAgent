@@ -1,7 +1,7 @@
 # python2.7 uses pylint 1.9.5, whose docs can be found here: http://pylint.pycqa.org/en/1.9/technical_reference/features.html#messages
 # python3.4 uses pylint 2.3.1, whose docs can be found here: http://pylint.pycqa.org/en/pylint-2.3.1/technical_reference/features.html
 
-# The source code supresses the following error types common between python2.7 and python3.4:
+# The source code suppresses the following error types common between python2.7 and python3.4:
 
 # attribute-defined-outside-init<W0201>: (hi-pri) Used when an instance attribute is defined outside the __init__ method.
 # bad-open-mode<W1501>: (hi-pri) Python supports: r, w, a[, x] modes with b, +, and U (only with r) options.
