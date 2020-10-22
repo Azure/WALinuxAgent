@@ -1149,7 +1149,6 @@ class TestExtension(ExtensionTestCase):
         conf.get_enable_overprovisioning = Mock(return_value=True)
 
         # Test when is_on_hold returns False
-        from azurelinuxagent.common.protocol.wire import InVMArtifactsProfile # pylint: disable=redefined-outer-name,reimported
         mock_in_vm_artifacts_profile = InVMArtifactsProfile(MagicMock())
         mock_in_vm_artifacts_profile.is_on_hold = Mock(return_value=False)
         protocol.get_artifacts_profile = Mock(return_value=mock_in_vm_artifacts_profile)
