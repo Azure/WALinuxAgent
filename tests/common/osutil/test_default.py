@@ -16,27 +16,27 @@
 #
 import contextlib
 import glob
-import mock
-import os # pylint: disable=wrong-import-order
-import socket # pylint: disable=wrong-import-order
-import subprocess # pylint: disable=wrong-import-order
-import tempfile # pylint: disable=wrong-import-order
-import traceback # pylint: disable=wrong-import-order
-import unittest # pylint: disable=wrong-import-order
+import os
+import socket
+import subprocess
+import tempfile
+import traceback
+import unittest
 
+import mock
+
+import azurelinuxagent.common.conf as conf
 import azurelinuxagent.common.osutil.default as osutil
 import azurelinuxagent.common.utils.shellutil as shellutil
 import azurelinuxagent.common.utils.textutil as textutil
-import azurelinuxagent.common.conf as conf
 from azurelinuxagent.common.exception import OSUtilError
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.osutil import get_osutil
 from azurelinuxagent.common.utils import fileutil
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
-# pylint: disable=unused-import
-from tests.tools import AgentTestCase, call, patch, open_patch, load_data, \
+from tests.tools import AgentTestCase, patch, open_patch, load_data, \
     running_under_travis, skip_if_predicate_true
-# pylint: enable=unused-import
+
 
 actual_get_proc_net_route = 'azurelinuxagent.common.osutil.default.DefaultOSUtil._get_proc_net_route' # pylint: disable=invalid-name
 

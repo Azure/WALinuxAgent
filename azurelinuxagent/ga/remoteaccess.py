@@ -17,21 +17,18 @@
 # Requires Python 2.6+ and Openssl 1.0+
 #
 
-import datetime
 import os
 import os.path
 import traceback
+from datetime import datetime, timedelta
 
 import azurelinuxagent.common.conf as conf
 import azurelinuxagent.common.logger as logger
-
-from datetime import datetime, timedelta # pylint: disable=C0411,ungrouped-imports
-
 from azurelinuxagent.common.event import add_event, WALAEventOperation
 from azurelinuxagent.common.future import ustr
+from azurelinuxagent.common.osutil import get_osutil
 from azurelinuxagent.common.utils.cryptutil import CryptUtil
 from azurelinuxagent.common.version import AGENT_NAME, CURRENT_VERSION
-from azurelinuxagent.common.osutil import get_osutil
 
 REMOTE_USR_EXPIRATION_FORMAT = "%a, %d %b %Y %H:%M:%S %Z"
 DATE_FORMAT = "%Y-%m-%d"

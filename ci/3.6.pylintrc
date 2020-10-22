@@ -69,8 +69,6 @@
 # useless-else-on-loop<W0120>: (hi-pri) Loops should only have an else clause if they can exit early with a break statement, otherwise the statements under else should be on the same scope as the loop itself.
 # useless-return<R1711>: (hi-pri) Emitted when a single "return" or "return None" statement is found at the end of function or method definition.
 # useless-super-delegation<W0235>: Used whenever we can detect that an overridden method is useless, relying on super() delegation to do the same thing as another method from the MRO.
-# wrong-import-order<C0411>: (hi-pri) Used when PEP8 import order is not respected (standard imports first, then third-party libraries, then local imports)
-# wrong-import-position<C0413>: (hi-pri) Used when code and imports are mixed
 
 [MESSAGES CONTROL]
 

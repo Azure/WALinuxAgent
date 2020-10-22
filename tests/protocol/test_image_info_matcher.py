@@ -16,8 +16,9 @@
 #
 # Requires Python 2.6+ and Openssl 1.0+
 
+import unittest
+
 from azurelinuxagent.common.protocol.imds import ImageInfoMatcher
-import unittest # pylint: disable=wrong-import-order
 
 
 class TestImageInfoMatcher(unittest.TestCase):
