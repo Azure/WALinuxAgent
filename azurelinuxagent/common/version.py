@@ -145,6 +145,9 @@ def get_distro():
     osinfo[0] = osinfo[0].strip('"').strip(' ').lower()
     return osinfo
 
+COMMAND_ABSENT = "Absent"
+COMMAND_FAILED = "Failed"
+
 
 def get_lis_version():
     """
@@ -169,26 +172,23 @@ def get_lis_version():
         # If the system doesn't have LIS drivers, 'modinfo' will
         # return nothing on stdout, which will cause 'run_command'
         # to return an empty string.
-        return "Absent"
+        return COMMAND_ABSENT
     except Exception:
         # Ignore almost every possible exception because this is in a
         # critical code path. Unfortunately the logger isn't already
         # imported in this module or we'd log this too.
-        return "Failed"
+        return COMMAND_FAILED
 
 def has_logrotate():
-    """
-    """
-
     try:
         logrotate_version = shellutil.run_command(["logrotate", "--version"]).split("\n")[0]
         return logrotate_version
     except shellutil.CommandError:
         # A non-zero return code means that logrotate isn't present on 
         # the system; --version shouldn't fail otherwise.
-        return "Absent"
+        return COMMAND_ABSENT
     except Exception:
-        return "Failed"
+        return COMMAND_FAILED
 
 
 AGENT_NAME = "WALinuxAgent"
