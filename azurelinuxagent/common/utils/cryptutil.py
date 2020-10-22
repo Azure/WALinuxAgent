@@ -41,19 +41,12 @@ class CryptUtil(object):
         """
         Create ssl certificate for https communication with endpoint server.
         """
-        cmd = [self.openssl_cmd, "req", "-x509", "-nodes", "-subj", "/CN=LinuxTransport", 
-            "-days", "730", "-newkey", "rsa:2048", "-keyout", prv_file, "-out", crt_file]
-        try:
-            shellutil.run_command(cmd)
-        except shellutil.CommandError as cmd_err:
-            msg = """Failed to create {0} and {1} certificates.
-            [stdout]
-            {2}
-
-            [stderr]
-            {3}
-            """.format(prv_file, crt_file, cmd_err.stdout, cmd_err.stderr)
-            logger.error(msg)
+        cmd = ("{0} req -x509 -nodes -subj /CN=LinuxTransport -days 730 "
+               "-newkey rsa:2048 -keyout {1} "
+               "-out {2}").format(self.openssl_cmd, prv_file, crt_file)
+        rc = shellutil.run(cmd) # pylint: disable=C0103
+        if rc != 0:
+            logger.error("Failed to create {0} and {1} certificates".format(prv_file, crt_file))
 
     def get_pubkey_from_prv(self, file_name):
         if not os.path.exists(file_name): # pylint: disable=R1720
@@ -114,15 +107,8 @@ class CryptUtil(object):
             
 
     def crt_to_ssh(self, input_file, output_file):
-        with open(output_file, "a") as file_out:
-            keygen_proc = subprocess.Popen(["ssh-keygen", "-i", "-m", "PKCS8", "-f", input_file])
-            stdout, _ = keygen_proc.communicate()
-
-            if keygen_proc.returncode != 0:
-                return
-
-            file_out.write(stdout)
-
+        shellutil.run("ssh-keygen -i -m PKCS8 -f {0} >> {1}".format(input_file,
+                                                                    output_file))
 
     def asn1_to_ssh(self, pubkey):
         lines = pubkey.split("\n")

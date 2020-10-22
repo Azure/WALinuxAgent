@@ -15,7 +15,9 @@
 # Requires Python 2.6+ and Openssl 1.0+
 #
 
-import sys, inspect # pylint: disable=multiple-imports
+import inspect
+import sys
+
 from azurelinuxagent.common.exception import AgentError
 from tests.tools import AgentTestCase
 

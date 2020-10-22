@@ -20,10 +20,7 @@ import os
 import tempfile
 from datetime import datetime, timedelta
 
-# pylint: disable=unused-import
-from azurelinuxagent.common.event import __event_logger__, add_log_event, MAX_NUMBER_OF_EVENTS, TELEMETRY_LOG_EVENT_ID,\
-    TELEMETRY_LOG_PROVIDER_ID, EVENTS_DIRECTORY 
-# pylint: enable=unused-import
+from azurelinuxagent.common.event import __event_logger__, add_log_event, MAX_NUMBER_OF_EVENTS, EVENTS_DIRECTORY
 
 import azurelinuxagent.common.logger as logger
 from azurelinuxagent.common.utils import fileutil
@@ -565,3 +562,32 @@ class TestAppender(AgentTestCase):
 
         # Validating only test-error gets logged and not others.
         self.assertEqual(1, mock_sys_stdout.call_count)
+
+    def test_console_output_enabled_should_return_true_when_there_are_console_appenders(self):
+        my_logger = logger.Logger()
+        my_logger.add_appender(logger.AppenderType.STDOUT, logger.LogLevel.INFO, None)
+        my_logger.add_appender(logger.AppenderType.CONSOLE, logger.LogLevel.INFO, None)
+
+        self.assertTrue(my_logger.console_output_enabled(), "Console output should be enabled, appenders = {0}".format(my_logger.appenders))
+
+    def test_console_output_enabled_should_return_false_when_there_are_no_console_appenders(self):
+        my_logger = logger.Logger()
+        my_logger.add_appender(logger.AppenderType.STDOUT, logger.LogLevel.INFO, None)
+
+        self.assertFalse(my_logger.console_output_enabled(), "Console output should not be enabled, appenders = {0}".format(my_logger.appenders))
+
+    def test_disable_console_output_should_remove_all_console_appenders(self):
+        my_logger = logger.Logger()
+        my_logger.add_appender(logger.AppenderType.STDOUT, logger.LogLevel.INFO, None)
+        my_logger.add_appender(logger.AppenderType.CONSOLE, logger.LogLevel.INFO, None)
+        my_logger.add_appender(logger.AppenderType.STDOUT, logger.LogLevel.INFO, None)
+        my_logger.add_appender(logger.AppenderType.CONSOLE, logger.LogLevel.INFO, None)
+
+        my_logger.disable_console_output()
+
+        self.assertTrue(
+            len(my_logger.appenders) == 2 and all(isinstance(a, logger.StdoutAppender) for a in my_logger.appenders),
+            "The console appender was not removed: {0}".format(my_logger.appenders))
+
+
+
