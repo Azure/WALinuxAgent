@@ -1,12 +1,15 @@
 # Copyright (c) Microsoft Corporation. All rights reserved.
 # Licensed under the Apache License.
 
-import zipfile, time, os # pylint: disable=multiple-imports
+import os
+import time
+import zipfile
 
-from azurelinuxagent.common.protocol.restapi import ExtHandler, ExtHandlerProperties, ExtHandlerPackage, ExtHandlerVersionUri
+from azurelinuxagent.common.exception import ExtensionDownloadError, ExtensionErrorCodes
+from azurelinuxagent.common.protocol.restapi import ExtHandler, ExtHandlerProperties, ExtHandlerPackage, \
+    ExtHandlerVersionUri
 from azurelinuxagent.common.protocol.wire import WireProtocol
 from azurelinuxagent.ga.exthandlers import ExtHandlerInstance, NUMBER_OF_DOWNLOAD_RETRIES, ExtHandlerState
-from azurelinuxagent.common.exception import ExtensionDownloadError, ExtensionErrorCodes
 from tests.tools import AgentTestCase, patch, mock_sleep
 
 
