@@ -16,14 +16,13 @@
 #
 # Requires Python 2.6+ and Openssl 1.0+
 
-import datetime
 import json
 import os
 import random
 import time
 import traceback
 import xml.sax.saxutils as saxutils
-from datetime import datetime # pylint: disable=ungrouped-imports
+from datetime import datetime  # pylint: disable=ungrouped-imports
 
 import azurelinuxagent.common.conf as conf
 import azurelinuxagent.common.logger as logger
@@ -542,6 +541,8 @@ class WireClient(object): # pylint: disable=R0904
         self._endpoint = endpoint
         self._goal_state = None
         self._last_try_update_goal_state_failed = False
+        self._previous_goal_state_timestamp = None
+        self._current_goal_state_timestamp = None
         self._host_plugin = None
         self.status_blob = StatusBlob(self)
         self.goal_state_flusher = StateFlusher(conf.get_lib_dir())
@@ -758,11 +759,18 @@ class WireClient(object): # pylint: disable=R0904
             self._host_plugin.update_role_config_name(role_config_name)
 
     def _save_goal_state(self):
-        try:
-            self.goal_state_flusher.flush(datetime.utcnow())
+        self._current_goal_state_timestamp = datetime.utcnow()
 
+        # If this is the first goal state, the timestamp is current
+        if not self._previous_goal_state_timestamp:
+            self._previous_goal_state_timestamp = self._current_goal_state_timestamp
+
+        try:
+            self.goal_state_flusher.flush(self._previous_goal_state_timestamp)
         except Exception as e: # pylint: disable=C0103
             logger.warn("Failed to save the previous goal state to the history folder: {0}", ustr(e))
+        finally:
+            self._previous_goal_state_timestamp = self._current_goal_state_timestamp
 
         try:
             local_file = os.path.join(conf.get_lib_dir(), INCARNATION_FILE_NAME)

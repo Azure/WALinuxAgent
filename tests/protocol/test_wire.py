@@ -24,7 +24,10 @@ import socket
 import time
 import unittest
 import uuid
+from datetime import datetime, timedelta
 
+import azurelinuxagent.common.conf as conf
+from azurelinuxagent.common.exception import IncompleteGoalStateError
 from azurelinuxagent.common.exception import InvalidContainerError, ResourceGoneError, ProtocolError, \
     ExtensionDownloadError, HttpError
 from azurelinuxagent.common.protocol.goal_state import ExtensionsConfig, GoalState
@@ -35,7 +38,6 @@ from azurelinuxagent.common.protocol.wire import WireProtocol, WireClient, \
 from azurelinuxagent.common.telemetryevent import TelemetryEventList, GuestAgentExtensionEventsSchema, \
     TelemetryEventParam, TelemetryEvent
 from azurelinuxagent.common.utils import restutil
-from azurelinuxagent.common.exception import IncompleteGoalStateError
 from azurelinuxagent.common.version import CURRENT_VERSION, DISTRO_NAME, DISTRO_VERSION
 from tests.ga.test_monitor import random_generator
 from tests.protocol import mockwiredata
@@ -1054,7 +1056,41 @@ class UpdateGoalStateTestCase(AgentTestCase):
 
             self.assertEqual(protocol.client.get_host_plugin().container_id, new_container_id)
             self.assertEqual(protocol.client.get_host_plugin().role_config_name, new_role_config_name)
+
+    def test_update_goal_state_should_archive_last_goal_state(self):
+        with patch("azurelinuxagent.common.protocol.wire.datetime") as patch_datetime:
+            first_gs_timestamp = datetime.utcnow() + timedelta(minutes=5)
+            second_gs_timestamp = datetime.utcnow() + timedelta(minutes=10)
+            third_gs_timestamp = datetime.utcnow() + timedelta(minutes=15)
+            patch_datetime.utcnow.side_effect = [first_gs_timestamp, second_gs_timestamp, third_gs_timestamp]
+
+            # The first goal state is created when we instantiate the protocol
+            with mock_wire_protocol(mockwiredata.DATA_FILE) as protocol:
+                history_dir = os.path.join(conf.get_lib_dir(), "history")
+                archives = os.listdir(history_dir)
+                self.assertEqual(len(archives), 0, "The goal state archive should have been empty since this is the first goal state")
+
+                # Create the second new goal state, so the initial one should be archived
+                protocol.mock_wire_data.set_incarnation("2")
+                protocol.client.update_goal_state()
+
+                # The initial goal state should be in the archive
+                archives = os.listdir(history_dir)
+                self.assertEqual(len(archives), 1, "Only one goal state should have been archived")
+                self.assertEqual(archives[0], first_gs_timestamp.isoformat(), "The name of goal state archive should match the first goal state timestamp")
+
+                # Create the third goal state, so the second one should be archived too
+                protocol.mock_wire_data.set_incarnation("3")
+                protocol.client.update_goal_state()
+
+                # The second goal state should be in the archive
+                archives = os.listdir(history_dir)
+                archives.sort()
+                self.assertEqual(len(archives), 2, "Two goal states should have been archived")
+                self.assertEqual(archives[1], second_gs_timestamp.isoformat(), "The name of goal state archive should match the second goal state timestamp")
+
 # pylint: enable=too-many-public-methods
+
 
 class TryUpdateGoalStateTestCase(HttpRequestPredicates, AgentTestCase):
     """
