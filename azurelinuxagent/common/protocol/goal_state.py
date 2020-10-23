@@ -20,6 +20,7 @@ import json
 import os
 import re
 import time
+from datetime import datetime
 
 import azurelinuxagent.common.conf as conf
 import azurelinuxagent.common.logger as logger
@@ -141,6 +142,7 @@ class GoalState(object):  # pylint: disable=R0902
             raise ProtocolError(msg="Error fetching goal state", inner=exception)
         finally:
             logger.info('Fetch goal state completed')
+            self.fetch_timestamp = datetime.utcnow()
 
     @staticmethod
     def fetch_goal_state(wire_client):

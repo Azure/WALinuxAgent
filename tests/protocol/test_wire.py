@@ -1058,7 +1058,7 @@ class UpdateGoalStateTestCase(AgentTestCase):
             self.assertEqual(protocol.client.get_host_plugin().role_config_name, new_role_config_name)
 
     def test_update_goal_state_should_archive_last_goal_state(self):
-        with patch("azurelinuxagent.common.protocol.wire.datetime") as patch_datetime:
+        with patch("azurelinuxagent.common.protocol.goal_state.datetime") as patch_datetime:
             first_gs_timestamp = datetime.utcnow() + timedelta(minutes=5)
             second_gs_timestamp = datetime.utcnow() + timedelta(minutes=10)
             third_gs_timestamp = datetime.utcnow() + timedelta(minutes=15)

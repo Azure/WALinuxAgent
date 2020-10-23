@@ -541,8 +541,6 @@ class WireClient(object): # pylint: disable=R0904
         self._endpoint = endpoint
         self._goal_state = None
         self._last_try_update_goal_state_failed = False
-        self._previous_goal_state_timestamp = None
-        self._current_goal_state_timestamp = None
         self._host_plugin = None
         self.status_blob = StatusBlob(self)
         self.goal_state_flusher = StateFlusher(conf.get_lib_dir())
@@ -722,8 +720,9 @@ class WireClient(object): # pylint: disable=R0904
                 new_goal_state = GoalState.fetch_full_goal_state_if_incarnation_different_than(self, self._goal_state.incarnation)
 
             if new_goal_state is not None:
+                previous_goal_state_fetch_timestamp = self._goal_state.fetch_timestamp if self._goal_state else datetime.utcnow()
                 self._goal_state = new_goal_state
-                self._save_goal_state()
+                self._save_goal_state(previous_goal_state_fetch_timestamp)
                 self._update_host_plugin(new_goal_state.container_id, new_goal_state.role_config_name)
 
         except Exception as exception:
@@ -758,19 +757,11 @@ class WireClient(object): # pylint: disable=R0904
             self._host_plugin.update_container_id(container_id)
             self._host_plugin.update_role_config_name(role_config_name)
 
-    def _save_goal_state(self):
-        self._current_goal_state_timestamp = datetime.utcnow()
-
-        # If this is the first goal state, the timestamp is current
-        if not self._previous_goal_state_timestamp:
-            self._previous_goal_state_timestamp = self._current_goal_state_timestamp
-
+    def _save_goal_state(self, previous_goal_state_fetch_timestamp):
         try:
-            self.goal_state_flusher.flush(self._previous_goal_state_timestamp)
+            self.goal_state_flusher.flush(previous_goal_state_fetch_timestamp)
         except Exception as e: # pylint: disable=C0103
             logger.warn("Failed to save the previous goal state to the history folder: {0}", ustr(e))
-        finally:
-            self._previous_goal_state_timestamp = self._current_goal_state_timestamp
 
         try:
             local_file = os.path.join(conf.get_lib_dir(), INCARNATION_FILE_NAME)
