@@ -182,7 +182,7 @@ class MountCgroupsTestCase(AgentTestCase):
 
         def mock_run_command(cmd, *args, **kwargs):
             if cmd[0] == 'mount':
-                return ""
+                return None
             return original_run_command(cmd, *args, **kwargs)
 
         with patch("azurelinuxagent.common.osutil.default.shellutil.run_command", side_effect=mock_run_command) as patch_run_command:
@@ -207,7 +207,7 @@ class MountCgroupsTestCase(AgentTestCase):
 
         def mock_run_command(cmd, *args, **kwargs):
             if cmd[0] == 'mount':
-                return ""
+                return None
             return original_run_command(cmd, *args, **kwargs)
 
         with patch("azurelinuxagent.common.osutil.default.shellutil.run_command", side_effect=mock_run_command) as patch_run_command:
@@ -228,7 +228,7 @@ class MountCgroupsTestCase(AgentTestCase):
 
         def mock_run_command(cmd, *args, **kwargs):
             if cmd[0] == 'mount':
-                return ""
+                return None
             return original_run_command(cmd, *args, **kwargs)
 
         with patch("azurelinuxagent.common.osutil.default.shellutil.run_command", side_effect=mock_run_command) as patch_run_command:
@@ -245,9 +245,9 @@ class MountCgroupsTestCase(AgentTestCase):
 
         def mock_run_command(cmd, *args, **kwargs):
             if cmd[0] == 'mount':
-                if list(filter(lambda part: 'memory' in part, cmd)):
+                if [part for part in cmd if 'memory' in part]:
                     raise Exception('A test exception mounting the memory controller')
-                return ""
+                return None
             return original_run_command(cmd, *args, **kwargs)
 
         with patch("azurelinuxagent.common.osutil.default.shellutil.run_command", side_effect=mock_run_command) as patch_run_command:
@@ -269,9 +269,9 @@ class MountCgroupsTestCase(AgentTestCase):
 
         def mock_run_command(cmd, *args, **kwargs):
             if cmd[0] == 'mount':
-                if list(filter(lambda part: 'cgroup_root' in part, cmd)):
+                if [part for part in cmd if 'cgroup_root' in part]:
                     raise Exception('A test exception mounting the cgroups file system')
-                return ""
+                return None
             return original_run_command(cmd, *args, **kwargs)
 
         with patch("azurelinuxagent.common.osutil.default.shellutil.run_command", side_effect=mock_run_command) as patch_run_command:
@@ -289,9 +289,9 @@ class MountCgroupsTestCase(AgentTestCase):
 
         def mock_run_command(cmd, *args, **kwargs):
             if cmd[0] == 'mount':
-                if filter(lambda part: 'memory' in part or 'cpu,cpuacct' in part, cmd):
+                if [part for part in cmd if 'memory' in part or 'cpu,cpuacct' in part]:
                     raise Exception('A test exception mounting a cgroup controller')
-                return ""
+                return None
             return original_run_command(cmd, *args, **kwargs)
 
         with patch("azurelinuxagent.common.osutil.default.shellutil.run_command", side_effect=mock_run_command):
@@ -305,9 +305,9 @@ class MountCgroupsTestCase(AgentTestCase):
 
         def mock_run_command(cmd, *args, **kwargs):
             if cmd[0] == 'mount':
-                if list(filter(lambda part: 'cpu,cpuacct' in part, cmd)):
+                if [part for part in cmd if 'cpu,cpuacct' in part]:
                     raise Exception('A test exception mounting the cpu controller')
-                return ""
+                return None
             return original_run_command(cmd, *args, **kwargs)
 
         with patch("azurelinuxagent.common.osutil.default.shellutil.run_command", side_effect=mock_run_command):
@@ -518,14 +518,14 @@ class SystemdCgroupsApiTestCase(AgentTestCase):
         SystemdCgroupsApi().create_extension_cgroups_root()
 
         unit_name = SystemdCgroupsApi()._get_extensions_slice_root_name() # pylint: disable=protected-access
-        _, status = shellutil.run_get_output("systemctl status {0}".format(unit_name))
+        status = shellutil.run_command(["systemctl", "status", unit_name])
         self.assertIn("Loaded: loaded", status)
         self.assertIn("Active: active", status)
 
-        shellutil.run_get_output("systemctl stop {0}".format(unit_name))
-        shellutil.run_get_output("systemctl disable {0}".format(unit_name))
+        shellutil.run_command(["systemctl", "stop", unit_name ])
+        shellutil.run_command(["systemctl", "disable", unit_name])
         os.remove("/etc/systemd/system/{0}".format(unit_name))
-        shellutil.run_get_output("systemctl daemon-reload")
+        shellutil.run_command(["systemctl", "daemon-reload"])
 
     def test_get_processes_in_cgroup_should_return_the_processes_within_the_cgroup(self):
         with mock_cgroup_commands():

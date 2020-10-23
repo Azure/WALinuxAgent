@@ -554,7 +554,12 @@ class DefaultOSUtil(object): # pylint: disable=R0904
             if not os.path.exists(path):
                 logger.error("Path does not exist: {0}".format(path))
                 return 1
-            return shellutil.run('chcon ' + con + ' ' + path)
+            
+            try:
+                shellutil.run_command(['chcon', con, path], log_error=True)
+            except shellutil.CommandError as cmd_err:
+                return cmd_err.returncode
+            return 0
 
     def conf_sshd(self, disable_password):
         option = "no" if disable_password else "yes"
@@ -630,9 +635,20 @@ class DefaultOSUtil(object): # pylint: disable=R0904
 
     def eject_dvd(self, chk_err=True):
         dvd = self.get_dvd_device()
-        retcode = shellutil.run("eject {0}".format(dvd))
-        if chk_err and retcode != 0:
-            raise OSUtilError("Failed to eject dvd: ret={0}".format(retcode))
+        try:
+            shellutil.run_command(["eject", dvd])
+        except shellutil.CommandError as cmd_err:
+            if chk_err:
+                
+                msg = """Failed to eject dvd: ret={0}
+                [stdout]
+                {1}
+
+                [stderr]
+                {2}
+                """.format(cmd_err.returncode, cmd_err.stdout, cmd_err.stderr)
+
+                raise OSUtilError(msg)
 
     def try_load_atapiix_mod(self):
         try:
@@ -685,7 +701,11 @@ class DefaultOSUtil(object): # pylint: disable=R0904
         return 0, output
 
     def umount(self, mount_point, chk_err=True):
-        return shellutil.run("umount {0}".format(mount_point), chk_err=chk_err)
+        try:
+            shellutil.run_command(["umount", mount_point], log_error=chk_err)
+        except shellutil.CommandError as cmd_err:
+            return cmd_err.returncode
+        return 0
 
     def allow_dhcp_broadcast(self):
         # Open DHCP port if iptables is enabled.
@@ -1120,15 +1140,26 @@ class DefaultOSUtil(object): # pylint: disable=R0904
     def restart_if(self, ifname, retries=3, wait=5):
         retry_limit=retries+1
         for attempt in range(1, retry_limit):
-            return_code=shellutil.run("ifdown {0} && ifup {0}".format(ifname), expected_errors=[1] if attempt < retries else [])
-            if return_code == 0:
+            try:
+                shellutil.run_command(["ifdown", ifname])
+                shellutil.run_command(["ifup", ifname])
                 return
-            logger.warn("failed to restart {0}: return code {1}".format(ifname, return_code))
-            if attempt < retry_limit:
-                logger.info("retrying in {0} seconds".format(wait))
-                time.sleep(wait)
-            else:
-                logger.warn("exceeded restart retries")
+            except shellutil.CommandError as cmd_err:
+                
+                msg = """failed to restart {0}: returncode={1}
+                [stdout]
+                {2}
+                
+                [stderr]
+                {3}
+                """.format(ifname, cmd_err.returncode, cmd_err.stdout, cmd_err.stderr)
+                logger.warn(msg)
+
+                if attempt < retry_limit:
+                    logger.info("retrying in {0} seconds".format(wait))
+                    time.sleep(wait)
+                else:
+                    logger.warn("exceeded restart retries")
 
     def publish_hostname(self, hostname):
         self.set_dhcp_hostname(hostname)
