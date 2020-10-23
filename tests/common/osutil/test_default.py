@@ -84,9 +84,7 @@ class TestOSUtil(AgentTestCase): # pylint: disable=too-many-public-methods
         with patch.object(osutil.DefaultOSUtil,
                           'get_dvd_device',
                           return_value='/dev/cdrom'):
-            with patch.object(shellutil,
-                              'run_get_output',
-                              return_value=(0, msg)) as patch_run: # pylint: disable=unused-variable
+            with patch.object(shellutil, 'run_command', return_value=msg):
                 with patch.object(os, 'makedirs'):
                     try:
                         osutil.DefaultOSUtil().mount_dvd()
@@ -95,20 +93,22 @@ class TestOSUtil(AgentTestCase): # pylint: disable=too-many-public-methods
 
     @patch('time.sleep')
     def test_mount_dvd_failure(self, _):
+        
         msg = 'message'
+        exception = shellutil.CommandError("mount_cmd", -1, msg, "")
+        
         with patch.object(osutil.DefaultOSUtil,
                           'get_dvd_device',
                           return_value='/dev/cdrom'):
-            with patch.object(shellutil,
-                              'run_get_output',
-                              return_value=(1, msg)) as patch_run:
+            with patch.object(shellutil, 'run_command',
+                side_effect=exception) as patch_run:
                 with patch.object(os, 'makedirs'):
                     try:
                         osutil.DefaultOSUtil().mount_dvd()
                         self.fail('OSUtilError was not raised')
                     except OSUtilError as ose:
                         self.assertTrue(msg in ustr(ose))
-                        self.assertTrue(patch_run.call_count == 6)
+                        self.assertTrue(patch_run.call_count == 5)
 
     def test_empty_proc_net_route(self):
         routing_table = ""

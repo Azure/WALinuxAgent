@@ -668,7 +668,10 @@ class DefaultOSUtil(object): # pylint: disable=R0904
                 time.sleep(1)
         return False
 
-    def mount(self, device, mount_point, option=[], chk_err=True):
+    def mount(self, device, mount_point, option=None, chk_err=True):
+        if not option:
+            option = []
+            
         cmd = ["mount"]
         cmd.extend(option + [device, mount_point])
         

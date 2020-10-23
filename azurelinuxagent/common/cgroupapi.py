@@ -243,7 +243,7 @@ class FileSystemCgroupsApi(CGroupsApi):
                         fileutil.mkdir(target_path)
                         osutil.mount(device=controller,
                                    mount_point=target_path, 
-                                   option="-t cgroup -o {0}".format(controller), 
+                                   option=["-t", "cgroup", "-o", "controller"], 
                                    chk_err=False) 
                         if controller == 'cpu,cpuacct':
                             cpu_mounted = True
