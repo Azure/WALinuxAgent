@@ -52,7 +52,7 @@ class UbuntuRDMAHandler(RDMAHandler):
             return
 
         #Reconfigure driver if one is available
-        status,output = shellutil.run_get_output('modinfo hv_network_direct_%s' % nd_version); # pylint: disable=W0301
+        status,output = shellutil.run_get_output('modinfo hv_network_direct_%s' % nd_version)
         if status == 0:
             logger.info("RDMA: driver with ND version is installed. Link to module name")
             self.update_modprobed_conf(nd_version)
