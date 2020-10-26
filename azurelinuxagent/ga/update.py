@@ -660,6 +660,8 @@ class UpdateHandler(object): # pylint: disable=R0902
         return os.path.join(conf.get_lib_dir(), AGENT_SENTINEL_FILE)
 
     def _shutdown(self):
+        # Todo: Ensure all threads stopped when shutting down the main extension handler to ensure that the state of
+        # all threads is clean.
         self.running = False
 
         if not os.path.isfile(self._sentinel_file_path()):

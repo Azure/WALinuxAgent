@@ -193,6 +193,7 @@ class ProcessExtensionEventsPeriodicOperation(PeriodicOperation):
                 except ServiceStoppedError:
                     # Not logging here as already logged once, re-raising
                     # Since we already started processing this file, deleting it as we could've already sent some events out
+                    # This is a trade-off between data replication vs data loss.
                     raise
                 except Exception as error:
                     msg = "Failed to process event file {0}: {1}, {2}".format(event_file, ustr(error),
@@ -200,6 +201,9 @@ class ProcessExtensionEventsPeriodicOperation(PeriodicOperation):
                     logger.warn(msg)
                     add_log_event(level=logger.LogLevel.WARNING, message=msg, forced=True)
                 finally:
+                    # Todo: We should delete files after ensuring that we sent the data to Wireserver successfully
+                    # from our end rather than deleting first and sending later. This is to ensure the data reliability
+                    # of the agent telemetry pipeline.
                     os.remove(event_file_path)
 
         finally:
@@ -397,7 +401,7 @@ class CollectAndEnqueueEventsPeriodicOperation(PeriodicOperation):
     # too-many-locals<R0914> Disabled: The number of local variables is OK
     def process_events(self):  # pylint: disable=too-many-locals
         """
-        Retuns a list of events that need to be sent to the telemetry pipeline and deletes the corresponding files
+        Returns a list of events that need to be sent to the telemetry pipeline and deletes the corresponding files
         from the events directory.
         """
         event_directory_full_path = os.path.join(conf.get_lib_dir(), EVENTS_DIRECTORY)
@@ -439,6 +443,9 @@ class CollectAndEnqueueEventsPeriodicOperation(PeriodicOperation):
 
                     self._send_telemetry_events_handler.enqueue_event(event)
                 finally:
+                    # Todo: We should delete files after ensuring that we sent the data to Wireserver successfully
+                    # from our end rather than deleting first and sending later. This is to ensure the data reliability
+                    # of the agent telemetry pipeline.
                     os.remove(event_file_path)
             except ServiceStoppedError as stopped_error:
                 logger.error(
