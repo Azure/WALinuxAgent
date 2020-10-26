@@ -15,9 +15,10 @@
 #
 # Requires Python 2.6+ and Openssl 1.0+
 #
-from tests.tools import AgentTestCase, patch
-import unittest # pylint: disable=wrong-import-order
+import unittest
+
 import azurelinuxagent.common.utils.shellutil as shellutil
+from tests.tools import AgentTestCase, patch
 
 
 class ShellQuoteTestCase(AgentTestCase):

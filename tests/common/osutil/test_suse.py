@@ -14,10 +14,11 @@
 #
 # Requires Python 2.6+ and Openssl 1.0+
 #
+import unittest
+
 from azurelinuxagent.common.osutil.suse import SUSE11OSUtil
+from tests.tools import AgentTestCase
 from .test_default import osutil_get_dhcp_pid_should_return_a_list_of_pids
-from tests.tools import AgentTestCase # pylint: disable=wrong-import-order
-import unittest # pylint: disable=wrong-import-order
 
 
 class TestSUSE11OSUtil(AgentTestCase):

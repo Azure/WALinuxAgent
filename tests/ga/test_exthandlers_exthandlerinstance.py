@@ -1,12 +1,13 @@
 # Copyright (c) Microsoft Corporation. All rights reserved.
 # Licensed under the Apache License.
 
-from azurelinuxagent.ga.exthandlers import ExtHandlerInstance
+import os
+import shutil
+import sys
+
 from azurelinuxagent.common.protocol.restapi import ExtHandler, ExtHandlerProperties, ExtHandlerPackage, \
     ExtHandlerVersionUri
-import os # pylint: disable=wrong-import-order
-import shutil # pylint: disable=wrong-import-order
-import sys # pylint: disable=wrong-import-order
+from azurelinuxagent.ga.exthandlers import ExtHandlerInstance
 from tests.tools import AgentTestCase, patch
 
 

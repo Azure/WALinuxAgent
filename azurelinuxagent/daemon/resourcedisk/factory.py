@@ -21,8 +21,6 @@ from .freebsd import FreeBSDResourceDiskHandler
 from .openbsd import OpenBSDResourceDiskHandler
 from .openwrt import OpenWRTResourceDiskHandler
 
-from distutils.version import LooseVersion as Version # pylint: disable=C0411,W0611,no-name-in-module, import-error
-
 
 def get_resourcedisk_handler(distro_name=DISTRO_NAME, 
                              distro_version=DISTRO_VERSION, # pylint: disable=W0613
