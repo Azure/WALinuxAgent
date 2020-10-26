@@ -227,7 +227,7 @@ class FileSystemCgroupsApi(CGroupsApi):
                 fileutil.mkdir(path)
                 osutil.mount(device='cgroup_root',
                            mount_point=path, 
-                           option=["-t", "tmpfs"], 
+                           option="-t tmpfs", 
                            chk_err=False) 
             elif not os.path.isdir(cgroup_path()):
                 logger.error("Could not mount cgroups: ordinary file at {0}", path)
@@ -243,7 +243,7 @@ class FileSystemCgroupsApi(CGroupsApi):
                         fileutil.mkdir(target_path)
                         osutil.mount(device=controller,
                                    mount_point=target_path, 
-                                   option=["-t", "cgroup", "-o", controller], 
+                                   option="-t cgroup -o {0}".format(controller), 
                                    chk_err=False) 
                         if controller == 'cpu,cpuacct':
                             cpu_mounted = True

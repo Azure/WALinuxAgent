@@ -244,7 +244,7 @@ class OpenBSDOSUtil(DefaultOSUtil): # pylint: disable=R0904
         for retry in range(0, max_retry):
             retcode = self.mount(dvd_device,
                                 mount_point, 
-                                option=["-o", "ro", "-t", "udf"], 
+                                option="-o ro -t udf", 
                                 chk_err=False) 
             if retcode == 0:
                 logger.info("Successfully mounted DVD")
