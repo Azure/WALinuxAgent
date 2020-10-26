@@ -92,7 +92,7 @@ class TestEvent(HttpRequestPredicates, AgentTestCase): # pylint: disable=too-man
             for telemetry_event in event_list:
                 yield telemetry_event
 
-        protocol.client.report_event(_yield_events)
+        protocol.client.report_event(_yield_events())
 
     @staticmethod
     def _collect_events():

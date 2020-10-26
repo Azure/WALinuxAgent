@@ -122,7 +122,7 @@ class TestWireProtocol(AgentTestCase):
             for telemetry_event in event_list:
                 yield telemetry_event
 
-        return _yield_events
+        return _yield_events()
 
     def test_getters(self, *args):
         """Normal case"""
