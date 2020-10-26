@@ -18,8 +18,8 @@
 import unittest
 
 from azurelinuxagent.common.osutil.ubuntu import Ubuntu12OSUtil, Ubuntu18OSUtil
+from tests.tools import AgentTestCase
 from .test_default import osutil_get_dhcp_pid_should_return_a_list_of_pids
-from tests.tools import AgentTestCase # pylint: disable=wrong-import-order
 
 
 class TestUbuntu12OSUtil(AgentTestCase):

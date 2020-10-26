@@ -14,15 +14,16 @@
 #
 # Requires Python 2.6+ and Openssl 1.0+
 #
+import os
+import shutil
+import subprocess
+import tempfile
+
 from azurelinuxagent.common.exception import ExtensionError, ExtensionErrorCodes
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.utils.extensionprocessutil import format_stdout_stderr, read_output, \
     wait_for_process_completion_or_timeout, handle_process_completion
 from tests.tools import AgentTestCase, patch
-import os # pylint: disable=wrong-import-order
-import shutil # pylint: disable=wrong-import-order
-import subprocess # pylint: disable=wrong-import-order
-import tempfile # pylint: disable=wrong-import-order
 
 
 class TestProcessUtils(AgentTestCase):

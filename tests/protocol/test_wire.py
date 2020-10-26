@@ -165,7 +165,6 @@ class TestWireProtocol(AgentTestCase):
         self.assertEqual(1, patch_report.call_count)
 
     def test_call_storage_kwargs(self, *args): # pylint: disable=unused-argument
-        from azurelinuxagent.common.utils import restutil # pylint: disable=redefined-outer-name,reimported
         with patch.object(restutil, 'http_get') as http_patch:
             http_req = restutil.http_get
             url = testurl
