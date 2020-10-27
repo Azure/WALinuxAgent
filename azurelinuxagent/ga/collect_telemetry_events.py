@@ -46,6 +46,18 @@ def get_collect_telemetry_events_handler(send_telemetry_events_handler):
 class ExtensionEventSchema(object): # pylint: disable=R0903
     """
     Class for defining the schema for Extension Events.
+
+    Sample Extension Event Example:
+        {
+           "Version":"1.0.0.23",
+           "Timestamp":"2018-01-02T22:08:12.510696Z"    //(time in UTC (ISO-8601 standard),
+           "TaskName":"TestRun"                         //Open for publishers,
+           "EventLevel":"Critical/Error/Warning/Verbose/Informational/LogAlways",
+           "Message": "Successful test"                //(max 3K, 3072 characters),
+           "EventPid":"1",
+           "EventTid":"2",
+           "OperationId":"Guid (str)"
+        }
     """
     Version = "Version"
     Timestamp = "Timestamp"
@@ -57,7 +69,7 @@ class ExtensionEventSchema(object): # pylint: disable=R0903
     OperationId = "OperationId"
 
 
-class ProcessExtensionEventsPeriodicOperation(PeriodicOperation):
+class _ProcessExtensionEventsPeriodicOperation(PeriodicOperation):
     """
     Periodic operation for collecting and sending extension telemetry events to Wireserver.
     """
@@ -75,10 +87,10 @@ class ProcessExtensionEventsPeriodicOperation(PeriodicOperation):
                                         not callable(getattr(ExtensionEventSchema, attr)) and not attr.startswith("__")]
 
     def __init__(self, send_telemetry_events_handler):
-        super(ProcessExtensionEventsPeriodicOperation, self).__init__(
+        super(_ProcessExtensionEventsPeriodicOperation, self).__init__(
             name="collect_and_enqueue_extension_events",
             operation=self._collect_and_enqueue_extension_events,
-            period=ProcessExtensionEventsPeriodicOperation._EXTENSION_EVENT_COLLECTION_PERIOD)
+            period=_ProcessExtensionEventsPeriodicOperation._EXTENSION_EVENT_COLLECTION_PERIOD)
 
         self._send_telemetry_events_handler = send_telemetry_events_handler
 
@@ -370,7 +382,7 @@ class ProcessExtensionEventsPeriodicOperation(PeriodicOperation):
             event.parameters.append(TelemetryEventParam(param_name, replace_or_add_params[param_name]))
 
 
-class CollectAndEnqueueEventsPeriodicOperation(PeriodicOperation):
+class _CollectAndEnqueueEventsPeriodicOperation(PeriodicOperation):
     """
     Periodic operation to collect and send telemetry events located in the events folder
     """
@@ -378,10 +390,10 @@ class CollectAndEnqueueEventsPeriodicOperation(PeriodicOperation):
     _EVENT_COLLECTION_PERIOD = datetime.timedelta(minutes=1)
 
     def __init__(self, send_telemetry_events_handler):
-        super(CollectAndEnqueueEventsPeriodicOperation, self).__init__(
+        super(_CollectAndEnqueueEventsPeriodicOperation, self).__init__(
             name="collect_and_enqueue_events",
             operation=self._collect_and_enqueue_events,
-            period=CollectAndEnqueueEventsPeriodicOperation._EVENT_COLLECTION_PERIOD)
+            period=_CollectAndEnqueueEventsPeriodicOperation._EVENT_COLLECTION_PERIOD)
         self._send_telemetry_events_handler = send_telemetry_events_handler
 
     def _collect_and_enqueue_events(self):
@@ -434,12 +446,12 @@ class CollectAndEnqueueEventsPeriodicOperation(PeriodicOperation):
                         event_file_creation_time = datetime.datetime.fromtimestamp(event_file_creation_time_epoch)
 
                         if event.is_extension_event():
-                            CollectAndEnqueueEventsPeriodicOperation._trim_legacy_extension_event_parameters(event)
+                            _CollectAndEnqueueEventsPeriodicOperation._trim_legacy_extension_event_parameters(event)
                             CollectTelemetryEventsHandler.add_common_params_to_telemetry_event(event,
                                                                                                event_file_creation_time)
                         else:
-                            CollectAndEnqueueEventsPeriodicOperation._update_legacy_agent_event(event,
-                                                                                                event_file_creation_time)
+                            _CollectAndEnqueueEventsPeriodicOperation._update_legacy_agent_event(event,
+                                                                                                 event_file_creation_time)
 
                     self._send_telemetry_events_handler.enqueue_event(event)
                 finally:
@@ -547,13 +559,13 @@ class CollectTelemetryEventsHandler(ThreadHandlerInterface):
 
     def daemon(self):
         periodic_operations = [
-            CollectAndEnqueueEventsPeriodicOperation(self._send_telemetry_events_handler)
+            _CollectAndEnqueueEventsPeriodicOperation(self._send_telemetry_events_handler)
         ]
 
         logger.info("Extension Telemetry pipeline enabled: {0}".format(
             is_extension_telemetry_pipeline_enabled()))
         if is_extension_telemetry_pipeline_enabled():
-            periodic_operations.append(ProcessExtensionEventsPeriodicOperation(self._send_telemetry_events_handler))
+            periodic_operations.append(_ProcessExtensionEventsPeriodicOperation(self._send_telemetry_events_handler))
 
         logger.info("Successfully started the {0} thread".format(self.get_thread_name()))
         while not self.stopped():

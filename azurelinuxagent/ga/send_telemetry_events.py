@@ -38,7 +38,7 @@ class SendTelemetryEventsHandler(ThreadHandlerInterface):
     there's any data available in the queue to send.
     """
 
-    _THREAD_NAME = "SendTelemetryEventsHandler"
+    _THREAD_NAME = "SendTelemetryHandler"
     _MAX_TIMEOUT = datetime.timedelta(seconds=5).seconds
     _MIN_EVENTS_TO_BATCH = 30
     _MIN_BATCH_WAIT_TIME = datetime.timedelta(seconds=5)
@@ -81,8 +81,6 @@ class SendTelemetryEventsHandler(ThreadHandlerInterface):
         Stop server communication and join the thread to main thread.
         """
         self.should_run = False
-        # Set the event to unblock the thread to ensure that the thread is not blocking shutdown.
-        # self._should_process_events.set()
         if self.is_alive():
             self.join()
 
@@ -108,9 +106,6 @@ class SendTelemetryEventsHandler(ThreadHandlerInterface):
         except Exception as error:
             raise ServiceStoppedError(
                 "Unable to enqueue due to: {0}, stopping any more enqueuing until the next run".format(ustr(error)))
-
-        # Set the event if any enqueue happens (even if already set) to trigger sending those events
-        # self._should_process_events.set()
 
     def _wait_for_event_in_queue(self):
         event = None
@@ -144,7 +139,6 @@ class SendTelemetryEventsHandler(ThreadHandlerInterface):
 
     def _send_events_in_queue(self, event):
         # Process everything in Queue
-        # if not self._queue.empty():
         start_time = datetime.datetime.utcnow()
         while not self.stopped() and (self._queue.qsize() + 1) < self._MIN_EVENTS_TO_BATCH and (
                 start_time + self._MIN_BATCH_WAIT_TIME) > datetime.datetime.utcnow():
@@ -156,11 +150,6 @@ class SendTelemetryEventsHandler(ThreadHandlerInterface):
             time.sleep(1)
         # Delete files after sending the data rather than deleting and sending
         self._protocol.report_event(self._get_events_in_queue(event))
-
-        # Reset the event when done processing all events in queue
-        # if self._should_process_events.is_set() and self._queue.empty():
-        #     logger.verbose("Resetting the event")
-        #     self._should_process_events.clear()
 
     def _get_events_in_queue(self, first_event):
         yield first_event

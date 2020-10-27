@@ -45,7 +45,7 @@ from azurelinuxagent.common.telemetryevent import TelemetryEvent, TelemetryEvent
     GuestAgentExtensionEventsSchema
 from azurelinuxagent.common.version import CURRENT_VERSION, DISTRO_NAME, DISTRO_VERSION, AGENT_VERSION, CURRENT_AGENT, \
     DISTRO_CODE_NAME
-from azurelinuxagent.ga.collect_telemetry_events import CollectAndEnqueueEventsPeriodicOperation
+from azurelinuxagent.ga.collect_telemetry_events import _CollectAndEnqueueEventsPeriodicOperation
 from azurelinuxagent.ga.send_telemetry_events import get_send_telemetry_events_handler
 from tests.ga.test_monitor import random_generator
 from tests.protocol.mocks import MockHttpResponse, mock_wire_protocol, HttpRequestPredicates
@@ -253,7 +253,6 @@ class TestSendTelemetryEventsHandler(AgentTestCase, HttpRequestPredicates):
             self.assertIn("{0} is stopped, not accepting anymore events".format(telemetry_handler.get_thread_name()),
                           str(exception))
 
-
     def test_it_should_honour_the_incoming_order_of_events(self):
 
         with self._create_send_telemetry_events_handler(timeout=0.3, start_thread=False) as telemetry_handler:
@@ -267,7 +266,6 @@ class TestSendTelemetryEventsHandler(AgentTestCase, HttpRequestPredicates):
             event_orders = re.findall(r'<Event id=\"(\d+)\"><!\[CDATA\[]]></Event>',
                                       textutil.str_to_encoded_ustr(event_body))
             self.assertEqual(sorted(event_orders), event_orders, "Events not ordered correctly")
-
 
     def test_send_telemetry_events_should_report_event_if_wireserver_returns_http_error(self):
 
@@ -335,7 +333,7 @@ class TestSendTelemetryEventsHandler(AgentTestCase, HttpRequestPredicates):
         mock_lib_dir.return_value = self.lib_dir
 
         with self._create_send_telemetry_events_handler() as telemetry_handler:
-            monitor_handler = CollectAndEnqueueEventsPeriodicOperation(telemetry_handler)
+            monitor_handler = _CollectAndEnqueueEventsPeriodicOperation(telemetry_handler)
             self._create_extension_event(message="Message-Test")
 
             test_mtime = 1000  # epoch time, in ms
@@ -406,7 +404,7 @@ class TestSendTelemetryEventsHandler(AgentTestCase, HttpRequestPredicates):
                 size = 2 ** power
                 self._create_extension_event(size)
 
-            CollectAndEnqueueEventsPeriodicOperation(telemetry_handler).run()
+            _CollectAndEnqueueEventsPeriodicOperation(telemetry_handler).run()
 
             # The send_event call would be called each time, as we are filling up the buffer up to the brim for each call.
             TestSendTelemetryEventsHandler._stop_handler(telemetry_handler)
@@ -424,7 +422,7 @@ class TestSendTelemetryEventsHandler(AgentTestCase, HttpRequestPredicates):
                 self._create_extension_event(size)
 
             with patch("azurelinuxagent.common.logger.periodic_warn") as patch_periodic_warn:
-                CollectAndEnqueueEventsPeriodicOperation(telemetry_handler).run()
+                _CollectAndEnqueueEventsPeriodicOperation(telemetry_handler).run()
                 TestSendTelemetryEventsHandler._stop_handler(telemetry_handler)
                 self.assertEqual(3, patch_periodic_warn.call_count)
 

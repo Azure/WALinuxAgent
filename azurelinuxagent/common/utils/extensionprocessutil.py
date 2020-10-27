@@ -103,7 +103,7 @@ def format_stdout_stderr(stdout, stderr):
     """
     Format stdout and stderr's output to make it suitable in telemetry.
     The goal is to maximize the amount of output given the constraints
-    of telemetry. too-few-public-methods<R0903> Disabled: This class is used as an Enum
+    of telemetry.
 
     For example, if there is more stderr output than stdout output give
     more buffer space to stderr.
