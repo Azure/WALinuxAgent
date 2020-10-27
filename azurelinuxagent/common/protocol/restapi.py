@@ -61,7 +61,7 @@ class CertList(DataContract): # pylint: disable=R0903
         self.certificates = DataContractList(Cert)
 
 
-# TODO: confirm vmagent manifest schema # pylint: disable=W0511
+# TODO: confirm vmagent manifest schema
 class VMAgentManifestUri(DataContract): # pylint: disable=R0903
     def __init__(self, uri=None):
         self.uri = uri
@@ -139,7 +139,7 @@ class ExtHandlerPackage(DataContract): # pylint: disable=R0903
     def __init__(self, version=None):
         self.version = version
         self.uris = DataContractList(ExtHandlerPackageUri)
-        # TODO update the naming to align with metadata protocol # pylint: disable=W0511
+        # TODO update the naming to align with metadata protocol
         self.isinternal = False
         self.disallow_major_upgrade = False
 
@@ -151,7 +151,7 @@ class ExtHandlerPackageList(DataContract): # pylint: disable=R0903
 
 class VMProperties(DataContract): # pylint: disable=R0903
     def __init__(self, certificateThumbprint=None):
-        # TODO need to confirm the property name # pylint: disable=W0511
+        # TODO need to confirm the property name
         self.certificateThumbprint = certificateThumbprint # pylint: disable=C0103
 
 

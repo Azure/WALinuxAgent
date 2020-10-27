@@ -577,7 +577,7 @@ After=system.slice"""
         logger.info("Created slice for walinuxagent extensions {0}".format(unit_filename))
 
     def create_extension_cgroups(self, extension_name):
-        # TODO: The slice created by this function is not used currently. We need to create the extension scopes within # pylint: disable=W0511
+        # TODO: The slice created by this function is not used currently. We need to create the extension scopes within
         #  this slice and use the slice to monitor the cgroups. Also see comment in get_extension_cgroups.
         # the slice.
         unit_contents = """
@@ -611,7 +611,7 @@ After=system-{1}.slice""".format(extension_name, EXTENSIONS_ROOT_CGROUP_NAME)
             raise CGroupsException("Failed to remove {0}. Error: {1}".format(unit_filename, ustr(e)))
 
     def get_extension_cgroups(self, extension_name):
-        # TODO: The slice returned by this function is not used currently. We need to create the extension scopes within # pylint: disable=W0511
+        # TODO: The slice returned by this function is not used currently. We need to create the extension scopes within
         #  this slice and use the slice to monitor the cgroups. Also see comment in create_extension_cgroups.
         slice_name = self._get_extension_cgroup_name(extension_name)
 

@@ -13,7 +13,6 @@
 # dangerous-default-value<W0102>: (hi-pri) Used when a mutable value as list or dictionary is detected in a default value for an argument.
 # expression-not-assigned<W0106>: (hi-pri) Used when an expression that is not a function call is assigned to nothing.
 # duplicate-code<R0801>: (hi-pri) Indicates that a set of similar lines has been detected among multiple file. (also disabled globally)
-# fixme<W0511>: Used when a warning note as FIXME or TODO is detected
 # function-redefined<E0102>: (hi-pri) Used when a function / class / method is redefined.
 # global-statement<W0603>: Used when you use the "global" statement to update a global variable.
 # import-error<E0401>: (hi-pri) Used when pylint has been unable to import a module.
@@ -96,7 +95,8 @@ disable=bad-continuation, # Buggy, **REMOVED in pylint-2.6.0**
     trailing-newlines, # Used when there are trailing blank lines in a file.
     trailing-whitespace, # Used when there is whitespace between the end of a line and the newline.
     useless-object-inheritance, # Used when a class inherit from object, which under python3 is implicit (3+ only)
-    duplicate-code # Indicates that a set of similar lines has been detected among multiple file. TODO: this is on our "fix" list, and is thus left last.
+    duplicate-code, # Indicates that a set of similar lines has been detected among multiple file. TODO: this is on our "fix" list, and is thus left last.
+    fixme, # Used when a warning note as FIXME or TODO is detected
 
 
 # This section controls the duplicate-code error.

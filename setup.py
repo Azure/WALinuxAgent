@@ -95,7 +95,7 @@ def get_data_files(name, version, fullname): # pylint: disable=R0912
             # redhat7.0+ use systemd
             set_systemd_files(data_files, dest="/usr/lib/systemd/system")
             if version.startswith("7.1"):
-                # TODO this is a mitigation to systemctl bug on 7.1 # pylint: disable=W0511
+                # TODO this is a mitigation to systemctl bug on 7.1
                 set_sysv_files(data_files)
     elif name == 'arch':
         set_bin_files(data_files, dest="/usr/bin")
@@ -171,7 +171,7 @@ def get_data_files(name, version, fullname): # pylint: disable=R0912
         set_udev_files(data_files)
         set_systemd_files(data_files, dest="/usr/lib/systemd/system")
         if version.startswith("7.1"):
-            # TODO this is a mitigation to systemctl bug on 7.1 # pylint: disable=W0511
+            # TODO this is a mitigation to systemctl bug on 7.1
             set_sysv_files(data_files)
     elif name == 'openwrt':
         set_bin_files(data_files)

@@ -364,7 +364,7 @@ class ImdsClient(object):
 
         # ensure all expected fields are present and have a value
         try:
-            # TODO: compute fields cannot be verified yet since we need to exclude rdfe vms (#1249) # pylint: disable=W0511
+            # TODO: compute fields cannot be verified yet since we need to exclude rdfe vms (#1249)
 
             self.check_field(json_data, 'network')
             self.check_field(json_data['network'], 'interface')
