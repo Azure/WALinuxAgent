@@ -1,10 +1,9 @@
 # python2.7 uses pylint 1.9.5, whose docs can be found here: http://pylint.pycqa.org/en/1.9/technical_reference/features.html#messages
 # python3.4 uses pylint 2.3.1, whose docs can be found here: http://pylint.pycqa.org/en/pylint-2.3.1/technical_reference/features.html
 
-# The source code supresses the following error types common between python2.7 and python3.4:
+# The source code suppresses the following error types common between python2.7 and python3.4:
 
 # attribute-defined-outside-init<W0201>: (hi-pri) Used when an instance attribute is defined outside the __init__ method.
-# bad-indentation<W0311>: (hi-pri) Used when an unexpected number of indentation's tabulations or spaces has been found.
 # bad-open-mode<W1501>: (hi-pri) Python supports: r, w, a[, x] modes with b, +, and U (only with r) options.
 # bad-super-call<E1003>: (hi-pri) Used when another argument than the current class is given as first argument of the super builtin.
 # bare-except<W0702>: (hi-pri) Used when an except clause doesn't specify exceptions type to catch.
@@ -22,7 +21,6 @@
 # invalid-name<C0103>: (needs review) Used when the name doesn't conform to naming rules associated to its type (constant, variable, class...).
 # keyword-arg-before-vararg<W1113>: (hi-pri) When defining a keyword argument before variable positional arguments, one can end up in having multiple values passed for the aforementioned parameter in case the method is called with keyword arguments.
 # len-as-condition<C1801>: (hi-pri) Used when Pylint detects that len(sequence) is being used without explicit comparison inside a condition to determine if a sequence is empty.
-# multiple-imports<C0410>: (hi-pri) Used when import statement importing multiple modules is detected.
 # no-else-return<R1705>: (hi-pri) Used in order to highlight an unnecessary block of code following an if containing a return statement.
 # no-member<E1101>: (hi-pri) Used when a variable is accessed for an unexistent member.
 # no-name-in-module<E0611>: (hi-pri) Used when a name cannot be found in a module.
@@ -34,7 +32,6 @@
 # redefined-builtin<W0622>: (hi-pri) Used when a variable or function override a built-in.
 # redefined-outer-name<W0621>: (hi-pri) Used when a variable's name hides a name defined in the outer scope.
 # redundant-unittest-assert<W1503>: (hi-pri) The first argument of assertTrue and assertFalse is a condition. If a constant is passed as parameter, that condition will be always true.
-# reimported<W0404>: (hi-pri) Used when a module is reimported multiple times.
 # simplifiable-if-statement<R1703>: Used when an if statement can be replaced with 'bool(test)'.
 # singleton-comparison<C0121>: (hi-pri) Used when an expression is compared to singleton values like True, False or None.
 # super-init-not-called<W0231>: (hi-pri) Used when an ancestor class method has an __init__ method which is not called by a derived class.
@@ -51,15 +48,12 @@
 # unidiomatic-typecheck<C0123>: (hi-pri) The idiomatic way to perform an explicit typecheck in Python is to use isinstance(x, Y) rather than type(x) == Y, type(x) is Y.
 # unnecessary-lambda<W0108>: Used when the body of a lambda expression is a function call on the same argument list as the lambda itself
 # unnecessary-pass<W0107>: (hi-pri) Used when a "pass" statement that can be avoided is encountered.
-# unnecessary-semicolon<W0301>: Used when a statement is ended by a semi-colon (";"), which isn't necessary
 # unneeded-not<C0113>: (needs review) Used when a boolean expression contains an unneeded negation.
 # unused-argument<W0613>: (hi-pri) Used when a function or method argument is not used.
 # unused-import<W0611>: (hi-pri) Used when an imported module or variable is not used.
 # unused-variable<W0612>: (hi-pri) Used when a variable is defined but not used.
 # useless-else-on-loop<W0120>: (hi-pri) Loops should only have an else clause if they can exit early with a break statement, otherwise the statements under else should be on the same scope as the loop itself.
 # useless-super-delegation<W0235>: Used whenever we can detect that an overridden method is useless, relying on super() delegation to do the same thing as another method from the MRO.
-# wrong-import-order<C0411>: (hi-pri) Used when PEP8 import order is not respected (standard imports first, then third-party libraries, then local imports)
-# wrong-import-position<C0413>: (hi-pri) Used when code and imports are mixed
 
 # The source code suppresses the following error codes specifically for python2.7:
 
@@ -76,7 +70,6 @@
 # no-else-raise<R1720>: (hi-pri) Used in order to highlight an unnecessary block of code following an if containing a raise statement. 
 # simplifiable-if-expression<R1719>: Used when an if expression can be replaced with 'bool(test)'.
 # subprocess-popen-preexec-fn<W1509>: (hi-pri) The preexec_fn parameter is not safe to use in the presence of threads in your application. The child process could deadlock before exec is called.
-# useless-import-alias<C0414>: (hi-pri) Used when an import alias is same as original package.e.g using import numpy as numpy instead of import numpy as np
 # useless-return<R1711>: (hi-pri) Emitted when a single "return" or "return None" statement is found at the end of function or method definition.
 
 

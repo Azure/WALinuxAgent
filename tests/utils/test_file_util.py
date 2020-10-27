@@ -15,18 +15,17 @@
 # Requires Python 2.6+ and Openssl 1.0+
 #
 
-import errno as errno # pylint: disable=useless-import-alias
+import errno
 import glob
+import os
 import random
+import shutil
 import string
 import tempfile
-import uuid
-import os
-import shutil
 import unittest
+import uuid
 
 import azurelinuxagent.common.utils.fileutil as fileutil
-
 from azurelinuxagent.common.future import ustr
 from tests.tools import AgentTestCase, patch
 

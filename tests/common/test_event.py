@@ -831,12 +831,14 @@ class TestMetrics(AgentTestCase):
     def test_report_metric(self, mock_event):
         event.report_metric("cpu", "%idle", "_total", 10.0)
         self.assertEqual(1, mock_event.call_count)
+
         event_json = mock_event.call_args[0][0]
         self.assertIn(event.TELEMETRY_EVENT_PROVIDER_ID, event_json)
         self.assertIn("%idle", event_json)
-        import json # pylint: disable=redefined-outer-name,reimported
+
         event_dictionary = json.loads(event_json)
         self.assertEqual(event_dictionary['providerId'], event.TELEMETRY_EVENT_PROVIDER_ID)
+
         for parameter in event_dictionary["parameters"]:
             if parameter['name'] == GuestAgentPerfCounterEventsSchema.Counter:
                 self.assertEqual(parameter['value'], '%idle')

@@ -20,15 +20,14 @@ import socket
 import time
 import unittest
 
+import azurelinuxagent.common.logger as logger
 import azurelinuxagent.common.osutil.bigip as osutil
 import azurelinuxagent.common.osutil.default as default
 import azurelinuxagent.common.utils.shellutil as shellutil
-
 from azurelinuxagent.common.exception import OSUtilError
-import azurelinuxagent.common.logger as logger
 from azurelinuxagent.common.osutil.bigip import BigIpOSUtil
+from tests.tools import AgentTestCase, patch
 from .test_default import osutil_get_dhcp_pid_should_return_a_list_of_pids
-from tests.tools import AgentTestCase, patch # pylint: disable=wrong-import-order
 
 
 class TestBigIpOSUtil_wait_until_mcpd_is_initialized(AgentTestCase): # pylint: disable=invalid-name
