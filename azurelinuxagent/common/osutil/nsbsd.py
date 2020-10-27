@@ -14,12 +14,14 @@
 # limitations under the License.
 #
 
+import os
+
+import azurelinuxagent.common.logger as logger
 import azurelinuxagent.common.utils.fileutil as fileutil
 import azurelinuxagent.common.utils.shellutil as shellutil
-import azurelinuxagent.common.logger as logger
 from azurelinuxagent.common.exception import OSUtilError
 from azurelinuxagent.common.osutil.freebsd import FreeBSDOSUtil
-import os # pylint: disable=C0411
+
 
 class NSBSDOSUtil(FreeBSDOSUtil):
 

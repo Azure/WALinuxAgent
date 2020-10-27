@@ -43,7 +43,7 @@ class CloudInitProvisionHandler(ProvisionHandler):
 
     def run(self):
         try:
-            if super(CloudInitProvisionHandler, self).is_provisioned():
+            if super(CloudInitProvisionHandler, self).check_provisioned_file():
                 logger.info("Provisioning already completed, skipping.")
                 return
 

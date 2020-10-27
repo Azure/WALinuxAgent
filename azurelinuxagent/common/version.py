@@ -25,6 +25,35 @@ import azurelinuxagent.common.utils.shellutil as shellutil
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
 from azurelinuxagent.common.future import ustr, get_linux_distribution
 
+__DAEMON_VERSION_ENV_VARIABLE = '_AZURE_GUEST_AGENT_DAEMON_VERSION_'
+"""
+    The daemon process sets this variable's value to the daemon's version number.
+    The variable is set only on versions >= 2.2.53
+"""
+
+
+def set_daemon_version(version):
+    """
+    Sets the value of the _AZURE_GUEST_AGENT_DAEMON_VERSION_ environment variable.
+
+    The given 'version' can be a FlexibleVersion or a string that can be parsed into a FlexibleVersion
+    """
+    flexible_version = version if isinstance(version, FlexibleVersion) else FlexibleVersion(version)
+    os.environ[__DAEMON_VERSION_ENV_VARIABLE] = ustr(flexible_version)
+
+
+def get_daemon_version():
+    """
+    Retrieves the value of the _AZURE_GUEST_AGENT_DAEMON_VERSION_ environment variable.
+    The value indicates the version of the daemon that started the current agent process or, if the current
+    process is the daemon, the version of the current process.
+    If the variable is not set (because the agent is < 2.2.53, or the process was not started by the daemon and
+    the process is not the daemon itself) the function returns "0.0.0.0"
+    """
+    if __DAEMON_VERSION_ENV_VARIABLE in os.environ:
+        return FlexibleVersion(os.environ[__DAEMON_VERSION_ENV_VARIABLE])
+    return FlexibleVersion("0.0.0.0")
+
 
 def get_f5_platform():
     """
@@ -116,6 +145,9 @@ def get_distro():
     osinfo[0] = osinfo[0].strip('"').strip(' ').lower()
     return osinfo
 
+COMMAND_ABSENT = "Absent"
+COMMAND_FAILED = "Failed"
+
 
 def get_lis_version():
     """
@@ -140,12 +172,23 @@ def get_lis_version():
         # If the system doesn't have LIS drivers, 'modinfo' will
         # return nothing on stdout, which will cause 'run_command'
         # to return an empty string.
-        return "Absent"
+        return COMMAND_ABSENT
     except Exception:
         # Ignore almost every possible exception because this is in a
         # critical code path. Unfortunately the logger isn't already
         # imported in this module or we'd log this too.
-        return "Failed"
+        return COMMAND_FAILED
+
+def has_logrotate():
+    try:
+        logrotate_version = shellutil.run_command(["logrotate", "--version"]).split("\n")[0]
+        return logrotate_version
+    except shellutil.CommandError:
+        # A non-zero return code means that logrotate isn't present on 
+        # the system; --version shouldn't fail otherwise.
+        return COMMAND_ABSENT
+    except Exception:
+        return COMMAND_FAILED
 
 
 AGENT_NAME = "WALinuxAgent"

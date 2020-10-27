@@ -18,16 +18,17 @@
 #
 
 import os
+import subprocess
+import sys
+
+import setuptools
+from setuptools import find_packages
+from setuptools.command.install import install as _install
+
+from azurelinuxagent.common.osutil import get_osutil
 from azurelinuxagent.common.version import AGENT_NAME, AGENT_VERSION, \
     AGENT_DESCRIPTION, \
     DISTRO_NAME, DISTRO_VERSION, DISTRO_FULL_NAME
-
-from azurelinuxagent.common.osutil import get_osutil
-import setuptools # pylint: disable=C0411
-from setuptools import find_packages # pylint: disable=C0411
-from setuptools.command.install import install as _install # pylint: disable=C0411
-import subprocess # pylint: disable=C0411
-import sys # pylint: disable=C0411
 
 root_dir = os.path.dirname(os.path.abspath(__file__)) # pylint: disable=invalid-name
 os.chdir(root_dir)

@@ -14,11 +14,12 @@
 #
 # Requires Python 2.6+ and Openssl 1.0+
 #
-from azurelinuxagent.common.utils.fileutil import read_file
+import unittest
+from os import path
+
 from azurelinuxagent.common.osutil.nsbsd import NSBSDOSUtil
+from azurelinuxagent.common.utils.fileutil import read_file
 from tests.tools import AgentTestCase, patch
-from os import path # pylint: disable=wrong-import-order
-import unittest # pylint: disable=wrong-import-order
 
 
 class TestNSBSDOSUtil(AgentTestCase):

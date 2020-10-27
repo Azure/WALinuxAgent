@@ -17,11 +17,12 @@
 # Requires Python 2.6+ and Openssl 1.0+
 #
 
+import os
+import signal
+import time
+
 from azurelinuxagent.common.exception import ExtensionErrorCodes, ExtensionOperationError, ExtensionError
 from azurelinuxagent.common.future import ustr
-import os # pylint: disable=C0411
-import signal # pylint: disable=C0411
-import time # pylint: disable=C0411
 
 TELEMETRY_MESSAGE_MAX_LEN = 3200
 

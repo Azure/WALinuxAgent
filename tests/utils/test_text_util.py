@@ -15,16 +15,14 @@
 # Requires Python 2.6+ and Openssl 1.0+
 #
 
-from distutils.version import LooseVersion as Version # pylint: disable=no-name-in-module,import-error
-from tests.tools import AgentTestCase
-
-import hashlib # pylint: disable=wrong-import-order
-import os # pylint: disable=wrong-import-order
-import unittest # pylint: disable=wrong-import-order
+import hashlib
+import os
+import unittest
+from distutils.version import LooseVersion as Version  # pylint: disable=no-name-in-module,import-error
 
 import azurelinuxagent.common.utils.textutil as textutil
-
 from azurelinuxagent.common.future import ustr
+from tests.tools import AgentTestCase
 
 
 class TestTextUtil(AgentTestCase):

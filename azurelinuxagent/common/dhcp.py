@@ -14,23 +14,23 @@
 #
 # Requires Python 2.6+ and Openssl 1.0+
 
+import array
 import os
 import socket
-import array
 import time
+
 import azurelinuxagent.common.logger as logger
+from azurelinuxagent.common.exception import DhcpError
+from azurelinuxagent.common.osutil import get_osutil
+from azurelinuxagent.common.utils.restutil import KNOWN_WIRESERVER_IP
 from azurelinuxagent.common.utils.textutil import hex_dump, hex_dump2, \
     hex_dump3, \
     compare_bytes, str_to_ord, \
     unpack_big_endian, \
     int_to_ip4_addr
-from azurelinuxagent.common.exception import DhcpError
-from azurelinuxagent.common.osutil import get_osutil
-
 
 # the kernel routing table representation of 168.63.129.16
 KNOWN_WIRESERVER_IP_ENTRY = '10813FA8'
-from azurelinuxagent.common.utils.restutil import KNOWN_WIRESERVER_IP # pylint: disable=C0413
 
 
 def get_dhcp_handler():
@@ -100,7 +100,7 @@ class DhcpHandler(object):
             logger.error(
                 "Could not determine whether route exists to {0}: {1}".format(
                     KNOWN_WIRESERVER_IP, e))
-                    
+
         return route_exists
 
     @property
@@ -162,9 +162,9 @@ class DhcpHandler(object):
         Build dhcp request with mac addr
         Configure route to allow dhcp traffic
         Stop dhcp service if necessary
-        """ 
+        """
         # pylint: enable=W0105
-        
+
         logger.info("Send dhcp request")
         mac_addr = self.osutil.get_mac_addr()
 
@@ -389,7 +389,7 @@ def build_dhcp_request(mac_addr, request_broadcast):
         # set broadcast flag to true to request the dhcp server
         # to respond to a boradcast address,
         # this is useful when user dhclient fails.
-        request[0x0A] = 0x80; # pylint: disable=W0301
+        request[0x0A] = 0x80
 
     # fill in ClientHardwareAddress
     for a in range(0, 6): # pylint: disable=C0103
