@@ -172,7 +172,7 @@ class ImageInfoMatcher(object): # pylint: disable=R0903
 class ComputeInfo(DataContract): # pylint: disable=R0902
     __matcher = ImageInfoMatcher(ENDORSED_IMAGE_INFO_MATCHER_JSON)
 
-    def __init__(self, # pylint: disable=R0913,R0914
+    def __init__(self, # pylint: disable=R0913
                  location=None,
                  name=None,
                  offer=None,

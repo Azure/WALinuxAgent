@@ -2087,7 +2087,7 @@ class TestExtension(ExtensionTestCase):
                     self.assertIn("{0}={1}".format(ExtCommandEnvVariable.ExtensionSeqNumber, expected_seq_no),
                                   kwargs['message'])
 
-    def test_correct_exit_code_should_be_set_on_uninstall_cmd_failure(self, *args): # pylint: disable=too-many-locals
+    def test_correct_exit_code_should_be_set_on_uninstall_cmd_failure(self, *args):
         test_file_name = "testfile.sh"
         test_error_file_name = "error.sh"
         handler_json = {

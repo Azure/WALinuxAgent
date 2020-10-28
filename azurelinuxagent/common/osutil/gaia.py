@@ -96,7 +96,6 @@ class GaiaOSUtil(DefaultOSUtil):
             username, (path, thumbprint))
 
     def openssl_to_openssh(self, input_file, output_file):
-        # pylint: disable=too-many-locals
         cryptutil = CryptUtil(conf.get_openssl_cmd())
         ret, out = shellutil.run_get_output(
             conf.get_openssl_cmd() +

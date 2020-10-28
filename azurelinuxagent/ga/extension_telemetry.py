@@ -130,7 +130,7 @@ class ProcessExtensionTelemetry(PeriodicOperation):
 
         return extension_handler_with_event_dirs
 
-    def _capture_extension_events(self, handler_name, handler_event_dir_path, events_list): # pylint: disable=R0914
+    def _capture_extension_events(self, handler_name, handler_event_dir_path, events_list):
         """
         Capture Extension events and add them to the events_list
         :param handler_name: Complete Handler Name. Eg: Microsoft.CPlat.Core.RunCommandLinux

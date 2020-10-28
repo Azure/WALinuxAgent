@@ -432,7 +432,7 @@ class FileSystemCgroupsApiTestCase(_MockedFileSystemTestCase):
             self.assertTrue(any(retrieved_cgroup.path == cgroup.path for retrieved_cgroup in retrieved))
 
     @patch('time.sleep', side_effect=lambda _: mock_sleep())
-    def test_start_extension_command_should_add_the_child_process_to_the_extension_cgroup(self, _): # pylint: disable=too-many-locals
+    def test_start_extension_command_should_add_the_child_process_to_the_extension_cgroup(self, _):
         api = FileSystemCgroupsApi()
         api.create_extension_cgroups_root()
 

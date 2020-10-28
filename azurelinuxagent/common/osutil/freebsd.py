@@ -128,7 +128,7 @@ class FreeBSDOSUtil(DefaultOSUtil):  # pylint: disable=R0904
         :rtype: list(str)
         """
 
-        def _get_netstat_rn_ipv4_routes():  # pylint: disable=too-many-locals
+        def _get_netstat_rn_ipv4_routes():
             """
             Runs `netstat -rn -f inet` and parses its output and returns a list of routes where the key is the column name
             and the value is the value in the column, stripped of leading and trailing whitespace.
