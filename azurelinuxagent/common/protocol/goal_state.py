@@ -361,7 +361,8 @@ class ExtensionsConfig(object):  # pylint: disable=R0903
         name = ext_handler.name
         version = ext_handler.properties.version
 
-        ext_handler_plugin_settings = [x for x in plugin_settings if getattrib(x, "name").lower() == name.lower()]
+        to_lower = lambda str_to_change: str_to_change.lower() if str_to_change is not None else None
+        ext_handler_plugin_settings = [x for x in plugin_settings if to_lower(getattrib(x, "name")) == to_lower(name)]
         if not ext_handler_plugin_settings:
             return
 
