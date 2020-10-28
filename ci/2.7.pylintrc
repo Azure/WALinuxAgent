@@ -13,7 +13,6 @@
 # dangerous-default-value<W0102>: (hi-pri) Used when a mutable value as list or dictionary is detected in a default value for an argument.
 # expression-not-assigned<W0106>: (hi-pri) Used when an expression that is not a function call is assigned to nothing.
 # duplicate-code<R0801>: (hi-pri) Indicates that a set of similar lines has been detected among multiple file. (also disabled globally)
-# fixme<W0511>: Used when a warning note as FIXME or TODO is detected
 # function-redefined<E0102>: (hi-pri) Used when a function / class / method is redefined.
 # global-statement<W0603>: Used when you use the "global" statement to update a global variable.
 # import-error<E0401>: (hi-pri) Used when pylint has been unable to import a module.
@@ -32,7 +31,6 @@
 # redefined-builtin<W0622>: (hi-pri) Used when a variable or function override a built-in.
 # redefined-outer-name<W0621>: (hi-pri) Used when a variable's name hides a name defined in the outer scope.
 # redundant-unittest-assert<W1503>: (hi-pri) The first argument of assertTrue and assertFalse is a condition. If a constant is passed as parameter, that condition will be always true.
-# reimported<W0404>: (hi-pri) Used when a module is reimported multiple times.
 # simplifiable-if-statement<R1703>: Used when an if statement can be replaced with 'bool(test)'.
 # singleton-comparison<C0121>: (hi-pri) Used when an expression is compared to singleton values like True, False or None.
 # super-init-not-called<W0231>: (hi-pri) Used when an ancestor class method has an __init__ method which is not called by a derived class.
@@ -41,7 +39,6 @@
 # too-many-branches<R0912>: Used when a function or method has too many branches, making it hard to follow.
 # too-many-instance-attributes<R0902>: Used when class has too many instance attributes, try to reduce this to get a simpler (and so easier to use) class.
 # too-many-lines<C0302>: (needs review) Used when a module has too many lines, reducing its readability.
-# too-many-locals<R0914>: Used when a function or method has too many local variables.
 # too-many-nested-blocks<R1702>: Used when a function or a method has too many nested blocks. 
 # too-many-public-methods<R0904>: Used when class has too many public methods, try to reduce this to get a simpler (and so easier to use) class.
 # too-many-return-statements<R0911>: Used when a function or method has too many return statement, making it hard to follow.
@@ -55,8 +52,6 @@
 # unused-variable<W0612>: (hi-pri) Used when a variable is defined but not used.
 # useless-else-on-loop<W0120>: (hi-pri) Loops should only have an else clause if they can exit early with a break statement, otherwise the statements under else should be on the same scope as the loop itself.
 # useless-super-delegation<W0235>: Used whenever we can detect that an overridden method is useless, relying on super() delegation to do the same thing as another method from the MRO.
-# wrong-import-order<C0411>: (hi-pri) Used when PEP8 import order is not respected (standard imports first, then third-party libraries, then local imports)
-# wrong-import-position<C0413>: (hi-pri) Used when code and imports are mixed
 
 # The source code suppresses the following error codes specifically for python2.7:
 
@@ -99,7 +94,9 @@ disable=bad-continuation, # Buggy, **REMOVED in pylint-2.6.0**
     trailing-newlines, # Used when there are trailing blank lines in a file.
     trailing-whitespace, # Used when there is whitespace between the end of a line and the newline.
     useless-object-inheritance, # Used when a class inherit from object, which under python3 is implicit (3+ only)
-    duplicate-code # Indicates that a set of similar lines has been detected among multiple file. TODO: this is on our "fix" list, and is thus left last.
+    duplicate-code, # Indicates that a set of similar lines has been detected among multiple file. TODO: this is on our "fix" list, and is thus left last.
+    fixme, # Used when a warning note as FIXME or TODO is detected
+    too-many-locals # Used when a function or method has too many local variables.
 
 
 # This section controls the duplicate-code error.

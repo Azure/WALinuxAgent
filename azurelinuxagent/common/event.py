@@ -473,7 +473,6 @@ class EventLogger(object):
         :param bool log_event: If true, log the collected metric in the agent log
         """
         if log_event:
-            from azurelinuxagent.common.version import AGENT_NAME # pylint: disable=W0404,W0621
             message = "Metric {0}/{1} [{2}] = {3}".format(category, counter, instance, value)
             _log_event(AGENT_NAME, "METRIC", message, 0)
 
@@ -588,7 +587,7 @@ class EventLogger(object):
                       message=err_msg_format.format(count, max_errors_to_report, ', '.join(errors)),
                       is_success=False)
 
-    def collect_events(self): # pylint: disable=R0914
+    def collect_events(self):
         """
         Retuns a list of events that need to be sent to the telemetry pipeline and deletes the corresponding files
         from the events directory.
@@ -686,7 +685,6 @@ def elapsed_milliseconds(utc_start):
 
 
 def report_event(op, is_success=True, message='', log_event=True): # pylint: disable=C0103
-    from azurelinuxagent.common.version import AGENT_NAME, CURRENT_VERSION # pylint: disable=W0404,W0621
     add_event(AGENT_NAME,
               version=str(CURRENT_VERSION),
               is_success=is_success,
@@ -696,7 +694,6 @@ def report_event(op, is_success=True, message='', log_event=True): # pylint: dis
 
 
 def report_periodic(delta, op, is_success=True, message=''): # pylint: disable=C0103
-    from azurelinuxagent.common.version import AGENT_NAME, CURRENT_VERSION # pylint: disable=W0404,W0621
     add_periodic(delta, AGENT_NAME,
                  version=str(CURRENT_VERSION),
                  is_success=is_success,
@@ -715,7 +712,6 @@ def report_metric(category, counter, instance, value, log_event=False, reporter=
     :param EventLogger reporter: The EventLogger instance to which metric events should be sent
     """
     if reporter.event_dir is None:
-        from azurelinuxagent.common.version import AGENT_NAME # pylint: disable=W0404,W0621
         logger.warn("Cannot report metric event -- Event reporter is not initialized.")
         message = "Metric {0}/{1} [{2}] = {3}".format(category, counter, instance, value)
         _log_event(AGENT_NAME, "METRIC", message, 0)

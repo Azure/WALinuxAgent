@@ -1149,7 +1149,6 @@ class TestExtension(ExtensionTestCase):
         conf.get_enable_overprovisioning = Mock(return_value=True)
 
         # Test when is_on_hold returns False
-        from azurelinuxagent.common.protocol.wire import InVMArtifactsProfile # pylint: disable=redefined-outer-name,reimported
         mock_in_vm_artifacts_profile = InVMArtifactsProfile(MagicMock())
         mock_in_vm_artifacts_profile.is_on_hold = Mock(return_value=False)
         protocol.get_artifacts_profile = Mock(return_value=mock_in_vm_artifacts_profile)
@@ -2088,7 +2087,7 @@ class TestExtension(ExtensionTestCase):
                     self.assertIn("{0}={1}".format(ExtCommandEnvVariable.ExtensionSeqNumber, expected_seq_no),
                                   kwargs['message'])
 
-    def test_correct_exit_code_should_be_set_on_uninstall_cmd_failure(self, *args): # pylint: disable=too-many-locals
+    def test_correct_exit_code_should_be_set_on_uninstall_cmd_failure(self, *args):
         test_file_name = "testfile.sh"
         test_error_file_name = "error.sh"
         handler_json = {

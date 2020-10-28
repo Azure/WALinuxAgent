@@ -49,9 +49,9 @@ from azurelinuxagent.common.osutil import get_osutil
 from azurelinuxagent.common.protocol.util import get_protocol_util
 from azurelinuxagent.common.protocol.hostplugin import HostPluginProtocol
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
-from azurelinuxagent.common.version import AGENT_NAME, AGENT_VERSION, AGENT_DIR_PATTERN, CURRENT_AGENT, \
-    CURRENT_VERSION, DISTRO_NAME, DISTRO_VERSION, is_current_agent_installed, get_lis_version, PY_VERSION_MAJOR, \
-    PY_VERSION_MINOR, PY_VERSION_MICRO
+from azurelinuxagent.common.version import AGENT_NAME, AGENT_VERSION, AGENT_DIR_PATTERN, CURRENT_AGENT,\
+    CURRENT_VERSION, DISTRO_NAME, DISTRO_VERSION, is_current_agent_installed, get_lis_version, \
+    has_logrotate, PY_VERSION_MAJOR, PY_VERSION_MINOR, PY_VERSION_MICRO
 from azurelinuxagent.ga.collect_logs import get_collect_logs_handler, is_log_collection_allowed
 from azurelinuxagent.ga.env import get_env_handler
 from azurelinuxagent.ga.extension_telemetry import get_extension_telemetry_handler
@@ -244,7 +244,7 @@ class UpdateHandler(object):  # pylint: disable=R0902
         self.child_process = None
         return
 
-    def run(self, debug=False):  # pylint: disable=R0912,R0914
+    def run(self, debug=False):  # pylint: disable=R0912
         """
         This is the main loop which watches for agent and extension updates.
         """
@@ -263,9 +263,20 @@ class UpdateHandler(object):  # pylint: disable=R0902
             initialize_event_logger_vminfo_common_parameters(protocol)
 
             # Log OS-specific info.
-            os_info_msg = u"Distro: {0}-{1}; OSUtil: {2}; AgentService: {3}; Python: {4}.{5}.{6}; systemd: {7}; LISDrivers: {8}".format(
-                DISTRO_NAME, DISTRO_VERSION, type(self.osutil).__name__, self.osutil.service_name, PY_VERSION_MAJOR,
-                PY_VERSION_MINOR, PY_VERSION_MICRO, CGroupsApi.is_systemd(), get_lis_version())
+            os_info_msg = u"Distro: {dist_name}-{dist_ver}; "\
+                u"OSUtil: {util_name}; AgentService: {service_name}; "\
+                u"Python: {py_major}.{py_minor}.{py_micro}; "\
+                u"systemd: {systemd}; "\
+                u"LISDrivers: {lis_ver}; "\
+                u"logrotate: {has_logrotate};".format(
+                    dist_name=DISTRO_NAME, dist_ver=DISTRO_VERSION,
+                    util_name=type(self.osutil).__name__,
+                    service_name=self.osutil.service_name,
+                    py_major=PY_VERSION_MAJOR, py_minor=PY_VERSION_MINOR,
+                    py_micro=PY_VERSION_MICRO, systemd=CGroupsApi.is_systemd(),
+                    lis_ver=get_lis_version(), has_logrotate=has_logrotate()
+            )
+
             logger.info(os_info_msg)
             add_event(AGENT_NAME, op=WALAEventOperation.OSInfo, message=os_info_msg)
 

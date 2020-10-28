@@ -51,7 +51,7 @@ class FreeBSDResourceDiskHandler(ResourceDiskHandler):
                 dic[geom_name] = line[8:]
         return dic
 
-    def mount_resource_disk(self, mount_point): # pylint: disable=R0912,R0914
+    def mount_resource_disk(self, mount_point): # pylint: disable=R0912
         fs = self.fs # pylint: disable=C0103
         if fs != 'ufs':
             raise ResourceDiskError(

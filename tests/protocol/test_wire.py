@@ -25,6 +25,7 @@ import time
 import unittest
 import uuid
 
+from azurelinuxagent.common.exception import IncompleteGoalStateError
 from azurelinuxagent.common.exception import InvalidContainerError, ResourceGoneError, ProtocolError, \
     ExtensionDownloadError, HttpError
 from azurelinuxagent.common.protocol.goal_state import ExtensionsConfig, GoalState
@@ -35,7 +36,6 @@ from azurelinuxagent.common.protocol.wire import WireProtocol, WireClient, \
 from azurelinuxagent.common.telemetryevent import TelemetryEventList, GuestAgentExtensionEventsSchema, \
     TelemetryEventParam, TelemetryEvent
 from azurelinuxagent.common.utils import restutil
-from azurelinuxagent.common.exception import IncompleteGoalStateError
 from azurelinuxagent.common.version import CURRENT_VERSION, DISTRO_NAME, DISTRO_VERSION
 from tests.ga.test_monitor import random_generator
 from tests.protocol import mockwiredata
@@ -163,7 +163,6 @@ class TestWireProtocol(AgentTestCase):
         self.assertEqual(1, patch_report.call_count)
 
     def test_call_storage_kwargs(self, *args): # pylint: disable=unused-argument
-        from azurelinuxagent.common.utils import restutil # pylint: disable=redefined-outer-name,reimported
         with patch.object(restutil, 'http_get') as http_patch:
             http_req = restutil.http_get
             url = testurl
@@ -1087,7 +1086,7 @@ class TryUpdateGoalStateTestCase(HttpRequestPredicates, AgentTestCase):
 
             self.assertFalse(protocol.client.try_update_goal_state(), "try_update_goal_state should have failed")
 
-    def test_it_should_log_errors_only_when_the_error_state_changes(self): # pylint: disable=too-many-locals
+    def test_it_should_log_errors_only_when_the_error_state_changes(self):
         with mock_wire_protocol(mockwiredata.DATA_FILE) as protocol:
             def http_get_handler(url, *_, **__):
                 if self.is_goal_state_request(url):

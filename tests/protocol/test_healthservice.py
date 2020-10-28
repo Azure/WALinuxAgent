@@ -29,7 +29,7 @@ class TestHealthService(AgentTestCase):
         is_healthy = not restutil.request_failed_at_hostplugin(response)
         self.assertEqual(expected_healthy, is_healthy)
 
-    def assert_observation(self, call_args, name, is_healthy, value, description): # pylint: disable=too-many-locals,too-many-arguments
+    def assert_observation(self, call_args, name, is_healthy, value, description): # pylint: disable=too-many-arguments
         endpoint = call_args[0][0]
         content = call_args[0][1]
 

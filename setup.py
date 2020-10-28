@@ -18,16 +18,17 @@
 #
 
 import os
+import subprocess
+import sys
+
+import setuptools
+from setuptools import find_packages
+from setuptools.command.install import install as _install
+
+from azurelinuxagent.common.osutil import get_osutil
 from azurelinuxagent.common.version import AGENT_NAME, AGENT_VERSION, \
     AGENT_DESCRIPTION, \
     DISTRO_NAME, DISTRO_VERSION, DISTRO_FULL_NAME
-
-from azurelinuxagent.common.osutil import get_osutil
-import setuptools # pylint: disable=C0411
-from setuptools import find_packages # pylint: disable=C0411
-from setuptools.command.install import install as _install # pylint: disable=C0411
-import subprocess # pylint: disable=C0411
-import sys # pylint: disable=C0411
 
 root_dir = os.path.dirname(os.path.abspath(__file__)) # pylint: disable=invalid-name
 os.chdir(root_dir)
@@ -94,7 +95,7 @@ def get_data_files(name, version, fullname): # pylint: disable=R0912
             # redhat7.0+ use systemd
             set_systemd_files(data_files, dest="/usr/lib/systemd/system")
             if version.startswith("7.1"):
-                # TODO this is a mitigation to systemctl bug on 7.1 # pylint: disable=W0511
+                # TODO this is a mitigation to systemctl bug on 7.1
                 set_sysv_files(data_files)
     elif name == 'arch':
         set_bin_files(data_files, dest="/usr/bin")
@@ -170,7 +171,7 @@ def get_data_files(name, version, fullname): # pylint: disable=R0912
         set_udev_files(data_files)
         set_systemd_files(data_files, dest="/usr/lib/systemd/system")
         if version.startswith("7.1"):
-            # TODO this is a mitigation to systemctl bug on 7.1 # pylint: disable=W0511
+            # TODO this is a mitigation to systemctl bug on 7.1
             set_sysv_files(data_files)
     elif name == 'openwrt':
         set_bin_files(data_files)

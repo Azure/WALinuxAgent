@@ -145,7 +145,7 @@ class Logger(object):
         for appender in self.appenders:
             appender.write(level, log_item)
             #
-            # TODO: we should actually call # pylint: disable=W0511
+            # TODO: we should actually call
             #
             #     write_log(appender)
             #
@@ -158,7 +158,7 @@ class Logger(object):
             for appender in self.logger.appenders:
                 appender.write(level, log_item)
                 #
-                # TODO: call write_log instead (see comment above) # pylint: disable=W0511
+                # TODO: call write_log instead (see comment above)
                 #
 
     def add_appender(self, appender_type, level, path):

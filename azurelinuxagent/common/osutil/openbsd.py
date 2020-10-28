@@ -146,7 +146,7 @@ class OpenBSDOSUtil(DefaultOSUtil): # pylint: disable=R0904
     def stop_dhcp_service(self):
         pass
 
-    def get_dhcp_lease_endpoint(self): # pylint: disable=R0912,R0914
+    def get_dhcp_lease_endpoint(self): # pylint: disable=R0912
         """
         OpenBSD has a sligthly different lease file format.
         """
