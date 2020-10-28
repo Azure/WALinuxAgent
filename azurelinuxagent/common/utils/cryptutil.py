@@ -113,14 +113,11 @@ class CryptUtil(object):
             
 
     def crt_to_ssh(self, input_file, output_file):
-        with open(output_file, "a") as file_out:
-            keygen_proc = subprocess.Popen(["ssh-keygen", "-i", "-m", "PKCS8", "-f", input_file])
-            stdout, _ = keygen_proc.communicate()
+        with open(output_file, "ab") as file_out:
+            cmd = ["ssh-keygen", "-i", "-m", "PKCS8", "-f", input_file]
+            keygen_proc = subprocess.Popen(cmd, stdout=file_out)
+            keygen_proc.wait()
 
-            if keygen_proc.returncode != 0:
-                return
-
-            file_out.write(stdout)
 
 
     def asn1_to_ssh(self, pubkey):
