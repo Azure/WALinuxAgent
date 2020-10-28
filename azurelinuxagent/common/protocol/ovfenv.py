@@ -55,7 +55,7 @@ class OvfEnv(object): # pylint: disable=R0903,R0902
         self.provision_guest_agent = None
         self.parse(xml_text)
 
-    def parse(self, xml_text): # pylint: disable=R0914
+    def parse(self, xml_text):
         """
         Parse xml tree, retreiving user and ssh key information.
         Return self.

@@ -244,7 +244,7 @@ class UpdateHandler(object):  # pylint: disable=R0902
         self.child_process = None
         return
 
-    def run(self, debug=False):  # pylint: disable=R0912,R0914
+    def run(self, debug=False):  # pylint: disable=R0912
         """
         This is the main loop which watches for agent and extension updates.
         """

@@ -315,7 +315,7 @@ class TestImds(AgentTestCase):
                                 expected_response='')
 
     def test_field_validation(self):
-        # TODO: compute fields (#1249) # pylint: disable=fixme
+        # TODO: compute fields (#1249)
 
         self._assert_field('network', 'interface', 'ipv4', 'ipAddress', 'privateIpAddress')
         self._assert_field('network', 'interface', 'ipv4', 'ipAddress')

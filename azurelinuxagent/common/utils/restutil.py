@@ -279,7 +279,7 @@ def redact_sas_tokens_in_urls(url):
     return SAS_TOKEN_RETRIEVAL_REGEX.sub(r"\1" + REDACTED_TEXT + r"\3", url)
 
 
-def _http_request(method, host, rel_uri, port=None, data=None, secure=False, # pylint: disable=R0913,R0914
+def _http_request(method, host, rel_uri, port=None, data=None, secure=False, # pylint: disable=R0913
                   headers=None, proxy_host=None, proxy_port=None, redact_data=False):
 
     headers = {} if headers is None else headers
@@ -327,7 +327,7 @@ def _http_request(method, host, rel_uri, port=None, data=None, secure=False, # p
     return conn.getresponse()
 
 
-def http_request(method, # pylint: disable=R0913,R0912,R0914,W0102
+def http_request(method, # pylint: disable=R0913,R0912,W0102
                  url, data, headers=None,
                  use_proxy=False,
                  max_retry=DEFAULT_RETRIES,

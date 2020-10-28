@@ -392,7 +392,7 @@ class TestExtensionTelemetryHandler(AgentTestCase, HttpRequestPredicates):
                 pattern = r'Skipping file:\s*{0}/(?P<name>.+?)/{1}.+'.format(conf.get_ext_log_dir(), EVENTS_DIRECTORY)
                 self._assert_event_reported(mock_event, handler_name_with_count, pattern)
 
-    def test_it_should_map_extension_event_json_correctly_to_telemetry_event(self): # pylint: disable=too-many-locals
+    def test_it_should_map_extension_event_json_correctly_to_telemetry_event(self):
 
         # EventName maps to HandlerName + '-' + Version from event file
         expected_mapping = {

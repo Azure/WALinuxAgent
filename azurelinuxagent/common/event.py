@@ -587,7 +587,7 @@ class EventLogger(object):
                       message=err_msg_format.format(count, max_errors_to_report, ', '.join(errors)),
                       is_success=False)
 
-    def collect_events(self): # pylint: disable=R0914
+    def collect_events(self):
         """
         Retuns a list of events that need to be sent to the telemetry pipeline and deletes the corresponding files
         from the events directory.

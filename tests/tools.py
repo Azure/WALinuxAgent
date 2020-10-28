@@ -305,7 +305,7 @@ class AgentTestCase(unittest.TestCase):
             if k not in first:
                 fail("'{0}' is missing from first".format(k))
 
-    def emulate_assertListEqual(self, seq1, seq2, msg=None, seq_type=None): # pylint: disable=too-many-locals,too-many-branches,invalid-name
+    def emulate_assertListEqual(self, seq1, seq2, msg=None, seq_type=None): # pylint: disable=too-many-branches,invalid-name
         """An equality assertion for ordered sequences (like lists and tuples).
 
         For the purposes of this function, a valid ordered sequence type is one

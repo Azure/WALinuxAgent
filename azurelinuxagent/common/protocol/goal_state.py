@@ -186,7 +186,7 @@ class SharedConfig(object):  # pylint: disable=R0903
 
 # too-few-public-methods<R0903> Disabled: This is just a data object that does not need any public methods
 class Certificates(object):  # pylint: disable=R0903
-    def __init__(self, xml_text): # pylint: disable=R0912,R0914
+    def __init__(self, xml_text): # pylint: disable=R0912
         self.cert_list = CertList()
 
         # Save the certificates
@@ -294,8 +294,7 @@ class Certificates(object):  # pylint: disable=R0903
 
 # too-few-public-methods<R0903> Disabled: This is just a data object that does not need any public methods
 class ExtensionsConfig(object):  # pylint: disable=R0903
-    # too-many-locals<R0914> Disabled: The number of local variables is OK
-    def __init__(self, xml_text):  # pylint: disable=R0914
+    def __init__(self, xml_text):
         self.xml_text = xml_text
         self.ext_handlers = ExtHandlerList()
         self.vmagent_manifests = VMAgentManifestList()
@@ -355,7 +354,7 @@ class ExtensionsConfig(object):  # pylint: disable=R0903
         return ext_handler
 
     @staticmethod
-    def _parse_plugin_settings(ext_handler, plugin_settings): # pylint: disable=R0914
+    def _parse_plugin_settings(ext_handler, plugin_settings):
         if plugin_settings is None:
             return
 

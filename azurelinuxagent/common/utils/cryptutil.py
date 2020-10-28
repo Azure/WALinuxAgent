@@ -97,7 +97,7 @@ class CryptUtil(object):
         lines = [x for x in lines if not x.startswith("----")]
         base64_encoded = "".join(lines)
         try:
-            #TODO remove pyasn1 dependency # pylint: disable=W0511
+            #TODO remove pyasn1 dependency
             from pyasn1.codec.der import decoder as der_decoder
             der_encoded = base64.b64decode(base64_encoded)
             der_encoded = der_decoder.decode(der_encoded)[0][1] # pylint: disable=unsubscriptable-object
