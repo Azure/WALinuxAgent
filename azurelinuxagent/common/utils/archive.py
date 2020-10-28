@@ -36,39 +36,39 @@ The timestamp is an ISO8601 formatted value.
 """
 # pylint: enable=W0105
 
-ARCHIVE_DIRECTORY_NAME = 'history'
+_ARCHIVE_DIRECTORY_NAME = 'history'
 
-MAX_ARCHIVED_STATES = 50
+_MAX_ARCHIVED_STATES = 50
 
-CACHE_PATTERNS = [
+_CACHE_PATTERNS = [
     re.compile(r"^(.*)\.(\d+)\.(agentsManifest)$", re.IGNORECASE),
     re.compile(r"^(.*)\.(\d+)\.(manifest\.xml)$", re.IGNORECASE),
     re.compile(r"^(.*)\.(\d+)\.(xml)$", re.IGNORECASE)
 ]
 
-GOAL_STATE_PATTERN = re.compile(r"^(.*)GoalState\.(\d+)\.xml$", re.IGNORECASE)
+_GOAL_STATE_PATTERN = re.compile(r"^(.*)GoalState\.(\d+)\.xml$", re.IGNORECASE)
 
 # 2018-04-06T08:21:37.142697
 # 2018-04-06T08:21:37.142697.zip
-ARCHIVE_PATTERNS_DIRECTORY = re.compile(r"^\d{4}\-\d{2}\-\d{2}T\d{2}:\d{2}:\d{2}\.\d+$")
-ARCHIVE_PATTERNS_ZIP = re.compile(r"^\d{4}\-\d{2}\-\d{2}T\d{2}:\d{2}:\d{2}\.\d+\.zip$")
+_ARCHIVE_PATTERNS_DIRECTORY = re.compile(r"^\d{4}\-\d{2}\-\d{2}T\d{2}:\d{2}:\d{2}\.\d+$")
+_ARCHIVE_PATTERNS_ZIP = re.compile(r"^\d{4}\-\d{2}\-\d{2}T\d{2}:\d{2}:\d{2}\.\d+\.zip$")
 
 
 class StateFlusher(object):
     def __init__(self, lib_dir):
         self._source = lib_dir
 
-        directory = os.path.join(self._source, ARCHIVE_DIRECTORY_NAME)
+        directory = os.path.join(self._source, _ARCHIVE_DIRECTORY_NAME)
         if not os.path.exists(directory):
             try:
                 fileutil.mkdir(directory)
-            except OSError as e:  # pylint: disable=C0103
-                if e.errno != errno.EEXIST:
-                    logger.error("{0} : {1}", self._source, e.strerror)
+            except OSError as exception:
+                if exception.errno != errno.EEXIST:
+                    logger.error("{0} : {1}", self._source, exception.strerror)
 
     def flush(self):
         files = self._get_files_to_archive()
-        if len(files) == 0:  # pylint: disable=len-as-condition
+        if not files:
             return
 
         goal_state_timestamp = self._get_latest_timestamp(files)
@@ -78,20 +78,20 @@ class StateFlusher(object):
             self._purge(files)
 
     def history_dir(self, timestamp):
-        return os.path.join(self._source, ARCHIVE_DIRECTORY_NAME, timestamp.isoformat())
+        return os.path.join(self._source, _ARCHIVE_DIRECTORY_NAME, timestamp.isoformat())
 
     @staticmethod
     def _get_latest_timestamp(files):
         # Get the most recently modified GoalState.*.xml (if there are more than one) and use that timestamp for the archive name.
         latest_timestamp_ms = None
         for current_file in files:
-            match = GOAL_STATE_PATTERN.match(current_file)
+            match = _GOAL_STATE_PATTERN.match(current_file)
             if not match:
                 continue
 
-            creation_time_ms = os.path.getmtime(current_file)
-            if not latest_timestamp_ms or latest_timestamp_ms < creation_time_ms:
-                latest_timestamp_ms = creation_time_ms
+            modification_time_ms = os.path.getmtime(current_file)
+            if not latest_timestamp_ms or latest_timestamp_ms < modification_time_ms:
+                latest_timestamp_ms = modification_time_ms
 
         return datetime.utcfromtimestamp(latest_timestamp_ms)
 
@@ -99,7 +99,7 @@ class StateFlusher(object):
         files = []
         for current_file in os.listdir(self._source):
             full_path = os.path.join(self._source, current_file)
-            for pattern in CACHE_PATTERNS:
+            for pattern in _CACHE_PATTERNS:
                 match = pattern.match(current_file)
                 if match is not None:
                     files.append(full_path)
@@ -122,8 +122,8 @@ class StateFlusher(object):
         try:
             fileutil.mkdir(directory, mode=0o700)
             return True
-        except IOError as e:  # pylint: disable=C0103
-            logger.error("{0} : {1}".format(directory, e.strerror))
+        except IOError as exception:
+            logger.error("{0} : {1}".format(directory, exception.strerror))
             return False
 
 
@@ -166,17 +166,11 @@ class State(object):
 
 
 class StateZip(State):
-    def __init__(self, path, timestamp):  # pylint: disable=W0235
-        super(StateZip, self).__init__(path, timestamp)
-
     def delete(self):
         os.remove(self._path)
 
 
 class StateDirectory(State):
-    def __init__(self, path, timestamp):  # pylint: disable=W0235
-        super(StateDirectory, self).__init__(path, timestamp)
-
     def delete(self):
         shutil.rmtree(self._path)
 
@@ -197,14 +191,14 @@ class StateDirectory(State):
 
 class StateArchiver(object):
     def __init__(self, lib_dir):
-        self._source = os.path.join(lib_dir, ARCHIVE_DIRECTORY_NAME)
+        self._source = os.path.join(lib_dir, _ARCHIVE_DIRECTORY_NAME)
 
         if not os.path.isdir(self._source):
             try:
                 fileutil.mkdir(self._source, mode=0o700)
-            except IOError as e:  # pylint: disable=C0103
-                if e.errno != errno.EEXIST:
-                    logger.error("{0} : {1}", self._source, e.strerror)
+            except IOError as exception:
+                if exception.errno != errno.EEXIST:
+                    logger.error("{0} : {1}", self._source, exception.strerror)
 
     def purge(self):
         """
@@ -215,7 +209,7 @@ class StateArchiver(object):
         states = self._get_archive_states()
         states.sort(reverse=True)
 
-        for state in states[MAX_ARCHIVED_STATES:]:
+        for state in states[_MAX_ARCHIVED_STATES:]:
             state.delete()
 
     def archive(self):
@@ -227,11 +221,11 @@ class StateArchiver(object):
         states = []
         for current_file in os.listdir(self._source):
             full_path = os.path.join(self._source, current_file)
-            match = ARCHIVE_PATTERNS_DIRECTORY.match(current_file)
+            match = _ARCHIVE_PATTERNS_DIRECTORY.match(current_file)
             if match is not None:
                 states.append(StateDirectory(full_path, match.group(0)))
 
-            match = ARCHIVE_PATTERNS_ZIP.match(current_file)
+            match = _ARCHIVE_PATTERNS_ZIP.match(current_file)
             if match is not None:
                 states.append(StateZip(full_path, match.group(0)))
 

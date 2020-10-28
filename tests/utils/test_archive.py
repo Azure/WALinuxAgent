@@ -9,7 +9,7 @@ import tempfile
 
 import azurelinuxagent.common.logger as logger
 from azurelinuxagent.common.utils import fileutil
-from azurelinuxagent.common.utils.archive import StateFlusher, StateArchiver, MAX_ARCHIVED_STATES
+from azurelinuxagent.common.utils.archive import StateFlusher, StateArchiver, _MAX_ARCHIVED_STATES
 from tests.tools import AgentTestCase
 
 debug = False # pylint: disable=invalid-name
@@ -126,7 +126,7 @@ class TestArchive(AgentTestCase):
         directories are properly deleted from the disk.
         """
         count = 6
-        total = MAX_ARCHIVED_STATES + count
+        total = _MAX_ARCHIVED_STATES + count
 
         start = datetime.now()
         timestamps = []
@@ -148,11 +148,11 @@ class TestArchive(AgentTestCase):
         test_subject.purge()
 
         archived_entries = os.listdir(self.history_dir)
-        self.assertEqual(MAX_ARCHIVED_STATES, len(archived_entries))
+        self.assertEqual(_MAX_ARCHIVED_STATES, len(archived_entries))
 
         archived_entries.sort()
 
-        for i in range(0, MAX_ARCHIVED_STATES):
+        for i in range(0, _MAX_ARCHIVED_STATES):
             ts = timestamps[i + count].isoformat() # pylint: disable=invalid-name
             if i % 2 == 0:
                 fn = ts # pylint: disable=invalid-name
