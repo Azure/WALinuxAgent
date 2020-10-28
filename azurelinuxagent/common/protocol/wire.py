@@ -22,7 +22,6 @@ import random
 import time
 import traceback
 import xml.sax.saxutils as saxutils
-from datetime import datetime  # pylint: disable=ungrouped-imports
 
 import azurelinuxagent.common.conf as conf
 import azurelinuxagent.common.logger as logger
@@ -720,9 +719,8 @@ class WireClient(object): # pylint: disable=R0904
                 new_goal_state = GoalState.fetch_full_goal_state_if_incarnation_different_than(self, self._goal_state.incarnation)
 
             if new_goal_state is not None:
-                previous_goal_state_fetch_timestamp = self._goal_state.fetch_timestamp if self._goal_state else datetime.utcnow()
                 self._goal_state = new_goal_state
-                self._save_goal_state(previous_goal_state_fetch_timestamp)
+                self._save_goal_state()
                 self._update_host_plugin(new_goal_state.container_id, new_goal_state.role_config_name)
 
         except Exception as exception:
@@ -757,9 +755,9 @@ class WireClient(object): # pylint: disable=R0904
             self._host_plugin.update_container_id(container_id)
             self._host_plugin.update_role_config_name(role_config_name)
 
-    def _save_goal_state(self, previous_goal_state_fetch_timestamp):
+    def _save_goal_state(self):
         try:
-            self.goal_state_flusher.flush(previous_goal_state_fetch_timestamp)
+            self.goal_state_flusher.flush()
         except Exception as e: # pylint: disable=C0103
             logger.warn("Failed to save the previous goal state to the history folder: {0}", ustr(e))
 

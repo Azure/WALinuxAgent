@@ -20,19 +20,18 @@ import json
 import os
 import re
 import time
-from datetime import datetime
 
 import azurelinuxagent.common.conf as conf
 import azurelinuxagent.common.logger as logger
 from azurelinuxagent.common.AgentGlobals import AgentGlobals
 from azurelinuxagent.common.datacontract import set_properties
 from azurelinuxagent.common.event import add_event, WALAEventOperation
+from azurelinuxagent.common.exception import IncompleteGoalStateError
 from azurelinuxagent.common.exception import ProtocolError
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.protocol.restapi import Cert, CertList, Extension, ExtHandler, ExtHandlerList, \
     ExtHandlerVersionUri, RemoteAccessUser, RemoteAccessUsersList, \
     VMAgentManifest, VMAgentManifestList, VMAgentManifestUri
-from azurelinuxagent.common.exception import IncompleteGoalStateError
 from azurelinuxagent.common.utils import fileutil
 from azurelinuxagent.common.utils.cryptutil import CryptUtil
 from azurelinuxagent.common.utils.textutil import parse_doc, findall, find, findtext, getattrib, gettext
@@ -142,7 +141,6 @@ class GoalState(object):  # pylint: disable=R0902
             raise ProtocolError(msg="Error fetching goal state", inner=exception)
         finally:
             logger.info('Fetch goal state completed')
-            self.fetch_timestamp = datetime.utcnow()
 
     @staticmethod
     def fetch_goal_state(wire_client):

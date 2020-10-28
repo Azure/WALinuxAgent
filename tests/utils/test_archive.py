@@ -51,6 +51,7 @@ class TestArchive(AgentTestCase):
         under the history folder that is timestamped.
         """
         temp_files = [
+            'GoalState.0.xml',
             'Prod.0.manifest.xml',
             'Prod.0.agentsManifest',
             'Microsoft.Azure.Extensions.CustomScript.0.xml'
@@ -60,7 +61,7 @@ class TestArchive(AgentTestCase):
             self._write_file(f)
 
         test_subject = StateFlusher(self.tmp_dir)
-        test_subject.flush(datetime.utcnow())
+        test_subject.flush()
 
         self.assertTrue(os.path.exists(self.history_dir))
         self.assertTrue(os.path.isdir(self.history_dir))
@@ -86,6 +87,7 @@ class TestArchive(AgentTestCase):
           2. Deleting the timestamped directory
         """
         temp_files = [
+            'GoalState.0.xml',
             'Prod.0.manifest.xml',
             'Prod.0.agentsManifest',
             'Microsoft.Azure.Extensions.CustomScript.0.xml'
@@ -95,7 +97,7 @@ class TestArchive(AgentTestCase):
             self._write_file(f)
 
         flusher = StateFlusher(self.tmp_dir)
-        flusher.flush(datetime.utcnow())
+        flusher.flush()
 
         test_subject = StateArchiver(self.tmp_dir)
         test_subject.archive()
@@ -157,58 +159,6 @@ class TestArchive(AgentTestCase):
             else:
                 fn = "{0}.zip".format(ts) # pylint: disable=invalid-name
             self.assertTrue(fn in archived_entries, "'{0}' is not in the list of unpurged entires".format(fn))
-
-    def test_archive03(self):
-        """
-        If the StateFlusher has to flush the same file, it should
-        overwrite the existing one.
-        """
-        temp_files = [
-            'Prod.0.manifest.xml',
-            'Prod.0.agentsManifest',
-            'Microsoft.Azure.Extensions.CustomScript.0.xml'
-        ]
-
-        def _write_goal_state_files(temp_files, content=None):
-            for f in temp_files: # pylint: disable=invalid-name
-                self._write_file(f, content)
-
-        def _check_history_files(timestamp_dir, files, content=None):
-            for f in files: # pylint: disable=invalid-name
-                history_path = os.path.join(self.history_dir, timestamp_dir, f)
-                msg = "expected the temp file {0} to exist".format(history_path)
-                self.assertTrue(os.path.exists(history_path), msg)
-                expected_content = f if content is None else content
-                actual_content = fileutil.read_file(history_path)
-                self.assertEqual(expected_content, actual_content)
-
-        timestamp = datetime.utcnow()
-
-        _write_goal_state_files(temp_files)
-        test_subject = StateFlusher(self.tmp_dir)
-        test_subject.flush(timestamp)
-
-        # Ensure history directory exists, has proper timestamped-based name,
-        self.assertTrue(os.path.exists(self.history_dir))
-        self.assertTrue(os.path.isdir(self.history_dir))
-
-        timestamp_dirs = os.listdir(self.history_dir)
-        self.assertEqual(1, len(timestamp_dirs))
-
-        self.assertIsIso8601(timestamp_dirs[0])
-        ts = self.parse_isoformat(timestamp_dirs[0]) # pylint: disable=invalid-name
-        self.assertDateTimeCloseTo(ts, datetime.utcnow(), timedelta(seconds=30))
-
-        # Ensure saved files contain the right content
-        _check_history_files(timestamp_dirs[0], temp_files)
-
-        # re-write all of the same files with different content, and flush again.
-        # .flush() should overwrite the existing ones
-        _write_goal_state_files(temp_files, "--this-has-been-changed--")
-        test_subject.flush(timestamp)
-
-        # The contents of the saved files were overwritten as a result of the flush.
-        _check_history_files(timestamp_dirs[0], temp_files, "--this-has-been-changed--")
 
     def test_archive04(self):
         """

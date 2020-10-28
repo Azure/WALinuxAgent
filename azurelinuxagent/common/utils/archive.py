@@ -5,12 +5,13 @@ import os
 import re
 import shutil
 import zipfile
-
-from azurelinuxagent.common.utils import fileutil
+from datetime import datetime
 
 import azurelinuxagent.common.logger as logger
+from azurelinuxagent.common.utils import fileutil
 
 # pylint: disable=W0105
+
 """
 archive.py
 
@@ -40,71 +41,89 @@ ARCHIVE_DIRECTORY_NAME = 'history'
 MAX_ARCHIVED_STATES = 50
 
 CACHE_PATTERNS = [
-    re.compile("^(.*)\.(\d+)\.(agentsManifest)$", re.IGNORECASE),  # pylint: disable=W1401
-    re.compile("^(.*)\.(\d+)\.(manifest\.xml)$", re.IGNORECASE),  # pylint: disable=W1401
-    re.compile("^(.*)\.(\d+)\.(xml)$", re.IGNORECASE)  # pylint: disable=W1401
+    re.compile(r"^(.*)\.(\d+)\.(agentsManifest)$", re.IGNORECASE),
+    re.compile(r"^(.*)\.(\d+)\.(manifest\.xml)$", re.IGNORECASE),
+    re.compile(r"^(.*)\.(\d+)\.(xml)$", re.IGNORECASE)
 ]
+
+GOAL_STATE_PATTERN = re.compile(r"^(.*)GoalState\.(\d+)\.xml$", re.IGNORECASE)
 
 # 2018-04-06T08:21:37.142697
 # 2018-04-06T08:21:37.142697.zip
-ARCHIVE_PATTERNS_DIRECTORY = re.compile('^\d{4}\-\d{2}\-\d{2}T\d{2}:\d{2}:\d{2}\.\d+$')  # pylint: disable=W1401
-ARCHIVE_PATTERNS_ZIP = re.compile('^\d{4}\-\d{2}\-\d{2}T\d{2}:\d{2}:\d{2}\.\d+\.zip$')  # pylint: disable=W1401
+ARCHIVE_PATTERNS_DIRECTORY = re.compile(r"^\d{4}\-\d{2}\-\d{2}T\d{2}:\d{2}:\d{2}\.\d+$")
+ARCHIVE_PATTERNS_ZIP = re.compile(r"^\d{4}\-\d{2}\-\d{2}T\d{2}:\d{2}:\d{2}\.\d+\.zip$")
 
 
 class StateFlusher(object):
     def __init__(self, lib_dir):
         self._source = lib_dir
 
-        d = os.path.join(self._source, ARCHIVE_DIRECTORY_NAME)  # pylint: disable=C0103
-        if not os.path.exists(d):
+        directory = os.path.join(self._source, ARCHIVE_DIRECTORY_NAME)
+        if not os.path.exists(directory):
             try:
-                fileutil.mkdir(d)
+                fileutil.mkdir(directory)
             except OSError as e:  # pylint: disable=C0103
                 if e.errno != errno.EEXIST:
                     logger.error("{0} : {1}", self._source, e.strerror)
 
-    def flush(self, timestamp):
+    def flush(self):
         files = self._get_files_to_archive()
         if len(files) == 0:  # pylint: disable=len-as-condition
             return
 
-        if self._mkdir(timestamp):
-            self._archive(files, timestamp)
+        goal_state_timestamp = self._get_latest_timestamp(files)
+        if goal_state_timestamp and self._mkdir(goal_state_timestamp):
+            self._archive(files, goal_state_timestamp)
         else:
             self._purge(files)
 
     def history_dir(self, timestamp):
         return os.path.join(self._source, ARCHIVE_DIRECTORY_NAME, timestamp.isoformat())
 
+    @staticmethod
+    def _get_latest_timestamp(files):
+        # Get the most recently modified GoalState.*.xml (if there are more than one) and use that timestamp for the archive name.
+        latest_timestamp_ms = None
+        for current_file in files:
+            match = GOAL_STATE_PATTERN.match(current_file)
+            if not match:
+                continue
+
+            creation_time_ms = os.path.getmtime(current_file)
+            if not latest_timestamp_ms or latest_timestamp_ms < creation_time_ms:
+                latest_timestamp_ms = creation_time_ms
+
+        return datetime.utcfromtimestamp(latest_timestamp_ms)
+
     def _get_files_to_archive(self):
         files = []
-        for f in os.listdir(self._source):  # pylint: disable=C0103
-            full_path = os.path.join(self._source, f)
+        for current_file in os.listdir(self._source):
+            full_path = os.path.join(self._source, current_file)
             for pattern in CACHE_PATTERNS:
-                m = pattern.match(f)  # pylint: disable=C0103
-                if m is not None:
+                match = pattern.match(current_file)
+                if match is not None:
                     files.append(full_path)
                     break
 
         return files
 
     def _archive(self, files, timestamp):
-        for f in files:  # pylint: disable=C0103
-            dst = os.path.join(self.history_dir(timestamp), os.path.basename(f))
-            shutil.move(f, dst)
+        for current_file in files:
+            dst = os.path.join(self.history_dir(timestamp), os.path.basename(current_file))
+            shutil.move(current_file, dst)
 
     def _purge(self, files):
-        for f in files:  # pylint: disable=C0103
-            os.remove(f)
+        for current_file in files:
+            os.remove(current_file)
 
     def _mkdir(self, timestamp):
-        d = self.history_dir(timestamp)  # pylint: disable=C0103
+        directory = self.history_dir(timestamp)
 
         try:
-            fileutil.mkdir(d, mode=0o700)
+            fileutil.mkdir(directory, mode=0o700)
             return True
         except IOError as e:  # pylint: disable=C0103
-            logger.error("{0} : {1}".format(d, e.strerror))
+            logger.error("{0} : {1}".format(directory, e.strerror))
             return False
 
 
@@ -163,16 +182,16 @@ class StateDirectory(State):
 
     def archive(self):
         fn_tmp = "{0}.zip.tmp".format(self._path)
-        fn = "{0}.zip".format(self._path)  # pylint: disable=C0103
+        filename = "{0}.zip".format(self._path)
 
         ziph = zipfile.ZipFile(fn_tmp, 'w')
-        for f in os.listdir(self._path):  # pylint: disable=C0103
-            full_path = os.path.join(self._path, f)
-            ziph.write(full_path, f, zipfile.ZIP_DEFLATED)
+        for current_file in os.listdir(self._path):
+            full_path = os.path.join(self._path, current_file)
+            ziph.write(full_path, current_file, zipfile.ZIP_DEFLATED)
 
         ziph.close()
 
-        os.rename(fn_tmp, fn)
+        os.rename(fn_tmp, filename)
         shutil.rmtree(self._path)
 
 
@@ -206,14 +225,14 @@ class StateArchiver(object):
 
     def _get_archive_states(self):
         states = []
-        for f in os.listdir(self._source):  # pylint: disable=C0103
-            full_path = os.path.join(self._source, f)
-            m = ARCHIVE_PATTERNS_DIRECTORY.match(f)  # pylint: disable=C0103
-            if m is not None:
-                states.append(StateDirectory(full_path, m.group(0)))
+        for current_file in os.listdir(self._source):
+            full_path = os.path.join(self._source, current_file)
+            match = ARCHIVE_PATTERNS_DIRECTORY.match(current_file)
+            if match is not None:
+                states.append(StateDirectory(full_path, match.group(0)))
 
-            m = ARCHIVE_PATTERNS_ZIP.match(f)  # pylint: disable=C0103
-            if m is not None:
-                states.append(StateZip(full_path, m.group(0)))
+            match = ARCHIVE_PATTERNS_ZIP.match(current_file)
+            if match is not None:
+                states.append(StateZip(full_path, match.group(0)))
 
         return states
