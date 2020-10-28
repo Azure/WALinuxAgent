@@ -186,7 +186,7 @@ class SharedConfig(object):  # pylint: disable=R0903
 
 # too-few-public-methods<R0903> Disabled: This is just a data object that does not need any public methods
 class Certificates(object):  # pylint: disable=R0903
-    def __init__(self, xml_text): # pylint: disable=R0912,R0914
+    def __init__(self, xml_text): # pylint: disable=R0912
         self.cert_list = CertList()
 
         # Save the certificates
@@ -294,8 +294,7 @@ class Certificates(object):  # pylint: disable=R0903
 
 # too-few-public-methods<R0903> Disabled: This is just a data object that does not need any public methods
 class ExtensionsConfig(object):  # pylint: disable=R0903
-    # too-many-locals<R0914> Disabled: The number of local variables is OK
-    def __init__(self, xml_text):  # pylint: disable=R0914
+    def __init__(self, xml_text):
         self.xml_text = xml_text
         self.ext_handlers = ExtHandlerList()
         self.vmagent_manifests = VMAgentManifestList()
@@ -355,15 +354,16 @@ class ExtensionsConfig(object):  # pylint: disable=R0903
         return ext_handler
 
     @staticmethod
-    def _parse_plugin_settings(ext_handler, plugin_settings): # pylint: disable=R0914
+    def _parse_plugin_settings(ext_handler, plugin_settings):
         if plugin_settings is None:
             return
 
         name = ext_handler.name
         version = ext_handler.properties.version
 
-        ext_handler_plugin_settings = [x for x in plugin_settings if getattrib(x, "name") == name]
-        if ext_handler_plugin_settings is None or len(ext_handler_plugin_settings) == 0: # pylint: disable=len-as-condition
+        to_lower = lambda str_to_change: str_to_change.lower() if str_to_change is not None else None
+        ext_handler_plugin_settings = [x for x in plugin_settings if to_lower(getattrib(x, "name")) == to_lower(name)]
+        if not ext_handler_plugin_settings:
             return
 
         settings = [x for x in ext_handler_plugin_settings if getattrib(x, "version") == version]
@@ -373,7 +373,7 @@ class ExtensionsConfig(object):  # pylint: disable=R0903
                 set([getattrib(x, "version") for x in ext_handler_plugin_settings]))) 
             add_event(AGENT_NAME, op=WALAEventOperation.PluginSettingsVersionMismatch, message=msg, log_event=False,
                       is_success=False)
-            if len(settings) == 0: # pylint: disable=len-as-condition
+            if not settings:
                 # If there is no corresponding settings for the specific extension handler, we will not process it at all,
                 # this is an unexpected error as we always expect both versions to be in sync.
                 logger.error(msg)
