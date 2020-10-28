@@ -115,8 +115,19 @@ class CryptUtil(object):
     def crt_to_ssh(self, input_file, output_file):
         with open(output_file, "ab") as file_out:
             cmd = ["ssh-keygen", "-i", "-m", "PKCS8", "-f", input_file]
-            keygen_proc = subprocess.Popen(cmd, stdout=file_out)
-            keygen_proc.wait()
+
+            try:
+                keygen_proc = subprocess.Popen(cmd, stdout=file_out)
+                keygen_proc.wait()
+
+                if keygen_proc.returncode != 0:
+                    msg = u"Command: [{0}], return code: [{1}]" \
+                        .format(cmd, keygen_proc.returncode)
+                    logger.error(msg)
+                
+            except Exception as exception:
+                msg = u"Exception on Command: [{0}]. exception={1}" \
+                    .format(cmd, exception)
 
 
 
