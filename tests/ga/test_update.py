@@ -1233,8 +1233,7 @@ class TestUpdate(UpdateTestCase): # pylint: disable=too-many-public-methods
         self._test_run_latest()
         self.assertEqual(0, mock_signal.call_count)
 
-    # too-many-locals<R0914> Disabled: The number of local variables is OK
-    def _test_run(self, invocations=1, calls=[call.run()], enable_updates=False, sleep_interval=(6,)): # pylint: disable=dangerous-default-value,too-many-locals
+    def _test_run(self, invocations=1, calls=[call.run()], enable_updates=False, sleep_interval=(6,)): # pylint: disable=dangerous-default-value
         conf.get_autoupdate_enabled = Mock(return_value=enable_updates)
 
         # Note:

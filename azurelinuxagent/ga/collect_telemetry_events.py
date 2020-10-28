@@ -410,8 +410,7 @@ class _CollectAndEnqueueEventsPeriodicOperation(PeriodicOperation):
             err_msg = "Failure in collecting Agent events: {0}".format(ustr(error))
             add_event(op=WALAEventOperation.UnhandledError, message=err_msg, is_success=False)
 
-    # too-many-locals<R0914> Disabled: The number of local variables is OK
-    def process_events(self):  # pylint: disable=too-many-locals
+    def process_events(self):
         """
         Returns a list of events that need to be sent to the telemetry pipeline and deletes the corresponding files
         from the events directory.
