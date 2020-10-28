@@ -109,7 +109,7 @@ class StateFlusher(object):
             return False
 
 
-# TODO: use @total_ordering once RHEL/CentOS and SLES 11 are EOL. # pylint: disable=W0511
+# TODO: use @total_ordering once RHEL/CentOS and SLES 11 are EOL.
 # @total_ordering first appeared in Python 2.7 and 3.2
 # If there are more use cases for @total_ordering, I will
 # consider re-implementing it.

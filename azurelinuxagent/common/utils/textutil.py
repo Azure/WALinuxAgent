@@ -409,7 +409,7 @@ def str_to_encoded_ustr(s, encoding='utf-8'): # pylint: disable=C0103
     :return: Returns the corresponding ustr string. Returns None if input is None.
     """
 
-    # TODO: Import at the top of the file instead of a local import (using local import here to avoid cyclic dependency) # pylint: disable=W0511
+    # TODO: Import at the top of the file instead of a local import (using local import here to avoid cyclic dependency)
     from azurelinuxagent.common.version import PY_VERSION_MAJOR
 
     if s is None or type(s) is ustr: # pylint: disable=C0123

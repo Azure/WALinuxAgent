@@ -795,7 +795,7 @@ class DefaultOSUtil(object): # pylint: disable=R0904
         return '', ''
 
     @staticmethod
-    def _build_route_list(proc_net_route): # pylint: disable=R0914
+    def _build_route_list(proc_net_route):
         """
         Construct a list of network route entries
         :param list(str) proc_net_route: Route table lines, including headers, containing at least one route
@@ -943,7 +943,7 @@ class DefaultOSUtil(object): # pylint: disable=R0904
         return None
 
     @staticmethod
-    def get_endpoint_from_leases_path(pathglob): # pylint: disable=R0912,R0914
+    def get_endpoint_from_leases_path(pathglob): # pylint: disable=R0912
         """
         Try to discover and decode the wireserver endpoint in the
         specified dhcp leases path.
