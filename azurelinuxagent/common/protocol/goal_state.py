@@ -361,8 +361,8 @@ class ExtensionsConfig(object):  # pylint: disable=R0903
         name = ext_handler.name
         version = ext_handler.properties.version
 
-        ext_handler_plugin_settings = [x for x in plugin_settings if getattrib(x, "name") == name]
-        if ext_handler_plugin_settings is None or len(ext_handler_plugin_settings) == 0: # pylint: disable=len-as-condition
+        ext_handler_plugin_settings = [x for x in plugin_settings if getattrib(x, "name").lower() == name.lower()]
+        if not ext_handler_plugin_settings:
             return
 
         settings = [x for x in ext_handler_plugin_settings if getattrib(x, "version") == version]
@@ -372,7 +372,7 @@ class ExtensionsConfig(object):  # pylint: disable=R0903
                 set([getattrib(x, "version") for x in ext_handler_plugin_settings]))) 
             add_event(AGENT_NAME, op=WALAEventOperation.PluginSettingsVersionMismatch, message=msg, log_event=False,
                       is_success=False)
-            if len(settings) == 0: # pylint: disable=len-as-condition
+            if not settings:
                 # If there is no corresponding settings for the specific extension handler, we will not process it at all,
                 # this is an unexpected error as we always expect both versions to be in sync.
                 logger.error(msg)
