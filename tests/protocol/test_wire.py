@@ -1094,7 +1094,7 @@ class TryUpdateGoalStateTestCase(HttpRequestPredicates, AgentTestCase):
 
             self.assertFalse(protocol.client.try_update_goal_state(), "try_update_goal_state should have failed")
 
-    def test_it_should_log_errors_only_when_the_error_state_changes(self): # pylint: disable=too-many-locals
+    def test_it_should_log_errors_only_when_the_error_state_changes(self):
         with mock_wire_protocol(mockwiredata.DATA_FILE) as protocol:
             def http_get_handler(url, *_, **__):
                 if self.is_goal_state_request(url):

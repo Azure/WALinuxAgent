@@ -1212,7 +1212,7 @@ class ExtHandlerInstance(object): # pylint: disable=R0904
 
     def report_ext_status(self):
         active_exts = []
-        # TODO Refactor or remove this common code pattern (for each extension subordinate to an ext_handler, do X). # pylint: disable=W0511
+        # TODO Refactor or remove this common code pattern (for each extension subordinate to an ext_handler, do X).
         for ext in self.ext_handler.properties.extensions:
             ext_status = self.collect_ext_status(ext)
             if ext_status is None:

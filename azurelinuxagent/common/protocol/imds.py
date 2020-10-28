@@ -172,7 +172,7 @@ class ImageInfoMatcher(object): # pylint: disable=R0903
 class ComputeInfo(DataContract): # pylint: disable=R0902
     __matcher = ImageInfoMatcher(ENDORSED_IMAGE_INFO_MATCHER_JSON)
 
-    def __init__(self, # pylint: disable=R0913,R0914
+    def __init__(self, # pylint: disable=R0913
                  location=None,
                  name=None,
                  offer=None,
@@ -364,7 +364,7 @@ class ImdsClient(object):
 
         # ensure all expected fields are present and have a value
         try:
-            # TODO: compute fields cannot be verified yet since we need to exclude rdfe vms (#1249) # pylint: disable=W0511
+            # TODO: compute fields cannot be verified yet since we need to exclude rdfe vms (#1249)
 
             self.check_field(json_data, 'network')
             self.check_field(json_data['network'], 'interface')
