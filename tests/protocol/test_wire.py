@@ -1077,21 +1077,21 @@ class UpdateGoalStateTestCase(AgentTestCase):
                 protocol.client.update_goal_state()
 
                 # The initial goal state should be in the archive
-                first_archive_name = datetime.utcfromtimestamp(first_gs_ms).isoformat()
+                first_archive_name = datetime.utcfromtimestamp(first_gs_ms).isoformat() + "_incarnation_1"
                 archives = os.listdir(history_dir)
                 self.assertEqual(len(archives), 1, "Only one goal state should have been archived")
-                self.assertEqual(archives[0], first_archive_name, "The name of goal state archive should match the first goal state timestamp")
+                self.assertEqual(archives[0], first_archive_name, "The name of goal state archive should match the first goal state timestamp and incarnation")
 
                 # Create the third goal state, so the second one should be archived too
                 protocol.mock_wire_data.set_incarnation("3")
                 protocol.client.update_goal_state()
 
                 # The second goal state should be in the archive
-                second_archive_name = datetime.utcfromtimestamp(second_gs_ms).isoformat()
+                second_archive_name = datetime.utcfromtimestamp(second_gs_ms).isoformat() + "_incarnation_2"
                 archives = os.listdir(history_dir)
                 archives.sort()
                 self.assertEqual(len(archives), 2, "Two goal states should have been archived")
-                self.assertEqual(archives[1], second_archive_name, "The name of goal state archive should match the second goal state timestamp")
+                self.assertEqual(archives[1], second_archive_name, "The name of goal state archive should match the second goal state timestamp and incarnation")
 
 # pylint: enable=too-many-public-methods
 

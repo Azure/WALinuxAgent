@@ -48,10 +48,10 @@ _CACHE_PATTERNS = [
 
 _GOAL_STATE_PATTERN = re.compile(r"^(.*)/GoalState\.(\d+)\.xml$", re.IGNORECASE)
 
-# 2018-04-06T08:21:37.142697
-# 2018-04-06T08:21:37.142697.zip
-_ARCHIVE_PATTERNS_DIRECTORY = re.compile(r"^\d{4}\-\d{2}\-\d{2}T\d{2}:\d{2}:\d{2}\.\d+$")
-_ARCHIVE_PATTERNS_ZIP = re.compile(r"^\d{4}\-\d{2}\-\d{2}T\d{2}:\d{2}:\d{2}\.\d+\.zip$")
+# 2018-04-06T08:21:37.142697_incarnation_N
+# 2018-04-06T08:21:37.142697_incarnation_N.zip
+_ARCHIVE_PATTERNS_DIRECTORY = re.compile(r"^\d{4}\-\d{2}\-\d{2}T\d{2}:\d{2}:\d{2}\.\d+_incarnation_(\d+)$")
+_ARCHIVE_PATTERNS_ZIP = re.compile(r"^\d{4}\-\d{2}\-\d{2}T\d{2}:\d{2}:\d{2}\.\d+_incarnation_(\d+)\.zip$")
 
 
 class StateFlusher(object):
@@ -71,7 +71,7 @@ class StateFlusher(object):
         if not files:
             return
 
-        archive_name = self._get_latest_timestamp(files)
+        archive_name = self._get_archive_name(files)
         if archive_name and self._mkdir(archive_name):
             self._archive(files, archive_name)
         else:
@@ -81,14 +81,16 @@ class StateFlusher(object):
         return os.path.join(self._source, _ARCHIVE_DIRECTORY_NAME, name)
 
     @staticmethod
-    def _get_latest_timestamp(files):
+    def _get_archive_name(files):
         """
-        Gets the most recently modified GoalState.*.xml and uses that timestamp for the archive name.
+        Gets the most recently modified GoalState.*.xml and uses that timestamp and incarnation for the archive name.
         In a normal workflow, we expect there to be only one GoalState.*.xml at a time, but if the previous one
         wasn't purged for whatever reason, we take the most recently modified goal state file.
         If there are no GoalState.*.xml files, we return None.
         """
         latest_timestamp_ms = None
+        incarnation = None
+
         for current_file in files:
             match = _GOAL_STATE_PATTERN.match(current_file)
             if not match:
@@ -97,11 +99,11 @@ class StateFlusher(object):
             modification_time_ms = os.path.getmtime(current_file)
             if latest_timestamp_ms is None or latest_timestamp_ms < modification_time_ms:
                 latest_timestamp_ms = modification_time_ms
+                incarnation = match.groups()[1]
 
-        if latest_timestamp_ms is not None:
-            return datetime.utcfromtimestamp(latest_timestamp_ms).isoformat()
-        else:
-            return None
+        if latest_timestamp_ms is not None and incarnation is not None:
+            return datetime.utcfromtimestamp(latest_timestamp_ms).isoformat() + "_incarnation_{0}".format(incarnation)
+        return None
 
     def _get_files_to_archive(self):
         files = []
