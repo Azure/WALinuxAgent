@@ -46,7 +46,7 @@ _CACHE_PATTERNS = [
     re.compile(r"^(.*)\.(\d+)\.(xml)$", re.IGNORECASE)
 ]
 
-_GOAL_STATE_PATTERN = re.compile(r"^(.*)GoalState\.(\d+)\.xml$", re.IGNORECASE)
+_GOAL_STATE_PATTERN = re.compile(r"^(.*)/GoalState\.(\d+)\.xml$", re.IGNORECASE)
 
 # 2018-04-06T08:21:37.142697
 # 2018-04-06T08:21:37.142697.zip
@@ -71,18 +71,23 @@ class StateFlusher(object):
         if not files:
             return
 
-        goal_state_timestamp = self._get_latest_timestamp(files)
-        if goal_state_timestamp and self._mkdir(goal_state_timestamp):
-            self._archive(files, goal_state_timestamp)
+        archive_name = self._get_latest_timestamp(files)
+        if archive_name and self._mkdir(archive_name):
+            self._archive(files, archive_name)
         else:
             self._purge(files)
 
-    def history_dir(self, timestamp):
-        return os.path.join(self._source, _ARCHIVE_DIRECTORY_NAME, timestamp.isoformat())
+    def history_dir(self, name):
+        return os.path.join(self._source, _ARCHIVE_DIRECTORY_NAME, name)
 
     @staticmethod
     def _get_latest_timestamp(files):
-        # Get the most recently modified GoalState.*.xml (if there are more than one) and use that timestamp for the archive name.
+        """
+        Gets the most recently modified GoalState.*.xml and uses that timestamp for the archive name.
+        In a normal workflow, we expect there to be only one GoalState.*.xml at a time, but if the previous one
+        wasn't purged for whatever reason, we take the most recently modified goal state file.
+        If there are no GoalState.*.xml files, we return None.
+        """
         latest_timestamp_ms = None
         for current_file in files:
             match = _GOAL_STATE_PATTERN.match(current_file)
@@ -90,10 +95,13 @@ class StateFlusher(object):
                 continue
 
             modification_time_ms = os.path.getmtime(current_file)
-            if not latest_timestamp_ms or latest_timestamp_ms < modification_time_ms:
+            if latest_timestamp_ms is None or latest_timestamp_ms < modification_time_ms:
                 latest_timestamp_ms = modification_time_ms
 
-        return datetime.utcfromtimestamp(latest_timestamp_ms)
+        if latest_timestamp_ms is not None:
+            return datetime.utcfromtimestamp(latest_timestamp_ms).isoformat()
+        else:
+            return None
 
     def _get_files_to_archive(self):
         files = []
@@ -116,8 +124,8 @@ class StateFlusher(object):
         for current_file in files:
             os.remove(current_file)
 
-    def _mkdir(self, timestamp):
-        directory = self.history_dir(timestamp)
+    def _mkdir(self, name):
+        directory = self.history_dir(name)
 
         try:
             fileutil.mkdir(directory, mode=0o700)

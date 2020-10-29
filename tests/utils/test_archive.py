@@ -160,7 +160,7 @@ class TestArchive(AgentTestCase):
                 fn = "{0}.zip".format(ts) # pylint: disable=invalid-name
             self.assertTrue(fn in archived_entries, "'{0}' is not in the list of unpurged entires".format(fn))
 
-    def test_archive04(self):
+    def test_archive03(self):
         """
         The archive directory is created if it does not exist.
 
