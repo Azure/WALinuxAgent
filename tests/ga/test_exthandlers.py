@@ -211,7 +211,7 @@ class TestExtHandlers(AgentTestCase):
         self.assertEqual(0, len(ext_status.substatusList))
 
     @patch('azurelinuxagent.common.event.EventLogger.add_event')
-    @patch('azurelinuxagent.ga.exthandlers.ExtHandlerInstance._get_largest_seq_no')
+    @patch('azurelinuxagent.ga.exthandlers.ExtHandlerInstance._get_last_modified_seq_no_from_config_files')
     def assert_extension_sequence_number(self, # pylint: disable=too-many-arguments
                                          patch_get_largest_seq,
                                          patch_add_event,

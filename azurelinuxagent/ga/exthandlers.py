@@ -391,17 +391,17 @@ class ExtHandlersHandler(object):
             # If handled successfully, proceed with the current handler.
             # Otherwise, skip the rest of the extension installation.
             dep_level = ext_handler.sort_key()
-            if dep_level >= 0 and dep_level < max_dep_level: # pylint: disable=R1716
+            if 0 <= dep_level < max_dep_level:
                 if not self.wait_for_handler_successful_completion(ext_handler, wait_until):
                     logger.warn("An extension failed or timed out, will skip processing the rest of the extensions")
                     break
 
     def wait_for_handler_successful_completion(self, ext_handler, wait_until):
-        '''
+        """
         Check the status of the extension being handled.
         Wait until it has a terminal state or times out.
         Return True if it is handled successfully. False if not.
-        '''
+        """
         handler_i = ExtHandlerInstance(ext_handler, self.protocol)
         for ext in ext_handler.properties.extensions:
             ext_completed, status = handler_i.is_ext_handling_complete(ext)
@@ -1070,26 +1070,44 @@ class ExtHandlerInstance(object): # pylint: disable=R0904
                              "Skip install during upgrade.")
         self.set_handler_state(ExtHandlerState.Installed)
 
-    def _get_largest_seq_no(self):
+    def _get_last_modified_seq_no_from_config_files(self):
+        """
+        The sequence number is not guaranteed to always be strictly increasing. To ensure we always get the latest one,
+        fetching the sequence number from config file that was last modified (and not necessarily the largest).
+        :return: Last modified Sequence number
+
+        Note: This function is going to be deprecated soon. We should rely on seqNo from GoalState rather than file system.
+        """
         seq_no = -1
-        conf_dir = self.get_conf_dir()
-        for item in os.listdir(conf_dir):
-            item_path = os.path.join(conf_dir, item)
-            if os.path.isfile(item_path):
-                try:
-                    separator = item.rfind(".")
-                    if separator > 0 and item[separator + 1:] == 'settings':
-                        curr_seq_no = int(item.split('.')[0])
-                        if curr_seq_no > seq_no:
-                            seq_no = curr_seq_no
-                except (ValueError, IndexError, TypeError):
-                    self.logger.verbose("Failed to parse file name: {0}", item)
-                    continue
+        try:
+            largest_modified_time = 0
+            conf_dir = self.get_conf_dir()
+            for item in os.listdir(conf_dir):
+                item_path = os.path.join(conf_dir, item)
+                if os.path.isfile(item_path):
+                    try:
+                        separator = item.rfind(".")
+                        if separator > 0 and item[separator + 1:] == 'settings':
+                            curr_seq_no = int(item.split('.')[0])
+                            curr_modified_time = os.path.getmtime(item_path)
+                            if curr_modified_time > largest_modified_time:
+                                seq_no = curr_seq_no
+                                largest_modified_time = curr_modified_time
+                    except (ValueError, IndexError, TypeError):
+                        self.logger.verbose("Failed to parse file name: {0}", item)
+                        continue
+        except Exception as error:
+            logger.verbose("Error fetching config files: {0}".format(ustr(error)))
         return seq_no
 
     def get_status_file_path(self, extension=None):
         path = None
-        seq_no = self._get_largest_seq_no()
+        # Todo: Remove check on filesystem for fetching sequence number (legacy behaviour).
+        # We should technically not rely on the filesystem at all for fetching the sequence number,
+        # it should only be fetched from GoalState. But since we still have Kusto data from the operation below
+        # (~0.000065% VMs are still reporting WALAEventOperation.SequenceNumberMismatch), keeping this as is with
+        # modified logic to monitor and ensure that the new data is consistent and eventually remove this logic.
+        seq_no = self._get_last_modified_seq_no_from_config_files()
 
         # Issue 1116: use the sequence number from goal state where possible
         if extension is not None and extension.sequenceNumber is not None:
