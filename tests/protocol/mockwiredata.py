@@ -81,6 +81,9 @@ DATA_FILE_EXT_SINGLE["manifest"] = "wire/manifest_deletion.xml"
 DATA_FILE_MULTIPLE_EXT = DATA_FILE.copy()
 DATA_FILE_MULTIPLE_EXT["ext_conf"] = "wire/ext_conf_multiple_extensions.xml"
 
+DATA_FILE_CASE_MISMATCH_EXT = DATA_FILE.copy()
+DATA_FILE_CASE_MISMATCH_EXT["ext_conf"] = "wire/ext_conf_settings_case_mismatch.xml"
+
 DATA_FILE_NO_CERT_FORMAT = DATA_FILE.copy()
 DATA_FILE_NO_CERT_FORMAT["certs"] = "wire/certs_no_format_specified.xml"
 
