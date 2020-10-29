@@ -147,7 +147,7 @@ def _cloud_init_is_enabled_systemd():
 
         unit_is_enabled = systemctl_output == 'enabled'
     except Exception as exc:
-        logger.info('Error getting cloud-init enabled status from systemctl: {0}'.format(exc))
+        logger.info('Unable to get cloud-init enabled status from systemctl: {0}'.format(exc))
         unit_is_enabled = False
 
     return unit_is_enabled
@@ -172,7 +172,7 @@ def _cloud_init_is_enabled_service():
 
         unit_is_enabled = True
     except Exception as exc:
-        logger.info('Error getting cloud-init enabled status from service: {0}'.format(exc))
+        logger.info('Unable to get cloud-init enabled status from service: {0}'.format(exc))
         unit_is_enabled = False
 
     return unit_is_enabled
