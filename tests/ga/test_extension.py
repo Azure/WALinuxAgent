@@ -1286,10 +1286,10 @@ class TestExtension(ExtensionTestCase):
         self.assertFalse(self._helper_wait_for_handler_successful_completion(exthandlers_handler))
 
     def test_get_ext_handling_status(self, *args):
-        '''
+        """
         Testing get_ext_handling_status() function with various cases and
         verifying against the expected values
-        '''
+        """
         test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE)
         exthandlers_handler, protocol = self._create_mock(test_data, *args) # pylint: disable=unused-variable,no-value-for-parameter
 
@@ -2708,6 +2708,23 @@ class TestCollectExtensionStatus(ExtensionTestCase):
         self.assertEqual(sub_status.code, "0")
         self.assertEqual(sub_status.message, None)
         self.assertEqual(sub_status.status, ValidHandlerStatus.success)
+
+    @patch("azurelinuxagent.common.conf.get_lib_dir")
+    def test_it_should_collect_ext_status_when_config_dir_deleted(self, mock_lib_dir, *args):
+
+        ext_handler_i, extension = self._setup_extension_for_validating_collect_ext_status(mock_lib_dir,
+                                                                                           "sample-status.json", *args)
+
+        shutil.rmtree(ext_handler_i.get_conf_dir(), ignore_errors=True)
+        ext_status = ext_handler_i.collect_ext_status(extension)
+
+        self.assertEqual(ext_status.code, SUCCESS_CODE_FROM_STATUS_FILE)
+        self.assertEqual(ext_status.configurationAppliedTime, None)
+        self.assertEqual(ext_status.operation, "Enable")
+        self.assertEqual(ext_status.sequenceNumber, 0)
+        self.assertEqual(ext_status.message, "Aenean semper nunc nisl, vitae sollicitudin felis consequat at. In "
+                                             "lobortis elementum sapien, non commodo odio semper ac.")
+        self.assertEqual(ext_status.status, ValidHandlerStatus.success)
 
     @patch("azurelinuxagent.common.conf.get_lib_dir")
     def test_collect_ext_status_very_large_status_message(self, mock_lib_dir, *args):
