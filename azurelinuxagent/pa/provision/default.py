@@ -40,6 +40,7 @@ from azurelinuxagent.common.osutil import get_osutil
 from azurelinuxagent.common.protocol.restapi import ProvisionStatus
 from azurelinuxagent.common.protocol.util import get_protocol_util
 from azurelinuxagent.common.version import AGENT_NAME
+from azurelinuxagent.pa.provision.cloudinit import cloud_init_is_enabled
 
 CUSTOM_DATA_FILE = "CustomData"
 CLOUD_INIT_PATTERN = b".*/bin/cloud-init.*"
@@ -70,8 +71,8 @@ class ProvisionHandler(object):
 
             logger.info("Running default provisioning handler")
 
-            if not self.validate_cloud_init(is_expected=False):
-                raise ProvisionError("cloud-init appears to be running, "
+            if cloud_init_is_enabled():
+                raise ProvisionError("cloud-init appears to be installed and enabled, "
                                         "this is not expected, cannot continue")
 
             logger.info("Copying ovf-env.xml")
@@ -103,30 +104,6 @@ class ProvisionHandler(object):
             self.report_not_ready("ProvisioningFailed", ustr(e))
             self.report_event(msg, is_success=False)
             return
-
-    @staticmethod
-    def validate_cloud_init(is_expected=True):
-        is_running = False
-        if os.path.isdir("/proc"):
-            pids = [pid for pid in os.listdir('/proc') if pid.isdigit()]
-        else:
-            pids = []
-        for pid in pids:
-            try:
-                with open(os.path.join('/proc', pid, 'cmdline'), 'rb') as fh: # pylint: disable=C0103
-                    pname = fh.read()
-                    if CLOUD_INIT_REGEX.match(pname):
-                        is_running = True
-                        msg = "cloud-init is running [PID {0}, {1}]".format(pid,
-                                                                            pname)
-                        if is_expected:
-                            logger.verbose(msg)
-                        else:
-                            logger.error(msg)
-                        break
-            except IOError:
-                continue
-        return is_running == is_expected
 
     @staticmethod
     def _get_uptime_seconds():
