@@ -201,6 +201,8 @@ Provisioning.DecodeCustomData=n
 Provisioning.ExecuteCustomData=n
 Provisioning.PasswordCryptId=6
 Provisioning.PasswordCryptSaltLength=10
+Provisioning.SetHostName=True
+Provisioning.UserAccounts=True
 ResourceDisk.Format=y
 ResourceDisk.Filesystem=ext4
 ResourceDisk.MountPoint=/mnt/resource
@@ -409,6 +411,20 @@ _Type: String_
 _Default: 10_
 
 Length of random salt used when generating password hash.
+
+#### __Provisioning.SetHostName__
+
+_Type: Boolean_
+_Default: y_
+
+Control if WAAgent should attempt to set the VMs hostname
+
+#### __Provisioning.UserAccounts
+
+_Type: Boolean_
+_Default: y_
+
+Control if WAAgent should configure user accounts
 
 #### __ResourceDisk.Format__
 

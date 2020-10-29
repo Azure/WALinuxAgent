@@ -229,13 +229,16 @@ class ProvisionHandler(object):
     def provision(self, ovfenv):
         logger.info("Handle ovf-env.xml.")
         try:
-            logger.info("Set hostname [{0}]".format(ovfenv.hostname))
-            self.osutil.set_hostname(ovfenv.hostname)
 
-            logger.info("Publish hostname [{0}]".format(ovfenv.hostname))
-            self.osutil.publish_hostname(ovfenv.hostname)
+            if conf.get_provisioning_hostname_set():
+                logger.info("Set hostname [{0}]".format(ovfenv.hostname))
+                self.osutil.set_hostname(ovfenv.hostname)
 
-            self.config_user_account(ovfenv)
+                logger.info("Publish hostname [{0}]".format(ovfenv.hostname))
+                self.osutil.publish_hostname(ovfenv.hostname)
+
+            if conf.get_provisioning_user_account_set():
+                self.config_user_account(ovfenv)
 
             self.save_customdata(ovfenv)
 
@@ -256,7 +259,7 @@ class ProvisionHandler(object):
             self.osutil.chpasswd(ovfenv.username, ovfenv.user_password,
                                  crypt_id=crypt_id, salt_len=salt_len)
 
-        logger.info("Configure sudoer")
+        logger.info("Configure sudoers")
         self.osutil.conf_sudoer(ovfenv.username,
                                 nopasswd=ovfenv.user_password is None)
 
