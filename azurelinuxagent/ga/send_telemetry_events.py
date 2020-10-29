@@ -48,7 +48,6 @@ class SendTelemetryEventsHandler(ThreadHandlerInterface):
         self._protocol = protocol_util.get_protocol()
         self.should_run = True
         self._thread = None
-        # self._should_process_events = threading.Event()
 
         # We're using a Queue for handling the communication between threads. We plan to remove any dependency on the
         # filesystem in the future and use add_event to directly queue events into the queue rather than writing to
@@ -108,13 +107,18 @@ class SendTelemetryEventsHandler(ThreadHandlerInterface):
                 "Unable to enqueue due to: {0}, stopping any more enqueuing until the next run".format(ustr(error)))
 
     def _wait_for_event_in_queue(self):
-        event = None
+        """
+        Wait for atleast one event in Queue or timeout after SendTelemetryEventsHandler._MAX_TIMEOUT seconds.
+        In case of a timeout, set the event to None.
+        :return: event if an event is added to the Queue or None to signify no events were added in queue.
+        This would raise in case of an error.
+        """
         try:
             event = self._queue.get(timeout=SendTelemetryEventsHandler._MAX_TIMEOUT)
             self._queue.task_done()
         except Empty:
-            # No elements in Queue, do nothing
-            pass
+            # No elements in Queue, return None
+            event = None
 
         return event
 
@@ -125,19 +129,18 @@ class SendTelemetryEventsHandler(ThreadHandlerInterface):
             # also keep checking every SendTelemetryEventsHandler._MAX_TIMEOUT secs to avoid uninterruptible waits.
             # Incase the service is stopped but we have events in queue, ensure we send them out before killing the thread.
             while not self.stopped() or not self._queue.empty():
-                # self._should_process_events.wait(timeout=SendTelemetryEventsHandler._MAX_TIMEOUT)
-                event = self._wait_for_event_in_queue()
-                if event:
-                    # Start processing queue only if initial event is not None (i.e. Queue has atleast 1 event),
+                first_event = self._wait_for_event_in_queue()
+                if first_event:
+                    # Start processing queue only if first event is not None (i.e. Queue has atleast 1 event),
                     # else do nothing
-                    self._send_events_in_queue(event)
+                    self._send_events_in_queue(first_event)
 
         except Exception as error:
             err_msg = "An unknown error occurred in the {0} thread main loop, stopping thread. Error: {1}, Stack: {2}".format(
                 self.get_thread_name(), ustr(error), traceback.format_exc())
             add_event(op=WALAEventOperation.UnhandledError, message=err_msg, is_success=False)
 
-    def _send_events_in_queue(self, event):
+    def _send_events_in_queue(self, first_event):
         # Process everything in Queue
         start_time = datetime.datetime.utcnow()
         while not self.stopped() and (self._queue.qsize() + 1) < self._MIN_EVENTS_TO_BATCH and (
@@ -149,14 +152,15 @@ class SendTelemetryEventsHandler(ThreadHandlerInterface):
                            self._queue.qsize()+1, (datetime.datetime.utcnow() - start_time).seconds)
             time.sleep(1)
         # Delete files after sending the data rather than deleting and sending
-        self._protocol.report_event(self._get_events_in_queue(event))
+        self._protocol.report_event(self._get_events_in_queue(first_event))
 
     def _get_events_in_queue(self, first_event):
         yield first_event
         while not self._queue.empty():
             try:
-                yield self._queue.get_nowait()
+                event = self._queue.get_nowait()
                 self._queue.task_done()
+                yield event
             except Exception as error:
                 logger.error("Some exception when fetching event from queue: {0}, {1}".format(ustr(error),
                                                                                               traceback.format_exc()))
