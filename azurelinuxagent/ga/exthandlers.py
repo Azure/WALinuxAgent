@@ -1084,18 +1084,19 @@ class ExtHandlerInstance(object): # pylint: disable=R0904
             conf_dir = self.get_conf_dir()
             for item in os.listdir(conf_dir):
                 item_path = os.path.join(conf_dir, item)
-                if os.path.isfile(item_path):
-                    try:
-                        separator = item.rfind(".")
-                        if separator > 0 and item[separator + 1:] == 'settings':
-                            curr_seq_no = int(item.split('.')[0])
-                            curr_modified_time = os.path.getmtime(item_path)
-                            if curr_modified_time > largest_modified_time:
-                                seq_no = curr_seq_no
-                                largest_modified_time = curr_modified_time
-                    except (ValueError, IndexError, TypeError):
-                        self.logger.verbose("Failed to parse file name: {0}", item)
-                        continue
+                if not os.path.isfile(item_path):
+                    continue
+                try:
+                    separator = item.rfind(".")
+                    if separator > 0 and item[separator + 1:] == 'settings':
+                        curr_seq_no = int(item.split('.')[0])
+                        curr_modified_time = os.path.getmtime(item_path)
+                        if curr_modified_time > largest_modified_time:
+                            seq_no = curr_seq_no
+                            largest_modified_time = curr_modified_time
+                except (ValueError, IndexError, TypeError):
+                    self.logger.verbose("Failed to parse file name: {0}", item)
+                    continue
         except Exception as error:
             logger.verbose("Error fetching config files: {0}".format(ustr(error)))
         return seq_no
