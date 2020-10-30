@@ -1,16 +1,15 @@
 # Copyright (c) Microsoft Corporation. All rights reserved.
 # Licensed under the Apache License.
-from datetime import datetime, timedelta
-
-import zipfile
 import os
 import shutil
 import tempfile
+import zipfile
+from datetime import datetime, timedelta
 
 import azurelinuxagent.common.logger as logger
 from azurelinuxagent.common.utils import fileutil
 from azurelinuxagent.common.utils.archive import StateFlusher, StateArchiver, _MAX_ARCHIVED_STATES
-from tests.tools import AgentTestCase
+from tests.tools import AgentTestCase, patch
 
 debug = False # pylint: disable=invalid-name
 if os.environ.get('DEBUG') == '1':
@@ -50,7 +49,7 @@ class TestArchive(AgentTestCase):
         # Name can be a directory or a zip
         # '0000-00-00T00:00:00.000000_incarnation_0'
         # '0000-00-00T00:00:00.000000_incarnation_0.zip'
-        timestamp_str, _, incarnation_ext = name.split("_")
+        timestamp_str, incarnation_ext = name.split("_incarnation_")
         incarnation_no_ext = os.path.splitext(incarnation_ext)[0]
         return timestamp_str, incarnation_no_ext
 
@@ -173,6 +172,34 @@ class TestArchive(AgentTestCase):
             self.assertTrue(filename in archived_entries, "'{0}' is not in the list of unpurged entires".format(filename))
 
     def test_archive03(self):
+        """
+        All archives should be purged, both with the new naming (with incarnation number) and with the old naming.
+        """
+        start = datetime.now()
+        timestamp1 = start + timedelta(seconds=5)
+        timestamp2 = start + timedelta(seconds=10)
+
+        dir_old = timestamp1.isoformat()
+        dir_new = "{0}_incarnation_1".format(timestamp2.isoformat())
+
+        archive_old = "{0}.zip".format(timestamp1.isoformat())
+        archive_new = "{0}_incarnation_1.zip".format(timestamp2.isoformat())
+
+        self._write_file(os.path.join("history", dir_old, "Prod.0.manifest.xml"))
+        self._write_file(os.path.join("history", dir_new, "Prod.1.manifest.xml"))
+        self._write_file(os.path.join("history", archive_old))
+        self._write_file(os.path.join("history", archive_new))
+
+        self.assertEqual(4, len(os.listdir(self.history_dir)), "Not all entries were archived!")
+
+        test_subject = StateArchiver(self.tmp_dir)
+        with patch("azurelinuxagent.common.utils.archive._MAX_ARCHIVED_STATES", 0):
+            test_subject.purge()
+
+        archived_entries = os.listdir(self.history_dir)
+        self.assertEqual(0, len(archived_entries), "Not all entries were purged!")
+
+    def test_archive04(self):
         """
         The archive directory is created if it does not exist.
 

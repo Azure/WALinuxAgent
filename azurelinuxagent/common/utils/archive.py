@@ -48,10 +48,11 @@ _CACHE_PATTERNS = [
 
 _GOAL_STATE_PATTERN = re.compile(r"^(.*)/GoalState\.(\d+)\.xml$", re.IGNORECASE)
 
+# Old names didn't have incarnation, new ones do. Ensure the regex captures both cases.
 # 2018-04-06T08:21:37.142697_incarnation_N
 # 2018-04-06T08:21:37.142697_incarnation_N.zip
-_ARCHIVE_PATTERNS_DIRECTORY = re.compile(r"^\d{4}\-\d{2}\-\d{2}T\d{2}:\d{2}:\d{2}\.\d+_incarnation_(\d+)$")
-_ARCHIVE_PATTERNS_ZIP = re.compile(r"^\d{4}\-\d{2}\-\d{2}T\d{2}:\d{2}:\d{2}\.\d+_incarnation_(\d+)\.zip$")
+_ARCHIVE_PATTERNS_DIRECTORY = re.compile(r"^\d{4}\-\d{2}\-\d{2}T\d{2}:\d{2}:\d{2}\.\d+(_incarnation_(\d+))?$$")
+_ARCHIVE_PATTERNS_ZIP = re.compile(r"^\d{4}\-\d{2}\-\d{2}T\d{2}:\d{2}:\d{2}\.\d+(_incarnation_(\d+))?\.zip$")
 
 
 class StateFlusher(object):
