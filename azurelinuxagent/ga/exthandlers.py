@@ -402,37 +402,57 @@ class ExtHandlersHandler(object):
         Wait until it has a terminal state or times out.
         Return True if it is handled successfully. False if not.
         """
-        handler_i = ExtHandlerInstance(ext_handler, self.protocol)
-        for ext in ext_handler.properties.extensions:
-            ext_completed, status = handler_i.is_ext_handling_complete(ext)
 
-            # Keep polling for the extension status until it becomes success or times out
-            while not ext_completed and datetime.datetime.utcnow() <= wait_until:
-                time.sleep(5)
-                ext_completed, status = handler_i.is_ext_handling_complete(ext)
+        def _report_error_event_and_return_false(error_message):
+            # In case of error, return False so that the processing of dependent extensions can be skipped (fail fast)
+            add_event(AGENT_NAME,
+                      version=CURRENT_VERSION,
+                      op=WALAEventOperation.ExtensionProcessing,
+                      is_success=False,
+                      message=error_message,
+                      log_event=True)
+            return False
 
-            # In case of timeout or terminal error state, we log it and return false
-            # so that the extensions waiting on this one can be skipped processing
-            if datetime.datetime.utcnow() > wait_until:
-                msg = "Extension {0} did not reach a terminal state within the allowed timeout. Last status was {1}".format(
-                    ext.name, status)
-                logger.warn(msg)
-                add_event(AGENT_NAME,
-                          version=CURRENT_VERSION,
-                          op=WALAEventOperation.ExtensionProcessing,
-                          is_success=False,
-                          message=msg)
-                return False
+        try:
+            handler_i = ExtHandlerInstance(ext_handler, self.protocol)
 
-            if status != ValidHandlerStatus.success:
-                msg = "Extension {0} did not succeed. Status was {1}".format(ext.name, status)
-                logger.warn(msg)
-                add_event(AGENT_NAME,
-                          version=CURRENT_VERSION,
-                          op=WALAEventOperation.ExtensionProcessing,
-                          is_success=False,
-                          message=msg)
-                return False
+            # First check if HandlerStatus was a success, if the Handler failed, no need to poll for extension status
+            handler_status = handler_i.get_handler_status()
+            if not handler_status:
+                msg = "No HandlerStatus available for Handler: {0}, marking the extension as failed".format(
+                    ext_handler.name)
+                return _report_error_event_and_return_false(msg)
+
+            if handler_status.code != ExtensionErrorCodes.PluginSuccess:
+                msg = "Handler: {0} failed with error code: {1}, marking the extension as failed".format(
+                    ext_handler.name, handler_status.code)
+                return _report_error_event_and_return_false(msg)
+
+            # Loop through all settings of the Handler and verify all extensions reported success status in status file
+            # Currently, we only support 1 extension (runtime-settings) per handler
+            for ext in ext_handler.properties.extensions:
+
+                # Keep polling for the extension status until it succeeds or times out
+                while datetime.datetime.utcnow() <= wait_until:
+                    ext_completed, status = handler_i.is_ext_handling_complete(ext)
+                    if ext_completed:
+                        break
+                    time.sleep(5)
+
+                # In case of timeout or terminal error state, we log it and return false
+                if datetime.datetime.utcnow() > wait_until:
+                    msg = "Extension {0} did not reach a terminal state within the allowed timeout. Last status was {1}".format(
+                        ext.name, status)
+                    return _report_error_event_and_return_false(msg)
+
+                if status != ValidHandlerStatus.success:
+                    msg = "Extension {0} did not succeed. Status was {1}".format(ext.name, status)
+                    return _report_error_event_and_return_false(msg)
+
+        except Exception as error:
+            msg = "Failed to wait for Handler completion due to unknown error. Marking the extension as failed: {0}, {1}".format(
+                ustr(error), traceback.format_exc())
+            return _report_error_event_and_return_false(msg)
 
         return True
 
@@ -1204,13 +1224,15 @@ class ExtHandlerInstance(object): # pylint: disable=R0904
 
     def get_ext_handling_status(self, ext):
         seq_no, ext_status_file = self.get_status_file_path(ext)
+
+        # This is legacy scenario for cases when no extension settings is available
         if seq_no < 0 or ext_status_file is None:
             return None
 
         # Missing status file is considered a non-terminal state here
         # so that extension sequencing can wait until it becomes existing
         if not os.path.exists(ext_status_file):
-            status = "warning"
+            status = ValidHandlerStatus.warning
         else:
             ext_status = self.collect_ext_status(ext)
             status = ext_status.status if ext_status is not None else None
@@ -1222,14 +1244,14 @@ class ExtHandlerInstance(object): # pylint: disable=R0904
 
         # when seq < 0 (i.e. no new user settings), the handling is complete and return None status
         if status is None:
-            return (True, None)
+            return True, None
 
         # If not in terminal state, it is incomplete
         if status not in _EXTENSION_TERMINAL_STATUSES:
-            return (False, status)
+            return False, status
 
         # Extension completed, return its status
-        return (True, status)
+        return True, status
 
     def report_ext_status(self):
         active_exts = []
@@ -1469,6 +1491,8 @@ class ExtHandlerInstance(object): # pylint: disable=R0904
                 is_success=False,
                 message=error_msg)
             raise
+
+        return None
 
     def get_extension_package_zipfile_name(self):
         return "{0}__{1}{2}".format(self.ext_handler.name,
