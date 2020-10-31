@@ -751,6 +751,37 @@ class TestExtension(ExtensionTestCase):
         self.assertEqual(exthandlers_handler.ext_handlers.extHandlers[0].properties.extensions[0].dependencyLevel, 6)
         self.assertEqual(exthandlers_handler.ext_handlers.extHandlers[1].properties.extensions[0].dependencyLevel, 5)
 
+    def test_ext_handler_sequencing_should_fail_if_handler_failed(self, mock_get, mock_crypt, *args):
+        test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE_EXT_SEQUENCING)
+        exthandlers_handler, protocol = self._create_mock(test_data, mock_get, mock_crypt, *args)
+
+        original_popen = subprocess.Popen
+        def mock_fail_popen(_, **kwargs):
+            return original_popen("fail_this_command", **kwargs)
+
+        with patch("subprocess.Popen", mock_fail_popen):
+            exthandlers_handler.run()
+
+        self._assert_handler_status(protocol.report_vm_status, "NotReady", 0, "1.0.0",
+                                    expected_handler_name="OSTCExtensions.OtherExampleHandlerLinux")
+
+        # Test it recovers on a new goal state if Handler succeeds
+        test_data.set_incarnation(2)
+        test_data.set_extensions_config_sequence_number(1)
+        protocol.update_goal_state()
+
+        exthandlers_handler.run()
+        self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.0.0",
+                                    expected_handler_name="OSTCExtensions.OtherExampleHandlerLinux")
+        self._assert_ext_status(protocol.report_ext_status, "success", 1)
+
+        # check handler list and dependency levels
+        self.assertTrue(exthandlers_handler.ext_handlers is not None)
+        self.assertTrue(exthandlers_handler.ext_handlers.extHandlers is not None)
+        self.assertEqual(len(exthandlers_handler.ext_handlers.extHandlers), 2)
+        self.assertEqual(exthandlers_handler.ext_handlers.extHandlers[0].properties.extensions[0].dependencyLevel, 1)
+        self.assertEqual(exthandlers_handler.ext_handlers.extHandlers[1].properties.extensions[0].dependencyLevel, 2)
+
     def test_ext_handler_sequencing_default_dependency_level(self, *args):
         test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE)
         exthandlers_handler, protocol = self._create_mock(test_data, *args) # pylint: disable=unused-variable,no-value-for-parameter
@@ -1207,24 +1238,25 @@ class TestExtension(ExtensionTestCase):
         self._assert_ext_status(protocol.report_ext_status, ValidHandlerStatus.error, 0)
 
     def test_wait_for_handler_successful_completion_empty_exts(self, *args):
-        '''
+        """
         Testing wait_for_handler_successful_completion() when there is no extension in a handler.
         Expected to return True.
-        '''
+        """
         test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE)
         exthandlers_handler, protocol = self._create_mock(test_data, *args) # pylint: disable=unused-variable,no-value-for-parameter
 
         handler = ExtHandler(name="handler")
+        ExtHandlerInstance(handler, protocol).set_handler_status("Ready")
 
         ExtHandlerInstance.get_ext_handling_status = MagicMock(return_value=None)
         self.assertTrue(exthandlers_handler.wait_for_handler_successful_completion(handler, datetime.datetime.utcnow()))
 
     def _helper_wait_for_handler_successful_completion(self, exthandlers_handler):
-        '''
+        """
         Call wait_for_handler_successful_completion() passing a handler with an extension.
         Override the wait time to be 5 seconds to minimize the timout duration.
         Return the value returned by wait_for_handler_successful_completion().
-        '''
+        """
         handler_name = "Handler"
         exthandler = ExtHandler(name=handler_name)
         extension = Extension(name=handler_name)
@@ -1232,13 +1264,14 @@ class TestExtension(ExtensionTestCase):
 
         # Override the timeout value to minimize the test duration
         wait_until = datetime.datetime.utcnow() + datetime.timedelta(seconds=0.1)
+        ExtHandlerInstance(exthandler, Mock()).set_handler_status("Ready")
         return exthandlers_handler.wait_for_handler_successful_completion(exthandler, wait_until)
 
     def test_wait_for_handler_successful_completion_no_status(self, *args):
-        '''
+        """
         Testing wait_for_handler_successful_completion() when there is no status file or seq_no is negative.
         Expected to return False.
-        '''
+        """
         test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE)
         exthandlers_handler, protocol = self._create_mock(test_data, *args) # pylint: disable=unused-variable,no-value-for-parameter
 
@@ -2156,7 +2189,7 @@ class TestExtensionSequencing(AgentTestCase):
         handler.ext_handlers, handler.last_etag = protocol.get_ext_handlers()
         conf.get_enable_overprovisioning = Mock(return_value=False)
 
-        def wait_for_handler_successful_completion(prev_handler, wait_until): # pylint: disable=unused-argument
+        def wait_for_handler_successful_completion(prev_handler, _):
             return orig_wait_for_handler_successful_completion(prev_handler,
                                                                datetime.datetime.utcnow() + datetime.timedelta(
                                                                    seconds=5))
@@ -2166,21 +2199,21 @@ class TestExtensionSequencing(AgentTestCase):
         return handler
 
     def _set_dependency_levels(self, dependency_levels, exthandlers_handler):
-        '''
+        """
         Creates extensions with the given dependencyLevel
-        '''
+        """
         handler_map = dict()
         all_handlers = []
-        for h, level in dependency_levels: # pylint: disable=invalid-name
-            if handler_map.get(h) is None:
-                handler = ExtHandler(name=h)
-                extension = Extension(name=h)
+        for handler_name, level in dependency_levels:
+            if handler_map.get(handler_name) is None:
+                handler = ExtHandler(name=handler_name)
+                extension = Extension(name=handler_name)
                 handler.properties.state = ExtensionRequestedState.Enabled
                 handler.properties.extensions.append(extension)
-                handler_map[h] = handler
+                handler_map[handler_name] = handler
                 all_handlers.append(handler)
 
-            handler = handler_map[h]
+            handler = handler_map[handler_name]
             for ext in handler.properties.extensions:
                 ext.dependencyLevel = level
 
@@ -2194,21 +2227,23 @@ class TestExtensionSequencing(AgentTestCase):
                              "Expected and actual list of extensions are not equal")
 
     def _run_test(self, extensions_to_be_failed, expected_sequence, exthandlers_handler):
-        '''
+        """
         Mocks get_ext_handling_status() to mimic error status for a given extension.
         Calls ExtHandlersHandler.run()
         Verifies if the ExtHandlersHandler.handle_ext_handler() was called with appropriate extensions
         in the expected order.
-        '''
+        """
 
         def get_ext_handling_status(ext):
             status = "error" if ext.name in extensions_to_be_failed else "success"
             return status
 
-        ExtHandlerInstance.get_ext_handling_status = MagicMock(side_effect=get_ext_handling_status)
         exthandlers_handler.handle_ext_handler = MagicMock()
-        exthandlers_handler.run()
-        self._validate_extension_sequence(expected_sequence, exthandlers_handler)
+
+        with patch.object(ExtHandlerInstance, "get_ext_handling_status", side_effect=get_ext_handling_status):
+            with patch.object(ExtHandlerInstance, "get_handler_status", ExtHandlerStatus):
+                exthandlers_handler.run()
+                self._validate_extension_sequence(expected_sequence, exthandlers_handler)
 
     def test_handle_ext_handlers(self, *args):
         '''

@@ -430,6 +430,7 @@ class ExtHandlersHandler(object):
 
             # Loop through all settings of the Handler and verify all extensions reported success status in status file
             # Currently, we only support 1 extension (runtime-settings) per handler
+            ext_completed, status = False, None
             for ext in ext_handler.properties.extensions:
 
                 # Keep polling for the extension status until it succeeds or times out
@@ -440,7 +441,8 @@ class ExtHandlersHandler(object):
                     time.sleep(5)
 
                 # In case of timeout or terminal error state, we log it and return false
-                if datetime.datetime.utcnow() > wait_until:
+                # Incase extension reported status at the last sec, we should prioritize reporting status over timeout
+                if not ext_completed and datetime.datetime.utcnow() > wait_until:
                     msg = "Extension {0} did not reach a terminal state within the allowed timeout. Last status was {1}".format(
                         ext.name, status)
                     return _report_error_event_and_return_false(msg)
@@ -1478,11 +1480,11 @@ class ExtHandlerInstance(object): # pylint: disable=R0904
             handler_status = ExtHandlerStatus()
             set_properties("ExtHandlerStatus", handler_status, data)
             return handler_status
-        except (IOError, ValueError) as e: # pylint: disable=C0103
-            self.logger.error("Failed to get handler status: {0}", e)
-        except Exception as e: # pylint: disable=C0103
+        except (IOError, ValueError) as error:
+            self.logger.error("Failed to get handler status: {0}", error)
+        except Exception as error:
             error_msg = "Failed to get handler status message: {0}.\n Contents of file: {1}".format(
-                ustr(e), handler_status_contents).replace('"', '\'')
+                ustr(error), handler_status_contents).replace('"', '\'')
             add_periodic(
                 delta=logger.EVERY_HOUR,
                 name=AGENT_NAME,
