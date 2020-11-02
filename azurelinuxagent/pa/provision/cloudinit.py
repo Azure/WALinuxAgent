@@ -19,7 +19,6 @@
 
 import os
 import os.path
-import subprocess
 import time
 
 from datetime import datetime
@@ -35,6 +34,7 @@ from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.protocol.util import OVF_FILE_NAME
 from azurelinuxagent.common.protocol.ovfenv import OvfEnv
 from azurelinuxagent.pa.provision.default import ProvisionHandler
+from azurelinuxagent.pa.provision.cloudinitdetect import cloud_init_is_enabled
 
 
 class CloudInitProvisionHandler(ProvisionHandler):
@@ -92,8 +92,8 @@ class CloudInitProvisionHandler(ProvisionHandler):
                         "sleeping {2}s]".format(ovf_file_path,
                                                 max_retry - retry,
                                                 sleep_time))
-                    if not self.validate_cloud_init():
-                        logger.warn("cloud-init does not appear to be running")
+                    if not cloud_init_is_enabled():
+                        logger.warn("cloud-init does not appear to be enabled")
                     time.sleep(sleep_time)
         raise ProvisionError("Giving up, ovf-env.xml was not copied to {0} "
                              "after {1}s".format(ovf_file_path,
@@ -120,75 +120,9 @@ class CloudInitProvisionHandler(ProvisionHandler):
                             "sleeping {2}s]".format(path,
                                                     max_retry - retry,
                                                     sleep_time))
-                if not self.validate_cloud_init():
+                if not cloud_init_is_enabled():
                     logger.warn("cloud-init does not appear to be running")
                 time.sleep(sleep_time)
         raise ProvisionError("Giving up, ssh host key was not found at {0} "
                              "after {1}s".format(path,
                                                  max_retry * sleep_time))
-
-def _cloud_init_is_enabled_systemd():
-    """
-    Determine whether or not cloud-init is enabled on a systemd machine.
-
-    Args:
-        None
-
-    Returns:
-        bool: True if cloud-init is enabled, False if otherwise.
-    """
-
-    try:
-        systemctl_output = subprocess.check_output([
-            'systemctl',
-            'is-enabled',
-            'cloud-init-local.service'
-        ], stderr=subprocess.STDOUT).decode('utf-8').replace('\n', '')
-
-        unit_is_enabled = systemctl_output == 'enabled'
-    except Exception as exc:
-        logger.info('Unable to get cloud-init enabled status from systemctl: {0}'.format(exc))
-        unit_is_enabled = False
-
-    return unit_is_enabled
-
-def _cloud_init_is_enabled_service():
-    """
-    Determine whether or not cloud-init is enabled on a non-systemd machine.
-
-    Args:
-        None
-
-    Returns:
-        bool: True if cloud-init is enabled, False if otherwise.
-    """
-
-    try:
-        subprocess.check_output([
-            'service',
-            'cloud-init',
-            'status'
-        ], stderr=subprocess.STDOUT)
-
-        unit_is_enabled = True
-    except Exception as exc:
-        logger.info('Unable to get cloud-init enabled status from service: {0}'.format(exc))
-        unit_is_enabled = False
-
-    return unit_is_enabled
-
-def cloud_init_is_enabled():
-    """
-    Determine whether or not cloud-init is enabled.
-
-    Args:
-        None
-
-    Returns:
-        bool: True if cloud-init is enabled, False if otherwise.
-    """
-
-    unit_is_enabled = _cloud_init_is_enabled_systemd() or _cloud_init_is_enabled_service()
-    logger.info('cloud-init is enabled: {0}'.format(unit_is_enabled))
-
-    return unit_is_enabled

@@ -40,7 +40,7 @@ from azurelinuxagent.common.osutil import get_osutil
 from azurelinuxagent.common.protocol.restapi import ProvisionStatus
 from azurelinuxagent.common.protocol.util import get_protocol_util
 from azurelinuxagent.common.version import AGENT_NAME
-from azurelinuxagent.pa.provision.cloudinit import cloud_init_is_enabled
+from azurelinuxagent.pa.provision.cloudinitdetect import cloud_init_is_enabled
 
 CUSTOM_DATA_FILE = "CustomData"
 CLOUD_INIT_PATTERN = b".*/bin/cloud-init.*"
