@@ -64,15 +64,13 @@ class TestOSUtil(AgentTestCase): # pylint: disable=too-many-public-methods
 
             # assert
             self.assertEqual(run_patch.call_count, retries)
-
             cmd_queue = list(args[0] for (args, _) in run_patch.call_args_list)            
             while cmd_queue:
                 self.assertEqual(cmd_queue.pop(0), ["ifdown", ifname])
                 # We don't expect the following command to be called because 'dummy' does
                 # not exist.
                 self.assertNotEqual(cmd_queue[0] if cmd_queue else None, ["ifup", ifname])
-
-
+                
     def test_get_dvd_device_success(self):
         with patch.object(os, 'listdir', return_value=['cpu', 'cdrom0']):
             osutil.DefaultOSUtil().get_dvd_device()

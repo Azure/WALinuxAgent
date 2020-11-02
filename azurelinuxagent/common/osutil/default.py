@@ -1146,14 +1146,13 @@ class DefaultOSUtil(object): # pylint: disable=R0904
                 return
             except shellutil.CommandError as cmd_err:
                 
-                msg = """failed to restart {0}: returncode={1}
-                [stdout]
-                {2}
+                msg = "failed to restart {0}: returncode={1}\n[stdout]{2}\n\n[stderr]{3}\n"\
+                    .format(ifname, cmd_err.returncode, cmd_err.stdout, cmd_err.stderr)
                 
-                [stderr]
-                {3}
-                """.format(ifname, cmd_err.returncode, cmd_err.stdout, cmd_err.stderr)
-                logger.warn(msg)
+                if cmd_err.returncode == 1:
+                    logger.info(msg)
+                else:
+                    logger.warn(msg)
 
                 if attempt < retry_limit:
                     logger.info("retrying in {0} seconds".format(wait))
