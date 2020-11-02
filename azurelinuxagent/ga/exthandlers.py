@@ -1096,9 +1096,9 @@ class ExtHandlerInstance(object): # pylint: disable=R0904
         """
         The sequence number is not guaranteed to always be strictly increasing. To ensure we always get the latest one,
         fetching the sequence number from config file that was last modified (and not necessarily the largest).
-        :return: Last modified Sequence number
+        :return: Last modified Sequence number or -1 on errors
 
-        Note: This function is going to be deprecated soon. We should rely only on seqNo from GoalState rather than file system.
+        Note: This function is going to be deprecated soon. We should only rely on seqNo from GoalState rather than file system.
         """
         seq_no = -1
 
@@ -1128,10 +1128,10 @@ class ExtHandlerInstance(object): # pylint: disable=R0904
     def get_status_file_path(self, extension=None):
         path = None
         # Todo: Remove check on filesystem for fetching sequence number (legacy behaviour).
-        # We should technically not rely on the filesystem at all for fetching the sequence number,
-        # it should only be fetched from GoalState. But since we still have Kusto data from the operation below
-        # (~0.000065% VMs are still reporting WALAEventOperation.SequenceNumberMismatch), keeping this as is with
-        # modified logic for fetching sequence number from filesystem. Based on the new data we will phase this out slowly.
+        # We should technically only fetch the sequence number from GoalState and not rely on the filesystem at all,
+        # But since we still have Kusto data from the operation below (~0.000065% VMs are still reporting
+        # WALAEventOperation.SequenceNumberMismatch), keeping this as is with modified logic for fetching
+        # sequence number from filesystem. Based on the new data we will eventually phase this out.
         seq_no = self._get_last_modified_seq_no_from_config_files()
 
         # Issue 1116: use the sequence number from goal state where possible

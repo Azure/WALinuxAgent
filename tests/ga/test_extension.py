@@ -2745,7 +2745,7 @@ class TestCollectExtensionStatus(ExtensionTestCase):
         self.assertEqual(sub_status.status, ValidHandlerStatus.success)
 
     @patch("azurelinuxagent.common.conf.get_lib_dir")
-    def test_it_should_collect_ext_status_when_config_dir_deleted(self, mock_lib_dir, *args):
+    def test_it_should_collect_ext_status_even_when_config_dir_deleted(self, mock_lib_dir, *args):
 
         ext_handler_i, extension = self._setup_extension_for_validating_collect_ext_status(mock_lib_dir,
                                                                                            "sample-status.json", *args)
