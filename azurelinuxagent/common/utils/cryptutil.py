@@ -46,13 +46,8 @@ class CryptUtil(object):
         try:
             shellutil.run_command(cmd)
         except shellutil.CommandError as cmd_err:
-            msg = """Failed to create {0} and {1} certificates.
-            [stdout]
-            {2}
-
-            [stderr]
-            {3}
-            """.format(prv_file, crt_file, cmd_err.stdout, cmd_err.stderr)
+            msg = "Failed to create {0} and {1} certificates.\n[stdout]\n{2}\n\n[stderr]\n{3}\n"\
+                .format(prv_file, crt_file, cmd_err.stdout, cmd_err.stderr)
             logger.error(msg)
 
     def get_pubkey_from_prv(self, file_name):
@@ -96,19 +91,13 @@ class CryptUtil(object):
             second_proc = subprocess.Popen(second_cmd, stdin=first_proc.stdout, stdout=subprocess.PIPE)
             first_proc.stdout.close()  # see https://docs.python.org/2/library/subprocess.html#replacing-shell-pipeline
             stdout, stderr = second_proc.communicate()
-            first_proc.poll()  # ensure that returncode is initialized
 
-            if first_proc.returncode != 0 or second_proc.returncode != 0:
+            if second_proc.returncode != 0:
                 stdout = ustr(stdout, encoding='utf-8', errors="backslashreplace") if stdout else ""
                 stderr =  ustr(stderr, encoding='utf-8', errors="backslashreplace") if stderr else ""
 
-                msg = """Failed to decrypt {0}
-                [stdout]
-                {1}
-
-                [stderr]
-                {2}
-                """.format(p7m_file, stdout, stderr)
+                msg = "Failed to decrypt {0}\n[stdout]\n{1}\n\n[stderr]\n{2}\n"\
+                    .format(p7m_file, stdout, stderr)
                 logger.error(msg)
             
 
