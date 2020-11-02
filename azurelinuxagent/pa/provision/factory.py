@@ -28,6 +28,7 @@ def get_provision_handler(distro_name=DISTRO_NAME, # pylint: disable=W0613
                             distro_full_name=DISTRO_FULL_NAME): # pylint: disable=W0613
 
     provisioning_agent = conf.get_provisioning_agent()
+    logger.info('Conf provisioning agent: {}'.format(provisioning_agent))
 
     if provisioning_agent == 'cloud-init' or (
             provisioning_agent == 'auto' and
