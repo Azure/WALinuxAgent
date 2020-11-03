@@ -150,11 +150,15 @@ class GaiaOSUtil(DefaultOSUtil):
     def eject_dvd(self, chk_err=True):
         logger.warn('eject is not supported on GAiA')
 
-    def mount(self, device, mount_point, option=[], chk_err=True):
+    def mount(self, device, mount_point, option=None, chk_err=True):
         logger.info('mount {0} {1} {2}', device, mount_point, " ".join(option))
-        if filter(option, lambda opt: 'udf,iso9660' in opt):
-            ret, out = super(GaiaOSUtil, self).mount(
-                device, mount_point, option=list(map(option, lambda opt: opt.replace('udf,iso9660', 'udf'))),
+
+        if not option:
+            option = []
+
+        if any('udf,iso9660' in opt for opt in option):
+            ret, out = super(GaiaOSUtil, self).mount(device, mount_point,
+                option=[opt.replace('udf,iso9660', 'udf') for opt in option],
                 chk_err=chk_err)
             if not ret:
                 return ret, out
