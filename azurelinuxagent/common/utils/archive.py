@@ -73,7 +73,10 @@ class StateFlusher(object):
             return
 
         archive_name = self._get_archive_name(files)
-        if archive_name and self._mkdir(archive_name):
+        if archive_name is None:
+            return
+
+        if self._mkdir(archive_name):
             self._archive(files, archive_name)
         else:
             self._purge(files)
