@@ -16,14 +16,12 @@
 #
 # Requires Python 2.6+ and Openssl 1.0+
 
-import datetime
 import json
 import os
 import random
 import time
 import traceback
 import xml.sax.saxutils as saxutils
-from datetime import datetime # pylint: disable=ungrouped-imports
 
 import azurelinuxagent.common.conf as conf
 import azurelinuxagent.common.logger as logger
@@ -759,8 +757,7 @@ class WireClient(object): # pylint: disable=R0904
 
     def _save_goal_state(self):
         try:
-            self.goal_state_flusher.flush(datetime.utcnow())
-
+            self.goal_state_flusher.flush()
         except Exception as e: # pylint: disable=C0103
             logger.warn("Failed to save the previous goal state to the history folder: {0}", ustr(e))
 
