@@ -25,7 +25,6 @@ import time
 import unittest
 import uuid
 
-from azurelinuxagent.common.exception import IncompleteGoalStateError
 from azurelinuxagent.common.exception import InvalidContainerError, ResourceGoneError, ProtocolError, \
     ExtensionDownloadError, HttpError
 from azurelinuxagent.common.protocol.goal_state import ExtensionsConfig
