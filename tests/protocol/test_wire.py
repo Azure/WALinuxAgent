@@ -26,6 +26,7 @@ import unittest
 import uuid
 from datetime import datetime, timedelta
 
+from azurelinuxagent.common import conf
 from azurelinuxagent.common.exception import InvalidContainerError, ResourceGoneError, ProtocolError, \
     ExtensionDownloadError, HttpError
 from azurelinuxagent.common.protocol.goal_state import ExtensionsConfig
