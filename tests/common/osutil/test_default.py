@@ -56,16 +56,22 @@ class TestOSUtil(AgentTestCase): # pylint: disable=too-many-public-methods
         # setup
         retries = 3
         ifname = 'dummy'
-        with patch.object(shellutil, "run") as run_patch:
-            run_patch.return_value = 1
+        with patch.object(shellutil, "run_command") as run_patch:
+            run_patch.side_effect = shellutil.CommandError("ifupdown dummy", 1, "", "")
 
             # execute
             osutil.DefaultOSUtil.restart_if(osutil.DefaultOSUtil(), ifname=ifname, retries=retries, wait=0)
 
             # assert
             self.assertEqual(run_patch.call_count, retries)
-            self.assertEqual(run_patch.call_args_list[0][0][0], 'ifdown {0} && ifup {0}'.format(ifname))
 
+            cmd_queue = list(args[0] for (args, _) in run_patch.call_args_list)            
+            while cmd_queue:
+                self.assertEqual(cmd_queue.pop(0), ["ifdown", ifname])
+                # We don't expect the following command to be called because 'dummy' does
+                # not exist.
+                self.assertNotEqual(cmd_queue[0] if cmd_queue else None, ["ifup", ifname])
+                
     def test_get_dvd_device_success(self):
         with patch.object(os, 'listdir', return_value=['cpu', 'cdrom0']):
             osutil.DefaultOSUtil().get_dvd_device()
