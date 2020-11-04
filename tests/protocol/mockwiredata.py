@@ -47,10 +47,6 @@ DATA_FILE_NO_EXT = DATA_FILE.copy()
 DATA_FILE_NO_EXT["goal_state"] = "wire/goal_state_no_ext.xml"
 DATA_FILE_NO_EXT["ext_conf"] = None
 
-DATA_FILE_NOOP_GS = DATA_FILE.copy()
-DATA_FILE_NOOP_GS["goal_state"] = "wire/goal_state_noop.xml"
-DATA_FILE_NOOP_GS["ext_conf"] = None
-
 DATA_FILE_EXT_NO_SETTINGS = DATA_FILE.copy()
 DATA_FILE_EXT_NO_SETTINGS["ext_conf"] = "wire/ext_conf_no_settings.xml"
 
