@@ -71,7 +71,7 @@ class ExtensionEventSchema(object): # pylint: disable=R0903
 
 class _ProcessExtensionEventsPeriodicOperation(PeriodicOperation):
     """
-    Periodic operation for collecting and sending extension telemetry events to Wireserver.
+    Periodic operation for collecting extension telemetry events and enqueueing them for the SendTelemetryHandler thread.
     """
 
     _EXTENSION_EVENT_COLLECTION_PERIOD = datetime.timedelta(minutes=5)
@@ -191,9 +191,9 @@ class _ProcessExtensionEventsPeriodicOperation(PeriodicOperation):
                         continue
 
                     # We support multiple events in a file, read the file and parse events.
-                    captured_extension_events_count = self._get_captured_events_count(handler_name, event_file_path,
-                                                                    captured_extension_events_count,
-                                                                    dropped_events_with_error_count)
+                    captured_extension_events_count = self._enqueue_events_and_get_count(handler_name, event_file_path,
+                                                                                         captured_extension_events_count,
+                                                                                         dropped_events_with_error_count)
 
                     # We only allow MAX_NUMBER_OF_EVENTS_PER_EXTENSION_PER_PERIOD=300 maximum events per period per handler
                     if captured_extension_events_count >= self._MAX_NUMBER_OF_EVENTS_PER_EXTENSION_PER_PERIOD:
@@ -250,8 +250,8 @@ class _ProcessExtensionEventsPeriodicOperation(PeriodicOperation):
                 if err is not None:
                     logger.error("Failed to completely clear the {0} directory. Exception: {1}", event_dir_path, err)
 
-    def _get_captured_events_count(self, handler_name, event_file_path, captured_events_count,
-                                   dropped_events_with_error_count):
+    def _enqueue_events_and_get_count(self, handler_name, event_file_path, captured_events_count,
+                                      dropped_events_with_error_count):
 
         event_file_time = datetime.datetime.fromtimestamp(os.path.getmtime(event_file_path))
 
@@ -384,7 +384,8 @@ class _ProcessExtensionEventsPeriodicOperation(PeriodicOperation):
 
 class _CollectAndEnqueueEventsPeriodicOperation(PeriodicOperation):
     """
-    Periodic operation to collect and send telemetry events located in the events folder
+    Periodic operation to collect telemetry events located in the events folder and enqueue them for the
+    SendTelemetryHandler thread.
     """
 
     _EVENT_COLLECTION_PERIOD = datetime.timedelta(minutes=1)
