@@ -757,8 +757,7 @@ class WireClient(object): # pylint: disable=R0904
 
     def _save_goal_state(self):
         try:
-            self.goal_state_flusher.flush(datetime.utcnow())
-
+            self.goal_state_flusher.flush()
         except Exception as e: # pylint: disable=C0103
             logger.warn("Failed to save the previous goal state to the history folder: {0}", ustr(e))
 
