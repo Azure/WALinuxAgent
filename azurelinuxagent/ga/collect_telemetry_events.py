@@ -408,7 +408,7 @@ class _CollectAndEnqueueEventsPeriodicOperation(PeriodicOperation):
                 return
             self.process_events()
         except Exception as error:
-            err_msg = "Failure in collecting Agent events: {0}".format(ustr(error))
+            err_msg = "Failure in collecting telemetry events: {0}".format(ustr(error))
             add_event(op=WALAEventOperation.UnhandledError, message=err_msg, is_success=False)
 
     def process_events(self):

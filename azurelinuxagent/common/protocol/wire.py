@@ -23,13 +23,13 @@ import time
 import traceback
 import xml.sax.saxutils as saxutils
 from collections import defaultdict
-from datetime import datetime
 
 import azurelinuxagent.common.conf as conf
 import azurelinuxagent.common.logger as logger
 import azurelinuxagent.common.utils.textutil as textutil
 from azurelinuxagent.common.datacontract import validate_param
-from azurelinuxagent.common.event import add_event, add_periodic, WALAEventOperation, report_event, CollectOrReportEventDebugInfo
+from azurelinuxagent.common.event import add_event, add_periodic, WALAEventOperation, report_event, \
+    CollectOrReportEventDebugInfo
 from azurelinuxagent.common.exception import ProtocolNotFoundError, \
     ResourceGoneError, ExtensionDownloadError, InvalidContainerError, ProtocolError, HttpError
 from azurelinuxagent.common.future import httpclient, bytebuffer, ustr
