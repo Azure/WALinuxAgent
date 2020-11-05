@@ -31,11 +31,10 @@ from mock import patch, MagicMock
 from azurelinuxagent.common import conf
 from azurelinuxagent.common.event import EVENTS_DIRECTORY
 from azurelinuxagent.common.exception import InvalidExtensionEventError, ServiceStoppedError
-from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.protocol.util import ProtocolUtil
 from azurelinuxagent.common.telemetryevent import GuestAgentGenericLogsSchema, \
     CommonTelemetryEventSchema
-from azurelinuxagent.common.utils import fileutil, textutil
+from azurelinuxagent.common.utils import fileutil
 from azurelinuxagent.ga.collect_telemetry_events import ExtensionEventSchema, _ProcessExtensionEventsPeriodicOperation
 from tests.protocol.mocks import HttpRequestPredicates
 from tests.tools import AgentTestCase, clear_singleton_instances, data_dir

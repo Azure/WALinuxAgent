@@ -15,34 +15,28 @@
 # Requires Python 2.6+ and Openssl 1.0+
 #
 import contextlib
+import json
+import os
+import platform
 import re
+import tempfile
 import time
 import uuid
 from datetime import datetime, timedelta
 
-import tempfile
-
-import os
-
-import json
-
-import platform
-
 from mock import MagicMock, Mock, patch, PropertyMock
-from azurelinuxagent.common.osutil.factory import get_osutil
 
 from azurelinuxagent.common import logger
 from azurelinuxagent.common.datacontract import get_properties
-
-from azurelinuxagent.common.utils import restutil, fileutil, textutil
-
 from azurelinuxagent.common.event import WALAEventOperation, EVENTS_DIRECTORY
 from azurelinuxagent.common.exception import HttpError, ServiceStoppedError
 from azurelinuxagent.common.future import ustr
+from azurelinuxagent.common.osutil.factory import get_osutil
 from azurelinuxagent.common.protocol.util import ProtocolUtil
 from azurelinuxagent.common.protocol.wire import event_to_v1
 from azurelinuxagent.common.telemetryevent import TelemetryEvent, TelemetryEventParam, \
     GuestAgentExtensionEventsSchema
+from azurelinuxagent.common.utils import restutil, fileutil
 from azurelinuxagent.common.version import CURRENT_VERSION, DISTRO_NAME, DISTRO_VERSION, AGENT_VERSION, CURRENT_AGENT, \
     DISTRO_CODE_NAME
 from azurelinuxagent.ga.collect_telemetry_events import _CollectAndEnqueueEventsPeriodicOperation
