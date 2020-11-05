@@ -24,7 +24,7 @@ import azurelinuxagent.common.utils.networkutil as networkutil
 from azurelinuxagent.common.cgroupconfigurator import CGroupConfigurator
 from azurelinuxagent.common.cgroupstelemetry import CGroupsTelemetry
 from azurelinuxagent.common.errorstate import ErrorState
-from azurelinuxagent.common.event import add_event, WALAEventOperation, report_metric, collect_events
+from azurelinuxagent.common.event import add_event, WALAEventOperation, report_metric
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.interfaces import ThreadHandlerInterface
 from azurelinuxagent.common.osutil import get_osutil
@@ -179,7 +179,6 @@ class MonitorHandler(ThreadHandlerInterface): # pylint: disable=R0902
         self.event_thread = None
         self._periodic_operations = [
             ResetPeriodicLogMessagesOperation(),
-            PeriodicOperation("collect_and_send_events", self.collect_and_send_events, self.EVENT_COLLECTION_PERIOD),
             ReportNetworkErrorsOperation(),
             PeriodicOperation("send_host_plugin_heartbeat", self.send_host_plugin_heartbeat, self.HOST_PLUGIN_HEARTBEAT_PERIOD),
             PeriodicOperation("send_imds_heartbeat", self.send_imds_heartbeat, self.IMDS_HEARTBEAT_PERIOD),
@@ -253,19 +252,6 @@ class MonitorHandler(ThreadHandlerInterface): # pylint: disable=R0902
                     PeriodicOperation.sleep_until_next_operation(self._periodic_operations)
         except Exception as e: # pylint: disable=C0103
             logger.error("An error occurred in the monitor thread; will exit the thread.\n{0}", ustr(e))
-
-    def collect_and_send_events(self):
-        """
-        Periodically send any events located in the events folder
-        """
-        try:
-            event_list = collect_events()
-
-            if len(event_list.events) > 0: # pylint: disable=len-as-condition
-                self.protocol.report_event(event_list)
-        except Exception as e: # pylint: disable=C0103
-            err_msg = "Failure in collecting/sending Agent events: {0}".format(ustr(e))
-            add_event(op=WALAEventOperation.UnhandledError, message=err_msg, is_success=False)
 
     def send_imds_heartbeat(self):
         """
