@@ -2245,8 +2245,12 @@ class TestExtensionSequencing(AgentTestCase):
                                                                datetime.datetime.utcnow() + datetime.timedelta(
                                                                    seconds=5))
 
+        def reset_etag():
+            handler.last_etag = 0
+
         orig_wait_for_handler_successful_completion = handler.wait_for_handler_successful_completion
         handler.wait_for_handler_successful_completion = wait_for_handler_successful_completion
+        handler.reset_etag = reset_etag
         return handler
 
     def _set_dependency_levels(self, dependency_levels, exthandlers_handler):
@@ -2290,6 +2294,7 @@ class TestExtensionSequencing(AgentTestCase):
             return status
 
         exthandlers_handler.handle_ext_handler = MagicMock()
+        exthandlers_handler.reset_etag()
 
         with patch.object(ExtHandlerInstance, "get_ext_handling_status", side_effect=get_ext_handling_status):
             with patch.object(ExtHandlerInstance, "get_handler_status", ExtHandlerStatus):
@@ -2297,12 +2302,12 @@ class TestExtensionSequencing(AgentTestCase):
                 self._validate_extension_sequence(expected_sequence, exthandlers_handler)
 
     def test_handle_ext_handlers(self, *args):
-        '''
+        """
         Tests extension sequencing among multiple extensions with dependencies.
         This test introduces failure in all possible levels and extensions.
         Verifies that the sequencing is in the expected order and a failure in one extension
         skips the rest of the extensions in the sequence.
-        '''
+        """
         exthandlers_handler = self._create_mock(*args) # pylint: disable=no-value-for-parameter
 
         self._set_dependency_levels([("A", 3), ("B", 2), ("C", 2), ("D", 1), ("E", 1), ("F", 1), ("G", 1)],
@@ -2341,12 +2346,12 @@ class TestExtensionSequencing(AgentTestCase):
         self._run_test(extensions_to_be_failed, expected_sequence, exthandlers_handler)
 
     def test_handle_ext_handlers_with_uninstallation(self, *args):
-        '''
+        """
         Tests extension sequencing among multiple extensions with dependencies when
         some extension are to be uninstalled.
         Verifies that the sequencing is in the expected order and the uninstallation takes place
         prior to all the installation/enable.
-        '''
+        """
         exthandlers_handler = self._create_mock(*args) # pylint: disable=no-value-for-parameter
 
         # "A", "D" and "F" are marked as to be uninstalled
@@ -2358,12 +2363,12 @@ class TestExtensionSequencing(AgentTestCase):
         self._run_test(extensions_to_be_failed, expected_sequence, exthandlers_handler)
 
     def test_handle_ext_handlers_fallback(self, *args):
-        '''
+        """
         This test makes sure that the extension sequencing is applied only when the user specifies
         dependency information in the extension.
         When there is no dependency specified, the agent is expected to assign dependencyLevel=0 to all extension.
         Also, it is expected to install all the extension no matter if there is any failure in any of the extensions.
-        '''
+        """
         exthandlers_handler = self._create_mock(*args) # pylint: disable=no-value-for-parameter
 
         self._set_dependency_levels([("A", 1), ("B", 1), ("C", 1), ("D", 1), ("E", 1), ("F", 1), ("G", 1)],
