@@ -17,14 +17,11 @@
 
 import os
 import unittest
-from datetime import datetime, timedelta
-from random import randint
 
 from azurelinuxagent.common.exception import HttpError, ResourceGoneError, InvalidContainerError
 import azurelinuxagent.common.utils.restutil as restutil
 from azurelinuxagent.common.utils.restutil import HTTP_USER_AGENT
 from azurelinuxagent.common.future import httpclient, ustr
-from tests.protocol.mocks import MockHttpResponse
 from tests.tools import AgentTestCase, call, Mock, MagicMock, patch
 
 
@@ -581,28 +578,27 @@ class TestHttpOperations(AgentTestCase): # pylint: disable=too-many-public-metho
         self.assertEqual(2, _http_request.call_count)
         self.assertEqual(1, _sleep.call_count)
 
-    def test_it_should_have_http_request_retries_with_linear_delay(self):
+    @patch("time.sleep")
+    @patch("azurelinuxagent.common.utils.restutil._http_request")
+    def test_http_request_retries_with_fibonacci_delay(self, _http_request, _sleep):
+        # Ensure the code is not a throttle code
+        self.assertFalse(httpclient.BAD_GATEWAY in restutil.THROTTLE_CODES)
 
-        self.assertTrue(httpclient.BAD_GATEWAY in restutil.RETRY_CODES, "Ensure that the test params are correct")
-        retry_delay_in_sec = 0.05
+        _http_request.side_effect = [
+                Mock(status=httpclient.BAD_GATEWAY)
+                    for i in range(restutil.DEFAULT_RETRIES)
+            ] + [Mock(status=httpclient.OK)]
 
-        for _ in range(3):
-            mock_resp = Mock(return_value=MockHttpResponse(status=httpclient.BAD_GATEWAY))
-            mock_conn = MagicMock(getresponse=mock_resp)
-            max_retry = randint(5, 10)
-            duration = None
-            with patch("azurelinuxagent.common.future.httpclient.HTTPConnection", return_value=mock_conn):
-                with self.assertRaises(HttpError):
-                    start_time = datetime.utcnow()
-                    restutil.http_get("http://foo.bar", retry_delay=retry_delay_in_sec, max_retry=max_retry)
-                duration = datetime.utcnow() - start_time
+        restutil.http_get("https://foo.bar",
+                            max_retry=restutil.DEFAULT_RETRIES+1)
 
-            self.assertEqual(max_retry, mock_resp.call_count, "Did not Retry the required amount of times")
-            upper_bound = timedelta(seconds=retry_delay_in_sec * (max_retry + 2))
-            lower_bound = timedelta(seconds=retry_delay_in_sec * (max_retry - 2))
-            self.assertTrue(upper_bound >= duration >= lower_bound,
-                            "The total duration for request not in acceptable range. UB: {0}; LB: {1}; Actual: {2}".format(
-                                upper_bound, lower_bound, duration))
+        self.assertEqual(restutil.DEFAULT_RETRIES+1, _http_request.call_count)
+        self.assertEqual(restutil.DEFAULT_RETRIES, _sleep.call_count)
+        self.assertEqual(
+            [
+                call(restutil._compute_delay(i+1, restutil.DELAY_IN_SECONDS))
+                    for i in range(restutil.DEFAULT_RETRIES)],
+            _sleep.call_args_list)
 
     @patch("time.sleep")
     @patch("azurelinuxagent.common.utils.restutil._http_request")
