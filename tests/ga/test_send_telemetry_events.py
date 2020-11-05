@@ -390,7 +390,7 @@ class TestSendTelemetryEventsHandler(AgentTestCase, HttpRequestPredicates):
                                                   test_eventpid, test_taskname, osversion, int(osutil.get_total_mem()),
                                                   osutil.get_processor_cores())
 
-            self.assertIn(sample_message.encode('utf-8'), collected_event)
+            self.assertIn(sample_message, collected_event)
 
     @patch("azurelinuxagent.common.conf.get_lib_dir")
     def test_collect_and_send_events_with_small_events(self, mock_lib_dir):
