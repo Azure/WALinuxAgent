@@ -25,13 +25,13 @@ import tempfile
 import time
 import unittest
 import uuid
-import zipfile # pylint: disable=unused-import
 
 import datetime
 
 from azurelinuxagent.common import conf
 from azurelinuxagent.common.cgroupconfigurator import CGroupConfigurator
 from azurelinuxagent.common.datacontract import get_properties
+from azurelinuxagent.common.event import WALAEventOperation
 from azurelinuxagent.common.utils import fileutil
 from azurelinuxagent.common.utils.fileutil import read_file
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
@@ -783,24 +783,41 @@ class TestExtension(ExtensionTestCase):
 
         original_popen = subprocess.Popen
 
-        def mock_fail_popen(_, **kwargs):
-            return original_popen("fail_this_command", **kwargs)
+        def _assert_event_reported_only_on_incarnation_change(patch_add_event, expected_count=1):
+            handler_seq_reporting = [kwargs for _, kwargs in patch_add_event.call_args_list if kwargs[
+                'op'] == WALAEventOperation.ExtensionProcessing and "marking the extension as failed" in kwargs[
+                                         'message']]
+            self.assertEqual(len(handler_seq_reporting), expected_count,
+                             "Error should be reported only on incarnation change")
 
-        with patch("subprocess.Popen", mock_fail_popen):
+        def mock_fail_extension_commands(args, **kwargs):
+            if 'sample.py' in args:
+                return original_popen("fail_this_command", **kwargs)
+            return original_popen(args, **kwargs)
+
+
+        with patch("subprocess.Popen", mock_fail_extension_commands):
             with patch('azurelinuxagent.ga.exthandlers.add_event') as patch_add_event:
                 exthandlers_handler.run()
 
                 self._assert_handler_status(protocol.report_vm_status, "NotReady", 0, "1.0.0",
                                             expected_handler_name="OSTCExtensions.OtherExampleHandlerLinux")
-                self.assertEqual(patch_add_event.call_count, 1, "Error should be reported")
 
-        # Assert that on rerun it should not report errors unless incarnation changes
-        # for _ in range(5):
-        #     with
-        #     exthandlers_handler.run()
+                _assert_event_reported_only_on_incarnation_change(patch_add_event, expected_count=1)
+
+                # Assert that on rerun it should not report errors unless incarnation changes
+                for _ in range(5):
+                    exthandlers_handler.run()
+                    _assert_event_reported_only_on_incarnation_change(patch_add_event, expected_count=1)
+
+                test_data.set_incarnation(2)
+                protocol.update_goal_state()
+                exthandlers_handler.run()
+                # We should report error again on incarnation change
+                _assert_event_reported_only_on_incarnation_change(patch_add_event, expected_count=2)
 
         # Test it recovers on a new goal state if Handler succeeds
-        test_data.set_incarnation(2)
+        test_data.set_incarnation(3)
         test_data.set_extensions_config_sequence_number(1)
         protocol.update_goal_state()
 
