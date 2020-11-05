@@ -422,7 +422,7 @@ class ExtHandlersHandler(object):
 
             # First check if HandlerStatus was a success, if the Handler failed, no need to poll for extension status
             handler_status = handler_i.get_handler_status()
-            if not handler_status:
+            if handler_status is None:
                 msg = "No HandlerStatus available for Handler: {0}, marking the extension as failed".format(
                     ext_handler.name)
                 return _report_error_event_and_return_false(msg)
