@@ -19,7 +19,6 @@
 import json
 import os
 import re
-import time
 
 import azurelinuxagent.common.conf as conf
 import azurelinuxagent.common.logger as logger
@@ -31,7 +30,6 @@ from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.protocol.restapi import Cert, CertList, Extension, ExtHandler, ExtHandlerList, \
     ExtHandlerVersionUri, RemoteAccessUser, RemoteAccessUsersList, \
     VMAgentManifest, VMAgentManifestList, VMAgentManifestUri
-from azurelinuxagent.common.exception import IncompleteGoalStateError
 from azurelinuxagent.common.utils import fileutil
 from azurelinuxagent.common.utils.cryptutil import CryptUtil
 from azurelinuxagent.common.utils.textutil import parse_doc, findall, find, findtext, getattrib, gettext
@@ -43,8 +41,6 @@ P7M_FILE_NAME = "Certificates.p7m"
 PEM_FILE_NAME = "Certificates.pem"
 TRANSPORT_CERT_FILE_NAME = "TransportCert.pem"
 TRANSPORT_PRV_FILE_NAME = "TransportPrivate.pem"
-
-_NUM_GS_FETCH_RETRIES = 6
 
 
 # too-many-instance-attributes<R0902> Disabled: The goal state consists of a good number of properties
@@ -64,22 +60,14 @@ class GoalState(object):  # pylint: disable=R0902
         directly.
 
         """
-        uri = GOAL_STATE_URI.format(wire_client.get_endpoint())
-
-        for _ in range(0, _NUM_GS_FETCH_RETRIES):
+        try:
+            uri = GOAL_STATE_URI.format(wire_client.get_endpoint())
             self.xml_text = wire_client.fetch_config(uri, wire_client.get_header())
             xml_doc = parse_doc(self.xml_text)
+
             self.incarnation = findtext(xml_doc, "Incarnation")
-
-            role_instance = find(xml_doc, "RoleInstance")
-            if role_instance:
-                break
-            time.sleep(0.5)
-        else:
-            raise IncompleteGoalStateError("Fetched goal state without a RoleInstance [incarnation {inc}]".format(inc=self.incarnation))
-
-        try:
             self.expected_state = findtext(xml_doc, "ExpectedState")
+            role_instance = find(xml_doc, "RoleInstance")
             self.role_instance_id = findtext(role_instance, "InstanceId")
             role_config = find(role_instance, "Configuration")
             self.role_config_name = findtext(role_config, "ConfigName")
@@ -90,11 +78,15 @@ class GoalState(object):  # pylint: disable=R0902
 
             AgentGlobals.update_container_id(self.container_id)
 
+            fetch_full_goal_state = False
             if full_goal_state:
+                fetch_full_goal_state = True
                 reason = 'force update'
-            elif base_incarnation not in (None, self.incarnation):
+            elif base_incarnation is not None and self.incarnation != base_incarnation:
+                fetch_full_goal_state = True
                 reason = 'new incarnation'
-            else:
+
+            if not fetch_full_goal_state:
                 self.hosting_env = None
                 self.shared_conf = None
                 self.certs = None
@@ -361,8 +353,9 @@ class ExtensionsConfig(object):  # pylint: disable=R0903
         name = ext_handler.name
         version = ext_handler.properties.version
 
-        ext_handler_plugin_settings = [x for x in plugin_settings if getattrib(x, "name") == name]
-        if ext_handler_plugin_settings is None or len(ext_handler_plugin_settings) == 0: # pylint: disable=len-as-condition
+        to_lower = lambda str_to_change: str_to_change.lower() if str_to_change is not None else None
+        ext_handler_plugin_settings = [x for x in plugin_settings if to_lower(getattrib(x, "name")) == to_lower(name)]
+        if not ext_handler_plugin_settings:
             return
 
         settings = [x for x in ext_handler_plugin_settings if getattrib(x, "version") == version]
@@ -372,7 +365,7 @@ class ExtensionsConfig(object):  # pylint: disable=R0903
                 set([getattrib(x, "version") for x in ext_handler_plugin_settings]))) 
             add_event(AGENT_NAME, op=WALAEventOperation.PluginSettingsVersionMismatch, message=msg, log_event=False,
                       is_success=False)
-            if len(settings) == 0: # pylint: disable=len-as-condition
+            if not settings:
                 # If there is no corresponding settings for the specific extension handler, we will not process it at all,
                 # this is an unexpected error as we always expect both versions to be in sync.
                 logger.error(msg)
