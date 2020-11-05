@@ -16,21 +16,20 @@
 #
 # Requires Python 2.6+ and Openssl 1.0+
 
-import datetime
 import json
 import os
 import random
 import time
 import traceback
 import xml.sax.saxutils as saxutils
-from datetime import datetime # pylint: disable=ungrouped-imports
+from collections import defaultdict
 
 import azurelinuxagent.common.conf as conf
 import azurelinuxagent.common.logger as logger
 import azurelinuxagent.common.utils.textutil as textutil
 from azurelinuxagent.common.datacontract import validate_param
-from azurelinuxagent.common.event import add_event, add_periodic, WALAEventOperation, EVENTS_DIRECTORY, EventLogger, \
-    report_event
+from azurelinuxagent.common.event import add_event, add_periodic, WALAEventOperation, report_event, \
+    CollectOrReportEventDebugInfo
 from azurelinuxagent.common.exception import ProtocolNotFoundError, \
     ResourceGoneError, ExtensionDownloadError, InvalidContainerError, ProtocolError, HttpError
 from azurelinuxagent.common.future import httpclient, bytebuffer, ustr
@@ -38,7 +37,7 @@ from azurelinuxagent.common.protocol.goal_state import GoalState, TRANSPORT_CERT
 from azurelinuxagent.common.protocol.hostplugin import HostPluginProtocol
 from azurelinuxagent.common.protocol.restapi import DataContract, ExtensionStatus, ExtHandlerPackage, \
     ExtHandlerPackageList, ExtHandlerVersionUri, ProvisionStatus, VMInfo, VMStatus
-from azurelinuxagent.common.telemetryevent import TelemetryEventList, GuestAgentExtensionEventsSchema
+from azurelinuxagent.common.telemetryevent import GuestAgentExtensionEventsSchema
 from azurelinuxagent.common.utils import fileutil, restutil
 from azurelinuxagent.common.utils.archive import StateFlusher
 from azurelinuxagent.common.utils.cryptutil import CryptUtil
@@ -189,9 +188,8 @@ class WireProtocol(DataContract):
         validate_param("ext_status", ext_status, ExtensionStatus)
         self.client.status_blob.set_ext_status(ext_handler_name, ext_status)
 
-    def report_event(self, events):
-        validate_param(EVENTS_DIRECTORY, events, TelemetryEventList)
-        self.client.report_event(events)
+    def report_event(self, events_iterator):
+        self.client.report_event(events_iterator)
 
     def upload_logs(self, logs):
         self.client.upload_logs(logs)
@@ -759,8 +757,7 @@ class WireClient(object): # pylint: disable=R0904
 
     def _save_goal_state(self):
         try:
-            self.goal_state_flusher.flush(datetime.utcnow())
-
+            self.goal_state_flusher.flush()
         except Exception as e: # pylint: disable=C0103
             logger.warn("Failed to save the previous goal state to the history folder: {0}", ustr(e))
 
@@ -1079,20 +1076,28 @@ class WireClient(object): # pylint: disable=R0904
             raise ProtocolError(
                 "Failed to send events:{0}".format(resp.status))
 
-    def report_event(self, event_list):
-        max_send_errors_to_report = 5
+    def report_event(self, events_iterator):
         buf = {}
-        events_per_request = 0
-        unicode_error_count, unicode_errors = 0, []
-        event_report_error_count, event_report_errors = 0, []
+        debug_info = CollectOrReportEventDebugInfo(operation=CollectOrReportEventDebugInfo.OP_REPORT)
+        events_per_provider = defaultdict(int)
+
+        def _send_event(provider_id, debug_info):
+            try:
+                self.send_encoded_event(provider_id, buf[provider_id])
+            except UnicodeError as uni_error:
+                debug_info.update_unicode_error(uni_error)
+            except Exception as error:
+                debug_info.update_op_error(error)
 
         # Group events by providerId
-        for event in event_list.events:
+        for event in events_iterator:
             try:
                 if event.providerId not in buf:
                     buf[event.providerId] = b''
                 event_str = event_to_v1_encoded(event)
+
                 if len(event_str) >= MAX_EVENT_BUFFER_SIZE:
+                    # Ignore single events that are too large to send out
                     details_of_event = [ustr(x.name) + ":" + ustr(x.value) for x in event.parameters if x.name in
                                         [GuestAgentExtensionEventsSchema.Name, GuestAgentExtensionEventsSchema.Version,
                                          GuestAgentExtensionEventsSchema.Operation,
@@ -1101,33 +1106,28 @@ class WireClient(object): # pylint: disable=R0904
                                          "Single event too large: {0}, with the length: {1} more than the limit({2})"
                                          .format(str(details_of_event), len(event_str), MAX_EVENT_BUFFER_SIZE))
                     continue
-                if len(buf[event.providerId] + event_str) >= MAX_EVENT_BUFFER_SIZE:
-                    self.send_encoded_event(event.providerId, buf[event.providerId])
-                    buf[event.providerId] = b''
-                    logger.verbose("No of events this request = {0}".format(events_per_request))
-                    events_per_request = 0
-                buf[event.providerId] = buf[event.providerId] + event_str
-                events_per_request += 1
-            except UnicodeError as e: # pylint: disable=C0103
-                unicode_error_count += 1
-                if len(unicode_errors) < max_send_errors_to_report:
-                    unicode_errors.append(ustr(e))
-            except Exception as e: # pylint: disable=C0103
-                event_report_error_count += 1
-                if len(event_report_errors) < max_send_errors_to_report:
-                    event_report_errors.append(ustr(e))
 
-        EventLogger.report_dropped_events_error(event_report_error_count, event_report_errors,
-                                                WALAEventOperation.CollectEventErrors, max_send_errors_to_report)
-        EventLogger.report_dropped_events_error(unicode_error_count, unicode_errors,
-                                                WALAEventOperation.CollectEventUnicodeErrors,
-                                                max_send_errors_to_report)
+                # If buffer is full, send out the events in buffer and reset buffer
+                if len(buf[event.providerId] + event_str) >= MAX_EVENT_BUFFER_SIZE:
+                    logger.verbose("No of events this request = {0}".format(events_per_provider[event.providerId]))
+                    _send_event(event.providerId, debug_info)
+                    buf[event.providerId] = b''
+                    events_per_provider[event.providerId] = 0
+
+                # Add encoded events to the buffer
+                buf[event.providerId] = buf[event.providerId] + event_str
+                events_per_provider[event.providerId] += 1
+
+            except Exception as error:
+                logger.warn("Unexpected error when generating Events: {0}, {1}", ustr(error), traceback.format_exc())
 
         # Send out all events left in buffer.
         for provider_id in list(buf.keys()):
-            if len(buf[provider_id]) > 0: # pylint: disable=len-as-condition
-                logger.verbose("No of events this request = {0}".format(events_per_request))
-                self.send_encoded_event(provider_id, buf[provider_id])
+            if buf[provider_id]:
+                logger.verbose("No of events this request = {0}".format(events_per_provider[provider_id]))
+                _send_event(provider_id, debug_info)
+
+        debug_info.report_debug_info()
 
     def report_status_event(self, message, is_success):
         report_event(op=WALAEventOperation.ReportStatus,
