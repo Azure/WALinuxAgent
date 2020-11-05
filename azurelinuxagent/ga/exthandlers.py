@@ -265,7 +265,6 @@ class ExtHandlersHandler(object):
         self.ext_handlers = None
         self.last_etag = None
         self.log_report = False
-        self.log_etag = True
         self.log_process = False
 
         self.report_status_error_state = ErrorState()
@@ -374,10 +373,15 @@ class ExtHandlersHandler(object):
         return True
 
     def handle_ext_handlers(self, etag=None):
-        if self.ext_handlers.extHandlers is None or \
-                len(self.ext_handlers.extHandlers) == 0: # pylint: disable=len-as-condition
+        if not self.ext_handlers.extHandlers:
             logger.verbose("No extension handler config found")
             return
+
+        if self.last_etag == etag:
+            # Skip processing if GoalState incarnation did not change
+            return
+
+        logger.info("New incarnation detected, starting processing of GoalState with incarnation: {0}".format(etag))
 
         wait_until = datetime.datetime.utcnow() + datetime.timedelta(minutes=_DEFAULT_EXT_TIMEOUT_MINUTES)
         max_dep_level = max([handler.sort_key() for handler in self.ext_handlers.extHandlers])
@@ -459,15 +463,9 @@ class ExtHandlersHandler(object):
         return True
 
     def handle_ext_handler(self, ext_handler, etag):
-        ext_handler_i = ExtHandlerInstance(ext_handler, self.protocol)
 
         try:
-            if self.last_etag == etag:
-                if self.log_etag:
-                    ext_handler_i.logger.verbose("Incarnation {0} did not change, not processing GoalState", etag)
-                    self.log_etag = False
-                return
-
+            ext_handler_i = ExtHandlerInstance(ext_handler, self.protocol)
             state = ext_handler.properties.state
 
             # The Guest Agent currently only supports 1 installed version per extension on the VM.
@@ -482,8 +480,6 @@ class ExtHandlersHandler(object):
                 ext_handler_i.set_handler_status(message=ustr(err_msg), code=-1)
                 ext_handler_i.report_event(message=ustr(err_msg), is_success=False)
                 return
-
-            self.log_etag = True
 
             ext_handler_i.logger.info("Target handler state: {0} [incarnation {1}]", state, etag)
             if state == ExtensionRequestedState.Enabled:
@@ -1463,9 +1459,9 @@ class ExtHandlerInstance(object): # pylint: disable=R0904
                 self.logger.error("Failed to create JSON document of handler status for {0} version {1}".format(
                     self.ext_handler.name,
                     self.ext_handler.properties.version))
-        except (IOError, ValueError, ProtocolError) as e: # pylint: disable=C0103
-            fileutil.clean_ioerror(e, paths=[status_file])
-            self.logger.error("Failed to save handler status: {0}, {1}", ustr(e), traceback.format_exc())
+        except (IOError, ValueError, ProtocolError) as error:
+            fileutil.clean_ioerror(error, paths=[status_file])
+            self.logger.error("Failed to save handler status: {0}, {1}", ustr(error), traceback.format_exc())
 
     def get_handler_status(self):
         state_dir = self.get_conf_dir()

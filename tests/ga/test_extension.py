@@ -53,7 +53,7 @@ from tests.protocol.mocks import mock_wire_protocol, HttpRequestPredicates
 from tests.protocol.mockwiredata import DATA_FILE
 from tests.tools import AgentTestCase, data_dir, MagicMock, Mock, patch, mock_sleep
 from tests.ga.extension_emulator import Actions, ExtensionCommandNames, extension_emulator, \
-    enable_invocations, generate_put_handler 
+    enable_invocations, generate_put_handler
 
 # Mocking the original sleep to reduce test execution time
 SLEEP = time.sleep
@@ -756,14 +756,22 @@ class TestExtension(ExtensionTestCase):
         exthandlers_handler, protocol = self._create_mock(test_data, mock_get, mock_crypt, *args)
 
         original_popen = subprocess.Popen
+
         def mock_fail_popen(_, **kwargs):
             return original_popen("fail_this_command", **kwargs)
 
         with patch("subprocess.Popen", mock_fail_popen):
-            exthandlers_handler.run()
+            with patch('azurelinuxagent.ga.exthandlers.add_event') as patch_add_event:
+                exthandlers_handler.run()
 
-        self._assert_handler_status(protocol.report_vm_status, "NotReady", 0, "1.0.0",
-                                    expected_handler_name="OSTCExtensions.OtherExampleHandlerLinux")
+                self._assert_handler_status(protocol.report_vm_status, "NotReady", 0, "1.0.0",
+                                            expected_handler_name="OSTCExtensions.OtherExampleHandlerLinux")
+                self.assertEqual(patch_add_event.call_count, 1, "Error should be reported")
+
+        # Assert that on rerun it should not report errors unless incarnation changes
+        # for _ in range(5):
+        #     with
+        #     exthandlers_handler.run()
 
         # Test it recovers on a new goal state if Handler succeeds
         test_data.set_incarnation(2)
@@ -2373,7 +2381,7 @@ class TestInVMArtifactsProfile(AgentTestCase):
 
 
 class TestExtensionUpdateOnFailure(ExtensionTestCase):
-    
+
     def setUp(self):
         AgentTestCase.setUp(self)
         self.mock_sleep = patch("time.sleep", lambda *_: mock_sleep(0.0001))
@@ -2417,7 +2425,7 @@ class TestExtensionUpdateOnFailure(ExtensionTestCase):
 
             with enable_invocations(first_ext, upgraded_ext) as invocation_record:
                 exthandlers_handler.run()
-            
+
                 return invocation_record
 
 
@@ -2427,7 +2435,7 @@ class TestExtensionUpdateOnFailure(ExtensionTestCase):
 
         first_ext = extension_emulator(enable_action=enable_action)
         second_ext = extension_emulator(version="1.1.0")
-        
+
         invocation_record = TestExtensionUpdateOnFailure._do_upgrade_scenario_and_get_order(first_ext, second_ext)
 
         invocation_record.compare(
@@ -2497,7 +2505,7 @@ class TestExtensionUpdateOnFailure(ExtensionTestCase):
         self.assertEqual(len(second_ext.status_blobs), 1, "The second extension should have a single submitted status.")
         self.assertTrue(exit_code in second_ext.status_blobs[0]["formattedMessage"]["message"],
             "DisableAction's error code should be propagated to the status blob.")
-        
+
 
     def test_extension_error_should_be_raised_when_continue_on_update_failure_is_false_on_uninstall_failure(self):
         exit_code, uninstall_action = Actions.generate_unique_fail()
@@ -2588,7 +2596,7 @@ class TestExtensionUpdateOnFailure(ExtensionTestCase):
             (second_ext, ExtensionCommandNames.INSTALL),
             (second_ext, ExtensionCommandNames.ENABLE)
         )
-    
+
         _, update_kwargs = second_ext.actions[ExtensionCommandNames.UPDATE].call_args
         _, install_kwargs = second_ext.actions[ExtensionCommandNames.INSTALL].call_args
 
@@ -2647,7 +2655,7 @@ class TestExtensionUpdateOnFailure(ExtensionTestCase):
         first_ext = extension_emulator(disable_action=force_timeout, uninstall_action=force_timeout)
         second_ext = extension_emulator(version="1.1.0", continue_on_update_failure=True)
 
-        
+
         with patch("os.killpg"):
             with patch("os.getpgid"):
                 invocation_record = TestExtensionUpdateOnFailure._do_upgrade_scenario_and_get_order(first_ext, second_ext)
@@ -2669,7 +2677,7 @@ class TestExtensionUpdateOnFailure(ExtensionTestCase):
             "DisableAction's return code should be marked as a timeout in UpdateAction's env.")
         self.assertEqual(install_kwargs["env"][ExtCommandEnvVariable.UninstallReturnCode], str(ExtensionErrorCodes.PluginHandlerScriptTimedout),
             "UninstallAction's return code should be marked as a timeout in installAction's env.")
-            
+
 
     def test_success_code_should_set_in_env_variables_on_cmd_success(self):
 
