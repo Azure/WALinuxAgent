@@ -596,7 +596,7 @@ class TestHttpOperations(AgentTestCase): # pylint: disable=too-many-public-metho
         self.assertEqual(restutil.DEFAULT_RETRIES, _sleep.call_count)
         self.assertEqual(
             [
-                call(restutil._compute_delay(i+1, restutil.DELAY_IN_SECONDS))
+                call(restutil._compute_delay(i+1, restutil.DELAY_IN_SECONDS))  # pylint: disable=protected-access
                     for i in range(restutil.DEFAULT_RETRIES)],
             _sleep.call_args_list)
 

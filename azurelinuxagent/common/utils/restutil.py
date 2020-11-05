@@ -137,7 +137,7 @@ class IOErrorCounter(object):
 
 def _compute_delay(retry_attempt=1, delay=DELAY_IN_SECONDS):
     fib = (1, 1)
-    for n in range(retry_attempt):
+    for _ in range(retry_attempt):
         fib = (fib[1], fib[0]+fib[1])
     return delay*fib[1]
 
