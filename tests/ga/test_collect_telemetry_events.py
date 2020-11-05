@@ -31,11 +31,10 @@ from mock import patch, MagicMock
 from azurelinuxagent.common import conf
 from azurelinuxagent.common.event import EVENTS_DIRECTORY
 from azurelinuxagent.common.exception import InvalidExtensionEventError, ServiceStoppedError
-from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.protocol.util import ProtocolUtil
 from azurelinuxagent.common.telemetryevent import GuestAgentGenericLogsSchema, \
     CommonTelemetryEventSchema
-from azurelinuxagent.common.utils import fileutil, textutil
+from azurelinuxagent.common.utils import fileutil
 from azurelinuxagent.ga.collect_telemetry_events import ExtensionEventSchema, _ProcessExtensionEventsPeriodicOperation
 from tests.protocol.mocks import HttpRequestPredicates
 from tests.tools import AgentTestCase, clear_singleton_instances, data_dir
@@ -202,15 +201,11 @@ class TestExtensionTelemetryHandler(AgentTestCase, HttpRequestPredicates):
         self.assertGreaterEqual(count, min_count,
                                 "'{0}: {1}' param only found {2} times in events. Min_count required: {3}".format(
                                     param_key, param_value, count, min_count))
-    @staticmethod
-    def _get_ustr_from_event_body(body):
-        return body if (body is None or type(body) is ustr) else textutil.str_to_encoded_ustr(body) # pylint: disable=unidiomatic-typecheck
 
     @staticmethod
     def _is_string_in_event_body(event_body, expected_string):
         found = False
         for body in event_body:
-            body = TestExtensionTelemetryHandler._get_ustr_from_event_body(body)
             if expected_string in body:
                 found = True
                 break

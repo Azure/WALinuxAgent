@@ -15,34 +15,28 @@
 # Requires Python 2.6+ and Openssl 1.0+
 #
 import contextlib
+import json
+import os
+import platform
 import re
+import tempfile
 import time
 import uuid
 from datetime import datetime, timedelta
 
-import tempfile
-
-import os
-
-import json
-
-import platform
-
 from mock import MagicMock, Mock, patch, PropertyMock
-from azurelinuxagent.common.osutil.factory import get_osutil
 
 from azurelinuxagent.common import logger
 from azurelinuxagent.common.datacontract import get_properties
-
-from azurelinuxagent.common.utils import restutil, fileutil, textutil
-
 from azurelinuxagent.common.event import WALAEventOperation, EVENTS_DIRECTORY
 from azurelinuxagent.common.exception import HttpError, ServiceStoppedError
 from azurelinuxagent.common.future import ustr
+from azurelinuxagent.common.osutil.factory import get_osutil
 from azurelinuxagent.common.protocol.util import ProtocolUtil
-from azurelinuxagent.common.protocol.wire import event_to_v1_encoded
+from azurelinuxagent.common.protocol.wire import event_to_v1
 from azurelinuxagent.common.telemetryevent import TelemetryEvent, TelemetryEventParam, \
     GuestAgentExtensionEventsSchema
+from azurelinuxagent.common.utils import restutil, fileutil
 from azurelinuxagent.common.version import CURRENT_VERSION, DISTRO_NAME, DISTRO_VERSION, AGENT_VERSION, CURRENT_AGENT, \
     DISTRO_CODE_NAME
 from azurelinuxagent.ga.collect_telemetry_events import _CollectAndEnqueueEventsPeriodicOperation
@@ -103,7 +97,7 @@ class TestSendTelemetryEventsHandler(AgentTestCase, HttpRequestPredicates):
         TestSendTelemetryEventsHandler._stop_handler(telemetry_handler)
 
         for telemetry_event in test_events:
-            event_str = event_to_v1_encoded(telemetry_event)
+            event_str = event_to_v1(telemetry_event)
             found = False
             for _, event_body in telemetry_handler.event_calls:
                 if event_str in event_body:
@@ -263,8 +257,7 @@ class TestSendTelemetryEventsHandler(AgentTestCase, HttpRequestPredicates):
             self.assertTrue(telemetry_handler.is_alive(), "Thread not alive")
             TestSendTelemetryEventsHandler._stop_handler(telemetry_handler)
             _, event_body = telemetry_handler.event_calls[0]
-            event_orders = re.findall(r'<Event id=\"(\d+)\"><!\[CDATA\[]]></Event>',
-                                      textutil.str_to_encoded_ustr(event_body))
+            event_orders = re.findall(r'<Event id=\"(\d+)\"><!\[CDATA\[]]></Event>', event_body)
             self.assertEqual(sorted(event_orders), event_orders, "Events not ordered correctly")
 
     def test_send_telemetry_events_should_report_event_if_wireserver_returns_http_error(self):

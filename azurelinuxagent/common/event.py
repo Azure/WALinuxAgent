@@ -605,6 +605,7 @@ class EventLogger(object):
 
 __event_logger__ = EventLogger()
 
+
 def get_event_logger():
     return __event_logger__
 

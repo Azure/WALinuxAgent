@@ -507,7 +507,7 @@ class StatusBlob(object):
 
 
 def event_param_to_v1(param):
-    param_format = ustr('<Param Name="{0}" Value={1} T="{2}" />')
+    param_format = '<Param Name="{0}" Value={1} T="{2}" />'
     param_type = type(param.value)
     attr_type = ""
     if param_type is int:
@@ -525,12 +525,14 @@ def event_param_to_v1(param):
                                attr_type)
 
 
-def event_to_v1_encoded(event, encoding='utf-8'):
+def event_to_v1(event):
     params = ""
     for param in event.parameters:
         params += event_param_to_v1(param)
-    event_str = ustr('<Event id="{0}"><![CDATA[{1}]]></Event>').format(event.eventId, params)
-    return event_str.encode(encoding)
+    event_str = ('<Event id="{0}">'
+                 '<![CDATA[{1}]]>'
+                 '</Event>').format(event.eventId, params)
+    return event_str
 
 
 class WireClient(object): # pylint: disable=R0904
@@ -1056,13 +1058,14 @@ class WireClient(object): # pylint: disable=R0904
                                  u",{0}: {1}").format(resp.status,
                                                       resp.read()))
 
-    def send_encoded_event(self, provider_id, event_str, encoding='utf-8'):
+    def send_event(self, provider_id, event_str):
         uri = TELEMETRY_URI.format(self.get_endpoint())
-        data_format_header = ustr('<?xml version="1.0"?><TelemetryData version="1.0"><Provider id="{0}">').format(
-            provider_id).encode(encoding)
-        data_format_footer = ustr('</Provider></TelemetryData>').encode(encoding)
-        # Event string should already be encoded by the time it gets here, to avoid double encoding, dividing it into parts.
-        data = data_format_header + event_str + data_format_footer
+        data_format = ('<?xml version="1.0"?>'
+                       '<TelemetryData version="1.0">'
+                       '<Provider id="{0}">{1}'
+                       '</Provider>'
+                       '</TelemetryData>')
+        data = data_format.format(provider_id, event_str)
         try:
             header = self.get_header_for_xml_content()
             # NOTE: The call to wireserver requests utf-8 encoding in the headers, but the body should not
@@ -1083,7 +1086,7 @@ class WireClient(object): # pylint: disable=R0904
 
         def _send_event(provider_id, debug_info):
             try:
-                self.send_encoded_event(provider_id, buf[provider_id])
+                self.send_event(provider_id, buf[provider_id])
             except UnicodeError as uni_error:
                 debug_info.update_unicode_error(uni_error)
             except Exception as error:
@@ -1094,7 +1097,7 @@ class WireClient(object): # pylint: disable=R0904
             try:
                 if event.providerId not in buf:
                     buf[event.providerId] = b''
-                event_str = event_to_v1_encoded(event)
+                event_str = event_to_v1(event)
 
                 if len(event_str) >= MAX_EVENT_BUFFER_SIZE:
                     # Ignore single events that are too large to send out

@@ -1,4 +1,3 @@
-# coding=utf-8
 #
 # Copyright 2017 Microsoft Corporation
 #
@@ -403,7 +402,7 @@ class TestEvent(HttpRequestPredicates, AgentTestCase): # pylint: disable=too-man
         os.chmod(self._create_test_event_file("custom_script_no_read_access.tld"), 0o200)
         self._create_test_event_file("custom_script_2.tld")  # another valid event
 
-        with patch("azurelinuxagent.common.event.add_event") as mock_add_event:
+        with patch("azurelinuxagent.common.event.logger.warn") as mock_warn:
             event_list = self._collect_events()
 
             self.assertEqual(
@@ -412,19 +411,17 @@ class TestEvent(HttpRequestPredicates, AgentTestCase): # pylint: disable=too-man
                 all(TestEvent._get_event_message(evt) == "A test telemetry message." for evt in event_list),
                 "The valid events were not found")
 
-            invalid_events = []
-            total_dropped_count = 0
-            for args, kwargs in mock_add_event.call_args_list: # pylint: disable=unused-variable
-                match = re.search(r"DroppedEventsCount: (\d+)", kwargs['message'])
-                if match is not None:
-                    invalid_events.append(kwargs['op'])
-                    total_dropped_count += int(match.groups()[0])
+            invalid_events = {}
+            for args in mock_warn.call_args_list:
+                if re.search('Failed to process event file', args[0][0]) is not None:
+                    invalid_events[args[0][1]] = args[0][1]
 
-            self.assertEqual(3, total_dropped_count, "Total dropped events dont match")
-            self.assertIn(WALAEventOperation.CollectEventErrors, invalid_events,
-                          "{0} errors not reported".format(WALAEventOperation.CollectEventErrors))
-            self.assertIn(WALAEventOperation.CollectEventUnicodeErrors, invalid_events,
-                          "{0} errors not reported".format(WALAEventOperation.CollectEventUnicodeErrors))
+            def assert_invalid_file_was_reported(filename):
+                self.assertIn(filename, invalid_events, '{0} was not reported as an invalid event file'.format(filename))
+
+            assert_invalid_file_was_reported("custom_script_utf-16.tld")
+            assert_invalid_file_was_reported("custom_script_invalid_json.tld")
+            assert_invalid_file_was_reported("custom_script_no_read_access.tld")
 
     def test_save_event_rollover(self):
         # We keep 1000 events only, and the older ones are removed.
@@ -739,10 +736,8 @@ class TestEvent(HttpRequestPredicates, AgentTestCase): # pylint: disable=too-man
 
             raise ValueError('Could not find the Message for the telemetry event in {0}'.format(event_file))
 
-        def get_event_message_from_http_request_body(event_body):
+        def get_event_message_from_http_request_body(http_request_body):
             # The XML for the event is sent over as a CDATA element ("Event") in the request's body
-            http_request_body = event_body if (
-                        event_body is None or type(event_body) is ustr) else textutil.str_to_encoded_ustr(event_body) # pylint: disable=unidiomatic-typecheck
             request_body_xml_doc = textutil.parse_doc(http_request_body)
 
             event_node = textutil.find(request_body_xml_doc, "Event")
@@ -787,43 +782,6 @@ class TestEvent(HttpRequestPredicates, AgentTestCase): # pylint: disable=too-man
             event_message = get_event_message_from_http_request_body(http_post_handler.request_body)
 
             self.assertEqual(event_message, expected_message, "The Message in the HTTP request does not match the Message in the event's *.tld file")
-
-    def test_report_event_should_encode_events_correctly(self):
-
-        def http_post_handler(url, body, **__):
-            if self.is_telemetry_request(url):
-                http_post_handler.request_body = body
-                return MockHttpResponse(status=200)
-            return None
-        http_post_handler.request_body = None
-
-        with mock_wire_protocol(mockwiredata.DATA_FILE, http_post_handler=http_post_handler) as protocol:
-            test_messages = [
-                'Non-English message -  此文字不是英文的',
-                "Ξεσκεπάζω τὴν ψυχοφθόρα βδελυγμία",
-                "The quick brown fox jumps over the lazy dog",
-                "El pingüino Wenceslao hizo kilómetros bajo exhaustiva lluvia y frío, añoraba a su querido cachorro.",
-                "Portez ce vieux whisky au juge blond qui fume sur son île intérieure, à côté de l'alcôve ovoïde, où les bûches",
-                "se consument dans l'âtre, ce qui lui permet de penser à la cænogenèse de l'être dont il est question",
-                "dans la cause ambiguë entendue à Moÿ, dans un capharnaüm qui, pense-t-il, diminue çà et là la qualité de son œuvre.",
-                "D'fhuascail Íosa, Úrmhac na hÓighe Beannaithe, pór Éava agus Ádhaimh",
-                "Árvíztűrő tükörfúrógép",
-                "Kæmi ný öxi hér ykist þjófum nú bæði víl og ádrepa",
-                "Sævör grét áðan því úlpan var ónýt",
-                "いろはにほへとちりぬるを わかよたれそつねならむ うゐのおくやまけふこえて あさきゆめみしゑひもせす",
-                "? דג סקרן שט בים מאוכזב ולפתע מצא לו חברה איך הקליטה"
-                "Pchnąć w tę łódź jeża lub ośm skrzyń fig",
-                "Normal string event"
-            ]
-            for msg in test_messages:
-                add_event('TestEventEncoding', message=msg)
-                event_list = self._collect_events()
-                self._report_events(protocol, event_list)
-                # In Py2, encode() produces a str and in py3 it produces a bytes string.
-                # type(bytes) == type(str) for Py2 so this check is mainly for Py3 to ensure that the event is encoded properly.
-                self.assertIsInstance(http_post_handler.request_body, bytes, "The Event request body should be encoded")
-                self.assertIn(textutil.str_to_encoded_ustr(msg).encode('utf-8'), http_post_handler.request_body,
-                              "Encoded message not found in body")
 
 
 class TestMetrics(AgentTestCase):

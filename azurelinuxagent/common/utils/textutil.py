@@ -27,8 +27,6 @@ import sys
 import zlib
 import xml.dom.minidom as minidom
 
-from azurelinuxagent.common.future import ustr
-
 
 def parse_doc(xml_text):
     """
@@ -398,35 +396,3 @@ def format_memory_value(unit, value):
         raise TypeError('Value must be convertible to a float')
 
     return int(value * units[unit])
-
-def str_to_encoded_ustr(s, encoding='utf-8'): # pylint: disable=C0103
-    """
-    This function takes the string and converts it into the corresponding encoded ustr if its not already a ustr.
-    The encoding is utf-8 by default if not specified.
-    Note: ustr() is a unicode object for Py2 and a str object for Py3.
-    :param s: The string to convert to ustr
-    :param encoding: Encoding to use. Utf-8 by default
-    :return: Returns the corresponding ustr string. Returns None if input is None.
-    """
-
-    # TODO: Import at the top of the file instead of a local import (using local import here to avoid cyclic dependency)
-    from azurelinuxagent.common.version import PY_VERSION_MAJOR
-
-    if s is None or type(s) is ustr: # pylint: disable=C0123
-        # If its already a ustr/None then return as is
-        return s
-    if PY_VERSION_MAJOR > 2:
-        try:
-            # For py3+, str() is unicode by default
-            if isinstance(s, bytes): # pylint: disable=R1705
-                # str.encode() returns bytes which should be decoded to get the str.
-                return s.decode(encoding)
-            else:
-                # If its not encoded, just return the string
-                return ustr(s)
-        except Exception:
-            # If some issues in decoding, just return the string
-            return ustr(s)
-
-    # For Py2, explicitly convert the string to unicode with the specified encoding
-    return ustr(s, encoding=encoding)
