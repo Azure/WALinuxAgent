@@ -151,8 +151,6 @@ class GaiaOSUtil(DefaultOSUtil):
         logger.warn('eject is not supported on GAiA')
 
     def mount(self, device, mount_point, option=None, chk_err=True):
-        logger.info('mount {0} {1} {2}', device, mount_point, " ".join(option))
-
         if not option:
             option = []
 
