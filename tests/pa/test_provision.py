@@ -187,6 +187,7 @@ class TestProvision(AgentTestCase):
     @patch('azurelinuxagent.common.osutil.default.DefaultOSUtil.get_instance_id',
            return_value='B9F3C233-9913-9F42-8EB3-BA656DF32502')
     @patch('azurelinuxagent.pa.provision.default.ProvisionHandler.write_agent_disabled')
+    @patch('azurelinuxagent.pa.provision.default.cloud_init_is_enabled', return_value=False)
     def _provision_test(self, # pylint: disable=invalid-name,too-many-arguments
                         distro_name,
                         distro_version,
@@ -194,8 +195,10 @@ class TestProvision(AgentTestCase):
                         ovf_file,
                         provisionMessage,
                         expect_success,
+                        # pylint:disable=unused-argument
+                        patch_cloud_init_is_enabled,
                         patch_write_agent_disabled,
-                        patch_get_instance_id): # pylint: disable=unused-argument
+                        patch_get_instance_id):
         """
         Assert that the agent issues two telemetry messages as part of a
         successful provisioning.
@@ -251,11 +254,16 @@ class TestProvision(AgentTestCase):
         'azurelinuxagent.common.osutil.default.DefaultOSUtil.get_instance_id',
         return_value='B9F3C233-9913-9F42-8EB3-BA656DF32502')
     @patch('azurelinuxagent.common.conf.get_provisioning_agent', return_value='waagent')
+    @patch('azurelinuxagent.pa.provision.default.cloud_init_is_enabled', return_value=False)
+    # pylint:disable=too-many-arguments
     def test_provision_telemetry_fail(self,
-                                      mock_util, # pylint: disable=unused-argument
                                       distro_name,
                                       distro_version,
-                                      distro_full_name, _):
+                                      distro_full_name,
+                                      # pylint:disable=unused-argument
+                                      patch_cloud_init_is_enabled,
+                                      patch_get_provisioning_agent,
+                                      mock_util):
         """
         Assert that the agent issues one telemetry message as part of a
         failed provisioning.
