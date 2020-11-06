@@ -185,7 +185,7 @@ class TestOsUtilFactory(AgentTestCase):
                           distro_code_name="",
                           distro_full_name="",
                           distro_version="10")
-        self.assertTrue(isinstance(ret) == DebianOSModernUtil)
+        self.assertTrue(type(ret) == DebianOSModernUtil) #pylint: disable=unidiomatic-typecheck
         self.assertEqual(ret.get_service_name(), "walinuxagent")
 
     def test_get_osutil_it_should_return_redhat(self):
