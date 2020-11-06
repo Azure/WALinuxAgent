@@ -640,13 +640,8 @@ class DefaultOSUtil(object): # pylint: disable=R0904
         except shellutil.CommandError as cmd_err:
             if chk_err:
                 
-                msg = """Failed to eject dvd: ret={0}
-                [stdout]
-                {1}
-
-                [stderr]
-                {2}
-                """.format(cmd_err.returncode, cmd_err.stdout, cmd_err.stderr)
+                msg = "Failed to eject dvd: ret={0}\n[stdout]\n{1}\n\n[stderr]\n{2}"\
+                    .format(cmd_err.returncode, cmd_err.stdout, cmd_err.stderr)
 
                 raise OSUtilError(msg)
 
