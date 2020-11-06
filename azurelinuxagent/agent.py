@@ -191,11 +191,13 @@ class Agent(object):
             sys.exit(1)
 
 
-def main(args=[]): # pylint: disable=R0912,W0102
+def main(args=None): # pylint: disable=R0912
     """
     Parse command line arguments, exit with usage() on error.
     Invoke different methods according to different command
     """
+    if args is None:
+        args = []
     if len(args) <= 0: # pylint: disable=len-as-condition
         args = sys.argv[1:]
     command, force, verbose, debug, conf_file_path, log_collector_full_mode = parse_args(args)

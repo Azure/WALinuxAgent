@@ -391,7 +391,7 @@ class ExtHandlersHandler(object):
             # If handled successfully, proceed with the current handler.
             # Otherwise, skip the rest of the extension installation.
             dep_level = ext_handler.sort_key()
-            if dep_level >= 0 and dep_level < max_dep_level: # pylint: disable=R1716
+            if 0 <= dep_level < max_dep_level:
                 if not self.wait_for_handler_successful_completion(ext_handler, wait_until):
                     logger.warn("An extension failed or timed out, will skip processing the rest of the extensions")
                     break
