@@ -153,10 +153,6 @@ class ProtocolNotFoundError(ProtocolError):
     def __init__(self, msg=None, inner=None): # pylint: disable=W0235
         super(ProtocolNotFoundError, self).__init__(msg, inner)
 
-class IncompleteGoalStateError(ProtocolError):
-    """
-    Goal state is returned incomplete.
-    """
 
 class HttpError(AgentError):
     """
@@ -225,6 +221,14 @@ class InvalidExtensionEventError(AgentError):
 
     def __init__(self, msg=None, inner=None):
         super(InvalidExtensionEventError, self).__init__(msg, inner)
+
+
+class ServiceStoppedError(AgentError):
+    """
+    Error thrown when trying to access a Service which is stopped
+    """
+    def __init__(self, msg=None, inner=None):
+        super(ServiceStoppedError, self).__init__(msg, inner)
 
 
 class ExtensionErrorCodes(object): # pylint: disable=R0903

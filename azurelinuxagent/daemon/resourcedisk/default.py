@@ -92,7 +92,7 @@ class ResourceDiskHandler(object):
             shellutil.run("blockdev --rereadpt {0}".format(device),
                           chk_err=False)
 
-    def mount_resource_disk(self, mount_point): # pylint: disable=R0912,R0914
+    def mount_resource_disk(self, mount_point): # pylint: disable=R0912
         device = self.osutil.device_for_ide_port(1)
         if device is None:
             raise ResourceDiskError("unable to detect disk topology")

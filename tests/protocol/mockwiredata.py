@@ -47,10 +47,6 @@ DATA_FILE_NO_EXT = DATA_FILE.copy()
 DATA_FILE_NO_EXT["goal_state"] = "wire/goal_state_no_ext.xml"
 DATA_FILE_NO_EXT["ext_conf"] = None
 
-DATA_FILE_NOOP_GS = DATA_FILE.copy()
-DATA_FILE_NOOP_GS["goal_state"] = "wire/goal_state_noop.xml"
-DATA_FILE_NOOP_GS["ext_conf"] = None
-
 DATA_FILE_EXT_NO_SETTINGS = DATA_FILE.copy()
 DATA_FILE_EXT_NO_SETTINGS["ext_conf"] = "wire/ext_conf_no_settings.xml"
 
@@ -80,6 +76,9 @@ DATA_FILE_EXT_SINGLE["manifest"] = "wire/manifest_deletion.xml"
 
 DATA_FILE_MULTIPLE_EXT = DATA_FILE.copy()
 DATA_FILE_MULTIPLE_EXT["ext_conf"] = "wire/ext_conf_multiple_extensions.xml"
+
+DATA_FILE_CASE_MISMATCH_EXT = DATA_FILE.copy()
+DATA_FILE_CASE_MISMATCH_EXT["ext_conf"] = "wire/ext_conf_settings_case_mismatch.xml"
 
 DATA_FILE_NO_CERT_FORMAT = DATA_FILE.copy()
 DATA_FILE_NO_CERT_FORMAT["certs"] = "wire/certs_no_format_specified.xml"

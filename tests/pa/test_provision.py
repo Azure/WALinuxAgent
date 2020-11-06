@@ -187,7 +187,7 @@ class TestProvision(AgentTestCase):
     @patch('azurelinuxagent.common.osutil.default.DefaultOSUtil.get_instance_id',
            return_value='B9F3C233-9913-9F42-8EB3-BA656DF32502')
     @patch('azurelinuxagent.pa.provision.default.ProvisionHandler.write_agent_disabled')
-    def _provision_test(self, # pylint: disable=too-many-locals,invalid-name,too-many-arguments
+    def _provision_test(self, # pylint: disable=invalid-name,too-many-arguments
                         distro_name,
                         distro_version,
                         distro_full_name,

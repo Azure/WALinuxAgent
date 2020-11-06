@@ -41,12 +41,14 @@ class CryptUtil(object):
         """
         Create ssl certificate for https communication with endpoint server.
         """
-        cmd = ("{0} req -x509 -nodes -subj /CN=LinuxTransport -days 730 "
-               "-newkey rsa:2048 -keyout {1} "
-               "-out {2}").format(self.openssl_cmd, prv_file, crt_file)
-        rc = shellutil.run(cmd) # pylint: disable=C0103
-        if rc != 0:
-            logger.error("Failed to create {0} and {1} certificates".format(prv_file, crt_file))
+        cmd = [self.openssl_cmd, "req", "-x509", "-nodes", "-subj", "/CN=LinuxTransport", 
+            "-days", "730", "-newkey", "rsa:2048", "-keyout", prv_file, "-out", crt_file]
+        try:
+            shellutil.run_command(cmd)
+        except shellutil.CommandError as cmd_err:
+            msg = "Failed to create {0} and {1} certificates.\n[stdout]\n{2}\n\n[stderr]\n{3}\n"\
+                .format(prv_file, crt_file, cmd_err.stdout, cmd_err.stderr)
+            logger.error(msg)
 
     def get_pubkey_from_prv(self, file_name):
         if not os.path.exists(file_name): # pylint: disable=R1720
@@ -79,25 +81,52 @@ class CryptUtil(object):
         elif not os.path.exists(trans_prv_file):
             raise IOError(errno.ENOENT, "File not found", trans_prv_file)
         else:
-            cmd = ("{0} cms -decrypt -in {1} -inkey {2} -recip {3} "
-                   "| {4} pkcs12 -nodes -password pass: -out {5}"
-                   "").format(self.openssl_cmd, p7m_file, trans_prv_file,
-                              trans_cert_file, self.openssl_cmd, pem_file)
-            shellutil.run(cmd)
-            rc = shellutil.run(cmd) # pylint: disable=C0103
-            if rc != 0:
-                logger.error("Failed to decrypt {0}".format(p7m_file))
+            first_cmd = [self.openssl_cmd, "cms", "-decrypt", "-in", p7m_file, "-inkey",
+                trans_prv_file, "-recip", trans_cert_file]
+            second_cmd = [self.openssl_cmd, "pkcs12", "-nodes", "-password", "pass:", 
+                "-out", pem_file]
+
+            first_proc = subprocess.Popen(first_cmd, stdout=subprocess.PIPE)
+
+            second_proc = subprocess.Popen(second_cmd, stdin=first_proc.stdout,
+                stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            first_proc.stdout.close()  # see https://docs.python.org/2/library/subprocess.html#replacing-shell-pipeline
+            stdout, stderr = second_proc.communicate()
+
+            if second_proc.returncode != 0:
+                stdout = ustr(stdout, encoding='utf-8', errors="backslashreplace") if stdout else ""
+                stderr =  ustr(stderr, encoding='utf-8', errors="backslashreplace") if stderr else ""
+
+                msg = "Failed to decrypt {0}\n[stdout]\n{1}\n\n[stderr]\n{2}\n"\
+                    .format(p7m_file, stdout, stderr)
+                logger.error(msg)
+            
 
     def crt_to_ssh(self, input_file, output_file):
-        shellutil.run("ssh-keygen -i -m PKCS8 -f {0} >> {1}".format(input_file,
-                                                                    output_file))
+        with open(output_file, "ab") as file_out:
+            cmd = ["ssh-keygen", "-i", "-m", "PKCS8", "-f", input_file]
+
+            try:
+                keygen_proc = subprocess.Popen(cmd, stdout=file_out)
+                keygen_proc.wait()
+
+                if keygen_proc.returncode != 0:
+                    msg = u"Command: [{0}], return code: [{1}]" \
+                        .format(cmd, keygen_proc.returncode)
+                    logger.error(msg)
+                
+            except Exception as exception:
+                msg = u"Exception on Command: [{0}]. exception={1}" \
+                    .format(cmd, exception)
+
+
 
     def asn1_to_ssh(self, pubkey):
         lines = pubkey.split("\n")
         lines = [x for x in lines if not x.startswith("----")]
         base64_encoded = "".join(lines)
         try:
-            #TODO remove pyasn1 dependency # pylint: disable=W0511
+            #TODO remove pyasn1 dependency
             from pyasn1.codec.der import decoder as der_decoder
             der_encoded = base64.b64decode(base64_encoded)
             der_encoded = der_decoder.decode(der_encoded)[0][1] # pylint: disable=unsubscriptable-object

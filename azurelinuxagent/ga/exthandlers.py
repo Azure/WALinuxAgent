@@ -52,7 +52,7 @@ from azurelinuxagent.common.version import AGENT_NAME, CURRENT_VERSION, DISTRO_N
 
 _HANDLER_NAME_PATTERN = r'^([^-]+)'
 _HANDLER_VERSION_PATTERN = r'(\d+(?:\.\d+)*)'
-_HANDLER_PATTERN = _HANDLER_NAME_PATTERN + r"-" + _HANDLER_VERSION_PATTERN #r'^([^-]+)-(\d+(?:\.\d+)*)'
+_HANDLER_PATTERN = _HANDLER_NAME_PATTERN + r"-" + _HANDLER_VERSION_PATTERN
 _HANDLER_PKG_PATTERN = re.compile(_HANDLER_PATTERN + r'\.zip$', re.IGNORECASE)
 _DEFAULT_EXT_TIMEOUT_MINUTES = 90
 
@@ -955,16 +955,22 @@ class ExtHandlerInstance(object): # pylint: disable=R0904
             seq_no, status_path = self.get_status_file_path() # pylint: disable=W0612
             if status_path is not None:
                 now = datetime.datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
-                status = {
-                    "version": 1.0,
-                    "timestampUTC": now,
-                    "status": {
-                        "name": self.ext_handler.name,
-                        "operation": "Enabling Handler",
-                        "status": "transitioning",
-                        "code": 0
+                status = [
+                    {
+                        "version": 1.0,
+                        "timestampUTC": now,
+                        "status": {
+                            "name": self.ext_handler.name,
+                            "operation": "Enabling Handler",
+                            "status": "transitioning",
+                            "code": 0,
+                            "formattedMessage": {
+                                "lang": "en-US",
+                                "message": "Install/Enable is in progress."
+                            }
+                        }
                     }
-                }
+                ]
                 fileutil.write_file(status_path, json.dumps(status))
 
         except IOError as e: # pylint: disable=C0103
@@ -1212,7 +1218,7 @@ class ExtHandlerInstance(object): # pylint: disable=R0904
 
     def report_ext_status(self):
         active_exts = []
-        # TODO Refactor or remove this common code pattern (for each extension subordinate to an ext_handler, do X). # pylint: disable=W0511
+        # TODO Refactor or remove this common code pattern (for each extension subordinate to an ext_handler, do X).
         for ext in self.ext_handler.properties.extensions:
             ext_status = self.collect_ext_status(ext)
             if ext_status is None:

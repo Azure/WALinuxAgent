@@ -654,6 +654,32 @@ class TestExtension(ExtensionTestCase):
         self._assert_no_handler_status(protocol.report_vm_status)
         self._assert_ext_pkg_file_status(expected_to_be_present=False, extension_version="1.2.0")
 
+    def test_it_should_ignore_case_when_parsing_plugin_settings(self, mock_get, mock_crypt_util, *args):
+        test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE_CASE_MISMATCH_EXT)
+        exthandlers_handler, protocol = self._create_mock(test_data, mock_get, mock_crypt_util, *args)
+
+        exthandlers_handler.run()
+
+        expected_ext_handlers = ["OSTCExtensions.ExampleHandlerLinux", "Microsoft.Powershell.ExampleExtension",
+                                 "Microsoft.EnterpriseCloud.Monitoring.ExampleHandlerLinux",
+                                 "Microsoft.CPlat.Core.ExampleExtensionLinux",
+                                 "Microsoft.OSTCExtensions.Edp.ExampleExtensionLinuxInTest"]
+
+        self.assertTrue(protocol.report_vm_status.called, "Handler status not reported")
+        args, _ = protocol.report_vm_status.call_args
+        vm_status = args[0]
+        self.assertEqual(len(expected_ext_handlers), len(vm_status.vmAgent.extensionHandlers),
+                         "No of Extension handlers dont match")
+
+        for handler_status in vm_status.vmAgent.extensionHandlers:
+            self.assertEqual("Ready", handler_status.status, "Handler is not Ready")
+            self.assertIn(handler_status.name, expected_ext_handlers, "Handler not reported")
+            self.assertEqual("1.0.0", handler_status.version, "Handler version not matching")
+            self.assertEqual(1, len(handler_status.extensions), "No settings were found for this extension")
+            expected_ext_handlers.remove(handler_status.name)
+
+        self.assertEqual(0, len(expected_ext_handlers), "All handlers not reported")
+
     def test_ext_handler_no_settings(self, *args):
         test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE_EXT_NO_SETTINGS)
         exthandlers_handler, protocol = self._create_mock(test_data, *args) # pylint: disable=no-value-for-parameter
@@ -2087,7 +2113,7 @@ class TestExtension(ExtensionTestCase):
                     self.assertIn("{0}={1}".format(ExtCommandEnvVariable.ExtensionSeqNumber, expected_seq_no),
                                   kwargs['message'])
 
-    def test_correct_exit_code_should_be_set_on_uninstall_cmd_failure(self, *args): # pylint: disable=too-many-locals
+    def test_correct_exit_code_should_be_set_on_uninstall_cmd_failure(self, *args):
         test_file_name = "testfile.sh"
         test_error_file_name = "error.sh"
         handler_json = {

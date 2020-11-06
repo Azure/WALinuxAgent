@@ -54,13 +54,14 @@ from azurelinuxagent.common.version import AGENT_NAME, AGENT_VERSION, AGENT_DIR_
     has_logrotate, PY_VERSION_MAJOR, PY_VERSION_MINOR, PY_VERSION_MICRO
 from azurelinuxagent.ga.collect_logs import get_collect_logs_handler, is_log_collection_allowed
 from azurelinuxagent.ga.env import get_env_handler
-from azurelinuxagent.ga.extension_telemetry import get_extension_telemetry_handler
+from azurelinuxagent.ga.collect_telemetry_events import get_collect_telemetry_events_handler
 
-from azurelinuxagent.ga.exthandlers import HandlerManifest, get_traceback, ExtHandlersHandler, \
-    is_extension_telemetry_pipeline_enabled, list_agent_lib_directory
+from azurelinuxagent.ga.exthandlers import HandlerManifest, get_traceback, ExtHandlersHandler, list_agent_lib_directory, \
+    is_extension_telemetry_pipeline_enabled
 from azurelinuxagent.ga.monitor import get_monitor_handler
 
 # pylint: disable=C0302
+from azurelinuxagent.ga.send_telemetry_events import get_send_telemetry_events_handler
 
 AGENT_ERROR_FILE = "error.json"  # File name for agent error record
 AGENT_MANIFEST_FILE = "HandlerManifest.json"
@@ -244,7 +245,7 @@ class UpdateHandler(object):  # pylint: disable=R0902
         self.child_process = None
         return
 
-    def run(self, debug=False):  # pylint: disable=R0912,R0914
+    def run(self, debug=False):  # pylint: disable=R0912
         """
         This is the main loop which watches for agent and extension updates.
         """
@@ -299,17 +300,16 @@ class UpdateHandler(object):  # pylint: disable=R0902
             self._ensure_extension_telemetry_state_configured_properly(protocol)
 
             # Get all thread handlers
+            telemetry_handler = get_send_telemetry_events_handler(self.protocol_util)
             all_thread_handlers = [
                 get_monitor_handler(),
-                get_env_handler()
+                get_env_handler(),
+                telemetry_handler,
+                get_collect_telemetry_events_handler(telemetry_handler)
             ]
 
             if is_log_collection_allowed():
                 all_thread_handlers.append(get_collect_logs_handler())
-
-            if is_extension_telemetry_pipeline_enabled():
-                # Reuse the same protocol_util as the UpdateHandler class to avoid new initializations
-                all_thread_handlers.append(get_extension_telemetry_handler(self.protocol_util))
 
             # Launch all monitoring threads
             for thread_handler in all_thread_handlers:
@@ -671,6 +671,8 @@ class UpdateHandler(object):  # pylint: disable=R0902
         return os.path.join(conf.get_lib_dir(), AGENT_SENTINEL_FILE)
 
     def _shutdown(self):
+        # Todo: Ensure all threads stopped when shutting down the main extension handler to ensure that the state of
+        # all threads is clean.
         self.running = False
 
         if not os.path.isfile(self._sentinel_file_path()):
