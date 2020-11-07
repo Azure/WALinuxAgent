@@ -584,7 +584,7 @@ class DefaultOSUtil(object):  # pylint: disable=R0904
         logger.info("Configured SSH client probing to keep connections alive.")
 
     def get_dvd_device(self, dev_dir='/dev'):
-        pattern = r'(sr[0-9]|hd[c-z]|cdrom[0-9]|cd[0-9])'
+        pattern = r'(sr[0-9]|hd[c-z]|cdrom[0-9]|cd[0-9]|vd[b-z])'
         device_list = os.listdir(dev_dir)
         for dvd in [re.match(pattern, dev) for dev in device_list]:
             if dvd is not None:
@@ -619,7 +619,7 @@ class DefaultOSUtil(object):  # pylint: disable=R0904
         for retry in range(1, max_retry):
             return_code, err = self.mount(dvd_device,
                                           mount_point,
-                                          option=["-o", "ro", "-t", "udf,iso9660"],
+                                          option=["-o", "ro", "-t", "udf,iso9660,vfat"],
                                           chk_err=False)
             if return_code == 0:  # pylint: disable=R1705
                 logger.info("Successfully mounted dvd")
@@ -645,6 +645,12 @@ class DefaultOSUtil(object):  # pylint: disable=R0904
 
     def eject_dvd(self, chk_err=True):
         dvd = self.get_dvd_device()
+        dev = dvd.rsplit('/', 1)[1]
+        pattern = r'(vd[b-z])'
+        # We should not eject if the disk is not a cdrom
+        if re.search(pattern, dev):
+            return
+
         try:
             shellutil.run_command(["eject", dvd])
         except shellutil.CommandError as cmd_err:
