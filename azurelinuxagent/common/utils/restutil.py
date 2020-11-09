@@ -35,8 +35,8 @@ from azurelinuxagent.common.version import PY_VERSION_MAJOR, AGENT_NAME, GOAL_ST
 
 SECURE_WARNING_EMITTED = False
 
-DEFAULT_RETRIES = 3
-DELAY_IN_SECONDS = 5
+DEFAULT_RETRIES = 6
+DELAY_IN_SECONDS = 1
 
 THROTTLE_RETRIES = 25
 THROTTLE_DELAY_IN_SECONDS = 1
@@ -133,6 +133,13 @@ class IOErrorCounter(object):
     @staticmethod
     def set_protocol_endpoint(endpoint=KNOWN_WIRESERVER_IP):
         IOErrorCounter._protocol_endpoint = endpoint
+
+
+def _compute_delay(retry_attempt=1, delay=DELAY_IN_SECONDS):
+    fib = (1, 1)
+    for _ in range(retry_attempt):
+        fib = (fib[1], fib[0]+fib[1])
+    return delay*fib[1]
 
 
 def _is_retry_status(status, retry_codes=RETRY_CODES): # pylint: disable=W0102
@@ -316,11 +323,10 @@ def _http_request(method, host, rel_uri, port=None, data=None, secure=False, # p
     if redact_data:
         payload = "[REDACTED]"
 
-    # Logger requires the data to be a ustr to log properly, ensuring that the data string that we log is always ustr.
     logger.verbose("HTTP connection [{0}] [{1}] [{2}] [{3}]",
                    method,
                    redact_sas_tokens_in_urls(url),
-                   textutil.str_to_encoded_ustr(payload),
+                   payload,
                    headers)
 
     conn.request(method=method, url=url, body=data, headers=headers)
@@ -383,8 +389,12 @@ def http_request(method, # pylint: disable=R0913,R0912,W0102
             # Compute the request delay
             # -- Use a fixed delay if the server ever rate-throttles the request
             #    (with a safe, minimum number of retry attempts)
-            # -- Otherwise, use the retry_delay (fixed) with maximum of max_retry retries for the rest of the requests.
-            delay = THROTTLE_DELAY_IN_SECONDS if was_throttled else retry_delay
+            # -- Otherwise, compute a delay that is the product of the next
+            #    item in the Fibonacci series and the initial delay value
+            delay = THROTTLE_DELAY_IN_SECONDS \
+                        if was_throttled \
+                        else _compute_delay(retry_attempt=attempt,
+                                            delay=retry_delay)
 
             logger.verbose("[HTTP Retry] "
                         "Attempt {0} of {1} will delay {2} seconds: {3}", 

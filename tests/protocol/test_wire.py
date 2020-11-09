@@ -24,16 +24,17 @@ import socket
 import time
 import unittest
 import uuid
+from datetime import datetime, timedelta
 
-from azurelinuxagent.common.exception import IncompleteGoalStateError
+from azurelinuxagent.common import conf
 from azurelinuxagent.common.exception import InvalidContainerError, ResourceGoneError, ProtocolError, \
     ExtensionDownloadError, HttpError
-from azurelinuxagent.common.protocol.goal_state import ExtensionsConfig, GoalState
+from azurelinuxagent.common.protocol.goal_state import ExtensionsConfig
 from azurelinuxagent.common.protocol.hostplugin import HostPluginProtocol
 from azurelinuxagent.common.protocol.restapi import VMAgentManifestUri
 from azurelinuxagent.common.protocol.wire import WireProtocol, WireClient, \
     InVMArtifactsProfile, StatusBlob, VMStatus
-from azurelinuxagent.common.telemetryevent import TelemetryEventList, GuestAgentExtensionEventsSchema, \
+from azurelinuxagent.common.telemetryevent import GuestAgentExtensionEventsSchema, \
     TelemetryEventParam, TelemetryEvent
 from azurelinuxagent.common.utils import restutil
 from azurelinuxagent.common.version import CURRENT_VERSION, DISTRO_NAME, DISTRO_VERSION
@@ -115,6 +116,14 @@ class TestWireProtocol(AgentTestCase):
                 self.assertFalse(os.path.isfile(crt2))
                 self.assertFalse(os.path.isfile(prv2))
             self.assertEqual("1", protocol.get_incarnation())
+
+    @staticmethod
+    def _get_telemetry_events_generator(event_list):
+        def _yield_events():
+            for telemetry_event in event_list:
+                yield telemetry_event
+
+        return _yield_events()
 
     def test_getters(self, *args):
         """Normal case"""
@@ -357,12 +366,12 @@ class TestWireProtocol(AgentTestCase):
         self.assertEqual(json.dumps(v1_vm_status), actual.to_json())
 
     @patch("azurelinuxagent.common.utils.restutil.http_request")
-    def test_send_encoded_event(self, mock_http_request, *args):
+    def test_send_event(self, mock_http_request, *args):
         mock_http_request.return_value = MockResponse("", 200)
 
         event_str = u'a test string'
         client = WireProtocol(WIRESERVER_URL).client
-        client.send_encoded_event("foo", event_str.encode('utf-8'))
+        client.send_event("foo", event_str.encode('utf-8'))
 
         first_call = mock_http_request.call_args_list[0]
         args, kwargs = first_call
@@ -371,52 +380,52 @@ class TestWireProtocol(AgentTestCase):
 
         # the headers should include utf-8 encoding...
         self.assertTrue("utf-8" in headers['Content-Type'])
-        # the body is encoded, decode and check for equality
-        self.assertIn(event_str, body_received.decode('utf-8'))
+        # the body is not encoded, just check for equality
+        self.assertIn(event_str, body_received)
 
-    @patch("azurelinuxagent.common.protocol.wire.WireClient.send_encoded_event")
+    @patch("azurelinuxagent.common.protocol.wire.WireClient.send_event")
     def test_report_event_small_event(self, patch_send_event, *args): # pylint: disable=unused-argument
-        event_list = TelemetryEventList()
+        event_list = []
         client = WireProtocol(WIRESERVER_URL).client
 
         event_str = random_generator(10)
-        event_list.events.append(get_event(message=event_str))
+        event_list.append(get_event(message=event_str))
 
         event_str = random_generator(100)
-        event_list.events.append(get_event(message=event_str))
+        event_list.append(get_event(message=event_str))
 
         event_str = random_generator(1000)
-        event_list.events.append(get_event(message=event_str))
+        event_list.append(get_event(message=event_str))
 
         event_str = random_generator(10000)
-        event_list.events.append(get_event(message=event_str))
+        event_list.append(get_event(message=event_str))
 
-        client.report_event(event_list)
+        client.report_event(self._get_telemetry_events_generator(event_list))
 
         # It merges the messages into one message
         self.assertEqual(patch_send_event.call_count, 1)
 
-    @patch("azurelinuxagent.common.protocol.wire.WireClient.send_encoded_event")
+    @patch("azurelinuxagent.common.protocol.wire.WireClient.send_event")
     def test_report_event_multiple_events_to_fill_buffer(self, patch_send_event, *args): # pylint: disable=unused-argument
-        event_list = TelemetryEventList()
+        event_list = []
         client = WireProtocol(WIRESERVER_URL).client
 
         event_str = random_generator(2 ** 15)
-        event_list.events.append(get_event(message=event_str))
-        event_list.events.append(get_event(message=event_str))
+        event_list.append(get_event(message=event_str))
+        event_list.append(get_event(message=event_str))
 
-        client.report_event(event_list)
+        client.report_event(self._get_telemetry_events_generator(event_list))
 
         # It merges the messages into one message
         self.assertEqual(patch_send_event.call_count, 2)
 
-    @patch("azurelinuxagent.common.protocol.wire.WireClient.send_encoded_event")
+    @patch("azurelinuxagent.common.protocol.wire.WireClient.send_event")
     def test_report_event_large_event(self, patch_send_event, *args): # pylint: disable=unused-argument
-        event_list = TelemetryEventList()
+        event_list = []
         event_str = random_generator(2 ** 18)
-        event_list.events.append(get_event(message=event_str))
+        event_list.append(get_event(message=event_str))
         client = WireProtocol(WIRESERVER_URL).client
-        client.report_event(event_list)
+        client.report_event(self._get_telemetry_events_generator(event_list))
 
         self.assertEqual(patch_send_event.call_count, 0)
 
@@ -1053,7 +1062,46 @@ class UpdateGoalStateTestCase(AgentTestCase):
 
             self.assertEqual(protocol.client.get_host_plugin().container_id, new_container_id)
             self.assertEqual(protocol.client.get_host_plugin().role_config_name, new_role_config_name)
+
+    def test_update_goal_state_should_archive_last_goal_state(self):
+        # We use the last modified timestamp of the goal state to be archived to determine the archive's name.
+        mock_mtime = os.path.getmtime(self.tmp_dir)
+        with patch("azurelinuxagent.common.utils.archive.os.path.getmtime") as patch_mtime:
+            first_gs_ms = mock_mtime + timedelta(minutes=5).seconds
+            second_gs_ms = mock_mtime + timedelta(minutes=10).seconds
+            third_gs_ms = mock_mtime + timedelta(minutes=15).seconds
+
+            patch_mtime.side_effect = [first_gs_ms, second_gs_ms, third_gs_ms]
+
+            # The first goal state is created when we instantiate the protocol
+            with mock_wire_protocol(mockwiredata.DATA_FILE) as protocol:
+                history_dir = os.path.join(conf.get_lib_dir(), "history")
+                archives = os.listdir(history_dir)
+                self.assertEqual(len(archives), 0, "The goal state archive should have been empty since this is the first goal state")
+
+                # Create the second new goal state, so the initial one should be archived
+                protocol.mock_wire_data.set_incarnation("2")
+                protocol.client.update_goal_state()
+
+                # The initial goal state should be in the archive
+                first_archive_name = datetime.utcfromtimestamp(first_gs_ms).isoformat() + "_incarnation_1"
+                archives = os.listdir(history_dir)
+                self.assertEqual(len(archives), 1, "Only one goal state should have been archived")
+                self.assertEqual(archives[0], first_archive_name, "The name of goal state archive should match the first goal state timestamp and incarnation")
+
+                # Create the third goal state, so the second one should be archived too
+                protocol.mock_wire_data.set_incarnation("3")
+                protocol.client.update_goal_state()
+
+                # The second goal state should be in the archive
+                second_archive_name = datetime.utcfromtimestamp(second_gs_ms).isoformat() + "_incarnation_2"
+                archives = os.listdir(history_dir)
+                archives.sort()
+                self.assertEqual(len(archives), 2, "Two goal states should have been archived")
+                self.assertEqual(archives[1], second_archive_name, "The name of goal state archive should match the second goal state timestamp and incarnation")
+
 # pylint: enable=too-many-public-methods
+
 
 class TryUpdateGoalStateTestCase(HttpRequestPredicates, AgentTestCase):
     """
@@ -1062,18 +1110,6 @@ class TryUpdateGoalStateTestCase(HttpRequestPredicates, AgentTestCase):
     def test_it_should_return_true_on_success(self):
         with mock_wire_protocol(mockwiredata.DATA_FILE) as protocol:
             self.assertTrue(protocol.client.try_update_goal_state(), "try_update_goal_state should have succeeded")
-
-    def test_incomplete_gs_should_fail(self):
-
-        with mock_wire_protocol(mockwiredata.DATA_FILE) as protocol:
-            GoalState.fetch_full_goal_state(protocol.client)
-
-            protocol.mock_wire_data.data_files = mockwiredata.DATA_FILE_NOOP_GS
-            protocol.mock_wire_data.reload()
-            protocol.mock_wire_data.set_incarnation(2)
-
-            with self.assertRaises(IncompleteGoalStateError):
-                GoalState.fetch_full_goal_state_if_incarnation_different_than(protocol.client, 1)
 
     def test_it_should_return_false_on_failure(self):
         with mock_wire_protocol(mockwiredata.DATA_FILE) as protocol:

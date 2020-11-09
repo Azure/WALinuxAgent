@@ -38,7 +38,6 @@ from azurelinuxagent.common.telemetryevent import TelemetryEventParam, Telemetry
 from azurelinuxagent.common.utils import fileutil, textutil
 from azurelinuxagent.common.utils.textutil import parse_doc, findall, find, getattrib
 from azurelinuxagent.common.version import CURRENT_VERSION, CURRENT_AGENT, AGENT_NAME, DISTRO_NAME, DISTRO_VERSION, DISTRO_CODE_NAME, AGENT_EXECUTION_MODE
-from azurelinuxagent.common.telemetryevent import TelemetryEventList
 from azurelinuxagent.common.protocol.imds import get_imds_client
 
 EVENTS_DIRECTORY = "events"
@@ -280,6 +279,57 @@ def _log_event(name, op, message, duration, is_success=True): # pylint: disable=
         logger.error(_EVENT_MSG, name, op, message, duration)
     else:
         logger.info(_EVENT_MSG, name, op, message, duration)
+
+
+class CollectOrReportEventDebugInfo(object):
+    """
+    This class is used for capturing and reporting debug info that is captured during event collection and
+    reporting to wireserver.
+    It captures the count of unicode errors and any unexpected errors and also a subset of errors with stacks to help
+    with debugging any potential issues.
+    """
+    __MAX_ERRORS_TO_REPORT = 5
+    OP_REPORT = "Report"
+    OP_COLLECT = "Collect"
+
+    def __init__(self, operation=OP_REPORT):
+        self.__unicode_error_count = 0
+        self.__unicode_errors = set()
+        self.__op_error_count = 0
+        self.__op_errors = set()
+
+        if operation == self.OP_REPORT:
+            self.__unicode_error_event = WALAEventOperation.ReportEventUnicodeErrors
+            self.__op_errors_event = WALAEventOperation.ReportEventErrors
+        elif operation == self.OP_COLLECT:
+            self.__unicode_error_event = WALAEventOperation.CollectEventUnicodeErrors
+            self.__op_errors_event = WALAEventOperation.CollectEventErrors
+
+    def report_debug_info(self):
+
+        def report_dropped_events_error(count, errors, operation_name):
+            err_msg_format = "DroppedEventsCount: {0}\nReasons (first {1} errors): {2}"
+            if count > 0:
+                add_event(op=operation_name,
+                          message=err_msg_format.format(count, CollectOrReportEventDebugInfo.__MAX_ERRORS_TO_REPORT, ', '.join(errors)),
+                          is_success=False)
+
+        report_dropped_events_error(self.__op_error_count, self.__op_errors, self.__op_errors_event)
+        report_dropped_events_error(self.__unicode_error_count, self.__unicode_errors, self.__unicode_error_event)
+
+    @staticmethod
+    def _update_errors_and_get_count(error_count, errors, error):
+        error_count += 1
+        if len(errors) < CollectOrReportEventDebugInfo.__MAX_ERRORS_TO_REPORT:
+            errors.add("{0}: {1}".format(ustr(error), traceback.format_exc()))
+        return error_count
+
+    def update_unicode_error(self, unicode_err):
+        self.__unicode_error_count = self._update_errors_and_get_count(self.__unicode_error_count, self.__unicode_errors,
+                                                                       unicode_err)
+
+    def update_op_error(self, op_err):
+        self.__op_error_count = self._update_errors_and_get_count(self.__op_error_count, self.__op_errors, op_err)
 
 
 class EventLogger(object):
@@ -552,121 +602,6 @@ class EventLogger(object):
         event.parameters.extend(common_params)
         event.parameters.extend(self._common_parameters)
 
-    @staticmethod
-    def _trim_extension_event_parameters(event):
-        """
-        This method is called for extension events before they are sent out. Per the agreement with extension
-        publishers, the parameters that belong to extensions and will be reported intact are Name, Version, Operation,
-        OperationSuccess, Message, and Duration. Since there is nothing preventing extensions to instantiate other
-        fields (which belong to the agent), we call this method to ensure the rest of the parameters are trimmed since
-        they will be replaced with values coming from the agent.
-        :param event: Extension event to trim.
-        :return: Trimmed extension event; containing only extension-specific parameters.
-        """
-        params_to_keep = dict().fromkeys([
-            GuestAgentExtensionEventsSchema.Name,
-            GuestAgentExtensionEventsSchema.Version,
-            GuestAgentExtensionEventsSchema.Operation,
-            GuestAgentExtensionEventsSchema.OperationSuccess,
-            GuestAgentExtensionEventsSchema.Message,
-            GuestAgentExtensionEventsSchema.Duration
-        ])
-        trimmed_params = []
-
-        for param in event.parameters:
-            if param.name in params_to_keep:
-                trimmed_params.append(param)
-
-        event.parameters = trimmed_params
-
-    @staticmethod
-    def report_dropped_events_error(count, errors, op, max_errors_to_report): # pylint: disable=C0103
-        err_msg_format = "DroppedEventsCount: {0}\nReasons (first {1} errors): {2}"
-        if count > 0:
-            add_event(op=op,
-                      message=err_msg_format.format(count, max_errors_to_report, ', '.join(errors)),
-                      is_success=False)
-
-    def collect_events(self):
-        """
-        Retuns a list of events that need to be sent to the telemetry pipeline and deletes the corresponding files
-        from the events directory.
-        """
-        max_collect_errors_to_report = 5
-        event_list = TelemetryEventList()
-        event_directory_full_path = os.path.join(conf.get_lib_dir(), EVENTS_DIRECTORY)
-        event_files = os.listdir(event_directory_full_path)
-        unicode_error_count, unicode_errors = 0, []
-        collect_event_error_count, collect_event_errors = 0, []
-
-        for event_file in event_files:
-            try:
-                match = EVENT_FILE_REGEX.search(event_file)
-                if match is None:
-                    continue
-
-                event_file_path = os.path.join(event_directory_full_path, event_file)
-
-                try:
-                    logger.verbose("Processing event file: {0}", event_file_path)
-
-                    with open(event_file_path, "rb") as fd: # pylint: disable=C0103
-                        event_data = fd.read().decode("utf-8")
-
-                    event = parse_event(event_data)
-
-                    # "legacy" events are events produced by previous versions of the agent (<= 2.2.46) and extensions;
-                    # they do not include all the telemetry fields, so we add them here
-                    is_legacy_event = match.group('agent_event') is None
-
-                    if is_legacy_event:
-                        # We'll use the file creation time for the event's timestamp
-                        event_file_creation_time_epoch = os.path.getmtime(event_file_path)
-                        event_file_creation_time = datetime.fromtimestamp(event_file_creation_time_epoch)
-
-                        if event.is_extension_event():
-                            EventLogger._trim_extension_event_parameters(event)
-                            self.add_common_event_parameters(event, event_file_creation_time)
-                        else:
-                            self._update_legacy_agent_event(event, event_file_creation_time)
-
-                    event_list.events.append(event)
-                finally:
-                    os.remove(event_file_path)
-            except UnicodeError as e: # pylint: disable=C0103
-                unicode_error_count += 1
-                if len(unicode_errors) < max_collect_errors_to_report:
-                    unicode_errors.append(ustr(e))
-            except Exception as e: # pylint: disable=C0103
-                collect_event_error_count += 1
-                if len(collect_event_errors) < max_collect_errors_to_report:
-                    collect_event_errors.append(ustr(e))
-
-        EventLogger.report_dropped_events_error(collect_event_error_count, collect_event_errors,
-                                                WALAEventOperation.CollectEventErrors, max_collect_errors_to_report)
-        EventLogger.report_dropped_events_error(unicode_error_count, unicode_errors,
-                                                WALAEventOperation.CollectEventUnicodeErrors,
-                                                max_collect_errors_to_report)
-
-        return event_list
-
-    def _update_legacy_agent_event(self, event, event_creation_time):
-        # Ensure that if an agent event is missing a field from the schema defined since 2.2.47, the missing fields
-        # will be appended, ensuring the event schema is complete before the event is reported.
-        new_event = TelemetryEvent()
-        new_event.parameters = []
-        self.add_common_event_parameters(new_event, event_creation_time)
-
-        event_params = dict([(param.name, param.value) for param in event.parameters])
-        new_event_params = dict([(param.name, param.value) for param in new_event.parameters])
-
-        missing_params = set(new_event_params.keys()).difference(set(event_params.keys()))
-        params_to_add = []
-        for param_name in missing_params:
-            params_to_add.append(TelemetryEventParam(param_name, new_event_params[param_name]))
-
-        event.parameters.extend(params_to_add)
-
 
 __event_logger__ = EventLogger()
 
@@ -769,10 +704,6 @@ def add_periodic(delta, name, op=WALAEventOperation.Unknown, is_success=True, du
 
     reporter.add_periodic(delta, name, op=op, is_success=is_success, duration=duration, version=str(version),
                           message=message, log_event=log_event, force=force)
-
-
-def collect_events(reporter=__event_logger__):
-    return reporter.collect_events()
 
 
 def mark_event_status(name, version, op, status): # pylint: disable=C0103
