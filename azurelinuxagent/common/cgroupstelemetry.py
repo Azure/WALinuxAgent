@@ -111,13 +111,6 @@ class CGroupsTelemetry(object):
         return metrics
 
     @staticmethod
-    def prune_all_tracked():
-        with CGroupsTelemetry._rlock:
-            for cgroup in CGroupsTelemetry._tracked[:]:
-                if not cgroup.is_active():
-                    CGroupsTelemetry.stop_tracking(cgroup)
-
-    @staticmethod
     def reset():
         with CGroupsTelemetry._rlock:
             CGroupsTelemetry._tracked *= 0  # emptying the list

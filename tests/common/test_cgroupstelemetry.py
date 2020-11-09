@@ -317,20 +317,6 @@ class TestCGroupsTelemetry(AgentTestCase):
         self._assert_cgroups_are_tracked(num_extensions)
         self.assertEqual(num_extensions * num_controllers, len(CGroupsTelemetry._tracked)) # pylint: disable=protected-access
 
-    def test_cgroup_pruning(self, *args): # pylint: disable=unused-argument
-        num_extensions = 5
-        num_controllers = 2
-        self._track_new_extension_cgroups(num_extensions)
-        self._assert_cgroups_are_tracked(num_extensions)
-        self.assertEqual(num_extensions * num_controllers, len(CGroupsTelemetry._tracked)) # pylint: disable=protected-access
-
-        CGroupsTelemetry.prune_all_tracked()
-        for i in range(num_extensions):
-            self.assertFalse(CGroupsTelemetry.is_tracked("dummy_cpu_path_{0}".format(i)))
-            self.assertFalse(CGroupsTelemetry.is_tracked("dummy_memory_path_{0}".format(i)))
-
-        self.assertEqual(0, len(CGroupsTelemetry._tracked)) # pylint: disable=protected-access
-
     def test_cgroup_is_tracked(self, *args): # pylint: disable=unused-argument
         num_extensions = 5
         self._track_new_extension_cgroups(num_extensions)

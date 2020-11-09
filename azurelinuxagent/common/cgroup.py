@@ -131,27 +131,6 @@ class CGroup(object):
                                  ' Internal error: {1}'.format(self.path, ustr(e)))
         return False
 
-    def get_tracked_processes(self):
-        """
-        :return: List of Str (Pids). Will return an empty string if we couldn't fetch any tracked processes.
-        """
-        procs = []
-        try:
-            procs = self._get_parameters("cgroup.procs")
-        except (IOError, OSError) as e: # pylint: disable=C0103
-            if e.errno == errno.ENOENT:
-                # only suppressing file not found exceptions.
-                pass
-            else:
-                logger.periodic_warn(logger.EVERY_HALF_HOUR,
-                                     'Could not get list of procs from "cgroup.procs" file in the cgroup: {0}.'
-                                     ' Internal error: {1}'.format(self.path, ustr(e)))
-        except CGroupsException as e: # pylint: disable=C0103
-            logger.periodic_warn(logger.EVERY_HALF_HOUR,
-                                 'Could not get list of tasks from "cgroup.procs" file in the cgroup: {0}.'
-                                 ' Internal error: {1}'.format(self.path, ustr(e)))
-        return procs
-
     def get_tracked_metrics(self):
         """
         Retrieves the current value of the metrics tracked for this cgroup and returns them as an array
@@ -216,8 +195,8 @@ class CpuCgroup(CGroup):
         """
         Computes the CPU used by the cgroup since the last call to this function.
 
-        The usage is measured as a percentage of utilization of all cores in the system. For example,
-        using 1 core at 100% on a 4-core system would be reported as 25%.
+        The usage is measured as a percentage of utilization of 1 core in the system. For example,
+        using 1 core all of the time on a 4-core system would be reported as 100%.
 
         NOTE: initialize_cpu_usage() must be invoked before calling get_cpu_usage()
         """
@@ -232,7 +211,7 @@ class CpuCgroup(CGroup):
         cgroup_delta = self._current_cgroup_cpu - self._previous_cgroup_cpu
         system_delta = max(1, self._current_system_cpu - self._previous_system_cpu)
 
-        return round(100.0 * float(cgroup_delta) / float(system_delta), 3)
+        return round(100.0 * self._osutil.get_processor_cores() * float(cgroup_delta) / float(system_delta), 3)
 
     def get_tracked_metrics(self):
         return [
