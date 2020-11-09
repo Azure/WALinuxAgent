@@ -23,8 +23,9 @@ import random
 
 from azurelinuxagent.common.cgroup import CpuCgroup, MemoryCgroup, CGroup
 from azurelinuxagent.common.exception import CGroupsException
+from azurelinuxagent.common.osutil import get_osutil
 from azurelinuxagent.common.utils import fileutil
-from tests.tools import AgentTestCase, patch, data_dir
+from tests.tools import AgentTestCase, patch, data_dir, Mock
 
 
 def consume_cpu_time():
@@ -56,15 +57,6 @@ class TestCGroup(AgentTestCase):
             tasks.write(str(1000).encode())
 
         self.assertEqual(True, test_cgroup.is_active())
-
-    def test_get_tracked_processes(self):
-        test_cgroup = CGroup.create(self.tmp_dir, "cpu", "test_extension")
-        self.assertListEqual(test_cgroup.get_tracked_processes(), [])
-
-        with open(os.path.join(self.tmp_dir, "cgroup.procs"), mode="wb") as tasks:
-            tasks.write(str(1000).encode())
-
-        self.assertEqual(['1000'], test_cgroup.get_tracked_processes())
 
     @patch("azurelinuxagent.common.logger.periodic_warn")
     def test_is_active_file_not_present(self, patch_periodic_warn):
@@ -132,6 +124,8 @@ class TestCpuCgroup(AgentTestCase):
         self.assertEqual(cgroup._current_system_cpu, 5496872) # pylint: disable=protected-access
 
     def test_get_cpu_usage_should_return_the_cpu_usage_since_its_last_invocation(self):
+        osutil = get_osutil()
+
         cgroup = CpuCgroup("test", "/sys/fs/cgroup/cpu/system.slice/test")
 
         TestCpuCgroup.mock_read_file_map = {
@@ -148,7 +142,7 @@ class TestCpuCgroup(AgentTestCase):
 
         cpu_usage = cgroup.get_cpu_usage()
 
-        self.assertEqual(cpu_usage, 0.031)
+        self.assertEqual(cpu_usage, round(100.0 * 0.000307697876885 * osutil.get_processor_cores(), 3))
 
         TestCpuCgroup.mock_read_file_map = {
             "/proc/stat": os.path.join(data_dir, "cgroups", "proc_stat_t2"),
@@ -157,7 +151,7 @@ class TestCpuCgroup(AgentTestCase):
 
         cpu_usage = cgroup.get_cpu_usage()
 
-        self.assertEqual(cpu_usage, 0.045)
+        self.assertEqual(cpu_usage, round(100.0 * 0.000445181085968 * osutil.get_processor_cores(), 3))
 
     def test_initialie_cpu_usage_should_set_the_cgroup_usage_to_0_when_the_cgroup_does_not_exist(self):
         cgroup = CpuCgroup("test", "/sys/fs/cgroup/cpu/system.slice/test")
