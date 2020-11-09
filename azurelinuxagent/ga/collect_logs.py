@@ -28,6 +28,7 @@ from azurelinuxagent.common import logger
 from azurelinuxagent.common.cgroupapi import CGroupsApi
 from azurelinuxagent.common.event import elapsed_milliseconds, add_event, WALAEventOperation
 from azurelinuxagent.common.future import ustr
+from azurelinuxagent.common.interfaces import ThreadHandlerInterface
 from azurelinuxagent.common.logcollector import COMPRESSED_ARCHIVE_PATH
 from azurelinuxagent.common.protocol.util import get_protocol_util
 from azurelinuxagent.common.utils import shellutil
@@ -67,7 +68,7 @@ def is_log_collection_allowed():
     return is_allowed
 
 
-class CollectLogsHandler(object):
+class CollectLogsHandler(ThreadHandlerInterface):
     """
     Periodically collects and uploads logs from the VM to the host.
     """
@@ -90,13 +91,13 @@ class CollectLogsHandler(object):
         ]
 
     def run(self):
-        self.start(init_data=True)
+        self.start()
 
     def is_alive(self):
         return self.event_thread.is_alive()
 
-    def start(self, init_data=False):
-        self.event_thread = threading.Thread(target=self.daemon, args=(init_data,))
+    def start(self):
+        self.event_thread = threading.Thread(target=self.daemon)
         self.event_thread.setDaemon(True)
         self.event_thread.setName(self.get_thread_name())
         self.event_thread.start()
@@ -119,9 +120,9 @@ class CollectLogsHandler(object):
         self.protocol_util = get_protocol_util()
         self.protocol = self.protocol_util.get_protocol()
 
-    def daemon(self, init_data=False):
+    def daemon(self):
         try:
-            if init_data:
+            if self.protocol_util is None or self.protocol is None:
                 self.init_protocols()
 
             while not self.stopped():
