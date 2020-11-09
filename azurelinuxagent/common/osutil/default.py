@@ -564,7 +564,12 @@ class DefaultOSUtil(object):  # pylint: disable=R0904
             if not os.path.exists(path):
                 logger.error("Path does not exist: {0}".format(path))
                 return 1
-            return shellutil.run('chcon ' + con + ' ' + path)
+            
+            try:
+                shellutil.run_command(['chcon', con, path], log_error=True)
+            except shellutil.CommandError as cmd_err:
+                return cmd_err.returncode
+            return 0
 
     def conf_sshd(self, disable_password):
         option = "no" if disable_password else "yes"
@@ -614,7 +619,7 @@ class DefaultOSUtil(object):  # pylint: disable=R0904
         for retry in range(1, max_retry):
             return_code, err = self.mount(dvd_device,
                                           mount_point,
-                                          option="-o ro -t udf,iso9660",
+                                          option=["-o", "ro", "-t", "udf,iso9660"],
                                           chk_err=False)
             if return_code == 0:  # pylint: disable=R1705
                 logger.info("Successfully mounted dvd")
@@ -640,9 +645,15 @@ class DefaultOSUtil(object):  # pylint: disable=R0904
 
     def eject_dvd(self, chk_err=True):
         dvd = self.get_dvd_device()
-        retcode = shellutil.run("eject {0}".format(dvd))
-        if chk_err and retcode != 0:
-            raise OSUtilError("Failed to eject dvd: ret={0}".format(retcode))
+        try:
+            shellutil.run_command(["eject", dvd])
+        except shellutil.CommandError as cmd_err:
+            if chk_err:
+                
+                msg = "Failed to eject dvd: ret={0}\n[stdout]\n{1}\n\n[stderr]\n{2}"\
+                    .format(cmd_err.returncode, cmd_err.stdout, cmd_err.stderr)
+
+                raise OSUtilError(msg)
 
     def try_load_atapiix_mod(self):
         try:
@@ -678,13 +689,21 @@ class DefaultOSUtil(object):  # pylint: disable=R0904
                 time.sleep(1)
         return False
 
-    def mount(self, device, mount_point, option="", chk_err=True):
-        cmd = "mount {0} {1} {2}".format(option, device, mount_point)
-        retcode, err = shellutil.run_get_output(cmd, chk_err)
-        if retcode != 0:
-            detail = "[{0}] returned {1}: {2}".format(cmd, retcode, err)
-            err = detail
-        return retcode, err
+    def mount(self, device, mount_point, option=None, chk_err=True):
+        if not option:
+            option = []
+            
+        cmd = ["mount"]
+        cmd.extend(option + [device, mount_point])
+        
+        try:
+            output = shellutil.run_command(cmd, log_error=chk_err)
+        except shellutil.CommandError as cmd_err:
+            detail = "[{0}] returned {1}:\n stdout: {2}\n\nstderr: {3}".format(cmd, cmd_err.returncode,
+                cmd_err.stdout, cmd_err.stderr)
+            return cmd_err.returncode, detail
+
+        return 0, output
 
     def umount(self, mount_point, chk_err=True):
         try:

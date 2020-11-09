@@ -121,6 +121,7 @@ class CryptUtil(object):
 
 
 
+
     def asn1_to_ssh(self, pubkey):
         lines = pubkey.split("\n")
         lines = [x for x in lines if not x.startswith("----")]
