@@ -335,7 +335,7 @@ def _http_request(method, host, rel_uri, port=None, data=None, secure=False, # p
     return conn.getresponse()
 
 
-def http_request(method, # pylint: disable=R0913,R0912,R0914
+def http_request(method, # pylint: disable=R0913,R0912
                  url, data, headers=None,
                  use_proxy=False,
                  max_retry=DEFAULT_RETRIES,
