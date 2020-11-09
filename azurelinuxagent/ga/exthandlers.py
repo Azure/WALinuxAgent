@@ -388,7 +388,7 @@ class ExtHandlersHandler(object):
 
         self.ext_handlers.extHandlers.sort(key=operator.methodcaller('sort_key'))
         for ext_handler in self.ext_handlers.extHandlers:
-            self.handle_ext_handler(ext_handler, etag)
+            handler_success = self.handle_ext_handler(ext_handler, etag)
 
             # Wait for the extension installation until it is handled.
             # This is done for the install and enable. Not for the uninstallation.
@@ -396,7 +396,8 @@ class ExtHandlersHandler(object):
             # Otherwise, skip the rest of the extension installation.
             dep_level = ext_handler.sort_key()
             if 0 <= dep_level < max_dep_level:
-                if not self.wait_for_handler_successful_completion(ext_handler, wait_until):
+                # Do no wait for extension status if the handler failed
+                if handler_success and not self.wait_for_handler_successful_completion(ext_handler, wait_until):
                     logger.warn("An extension failed or timed out, will skip processing the rest of the extensions")
                     break
 
@@ -419,18 +420,6 @@ class ExtHandlersHandler(object):
 
         try:
             handler_i = ExtHandlerInstance(ext_handler, self.protocol)
-
-            # First check if HandlerStatus was a success, if the Handler failed, no need to poll for extension status
-            handler_status = handler_i.get_handler_status()
-            if handler_status is None:
-                msg = "No HandlerStatus available for Handler: {0}, marking the extension as failed".format(
-                    ext_handler.name)
-                return _report_error_event_and_return_false(msg)
-
-            if handler_status.code != ExtensionErrorCodes.PluginSuccess:
-                msg = "Handler: {0} failed with error code: {1}, marking the extension as failed".format(
-                    ext_handler.name, handler_status.code)
-                return _report_error_event_and_return_false(msg)
 
             # Loop through all settings of the Handler and verify all extensions reported success status in status file
             # Currently, we only support 1 extension (runtime-settings) per handler
@@ -463,7 +452,12 @@ class ExtHandlersHandler(object):
         return True
 
     def handle_ext_handler(self, ext_handler, etag):
-
+        """
+        Execute the requested command for the handler and return if success
+        :param ext_handler: The ExtHandler to execute the command on
+        :param etag: Current incarnation of the GoalState
+        :return: True if the operation was successful, False if not
+        """
         try:
             ext_handler_i = ExtHandlerInstance(ext_handler, self.protocol)
             state = ext_handler.properties.state
@@ -473,13 +467,13 @@ class ExtHandlersHandler(object):
             # we should let it go through even if the installed version doesnt exist in Handler manifest (PIR) anymore.
             # If target state is enabled and version not found in manifest, do not process the extension.
             if ext_handler_i.decide_version(target_state=state) is None and state == ExtensionRequestedState.Enabled:
-                version = ext_handler_i.ext_handler.properties.version # pylint: disable=W0621
+                handler_version = ext_handler_i.ext_handler.properties.version
                 name = ext_handler_i.ext_handler.name
-                err_msg = "Unable to find version {0} in manifest for extension {1}".format(version, name)
+                err_msg = "Unable to find version {0} in manifest for extension {1}".format(handler_version, name)
                 ext_handler_i.set_operation(WALAEventOperation.Download)
                 ext_handler_i.set_handler_status(message=ustr(err_msg), code=-1)
                 ext_handler_i.report_event(message=ustr(err_msg), is_success=False)
-                return
+                return False
 
             ext_handler_i.logger.info("Target handler state: {0} [incarnation {1}]", state, etag)
             if state == ExtensionRequestedState.Enabled:
@@ -491,15 +485,20 @@ class ExtHandlersHandler(object):
             else:
                 message = u"Unknown ext handler state:{0}".format(state)
                 raise ExtensionError(message)
-        except ExtensionUpdateError as e: # pylint: disable=C0103
+
+            return True
+
+        except ExtensionUpdateError as error:
             # Not reporting the error as it has already been reported from the old version
-            self.handle_ext_handler_error(ext_handler_i, e, e.code, report_telemetry_event=False)
-        except ExtensionDownloadError as e: # pylint: disable=C0103
-            self.handle_ext_handler_download_error(ext_handler_i, e, e.code)
-        except ExtensionError as e: # pylint: disable=C0103
-            self.handle_ext_handler_error(ext_handler_i, e, e.code)
-        except Exception as e: # pylint: disable=C0103
-            self.handle_ext_handler_error(ext_handler_i, e)
+            self.handle_ext_handler_error(ext_handler_i, error, error.code, report_telemetry_event=False)
+        except ExtensionDownloadError as error:
+            self.handle_ext_handler_download_error(ext_handler_i, error, error.code)
+        except ExtensionError as error:
+            self.handle_ext_handler_error(ext_handler_i, error, error.code)
+        except Exception as error:
+            self.handle_ext_handler_error(ext_handler_i, error)
+
+        return False
 
     def handle_ext_handler_error(self, ext_handler_i, e, code=-1, report_telemetry_event=True): # pylint: disable=C0103
         msg = ustr(e)
