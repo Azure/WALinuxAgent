@@ -1288,9 +1288,9 @@ class TestExtension(ExtensionTestCase):
         self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.0.0")
         self._assert_ext_status(protocol.report_ext_status, ValidHandlerStatus.error, 0)
 
-    def test_wait_for_handler_successful_completion_empty_exts(self, *args):
+    def test_wait_for_handler_completion_empty_exts(self, *args):
         """
-        Testing wait_for_handler_successful_completion() when there is no extension in a handler.
+        Testing wait_for_handler_completion() when there is no extension in a handler.
         Expected to return True.
         """
         test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE)
@@ -1300,13 +1300,13 @@ class TestExtension(ExtensionTestCase):
         ExtHandlerInstance(handler, protocol).set_handler_status("Ready")
 
         ExtHandlerInstance.get_ext_handling_status = MagicMock(return_value=None)
-        self.assertTrue(exthandlers_handler.wait_for_handler_successful_completion(handler, datetime.datetime.utcnow()))
+        self.assertTrue(exthandlers_handler.wait_for_handler_completion(handler, datetime.datetime.utcnow()))
 
-    def _helper_wait_for_handler_successful_completion(self, exthandlers_handler):
+    def _helper_wait_for_handler_completion(self, exthandlers_handler):
         """
-        Call wait_for_handler_successful_completion() passing a handler with an extension.
+        Call wait_for_handler_completion() passing a handler with an extension.
         Override the wait time to be 5 seconds to minimize the timout duration.
-        Return the value returned by wait_for_handler_successful_completion().
+        Return the value returned by wait_for_handler_completion().
         """
         handler_name = "Handler"
         exthandler = ExtHandler(name=handler_name)
@@ -1316,50 +1316,50 @@ class TestExtension(ExtensionTestCase):
         # Override the timeout value to minimize the test duration
         wait_until = datetime.datetime.utcnow() + datetime.timedelta(seconds=0.1)
         ExtHandlerInstance(exthandler, Mock()).set_handler_status("Ready")
-        return exthandlers_handler.wait_for_handler_successful_completion(exthandler, wait_until)
+        return exthandlers_handler.wait_for_handler_completion(exthandler, wait_until)
 
-    def test_wait_for_handler_successful_completion_no_status(self, *args):
+    def test_wait_for_handler_completion_no_status(self, *args):
         """
-        Testing wait_for_handler_successful_completion() when there is no status file or seq_no is negative.
+        Testing wait_for_handler_completion() when there is no status file or seq_no is negative.
         Expected to return False.
         """
         test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE)
         exthandlers_handler, protocol = self._create_mock(test_data, *args) # pylint: disable=unused-variable,no-value-for-parameter
 
         ExtHandlerInstance.get_ext_handling_status = MagicMock(return_value=None)
-        self.assertFalse(self._helper_wait_for_handler_successful_completion(exthandlers_handler))
+        self.assertFalse(self._helper_wait_for_handler_completion(exthandlers_handler))
 
-    def test_wait_for_handler_successful_completion_success_status(self, *args):
-        '''
+    def test_wait_for_handler_completion_success_status(self, *args):
+        """
         Testing wait_for_handler_successful_completion() when there is successful status.
         Expected to return True.
-        '''
+        """
         test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE)
         exthandlers_handler, protocol = self._create_mock(test_data, *args) # pylint: disable=unused-variable,no-value-for-parameter
 
         status = "success"
 
         ExtHandlerInstance.get_ext_handling_status = MagicMock(return_value=status)
-        self.assertTrue(self._helper_wait_for_handler_successful_completion(exthandlers_handler))
+        self.assertTrue(self._helper_wait_for_handler_completion(exthandlers_handler))
 
-    def test_wait_for_handler_successful_completion_error_status(self, *args):
-        '''
-        Testing wait_for_handler_successful_completion() when there is error status.
+    def test_wait_for_handler_completion_error_status(self, *args):
+        """
+        Testing wait_for_handler_completion() when there is error status.
         Expected to return False.
-        '''
+        """
         test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE)
         exthandlers_handler, protocol = self._create_mock(test_data, *args) # pylint: disable=unused-variable,no-value-for-parameter
 
         status = "error"
 
         ExtHandlerInstance.get_ext_handling_status = MagicMock(return_value=status)
-        self.assertFalse(self._helper_wait_for_handler_successful_completion(exthandlers_handler))
+        self.assertFalse(self._helper_wait_for_handler_completion(exthandlers_handler))
 
-    def test_wait_for_handler_successful_completion_timeout(self, *args):
-        '''
+    def test_wait_for_handler_completion_timeout(self, *args):
+        """
         Testing wait_for_handler_successful_completion() when there is non terminal status.
         Expected to return False.
-        '''
+        """
         test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE)
         exthandlers_handler, protocol = self._create_mock(test_data, *args) # pylint: disable=unused-variable,no-value-for-parameter
 
@@ -1367,7 +1367,7 @@ class TestExtension(ExtensionTestCase):
         status = "warning"
 
         ExtHandlerInstance.get_ext_handling_status = MagicMock(return_value=status)
-        self.assertFalse(self._helper_wait_for_handler_successful_completion(exthandlers_handler))
+        self.assertFalse(self._helper_wait_for_handler_completion(exthandlers_handler))
 
     def test_get_ext_handling_status(self, *args):
         """
@@ -2240,16 +2240,16 @@ class TestExtensionSequencing(AgentTestCase):
         handler.ext_handlers, handler.last_etag = protocol.get_ext_handlers()
         conf.get_enable_overprovisioning = Mock(return_value=False)
 
-        def wait_for_handler_successful_completion(prev_handler, _):
-            return orig_wait_for_handler_successful_completion(prev_handler,
+        def wait_for_handler_completion(prev_handler, _):
+            return orig_wait_for_handler_completion(prev_handler,
                                                                datetime.datetime.utcnow() + datetime.timedelta(
                                                                    seconds=5))
 
         def reset_etag():
             handler.last_etag = 0
 
-        orig_wait_for_handler_successful_completion = handler.wait_for_handler_successful_completion
-        handler.wait_for_handler_successful_completion = wait_for_handler_successful_completion
+        orig_wait_for_handler_completion = handler.wait_for_handler_completion
+        handler.wait_for_handler_completion = wait_for_handler_completion
         handler.reset_etag = reset_etag
         return handler
 

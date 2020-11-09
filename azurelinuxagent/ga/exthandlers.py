@@ -278,7 +278,8 @@ class ExtHandlersHandler(object):
             # Log status report success on new config
             self.log_report = True
 
-            if self._extension_processing_allowed():
+            if self._extension_processing_allowed(etag):
+                logger.info("ProcessGoalState started [incarnation {0}]".format(etag))
                 self.handle_ext_handlers(etag)
                 self.last_etag = etag
 
@@ -359,7 +360,7 @@ class ExtHandlersHandler(object):
                 except OSError as e: # pylint: disable=C0103
                     logger.warn("Failed to remove extension package {0}: {1}".format(pkg, e.strerror))
 
-    def _extension_processing_allowed(self):
+    def _extension_processing_allowed(self, etag):
         if not conf.get_extensions_enabled():
             logger.verbose("Extension handling is disabled")
             return False
@@ -370,15 +371,15 @@ class ExtHandlersHandler(object):
                 logger.info("Extension handling is on hold")
                 return False
 
+        if self.last_etag == etag:
+            # Skip processing if GoalState incarnation did not change
+            return False
+
         return True
 
     def handle_ext_handlers(self, etag=None):
         if not self.ext_handlers.extHandlers:
             logger.verbose("No extension handler config found")
-            return
-
-        if self.last_etag == etag:
-            # Skip processing if GoalState incarnation did not change
             return
 
         logger.info("New incarnation detected, starting processing of GoalState with incarnation: {0}".format(etag))
@@ -397,11 +398,11 @@ class ExtHandlersHandler(object):
             dep_level = ext_handler.sort_key()
             if 0 <= dep_level < max_dep_level:
                 # Do no wait for extension status if the handler failed
-                if handler_success and not self.wait_for_handler_successful_completion(ext_handler, wait_until):
+                if handler_success and not self.wait_for_handler_completion(ext_handler, wait_until):
                     logger.warn("An extension failed or timed out, will skip processing the rest of the extensions")
                     break
 
-    def wait_for_handler_successful_completion(self, ext_handler, wait_until):
+    def wait_for_handler_completion(self, ext_handler, wait_until):
         """
         Check the status of the extension being handled.
         Wait until it has a terminal state or times out.
@@ -1123,6 +1124,7 @@ class ExtHandlerInstance(object): # pylint: disable=R0904
                     continue
         except Exception as error:
             logger.verbose("Error fetching sequence number from config files: {0}".format(ustr(error)))
+            seq_no = -1
 
         return seq_no
 
