@@ -119,9 +119,9 @@ Destination        Gateway            Flags     Netif Expire
         with patch.object(freebsdosutil, '_get_net_info', return_value=('em0', '10.0.0.1', 'e5:f0:38:aa:da:52')):
             try:
                 freebsdosutil.get_first_if()[0]
-            except Exception as e: # pylint: disable=unused-variable,invalid-name
+            except Exception as e:  # pylint: disable=unused-variable,invalid-name
                 print(traceback.format_exc())
-                exception = True # pylint: disable=unused-variable
+                exception = True  # pylint: disable=unused-variable
 
 if __name__ == '__main__':
     unittest.main()

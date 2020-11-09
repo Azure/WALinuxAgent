@@ -35,7 +35,7 @@ class OpenWRTResourceDiskHandler(ResourceDiskHandler):
             self.fs = 'ffs'
 
     def reread_partition_table(self, device):
-        ret, output = shellutil.run_get_output("hdparm -z {0}".format(device), chk_err=False) # pylint: disable=W0612
+        ret, output = shellutil.run_get_output("hdparm -z {0}".format(device), chk_err=False)  # pylint: disable=W0612
         if ret != 0:
             logger.warn("Failed refresh the partition table.")
 

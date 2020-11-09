@@ -15,8 +15,8 @@
 # Requires Python 2.4+ and Openssl 1.0+
 #
 
-from azurelinuxagent.common.osutil.default import DefaultOSUtil, shellutil # pylint: disable=unused-import
-from tests.tools import AgentTestCase, patch # pylint: disable=unused-import
+from azurelinuxagent.common.osutil.default import DefaultOSUtil, shellutil  # pylint: disable=unused-import
+from tests.tools import AgentTestCase, patch  # pylint: disable=unused-import
 
 
 class DefaultOsUtilTestCase(AgentTestCase):

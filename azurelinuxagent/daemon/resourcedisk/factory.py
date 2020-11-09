@@ -23,8 +23,8 @@ from .openwrt import OpenWRTResourceDiskHandler
 
 
 def get_resourcedisk_handler(distro_name=DISTRO_NAME, 
-                             distro_version=DISTRO_VERSION, # pylint: disable=W0613
-                             distro_full_name=DISTRO_FULL_NAME): # pylint: disable=W0613
+                             distro_version=DISTRO_VERSION,  # pylint: disable=W0613
+                             distro_full_name=DISTRO_FULL_NAME):  # pylint: disable=W0613
     if distro_name == "freebsd":
         return FreeBSDResourceDiskHandler()
 

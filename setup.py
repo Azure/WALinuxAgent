@@ -30,7 +30,7 @@ from azurelinuxagent.common.version import AGENT_NAME, AGENT_VERSION, \
     AGENT_DESCRIPTION, \
     DISTRO_NAME, DISTRO_VERSION, DISTRO_FULL_NAME
 
-root_dir = os.path.dirname(os.path.abspath(__file__)) # pylint: disable=invalid-name
+root_dir = os.path.dirname(os.path.abspath(__file__))  # pylint: disable=invalid-name
 os.chdir(root_dir)
 
 
@@ -38,53 +38,53 @@ def set_files(data_files, dest=None, src=None):
     data_files.append((dest, src))
 
 
-def set_bin_files(data_files, dest="/usr/sbin", # pylint: disable=W0102
+def set_bin_files(data_files, dest="/usr/sbin",  # pylint: disable=W0102
                   src=["bin/waagent", "bin/waagent2.0"]):
     data_files.append((dest, src))
 
 
-def set_conf_files(data_files, dest="/etc", src=["config/waagent.conf"]): # pylint: disable=W0102
+def set_conf_files(data_files, dest="/etc", src=["config/waagent.conf"]):  # pylint: disable=W0102
     data_files.append((dest, src))
 
 
-def set_logrotate_files(data_files, dest="/etc/logrotate.d", # pylint: disable=W0102
+def set_logrotate_files(data_files, dest="/etc/logrotate.d",  # pylint: disable=W0102
                         src=["config/waagent.logrotate",
                              "config/waagent-extn.logrotate"]):
     data_files.append((dest, src))
 
 
-def set_sysv_files(data_files, dest="/etc/rc.d/init.d", src=["init/waagent"]): # pylint: disable=W0102
+def set_sysv_files(data_files, dest="/etc/rc.d/init.d", src=["init/waagent"]):  # pylint: disable=W0102
     data_files.append((dest, src))
 
 
-def set_systemd_files(data_files, dest="/lib/systemd/system", # pylint: disable=W0102
+def set_systemd_files(data_files, dest="/lib/systemd/system",  # pylint: disable=W0102
                       src=["init/waagent.service"]):
     data_files.append((dest, src))
 
 
-def set_freebsd_rc_files(data_files, dest="/etc/rc.d/", # pylint: disable=W0102
+def set_freebsd_rc_files(data_files, dest="/etc/rc.d/",  # pylint: disable=W0102
                          src=["init/freebsd/waagent"]):
     data_files.append((dest, src))
 
 
-def set_openbsd_rc_files(data_files, dest="/etc/rc.d/", # pylint: disable=W0102
+def set_openbsd_rc_files(data_files, dest="/etc/rc.d/",  # pylint: disable=W0102
                          src=["init/openbsd/waagent"]):
     data_files.append((dest, src))
 
 
-def set_udev_files(data_files, dest="/etc/udev/rules.d/", # pylint: disable=W0102
+def set_udev_files(data_files, dest="/etc/udev/rules.d/",  # pylint: disable=W0102
                    src=["config/66-azure-storage.rules",
                         "config/99-azure-product-uuid.rules"]):
     data_files.append((dest, src))
 
 
-def get_data_files(name, version, fullname): # pylint: disable=R0912
+def get_data_files(name, version, fullname):  # pylint: disable=R0912
     """
     Determine data_files according to distro name, version and init system type
     """
     data_files = []
 
-    if name == 'redhat' or name == 'centos': # pylint: disable=R1714
+    if name == 'redhat' or name == 'centos':  # pylint: disable=R1714
         set_bin_files(data_files)
         set_conf_files(data_files)
         set_logrotate_files(data_files)
@@ -135,7 +135,7 @@ def get_data_files(name, version, fullname): # pylint: disable=R0912
             # Ubuntu15.04+ uses systemd
             set_systemd_files(data_files,
                               src=["init/ubuntu/walinuxagent.service"])
-    elif name == 'suse' or name == 'opensuse': # pylint: disable=R1714
+    elif name == 'suse' or name == 'opensuse':  # pylint: disable=R1714
         set_bin_files(data_files)
         set_conf_files(data_files, src=["config/suse/waagent.conf"])
         set_logrotate_files(data_files)
@@ -196,7 +196,7 @@ def debian_has_systemd():
         return False
 
 
-class install(_install): # pylint: disable=C0103
+class install(_install):  # pylint: disable=C0103
     user_options = _install.user_options + [
         ('lnx-distro=', None, 'target Linux distribution'),
         ('lnx-distro-version=', None, 'target Linux distribution version'),
@@ -239,11 +239,11 @@ class install(_install): # pylint: disable=C0103
 # module was deprecated. Depending on the Linux distribution the
 # implementation may be broken prior to Python 3.7 wher the functionality
 # will be removed from Python 3
-requires = [] # pylint: disable=invalid-name
+requires = []  # pylint: disable=invalid-name
 if float(sys.version[:3]) >= 3.7:
-    requires = ['distro'] # pylint: disable=invalid-name
+    requires = ['distro']  # pylint: disable=invalid-name
 
-modules = [] # pylint: disable=invalid-name
+modules = []  # pylint: disable=invalid-name
 
 if "bdist_egg" in sys.argv:
     modules.append("__main__")
