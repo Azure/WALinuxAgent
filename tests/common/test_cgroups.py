@@ -25,7 +25,7 @@ from azurelinuxagent.common.cgroup import CpuCgroup, MemoryCgroup, CGroup
 from azurelinuxagent.common.exception import CGroupsException
 from azurelinuxagent.common.osutil import get_osutil
 from azurelinuxagent.common.utils import fileutil
-from tests.tools import AgentTestCase, patch, data_dir, Mock
+from tests.tools import AgentTestCase, patch, data_dir
 
 
 def consume_cpu_time():
