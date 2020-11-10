@@ -1,29 +1,19 @@
-From: Bastian Blank <bastian.blank@credativ.de>
-Date: Wed, 4 Jan 2017 18:07:20 +0100
-Subject: Fix filesystem detection
-
-Use blkid to detect filesystem information.
----
- azurelinuxagent/common/utils/shellutil.py      |  1 -
- azurelinuxagent/daemon/resourcedisk/default.py | 57 ++++----------------------
- 2 files changed, 8 insertions(+), 50 deletions(-)
-
-diff --git a/azurelinuxagent/common/utils/shellutil.py b/azurelinuxagent/common/utils/shellutil.py
-index 0e3ee64..80a0e71 100644
---- a/azurelinuxagent/common/utils/shellutil.py
-+++ b/azurelinuxagent/common/utils/shellutil.py
-@@ -84,7 +84,6 @@ def run_get_output(cmd, chk_err=True, log_cmd=True, expected_errors=[]):
+Index: WALinuxAgent/azurelinuxagent/common/utils/shellutil.py
+===================================================================
+--- WALinuxAgent.orig/azurelinuxagent/common/utils/shellutil.py
++++ WALinuxAgent/azurelinuxagent/common/utils/shellutil.py
+@@ -94,7 +94,6 @@ def run_get_output(cmd, chk_err=True, lo
          logger.verbose(u"Command: [{0}]", cmd)
      try:
          output = subprocess.check_output(cmd,
 -                                         stderr=subprocess.STDOUT,
                                           shell=True)
-         output = ustr(output,
-                       encoding='utf-8',
-diff --git a/azurelinuxagent/daemon/resourcedisk/default.py b/azurelinuxagent/daemon/resourcedisk/default.py
-index cfb76d2..7435377 100644
---- a/azurelinuxagent/daemon/resourcedisk/default.py
-+++ b/azurelinuxagent/daemon/resourcedisk/default.py
+         output = _encode_command_output(output)
+     except subprocess.CalledProcessError as e: # pylint: disable=C0103
+Index: WALinuxAgent/azurelinuxagent/daemon/resourcedisk/default.py
+===================================================================
+--- WALinuxAgent.orig/azurelinuxagent/daemon/resourcedisk/default.py
++++ WALinuxAgent/azurelinuxagent/daemon/resourcedisk/default.py
 @@ -88,9 +88,8 @@ class ResourceDiskHandler(object):
              logger.error("Failed to enable swap {0}", e)
  
@@ -34,7 +24,7 @@ index cfb76d2..7435377 100644
 +        shellutil.run("blockdev --rereadpt {0}".format(device),
 +                      chk_err=False)
  
-     def mount_resource_disk(self, mount_point):
+     def mount_resource_disk(self, mount_point): # pylint: disable=R0912
          device = self.osutil.device_for_ide_port(1)
 @@ -117,7 +116,7 @@ class ResourceDiskHandler(object):
              raise ResourceDiskError(msg=msg, inner=ose)
@@ -92,7 +82,7 @@ index cfb76d2..7435377 100644
 -        """
 -
 -        command_to_use = '--part-type'
--        input = "sfdisk {0} {1} {2}".format(
+-        input = "sfdisk {0} {1} {2}".format( # pylint: disable=W0622
 -            command_to_use, '-f' if suppress_message else '', option_str)
 -        err_code, output = shellutil.run_get_output(
 -            input, chk_err=False, log_cmd=True)
@@ -118,6 +108,6 @@ index cfb76d2..7435377 100644
 -
 -        return err_code, output
 -
-     @staticmethod
-     def get_mount_string(mount_options, partition, mount_point):
-         if mount_options is not None:
+     def get_mount_string(self, mount_options, partition, mount_point):
+         if mount_options is not None: # pylint: disable=R1705
+             return 'mount -t {0} -o {1} {2} {3}'.format(

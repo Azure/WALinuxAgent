@@ -1,59 +1,37 @@
-From: Bastian Blank <bastian.blank@credativ.de>
-Date: Thu, 10 Jan 2019 09:39:05 +0100
-Subject: Ignore some broken tests
-
----
- tests/ga/test_update.py       | 3 +++
- tests/protocol/test_wire.py   | 1 +
- tests/utils/test_rest_util.py | 2 ++
- 3 files changed, 6 insertions(+)
-
-diff --git a/tests/ga/test_update.py b/tests/ga/test_update.py
-index 2443005..1f2fe20 100644
---- a/tests/ga/test_update.py
-+++ b/tests/ga/test_update.py
+Index: WALinuxAgent/tests/ga/test_update.py
+===================================================================
+--- WALinuxAgent.orig/tests/ga/test_update.py
++++ WALinuxAgent/tests/ga/test_update.py
 @@ -3,6 +3,8 @@
  
  from __future__ import print_function
  
 +import unittest
 +
- from azurelinuxagent.common.event import *
- from azurelinuxagent.common.protocol.hostplugin import *
- from azurelinuxagent.common.protocol.metadata import *
-@@ -1112,6 +1114,7 @@ class TestUpdate(UpdateTestCase):
+ import contextlib
+ import glob
+ import json
+@@ -1140,6 +1142,7 @@ class TestUpdate(UpdateTestCase): # pyli
          self._test_run_latest(mock_time=mock_time)
-         self.assertNotEqual(1, mock_time.sleep_interval)
+         self.assertEqual(1, mock_time.sleep_interval)
  
 +    @unittest.expectedFailure
      def test_run_latest_defaults_to_current(self):
          self.assertEqual(None, self.update_handler.get_latest_agent())
  
-diff --git a/tests/protocol/test_wire.py b/tests/protocol/test_wire.py
-index afc6f3b..a5946e2 100644
---- a/tests/protocol/test_wire.py
-+++ b/tests/protocol/test_wire.py
-@@ -192,6 +192,7 @@ class TestWireProtocol(AgentTestCase):
-         self.assertEqual(patch_http.call_args_list[1][0][1], host_uri)
- 
-     @skip_if_predicate_true(running_under_travis, "Travis unit tests should not have external dependencies")
-+    @skip_if_predicate_true(lambda: os.environ.get('https_proxy') is not None, "Skip if proxy is defined")
-     def test_download_ext_handler_pkg_stream(self, *args):
-         ext_uri = 'https://dcrdata.blob.core.windows.net/files/packer.zip'
-         tmp = tempfile.mkdtemp()
-diff --git a/tests/utils/test_rest_util.py b/tests/utils/test_rest_util.py
-index 8216e5e..4f343b5 100644
---- a/tests/utils/test_rest_util.py
-+++ b/tests/utils/test_rest_util.py
-@@ -178,6 +178,7 @@ class TestHttpOperations(AgentTestCase):
-         for x in urls_tuples:
-             self.assertEquals(restutil.redact_sas_tokens_in_urls(x[0]), x[1])
+Index: WALinuxAgent/tests/utils/test_rest_util.py
+===================================================================
+--- WALinuxAgent.orig/tests/utils/test_rest_util.py
++++ WALinuxAgent/tests/utils/test_rest_util.py
+@@ -177,6 +177,7 @@ class TestHttpOperations(AgentTestCase):
+         for x in urls_tuples: # pylint: disable=invalid-name
+             self.assertEqual(restutil.redact_sas_tokens_in_urls(x[0]), x[1]) 
  
 +    @skip_if_predicate_true(lambda: os.environ.get('https_proxy') is not None, "Skip if proxy is defined")
      @patch('azurelinuxagent.common.conf.get_httpproxy_port')
      @patch('azurelinuxagent.common.conf.get_httpproxy_host')
      def test_get_http_proxy_none_is_default(self, mock_host, mock_port):
-@@ -198,6 +199,7 @@ class TestHttpOperations(AgentTestCase):
+@@ -197,6 +198,7 @@ class TestHttpOperations(AgentTestCase):
          self.assertEqual(1, mock_host.call_count)
          self.assertEqual(1, mock_port.call_count)
  

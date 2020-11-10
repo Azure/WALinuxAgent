@@ -1,16 +1,8 @@
-From: Bastian Blank <bastian.blank@credativ.de>
-Date: Wed, 4 Jan 2017 18:06:30 +0100
-Subject: Add resourcedisk command to agent
-
----
- azurelinuxagent/agent.py | 11 ++++++++++-
- 1 file changed, 10 insertions(+), 1 deletion(-)
-
-diff --git a/azurelinuxagent/agent.py b/azurelinuxagent/agent.py
-index d660b4d..2a6f583 100644
---- a/azurelinuxagent/agent.py
-+++ b/azurelinuxagent/agent.py
-@@ -136,6 +136,11 @@ class Agent(object):
+Index: WALinuxAgent/azurelinuxagent/agent.py
+===================================================================
+--- WALinuxAgent.orig/azurelinuxagent/agent.py
++++ WALinuxAgent/azurelinuxagent/agent.py
+@@ -169,6 +169,11 @@ class Agent(object):
          update_handler = get_update_handler()
          update_handler.run(debug)
  
@@ -22,7 +14,7 @@ index d660b4d..2a6f583 100644
      def show_configuration(self):
          configuration = conf.get_configuration()
          for k in sorted(configuration.keys()):
-@@ -170,6 +175,8 @@ def main(args=[]):
+@@ -220,6 +225,8 @@ def main(args=[]): # pylint: disable=R09
                  agent.daemon()
              elif command == "run-exthandlers":
                  agent.run_exthandlers(debug)
@@ -30,22 +22,22 @@ index d660b4d..2a6f583 100644
 +                agent.resourcedisk()
              elif command == "show-configuration":
                  agent.show_configuration()
-         except Exception:
-@@ -210,6 +217,8 @@ def parse_args(sys_args):
+             elif command == "collect-logs":
+@@ -264,6 +271,8 @@ def parse_args(sys_args): # pylint: disa
              cmd = "register-service"
-         elif re.match("^([-/]*)run-exthandlers", a):
+         elif re.match("^([-/]*)run-exthandlers", arg):
              cmd = "run-exthandlers"
-+        elif re.match("^([-/]*)resourcedisk", a):
++        elif re.match("^([-/]*)resourcedisk", arg):
 +            cmd = "resourcedisk"
-         elif re.match("^([-/]*)version", a):
+         elif re.match("^([-/]*)version", arg):
              cmd = "version"
-         elif re.match("^([-/]*)verbose", a):
-@@ -249,7 +258,7 @@ def usage():
-     s += ("usage: {0} [-verbose] [-force] [-help] "
-            "-configuration-path:<path to configuration file>"
+         elif re.match("^([-/]*)verbose", arg):
+@@ -308,7 +317,7 @@ def usage():
+     s += ("usage: {0} [-verbose] [-force] [-help] " # pylint: disable=C0103
+            "-configuration-path:<path to configuration file>" 
             "-provision|-deprovision[+user]|-register-service|-version|-daemon|-start|"
--           "-run-exthandlers|-show-configuration]"
-+           "-run-exthandlers||-resourcedisk-show-configuration]"
+-           "-run-exthandlers|-show-configuration|-collect-logs [-full]"
++           "-run-exthandlers|-resourcedisk|-show-configuration|-collect-logs [-full]"
             "").format(sys.argv[0])
-     s += "\n"
+     s += "\n" # pylint: disable=C0103
      return s

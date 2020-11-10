@@ -1,24 +1,16 @@
-From: Bastian Blank <bastian.blank@credativ.de>
-Date: Wed, 4 Jan 2017 16:07:33 +0100
-Subject: Set shell of created user to /bin/bash
-
----
- azurelinuxagent/common/osutil/default.py | 4 ++--
- 1 file changed, 2 insertions(+), 2 deletions(-)
-
-diff --git a/azurelinuxagent/common/osutil/default.py b/azurelinuxagent/common/osutil/default.py
-index 7cc2be8..4b9991e 100644
---- a/azurelinuxagent/common/osutil/default.py
-+++ b/azurelinuxagent/common/osutil/default.py
-@@ -412,9 +412,9 @@ class DefaultOSUtil(object):
+Index: WALinuxAgent/azurelinuxagent/common/osutil/default.py
+===================================================================
+--- WALinuxAgent.orig/azurelinuxagent/common/osutil/default.py
++++ WALinuxAgent/azurelinuxagent/common/osutil/default.py
+@@ -388,9 +388,9 @@ class DefaultOSUtil(object): # pylint: d
              return
  
          if expiration is not None:
--            cmd = "useradd -m {0} -e {1}".format(username, expiration)
-+            cmd = "useradd -m {0} -s /bin/bash -e {1}".format(username, expiration)
+-            cmd = ["useradd", "-m", username, "-e", expiration]
++            cmd = ["useradd", "-m", username, "-s", "/bin/bash", "-e", expiration]
          else:
--            cmd = "useradd -m {0}".format(username)
-+            cmd = "useradd -m {0} -s /bin/bash".format(username)
+-            cmd = ["useradd", "-m", username]
++            cmd = ["useradd", "-m", username, "-s", "/bin/bash"]
          
          if comment is not None:
-             cmd += " -c {0}".format(comment)
+             cmd.extend(["-c", comment])

@@ -1,3 +1,10 @@
+waagent (2.2.53+cbld10u1) unstable; urgency=medium
+
+  * Fix patches to align with latest source
+  * Update Provisioning.Agent setting
+
+ -- Matt Bearup <mbearup@microsoft.com>  Mon, 9 Nov 2020 21:05:06 +0800
+
 waagent (2.2.41+cbld10u2) unstable; urgency=medium
 
   * Added rule to enable waagent with python3

@@ -2,20 +2,12 @@ Index: WALinuxAgent/config/debian/waagent.conf
 ===================================================================
 --- WALinuxAgent.orig/config/debian/waagent.conf
 +++ WALinuxAgent/config/debian/waagent.conf
-@@ -3,27 +3,27 @@
- #
+@@ -8,20 +8,20 @@ Extensions.Enabled=y
  
- # Enable instance creation
--Provisioning.Enabled=y
-+Provisioning.Enabled=n
- 
- # Enable extension handling. Do not disable this unless you do not need password reset,
- # backup, monitoring, or any extension handling whatsoever.
- Extensions.Enabled=y
- 
- # Rely on cloud-init to provision
--Provisioning.UseCloudInit=n
-+Provisioning.UseCloudInit=y
+ # Which provisioning agent to use. Supported values are "auto" (default), "waagent",
+ # "cloud-init", or "disabled".
+-Provisioning.Agent=auto
++Provisioning.Agent=cloud-init
  
  # Password authentication for root account will be unavailable.
  Provisioning.DeleteRootPassword=y
@@ -34,3 +26,12 @@ Index: WALinuxAgent/config/debian/waagent.conf
  
  # Decode CustomData from Base64.
  Provisioning.DecodeCustomData=n
+@@ -39,7 +39,7 @@ Provisioning.ExecuteCustomData=n
+ Provisioning.AllowResetSysUser=n
+ 
+ # Format if unformatted. If 'n', resource disk will not be mounted.
+-ResourceDisk.Format=y
++ResourceDisk.Format=n
+ 
+ # File system on the resource disk
+ # Typically ext3 or ext4. FreeBSD images should use 'ufs2' here.
