@@ -49,7 +49,7 @@ class TestOsUtilFactory(AgentTestCase):
                           distro_code_name="",
                           distro_version="",
                           distro_full_name="")
-        self.assertTrue(type(ret) == DefaultOSUtil) # pylint: disable=unidiomatic-typecheck
+        self.assertTrue(type(ret) == DefaultOSUtil)  # pylint: disable=unidiomatic-typecheck
         self.assertEqual(patch_logger.call_count, 1)
         self.assertEqual(ret.get_service_name(), "waagent")
 
@@ -58,49 +58,49 @@ class TestOsUtilFactory(AgentTestCase):
                           distro_code_name="",
                           distro_version="10.04",
                           distro_full_name="")
-        self.assertTrue(type(ret) == UbuntuOSUtil) # pylint: disable=unidiomatic-typecheck
+        self.assertTrue(type(ret) == UbuntuOSUtil)  # pylint: disable=unidiomatic-typecheck
         self.assertEqual(ret.get_service_name(), "walinuxagent")
 
         ret = _get_osutil(distro_name="ubuntu",
                           distro_code_name="",
                           distro_version="12.04",
                           distro_full_name="")
-        self.assertTrue(type(ret) == Ubuntu12OSUtil) # pylint: disable=unidiomatic-typecheck
+        self.assertTrue(type(ret) == Ubuntu12OSUtil)  # pylint: disable=unidiomatic-typecheck
         self.assertEqual(ret.get_service_name(), "walinuxagent")
 
         ret = _get_osutil(distro_name="ubuntu",
                           distro_code_name="trusty",
                           distro_version="14.04",
                           distro_full_name="")
-        self.assertTrue(type(ret) == Ubuntu14OSUtil) # pylint: disable=unidiomatic-typecheck
+        self.assertTrue(type(ret) == Ubuntu14OSUtil)  # pylint: disable=unidiomatic-typecheck
         self.assertEqual(ret.get_service_name(), "walinuxagent")
 
         ret = _get_osutil(distro_name="ubuntu",
                           distro_code_name="xenial",
                           distro_version="16.04",
                           distro_full_name="")
-        self.assertTrue(type(ret) == Ubuntu16OSUtil) # pylint: disable=unidiomatic-typecheck
+        self.assertTrue(type(ret) == Ubuntu16OSUtil)  # pylint: disable=unidiomatic-typecheck
         self.assertEqual(ret.get_service_name(), "walinuxagent")
 
         ret = _get_osutil(distro_name="ubuntu",
                           distro_code_name="bionic",
                           distro_version="18.04",
                           distro_full_name="")
-        self.assertTrue(type(ret) == Ubuntu18OSUtil) # pylint: disable=unidiomatic-typecheck
+        self.assertTrue(type(ret) == Ubuntu18OSUtil)  # pylint: disable=unidiomatic-typecheck
         self.assertEqual(ret.get_service_name(), "walinuxagent")
 
         ret = _get_osutil(distro_name="ubuntu",
                           distro_code_name="focal",
                           distro_version="20.04",
                           distro_full_name="")
-        self.assertTrue(type(ret) == Ubuntu18OSUtil) # pylint: disable=unidiomatic-typecheck
+        self.assertTrue(type(ret) == Ubuntu18OSUtil)  # pylint: disable=unidiomatic-typecheck
         self.assertEqual(ret.get_service_name(), "walinuxagent")
 
         ret = _get_osutil(distro_name="ubuntu",
                           distro_code_name="",
                           distro_version="10.04",
                           distro_full_name="Snappy Ubuntu Core")
-        self.assertTrue(type(ret) == UbuntuSnappyOSUtil) # pylint: disable=unidiomatic-typecheck
+        self.assertTrue(type(ret) == UbuntuSnappyOSUtil)  # pylint: disable=unidiomatic-typecheck
         self.assertEqual(ret.get_service_name(), "walinuxagent")
 
     def test_get_osutil_it_should_return_arch(self):
@@ -108,7 +108,7 @@ class TestOsUtilFactory(AgentTestCase):
                           distro_code_name="",
                           distro_version="",
                           distro_full_name="")
-        self.assertTrue(type(ret) == ArchUtil) # pylint: disable=unidiomatic-typecheck
+        self.assertTrue(type(ret) == ArchUtil)  # pylint: disable=unidiomatic-typecheck
         self.assertEqual(ret.get_service_name(), "waagent")
 
     def test_get_osutil_it_should_return_clear_linux(self):
@@ -116,7 +116,7 @@ class TestOsUtilFactory(AgentTestCase):
                           distro_code_name="",
                           distro_version="",
                           distro_full_name="Clear Linux")
-        self.assertTrue(type(ret) == ClearLinuxUtil) # pylint: disable=unidiomatic-typecheck
+        self.assertTrue(type(ret) == ClearLinuxUtil)  # pylint: disable=unidiomatic-typecheck
         self.assertEqual(ret.get_service_name(), "waagent")
 
     def test_get_osutil_it_should_return_alpine(self):
@@ -124,7 +124,7 @@ class TestOsUtilFactory(AgentTestCase):
                           distro_code_name="",
                           distro_version="",
                           distro_full_name="")
-        self.assertTrue(type(ret) == AlpineOSUtil) # pylint: disable=unidiomatic-typecheck
+        self.assertTrue(type(ret) == AlpineOSUtil)  # pylint: disable=unidiomatic-typecheck
         self.assertEqual(ret.get_service_name(), "waagent")
 
     def test_get_osutil_it_should_return_kali(self):
@@ -132,7 +132,7 @@ class TestOsUtilFactory(AgentTestCase):
                           distro_code_name="",
                           distro_version="",
                           distro_full_name="")
-        self.assertTrue(type(ret) == DebianOSBaseUtil) # pylint: disable=unidiomatic-typecheck
+        self.assertTrue(type(ret) == DebianOSBaseUtil)  # pylint: disable=unidiomatic-typecheck
         self.assertEqual(ret.get_service_name(), "waagent")
 
     def test_get_osutil_it_should_return_coreos(self):
@@ -140,7 +140,7 @@ class TestOsUtilFactory(AgentTestCase):
                           distro_code_name="",
                           distro_version="",
                           distro_full_name="")
-        self.assertTrue(type(ret) == CoreOSUtil) # pylint: disable=unidiomatic-typecheck
+        self.assertTrue(type(ret) == CoreOSUtil)  # pylint: disable=unidiomatic-typecheck
         self.assertEqual(ret.get_service_name(), "waagent")
 
     def test_get_osutil_it_should_return_suse(self):
@@ -148,21 +148,21 @@ class TestOsUtilFactory(AgentTestCase):
                           distro_code_name="",
                           distro_version="10",
                           distro_full_name="")
-        self.assertTrue(type(ret) == SUSEOSUtil) # pylint: disable=unidiomatic-typecheck
+        self.assertTrue(type(ret) == SUSEOSUtil)  # pylint: disable=unidiomatic-typecheck
         self.assertEqual(ret.get_service_name(), "waagent")
 
         ret = _get_osutil(distro_name="suse",
                           distro_code_name="",
                           distro_full_name="SUSE Linux Enterprise Server",
                           distro_version="11")
-        self.assertTrue(type(ret) == SUSE11OSUtil) # pylint: disable=unidiomatic-typecheck
+        self.assertTrue(type(ret) == SUSE11OSUtil)  # pylint: disable=unidiomatic-typecheck
         self.assertEqual(ret.get_service_name(), "waagent")
 
         ret = _get_osutil(distro_name="suse",
                           distro_code_name="",
                           distro_full_name="openSUSE",
                           distro_version="12")
-        self.assertTrue(type(ret) == SUSE11OSUtil) # pylint: disable=unidiomatic-typecheck
+        self.assertTrue(type(ret) == SUSE11OSUtil)  # pylint: disable=unidiomatic-typecheck
         self.assertEqual(ret.get_service_name(), "waagent")
 
     def test_get_osutil_it_should_return_debian(self):
@@ -170,14 +170,14 @@ class TestOsUtilFactory(AgentTestCase):
                           distro_code_name="",
                           distro_full_name="",
                           distro_version="7")
-        self.assertTrue(type(ret) == DebianOSBaseUtil) # pylint: disable=unidiomatic-typecheck
+        self.assertTrue(type(ret) == DebianOSBaseUtil)  # pylint: disable=unidiomatic-typecheck
         self.assertEqual(ret.get_service_name(), "waagent")
 
         ret = _get_osutil(distro_name="debian",
                           distro_code_name="",
                           distro_full_name="",
                           distro_version="8")
-        self.assertTrue(type(ret) == DebianOSModernUtil) # pylint: disable=unidiomatic-typecheck
+        self.assertTrue(type(ret) == DebianOSModernUtil)  # pylint: disable=unidiomatic-typecheck
         self.assertEqual(ret.get_service_name(), "walinuxagent")
 
     def test_get_osutil_it_should_return_redhat(self):
@@ -185,42 +185,42 @@ class TestOsUtilFactory(AgentTestCase):
                           distro_code_name="",
                           distro_full_name="",
                           distro_version="6")
-        self.assertTrue(type(ret) == Redhat6xOSUtil) # pylint: disable=unidiomatic-typecheck
+        self.assertTrue(type(ret) == Redhat6xOSUtil)  # pylint: disable=unidiomatic-typecheck
         self.assertEqual(ret.get_service_name(), "waagent")
 
         ret = _get_osutil(distro_name="centos",
                           distro_code_name="",
                           distro_full_name="",
                           distro_version="6")
-        self.assertTrue(type(ret) == Redhat6xOSUtil) # pylint: disable=unidiomatic-typecheck
+        self.assertTrue(type(ret) == Redhat6xOSUtil)  # pylint: disable=unidiomatic-typecheck
         self.assertEqual(ret.get_service_name(), "waagent")
 
         ret = _get_osutil(distro_name="oracle",
                           distro_code_name="",
                           distro_full_name="",
                           distro_version="6")
-        self.assertTrue(type(ret) == Redhat6xOSUtil) # pylint: disable=unidiomatic-typecheck
+        self.assertTrue(type(ret) == Redhat6xOSUtil)  # pylint: disable=unidiomatic-typecheck
         self.assertEqual(ret.get_service_name(), "waagent")
 
         ret = _get_osutil(distro_name="redhat",
                           distro_code_name="",
                           distro_full_name="",
                           distro_version="7")
-        self.assertTrue(type(ret) == RedhatOSUtil) # pylint: disable=unidiomatic-typecheck
+        self.assertTrue(type(ret) == RedhatOSUtil)  # pylint: disable=unidiomatic-typecheck
         self.assertEqual(ret.get_service_name(), "waagent")
 
         ret = _get_osutil(distro_name="centos",
                           distro_code_name="",
                           distro_full_name="",
                           distro_version="7")
-        self.assertTrue(type(ret) == RedhatOSUtil) # pylint: disable=unidiomatic-typecheck
+        self.assertTrue(type(ret) == RedhatOSUtil)  # pylint: disable=unidiomatic-typecheck
         self.assertEqual(ret.get_service_name(), "waagent")
 
         ret = _get_osutil(distro_name="oracle",
                           distro_code_name="",
                           distro_full_name="",
                           distro_version="7")
-        self.assertTrue(type(ret) == RedhatOSUtil) # pylint: disable=unidiomatic-typecheck
+        self.assertTrue(type(ret) == RedhatOSUtil)  # pylint: disable=unidiomatic-typecheck
         self.assertEqual(ret.get_service_name(), "waagent")
 
     def test_get_osutil_it_should_return_euleros(self):
@@ -228,7 +228,7 @@ class TestOsUtilFactory(AgentTestCase):
                           distro_code_name="",
                           distro_version="",
                           distro_full_name="")
-        self.assertTrue(type(ret) == RedhatOSUtil) # pylint: disable=unidiomatic-typecheck
+        self.assertTrue(type(ret) == RedhatOSUtil)  # pylint: disable=unidiomatic-typecheck
         self.assertEqual(ret.get_service_name(), "waagent")
 
     def test_get_osutil_it_should_return_freebsd(self):
@@ -236,7 +236,7 @@ class TestOsUtilFactory(AgentTestCase):
                           distro_code_name="",
                           distro_version="",
                           distro_full_name="")
-        self.assertTrue(type(ret) == FreeBSDOSUtil) # pylint: disable=unidiomatic-typecheck
+        self.assertTrue(type(ret) == FreeBSDOSUtil)  # pylint: disable=unidiomatic-typecheck
         self.assertEqual(ret.get_service_name(), "waagent")
 
     def test_get_osutil_it_should_return_openbsd(self):
@@ -244,7 +244,7 @@ class TestOsUtilFactory(AgentTestCase):
                           distro_code_name="",
                           distro_version="",
                           distro_full_name="")
-        self.assertTrue(type(ret) == OpenBSDOSUtil) # pylint: disable=unidiomatic-typecheck
+        self.assertTrue(type(ret) == OpenBSDOSUtil)  # pylint: disable=unidiomatic-typecheck
         self.assertEqual(ret.get_service_name(), "waagent")
 
     def test_get_osutil_it_should_return_bigip(self):
@@ -252,7 +252,7 @@ class TestOsUtilFactory(AgentTestCase):
                           distro_code_name="",
                           distro_version="",
                           distro_full_name="")
-        self.assertTrue(type(ret) == BigIpOSUtil) # pylint: disable=unidiomatic-typecheck
+        self.assertTrue(type(ret) == BigIpOSUtil)  # pylint: disable=unidiomatic-typecheck
         self.assertEqual(ret.get_service_name(), "waagent")
 
     def test_get_osutil_it_should_return_gaia(self):
@@ -260,7 +260,7 @@ class TestOsUtilFactory(AgentTestCase):
                           distro_code_name="",
                           distro_version="",
                           distro_full_name="")
-        self.assertTrue(type(ret) == GaiaOSUtil) # pylint: disable=unidiomatic-typecheck
+        self.assertTrue(type(ret) == GaiaOSUtil)  # pylint: disable=unidiomatic-typecheck
         self.assertEqual(ret.get_service_name(), "waagent")
 
     def test_get_osutil_it_should_return_iosxe(self):
@@ -268,7 +268,7 @@ class TestOsUtilFactory(AgentTestCase):
                           distro_code_name="",
                           distro_version="",
                           distro_full_name="")
-        self.assertTrue(type(ret) == IosxeOSUtil) # pylint: disable=unidiomatic-typecheck
+        self.assertTrue(type(ret) == IosxeOSUtil)  # pylint: disable=unidiomatic-typecheck
         self.assertEqual(ret.get_service_name(), "waagent")
 
     def test_get_osutil_it_should_return_openwrt(self):
@@ -276,5 +276,5 @@ class TestOsUtilFactory(AgentTestCase):
                           distro_code_name="",
                           distro_version="",
                           distro_full_name="")
-        self.assertTrue(type(ret) == OpenWRTOSUtil) # pylint: disable=unidiomatic-typecheck
+        self.assertTrue(type(ret) == OpenWRTOSUtil)  # pylint: disable=unidiomatic-typecheck
         self.assertEqual(ret.get_service_name(), "waagent")

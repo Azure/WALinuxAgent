@@ -1,4 +1,4 @@
-# Microsoft Azure Linux Agent # pylint: disable=C0302
+# Microsoft Azure Linux Agent  # pylint: disable=C0302
 #
 # Copyright 2018 Microsoft Corporation
 #
@@ -155,7 +155,7 @@ class WireProtocol(DataContract):
         success = self.client.stream(uri, destination, headers=headers, use_proxy=False)
         return success
 
-    def download_ext_handler_pkg(self, uri, destination, headers=None, use_proxy=True): # pylint: disable=W0613
+    def download_ext_handler_pkg(self, uri, destination, headers=None, use_proxy=True):  # pylint: disable=W0613
         direct_func = lambda: self.client.stream(uri, destination, headers=None, use_proxy=True)
         # NOTE: the host_func may be called after refreshing the goal state, be careful about any goal state data
         # in the lambda.
@@ -184,7 +184,7 @@ class WireProtocol(DataContract):
         self.client.status_blob.set_vm_status(vm_status)
         self.client.upload_status_blob()
 
-    def report_ext_status(self, ext_handler_name, ext_name, ext_status): # pylint: disable=W0613
+    def report_ext_status(self, ext_handler_name, ext_name, ext_status):  # pylint: disable=W0613
         validate_param("ext_status", ext_status, ExtensionStatus)
         self.client.status_blob.set_ext_status(ext_handler_name, ext_status)
 
@@ -214,7 +214,7 @@ def _build_role_properties(container_id, role_instance_id, thumbprint):
     return xml
 
 
-def _build_health_report(incarnation, container_id, role_instance_id, # pylint: disable=R0913
+def _build_health_report(incarnation, container_id, role_instance_id,  # pylint: disable=R0913
                          status, substatus, description):
     # The max description that can be sent to WireServer is 4096 bytes.
     # Exceeding this max can result in a failure to report health.
@@ -330,12 +330,12 @@ def ext_status_to_v1(ext_name, ext_status):
         "version": 1.0,
         "timestampUTC": timestamp
     }
-    if len(v1_sub_status) != 0: # pylint: disable=len-as-condition
+    if len(v1_sub_status) != 0:  # pylint: disable=len-as-condition
         v1_ext_status['status']['substatus'] = v1_sub_status
     return v1_ext_status
 
 
-def ext_handler_status_to_v1(handler_status, ext_statuses, timestamp): # pylint: disable=W0613
+def ext_handler_status_to_v1(handler_status, ext_statuses, timestamp):  # pylint: disable=W0613
     v1_handler_status = {
         'handlerVersion': handler_status.version,
         'handlerName': handler_status.name,
@@ -349,7 +349,7 @@ def ext_handler_status_to_v1(handler_status, ext_statuses, timestamp): # pylint:
             "message": handler_status.message
         }
 
-    if len(handler_status.extensions) > 0: # pylint: disable=len-as-condition
+    if len(handler_status.extensions) > 0:  # pylint: disable=len-as-condition
         # Currently, no more than one extension per handler
         ext_name = handler_status.extensions[0]
         ext_status = ext_statuses.get(ext_name)
@@ -425,7 +425,7 @@ class StatusBlob(object):
                 self.put_page_blob(url, self.data)
             return True
 
-        except Exception as e: # pylint: disable=C0103
+        except Exception as e:  # pylint: disable=C0103
             logger.verbose("Initial status upload failed: {0}", e)
 
         return False
@@ -533,7 +533,7 @@ def event_to_v1(event):
     return event_str
 
 
-class WireClient(object): # pylint: disable=R0904
+class WireClient(object):  # pylint: disable=R0904
 
     def __init__(self, endpoint):
         logger.info("Wire server endpoint:{0}", endpoint)
@@ -563,7 +563,7 @@ class WireClient(object): # pylint: disable=R0904
         except ResourceGoneError:
             raise
 
-        except Exception as e: # pylint: disable=C0103
+        except Exception as e:  # pylint: disable=C0103
             raise ProtocolError("[Wireserver Exception] {0}".format(
                 ustr(e)))
 
@@ -587,20 +587,20 @@ class WireClient(object): # pylint: disable=R0904
             raise ProtocolError("{0} is missing.".format(local_file))
         try:
             return fileutil.read_file(local_file)
-        except IOError as e: # pylint: disable=C0103
+        except IOError as e:  # pylint: disable=C0103
             raise ProtocolError("Failed to read cache: {0}".format(e))
 
     def save_cache(self, local_file, data):
         try:
             fileutil.write_file(local_file, data)
-        except IOError as e: # pylint: disable=C0103
+        except IOError as e:  # pylint: disable=C0103
             fileutil.clean_ioerror(e, paths=[local_file])
             raise ProtocolError("Failed to write cache: {0}".format(e))
 
     @staticmethod
     def call_storage_service(http_req, *args, **kwargs):
         # Default to use the configured HTTP proxy
-        if not 'use_proxy' in kwargs or kwargs['use_proxy'] is None: # pylint: disable=C0113
+        if not 'use_proxy' in kwargs or kwargs['use_proxy'] is None:  # pylint: disable=C0113
             kwargs['use_proxy'] = True
 
         return http_req(*args, **kwargs)
@@ -623,10 +623,10 @@ class WireClient(object): # pylint: disable=R0904
                 logger.verbose('The specified manifest URL is empty, ignored.')
                 continue
 
-            direct_func = lambda: self.fetch(version.uri) # pylint: disable=W0640
+            direct_func = lambda: self.fetch(version.uri)  # pylint: disable=W0640
             # NOTE: the host_func may be called after refreshing the goal state, be careful about any goal state data
             # in the lambda.
-            host_func = lambda: self.fetch_manifest_through_host(version.uri) # pylint: disable=W0640
+            host_func = lambda: self.fetch_manifest_through_host(version.uri)  # pylint: disable=W0640
 
             try:
                 response = self.send_request_using_appropriate_channel(direct_func, host_func)
@@ -635,7 +635,7 @@ class WireClient(object): # pylint: disable=R0904
                     host = self.get_host_plugin()
                     host.update_manifest_uri(version.uri)
                     return response
-            except Exception as e: # pylint: disable=C0103
+            except Exception as e:  # pylint: disable=C0103
                 logger.warn("Exception when fetching manifest. Error: {0}".format(ustr(e)))
 
         raise ExtensionDownloadError("Failed to fetch manifest from all sources")
@@ -655,7 +655,7 @@ class WireClient(object): # pylint: disable=R0904
                         destination_fh.write(chunk)
                         complete = len(chunk) < chunk_size
                 success = True
-            except Exception as e: # pylint: disable=C0103
+            except Exception as e:  # pylint: disable=C0103
                 logger.error('Error streaming {0} to {1}: {2}'.format(uri, destination, ustr(e)))
 
         return success
@@ -680,7 +680,7 @@ class WireClient(object): # pylint: disable=R0904
 
             host_plugin = self.get_host_plugin()
 
-            if restutil.request_failed(resp): # pylint: disable=R1720
+            if restutil.request_failed(resp):  # pylint: disable=R1720
                 error_response = restutil.read_response_error(resp)
                 msg = "Fetch failed from [{0}]: {1}".format(uri, error_response)
                 logger.warn(msg)
@@ -695,9 +695,9 @@ class WireClient(object): # pylint: disable=R0904
                 if host_plugin is not None:
                     host_plugin.report_fetch_health(uri, source='WireClient')
 
-        except (HttpError, ProtocolError, IOError) as e: # pylint: disable=C0103
+        except (HttpError, ProtocolError, IOError) as e:  # pylint: disable=C0103
             logger.verbose("Fetch failed from [{0}]: {1}", uri, e)
-            if isinstance(e, ResourceGoneError) or isinstance(e, InvalidContainerError): # pylint: disable=R1701
+            if isinstance(e, ResourceGoneError) or isinstance(e, InvalidContainerError):  # pylint: disable=R1701
                 raise
         return resp
 
@@ -738,7 +738,7 @@ class WireClient(object): # pylint: disable=R0904
                 message = u"Retrieving the goal state recovered from previous errors"
                 add_event(AGENT_NAME, op=WALAEventOperation.FetchGoalState, version=CURRENT_VERSION, is_success=True, message=message, log_event=False)
                 logger.info(message)
-        except Exception as e: # pylint: disable=C0103
+        except Exception as e:  # pylint: disable=C0103
             if not self._last_try_update_goal_state_failed:
                 self._last_try_update_goal_state_failed = True
                 message = u"An error occurred while retrieving the goal state: {0}".format(ustr(e))
@@ -758,7 +758,7 @@ class WireClient(object): # pylint: disable=R0904
     def _save_goal_state(self):
         try:
             self.goal_state_flusher.flush()
-        except Exception as e: # pylint: disable=C0103
+        except Exception as e:  # pylint: disable=C0103
             logger.warn("Failed to save the previous goal state to the history folder: {0}", ustr(e))
 
         try:
@@ -778,7 +778,7 @@ class WireClient(object): # pylint: disable=R0904
             save_if_not_none(self._goal_state.ext_conf, EXT_CONF_FILE_NAME.format(self._goal_state.incarnation))
             save_if_not_none(self._goal_state.remote_access, REMOTE_ACCESS_FILE_NAME.format(self._goal_state.incarnation))
 
-        except Exception as e: # pylint: disable=C0103
+        except Exception as e:  # pylint: disable=C0103
             logger.warn("Failed to save the goal state to disk: {0}", ustr(e))
 
     def _set_host_plugin(self, new_host_plugin):
@@ -822,7 +822,7 @@ class WireClient(object): # pylint: disable=R0904
             xml_text = self.fetch_manifest(ext_handler.versionUris)
             self.save_cache(local_file, xml_text)
             return ExtensionManifest(xml_text)
-        except Exception as e: # pylint: disable=C0103
+        except Exception as e:  # pylint: disable=C0103
             raise ExtensionDownloadError("Failed to retrieve extension manifest. Error: {0}".format(ustr(e)))
 
     def get_remote_access(self):
@@ -838,7 +838,7 @@ class WireClient(object): # pylint: disable=R0904
             xml_text = self.fetch_manifest(vmagent_manifest.versionsManifestUris)
             fileutil.write_file(local_file, xml_text)
             return ExtensionManifest(xml_text)
-        except Exception as e: # pylint: disable=C0103
+        except Exception as e:  # pylint: disable=C0103
             raise ProtocolError("Failed to retrieve GAFamily manifest. Error: {0}".format(ustr(e)))
 
     def check_wire_protocol_version(self):
@@ -861,7 +861,7 @@ class WireClient(object): # pylint: disable=R0904
         ret = None
         try:
             ret = host_func()
-        except (ResourceGoneError, InvalidContainerError) as e: # pylint: disable=C0103
+        except (ResourceGoneError, InvalidContainerError) as e:  # pylint: disable=C0103
             host_plugin = self.get_host_plugin()
             old_container_id = host_plugin.container_id
             old_role_config_name = host_plugin.role_config_name
@@ -894,7 +894,7 @@ class WireClient(object): # pylint: disable=R0904
                                  message=msg,
                                  log_event=True)
 
-            except (ResourceGoneError, InvalidContainerError) as e: # pylint: disable=C0103
+            except (ResourceGoneError, InvalidContainerError) as e:  # pylint: disable=C0103
                 msg = "[PERIODIC] Request failed using the host plugin channel after goal state refresh. " \
                       "ContainerId changed from {0} to {1}, role config file changed from {2} to {3}. " \
                       "Exception type: {4}.".format(old_container_id, new_container_id, old_role_config_name,
@@ -936,7 +936,7 @@ class WireClient(object): # pylint: disable=R0904
                 if not ret:
                     logger.periodic_info(logger.EVERY_HOUR, "[PERIODIC] Request failed using the direct channel, "
                                                             "switching to host plugin.")
-            except (ResourceGoneError, InvalidContainerError) as e: # pylint: disable=C0103
+            except (ResourceGoneError, InvalidContainerError) as e:  # pylint: disable=C0103
                 logger.periodic_info(logger.EVERY_HOUR, "[PERIODIC] Request failed using the direct channel, "
                                                         "switching to host plugin. Error: {0}".format(ustr(e)))
 
@@ -972,8 +972,8 @@ class WireClient(object): # pylint: disable=R0904
 
         try:
             self.status_blob.prepare(blob_type)
-        except Exception as e: # pylint: disable=C0103
-            raise ProtocolError("Exception creating status blob: {0}", ustr(e)) # pylint: disable=W0715
+        except Exception as e:  # pylint: disable=C0103
+            raise ProtocolError("Exception creating status blob: {0}", ustr(e))  # pylint: disable=W0715
 
         # Swap the order of use for the HostPlugin vs. the "direct" route.
         # Prefer the use of HostPlugin. If HostPlugin fails fall back to the
@@ -992,7 +992,7 @@ class WireClient(object): # pylint: disable=R0904
             # refresh the host plugin client and try again on the next iteration of the main loop
             self.update_host_plugin_from_goal_state()
             return
-        except Exception as e: # pylint: disable=C0103
+        except Exception as e:  # pylint: disable=C0103
             # for all other errors, fall back to direct
             msg = "Falling back to direct upload: {0}".format(ustr(e))
             self.report_status_event(msg, is_success=True)
@@ -1000,7 +1000,7 @@ class WireClient(object): # pylint: disable=R0904
         try:
             if self.status_blob.upload(ext_conf.status_upload_blob):
                 return
-        except Exception as e: # pylint: disable=C0103
+        except Exception as e:  # pylint: disable=C0103
             msg = "Exception uploading status blob: {0}".format(ustr(e))
             self.report_status_event(msg, is_success=False)
 
@@ -1019,7 +1019,7 @@ class WireClient(object): # pylint: disable=R0904
                                         role_prop_uri,
                                         role_prop,
                                         headers=headers)
-        except HttpError as e: # pylint: disable=C0103
+        except HttpError as e:  # pylint: disable=C0103
             raise ProtocolError((u"Failed to send role properties: "
                                  u"{0}").format(e))
         if resp.status != httpclient.ACCEPTED:
@@ -1048,7 +1048,7 @@ class WireClient(object): # pylint: disable=R0904
                                         headers=headers,
                                         max_retry=30,
                                         retry_delay=15)
-        except HttpError as e: # pylint: disable=C0103
+        except HttpError as e:  # pylint: disable=C0103
             raise ProtocolError((u"Failed to send provision status: "
                                  u"{0}").format(e))
         if restutil.request_failed(resp):
@@ -1069,7 +1069,7 @@ class WireClient(object): # pylint: disable=R0904
             # NOTE: The call to wireserver requests utf-8 encoding in the headers, but the body should not
             #       be encoded: some nodes in the telemetry pipeline do not support utf-8 encoding.
             resp = self.call_wireserver(restutil.http_post, uri, data, header)
-        except HttpError as e: # pylint: disable=C0103
+        except HttpError as e:  # pylint: disable=C0103
             raise ProtocolError("Failed to send events:{0}".format(e))
 
         if restutil.request_failed(resp):
@@ -1194,7 +1194,7 @@ class WireClient(object): # pylint: disable=R0904
 
             try:
                 profile = self.send_request_using_appropriate_channel(direct_func, host_func)
-            except Exception as e: # pylint: disable=C0103
+            except Exception as e:  # pylint: disable=C0103
                 logger.warn("Exception retrieving artifacts profile: {0}".format(ustr(e)))
                 return None
 
@@ -1255,7 +1255,7 @@ class VersionInfo(object):
         return self.supported
 
 
-class ExtensionManifest(object): # pylint: disable=R0903
+class ExtensionManifest(object):  # pylint: disable=R0903
     def __init__(self, xml_text):
         if xml_text is None:
             raise ValueError("ExtensionManifest is None")
@@ -1300,7 +1300,7 @@ class ExtensionManifest(object): # pylint: disable=R0903
 
 
 # Do not extend this class
-class InVMArtifactsProfile(object): # pylint: disable=R0903
+class InVMArtifactsProfile(object):  # pylint: disable=R0903
     """
     deserialized json string of InVMArtifactsProfile.
     It is expected to contain the following fields:
@@ -1319,5 +1319,5 @@ class InVMArtifactsProfile(object): # pylint: disable=R0903
     def is_on_hold(self):
         # hasattr() is not available in Python 2.6
         if 'onHold' in self.__dict__:
-            return str(self.onHold).lower() == 'true' # pylint: disable=E1101
+            return str(self.onHold).lower() == 'true'  # pylint: disable=E1101
         return False

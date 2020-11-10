@@ -148,7 +148,7 @@ def _is_retry_status(status, retry_codes=None):
     return status in retry_codes
 
 
-def _is_retry_exception(e): # pylint: disable=C0103
+def _is_retry_exception(e):  # pylint: disable=C0103
     return len([x for x in RETRY_EXCEPTIONS if isinstance(e, x)]) > 0
 
 
@@ -161,7 +161,7 @@ def _parse_url(url):
     Parse URL to get the components of the URL broken down to host, port
     :rtype: string, int, bool, string
     """
-    o = urlparse(url) # pylint: disable=C0103
+    o = urlparse(url)  # pylint: disable=C0103
     rel_uri = o.path
     if o.fragment:
         rel_uri = "{0}#{1}".format(rel_uri, o.fragment)
@@ -205,7 +205,7 @@ def dotted_netmask(mask):
     return socket.inet_ntoa(struct.pack('>I', bits))
 
 
-def address_in_network(ip, net): # pylint: disable=C0103
+def address_in_network(ip, net):  # pylint: disable=C0103
     """This function allows you to check if an IP belongs to a network subnet
     Example: returns True if ip = 192.168.1.1 and net = 192.168.1.0/24
              returns False if ip = 192.168.1.1 and net = 192.168.100.0/24
@@ -273,7 +273,7 @@ def _get_http_proxy(secure=False):
     else:
         http_proxy_env = HTTPS_PROXY_ENV if secure else HTTP_PROXY_ENV
         http_proxy_url = None
-        for v in [http_proxy_env, http_proxy_env.upper()]: # pylint: disable=C0103
+        for v in [http_proxy_env, http_proxy_env.upper()]:  # pylint: disable=C0103
             if v in os.environ:
                 http_proxy_url = os.environ[v]
                 break
@@ -288,7 +288,7 @@ def redact_sas_tokens_in_urls(url):
     return SAS_TOKEN_RETRIEVAL_REGEX.sub(r"\1" + REDACTED_TEXT + r"\3", url)
 
 
-def _http_request(method, host, rel_uri, port=None, data=None, secure=False, # pylint: disable=R0913
+def _http_request(method, host, rel_uri, port=None, data=None, secure=False,  # pylint: disable=R0913
                   headers=None, proxy_host=None, proxy_port=None, redact_data=False):
 
     headers = {} if headers is None else headers
@@ -335,7 +335,7 @@ def _http_request(method, host, rel_uri, port=None, data=None, secure=False, # p
     return conn.getresponse()
 
 
-def http_request(method, # pylint: disable=R0913,R0912
+def http_request(method,  # pylint: disable=R0913,R0912
                  url, data, headers=None,
                  use_proxy=False,
                  max_retry=DEFAULT_RETRIES,
@@ -345,7 +345,7 @@ def http_request(method, # pylint: disable=R0913,R0912
 
     if retry_codes is None:
         retry_codes = RETRY_CODES
-    global SECURE_WARNING_EMITTED # pylint: disable=W0603
+    global SECURE_WARNING_EMITTED  # pylint: disable=W0603
 
     host, port, secure, rel_uri = _parse_url(url)
 
@@ -449,14 +449,14 @@ def http_request(method, # pylint: disable=R0913,R0912
 
             return resp
 
-        except httpclient.HTTPException as e: # pylint: disable=C0103
+        except httpclient.HTTPException as e:  # pylint: disable=C0103
             clean_url = redact_sas_tokens_in_urls(url)
             msg = '[HTTP Failed] {0} {1} -- HttpException {2}'.format(method, clean_url, e)
             if _is_retry_exception(e):
                 continue
             break
 
-        except IOError as e: # pylint: disable=C0103
+        except IOError as e:  # pylint: disable=C0103
             IOErrorCounter.increment(host=host, port=port)
             clean_url = redact_sas_tokens_in_urls(url)
             msg = '[HTTP Failed] {0} {1} -- IOError {2}'.format(method, clean_url, e)
@@ -465,7 +465,7 @@ def http_request(method, # pylint: disable=R0913,R0912
     raise HttpError("{0} -- {1} attempts made".format(msg, attempt))
 
 
-def http_get(url, # pylint: disable=R0913
+def http_get(url,  # pylint: disable=R0913
              headers=None,
              use_proxy=False,
              max_retry=DEFAULT_RETRIES,
@@ -482,7 +482,7 @@ def http_get(url, # pylint: disable=R0913
                         retry_delay=retry_delay)
 
 
-def http_head(url, # pylint: disable=R0913
+def http_head(url,  # pylint: disable=R0913
               headers=None,
               use_proxy=False,
               max_retry=DEFAULT_RETRIES,
@@ -499,7 +499,7 @@ def http_head(url, # pylint: disable=R0913
                         retry_delay=retry_delay)
 
 
-def http_post(url, # pylint: disable=R0913
+def http_post(url,  # pylint: disable=R0913
               data,
               headers=None,
               use_proxy=False,
@@ -517,7 +517,7 @@ def http_post(url, # pylint: disable=R0913
                         retry_delay=retry_delay)
 
 
-def http_put(url, # pylint: disable=R0913
+def http_put(url,  # pylint: disable=R0913
              data,
              headers=None,
              use_proxy=False,
@@ -537,7 +537,7 @@ def http_put(url, # pylint: disable=R0913
                         redact_data=redact_data)
 
 
-def http_delete(url, # pylint: disable=R0913
+def http_delete(url,  # pylint: disable=R0913
                 headers=None,
                 use_proxy=False,
                 max_retry=DEFAULT_RETRIES,

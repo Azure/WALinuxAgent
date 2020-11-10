@@ -11,9 +11,9 @@ from azurelinuxagent.common.utils import fileutil
 from azurelinuxagent.common.utils.archive import StateFlusher, StateArchiver, _MAX_ARCHIVED_STATES
 from tests.tools import AgentTestCase, patch
 
-debug = False # pylint: disable=invalid-name
+debug = False  # pylint: disable=invalid-name
 if os.environ.get('DEBUG') == '1':
-    debug = True # pylint: disable=invalid-name
+    debug = True  # pylint: disable=invalid-name
 
 # Enable verbose logger to stdout
 if debug:

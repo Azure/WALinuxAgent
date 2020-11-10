@@ -65,7 +65,7 @@ class RunGetOutputTestCase(AgentTestCase):
 
         self.assertEqual(mock_logger.verbose.call_count, 1)
 
-        args, kwargs = mock_logger.verbose.call_args # pylint: disable=unused-variable
+        args, kwargs = mock_logger.verbose.call_args  # pylint: disable=unused-variable
         command_in_message = args[1]
         self.assertEqual(command_in_message, command)
 
@@ -78,7 +78,7 @@ class RunGetOutputTestCase(AgentTestCase):
 
         self.assertEqual(mock_logger.error.call_count, 1)
 
-        args, kwargs = mock_logger.error.call_args # pylint: disable=unused-variable
+        args, kwargs = mock_logger.error.call_args  # pylint: disable=unused-variable
 
         message = args[0]  # message is similar to "Command: [exit 99], return code: [99], result: []"
         self.assertIn("[{0}]".format(command), message)
@@ -97,7 +97,7 @@ class RunGetOutputTestCase(AgentTestCase):
 
         self.assertEqual(mock_logger.info.call_count, 1)
 
-        args, kwargs = mock_logger.info.call_args # pylint: disable=unused-variable
+        args, kwargs = mock_logger.info.call_args  # pylint: disable=unused-variable
 
         message = args[0]  # message is similar to "Command: [exit 99], return code: [99], result: []"
         self.assertIn("[{0}]".format(command), message)
@@ -116,7 +116,7 @@ class RunGetOutputTestCase(AgentTestCase):
 
         self.assertEqual(mock_logger.error.call_count, 1)
 
-        args, kwargs = mock_logger.error.call_args # pylint: disable=unused-variable
+        args, kwargs = mock_logger.error.call_args  # pylint: disable=unused-variable
 
         message = args[0]  # message is similar to "Command: [exit 99], return code: [99], result: []"
         self.assertIn("[{0}]".format(command), message)
@@ -161,7 +161,7 @@ class RunCommandTestCase(AgentTestCase):
         def assert_no_message_logged(command):
             try:
                 shellutil.run_command(command)
-            except: # pylint: disable=bare-except
+            except:  # pylint: disable=bare-except
                 pass
 
             self.assertEqual(mock_logger.info.call_count, 0)
@@ -178,12 +178,12 @@ class RunCommandTestCase(AgentTestCase):
         with patch("azurelinuxagent.common.utils.shellutil.logger.error") as mock_log_error:
             try:
                 shellutil.run_command(command, log_error=True)
-            except: # pylint: disable=bare-except
+            except:  # pylint: disable=bare-except
                 pass
 
             self.assertEqual(mock_log_error.call_count, 1)
 
-            args, kwargs = mock_log_error.call_args # pylint: disable=unused-variable
+            args, kwargs = mock_log_error.call_args  # pylint: disable=unused-variable
             self.assertIn("ls -d /etc nonexistent_file", args, msg="The command was not logged")
             self.assertIn(2, args, msg="The command's return code was not logged")
             self.assertIn("/etc\n", args, msg="The command's stdout was not logged")
@@ -194,7 +194,7 @@ class RunCommandTestCase(AgentTestCase):
         with patch("azurelinuxagent.common.utils.shellutil.logger.error") as mock_log_error:
             try:
                 shellutil.run_command(command, log_error=True)
-            except: # pylint: disable=bare-except
+            except:  # pylint: disable=bare-except
                 pass
 
             self.assertEqual(mock_log_error.call_count, 1)
@@ -209,7 +209,7 @@ class RunCommandTestCase(AgentTestCase):
         random_hash = ''.join(random.choice('0123456789ABCDEF') for _ in range(16))
         try:
             output = shellutil.run_command(command, cmd_input=random_hash)
-        except: # pylint: disable=bare-except
+        except:  # pylint: disable=bare-except
             self.fail("No exception should've been thrown when trying to read from stdin in run_command")
 
         self.assertEqual(output, random_hash, "We're reading from stdin and printing it shell, output should match")

@@ -334,7 +334,7 @@ class CGroupConfigurator(object):
             #
             r"^ifdown .+ && ifup .+",
         ]
-        for p in patterns: # pylint: disable=C0103
+        for p in patterns:  # pylint: disable=C0103
             if re.match(p, command_line) is not None:
                 return True
         return False

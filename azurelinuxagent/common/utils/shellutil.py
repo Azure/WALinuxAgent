@@ -42,7 +42,7 @@ if not hasattr(subprocess, 'check_output'):
 
     # Exception classes used by this module.
     class CalledProcessError(Exception):
-        def __init__(self, returncode, cmd, output=None): # pylint: disable=W0231
+        def __init__(self, returncode, cmd, output=None):  # pylint: disable=W0231
             self.returncode = returncode
             self.cmd = cmd
             self.output = output
@@ -78,7 +78,7 @@ def run(cmd, chk_err=True, expected_errors=None):
     """
     if expected_errors is None:
         expected_errors = []
-    retcode, out = run_get_output(cmd, chk_err=chk_err, expected_errors=expected_errors) # pylint: disable=W0612
+    retcode, out = run_get_output(cmd, chk_err=chk_err, expected_errors=expected_errors)  # pylint: disable=W0612
     return retcode
 
 
@@ -101,7 +101,7 @@ def run_get_output(cmd, chk_err=True, log_cmd=True, expected_errors=None):
                                          stderr=subprocess.STDOUT,
                                          shell=True)
         output = _encode_command_output(output)
-    except subprocess.CalledProcessError as e: # pylint: disable=C0103
+    except subprocess.CalledProcessError as e:  # pylint: disable=C0103
         output = _encode_command_output(e.output)
 
         if chk_err:
@@ -113,7 +113,7 @@ def run_get_output(cmd, chk_err=True, log_cmd=True, expected_errors=None):
             else:
                 logger.error(msg)
         return e.returncode, output
-    except Exception as e: # pylint: disable=C0103
+    except Exception as e:  # pylint: disable=C0103
         if chk_err:
             logger.error(u"Command [{0}] raised unexpected exception: [{1}]"
                          .format(cmd, ustr(e)))
@@ -131,11 +131,11 @@ class CommandError(Exception):
     """
     @staticmethod
     def _get_message(command, return_code, stderr):
-        command_name = command[0] if isinstance(command, list) and len(command) > 0 else command # pylint: disable=len-as-condition
+        command_name = command[0] if isinstance(command, list) and len(command) > 0 else command  # pylint: disable=len-as-condition
         return "'{0}' failed: {1} ({2})".format(command_name, return_code, stderr.rstrip())
 
     def __init__(self, command, return_code, stdout, stderr):
-        super(Exception, self).__init__(CommandError._get_message(command, return_code, stderr)) # pylint: disable=E1003
+        super(Exception, self).__init__(CommandError._get_message(command, return_code, stderr))  # pylint: disable=E1003
         self.command = command
         self.returncode = return_code
         self.stdout = stdout
@@ -165,7 +165,7 @@ def run_command(command, log_error=False, cmd_input=None):
         process = subprocess.Popen(command, stdin=stdin, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=False)
         stdout, stderr = process.communicate(input=process_input)
         returncode = process.returncode
-    except Exception as e: # pylint: disable=C0103
+    except Exception as e:  # pylint: disable=C0103
         if log_error:
             logger.error(u"Command [{0}] raised unexpected exception: [{1}]", format_command(command), ustr(e))
         raise

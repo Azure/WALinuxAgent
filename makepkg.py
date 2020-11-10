@@ -48,22 +48,22 @@ PUBLISH_MANIFEST = '''<?xml version="1.0" encoding="utf-8" ?>
 
 PUBLISH_MANIFEST_FILE = 'manifest.xml'
 
-output_path = os.path.join(os.getcwd(), "eggs") # pylint: disable=invalid-name
-target_path = os.path.join(output_path, AGENT_LONG_VERSION) # pylint: disable=invalid-name
-bin_path = os.path.join(target_path, "bin") # pylint: disable=invalid-name
-egg_path = os.path.join(bin_path, AGENT_LONG_VERSION + ".egg") # pylint: disable=invalid-name
-manifest_path = os.path.join(target_path, AGENT_MANIFEST_FILE) # pylint: disable=invalid-name
-publish_manifest_path = os.path.join(target_path, PUBLISH_MANIFEST_FILE) # pylint: disable=invalid-name
-pkg_name = os.path.join(output_path, AGENT_LONG_VERSION + ".zip") # pylint: disable=invalid-name
+output_path = os.path.join(os.getcwd(), "eggs")  # pylint: disable=invalid-name
+target_path = os.path.join(output_path, AGENT_LONG_VERSION)  # pylint: disable=invalid-name
+bin_path = os.path.join(target_path, "bin")  # pylint: disable=invalid-name
+egg_path = os.path.join(bin_path, AGENT_LONG_VERSION + ".egg")  # pylint: disable=invalid-name
+manifest_path = os.path.join(target_path, AGENT_MANIFEST_FILE)  # pylint: disable=invalid-name
+publish_manifest_path = os.path.join(target_path, PUBLISH_MANIFEST_FILE)  # pylint: disable=invalid-name
+pkg_name = os.path.join(output_path, AGENT_LONG_VERSION + ".zip")  # pylint: disable=invalid-name
 
-family = 'Test' # pylint: disable=C0103
+family = 'Test'  # pylint: disable=C0103
 if len(sys.argv) > 1:
-    family = sys.argv[1] # pylint: disable=invalid-name
+    family = sys.argv[1]  # pylint: disable=invalid-name
 
-def do(*args): # pylint: disable=C0103,W0621
+def do(*args):  # pylint: disable=C0103,W0621
     try:
         subprocess.check_output(args, stderr=subprocess.STDOUT)
-    except subprocess.CalledProcessError as e: # pylint: disable=C0103
+    except subprocess.CalledProcessError as e:  # pylint: disable=C0103
         print("ERROR: {0}".format(str(e)))
         print("\t{0}".format(" ".join(args)))
         print(e.output)
@@ -79,12 +79,12 @@ if os.path.isfile(pkg_name):
 os.makedirs(bin_path)
 print("Created {0} directory".format(target_path))
 
-args = ["python", "setup.py", "bdist_egg", "--dist-dir={0}".format(bin_path)] # pylint: disable=invalid-name
+args = ["python", "setup.py", "bdist_egg", "--dist-dir={0}".format(bin_path)]  # pylint: disable=invalid-name
 
 print("Creating egg {0}".format(egg_path))
 do(*args)
 
-egg_name = os.path.join("bin", os.path.basename( # pylint: disable=invalid-name
+egg_name = os.path.join("bin", os.path.basename(  # pylint: disable=invalid-name
     glob.glob(os.path.join(bin_path, "*"))[0]))
 
 print("Writing {0}".format(manifest_path))
@@ -97,7 +97,7 @@ with open(publish_manifest_path, mode='w') as publish_manifest:
                                                    family))
 
 
-cwd = os.getcwd() # pylint: disable=invalid-name
+cwd = os.getcwd()  # pylint: disable=invalid-name
 os.chdir(target_path)
 print("Creating package {0}".format(pkg_name))
 do("zip", "-r", pkg_name, egg_name)

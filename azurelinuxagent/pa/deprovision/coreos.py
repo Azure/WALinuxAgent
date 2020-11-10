@@ -22,7 +22,7 @@ from azurelinuxagent.pa.deprovision.default import DeprovisionHandler, \
                                                    DeprovisionAction
 
 class CoreOSDeprovisionHandler(DeprovisionHandler):
-    def __init__(self): # pylint: disable=W0235
+    def __init__(self):  # pylint: disable=W0235
         super(CoreOSDeprovisionHandler, self).__init__()
 
     def setup(self, deluser):

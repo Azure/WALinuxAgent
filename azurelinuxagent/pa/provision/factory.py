@@ -23,9 +23,9 @@ from azurelinuxagent.common.version import DISTRO_NAME, DISTRO_VERSION, \
 from .default import ProvisionHandler
 from .cloudinit import CloudInitProvisionHandler, cloud_init_is_enabled
 
-def get_provision_handler(distro_name=DISTRO_NAME, # pylint: disable=W0613
-                            distro_version=DISTRO_VERSION, # pylint: disable=W0613
-                            distro_full_name=DISTRO_FULL_NAME): # pylint: disable=W0613
+def get_provision_handler(distro_name=DISTRO_NAME,  # pylint: disable=W0613
+                            distro_version=DISTRO_VERSION,  # pylint: disable=W0613
+                            distro_full_name=DISTRO_FULL_NAME):  # pylint: disable=W0613
 
     provisioning_agent = conf.get_provisioning_agent()
 
