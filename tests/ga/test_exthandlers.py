@@ -19,15 +19,18 @@ import json
 import os
 import subprocess
 import time
+import uuid
 
 from azurelinuxagent.common.cgroupconfigurator import CGroupConfigurator
 from azurelinuxagent.common.event import AGENT_EVENT_FILE_EXTENSION, WALAEventOperation
 from azurelinuxagent.common.exception import ExtensionError, ExtensionErrorCodes
 from azurelinuxagent.common.protocol.restapi import ExtensionStatus, Extension, ExtHandler, ExtHandlerProperties
 from azurelinuxagent.common.protocol.util import ProtocolUtil
+from azurelinuxagent.common.protocol.wire import WireProtocol
 from azurelinuxagent.common.utils.extensionprocessutil import TELEMETRY_MESSAGE_MAX_LEN, format_stdout_stderr, \
     read_output
-from azurelinuxagent.ga.exthandlers import parse_ext_status, ExtHandlerInstance, ExtCommandEnvVariable, ExtensionStatusError
+from azurelinuxagent.ga.exthandlers import parse_ext_status, ExtHandlerInstance, ExtCommandEnvVariable, \
+    ExtensionStatusError
 from tests.protocol import mockwiredata
 from tests.protocol.mocks import mock_wire_protocol
 from tests.tools import AgentTestCase, patch, mock_sleep, clear_singleton_instances
@@ -299,7 +302,7 @@ class LaunchCommandTestCase(AgentTestCase):
         ext_handler_properties.version = "1.2.3"
         self.ext_handler = ExtHandler(name='foo')
         self.ext_handler.properties = ext_handler_properties
-        self.ext_handler_instance = ExtHandlerInstance(ext_handler=self.ext_handler, protocol=None)
+        self.ext_handler_instance = ExtHandlerInstance(ext_handler=self.ext_handler, protocol=WireProtocol("1.2.3.4"))
 
         self.mock_get_base_dir = patch("azurelinuxagent.ga.exthandlers.ExtHandlerInstance.get_base_dir", lambda *_: self.tmp_dir)
         self.mock_get_base_dir.start()
@@ -669,9 +672,13 @@ sys.stderr.write("STDERR")
 
     def test_it_should_contain_all_helper_environment_variables(self):
 
-        helper_env_vars = {ExtCommandEnvVariable.ExtensionSeqNumber: self.ext_handler_instance.get_seq_no(),
+        wire_ip = str(uuid.uuid4())
+        ext_handler_instance = ExtHandlerInstance(ext_handler=self.ext_handler, protocol=WireProtocol(wire_ip))
+
+        helper_env_vars = {ExtCommandEnvVariable.ExtensionSeqNumber: ext_handler_instance.get_seq_no(),
                            ExtCommandEnvVariable.ExtensionPath: self.tmp_dir,
-                           ExtCommandEnvVariable.ExtensionVersion: self.ext_handler_instance.ext_handler.properties.version}
+                           ExtCommandEnvVariable.ExtensionVersion: ext_handler_instance.ext_handler.properties.version,
+                           ExtCommandEnvVariable.WireProtocolAddress: wire_ip}
 
         command = """
             printenv | grep -E '(%s)'
@@ -680,7 +687,7 @@ sys.stderr.write("STDERR")
         test_file = self.create_script('printHelperEnvironments.sh', command)
 
         with patch("subprocess.Popen", wraps=subprocess.Popen) as patch_popen:
-            output = self.ext_handler_instance.launch_command(test_file)
+            output = ext_handler_instance.launch_command(test_file)
 
             args, kwagrs = patch_popen.call_args  # pylint: disable=unused-variable
             without_os_env = dict((k, v) for (k, v) in kwagrs['env'].items() if k not in os.environ)

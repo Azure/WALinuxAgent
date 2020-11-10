@@ -98,14 +98,16 @@ class ValidHandlerStatus(object):  # pylint: disable=R0903
 _EXTENSION_TERMINAL_STATUSES = [ValidHandlerStatus.error, ValidHandlerStatus.success]
 
 
+# too-few-public-methods<R0903> Disabled: This class is used as an Enum
 class ExtCommandEnvVariable(object):  # pylint: disable=R0903
     Prefix = "AZURE_GUEST_AGENT"
-    DisableReturnCode = "%s_DISABLE_CMD_EXIT_CODE" % Prefix
-    UninstallReturnCode = "%s_UNINSTALL_CMD_EXIT_CODE" % Prefix
-    ExtensionPath = "%s_EXTENSION_PATH" % Prefix
-    ExtensionVersion = "%s_EXTENSION_VERSION" % Prefix
+    DisableReturnCode = "{0}_DISABLE_CMD_EXIT_CODE".format(Prefix)
+    UninstallReturnCode = "{0}_UNINSTALL_CMD_EXIT_CODE".format(Prefix)
+    ExtensionPath = "{0}_EXTENSION_PATH".format(Prefix)
+    ExtensionVersion = "{0}_EXTENSION_VERSION".format(Prefix)
     ExtensionSeqNumber = "ConfigSequenceNumber"  # At par with Windows Guest Agent
-    UpdatingFromVersion = "%s_UPDATING_FROM_VERSION" % Prefix
+    UpdatingFromVersion = "{0}_UPDATING_FROM_VERSION".format(Prefix)
+    WireProtocolAddress = "{0}_WIRE_PROTOCOL_ADDRESS".format(Prefix)
 
 
 def get_traceback(e):  # pylint: disable=R1710,C0103
@@ -1279,9 +1281,12 @@ class ExtHandlerInstance(object):  # pylint: disable=R0904
                     env = {}
                 env.update(os.environ)
                 # Always add Extension Path and version to the current launch_command (Ask from publishers)
-                env.update({ExtCommandEnvVariable.ExtensionPath: base_dir,
-                            ExtCommandEnvVariable.ExtensionVersion: str(self.ext_handler.properties.version),
-                            ExtCommandEnvVariable.ExtensionSeqNumber: str(self.get_seq_no())})
+                env.update({
+                    ExtCommandEnvVariable.ExtensionPath: base_dir,
+                    ExtCommandEnvVariable.ExtensionVersion: str(self.ext_handler.properties.version),
+                    ExtCommandEnvVariable.ExtensionSeqNumber: str(self.get_seq_no()),
+                    ExtCommandEnvVariable.WireProtocolAddress: self.protocol.get_endpoint()
+                })
 
                 try:
                     # Some extensions erroneously begin cmd with a slash; don't interpret those
