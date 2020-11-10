@@ -147,13 +147,17 @@ class UpdateTestCase(AgentTestCase):
         v.sort(reverse=True)
         return v
 
-    def get_error_file(self, error_data=NO_ERROR): # pylint: disable=dangerous-default-value
+    def get_error_file(self, error_data=None):
+        if error_data is None:
+            error_data = NO_ERROR
         fp = tempfile.NamedTemporaryFile(mode="w") # pylint: disable=invalid-name
         json.dump(error_data if error_data is not None else NO_ERROR, fp)
         fp.seek(0)
         return fp
 
-    def create_error(self, error_data=NO_ERROR): # pylint: disable=dangerous-default-value
+    def create_error(self, error_data=None):
+        if error_data is None:
+            error_data = NO_ERROR
         with self.get_error_file(error_data) as path:
             err = GuestAgentError(path.name)
             err.load()
@@ -1233,7 +1237,9 @@ class TestUpdate(UpdateTestCase): # pylint: disable=too-many-public-methods
         self._test_run_latest()
         self.assertEqual(0, mock_signal.call_count)
 
-    def _test_run(self, invocations=1, calls=[call.run()], enable_updates=False, sleep_interval=(6,)): # pylint: disable=dangerous-default-value
+    def _test_run(self, invocations=1, calls=None, enable_updates=False, sleep_interval=(6,)):
+        if calls is None:
+            calls = [call.run()]
         conf.get_autoupdate_enabled = Mock(return_value=enable_updates)
 
         # Note:
@@ -1494,7 +1500,7 @@ class TestUpdate(UpdateTestCase): # pylint: disable=too-many-public-methods
                             for call_args in patch_info.call_args), "The heartbeat was not written to the agent's log")
 
     @contextlib.contextmanager
-    def _get_update_handler(self, iterations=1, test_data=DATA_FILE): # pylint: disable=dangerous-default-value
+    def _get_update_handler(self, iterations=1, test_data=None):
         """
         This function returns a mocked version of the UpdateHandler object to be used for testing. It will only run the
         main loop [iterations] no of times.
@@ -1502,6 +1508,8 @@ class TestUpdate(UpdateTestCase): # pylint: disable=too-many-public-methods
         :param iterations: No of times the UpdateHandler.run() method should run.
         :return: Mocked object of UpdateHandler() class and object of the MockWireProtocol().
         """
+        if test_data is None:
+            test_data = DATA_FILE
 
         def _set_iterations(iterations):
             # This will reset the current iteration and the max iterations to run for this test object.

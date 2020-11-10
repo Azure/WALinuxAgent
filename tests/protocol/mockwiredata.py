@@ -95,7 +95,9 @@ DATA_FILE_PLUGIN_SETTINGS_MISMATCH["ext_conf"] = "wire/ext_conf_plugin_settings_
 
 
 class WireProtocolData(object): # pylint: disable=too-many-instance-attributes
-    def __init__(self, data_files=DATA_FILE): # pylint: disable=dangerous-default-value
+    def __init__(self, data_files=None):
+        if data_files is None:
+            data_files = DATA_FILE
         self.emulate_stale_goal_state = False
         self.call_counts = {
             "comp=versions": 0,

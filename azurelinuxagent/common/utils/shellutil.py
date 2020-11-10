@@ -69,18 +69,20 @@ def has_command(cmd):
     return not run(cmd, False)
 
 
-def run(cmd, chk_err=True, expected_errors=[]): # pylint: disable=W0102
+def run(cmd, chk_err=True, expected_errors=None):
     """
     Note: Deprecating in favour of `azurelinuxagent.common.utils.shellutil.run_command` function.
     Calls run_get_output on 'cmd', returning only the return code.
     If chk_err=True then errors will be reported in the log.
     If chk_err=False then errors will be suppressed from the log.
     """
+    if expected_errors is None:
+        expected_errors = []
     retcode, out = run_get_output(cmd, chk_err=chk_err, expected_errors=expected_errors) # pylint: disable=W0612
     return retcode
 
 
-def run_get_output(cmd, chk_err=True, log_cmd=True, expected_errors=[]): # pylint: disable=W0102
+def run_get_output(cmd, chk_err=True, log_cmd=True, expected_errors=None):
     """
     Wrapper for subprocess.check_output.
     Execute 'cmd'.  Returns return code and STDOUT, trapping expected
@@ -90,6 +92,8 @@ def run_get_output(cmd, chk_err=True, log_cmd=True, expected_errors=[]): # pylin
     For new callers, consider using run_command instead as it separates stdout from stderr,
     returns only stdout on success, logs both outputs and return code on error and raises an exception.
     """
+    if expected_errors is None:
+        expected_errors = []
     if log_cmd:
         logger.verbose(u"Command: [{0}]", cmd)
     try:

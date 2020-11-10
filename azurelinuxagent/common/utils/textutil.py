@@ -93,12 +93,12 @@ def getattrib(node, attr_name):
         return None
 
 
-def unpack(buf, offset, range): # pylint: disable=W0622
+def unpack(buf, offset, value_range):
     """
     Unpack bytes into python values.
     """
     result = 0
-    for i in range:
+    for i in value_range:
         result = (result << 8) | str_to_ord(buf[offset + i])
     return result
 
@@ -133,9 +133,9 @@ def hex_dump2(buf):
 
 def is_in_range(a, low, high): # pylint: disable=C0103
     """
-    Return True if 'a' in 'low' <= a >= 'high'
+    Return True if 'a' in 'low' <= a <= 'high'
     """
-    return (a >= low and a <= high) # pylint: disable=R1716
+    return low <= a <= high
 
 
 def is_printable(ch): # pylint: disable=C0103

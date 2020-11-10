@@ -38,43 +38,53 @@ def set_files(data_files, dest=None, src=None):
     data_files.append((dest, src))
 
 
-def set_bin_files(data_files, dest="/usr/sbin", # pylint: disable=W0102
-                  src=["bin/waagent", "bin/waagent2.0"]):
+def set_bin_files(data_files, dest="/usr/sbin", src=None):
+    if src is None:
+        src = ["bin/waagent", "bin/waagent2.0"]
     data_files.append((dest, src))
 
 
-def set_conf_files(data_files, dest="/etc", src=["config/waagent.conf"]): # pylint: disable=W0102
+def set_conf_files(data_files, dest="/etc", src=None):
+    if src is None:
+        src = ["config/waagent.conf"]
     data_files.append((dest, src))
 
 
-def set_logrotate_files(data_files, dest="/etc/logrotate.d", # pylint: disable=W0102
-                        src=["config/waagent.logrotate",
-                             "config/waagent-extn.logrotate"]):
+def set_logrotate_files(data_files, dest="/etc/logrotate.d", src=None):
+    if src is None:
+        src = ["config/waagent.logrotate",
+               "config/waagent-extn.logrotate"]
     data_files.append((dest, src))
 
 
-def set_sysv_files(data_files, dest="/etc/rc.d/init.d", src=["init/waagent"]): # pylint: disable=W0102
+def set_sysv_files(data_files, dest="/etc/rc.d/init.d", src=None):
+    if src is None:
+        src = ["init/waagent"]
     data_files.append((dest, src))
 
 
-def set_systemd_files(data_files, dest="/lib/systemd/system", # pylint: disable=W0102
-                      src=["init/waagent.service"]):
+def set_systemd_files(data_files, dest="/lib/systemd/system", src=None):
+    if src is None:
+        src = ["init/waagent.service"]
     data_files.append((dest, src))
 
 
-def set_freebsd_rc_files(data_files, dest="/etc/rc.d/", # pylint: disable=W0102
-                         src=["init/freebsd/waagent"]):
+def set_freebsd_rc_files(data_files, dest="/etc/rc.d/", src=None):
+    if src is None:
+        src = ["init/freebsd/waagent"]
     data_files.append((dest, src))
 
 
-def set_openbsd_rc_files(data_files, dest="/etc/rc.d/", # pylint: disable=W0102
-                         src=["init/openbsd/waagent"]):
+def set_openbsd_rc_files(data_files, dest="/etc/rc.d/", src=None):
+    if src is None:
+        src = ["init/openbsd/waagent"]
     data_files.append((dest, src))
 
 
-def set_udev_files(data_files, dest="/etc/udev/rules.d/", # pylint: disable=W0102
-                   src=["config/66-azure-storage.rules",
-                        "config/99-azure-product-uuid.rules"]):
+def set_udev_files(data_files, dest="/etc/udev/rules.d/", src=None):
+    if src is None:
+        src = ["config/66-azure-storage.rules",
+               "config/99-azure-product-uuid.rules"]
     data_files.append((dest, src))
 
 
