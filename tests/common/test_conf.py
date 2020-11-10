@@ -141,30 +141,30 @@ class TestConf(AgentTestCase):
         self.assertEqual(expected_value, conf.get_cgroups_excluded(self.conf))
 
     def test_get_cgroups_excluded(self):
-        self.assert_get_cgroups_excluded(config=None, # pylint: disable=no-value-for-parameter
+        self.assert_get_cgroups_excluded(config=None,  # pylint: disable=no-value-for-parameter
                                          expected_value=[])
 
-        self.assert_get_cgroups_excluded(config='', # pylint: disable=no-value-for-parameter
+        self.assert_get_cgroups_excluded(config='',  # pylint: disable=no-value-for-parameter
                                          expected_value=[])
 
-        self.assert_get_cgroups_excluded(config='  ', # pylint: disable=no-value-for-parameter
+        self.assert_get_cgroups_excluded(config='  ',  # pylint: disable=no-value-for-parameter
                                          expected_value=[])
 
-        self.assert_get_cgroups_excluded(config='  ,  ,,  ,', # pylint: disable=no-value-for-parameter
+        self.assert_get_cgroups_excluded(config='  ,  ,,  ,',  # pylint: disable=no-value-for-parameter
                                          expected_value=[])
 
         standard_values = ['customscript', 'runcommand']
-        self.assert_get_cgroups_excluded(config='CustomScript, RunCommand', # pylint: disable=no-value-for-parameter
+        self.assert_get_cgroups_excluded(config='CustomScript, RunCommand',  # pylint: disable=no-value-for-parameter
                                          expected_value=standard_values)
 
-        self.assert_get_cgroups_excluded(config='customScript, runCommand  , , ,,', # pylint: disable=no-value-for-parameter
+        self.assert_get_cgroups_excluded(config='customScript, runCommand  , , ,,',  # pylint: disable=no-value-for-parameter
                                          expected_value=standard_values)
 
-        self.assert_get_cgroups_excluded(config='  customscript,runcommand  ', # pylint: disable=no-value-for-parameter
+        self.assert_get_cgroups_excluded(config='  customscript,runcommand  ',  # pylint: disable=no-value-for-parameter
                                          expected_value=standard_values)
 
-        self.assert_get_cgroups_excluded(config='customscript,, runcommand', # pylint: disable=no-value-for-parameter
+        self.assert_get_cgroups_excluded(config='customscript,, runcommand',  # pylint: disable=no-value-for-parameter
                                          expected_value=standard_values)
 
-        self.assert_get_cgroups_excluded(config=',,customscript ,runcommand', # pylint: disable=no-value-for-parameter
+        self.assert_get_cgroups_excluded(config=',,customscript ,runcommand',  # pylint: disable=no-value-for-parameter
                                          expected_value=standard_values)

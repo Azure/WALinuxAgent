@@ -16,22 +16,22 @@
 # Requires Python 2.6+ and Openssl 1.0+
 #
 
-import os # pylint: disable=W0611
-import re # pylint: disable=W0611
-import pwd # pylint: disable=W0611
-import shutil # pylint: disable=W0611
-import socket # pylint: disable=W0611
-import array # pylint: disable=W0611
-import struct # pylint: disable=W0611
-import fcntl # pylint: disable=W0611
-import time # pylint: disable=W0611
-import base64 # pylint: disable=W0611
+import os  # pylint: disable=W0611
+import re  # pylint: disable=W0611
+import pwd  # pylint: disable=W0611
+import shutil  # pylint: disable=W0611
+import socket  # pylint: disable=W0611
+import array  # pylint: disable=W0611
+import struct  # pylint: disable=W0611
+import fcntl  # pylint: disable=W0611
+import time  # pylint: disable=W0611
+import base64  # pylint: disable=W0611
 import errno
 import azurelinuxagent.common.conf as conf
-import azurelinuxagent.common.logger as logger # pylint: disable=W0611
+import azurelinuxagent.common.logger as logger  # pylint: disable=W0611
 import azurelinuxagent.common.utils.fileutil as fileutil
 import azurelinuxagent.common.utils.shellutil as shellutil
-import azurelinuxagent.common.utils.textutil as textutil # pylint: disable=W0611
+import azurelinuxagent.common.utils.textutil as textutil  # pylint: disable=W0611
 from azurelinuxagent.common.osutil.default import DefaultOSUtil
 from azurelinuxagent.common.exception import OSUtilError
 
@@ -91,6 +91,6 @@ class ClearLinuxUtil(DefaultOSUtil):
                 new_passwd = [x for x in passwd if not x.startswith("root:")]
                 new_passwd.insert(0, "root:*LOCK*:14600::::::")
             fileutil.write_file(passwd_file_path, "\n".join(new_passwd))
-        except IOError as e: # pylint: disable=C0103
+        except IOError as e:  # pylint: disable=C0103
             raise OSUtilError("Failed to delete root password:{0}".format(e))
-        pass # pylint: disable=W0107
+        pass  # pylint: disable=W0107

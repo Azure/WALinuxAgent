@@ -178,7 +178,7 @@ class SharedConfig(object):  # pylint: disable=R0903
 
 # too-few-public-methods<R0903> Disabled: This is just a data object that does not need any public methods
 class Certificates(object):  # pylint: disable=R0903
-    def __init__(self, xml_text): # pylint: disable=R0912
+    def __init__(self, xml_text):  # pylint: disable=R0912
         self.cert_list = CertList()
 
         # Save the certificates
@@ -192,14 +192,14 @@ class Certificates(object):  # pylint: disable=R0903
             return
 
         # if the certificates format is not Pkcs7BlobWithPfxContents do not parse it
-        certificateFormat = findtext(xml_doc, "Format") # pylint: disable=C0103
+        certificateFormat = findtext(xml_doc, "Format")  # pylint: disable=C0103
         if certificateFormat and certificateFormat != "Pkcs7BlobWithPfxContents":
             logger.warn("The Format is not Pkcs7BlobWithPfxContents. Format is " + certificateFormat)
             return
 
         cryptutil = CryptUtil(conf.get_openssl_cmd())
         p7m_file = os.path.join(conf.get_lib_dir(), P7M_FILE_NAME)
-        p7m = ("MIME-Version:1.0\n" # pylint: disable=W1308
+        p7m = ("MIME-Version:1.0\n"  # pylint: disable=W1308
                "Content-Disposition: attachment; filename=\"{0}\"\n"
                "Content-Type: application/x-pkcs7-mime; name=\"{1}\"\n"
                "Content-Transfer-Encoding: base64\n"
@@ -216,8 +216,8 @@ class Certificates(object):  # pylint: disable=R0903
 
         # The parsing process use public key to match prv and crt.
         buf = []
-        begin_crt = False # pylint: disable=W0612
-        begin_prv = False # pylint: disable=W0612
+        begin_crt = False  # pylint: disable=W0612
+        begin_prv = False  # pylint: disable=W0612
         prvs = {}
         thumbprints = {}
         index = 0
@@ -309,7 +309,7 @@ class ExtensionsConfig(object):  # pylint: disable=R0903
             manifest = VMAgentManifest()
             manifest.family = family
             for uri in uris:
-                manifestUri = VMAgentManifestUri(uri=gettext(uri)) # pylint: disable=C0103
+                manifestUri = VMAgentManifestUri(uri=gettext(uri))  # pylint: disable=C0103
                 manifest.versionsManifestUris.append(manifestUri)
             self.vmagent_manifests.vmAgentManifests.append(manifest)
 
@@ -374,17 +374,17 @@ class ExtensionsConfig(object):  # pylint: disable=R0903
 
         runtime_settings = None
         runtime_settings_node = find(settings[0], "RuntimeSettings")
-        seqNo = getattrib(runtime_settings_node, "seqNo") # pylint: disable=C0103
+        seqNo = getattrib(runtime_settings_node, "seqNo")  # pylint: disable=C0103
         runtime_settings_str = gettext(runtime_settings_node)
         try:
             runtime_settings = json.loads(runtime_settings_str)
-        except ValueError as e: # pylint: disable=W0612,C0103
+        except ValueError as e:  # pylint: disable=W0612,C0103
             logger.error("Invalid extension settings")
             return
 
         depends_on_level = 0
         depends_on_node = find(settings[0], "DependsOn")
-        if depends_on_node != None: # pylint: disable=C0121
+        if depends_on_node != None:  # pylint: disable=C0121
             try:
                 depends_on_level = int(getattrib(depends_on_node, "dependencyLevel"))
             except (ValueError, TypeError):
@@ -431,7 +431,7 @@ class RemoteAccess(object):  # pylint: disable=R0903
         self.incarnation = None
         self.user_list = RemoteAccessUsersList()
 
-        if self.xml_text is None or len(self.xml_text) == 0: # pylint: disable=len-as-condition
+        if self.xml_text is None or len(self.xml_text) == 0:  # pylint: disable=len-as-condition
             return
 
         xml_doc = parse_doc(self.xml_text)

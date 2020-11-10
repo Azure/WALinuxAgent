@@ -16,8 +16,8 @@
 #
 import xml
 
-from azurelinuxagent.common.protocol.goal_state import GoalState, RemoteAccess # pylint: disable=unused-import
-from tests.tools import AgentTestCase, load_data, patch, Mock # pylint: disable=unused-import
+from azurelinuxagent.common.protocol.goal_state import GoalState, RemoteAccess  # pylint: disable=unused-import
+from tests.tools import AgentTestCase, load_data, patch, Mock  # pylint: disable=unused-import
 from tests.protocol import mockwiredata
 from tests.protocol.mocks import mock_wire_protocol
 

@@ -84,7 +84,7 @@ class Agent(object):
                 raise Exception("{0} is a file".format(ext_log_dir))
             if not os.path.isdir(ext_log_dir):
                 fileutil.mkdir(ext_log_dir, mode=0o755, owner="root")
-        except Exception as e: # pylint: disable=C0103
+        except Exception as e:  # pylint: disable=C0103
             logger.error(
                 "Exception occurred while creating extension "
                 "log directory {0}: {1}".format(ext_log_dir, e))
@@ -185,20 +185,20 @@ class Agent(object):
             archive = log_collector.collect_logs_and_get_archive()
             print("Log collection successfully completed. Archive can be found at {0} "
                   "and detailed log output can be found at {1}".format(archive, OUTPUT_RESULTS_FILE_PATH))
-        except Exception as e: # pylint: disable=C0103
+        except Exception as e:  # pylint: disable=C0103
             print("Log collection completed unsuccessfully. Error: {0}".format(ustr(e)))
             print("Detailed log output can be found at {0}".format(OUTPUT_RESULTS_FILE_PATH))
             sys.exit(1)
 
 
-def main(args=None): # pylint: disable=R0912
+def main(args=None):  # pylint: disable=R0912
     """
     Parse command line arguments, exit with usage() on error.
     Invoke different methods according to different command
     """
     if args is None:
         args = []
-    if len(args) <= 0: # pylint: disable=len-as-condition
+    if len(args) <= 0:  # pylint: disable=len-as-condition
         args = sys.argv[1:]
     command, force, verbose, debug, conf_file_path, log_collector_full_mode = parse_args(args)
     if command == "version":
@@ -232,7 +232,7 @@ def main(args=None): # pylint: disable=R0912
                          traceback.format_exc())
 
 
-def parse_args(sys_args): # pylint: disable=R0912
+def parse_args(sys_args):  # pylint: disable=R0912
     """
     Parse command line arguments
     """
@@ -244,7 +244,7 @@ def parse_args(sys_args): # pylint: disable=R0912
     log_collector_full_mode = False
 
     for arg in sys_args:
-        m = re.match("^(?:[-/]*)configuration-path:([\w/\.\-_]+)", arg) # pylint: disable=W1401,C0103
+        m = re.match("^(?:[-/]*)configuration-path:([\w/\.\-_]+)", arg)  # pylint: disable=W1401,C0103
         if not m is None:
             conf_file_path = m.group(1)
             if not os.path.exists(conf_file_path):
@@ -304,13 +304,13 @@ def usage():
     """
     Return agent usage message
     """
-    s  = "\n" # pylint: disable=C0103
-    s += ("usage: {0} [-verbose] [-force] [-help] " # pylint: disable=C0103
+    s  = "\n"  # pylint: disable=C0103
+    s += ("usage: {0} [-verbose] [-force] [-help] "  # pylint: disable=C0103
            "-configuration-path:<path to configuration file>" 
            "-deprovision[+user]|-register-service|-version|-daemon|-start|"
            "-run-exthandlers|-show-configuration|-collect-logs [-full]"
            "").format(sys.argv[0])
-    s += "\n" # pylint: disable=C0103
+    s += "\n"  # pylint: disable=C0103
     return s
 
 

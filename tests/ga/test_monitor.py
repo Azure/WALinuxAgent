@@ -60,7 +60,7 @@ def _create_monitor_handler(enabled_operations=None, iterations=1):
         enabled_operations = []
 
     def run(self):
-        if len(enabled_operations) == 0 or self._name in enabled_operations: # pylint: disable=protected-access,len-as-condition
+        if len(enabled_operations) == 0 or self._name in enabled_operations:  # pylint: disable=protected-access,len-as-condition
             run.original_definition(self)
     run.original_definition = PeriodicOperation.run
 
@@ -182,7 +182,7 @@ class TestExtensionMetricsDataTelemetry(AgentTestCase):
     @patch('azurelinuxagent.common.event.EventLogger.add_metric')
     @patch('azurelinuxagent.common.event.EventLogger.add_event')
     @patch("azurelinuxagent.common.cgroupstelemetry.CGroupsTelemetry.poll_all_tracked")
-    def test_send_extension_metrics_telemetry(self, patch_poll_all_tracked, patch_add_event, # pylint: disable=unused-argument
+    def test_send_extension_metrics_telemetry(self, patch_poll_all_tracked, patch_add_event,  # pylint: disable=unused-argument
                                               patch_add_metric, *args):
         patch_poll_all_tracked.return_value = [MetricValue("Process", "% Processor Time", 1, 1),
                                                MetricValue("Memory", "Total Memory Usage", 1, 1),
@@ -195,7 +195,7 @@ class TestExtensionMetricsDataTelemetry(AgentTestCase):
     @patch('azurelinuxagent.common.event.EventLogger.add_metric')
     @patch('azurelinuxagent.common.event.EventLogger.add_event')
     @patch("azurelinuxagent.common.cgroupstelemetry.CGroupsTelemetry.poll_all_tracked")
-    def test_send_extension_metrics_telemetry_for_empty_cgroup(self, patch_poll_all_tracked, # pylint: disable=unused-argument
+    def test_send_extension_metrics_telemetry_for_empty_cgroup(self, patch_poll_all_tracked,  # pylint: disable=unused-argument
                                                                patch_add_event, patch_add_metric,*args):
         patch_poll_all_tracked.return_value = []
 
@@ -207,14 +207,14 @@ class TestExtensionMetricsDataTelemetry(AgentTestCase):
     @patch('azurelinuxagent.common.event.EventLogger.add_metric')
     @patch("azurelinuxagent.common.cgroup.MemoryCgroup.get_memory_usage")
     @patch('azurelinuxagent.common.logger.Logger.periodic_warn')
-    def test_send_extension_metrics_telemetry_handling_memory_cgroup_exceptions_errno2(self, patch_periodic_warn, # pylint: disable=unused-argument
+    def test_send_extension_metrics_telemetry_handling_memory_cgroup_exceptions_errno2(self, patch_periodic_warn,  # pylint: disable=unused-argument
                                                                                        patch_get_memory_usage,
                                                                                        patch_add_metric, *args):
         ioerror = IOError()
         ioerror.errno = 2
         patch_get_memory_usage.side_effect = ioerror
 
-        CGroupsTelemetry._tracked.append(MemoryCgroup("cgroup_name", "/test/path")) # pylint: disable=protected-access
+        CGroupsTelemetry._tracked.append(MemoryCgroup("cgroup_name", "/test/path"))  # pylint: disable=protected-access
 
         PollResourceUsageOperation().run()
         self.assertEqual(0, patch_periodic_warn.call_count)
@@ -223,14 +223,14 @@ class TestExtensionMetricsDataTelemetry(AgentTestCase):
     @patch('azurelinuxagent.common.event.EventLogger.add_metric')
     @patch("azurelinuxagent.common.cgroup.CpuCgroup.get_cpu_usage")
     @patch('azurelinuxagent.common.logger.Logger.periodic_warn')
-    def test_send_extension_metrics_telemetry_handling_cpu_cgroup_exceptions_errno2(self, patch_periodic_warn, # pylint: disable=unused-argument
+    def test_send_extension_metrics_telemetry_handling_cpu_cgroup_exceptions_errno2(self, patch_periodic_warn,  # pylint: disable=unused-argument
                                                                                     patch_cpu_usage, patch_add_metric,
                                                                                     *args):
         ioerror = IOError()
         ioerror.errno = 2
         patch_cpu_usage.side_effect = ioerror
 
-        CGroupsTelemetry._tracked.append(CpuCgroup("cgroup_name", "/test/path")) # pylint: disable=protected-access
+        CGroupsTelemetry._tracked.append(CpuCgroup("cgroup_name", "/test/path"))  # pylint: disable=protected-access
 
         PollResourceUsageOperation().run()
         self.assertEqual(0, patch_periodic_warn.call_count)
@@ -238,14 +238,14 @@ class TestExtensionMetricsDataTelemetry(AgentTestCase):
 
     @patch('azurelinuxagent.common.event.EventLogger.add_metric')
     @patch('azurelinuxagent.common.logger.Logger.periodic_warn')
-    def test_send_extension_metrics_telemetry_for_unsupported_cgroup(self, patch_periodic_warn, patch_add_metric, *args): # pylint: disable=unused-argument
-        CGroupsTelemetry._tracked.append(CGroup("cgroup_name", "/test/path", "io")) # pylint: disable=protected-access
+    def test_send_extension_metrics_telemetry_for_unsupported_cgroup(self, patch_periodic_warn, patch_add_metric, *args):  # pylint: disable=unused-argument
+        CGroupsTelemetry._tracked.append(CGroup("cgroup_name", "/test/path", "io"))  # pylint: disable=protected-access
 
         PollResourceUsageOperation().run()
         self.assertEqual(1, patch_periodic_warn.call_count)
         self.assertEqual(0, patch_add_metric.call_count)  # No metrics should be sent.
 
-    def test_generate_extension_metrics_telemetry_dictionary(self, *args): # pylint: disable=unused-argument
+    def test_generate_extension_metrics_telemetry_dictionary(self, *args):  # pylint: disable=unused-argument
         num_polls = 10
         num_extensions = 1
 
@@ -265,7 +265,7 @@ class TestExtensionMetricsDataTelemetry(AgentTestCase):
                                                     "dummy_extension_{0}".format(i))
                 CGroupsTelemetry.track_cgroup(dummy_memory_cgroup)
 
-        self.assertEqual(2 * num_extensions, len(CGroupsTelemetry._tracked)) # pylint: disable=protected-access
+        self.assertEqual(2 * num_extensions, len(CGroupsTelemetry._tracked))  # pylint: disable=protected-access
 
         with patch("azurelinuxagent.common.cgroup.MemoryCgroup.get_max_memory_usage") as patch_get_memory_max_usage:
             with patch("azurelinuxagent.common.cgroup.MemoryCgroup.get_memory_usage") as patch_get_memory_usage:
@@ -284,13 +284,13 @@ class PollResourceUsageOperationTestCase(AgentTestCase):
     def setUpClass(cls):
         AgentTestCase.setUpClass()
         # ensure cgroups are enabled by forcing a new instance
-        CGroupConfigurator._instance = None # pylint: disable=protected-access
+        CGroupConfigurator._instance = None  # pylint: disable=protected-access
         with mock_cgroup_commands():
             CGroupConfigurator.get_instance().initialize()
 
     @classmethod
     def tearDownClass(cls):
-        CGroupConfigurator._instance = None # pylint: disable=protected-access
+        CGroupConfigurator._instance = None  # pylint: disable=protected-access
         AgentTestCase.tearDownClass()
 
     def test_it_should_report_processes_that_do_not_belong_to_the_agent_cgroup(self):
@@ -328,7 +328,7 @@ Directory /sys/fs/cgroup/cpu/system.slice/walinuxagent.service:
                     '/bin/sh /var/lib/waagent/run-command/download/1/script.sh',
                 ]
 
-                for fp in unexpected_processes: # pylint: disable=invalid-name
+                for fp in unexpected_processes:  # pylint: disable=invalid-name
                     self.assertIn(fp, messages[0], "[{0}] was not reported as an unexpected process. Events: {1}".format(fp, messages))
 
                 # The list of processes in the message is an array of strings: "['foo', ..., 'bar']"
@@ -345,7 +345,7 @@ Directory /sys/fs/cgroup/cpu/system.slice/walinuxagent.service:
 class TestMonitorFailure(AgentTestCase):
 
     @patch("azurelinuxagent.common.protocol.healthservice.HealthService.report_host_plugin_heartbeat")
-    def test_error_heartbeat_creates_no_signal(self, patch_report_heartbeat, patch_http_get, patch_add_event, *args): # pylint: disable=unused-argument
+    def test_error_heartbeat_creates_no_signal(self, patch_report_heartbeat, patch_http_get, patch_add_event, *args):  # pylint: disable=unused-argument
 
         monitor_handler = get_monitor_handler()
         protocol = WireProtocol('endpoint')
