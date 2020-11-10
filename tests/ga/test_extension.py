@@ -785,8 +785,8 @@ class TestExtension(ExtensionTestCase):
 
         def _assert_event_reported_only_on_incarnation_change(patch_add_event, expected_count=1):
             handler_seq_reporting = [kwargs for _, kwargs in patch_add_event.call_args_list if kwargs[
-                'op'] == WALAEventOperation.ExtensionProcessing and "marking the extension as failed" in kwargs[
-                                         'message']]
+                'op'] == WALAEventOperation.ExtensionProcessing and "will skip processing the rest of the extensions" in
+                                     kwargs['message']]
             self.assertEqual(len(handler_seq_reporting), expected_count,
                              "Error should be reported only on incarnation change")
 
@@ -1179,28 +1179,64 @@ class TestExtension(ExtensionTestCase):
         mock_fileutil.write_file.return_value = IOError("Mock IO Error")
         exthandlers_handler.run()
 
-    def test_extension_processing_allowed(self, *args): # pylint: disable=unused-argument
-        exthandlers_handler = get_exthandlers_handler(Mock())
+    def test_it_should_process_extensions_only_if_allowed(self, mock_get, mock_crypt, *args):
 
-        # disable extension handling in configuration
+        def assert_extensions_called(exthandlers_handler, expected_call_count=0):
+            extension_name = 'OSTCExtensions.ExampleHandlerLinux'
+            extension_calls = []
+            original_popen = subprocess.Popen
+
+            def mock_popen(*args, **kwargs):
+                if extension_name in args[0]:
+                    extension_calls.append(args[0])
+                return original_popen(*args, **kwargs)
+
+            with patch('subprocess.Popen', side_effect=mock_popen):
+                exthandlers_handler.run()
+                self.assertEqual(expected_call_count, len(extension_calls), "Call counts dont match")
+
+        test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE)
+        exthandlers_handler, protocol = self._create_mock(test_data, mock_get, mock_crypt, *args)
+
+        # Extension called once for Install and once for Enable
+        assert_extensions_called(exthandlers_handler, expected_call_count=2)
+        self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.0.0")
+
+        # We should not re-handle the extensions if GoalState didn't change
+        assert_extensions_called(exthandlers_handler, expected_call_count=0)
+
+        # Update GoalState
+        test_data.set_incarnation(2)
+        protocol.update_goal_state()
+
         with patch.object(conf, 'get_extensions_enabled', return_value=False):
-            self.assertFalse(exthandlers_handler._extension_processing_allowed()) # pylint: disable=protected-access
+            assert_extensions_called(exthandlers_handler, expected_call_count=0)
 
-        # enable extension handling in configuration
-        with patch.object(conf, "get_extensions_enabled", return_value=True):
-            # disable overprovisioning in configuration
+        # Disabled over-provisioning in configuration
+        # In this case we should process GoalState as incarnation changed
+        with patch.object(conf, 'get_extensions_enabled', return_value=True):
             with patch.object(conf, 'get_enable_overprovisioning', return_value=False):
-                self.assertTrue(exthandlers_handler._extension_processing_allowed()) # pylint: disable=protected-access
+                # 1 expected call count for Enable command
+                assert_extensions_called(exthandlers_handler, expected_call_count=1)
 
-            # enable overprovisioning in configuration
+        # Update GoalState
+        test_data.set_incarnation(3)
+        protocol.update_goal_state()
+
+        # Enabled on_hold property in artifact_blob
+        with patch.object(conf, 'get_extensions_enabled', return_value=True):
             with patch.object(conf, "get_enable_overprovisioning", return_value=True):
-                with patch.object(exthandlers_handler.protocol.get_artifacts_profile(), "is_on_hold",
-                                  side_effect=[True, False]):
-                    # Enable on_hold property in artifact_blob
-                    self.assertFalse(exthandlers_handler._extension_processing_allowed()) # pylint: disable=protected-access
+                with patch.object(protocol, "get_artifacts_profile",
+                                  return_value=InVMArtifactsProfile(json.dumps({'onHold': True}))):
+                    assert_extensions_called(exthandlers_handler, expected_call_count=0)
 
-                    # Disable on_hold property in artifact_blob
-                    self.assertTrue(exthandlers_handler._extension_processing_allowed()) # pylint: disable=protected-access
+        # Disabled on_hold property in artifact_blob
+        with patch.object(conf, 'get_extensions_enabled', return_value=True):
+            with patch.object(conf, "get_enable_overprovisioning", return_value=True):
+                with patch.object(protocol, "get_artifacts_profile",
+                                  return_value=InVMArtifactsProfile(json.dumps({'onHold': False}))):
+                    # 1 expected call count for Enable command
+                    assert_extensions_called(exthandlers_handler, expected_call_count=1)
 
     def test_handle_ext_handlers_on_hold_true(self, *args):
         test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE)

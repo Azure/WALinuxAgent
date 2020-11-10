@@ -382,8 +382,6 @@ class ExtHandlersHandler(object):
             logger.verbose("No extension handler config found")
             return
 
-        logger.info("New incarnation detected, starting processing of GoalState with incarnation: {0}".format(etag))
-
         wait_until = datetime.datetime.utcnow() + datetime.timedelta(minutes=_DEFAULT_EXT_TIMEOUT_MINUTES)
         max_dep_level = max([handler.sort_key() for handler in self.ext_handlers.extHandlers])
 
@@ -397,8 +395,20 @@ class ExtHandlersHandler(object):
             # Otherwise, skip the rest of the extension installation.
             dep_level = ext_handler.sort_key()
             if 0 <= dep_level < max_dep_level:
+
                 # Do no wait for extension status if the handler failed
-                if handler_success and not self.wait_for_handler_completion(ext_handler, wait_until):
+                if not handler_success:
+                    msg = "Handler: {0} processing failed, will skip processing the rest of the extensions".format(
+                        ext_handler.name)
+                    add_event(AGENT_NAME,
+                              version=CURRENT_VERSION,
+                              op=WALAEventOperation.ExtensionProcessing,
+                              is_success=False,
+                              message=msg,
+                              log_event=True)
+                    break
+
+                if not self.wait_for_handler_completion(ext_handler, wait_until):
                     logger.warn("An extension failed or timed out, will skip processing the rest of the extensions")
                     break
 
