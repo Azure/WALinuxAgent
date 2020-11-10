@@ -269,6 +269,10 @@ class ExtHandlersHandler(object):
 
         self.report_status_error_state = ErrorState()
 
+    def _incarnation_changed(self, etag):
+        # Skip processing if GoalState incarnation did not change
+        return self.last_etag != etag
+
     def run(self):
 
         try:
@@ -278,7 +282,7 @@ class ExtHandlersHandler(object):
             # Log status report success on new config
             self.log_report = True
 
-            if self._extension_processing_allowed(etag):
+            if self._extension_processing_allowed() and self._incarnation_changed(etag):
                 logger.info("ProcessGoalState started [incarnation {0}]".format(etag))
                 self.handle_ext_handlers(etag)
                 self.last_etag = etag
@@ -360,7 +364,7 @@ class ExtHandlersHandler(object):
                 except OSError as e: # pylint: disable=C0103
                     logger.warn("Failed to remove extension package {0}: {1}".format(pkg, e.strerror))
 
-    def _extension_processing_allowed(self, etag):
+    def _extension_processing_allowed(self):
         if not conf.get_extensions_enabled():
             logger.verbose("Extension handling is disabled")
             return False
@@ -370,10 +374,6 @@ class ExtHandlersHandler(object):
             if artifacts_profile and artifacts_profile.is_on_hold():
                 logger.info("Extension handling is on hold")
                 return False
-
-        if self.last_etag == etag:
-            # Skip processing if GoalState incarnation did not change
-            return False
 
         return True
 

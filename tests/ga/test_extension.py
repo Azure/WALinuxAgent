@@ -1241,9 +1241,7 @@ class TestExtension(ExtensionTestCase):
     def test_handle_ext_handlers_on_hold_true(self, *args):
         test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE)
         exthandlers_handler, protocol = self._create_mock(test_data, *args) # pylint: disable=no-value-for-parameter
-        exthandlers_handler.ext_handlers, exthandlers_handler.last_etag = protocol.get_ext_handlers()
         protocol.get_artifacts_profile = MagicMock()
-        exthandlers_handler.protocol = protocol
 
         # Disable extension handling blocking
         exthandlers_handler._extension_processing_allowed = Mock(return_value=False) # pylint: disable=protected-access
