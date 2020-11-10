@@ -24,7 +24,7 @@ from azurelinuxagent.pa.deprovision.default import DeprovisionHandler, \
 # pylint: enable=W0611
 
 class ClearLinuxDeprovisionHandler(DeprovisionHandler):
-    def __init__(self, distro): # pylint: disable=W0231
+    def __init__(self, distro):  # pylint: disable=W0231
         self.distro = distro
 
     def setup(self, deluser):

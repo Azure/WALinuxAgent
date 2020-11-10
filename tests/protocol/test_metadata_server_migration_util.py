@@ -19,7 +19,7 @@ import os
 import tempfile
 import unittest
 
-import azurelinuxagent.common.osutil.default as osutil # pylint: disable=unused-import
+import azurelinuxagent.common.osutil.default as osutil  # pylint: disable=unused-import
 import azurelinuxagent.common.protocol.metadata_server_migration_util as migration_util
 
 from azurelinuxagent.common.protocol.metadata_server_migration_util import _LEGACY_METADATA_SERVER_TRANSPORT_PRV_FILE_NAME, \
@@ -32,7 +32,7 @@ from tests.tools import AgentTestCase, patch, MagicMock
 class TestMetadataServerMigrationUtil(AgentTestCase):
     @patch('azurelinuxagent.common.conf.get_lib_dir')
     def test_is_metadata_server_artifact_present(self, mock_get_lib_dir):
-        dir = tempfile.gettempdir() # pylint: disable=redefined-builtin
+        dir = tempfile.gettempdir()  # pylint: disable=redefined-builtin
         metadata_server_transport_cert_file = os.path.join(dir, _LEGACY_METADATA_SERVER_TRANSPORT_CERT_FILE_NAME)
         open(metadata_server_transport_cert_file, 'w').close()
         mock_get_lib_dir.return_value = dir
@@ -48,7 +48,7 @@ class TestMetadataServerMigrationUtil(AgentTestCase):
     def test_cleanup_metadata_server_artifacts_does_not_throw_with_no_metadata_certs(self, mock_get_lib_dir, mock_enable_firewall):
         mock_get_lib_dir.return_value = tempfile.gettempdir()
         mock_enable_firewall.return_value = False
-        osutil = MagicMock() # pylint: disable=redefined-outer-name
+        osutil = MagicMock()  # pylint: disable=redefined-outer-name
         migration_util.cleanup_metadata_server_artifacts(osutil)
 
     @patch('azurelinuxagent.common.conf.enable_firewall')
@@ -56,7 +56,7 @@ class TestMetadataServerMigrationUtil(AgentTestCase):
     @patch('os.getuid')
     def test_cleanup_metadata_server_artifacts_firewall_enabled(self, mock_os_getuid, mock_get_lib_dir, mock_enable_firewall):
         # Setup Certificate Files
-        dir = tempfile.gettempdir() # pylint: disable=redefined-builtin
+        dir = tempfile.gettempdir()  # pylint: disable=redefined-builtin
         metadata_server_transport_prv_file = os.path.join(dir, _LEGACY_METADATA_SERVER_TRANSPORT_PRV_FILE_NAME)
         metadata_server_transport_cert_file = os.path.join(dir, _LEGACY_METADATA_SERVER_TRANSPORT_CERT_FILE_NAME)
         metadata_server_p7b_file = os.path.join(dir, _LEGACY_METADATA_SERVER_P7B_FILE_NAME)
@@ -69,7 +69,7 @@ class TestMetadataServerMigrationUtil(AgentTestCase):
         mock_enable_firewall.return_value = True
         fixed_uid = 0
         mock_os_getuid.return_value = fixed_uid
-        osutil = MagicMock() # pylint: disable=redefined-outer-name
+        osutil = MagicMock()  # pylint: disable=redefined-outer-name
 
         # Run
         migration_util.cleanup_metadata_server_artifacts(osutil)
@@ -88,7 +88,7 @@ class TestMetadataServerMigrationUtil(AgentTestCase):
     @patch('os.getuid')
     def test_cleanup_metadata_server_artifacts_firewall_disabled(self, mock_os_getuid, mock_get_lib_dir, mock_enable_firewall):
         # Setup Certificate Files
-        dir = tempfile.gettempdir() # pylint: disable=redefined-builtin
+        dir = tempfile.gettempdir()  # pylint: disable=redefined-builtin
         metadata_server_transport_prv_file = os.path.join(dir, _LEGACY_METADATA_SERVER_TRANSPORT_PRV_FILE_NAME)
         metadata_server_transport_cert_file = os.path.join(dir, _LEGACY_METADATA_SERVER_TRANSPORT_CERT_FILE_NAME)
         metadata_server_p7b_file = os.path.join(dir, _LEGACY_METADATA_SERVER_P7B_FILE_NAME)
@@ -101,7 +101,7 @@ class TestMetadataServerMigrationUtil(AgentTestCase):
         mock_enable_firewall.return_value = False
         fixed_uid = 0
         mock_os_getuid.return_value = fixed_uid
-        osutil = MagicMock() # pylint: disable=redefined-outer-name
+        osutil = MagicMock()  # pylint: disable=redefined-outer-name
 
         # Run
         migration_util.cleanup_metadata_server_artifacts(osutil)

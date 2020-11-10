@@ -156,7 +156,7 @@ class ReportNetworkConfigurationChangesOperation(PeriodicOperation):
             self.last_nic_state = nic_state
 
 
-class MonitorHandler(ThreadHandlerInterface): # pylint: disable=R0902
+class MonitorHandler(ThreadHandlerInterface):  # pylint: disable=R0902
     # telemetry
     EVENT_COLLECTION_PERIOD = datetime.timedelta(minutes=1)
     # host plugin
@@ -243,14 +243,14 @@ class MonitorHandler(ThreadHandlerInterface): # pylint: disable=R0902
                 try:
                     self.protocol.update_host_plugin_from_goal_state()
 
-                    for op in self._periodic_operations: # pylint: disable=C0103
+                    for op in self._periodic_operations:  # pylint: disable=C0103
                         op.run()
 
-                except Exception as e: # pylint: disable=C0103
+                except Exception as e:  # pylint: disable=C0103
                     logger.error("An error occurred in the monitor thread main loop; will skip the current iteration.\n{0}", ustr(e))
                 finally:
                     PeriodicOperation.sleep_until_next_operation(self._periodic_operations)
-        except Exception as e: # pylint: disable=C0103
+        except Exception as e:  # pylint: disable=C0103
             logger.error("An error occurred in the monitor thread; will exit the thread.\n{0}", ustr(e))
 
     def send_imds_heartbeat(self):
@@ -271,7 +271,7 @@ class MonitorHandler(ThreadHandlerInterface): # pylint: disable=R0902
 
             self.health_service.report_imds_status(is_healthy, response)
 
-        except Exception as e: # pylint: disable=C0103
+        except Exception as e:  # pylint: disable=C0103
             msg = "Exception sending imds heartbeat: {0}".format(ustr(e))
             add_event(
                 name=AGENT_NAME,
@@ -310,7 +310,7 @@ class MonitorHandler(ThreadHandlerInterface): # pylint: disable=R0902
                     message='{0} since successful heartbeat'.format(self.host_plugin_errorstate.fail_time),
                     log_event=False)
 
-        except Exception as e: # pylint: disable=C0103
+        except Exception as e:  # pylint: disable=C0103
             msg = "Exception sending host plugin heartbeat: {0}".format(ustr(e))
             add_event(
                 name=AGENT_NAME,

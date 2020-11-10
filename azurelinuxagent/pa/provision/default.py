@@ -63,7 +63,7 @@ class ProvisionHandler(object):
 
         try:
             utc_start = datetime.utcnow()
-            thumbprint = None # pylint: disable=W0612
+            thumbprint = None  # pylint: disable=W0612
 
             if self.check_provisioned_file():
                 logger.info("Provisioning already completed, skipping.")
@@ -98,7 +98,7 @@ class ProvisionHandler(object):
             self.report_ready()
             logger.info("Provisioning complete")
 
-        except (ProtocolError, ProvisionError) as e: # pylint: disable=C0103
+        except (ProtocolError, ProvisionError) as e:  # pylint: disable=C0103
             msg = "Provisioning failed: {0} ({1}s)".format(ustr(e), self._get_uptime_seconds())
             logger.error(msg)
             self.report_not_ready("ProvisioningFailed", ustr(e))
@@ -108,10 +108,10 @@ class ProvisionHandler(object):
     @staticmethod
     def _get_uptime_seconds():
         try:
-            with open('/proc/uptime') as fh: # pylint: disable=C0103
+            with open('/proc/uptime') as fh:  # pylint: disable=C0103
                 uptime, _ = fh.readline().split()
                 return uptime
-        except: # pylint: disable=W0702
+        except:  # pylint: disable=W0702
             return 0
 
     def reg_ssh_host_key(self):
@@ -136,7 +136,7 @@ class ProvisionHandler(object):
     def get_ssh_host_key_thumbprint(self, chk_err=True):
         cmd = "ssh-keygen -lf {0}".format(conf.get_ssh_key_public_path())
         ret = shellutil.run_get_output(cmd, chk_err=chk_err)
-        if ret[0] == 0: # pylint: disable=R1705
+        if ret[0] == 0:  # pylint: disable=R1705
             return ret[1].rstrip().split()[1].replace(':', '')
         else:
             raise ProvisionError(("Failed to generate ssh host key: "
@@ -169,9 +169,9 @@ class ProvisionHandler(object):
         if not ProvisionHandler.is_provisioned():
             return False
 
-        s = fileutil.read_file(ProvisionHandler.provisioned_file_path()).strip() # pylint: disable=C0103
+        s = fileutil.read_file(ProvisionHandler.provisioned_file_path()).strip()  # pylint: disable=C0103
         if not self.osutil.is_current_instance_id(s):
-            if len(s) > 0: # pylint: disable=len-as-condition
+            if len(s) > 0:  # pylint: disable=len-as-condition
                 logger.warn("VM is provisioned, "
                             "but the VM unique identifier has changed -- "
                             "clearing cached state")
@@ -219,7 +219,7 @@ class ProvisionHandler(object):
             if conf.get_delete_root_password():
                 self.osutil.del_root_password()
 
-        except OSUtilError as e: # pylint: disable=C0103
+        except OSUtilError as e:  # pylint: disable=C0103
             raise ProvisionError("Failed to provision: {0}".format(ustr(e)))
 
     def config_user_account(self, ovfenv):
@@ -291,7 +291,7 @@ class ProvisionHandler(object):
         try:
             protocol = self.protocol_util.get_protocol()
             protocol.report_provision_status(status)
-        except ProtocolError as e: # pylint: disable=C0103
+        except ProtocolError as e:  # pylint: disable=C0103
             logger.error("Reporting NotReady failed: {0}", e)
             self.report_event(ustr(e))
 
@@ -300,6 +300,6 @@ class ProvisionHandler(object):
         try:
             protocol = self.protocol_util.get_protocol()
             protocol.report_provision_status(status)
-        except ProtocolError as e: # pylint: disable=C0103
+        except ProtocolError as e:  # pylint: disable=C0103
             logger.error("Reporting Ready failed: {0}", e)
             self.report_event(ustr(e))

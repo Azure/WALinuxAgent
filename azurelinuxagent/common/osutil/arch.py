@@ -16,7 +16,7 @@
 # Requires Python 2.6+ and Openssl 1.0+
 #
 
-import os # pylint: disable=W0611
+import os  # pylint: disable=W0611
 import azurelinuxagent.common.utils.shellutil as shellutil
 from azurelinuxagent.common.osutil.default import DefaultOSUtil
 

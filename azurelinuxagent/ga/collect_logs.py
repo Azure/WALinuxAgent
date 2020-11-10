@@ -127,14 +127,14 @@ class CollectLogsHandler(ThreadHandlerInterface):
 
             while not self.stopped():
                 try:
-                    for op in self._periodic_operations: # pylint: disable=C0103
+                    for op in self._periodic_operations:  # pylint: disable=C0103
                         op.run()
-                except Exception as e: # pylint: disable=C0103
+                except Exception as e:  # pylint: disable=C0103
                     logger.error("An error occurred in the log collection thread main loop; "
                                  "will skip the current iteration.\n{0}", ustr(e))
                 finally:
                     PeriodicOperation.sleep_until_next_operation(self._periodic_operations)
-        except Exception as e: # pylint: disable=C0103
+        except Exception as e:  # pylint: disable=C0103
             logger.error("An error occurred in the log collection thread; will exit the thread.\n{0}", ustr(e))
 
     def collect_and_send_logs(self):
@@ -180,11 +180,11 @@ class CollectLogsHandler(ThreadHandlerInterface):
             success = True
 
             return True
-        except Exception as e: # pylint: disable=C0103
+        except Exception as e:  # pylint: disable=C0103
             duration = elapsed_milliseconds(start_time)
 
             if isinstance(e, CommandError):
-                exception_message = ustr("[stderr] %s", e.stderr) # pylint: disable=no-member
+                exception_message = ustr("[stderr] %s", e.stderr)  # pylint: disable=no-member
             else:
                 exception_message = ustr(e)
 
@@ -205,14 +205,14 @@ class CollectLogsHandler(ThreadHandlerInterface):
         msg = None
         success = False
         try:
-            with open(COMPRESSED_ARCHIVE_PATH, "rb") as fh: # pylint: disable=C0103
+            with open(COMPRESSED_ARCHIVE_PATH, "rb") as fh:  # pylint: disable=C0103
                 archive_content = fh.read()
                 self.protocol.upload_logs(archive_content)
                 msg = "Successfully uploaded logs."
                 logger.info(msg)
 
             success = True
-        except Exception as e: # pylint: disable=C0103
+        except Exception as e:  # pylint: disable=C0103
             msg = "Failed to upload logs. Error: {0}".format(ustr(e))
             logger.warn(msg)
         finally:

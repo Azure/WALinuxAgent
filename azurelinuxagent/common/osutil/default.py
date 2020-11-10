@@ -1,4 +1,4 @@
-# # pylint: disable=C0302
+#  # pylint: disable=C0302
 # Copyright 2018 Microsoft Corporation
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -977,7 +977,7 @@ class DefaultOSUtil(object):  # pylint: disable=R0904
         return None
 
     @staticmethod
-    def get_endpoint_from_leases_path(pathglob): # pylint: disable=R0912
+    def get_endpoint_from_leases_path(pathglob):  # pylint: disable=R0912
         """
         Try to discover and decode the wireserver endpoint in the
         specified dhcp leases path.
@@ -1410,7 +1410,7 @@ class DefaultOSUtil(object):  # pylint: disable=R0904
 
         self._update_nic_state(state, "ip -4 -a -o address", NetworkInterfaceCard.add_ipv4, "an IPv4 address")
         # pylint: disable=W0105
-        """ # pylint: disable=W1401
+        """  # pylint: disable=W1401
         1: lo    inet 127.0.0.1/8 scope host lo\       valid_lft forever preferred_lft forever
         2: eth0    inet 10.145.187.220/26 brd 10.145.187.255 scope global eth0\       valid_lft forever preferred_lft forever
         3: docker0    inet 192.168.43.1/24 brd 192.168.43.255 scope global docker0\       valid_lft forever preferred_lft forever
@@ -1419,7 +1419,7 @@ class DefaultOSUtil(object):  # pylint: disable=R0904
 
         self._update_nic_state(state, "ip -6 -a -o address", NetworkInterfaceCard.add_ipv6, "an IPv6 address")
         # pylint: disable=W0105
-        """ # pylint: disable=W1401
+        """  # pylint: disable=W1401
         1: lo    inet6 ::1/128 scope host \       valid_lft forever preferred_lft forever
         2: eth0    inet6 fe80::20d:3aff:fe30:c35a/64 scope link \       valid_lft forever preferred_lft forever
         """

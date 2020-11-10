@@ -13,7 +13,7 @@ from azurelinuxagent.ga.exthandlers import ExtHandlerInstance, NUMBER_OF_DOWNLOA
 from tests.tools import AgentTestCase, patch, mock_sleep
 
 
-class DownloadExtensionTestCase(AgentTestCase): # pylint: disable=too-many-instance-attributes
+class DownloadExtensionTestCase(AgentTestCase):  # pylint: disable=too-many-instance-attributes
     """
     Test cases for launch_command
     """
@@ -72,7 +72,7 @@ class DownloadExtensionTestCase(AgentTestCase): # pylint: disable=too-many-insta
 
     @staticmethod
     def _create_zip_file(filename):
-        file = None # pylint: disable=redefined-builtin
+        file = None  # pylint: disable=redefined-builtin
         try:
             file = zipfile.ZipFile(filename, "w")
             info = zipfile.ZipInfo(DownloadExtensionTestCase._extension_command)
@@ -85,7 +85,7 @@ class DownloadExtensionTestCase(AgentTestCase): # pylint: disable=too-many-insta
 
     @staticmethod
     def _create_invalid_zip_file(filename):
-        with open(filename, "w") as file: # pylint: disable=redefined-builtin
+        with open(filename, "w") as file:  # pylint: disable=redefined-builtin
             file.write("An invalid ZIP file\n")
 
     def _get_extension_package_file(self):
@@ -187,7 +187,7 @@ class DownloadExtensionTestCase(AgentTestCase): # pylint: disable=too-many-insta
                          "Ensure that the state is maintained for extension HandlerState")
 
     def test_it_should_use_alternate_uris_when_download_fails(self):
-        self.download_failures = 0 # pylint: disable=attribute-defined-outside-init
+        self.download_failures = 0  # pylint: disable=attribute-defined-outside-init
 
         def download_ext_handler_pkg(_uri, destination):
             # fail a few times, then succeed
@@ -205,7 +205,7 @@ class DownloadExtensionTestCase(AgentTestCase): # pylint: disable=too-many-insta
         self._assert_download_and_expand_succeeded()
 
     def test_it_should_use_alternate_uris_when_download_raises_an_exception(self):
-        self.download_failures = 0 # pylint: disable=attribute-defined-outside-init
+        self.download_failures = 0  # pylint: disable=attribute-defined-outside-init
 
         def download_ext_handler_pkg(_uri, destination):
             # fail a few times, then succeed
@@ -223,7 +223,7 @@ class DownloadExtensionTestCase(AgentTestCase): # pylint: disable=too-many-insta
         self._assert_download_and_expand_succeeded()
 
     def test_it_should_use_alternate_uris_when_it_downloads_an_invalid_package(self):
-        self.download_failures = 0 # pylint: disable=attribute-defined-outside-init
+        self.download_failures = 0  # pylint: disable=attribute-defined-outside-init
 
         def download_ext_handler_pkg(_uri, destination):
             # fail a few times, then succeed

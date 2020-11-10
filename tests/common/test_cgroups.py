@@ -30,7 +30,7 @@ from tests.tools import AgentTestCase, patch, data_dir
 
 def consume_cpu_time():
     waste = 0
-    for x in range(1, 200000): # pylint: disable=unused-variable,invalid-name
+    for x in range(1, 200000):  # pylint: disable=unused-variable,invalid-name
         waste += random.random()
     return waste
 
@@ -120,8 +120,8 @@ class TestCpuCgroup(AgentTestCase):
 
         cgroup.initialize_cpu_usage()
 
-        self.assertEqual(cgroup._current_cgroup_cpu, 63763) # pylint: disable=protected-access
-        self.assertEqual(cgroup._current_system_cpu, 5496872) # pylint: disable=protected-access
+        self.assertEqual(cgroup._current_cgroup_cpu, 63763)  # pylint: disable=protected-access
+        self.assertEqual(cgroup._current_system_cpu, 5496872)  # pylint: disable=protected-access
 
     def test_get_cpu_usage_should_return_the_cpu_usage_since_its_last_invocation(self):
         osutil = get_osutil()
@@ -166,8 +166,8 @@ class TestCpuCgroup(AgentTestCase):
 
         cgroup.initialize_cpu_usage()
 
-        self.assertEqual(cgroup._current_cgroup_cpu, 0) # pylint: disable=protected-access
-        self.assertEqual(cgroup._current_system_cpu, 5496872)  # check the system usage just for test sanity # pylint: disable=protected-access
+        self.assertEqual(cgroup._current_cgroup_cpu, 0)  # pylint: disable=protected-access
+        self.assertEqual(cgroup._current_system_cpu, 5496872)  # check the system usage just for test sanity  # pylint: disable=protected-access
 
 
     def test_initialize_cpu_usage_should_raise_an_exception_when_called_more_than_once(self):
@@ -187,7 +187,7 @@ class TestCpuCgroup(AgentTestCase):
         cgroup = CpuCgroup("test", "/sys/fs/cgroup/cpu/system.slice/test")
 
         with self.assertRaises(CGroupsException):
-            cpu_usage = cgroup.get_cpu_usage() # pylint: disable=unused-variable
+            cpu_usage = cgroup.get_cpu_usage()  # pylint: disable=unused-variable
 
 
 class TestMemoryCgroup(AgentTestCase):
@@ -207,12 +207,12 @@ class TestMemoryCgroup(AgentTestCase):
     def test_get_metrics_when_files_not_present(self):
         test_mem_cg = MemoryCgroup("test_extension", os.path.join(data_dir, "cgroups"))
 
-        with self.assertRaises(IOError) as e: # pylint: disable=invalid-name
+        with self.assertRaises(IOError) as e:  # pylint: disable=invalid-name
             test_mem_cg.get_memory_usage()
 
         self.assertEqual(e.exception.errno, errno.ENOENT)
 
-        with self.assertRaises(IOError) as e: # pylint: disable=invalid-name
+        with self.assertRaises(IOError) as e:  # pylint: disable=invalid-name
             test_mem_cg.get_max_memory_usage()
 
         self.assertEqual(e.exception.errno, errno.ENOENT)
