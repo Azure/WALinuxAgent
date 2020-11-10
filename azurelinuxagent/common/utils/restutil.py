@@ -142,7 +142,9 @@ def _compute_delay(retry_attempt=1, delay=DELAY_IN_SECONDS):
     return delay*fib[1]
 
 
-def _is_retry_status(status, retry_codes=RETRY_CODES): # pylint: disable=W0102
+def _is_retry_status(status, retry_codes=None):
+    if retry_codes is None:
+        retry_codes = RETRY_CODES
     return status in retry_codes
 
 
@@ -333,14 +335,16 @@ def _http_request(method, host, rel_uri, port=None, data=None, secure=False, # p
     return conn.getresponse()
 
 
-def http_request(method, # pylint: disable=R0913,R0912,W0102
+def http_request(method, # pylint: disable=R0913,R0912
                  url, data, headers=None,
                  use_proxy=False,
                  max_retry=DEFAULT_RETRIES,
-                 retry_codes=RETRY_CODES,
+                 retry_codes=None,
                  retry_delay=DELAY_IN_SECONDS,
                  redact_data=False):
 
+    if retry_codes is None:
+        retry_codes = RETRY_CODES
     global SECURE_WARNING_EMITTED # pylint: disable=W0603
 
     host, port, secure, rel_uri = _parse_url(url)
@@ -461,13 +465,15 @@ def http_request(method, # pylint: disable=R0913,R0912,W0102
     raise HttpError("{0} -- {1} attempts made".format(msg, attempt))
 
 
-def http_get(url, # pylint: disable=R0913,W0102
+def http_get(url, # pylint: disable=R0913
              headers=None,
              use_proxy=False,
              max_retry=DEFAULT_RETRIES,
-             retry_codes=RETRY_CODES,
+             retry_codes=None,
              retry_delay=DELAY_IN_SECONDS):
 
+    if retry_codes is None:
+        retry_codes = RETRY_CODES
     return http_request("GET",
                         url, None, headers=headers,
                         use_proxy=use_proxy,
@@ -476,13 +482,15 @@ def http_get(url, # pylint: disable=R0913,W0102
                         retry_delay=retry_delay)
 
 
-def http_head(url, # pylint: disable=R0913,W0102
+def http_head(url, # pylint: disable=R0913
               headers=None,
               use_proxy=False,
               max_retry=DEFAULT_RETRIES,
-              retry_codes=RETRY_CODES,
+              retry_codes=None,
               retry_delay=DELAY_IN_SECONDS):
 
+    if retry_codes is None:
+        retry_codes = RETRY_CODES
     return http_request("HEAD",
                         url, None, headers=headers,
                         use_proxy=use_proxy,
@@ -491,14 +499,16 @@ def http_head(url, # pylint: disable=R0913,W0102
                         retry_delay=retry_delay)
 
 
-def http_post(url, # pylint: disable=R0913,W0102
+def http_post(url, # pylint: disable=R0913
               data,
               headers=None,
               use_proxy=False,
               max_retry=DEFAULT_RETRIES,
-              retry_codes=RETRY_CODES,
+              retry_codes=None,
               retry_delay=DELAY_IN_SECONDS):
 
+    if retry_codes is None:
+        retry_codes = RETRY_CODES
     return http_request("POST",
                         url, data, headers=headers,
                         use_proxy=use_proxy,
@@ -507,15 +517,17 @@ def http_post(url, # pylint: disable=R0913,W0102
                         retry_delay=retry_delay)
 
 
-def http_put(url, # pylint: disable=R0913,W0102
+def http_put(url, # pylint: disable=R0913
              data,
              headers=None,
              use_proxy=False,
              max_retry=DEFAULT_RETRIES,
-             retry_codes=RETRY_CODES,
+             retry_codes=None,
              retry_delay=DELAY_IN_SECONDS,
              redact_data=False):
 
+    if retry_codes is None:
+        retry_codes = RETRY_CODES
     return http_request("PUT",
                         url, data, headers=headers,
                         use_proxy=use_proxy,
@@ -525,13 +537,15 @@ def http_put(url, # pylint: disable=R0913,W0102
                         redact_data=redact_data)
 
 
-def http_delete(url, # pylint: disable=R0913,W0102
+def http_delete(url, # pylint: disable=R0913
                 headers=None,
                 use_proxy=False,
                 max_retry=DEFAULT_RETRIES,
-                retry_codes=RETRY_CODES,
+                retry_codes=None,
                 retry_delay=DELAY_IN_SECONDS):
 
+    if retry_codes is None:
+        retry_codes = RETRY_CODES
     return http_request("DELETE",
                         url, None, headers=headers,
                         use_proxy=use_proxy,
@@ -540,11 +554,15 @@ def http_delete(url, # pylint: disable=R0913,W0102
                         retry_delay=retry_delay)
 
 
-def request_failed(resp, ok_codes=OK_CODES): # pylint: disable=W0102
+def request_failed(resp, ok_codes=None):
+    if ok_codes is None:
+        ok_codes = OK_CODES
     return not request_succeeded(resp, ok_codes=ok_codes)
 
 
-def request_succeeded(resp, ok_codes=OK_CODES): # pylint: disable=W0102
+def request_succeeded(resp, ok_codes=None):
+    if ok_codes is None:
+        ok_codes = OK_CODES
     return resp is not None and resp.status in ok_codes
 
 
@@ -552,10 +570,12 @@ def request_not_modified(resp):
     return resp is not None and resp.status in NOT_MODIFIED_CODES
 
 
-def request_failed_at_hostplugin(resp, upstream_failure_codes=HOSTPLUGIN_UPSTREAM_FAILURE_CODES): # pylint: disable=W0102
+def request_failed_at_hostplugin(resp, upstream_failure_codes=None):
     """
     Host plugin will return 502 for any upstream issue, so a failure is any 5xx except 502
     """
+    if upstream_failure_codes is None:
+        upstream_failure_codes = HOSTPLUGIN_UPSTREAM_FAILURE_CODES
     return resp is not None and resp.status >= 500 and resp.status not in upstream_failure_codes
 
 

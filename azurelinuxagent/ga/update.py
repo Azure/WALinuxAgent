@@ -650,7 +650,9 @@ class UpdateHandler(object):  # pylint: disable=R0902
                 logger.warn(u"Purging {0} raised exception: {1}", agent_path, ustr(e))
         return
 
-    def _set_agents(self, agents=[]):  # pylint: disable=W0102,R1711
+    def _set_agents(self, agents=None):  # pylint: disable=R1711
+        if agents is None:
+            agents = []
         self.agents = agents
         self.agents.sort(key=lambda agent: agent.version, reverse=True)
         return

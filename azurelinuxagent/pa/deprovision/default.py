@@ -25,9 +25,7 @@ import sys
 
 import azurelinuxagent.common.conf as conf
 import azurelinuxagent.common.utils.fileutil as fileutil
-import azurelinuxagent.common.utils.shellutil as shellutil # pylint: disable=W0611
 from azurelinuxagent.common import version
-
 from azurelinuxagent.common.exception import ProtocolError
 from azurelinuxagent.common.osutil import get_osutil
 from azurelinuxagent.common.protocol.util import get_protocol_util
@@ -43,14 +41,20 @@ def read_input(message):
         # Suppress it here.
         return raw_input(message) # pylint: disable=E0602
 
+
 class DeprovisionAction(object): # pylint: disable=R0903
-    def __init__(self, func, args=[], kwargs={}): # pylint: disable=W0102
+    def __init__(self, func, args=None, kwargs=None):
+        if args is None:
+            args = []
+        if kwargs is None:
+            kwargs = {}
         self.func = func
         self.args = args
         self.kwargs = kwargs
 
     def invoke(self):
         self.func(*self.args, **self.kwargs)
+
 
 class DeprovisionHandler(object):
     def __init__(self):
@@ -79,7 +83,6 @@ class DeprovisionHandler(object):
                          "will be deleted.").format(username))
         actions.append(DeprovisionAction(self.osutil.del_account, 
                                          [username]))
-
 
     def regen_ssh_host_key(self, warnings, actions):
         warnings.append("WARNING! All SSH host key pairs will be deleted.")

@@ -224,11 +224,13 @@ def get_all_files(root_path):
     return result
 
 
-def clean_ioerror(e, paths=[]): # pylint: disable=W0102,C0103
+def clean_ioerror(e, paths=None): # pylint: disable=C0103
     """
     Clean-up possibly bad files and directories after an IO error.
     The code ignores *all* errors since disk state may be unhealthy.
     """
+    if paths is None:
+        paths = []
     if isinstance(e, IOError) and e.errno in KNOWN_IOERRORS:
         for path in paths:
             if path is None:

@@ -179,8 +179,8 @@ class CentOSRDMAHandler(RDMAHandler):
             logger.info("RDMA: kernel module is loaded")
 
     @staticmethod
-    def get_file_by_pattern(list, pattern): # pylint: disable=W0622
-        for l in list: # pylint: disable=C0103
+    def get_file_by_pattern(file_list, pattern):
+        for l in file_list: # pylint: disable=C0103
             if re.match(pattern, l):
                 return l
         return None

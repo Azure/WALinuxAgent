@@ -41,8 +41,9 @@ from tests.tools import Mock, MagicMock, patch, AgentTestCase, clear_singleton_i
 def random_generator(size=6, chars=string.ascii_uppercase + string.digits + string.ascii_lowercase):
     return ''.join(random.choice(chars) for x in range(size))
 
+
 @contextlib.contextmanager
-def _create_monitor_handler(enabled_operations=[], iterations=1): # pylint: disable=dangerous-default-value
+def _create_monitor_handler(enabled_operations=None, iterations=1):
     """
     Creates an instance of MonitorHandler that
         * Uses a mock_wire_protocol for network requests,
@@ -55,6 +56,9 @@ def _create_monitor_handler(enabled_operations=[], iterations=1): # pylint: disa
         * run_and_wait() - invokes run() and wait() on the MonitorHandler
 
     """
+    if enabled_operations is None:
+        enabled_operations = []
+
     def run(self):
         if len(enabled_operations) == 0 or self._name in enabled_operations: # pylint: disable=protected-access,len-as-condition
             run.original_definition(self)

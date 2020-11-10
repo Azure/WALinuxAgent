@@ -10,7 +10,6 @@
 # blacklisted-name<C0102>: (needs review) Used when the name is listed in the black list (unauthorized names).
 # cell-var-from-loop<W0640>: (hi-pri) A variable used in a closure is defined in a loop. This will result in all closures using the same value for the closed-over variable.
 # cyclic-import<R0401>: (hi-pri) Used when a cyclic import between two or more modules is detected.
-# dangerous-default-value<W0102>: (hi-pri) Used when a mutable value as list or dictionary is detected in a default value for an argument.
 # expression-not-assigned<W0106>: (hi-pri) Used when an expression that is not a function call is assigned to nothing.
 # duplicate-code<R0801>: (hi-pri) Indicates that a set of similar lines has been detected among multiple file. (also disabled globally)
 # function-redefined<E0102>: (hi-pri) Used when a function / class / method is redefined.
@@ -61,7 +60,6 @@
 
 # The source code suppresses the following error codes specifically for python3.4:
 
-# chained-comparison<R1716>: This message is emitted when pylint encounters boolean operation like"a < b and b < c", suggesting instead to refactor it to "a < b < c"
 # consider-using-in<R1714>: To check if a variable is equal to one of many values,combine the values into a tuple and check if the variable is contained "in" it instead of checking for equality against each of the values.
 # duplicate-string-formatting-argument<W1308>: (hi-pri) Used when we detect that a string formatting is repeating an argument instead of using named string arguments
 # implicit-str-concat-in-sequence<W1403>: (hi-pri) String literals are implicitly concatenated in a literal iterable definition : maybe a comma is missing ?
