@@ -265,10 +265,13 @@ class ExtHandlersHandler(object):
         self.ext_handlers = None
         self.last_etag = None
         self.log_report = False
-        self.log_etag = True
         self.log_process = False
 
         self.report_status_error_state = ErrorState()
+
+    def _incarnation_changed(self, etag):
+        # Skip processing if GoalState incarnation did not change
+        return self.last_etag != etag
 
     def run(self):
 
@@ -279,7 +282,8 @@ class ExtHandlersHandler(object):
             # Log status report success on new config
             self.log_report = True
 
-            if self._extension_processing_allowed():
+            if self._extension_processing_allowed() and self._incarnation_changed(etag):
+                logger.info("ProcessGoalState started [incarnation {0}]".format(etag))
                 self.handle_ext_handlers(etag)
                 self.last_etag = etag
 
@@ -374,8 +378,7 @@ class ExtHandlersHandler(object):
         return True
 
     def handle_ext_handlers(self, etag=None):
-        if self.ext_handlers.extHandlers is None or \
-                len(self.ext_handlers.extHandlers) == 0:  # pylint: disable=len-as-condition
+        if not self.ext_handlers.extHandlers:
             logger.verbose("No extension handler config found")
             return
 
@@ -384,7 +387,7 @@ class ExtHandlersHandler(object):
 
         self.ext_handlers.extHandlers.sort(key=operator.methodcaller('sort_key'))
         for ext_handler in self.ext_handlers.extHandlers:
-            self.handle_ext_handler(ext_handler, etag)
+            handler_success = self.handle_ext_handler(ext_handler, etag)
 
             # Wait for the extension installation until it is handled.
             # This is done for the install and enable. Not for the uninstallation.
@@ -392,60 +395,82 @@ class ExtHandlersHandler(object):
             # Otherwise, skip the rest of the extension installation.
             dep_level = ext_handler.sort_key()
             if 0 <= dep_level < max_dep_level:
-                if not self.wait_for_handler_successful_completion(ext_handler, wait_until):
+
+                # Do no wait for extension status if the handler failed
+                if not handler_success:
+                    msg = "Handler: {0} processing failed, will skip processing the rest of the extensions".format(
+                        ext_handler.name)
+                    add_event(AGENT_NAME,
+                              version=CURRENT_VERSION,
+                              op=WALAEventOperation.ExtensionProcessing,
+                              is_success=False,
+                              message=msg,
+                              log_event=True)
+                    break
+
+                if not self.wait_for_handler_completion(ext_handler, wait_until):
                     logger.warn("An extension failed or timed out, will skip processing the rest of the extensions")
                     break
 
-    def wait_for_handler_successful_completion(self, ext_handler, wait_until):
-        '''
+    def wait_for_handler_completion(self, ext_handler, wait_until):
+        """
         Check the status of the extension being handled.
         Wait until it has a terminal state or times out.
         Return True if it is handled successfully. False if not.
-        '''
-        handler_i = ExtHandlerInstance(ext_handler, self.protocol)
-        for ext in ext_handler.properties.extensions:
-            ext_completed, status = handler_i.is_ext_handling_complete(ext)
+        """
 
-            # Keep polling for the extension status until it becomes success or times out
-            while not ext_completed and datetime.datetime.utcnow() <= wait_until:
-                time.sleep(5)
-                ext_completed, status = handler_i.is_ext_handling_complete(ext)
+        def _report_error_event_and_return_false(error_message):
+            # In case of error, return False so that the processing of dependent extensions can be skipped (fail fast)
+            add_event(AGENT_NAME,
+                      version=CURRENT_VERSION,
+                      op=WALAEventOperation.ExtensionProcessing,
+                      is_success=False,
+                      message=error_message,
+                      log_event=True)
+            return False
 
-            # In case of timeout or terminal error state, we log it and return false
-            # so that the extensions waiting on this one can be skipped processing
-            if datetime.datetime.utcnow() > wait_until:
-                msg = "Extension {0} did not reach a terminal state within the allowed timeout. Last status was {1}".format(
-                    ext.name, status)
-                logger.warn(msg)
-                add_event(AGENT_NAME,
-                          version=CURRENT_VERSION,
-                          op=WALAEventOperation.ExtensionProcessing,
-                          is_success=False,
-                          message=msg)
-                return False
+        try:
+            handler_i = ExtHandlerInstance(ext_handler, self.protocol)
 
-            if status != ValidHandlerStatus.success:
-                msg = "Extension {0} did not succeed. Status was {1}".format(ext.name, status)
-                logger.warn(msg)
-                add_event(AGENT_NAME,
-                          version=CURRENT_VERSION,
-                          op=WALAEventOperation.ExtensionProcessing,
-                          is_success=False,
-                          message=msg)
-                return False
+            # Loop through all settings of the Handler and verify all extensions reported success status in status file
+            # Currently, we only support 1 extension (runtime-settings) per handler
+            ext_completed, status = False, None
+            for ext in ext_handler.properties.extensions:
+
+                # Keep polling for the extension status until it succeeds or times out
+                while datetime.datetime.utcnow() <= wait_until:
+                    ext_completed, status = handler_i.is_ext_handling_complete(ext)
+                    if ext_completed:
+                        break
+                    time.sleep(5)
+
+                # In case of timeout or terminal error state, we log it and return false
+                # Incase extension reported status at the last sec, we should prioritize reporting status over timeout
+                if not ext_completed and datetime.datetime.utcnow() > wait_until:
+                    msg = "Extension {0} did not reach a terminal state within the allowed timeout. Last status was {1}".format(
+                        ext.name, status)
+                    return _report_error_event_and_return_false(msg)
+
+                if status != ValidHandlerStatus.success:
+                    msg = "Extension {0} did not succeed. Status was {1}".format(ext.name, status)
+                    return _report_error_event_and_return_false(msg)
+
+        except Exception as error:
+            msg = "Failed to wait for Handler completion due to unknown error. Marking the extension as failed: {0}, {1}".format(
+                ustr(error), traceback.format_exc())
+            return _report_error_event_and_return_false(msg)
 
         return True
 
     def handle_ext_handler(self, ext_handler, etag):
-        ext_handler_i = ExtHandlerInstance(ext_handler, self.protocol)
-
+        """
+        Execute the requested command for the handler and return if success
+        :param ext_handler: The ExtHandler to execute the command on
+        :param etag: Current incarnation of the GoalState
+        :return: True if the operation was successful, False if not
+        """
         try:
-            if self.last_etag == etag:
-                if self.log_etag:
-                    ext_handler_i.logger.verbose("Incarnation {0} did not change, not processing GoalState", etag)
-                    self.log_etag = False
-                return
-
+            ext_handler_i = ExtHandlerInstance(ext_handler, self.protocol)
             state = ext_handler.properties.state
 
             # The Guest Agent currently only supports 1 installed version per extension on the VM.
@@ -453,15 +478,13 @@ class ExtHandlersHandler(object):
             # we should let it go through even if the installed version doesnt exist in Handler manifest (PIR) anymore.
             # If target state is enabled and version not found in manifest, do not process the extension.
             if ext_handler_i.decide_version(target_state=state) is None and state == ExtensionRequestedState.Enabled:
-                version = ext_handler_i.ext_handler.properties.version  # pylint: disable=W0621
+                handler_version = ext_handler_i.ext_handler.properties.version
                 name = ext_handler_i.ext_handler.name
-                err_msg = "Unable to find version {0} in manifest for extension {1}".format(version, name)
+                err_msg = "Unable to find version {0} in manifest for extension {1}".format(handler_version, name)
                 ext_handler_i.set_operation(WALAEventOperation.Download)
                 ext_handler_i.set_handler_status(message=ustr(err_msg), code=-1)
                 ext_handler_i.report_event(message=ustr(err_msg), is_success=False)
-                return
-
-            self.log_etag = True
+                return False
 
             ext_handler_i.logger.info("Target handler state: {0} [incarnation {1}]", state, etag)
             if state == ExtensionRequestedState.Enabled:
@@ -473,15 +496,20 @@ class ExtHandlersHandler(object):
             else:
                 message = u"Unknown ext handler state:{0}".format(state)
                 raise ExtensionError(message)
-        except ExtensionUpdateError as e:  # pylint: disable=C0103
+
+            return True
+
+        except ExtensionUpdateError as error:
             # Not reporting the error as it has already been reported from the old version
-            self.handle_ext_handler_error(ext_handler_i, e, e.code, report_telemetry_event=False)
-        except ExtensionDownloadError as e:  # pylint: disable=C0103
-            self.handle_ext_handler_download_error(ext_handler_i, e, e.code)
-        except ExtensionError as e:  # pylint: disable=C0103
-            self.handle_ext_handler_error(ext_handler_i, e, e.code)
-        except Exception as e:  # pylint: disable=C0103
-            self.handle_ext_handler_error(ext_handler_i, e)
+            self.handle_ext_handler_error(ext_handler_i, error, error.code, report_telemetry_event=False)
+        except ExtensionDownloadError as error:
+            self.handle_ext_handler_download_error(ext_handler_i, error, error.code)
+        except ExtensionError as error:
+            self.handle_ext_handler_error(ext_handler_i, error, error.code)
+        except Exception as error:
+            self.handle_ext_handler_error(ext_handler_i, error)
+
+        return False
 
     def handle_ext_handler_error(self, ext_handler_i, e, code=-1, report_telemetry_event=True):  # pylint: disable=C0103
         msg = ustr(e)
@@ -1076,26 +1104,48 @@ class ExtHandlerInstance(object):  # pylint: disable=R0904
                              "Skip install during upgrade.")
         self.set_handler_state(ExtHandlerState.Installed)
 
-    def _get_largest_seq_no(self):
+    def _get_last_modified_seq_no_from_config_files(self):
+        """
+        The sequence number is not guaranteed to always be strictly increasing. To ensure we always get the latest one,
+        fetching the sequence number from config file that was last modified (and not necessarily the largest).
+        :return: Last modified Sequence number or -1 on errors
+
+        Note: This function is going to be deprecated soon. We should only rely on seqNo from GoalState rather than file system.
+        """
         seq_no = -1
-        conf_dir = self.get_conf_dir()
-        for item in os.listdir(conf_dir):
-            item_path = os.path.join(conf_dir, item)
-            if os.path.isfile(item_path):
+
+        try:
+            largest_modified_time = 0
+            conf_dir = self.get_conf_dir()
+            for item in os.listdir(conf_dir):
+                item_path = os.path.join(conf_dir, item)
+                if not os.path.isfile(item_path):
+                    continue
                 try:
                     separator = item.rfind(".")
                     if separator > 0 and item[separator + 1:] == 'settings':
                         curr_seq_no = int(item.split('.')[0])
-                        if curr_seq_no > seq_no:
+                        curr_modified_time = os.path.getmtime(item_path)
+                        if curr_modified_time > largest_modified_time:
                             seq_no = curr_seq_no
+                            largest_modified_time = curr_modified_time
                 except (ValueError, IndexError, TypeError):
                     self.logger.verbose("Failed to parse file name: {0}", item)
                     continue
+        except Exception as error:
+            logger.verbose("Error fetching sequence number from config files: {0}".format(ustr(error)))
+            seq_no = -1
+
         return seq_no
 
     def get_status_file_path(self, extension=None):
         path = None
-        seq_no = self._get_largest_seq_no()
+        # Todo: Remove check on filesystem for fetching sequence number (legacy behaviour).
+        # We should technically only fetch the sequence number from GoalState and not rely on the filesystem at all,
+        # But since we still have Kusto data from the operation below (~0.000065% VMs are still reporting
+        # WALAEventOperation.SequenceNumberMismatch), keeping this as is with modified logic for fetching
+        # sequence number from filesystem. Based on the new data we will eventually phase this out.
+        seq_no = self._get_last_modified_seq_no_from_config_files()
 
         # Issue 1116: use the sequence number from goal state where possible
         if extension is not None and extension.sequenceNumber is not None:
@@ -1189,13 +1239,15 @@ class ExtHandlerInstance(object):  # pylint: disable=R0904
 
     def get_ext_handling_status(self, ext):
         seq_no, ext_status_file = self.get_status_file_path(ext)
+
+        # This is legacy scenario for cases when no extension settings is available
         if seq_no < 0 or ext_status_file is None:
             return None
 
         # Missing status file is considered a non-terminal state here
         # so that extension sequencing can wait until it becomes existing
         if not os.path.exists(ext_status_file):
-            status = "warning"
+            status = ValidHandlerStatus.warning
         else:
             ext_status = self.collect_ext_status(ext)
             status = ext_status.status if ext_status is not None else None
@@ -1207,14 +1259,14 @@ class ExtHandlerInstance(object):  # pylint: disable=R0904
 
         # when seq < 0 (i.e. no new user settings), the handling is complete and return None status
         if status is None:
-            return (True, None)
+            return True, None
 
         # If not in terminal state, it is incomplete
         if status not in _EXTENSION_TERMINAL_STATUSES:
-            return (False, status)
+            return False, status
 
         # Extension completed, return its status
-        return (True, status)
+        return True, status
 
     def report_ext_status(self):
         active_exts = []
@@ -1424,9 +1476,9 @@ class ExtHandlerInstance(object):  # pylint: disable=R0904
                 self.logger.error("Failed to create JSON document of handler status for {0} version {1}".format(
                     self.ext_handler.name,
                     self.ext_handler.properties.version))
-        except (IOError, ValueError, ProtocolError) as e:  # pylint: disable=C0103
-            fileutil.clean_ioerror(e, paths=[status_file])
-            self.logger.error("Failed to save handler status: {0}, {1}", ustr(e), traceback.format_exc())
+        except (IOError, ValueError, ProtocolError) as error:
+            fileutil.clean_ioerror(error, paths=[status_file])
+            self.logger.error("Failed to save handler status: {0}, {1}", ustr(error), traceback.format_exc())
 
     def get_handler_status(self):
         state_dir = self.get_conf_dir()
@@ -1441,11 +1493,11 @@ class ExtHandlerInstance(object):  # pylint: disable=R0904
             handler_status = ExtHandlerStatus()
             set_properties("ExtHandlerStatus", handler_status, data)
             return handler_status
-        except (IOError, ValueError) as e:  # pylint: disable=C0103
-            self.logger.error("Failed to get handler status: {0}", e)
-        except Exception as e:  # pylint: disable=C0103
+        except (IOError, ValueError) as error:
+            self.logger.error("Failed to get handler status: {0}", error)
+        except Exception as error:
             error_msg = "Failed to get handler status message: {0}.\n Contents of file: {1}".format(
-                ustr(e), handler_status_contents).replace('"', '\'')
+                ustr(error), handler_status_contents).replace('"', '\'')
             add_periodic(
                 delta=logger.EVERY_HOUR,
                 name=AGENT_NAME,
@@ -1454,6 +1506,8 @@ class ExtHandlerInstance(object):  # pylint: disable=R0904
                 is_success=False,
                 message=error_msg)
             raise
+
+        return None
 
     def get_extension_package_zipfile_name(self):
         return "{0}__{1}{2}".format(self.ext_handler.name,
