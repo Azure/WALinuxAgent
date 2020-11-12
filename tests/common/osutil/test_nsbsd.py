@@ -14,11 +14,12 @@
 #
 # Requires Python 2.6+ and Openssl 1.0+
 #
-from azurelinuxagent.common.utils.fileutil import read_file
+import unittest
+from os import path
+
 from azurelinuxagent.common.osutil.nsbsd import NSBSDOSUtil
+from azurelinuxagent.common.utils.fileutil import read_file
 from tests.tools import AgentTestCase, patch
-from os import path # pylint: disable=wrong-import-order
-import unittest # pylint: disable=wrong-import-order
 
 
 class TestNSBSDOSUtil(AgentTestCase):
@@ -34,12 +35,12 @@ class TestNSBSDOSUtil(AgentTestCase):
         with patch.object(NSBSDOSUtil, "resolver"):  # instantiating NSBSDOSUtil requires a resolver
             original_isfile = path.isfile
 
-            def mock_isfile(path): # pylint: disable=redefined-outer-name
+            def mock_isfile(path):  # pylint: disable=redefined-outer-name
                 return True if path == self.dhclient_pid_file else original_isfile(path)
 
             original_read_file = read_file
 
-            def mock_read_file(file, *args, **kwargs): # pylint: disable=redefined-builtin
+            def mock_read_file(file, *args, **kwargs):  # pylint: disable=redefined-builtin
                 return "123" if file == self.dhclient_pid_file else original_read_file(file, *args, **kwargs)
 
             with patch("os.path.isfile", mock_isfile):
@@ -55,7 +56,7 @@ class TestNSBSDOSUtil(AgentTestCase):
             #
             original_isfile = path.isfile
 
-            def mock_isfile(path): # pylint: disable=redefined-outer-name
+            def mock_isfile(path):  # pylint: disable=redefined-outer-name
                 return False if path == self.dhclient_pid_file else original_isfile(path)
 
             with patch("os.path.isfile", mock_isfile):
@@ -68,12 +69,12 @@ class TestNSBSDOSUtil(AgentTestCase):
             #
             original_isfile = path.isfile
 
-            def mock_isfile(path): # pylint: disable=redefined-outer-name,function-redefined
+            def mock_isfile(path):  # pylint: disable=redefined-outer-name,function-redefined
                 return True if path == self.dhclient_pid_file else original_isfile(path)
 
             original_read_file = read_file
 
-            def mock_read_file(file, *args, **kwargs): # pylint: disable=redefined-builtin
+            def mock_read_file(file, *args, **kwargs):  # pylint: disable=redefined-builtin
                 return "" if file == self.dhclient_pid_file else original_read_file(file, *args, **kwargs)
 
             with patch("os.path.isfile", mock_isfile):

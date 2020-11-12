@@ -50,7 +50,6 @@ class CGroupConfigurator(object):
 
         # too-many-branches<R0912> Disabled: branches are sequential, not nested
         def initialize(self):  # pylint: disable=R0912
-            # pylint: disable=too-many-locals
             try:
                 if self._initialized:
                     return
@@ -335,7 +334,7 @@ class CGroupConfigurator(object):
             #
             r"^ifdown .+ && ifup .+",
         ]
-        for p in patterns: # pylint: disable=C0103
+        for p in patterns:  # pylint: disable=C0103
             if re.match(p, command_line) is not None:
                 return True
         return False

@@ -14,15 +14,16 @@
 #
 # Requires Python 2.6+ and Openssl 1.0+
 #
+import os
+import shutil
+import subprocess
+import tempfile
+
 from azurelinuxagent.common.exception import ExtensionError, ExtensionErrorCodes
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.utils.extensionprocessutil import format_stdout_stderr, read_output, \
     wait_for_process_completion_or_timeout, handle_process_completion
 from tests.tools import AgentTestCase, patch
-import os # pylint: disable=wrong-import-order
-import shutil # pylint: disable=wrong-import-order
-import subprocess # pylint: disable=wrong-import-order
-import tempfile # pylint: disable=wrong-import-order
 
 
 class TestProcessUtils(AgentTestCase):
@@ -54,7 +55,7 @@ class TestProcessUtils(AgentTestCase):
 
     def test_wait_for_process_completion_or_timeout_should_kill_process_on_timeout(self):
         timeout = 5
-        process = subprocess.Popen( # pylint: disable=subprocess-popen-preexec-fn
+        process = subprocess.Popen(  # pylint: disable=subprocess-popen-preexec-fn
             "sleep 1m",
             shell=True,
             cwd=self.tmp_dir,
@@ -93,7 +94,7 @@ class TestProcessUtils(AgentTestCase):
         command = "echo 'dummy stdout' && 1>&2 echo 'dummy stderr'"
         with tempfile.TemporaryFile(dir=self.tmp_dir, mode="w+b") as stdout:
             with tempfile.TemporaryFile(dir=self.tmp_dir, mode="w+b") as stderr:
-                process = subprocess.Popen(command, # pylint: disable=subprocess-popen-preexec-fn
+                process = subprocess.Popen(command,  # pylint: disable=subprocess-popen-preexec-fn
                                            shell=True,
                                            cwd=self.tmp_dir,
                                            env={},
@@ -118,7 +119,7 @@ class TestProcessUtils(AgentTestCase):
             with tempfile.TemporaryFile(dir=self.tmp_dir, mode="w+b") as stderr:
                 with patch('time.sleep') as mock_sleep:
                     with self.assertRaises(ExtensionError) as context_manager:
-                        process = subprocess.Popen(command, # pylint: disable=subprocess-popen-preexec-fn
+                        process = subprocess.Popen(command,  # pylint: disable=subprocess-popen-preexec-fn
                                                    shell=True,
                                                    cwd=self.tmp_dir,
                                                    env={},
@@ -148,7 +149,7 @@ class TestProcessUtils(AgentTestCase):
         with tempfile.TemporaryFile(dir=self.tmp_dir, mode="w+b") as stdout:
             with tempfile.TemporaryFile(dir=self.tmp_dir, mode="w+b") as stderr:
                 with self.assertRaises(ExtensionError) as context_manager:
-                    process = subprocess.Popen(command, # pylint: disable=subprocess-popen-preexec-fn
+                    process = subprocess.Popen(command,  # pylint: disable=subprocess-popen-preexec-fn
                                                shell=True,
                                                cwd=self.tmp_dir,
                                                env={},

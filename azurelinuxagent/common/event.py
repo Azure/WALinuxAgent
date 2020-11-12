@@ -38,7 +38,6 @@ from azurelinuxagent.common.telemetryevent import TelemetryEventParam, Telemetry
 from azurelinuxagent.common.utils import fileutil, textutil
 from azurelinuxagent.common.utils.textutil import parse_doc, findall, find, getattrib
 from azurelinuxagent.common.version import CURRENT_VERSION, CURRENT_AGENT, AGENT_NAME, DISTRO_NAME, DISTRO_VERSION, DISTRO_CODE_NAME, AGENT_EXECUTION_MODE
-from azurelinuxagent.common.telemetryevent import TelemetryEventList
 from azurelinuxagent.common.protocol.imds import get_imds_client
 
 EVENTS_DIRECTORY = "events"
@@ -66,7 +65,7 @@ def send_logs_to_telemetry():
     return SEND_LOGS_TO_TELEMETRY
 
 
-class WALAEventOperation: # pylint: disable=R0903,no-init
+class WALAEventOperation:  # pylint: disable=R0903,no-init
     ActivateResourceDisk = "ActivateResourceDisk"
     AgentBlacklisted = "AgentBlacklisted"
     AgentEnabled = "AgentEnabled"
@@ -145,10 +144,10 @@ class EventStatus(object):
         self._status = {}
         self._save()
 
-    def event_marked(self, name, version, op): # pylint: disable=C0103
+    def event_marked(self, name, version, op):  # pylint: disable=C0103
         return self._event_name(name, version, op) in self._status
 
-    def event_succeeded(self, name, version, op): # pylint: disable=C0103
+    def event_succeeded(self, name, version, op):  # pylint: disable=C0103
         event = self._event_name(name, version, op)
         if event not in self._status:
             return True
@@ -158,29 +157,29 @@ class EventStatus(object):
         self._path = os.path.join(status_dir, EventStatus.EVENT_STATUS_FILE)
         self._load()
 
-    def mark_event_status(self, name, version, op, status): # pylint: disable=C0103
+    def mark_event_status(self, name, version, op, status):  # pylint: disable=C0103
         event = self._event_name(name, version, op)
         self._status[event] = (status is True)
         self._save()
 
-    def _event_name(self, name, version, op): # pylint: disable=C0103
+    def _event_name(self, name, version, op):  # pylint: disable=C0103
         return "{0}-{1}-{2}".format(name, version, op)
 
     def _load(self):
         try:
             self._status = {}
             if os.path.isfile(self._path):
-                with open(self._path, 'r') as f: # pylint: disable=C0103
+                with open(self._path, 'r') as f:  # pylint: disable=C0103
                     self._status = json.load(f)
-        except Exception as e: # pylint: disable=C0103
+        except Exception as e:  # pylint: disable=C0103
             logger.warn("Exception occurred loading event status: {0}".format(e))
             self._status = {}
 
     def _save(self):
         try:
-            with open(self._path, 'w') as f: # pylint: disable=C0103
+            with open(self._path, 'w') as f:  # pylint: disable=C0103
                 json.dump(self._status, f)
-        except Exception as e: # pylint: disable=C0103
+        except Exception as e:  # pylint: disable=C0103
             logger.warn("Exception occurred saving event status: {0}".format(e))
 
 
@@ -204,7 +203,7 @@ def parse_event(data_str):
             return parse_json_event(data_str)
         except ValueError:
             return parse_xml_event(data_str)
-    except Exception as e: # pylint: disable=C0103
+    except Exception as e:  # pylint: disable=C0103
         raise EventError("Error parsing event: {0}".format(ustr(e)))
 
 
@@ -233,11 +232,11 @@ def parse_xml_event(data_str):
             event.parameters.append(parse_xml_param(param_node))
         event.file_type = "xml"
         return event
-    except Exception as e: # pylint: disable=C0103
+    except Exception as e:  # pylint: disable=C0103
         raise ValueError(ustr(e))
 
 
-def _encode_message(op, message): # pylint: disable=C0103
+def _encode_message(op, message):  # pylint: disable=C0103
     """
     Gzip and base64 encode a message based on the operation.
 
@@ -258,7 +257,7 @@ def _encode_message(op, message): # pylint: disable=C0103
     :return: gzip'ed and base64 encoded message, or the original message
     """
 
-    if len(message) == 0: # pylint: disable=len-as-condition
+    if len(message) == 0:  # pylint: disable=len-as-condition
         return message
 
     if op not in SHOULD_ENCODE_MESSAGE_OP:
@@ -272,14 +271,65 @@ def _encode_message(op, message): # pylint: disable=C0103
         return "<>"
 
 
-def _log_event(name, op, message, duration, is_success=True): # pylint: disable=C0103
-    global _EVENT_MSG # pylint: disable=W0603
+def _log_event(name, op, message, duration, is_success=True):  # pylint: disable=C0103
+    global _EVENT_MSG  # pylint: disable=W0603
 
     message = _encode_message(op, message)
     if not is_success:
         logger.error(_EVENT_MSG, name, op, message, duration)
     else:
         logger.info(_EVENT_MSG, name, op, message, duration)
+
+
+class CollectOrReportEventDebugInfo(object):
+    """
+    This class is used for capturing and reporting debug info that is captured during event collection and
+    reporting to wireserver.
+    It captures the count of unicode errors and any unexpected errors and also a subset of errors with stacks to help
+    with debugging any potential issues.
+    """
+    __MAX_ERRORS_TO_REPORT = 5
+    OP_REPORT = "Report"
+    OP_COLLECT = "Collect"
+
+    def __init__(self, operation=OP_REPORT):
+        self.__unicode_error_count = 0
+        self.__unicode_errors = set()
+        self.__op_error_count = 0
+        self.__op_errors = set()
+
+        if operation == self.OP_REPORT:
+            self.__unicode_error_event = WALAEventOperation.ReportEventUnicodeErrors
+            self.__op_errors_event = WALAEventOperation.ReportEventErrors
+        elif operation == self.OP_COLLECT:
+            self.__unicode_error_event = WALAEventOperation.CollectEventUnicodeErrors
+            self.__op_errors_event = WALAEventOperation.CollectEventErrors
+
+    def report_debug_info(self):
+
+        def report_dropped_events_error(count, errors, operation_name):
+            err_msg_format = "DroppedEventsCount: {0}\nReasons (first {1} errors): {2}"
+            if count > 0:
+                add_event(op=operation_name,
+                          message=err_msg_format.format(count, CollectOrReportEventDebugInfo.__MAX_ERRORS_TO_REPORT, ', '.join(errors)),
+                          is_success=False)
+
+        report_dropped_events_error(self.__op_error_count, self.__op_errors, self.__op_errors_event)
+        report_dropped_events_error(self.__unicode_error_count, self.__unicode_errors, self.__unicode_error_event)
+
+    @staticmethod
+    def _update_errors_and_get_count(error_count, errors, error):
+        error_count += 1
+        if len(errors) < CollectOrReportEventDebugInfo.__MAX_ERRORS_TO_REPORT:
+            errors.add("{0}: {1}".format(ustr(error), traceback.format_exc()))
+        return error_count
+
+    def update_unicode_error(self, unicode_err):
+        self.__unicode_error_count = self._update_errors_and_get_count(self.__unicode_error_count, self.__unicode_errors,
+                                                                       unicode_err)
+
+    def update_op_error(self, op_err):
+        self.__op_error_count = self._update_errors_and_get_count(self.__op_error_count, self.__op_errors, op_err)
 
 
 class EventLogger(object):
@@ -335,7 +385,7 @@ class EventLogger(object):
     def _get_ram(osutil):
         try:
             return osutil.get_total_mem()
-        except OSUtilError as e: # pylint: disable=C0103
+        except OSUtilError as e:  # pylint: disable=C0103
             logger.warn("Failed to get RAM info; will be missing from telemetry: {0}", ustr(e))
         return 0
 
@@ -343,7 +393,7 @@ class EventLogger(object):
     def _get_processors(osutil):
         try:
             return osutil.get_processor_cores()
-        except OSUtilError as e: # pylint: disable=C0103
+        except OSUtilError as e:  # pylint: disable=C0103
             logger.warn("Failed to get Processors info; will be missing from telemetry: {0}", ustr(e))
         return 0
 
@@ -353,7 +403,7 @@ class EventLogger(object):
         """
         # create an index of the event parameters for faster updates
         parameters = {}
-        for p in self._common_parameters: # pylint: disable=C0103
+        for p in self._common_parameters:  # pylint: disable=C0103
             parameters[p.name] = p
 
         try:
@@ -361,7 +411,7 @@ class EventLogger(object):
             parameters[CommonTelemetryEventSchema.TenantName].value = vminfo.tenantName
             parameters[CommonTelemetryEventSchema.RoleName].value = vminfo.roleName
             parameters[CommonTelemetryEventSchema.RoleInstanceName].value = vminfo.roleInstanceName
-        except Exception as e: # pylint: disable=C0103
+        except Exception as e:  # pylint: disable=C0103
             logger.warn("Failed to get VM info from goal state; will be missing from telemetry: {0}", ustr(e))
 
         try:
@@ -372,7 +422,7 @@ class EventLogger(object):
             parameters[CommonTelemetryEventSchema.ResourceGroupName].value = imds_info.resourceGroupName
             parameters[CommonTelemetryEventSchema.VMId].value = imds_info.vmId
             parameters[CommonTelemetryEventSchema.ImageOrigin].value = int(imds_info.image_origin)
-        except Exception as e: # pylint: disable=C0103
+        except Exception as e:  # pylint: disable=C0103
             logger.warn("Failed to get IMDS info; will be missing from telemetry: {0}", ustr(e))
 
     def save_event(self, data):
@@ -382,7 +432,7 @@ class EventLogger(object):
 
         try:
             fileutil.mkdir(self.event_dir, mode=0o700)
-        except (IOError, OSError) as e: # pylint: disable=C0103
+        except (IOError, OSError) as e:  # pylint: disable=C0103
             msg = "Failed to create events folder {0}. Error: {1}".format(self.event_dir, ustr(e))
             raise EventError(msg)
 
@@ -396,7 +446,7 @@ class EventLogger(object):
                 oldest_files = existing_events[:-999]
                 for event_file in oldest_files:
                     os.remove(os.path.join(self.event_dir, event_file))
-        except (IOError, OSError) as e: # pylint: disable=C0103
+        except (IOError, OSError) as e:  # pylint: disable=C0103
             msg = "Failed to remove old events from events folder {0}. Error: {1}".format(self.event_dir, ustr(e))
             raise EventError(msg)
 
@@ -406,27 +456,27 @@ class EventLogger(object):
             with open(filename + ".tmp", 'wb+') as hfile:
                 hfile.write(data.encode("utf-8"))
             os.rename(filename + ".tmp", filename + AGENT_EVENT_FILE_EXTENSION)
-        except (IOError, OSError) as e: # pylint: disable=C0103
+        except (IOError, OSError) as e:  # pylint: disable=C0103
             msg = "Failed to write events to file: {0}".format(e)
             raise EventError(msg)
 
     def reset_periodic(self):
         self.periodic_events = {}
 
-    def is_period_elapsed(self, delta, h): # pylint: disable=C0103
+    def is_period_elapsed(self, delta, h):  # pylint: disable=C0103
         return h not in self.periodic_events or \
             (self.periodic_events[h] + delta) <= datetime.now()
 
-    def add_periodic(self, delta, name, op=WALAEventOperation.Unknown, is_success=True, duration=0, # pylint: disable=R0913,C0103
+    def add_periodic(self, delta, name, op=WALAEventOperation.Unknown, is_success=True, duration=0,  # pylint: disable=R0913,C0103
                      version=str(CURRENT_VERSION), message="", log_event=True, force=False):
-        h = hash(name + op + ustr(is_success) + message) # pylint: disable=C0103
+        h = hash(name + op + ustr(is_success) + message)  # pylint: disable=C0103
 
         if force or self.is_period_elapsed(delta, h):
             self.add_event(name, op=op, is_success=is_success, duration=duration,
                            version=version, message=message, log_event=log_event)
             self.periodic_events[h] = datetime.now()
 
-    def add_event(self, name, op=WALAEventOperation.Unknown, is_success=True, duration=0, version=str(CURRENT_VERSION), # pylint: disable=R0913,C0103
+    def add_event(self, name, op=WALAEventOperation.Unknown, is_success=True, duration=0, version=str(CURRENT_VERSION),  # pylint: disable=R0913,C0103
                   message="", log_event=True):
 
         if (not is_success) and log_event:
@@ -444,7 +494,7 @@ class EventLogger(object):
         data = get_properties(event)
         try:
             self.save_event(json.dumps(data))
-        except EventError as e: # pylint: disable=C0103
+        except EventError as e:  # pylint: disable=C0103
             logger.periodic_error(logger.EVERY_FIFTEEN_MINUTES, "[PERIODIC] {0}".format(ustr(e)))
 
     def add_log_event(self, level, message):
@@ -462,7 +512,7 @@ class EventLogger(object):
         except EventError:
             pass
 
-    def add_metric(self, category, counter, instance, value, log_event=False): # pylint: disable=R0913
+    def add_metric(self, category, counter, instance, value, log_event=False):  # pylint: disable=R0913
         """
         Create and save an event which contains a telemetry event.
 
@@ -473,7 +523,6 @@ class EventLogger(object):
         :param bool log_event: If true, log the collected metric in the agent log
         """
         if log_event:
-            from azurelinuxagent.common.version import AGENT_NAME # pylint: disable=W0404,W0621
             message = "Metric {0}/{1} [{2}] = {3}".format(category, counter, instance, value)
             _log_event(AGENT_NAME, "METRIC", message, 0)
 
@@ -487,7 +536,7 @@ class EventLogger(object):
         data = get_properties(event)
         try:
             self.save_event(json.dumps(data))
-        except EventError as e: # pylint: disable=C0103
+        except EventError as e:  # pylint: disable=C0103
             logger.periodic_error(logger.EVERY_FIFTEEN_MINUTES, "[PERIODIC] {0}".format(ustr(e)))
 
     @staticmethod
@@ -521,12 +570,12 @@ class EventLogger(object):
 
         # Parsing the log messages containing levels in it
         extract_level_message = log_level_format_parser.search(message)
-        if extract_level_message: # pylint: disable=R1705
+        if extract_level_message:  # pylint: disable=R1705
             return extract_level_message.group(2)  # The message bit
         else:
             # Parsing the log messages without levels in it.
             extract_message = log_format_parser.search(message)
-            if extract_message: # pylint: disable=R1705
+            if extract_message:  # pylint: disable=R1705
                 return extract_message.group(1)  # The message bit
             else:
                 return message
@@ -553,121 +602,6 @@ class EventLogger(object):
         event.parameters.extend(common_params)
         event.parameters.extend(self._common_parameters)
 
-    @staticmethod
-    def _trim_extension_event_parameters(event):
-        """
-        This method is called for extension events before they are sent out. Per the agreement with extension
-        publishers, the parameters that belong to extensions and will be reported intact are Name, Version, Operation,
-        OperationSuccess, Message, and Duration. Since there is nothing preventing extensions to instantiate other
-        fields (which belong to the agent), we call this method to ensure the rest of the parameters are trimmed since
-        they will be replaced with values coming from the agent.
-        :param event: Extension event to trim.
-        :return: Trimmed extension event; containing only extension-specific parameters.
-        """
-        params_to_keep = dict().fromkeys([
-            GuestAgentExtensionEventsSchema.Name,
-            GuestAgentExtensionEventsSchema.Version,
-            GuestAgentExtensionEventsSchema.Operation,
-            GuestAgentExtensionEventsSchema.OperationSuccess,
-            GuestAgentExtensionEventsSchema.Message,
-            GuestAgentExtensionEventsSchema.Duration
-        ])
-        trimmed_params = []
-
-        for param in event.parameters:
-            if param.name in params_to_keep:
-                trimmed_params.append(param)
-
-        event.parameters = trimmed_params
-
-    @staticmethod
-    def report_dropped_events_error(count, errors, op, max_errors_to_report): # pylint: disable=C0103
-        err_msg_format = "DroppedEventsCount: {0}\nReasons (first {1} errors): {2}"
-        if count > 0:
-            add_event(op=op,
-                      message=err_msg_format.format(count, max_errors_to_report, ', '.join(errors)),
-                      is_success=False)
-
-    def collect_events(self): # pylint: disable=R0914
-        """
-        Retuns a list of events that need to be sent to the telemetry pipeline and deletes the corresponding files
-        from the events directory.
-        """
-        max_collect_errors_to_report = 5
-        event_list = TelemetryEventList()
-        event_directory_full_path = os.path.join(conf.get_lib_dir(), EVENTS_DIRECTORY)
-        event_files = os.listdir(event_directory_full_path)
-        unicode_error_count, unicode_errors = 0, []
-        collect_event_error_count, collect_event_errors = 0, []
-
-        for event_file in event_files:
-            try:
-                match = EVENT_FILE_REGEX.search(event_file)
-                if match is None:
-                    continue
-
-                event_file_path = os.path.join(event_directory_full_path, event_file)
-
-                try:
-                    logger.verbose("Processing event file: {0}", event_file_path)
-
-                    with open(event_file_path, "rb") as fd: # pylint: disable=C0103
-                        event_data = fd.read().decode("utf-8")
-
-                    event = parse_event(event_data)
-
-                    # "legacy" events are events produced by previous versions of the agent (<= 2.2.46) and extensions;
-                    # they do not include all the telemetry fields, so we add them here
-                    is_legacy_event = match.group('agent_event') is None
-
-                    if is_legacy_event:
-                        # We'll use the file creation time for the event's timestamp
-                        event_file_creation_time_epoch = os.path.getmtime(event_file_path)
-                        event_file_creation_time = datetime.fromtimestamp(event_file_creation_time_epoch)
-
-                        if event.is_extension_event():
-                            EventLogger._trim_extension_event_parameters(event)
-                            self.add_common_event_parameters(event, event_file_creation_time)
-                        else:
-                            self._update_legacy_agent_event(event, event_file_creation_time)
-
-                    event_list.events.append(event)
-                finally:
-                    os.remove(event_file_path)
-            except UnicodeError as e: # pylint: disable=C0103
-                unicode_error_count += 1
-                if len(unicode_errors) < max_collect_errors_to_report:
-                    unicode_errors.append(ustr(e))
-            except Exception as e: # pylint: disable=C0103
-                collect_event_error_count += 1
-                if len(collect_event_errors) < max_collect_errors_to_report:
-                    collect_event_errors.append(ustr(e))
-
-        EventLogger.report_dropped_events_error(collect_event_error_count, collect_event_errors,
-                                                WALAEventOperation.CollectEventErrors, max_collect_errors_to_report)
-        EventLogger.report_dropped_events_error(unicode_error_count, unicode_errors,
-                                                WALAEventOperation.CollectEventUnicodeErrors,
-                                                max_collect_errors_to_report)
-
-        return event_list
-
-    def _update_legacy_agent_event(self, event, event_creation_time):
-        # Ensure that if an agent event is missing a field from the schema defined since 2.2.47, the missing fields
-        # will be appended, ensuring the event schema is complete before the event is reported.
-        new_event = TelemetryEvent()
-        new_event.parameters = []
-        self.add_common_event_parameters(new_event, event_creation_time)
-
-        event_params = dict([(param.name, param.value) for param in event.parameters])
-        new_event_params = dict([(param.name, param.value) for param in new_event.parameters])
-
-        missing_params = set(new_event_params.keys()).difference(set(event_params.keys()))
-        params_to_add = []
-        for param_name in missing_params:
-            params_to_add.append(TelemetryEventParam(param_name, new_event_params[param_name]))
-
-        event.parameters.extend(params_to_add)
-
 
 __event_logger__ = EventLogger()
 
@@ -680,13 +614,12 @@ def elapsed_milliseconds(utc_start):
     if now < utc_start:
         return 0
 
-    d = now - utc_start # pylint: disable=C0103
+    d = now - utc_start  # pylint: disable=C0103
     return int(((d.days * 24 * 60 * 60 + d.seconds) * 1000) + \
                     (d.microseconds / 1000.0))
 
 
-def report_event(op, is_success=True, message='', log_event=True): # pylint: disable=C0103
-    from azurelinuxagent.common.version import AGENT_NAME, CURRENT_VERSION # pylint: disable=W0404,W0621
+def report_event(op, is_success=True, message='', log_event=True):  # pylint: disable=C0103
     add_event(AGENT_NAME,
               version=str(CURRENT_VERSION),
               is_success=is_success,
@@ -695,8 +628,7 @@ def report_event(op, is_success=True, message='', log_event=True): # pylint: dis
               log_event=log_event)
 
 
-def report_periodic(delta, op, is_success=True, message=''): # pylint: disable=C0103
-    from azurelinuxagent.common.version import AGENT_NAME, CURRENT_VERSION # pylint: disable=W0404,W0621
+def report_periodic(delta, op, is_success=True, message=''):  # pylint: disable=C0103
     add_periodic(delta, AGENT_NAME,
                  version=str(CURRENT_VERSION),
                  is_success=is_success,
@@ -704,7 +636,7 @@ def report_periodic(delta, op, is_success=True, message=''): # pylint: disable=C
                  op=op)
 
 
-def report_metric(category, counter, instance, value, log_event=False, reporter=__event_logger__): # pylint: disable=R0913
+def report_metric(category, counter, instance, value, log_event=False, reporter=__event_logger__):  # pylint: disable=R0913
     """
     Send a telemetry event reporting a single instance of a performance counter.
     :param str category: The category of the metric (cpu, memory, etc)
@@ -715,7 +647,6 @@ def report_metric(category, counter, instance, value, log_event=False, reporter=
     :param EventLogger reporter: The EventLogger instance to which metric events should be sent
     """
     if reporter.event_dir is None:
-        from azurelinuxagent.common.version import AGENT_NAME # pylint: disable=W0404,W0621
         logger.warn("Cannot report metric event -- Event reporter is not initialized.")
         message = "Metric {0}/{1} [{2}] = {3}".format(category, counter, instance, value)
         _log_event(AGENT_NAME, "METRIC", message, 0)
@@ -731,7 +662,7 @@ def initialize_event_logger_vminfo_common_parameters(protocol, reporter=__event_
     reporter.initialize_vminfo_common_parameters(protocol)
 
 
-def add_event(name=AGENT_NAME, op=WALAEventOperation.Unknown, is_success=True, duration=0, version=str(CURRENT_VERSION), # pylint: disable=R0913,C0103
+def add_event(name=AGENT_NAME, op=WALAEventOperation.Unknown, is_success=True, duration=0, version=str(CURRENT_VERSION),  # pylint: disable=R0913,C0103
               message="", log_event=True, reporter=__event_logger__):
     if reporter.event_dir is None:
         logger.warn("Cannot add event -- Event reporter is not initialized.")
@@ -764,7 +695,7 @@ def add_log_event(level, message, forced=False, reporter=__event_logger__):
         reporter.add_log_event(level, message)
 
 
-def add_periodic(delta, name, op=WALAEventOperation.Unknown, is_success=True, duration=0, version=str(CURRENT_VERSION), # pylint: disable=R0913,C0103
+def add_periodic(delta, name, op=WALAEventOperation.Unknown, is_success=True, duration=0, version=str(CURRENT_VERSION),  # pylint: disable=R0913,C0103
                  message="", log_event=True, force=False, reporter=__event_logger__):
     if reporter.event_dir is None:
         logger.warn("Cannot add periodic event -- Event reporter is not initialized.")
@@ -775,16 +706,12 @@ def add_periodic(delta, name, op=WALAEventOperation.Unknown, is_success=True, du
                           message=message, log_event=log_event, force=force)
 
 
-def collect_events(reporter=__event_logger__):
-    return reporter.collect_events()
-
-
-def mark_event_status(name, version, op, status): # pylint: disable=C0103
+def mark_event_status(name, version, op, status):  # pylint: disable=C0103
     if op in __event_status_operations__:
         __event_status__.mark_event_status(name, version, op, status)
 
 
-def should_emit_event(name, version, op, status): # pylint: disable=C0103
+def should_emit_event(name, version, op, status):  # pylint: disable=C0103
     return \
         op not in __event_status_operations__ or \
         __event_status__ is None or \

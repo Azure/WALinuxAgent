@@ -1,4 +1,4 @@
-# Copyright (c) Microsoft Corporation. All rights reserved. # pylint: disable=too-many-lines
+# Copyright (c) Microsoft Corporation. All rights reserved.  # pylint: disable=too-many-lines
 # Licensed under the Apache License.
 
 from __future__ import print_function
@@ -143,24 +143,28 @@ class UpdateTestCase(AgentTestCase):
         return get_agent_pkgs(in_dir=self.tmp_dir)
 
     def agent_versions(self):
-        v = [FlexibleVersion(AGENT_DIR_PATTERN.match(a).group(1)) for a in self.agent_dirs()] # pylint: disable=invalid-name
+        v = [FlexibleVersion(AGENT_DIR_PATTERN.match(a).group(1)) for a in self.agent_dirs()]  # pylint: disable=invalid-name
         v.sort(reverse=True)
         return v
 
-    def get_error_file(self, error_data=NO_ERROR): # pylint: disable=dangerous-default-value
-        fp = tempfile.NamedTemporaryFile(mode="w") # pylint: disable=invalid-name
+    def get_error_file(self, error_data=None):
+        if error_data is None:
+            error_data = NO_ERROR
+        fp = tempfile.NamedTemporaryFile(mode="w")  # pylint: disable=invalid-name
         json.dump(error_data if error_data is not None else NO_ERROR, fp)
         fp.seek(0)
         return fp
 
-    def create_error(self, error_data=NO_ERROR): # pylint: disable=dangerous-default-value
+    def create_error(self, error_data=None):
+        if error_data is None:
+            error_data = NO_ERROR
         with self.get_error_file(error_data) as path:
             err = GuestAgentError(path.name)
             err.load()
             return err
 
-    def copy_agents(self, *agents): # pylint: disable=useless-return
-        if len(agents) <= 0: # pylint: disable=len-as-condition
+    def copy_agents(self, *agents):  # pylint: disable=useless-return
+        if len(agents) <= 0:  # pylint: disable=len-as-condition
             agents = get_agent_pkgs()
         for agent in agents:
             shutil.copy(agent, self.tmp_dir)
@@ -171,7 +175,7 @@ class UpdateTestCase(AgentTestCase):
             path = os.path.join(self.tmp_dir, fileutil.trim_ext(agent, "zip"))
             zipfile.ZipFile(agent).extractall(path)
 
-    def prepare_agent(self, version): # pylint: disable=useless-return
+    def prepare_agent(self, version):  # pylint: disable=useless-return
         """
         Create a download for the current agent version, copied from test data
         """
@@ -212,14 +216,14 @@ class UpdateTestCase(AgentTestCase):
             count=count - agent_count,
             is_available=is_available)
 
-    def remove_agents(self): # pylint: disable=useless-return
+    def remove_agents(self):  # pylint: disable=useless-return
         for agent in self.agent_paths():
             try:
                 if os.path.isfile(agent):
                     os.remove(agent)
                 else:
                     shutil.rmtree(agent)
-            except: # pylint: disable=bare-except
+            except:  # pylint: disable=bare-except
                 pass
         return
 
@@ -230,7 +234,7 @@ class UpdateTestCase(AgentTestCase):
                          increment=1):
         from_path = self.agent_dir(src_v)
         dst_v = FlexibleVersion(str(src_v))
-        for i in range(0, count): # pylint: disable=unused-variable
+        for i in range(0, count):  # pylint: disable=unused-variable
             dst_v += increment
             to_path = self.agent_dir(dst_v)
             shutil.copyfile(from_path + ".zip", to_path + ".zip")
@@ -242,7 +246,7 @@ class UpdateTestCase(AgentTestCase):
 
 
 class TestGuestAgentError(UpdateTestCase):
-    def test_creation(self): # pylint: disable=useless-return
+    def test_creation(self):  # pylint: disable=useless-return
         self.assertRaises(TypeError, GuestAgentError)
         self.assertRaises(UpdateError, GuestAgentError, None)
 
@@ -257,7 +261,7 @@ class TestGuestAgentError(UpdateTestCase):
         self.assertEqual(WITH_ERROR["was_fatal"], err.was_fatal)
         return
 
-    def test_clear(self): # pylint: disable=useless-return
+    def test_clear(self):  # pylint: disable=useless-return
         with self.get_error_file(error_data=WITH_ERROR) as path:
             err = GuestAgentError(path.name)
             err.load()
@@ -280,11 +284,11 @@ class TestGuestAgentError(UpdateTestCase):
         self.assertEqual(err1.failure_count, err2.failure_count)
         self.assertEqual(err1.was_fatal, err2.was_fatal)
 
-    def test_mark_failure(self): # pylint: disable=useless-return
+    def test_mark_failure(self):  # pylint: disable=useless-return
         err = self.create_error()
         self.assertFalse(err.is_blacklisted)
 
-        for i in range(0, MAX_FAILURE): # pylint: disable=unused-variable
+        for i in range(0, MAX_FAILURE):  # pylint: disable=unused-variable
             err.mark_failure()
 
         # Agent failed >= MAX_FAILURE, it should be blacklisted
@@ -292,7 +296,7 @@ class TestGuestAgentError(UpdateTestCase):
         self.assertEqual(MAX_FAILURE, err.failure_count)
         return
 
-    def test_mark_failure_permanent(self): # pylint: disable=useless-return
+    def test_mark_failure_permanent(self):  # pylint: disable=useless-return
         err = self.create_error()
 
         self.assertFalse(err.is_blacklisted)
@@ -303,16 +307,16 @@ class TestGuestAgentError(UpdateTestCase):
         self.assertTrue(err.failure_count < MAX_FAILURE)
         return
 
-    def test_str(self): # pylint: disable=useless-return
+    def test_str(self):  # pylint: disable=useless-return
         err = self.create_error(error_data=NO_ERROR)
-        s = "Last Failure: {0}, Total Failures: {1}, Fatal: {2}".format( # pylint: disable=invalid-name
+        s = "Last Failure: {0}, Total Failures: {1}, Fatal: {2}".format(  # pylint: disable=invalid-name
             NO_ERROR["last_failure"],
             NO_ERROR["failure_count"],
             NO_ERROR["was_fatal"])
         self.assertEqual(s, str(err))
 
         err = self.create_error(error_data=WITH_ERROR)
-        s = "Last Failure: {0}, Total Failures: {1}, Fatal: {2}".format( # pylint: disable=invalid-name
+        s = "Last Failure: {0}, Total Failures: {1}, Fatal: {2}".format(  # pylint: disable=invalid-name
             WITH_ERROR["last_failure"],
             WITH_ERROR["failure_count"],
             WITH_ERROR["was_fatal"])
@@ -320,7 +324,7 @@ class TestGuestAgentError(UpdateTestCase):
         return
 
 
-class TestGuestAgent(UpdateTestCase): # pylint: disable=too-many-public-methods
+class TestGuestAgent(UpdateTestCase):  # pylint: disable=too-many-public-methods
     def setUp(self):
         UpdateTestCase.setUp(self)
         self.copy_agents(get_agent_file_path())
@@ -328,7 +332,7 @@ class TestGuestAgent(UpdateTestCase): # pylint: disable=too-many-public-methods
 
     def test_creation(self):
         self.assertRaises(UpdateError, GuestAgent, "A very bad file name")
-        n = "{0}-a.bad.version".format(AGENT_NAME) # pylint: disable=invalid-name
+        n = "{0}-a.bad.version".format(AGENT_NAME)  # pylint: disable=invalid-name
         self.assertRaises(UpdateError, GuestAgent, n)
 
         self.expand_agents()
@@ -355,7 +359,7 @@ class TestGuestAgent(UpdateTestCase): # pylint: disable=too-many-public-methods
         self.assertTrue(agent.is_available)
 
     @patch("azurelinuxagent.ga.update.GuestAgent._ensure_downloaded")
-    def test_clear_error(self, mock_downloaded): # pylint: disable=unused-argument
+    def test_clear_error(self, mock_downloaded):  # pylint: disable=unused-argument
         self.expand_agents()
 
         agent = GuestAgent(path=self.agent_path)
@@ -374,11 +378,11 @@ class TestGuestAgent(UpdateTestCase): # pylint: disable=too-many-public-methods
 
     @patch("azurelinuxagent.ga.update.GuestAgent._ensure_downloaded")
     @patch("azurelinuxagent.ga.update.GuestAgent._ensure_loaded")
-    def test_is_available(self, mock_loaded, mock_downloaded): # pylint: disable=unused-argument
+    def test_is_available(self, mock_loaded, mock_downloaded):  # pylint: disable=unused-argument
         agent = GuestAgent(path=self.agent_path)
 
         self.assertFalse(agent.is_available)
-        agent._unpack() # pylint: disable=protected-access
+        agent._unpack()  # pylint: disable=protected-access
         self.assertTrue(agent.is_available)
 
         agent.mark_failure(is_fatal=True)
@@ -386,11 +390,11 @@ class TestGuestAgent(UpdateTestCase): # pylint: disable=too-many-public-methods
 
     @patch("azurelinuxagent.ga.update.GuestAgent._ensure_downloaded")
     @patch("azurelinuxagent.ga.update.GuestAgent._ensure_loaded")
-    def test_is_blacklisted(self, mock_loaded, mock_downloaded): # pylint: disable=unused-argument
+    def test_is_blacklisted(self, mock_loaded, mock_downloaded):  # pylint: disable=unused-argument
         agent = GuestAgent(path=self.agent_path)
         self.assertFalse(agent.is_blacklisted)
 
-        agent._unpack() # pylint: disable=protected-access
+        agent._unpack()  # pylint: disable=protected-access
         self.assertFalse(agent.is_blacklisted)
         self.assertEqual(agent.is_blacklisted, agent.error.is_blacklisted)
 
@@ -400,39 +404,39 @@ class TestGuestAgent(UpdateTestCase): # pylint: disable=too-many-public-methods
 
     @patch("azurelinuxagent.ga.update.GuestAgent._ensure_downloaded")
     @patch("azurelinuxagent.ga.update.GuestAgent._ensure_loaded")
-    def test_resource_gone_error_not_blacklisted(self, mock_loaded, mock_downloaded): # pylint: disable=unused-argument
+    def test_resource_gone_error_not_blacklisted(self, mock_loaded, mock_downloaded):  # pylint: disable=unused-argument
         try:
             mock_downloaded.side_effect = ResourceGoneError()
             agent = GuestAgent(path=self.agent_path)
             self.assertFalse(agent.is_blacklisted)
         except ResourceGoneError:
             pass
-        except: # pylint: disable=bare-except
+        except:  # pylint: disable=bare-except
             self.fail("Exception was not expected!")
 
     @patch("azurelinuxagent.ga.update.GuestAgent._ensure_downloaded")
     @patch("azurelinuxagent.ga.update.GuestAgent._ensure_loaded")
-    def test_ioerror_not_blacklisted(self, mock_loaded, mock_downloaded): # pylint: disable=unused-argument
+    def test_ioerror_not_blacklisted(self, mock_loaded, mock_downloaded):  # pylint: disable=unused-argument
         try:
             mock_downloaded.side_effect = IOError()
             agent = GuestAgent(path=self.agent_path)
             self.assertFalse(agent.is_blacklisted)
         except IOError:
             pass
-        except: # pylint: disable=bare-except
+        except:  # pylint: disable=bare-except
             self.fail("Exception was not expected!")
 
     @patch("azurelinuxagent.ga.update.GuestAgent._ensure_downloaded")
     @patch("azurelinuxagent.ga.update.GuestAgent._ensure_loaded")
-    def test_is_downloaded(self, mock_loaded, mock_downloaded): # pylint: disable=unused-argument
+    def test_is_downloaded(self, mock_loaded, mock_downloaded):  # pylint: disable=unused-argument
         agent = GuestAgent(path=self.agent_path)
         self.assertFalse(agent.is_downloaded)
-        agent._unpack() # pylint: disable=protected-access
+        agent._unpack()  # pylint: disable=protected-access
         self.assertTrue(agent.is_downloaded)
 
     @patch("azurelinuxagent.ga.update.GuestAgent._ensure_downloaded")
     @patch("azurelinuxagent.ga.update.GuestAgent._ensure_loaded")
-    def test_mark_failure(self, mock_loaded, mock_downloaded): # pylint: disable=unused-argument
+    def test_mark_failure(self, mock_loaded, mock_downloaded):  # pylint: disable=unused-argument
         agent = GuestAgent(path=self.agent_path)
 
         agent.mark_failure()
@@ -444,74 +448,74 @@ class TestGuestAgent(UpdateTestCase): # pylint: disable=too-many-public-methods
 
     @patch("azurelinuxagent.ga.update.GuestAgent._ensure_downloaded")
     @patch("azurelinuxagent.ga.update.GuestAgent._ensure_loaded")
-    def test_unpack(self, mock_loaded, mock_downloaded): # pylint: disable=unused-argument
+    def test_unpack(self, mock_loaded, mock_downloaded):  # pylint: disable=unused-argument
         agent = GuestAgent(path=self.agent_path)
         self.assertFalse(os.path.isdir(agent.get_agent_dir()))
-        agent._unpack() # pylint: disable=protected-access
+        agent._unpack()  # pylint: disable=protected-access
         self.assertTrue(os.path.isdir(agent.get_agent_dir()))
         self.assertTrue(os.path.isfile(agent.get_agent_manifest_path()))
 
     @patch("azurelinuxagent.ga.update.GuestAgent._ensure_downloaded")
     @patch("azurelinuxagent.ga.update.GuestAgent._ensure_loaded")
-    def test_unpack_fail(self, mock_loaded, mock_downloaded): # pylint: disable=unused-argument
+    def test_unpack_fail(self, mock_loaded, mock_downloaded):  # pylint: disable=unused-argument
         agent = GuestAgent(path=self.agent_path)
         self.assertFalse(os.path.isdir(agent.get_agent_dir()))
         os.remove(agent.get_agent_pkg_path())
-        self.assertRaises(UpdateError, agent._unpack) # pylint: disable=protected-access
+        self.assertRaises(UpdateError, agent._unpack)  # pylint: disable=protected-access
 
     @patch("azurelinuxagent.ga.update.GuestAgent._ensure_downloaded")
     @patch("azurelinuxagent.ga.update.GuestAgent._ensure_loaded")
-    def test_load_manifest(self, mock_loaded, mock_downloaded): # pylint: disable=unused-argument
+    def test_load_manifest(self, mock_loaded, mock_downloaded):  # pylint: disable=unused-argument
         agent = GuestAgent(path=self.agent_path)
-        agent._unpack() # pylint: disable=protected-access
-        agent._load_manifest() # pylint: disable=protected-access
+        agent._unpack()  # pylint: disable=protected-access
+        agent._load_manifest()  # pylint: disable=protected-access
         self.assertEqual(agent.manifest.get_enable_command(),
                          agent.get_agent_cmd())
 
     @patch("azurelinuxagent.ga.update.GuestAgent._ensure_downloaded")
     @patch("azurelinuxagent.ga.update.GuestAgent._ensure_loaded")
-    def test_load_manifest_missing(self, mock_loaded, mock_downloaded): # pylint: disable=unused-argument
+    def test_load_manifest_missing(self, mock_loaded, mock_downloaded):  # pylint: disable=unused-argument
         agent = GuestAgent(path=self.agent_path)
         self.assertFalse(os.path.isdir(agent.get_agent_dir()))
-        agent._unpack() # pylint: disable=protected-access
+        agent._unpack()  # pylint: disable=protected-access
         os.remove(agent.get_agent_manifest_path())
-        self.assertRaises(UpdateError, agent._load_manifest) # pylint: disable=protected-access
+        self.assertRaises(UpdateError, agent._load_manifest)  # pylint: disable=protected-access
 
     @patch("azurelinuxagent.ga.update.GuestAgent._ensure_downloaded")
     @patch("azurelinuxagent.ga.update.GuestAgent._ensure_loaded")
-    def test_load_manifest_is_empty(self, mock_loaded, mock_downloaded): # pylint: disable=unused-argument
+    def test_load_manifest_is_empty(self, mock_loaded, mock_downloaded):  # pylint: disable=unused-argument
         agent = GuestAgent(path=self.agent_path)
         self.assertFalse(os.path.isdir(agent.get_agent_dir()))
-        agent._unpack() # pylint: disable=protected-access
+        agent._unpack()  # pylint: disable=protected-access
         self.assertTrue(os.path.isfile(agent.get_agent_manifest_path()))
 
-        with open(agent.get_agent_manifest_path(), "w") as file: # pylint: disable=redefined-builtin
+        with open(agent.get_agent_manifest_path(), "w") as file:  # pylint: disable=redefined-builtin
             json.dump(EMPTY_MANIFEST, file)
-        self.assertRaises(UpdateError, agent._load_manifest) # pylint: disable=protected-access
+        self.assertRaises(UpdateError, agent._load_manifest)  # pylint: disable=protected-access
 
     @patch("azurelinuxagent.ga.update.GuestAgent._ensure_downloaded")
     @patch("azurelinuxagent.ga.update.GuestAgent._ensure_loaded")
-    def test_load_manifest_is_malformed(self, mock_loaded, mock_downloaded): # pylint: disable=unused-argument
+    def test_load_manifest_is_malformed(self, mock_loaded, mock_downloaded):  # pylint: disable=unused-argument
         agent = GuestAgent(path=self.agent_path)
         self.assertFalse(os.path.isdir(agent.get_agent_dir()))
-        agent._unpack() # pylint: disable=protected-access
+        agent._unpack()  # pylint: disable=protected-access
         self.assertTrue(os.path.isfile(agent.get_agent_manifest_path()))
 
-        with open(agent.get_agent_manifest_path(), "w") as file: # pylint: disable=redefined-builtin
+        with open(agent.get_agent_manifest_path(), "w") as file:  # pylint: disable=redefined-builtin
             file.write("This is not JSON data")
-        self.assertRaises(UpdateError, agent._load_manifest) # pylint: disable=protected-access
+        self.assertRaises(UpdateError, agent._load_manifest)  # pylint: disable=protected-access
 
     def test_load_error(self):
         agent = GuestAgent(path=self.agent_path)
         agent.error = None
 
-        agent._load_error() # pylint: disable=protected-access
+        agent._load_error()  # pylint: disable=protected-access
         self.assertTrue(agent.error is not None)
 
     @patch("azurelinuxagent.ga.update.GuestAgent._ensure_downloaded")
     @patch("azurelinuxagent.ga.update.GuestAgent._ensure_loaded")
     @patch("azurelinuxagent.ga.update.restutil.http_get")
-    def test_download(self, mock_http_get, mock_loaded, mock_downloaded): # pylint: disable=unused-argument
+    def test_download(self, mock_http_get, mock_loaded, mock_downloaded):  # pylint: disable=unused-argument
         self.remove_agents()
         self.assertFalse(os.path.isdir(self.agent_path))
 
@@ -521,14 +525,14 @@ class TestGuestAgent(UpdateTestCase): # pylint: disable=too-many-public-methods
         pkg = ExtHandlerPackage(version=str(get_agent_version()))
         pkg.uris.append(ExtHandlerPackageUri())
         agent = GuestAgent(pkg=pkg)
-        agent._download() # pylint: disable=protected-access
+        agent._download()  # pylint: disable=protected-access
 
         self.assertTrue(os.path.isfile(agent.get_agent_pkg_path()))
 
     @patch("azurelinuxagent.ga.update.GuestAgent._ensure_downloaded")
     @patch("azurelinuxagent.ga.update.GuestAgent._ensure_loaded")
     @patch("azurelinuxagent.ga.update.restutil.http_get")
-    def test_download_fail(self, mock_http_get, mock_loaded, mock_downloaded): # pylint: disable=unused-argument
+    def test_download_fail(self, mock_http_get, mock_loaded, mock_downloaded):  # pylint: disable=unused-argument
         self.remove_agents()
         self.assertFalse(os.path.isdir(self.agent_path))
 
@@ -538,7 +542,7 @@ class TestGuestAgent(UpdateTestCase): # pylint: disable=too-many-public-methods
         pkg.uris.append(ExtHandlerPackageUri())
         agent = GuestAgent(pkg=pkg)
 
-        self.assertRaises(UpdateError, agent._download) # pylint: disable=protected-access
+        self.assertRaises(UpdateError, agent._download)  # pylint: disable=protected-access
         self.assertFalse(os.path.isfile(agent.get_agent_pkg_path()))
         self.assertFalse(agent.is_downloaded)
 
@@ -546,7 +550,7 @@ class TestGuestAgent(UpdateTestCase): # pylint: disable=too-many-public-methods
     @patch("azurelinuxagent.ga.update.GuestAgent._ensure_loaded")
     @patch("azurelinuxagent.ga.update.restutil.http_get")
     @patch("azurelinuxagent.ga.update.restutil.http_post")
-    def test_download_fallback(self, mock_http_post, mock_http_get, mock_loaded, mock_downloaded): # pylint: disable=unused-argument
+    def test_download_fallback(self, mock_http_post, mock_http_get, mock_loaded, mock_downloaded):  # pylint: disable=unused-argument
         self.remove_agents()
         self.assertFalse(os.path.isdir(self.agent_path))
 
@@ -568,7 +572,7 @@ class TestGuestAgent(UpdateTestCase): # pylint: disable=too-many-public-methods
         agent.host = mock_host
 
         # ensure fallback fails gracefully, no http
-        self.assertRaises(UpdateError, agent._download) # pylint: disable=protected-access
+        self.assertRaises(UpdateError, agent._download)  # pylint: disable=protected-access
         self.assertEqual(mock_http_get.call_count, 2)
         self.assertEqual(mock_http_get.call_args_list[0][0][0], ext_uri)
         self.assertEqual(mock_http_get.call_args_list[1][0][0], api_uri)
@@ -577,30 +581,30 @@ class TestGuestAgent(UpdateTestCase): # pylint: disable=too-many-public-methods
         with patch.object(HostPluginProtocol,
                           "ensure_initialized",
                           return_value=True):
-            self.assertRaises(UpdateError, agent._download) # pylint: disable=protected-access
+            self.assertRaises(UpdateError, agent._download)  # pylint: disable=protected-access
             self.assertEqual(mock_http_get.call_count, 4)
 
             self.assertEqual(mock_http_get.call_args_list[2][0][0], ext_uri)
 
             self.assertEqual(mock_http_get.call_args_list[3][0][0], art_uri)
-            a, k = mock_http_get.call_args_list[3] # pylint: disable=unused-variable,invalid-name
+            a, k = mock_http_get.call_args_list[3]  # pylint: disable=unused-variable,invalid-name
             self.assertEqual(False, k['use_proxy'])
 
             # ensure fallback works as expected
             with patch.object(HostPluginProtocol,
                               "get_artifact_request",
                               return_value=[art_uri, {}]):
-                self.assertRaises(UpdateError, agent._download) # pylint: disable=protected-access
+                self.assertRaises(UpdateError, agent._download)  # pylint: disable=protected-access
                 self.assertEqual(mock_http_get.call_count, 6)
 
-                a, k = mock_http_get.call_args_list[3] # pylint: disable=invalid-name
+                a, k = mock_http_get.call_args_list[3]  # pylint: disable=invalid-name
                 self.assertEqual(False, k['use_proxy'])
 
                 self.assertEqual(mock_http_get.call_args_list[4][0][0], ext_uri)
-                a, k = mock_http_get.call_args_list[4] # pylint: disable=invalid-name
+                a, k = mock_http_get.call_args_list[4]  # pylint: disable=invalid-name
 
                 self.assertEqual(mock_http_get.call_args_list[5][0][0], art_uri)
-                a, k = mock_http_get.call_args_list[5] # pylint: disable=invalid-name
+                a, k = mock_http_get.call_args_list[5]  # pylint: disable=invalid-name
                 self.assertEqual(False, k['use_proxy'])
 
     @patch("azurelinuxagent.ga.update.restutil.http_get")
@@ -619,7 +623,7 @@ class TestGuestAgent(UpdateTestCase): # pylint: disable=too-many-public-methods
         self.assertTrue(agent.is_downloaded)
 
     @patch("azurelinuxagent.ga.update.GuestAgent._download", side_effect=UpdateError)
-    def test_ensure_downloaded_download_fails(self, mock_download): # pylint: disable=unused-argument
+    def test_ensure_downloaded_download_fails(self, mock_download):  # pylint: disable=unused-argument
         self.remove_agents()
         self.assertFalse(os.path.isdir(self.agent_path))
 
@@ -633,7 +637,7 @@ class TestGuestAgent(UpdateTestCase): # pylint: disable=too-many-public-methods
 
     @patch("azurelinuxagent.ga.update.GuestAgent._download")
     @patch("azurelinuxagent.ga.update.GuestAgent._unpack", side_effect=UpdateError)
-    def test_ensure_downloaded_unpack_fails(self, mock_unpack, mock_download): # pylint: disable=unused-argument
+    def test_ensure_downloaded_unpack_fails(self, mock_unpack, mock_download):  # pylint: disable=unused-argument
         self.assertFalse(os.path.isdir(self.agent_path))
 
         pkg = ExtHandlerPackage(version=str(get_agent_version()))
@@ -647,7 +651,7 @@ class TestGuestAgent(UpdateTestCase): # pylint: disable=too-many-public-methods
     @patch("azurelinuxagent.ga.update.GuestAgent._download")
     @patch("azurelinuxagent.ga.update.GuestAgent._unpack")
     @patch("azurelinuxagent.ga.update.GuestAgent._load_manifest", side_effect=UpdateError)
-    def test_ensure_downloaded_load_manifest_fails(self, mock_manifest, mock_unpack, mock_download): # pylint: disable=unused-argument
+    def test_ensure_downloaded_load_manifest_fails(self, mock_manifest, mock_unpack, mock_download):  # pylint: disable=unused-argument
         self.assertFalse(os.path.isdir(self.agent_path))
 
         pkg = ExtHandlerPackage(version=str(get_agent_version()))
@@ -661,7 +665,7 @@ class TestGuestAgent(UpdateTestCase): # pylint: disable=too-many-public-methods
     @patch("azurelinuxagent.ga.update.GuestAgent._download")
     @patch("azurelinuxagent.ga.update.GuestAgent._unpack")
     @patch("azurelinuxagent.ga.update.GuestAgent._load_manifest")
-    def test_ensure_download_skips_blacklisted(self, mock_manifest, mock_unpack, mock_download): # pylint: disable=unused-argument
+    def test_ensure_download_skips_blacklisted(self, mock_manifest, mock_unpack, mock_download):  # pylint: disable=unused-argument
         agent = GuestAgent(path=self.agent_path)
         self.assertEqual(0, mock_download.call_count)
 
@@ -680,7 +684,7 @@ class TestGuestAgent(UpdateTestCase): # pylint: disable=too-many-public-methods
         self.assertEqual(0, mock_unpack.call_count)
 
 
-class TestUpdate(UpdateTestCase): # pylint: disable=too-many-public-methods
+class TestUpdate(UpdateTestCase):  # pylint: disable=too-many-public-methods
     def setUp(self):
         UpdateTestCase.setUp(self)
         self.event_patch = patch('azurelinuxagent.common.event.add_event')
@@ -708,16 +712,16 @@ class TestUpdate(UpdateTestCase): # pylint: disable=too-many-public-methods
     def test_emit_restart_event_emits_event_if_not_clean_start(self):
         try:
             mock_event = self.event_patch.start()
-            self.update_handler._set_sentinel() # pylint: disable=protected-access
-            self.update_handler._emit_restart_event() # pylint: disable=protected-access
+            self.update_handler._set_sentinel()  # pylint: disable=protected-access
+            self.update_handler._emit_restart_event()  # pylint: disable=protected-access
             self.assertEqual(1, mock_event.call_count)
-        except Exception as e: # pylint: disable=unused-variable,invalid-name
+        except Exception as e:  # pylint: disable=unused-variable,invalid-name
             pass
         self.event_patch.stop()
 
     def _create_protocol(self, count=20, versions=None):
         latest_version = self.prepare_agents(count=count)
-        if versions is None or len(versions) <= 0: # pylint: disable=len-as-condition
+        if versions is None or len(versions) <= 0:  # pylint: disable=len-as-condition
             versions = [latest_version]
         return ProtocolMock(versions=versions)
 
@@ -731,18 +735,18 @@ class TestUpdate(UpdateTestCase): # pylint: disable=too-many-public-methods
             #   See http://stackoverflow.com/questions/26408941/python-nested-functions-and-variable-scope
             iterations = [0]
 
-            def iterator(*args, **kwargs): # pylint: disable=unused-argument
+            def iterator(*args, **kwargs):  # pylint: disable=unused-argument
                 iterations[0] += 1
                 return iterations[0] < invocations
 
             mock_util.check_pid_alive = Mock(side_effect=iterator)
 
-            pid_files = self.update_handler._get_pid_files() # pylint: disable=protected-access
+            pid_files = self.update_handler._get_pid_files()  # pylint: disable=protected-access
             self.assertEqual(pid_count, len(pid_files))
 
             with patch('os.getpid', return_value=42):
-                with patch('time.sleep', return_value=None) as mock_sleep: # pylint: disable=redefined-outer-name
-                    self.update_handler._ensure_no_orphans(orphan_wait_interval=interval) # pylint: disable=protected-access
+                with patch('time.sleep', return_value=None) as mock_sleep:  # pylint: disable=redefined-outer-name
+                    self.update_handler._ensure_no_orphans(orphan_wait_interval=interval)  # pylint: disable=protected-access
                     for pid_file in pid_files:
                         self.assertFalse(os.path.exists(pid_file))
                     return mock_util.check_pid_alive.call_count, mock_sleep.call_count
@@ -782,13 +786,13 @@ class TestUpdate(UpdateTestCase): # pylint: disable=too-many-public-methods
 
         self.assertFalse(os.path.exists(path))
 
-        for n in range(0, 99): # pylint: disable=invalid-name
+        for n in range(0, 99):  # pylint: disable=invalid-name
             mock_time.utcnow.return_value = Mock(microsecond=n * 10000)
 
-            self.update_handler._ensure_partition_assigned() # pylint: disable=protected-access
+            self.update_handler._ensure_partition_assigned()  # pylint: disable=protected-access
 
             self.assertTrue(os.path.exists(path))
-            s = fileutil.read_file(path) # pylint: disable=invalid-name
+            s = fileutil.read_file(path)  # pylint: disable=invalid-name
             self.assertEqual(n, int(s))
             os.remove(path)
 
@@ -805,7 +809,7 @@ class TestUpdate(UpdateTestCase): # pylint: disable=too-many-public-methods
             os.chmod(path,
                      stat.S_IRUSR | stat.S_IWUSR | stat.S_IRGRP | stat.S_IROTH)
 
-        self.update_handler._ensure_readonly_files() # pylint: disable=protected-access
+        self.update_handler._ensure_readonly_files()  # pylint: disable=protected-access
 
         for path in test_files:
             mode = os.stat(path).st_mode
@@ -824,7 +828,7 @@ class TestUpdate(UpdateTestCase): # pylint: disable=too-many-public-methods
             os.chmod(path,
                      stat.S_IRUSR | stat.S_IWUSR | stat.S_IRGRP | stat.S_IROTH)
 
-        self.update_handler._ensure_readonly_files() # pylint: disable=protected-access
+        self.update_handler._ensure_readonly_files()  # pylint: disable=protected-access
 
         for path in test_files:
             mode = os.stat(path).st_mode
@@ -846,10 +850,10 @@ class TestUpdate(UpdateTestCase): # pylint: disable=too-many-public-methods
         self.assertFalse(child_agent.is_blacklisted)
         self.update_handler.child_agent = child_agent
 
-        self.update_handler._evaluate_agent_health(latest_agent) # pylint: disable=protected-access
+        self.update_handler._evaluate_agent_health(latest_agent)  # pylint: disable=protected-access
 
     def test_evaluate_agent_health_ignores_installed_agent(self):
-        self.update_handler._evaluate_agent_health(None) # pylint: disable=protected-access
+        self.update_handler._evaluate_agent_health(None)  # pylint: disable=protected-access
 
     def test_evaluate_agent_health_raises_exception_for_restarting_agent(self):
         self.update_handler.child_launch_time = time.time() - (4 * 60)
@@ -875,46 +879,46 @@ class TestUpdate(UpdateTestCase): # pylint: disable=too-many-public-methods
     def test_filter_blacklisted_agents(self):
         self.prepare_agents()
 
-        self.update_handler._set_agents([GuestAgent(path=path) for path in self.agent_dirs()]) # pylint: disable=protected-access
+        self.update_handler._set_agents([GuestAgent(path=path) for path in self.agent_dirs()])  # pylint: disable=protected-access
         self.assertEqual(len(self.agent_dirs()), len(self.update_handler.agents))
 
         kept_agents = self.update_handler.agents[::2]
         blacklisted_agents = self.update_handler.agents[1::2]
         for agent in blacklisted_agents:
             agent.mark_failure(is_fatal=True)
-        self.update_handler._filter_blacklisted_agents() # pylint: disable=protected-access
+        self.update_handler._filter_blacklisted_agents()  # pylint: disable=protected-access
         self.assertEqual(kept_agents, self.update_handler.agents)
 
     def test_find_agents(self):
         self.prepare_agents()
 
         self.assertTrue(0 <= len(self.update_handler.agents))
-        self.update_handler._find_agents() # pylint: disable=protected-access
+        self.update_handler._find_agents()  # pylint: disable=protected-access
         self.assertEqual(len(get_agents(self.tmp_dir)), len(self.update_handler.agents))
 
     def test_find_agents_does_reload(self):
         self.prepare_agents()
 
-        self.update_handler._find_agents() # pylint: disable=protected-access
+        self.update_handler._find_agents()  # pylint: disable=protected-access
         agents = self.update_handler.agents
 
-        self.update_handler._find_agents() # pylint: disable=protected-access
+        self.update_handler._find_agents()  # pylint: disable=protected-access
         self.assertNotEqual(agents, self.update_handler.agents)
 
     def test_find_agents_sorts(self):
         self.prepare_agents()
-        self.update_handler._find_agents() # pylint: disable=protected-access
+        self.update_handler._find_agents()  # pylint: disable=protected-access
 
-        v = FlexibleVersion("100000") # pylint: disable=invalid-name
-        for a in self.update_handler.agents: # pylint: disable=invalid-name
+        v = FlexibleVersion("100000")  # pylint: disable=invalid-name
+        for a in self.update_handler.agents:  # pylint: disable=invalid-name
             self.assertTrue(v > a.version)
-            v = a.version # pylint: disable=invalid-name
+            v = a.version  # pylint: disable=invalid-name
 
     @patch('azurelinuxagent.common.protocol.wire.WireClient.get_host_plugin')
     def test_get_host_plugin_returns_host_for_wireserver(self, mock_get_host):
         protocol = WireProtocol('12.34.56.78')
         mock_get_host.return_value = "faux host"
-        host = self.update_handler._get_host_plugin(protocol=protocol) # pylint: disable=protected-access
+        host = self.update_handler._get_host_plugin(protocol=protocol)  # pylint: disable=protected-access
         print("mock_get_host call cound={0}".format(mock_get_host.call_count))
         self.assertEqual(1, mock_get_host.call_count)
         self.assertEqual("faux host", host)
@@ -953,77 +957,77 @@ class TestUpdate(UpdateTestCase): # pylint: disable=too-many-public-methods
         self.assertEqual(latest_agent.version, prior_agent.version)
 
     def test_get_pid_files(self):
-        pid_files = self.update_handler._get_pid_files() # pylint: disable=protected-access
+        pid_files = self.update_handler._get_pid_files()  # pylint: disable=protected-access
         self.assertEqual(0, len(pid_files))
 
     def test_get_pid_files_returns_previous(self):
-        for n in range(1250): # pylint: disable=invalid-name
+        for n in range(1250):  # pylint: disable=invalid-name
             fileutil.write_file(os.path.join(self.tmp_dir, str(n) + "_waagent.pid"), ustr(n + 1))
-        pid_files = self.update_handler._get_pid_files() # pylint: disable=protected-access
+        pid_files = self.update_handler._get_pid_files()  # pylint: disable=protected-access
         self.assertEqual(1250, len(pid_files))
 
-        pid_dir, pid_name, pid_re = self.update_handler._get_pid_parts() # pylint: disable=unused-variable,protected-access
-        for p in pid_files: # pylint: disable=invalid-name
+        pid_dir, pid_name, pid_re = self.update_handler._get_pid_parts()  # pylint: disable=unused-variable,protected-access
+        for p in pid_files:  # pylint: disable=invalid-name
             self.assertTrue(pid_re.match(os.path.basename(p)))
 
     def test_is_clean_start_returns_true_when_no_sentinel(self):
-        self.assertFalse(os.path.isfile(self.update_handler._sentinel_file_path())) # pylint: disable=protected-access
-        self.assertTrue(self.update_handler._is_clean_start) # pylint: disable=protected-access
+        self.assertFalse(os.path.isfile(self.update_handler._sentinel_file_path()))  # pylint: disable=protected-access
+        self.assertTrue(self.update_handler._is_clean_start)  # pylint: disable=protected-access
 
     def test_is_clean_start_returns_false_when_sentinel_exists(self):
-        self.update_handler._set_sentinel(agent=CURRENT_AGENT) # pylint: disable=protected-access
-        self.assertFalse(self.update_handler._is_clean_start) # pylint: disable=protected-access
+        self.update_handler._set_sentinel(agent=CURRENT_AGENT)  # pylint: disable=protected-access
+        self.assertFalse(self.update_handler._is_clean_start)  # pylint: disable=protected-access
 
     def test_is_clean_start_returns_false_for_exceptions(self):
-        self.update_handler._set_sentinel() # pylint: disable=protected-access
+        self.update_handler._set_sentinel()  # pylint: disable=protected-access
         with patch("azurelinuxagent.common.utils.fileutil.read_file", side_effect=Exception):
-            self.assertFalse(self.update_handler._is_clean_start) # pylint: disable=protected-access
+            self.assertFalse(self.update_handler._is_clean_start)  # pylint: disable=protected-access
 
     def test_is_orphaned_returns_false_if_parent_exists(self):
         fileutil.write_file(conf.get_agent_pid_file_path(), ustr(42))
         with patch('os.getppid', return_value=42):
-            self.assertFalse(self.update_handler._is_orphaned) # pylint: disable=protected-access
+            self.assertFalse(self.update_handler._is_orphaned)  # pylint: disable=protected-access
 
     def test_is_orphaned_returns_true_if_parent_is_init(self):
         with patch('os.getppid', return_value=1):
-            self.assertTrue(self.update_handler._is_orphaned) # pylint: disable=protected-access
+            self.assertTrue(self.update_handler._is_orphaned)  # pylint: disable=protected-access
 
     def test_is_orphaned_returns_true_if_parent_does_not_exist(self):
         fileutil.write_file(conf.get_agent_pid_file_path(), ustr(24))
         with patch('os.getppid', return_value=42):
-            self.assertTrue(self.update_handler._is_orphaned) # pylint: disable=protected-access
+            self.assertTrue(self.update_handler._is_orphaned)  # pylint: disable=protected-access
 
     def test_is_version_available(self):
         self.prepare_agents(is_available=True)
         self.update_handler.agents = self.agents()
 
         for agent in self.agents():
-            self.assertTrue(self.update_handler._is_version_eligible(agent.version)) # pylint: disable=protected-access
+            self.assertTrue(self.update_handler._is_version_eligible(agent.version))  # pylint: disable=protected-access
 
     @patch("azurelinuxagent.ga.update.is_current_agent_installed", return_value=False)
-    def test_is_version_available_rejects(self, mock_current): # pylint: disable=unused-argument
+    def test_is_version_available_rejects(self, mock_current):  # pylint: disable=unused-argument
         self.prepare_agents(is_available=True)
         self.update_handler.agents = self.agents()
 
         self.update_handler.agents[0].mark_failure(is_fatal=True)
-        self.assertFalse(self.update_handler._is_version_eligible(self.agents()[0].version)) # pylint: disable=protected-access
+        self.assertFalse(self.update_handler._is_version_eligible(self.agents()[0].version))  # pylint: disable=protected-access
 
     @patch("azurelinuxagent.ga.update.is_current_agent_installed", return_value=True)
-    def test_is_version_available_accepts_current(self, mock_current): # pylint: disable=unused-argument
+    def test_is_version_available_accepts_current(self, mock_current):  # pylint: disable=unused-argument
         self.update_handler.agents = []
-        self.assertTrue(self.update_handler._is_version_eligible(CURRENT_VERSION)) # pylint: disable=protected-access
+        self.assertTrue(self.update_handler._is_version_eligible(CURRENT_VERSION))  # pylint: disable=protected-access
 
     @patch("azurelinuxagent.ga.update.is_current_agent_installed", return_value=False)
-    def test_is_version_available_rejects_by_default(self, mock_current): # pylint: disable=unused-argument
+    def test_is_version_available_rejects_by_default(self, mock_current):  # pylint: disable=unused-argument
         self.prepare_agents()
         self.update_handler.agents = []
 
-        v = self.agents()[0].version # pylint: disable=invalid-name
-        self.assertFalse(self.update_handler._is_version_eligible(v)) # pylint: disable=protected-access
+        v = self.agents()[0].version  # pylint: disable=invalid-name
+        self.assertFalse(self.update_handler._is_version_eligible(v))  # pylint: disable=protected-access
 
     def test_purge_agents(self):
         self.prepare_agents()
-        self.update_handler._find_agents() # pylint: disable=protected-access
+        self.update_handler._find_agents()  # pylint: disable=protected-access
 
         # Ensure at least three agents initially exist
         self.assertTrue(2 < len(self.update_handler.agents))
@@ -1045,8 +1049,8 @@ class TestUpdate(UpdateTestCase): # pylint: disable=too-many-public-methods
 
         # Reload and assert only the kept agents remain on disk
         self.update_handler.agents = agents_to_keep
-        self.update_handler._purge_agents() # pylint: disable=protected-access
-        self.update_handler._find_agents() # pylint: disable=protected-access
+        self.update_handler._purge_agents()  # pylint: disable=protected-access
+        self.update_handler._find_agents()  # pylint: disable=protected-access
         self.assertEqual(
             [agent.version for agent in kept_agents],
             [agent.version for agent in self.update_handler.agents])
@@ -1098,8 +1102,8 @@ class TestUpdate(UpdateTestCase): # pylint: disable=too-many-public-methods
     def test_run_latest_passes_child_args(self):
         self.prepare_agents()
 
-        agent = self.update_handler.get_latest_agent() # pylint: disable=unused-variable
-        args, kwargs = self._test_run_latest(child_args="AnArgument") # pylint: disable=unused-variable
+        agent = self.update_handler.get_latest_agent()  # pylint: disable=unused-variable
+        args, kwargs = self._test_run_latest(child_args="AnArgument")  # pylint: disable=unused-variable
         args = args[0]
 
         self.assertTrue(len(args) > 1)
@@ -1128,7 +1132,7 @@ class TestUpdate(UpdateTestCase): # pylint: disable=too-many-public-methods
         self.assertEqual(0, mock_child.wait.call_count)
 
     def test_run_latest_polls_frequently_if_installed_is_latest(self):
-        mock_child = ChildMock(return_value=0) # pylint: disable=unused-variable
+        mock_child = ChildMock(return_value=0)  # pylint: disable=unused-variable
         mock_time = TimeMock(time_increment=CHILD_HEALTH_INTERVAL / 2)
         self._test_run_latest(mock_time=mock_time)
         self.assertEqual(1, mock_time.sleep_interval)
@@ -1233,7 +1237,9 @@ class TestUpdate(UpdateTestCase): # pylint: disable=too-many-public-methods
         self._test_run_latest()
         self.assertEqual(0, mock_signal.call_count)
 
-    def _test_run(self, invocations=1, calls=[call.run()], enable_updates=False, sleep_interval=(6,)): # pylint: disable=dangerous-default-value
+    def _test_run(self, invocations=1, calls=None, enable_updates=False, sleep_interval=(6,)):
+        if calls is None:
+            calls = [call.run()]
         conf.get_autoupdate_enabled = Mock(return_value=enable_updates)
 
         # Note:
@@ -1244,7 +1250,7 @@ class TestUpdate(UpdateTestCase): # pylint: disable=too-many-public-methods
         #   See http://stackoverflow.com/questions/26408941/python-nested-functions-and-variable-scope
         iterations = [0]
 
-        def iterator(*args, **kwargs): # pylint: disable=useless-return,unused-argument
+        def iterator(*args, **kwargs):  # pylint: disable=useless-return,unused-argument
             iterations[0] += 1
             if iterations[0] >= invocations:
                 self.update_handler.running = False
@@ -1257,27 +1263,31 @@ class TestUpdate(UpdateTestCase): # pylint: disable=too-many-public-methods
                 with patch('azurelinuxagent.ga.update.get_monitor_handler') as mock_monitor:
                     with patch('azurelinuxagent.ga.update.get_env_handler') as mock_env:
                         with patch('azurelinuxagent.ga.update.get_collect_logs_handler') as mock_collect_logs:
-                            with patch('azurelinuxagent.ga.update.initialize_event_logger_vminfo_common_parameters'):
-                                with patch('azurelinuxagent.ga.update.is_log_collection_allowed', return_value=True):
-                                    with patch('time.sleep', side_effect=iterator) as mock_sleep: # pylint: disable=redefined-outer-name
-                                        with patch('sys.exit') as mock_exit:
-                                            if isinstance(os.getppid, MagicMock):
-                                                self.update_handler.run()
-                                            else:
-                                                with patch('os.getppid', return_value=42):
-                                                    self.update_handler.run()
+                            with patch('azurelinuxagent.ga.update.get_send_telemetry_events_handler') as mock_telemetry_send_events:
+                                with patch('azurelinuxagent.ga.update.get_collect_telemetry_events_handler') as mock_event_collector:
+                                    with patch('azurelinuxagent.ga.update.initialize_event_logger_vminfo_common_parameters'):
+                                        with patch('azurelinuxagent.ga.update.is_log_collection_allowed', return_value=True):
+                                            with patch('time.sleep', side_effect=iterator) as sleep_mock:
+                                                with patch('sys.exit') as mock_exit:
+                                                    if isinstance(os.getppid, MagicMock):
+                                                        self.update_handler.run()
+                                                    else:
+                                                        with patch('os.getppid', return_value=42):
+                                                            self.update_handler.run()
 
-                                        self.assertEqual(1, mock_handler.call_count)
-                                        self.assertEqual(mock_handler.return_value.method_calls, calls)
-                                        self.assertEqual(1, mock_ra_handler.call_count)
-                                        self.assertEqual(mock_ra_handler.return_value.method_calls, calls)
-                                        self.assertEqual(invocations, mock_sleep.call_count)
-                                        if invocations > 0:
-                                            self.assertEqual(sleep_interval, mock_sleep.call_args[0])
-                                        self.assertEqual(1, mock_monitor.call_count)
-                                        self.assertEqual(1, mock_env.call_count)
-                                        self.assertEqual(1, mock_collect_logs.call_count)
-                                        self.assertEqual(1, mock_exit.call_count)
+                                                self.assertEqual(1, mock_handler.call_count)
+                                                self.assertEqual(mock_handler.return_value.method_calls, calls)
+                                                self.assertEqual(1, mock_ra_handler.call_count)
+                                                self.assertEqual(mock_ra_handler.return_value.method_calls, calls)
+                                                self.assertEqual(invocations, sleep_mock.call_count)
+                                                if invocations > 0:
+                                                    self.assertEqual(sleep_interval, sleep_mock.call_args[0])
+                                                self.assertEqual(1, mock_monitor.call_count)
+                                                self.assertEqual(1, mock_env.call_count)
+                                                self.assertEqual(1, mock_collect_logs.call_count)
+                                                self.assertEqual(1, mock_telemetry_send_events.call_count)
+                                                self.assertEqual(1, mock_event_collector.call_count)
+                                                self.assertEqual(1, mock_exit.call_count)
 
     def test_run(self):
         self._test_run()
@@ -1286,7 +1296,7 @@ class TestUpdate(UpdateTestCase): # pylint: disable=too-many-public-methods
         self._test_run(invocations=15, calls=[call.run()] * 15)
 
     def test_run_stops_if_update_available(self):
-        self.update_handler._upgrade_available = Mock(return_value=True) # pylint: disable=protected-access
+        self.update_handler._upgrade_available = Mock(return_value=True)  # pylint: disable=protected-access
         self._test_run(invocations=0, calls=[], enable_updates=True)
 
     def test_run_stops_if_orphaned(self):
@@ -1295,66 +1305,66 @@ class TestUpdate(UpdateTestCase): # pylint: disable=too-many-public-methods
 
     def test_run_clears_sentinel_on_successful_exit(self):
         self._test_run()
-        self.assertFalse(os.path.isfile(self.update_handler._sentinel_file_path())) # pylint: disable=protected-access
+        self.assertFalse(os.path.isfile(self.update_handler._sentinel_file_path()))  # pylint: disable=protected-access
 
     def test_run_leaves_sentinel_on_unsuccessful_exit(self):
-        self.update_handler._upgrade_available = Mock(side_effect=Exception) # pylint: disable=protected-access
+        self.update_handler._upgrade_available = Mock(side_effect=Exception)  # pylint: disable=protected-access
         self._test_run(invocations=0, calls=[], enable_updates=True)
-        self.assertTrue(os.path.isfile(self.update_handler._sentinel_file_path())) # pylint: disable=protected-access
+        self.assertTrue(os.path.isfile(self.update_handler._sentinel_file_path()))  # pylint: disable=protected-access
 
     def test_run_emits_restart_event(self):
-        self.update_handler._emit_restart_event = Mock() # pylint: disable=protected-access
+        self.update_handler._emit_restart_event = Mock()  # pylint: disable=protected-access
         self._test_run()
-        self.assertEqual(1, self.update_handler._emit_restart_event.call_count) # pylint: disable=protected-access
+        self.assertEqual(1, self.update_handler._emit_restart_event.call_count)  # pylint: disable=protected-access
 
     def test_set_agents_sets_agents(self):
         self.prepare_agents()
 
-        self.update_handler._set_agents([GuestAgent(path=path) for path in self.agent_dirs()]) # pylint: disable=protected-access
+        self.update_handler._set_agents([GuestAgent(path=path) for path in self.agent_dirs()])  # pylint: disable=protected-access
         self.assertTrue(len(self.update_handler.agents) > 0)
         self.assertEqual(len(self.agent_dirs()), len(self.update_handler.agents))
 
     def test_set_agents_sorts_agents(self):
         self.prepare_agents()
 
-        self.update_handler._set_agents([GuestAgent(path=path) for path in self.agent_dirs()]) # pylint: disable=protected-access
+        self.update_handler._set_agents([GuestAgent(path=path) for path in self.agent_dirs()])  # pylint: disable=protected-access
 
-        v = FlexibleVersion("100000") # pylint: disable=invalid-name
-        for a in self.update_handler.agents: # pylint: disable=invalid-name
+        v = FlexibleVersion("100000")  # pylint: disable=invalid-name
+        for a in self.update_handler.agents:  # pylint: disable=invalid-name
             self.assertTrue(v > a.version)
-            v = a.version # pylint: disable=invalid-name
+            v = a.version  # pylint: disable=invalid-name
 
     def test_set_sentinel(self):
-        self.assertFalse(os.path.isfile(self.update_handler._sentinel_file_path())) # pylint: disable=protected-access
-        self.update_handler._set_sentinel() # pylint: disable=protected-access
-        self.assertTrue(os.path.isfile(self.update_handler._sentinel_file_path())) # pylint: disable=protected-access
+        self.assertFalse(os.path.isfile(self.update_handler._sentinel_file_path()))  # pylint: disable=protected-access
+        self.update_handler._set_sentinel()  # pylint: disable=protected-access
+        self.assertTrue(os.path.isfile(self.update_handler._sentinel_file_path()))  # pylint: disable=protected-access
 
     def test_set_sentinel_writes_current_agent(self):
-        self.update_handler._set_sentinel() # pylint: disable=protected-access
+        self.update_handler._set_sentinel()  # pylint: disable=protected-access
         self.assertTrue(
-            fileutil.read_file(self.update_handler._sentinel_file_path()), # pylint: disable=protected-access
+            fileutil.read_file(self.update_handler._sentinel_file_path()),  # pylint: disable=protected-access
             CURRENT_AGENT)
 
     def test_shutdown(self):
-        self.update_handler._set_sentinel() # pylint: disable=protected-access
-        self.update_handler._shutdown() # pylint: disable=protected-access
+        self.update_handler._set_sentinel()  # pylint: disable=protected-access
+        self.update_handler._shutdown()  # pylint: disable=protected-access
         self.assertFalse(self.update_handler.running)
-        self.assertFalse(os.path.isfile(self.update_handler._sentinel_file_path())) # pylint: disable=protected-access
+        self.assertFalse(os.path.isfile(self.update_handler._sentinel_file_path()))  # pylint: disable=protected-access
 
     def test_shutdown_ignores_missing_sentinel_file(self):
-        self.assertFalse(os.path.isfile(self.update_handler._sentinel_file_path())) # pylint: disable=protected-access
-        self.update_handler._shutdown() # pylint: disable=protected-access
+        self.assertFalse(os.path.isfile(self.update_handler._sentinel_file_path()))  # pylint: disable=protected-access
+        self.update_handler._shutdown()  # pylint: disable=protected-access
         self.assertFalse(self.update_handler.running)
-        self.assertFalse(os.path.isfile(self.update_handler._sentinel_file_path())) # pylint: disable=protected-access
+        self.assertFalse(os.path.isfile(self.update_handler._sentinel_file_path()))  # pylint: disable=protected-access
 
     def test_shutdown_ignores_exceptions(self):
-        self.update_handler._set_sentinel() # pylint: disable=protected-access
+        self.update_handler._set_sentinel()  # pylint: disable=protected-access
 
         try:
             with patch("os.remove", side_effect=Exception):
-                self.update_handler._shutdown() # pylint: disable=protected-access
-        except Exception as e: # pylint: disable=unused-variable,invalid-name
-            self.assertTrue(False, "Unexpected exception") # pylint: disable=redundant-unittest-assert
+                self.update_handler._shutdown()  # pylint: disable=protected-access
+        except Exception as e:  # pylint: disable=unused-variable,invalid-name
+            self.assertTrue(False, "Unexpected exception")  # pylint: disable=redundant-unittest-assert
 
     def _test_upgrade_available(
             self,
@@ -1369,7 +1379,7 @@ class TestUpdate(UpdateTestCase): # pylint: disable=too-many-public-methods
         self.update_handler.protocol_util = protocol
         conf.get_autoupdate_gafamily = Mock(return_value=protocol.family)
 
-        return self.update_handler._upgrade_available(protocol, base_version=base_version) # pylint: disable=protected-access
+        return self.update_handler._upgrade_available(protocol, base_version=base_version)  # pylint: disable=protected-access
 
     def test_upgrade_available_returns_true_on_first_use(self):
         self.assertTrue(self._test_upgrade_available())
@@ -1378,11 +1388,11 @@ class TestUpdate(UpdateTestCase): # pylint: disable=too-many-public-methods
         extensions_config = ExtensionsConfig(load_data("wire/ext_conf_missing_family.xml"))
         protocol = ProtocolMock()
         protocol.family = "Prod"
-        protocol.agent_manifests = extensions_config.vmagent_manifests # pylint: disable=attribute-defined-outside-init
+        protocol.agent_manifests = extensions_config.vmagent_manifests  # pylint: disable=attribute-defined-outside-init
         self.update_handler.protocol_util = protocol
         with patch('azurelinuxagent.common.logger.warn') as mock_logger:
             with patch('tests.ga.test_update.ProtocolMock.get_vmagent_pkgs', side_effect=ProtocolError):
-                self.assertFalse(self.update_handler._upgrade_available(protocol, base_version=CURRENT_VERSION)) # pylint: disable=protected-access
+                self.assertFalse(self.update_handler._upgrade_available(protocol, base_version=CURRENT_VERSION))  # pylint: disable=protected-access
                 self.assertEqual(0, mock_logger.call_count)
 
     def test_upgrade_available_includes_old_agents(self):
@@ -1412,7 +1422,7 @@ class TestUpdate(UpdateTestCase): # pylint: disable=too-many-public-methods
         self.assertEqual(agent_versions, self.agent_versions())
 
     def test_update_available_returns_true_if_current_gets_blacklisted(self):
-        self.update_handler._is_version_eligible = Mock(return_value=False) # pylint: disable=protected-access
+        self.update_handler._is_version_eligible = Mock(return_value=False)  # pylint: disable=protected-access
         self.assertTrue(self._test_upgrade_available())
 
     def test_upgrade_available_skips_if_too_frequent(self):
@@ -1423,7 +1433,7 @@ class TestUpdate(UpdateTestCase): # pylint: disable=too-many-public-methods
     def test_upgrade_available_skips_if_when_no_new_versions(self):
         self.prepare_agents()
         base_version = self.agent_versions()[0] + 1
-        self.update_handler._is_version_eligible = lambda x: x == base_version # pylint: disable=protected-access
+        self.update_handler._is_version_eligible = lambda x: x == base_version  # pylint: disable=protected-access
         self.assertFalse(self._test_upgrade_available(base_version=base_version))
 
     def test_upgrade_available_skips_when_no_versions(self):
@@ -1437,16 +1447,16 @@ class TestUpdate(UpdateTestCase): # pylint: disable=too-many-public-methods
         self.prepare_agents()
         self._test_upgrade_available()
 
-        v = FlexibleVersion("100000") # pylint: disable=invalid-name
-        for a in self.update_handler.agents: # pylint: disable=invalid-name
+        v = FlexibleVersion("100000")  # pylint: disable=invalid-name
+        for a in self.update_handler.agents:  # pylint: disable=invalid-name
             self.assertTrue(v > a.version)
-            v = a.version # pylint: disable=invalid-name
+            v = a.version  # pylint: disable=invalid-name
 
     def test_write_pid_file(self):
-        for n in range(1112): # pylint: disable=invalid-name
+        for n in range(1112):  # pylint: disable=invalid-name
             fileutil.write_file(os.path.join(self.tmp_dir, str(n) + "_waagent.pid"), ustr(n + 1))
         with patch('os.getpid', return_value=1112):
-            pid_files, pid_file = self.update_handler._write_pid_file() # pylint: disable=protected-access
+            pid_files, pid_file = self.update_handler._write_pid_file()  # pylint: disable=protected-access
             self.assertEqual(1112, len(pid_files))
             self.assertEqual("1111_waagent.pid", os.path.basename(pid_files[-1]))
             self.assertEqual("1112_waagent.pid", os.path.basename(pid_file))
@@ -1455,7 +1465,7 @@ class TestUpdate(UpdateTestCase): # pylint: disable=too-many-public-methods
     def test_write_pid_file_ignores_exceptions(self):
         with patch('azurelinuxagent.common.utils.fileutil.write_file', side_effect=Exception):
             with patch('os.getpid', return_value=42):
-                pid_files, pid_file = self.update_handler._write_pid_file() # pylint: disable=protected-access
+                pid_files, pid_file = self.update_handler._write_pid_file()  # pylint: disable=protected-access
                 self.assertEqual(0, len(pid_files))
                 self.assertEqual(None, pid_file)
 
@@ -1466,7 +1476,7 @@ class TestUpdate(UpdateTestCase): # pylint: disable=too-many-public-methods
         before an update is found, this test attempts to ensure that
         behavior never changes.
         """
-        self.update_handler._upgrade_available = Mock(return_value=True) # pylint: disable=protected-access
+        self.update_handler._upgrade_available = Mock(return_value=True)  # pylint: disable=protected-access
         self._test_run(invocations=0, calls=[], enable_updates=True, sleep_interval=(300,))
 
     @patch('azurelinuxagent.common.conf.get_extensions_enabled', return_value=False)
@@ -1474,7 +1484,7 @@ class TestUpdate(UpdateTestCase): # pylint: disable=too-many-public-methods
         """
         When extension processing is disabled, the goal state interval should be larger.
         """
-        self.update_handler._upgrade_available = Mock(return_value=False) # pylint: disable=protected-access
+        self.update_handler._upgrade_available = Mock(return_value=False)  # pylint: disable=protected-access
         self._test_run(invocations=15, calls=[call.run()] * 15, sleep_interval=(300,))
 
     @patch("azurelinuxagent.common.logger.info")
@@ -1484,13 +1494,13 @@ class TestUpdate(UpdateTestCase): # pylint: disable=too-many-public-methods
         mock_protocol = WireProtocol("foo.bar")
 
         update_handler.last_telemetry_heartbeat = datetime.utcnow() - timedelta(hours=1)
-        update_handler._send_heartbeat_telemetry(mock_protocol) # pylint: disable=protected-access
+        update_handler._send_heartbeat_telemetry(mock_protocol)  # pylint: disable=protected-access
         self.assertEqual(1, patch_add_event.call_count)
         self.assertTrue(any(call_args[0] == "[HEARTBEAT] Agent {0} is running as the goal state agent {1}"
                             for call_args in patch_info.call_args), "The heartbeat was not written to the agent's log")
 
     @contextlib.contextmanager
-    def _get_update_handler(self, iterations=1, test_data=DATA_FILE): # pylint: disable=dangerous-default-value
+    def _get_update_handler(self, iterations=1, test_data=None):
         """
         This function returns a mocked version of the UpdateHandler object to be used for testing. It will only run the
         main loop [iterations] no of times.
@@ -1498,15 +1508,17 @@ class TestUpdate(UpdateTestCase): # pylint: disable=too-many-public-methods
         :param iterations: No of times the UpdateHandler.run() method should run.
         :return: Mocked object of UpdateHandler() class and object of the MockWireProtocol().
         """
+        if test_data is None:
+            test_data = DATA_FILE
 
         def _set_iterations(iterations):
             # This will reset the current iteration and the max iterations to run for this test object.
-            update_handler._cur_iteration = 0 # pylint: disable=protected-access
-            update_handler._iterations = iterations # pylint: disable=protected-access
+            update_handler._cur_iteration = 0  # pylint: disable=protected-access
+            update_handler._iterations = iterations  # pylint: disable=protected-access
 
-        def check_running(*args, **kwargs): # pylint: disable=unused-argument
+        def check_running(*args, **kwargs):  # pylint: disable=unused-argument
             # This method will determine if the current UpdateHandler object is supposed to run or not.
-            if update_handler._cur_iteration < update_handler._iterations: # pylint: disable=protected-access
+            if update_handler._cur_iteration < update_handler._iterations:  # pylint: disable=protected-access
                 update_handler._cur_iteration += 1
                 return True
             return False
@@ -1518,9 +1530,9 @@ class TestUpdate(UpdateTestCase): # pylint: disable=too-many-public-methods
                 with patch("azurelinuxagent.common.conf.get_autoupdate_enabled", return_value=False):
                     update_handler = get_update_handler()
                     # Setup internal state for the object required for testing
-                    update_handler._cur_iteration = 0 # pylint: disable=protected-access
-                    update_handler._iterations = 0 # pylint: disable=protected-access
-                    update_handler.set_iterations = lambda i: _set_iterations(i) # pylint: disable=unnecessary-lambda
+                    update_handler._cur_iteration = 0  # pylint: disable=protected-access
+                    update_handler._iterations = 0  # pylint: disable=protected-access
+                    update_handler.set_iterations = lambda i: _set_iterations(i)  # pylint: disable=unnecessary-lambda
                     type(update_handler).running = PropertyMock(side_effect=check_running)
                     with patch("time.sleep", side_effect=lambda _: mock_sleep(0.001)):
                         with patch('sys.exit'):
@@ -1535,7 +1547,7 @@ class TestUpdate(UpdateTestCase): # pylint: disable=too-many-public-methods
 
     @staticmethod
     def _get_test_ext_handler_instance(protocol, name="OSTCExtensions.ExampleHandlerLinux", version="1.0.0"):
-        eh = ExtHandler(name=name) # pylint: disable=invalid-name
+        eh = ExtHandler(name=name)  # pylint: disable=invalid-name
         eh.properties.version = version
         return ExtHandlerInstance(eh, protocol)
 
@@ -1557,8 +1569,7 @@ class TestUpdate(UpdateTestCase): # pylint: disable=too-many-public-methods
 
             # Rerun the update handler and ensure that the HandlerEnvironment file is recreated with eventsFolder
             # flag in HandlerEnvironment.json file
-            with patch('azurelinuxagent.ga.exthandlers._ENABLE_EXTENSION_TELEMETRY_PIPELINE',
-                       return_value=True):
+            with patch('azurelinuxagent.ga.exthandlers.is_extension_telemetry_pipeline_enabled', return_value=True):
                 update_handler.set_iterations(1)
                 update_handler.run(debug=True)
 
@@ -1572,22 +1583,24 @@ class TestUpdate(UpdateTestCase): # pylint: disable=too-many-public-methods
 
     @contextlib.contextmanager
     def _setup_test_for_ext_event_dirs_retention(self):
-        tempdir = tempfile.mkdtemp()
         try:
-            with patch.object(conf, "get_ext_log_dir", return_value=tempdir):
-                with self._get_update_handler(test_data=DATA_FILE_MULTIPLE_EXT) as (update_handler, protocol):
-                    with patch('azurelinuxagent.ga.exthandlers._ENABLE_EXTENSION_TELEMETRY_PIPELINE', True):
-                        update_handler.run(debug=True)
-                        expected_events_dirs = glob.glob(os.path.join(conf.get_ext_log_dir(), "*", EVENTS_DIRECTORY))
-                        no_of_extensions = protocol.mock_wire_data.get_no_of_plugins_in_extension_config()
-                        # Ensure extensions installed and events directory created
-                        self.assertEqual(len(expected_events_dirs), no_of_extensions, "Extension events directories dont match")
-                        for ext_dir in expected_events_dirs:
-                            self.assertTrue(os.path.exists(ext_dir), "Extension directory {0} not created!".format(ext_dir))
+            with self._get_update_handler(test_data=DATA_FILE_MULTIPLE_EXT) as (update_handler, protocol):
+                with patch('azurelinuxagent.ga.exthandlers._ENABLE_EXTENSION_TELEMETRY_PIPELINE', True):
+                    update_handler.run(debug=True)
+                    expected_events_dirs = glob.glob(os.path.join(conf.get_ext_log_dir(), "*", EVENTS_DIRECTORY))
+                    no_of_extensions = protocol.mock_wire_data.get_no_of_plugins_in_extension_config()
+                    # Ensure extensions installed and events directory created
+                    self.assertEqual(len(expected_events_dirs), no_of_extensions, "Extension events directories dont match")
+                    for ext_dir in expected_events_dirs:
+                        self.assertTrue(os.path.exists(ext_dir), "Extension directory {0} not created!".format(ext_dir))
 
-                        yield update_handler, expected_events_dirs
+                    yield update_handler, expected_events_dirs
         finally:
-            shutil.rmtree(tempdir, ignore_errors=True)
+            # The TestUpdate.setUp() initializes the self.tmp_dir to be used as a placeholder
+            # for everything (event logger, status logger, conf.get_lib_dir() and more).
+            # Since we add more data to the dir for this test, ensuring its completely clean before exiting the test.
+            shutil.rmtree(self.tmp_dir, ignore_errors=True)
+            self.tmp_dir = None
 
     def test_it_should_delete_extension_events_directory_if_extension_telemetry_pipeline_disabled(self):
         # Disable extension telemetry pipeline and ensure events directory got deleted
@@ -1605,6 +1618,8 @@ class TestUpdate(UpdateTestCase): # pylint: disable=too-many-public-methods
                 self.assertTrue(os.path.exists(ext_dir), "Extension directory {0} should exist!".format(ext_dir))
 
 
+@patch('azurelinuxagent.ga.update.get_collect_telemetry_events_handler')
+@patch('azurelinuxagent.ga.update.get_send_telemetry_events_handler')
 @patch('azurelinuxagent.ga.update.get_collect_logs_handler')
 @patch('azurelinuxagent.ga.update.get_monitor_handler')
 @patch('azurelinuxagent.ga.update.get_env_handler')
@@ -1620,7 +1635,7 @@ class MonitorThreadTest(AgentTestCase):
     def _test_run(self, invocations=1):
         iterations = [0]
 
-        def iterator(*args, **kwargs): # pylint: disable=useless-return,unused-argument
+        def iterator(*args, **kwargs):  # pylint: disable=useless-return,unused-argument
             iterations[0] += 1
             if iterations[0] >= invocations:
                 self.update_handler.running = False
@@ -1650,65 +1665,62 @@ class MonitorThreadTest(AgentTestCase):
         self._test_run(invocations=invocations)
         return thread
 
-    def test_start_threads(self, mock_env, mock_monitor, mock_collect_logs):
+    # too-many-arguments<R0913> Disabled: The number of arguments maps to the number of threads
+    def test_start_threads(self, mock_env, mock_monitor, mock_collect_logs, mock_telemetry_send_events, mock_telemetry_collector):  # pylint: disable=too-many-arguments
         self.assertTrue(self.update_handler.running)
 
-        mock_monitor_thread = MagicMock()
-        mock_monitor_thread.run = MagicMock()
-        mock_monitor.return_value = mock_monitor_thread
+        def _get_mock_thread():
+            thread = MagicMock()
+            thread.run = MagicMock()
+            return thread
 
-        mock_env_thread = MagicMock()
-        mock_env_thread.run = MagicMock()
-        mock_env.return_value = mock_env_thread
+        all_threads = [mock_telemetry_send_events, mock_telemetry_collector, mock_env, mock_monitor, mock_collect_logs]
 
-        mock_collect_logs_thread = MagicMock()
-        mock_collect_logs_thread.run = MagicMock()
-        mock_collect_logs.return_value = mock_collect_logs_thread
+        for thread in all_threads:
+            thread.return_value = _get_mock_thread()
 
         self._test_run(invocations=0)
-        self.assertEqual(1, mock_monitor.call_count)
-        self.assertEqual(1, mock_monitor_thread.run.call_count)
-        self.assertEqual(1, mock_env.call_count)
-        self.assertEqual(1, mock_env_thread.run.call_count)
-        self.assertEqual(1, mock_collect_logs.call_count)
-        self.assertEqual(1, mock_collect_logs_thread.run.call_count)
 
-    def test_check_if_monitor_thread_is_alive(self, mock_env, mock_monitor, mock_collect_logs): # pylint: disable=unused-argument
+        for thread in all_threads:
+            self.assertEqual(1, thread.call_count)
+            self.assertEqual(1, thread().run.call_count)
+
+    def test_check_if_monitor_thread_is_alive(self, _, mock_monitor, *args):  # pylint: disable=unused-argument
         mock_monitor_thread = self._setup_mock_thread_and_start_test_run(mock_monitor, is_alive=True, invocations=0)
         self.assertEqual(1, mock_monitor.call_count)
         self.assertEqual(1, mock_monitor_thread.run.call_count)
         self.assertEqual(1, mock_monitor_thread.is_alive.call_count)
         self.assertEqual(0, mock_monitor_thread.start.call_count)
 
-    def test_check_if_env_thread_is_alive(self, mock_env, mock_monitor, mock_collect_logs): # pylint: disable=unused-argument
+    def test_check_if_env_thread_is_alive(self, mock_env, *args):  # pylint: disable=unused-argument
         mock_env_thread = self._setup_mock_thread_and_start_test_run(mock_env, is_alive=True, invocations=1)
         self.assertEqual(1, mock_env.call_count)
         self.assertEqual(1, mock_env_thread.run.call_count)
         self.assertEqual(1, mock_env_thread.is_alive.call_count)
         self.assertEqual(0, mock_env_thread.start.call_count)
 
-    def test_restart_monitor_thread_if_not_alive(self, mock_env, mock_monitor, mock_collect_logs): # pylint: disable=unused-argument
+    def test_restart_monitor_thread_if_not_alive(self, _, mock_monitor, *args):  # pylint: disable=unused-argument
         mock_monitor_thread = self._setup_mock_thread_and_start_test_run(mock_monitor, is_alive=False, invocations=1)
         self.assertEqual(1, mock_monitor.call_count)
         self.assertEqual(1, mock_monitor_thread.run.call_count)
         self.assertEqual(1, mock_monitor_thread.is_alive.call_count)
         self.assertEqual(1, mock_monitor_thread.start.call_count)
 
-    def test_restart_env_thread_if_not_alive(self, mock_env, mock_monitor, mock_collect_logs): # pylint: disable=unused-argument
+    def test_restart_env_thread_if_not_alive(self, mock_env, *args):  # pylint: disable=unused-argument
         mock_env_thread = self._setup_mock_thread_and_start_test_run(mock_env, is_alive=False, invocations=1)
         self.assertEqual(1, mock_env.call_count)
         self.assertEqual(1, mock_env_thread.run.call_count)
         self.assertEqual(1, mock_env_thread.is_alive.call_count)
         self.assertEqual(1, mock_env_thread.start.call_count)
 
-    def test_restart_monitor_thread(self, mock_env, mock_monitor, mock_collect_logs): # pylint: disable=unused-argument
+    def test_restart_monitor_thread(self, _, mock_monitor, *args):  # pylint: disable=unused-argument
         mock_monitor_thread = self._setup_mock_thread_and_start_test_run(mock_monitor, is_alive=False, invocations=0)
         self.assertEqual(True, mock_monitor.called)
         self.assertEqual(True, mock_monitor_thread.run.called)
         self.assertEqual(True, mock_monitor_thread.is_alive.called)
         self.assertEqual(True, mock_monitor_thread.start.called)
 
-    def test_restart_env_thread(self, mock_env, mock_monitor, mock_collect_logs): # pylint: disable=unused-argument
+    def test_restart_env_thread(self, mock_env, *args):  # pylint: disable=unused-argument
         mock_env_thread = self._setup_mock_thread_and_start_test_run(mock_env, is_alive=False, invocations=0)
         self.assertEqual(True, mock_env.called)
         self.assertEqual(True, mock_env_thread.run.called)
@@ -1716,7 +1728,7 @@ class MonitorThreadTest(AgentTestCase):
         self.assertEqual(True, mock_env_thread.start.called)
 
 
-class ChildMock(Mock): # pylint: disable=too-many-ancestors
+class ChildMock(Mock):  # pylint: disable=too-many-ancestors
     def __init__(self, return_value=0, side_effect=None):
         Mock.__init__(self, return_value=return_value, side_effect=side_effect)
 
@@ -1724,7 +1736,7 @@ class ChildMock(Mock): # pylint: disable=too-many-ancestors
         self.wait = Mock(return_value=return_value, side_effect=side_effect)
 
 
-class ProtocolMock(object): # pylint: disable=too-many-instance-attributes
+class ProtocolMock(object):  # pylint: disable=too-many-instance-attributes
     def __init__(self, family="TestAgent", etag=42, versions=None, client=None):
         self.family = family
         self.client = client
@@ -1744,7 +1756,7 @@ class ProtocolMock(object): # pylint: disable=too-many-instance-attributes
 
     def create_manifests(self):
         self.agent_manifests = VMAgentManifestList()
-        if len(self.versions) <= 0: # pylint: disable=len-as-condition
+        if len(self.versions) <= 0:  # pylint: disable=len-as-condition
             return
 
         if self.family is not None:
@@ -1756,7 +1768,7 @@ class ProtocolMock(object): # pylint: disable=too-many-instance-attributes
 
     def create_packages(self):
         self.agent_packages = ExtHandlerPackageList()
-        if len(self.versions) <= 0: # pylint: disable=len-as-condition
+        if len(self.versions) <= 0:  # pylint: disable=len-as-condition
             return
 
         for version in self.versions:
@@ -1776,7 +1788,7 @@ class ProtocolMock(object): # pylint: disable=too-many-instance-attributes
             raise ResourceGoneError()
         return self.agent_manifests, self.etag
 
-    def get_vmagent_pkgs(self, manifest): # pylint: disable=unused-argument
+    def get_vmagent_pkgs(self, manifest):  # pylint: disable=unused-argument
         self.call_counts["get_vmagent_pkgs"] += 1
         if self.goal_state_is_stale:
             self.goal_state_is_stale = False
@@ -1787,7 +1799,7 @@ class ProtocolMock(object): # pylint: disable=too-many-instance-attributes
         self.call_counts["update_goal_state"] += 1
 
 
-class ResponseMock(Mock): # pylint: disable=too-many-ancestors
+class ResponseMock(Mock):  # pylint: disable=too-many-ancestors
     def __init__(self, status=restutil.httpclient.OK, response=None, reason=None):
         Mock.__init__(self)
         self.status = status
@@ -1798,7 +1810,7 @@ class ResponseMock(Mock): # pylint: disable=too-many-ancestors
         return self.response
 
 
-class TimeMock(Mock): # pylint: disable=too-many-ancestors
+class TimeMock(Mock):  # pylint: disable=too-many-ancestors
     def __init__(self, time_increment=1):
         Mock.__init__(self)
         self.next_time = time.time()
@@ -1807,7 +1819,7 @@ class TimeMock(Mock): # pylint: disable=too-many-ancestors
 
         self.sleep_interval = None
 
-    def sleep(self, n): # pylint: disable=invalid-name
+    def sleep(self, n):  # pylint: disable=invalid-name
         self.sleep_interval = n
 
     def time(self):

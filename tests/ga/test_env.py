@@ -51,7 +51,7 @@ class TestEnvHandler(AgentTestCase):
         self.assertEqual(pids, [])
 
         self.assertEqual(mock_warn.call_count, 1)
-        args, kwargs = mock_warn.call_args # pylint: disable=unused-variable
+        args, kwargs = mock_warn.call_args  # pylint: disable=unused-variable
         message = args[0]
         self.assertEqual("Dhcp client is not running.", message)
 
@@ -63,7 +63,7 @@ class TestEnvHandler(AgentTestCase):
         self.assertEqual(pids, [])
 
         self.assertEqual(mock_error.call_count, 1)
-        args, kwargs = mock_error.call_args # pylint: disable=unused-variable
+        args, kwargs = mock_error.call_args  # pylint: disable=unused-variable
         self.assertIn("Failed to get the PID of the DHCP client", args[0])
         self.assertIn("No such file or directory", args[1])
 
@@ -75,7 +75,7 @@ class TestEnvHandler(AgentTestCase):
                 self.assertEqual(mock_warn.call_count, count)
 
                 for call_args in mock_warn.call_args_list:
-                    args, kwargs = call_args # pylint: disable=unused-variable
+                    args, kwargs = call_args  # pylint: disable=unused-variable
                     self.assertEqual("Dhcp client is not running.", args[0])
 
             with patch("azurelinuxagent.common.osutil.default.shellutil.run_command", side_effect=lambda _: self.shellutil_run_command(["pidof", "non-existing-process"])):
@@ -85,7 +85,7 @@ class TestEnvHandler(AgentTestCase):
                 assert_warnings(1)
 
                 # it should not log subsequent errors
-                for i in range(0, 3): # pylint: disable=unused-variable
+                for i in range(0, 3):  # pylint: disable=unused-variable
                     pids = env_handler.get_dhcp_client_pid()
                     self.assertEqual(pids, [])
                     self.assertEqual(mock_warn.call_count, 1)
@@ -136,7 +136,7 @@ class TestEnvHandler(AgentTestCase):
             #
             # if the process was restarted then it should reconfigure the network routes
             #
-            def mock_check_pid_alive(pid): # pylint: disable=function-redefined
+            def mock_check_pid_alive(pid):  # pylint: disable=function-redefined
                 if pid == 123:
                     return False
                 raise Exception("Unexpected PID: {0}".format(pid))
@@ -149,7 +149,7 @@ class TestEnvHandler(AgentTestCase):
             #
             # if the new dhcp client has not been restarted then it should not reconfigure the network routes
             #
-            def mock_check_pid_alive(pid): # pylint: disable=function-redefined
+            def mock_check_pid_alive(pid):  # pylint: disable=function-redefined
                 if pid in [456, 789]:
                     return True
                 raise Exception("Unexpected PID: {0}".format(pid))
