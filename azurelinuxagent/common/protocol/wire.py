@@ -162,12 +162,7 @@ class WireProtocol(DataContract):
         # in the lambda.
         host_func = lambda: self._download_ext_handler_pkg_through_host(uri, destination)
 
-        try:
-            success = self.client.send_request_using_appropriate_channel(direct_func, host_func)
-        except Exception:
-            success = False
-
-        return success
+        return self.client.send_request_using_appropriate_channel(direct_func, host_func)
 
     def report_provision_status(self, provision_status):
         validate_param("provision_status", provision_status, ProvisionStatus)
@@ -630,20 +625,22 @@ class WireClient(object): # pylint: disable=R0904
             # in the lambda.
             host_func = lambda: self.fetch_manifest_through_host(version.uri) # pylint: disable=W0640
 
-            try:
-                response = self.send_request_using_appropriate_channel(direct_func, host_func)
+            response = self.send_request_using_appropriate_channel(direct_func, host_func)
 
-                if response:
+            try:
+                if response is not None:
                     host = self.get_host_plugin()
                     host.update_manifest_uri(version.uri)
                     return response
-            except Exception as e: # pylint: disable=C0103
-                logger.warn("Exception when fetching manifest. Error: {0}".format(ustr(e)))
+                else:
+                    logger.warn("Failed to fetch manifest from {0}", version.uri)
+            except Exception as error:
+                logger.warn("Failed to fetch manifest from {0}. Error: {1}", version.uri, ustr(error))
 
         raise ExtensionDownloadError("Failed to fetch manifest from all sources")
 
     def stream(self, uri, destination, headers=None, use_proxy=None):
-        success = False
+        success = None
         logger.verbose("Fetch [{0}] with headers [{1}] to file [{2}]", uri, headers, destination)
 
         response = self._fetch_response(uri, headers, use_proxy)
@@ -657,8 +654,8 @@ class WireClient(object): # pylint: disable=R0904
                         destination_fh.write(chunk)
                         complete = len(chunk) < chunk_size
                 success = True
-            except Exception as e: # pylint: disable=C0103
-                logger.error('Error streaming {0} to {1}: {2}'.format(uri, destination, ustr(e)))
+            except Exception as error:
+                logger.error('Error streaming {0} to {1}: {2}'.format(uri, destination, ustr(error)))
 
         return success
 
@@ -697,10 +694,13 @@ class WireClient(object): # pylint: disable=R0904
                 if host_plugin is not None:
                     host_plugin.report_fetch_health(uri, source='WireClient')
 
-        except (HttpError, ProtocolError, IOError) as e: # pylint: disable=C0103
-            logger.verbose("Fetch failed from [{0}]: {1}", uri, e)
-            if isinstance(e, ResourceGoneError) or isinstance(e, InvalidContainerError): # pylint: disable=R1701
+        except (HttpError, ProtocolError, IOError, ProtocolError) as error:
+            logger.verbose("Fetch failed from [{0}]: {1}", uri, error)
+            if isinstance(error, (InvalidContainerError, ResourceGoneError)):
+                # These are retryable errors that should force a goal state refresh in the host plugin
                 raise
+            return None
+
         return resp
 
     def update_host_plugin_from_goal_state(self):
@@ -860,104 +860,79 @@ class WireClient(object): # pylint: disable=R0904
                      "advised by Fabric.").format(PROTOCOL_VERSION)
             raise ProtocolNotFoundError(error)
 
-    def __call_hostplugin_with_container_check(self, host_func):
+    def __send_request_using_host_channel(self, host_func):
         ret = None
         try:
             ret = host_func()
-        except (ResourceGoneError, InvalidContainerError) as e: # pylint: disable=C0103
+        except (ResourceGoneError, InvalidContainerError) as error:
             host_plugin = self.get_host_plugin()
-            old_container_id = host_plugin.container_id
-            old_role_config_name = host_plugin.role_config_name
 
-            msg = "[PERIODIC] Request failed with the current host plugin configuration. " \
+            old_container_id, old_role_config_name = host_plugin.container_id, host_plugin.role_config_name
+            msg = "Request failed with the current host plugin configuration. " \
                   "ContainerId: {0}, role config file: {1}. Fetching new goal state and retrying the call." \
-                  "Error: {2}".format(old_container_id, old_role_config_name, ustr(e))
-            logger.periodic_info(logger.EVERY_SIX_HOURS, msg)
+                  "Error: {2}".format(old_container_id, old_role_config_name, ustr(error))
+            logger.info(msg)
 
             self.update_host_plugin_from_goal_state()
 
-            new_container_id = host_plugin.container_id
-            new_role_config_name = host_plugin.role_config_name
-            msg = "[PERIODIC] Host plugin reconfigured with new parameters. " \
+            new_container_id, new_role_config_name = host_plugin.container_id, host_plugin.role_config_name
+            msg = "Host plugin reconfigured with new parameters. " \
                   "ContainerId: {0}, role config file: {1}.".format(new_container_id, new_role_config_name)
-            logger.periodic_info(logger.EVERY_SIX_HOURS, msg)
+            logger.info(msg)
 
             try:
                 ret = host_func()
-                if ret:
-                    msg = "[PERIODIC] Request succeeded using the host plugin channel after goal state refresh. " \
+                if ret is not None:
+                    msg = "Request succeeded using the host plugin channel after goal state refresh. " \
                           "ContainerId changed from {0} to {1}, " \
-                          "role config file changed from {2} to {3}.".format(old_container_id, new_container_id,
-                                                                             old_role_config_name, new_role_config_name)
-                    add_periodic(delta=logger.EVERY_SIX_HOURS,
-                                 name=AGENT_NAME,
-                                 version=CURRENT_VERSION,
-                                 op=WALAEventOperation.HostPlugin,
-                                 is_success=True,
-                                 message=msg,
-                                 log_event=True)
+                          "role config file changed from {2} to {3}.".format(old_container_id, new_container_id, old_role_config_name, new_role_config_name)
+                    add_event(AGENT_NAME, op=WALAEventOperation.HostPlugin, version=CURRENT_VERSION, is_success=True, message=msg, log_event=True)
 
-            except (ResourceGoneError, InvalidContainerError) as e: # pylint: disable=C0103
-                msg = "[PERIODIC] Request failed using the host plugin channel after goal state refresh. " \
+            except Exception as error:
+                msg = "Request failed using the host plugin channel after goal state refresh. " \
                       "ContainerId changed from {0} to {1}, role config file changed from {2} to {3}. " \
-                      "Exception type: {4}.".format(old_container_id, new_container_id, old_role_config_name,
-                                                    new_role_config_name, type(e).__name__)
-                add_periodic(delta=logger.EVERY_SIX_HOURS,
-                             name=AGENT_NAME,
-                             version=CURRENT_VERSION,
-                             op=WALAEventOperation.HostPlugin,
-                             is_success=False,
-                             message=msg,
-                             log_event=True)
-                raise
+                      "Exception type: {4}.".format(old_container_id, new_container_id, old_role_config_name, new_role_config_name, type(error).__name__)
+                add_event(AGENT_NAME, op=WALAEventOperation.HostPlugin, version=CURRENT_VERSION, is_success=False, message=msg, log_event=True)
+                return None
+        except Exception as error:
+            logger.info("Request failed using the host plugin channel. Error: {0}", ustr(error))
+            return None
 
         return ret
 
-    def __send_request_using_host_channel(self, host_func):
-        ret = self.__call_hostplugin_with_container_check(host_func)
-
-        if ret and not HostPluginProtocol.is_default_channel():
-            # Set host plugin channel as default if it succeeded.
-            logger.info("Switching default channel to host plugin.")
-            HostPluginProtocol.set_default_channel(True)
-
-        return ret
-
-    def __send_request_using_direct_channel(self, direct_func):
+    @staticmethod
+    def __send_request_using_direct_channel(direct_func):
         ret = None
         try:
             ret = direct_func()
 
-            # Different direct channel functions report failure in different ways: by returning None, False,
-            # or raising ResourceGone or InvalidContainer exceptions.
-            if not ret:
-                logger.periodic_info(logger.EVERY_HOUR, "[PERIODIC] Request failed using the direct channel, "
-                                                        "trying host plugin next.")
-        except (ResourceGoneError, InvalidContainerError) as e:  # pylint: disable=C0103
-            logger.periodic_info(logger.EVERY_HOUR, "[PERIODIC] Request failed using the direct channel, "
-                                                    "trying host plugin next. Error: {0}".format(ustr(e)))
-
-        if ret and HostPluginProtocol.is_default_channel():
-            # Set direct channel as default if it succeeded.
-            logger.info("Switching default channel to WireServer.")
-            HostPluginProtocol.set_default_channel(False)
+            if ret is None:
+                logger.info("Request failed using the direct channel.")
+                return None
+        except Exception as error:
+            logger.info("Request failed using the direct channel. Error: {0}".format(ustr(error)))
 
         return ret
 
     def send_request_using_appropriate_channel(self, direct_func, host_func):
-        primary_ret = None
-        try:
-            primary_ret = self.__send_request_using_host_channel(host_func) if HostPluginProtocol.is_default_channel() \
-                else self.__send_request_using_direct_channel(direct_func)
-        except Exception:
-            pass
+        direct_channel = lambda: self.__send_request_using_direct_channel(direct_func)
+        host_channel = lambda: self.__send_request_using_host_channel(host_func)
 
-        if primary_ret:
-            return primary_ret
+        if HostPluginProtocol.is_default_channel:
+            primary_channel, secondary_channel = host_channel, direct_channel
+        else:
+            primary_channel, secondary_channel = direct_channel, host_channel
 
-        secondary_ret = self.__send_request_using_direct_channel(direct_func) if HostPluginProtocol.is_default_channel() \
-            else self.__send_request_using_host_channel(host_func)
-        return secondary_ret
+        ret = primary_channel()
+        if ret is not None:
+            return ret
+
+        ret = secondary_channel()
+        if ret is not None:
+            HostPluginProtocol.is_default_channel = not HostPluginProtocol.is_default_channel
+            logger.info("Default channel changed to {0}.", "host" if HostPluginProtocol.is_default_channel else "direct")
+
+        return ret
 
     def upload_status_blob(self):
         ext_conf = self.get_ext_conf()
@@ -1193,10 +1168,9 @@ class WireClient(object): # pylint: disable=R0904
 
             logger.verbose("Retrieving the artifacts profile")
 
-            try:
-                profile = self.send_request_using_appropriate_channel(direct_func, host_func)
-            except Exception as e: # pylint: disable=C0103
-                logger.warn("Exception retrieving artifacts profile: {0}".format(ustr(e)))
+            profile = self.send_request_using_appropriate_channel(direct_func, host_func)
+            if profile is None:
+                logger.warn("Failed to retrieve artifacts profile")
                 return None
 
             if not textutil.is_str_empty(profile):
@@ -1217,7 +1191,7 @@ class WireClient(object): # pylint: disable=R0904
 
     def upload_logs(self, content):
         host_func = lambda: self._upload_logs_through_host(content)
-        return self.__call_hostplugin_with_container_check(host_func)
+        return self.__send_request_using_host_channel(host_func)
 
     def _upload_logs_through_host(self, content):
         host = self.get_host_plugin()
