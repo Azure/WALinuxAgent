@@ -1,3 +1,9 @@
+waagent (2.2.41+cbld10u3) unstable; urgency=medium
+
+  * Fix detection of CBL-D distro
+
+ -- Matt Bearup <mbearup@microsoft.com>  Thu, 12 Nov 2020 10:54:45 +0800
+
 waagent (2.2.41+cbld10u2) unstable; urgency=medium
 
   * Added rule to enable waagent with python3
