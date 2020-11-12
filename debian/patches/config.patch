@@ -34,3 +34,12 @@ Index: WALinuxAgent/config/debian/waagent.conf
  
  # Decode CustomData from Base64.
  Provisioning.DecodeCustomData=n
+@@ -41,7 +41,7 @@ Provisioning.ExecuteCustomData=n
+ Provisioning.AllowResetSysUser=n
+ 
+ # Format if unformatted. If 'n', resource disk will not be mounted.
+-ResourceDisk.Format=y
++ResourceDisk.Format=n
+ 
+ # File system on the resource disk
+ # Typically ext3 or ext4. FreeBSD images should use 'ufs2' here.
