@@ -28,7 +28,7 @@ import azurelinuxagent.common.conf as conf
 import azurelinuxagent.common.logger as logger
 import azurelinuxagent.common.utils.textutil as textutil
 from azurelinuxagent.common.datacontract import validate_param
-from azurelinuxagent.common.event import add_event, add_periodic, WALAEventOperation, report_event, \
+from azurelinuxagent.common.event import add_event, WALAEventOperation, report_event, \
     CollectOrReportEventDebugInfo
 from azurelinuxagent.common.exception import ProtocolNotFoundError, \
     ResourceGoneError, ExtensionDownloadError, InvalidContainerError, ProtocolError, HttpError
@@ -626,12 +626,12 @@ class WireClient(object):  # pylint: disable=R0904
             response = self.send_request_using_appropriate_channel(direct_func, host_func)
 
             try:
-                if response is not None:
+                if response is None:
+                    logger.warn("Failed to fetch manifest from {0}", version.uri)
+                else:
                     host = self.get_host_plugin()
                     host.update_manifest_uri(version.uri)
                     return response
-                else:
-                    logger.warn("Failed to fetch manifest from {0}", version.uri)
             except Exception as error:
                 logger.warn("Failed to fetch manifest from {0}. Error: {1}", version.uri, ustr(error))
 
