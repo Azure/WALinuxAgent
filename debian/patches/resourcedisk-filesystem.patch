@@ -73,7 +73,7 @@ index cfb76d2..7435377 100644
 -                    suppress_message=False,
 -                    option_str="{0} 1 83".format(device))
 -                self.reread_partition_table(device)
-+                subprocess.call(['sfdisk', '-c', '-f', device, '1', '83'], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
++                shellutil.run('sfdisk -c -f {0} 1 83'.format(device))
                  logger.info("Format partition [{0}]", mkfs_string)
                  shellutil.run(mkfs_string)
 -            else:
