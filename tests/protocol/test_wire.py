@@ -562,12 +562,11 @@ class TestWireClient(HttpRequestPredicates, AgentTestCase):
 
     def test_download_ext_handler_pkg_should_not_change_default_channel_when_all_channels_fail(self):
         extension_url = 'https://fake_host/fake_extension.zip'
+        target_file = os.path.join(self.tmp_dir, "fake_extension.zip")
 
         def http_get_handler(url, *_, **kwargs):
-            if url == extension_url:
-                return HttpError("Exception to fake error on direct channel")
-            if self.is_host_plugin_extension_request(url, kwargs, extension_url):
-                return ResourceGoneError("Exception to fake error on host channel")
+            if url == extension_url or self.is_host_plugin_extension_request(url, kwargs, extension_url):
+                return MockResponse(body=b"content not found", status_code=404, reason="Not Found")
             if self.is_goal_state_request(url):
                 protocol.track_url(url)  # keep track of goal state requests
             return None
@@ -580,15 +579,14 @@ class TestWireClient(HttpRequestPredicates, AgentTestCase):
 
             protocol.set_http_handlers(http_get_handler=http_get_handler)
 
-            success = protocol.download_ext_handler_pkg(extension_url, "/an-invalid-directory/an-invalid-file.zip")
+            success = protocol.download_ext_handler_pkg(extension_url, target_file)
 
             urls = protocol.get_tracked_urls()
             self.assertEqual(success, None, "The download should have failed")
-            self.assertEqual(len(urls), 4, "Unexpected number of HTTP requests: [{0}]".format(urls))
+            self.assertEqual(len(urls), 2, "Unexpected number of HTTP requests: [{0}]".format(urls))
             self.assertEqual(urls[0], extension_url, "The first attempt should have been over the direct channel")
             self.assertTrue(self.is_host_plugin_extension_artifact_request(urls[1]), "The second attempt should have been over the host channel")
-            self.assertTrue(self.is_goal_state_request(urls[2]), "The host channel should have been refreshed the goal state")
-            self.assertTrue(self.is_host_plugin_extension_artifact_request(urls[3]), "The third attempt should have been over the host channel")
+            self.assertFalse(os.path.exists(target_file), "The extension package was downloaded and it shouldn't have")
             self.assertEqual(HostPluginProtocol.is_default_channel, False, "The host channel should not have been set as the default")
 
     def test_fetch_manifest_should_not_invoke_host_channel_when_direct_channel_succeeds(self):
@@ -1280,9 +1278,10 @@ class UpdateHostPluginFromGoalStateTestCase(AgentTestCase):
 
 
 class MockResponse:  # pylint: disable=too-few-public-methods
-    def __init__(self, body, status_code):
+    def __init__(self, body, status_code, reason=None):
         self.body = body
         self.status = status_code
+        self.reason = reason
 
     def read(self, *_):
         return self.body
