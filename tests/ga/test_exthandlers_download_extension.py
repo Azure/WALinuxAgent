@@ -193,7 +193,7 @@ class DownloadExtensionTestCase(AgentTestCase):  # pylint: disable=too-many-inst
             # fail a few times, then succeed
             if self.download_failures < 3:
                 self.download_failures += 1
-                return None
+                return False
             DownloadExtensionTestCase._create_zip_file(destination)
             return True
 
