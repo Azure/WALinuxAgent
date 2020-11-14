@@ -911,38 +911,24 @@ class TestWireClient(HttpRequestPredicates, AgentTestCase):
             HostPluginProtocol.is_default_channel = False
             direct_func, host_func = self._set_and_fail_helper_channel_functions(fail_direct=True, fail_host=True)
 
-            # Assert we've called both channels, but the default channel hasn't changed
-            ret = protocol.client.send_request_using_appropriate_channel(direct_func, host_func)
-            self.assertEqual(None, ret)
-            self.assertEqual(1, direct_func.counter)
-            self.assertEqual(1, host_func.counter)
-            self.assertFalse(HostPluginProtocol.is_default_channel)
-
-            # If both channels keep failing, assert we are not changing the default, but keep trying both.
-            for n in range(5):  # pylint: disable=invalid-name
+            # Assert we keep trying both channels, but the default channel doesn't change
+            for iteration in range(5):
                 ret = protocol.client.send_request_using_appropriate_channel(direct_func, host_func)
                 self.assertEqual(None, ret)
-                self.assertEqual(1 + n + 1, direct_func.counter)
-                self.assertEqual(1 + n + 1, host_func.counter)
+                self.assertEqual(iteration + 1, direct_func.counter)
+                self.assertEqual(iteration + 1, host_func.counter)
                 self.assertFalse(HostPluginProtocol.is_default_channel)
 
             # Scenario #2: Host channel is default
             HostPluginProtocol.is_default_channel = True
             direct_func, host_func = self._set_and_fail_helper_channel_functions(fail_direct=True, fail_host=True)
 
-            # Assert we've called both channels, but the default channel hasn't changed
-            ret = protocol.client.send_request_using_appropriate_channel(direct_func, host_func)
-            self.assertEqual(None, ret)
-            self.assertEqual(1, direct_func.counter)
-            self.assertEqual(1, host_func.counter)
-            self.assertTrue(HostPluginProtocol.is_default_channel)
-
-            # If both channels keep failing, assert we are not changing the default, but keep trying both.
-            for n in range(5):  # pylint: disable=invalid-name
+            # Assert we keep trying both channels, but the default channel doesn't change
+            for iteration in range(5):
                 ret = protocol.client.send_request_using_appropriate_channel(direct_func, host_func)
                 self.assertEqual(None, ret)
-                self.assertEqual(1 + n + 1, direct_func.counter)
-                self.assertEqual(1 + n + 1, host_func.counter)
+                self.assertEqual(iteration + 1, direct_func.counter)
+                self.assertEqual(iteration + 1, host_func.counter)
                 self.assertTrue(HostPluginProtocol.is_default_channel)
 
     def test_send_request_using_appropriate_channel_should_change_default_channel_when_secondary_succeeds(self):
@@ -959,11 +945,11 @@ class TestWireClient(HttpRequestPredicates, AgentTestCase):
             self.assertTrue(HostPluginProtocol.is_default_channel)
 
             # If host keeps succeeding, assert we keep calling only that channel and not changing the default.
-            for n in range(5):  # pylint: disable=invalid-name
+            for iteration in range(5):
                 ret = protocol.client.send_request_using_appropriate_channel(direct_func, host_func)
                 self.assertEqual("host", ret)
                 self.assertEqual(1, direct_func.counter)
-                self.assertEqual(1 + n + 1, host_func.counter)
+                self.assertEqual(1 + iteration + 1, host_func.counter)
                 self.assertTrue(HostPluginProtocol.is_default_channel)
 
             # Scenario #2: Host channel is default
@@ -978,10 +964,10 @@ class TestWireClient(HttpRequestPredicates, AgentTestCase):
             self.assertFalse(HostPluginProtocol.is_default_channel)
 
             # If direct keeps succeeding, assert we keep calling only that channel and not changing the default.
-            for n in range(5):  # pylint: disable=invalid-name
+            for iteration in range(5):
                 ret = protocol.client.send_request_using_appropriate_channel(direct_func, host_func)
                 self.assertEqual("direct", ret)
-                self.assertEqual(1 + n + 1, direct_func.counter)
+                self.assertEqual(1 + iteration + 1, direct_func.counter)
                 self.assertEqual(1, host_func.counter)
                 self.assertFalse(HostPluginProtocol.is_default_channel)
 
