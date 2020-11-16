@@ -1,4 +1,4 @@
-# Copyright 2018 Microsoft Corporation # pylint: disable=too-many-lines
+# Copyright 2018 Microsoft Corporation  # pylint: disable=too-many-lines
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -25,13 +25,13 @@ import tempfile
 import time
 import unittest
 import uuid
-import zipfile # pylint: disable=unused-import
 
 import datetime
 
 from azurelinuxagent.common import conf
 from azurelinuxagent.common.cgroupconfigurator import CGroupConfigurator
 from azurelinuxagent.common.datacontract import get_properties
+from azurelinuxagent.common.event import WALAEventOperation
 from azurelinuxagent.common.utils import fileutil
 from azurelinuxagent.common.utils.fileutil import read_file
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
@@ -53,7 +53,7 @@ from tests.protocol.mocks import mock_wire_protocol, HttpRequestPredicates
 from tests.protocol.mockwiredata import DATA_FILE
 from tests.tools import AgentTestCase, data_dir, MagicMock, Mock, patch, mock_sleep
 from tests.ga.extension_emulator import Actions, ExtensionCommandNames, extension_emulator, \
-    enable_invocations, generate_put_handler 
+    enable_invocations, generate_put_handler
 
 # Mocking the original sleep to reduce test execution time
 SLEEP = time.sleep
@@ -70,8 +70,8 @@ def raise_system_exception():
     raise Exception
 
 
-def raise_ioerror(*args): # pylint: disable=unused-argument
-    e = IOError() # pylint: disable=invalid-name
+def raise_ioerror(*args):  # pylint: disable=unused-argument
+    e = IOError()  # pylint: disable=invalid-name
     from errno import EIO
     e.errno = EIO
     raise e
@@ -101,7 +101,7 @@ class TestExtensionCleanup(AgentTestCase):
     def _is_extension_dir(path):
         return re.match(HANDLER_COMPLETE_NAME_PATTERN, os.path.basename(path)) is not None
 
-    def _assert_ext_handler_status(self, aggregate_status, expected_status, version, expected_ext_handler_count=0): # pylint: disable=useless-return
+    def _assert_ext_handler_status(self, aggregate_status, expected_status, version, expected_ext_handler_count=0):  # pylint: disable=useless-return
         self.assertIsNotNone(aggregate_status, "Aggregate status should not be None")
         handler_statuses = aggregate_status['aggregateStatus']['handlerAggregateStatus']
         self.assertEqual(expected_ext_handler_count, len(handler_statuses),
@@ -116,7 +116,7 @@ class TestExtensionCleanup(AgentTestCase):
     def _setup_test_env(self, test_data):
         with mock_wire_protocol(test_data) as protocol:
 
-            def mock_http_put(url, *args, **kwargs): # pylint: disable=unused-argument,inconsistent-return-statements
+            def mock_http_put(url, *args, **kwargs):  # pylint: disable=unused-argument,inconsistent-return-statements
                 if HttpRequestPredicates.is_host_plugin_status_request(url):
                     # Skip reading the HostGA request data as its encoded
                     return None
@@ -165,7 +165,7 @@ class TestExtensionCleanup(AgentTestCase):
 
             # Create random extension directories
             for i in range(no_of_orphaned_packages):
-                eh = ExtHandler(name='Random.Extension.ShouldNot.Be.There') # pylint: disable=invalid-name
+                eh = ExtHandler(name='Random.Extension.ShouldNot.Be.There')  # pylint: disable=invalid-name
                 eh.properties.version = FlexibleVersion("9.9.0") + i
                 handler = ExtHandlerInstance(eh, "unused")
                 os.mkdir(handler.get_base_dir())
@@ -181,7 +181,7 @@ class TestExtensionCleanup(AgentTestCase):
     def test_cleanup_leaves_failed_extensions(self):
         original_popen = subprocess.Popen
 
-        def mock_fail_popen(*args, **kwargs): # pylint: disable=unused-argument
+        def mock_fail_popen(*args, **kwargs):  # pylint: disable=unused-argument
             return original_popen("fail_this_command", **kwargs)
 
         with self._setup_test_env(mockwiredata.DATA_FILE_EXT_SINGLE) as (exthandlers_handler, protocol, no_of_exts):
@@ -208,7 +208,7 @@ class TestExtensionCleanup(AgentTestCase):
 
 
 class TestHandlerStateMigration(AgentTestCase):
-    def setUp(self): # pylint: disable=useless-return
+    def setUp(self):  # pylint: disable=useless-return
         AgentTestCase.setUp(self)
 
         handler_name = "Not.A.Real.Extension"
@@ -226,7 +226,7 @@ class TestHandlerStateMigration(AgentTestCase):
             message="Uninteresting message")
         return
 
-    def _prepare_handler_state(self): # pylint: disable=useless-return
+    def _prepare_handler_state(self):  # pylint: disable=useless-return
         handler_state_path = os.path.join(
             self.tmp_dir,
             "handler_state",
@@ -240,7 +240,7 @@ class TestHandlerStateMigration(AgentTestCase):
             json.dumps(get_properties(self.handler_status)))
         return
 
-    def _prepare_handler_config(self): # pylint: disable=useless-return
+    def _prepare_handler_config(self):  # pylint: disable=useless-return
         handler_config_path = os.path.join(
             self.tmp_dir,
             self.ext_handler_i.get_full_name(),
@@ -248,7 +248,7 @@ class TestHandlerStateMigration(AgentTestCase):
         os.makedirs(handler_config_path)
         return
 
-    def test_migration_migrates(self): # pylint: disable=useless-return
+    def test_migration_migrates(self):  # pylint: disable=useless-return
         self._prepare_handler_state()
         self._prepare_handler_config()
 
@@ -260,7 +260,7 @@ class TestHandlerStateMigration(AgentTestCase):
             self.handler_status.status)
         return
 
-    def test_migration_skips_if_empty(self): # pylint: disable=useless-return
+    def test_migration_skips_if_empty(self):  # pylint: disable=useless-return
         self._prepare_handler_config()
 
         migrate_handler_state()
@@ -271,7 +271,7 @@ class TestHandlerStateMigration(AgentTestCase):
             os.path.isfile(os.path.join(self.ext_handler_i.get_conf_dir(), "HandlerStatus")))
         return
 
-    def test_migration_cleans_up(self): # pylint: disable=useless-return
+    def test_migration_cleans_up(self):  # pylint: disable=useless-return
         self._prepare_handler_state()
         self._prepare_handler_config()
 
@@ -280,7 +280,7 @@ class TestHandlerStateMigration(AgentTestCase):
         self.assertFalse(os.path.isdir(os.path.join(conf.get_lib_dir(), "handler_state")))
         return
 
-    def test_migration_does_not_overwrite(self): # pylint: disable=useless-return
+    def test_migration_does_not_overwrite(self):  # pylint: disable=useless-return
         self._prepare_handler_state()
         self._prepare_handler_config()
 
@@ -320,29 +320,29 @@ class TestHandlerStateMigration(AgentTestCase):
         try:
             with patch('json.dumps', return_value=None):
                 self.ext_handler_i.set_handler_status(status=status, code=code, message=message)
-        except Exception as e: # pylint: disable=unused-variable,invalid-name
+        except Exception as e:  # pylint: disable=unused-variable,invalid-name
             self.fail("set_handler_status threw an exception")
 
     @patch("shutil.move", side_effect=Exception)
-    def test_migration_ignores_move_errors(self, shutil_mock): # pylint: disable=useless-return,unused-argument
+    def test_migration_ignores_move_errors(self, shutil_mock):  # pylint: disable=useless-return,unused-argument
         self._prepare_handler_state()
         self._prepare_handler_config()
 
         try:
             migrate_handler_state()
-        except Exception as e: # pylint: disable=invalid-name
-            self.assertTrue(False, "Unexpected exception: {0}".format(str(e))) # pylint: disable=redundant-unittest-assert
+        except Exception as e:  # pylint: disable=invalid-name
+            self.assertTrue(False, "Unexpected exception: {0}".format(str(e)))  # pylint: disable=redundant-unittest-assert
         return
 
     @patch("shutil.rmtree", side_effect=Exception)
-    def test_migration_ignores_tree_remove_errors(self, shutil_mock): # pylint: disable=useless-return,unused-argument
+    def test_migration_ignores_tree_remove_errors(self, shutil_mock):  # pylint: disable=useless-return,unused-argument
         self._prepare_handler_state()
         self._prepare_handler_config()
 
         try:
             migrate_handler_state()
-        except Exception as e: # pylint: disable=invalid-name
-            self.assertTrue(False, "Unexpected exception: {0}".format(str(e))) # pylint: disable=redundant-unittest-assert
+        except Exception as e:  # pylint: disable=invalid-name
+            self.assertTrue(False, "Unexpected exception: {0}".format(str(e)))  # pylint: disable=redundant-unittest-assert
         return
 
 
@@ -368,11 +368,11 @@ class TestExtension(ExtensionTestCase):
     def setUp(self):
         AgentTestCase.setUp(self)
 
-    def _assert_handler_status(self, report_vm_status, expected_status, # pylint: disable=useless-return,too-many-arguments
+    def _assert_handler_status(self, report_vm_status, expected_status,  # pylint: disable=useless-return,too-many-arguments
                                expected_ext_count, version,
                                expected_handler_name="OSTCExtensions.ExampleHandlerLinux"):
         self.assertTrue(report_vm_status.called)
-        args, kw = report_vm_status.call_args # pylint: disable=unused-variable,invalid-name
+        args, kw = report_vm_status.call_args  # pylint: disable=unused-variable,invalid-name
         vm_status = args[0]
         self.assertNotEqual(0, len(vm_status.vmAgent.extensionHandlers))
         handler_status = vm_status.vmAgent.extensionHandlers[0]
@@ -391,14 +391,14 @@ class TestExtension(ExtensionTestCase):
         else:
             self.assertNotIn(zip_file_format.format(extension_handler_name, extension_version), os.listdir(conf.get_lib_dir()))
 
-    def _assert_no_handler_status(self, report_vm_status): # pylint: disable=useless-return
+    def _assert_no_handler_status(self, report_vm_status):  # pylint: disable=useless-return
         self.assertTrue(report_vm_status.called)
-        args, kw = report_vm_status.call_args # pylint: disable=unused-variable,invalid-name
+        args, kw = report_vm_status.call_args  # pylint: disable=unused-variable,invalid-name
         vm_status = args[0]
         self.assertEqual(0, len(vm_status.vmAgent.extensionHandlers))
         return
 
-    def _create_mock(self, test_data, mock_http_get, MockCryptUtil, *args): # pylint: disable=unused-argument,invalid-name
+    def _create_mock(self, test_data, mock_http_get, MockCryptUtil, *args):  # pylint: disable=unused-argument,invalid-name
         # Mock protocol to return test data
         mock_http_get.side_effect = test_data.mock_http_get
         MockCryptUtil.side_effect = test_data.mock_crypt_util
@@ -421,7 +421,7 @@ class TestExtension(ExtensionTestCase):
         :return: test_data, exthandlers_handler, protocol
         """
         test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE_EXT_SINGLE)
-        exthandlers_handler, protocol = self._create_mock(test_data, *args) # pylint: disable=no-value-for-parameter
+        exthandlers_handler, protocol = self._create_mock(test_data, *args)  # pylint: disable=no-value-for-parameter
 
         # Ensure initial install and enable is successful
         exthandlers_handler.run()
@@ -449,7 +449,7 @@ class TestExtension(ExtensionTestCase):
     def test_ext_handler(self, *args):
         # Test enable scenario.
         test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE)
-        exthandlers_handler, protocol = self._create_mock(test_data, *args) # pylint: disable=no-value-for-parameter
+        exthandlers_handler, protocol = self._create_mock(test_data, *args)  # pylint: disable=no-value-for-parameter
 
         exthandlers_handler.run()
 
@@ -527,7 +527,7 @@ class TestExtension(ExtensionTestCase):
                              "We should have downloaded extension manifest {0} times".format(manifest_count))
 
         test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE)
-        exthandlers_handler, protocol = self._create_mock(test_data, *args) # pylint: disable=no-value-for-parameter
+        exthandlers_handler, protocol = self._create_mock(test_data, *args)  # pylint: disable=no-value-for-parameter
         exthandlers_handler.run()
         _assert_handler_status_and_manifest_download_count(protocol, test_data, 1)
 
@@ -551,7 +551,7 @@ class TestExtension(ExtensionTestCase):
     def test_ext_zip_file_packages_removed_in_update_case(self, *args):
         # Test enable scenario.
         test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE)
-        exthandlers_handler, protocol = self._create_mock(test_data, *args) # pylint: disable=no-value-for-parameter
+        exthandlers_handler, protocol = self._create_mock(test_data, *args)  # pylint: disable=no-value-for-parameter
 
         exthandlers_handler.run()
 
@@ -588,7 +588,7 @@ class TestExtension(ExtensionTestCase):
     def test_ext_zip_file_packages_removed_in_uninstall_case(self, *args):
         # Test enable scenario.
         test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE)
-        exthandlers_handler, protocol = self._create_mock(test_data, *args) # pylint: disable=no-value-for-parameter
+        exthandlers_handler, protocol = self._create_mock(test_data, *args)  # pylint: disable=no-value-for-parameter
         extension_version = "1.0.0"
 
         exthandlers_handler.run()
@@ -610,7 +610,7 @@ class TestExtension(ExtensionTestCase):
     def test_ext_zip_file_packages_removed_in_update_and_uninstall_case(self, *args):
         # Test enable scenario.
         test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE)
-        exthandlers_handler, protocol = self._create_mock(test_data, *args) # pylint: disable=no-value-for-parameter
+        exthandlers_handler, protocol = self._create_mock(test_data, *args)  # pylint: disable=no-value-for-parameter
 
         exthandlers_handler.run()
 
@@ -654,23 +654,49 @@ class TestExtension(ExtensionTestCase):
         self._assert_no_handler_status(protocol.report_vm_status)
         self._assert_ext_pkg_file_status(expected_to_be_present=False, extension_version="1.2.0")
 
+    def test_it_should_ignore_case_when_parsing_plugin_settings(self, mock_get, mock_crypt_util, *args):
+        test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE_CASE_MISMATCH_EXT)
+        exthandlers_handler, protocol = self._create_mock(test_data, mock_get, mock_crypt_util, *args)
+
+        exthandlers_handler.run()
+
+        expected_ext_handlers = ["OSTCExtensions.ExampleHandlerLinux", "Microsoft.Powershell.ExampleExtension",
+                                 "Microsoft.EnterpriseCloud.Monitoring.ExampleHandlerLinux",
+                                 "Microsoft.CPlat.Core.ExampleExtensionLinux",
+                                 "Microsoft.OSTCExtensions.Edp.ExampleExtensionLinuxInTest"]
+
+        self.assertTrue(protocol.report_vm_status.called, "Handler status not reported")
+        args, _ = protocol.report_vm_status.call_args
+        vm_status = args[0]
+        self.assertEqual(len(expected_ext_handlers), len(vm_status.vmAgent.extensionHandlers),
+                         "No of Extension handlers dont match")
+
+        for handler_status in vm_status.vmAgent.extensionHandlers:
+            self.assertEqual("Ready", handler_status.status, "Handler is not Ready")
+            self.assertIn(handler_status.name, expected_ext_handlers, "Handler not reported")
+            self.assertEqual("1.0.0", handler_status.version, "Handler version not matching")
+            self.assertEqual(1, len(handler_status.extensions), "No settings were found for this extension")
+            expected_ext_handlers.remove(handler_status.name)
+
+        self.assertEqual(0, len(expected_ext_handlers), "All handlers not reported")
+
     def test_ext_handler_no_settings(self, *args):
         test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE_EXT_NO_SETTINGS)
-        exthandlers_handler, protocol = self._create_mock(test_data, *args) # pylint: disable=no-value-for-parameter
+        exthandlers_handler, protocol = self._create_mock(test_data, *args)  # pylint: disable=no-value-for-parameter
 
         exthandlers_handler.run()
         self._assert_handler_status(protocol.report_vm_status, "Ready", 0, "1.0.0")
 
     def test_ext_handler_no_public_settings(self, *args):
         test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE_EXT_NO_PUBLIC)
-        exthandlers_handler, protocol = self._create_mock(test_data, *args) # pylint: disable=no-value-for-parameter
+        exthandlers_handler, protocol = self._create_mock(test_data, *args)  # pylint: disable=no-value-for-parameter
 
         exthandlers_handler.run()
         self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.0.0")
 
     def test_ext_handler_no_ext(self, *args):
         test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE_NO_EXT)
-        exthandlers_handler, protocol = self._create_mock(test_data, *args) # pylint: disable=no-value-for-parameter
+        exthandlers_handler, protocol = self._create_mock(test_data, *args)  # pylint: disable=no-value-for-parameter
 
         # Assert no extension handler status
         exthandlers_handler.run()
@@ -679,7 +705,7 @@ class TestExtension(ExtensionTestCase):
     def test_ext_handler_sequencing(self, *args):
         # Test enable scenario.
         test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE_EXT_SEQUENCING)
-        exthandlers_handler, protocol = self._create_mock(test_data, *args) # pylint: disable=no-value-for-parameter
+        exthandlers_handler, protocol = self._create_mock(test_data, *args)  # pylint: disable=no-value-for-parameter
 
         exthandlers_handler.run()
 
@@ -751,9 +777,65 @@ class TestExtension(ExtensionTestCase):
         self.assertEqual(exthandlers_handler.ext_handlers.extHandlers[0].properties.extensions[0].dependencyLevel, 6)
         self.assertEqual(exthandlers_handler.ext_handlers.extHandlers[1].properties.extensions[0].dependencyLevel, 5)
 
+    def test_ext_handler_sequencing_should_fail_if_handler_failed(self, mock_get, mock_crypt, *args):
+        test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE_EXT_SEQUENCING)
+        exthandlers_handler, protocol = self._create_mock(test_data, mock_get, mock_crypt, *args)
+
+        original_popen = subprocess.Popen
+
+        def _assert_event_reported_only_on_incarnation_change(patch_add_event, expected_count=1):
+            handler_seq_reporting = [kwargs for _, kwargs in patch_add_event.call_args_list if kwargs[
+                'op'] == WALAEventOperation.ExtensionProcessing and "will skip processing the rest of the extensions" in
+                                     kwargs['message']]
+            self.assertEqual(len(handler_seq_reporting), expected_count,
+                             "Error should be reported only on incarnation change")
+
+        def mock_fail_extension_commands(args, **kwargs):
+            if 'sample.py' in args:
+                return original_popen("fail_this_command", **kwargs)
+            return original_popen(args, **kwargs)
+
+
+        with patch("subprocess.Popen", mock_fail_extension_commands):
+            with patch('azurelinuxagent.ga.exthandlers.add_event') as patch_add_event:
+                exthandlers_handler.run()
+
+                self._assert_handler_status(protocol.report_vm_status, "NotReady", 0, "1.0.0",
+                                            expected_handler_name="OSTCExtensions.OtherExampleHandlerLinux")
+
+                _assert_event_reported_only_on_incarnation_change(patch_add_event, expected_count=1)
+
+                # Assert that on rerun it should not report errors unless incarnation changes
+                for _ in range(5):
+                    exthandlers_handler.run()
+                    _assert_event_reported_only_on_incarnation_change(patch_add_event, expected_count=1)
+
+                test_data.set_incarnation(2)
+                protocol.update_goal_state()
+                exthandlers_handler.run()
+                # We should report error again on incarnation change
+                _assert_event_reported_only_on_incarnation_change(patch_add_event, expected_count=2)
+
+        # Test it recovers on a new goal state if Handler succeeds
+        test_data.set_incarnation(3)
+        test_data.set_extensions_config_sequence_number(1)
+        protocol.update_goal_state()
+
+        exthandlers_handler.run()
+        self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.0.0",
+                                    expected_handler_name="OSTCExtensions.OtherExampleHandlerLinux")
+        self._assert_ext_status(protocol.report_ext_status, "success", 1)
+
+        # check handler list and dependency levels
+        self.assertTrue(exthandlers_handler.ext_handlers is not None)
+        self.assertTrue(exthandlers_handler.ext_handlers.extHandlers is not None)
+        self.assertEqual(len(exthandlers_handler.ext_handlers.extHandlers), 2)
+        self.assertEqual(exthandlers_handler.ext_handlers.extHandlers[0].properties.extensions[0].dependencyLevel, 1)
+        self.assertEqual(exthandlers_handler.ext_handlers.extHandlers[1].properties.extensions[0].dependencyLevel, 2)
+
     def test_ext_handler_sequencing_default_dependency_level(self, *args):
         test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE)
-        exthandlers_handler, protocol = self._create_mock(test_data, *args) # pylint: disable=unused-variable,no-value-for-parameter
+        exthandlers_handler, protocol = self._create_mock(test_data, *args)  # pylint: disable=unused-variable,no-value-for-parameter
         exthandlers_handler.run()
         self.assertEqual(exthandlers_handler.ext_handlers.extHandlers[0].properties.extensions[0].dependencyLevel, 0)
         self.assertEqual(exthandlers_handler.ext_handlers.extHandlers[0].properties.extensions[0].dependencyLevel, 0)
@@ -766,7 +848,7 @@ class TestExtension(ExtensionTestCase):
                                                         "dependencyLevel=\"a6\"")
         test_data.ext_conf = test_data.ext_conf.replace("dependencyLevel=\"2\"",
                                                         "dependencyLevel=\"5b\"")
-        exthandlers_handler, protocol = self._create_mock(test_data, *args) # pylint: disable=unused-variable,no-value-for-parameter
+        exthandlers_handler, protocol = self._create_mock(test_data, *args)  # pylint: disable=unused-variable,no-value-for-parameter
 
         exthandlers_handler.run()
 
@@ -820,7 +902,7 @@ class TestExtension(ExtensionTestCase):
         expected_status_json = json.loads(expected_status)
 
         test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE_MULTIPLE_EXT)
-        exthandlers_handler, protocol = self._create_mock(test_data, *args) # pylint: disable=unused-variable,no-value-for-parameter
+        exthandlers_handler, protocol = self._create_mock(test_data, *args)  # pylint: disable=unused-variable,no-value-for-parameter
         exthandlers_handler.run()
 
         status_path = os.path.join(conf.get_lib_dir(), AGENT_STATUS_FILE)
@@ -831,7 +913,7 @@ class TestExtension(ExtensionTestCase):
     def test_ext_handler_rollingupgrade(self, *args):
         # Test enable scenario.
         test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE_EXT_ROLLINGUPGRADE)
-        exthandlers_handler, protocol = self._create_mock(test_data, *args) # pylint: disable=no-value-for-parameter
+        exthandlers_handler, protocol = self._create_mock(test_data, *args)  # pylint: disable=no-value-for-parameter
 
         exthandlers_handler.run()
 
@@ -925,10 +1007,10 @@ class TestExtension(ExtensionTestCase):
 
     @patch('azurelinuxagent.ga.exthandlers.add_event')
     def test_ext_handler_download_failure_transient(self, mock_add_event, *args):
-        original_sleep = time.sleep # pylint: disable=unused-variable
+        original_sleep = time.sleep  # pylint: disable=unused-variable
 
         test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE)
-        exthandlers_handler, protocol = self._create_mock(test_data, *args) # pylint: disable=no-value-for-parameter
+        exthandlers_handler, protocol = self._create_mock(test_data, *args)  # pylint: disable=no-value-for-parameter
         protocol.download_ext_handler_pkg = Mock(side_effect=ProtocolError)
 
         exthandlers_handler.run()
@@ -945,7 +1027,7 @@ class TestExtension(ExtensionTestCase):
                     # Create new object for each run to force re-installation of extensions as we
                     # only create handler_environment on installation
                     test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE_MULTIPLE_EXT)
-                    exthandlers_handler, protocol = self._create_mock(test_data, *args) # pylint: disable=no-value-for-parameter
+                    exthandlers_handler, protocol = self._create_mock(test_data, *args)  # pylint: disable=no-value-for-parameter
 
                     exthandlers_handler.run()
                     self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.0.0")
@@ -974,7 +1056,7 @@ class TestExtension(ExtensionTestCase):
 
     def test_it_should_not_delete_extension_events_directory_on_extension_uninstall(self, *args):
         test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE)
-        exthandlers_handler, protocol = self._create_mock(test_data, *args) # pylint: disable=no-value-for-parameter
+        exthandlers_handler, protocol = self._create_mock(test_data, *args)  # pylint: disable=no-value-for-parameter
 
         with patch('azurelinuxagent.ga.exthandlers.is_extension_telemetry_pipeline_enabled', return_value=True):
             exthandlers_handler.run()
@@ -993,7 +1075,7 @@ class TestExtension(ExtensionTestCase):
 
     def test_it_should_uninstall_unregistered_extensions_properly(self, *args):
         test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE)
-        exthandlers_handler, protocol = self._create_mock(test_data, *args) # pylint: disable=no-value-for-parameter
+        exthandlers_handler, protocol = self._create_mock(test_data, *args)  # pylint: disable=no-value-for-parameter
         exthandlers_handler.run()
         self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.0.0")
 
@@ -1015,13 +1097,13 @@ class TestExtension(ExtensionTestCase):
     @patch('azurelinuxagent.ga.exthandlers.add_event')
     def test_ext_handler_report_status_permanent(self, mock_add_event, mock_error_state, *args):
         test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE)
-        exthandlers_handler, protocol = self._create_mock(test_data, *args) # pylint: disable=no-value-for-parameter
+        exthandlers_handler, protocol = self._create_mock(test_data, *args)  # pylint: disable=no-value-for-parameter
         protocol.report_vm_status = Mock(side_effect=ProtocolError)
 
         mock_error_state.return_value = True
         exthandlers_handler.run()
         self.assertEqual(5, mock_add_event.call_count)
-        args, kw = mock_add_event.call_args # pylint: disable=invalid-name
+        args, kw = mock_add_event.call_args  # pylint: disable=invalid-name
         self.assertEqual(False, kw['is_success'])
         self.assertTrue("Failed to report vm agent status" in kw['message'])
         self.assertEqual("ReportStatusExtended", kw['op'])
@@ -1029,21 +1111,21 @@ class TestExtension(ExtensionTestCase):
     @patch('azurelinuxagent.ga.exthandlers.add_event')
     def test_ext_handler_report_status_resource_gone(self, mock_add_event, *args):
         test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE)
-        exthandlers_handler, protocol = self._create_mock(test_data, *args) # pylint: disable=no-value-for-parameter
+        exthandlers_handler, protocol = self._create_mock(test_data, *args)  # pylint: disable=no-value-for-parameter
         protocol.report_vm_status = Mock(side_effect=ResourceGoneError)
 
         exthandlers_handler.run()
         self.assertEqual(4, mock_add_event.call_count)
-        args, kw = mock_add_event.call_args # pylint: disable=invalid-name
+        args, kw = mock_add_event.call_args  # pylint: disable=invalid-name
         self.assertEqual(False, kw['is_success'])
         self.assertTrue("ResourceGoneError" in kw['message'])
         self.assertEqual("ExtensionProcessing", kw['op'])
 
     @patch('azurelinuxagent.common.errorstate.ErrorState.is_triggered')
     @patch('azurelinuxagent.ga.exthandlers.ExtHandlerInstance.report_event')
-    def test_ext_handler_download_failure_permanent_ProtocolError(self, mock_add_event, mock_error_state, *args): # pylint: disable=invalid-name
+    def test_ext_handler_download_failure_permanent_ProtocolError(self, mock_add_event, mock_error_state, *args):  # pylint: disable=invalid-name
         test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE)
-        exthandlers_handler, protocol = self._create_mock(test_data, *args) # pylint: disable=no-value-for-parameter
+        exthandlers_handler, protocol = self._create_mock(test_data, *args)  # pylint: disable=no-value-for-parameter
         protocol.get_ext_handler_pkgs = Mock(side_effect=ProtocolError)
 
         mock_error_state.return_value = True
@@ -1051,7 +1133,7 @@ class TestExtension(ExtensionTestCase):
         exthandlers_handler.run()
 
         self.assertEqual(1, mock_add_event.call_count)
-        args, kw = mock_add_event.call_args_list[0] # pylint: disable=invalid-name
+        args, kw = mock_add_event.call_args_list[0]  # pylint: disable=invalid-name
         self.assertEqual(False, kw['is_success'])
         self.assertTrue("Failed to get ext handler pkgs" in kw['message'])
         self.assertTrue("ProtocolError" in kw['message'])
@@ -1068,7 +1150,7 @@ class TestExtension(ExtensionTestCase):
                              "Incorrect Operation, all events should be a download errors")
 
         test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE)
-        exthandlers_handler, protocol = self._create_mock(test_data, *args) # pylint: disable=no-value-for-parameter
+        exthandlers_handler, protocol = self._create_mock(test_data, *args)  # pylint: disable=no-value-for-parameter
         unique_error_message_guid = str(uuid.uuid4())
         protocol.get_ext_handler_pkgs = Mock(side_effect=ExtensionDownloadError(unique_error_message_guid))
 
@@ -1092,56 +1174,90 @@ class TestExtension(ExtensionTestCase):
     @patch('azurelinuxagent.ga.exthandlers.fileutil')
     def test_ext_handler_io_error(self, mock_fileutil, *args):
         test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE)
-        exthandlers_handler, protocol = self._create_mock(test_data, *args) # pylint: disable=unused-variable,no-value-for-parameter
+        exthandlers_handler, protocol = self._create_mock(test_data, *args)  # pylint: disable=unused-variable,no-value-for-parameter
 
         mock_fileutil.write_file.return_value = IOError("Mock IO Error")
         exthandlers_handler.run()
 
-    def test_extension_processing_allowed(self, *args): # pylint: disable=unused-argument
-        exthandlers_handler = get_exthandlers_handler(Mock())
+    def test_it_should_process_extensions_only_if_allowed(self, mock_get, mock_crypt, *args):
 
-        # disable extension handling in configuration
+        def assert_extensions_called(exthandlers_handler, expected_call_count=0):
+            extension_name = 'OSTCExtensions.ExampleHandlerLinux'
+            extension_calls = []
+            original_popen = subprocess.Popen
+
+            def mock_popen(*args, **kwargs):
+                if extension_name in args[0]:
+                    extension_calls.append(args[0])
+                return original_popen(*args, **kwargs)
+
+            with patch('subprocess.Popen', side_effect=mock_popen):
+                exthandlers_handler.run()
+                self.assertEqual(expected_call_count, len(extension_calls), "Call counts dont match")
+
+        test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE)
+        exthandlers_handler, protocol = self._create_mock(test_data, mock_get, mock_crypt, *args)
+
+        # Extension called once for Install and once for Enable
+        assert_extensions_called(exthandlers_handler, expected_call_count=2)
+        self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.0.0")
+
+        # We should not re-handle the extensions if GoalState didn't change
+        assert_extensions_called(exthandlers_handler, expected_call_count=0)
+
+        # Update GoalState
+        test_data.set_incarnation(2)
+        protocol.update_goal_state()
+
         with patch.object(conf, 'get_extensions_enabled', return_value=False):
-            self.assertFalse(exthandlers_handler._extension_processing_allowed()) # pylint: disable=protected-access
+            assert_extensions_called(exthandlers_handler, expected_call_count=0)
 
-        # enable extension handling in configuration
-        with patch.object(conf, "get_extensions_enabled", return_value=True):
-            # disable overprovisioning in configuration
+        # Disabled over-provisioning in configuration
+        # In this case we should process GoalState as incarnation changed
+        with patch.object(conf, 'get_extensions_enabled', return_value=True):
             with patch.object(conf, 'get_enable_overprovisioning', return_value=False):
-                self.assertTrue(exthandlers_handler._extension_processing_allowed()) # pylint: disable=protected-access
+                # 1 expected call count for Enable command
+                assert_extensions_called(exthandlers_handler, expected_call_count=1)
 
-            # enable overprovisioning in configuration
+        # Update GoalState
+        test_data.set_incarnation(3)
+        protocol.update_goal_state()
+
+        # Enabled on_hold property in artifact_blob
+        with patch.object(conf, 'get_extensions_enabled', return_value=True):
             with patch.object(conf, "get_enable_overprovisioning", return_value=True):
-                with patch.object(exthandlers_handler.protocol.get_artifacts_profile(), "is_on_hold",
-                                  side_effect=[True, False]):
-                    # Enable on_hold property in artifact_blob
-                    self.assertFalse(exthandlers_handler._extension_processing_allowed()) # pylint: disable=protected-access
+                with patch.object(protocol, "get_artifacts_profile",
+                                  return_value=InVMArtifactsProfile(json.dumps({'onHold': True}))):
+                    assert_extensions_called(exthandlers_handler, expected_call_count=0)
 
-                    # Disable on_hold property in artifact_blob
-                    self.assertTrue(exthandlers_handler._extension_processing_allowed()) # pylint: disable=protected-access
+        # Disabled on_hold property in artifact_blob
+        with patch.object(conf, 'get_extensions_enabled', return_value=True):
+            with patch.object(conf, "get_enable_overprovisioning", return_value=True):
+                with patch.object(protocol, "get_artifacts_profile",
+                                  return_value=InVMArtifactsProfile(json.dumps({'onHold': False}))):
+                    # 1 expected call count for Enable command
+                    assert_extensions_called(exthandlers_handler, expected_call_count=1)
 
     def test_handle_ext_handlers_on_hold_true(self, *args):
         test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE)
-        exthandlers_handler, protocol = self._create_mock(test_data, *args) # pylint: disable=no-value-for-parameter
-        exthandlers_handler.ext_handlers, exthandlers_handler.last_etag = protocol.get_ext_handlers()
+        exthandlers_handler, protocol = self._create_mock(test_data, *args)  # pylint: disable=no-value-for-parameter
         protocol.get_artifacts_profile = MagicMock()
-        exthandlers_handler.protocol = protocol
 
         # Disable extension handling blocking
-        exthandlers_handler._extension_processing_allowed = Mock(return_value=False) # pylint: disable=protected-access
+        exthandlers_handler._extension_processing_allowed = Mock(return_value=False)  # pylint: disable=protected-access
         with patch.object(ExtHandlersHandler, 'handle_ext_handlers') as patch_handle_ext_handlers:
             exthandlers_handler.run()
             self.assertEqual(0, patch_handle_ext_handlers.call_count)
 
         # enable extension handling blocking
-        exthandlers_handler._extension_processing_allowed = Mock(return_value=True) # pylint: disable=protected-access
+        exthandlers_handler._extension_processing_allowed = Mock(return_value=True)  # pylint: disable=protected-access
         with patch.object(ExtHandlersHandler, 'handle_ext_handlers') as patch_handle_ext_handlers:
             exthandlers_handler.run()
             self.assertEqual(1, patch_handle_ext_handlers.call_count)
 
     def test_handle_ext_handlers_on_hold_false(self, *args):
         test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE)
-        exthandlers_handler, protocol = self._create_mock(test_data, *args) # pylint: disable=no-value-for-parameter
+        exthandlers_handler, protocol = self._create_mock(test_data, *args)  # pylint: disable=no-value-for-parameter
         exthandlers_handler.ext_handlers, exthandlers_handler.last_etag = protocol.get_ext_handlers()
         exthandlers_handler.protocol = protocol
 
@@ -1149,7 +1265,6 @@ class TestExtension(ExtensionTestCase):
         conf.get_enable_overprovisioning = Mock(return_value=True)
 
         # Test when is_on_hold returns False
-        from azurelinuxagent.common.protocol.wire import InVMArtifactsProfile # pylint: disable=redefined-outer-name,reimported
         mock_in_vm_artifacts_profile = InVMArtifactsProfile(MagicMock())
         mock_in_vm_artifacts_profile.is_on_hold = Mock(return_value=False)
         protocol.get_artifacts_profile = Mock(return_value=mock_in_vm_artifacts_profile)
@@ -1165,7 +1280,7 @@ class TestExtension(ExtensionTestCase):
 
     def test_last_etag_on_extension_processing(self, *args):
         test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE)
-        exthandlers_handler, protocol = self._create_mock(test_data, *args) # pylint: disable=no-value-for-parameter
+        exthandlers_handler, protocol = self._create_mock(test_data, *args)  # pylint: disable=no-value-for-parameter
         exthandlers_handler.ext_handlers, etag = protocol.get_ext_handlers()
         exthandlers_handler.protocol = protocol
 
@@ -1185,14 +1300,14 @@ class TestExtension(ExtensionTestCase):
     def _assert_ext_status(self, report_ext_status, expected_status,
                            expected_seq_no):
         self.assertTrue(report_ext_status.called)
-        args, kw = report_ext_status.call_args # pylint: disable=unused-variable,invalid-name
+        args, kw = report_ext_status.call_args  # pylint: disable=unused-variable,invalid-name
         ext_status = args[-1]
         self.assertEqual(expected_status, ext_status.status)
         self.assertEqual(expected_seq_no, ext_status.sequenceNumber)
 
     def test_ext_handler_no_reporting_status(self, *args):
         test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE)
-        exthandlers_handler, protocol = self._create_mock(test_data, *args) # pylint: disable=no-value-for-parameter
+        exthandlers_handler, protocol = self._create_mock(test_data, *args)  # pylint: disable=no-value-for-parameter
         exthandlers_handler.run()
         self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.0.0")
 
@@ -1207,25 +1322,26 @@ class TestExtension(ExtensionTestCase):
         self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.0.0")
         self._assert_ext_status(protocol.report_ext_status, ValidHandlerStatus.error, 0)
 
-    def test_wait_for_handler_successful_completion_empty_exts(self, *args):
-        '''
-        Testing wait_for_handler_successful_completion() when there is no extension in a handler.
+    def test_wait_for_handler_completion_empty_exts(self, *args):
+        """
+        Testing wait_for_handler_completion() when there is no extension in a handler.
         Expected to return True.
-        '''
+        """
         test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE)
-        exthandlers_handler, protocol = self._create_mock(test_data, *args) # pylint: disable=unused-variable,no-value-for-parameter
+        exthandlers_handler, protocol = self._create_mock(test_data, *args)  # pylint: disable=unused-variable,no-value-for-parameter
 
         handler = ExtHandler(name="handler")
+        ExtHandlerInstance(handler, protocol).set_handler_status("Ready")
 
         ExtHandlerInstance.get_ext_handling_status = MagicMock(return_value=None)
-        self.assertTrue(exthandlers_handler.wait_for_handler_successful_completion(handler, datetime.datetime.utcnow()))
+        self.assertTrue(exthandlers_handler.wait_for_handler_completion(handler, datetime.datetime.utcnow()))
 
-    def _helper_wait_for_handler_successful_completion(self, exthandlers_handler):
-        '''
-        Call wait_for_handler_successful_completion() passing a handler with an extension.
+    def _helper_wait_for_handler_completion(self, exthandlers_handler):
+        """
+        Call wait_for_handler_completion() passing a handler with an extension.
         Override the wait time to be 5 seconds to minimize the timout duration.
-        Return the value returned by wait_for_handler_successful_completion().
-        '''
+        Return the value returned by wait_for_handler_completion().
+        """
         handler_name = "Handler"
         exthandler = ExtHandler(name=handler_name)
         extension = Extension(name=handler_name)
@@ -1233,66 +1349,67 @@ class TestExtension(ExtensionTestCase):
 
         # Override the timeout value to minimize the test duration
         wait_until = datetime.datetime.utcnow() + datetime.timedelta(seconds=0.1)
-        return exthandlers_handler.wait_for_handler_successful_completion(exthandler, wait_until)
+        ExtHandlerInstance(exthandler, Mock()).set_handler_status("Ready")
+        return exthandlers_handler.wait_for_handler_completion(exthandler, wait_until)
 
-    def test_wait_for_handler_successful_completion_no_status(self, *args):
-        '''
-        Testing wait_for_handler_successful_completion() when there is no status file or seq_no is negative.
+    def test_wait_for_handler_completion_no_status(self, *args):
+        """
+        Testing wait_for_handler_completion() when there is no status file or seq_no is negative.
         Expected to return False.
-        '''
+        """
         test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE)
-        exthandlers_handler, protocol = self._create_mock(test_data, *args) # pylint: disable=unused-variable,no-value-for-parameter
+        exthandlers_handler, protocol = self._create_mock(test_data, *args)  # pylint: disable=unused-variable,no-value-for-parameter
 
         ExtHandlerInstance.get_ext_handling_status = MagicMock(return_value=None)
-        self.assertFalse(self._helper_wait_for_handler_successful_completion(exthandlers_handler))
+        self.assertFalse(self._helper_wait_for_handler_completion(exthandlers_handler))
 
-    def test_wait_for_handler_successful_completion_success_status(self, *args):
-        '''
+    def test_wait_for_handler_completion_success_status(self, *args):
+        """
         Testing wait_for_handler_successful_completion() when there is successful status.
         Expected to return True.
-        '''
+        """
         test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE)
-        exthandlers_handler, protocol = self._create_mock(test_data, *args) # pylint: disable=unused-variable,no-value-for-parameter
+        exthandlers_handler, protocol = self._create_mock(test_data, *args)  # pylint: disable=unused-variable,no-value-for-parameter
 
         status = "success"
 
         ExtHandlerInstance.get_ext_handling_status = MagicMock(return_value=status)
-        self.assertTrue(self._helper_wait_for_handler_successful_completion(exthandlers_handler))
+        self.assertTrue(self._helper_wait_for_handler_completion(exthandlers_handler))
 
-    def test_wait_for_handler_successful_completion_error_status(self, *args):
-        '''
-        Testing wait_for_handler_successful_completion() when there is error status.
+    def test_wait_for_handler_completion_error_status(self, *args):
+        """
+        Testing wait_for_handler_completion() when there is error status.
         Expected to return False.
-        '''
+        """
         test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE)
-        exthandlers_handler, protocol = self._create_mock(test_data, *args) # pylint: disable=unused-variable,no-value-for-parameter
+        exthandlers_handler, protocol = self._create_mock(test_data, *args)  # pylint: disable=unused-variable,no-value-for-parameter
 
         status = "error"
 
         ExtHandlerInstance.get_ext_handling_status = MagicMock(return_value=status)
-        self.assertFalse(self._helper_wait_for_handler_successful_completion(exthandlers_handler))
+        self.assertFalse(self._helper_wait_for_handler_completion(exthandlers_handler))
 
-    def test_wait_for_handler_successful_completion_timeout(self, *args):
-        '''
+    def test_wait_for_handler_completion_timeout(self, *args):
+        """
         Testing wait_for_handler_successful_completion() when there is non terminal status.
         Expected to return False.
-        '''
+        """
         test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE)
-        exthandlers_handler, protocol = self._create_mock(test_data, *args) # pylint: disable=unused-variable,no-value-for-parameter
+        exthandlers_handler, protocol = self._create_mock(test_data, *args)  # pylint: disable=unused-variable,no-value-for-parameter
 
         # Choose a non-terminal status
         status = "warning"
 
         ExtHandlerInstance.get_ext_handling_status = MagicMock(return_value=status)
-        self.assertFalse(self._helper_wait_for_handler_successful_completion(exthandlers_handler))
+        self.assertFalse(self._helper_wait_for_handler_completion(exthandlers_handler))
 
     def test_get_ext_handling_status(self, *args):
-        '''
+        """
         Testing get_ext_handling_status() function with various cases and
         verifying against the expected values
-        '''
+        """
         test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE)
-        exthandlers_handler, protocol = self._create_mock(test_data, *args) # pylint: disable=unused-variable,no-value-for-parameter
+        exthandlers_handler, protocol = self._create_mock(test_data, *args)  # pylint: disable=unused-variable,no-value-for-parameter
 
         handler_name = "Handler"
         exthandler = ExtHandler(name=handler_name)
@@ -1335,7 +1452,7 @@ class TestExtension(ExtensionTestCase):
         verifying against the expected output values.
         """
         test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE)
-        exthandlers_handler, protocol = self._create_mock(test_data, *args) # pylint: disable=unused-variable,no-value-for-parameter
+        exthandlers_handler, protocol = self._create_mock(test_data, *args)  # pylint: disable=unused-variable,no-value-for-parameter
 
         handler_name = "Handler"
         exthandler = ExtHandler(name=handler_name)
@@ -1383,7 +1500,7 @@ class TestExtension(ExtensionTestCase):
                     else:
                         datafile = mockwiredata.DATA_FILE
 
-                _, protocol = self._create_mock(mockwiredata.WireProtocolData(datafile), *args) # pylint: disable=no-value-for-parameter
+                _, protocol = self._create_mock(mockwiredata.WireProtocolData(datafile), *args)  # pylint: disable=no-value-for-parameter
                 ext_handlers, _ = protocol.get_ext_handlers()
                 self.assertEqual(1, len(ext_handlers.extHandlers))
                 ext_handler = ext_handlers.extHandlers[0]
@@ -1416,7 +1533,7 @@ class TestExtension(ExtensionTestCase):
             (None, '4.1', '4.1.0.0'),
         ]
 
-        _, protocol = self._create_mock(mockwiredata.WireProtocolData(mockwiredata.DATA_FILE), *args) # pylint: disable=no-value-for-parameter
+        _, protocol = self._create_mock(mockwiredata.WireProtocolData(mockwiredata.DATA_FILE), *args)  # pylint: disable=no-value-for-parameter
         version_uri = Mock()
         version_uri.uri = 'http://mock-goal-state/Microsoft.OSTCExtensions_ExampleHandlerLinux_asiaeast_manifest.xml'
 
@@ -1437,20 +1554,20 @@ class TestExtension(ExtensionTestCase):
     def test_extensions_disabled(self, _, *args):
         # test status is reported for no extensions
         test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE_NO_EXT)
-        exthandlers_handler, protocol = self._create_mock(test_data, *args) # pylint: disable=no-value-for-parameter
+        exthandlers_handler, protocol = self._create_mock(test_data, *args)  # pylint: disable=no-value-for-parameter
         exthandlers_handler.run()
         self._assert_no_handler_status(protocol.report_vm_status)
 
         # test status is reported, but extensions are not processed
         test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE)
-        exthandlers_handler, protocol = self._create_mock(test_data, *args) # pylint: disable=no-value-for-parameter
+        exthandlers_handler, protocol = self._create_mock(test_data, *args)  # pylint: disable=no-value-for-parameter
         exthandlers_handler.run()
         self._assert_no_handler_status(protocol.report_vm_status)
 
     def test_extensions_deleted(self, *args):
         # Ensure initial enable is successful
         test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE_EXT_DELETION)
-        exthandlers_handler, protocol = self._create_mock(test_data, *args) # pylint: disable=no-value-for-parameter
+        exthandlers_handler, protocol = self._create_mock(test_data, *args)  # pylint: disable=no-value-for-parameter
 
         exthandlers_handler.run()
 
@@ -1477,7 +1594,7 @@ class TestExtension(ExtensionTestCase):
         When extension install fails, the operation should not be retried.
         """
         test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE_EXT_SINGLE)
-        exthandlers_handler, protocol = self._create_mock(test_data, *args) # pylint: disable=no-value-for-parameter
+        exthandlers_handler, protocol = self._create_mock(test_data, *args)  # pylint: disable=no-value-for-parameter
 
         # Ensure initial install is unsuccessful
         patch_get_install_command.return_value = "exit.sh 1"
@@ -1500,7 +1617,7 @@ class TestExtension(ExtensionTestCase):
         When extension install fails, the operation should be reported to our telemetry service.
         """
         test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE_EXT_SINGLE)
-        exthandlers_handler, protocol = self._create_mock(test_data, *args) # pylint: disable=no-value-for-parameter
+        exthandlers_handler, protocol = self._create_mock(test_data, *args)  # pylint: disable=no-value-for-parameter
 
         # Ensure install is unsuccessful
         patch_get_install_command.return_value = "exit.sh 1"
@@ -1515,7 +1632,7 @@ class TestExtension(ExtensionTestCase):
         When extension enable fails, the operation should not be retried.
         """
         test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE_EXT_SINGLE)
-        exthandlers_handler, protocol = self._create_mock(test_data, *args) # pylint: disable=no-value-for-parameter
+        exthandlers_handler, protocol = self._create_mock(test_data, *args)  # pylint: disable=no-value-for-parameter
 
         # Ensure initial install is successful, but enable fails
         patch_get_enable_command.call_count = 0
@@ -1538,7 +1655,7 @@ class TestExtension(ExtensionTestCase):
         When extension enable fails, the operation should be reported.
         """
         test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE_EXT_SINGLE)
-        exthandlers_handler, protocol = self._create_mock(test_data, *args) # pylint: disable=no-value-for-parameter
+        exthandlers_handler, protocol = self._create_mock(test_data, *args)  # pylint: disable=no-value-for-parameter
 
         # Ensure initial install is successful, but enable fails
         patch_get_enable_command.call_count = 0
@@ -1556,7 +1673,7 @@ class TestExtension(ExtensionTestCase):
         """
         # Ensure initial install and enable is successful, but disable fails
         test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE_EXT_SINGLE)
-        exthandlers_handler, protocol = self._create_mock(test_data, *args) # pylint: disable=no-value-for-parameter
+        exthandlers_handler, protocol = self._create_mock(test_data, *args)  # pylint: disable=no-value-for-parameter
         patch_get_disable_command.call_count = 0
         patch_get_disable_command.return_value = "exit.sh 1"
 
@@ -1594,7 +1711,7 @@ class TestExtension(ExtensionTestCase):
         """
         # Ensure initial install and enable is successful, but disable fails
         test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE_EXT_SINGLE)
-        exthandlers_handler, protocol = self._create_mock(test_data, *args) # pylint: disable=no-value-for-parameter
+        exthandlers_handler, protocol = self._create_mock(test_data, *args)  # pylint: disable=no-value-for-parameter
         patch_get_disable_command.call_count = 0
         patch_get_disable_command.return_value = "exit 1"
 
@@ -1623,7 +1740,7 @@ class TestExtension(ExtensionTestCase):
         """
         # Ensure initial install and enable is successful, but uninstall fails
         test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE_EXT_SINGLE)
-        exthandlers_handler, protocol = self._create_mock(test_data, *args) # pylint: disable=no-value-for-parameter
+        exthandlers_handler, protocol = self._create_mock(test_data, *args)  # pylint: disable=no-value-for-parameter
         patch_get_uninstall_command.call_count = 0
         patch_get_uninstall_command.return_value = "exit 1"
 
@@ -1689,7 +1806,7 @@ class TestExtension(ExtensionTestCase):
 
             # Ensure we are processing the same goal state only once
             loop_run = 5
-            for x in range(loop_run): # pylint: disable=unused-variable,invalid-name
+            for x in range(loop_run):  # pylint: disable=unused-variable,invalid-name
                 exthandlers_handler.run()
 
             update_command_count = len([extension_call for extension_call in extension_calls
@@ -1718,7 +1835,7 @@ class TestExtension(ExtensionTestCase):
 
     @patch('azurelinuxagent.ga.exthandlers.HandlerManifest.get_disable_command')
     def test_extension_upgrade_failure_when_prev_version_disable_fails(self, patch_get_disable_command, *args):
-        test_data, exthandlers_handler, protocol = self._set_up_update_test_and_update_gs(patch_get_disable_command, *args) # pylint: disable=unused-variable
+        test_data, exthandlers_handler, protocol = self._set_up_update_test_and_update_gs(patch_get_disable_command, *args)  # pylint: disable=unused-variable
 
         with patch('azurelinuxagent.ga.exthandlers.HandlerManifest.get_enable_command') as patch_get_enable_command:
             exthandlers_handler.run()
@@ -1731,7 +1848,7 @@ class TestExtension(ExtensionTestCase):
 
             # Ensure we are processing the same goal state only once
             loop_run = 5
-            for x in range(loop_run): # pylint: disable=unused-variable,invalid-name
+            for x in range(loop_run):  # pylint: disable=unused-variable,invalid-name
                 exthandlers_handler.run()
 
             self.assertEqual(1, patch_get_disable_command.call_count)
@@ -1754,7 +1871,7 @@ class TestExtension(ExtensionTestCase):
 
             # Ensure we are processing the same goal state only once
             loop_run = 5
-            for x in range(loop_run): # pylint: disable=unused-variable,invalid-name
+            for x in range(loop_run):  # pylint: disable=unused-variable,invalid-name
                 exthandlers_handler.run()
 
             self.assertEqual(1, patch_get_disable_command.call_count)
@@ -1765,7 +1882,7 @@ class TestExtension(ExtensionTestCase):
             protocol.update_goal_state()
 
             # Ensure disable won't fail by making launch_command a no-op
-            with patch('azurelinuxagent.ga.exthandlers.ExtHandlerInstance.launch_command') as patch_launch_command: # pylint: disable=unused-variable
+            with patch('azurelinuxagent.ga.exthandlers.ExtHandlerInstance.launch_command') as patch_launch_command:  # pylint: disable=unused-variable
                 exthandlers_handler.run()
                 self.assertEqual(2, patch_get_disable_command.call_count)
                 self.assertEqual(1, patch_get_enable_command.call_count)
@@ -1774,7 +1891,7 @@ class TestExtension(ExtensionTestCase):
     @patch('azurelinuxagent.ga.exthandlers.HandlerManifest.get_disable_command')
     def test_extension_upgrade_failure_when_prev_version_disable_fails_incorrect_zip(self, patch_get_disable_command,
                                                                                       *args):
-        test_data, exthandlers_handler, protocol = self._set_up_update_test_and_update_gs(patch_get_disable_command, # pylint: disable=unused-variable
+        test_data, exthandlers_handler, protocol = self._set_up_update_test_and_update_gs(patch_get_disable_command,  # pylint: disable=unused-variable
                                                                                           *args)
 
         # The download logic has retry logic that sleeps before each try - make sleep a no-op.
@@ -1793,7 +1910,7 @@ class TestExtension(ExtensionTestCase):
 
                     # Ensure we are processing the same goal state only once
                     loop_run = 5
-                    for x in range(loop_run): # pylint: disable=unused-variable,invalid-name
+                    for x in range(loop_run):  # pylint: disable=unused-variable,invalid-name
                         exthandlers_handler.run()
 
                     self.assertEqual(0, patch_get_disable_command.call_count)
@@ -1802,7 +1919,7 @@ class TestExtension(ExtensionTestCase):
     @patch('azurelinuxagent.ga.exthandlers.HandlerManifest.get_disable_command')
     def test_old_handler_reports_failure_on_disable_fail_on_update(self, patch_get_disable_command, *args):
         old_version, new_version = "1.0.0", "1.0.1"
-        test_data, exthandlers_handler, protocol = self._set_up_update_test_and_update_gs(patch_get_disable_command, # pylint: disable=unused-variable
+        test_data, exthandlers_handler, protocol = self._set_up_update_test_and_update_gs(patch_get_disable_command,  # pylint: disable=unused-variable
                                                                                           *args)
 
         with patch.object(ExtHandlerInstance, "report_event", autospec=True) as patch_report_event:
@@ -1837,7 +1954,7 @@ class TestExtension(ExtensionTestCase):
         """
         Extension upgrade failure should not be retried
         """
-        test_data, exthandlers_handler, protocol = self._set_up_update_test_and_update_gs(patch_get_update_command, # pylint: disable=unused-variable
+        test_data, exthandlers_handler, protocol = self._set_up_update_test_and_update_gs(patch_get_update_command,  # pylint: disable=unused-variable
                                                                                           *args)
 
         exthandlers_handler.run()
@@ -1847,7 +1964,7 @@ class TestExtension(ExtensionTestCase):
     @patch('azurelinuxagent.ga.exthandlers.HandlerManifest.get_disable_command')
     def test_extension_upgrade_should_pass_when_continue_on_update_failure_is_true_and_prev_version_disable_fails(
             self, patch_get_disable_command, *args):
-        test_data, exthandlers_handler, protocol = self._set_up_update_test_and_update_gs(patch_get_disable_command, # pylint: disable=unused-variable
+        test_data, exthandlers_handler, protocol = self._set_up_update_test_and_update_gs(patch_get_disable_command,  # pylint: disable=unused-variable
                                                                                           *args)
 
         with patch('azurelinuxagent.ga.exthandlers.HandlerManifest.is_continue_on_update_failure', return_value=True) \
@@ -1865,7 +1982,7 @@ class TestExtension(ExtensionTestCase):
     @patch('azurelinuxagent.ga.exthandlers.HandlerManifest.get_uninstall_command')
     def test_extension_upgrade_should_pass_when_continue_on_update_failue_is_true_and_prev_version_uninstall_fails(
             self, patch_get_uninstall_command, *args):
-        test_data, exthandlers_handler, protocol = self._set_up_update_test_and_update_gs(patch_get_uninstall_command, # pylint: disable=unused-variable
+        test_data, exthandlers_handler, protocol = self._set_up_update_test_and_update_gs(patch_get_uninstall_command,  # pylint: disable=unused-variable
                                                                                           *args)
 
         with patch('azurelinuxagent.ga.exthandlers.HandlerManifest.is_continue_on_update_failure', return_value=True) \
@@ -1883,7 +2000,7 @@ class TestExtension(ExtensionTestCase):
     @patch('azurelinuxagent.ga.exthandlers.HandlerManifest.get_disable_command')
     def test_extension_upgrade_should_fail_when_continue_on_update_failure_is_false_and_prev_version_disable_fails(
             self, patch_get_disable_command, *args):
-        test_data, exthandlers_handler, protocol = self._set_up_update_test_and_update_gs(patch_get_disable_command, # pylint: disable=unused-variable
+        test_data, exthandlers_handler, protocol = self._set_up_update_test_and_update_gs(patch_get_disable_command,  # pylint: disable=unused-variable
                                                                                           *args)
 
         with patch('azurelinuxagent.ga.exthandlers.HandlerManifest.is_continue_on_update_failure', return_value=False) \
@@ -1900,7 +2017,7 @@ class TestExtension(ExtensionTestCase):
     @patch('azurelinuxagent.ga.exthandlers.HandlerManifest.get_uninstall_command')
     def test_extension_upgrade_should_fail_when_continue_on_update_failure_is_false_and_prev_version_uninstall_fails(
             self, patch_get_uninstall_command, *args):
-        test_data, exthandlers_handler, protocol = self._set_up_update_test_and_update_gs(patch_get_uninstall_command, # pylint: disable=unused-variable
+        test_data, exthandlers_handler, protocol = self._set_up_update_test_and_update_gs(patch_get_uninstall_command,  # pylint: disable=unused-variable
                                                                                           *args)
 
         with patch('azurelinuxagent.ga.exthandlers.HandlerManifest.is_continue_on_update_failure', return_value=False) \
@@ -1917,7 +2034,7 @@ class TestExtension(ExtensionTestCase):
     @patch('azurelinuxagent.ga.exthandlers.HandlerManifest.get_disable_command')
     def test_extension_upgrade_should_fail_when_continue_on_update_failure_is_true_and_old_disable_and_new_enable_fails(
             self, patch_get_disable_command, *args):
-        test_data, exthandlers_handler, protocol = self._set_up_update_test_and_update_gs(patch_get_disable_command, # pylint: disable=unused-variable
+        test_data, exthandlers_handler, protocol = self._set_up_update_test_and_update_gs(patch_get_disable_command,  # pylint: disable=unused-variable
                                                                                           *args)
 
         with patch('azurelinuxagent.ga.exthandlers.HandlerManifest.is_continue_on_update_failure', return_value=True) \
@@ -1986,7 +2103,7 @@ class TestExtension(ExtensionTestCase):
 
     def test_ext_path_and_version_env_variables_set_for_ever_operation(self, *args):
         test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE_EXT_SINGLE)
-        exthandlers_handler, protocol = self._create_mock(test_data, *args) # pylint: disable=no-value-for-parameter
+        exthandlers_handler, protocol = self._create_mock(test_data, *args)  # pylint: disable=no-value-for-parameter
 
         with patch.object(CGroupConfigurator.get_instance(), "start_extension_command") as patch_start_cmd:
             exthandlers_handler.run()
@@ -2004,7 +2121,7 @@ class TestExtension(ExtensionTestCase):
     @patch("azurelinuxagent.common.cgroupconfigurator.handle_process_completion", side_effect="Process Successful")
     def test_ext_sequence_no_should_be_set_for_every_command_call(self, _, *args):
         test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE_MULTIPLE_EXT)
-        exthandlers_handler, protocol = self._create_mock(test_data, *args) # pylint: disable=no-value-for-parameter
+        exthandlers_handler, protocol = self._create_mock(test_data, *args)  # pylint: disable=no-value-for-parameter
 
         with patch("subprocess.Popen") as patch_popen:
             exthandlers_handler.run()
@@ -2020,7 +2137,7 @@ class TestExtension(ExtensionTestCase):
         test_data.ext_conf = test_data.ext_conf.replace('version="1.0.0"', 'version="1.0.1"')
         test_data.ext_conf = test_data.ext_conf.replace('seqNo="0"', 'seqNo="1"')
         test_data.manifest = test_data.manifest.replace('1.0.0', '1.0.1')
-        exthandlers_handler, protocol = self._create_mock(test_data, *args) # pylint: disable=no-value-for-parameter
+        exthandlers_handler, protocol = self._create_mock(test_data, *args)  # pylint: disable=no-value-for-parameter
 
         with patch("subprocess.Popen") as patch_popen:
             exthandlers_handler.run()
@@ -2055,7 +2172,7 @@ class TestExtension(ExtensionTestCase):
         self.create_script(test_file_name, test_file, base_dir)
 
         test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE_EXT_SINGLE)
-        exthandlers_handler, protocol = self._create_mock(test_data, *args) # pylint: disable=unused-variable,no-value-for-parameter
+        exthandlers_handler, protocol = self._create_mock(test_data, *args)  # pylint: disable=unused-variable,no-value-for-parameter
         expected_seq_no = 0
 
         with patch.object(ExtHandlerInstance, "load_manifest", return_value=manifest):
@@ -2088,7 +2205,7 @@ class TestExtension(ExtensionTestCase):
                     self.assertIn("{0}={1}".format(ExtCommandEnvVariable.ExtensionSeqNumber, expected_seq_no),
                                   kwargs['message'])
 
-    def test_correct_exit_code_should_be_set_on_uninstall_cmd_failure(self, *args): # pylint: disable=too-many-locals
+    def test_correct_exit_code_should_be_set_on_uninstall_cmd_failure(self, *args):
         test_file_name = "testfile.sh"
         test_error_file_name = "error.sh"
         handler_json = {
@@ -2116,7 +2233,7 @@ class TestExtension(ExtensionTestCase):
         error_dir = os.path.join(conf.get_lib_dir(), 'OSTCExtensions.ExampleHandlerLinux-1.0.0', test_error_file_name)
         self.create_script(test_error_file_name, test_error_content, error_dir)
 
-        test_data, exthandlers_handler, protocol = self._set_up_update_test_and_update_gs(Mock(), *args) # pylint: disable=unused-variable
+        test_data, exthandlers_handler, protocol = self._set_up_update_test_and_update_gs(Mock(), *args)  # pylint: disable=unused-variable
 
         base_dir = os.path.join(conf.get_lib_dir(), 'OSTCExtensions.ExampleHandlerLinux-1.0.1', test_file_name)
         self.create_script(test_file_name, test_file, base_dir)
@@ -2125,9 +2242,9 @@ class TestExtension(ExtensionTestCase):
             with patch.object(ExtHandlerInstance, 'report_event') as mock_report_event:
                 exthandlers_handler.run()
 
-                _, disable_kwargs = mock_report_event.call_args_list[1] # pylint: disable=unused-variable
+                _, disable_kwargs = mock_report_event.call_args_list[1]  # pylint: disable=unused-variable
                 _, update_kwargs = mock_report_event.call_args_list[2]
-                _, uninstall_kwargs = mock_report_event.call_args_list[3] # pylint: disable=unused-variable
+                _, uninstall_kwargs = mock_report_event.call_args_list[3]  # pylint: disable=unused-variable
                 _, install_kwargs = mock_report_event.call_args_list[4]
                 _, enable_kwargs = mock_report_event.call_args_list[5]
 
@@ -2140,7 +2257,7 @@ class TestExtension(ExtensionTestCase):
 @patch("azurelinuxagent.common.utils.restutil.http_get")
 class TestExtensionSequencing(AgentTestCase):
 
-    def _create_mock(self, mock_http_get, MockCryptUtil): # pylint: disable=invalid-name
+    def _create_mock(self, mock_http_get, MockCryptUtil):  # pylint: disable=invalid-name
         test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE)
 
         # Mock protocol to return test data
@@ -2157,31 +2274,35 @@ class TestExtensionSequencing(AgentTestCase):
         handler.ext_handlers, handler.last_etag = protocol.get_ext_handlers()
         conf.get_enable_overprovisioning = Mock(return_value=False)
 
-        def wait_for_handler_successful_completion(prev_handler, wait_until): # pylint: disable=unused-argument
-            return orig_wait_for_handler_successful_completion(prev_handler,
+        def wait_for_handler_completion(prev_handler, _):
+            return orig_wait_for_handler_completion(prev_handler,
                                                                datetime.datetime.utcnow() + datetime.timedelta(
                                                                    seconds=5))
 
-        orig_wait_for_handler_successful_completion = handler.wait_for_handler_successful_completion
-        handler.wait_for_handler_successful_completion = wait_for_handler_successful_completion
+        def reset_etag():
+            handler.last_etag = 0
+
+        orig_wait_for_handler_completion = handler.wait_for_handler_completion
+        handler.wait_for_handler_completion = wait_for_handler_completion
+        handler.reset_etag = reset_etag
         return handler
 
     def _set_dependency_levels(self, dependency_levels, exthandlers_handler):
-        '''
+        """
         Creates extensions with the given dependencyLevel
-        '''
+        """
         handler_map = dict()
         all_handlers = []
-        for h, level in dependency_levels: # pylint: disable=invalid-name
-            if handler_map.get(h) is None:
-                handler = ExtHandler(name=h)
-                extension = Extension(name=h)
+        for handler_name, level in dependency_levels:
+            if handler_map.get(handler_name) is None:
+                handler = ExtHandler(name=handler_name)
+                extension = Extension(name=handler_name)
                 handler.properties.state = ExtensionRequestedState.Enabled
                 handler.properties.extensions.append(extension)
-                handler_map[h] = handler
+                handler_map[handler_name] = handler
                 all_handlers.append(handler)
 
-            handler = handler_map[h]
+            handler = handler_map[handler_name]
             for ext in handler.properties.extensions:
                 ext.dependencyLevel = level
 
@@ -2190,35 +2311,38 @@ class TestExtensionSequencing(AgentTestCase):
             exthandlers_handler.ext_handlers.extHandlers.append(handler)
 
     def _validate_extension_sequence(self, expected_sequence, exthandlers_handler):
-        installed_extensions = [a[0].name for a, k in exthandlers_handler.handle_ext_handler.call_args_list] # pylint: disable=unused-variable
+        installed_extensions = [a[0].name for a, k in exthandlers_handler.handle_ext_handler.call_args_list]  # pylint: disable=unused-variable
         self.assertListEqual(expected_sequence, installed_extensions,
                              "Expected and actual list of extensions are not equal")
 
     def _run_test(self, extensions_to_be_failed, expected_sequence, exthandlers_handler):
-        '''
+        """
         Mocks get_ext_handling_status() to mimic error status for a given extension.
         Calls ExtHandlersHandler.run()
         Verifies if the ExtHandlersHandler.handle_ext_handler() was called with appropriate extensions
         in the expected order.
-        '''
+        """
 
         def get_ext_handling_status(ext):
             status = "error" if ext.name in extensions_to_be_failed else "success"
             return status
 
-        ExtHandlerInstance.get_ext_handling_status = MagicMock(side_effect=get_ext_handling_status)
         exthandlers_handler.handle_ext_handler = MagicMock()
-        exthandlers_handler.run()
-        self._validate_extension_sequence(expected_sequence, exthandlers_handler)
+        exthandlers_handler.reset_etag()
+
+        with patch.object(ExtHandlerInstance, "get_ext_handling_status", side_effect=get_ext_handling_status):
+            with patch.object(ExtHandlerInstance, "get_handler_status", ExtHandlerStatus):
+                exthandlers_handler.run()
+                self._validate_extension_sequence(expected_sequence, exthandlers_handler)
 
     def test_handle_ext_handlers(self, *args):
-        '''
+        """
         Tests extension sequencing among multiple extensions with dependencies.
         This test introduces failure in all possible levels and extensions.
         Verifies that the sequencing is in the expected order and a failure in one extension
         skips the rest of the extensions in the sequence.
-        '''
-        exthandlers_handler = self._create_mock(*args) # pylint: disable=no-value-for-parameter
+        """
+        exthandlers_handler = self._create_mock(*args)  # pylint: disable=no-value-for-parameter
 
         self._set_dependency_levels([("A", 3), ("B", 2), ("C", 2), ("D", 1), ("E", 1), ("F", 1), ("G", 1)],
                                     exthandlers_handler)
@@ -2256,13 +2380,13 @@ class TestExtensionSequencing(AgentTestCase):
         self._run_test(extensions_to_be_failed, expected_sequence, exthandlers_handler)
 
     def test_handle_ext_handlers_with_uninstallation(self, *args):
-        '''
+        """
         Tests extension sequencing among multiple extensions with dependencies when
         some extension are to be uninstalled.
         Verifies that the sequencing is in the expected order and the uninstallation takes place
         prior to all the installation/enable.
-        '''
-        exthandlers_handler = self._create_mock(*args) # pylint: disable=no-value-for-parameter
+        """
+        exthandlers_handler = self._create_mock(*args)  # pylint: disable=no-value-for-parameter
 
         # "A", "D" and "F" are marked as to be uninstalled
         self._set_dependency_levels([("A", 0), ("B", 2), ("C", 2), ("D", 0), ("E", 1), ("F", 0), ("G", 1)],
@@ -2273,13 +2397,13 @@ class TestExtensionSequencing(AgentTestCase):
         self._run_test(extensions_to_be_failed, expected_sequence, exthandlers_handler)
 
     def test_handle_ext_handlers_fallback(self, *args):
-        '''
+        """
         This test makes sure that the extension sequencing is applied only when the user specifies
         dependency information in the extension.
         When there is no dependency specified, the agent is expected to assign dependencyLevel=0 to all extension.
         Also, it is expected to install all the extension no matter if there is any failure in any of the extensions.
-        '''
-        exthandlers_handler = self._create_mock(*args) # pylint: disable=no-value-for-parameter
+        """
+        exthandlers_handler = self._create_mock(*args)  # pylint: disable=no-value-for-parameter
 
         self._set_dependency_levels([("A", 1), ("B", 1), ("C", 1), ("D", 1), ("E", 1), ("F", 1), ("G", 1)],
                                     exthandlers_handler)
@@ -2339,7 +2463,7 @@ class TestInVMArtifactsProfile(AgentTestCase):
 
 
 class TestExtensionUpdateOnFailure(ExtensionTestCase):
-    
+
     def setUp(self):
         AgentTestCase.setUp(self)
         self.mock_sleep = patch("time.sleep", lambda *_: mock_sleep(0.0001))
@@ -2383,7 +2507,7 @@ class TestExtensionUpdateOnFailure(ExtensionTestCase):
 
             with enable_invocations(first_ext, upgraded_ext) as invocation_record:
                 exthandlers_handler.run()
-            
+
                 return invocation_record
 
 
@@ -2393,7 +2517,7 @@ class TestExtensionUpdateOnFailure(ExtensionTestCase):
 
         first_ext = extension_emulator(enable_action=enable_action)
         second_ext = extension_emulator(version="1.1.0")
-        
+
         invocation_record = TestExtensionUpdateOnFailure._do_upgrade_scenario_and_get_order(first_ext, second_ext)
 
         invocation_record.compare(
@@ -2463,7 +2587,7 @@ class TestExtensionUpdateOnFailure(ExtensionTestCase):
         self.assertEqual(len(second_ext.status_blobs), 1, "The second extension should have a single submitted status.")
         self.assertTrue(exit_code in second_ext.status_blobs[0]["formattedMessage"]["message"],
             "DisableAction's error code should be propagated to the status blob.")
-        
+
 
     def test_extension_error_should_be_raised_when_continue_on_update_failure_is_false_on_uninstall_failure(self):
         exit_code, uninstall_action = Actions.generate_unique_fail()
@@ -2554,7 +2678,7 @@ class TestExtensionUpdateOnFailure(ExtensionTestCase):
             (second_ext, ExtensionCommandNames.INSTALL),
             (second_ext, ExtensionCommandNames.ENABLE)
         )
-    
+
         _, update_kwargs = second_ext.actions[ExtensionCommandNames.UPDATE].call_args
         _, install_kwargs = second_ext.actions[ExtensionCommandNames.INSTALL].call_args
 
@@ -2613,7 +2737,7 @@ class TestExtensionUpdateOnFailure(ExtensionTestCase):
         first_ext = extension_emulator(disable_action=force_timeout, uninstall_action=force_timeout)
         second_ext = extension_emulator(version="1.1.0", continue_on_update_failure=True)
 
-        
+
         with patch("os.killpg"):
             with patch("os.getpgid"):
                 invocation_record = TestExtensionUpdateOnFailure._do_upgrade_scenario_and_get_order(first_ext, second_ext)
@@ -2635,7 +2759,7 @@ class TestExtensionUpdateOnFailure(ExtensionTestCase):
             "DisableAction's return code should be marked as a timeout in UpdateAction's env.")
         self.assertEqual(install_kwargs["env"][ExtCommandEnvVariable.UninstallReturnCode], str(ExtensionErrorCodes.PluginHandlerScriptTimedout),
             "UninstallAction's return code should be marked as a timeout in installAction's env.")
-            
+
 
     def test_success_code_should_set_in_env_variables_on_cmd_success(self):
 
@@ -2667,7 +2791,7 @@ class TestCollectExtensionStatus(ExtensionTestCase):
         ExtensionTestCase.setUp(self)
         self.lib_dir = tempfile.mkdtemp()
 
-    def _setup_extension_for_validating_collect_ext_status(self, mock_lib_dir, status_file, *args): # pylint: disable=unused-argument
+    def _setup_extension_for_validating_collect_ext_status(self, mock_lib_dir, status_file, *args):  # pylint: disable=unused-argument
         handler_name = "TestHandler"
         handler_version = "1.0.0"
         mock_lib_dir.return_value = self.lib_dir
@@ -2711,6 +2835,23 @@ class TestCollectExtensionStatus(ExtensionTestCase):
         self.assertEqual(sub_status.status, ValidHandlerStatus.success)
 
     @patch("azurelinuxagent.common.conf.get_lib_dir")
+    def test_it_should_collect_ext_status_even_when_config_dir_deleted(self, mock_lib_dir, *args):
+
+        ext_handler_i, extension = self._setup_extension_for_validating_collect_ext_status(mock_lib_dir,
+                                                                                           "sample-status.json", *args)
+
+        shutil.rmtree(ext_handler_i.get_conf_dir(), ignore_errors=True)
+        ext_status = ext_handler_i.collect_ext_status(extension)
+
+        self.assertEqual(ext_status.code, SUCCESS_CODE_FROM_STATUS_FILE)
+        self.assertEqual(ext_status.configurationAppliedTime, None)
+        self.assertEqual(ext_status.operation, "Enable")
+        self.assertEqual(ext_status.sequenceNumber, 0)
+        self.assertEqual(ext_status.message, "Aenean semper nunc nisl, vitae sollicitudin felis consequat at. In "
+                                             "lobortis elementum sapien, non commodo odio semper ac.")
+        self.assertEqual(ext_status.status, ValidHandlerStatus.success)
+
+    @patch("azurelinuxagent.common.conf.get_lib_dir")
     def test_collect_ext_status_very_large_status_message(self, mock_lib_dir, *args):
         """
         Testing collect_ext_status() with a very large status file (>128K) to see if it correctly parses the status
@@ -2728,7 +2869,7 @@ class TestCollectExtensionStatus(ExtensionTestCase):
         # [TRUNCATED] comes from azurelinuxagent.ga.exthandlers._TRUNCATED_SUFFIX
         self.assertRegex(ext_status.message, r"Lorem ipsum dolor sit amet, consectetur adipiscing elit. Vestibulum non "
                                              r"lacinia urna, sit .*\[TRUNCATED\]")
-        self.maxDiff = None # pylint: disable=invalid-name
+        self.maxDiff = None  # pylint: disable=invalid-name
         self.assertEqual(ext_status.status, ValidHandlerStatus.success)
         self.assertEqual(len(ext_status.substatusList), 1) # NUM OF SUBSTATUS PARSED
         for sub_status in ext_status.substatusList:
@@ -2775,17 +2916,17 @@ class TestCollectExtensionStatus(ExtensionTestCase):
                                                                                            "sample-status.json", *args)
         original_read_file = read_file
 
-        def mock_read_file(file, *args, **kwargs): # pylint: disable=redefined-builtin
+        def mock_read_file(file, *args, **kwargs):  # pylint: disable=redefined-builtin
             expected_status_file_path = os.path.join(self.lib_dir,
                                                      ext_handler_i.ext_handler.name + "-" +
                                                      ext_handler_i.ext_handler. properties.version,
                                                      "status", "0.status")
-            if file == expected_status_file_path: # pylint: disable=no-else-raise
+            if file == expected_status_file_path:  # pylint: disable=no-else-raise
                 raise IOError("No such file or directory: {0}".format(expected_status_file_path))
             else:
                 original_read_file(file, *args, **kwargs)
 
-        with patch('azurelinuxagent.common.utils.fileutil.read_file', mock_read_file) as patch_read_file: # pylint: disable=unused-variable
+        with patch('azurelinuxagent.common.utils.fileutil.read_file', mock_read_file) as patch_read_file:  # pylint: disable=unused-variable
             ext_status = ext_handler_i.collect_ext_status(extension)
 
             self.assertEqual(ext_status.code, ExtensionErrorCodes.PluginUnknownFailure)

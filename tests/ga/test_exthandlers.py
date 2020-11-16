@@ -19,15 +19,18 @@ import json
 import os
 import subprocess
 import time
+import uuid
 
 from azurelinuxagent.common.cgroupconfigurator import CGroupConfigurator
 from azurelinuxagent.common.event import AGENT_EVENT_FILE_EXTENSION, WALAEventOperation
 from azurelinuxagent.common.exception import ExtensionError, ExtensionErrorCodes
 from azurelinuxagent.common.protocol.restapi import ExtensionStatus, Extension, ExtHandler, ExtHandlerProperties
 from azurelinuxagent.common.protocol.util import ProtocolUtil
+from azurelinuxagent.common.protocol.wire import WireProtocol
 from azurelinuxagent.common.utils.extensionprocessutil import TELEMETRY_MESSAGE_MAX_LEN, format_stdout_stderr, \
     read_output
-from azurelinuxagent.ga.exthandlers import parse_ext_status, ExtHandlerInstance, ExtCommandEnvVariable, ExtensionStatusError
+from azurelinuxagent.ga.exthandlers import parse_ext_status, ExtHandlerInstance, ExtCommandEnvVariable, \
+    ExtensionStatusError
 from tests.protocol import mockwiredata
 from tests.protocol.mocks import mock_wire_protocol
 from tests.tools import AgentTestCase, patch, mock_sleep, clear_singleton_instances
@@ -186,7 +189,7 @@ class TestExtHandlers(AgentTestCase):
         """
 
         # Validating empty status case
-        s = '''[]''' # pylint: disable=invalid-name
+        s = '''[]'''  # pylint: disable=invalid-name
         ext_status = ExtensionStatus(seq_no=0)
         parse_ext_status(ext_status, json.loads(s))
 
@@ -211,8 +214,8 @@ class TestExtHandlers(AgentTestCase):
         self.assertEqual(0, len(ext_status.substatusList))
 
     @patch('azurelinuxagent.common.event.EventLogger.add_event')
-    @patch('azurelinuxagent.ga.exthandlers.ExtHandlerInstance._get_largest_seq_no')
-    def assert_extension_sequence_number(self, # pylint: disable=too-many-locals,too-many-arguments
+    @patch('azurelinuxagent.ga.exthandlers.ExtHandlerInstance._get_last_modified_seq_no_from_config_files')
+    def assert_extension_sequence_number(self,  # pylint: disable=too-many-arguments
                                          patch_get_largest_seq,
                                          patch_add_event,
                                          goal_state_sequence_number,
@@ -238,7 +241,7 @@ class TestExtHandlers(AgentTestCase):
 
         if gs_int and gs_seq_int != disk_sequence_number:
             self.assertEqual(1, patch_add_event.call_count)
-            args, kw_args = patch_add_event.call_args # pylint: disable=unused-variable
+            args, kw_args = patch_add_event.call_args  # pylint: disable=unused-variable
             self.assertEqual('SequenceNumberMismatch', kw_args['op'])
             self.assertEqual(False, kw_args['is_success'])
             self.assertEqual('Goal state: {0}, disk: {1}'
@@ -254,19 +257,19 @@ class TestExtHandlers(AgentTestCase):
             self.assertIsNone(path)
 
     def test_extension_sequence_number(self):
-        self.assert_extension_sequence_number(goal_state_sequence_number="12", # pylint: disable=no-value-for-parameter
+        self.assert_extension_sequence_number(goal_state_sequence_number="12",  # pylint: disable=no-value-for-parameter
                                               disk_sequence_number=366,
                                               expected_sequence_number=12)
 
-        self.assert_extension_sequence_number(goal_state_sequence_number=" 12 ", # pylint: disable=no-value-for-parameter
+        self.assert_extension_sequence_number(goal_state_sequence_number=" 12 ",  # pylint: disable=no-value-for-parameter
                                               disk_sequence_number=366,
                                               expected_sequence_number=12)
 
-        self.assert_extension_sequence_number(goal_state_sequence_number=" foo", # pylint: disable=no-value-for-parameter
+        self.assert_extension_sequence_number(goal_state_sequence_number=" foo",  # pylint: disable=no-value-for-parameter
                                               disk_sequence_number=3,
                                               expected_sequence_number=3)
 
-        self.assert_extension_sequence_number(goal_state_sequence_number="-1", # pylint: disable=no-value-for-parameter
+        self.assert_extension_sequence_number(goal_state_sequence_number="-1",  # pylint: disable=no-value-for-parameter
                                               disk_sequence_number=3,
                                               expected_sequence_number=-1)
 
@@ -299,7 +302,7 @@ class LaunchCommandTestCase(AgentTestCase):
         ext_handler_properties.version = "1.2.3"
         self.ext_handler = ExtHandler(name='foo')
         self.ext_handler.properties = ext_handler_properties
-        self.ext_handler_instance = ExtHandlerInstance(ext_handler=self.ext_handler, protocol=None)
+        self.ext_handler_instance = ExtHandlerInstance(ext_handler=self.ext_handler, protocol=WireProtocol("1.2.3.4"))
 
         self.mock_get_base_dir = patch("azurelinuxagent.ga.exthandlers.ExtHandlerInstance.get_base_dir", lambda *_: self.tmp_dir)
         self.mock_get_base_dir.start()
@@ -368,8 +371,7 @@ sys.stderr.write("{1}")
 
         self.assertListEqual(files_before, files_after, "Not all temporary files were deleted. File list: {0}".format(files_after))
 
-    # R0914: "Too many local variables" - The use of locals in this function is currently acceptable.
-    def test_it_should_raise_an_exception_when_the_command_times_out(self):  # pylint: disable=R0914
+    def test_it_should_raise_an_exception_when_the_command_times_out(self):
         extension_error_code = ExtensionErrorCodes.PluginHandlerScriptTimedout
         stdout = "stdout" * 7
         stderr = "stderr" * 7
@@ -405,7 +407,7 @@ with open("{2}", "w") as file:
 
         start_time = time.time()
 
-        with patch("time.sleep", side_effect=sleep, autospec=True) as mock_sleep: # pylint: disable=redefined-outer-name
+        with patch("time.sleep", side_effect=sleep, autospec=True) as mock_sleep:  # pylint: disable=redefined-outer-name
 
             with self.assertRaises(ExtensionError) as context_manager:
                 self.ext_handler_instance.launch_command(command, timeout=timeout, extension_error_code=extension_error_code)
@@ -639,7 +641,7 @@ sys.stderr.write("E" * 5 * 1024 * 1024)
 
         mock_format.assert_called_once()
 
-        args, kwargs = mock_format.call_args # pylint: disable=unused-variable
+        args, kwargs = mock_format.call_args  # pylint: disable=unused-variable
         stdout, stderr = args
 
         self.assertGreaterEqual(len(stdout), 1024)
@@ -660,7 +662,7 @@ sys.stderr.write("STDERR")
         # trying to use these files.
         original_capture_process_output = read_output
 
-        def capture_process_output(stdout_file, stderr_file): # pylint: disable=unused-argument
+        def capture_process_output(stdout_file, stderr_file):  # pylint: disable=unused-argument
             return original_capture_process_output(None, None)
 
         with patch('azurelinuxagent.common.utils.extensionprocessutil.read_output', side_effect=capture_process_output):
@@ -670,9 +672,13 @@ sys.stderr.write("STDERR")
 
     def test_it_should_contain_all_helper_environment_variables(self):
 
-        helper_env_vars = {ExtCommandEnvVariable.ExtensionSeqNumber: self.ext_handler_instance.get_seq_no(),
+        wire_ip = str(uuid.uuid4())
+        ext_handler_instance = ExtHandlerInstance(ext_handler=self.ext_handler, protocol=WireProtocol(wire_ip))
+
+        helper_env_vars = {ExtCommandEnvVariable.ExtensionSeqNumber: ext_handler_instance.get_seq_no(),
                            ExtCommandEnvVariable.ExtensionPath: self.tmp_dir,
-                           ExtCommandEnvVariable.ExtensionVersion: self.ext_handler_instance.ext_handler.properties.version}
+                           ExtCommandEnvVariable.ExtensionVersion: ext_handler_instance.ext_handler.properties.version,
+                           ExtCommandEnvVariable.WireProtocolAddress: wire_ip}
 
         command = """
             printenv | grep -E '(%s)'
@@ -681,9 +687,9 @@ sys.stderr.write("STDERR")
         test_file = self.create_script('printHelperEnvironments.sh', command)
 
         with patch("subprocess.Popen", wraps=subprocess.Popen) as patch_popen:
-            output = self.ext_handler_instance.launch_command(test_file)
+            output = ext_handler_instance.launch_command(test_file)
 
-            args, kwagrs = patch_popen.call_args # pylint: disable=unused-variable
+            args, kwagrs = patch_popen.call_args  # pylint: disable=unused-variable
             without_os_env = dict((k, v) for (k, v) in kwagrs['env'].items() if k not in os.environ)
 
             # This check will fail if any helper environment variables are added/removed later on

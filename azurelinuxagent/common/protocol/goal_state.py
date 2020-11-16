@@ -25,6 +25,7 @@ import azurelinuxagent.common.logger as logger
 from azurelinuxagent.common.AgentGlobals import AgentGlobals
 from azurelinuxagent.common.datacontract import set_properties
 from azurelinuxagent.common.event import add_event, WALAEventOperation
+from azurelinuxagent.common.exception import ProtocolError
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.protocol.restapi import Cert, CertList, Extension, ExtHandler, ExtHandlerList, \
     ExtHandlerVersionUri, RemoteAccessUser, RemoteAccessUsersList, \
@@ -42,9 +43,10 @@ TRANSPORT_CERT_FILE_NAME = "TransportCert.pem"
 TRANSPORT_PRV_FILE_NAME = "TransportPrivate.pem"
 
 
-class GoalState(object): # pylint: disable=R0902
-
-    def __init__(self, wire_client, full_goal_state=False, base_incarnation=None):
+# too-many-instance-attributes<R0902> Disabled: The goal state consists of a good number of properties
+class GoalState(object):  # pylint: disable=R0902
+    # too-many-branches<R0912> Disable: Branches are sequential, not nested
+    def __init__(self, wire_client, full_goal_state=False, base_incarnation=None):  # pylint: disable=R0912
         """
         Fetches the goal state using the given wire client.
 
@@ -58,42 +60,46 @@ class GoalState(object): # pylint: disable=R0902
         directly.
 
         """
-        uri = GOAL_STATE_URI.format(wire_client.get_endpoint())
-        self.xml_text = wire_client.fetch_config(uri, wire_client.get_header())
-        xml_doc = parse_doc(self.xml_text)
+        try:
+            uri = GOAL_STATE_URI.format(wire_client.get_endpoint())
+            self.xml_text = wire_client.fetch_config(uri, wire_client.get_header())
+            xml_doc = parse_doc(self.xml_text)
 
-        self.incarnation = findtext(xml_doc, "Incarnation")
-        self.expected_state = findtext(xml_doc, "ExpectedState")
-        role_instance = find(xml_doc, "RoleInstance")
-        self.role_instance_id = findtext(role_instance, "InstanceId")
-        role_config = find(role_instance, "Configuration")
-        self.role_config_name = findtext(role_config, "ConfigName")
-        container = find(xml_doc, "Container")
-        self.container_id = findtext(container, "ContainerId")
-        lbprobe_ports = find(xml_doc, "LBProbePorts")
-        self.load_balancer_probe_port = findtext(lbprobe_ports, "Port")
+            self.incarnation = findtext(xml_doc, "Incarnation")
+            self.expected_state = findtext(xml_doc, "ExpectedState")
+            role_instance = find(xml_doc, "RoleInstance")
+            self.role_instance_id = findtext(role_instance, "InstanceId")
+            role_config = find(role_instance, "Configuration")
+            self.role_config_name = findtext(role_config, "ConfigName")
+            container = find(xml_doc, "Container")
+            self.container_id = findtext(container, "ContainerId")
+            lbprobe_ports = find(xml_doc, "LBProbePorts")
+            self.load_balancer_probe_port = findtext(lbprobe_ports, "Port")
 
-        AgentGlobals.update_container_id(self.container_id)
+            AgentGlobals.update_container_id(self.container_id)
 
-        fetch_full_goal_state = False
-        if full_goal_state:
-            fetch_full_goal_state = True
-            reason = 'force update'
-        elif base_incarnation is not None and self.incarnation != base_incarnation:
-            fetch_full_goal_state = True
-            reason = 'new incarnation'
+            fetch_full_goal_state = False
+            if full_goal_state:
+                fetch_full_goal_state = True
+                reason = 'force update'
+            elif base_incarnation is not None and self.incarnation != base_incarnation:
+                fetch_full_goal_state = True
+                reason = 'new incarnation'
 
-        if not fetch_full_goal_state:
-            self.hosting_env = None
-            self.shared_conf = None
-            self.certs = None
-            self.ext_conf = None
-            self.remote_access = None
-            return
-
-        logger.info('Fetching new goal state [incarnation {0} ({1})]', self.incarnation, reason)
+            if not fetch_full_goal_state:
+                self.hosting_env = None
+                self.shared_conf = None
+                self.certs = None
+                self.ext_conf = None
+                self.remote_access = None
+                return
+        except Exception as exception:
+            # We don't log the error here since fetching the goal state is done every few seconds
+            raise ProtocolError(msg="Error fetching goal state", inner=exception)
 
         try:
+            logger.info('Fetching new goal state [incarnation {0} ({1})]', self.incarnation, reason)
+
             uri = findtext(xml_doc, "HostingEnvironmentConfig")
             xml_text = wire_client.fetch_config(uri, wire_client.get_header())
             self.hosting_env = HostingEnv(xml_text)
@@ -122,9 +128,9 @@ class GoalState(object): # pylint: disable=R0902
             else:
                 xml_text = wire_client.fetch_config(uri, wire_client.get_header_for_cert())
                 self.remote_access = RemoteAccess(xml_text)
-        except Exception as e: # pylint: disable=C0103
-            logger.warn("Fetching the goal state failed: {0}", ustr(e))
-            raise
+        except Exception as exception:
+            logger.warn("Fetching the goal state failed: {0}", ustr(exception))
+            raise ProtocolError(msg="Error fetching goal state", inner=exception)
         finally:
             logger.info('Fetch goal state completed')
 
@@ -151,7 +157,8 @@ class GoalState(object): # pylint: disable=R0902
         return goal_state if goal_state.incarnation != incarnation else None
 
 
-class HostingEnv(object): # pylint: disable=R0903
+# too-few-public-methods<R0903> Disabled: This is just a data object that does not need any public methods
+class HostingEnv(object):  # pylint: disable=R0903
     def __init__(self, xml_text):
         self.xml_text = xml_text
         xml_doc = parse_doc(xml_text)
@@ -163,13 +170,15 @@ class HostingEnv(object): # pylint: disable=R0903
         self.deployment_name = getattrib(deployment, "name")
 
 
-class SharedConfig(object): # pylint: disable=R0903
+# too-few-public-methods<R0903> Disabled: This is just a data object that does not need any public methods
+class SharedConfig(object):  # pylint: disable=R0903
     def __init__(self, xml_text):
         self.xml_text = xml_text
 
 
-class Certificates(object): # pylint: disable=R0903
-    def __init__(self, xml_text): # pylint: disable=R0912,R0914
+# too-few-public-methods<R0903> Disabled: This is just a data object that does not need any public methods
+class Certificates(object):  # pylint: disable=R0903
+    def __init__(self, xml_text):  # pylint: disable=R0912
         self.cert_list = CertList()
 
         # Save the certificates
@@ -183,14 +192,14 @@ class Certificates(object): # pylint: disable=R0903
             return
 
         # if the certificates format is not Pkcs7BlobWithPfxContents do not parse it
-        certificateFormat = findtext(xml_doc, "Format") # pylint: disable=C0103
+        certificateFormat = findtext(xml_doc, "Format")  # pylint: disable=C0103
         if certificateFormat and certificateFormat != "Pkcs7BlobWithPfxContents":
             logger.warn("The Format is not Pkcs7BlobWithPfxContents. Format is " + certificateFormat)
             return
 
         cryptutil = CryptUtil(conf.get_openssl_cmd())
         p7m_file = os.path.join(conf.get_lib_dir(), P7M_FILE_NAME)
-        p7m = ("MIME-Version:1.0\n" # pylint: disable=W1308
+        p7m = ("MIME-Version:1.0\n"  # pylint: disable=W1308
                "Content-Disposition: attachment; filename=\"{0}\"\n"
                "Content-Type: application/x-pkcs7-mime; name=\"{1}\"\n"
                "Content-Transfer-Encoding: base64\n"
@@ -207,8 +216,8 @@ class Certificates(object): # pylint: disable=R0903
 
         # The parsing process use public key to match prv and crt.
         buf = []
-        begin_crt = False # pylint: disable=W0612
-        begin_prv = False # pylint: disable=W0612
+        begin_crt = False  # pylint: disable=W0612
+        begin_prv = False  # pylint: disable=W0612
         prvs = {}
         thumbprints = {}
         index = 0
@@ -275,8 +284,9 @@ class Certificates(object): # pylint: disable=R0903
         return file_name
 
 
-class ExtensionsConfig(object): # pylint: disable=R0903
-    def __init__(self, xml_text): # pylint: disable=R0914
+# too-few-public-methods<R0903> Disabled: This is just a data object that does not need any public methods
+class ExtensionsConfig(object):  # pylint: disable=R0903
+    def __init__(self, xml_text):
         self.xml_text = xml_text
         self.ext_handlers = ExtHandlerList()
         self.vmagent_manifests = VMAgentManifestList()
@@ -299,7 +309,7 @@ class ExtensionsConfig(object): # pylint: disable=R0903
             manifest = VMAgentManifest()
             manifest.family = family
             for uri in uris:
-                manifestUri = VMAgentManifestUri(uri=gettext(uri)) # pylint: disable=C0103
+                manifestUri = VMAgentManifestUri(uri=gettext(uri))  # pylint: disable=C0103
                 manifest.versionsManifestUris.append(manifestUri)
             self.vmagent_manifests.vmAgentManifests.append(manifest)
 
@@ -336,15 +346,16 @@ class ExtensionsConfig(object): # pylint: disable=R0903
         return ext_handler
 
     @staticmethod
-    def _parse_plugin_settings(ext_handler, plugin_settings): # pylint: disable=R0914
+    def _parse_plugin_settings(ext_handler, plugin_settings):
         if plugin_settings is None:
             return
 
         name = ext_handler.name
         version = ext_handler.properties.version
 
-        ext_handler_plugin_settings = [x for x in plugin_settings if getattrib(x, "name") == name]
-        if ext_handler_plugin_settings is None or len(ext_handler_plugin_settings) == 0: # pylint: disable=len-as-condition
+        to_lower = lambda str_to_change: str_to_change.lower() if str_to_change is not None else None
+        ext_handler_plugin_settings = [x for x in plugin_settings if to_lower(getattrib(x, "name")) == to_lower(name)]
+        if not ext_handler_plugin_settings:
             return
 
         settings = [x for x in ext_handler_plugin_settings if getattrib(x, "version") == version]
@@ -354,7 +365,7 @@ class ExtensionsConfig(object): # pylint: disable=R0903
                 set([getattrib(x, "version") for x in ext_handler_plugin_settings]))) 
             add_event(AGENT_NAME, op=WALAEventOperation.PluginSettingsVersionMismatch, message=msg, log_event=False,
                       is_success=False)
-            if len(settings) == 0: # pylint: disable=len-as-condition
+            if not settings:
                 # If there is no corresponding settings for the specific extension handler, we will not process it at all,
                 # this is an unexpected error as we always expect both versions to be in sync.
                 logger.error(msg)
@@ -363,17 +374,17 @@ class ExtensionsConfig(object): # pylint: disable=R0903
 
         runtime_settings = None
         runtime_settings_node = find(settings[0], "RuntimeSettings")
-        seqNo = getattrib(runtime_settings_node, "seqNo") # pylint: disable=C0103
+        seqNo = getattrib(runtime_settings_node, "seqNo")  # pylint: disable=C0103
         runtime_settings_str = gettext(runtime_settings_node)
         try:
             runtime_settings = json.loads(runtime_settings_str)
-        except ValueError as e: # pylint: disable=W0612,C0103
+        except ValueError as e:  # pylint: disable=W0612,C0103
             logger.error("Invalid extension settings")
             return
 
         depends_on_level = 0
         depends_on_node = find(settings[0], "DependsOn")
-        if depends_on_node != None: # pylint: disable=C0121
+        if depends_on_node != None:  # pylint: disable=C0121
             try:
                 depends_on_level = int(getattrib(depends_on_node, "dependencyLevel"))
             except (ValueError, TypeError):
@@ -396,7 +407,8 @@ class ExtensionsConfig(object): # pylint: disable=R0903
             ext_handler.properties.extensions.append(ext)
 
 
-class RemoteAccess(object): # pylint: disable=R0903
+# too-few-public-methods<R0903> Disabled: This is just a data object that does not need any public methods
+class RemoteAccess(object):  # pylint: disable=R0903
     """
     Object containing information about user accounts
     """
@@ -419,7 +431,7 @@ class RemoteAccess(object): # pylint: disable=R0903
         self.incarnation = None
         self.user_list = RemoteAccessUsersList()
 
-        if self.xml_text is None or len(self.xml_text) == 0: # pylint: disable=len-as-condition
+        if self.xml_text is None or len(self.xml_text) == 0:  # pylint: disable=len-as-condition
             return
 
         xml_doc = parse_doc(self.xml_text)

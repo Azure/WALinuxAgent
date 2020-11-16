@@ -31,7 +31,7 @@ class OpenWRTOSUtil(DefaultOSUtil):
         super(OpenWRTOSUtil, self).__init__()
         self.agent_conf_file_path = '/etc/waagent.conf'
         self.dhclient_name = 'udhcpc'
-        self.ip_command_output = re.compile('^\d+:\s+(\w+):\s+(.*)$') # pylint: disable=W1401
+        self.ip_command_output = re.compile('^\d+:\s+(\w+):\s+(.*)$')  # pylint: disable=W1401
         self.jit_enabled = True
         
     def eject_dvd(self, chk_err=True):
@@ -121,9 +121,9 @@ class OpenWRTOSUtil(DefaultOSUtil):
     def start_network(self) :
         return shellutil.run("/etc/init.d/network start", chk_err=True)
 
-    def restart_ssh_service(self): # pylint: disable=R1710
+    def restart_ssh_service(self):  # pylint: disable=R1710
         # Since Dropbear is the default ssh server on OpenWRt, lets do a sanity check
-        if os.path.exists("/etc/init.d/sshd"): # pylint: disable=R1705
+        if os.path.exists("/etc/init.d/sshd"):  # pylint: disable=R1705
             return shellutil.run("/etc/init.d/sshd restart", chk_err=True)
         else:
             logger.warn("sshd service does not exists")

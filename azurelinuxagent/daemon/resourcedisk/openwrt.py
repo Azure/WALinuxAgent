@@ -35,11 +35,11 @@ class OpenWRTResourceDiskHandler(ResourceDiskHandler):
             self.fs = 'ffs'
 
     def reread_partition_table(self, device):
-        ret, output = shellutil.run_get_output("hdparm -z {0}".format(device), chk_err=False) # pylint: disable=W0612
+        ret, output = shellutil.run_get_output("hdparm -z {0}".format(device), chk_err=False)  # pylint: disable=W0612
         if ret != 0:
             logger.warn("Failed refresh the partition table.")
 
-    def mount_resource_disk(self, mount_point): # pylint: disable=R0914
+    def mount_resource_disk(self, mount_point):
         device = self.osutil.device_for_ide_port(1)
         if device is None:
             raise ResourceDiskError("unable to detect disk topology")

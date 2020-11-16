@@ -15,15 +15,12 @@
 # Requires Python 2.6+ and Openssl 1.0+
 #
 
-import json # pylint: disable=unused-import
+import json  # pylint: disable=unused-import
 import os
 import tempfile
 from datetime import datetime, timedelta
 
-# pylint: disable=unused-import
-from azurelinuxagent.common.event import __event_logger__, add_log_event, MAX_NUMBER_OF_EVENTS, TELEMETRY_LOG_EVENT_ID,\
-    TELEMETRY_LOG_PROVIDER_ID, EVENTS_DIRECTORY 
-# pylint: enable=unused-import
+from azurelinuxagent.common.event import __event_logger__, add_log_event, MAX_NUMBER_OF_EVENTS, EVENTS_DIRECTORY
 
 import azurelinuxagent.common.logger as logger
 from azurelinuxagent.common.utils import fileutil
@@ -234,7 +231,7 @@ class TestLogger(AgentTestCase):
         mock.assert_not_called()
         mock.reset_mock()
 
-        for i in range(5): # pylint: disable=unused-variable
+        for i in range(5):  # pylint: disable=unused-variable
             appender.write(logger.LogLevel.ERROR, "--unit-test-ERROR--")
             appender.write(logger.LogLevel.INFO, "--unit-test-INFO--")
 
@@ -253,7 +250,7 @@ class TestLogger(AgentTestCase):
     @patch("azurelinuxagent.common.logger.ConsoleAppender.write")
     @patch("azurelinuxagent.common.logger.FileAppender.write")
     def test_add_appender(self, mock_file_write, mock_console_write, mock_telem_write, mock_stdout_write):
-        lg = logger.Logger(logger.DEFAULT_LOGGER, "TestLogger1") # pylint: disable=invalid-name
+        lg = logger.Logger(logger.DEFAULT_LOGGER, "TestLogger1")  # pylint: disable=invalid-name
 
         lg.add_appender(logger.AppenderType.FILE, logger.LogLevel.INFO, path=self.log_file)
         lg.add_appender(logger.AppenderType.TELEMETRY, logger.LogLevel.WARNING, path=add_log_event)
@@ -301,7 +298,7 @@ class TestLogger(AgentTestCase):
     @patch("azurelinuxagent.common.logger.ConsoleAppender.write")
     @patch("azurelinuxagent.common.logger.FileAppender.write")
     def test_set_prefix(self, mock_file_write, mock_console_write, mock_telem_write, mock_stdout_write):
-        lg = logger.Logger(logger.DEFAULT_LOGGER) # pylint: disable=invalid-name
+        lg = logger.Logger(logger.DEFAULT_LOGGER)  # pylint: disable=invalid-name
         prefix = "YoloLogger"
 
         lg.set_prefix(prefix)
@@ -341,7 +338,7 @@ class TestLogger(AgentTestCase):
         logger.add_logger_appender(logger.AppenderType.STDOUT, logger.LogLevel.WARNING)
         logger.set_prefix(parent_prefix)
 
-        lg = logger.Logger(logger.DEFAULT_LOGGER, child_prefix) # pylint: disable=invalid-name
+        lg = logger.Logger(logger.DEFAULT_LOGGER, child_prefix)  # pylint: disable=invalid-name
 
         lg.error("Test Log")
         self.assertEqual(1, mock_file_write.call_count)
@@ -386,8 +383,8 @@ class TestLogger(AgentTestCase):
                 logcontent = logfile.read()
                 # Checking the contents of the event file.
                 self.assertIn("Test Log - Warning", logcontent)
-        except Exception as e: # pylint: disable=invalid-name
-            self.assertFalse(True, "The log file looks like it isn't correctly setup for this test. Take a look. " # pylint: disable=redundant-unittest-assert
+        except Exception as e:  # pylint: disable=invalid-name
+            self.assertFalse(True, "The log file looks like it isn't correctly setup for this test. Take a look. "  # pylint: disable=redundant-unittest-assert
                                    "{0}".format(e))
 
     @skip_if_predicate_true(lambda: True, "Enable this test when SEND_LOGS_TO_TELEMETRY is enabled")
@@ -420,7 +417,7 @@ class TestLogger(AgentTestCase):
     @patch("azurelinuxagent.common.logger.ConsoleAppender.write")
     @patch("azurelinuxagent.common.event.send_logs_to_telemetry", return_value=True)
     @patch("azurelinuxagent.common.conf.get_lib_dir")
-    def test_telemetry_logger_check_all_file_logs_written_when_events_gt_MAX_NUMBER_OF_EVENTS(self, mock_lib_dir, *_): # pylint: disable=invalid-name
+    def test_telemetry_logger_check_all_file_logs_written_when_events_gt_MAX_NUMBER_OF_EVENTS(self, mock_lib_dir, *_):  # pylint: disable=invalid-name
         mock_lib_dir.return_value = self.lib_dir
         __event_logger__.event_dir = self.event_dir
         no_of_log_statements = MAX_NUMBER_OF_EVENTS + 100
@@ -456,8 +453,8 @@ class TestLogger(AgentTestCase):
                 self.assertRegex(logcontent[1001], r"(.*WARNING\s*{0}\s*\[PERIODIC\]\s*Too many files under:.*{1}, "
                                                    r"current count\:\s*\d+,\s*removing oldest\s*.*)".format(prefix,
                                                                                                             self.event_dir))
-        except Exception as e: # pylint: disable=invalid-name
-            self.assertFalse(True, "The log file looks like it isn't correctly setup for this test. " # pylint: disable=redundant-unittest-assert
+        except Exception as e:  # pylint: disable=invalid-name
+            self.assertFalse(True, "The log file looks like it isn't correctly setup for this test. "  # pylint: disable=redundant-unittest-assert
                                    "Take a look. {0}".format(e))
 
 
@@ -565,3 +562,32 @@ class TestAppender(AgentTestCase):
 
         # Validating only test-error gets logged and not others.
         self.assertEqual(1, mock_sys_stdout.call_count)
+
+    def test_console_output_enabled_should_return_true_when_there_are_console_appenders(self):
+        my_logger = logger.Logger()
+        my_logger.add_appender(logger.AppenderType.STDOUT, logger.LogLevel.INFO, None)
+        my_logger.add_appender(logger.AppenderType.CONSOLE, logger.LogLevel.INFO, None)
+
+        self.assertTrue(my_logger.console_output_enabled(), "Console output should be enabled, appenders = {0}".format(my_logger.appenders))
+
+    def test_console_output_enabled_should_return_false_when_there_are_no_console_appenders(self):
+        my_logger = logger.Logger()
+        my_logger.add_appender(logger.AppenderType.STDOUT, logger.LogLevel.INFO, None)
+
+        self.assertFalse(my_logger.console_output_enabled(), "Console output should not be enabled, appenders = {0}".format(my_logger.appenders))
+
+    def test_disable_console_output_should_remove_all_console_appenders(self):
+        my_logger = logger.Logger()
+        my_logger.add_appender(logger.AppenderType.STDOUT, logger.LogLevel.INFO, None)
+        my_logger.add_appender(logger.AppenderType.CONSOLE, logger.LogLevel.INFO, None)
+        my_logger.add_appender(logger.AppenderType.STDOUT, logger.LogLevel.INFO, None)
+        my_logger.add_appender(logger.AppenderType.CONSOLE, logger.LogLevel.INFO, None)
+
+        my_logger.disable_console_output()
+
+        self.assertTrue(
+            len(my_logger.appenders) == 2 and all(isinstance(a, logger.StdoutAppender) for a in my_logger.appenders),
+            "The console appender was not removed: {0}".format(my_logger.appenders))
+
+
+

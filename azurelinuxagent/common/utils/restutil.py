@@ -35,8 +35,8 @@ from azurelinuxagent.common.version import PY_VERSION_MAJOR, AGENT_NAME, GOAL_ST
 
 SECURE_WARNING_EMITTED = False
 
-DEFAULT_RETRIES = 3
-DELAY_IN_SECONDS = 5
+DEFAULT_RETRIES = 6
+DELAY_IN_SECONDS = 1
 
 THROTTLE_RETRIES = 25
 THROTTLE_DELAY_IN_SECONDS = 1
@@ -135,11 +135,20 @@ class IOErrorCounter(object):
         IOErrorCounter._protocol_endpoint = endpoint
 
 
-def _is_retry_status(status, retry_codes=RETRY_CODES): # pylint: disable=W0102
+def _compute_delay(retry_attempt=1, delay=DELAY_IN_SECONDS):
+    fib = (1, 1)
+    for _ in range(retry_attempt):
+        fib = (fib[1], fib[0]+fib[1])
+    return delay*fib[1]
+
+
+def _is_retry_status(status, retry_codes=None):
+    if retry_codes is None:
+        retry_codes = RETRY_CODES
     return status in retry_codes
 
 
-def _is_retry_exception(e): # pylint: disable=C0103
+def _is_retry_exception(e):  # pylint: disable=C0103
     return len([x for x in RETRY_EXCEPTIONS if isinstance(e, x)]) > 0
 
 
@@ -152,7 +161,7 @@ def _parse_url(url):
     Parse URL to get the components of the URL broken down to host, port
     :rtype: string, int, bool, string
     """
-    o = urlparse(url) # pylint: disable=C0103
+    o = urlparse(url)  # pylint: disable=C0103
     rel_uri = o.path
     if o.fragment:
         rel_uri = "{0}#{1}".format(rel_uri, o.fragment)
@@ -196,7 +205,7 @@ def dotted_netmask(mask):
     return socket.inet_ntoa(struct.pack('>I', bits))
 
 
-def address_in_network(ip, net): # pylint: disable=C0103
+def address_in_network(ip, net):  # pylint: disable=C0103
     """This function allows you to check if an IP belongs to a network subnet
     Example: returns True if ip = 192.168.1.1 and net = 192.168.1.0/24
              returns False if ip = 192.168.1.1 and net = 192.168.100.0/24
@@ -264,7 +273,7 @@ def _get_http_proxy(secure=False):
     else:
         http_proxy_env = HTTPS_PROXY_ENV if secure else HTTP_PROXY_ENV
         http_proxy_url = None
-        for v in [http_proxy_env, http_proxy_env.upper()]: # pylint: disable=C0103
+        for v in [http_proxy_env, http_proxy_env.upper()]:  # pylint: disable=C0103
             if v in os.environ:
                 http_proxy_url = os.environ[v]
                 break
@@ -279,7 +288,7 @@ def redact_sas_tokens_in_urls(url):
     return SAS_TOKEN_RETRIEVAL_REGEX.sub(r"\1" + REDACTED_TEXT + r"\3", url)
 
 
-def _http_request(method, host, rel_uri, port=None, data=None, secure=False, # pylint: disable=R0913,R0914
+def _http_request(method, host, rel_uri, port=None, data=None, secure=False,  # pylint: disable=R0913
                   headers=None, proxy_host=None, proxy_port=None, redact_data=False):
 
     headers = {} if headers is None else headers
@@ -316,26 +325,27 @@ def _http_request(method, host, rel_uri, port=None, data=None, secure=False, # p
     if redact_data:
         payload = "[REDACTED]"
 
-    # Logger requires the data to be a ustr to log properly, ensuring that the data string that we log is always ustr.
     logger.verbose("HTTP connection [{0}] [{1}] [{2}] [{3}]",
                    method,
                    redact_sas_tokens_in_urls(url),
-                   textutil.str_to_encoded_ustr(payload),
+                   payload,
                    headers)
 
     conn.request(method=method, url=url, body=data, headers=headers)
     return conn.getresponse()
 
 
-def http_request(method, # pylint: disable=R0913,R0912,R0914,W0102
+def http_request(method,  # pylint: disable=R0913,R0912
                  url, data, headers=None,
                  use_proxy=False,
                  max_retry=DEFAULT_RETRIES,
-                 retry_codes=RETRY_CODES,
+                 retry_codes=None,
                  retry_delay=DELAY_IN_SECONDS,
                  redact_data=False):
 
-    global SECURE_WARNING_EMITTED # pylint: disable=W0603
+    if retry_codes is None:
+        retry_codes = RETRY_CODES
+    global SECURE_WARNING_EMITTED  # pylint: disable=W0603
 
     host, port, secure, rel_uri = _parse_url(url)
 
@@ -383,8 +393,12 @@ def http_request(method, # pylint: disable=R0913,R0912,R0914,W0102
             # Compute the request delay
             # -- Use a fixed delay if the server ever rate-throttles the request
             #    (with a safe, minimum number of retry attempts)
-            # -- Otherwise, use the retry_delay (fixed) with maximum of max_retry retries for the rest of the requests.
-            delay = THROTTLE_DELAY_IN_SECONDS if was_throttled else retry_delay
+            # -- Otherwise, compute a delay that is the product of the next
+            #    item in the Fibonacci series and the initial delay value
+            delay = THROTTLE_DELAY_IN_SECONDS \
+                        if was_throttled \
+                        else _compute_delay(retry_attempt=attempt,
+                                            delay=retry_delay)
 
             logger.verbose("[HTTP Retry] "
                         "Attempt {0} of {1} will delay {2} seconds: {3}", 
@@ -435,14 +449,14 @@ def http_request(method, # pylint: disable=R0913,R0912,R0914,W0102
 
             return resp
 
-        except httpclient.HTTPException as e: # pylint: disable=C0103
+        except httpclient.HTTPException as e:  # pylint: disable=C0103
             clean_url = redact_sas_tokens_in_urls(url)
             msg = '[HTTP Failed] {0} {1} -- HttpException {2}'.format(method, clean_url, e)
             if _is_retry_exception(e):
                 continue
             break
 
-        except IOError as e: # pylint: disable=C0103
+        except IOError as e:  # pylint: disable=C0103
             IOErrorCounter.increment(host=host, port=port)
             clean_url = redact_sas_tokens_in_urls(url)
             msg = '[HTTP Failed] {0} {1} -- IOError {2}'.format(method, clean_url, e)
@@ -451,13 +465,15 @@ def http_request(method, # pylint: disable=R0913,R0912,R0914,W0102
     raise HttpError("{0} -- {1} attempts made".format(msg, attempt))
 
 
-def http_get(url, # pylint: disable=R0913,W0102
+def http_get(url,  # pylint: disable=R0913
              headers=None,
              use_proxy=False,
              max_retry=DEFAULT_RETRIES,
-             retry_codes=RETRY_CODES,
+             retry_codes=None,
              retry_delay=DELAY_IN_SECONDS):
 
+    if retry_codes is None:
+        retry_codes = RETRY_CODES
     return http_request("GET",
                         url, None, headers=headers,
                         use_proxy=use_proxy,
@@ -466,13 +482,15 @@ def http_get(url, # pylint: disable=R0913,W0102
                         retry_delay=retry_delay)
 
 
-def http_head(url, # pylint: disable=R0913,W0102
+def http_head(url,  # pylint: disable=R0913
               headers=None,
               use_proxy=False,
               max_retry=DEFAULT_RETRIES,
-              retry_codes=RETRY_CODES,
+              retry_codes=None,
               retry_delay=DELAY_IN_SECONDS):
 
+    if retry_codes is None:
+        retry_codes = RETRY_CODES
     return http_request("HEAD",
                         url, None, headers=headers,
                         use_proxy=use_proxy,
@@ -481,14 +499,16 @@ def http_head(url, # pylint: disable=R0913,W0102
                         retry_delay=retry_delay)
 
 
-def http_post(url, # pylint: disable=R0913,W0102
+def http_post(url,  # pylint: disable=R0913
               data,
               headers=None,
               use_proxy=False,
               max_retry=DEFAULT_RETRIES,
-              retry_codes=RETRY_CODES,
+              retry_codes=None,
               retry_delay=DELAY_IN_SECONDS):
 
+    if retry_codes is None:
+        retry_codes = RETRY_CODES
     return http_request("POST",
                         url, data, headers=headers,
                         use_proxy=use_proxy,
@@ -497,15 +517,17 @@ def http_post(url, # pylint: disable=R0913,W0102
                         retry_delay=retry_delay)
 
 
-def http_put(url, # pylint: disable=R0913,W0102
+def http_put(url,  # pylint: disable=R0913
              data,
              headers=None,
              use_proxy=False,
              max_retry=DEFAULT_RETRIES,
-             retry_codes=RETRY_CODES,
+             retry_codes=None,
              retry_delay=DELAY_IN_SECONDS,
              redact_data=False):
 
+    if retry_codes is None:
+        retry_codes = RETRY_CODES
     return http_request("PUT",
                         url, data, headers=headers,
                         use_proxy=use_proxy,
@@ -515,13 +537,15 @@ def http_put(url, # pylint: disable=R0913,W0102
                         redact_data=redact_data)
 
 
-def http_delete(url, # pylint: disable=R0913,W0102
+def http_delete(url,  # pylint: disable=R0913
                 headers=None,
                 use_proxy=False,
                 max_retry=DEFAULT_RETRIES,
-                retry_codes=RETRY_CODES,
+                retry_codes=None,
                 retry_delay=DELAY_IN_SECONDS):
 
+    if retry_codes is None:
+        retry_codes = RETRY_CODES
     return http_request("DELETE",
                         url, None, headers=headers,
                         use_proxy=use_proxy,
@@ -530,11 +554,15 @@ def http_delete(url, # pylint: disable=R0913,W0102
                         retry_delay=retry_delay)
 
 
-def request_failed(resp, ok_codes=OK_CODES): # pylint: disable=W0102
+def request_failed(resp, ok_codes=None):
+    if ok_codes is None:
+        ok_codes = OK_CODES
     return not request_succeeded(resp, ok_codes=ok_codes)
 
 
-def request_succeeded(resp, ok_codes=OK_CODES): # pylint: disable=W0102
+def request_succeeded(resp, ok_codes=None):
+    if ok_codes is None:
+        ok_codes = OK_CODES
     return resp is not None and resp.status in ok_codes
 
 
@@ -542,10 +570,12 @@ def request_not_modified(resp):
     return resp is not None and resp.status in NOT_MODIFIED_CODES
 
 
-def request_failed_at_hostplugin(resp, upstream_failure_codes=HOSTPLUGIN_UPSTREAM_FAILURE_CODES): # pylint: disable=W0102
+def request_failed_at_hostplugin(resp, upstream_failure_codes=None):
     """
     Host plugin will return 502 for any upstream issue, so a failure is any 5xx except 502
     """
+    if upstream_failure_codes is None:
+        upstream_failure_codes = HOSTPLUGIN_UPSTREAM_FAILURE_CODES
     return resp is not None and resp.status >= 500 and resp.status not in upstream_failure_codes
 
 
