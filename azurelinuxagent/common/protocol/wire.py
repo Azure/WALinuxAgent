@@ -184,6 +184,10 @@ class WireProtocol(DataContract):
         self.client.status_blob.set_vm_status(vm_status)
         self.client.upload_status_blob()
 
+        status_file = "status_blob.{inc}.json".format(inc=self.get_incarnation())
+        fileutil.write_file(os.path.join(conf.get_lib_dir(), status_file),
+            self.client.status_blob.data)
+
     def report_ext_status(self, ext_handler_name, ext_name, ext_status):  # pylint: disable=W0613
         validate_param("ext_status", ext_status, ExtensionStatus)
         self.client.status_blob.set_ext_status(ext_handler_name, ext_status)
