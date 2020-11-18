@@ -360,9 +360,8 @@ class ExtensionsConfig(object):  # pylint: disable=R0903
 
         settings = [x for x in ext_handler_plugin_settings if getattrib(x, "version") == version]
         if len(settings) != len(ext_handler_plugin_settings):
-            msg = "ExtHandler PluginSettings Version Mismatch! Expected PluginSettings version: {0} for Handler: " \
-                  "{1} but found versions: ({2})".format(version, name, ', '.join(
-                set([getattrib(x, "version") for x in ext_handler_plugin_settings]))) 
+            msg = "ExtHandler PluginSettings Version Mismatch! Expected PluginSettings version: {0} for Handler: {1} but found versions: ({2})".format(
+                version, name, ', '.join(set([getattrib(x, "version") for x in ext_handler_plugin_settings])))
             add_event(AGENT_NAME, op=WALAEventOperation.PluginSettingsVersionMismatch, message=msg, log_event=False,
                       is_success=False)
             if not settings:
@@ -372,19 +371,17 @@ class ExtensionsConfig(object):  # pylint: disable=R0903
                 return
             logger.warn(msg)
 
-        runtime_settings = None
         runtime_settings_node = find(settings[0], "RuntimeSettings")
-        seqNo = getattrib(runtime_settings_node, "seqNo")  # pylint: disable=C0103
-        runtime_settings_str = gettext(runtime_settings_node)
+        seq_no = getattrib(runtime_settings_node, "seqNo")
         try:
-            runtime_settings = json.loads(runtime_settings_str)
-        except ValueError as e:  # pylint: disable=W0612,C0103
-            logger.error("Invalid extension settings")
+            runtime_settings = json.loads(gettext(runtime_settings_node))
+        except ValueError as error:
+            logger.error("Invalid extension settings: {0}", ustr(error))
             return
 
         depends_on_level = 0
         depends_on_node = find(settings[0], "DependsOn")
-        if depends_on_node != None:  # pylint: disable=C0121
+        if depends_on_node is not None:
             try:
                 depends_on_level = int(getattrib(depends_on_node, "dependencyLevel"))
             except (ValueError, TypeError):
@@ -397,7 +394,7 @@ class ExtensionsConfig(object):  # pylint: disable=R0903
             # There is no "extension name" in wire protocol.
             # Put
             ext.name = ext_handler.name
-            ext.sequenceNumber = seqNo
+            ext.sequenceNumber = seq_no
             ext.publicSettings = handler_settings.get("publicSettings")
             ext.protectedSettings = handler_settings.get("protectedSettings")
             ext.dependencyLevel = depends_on_level
