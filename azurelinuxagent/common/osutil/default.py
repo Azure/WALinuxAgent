@@ -802,7 +802,7 @@ class DefaultOSUtil(object):  # pylint: disable=R0904
             # Python 3.9 removed the tostring() method on arrays, tobytes() is the new alias
             ifconf_buff = buff.tostring()
         except AttributeError:
-            ifconf_buff = buff.tobytes()
+            ifconf_buff = buff.tobytes()  # pylint: disable=no-member
 
         ifaces = {}
         for i in range(0, array_size, struct_size):

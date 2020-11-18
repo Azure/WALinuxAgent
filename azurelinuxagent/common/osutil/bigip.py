@@ -291,7 +291,7 @@ class BigIpOSUtil(DefaultOSUtil):
             # Python 3.9 removed the tostring() method on arrays, tobytes() is the new alias
             sock = buff.tostring()
         except AttributeError:
-            sock = buff.tobytes()
+            sock = buff.tobytes()  # pylint: disable=no-member
 
         for i in range(0, struct_size * expected, struct_size):
             iface = self._format_single_interface_name(sock, i)
