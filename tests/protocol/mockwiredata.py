@@ -43,6 +43,9 @@ DATA_FILE_IN_VM_ARTIFACTS_PROFILE = DATA_FILE.copy()
 DATA_FILE_IN_VM_ARTIFACTS_PROFILE["ext_conf"] = "wire/ext_conf_in_vm_artifacts_profile.xml"
 DATA_FILE_IN_VM_ARTIFACTS_PROFILE["in_vm_artifacts_profile"] = "wire/in_vm_artifacts_profile.json"
 
+DATA_FILE_IN_VM_META_DATA = DATA_FILE.copy()
+DATA_FILE_IN_VM_META_DATA["ext_conf"] = "wire/ext_conf_in_vm_metadata.xml"
+
 DATA_FILE_NO_EXT = DATA_FILE.copy()
 DATA_FILE_NO_EXT["goal_state"] = "wire/goal_state_no_ext.xml"
 DATA_FILE_NO_EXT["ext_conf"] = None

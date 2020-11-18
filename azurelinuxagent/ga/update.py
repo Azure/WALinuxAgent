@@ -362,14 +362,15 @@ class UpdateHandler(object):  # pylint: disable=R0902
                     if last_etag != exthandlers_handler.last_etag:
                         self._ensure_readonly_files()
                         duration = elapsed_milliseconds(utc_start)
-                        logger.info('ProcessGoalState completed [incarnation {0}; {1} ms]',
-                                    exthandlers_handler.last_etag,
-                                    duration)
+                        activity_id, correlation_id = exthandlers_handler.get_activity_and_correlation_id()
+                        msg = 'ProcessGoalState completed [incarnation {0}; {1} ms; Activity Id: {2}; Correlation Id: {3}]'.format(
+                            exthandlers_handler.last_etag, duration, activity_id, correlation_id)
+                        logger.info(msg)
                         add_event(
                             AGENT_NAME,
                             op=WALAEventOperation.ProcessGoalState,
                             duration=duration,
-                            message="Incarnation {0}".format(exthandlers_handler.last_etag))
+                            message=msg)
 
                 self._send_heartbeat_telemetry(protocol)
                 time.sleep(goal_state_interval)

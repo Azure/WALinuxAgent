@@ -275,6 +275,10 @@ class ExtHandlersHandler(object):
         # Skip processing if GoalState incarnation did not change
         return self.last_etag != etag
 
+    def get_activity_and_correlation_id(self):
+        in_vm_metadata = self.protocol.get_in_vm_metadata()
+        return in_vm_metadata.activity_id, in_vm_metadata.correlation_id
+
     def run(self):
 
         try:
@@ -285,11 +289,11 @@ class ExtHandlersHandler(object):
             self.log_report = True
 
             if self._extension_processing_allowed() and self._incarnation_changed(etag):
-                in_vm_metadata = self.protocol.get_in_vm_metadata()
+                activity_id, correlation_id = self.get_activity_and_correlation_id()
                 logger.info(
                     "ProcessGoalState started [incarnation {0}; Activity Id: {1}; Correlation Id: {2}]".format(etag,
-                                                                                                               in_vm_metadata.activity_id,
-                                                                                                               in_vm_metadata.correlation_id))
+                                                                                                               activity_id,
+                                                                                                               correlation_id))
                 self.handle_ext_handlers(etag)
                 self.last_etag = etag
 

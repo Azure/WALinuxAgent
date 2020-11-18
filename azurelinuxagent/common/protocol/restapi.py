@@ -126,7 +126,8 @@ class ExtHandler(DataContract):  # pylint: disable=R0903
         return level
 
 
-class InVMGoalStateMetaData(DataContract):
+# too-few-public-methods<R0903> Disabled: More public methods are not needed here.
+class InVMGoalStateMetaData(DataContract):  # pylint: disable=R0903
     """
     Object for parsing the GoalState MetaData received from CRP
     Eg: <InVMGoalStateMetaData inSvdSeqNo="2" createdOnTicks="637405409304121230" activityId="555e551c-600e-4fb4-90ba-8ab8ec28eccc" correlationId="400de90b-522e-491f-9d89-ec944661f531" />

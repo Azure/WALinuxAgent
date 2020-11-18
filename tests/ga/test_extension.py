@@ -1297,6 +1297,27 @@ class TestExtension(ExtensionTestCase):
             self.assertEqual(etag, exthandlers_handler.last_etag,
                              "Last etag and etag should be same if extension processing is enabled")
 
+    def test_it_should_parse_in_vm_metadata_properly(self, mock_get, mock_crypt, *args):
+
+        test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE_IN_VM_META_DATA)
+        exthandlers_handler, protocol = self._create_mock(test_data, mock_get, mock_crypt, *args)
+
+        exthandlers_handler.run()
+        self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.0.0")
+        activity_id, correlation_id = exthandlers_handler.get_activity_and_correlation_id()
+        self.assertEqual(activity_id, "555e551c-600e-4fb4-90ba-8ab8ec28eccc", "Incorrect activity Id")
+        self.assertEqual(correlation_id, "400de90b-522e-491f-9d89-ec944661f531", "Incorrect correlation Id")
+
+        # If the data is not provided in ExtensionConfig, it should just be None
+        test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE)
+        exthandlers_handler, protocol = self._create_mock(test_data, mock_get, mock_crypt, *args)
+
+        exthandlers_handler.run()
+        self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.0.0")
+        activity_id, correlation_id = exthandlers_handler.get_activity_and_correlation_id()
+        self.assertIsNone(activity_id, "Activity Id should be None")
+        self.assertIsNone(correlation_id, "Correlation Id should be None")
+
     def _assert_ext_status(self, report_ext_status, expected_status,
                            expected_seq_no):
         self.assertTrue(report_ext_status.called)
