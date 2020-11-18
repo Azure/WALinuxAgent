@@ -287,7 +287,12 @@ class BigIpOSUtil(DefaultOSUtil):
         if retsize == (expected * struct_size):
             logger.warn(('SIOCGIFCONF returned more than {0} up '
                          'network interfaces.'), expected)
-        sock = buff.tostring()
+        try:
+            # Python 3.9 removed the tostring() method on arrays, tobytes() is the new alias
+            sock = buff.tostring()
+        except AttributeError:
+            sock = buff.tobytes()
+
         for i in range(0, struct_size * expected, struct_size):
             iface = self._format_single_interface_name(sock, i)
 

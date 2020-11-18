@@ -111,7 +111,7 @@ class TestImds(AgentTestCase):
         }'''
         # pylint: enable=invalid-name
 
-        data = json.loads(s, encoding='utf-8')
+        data = json.loads(s)
 
         compute_info = imds.ComputeInfo()
         set_properties("compute", compute_info, data)
@@ -262,7 +262,7 @@ class TestImds(AgentTestCase):
         }}'''.format(publisher, offer, sku, version)
         # pylint: enable=invalid-name
 
-        data = json.loads(s, encoding='utf-8')
+        data = json.loads(s)
         compute_info = imds.ComputeInfo()
         set_properties("compute", compute_info, data)
 
