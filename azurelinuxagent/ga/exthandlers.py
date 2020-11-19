@@ -883,7 +883,7 @@ class ExtHandlerInstance(object):  # pylint: disable=R0904
         self.logger.info("Downloading extension package: {0}", source_uri)
         try:
             if not self.protocol.download_ext_handler_pkg(source_uri, target_file):
-                raise Exception("Failed to download extension package - no error information is available")
+                raise Exception("Failed to download extension package from {0}".format(source_uri))
         except Exception as exception:
             self.logger.info("Error downloading extension package: {0}", ustr(exception))
             if os.path.exists(target_file):
