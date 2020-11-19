@@ -94,20 +94,22 @@ class RDMAHandler(object):
             logger.error(error_msg % driver_info_source)
             return
 
-        f = open(driver_info_source)  # pylint: disable=C0103
-        while True:
-            key = f.read(kvp_key_size)
-            value = f.read(kvp_value_size)
-            if key and value:
-                key_0 = key.split("\x00")[0]
-                value_0 = value.split("\x00")[0]
-                if key_0 == "NdDriverVersion":
-                    f.close()
-                    self.nd_version = value_0
-                    return self.nd_version
-            else:
-                break
-        f.close()
+        with open(driver_info_source, "rb") as pool_file:
+            while True:
+                key = pool_file.read(kvp_key_size)
+                value = pool_file.read(kvp_value_size)
+                if key and value:
+                    key_0 = key.partition(b"\x00")[0]
+                    if key_0:
+                        key_0 = key_0.decode()
+                    value_0 = value.partition(b"\x00")[0]
+                    if value_0:
+                        value_0 = value_0.decode()
+                    if key_0 == "NdDriverVersion":
+                        self.nd_version = value_0
+                        return self.nd_version
+                else:
+                    break
 
         error_msg = 'RDMA: NdDriverVersion not found in "%s"'
         logger.error(error_msg % driver_info_source)
