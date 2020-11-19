@@ -866,7 +866,7 @@ class WireClient(object):  # pylint: disable=R0904
         """
         try:
             ret = host_func()
-            if ret is None or not ret:
+            if ret in (None, False):
                 raise Exception("Request failed using the host channel.")
 
             return ret
@@ -889,7 +889,7 @@ class WireClient(object):  # pylint: disable=R0904
             try:
                 ret = host_func()
 
-                if ret is None or not ret:
+                if ret in (None, False):
                     raise Exception("Request failed using the host channel after goal state refresh.")
 
                 msg = "[PERIODIC] Request succeeded using the host plugin channel after goal state refresh. " \
@@ -947,7 +947,7 @@ class WireClient(object):  # pylint: disable=R0904
         try:
             ret = direct_func()
 
-            if ret is None or not ret:
+            if ret in (None, False):
                 logger.periodic_info(logger.EVERY_HOUR, "[PERIODIC] Request failed using the direct channel.")
                 return None
         except Exception as error:
