@@ -489,11 +489,11 @@ class TestWireClient(HttpRequestPredicates, AgentTestCase):
             success = protocol.download_ext_handler_pkg(extension_url, target_file)
 
             urls = protocol.get_tracked_urls()
-            self.assertEqual(success, True, 'The download should have succeeded')
+            self.assertTrue(success, "The download should have succeeded")
             self.assertEqual(len(urls), 1, "Unexpected number of HTTP requests: [{0}]".format(urls))
             self.assertEqual(urls[0], extension_url, "The extension should have been downloaded over the direct channel")
-            self.assertTrue(os.path.exists(target_file), 'The extension package was not downloaded')
-            self.assertEqual(HostPluginProtocol.is_default_channel, False, "The host channel should not have been set as the default")
+            self.assertTrue(os.path.exists(target_file), "The extension package was not downloaded")
+            self.assertFalse(HostPluginProtocol.is_default_channel, "The host channel should not have been set as the default")
 
     def test_download_ext_handler_pkg_should_use_host_channel_when_direct_channel_fails_and_set_host_as_default(self):
         extension_url = 'https://fake_host/fake_extension.zip'
@@ -512,12 +512,12 @@ class TestWireClient(HttpRequestPredicates, AgentTestCase):
             success = protocol.download_ext_handler_pkg(extension_url, target_file)
 
             urls = protocol.get_tracked_urls()
-            self.assertEqual(success, True, 'The download should have succeeded')
+            self.assertTrue(success, "The download should have succeeded")
             self.assertEqual(len(urls), 2, "Unexpected number of HTTP requests: [{0}]".format(urls))
             self.assertEqual(urls[0], extension_url, "The first attempt should have been over the direct channel")
             self.assertTrue(self.is_host_plugin_extension_artifact_request(urls[1]), "The retry attempt should have been over the host channel")
             self.assertTrue(os.path.exists(target_file), 'The extension package was not downloaded')
-            self.assertEqual(HostPluginProtocol.is_default_channel, True, "The host channel should have been set as the default")
+            self.assertTrue(HostPluginProtocol.is_default_channel, "The host channel should have been set as the default")
 
     def test_download_ext_handler_pkg_should_retry_the_host_channel_after_refreshing_host_plugin(self):
         extension_url = 'https://fake_host/fake_extension.zip'
@@ -549,14 +549,14 @@ class TestWireClient(HttpRequestPredicates, AgentTestCase):
                 success = protocol.download_ext_handler_pkg(extension_url, target_file)
 
                 urls = protocol.get_tracked_urls()
-                self.assertEqual(success, True, 'The download should have succeeded')
+                self.assertTrue(success, "The download should have succeeded")
                 self.assertEqual(len(urls), 4, "Unexpected number of HTTP requests: [{0}]".format(urls))
                 self.assertEqual(urls[0], extension_url, "The first attempt should have been over the direct channel")
                 self.assertTrue(self.is_host_plugin_extension_artifact_request(urls[1]), "The second attempt should have been over the host channel")
                 self.assertTrue(self.is_goal_state_request(urls[2]), "The host channel should have been refreshed the goal state")
                 self.assertTrue(self.is_host_plugin_extension_artifact_request(urls[3]), "The third attempt should have been over the host channel")
                 self.assertTrue(os.path.exists(target_file), 'The extension package was not downloaded')
-                self.assertEqual(HostPluginProtocol.is_default_channel, True, "The host channel should have been set as the default")
+                self.assertTrue(HostPluginProtocol.is_default_channel, "The host channel should have been set as the default")
             finally:
                 HostPluginProtocol.is_default_channel = False
 
@@ -582,12 +582,12 @@ class TestWireClient(HttpRequestPredicates, AgentTestCase):
             success = protocol.download_ext_handler_pkg(extension_url, target_file)
 
             urls = protocol.get_tracked_urls()
-            self.assertEqual(success, False, "The download should have failed")
+            self.assertFalse(success, "The download should have failed")
             self.assertEqual(len(urls), 2, "Unexpected number of HTTP requests: [{0}]".format(urls))
             self.assertEqual(urls[0], extension_url, "The first attempt should have been over the direct channel")
             self.assertTrue(self.is_host_plugin_extension_artifact_request(urls[1]), "The second attempt should have been over the host channel")
             self.assertFalse(os.path.exists(target_file), "The extension package was downloaded and it shouldn't have")
-            self.assertEqual(HostPluginProtocol.is_default_channel, False, "The host channel should not have been set as the default")
+            self.assertFalse(HostPluginProtocol.is_default_channel, "The host channel should not have been set as the default")
 
     def test_fetch_manifest_should_not_invoke_host_channel_when_direct_channel_succeeds(self):
         manifest_url = 'https://fake_host/fake_manifest.xml'
@@ -609,7 +609,7 @@ class TestWireClient(HttpRequestPredicates, AgentTestCase):
             self.assertEqual(manifest, manifest_xml, 'The expected manifest was not downloaded')
             self.assertEqual(len(urls), 1, "Unexpected number of HTTP requests: [{0}]".format(urls))
             self.assertEqual(urls[0], manifest_url, "The manifest should have been downloaded over the direct channel")
-            self.assertEqual(HostPluginProtocol.is_default_channel, False, "The default channel should not have changed")
+            self.assertFalse(HostPluginProtocol.is_default_channel, "The default channel should not have changed")
 
     def test_fetch_manifest_should_use_host_channel_when_direct_channel_fails_and_set_it_to_default(self):
         manifest_url = 'https://fake_host/fake_manifest.xml'
@@ -633,7 +633,7 @@ class TestWireClient(HttpRequestPredicates, AgentTestCase):
                 self.assertEqual(len(urls), 2, "Unexpected number of HTTP requests: [{0}]".format(urls))
                 self.assertEqual(urls[0], manifest_url, "The first attempt should have been over the direct channel")
                 self.assertTrue(self.is_host_plugin_extension_artifact_request(urls[1]), "The retry should have been over the host channel")
-                self.assertEqual(HostPluginProtocol.is_default_channel, True, "The host should have been set as the default channel")
+                self.assertTrue(HostPluginProtocol.is_default_channel, "The host should have been set as the default channel")
             finally:
                 HostPluginProtocol.is_default_channel = False  # Reset default channel
 
@@ -672,7 +672,7 @@ class TestWireClient(HttpRequestPredicates, AgentTestCase):
                 self.assertTrue(self.is_host_plugin_extension_artifact_request(urls[1]), "The second attempt should have been over the host channel")
                 self.assertTrue(self.is_goal_state_request(urls[2]), "The host channel should have been refreshed the goal state")
                 self.assertTrue(self.is_host_plugin_extension_artifact_request(urls[3]), "The third attempt should have been over the host channel")
-                self.assertEqual(HostPluginProtocol.is_default_channel, True, "The host should have been set as the default channel")
+                self.assertTrue(HostPluginProtocol.is_default_channel, "The host should have been set as the default channel")
             finally:
                 HostPluginProtocol.is_default_channel = False  # Reset default channel
 
@@ -702,14 +702,10 @@ class TestWireClient(HttpRequestPredicates, AgentTestCase):
             urls = protocol.get_tracked_urls()
             self.assertEqual(len(urls), 4, "Unexpected number of HTTP requests: [{0}]".format(urls))
             self.assertEqual(urls[0], manifest_url, "The first attempt should have been over the direct channel")
-            self.assertTrue(self.is_host_plugin_extension_artifact_request(urls[1]),
-                            "The second attempt should have been over the host channel")
-            self.assertTrue(self.is_goal_state_request(urls[2]),
-                            "The host channel should have been refreshed the goal state")
-            self.assertTrue(self.is_host_plugin_extension_artifact_request(urls[3]),
-                            "The third attempt should have been over the host channel")
-            self.assertEqual(HostPluginProtocol.is_default_channel, False,
-                              "The host should not have been set as the default channel")
+            self.assertTrue(self.is_host_plugin_extension_artifact_request(urls[1]), "The second attempt should have been over the host channel")
+            self.assertTrue(self.is_goal_state_request(urls[2]), "The host channel should have been refreshed the goal state")
+            self.assertTrue(self.is_host_plugin_extension_artifact_request(urls[3]), "The third attempt should have been over the host channel")
+            self.assertFalse(HostPluginProtocol.is_default_channel, "The host should not have been set as the default channel")
 
             self.assertEqual(HostPluginProtocol.is_default_channel, False)
 
@@ -727,7 +723,7 @@ class TestWireClient(HttpRequestPredicates, AgentTestCase):
             self.assertIsInstance(return_value, InVMArtifactsProfile, 'The request did not return a valid artifacts profile: {0}'.format(return_value))
             urls = protocol.get_tracked_urls()
             self.assertEqual(len(urls), 1, "Unexpected HTTP requests: [{0}]".format(urls))
-            self.assertEqual(HostPluginProtocol.is_default_channel, False)
+            self.assertFalse(HostPluginProtocol.is_default_channel, "The host should not have been set as the default channel")
 
     def test_get_artifacts_profile_should_use_host_channel_when_direct_channel_fails(self):
         def http_get_handler(url, *_, **kwargs):
@@ -752,7 +748,7 @@ class TestWireClient(HttpRequestPredicates, AgentTestCase):
                 self.assertEqual(len(urls), 2, "Invalid number of requests: [{0}]".format(urls))
                 self.assertTrue(self.is_in_vm_artifacts_profile_request(urls[0]), "The first request should have been over the direct channel")
                 self.assertTrue(self.is_host_plugin_extension_artifact_request(urls[1]), "The second request should have been over the host channel")
-                self.assertEqual(HostPluginProtocol.is_default_channel, True, "The default channel should have changed to the host")
+                self.assertTrue(HostPluginProtocol.is_default_channel, "The default channel should have changed to the host")
             finally:
                 HostPluginProtocol.is_default_channel = False
 
@@ -790,7 +786,7 @@ class TestWireClient(HttpRequestPredicates, AgentTestCase):
                 self.assertTrue(self.is_host_plugin_extension_artifact_request(urls[1]), "The second request should have been over the host channel")
                 self.assertTrue(self.is_goal_state_request(urls[2]), "The goal state should have been refreshed before retrying the host channel")
                 self.assertTrue(self.is_host_plugin_extension_artifact_request(urls[3]), "The retry request should have been over the host channel")
-                self.assertEqual(HostPluginProtocol.is_default_channel, True, "The default channel should have changed to the host")
+                self.assertTrue(HostPluginProtocol.is_default_channel, "The default channel should have changed to the host")
             finally:
                 HostPluginProtocol.is_default_channel = False
 
@@ -821,7 +817,7 @@ class TestWireClient(HttpRequestPredicates, AgentTestCase):
             self.assertTrue(self.is_host_plugin_extension_artifact_request(urls[1]), "The second request should have been over the host channel")
             self.assertTrue(self.is_goal_state_request(urls[2]), "The goal state should have been refreshed before retrying the host channel")
             self.assertTrue(self.is_host_plugin_extension_artifact_request(urls[3]), "The retry request should have been over the host channel")
-            self.assertEqual(HostPluginProtocol.is_default_channel, False, "The default channel should not have changed")
+            self.assertFalse(HostPluginProtocol.is_default_channel, "The default channel should not have changed")
 
     def test_upload_logs_should_not_refresh_plugin_when_first_attempt_succeeds(self):
         def http_put_handler(url, *_, **__):  # pylint: disable=inconsistent-return-statements
@@ -852,10 +848,8 @@ class TestWireClient(HttpRequestPredicates, AgentTestCase):
 
             urls = protocol.get_tracked_urls()
             self.assertEqual(len(urls), 2, "Invalid number of requests: [{0}]".format(urls))
-            self.assertTrue(self.is_host_plugin_put_logs_request(urls[0]),
-                            "The first request should have been over the host channel")
-            self.assertTrue(self.is_host_plugin_put_logs_request(urls[1]),
-                            "The second request should have been over the host channel")
+            self.assertTrue(self.is_host_plugin_put_logs_request(urls[0]), "The first request should have been over the host channel")
+            self.assertTrue(self.is_host_plugin_put_logs_request(urls[1]), "The second request should have been over the host channel")
 
     @staticmethod
     def _set_and_fail_helper_channel_functions(fail_direct=False, fail_host=False):
@@ -886,10 +880,10 @@ class TestWireClient(HttpRequestPredicates, AgentTestCase):
 
             direct_func, host_func = self._set_and_fail_helper_channel_functions()
             # Assert we're only calling the primary channel (direct) and that it succeeds.
-            for n in range(5):  # pylint: disable=invalid-name
+            for iteration in range(5):
                 ret = protocol.client.send_request_using_appropriate_channel(direct_func, host_func)
                 self.assertEqual("direct", ret)
-                self.assertEqual(n + 1, direct_func.counter)
+                self.assertEqual(iteration + 1, direct_func.counter)
                 self.assertEqual(0, host_func.counter)
                 self.assertFalse(HostPluginProtocol.is_default_channel)
 
@@ -898,11 +892,11 @@ class TestWireClient(HttpRequestPredicates, AgentTestCase):
             direct_func, host_func = self._set_and_fail_helper_channel_functions()
 
             # Assert we're only calling the primary channel (host) and that it succeeds.
-            for n in range(5):  # pylint: disable=invalid-name
+            for iteration in range(5):
                 ret = protocol.client.send_request_using_appropriate_channel(direct_func, host_func)
                 self.assertEqual("host", ret)
                 self.assertEqual(0, direct_func.counter)
-                self.assertEqual(n + 1, host_func.counter)
+                self.assertEqual(iteration + 1, host_func.counter)
                 self.assertTrue(HostPluginProtocol.is_default_channel)
 
     def test_send_request_using_appropriate_channel_should_not_change_default_channel_if_none_succeeds(self):

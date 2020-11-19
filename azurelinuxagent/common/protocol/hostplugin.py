@@ -56,7 +56,8 @@ _HEADER_ARTIFACT_MANIFEST_LOCATION = "x-ms-artifact-manifest-location"
 MAXIMUM_PAGEBLOB_PAGE_SIZE = 4 * 1024 * 1024  # Max page size: 4MB
 
 
-class HostPluginProtocol(object): # pylint: disable=R0902
+# too-many-instance-attributes<R0902> Disabled: all attributes are necessary
+class HostPluginProtocol(object):  # pylint: disable=R0902
     is_default_channel = False
 
     FETCH_REPORTING_PERIOD = datetime.timedelta(minutes=1)

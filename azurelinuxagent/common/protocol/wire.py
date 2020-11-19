@@ -921,6 +921,9 @@ class WireClient(object):  # pylint: disable=R0904
     def __send_request_using_host_channel(self, host_func):
         """
         Calls the host_func on host channel with retries for stale goal state and handles any exceptions, consistent with the caller for direct channel.
+        At the time of writing, host_func internally calls either:
+        1) WireClient.stream which returns a boolean, or
+        2) WireClient.fetch which returns None or a HTTP response.
         """
         ret = None
         try:
@@ -934,6 +937,9 @@ class WireClient(object):  # pylint: disable=R0904
     def __send_request_using_direct_channel(direct_func):
         """
         Calls the direct_func on direct channel and handles any exceptions, consistent with the caller for host channel.
+        At the time of writing, direct_func internally calls either:
+        1) WireClient.stream which returns a boolean, or
+        2) WireClient.fetch which returns None or a HTTP response.
         """
         ret = None
         try:
@@ -970,8 +976,9 @@ class WireClient(object):  # pylint: disable=R0904
         ret = secondary_channel()
         if ret is not None:
             HostPluginProtocol.is_default_channel = not HostPluginProtocol.is_default_channel
-            logger.info("Default channel changed to {0}.", "host" if HostPluginProtocol.is_default_channel else "direct")
-
+            message = "Default channel changed to {0}.".format("host" if HostPluginProtocol.is_default_channel else "direct")
+            logger.info(message)
+            add_event(AGENT_NAME, op=WALAEventOperation.DefaultChannelChange, version=CURRENT_VERSION, is_success=True, message=message, log_event=False)
         return ret
 
     def upload_status_blob(self):
@@ -1215,9 +1222,10 @@ class WireClient(object):  # pylint: disable=R0904
             try:
                 profile = self.send_request_using_appropriate_channel(direct_func, host_func)
                 if profile is None:
-                    raise Exception("Failed to fetch artifacts profile from blob {0}".format(blob))
+                    logger.warn("Failed to fetch artifacts profile from blob {0}", blob)
+                    return None
             except Exception as e:  # pylint: disable=C0103
-                logger.warn("Exception retrieving artifacts profile: {0}".format(ustr(e)))
+                logger.warn("Exception retrieving artifacts profile from blob {0}. Error: {1}".format(blob, ustr(e)))
                 return None
 
             if not textutil.is_str_empty(profile):
