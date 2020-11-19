@@ -924,6 +924,7 @@ class WireClient(object):  # pylint: disable=R0904
         At the time of writing, host_func internally calls either:
         1) WireClient.stream which returns a boolean, or
         2) WireClient.fetch which returns None or a HTTP response.
+        This method returns either None (failure case where host_func returned None or False), True or an HTTP response.
         """
         ret = None
         try:
@@ -940,6 +941,7 @@ class WireClient(object):  # pylint: disable=R0904
         At the time of writing, direct_func internally calls either:
         1) WireClient.stream which returns a boolean, or
         2) WireClient.fetch which returns None or a HTTP response.
+        This method returns either None (failure case where direct_func returned None or False), True or an HTTP response.
         """
         ret = None
         try:
@@ -959,7 +961,7 @@ class WireClient(object):  # pylint: disable=R0904
         We call the primary channel first and return on success. If primary fails, we try secondary. If secondary fails,
         we return and *don't* switch the default channel. If secondary succeeds, we change the default channel.
         This method doesn't raise since the calls to direct_func and host_func are already wrapped and handle any exceptions.
-        Possible return values are manifest, artifacts profile, boolean or None.
+        Possible return values are manifest, artifacts profile, True or None.
         """
         direct_channel = lambda: self.__send_request_using_direct_channel(direct_func)
         host_channel = lambda: self.__send_request_using_host_channel(host_func)
@@ -976,7 +978,7 @@ class WireClient(object):  # pylint: disable=R0904
         ret = secondary_channel()
         if ret is not None:
             HostPluginProtocol.is_default_channel = not HostPluginProtocol.is_default_channel
-            message = "Default channel changed to {0}.".format("host" if HostPluginProtocol.is_default_channel else "direct")
+            message = "Default channel changed to {0} channel.".format("HostGA" if HostPluginProtocol.is_default_channel else "direct")
             logger.info(message)
             add_event(AGENT_NAME, op=WALAEventOperation.DefaultChannelChange, version=CURRENT_VERSION, is_success=True, message=message, log_event=False)
         return ret
@@ -1224,8 +1226,8 @@ class WireClient(object):  # pylint: disable=R0904
                 if profile is None:
                     logger.warn("Failed to fetch artifacts profile from blob {0}", blob)
                     return None
-            except Exception as e:  # pylint: disable=C0103
-                logger.warn("Exception retrieving artifacts profile from blob {0}. Error: {1}".format(blob, ustr(e)))
+            except Exception as error:
+                logger.warn("Exception retrieving artifacts profile from blob {0}. Error: {1}".format(blob, ustr(error)))
                 return None
 
             if not textutil.is_str_empty(profile):
