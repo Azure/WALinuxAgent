@@ -438,7 +438,8 @@ class ExtensionsConfig(object):  # pylint: disable=R0903
                 len(depends_on_nodes))
             ext_handler.is_invalid_with_reason = msg
             return
-        depends_on_level = ExtensionsConfig.__get_dependency_level_from_node(depends_on_nodes[0], handler_name)
+        depends_on_node = depends_on_nodes[0] if depends_on_nodes else None
+        depends_on_level = ExtensionsConfig.__get_dependency_level_from_node(depends_on_node, handler_name)
         ExtensionsConfig.__parse_and_add_extension_settings(runtime_settings_node, handler_name, ext_handler,
                                                             depends_on_level)
 
