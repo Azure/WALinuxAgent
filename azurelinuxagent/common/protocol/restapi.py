@@ -85,13 +85,15 @@ class Extension(DataContract):  # pylint: disable=R0903
                  publicSettings=None,
                  protectedSettings=None,
                  certificateThumbprint=None,
-                 dependencyLevel=0):
+                 dependencyLevel=0,
+                 state="enabled"):
         self.name = name
         self.sequenceNumber = sequenceNumber  # pylint: disable=C0103
         self.publicSettings = publicSettings  # pylint: disable=C0103
         self.protectedSettings = protectedSettings  # pylint: disable=C0103
         self.certificateThumbprint = certificateThumbprint  # pylint: disable=C0103
         self.dependencyLevel = dependencyLevel  # pylint: disable=C0103
+        self.state = state
 
 
 class ExtHandlerProperties(DataContract):  # pylint: disable=R0903
@@ -111,6 +113,15 @@ class ExtHandler(DataContract):  # pylint: disable=R0903
         self.name = name
         self.properties = ExtHandlerProperties()
         self.versionUris = DataContractList(ExtHandlerVersionUri)  # pylint: disable=C0103
+        self.__invalid_handler_reason = None
+
+    @property
+    def is_invalid_with_reason(self):
+        return self.__invalid_handler_reason is not None, self.__invalid_handler_reason
+
+    @is_invalid_with_reason.setter
+    def is_invalid_with_reason(self, value):
+        self.__invalid_handler_reason = value
 
     def sort_key(self):
         levels = [e.dependencyLevel for e in self.properties.extensions]

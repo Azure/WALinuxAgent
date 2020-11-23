@@ -19,6 +19,7 @@
 import json
 import os
 import re
+from collections import defaultdict
 
 import azurelinuxagent.common.conf as conf
 import azurelinuxagent.common.logger as logger
@@ -350,20 +351,21 @@ class ExtensionsConfig(object):  # pylint: disable=R0903
         if plugin_settings is None:
             return
 
-        name = ext_handler.name
+        handler_name = ext_handler.name
         version = ext_handler.properties.version
 
-        to_lower = lambda str_to_change: str_to_change.lower() if str_to_change is not None else None
-        ext_handler_plugin_settings = [x for x in plugin_settings if to_lower(getattrib(x, "name")) == to_lower(name)]
+        def to_lower(str_to_change): str_to_change.lower() if str_to_change is not None else None
+        ext_handler_plugin_settings = [x for x in plugin_settings if to_lower(getattrib(x, "name")) == to_lower(handler_name)]
         if not ext_handler_plugin_settings:
             return
 
         settings = [x for x in ext_handler_plugin_settings if getattrib(x, "version") == version]
         if len(settings) != len(ext_handler_plugin_settings):
             msg = "ExtHandler PluginSettings Version Mismatch! Expected PluginSettings version: {0} for Handler: {1} but found versions: ({2})".format(
-                version, name, ', '.join(set([getattrib(x, "version") for x in ext_handler_plugin_settings])))
+                version, handler_name, ', '.join(set([getattrib(x, "version") for x in ext_handler_plugin_settings])))
             add_event(AGENT_NAME, op=WALAEventOperation.PluginSettingsVersionMismatch, message=msg, log_event=False,
                       is_success=False)
+            ext_handler.is_invalid_with_reason = msg
             if not settings:
                 # If there is no corresponding settings for the specific extension handler, we will not process it at all,
                 # this is an unexpected error as we always expect both versions to be in sync.
@@ -371,35 +373,160 @@ class ExtensionsConfig(object):  # pylint: disable=R0903
                 return
             logger.warn(msg)
 
-        runtime_settings_node = find(settings[0], "RuntimeSettings")
-        seq_no = getattrib(runtime_settings_node, "seqNo")
-        try:
-            runtime_settings = json.loads(gettext(runtime_settings_node))
-        except ValueError as error:
-            logger.error("Invalid extension settings: {0}", ustr(error))
+        if len(settings) > 1:
+            msg = "Multiple plugin settings found for the same handler: {0} and version: {1} (total settings: {2})".format(
+                handler_name, version, len(settings))
+            ext_handler.is_invalid_with_reason = msg
             return
 
+        plugin_settings_node = settings[0]
+        runtime_settings_node = find(plugin_settings_node, "RuntimeSettings")
+        extension_runtime_settings_nodes = findall(plugin_settings_node, "ExtensionRuntimeSettings")
+
+        if runtime_settings_node is not None and extension_runtime_settings_nodes:
+            # There can only be a single RuntimeSettings node or multiple ExtensionRuntimeSettings nodes per Plugin
+            msg = "Both RuntimeSettings and ExtensionRuntimeSettings found for the same handler: {0} and version: {1}".format(
+                handler_name, version)
+            ext_handler.is_invalid_with_reason = msg
+        elif runtime_settings_node is not None:
+            # Only Runtime settings available, parse that
+            ExtensionsConfig.__parse_runtime_settings(plugin_settings_node, runtime_settings_node, handler_name,
+                                                      ext_handler)
+        else:
+            # Parse the ExtensionRuntime settings for the given extension
+            ExtensionsConfig.__parse_extension_runtime_settings(plugin_settings_node, extension_runtime_settings_nodes,
+                                                                ext_handler)
+
+    @staticmethod
+    def __get_dependency_level_from_node(depends_on_node, name):
         depends_on_level = 0
-        depends_on_node = find(settings[0], "DependsOn")
         if depends_on_node is not None:
             try:
                 depends_on_level = int(getattrib(depends_on_node, "dependencyLevel"))
             except (ValueError, TypeError):
                 logger.warn("Could not parse dependencyLevel for handler {0}. Setting it to 0".format(name))
                 depends_on_level = 0
+        return depends_on_level
+
+    @staticmethod
+    def __parse_runtime_settings(plugin_settings_node, runtime_settings_node, handler_name, ext_handler):
+        """
+        Sample Plugin in PluginSettings containing RuntimeSettings (single settings per extension) -
+
+        <Plugin name="Microsoft.Compute.VMAccessAgent" version="2.4.7">
+        <DependsOn dependencyLevel="2">
+          <DependsOnExtension extension="firstRunCommand" handler="Microsoft.CPlat.Core.RunCommandHandlerWindows" />
+          <DependsOnExtension handler="Microsoft.Compute.CustomScriptExtension" />
+        </DependsOn>
+        <RuntimeSettings seqNo="1">{
+              "runtimeSettings": [
+                {
+                  "handlerSettings": {
+                    "protectedSettingsCertThumbprint": "<Redacted>",
+                    "protectedSettings": "<Redacted>",
+                    "publicSettings": {"UserName":"test1234"}
+                  }
+                }
+              ]
+            }
+        </RuntimeSettings>
+        </Plugin>
+        """
+        depends_on_nodes = findall(plugin_settings_node, "DependsOn")
+        if len(depends_on_nodes > 1):
+            msg = "Extension Handler can only have a single dependency for Single config extensions. Found: {0}".format(
+                len(depends_on_nodes))
+            ext_handler.is_invalid_with_reason = msg
+            return
+        depends_on_level = ExtensionsConfig.__get_dependency_level_from_node(depends_on_nodes[0], handler_name)
+        ExtensionsConfig.__parse_and_add_extension_settings(runtime_settings_node, handler_name, ext_handler,
+                                                            depends_on_level)
+
+    @staticmethod
+    def __parse_extension_runtime_settings(plugin_settings_node, extension_runtime_settings_nodes, ext_handler):
+        """
+        Sample PluginSettings containing ExtensionRuntimeSettings -
+
+        <Plugin name="Microsoft.CPlat.Core.RunCommandHandlerWindows" version="2.0.2">
+        <DependsOn dependencyLevel="3" name="secondRunCommand">
+          <DependsOnExtension extension="firstRunCommand" handler="Microsoft.CPlat.Core.RunCommandHandlerWindows" />
+          <DependsOnExtension handler="Microsoft.Compute.CustomScriptExtension" />
+          <DependsOnExtension handler="Microsoft.Compute.VMAccessAgent" />
+        </DependsOn>
+        <DependsOn dependencyLevel="4" name="thirdRunCommand">
+          <DependsOnExtension extension="firstRunCommand" handler="Microsoft.CPlat.Core.RunCommandHandlerWindows" />
+          <DependsOnExtension extension="secondRunCommand" handler="Microsoft.CPlat.Core.RunCommandHandlerWindows" />
+          <DependsOnExtension handler="Microsoft.Compute.CustomScriptExtension" />
+          <DependsOnExtension handler="Microsoft.Compute.VMAccessAgent" />
+        </DependsOn>
+        <ExtensionRuntimeSettings seqNo="2" name="firstRunCommand" state="enabled">{
+              "runtimeSettings": [
+                {
+                  "handlerSettings": {
+                    "publicSettings": {"source":{"script":"Write-Host First: Hello World 1234!"}}
+                  }
+                }
+              ]
+            }
+        </ExtensionRuntimeSettings>
+        <ExtensionRuntimeSettings seqNo="2" name="secondRunCommand" state="enabled">
+            {
+              "runtimeSettings": [
+                {
+                  "handlerSettings": {
+                    "publicSettings": {"source":{"script":"Write-Host First: Hello World 1234!"}}
+                  }
+                }
+              ]
+            }
+        </ExtensionRuntimeSettings>
+        <ExtensionRuntimeSettings seqNo="1" name="thirdRunCommand" state="enabled">
+            {
+              "runtimeSettings": [
+                {
+                  "handlerSettings": {
+                    "publicSettings": {"source":{"script":"Write-Host Third: Hello World 3!"}}
+                  }
+                }
+              ]
+            }
+        </ExtensionRuntimeSettings>
+      </Plugin>
+        """
+        # Parse and cache the Dependencies for each extension first
+        dependency_levels = defaultdict(int)
+        for depends_on_node in findall(plugin_settings_node, "DependsOn"):
+            extension_name = getattrib(depends_on_node, "name")
+            dependency_level = ExtensionsConfig.__get_dependency_level_from_node(depends_on_node, extension_name)
+            dependency_levels[extension_name] = dependency_level
+
+        for extension_runtime_setting_node in extension_runtime_settings_nodes:
+            extension_name = getattrib(extension_runtime_setting_node, "name")
+            ExtensionsConfig.__parse_and_add_extension_settings(extension_runtime_setting_node, extension_name,
+                                                                ext_handler, dependency_levels[extension_name])
+
+    @staticmethod
+    def __parse_and_add_extension_settings(settings_node, name, ext_handler, depends_on_level):
+        seq_no = getattrib(settings_node, "seqNo")
+        state = getattrib(settings_node, "state")
+        state = "enabled" if state is None else state
+        try:
+            runtime_settings = json.loads(gettext(settings_node))
+        except ValueError as error:
+            logger.error("Invalid extension settings: {0}", ustr(error))
+            return
 
         for plugin_settings_list in runtime_settings["runtimeSettings"]:
             handler_settings = plugin_settings_list["handlerSettings"]
             ext = Extension()
-            # There is no "extension name" in wire protocol.
-            # Put
-            ext.name = ext_handler.name
+            # There is no "extension name" for single Handler Settings. Use HandlerName for those
+            ext.name = name
+            ext.state = state
             ext.sequenceNumber = seq_no
             ext.publicSettings = handler_settings.get("publicSettings")
             ext.protectedSettings = handler_settings.get("protectedSettings")
             ext.dependencyLevel = depends_on_level
-            thumbprint = handler_settings.get(
-                "protectedSettingsCertThumbprint")
+            thumbprint = handler_settings.get("protectedSettingsCertThumbprint")
             ext.certificateThumbprint = thumbprint
             ext_handler.properties.extensions.append(ext)
 

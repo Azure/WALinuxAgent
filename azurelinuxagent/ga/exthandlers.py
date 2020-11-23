@@ -42,7 +42,7 @@ from azurelinuxagent.common.errorstate import ErrorState
 from azurelinuxagent.common.event import add_event, elapsed_milliseconds, report_event, WALAEventOperation, \
     add_periodic, EVENTS_DIRECTORY
 from azurelinuxagent.common.exception import ExtensionDownloadError, ExtensionError, ExtensionErrorCodes, \
-    ExtensionOperationError, ExtensionUpdateError, ProtocolError, ProtocolNotFoundError
+    ExtensionOperationError, ExtensionUpdateError, ProtocolError, ProtocolNotFoundError, ExtensionConfigError
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.protocol.restapi import ExtensionStatus, ExtensionSubStatus, ExtHandler, ExtHandlerStatus, \
     VMStatus
@@ -471,8 +471,13 @@ class ExtHandlersHandler(object):
         :param etag: Current incarnation of the GoalState
         :return: True if the operation was successful, False if not
         """
+        ext_handler_i = ExtHandlerInstance(ext_handler, self.protocol)
         try:
-            ext_handler_i = ExtHandlerInstance(ext_handler, self.protocol)
+            # Ensure the extension config was valid
+            handler_invalid, invalid_reason = ext_handler.is_invalid_with_reason
+            if handler_invalid:
+                raise ExtensionConfigError(invalid_reason)
+
             state = ext_handler.properties.state
 
             # The Guest Agent currently only supports 1 installed version per extension on the VM.
@@ -501,6 +506,11 @@ class ExtHandlersHandler(object):
 
             return True
 
+        except ExtensionConfigError as error:
+            # Catching and reporting invalid ExtensionConfig errors here to fail fast rather than timing out after 90min
+            ext_handler_i.set_handler_status(ustr(error))
+            report_event(op=WALAEventOperation.InvalidExtensionConfig, is_success=False, log_event=True,
+                         message="Invalid ExtensionConfig: {0}".format(ustr(error)))
         except ExtensionUpdateError as error:
             # Not reporting the error as it has already been reported from the old version
             self.handle_ext_handler_error(ext_handler_i, error, error.code, report_telemetry_event=False)
@@ -513,15 +523,17 @@ class ExtHandlersHandler(object):
 
         return False
 
-    def handle_ext_handler_error(self, ext_handler_i, e, code=-1, report_telemetry_event=True):  # pylint: disable=C0103
-        msg = ustr(e)
+    @staticmethod
+    def handle_ext_handler_error(ext_handler_i, error, code=-1, report_telemetry_event=True):
+        msg = ustr(error)
         ext_handler_i.set_handler_status(message=msg, code=code)
 
         if report_telemetry_event:
             ext_handler_i.report_event(message=msg, is_success=False, log_event=True)
 
-    def handle_ext_handler_download_error(self, ext_handler_i, e, code=-1):  # pylint: disable=C0103
-        msg = ustr(e)
+    @staticmethod
+    def handle_ext_handler_download_error(ext_handler_i, error, code=-1):
+        msg = ustr(error)
         ext_handler_i.set_handler_status(message=msg, code=code)
 
         report_event(op=WALAEventOperation.Download, is_success=False, log_event=True,
