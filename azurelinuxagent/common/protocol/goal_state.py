@@ -433,7 +433,7 @@ class ExtensionsConfig(object):  # pylint: disable=R0903
         </Plugin>
         """
         depends_on_nodes = findall(plugin_settings_node, "DependsOn")
-        if len(depends_on_nodes > 1):
+        if len(depends_on_nodes) > 1:
             msg = "Extension Handler can only have a single dependency for Single config extensions. Found: {0}".format(
                 len(depends_on_nodes))
             ext_handler.is_invalid_with_reason = msg
