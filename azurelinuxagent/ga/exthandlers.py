@@ -507,15 +507,18 @@ class ExtHandlersHandler(object):
             return True
 
         except ExtensionConfigError as error:
-            # Catching and reporting invalid ExtensionConfig errors here to fail fast rather than timing out after 90min
-            ext_handler_i.set_handler_status(ustr(error))
-            report_event(op=WALAEventOperation.InvalidExtensionConfig, is_success=False, log_event=True,
-                         message="Invalid ExtensionConfig: {0}".format(ustr(error)))
+            # Catch and report Invalid ExtensionConfig errors here to fail fast rather than timing out after 90 min
+            msg = "[Retryable Error] Invalid ExtensionConfig: {0}".format(ustr(error))
+            self.__handle_and_report_ext_handler_errors(ext_handler_i, error,
+                                                        report_op=WALAEventOperation.InvalidExtensionConfig,
+                                                        message=msg)
         except ExtensionUpdateError as error:
             # Not reporting the error as it has already been reported from the old version
             self.handle_ext_handler_error(ext_handler_i, error, error.code, report_telemetry_event=False)
         except ExtensionDownloadError as error:
-            self.handle_ext_handler_download_error(ext_handler_i, error, error.code)
+            msg = "Failed to download artifacts: {0}".format(ustr(error))
+            self.__handle_and_report_ext_handler_errors(ext_handler_i, error, report_op=WALAEventOperation.Download,
+                                                        message=msg)
         except ExtensionError as error:
             self.handle_ext_handler_error(ext_handler_i, error, error.code)
         except Exception as error:
@@ -532,12 +535,9 @@ class ExtHandlersHandler(object):
             ext_handler_i.report_event(message=msg, is_success=False, log_event=True)
 
     @staticmethod
-    def handle_ext_handler_download_error(ext_handler_i, error, code=-1):
-        msg = ustr(error)
-        ext_handler_i.set_handler_status(message=msg, code=code)
-
-        report_event(op=WALAEventOperation.Download, is_success=False, log_event=True,
-                     message="Failed to download artifacts: {0}".format(msg))
+    def __handle_and_report_ext_handler_errors(ext_handler_i, error, report_op, message):
+        ext_handler_i.set_handler_status(message=message, code=error.code)
+        report_event(op=report_op, is_success=False, log_event=True, message=message)
 
     def handle_enable(self, ext_handler_i):
         self.log_process = True
