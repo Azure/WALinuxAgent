@@ -18,6 +18,7 @@
 #
 
 import subprocess
+import tempfile
 
 import azurelinuxagent.common.logger as logger
 from azurelinuxagent.common.future import ustr
@@ -97,12 +98,10 @@ def run_get_output(cmd, chk_err=True, log_cmd=True, expected_errors=None):
     if log_cmd:
         logger.verbose(u"Command: [{0}]", cmd)
     try:
-        output = subprocess.check_output(cmd,
-                                         stderr=subprocess.STDOUT,
-                                         shell=True)
-        output = _encode_command_output(output)
+        output = subprocess.check_output(cmd, stderr=subprocess.STDOUT, shell=True)
+        output = __encode_command_output(output)
     except subprocess.CalledProcessError as e:  # pylint: disable=C0103
-        output = _encode_command_output(e.output)
+        output = __encode_command_output(e.output)
 
         if chk_err:
             msg = u"Command: [{0}], " \
@@ -121,13 +120,55 @@ def run_get_output(cmd, chk_err=True, log_cmd=True, expected_errors=None):
     return 0, output
 
 
-def _encode_command_output(output):
-    return ustr(output, encoding='utf-8', errors="backslashreplace")
+def __format_command(command):
+    """
+    Formats the command taken by run_command/run_pipe.
+
+    Examples:
+        > __format_command("sort")
+        'sort'
+        > __format_command(["sort", "-u"])
+        'sort -u'
+        > __format_command([["sort"], ["unique", "-n"]])
+        'sort | unique -n'
+    """
+    if isinstance(command, list):
+        if command and isinstance(command[0], list):
+            return " | ".join([" ".join(cmd) for cmd in command])
+        return " ".join(command)
+    return command
+
+
+def __encode_command_output(output):
+    """
+    Encodes the stdout/stderr returned by subprocess.communicate()
+    """
+    return ustr(output if output is not None else b'', encoding='utf-8', errors="backslashreplace")
+
+
+def __process_command_result(command, return_code, stdout, stderr, log_error):
+    """
+    Helper for run_command/run_pipe. Checks the return code of the command and, if it indicates a failure logs
+    and error and raises a CommandError; otherwise it returns stdout encoded using UTF-8.
+    """
+    if return_code != 0:
+        encoded_stdout = __encode_command_output(stdout)
+        encoded_stderr = __encode_command_output(stderr)
+        if log_error:
+            logger.error(
+                "Command: [{0}], return code: [{1}], stdout: [{2}] stderr: [{3}]",
+                __format_command(command),
+                return_code,
+                encoded_stdout,
+                encoded_stderr)
+        raise CommandError(command=__format_command(command), return_code=return_code, stdout=encoded_stdout, stderr=encoded_stderr)
+
+    return __encode_command_output(stdout)
 
 
 class CommandError(Exception):
     """
-    Exception raised by run_command when the command returns an error
+    Exception raised by run_command/run_pipe when the command returns an error
     """
     @staticmethod
     def _get_message(command, return_code, stderr):
@@ -142,47 +183,113 @@ class CommandError(Exception):
         self.stderr = stderr
 
 
-def run_command(command, log_error=False, cmd_input=None):
+def run_command(command, input=None, stdin=None, stdout=subprocess.PIPE, stderr=subprocess.PIPE, log_error=False):
     """
-        Executes the given command and returns its stdout as a string. If cmd_input is specified, then we pass the cmd_input
-        to stdin and execute the command. Currently we only support string input for stdin.
-        If there are any errors executing the command it logs details about the failure and raises a RunCommandException;
-        if 'log_error' is True, it also logs details about the error.
+        Executes the given command and returns its stdout as a string.
+
+        If there are any errors executing the command it raises a RunCommandException; if 'log_error'
+        is True, it also logs details about the error.
+
+        This function is a thin wrapper around Popen/communicate in the subprocess module:
+           * The 'input' parameter corresponds to the same parameter in communicate
+           * The 'stdin' parameter corresponds to the same parameters in Popen
+           * Only one of 'input' and 'stdin' can be specified
+           * The 'stdout' and 'stderr' parameters correspond to the same parameters in Popen, except that they
+             default to subprocess.PIPE instead of None
+           * If the output of the command is redirected using the 'stdout' or 'stderr' parameters (i.e. if the
+             value for these parameters is anything other than the default (subprocess.PIPE)), then the corresponding
+             values returned by this function or the CommandError exception will be empty strings.
 
         Note: This is the preferred method to execute shell commands over `azurelinuxagent.common.utils.shellutil.run` function.
     """
-    def format_command(cmd):
-        return " ".join(cmd) if isinstance(cmd, list) else command
+    if input is not None and stdin is not None:
+        raise ValueError("The input and stdin arguments are mutually exclusive")
 
-    # Currently we only support PIPE for stdin/stdout/stderr, but acceptable options as per python docs are -
-    # PIPE, an existing file descriptor (a positive integer), an existing file object, and None
-    stdin = subprocess.PIPE if cmd_input else None
+    popen_stdin = communicate_input = None
+    if input is not None:
+        popen_stdin = subprocess.PIPE
+        communicate_input = input.encode() if isinstance(input, str) else input  # communicate() needs an array of bytes
+    if stdin is not None:
+        popen_stdin = stdin
+        communicate_input = None
+
     try:
-        # Starting Python 3.4+, you need to encode the string, i.e. you need to pass Bytes to the input rather than
-        # string to process.communicate()
-        process_input = cmd_input.encode() if cmd_input else None
+        process = subprocess.Popen(command, stdin=popen_stdin, stdout=stdout, stderr=stderr, shell=False)
 
-        process = subprocess.Popen(command, stdin=stdin, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=False)
-        stdout, stderr = process.communicate(input=process_input)
-        returncode = process.returncode
-    except Exception as e:  # pylint: disable=C0103
+        command_stdout, command_stderr = process.communicate(input=communicate_input)
+
+        return __process_command_result(command, process.returncode, command_stdout, command_stderr, log_error)
+    except CommandError:
+        raise
+    except Exception as exception:
         if log_error:
-            logger.error(u"Command [{0}] raised unexpected exception: [{1}]", format_command(command), ustr(e))
+            logger.error(u"Command [{0}] raised unexpected exception: [{1}]", __format_command(command), ustr(exception))
         raise
 
-    if returncode != 0:
-        encoded_stdout = _encode_command_output(stdout)
-        encoded_stderr = _encode_command_output(stderr)
-        if log_error:
-            logger.error(
-                "Command: [{0}], return code: [{1}], stdout: [{2}] stderr: [{3}]",
-                format_command(command),
-                returncode,
-                encoded_stdout,
-                encoded_stderr)
-        raise CommandError(command=command, return_code=returncode, stdout=encoded_stdout, stderr=encoded_stderr)
 
-    return _encode_command_output(stdout)
+def run_pipe(pipe, stdin=None, stdout=subprocess.PIPE, stderr=subprocess.PIPE, log_error=False):
+    """
+        Executes the given commands as a pipe and returns its stdout as a string.
+
+        The pipe is a list of commands, which in turn are a list of strings, e.g.
+
+            [["sort"], ["uniq", "-n"]] represents 'sort | unique -n'
+
+        If there are any errors executing the command it raises a RunCommandException; if 'log_error'
+        is True, it also logs details about the error.
+
+        This function is a thin wrapper around Popen/communicate in the subprocess module:
+           * The 'stdin' parameter is used as input for the first command in the pipe
+           * The 'stdout', and 'stderr' can be used to redirect the output of the pipe
+           * If the output of the pipe is redirected using the 'stdout' or 'stderr' parameters (i.e. if the
+             value for these parameters is anything other than the default (subprocess.PIPE)), then the corresponding
+             values returned by this function or the CommandError exception will be empty strings.
+    """
+    if len(pipe) < 2:
+        raise ValueError("The pipe must consist of at least 2 commands")
+
+    stderr_file = None
+
+    try:
+        popen_stdin = stdin
+        # If stderr is subprocess.PIPE each call to Popen would create a new pipe. We want to collect the stderr of all the
+        # commands in the pipe so we replace stderr with a temporary file that we read once the pipe completes.
+        if stderr == subprocess.PIPE:
+            stderr_file = tempfile.TemporaryFile()
+            popen_stderr = stderr_file
+        else:
+            popen_stderr = stderr
+
+        processes = []
+        i = 0
+        while i < len(pipe) - 1:
+            processes.append(subprocess.Popen(pipe[i], stdin=popen_stdin, stdout=subprocess.PIPE, stderr=popen_stderr))
+            popen_stdin = processes[i].stdout
+            i += 1
+
+        processes.append(subprocess.Popen(pipe[i], stdin=popen_stdin, stdout=stdout, stderr=popen_stderr))
+
+        i = 0
+        while i < len(processes) - 1:
+            processes[i].stdout.close()  # see https://docs.python.org/2/library/subprocess.html#replacing-shell-pipeline
+            i += 1
+
+        pipe_stdout, pipe_stderr = processes[i].communicate()
+
+        if stderr_file is not None:
+            stderr_file.seek(0)
+            pipe_stderr = stderr_file.read()
+
+        return __process_command_result(pipe, processes[i].returncode, pipe_stdout, pipe_stderr, log_error)
+    except CommandError:
+        raise
+    except Exception as exception:
+        if log_error:
+            logger.error(u"Command [{0}] raised unexpected exception: [{1}]", __format_command(pipe), ustr(exception))
+        raise
+    finally:
+        if stderr_file is not None:
+            stderr_file.close()
 
 
 def quote(word_list):
