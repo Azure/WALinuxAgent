@@ -2168,8 +2168,10 @@ class TestExtension(ExtensionTestCase):
                 printenv | grep ConfigSequenceNumber
                 """
 
-        base_dir = os.path.join(conf.get_lib_dir(), 'OSTCExtensions.ExampleHandlerLinux-1.0.0', test_file_name)
-        self.create_script(test_file_name, test_file, base_dir)
+        base_dir = os.path.join(conf.get_lib_dir(), 'OSTCExtensions.ExampleHandlerLinux-1.0.0')
+        if not os.path.exists(base_dir):
+            os.mkdir(base_dir)
+        self.create_script(os.path.join(base_dir, test_file_name), test_file)
 
         test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE_EXT_SINGLE)
         exthandlers_handler, protocol = self._create_mock(test_data, *args)  # pylint: disable=unused-variable,no-value-for-parameter
@@ -2192,8 +2194,10 @@ class TestExtension(ExtensionTestCase):
             test_data.ext_conf = test_data.ext_conf.replace('seqNo="0"', 'seqNo="1"')
             test_data.manifest = test_data.manifest.replace('1.0.0', '1.0.1')
             expected_seq_no = 1
-            base_dir = os.path.join(conf.get_lib_dir(), 'OSTCExtensions.ExampleHandlerLinux-1.0.1', test_file_name)
-            self.create_script(test_file_name, test_file, base_dir)
+            base_dir = os.path.join(conf.get_lib_dir(), 'OSTCExtensions.ExampleHandlerLinux-1.0.1')
+            if not os.path.exists(base_dir):
+                os.mkdir(base_dir)
+            self.create_script(os.path.join(base_dir, test_file_name), test_file)
 
             with patch.object(ExtHandlerInstance, 'report_event') as mock_report_event:
                 exthandlers_handler.run()
@@ -2230,13 +2234,17 @@ class TestExtension(ExtensionTestCase):
             exit %s
         """ % exit_code
 
-        error_dir = os.path.join(conf.get_lib_dir(), 'OSTCExtensions.ExampleHandlerLinux-1.0.0', test_error_file_name)
-        self.create_script(test_error_file_name, test_error_content, error_dir)
+        error_dir = os.path.join(conf.get_lib_dir(), 'OSTCExtensions.ExampleHandlerLinux-1.0.0')
+        if not os.path.exists(error_dir):
+            os.mkdir(error_dir)
+        self.create_script(os.path.join(error_dir, test_error_file_name), test_error_content)
 
         test_data, exthandlers_handler, protocol = self._set_up_update_test_and_update_gs(Mock(), *args)  # pylint: disable=unused-variable
 
-        base_dir = os.path.join(conf.get_lib_dir(), 'OSTCExtensions.ExampleHandlerLinux-1.0.1', test_file_name)
-        self.create_script(test_file_name, test_file, base_dir)
+        base_dir = os.path.join(conf.get_lib_dir(), 'OSTCExtensions.ExampleHandlerLinux-1.0.1')
+        if not os.path.exists(base_dir):
+            os.mkdir(base_dir)
+        self.create_script(os.path.join(base_dir, test_file_name), test_file)
 
         with patch("azurelinuxagent.ga.exthandlers.ExtHandlerInstance.load_manifest", return_value=manifest):
             with patch.object(ExtHandlerInstance, 'report_event') as mock_report_event:
