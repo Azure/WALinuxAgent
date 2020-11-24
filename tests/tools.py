@@ -422,19 +422,19 @@ class AgentTestCase(unittest.TestCase):
             time.sleep(with_sleep)
 
     @staticmethod
-    def create_script(file, contents):
+    def create_script(script_file, contents):
         """
         Creates an executable script with the given contents. If file ends with ".py", it creates a Python3 script,
         otherwise it creates a bash script.
         """
-        with open(file, "w") as script:
-            if file.endswith(".py"):
+        with open(script_file, "w") as script:
+            if script_file.endswith(".py"):
                 script.write("#!/usr/bin/env python3\n")
             else:
                 script.write("#!/usr/bin/env bash\n")
             script.write(contents)
 
-        os.chmod(file, stat.S_IRUSR | stat.S_IWUSR | stat.S_IXUSR)
+        os.chmod(script_file, stat.S_IRUSR | stat.S_IWUSR | stat.S_IXUSR)
 
 
 def load_data(name):

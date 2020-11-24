@@ -345,12 +345,12 @@ exit({0})
     def test_run_command_should_return_a_string_by_default(self):
         output = shellutil.run_command(self.__create_tee_script(), input="TEST STRING")
 
-        self.assertTrue(isinstance(output, str) or isinstance(output, unicode), "The return value should be a string. Got: '{0}'".format(type(output)))
+        self.assertTrue(isinstance(output, ustr), "The return value should be a string. Got: '{0}'".format(type(output)))
 
     def test_run_pipe_should_return_a_string_by_default(self):
         output = shellutil.run_pipe([["echo", "TEST STRING"], [self.__create_tee_script()]])
 
-        self.assertTrue(isinstance(output, str) or isinstance(output, unicode), "The return value should be a string. Got: '{0}'".format(type(output)))
+        self.assertTrue(isinstance(output, ustr), "The return value should be a string. Got: '{0}'".format(type(output)))
 
     def test_run_command_should_return_a_bytes_object_when_encode_output_is_false(self):
         output = shellutil.run_command(self.__create_tee_script(), input="TEST STRING", encode_output=False)
