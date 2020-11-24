@@ -1,0 +1,301 @@
+waagent (2.2.51) unstable; urgency=medium
+
+  * New waagent release
+
+ -- Matt Bearup <mbearup@microsoft.com>  Tue, 24 Nov 2020 15:04:20 +0800
+
+waagent (2.2.47-2) unstable; urgency=medium
+
+  * Use debhelper compat level 13.
+  * Remove build-dep on dh-systemd. (closes: #958633)
+  * Use declarative python3 dh sequence.
+
+ -- Bastian Blank <bastian.blank@credativ.de>  Wed, 19 Aug 2020 16:06:40 +0200
+
+waagent (2.2.47-1) unstable; urgency=medium
+
+  * New upstream version.
+  * Remove recurring message for disabled auto-update.
+  * Depend on fdisk. (closes: #872113)
+
+ -- Bastian Blank <bastian.blank@credativ.de>  Wed, 13 May 2020 12:46:19 +0200
+
+waagent (2.2.45-4) unstable; urgency=medium
+
+  * Build-depend on required python3-distro. (closes: #954492)
+
+ -- Bastian Blank <bastian.blank@credativ.de>  Fri, 27 Mar 2020 14:41:41 +0100
+
+waagent (2.2.45-3) unstable; urgency=medium
+
+  * Disable resource disk if cloud-init is enabled.
+  * Open log before trying to log anything.
+  * Make compatible with Python 3.8.
+
+ -- Bastian Blank <bastian.blank@credativ.de>  Thu, 19 Mar 2020 16:13:51 +0100
+
+waagent (2.2.45-2) unstable; urgency=medium
+
+  * Use new source format.
+  * Fix resource disk setup.
+
+ -- Bastian Blank <bastian.blank@credativ.de>  Mon, 20 Jan 2020 16:34:23 +0100
+
+waagent (2.2.45-1) unstable; urgency=medium
+
+  * New upstream version. (closes: #911701)
+  * Support co-installation with cloud-init.
+
+ -- Bastian Blank <bastian.blank@credativ.de>  Fri, 06 Dec 2019 14:00:41 +0100
+
+waagent (2.2.41-1) unstable; urgency=medium
+
+  * New upstream version.
+
+ -- Bastian Blank <bastian.blank@credativ.de>  Thu, 08 Aug 2019 16:05:11 +0200
+
+waagent (2.2.34-4) unstable; urgency=medium
+
+  * Fix stray backup file due to incorrect sed call. (closes: #928179)
+
+ -- Bastian Blank <bastian.blank@credativ.de>  Mon, 29 Apr 2019 16:45:57 +0200
+
+waagent (2.2.34-3) unstable; urgency=medium
+
+  * Set proper access rights on swap file.
+    CVE-2019-0804
+
+ -- Bastian Blank <bastian.blank@credativ.de>  Tue, 12 Mar 2019 09:34:51 +0100
+
+waagent (2.2.34-2) unstable; urgency=medium
+
+  * Disable all tests, they need a real system. (closes: #918943)
+
+ -- Bastian Blank <bastian.blank@credativ.de>  Wed, 16 Jan 2019 15:03:03 +0100
+
+waagent (2.2.34-1) unstable; urgency=medium
+
+  * New upstream version.
+
+ -- Bastian Blank <bastian.blank@credativ.de>  Thu, 10 Jan 2019 09:49:51 +0100
+
+waagent (2.2.26-1) unstable; urgency=medium
+
+  * New upstream version.
+  * Update Vcs entries to point to salsa.debian.org.
+  * Disable agent auto update. (closes: #887704)
+
+ -- Bastian Blank <bastian.blank@credativ.de>  Tue, 29 May 2018 14:53:21 +0200
+
+waagent (2.2.18-3) unstable; urgency=medium
+
+  * Move udev rules to /lib/udev. (closes: #856065)
+  * Set priority to optional.
+
+ -- Bastian Blank <bastian.blank@credativ.de>  Mon, 27 Nov 2017 09:07:13 +0100
+
+waagent (2.2.18-2) unstable; urgency=medium
+
+  * Create /var/lib/waagent with mode 0700. (closes: #878951)
+
+ -- Bastian Blank <bastian.blank@credativ.de>  Tue, 21 Nov 2017 09:28:39 +0100
+
+waagent (2.2.18-1) unstable; urgency=medium
+
+  * New upstream version.
+
+ -- Bastian Blank <waldi@debian.org>  Wed, 04 Oct 2017 11:51:29 +0200
+
+waagent (2.2.14-1) unstable; urgency=medium
+
+  * New upstream version.
+
+ -- Bastian Blank <waldi@debian.org>  Fri, 18 Aug 2017 13:38:17 +0200
+
+waagent (2.2.12-3) unstable; urgency=medium
+
+  * Revert waagent2.0 handling.
+  * Add Vcs source entries.
+  * Add minimal mirror selection for apt sources.list.
+
+ -- Bastian Blank <waldi@debian.org>  Thu, 17 Aug 2017 15:04:48 +0200
+
+waagent (2.2.12-2) unstable; urgency=medium
+
+  * Install waagent2.0 in /usr/lib.
+  * Disable byte-code writing in extentions handlers.
+
+ -- Bastian Blank <waldi@debian.org>  Fri, 07 Jul 2017 17:24:34 +0200
+
+waagent (2.2.12-1) unstable; urgency=medium
+
+  * New upstream version.
+
+ -- Bastian Blank <bastian.blank@credativ.de>  Mon, 29 May 2017 10:54:06 +0200
+
+waagent (2.2.2-2) unstable; urgency=medium
+
+  * Make sure tests packages is not included.
+  * Fix deprovision. (closes: #860019)
+
+ -- Bastian Blank <bastian.blank@credativ.de>  Mon, 10 Apr 2017 13:14:40 +0200
+
+waagent (2.2.2-1) unstable; urgency=medium
+
+  * New upstream version.
+  * Use Python 3.
+  * Extend Debian support.
+  * Drop cloud-init use:
+    - Conflict against cloud-init.
+    - Drop upgrade code.
+  * Split walinuxagent.service:
+    - Add waagent-resourcedisk.service:
+      Format and mount resourcedisk before local-fs.target.
+    - Add waagent-provision.service:
+      Run complete provisioning while blocking the boot.
+  * Replace check for resourcedisk setup with blkid calls.
+
+ -- Bastian Blank <bastian.blank@credativ.de>  Wed, 18 Jan 2017 13:36:20 +0100
+
+waagent (2.2.0-1) unstable; urgency=medium
+
+  * New upstream version.
+
+ -- Bastian Blank <bastian.blank@credativ.de>  Wed, 05 Oct 2016 14:10:15 +0200
+
+waagent (2.1.6-1) unstable; urgency=medium
+
+  * New upstream version.
+
+ -- Bastian Blank <bastian.blank@credativ.de>  Wed, 24 Aug 2016 16:48:22 +0200
+
+waagent (2.1.4-2) unstable; urgency=medium
+
+  * Depend on eject.
+
+ -- Bastian Blank <bastian.blank@credativ.de>  Thu, 09 Jun 2016 13:33:02 +0200
+
+waagent (2.1.4-1) unstable; urgency=medium
+
+  * New upstream version.
+  * Fill cloud-init information if none already exist.
+  * Start service after network.target.
+
+ -- Bastian Blank <bastian.blank@credativ.de>  Thu, 02 Jun 2016 14:07:58 +0200
+
+waagent (2.1.3-3) unstable; urgency=medium
+
+  * Don't longer disable hostname bounce.
+
+ -- Bastian Blank <bastian.blank@credativ.de>  Thu, 10 Mar 2016 13:49:23 +0100
+
+waagent (2.1.3-2) unstable; urgency=medium
+
+  * Handle upgrades to cloud-init. (closes: #814513)
+
+ -- Bastian Blank <bastian.blank@credativ.de>  Fri, 04 Mar 2016 17:06:16 +0100
+
+waagent (2.1.3-1) unstable; urgency=medium
+
+  * New upstream version.
+  * Only create /var/lib/waagent on initial installation
+
+ -- Bastian Blank <bastian.blank@credativ.de>  Thu, 11 Feb 2016 16:40:04 +0100
+
+waagent (2.1.2-1) unstable; urgency=medium
+
+  * New upstream version.
+  * Depend on host, needed by Microsofts custom script stuff.
+  * Use cloud-init:
+    - Use Ubuntu provisioning handler, disable provisioning.
+    - Depend on new enough version of cloud-init.
+    - Update dependencies in init script and service.
+    - Disable recursive agent invocation and hostname bounce in clout-init.
+
+ -- Bastian Blank <bastian.blank@credativ.de>  Mon, 01 Feb 2016 13:11:28 +0100
+
+waagent (2.1.0-3) unstable; urgency=medium
+
+  * Completely drop cloud-init usage. (closes: #800957)
+  * Depend on ca-certificates and parted.
+  * Create /var/lib/waagent with restricted permissions.
+  * Drop /var/lib/waagent during remove.
+
+ -- Bastian Blank <bastian.blank@credativ.de>  Thu, 22 Oct 2015 08:14:17 +0200
+
+waagent (2.1.0-2) unstable; urgency=medium
+
+  * Ignore missing certificate (ssh key).
+  * Rename init-script/systemd-server again.
+  * Fix service dependencies.
+
+ -- Bastian Blank <bastian.blank@credativ.de>  Wed, 30 Sep 2015 12:12:58 +0200
+
+waagent (2.1.0-1) unstable; urgency=medium
+
+  * New upstream version.
+  * Hijack package.
+  * Not longer try to install systemd stuff by package setup.
+  * Use own systemd service, use dh-systemd.
+  * Use own init script.
+  * Remove unused python3 support.
+  * Remove old postinst, postrm script.
+  * Remove upstart support, "It's dead, Jim".
+  * Make package arch-all.
+  * Disable environment monitor.
+
+ -- Bastian Blank <bastian.blank@credativ.de>  Thu, 30 Jul 2015 13:27:01 +0200
+
+waagent (2.0.8-0.1) experimental; urgency=medium
+
+  * Non-maintainer upload.
+  * New upstream release (Closes: #739153)
+  * debian/watch
+    - update upstream source URL
+  * debian/control
+    - update Homepage: field
+    - set Standards-Version: 3.9.6
+    - add "Build-Depends: python-setuptools" to avoid FTBFS
+    - set "Build-Depends: debhelper (>= 9)"
+    - add "Build-Depends: dh-python"
+    - add "Build-Depends: python3-all"
+    - add "X-Python-Version: all"
+    - update description from upstream README
+    - add "Conflicts: walinuxagent"
+  * remove debian/waagent.install since setup.py installs necessary files to
+    debian/waagent directory
+  * add debian/init.d to install init for sysvinit system
+  * debian/copyright
+    - correct license name, Apache-2.0
+  * debian/patches
+    - drop waagent-fdisk-locale.patch: merged upstream
+  * debian/rules
+    - add override_dh_auto_install to specify "--init-system=systemd" for
+      setup.py
+  * debian/compat
+    - set 9
+  * debian/upstart
+    - import from Ubuntu's walinuxagent package
+
+ -- Hideki Yamane <henrich@debian.org>  Sun, 12 Oct 2014 21:50:29 +0900
+
+waagent (1.3.2-1) unstable; urgency=low
+
+  * New upstream release:
+    - dvd provisionning fixes
+    - improve system commands handling
+  * Add python-pyasn1 requires in order to get working ssh fingerprint
+  support
+  * Kill prerm script
+  * Fix postrm script (Closes: #704741)
+  * Make sure that everything is removed on purge.
+  * Fix fdisk check to make it locale independent
+
+ -- Arnaud Patard <apatard@hupstream.com>  Thu, 07 Mar 2013 14:23:14 +0100
+
+waagent (1.2-1) unstable; urgency=low
+
+  * Initial import (Closes: #695575)
+
+ -- Arnaud Patard <apatard@hupstream.com>  Mon, 10 Dec 2012 09:22:45 +0100
+

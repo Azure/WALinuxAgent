@@ -1,0 +1,48 @@
+#!/usr/bin/make -f
+# Uncomment this to turn on verbose mode.
+#export DH_VERBOSE=1
+
+include /usr/share/dpkg/default.mk
+
+export PYBUILD_INSTALL_ARGS=--install-scripts /usr/sbin
+
+%:
+	dh $@ --buildsystem pybuild
+
+git-source: TAR_ORIG=$(DEB_SOURCE)_$(DEB_VERSION_UPSTREAM).orig.tar.xz
+git-source: TAR_DEBIAN=$(DEB_SOURCE)_$(DEB_VERSION_UPSTREAM_REVISION).debian.tar.xz
+git-source: CHANGES=$(DEB_SOURCE)_$(DEB_VERSION_UPSTREAM_REVISION)_source.changes
+git-source:
+	pristine-lfs checkout -o .. $(TAR_ORIG)
+	mkdir -p debian/patches debian/source
+	git diff v$(DEB_VERSION_UPSTREAM) -- . ':!debian' > debian/patches/debian-changes
+	echo debian-changes > debian/patches/series
+	echo '3.0 (quilt)' > debian/source/format
+	tar -caf ../$(TAR_DEBIAN) debian
+	dpkg-source --build --format='3.0 (custom)' --target-format='3.0 (quilt)' . $(TAR_ORIG) $(TAR_DEBIAN)
+	dpkg-genchanges -S > ../$(CHANGES)
+
+git-orig: TAR_ORIG=$(DEB_SOURCE)_$(DEB_VERSION_UPSTREAM).orig.tar.xz
+git-orig:
+	git archive --format tar --prefix $(DEB_SOURCE)-$(DEB_VERSION_UPSTREAM)/ v$(DEB_VERSION_UPSTREAM) | xz > ../$(TAR_ORIG)
+	pristine-lfs commit ../$(TAR_ORIG)
+
+override_dh_auto_install:
+	dh_auto_install
+	rm -rf debian/waagent/usr/lib/python3*/dist-packages/tests/
+
+override_dh_auto_test:
+	true
+
+override_dh_auto_clean:
+	dh_auto_clean
+	rm -rf AzureLinuxAgent.egg-info
+
+override_dh_installinit:
+	dh_installinit -p waagent --name walinuxagent
+
+override_dh_installsystemd:
+	dh_installsystemd -p waagent --name walinuxagent
+	dh_installsystemd -p waagent --name waagent-apt
+	dh_installsystemd -p waagent --name waagent-provision
+	dh_installsystemd -p waagent --name waagent-resourcedisk

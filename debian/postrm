@@ -1,0 +1,12 @@
+#!/bin/sh
+# postrm script for #PACKAGE#
+
+set -e
+
+if [ "$1" = remove ]; then
+    rm -rf /var/lib/waagent
+fi
+
+#DEBHELPER#
+
+exit 0

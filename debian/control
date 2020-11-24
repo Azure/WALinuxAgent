@@ -1,0 +1,67 @@
+Source: waagent
+Section: admin
+Priority: optional
+Maintainer: Bastian Blank <bastian.blank@credativ.de>
+Build-Depends:
+ debhelper-compat (= 13),
+ dh-sequence-python3,
+ python3,
+ python3-distro,
+ python3-setuptools,
+Standards-Version: 3.9.6
+Homepage: https://github.com/Azure/WALinuxAgent
+Vcs-Browser: https://salsa.debian.org/waldi/waagent
+Vcs-Git: https://salsa.debian.org/waldi/waagent.git
+
+Package: waagent
+Architecture: all
+Depends:
+ ${misc:Depends}, ${python3:Depends},
+ python3-pkg-resources,
+ ca-certificates,
+ eject,
+ fdisk | util-linux (<< 2.29.2-3~),
+ host,
+ iptables,
+ openssh-server,
+ openssl,
+ parted,
+ sudo,
+ net-tools,
+Conflicts: network-manager, walinuxagent
+Description: Windows Azure Linux Agent
+ The Windows Azure Linux Agent (waagent) manages VM interaction with the Windows
+ Azure Fabric Controller. It provides the following functionality for IaaS 
+ deployments:
+ .
+  * Image Provisioning
+    - Creation of a user account
+    - Configuring SSH authentication types
+    - Deployment of SSH public keys and key pairs
+    - Setting the host name
+    - Publishing the host name to the platform DNS
+    - Reporting SSH host key fingerprint to the platform
+    - Resource Disk Management
+    - Formatting and mounting the resource disk
+    - Configuring swap space
+ .
+  * Networking
+    - Manages routes to improve compatibility with platform DHCP servers
+    - Ensures the stability of the network interface name
+ .
+  * Kernel
+    - Configure virtual NUMA (disable for kernel <2.6.37)
+    - Consume Hyper-V entropy for /dev/random
+    - Configure SCSI timeouts for the root device (which could be remote)
+ .
+  * Diagnostics
+    - Console redirection to the serial port
+ .
+  * SCVMM Deployments
+    - Detect and bootstrap the VMM agent for Linux when running in a System
+      Center Virtual Machine Manager 2012R2 environment
+ .
+  * VM Extension
+    - Inject component authored by Microsoft and Partners into Linux VM (IaaS)
+      to enable software and configuration automation
+      see https://github.com/Azure/azure-linux-extensions
