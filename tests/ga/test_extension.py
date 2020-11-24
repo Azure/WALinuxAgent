@@ -3034,7 +3034,8 @@ class TestMultiConfigExtensions(ExtensionTestCase):
         self.mock_sleep.stop()
         ExtensionTestCase.tearDown(self)
 
-    class _TestExtHandlerObject:
+    # too-few-public-methods<R0903> Disabled: This is just a test class used for verification purposes.
+    class _TestExtHandlerObject:  # pylint: disable=R0903
         def __init__(self, name, version, state="enabled"):
             self.name = name
             self.version = version
@@ -3042,7 +3043,8 @@ class TestMultiConfigExtensions(ExtensionTestCase):
             self.is_invalid = False
             self.extensions = dict()
 
-    class _TestExtensionObject:
+    # too-few-public-methods<R0903> Disabled: This is just a test class used for verification purposes.
+    class _TestExtensionObject:  # pylint: disable=R0903
         def __init__(self, name, seq_no, dependency_level="0", state="enabled"):
             self.name = name
             self.seq_no = seq_no
@@ -3051,7 +3053,7 @@ class TestMultiConfigExtensions(ExtensionTestCase):
 
     def _mock_and_assert_ext_handlers(self, expected_handlers):
         with mock_wire_protocol(self.test_data) as protocol:
-            ext_handlers, etag = protocol.get_ext_handlers()
+            ext_handlers, _ = protocol.get_ext_handlers()
             for ext_handler in ext_handlers.extHandlers:
                 if ext_handler.name not in expected_handlers:
                     continue
