@@ -366,12 +366,7 @@ class ExtensionsConfig(object):  # pylint: disable=R0903
             add_event(AGENT_NAME, op=WALAEventOperation.PluginSettingsVersionMismatch, message=msg, log_event=False,
                       is_success=False)
             ext_handler.is_invalid_with_reason = msg
-            if not settings:
-                # If there is no corresponding settings for the specific extension handler, we will not process it at all,
-                # this is an unexpected error as we always expect both versions to be in sync.
-                logger.error(msg)
-                return
-            logger.warn(msg)
+            return
 
         if len(settings) > 1:
             msg = "Multiple plugin settings found for the same handler: {0} and version: {1} (total settings: {2})".format(
