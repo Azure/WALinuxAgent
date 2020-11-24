@@ -384,24 +384,21 @@ class ExtensionsConfig(object):  # pylint: disable=R0903
 
         plugin_settings_node = settings[0]
         runtime_settings_nodes = findall(plugin_settings_node, "RuntimeSettings")
-
-        if len(runtime_settings_nodes) > 1:
-            msg = "Multiple RuntimeSettings found for the same handler: {0} and version: {1} (Expected: 1; Available: {2})".format(
-                handler_name, version, len(runtime_settings_nodes))
-            raise ExtensionConfigError(msg)
-
-        runtime_settings_node = runtime_settings_nodes[0]
         extension_runtime_settings_nodes = findall(plugin_settings_node, "ExtensionRuntimeSettings")
 
-        if runtime_settings_node is not None and extension_runtime_settings_nodes:
+        if runtime_settings_nodes and extension_runtime_settings_nodes:
             # There can only be a single RuntimeSettings node or multiple ExtensionRuntimeSettings nodes per Plugin
             msg = "Both RuntimeSettings and ExtensionRuntimeSettings found for the same handler: {0} and version: {1}".format(
                 handler_name, version)
             raise ExtensionConfigError(msg)
 
-        if runtime_settings_node is not None:
+        if runtime_settings_nodes:
+            if len(runtime_settings_nodes) > 1:
+                msg = "Multiple RuntimeSettings found for the same handler: {0} and version: {1} (Expected: 1; Available: {2})".format(
+                    handler_name, version, len(runtime_settings_nodes))
+                raise ExtensionConfigError(msg)
             # Only Runtime settings available, parse that
-            ExtensionsConfig.__parse_runtime_settings(plugin_settings_node, runtime_settings_node, handler_name,
+            ExtensionsConfig.__parse_runtime_settings(plugin_settings_node, runtime_settings_nodes[0], handler_name,
                                                       ext_handler)
         else:
             # Parse the ExtensionRuntime settings for the given extension
