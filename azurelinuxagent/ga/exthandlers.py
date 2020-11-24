@@ -290,10 +290,13 @@ class ExtHandlersHandler(object):
 
             if self._extension_processing_allowed() and self._incarnation_changed(etag):
                 activity_id, correlation_id = self.get_activity_and_correlation_id()
-                logger.info(
-                    "ProcessGoalState started [incarnation {0}; Activity Id: {1}; Correlation Id: {2}]".format(etag,
-                                                                                                               activity_id,
-                                                                                                               correlation_id))
+
+                log_msgs = ["Incarnation: {0}".format(etag)]
+                if activity_id is not None:
+                    log_msgs.append("Activity Id: {0}".format(activity_id))
+                if correlation_id is not None:
+                    log_msgs.append("Correlation Id: {0}".format(correlation_id))
+                logger.info("ProcessGoalState started [{0}]".format('; '.join(log_msgs)))
                 self.handle_ext_handlers(etag)
                 self.last_etag = etag
 

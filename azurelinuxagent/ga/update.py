@@ -363,8 +363,13 @@ class UpdateHandler(object):  # pylint: disable=R0902
                         self._ensure_readonly_files()
                         duration = elapsed_milliseconds(utc_start)
                         activity_id, correlation_id = exthandlers_handler.get_activity_and_correlation_id()
-                        msg = 'ProcessGoalState completed [incarnation {0}; {1} ms; Activity Id: {2}; Correlation Id: {3}]'.format(
-                            exthandlers_handler.last_etag, duration, activity_id, correlation_id)
+
+                        log_msgs = ["Incarnation: {0}".format(exthandlers_handler.last_etag), "{0} ms".format(duration)]
+                        if activity_id is not None:
+                            log_msgs.append("Activity Id: {0}".format(activity_id))
+                        if correlation_id is not None:
+                            log_msgs.append("Correlation Id: {0}".format(correlation_id))
+                        msg = 'ProcessGoalState completed [{0}]'.format('; '.join(log_msgs))
                         logger.info(msg)
                         add_event(
                             AGENT_NAME,
