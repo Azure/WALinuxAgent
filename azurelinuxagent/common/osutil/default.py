@@ -1476,7 +1476,7 @@ class DefaultOSUtil(object):  # pylint: disable=R0904
     def _run_command_raising_OSUtilError(cmd, err_msg, cmd_input=None):  # pylint: disable=C0103
         # This method runs shell command using the new secure shellutil.run_command and raises OSUtilErrors on failures.
         try:
-            return shellutil.run_command(cmd, log_error=True, cmd_input=cmd_input)
+            return shellutil.run_command(cmd, log_error=True, input=cmd_input)
         except shellutil.CommandError as e:  # pylint: disable=C0103
             raise OSUtilError(
                 "{0}, Retcode: {1}, Output: {2}, Error: {3}".format(err_msg, e.returncode, e.stdout, e.stderr))
