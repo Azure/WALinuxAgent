@@ -391,7 +391,8 @@ class ExtensionsConfig(object):  # pylint: disable=R0903
             msg = "Both RuntimeSettings and ExtensionRuntimeSettings found for the same handler: {0} and version: {1}".format(
                 handler_name, version)
             raise ExtensionConfigError(msg)
-        elif runtime_settings_node is not None:
+
+        if runtime_settings_node is not None:
             # Only Runtime settings available, parse that
             ExtensionsConfig.__parse_runtime_settings(plugin_settings_node, runtime_settings_node, handler_name,
                                                       ext_handler)
