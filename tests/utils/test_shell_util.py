@@ -19,6 +19,7 @@ import os
 import tempfile
 import unittest
 
+from azurelinuxagent.common.future import ustr
 import azurelinuxagent.common.utils.shellutil as shellutil
 from tests.tools import AgentTestCase, patch
 
@@ -301,7 +302,7 @@ exit({0})
             captured_output = action(stdout=output_file)
 
             output_file.seek(0)
-            command_output = output_file.read().decode(encoding='UTF-8')
+            command_output = ustr(output_file.read(), encoding='utf-8', errors='backslashreplace')
 
             self.assertEqual(command_output, "TEST STRING\n", "The command did not produce the correct output; the output should match the input")
             self.assertEqual("", captured_output, "No output should have been captured since it was redirected to a file. Output: [{0}]".format(captured_output))
@@ -319,7 +320,7 @@ exit({0})
             action(stderr=output_file)
 
             output_file.seek(0)
-            command_error_output = output_file.read().decode(encoding='UTF-8')
+            command_error_output = ustr(output_file.read(), encoding='utf-8', errors="backslashreplace")
 
             self.assertEqual("TEST STRING\n", command_error_output, "stderr was not redirected to the output file correctly")
 
@@ -344,12 +345,12 @@ exit({0})
     def test_run_command_should_return_a_string_by_default(self):
         output = shellutil.run_command(self.__create_tee_script(), input="TEST STRING")
 
-        self.assertTrue(isinstance(output, str), "The return value should be a string. Got: '{0}'".format(type(output)))
+        self.assertTrue(isinstance(output, str) or isinstance(output, unicode), "The return value should be a string. Got: '{0}'".format(type(output)))
 
     def test_run_pipe_should_return_a_string_by_default(self):
         output = shellutil.run_pipe([["echo", "TEST STRING"], [self.__create_tee_script()]])
 
-        self.assertTrue(isinstance(output, str), "The return value should be a string. Got: '{0}'".format(type(output)))
+        self.assertTrue(isinstance(output, str) or isinstance(output, unicode), "The return value should be a string. Got: '{0}'".format(type(output)))
 
     def test_run_command_should_return_a_bytes_object_when_encode_output_is_false(self):
         output = shellutil.run_command(self.__create_tee_script(), input="TEST STRING", encode_output=False)

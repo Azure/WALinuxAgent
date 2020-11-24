@@ -155,7 +155,7 @@ class CryptUtil(object):
         try:
             decoded = base64.b64decode(encrypted_password)
             args = DECRYPT_SECRET_CMD.format(self.openssl_cmd, private_key).split(' ')
-            output = shellutil.run_command(args, input=decoded, stderr=subprocess.STDOUT, encode_output=False)
+            output = shellutil.run_command(args, input=decoded, stderr=subprocess.STDOUT, encode_input=False, encode_output=False)
             return output.decode('utf-16')
         except shellutil.CommandError as command_error:
             raise subprocess.CalledProcessError(command_error.returncode, "openssl cms -decrypt", output=command_error.stdout)
