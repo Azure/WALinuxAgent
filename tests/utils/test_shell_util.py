@@ -16,7 +16,6 @@
 # Requires Python 2.6+ and Openssl 1.0+
 #
 import os
-import subprocess
 import tempfile
 import unittest
 
@@ -130,7 +129,8 @@ class RunGetOutputTestCase(AgentTestCase):
         self.assertEqual(mock_logger.warn.call_count, 0)
 
 
-class RunCommandTestCase(AgentTestCase):
+# R0904: Too many public methods (24/20)  -- disabled: each method is a unit test
+class RunCommandTestCase(AgentTestCase):  # pylint: disable=R0904
     """
     Tests for shellutil.run_command/run_pipe
     """
@@ -274,14 +274,14 @@ exit({0})
         self.assertEqual(output, command_input, "The command did not process its input correctly; the output should match the input")
 
     def test_run_command_should_read_stdin_from_the_input_parameter_when_it_is_a_sequence_of_bytes(self):
-        command_input = b'TEST BYTES'
+        command_input = 'TEST BYTES'
         output = shellutil.run_command(["cat"], input=command_input)
         self.assertEqual(output, command_input, "The command did not process its input correctly; the output should match the input")
 
     def __it_should_read_the_command_input_from_the_stdin_parameter(self, action):
         command_input = 'TEST STRING\n'
         with tempfile.TemporaryFile() as input_file:
-            input_file.write(command_input)
+            input_file.write(command_input.encode())
             input_file.seek(0)
 
             output = action(stdin=input_file)
@@ -301,27 +301,25 @@ exit({0})
             captured_output = action(stdout=output_file)
 
             output_file.seek(0)
-            command_output = output_file.read()
+            command_output = output_file.read().decode(encoding='UTF-8')
 
             self.assertEqual(command_output, "TEST STRING\n", "The command did not produce the correct output; the output should match the input")
             self.assertEqual("", captured_output, "No output should have been captured since it was redirected to a file. Output: [{0}]".format(captured_output))
 
     def test_run_command_should_write_the_command_output_to_the_stdout_parameter(self):
-        with tempfile.TemporaryFile() as output_file:
-            self.__it_should_write_the_command_output_to_the_stdout_parameter(
-                lambda stdout: shellutil.run_command(["echo", "TEST STRING"], stdout=stdout))
+        self.__it_should_write_the_command_output_to_the_stdout_parameter(
+            lambda stdout: shellutil.run_command(["echo", "TEST STRING"], stdout=stdout))
 
     def test_run_pipe_should_write_the_command_output_to_the_stdout_parameter(self):
-        with tempfile.TemporaryFile() as output_file:
-            self.__it_should_write_the_command_output_to_the_stdout_parameter(
-                lambda stdout: shellutil.run_pipe([["echo", "TEST STRING"], ["sort"]], stdout=stdout))
+        self.__it_should_write_the_command_output_to_the_stdout_parameter(
+            lambda stdout: shellutil.run_pipe([["echo", "TEST STRING"], ["sort"]], stdout=stdout))
 
     def __it_should_write_the_command_error_output_to_the_stderr_parameter(self, action):
         with tempfile.TemporaryFile() as output_file:
             action(stderr=output_file)
 
             output_file.seek(0)
-            command_error_output = output_file.read()
+            command_error_output = output_file.read().decode(encoding='UTF-8')
 
             self.assertEqual("TEST STRING\n", command_error_output, "stderr was not redirected to the output file correctly")
 
@@ -343,7 +341,25 @@ exit({0})
 
         self.assertEqual("TEST STRING\n" * 3, context_manager.exception.stderr, "Expected 3 copies of the test string since there are 3 commands in the pipe")
 
+    def test_run_command_should_return_a_string_by_default(self):
+        output = shellutil.run_command(self.__create_tee_script(), input="TEST STRING")
 
+        self.assertTrue(isinstance(output, str), "The return value should be a string. Got: '{0}'".format(type(output)))
+
+    def test_run_pipe_should_return_a_string_by_default(self):
+        output = shellutil.run_pipe([["echo", "TEST STRING"], [self.__create_tee_script()]])
+
+        self.assertTrue(isinstance(output, str), "The return value should be a string. Got: '{0}'".format(type(output)))
+
+    def test_run_command_should_return_a_bytes_object_when_encode_output_is_false(self):
+        output = shellutil.run_command(self.__create_tee_script(), input="TEST STRING", encode_output=False)
+
+        self.assertTrue(isinstance(output, bytes), "The return value should be a bytes object. Got: '{0}'".format(type(output)))
+
+    def test_run_pipe_should_return_a_bytes_object_when_encode_output_is_false(self):
+        output = shellutil.run_pipe([["echo", "TEST STRING"], [self.__create_tee_script()]], encode_output=False)
+
+        self.assertTrue(isinstance(output, bytes), "The return value should be a bytes object. Got: '{0}'".format(type(output)))
 
 
 if __name__ == '__main__':
