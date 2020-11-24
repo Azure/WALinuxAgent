@@ -378,12 +378,19 @@ class ExtensionsConfig(object):  # pylint: disable=R0903
             raise ExtensionConfigError(msg)
 
         if len(settings) > 1:
-            msg = "Multiple plugin settings found for the same handler: {0} and version: {1} (total settings: {2})".format(
+            msg = "Multiple plugin settings found for the same handler: {0} and version: {1} (Expected: 1; Available: {2})".format(
                 handler_name, version, len(settings))
             raise ExtensionConfigError(msg)
 
         plugin_settings_node = settings[0]
-        runtime_settings_node = find(plugin_settings_node, "RuntimeSettings")
+        runtime_settings_nodes = findall(plugin_settings_node, "RuntimeSettings")
+
+        if len(runtime_settings_nodes) > 1:
+            msg = "Multiple RuntimeSettings found for the same handler: {0} and version: {1} (Expected: 1; Available: {2})".format(
+                handler_name, version, len(runtime_settings_nodes))
+            raise ExtensionConfigError(msg)
+
+        runtime_settings_node = runtime_settings_nodes[0]
         extension_runtime_settings_nodes = findall(plugin_settings_node, "ExtensionRuntimeSettings")
 
         if runtime_settings_node is not None and extension_runtime_settings_nodes:
@@ -415,7 +422,7 @@ class ExtensionsConfig(object):  # pylint: disable=R0903
     @staticmethod
     def __parse_runtime_settings(plugin_settings_node, runtime_settings_node, handler_name, ext_handler):
         """
-        Sample Plugin in PluginSettings containing RuntimeSettings (single settings per extension) -
+        Sample Plugin in PluginSettings containing DependsOn and RuntimeSettings (single settings per extension) -
 
         <Plugin name="Microsoft.Compute.VMAccessAgent" version="2.4.7">
         <DependsOn dependencyLevel="2">
@@ -438,7 +445,7 @@ class ExtensionsConfig(object):  # pylint: disable=R0903
         """
         depends_on_nodes = findall(plugin_settings_node, "DependsOn")
         if len(depends_on_nodes) > 1:
-            msg = "Extension Handler can only have a single dependency for Single config extensions. Found: {0}".format(
+            msg = "Extension Handler can only have a single dependsOn node for Single config extensions. Found: {0}".format(
                 len(depends_on_nodes))
             raise ExtensionConfigError(msg)
         depends_on_node = depends_on_nodes[0] if depends_on_nodes else None

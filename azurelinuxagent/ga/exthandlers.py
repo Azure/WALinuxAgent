@@ -508,10 +508,9 @@ class ExtHandlersHandler(object):
 
         except ExtensionConfigError as error:
             # Catch and report Invalid ExtensionConfig errors here to fail fast rather than timing out after 90 min
-            msg = "[Retryable Error] Invalid ExtensionConfig: {0}".format(ustr(error))
             self.__handle_and_report_ext_handler_errors(ext_handler_i, error,
                                                         report_op=WALAEventOperation.InvalidExtensionConfig,
-                                                        message=msg)
+                                                        message="[Retryable Error] {0}".format(ustr(error)))
         except ExtensionUpdateError as error:
             # Not reporting the error as it has already been reported from the old version
             self.handle_ext_handler_error(ext_handler_i, error, error.code, report_telemetry_event=False)
