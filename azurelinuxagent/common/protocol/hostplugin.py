@@ -56,8 +56,9 @@ _HEADER_ARTIFACT_MANIFEST_LOCATION = "x-ms-artifact-manifest-location"
 MAXIMUM_PAGEBLOB_PAGE_SIZE = 4 * 1024 * 1024  # Max page size: 4MB
 
 
+# too-many-instance-attributes<R0902> Disabled: all attributes are necessary
 class HostPluginProtocol(object):  # pylint: disable=R0902
-    _is_default_channel = False
+    is_default_channel = False
 
     FETCH_REPORTING_PERIOD = datetime.timedelta(minutes=1)
     STATUS_REPORTING_PERIOD = datetime.timedelta(minutes=1)
@@ -83,14 +84,6 @@ class HostPluginProtocol(object):  # pylint: disable=R0902
     def _extract_deployment_id(role_config_name):
         # Role config name consists of: <deployment id>.<incarnation>(...)
         return role_config_name.split(".")[0] if role_config_name is not None else None
-
-    @staticmethod
-    def is_default_channel():
-        return HostPluginProtocol._is_default_channel
-
-    @staticmethod
-    def set_default_channel(is_default):
-        HostPluginProtocol._is_default_channel = is_default
 
     def update_container_id(self, new_container_id):
         self.container_id = new_container_id

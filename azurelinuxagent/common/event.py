@@ -79,6 +79,7 @@ class WALAEventOperation:  # pylint: disable=R0903,no-init
     CollectEventUnicodeErrors = "CollectEventUnicodeErrors"
     ConfigurationChange = "ConfigurationChange"
     CustomData = "CustomData"
+    DefaultChannelChange = "DefaultChannelChange"
     Deploy = "Deploy"
     Disable = "Disable"
     Downgrade = "Downgrade"
