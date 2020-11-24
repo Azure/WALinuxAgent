@@ -26,7 +26,7 @@ import azurelinuxagent.common.logger as logger
 from azurelinuxagent.common.AgentGlobals import AgentGlobals
 from azurelinuxagent.common.datacontract import set_properties
 from azurelinuxagent.common.event import add_event, WALAEventOperation
-from azurelinuxagent.common.exception import ProtocolError
+from azurelinuxagent.common.exception import ProtocolError, ExtensionConfigError
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.protocol.restapi import Cert, CertList, Extension, ExtHandler, ExtHandlerList, \
     ExtHandlerVersionUri, RemoteAccessUser, RemoteAccessUsersList, \
@@ -320,9 +320,15 @@ class ExtensionsConfig(object):  # pylint: disable=R0903
         plugin_settings = findall(plugin_settings_list, "Plugin")
 
         for plugin in plugins:
-            ext_handler = ExtensionsConfig._parse_plugin(plugin)
+
+            ext_handler = ExtHandler()
+            try:
+                ExtensionsConfig._parse_plugin(ext_handler, plugin)
+                ExtensionsConfig._parse_plugin_settings(ext_handler, plugin_settings)
+            except ExtensionConfigError as error:
+                ext_handler.is_invalid_with_reason = ustr(error)
+
             self.ext_handlers.extHandlers.append(ext_handler)
-            ExtensionsConfig._parse_plugin_settings(ext_handler, plugin_settings)
 
         self.status_upload_blob = findtext(xml_doc, "StatusUploadBlob")
         self.artifacts_profile_blob = findtext(xml_doc, "InVMArtifactsProfileBlob")
@@ -332,11 +338,16 @@ class ExtensionsConfig(object):  # pylint: disable=R0903
         logger.verbose("Extension config shows status blob type as [{0}]", self.status_upload_blob_type)
 
     @staticmethod
-    def _parse_plugin(plugin):
-        ext_handler = ExtHandler()
-        ext_handler.name = getattrib(plugin, "name")
-        ext_handler.properties.version = getattrib(plugin, "version")
-        ext_handler.properties.state = getattrib(plugin, "state")
+    def _parse_plugin(ext_handler, plugin):
+
+        def _raise_config_error_if_none(attr_name, value):
+            if value is None:
+                raise ExtensionConfigError("{0} is None for ExtensionConfig, failing Extension.".format(attr_name))
+            return value
+
+        ext_handler.name = _raise_config_error_if_none("Handler Name", getattrib(plugin, "name"))
+        ext_handler.properties.version = _raise_config_error_if_none("Handler Version", getattrib(plugin, "version"))
+        ext_handler.properties.state = _raise_config_error_if_none("Handler State", getattrib(plugin, "state"))
 
         location = getattrib(plugin, "location")
         failover_location = getattrib(plugin, "failoverlocation")
@@ -344,7 +355,6 @@ class ExtensionsConfig(object):  # pylint: disable=R0903
             version_uri = ExtHandlerVersionUri()
             version_uri.uri = uri
             ext_handler.versionUris.append(version_uri)
-        return ext_handler
 
     @staticmethod
     def _parse_plugin_settings(ext_handler, plugin_settings):
@@ -365,14 +375,12 @@ class ExtensionsConfig(object):  # pylint: disable=R0903
                 version, handler_name, ', '.join(set([getattrib(x, "version") for x in ext_handler_plugin_settings])))
             add_event(AGENT_NAME, op=WALAEventOperation.PluginSettingsVersionMismatch, message=msg, log_event=False,
                       is_success=False)
-            ext_handler.is_invalid_with_reason = msg
-            return
+            raise ExtensionConfigError(msg)
 
         if len(settings) > 1:
             msg = "Multiple plugin settings found for the same handler: {0} and version: {1} (total settings: {2})".format(
                 handler_name, version, len(settings))
-            ext_handler.is_invalid_with_reason = msg
-            return
+            raise ExtensionConfigError(msg)
 
         plugin_settings_node = settings[0]
         runtime_settings_node = find(plugin_settings_node, "RuntimeSettings")
@@ -382,7 +390,7 @@ class ExtensionsConfig(object):  # pylint: disable=R0903
             # There can only be a single RuntimeSettings node or multiple ExtensionRuntimeSettings nodes per Plugin
             msg = "Both RuntimeSettings and ExtensionRuntimeSettings found for the same handler: {0} and version: {1}".format(
                 handler_name, version)
-            ext_handler.is_invalid_with_reason = msg
+            raise ExtensionConfigError(msg)
         elif runtime_settings_node is not None:
             # Only Runtime settings available, parse that
             ExtensionsConfig.__parse_runtime_settings(plugin_settings_node, runtime_settings_node, handler_name,
@@ -431,8 +439,7 @@ class ExtensionsConfig(object):  # pylint: disable=R0903
         if len(depends_on_nodes) > 1:
             msg = "Extension Handler can only have a single dependency for Single config extensions. Found: {0}".format(
                 len(depends_on_nodes))
-            ext_handler.is_invalid_with_reason = msg
-            return
+            raise ExtensionConfigError(msg)
         depends_on_node = depends_on_nodes[0] if depends_on_nodes else None
         depends_on_level = ExtensionsConfig.__get_dependency_level_from_node(depends_on_node, handler_name)
         ExtensionsConfig.__parse_and_add_extension_settings(runtime_settings_node, handler_name, ext_handler,
@@ -441,7 +448,7 @@ class ExtensionsConfig(object):  # pylint: disable=R0903
     @staticmethod
     def __parse_extension_runtime_settings(plugin_settings_node, extension_runtime_settings_nodes, ext_handler):
         """
-        Sample PluginSettings containing ExtensionRuntimeSettings -
+        Sample PluginSettings containing DependsOn and ExtensionRuntimeSettings -
 
         <Plugin name="Microsoft.CPlat.Core.RunCommandHandlerWindows" version="2.0.2">
         <DependsOn dependencyLevel="3" name="secondRunCommand">
@@ -455,7 +462,8 @@ class ExtensionsConfig(object):  # pylint: disable=R0903
           <DependsOnExtension handler="Microsoft.Compute.CustomScriptExtension" />
           <DependsOnExtension handler="Microsoft.Compute.VMAccessAgent" />
         </DependsOn>
-        <ExtensionRuntimeSettings seqNo="2" name="firstRunCommand" state="enabled">{
+        <ExtensionRuntimeSettings seqNo="2" name="firstRunCommand" state="enabled">
+            {
               "runtimeSettings": [
                 {
                   "handlerSettings": {
@@ -497,15 +505,22 @@ class ExtensionsConfig(object):  # pylint: disable=R0903
             dependency_levels[extension_name] = dependency_level
 
         for extension_runtime_setting_node in extension_runtime_settings_nodes:
+            # Name and State will only be set for ExtensionRuntimeSettings for Multi-Config
             extension_name = getattrib(extension_runtime_setting_node, "name")
+            if extension_name is None:
+                raise ExtensionConfigError("Extension Name not specified for ExtensionRuntimeSettings for MultiConfig!")
+            # State can either be `enabled` (default) or `disabled`
+            state = getattrib(extension_runtime_setting_node, "state")
+            state = "enabled" if state is None else state
             ExtensionsConfig.__parse_and_add_extension_settings(extension_runtime_setting_node, extension_name,
-                                                                ext_handler, dependency_levels[extension_name])
+                                                                ext_handler, dependency_levels[extension_name],
+                                                                state=state)
 
     @staticmethod
-    def __parse_and_add_extension_settings(settings_node, name, ext_handler, depends_on_level):
+    def __parse_and_add_extension_settings(settings_node, name, ext_handler, depends_on_level, state="enabled"):
         seq_no = getattrib(settings_node, "seqNo")
-        state = getattrib(settings_node, "state")
-        state = "enabled" if state is None else state
+        if seq_no is None:
+            raise ExtensionConfigError("SeqNo not specified for the Extension: {0}".format(name))
         try:
             runtime_settings = json.loads(gettext(settings_node))
         except ValueError as error:

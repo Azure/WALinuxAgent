@@ -548,6 +548,48 @@ class TestExtension(ExtensionTestCase):
             # The extension manifest should be downloaded twice now as incarnation changed once
             _assert_handler_status_and_manifest_download_count(protocol, test_data, 2)
 
+    def test_it_should_fail_handler_on_bad_extension_config_and_report_error(self, mock_get, mock_crypt_util, *args):
+
+        invalid_config_dir = os.path.join(data_dir, "wire", "invalid_config")
+        self.assertGreater(len(os.listdir(invalid_config_dir)), 0, "Not even a single bad config file found")
+
+        for bad_config_file_path in os.listdir(invalid_config_dir):
+            bad_conf = DATA_FILE.copy()
+            bad_conf["ext_conf"] = os.path.join(invalid_config_dir, bad_config_file_path)
+            test_data = mockwiredata.WireProtocolData(bad_conf)
+            exthandlers_handler, protocol = self._create_mock(test_data, mock_get, mock_crypt_util, *args)
+
+            with patch('azurelinuxagent.common.event.add_event') as patch_add_event:
+                exthandlers_handler.run()
+                self._assert_handler_status(protocol.report_vm_status, "NotReady", 0, "1.0.0")
+
+                invalid_config_errors = [kw for _, kw in patch_add_event.call_args_list if
+                                         kw['op'] == WALAEventOperation.InvalidExtensionConfig]
+                self.assertEqual(1, len(invalid_config_errors), "Error not logged and reported to Kusto")
+
+    def test_it_should_process_valid_extensions_if_present(self, mock_get, mock_crypt_util, *args):
+
+        bad_conf = DATA_FILE.copy()
+        bad_conf["ext_conf"] = os.path.join("wire", "ext_conf_invalid_and_valid_handlers.xml")
+        test_data = mockwiredata.WireProtocolData(bad_conf)
+        exthandlers_handler, protocol = self._create_mock(test_data, mock_get, mock_crypt_util, *args)
+
+        exthandlers_handler.run()
+        self.assertTrue(protocol.report_vm_status.called)
+        args, _ = protocol.report_vm_status.call_args
+        vm_status = args[0]
+        expected_handlers = ["OSTCExtensions.InvalidExampleHandlerLinux", "OSTCExtensions.ValidExampleHandlerLinux"]
+        self.assertEqual(2, len(vm_status.vmAgent.extensionHandlers))
+        for handler in vm_status.vmAgent.extensionHandlers:
+            expected_status = "NotReady" if "InvalidExampleHandlerLinux" in handler.name else "Ready"
+            expected_ext_count = 0 if "InvalidExampleHandlerLinux" in handler.name else 1
+            self.assertEqual(expected_status, handler.status, "Invalid status")
+            self.assertIn(handler.name, expected_handlers, "Handler not found")
+            self.assertEqual("1.0.0", handler.version, "Incorrect handler version")
+            self.assertEqual(expected_ext_count, len(handler.extensions), "Incorrect extensions enabled")
+            expected_handlers.remove(handler.name)
+        self.assertEqual(0, len(expected_handlers), "All handlers not reported status")
+
     def test_ext_zip_file_packages_removed_in_update_case(self, *args):
         # Test enable scenario.
         test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE)
