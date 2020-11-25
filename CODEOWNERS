@@ -21,3 +21,8 @@
 # Linux Agent team
 #
 * @narrieta @pgombar @larohra @kevinclark19a @ZhidongPeng
+
+#
+# Deb Packaging
+#
+/packaging/debian/ @mbearup
