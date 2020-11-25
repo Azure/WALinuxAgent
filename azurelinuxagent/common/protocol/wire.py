@@ -27,6 +27,7 @@ from collections import defaultdict
 import azurelinuxagent.common.conf as conf
 import azurelinuxagent.common.logger as logger
 import azurelinuxagent.common.utils.textutil as textutil
+from azurelinuxagent.common.AgentGlobals import AgentGlobals
 from azurelinuxagent.common.datacontract import validate_param
 from azurelinuxagent.common.event import add_event, WALAEventOperation, report_event, \
     CollectOrReportEventDebugInfo, add_periodic
@@ -384,6 +385,18 @@ def vm_status_to_v1(vm_status, ext_statuses):
         'aggregateStatus': v1_agg_status,
         'guestOSInfo': v1_ga_guest_info
     }
+
+    if AgentGlobals.supported_features:
+        supported_features = []
+        for key, val in AgentGlobals.supported_features.items():
+            supported_features.append(
+                {
+                    "Key": key,
+                    "Value": val
+                }
+            )
+        v1_vm_status["supportedFeatures"] = supported_features
+
     return v1_vm_status
 
 
