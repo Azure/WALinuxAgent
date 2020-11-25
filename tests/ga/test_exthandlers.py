@@ -349,7 +349,8 @@ class LaunchCommandTestCase(AgentTestCase):
         stdout = "stdout" * 5
         stderr = "stderr" * 5
 
-        command = self.create_script("produce_output.py", '''
+        command = "produce_output.py"
+        self.create_script(os.path.join(self.ext_handler_instance.get_base_dir(), command), '''
 import sys
 
 sys.stdout.write("{0}")
@@ -380,7 +381,8 @@ sys.stderr.write("{1}")
         signal_file = os.path.join(self.tmp_dir, "signal_file.txt")
 
         # the test command produces some output then goes into an infinite loop
-        command = self.create_script("produce_output_then_hang.py", '''
+        command = "produce_output_then_hang.py"
+        self.create_script(os.path.join(self.ext_handler_instance.get_base_dir(), command), '''
 import sys
 import time
 
@@ -446,7 +448,8 @@ with open("{2}", "w") as file:
         stderr = "stderr" * 3
         exit_code = 99
 
-        command = self.create_script("fail.py", '''
+        command = "fail.py"
+        self.create_script(os.path.join(self.ext_handler_instance.get_base_dir(), command), '''
 import sys
 
 sys.stdout.write("{0}")
@@ -468,7 +471,8 @@ exit({2})
         stdout = "stdout"
         stderr = "stderr"
 
-        command = self.create_script("start_child_process.py", '''
+        command = "start_child_process.py"
+        self.create_script(os.path.join(self.ext_handler_instance.get_base_dir(), command), '''
 import os
 import sys
 import time
@@ -503,7 +507,8 @@ else:
         # the child process uses the signal file to indicate it has produced output
         signal_file = os.path.join(self.tmp_dir, "signal_file.txt")
 
-        command = self.create_script("start_child_with_output.py", '''
+        command = "start_child_with_output.py"
+        self.create_script(os.path.join(self.ext_handler_instance.get_base_dir(), command), '''
 import os
 import sys
 import time
@@ -544,7 +549,8 @@ else:
         child_stdout = "CHILD STDOUT"
         child_stderr = "CHILD STDERR"
 
-        command = self.create_script("start_child_that_fails.py", '''
+        command = "start_child_that_fails.py"
+        self.create_script(os.path.join(self.ext_handler_instance.get_base_dir(), command), '''
 import os
 import sys
 import time
@@ -573,7 +579,8 @@ else:
         # file used to verify the command completed successfully
         signal_file = os.path.join(self.tmp_dir, "signal_file.txt")
 
-        command = self.create_script("create_file.py", '''
+        command = "create_file.py"
+        self.create_script(os.path.join(self.ext_handler_instance.get_base_dir(), command), '''
 open("{0}", "w").close()
 
 '''.format(signal_file))
@@ -590,7 +597,8 @@ open("{0}", "w").close()
         stderr = "STDERR"
 
         # the test script mimics the redirection done by the Custom Script extension
-        command = self.create_script("produce_output", '''
+        command = "produce_output"
+        self.create_script(os.path.join(self.ext_handler_instance.get_base_dir(), command), '''
 exec &> {0}
 echo {1}
 >&2 echo {2}
@@ -609,7 +617,8 @@ echo {1}
         stdout = "STDOUT"
         stderr = "STDERR"
 
-        command = self.create_script("produce_long_output.py", '''
+        command = "produce_long_output.py"
+        self.create_script(os.path.join(self.ext_handler_instance.get_base_dir(), command), '''
 import sys
 
 sys.stdout.write( "{0}" * {1})
@@ -623,7 +632,8 @@ sys.stderr.write( "{2}" * {3})
         self.assertIn(stderr, output)
 
     def test_it_should_read_only_the_head_of_large_outputs(self):
-        command = self.create_script("produce_long_output.py", '''
+        command = "produce_long_output.py"
+        self.create_script(os.path.join(self.ext_handler_instance.get_base_dir(), command), '''
 import sys
 
 sys.stdout.write("O" * 5 * 1024 * 1024)
@@ -651,7 +661,8 @@ sys.stderr.write("E" * 5 * 1024 * 1024)
         self.assertLessEqual(len(stderr), TELEMETRY_MESSAGE_MAX_LEN)
 
     def test_it_should_handle_errors_while_reading_the_command_output(self):
-        command = self.create_script("produce_output.py", '''
+        command = "produce_output.py"
+        self.create_script(os.path.join(self.ext_handler_instance.get_base_dir(), command), '''
 import sys
 
 sys.stdout.write("STDOUT")
@@ -684,7 +695,8 @@ sys.stderr.write("STDERR")
             printenv | grep -E '(%s)'
         """ % '|'.join(helper_env_vars.keys())
 
-        test_file = self.create_script('printHelperEnvironments.sh', command)
+        test_file = 'printHelperEnvironments.sh'
+        self.create_script(os.path.join(self.ext_handler_instance.get_base_dir(), test_file), command)
 
         with patch("subprocess.Popen", wraps=subprocess.Popen) as patch_popen:
             output = ext_handler_instance.launch_command(test_file)
