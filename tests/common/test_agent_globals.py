@@ -14,7 +14,7 @@
 #
 # Requires Python 2.6+ and Openssl 1.0+
 #
-from azurelinuxagent.common.AgentGlobals import AgentGlobals, MultiConfigFeature
+from azurelinuxagent.common.AgentGlobals import AgentGlobals
 from tests.tools import AgentTestCase, patch
 
 
@@ -22,10 +22,10 @@ class TestAgentGlobals(AgentTestCase):
 
     def test_it_should_set_supported_features_correctly(self):
 
-        multi_config_name = MultiConfigFeature().name
+        multi_config_name = AgentGlobals.get_multi_config_feature().name
 
-        with patch("azurelinuxagent.common.AgentGlobals.MultiConfigFeature.__SUPPORTED", False):
-            self.assertNotIn(multi_config_name, AgentGlobals.supported_features, "MultiConfig should not be there")
+        with patch("azurelinuxagent.common.AgentGlobals._MultiConfigFeature.is_supported", False):
+            self.assertNotIn(multi_config_name, AgentGlobals.get_supported_features(), "MultiConfig should not be there")
 
-        with patch("azurelinuxagent.common.AgentGlobals.MultiConfigFeature.__SUPPORTED", True):
-            self.assertIn(multi_config_name, AgentGlobals.supported_features, "MultiConfig should be there")
+        with patch("azurelinuxagent.common.AgentGlobals._MultiConfigFeature.is_supported", True):
+            self.assertIn(multi_config_name, AgentGlobals.get_supported_features(), "MultiConfig should be there")

@@ -22,7 +22,7 @@ class AgentFeature(object):
     Interface for defining new features that the Linux Guest Agent supports
     """
 
-    def __init__(self, name, version, supported=False):
+    def __init__(self, name, version="1.0", supported=False):
         self.__name = name
         self.__version = version
         self.__supported = supported
@@ -40,16 +40,16 @@ class AgentFeature(object):
         return self.__supported
 
 
-class MultiConfigFeature(AgentFeature):
+class _MultiConfigFeature(AgentFeature):
 
     __NAME = "MultipleExtensionsPerHandler"
     __VERSION = "1.0"
     __SUPPORTED = False
 
     def __init__(self):
-        super(MultiConfigFeature, self).__init__(name=MultiConfigFeature.__NAME,
-                                                 version=MultiConfigFeature.__VERSION,
-                                                 supported=MultiConfigFeature.__SUPPORTED)
+        super(_MultiConfigFeature, self).__init__(name=_MultiConfigFeature.__NAME,
+                                                  version=_MultiConfigFeature.__VERSION,
+                                                  supported=_MultiConfigFeature.__SUPPORTED)
 
 
 class AgentGlobals(object):
@@ -64,14 +64,14 @@ class AgentGlobals(object):
     _container_id = "00000000-0000-0000-0000-000000000000"
 
     # Feature List
-    __multi_config_feature = MultiConfigFeature()
+    __multi_config_feature = _MultiConfigFeature()
 
-    @property
-    def multi_config_feature(self):
+    @staticmethod
+    def get_multi_config_feature():
         return AgentGlobals.__multi_config_feature
 
-    @property
-    def supported_features(self):
+    @staticmethod
+    def get_supported_features():
         """
         List of features that the GuestAgent currently supports (like FastTrack, MultiConfig, etc).
         We need to send this list as part of Status reporting to inform CRP of all the features it supports.
@@ -85,8 +85,9 @@ class AgentGlobals(object):
 
         supported_features = dict()
 
-        if AgentGlobals.multi_config_feature.is_supported:
-            supported_features[AgentGlobals.multi_config_feature.name] = AgentGlobals.multi_config_feature.version
+        multi_config = AgentGlobals.get_multi_config_feature()
+        if multi_config.is_supported:
+            supported_features[multi_config.name] = multi_config.version
 
         return supported_features
 
