@@ -276,8 +276,10 @@ class ExtHandlersHandler(object):
         return self.last_etag != etag
 
     def get_activity_and_correlation_id(self):
+
+        def check_empty(value): return value if value else "NA"
         in_vm_metadata = self.protocol.get_in_vm_metadata()
-        return in_vm_metadata.activity_id, in_vm_metadata.correlation_id
+        return check_empty(in_vm_metadata.activity_id), check_empty(in_vm_metadata.correlation_id)
 
     def run(self):
 
@@ -291,20 +293,18 @@ class ExtHandlersHandler(object):
             if self._extension_processing_allowed() and self._incarnation_changed(etag):
                 activity_id, correlation_id = self.get_activity_and_correlation_id()
 
-                log_msgs = ["Incarnation: {0}".format(etag)]
-                if activity_id is not None:
-                    log_msgs.append("Activity Id: {0}".format(activity_id))
-                if correlation_id is not None:
-                    log_msgs.append("Correlation Id: {0}".format(correlation_id))
-                logger.info("ProcessGoalState started [{0}]".format('; '.join(log_msgs)))
+                logger.info(
+                    "ProcessGoalState started [Incarnation: {0}; Activity Id: {1}; Correlation Id: {2}]".format(etag,
+                                                                                                                activity_id,
+                                                                                                                correlation_id))
                 self.handle_ext_handlers(etag)
                 self.last_etag = etag
 
             self.report_ext_handlers_status()
             self._cleanup_outdated_handlers()
-        except Exception as e:  # pylint: disable=C0103
-            msg = u"Exception processing extension handlers: {0}".format(ustr(e))
-            detailed_msg = '{0} {1}'.format(msg, traceback.extract_tb(get_traceback(e)))
+        except Exception as error:
+            msg = u"Exception processing extension handlers: {0}".format(ustr(error))
+            detailed_msg = '{0} {1}'.format(msg, traceback.extract_tb(get_traceback(error)))
             logger.warn(msg)
             add_event(AGENT_NAME,
                       version=CURRENT_VERSION,

@@ -363,13 +363,8 @@ class UpdateHandler(object):  # pylint: disable=R0902
                         self._ensure_readonly_files()
                         duration = elapsed_milliseconds(utc_start)
                         activity_id, correlation_id = exthandlers_handler.get_activity_and_correlation_id()
-
-                        log_msgs = ["Incarnation: {0}".format(exthandlers_handler.last_etag), "{0} ms".format(duration)]
-                        if activity_id is not None:
-                            log_msgs.append("Activity Id: {0}".format(activity_id))
-                        if correlation_id is not None:
-                            log_msgs.append("Correlation Id: {0}".format(correlation_id))
-                        msg = 'ProcessGoalState completed [{0}]'.format('; '.join(log_msgs))
+                        msg = 'ProcessGoalState completed [Incarnation: {0}; {1} ms; Activity Id: {2}; Correlation Id: {3}]'.format(
+                            exthandlers_handler.last_etag, duration, activity_id, correlation_id)
                         logger.info(msg)
                         add_event(
                             AGENT_NAME,
@@ -380,8 +375,8 @@ class UpdateHandler(object):  # pylint: disable=R0902
                 self._send_heartbeat_telemetry(protocol)
                 time.sleep(goal_state_interval)
 
-        except Exception as e:  # pylint: disable=C0103
-            msg = u"Agent {0} failed with exception: {1}".format(CURRENT_AGENT, ustr(e))
+        except Exception as error:
+            msg = u"Agent {0} failed with exception: {1}".format(CURRENT_AGENT, ustr(error))
             self._set_sentinel(msg=msg)
             logger.warn(msg)
             logger.warn(traceback.format_exc())

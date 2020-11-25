@@ -1315,8 +1315,8 @@ class TestExtension(ExtensionTestCase):
         exthandlers_handler.run()
         self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.0.0")
         activity_id, correlation_id = exthandlers_handler.get_activity_and_correlation_id()
-        self.assertIsNone(activity_id, "Activity Id should be None")
-        self.assertIsNone(correlation_id, "Correlation Id should be None")
+        self.assertEqual(activity_id, "NA", "Activity Id should be NA")
+        self.assertEqual(correlation_id, "NA", "Correlation Id should be NA")
 
     def _assert_ext_status(self, report_ext_status, expected_status,
                            expected_seq_no):
