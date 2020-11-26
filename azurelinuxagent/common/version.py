@@ -110,7 +110,8 @@ def get_distro():
         release = re.sub('\-.*\Z', '', ustr(platform.release()))  # pylint: disable=W1401
         osinfo = ['openbsd', release, '', 'openbsd']
     elif 'Linux' in platform.system():
-        osinfo = get_linux_distribution(0, 'alpine')
+# adding devuan to list of extra supported dists:
+        osinfo = get_linux_distribution(0, ['alpine', 'devuan'])
     elif 'NS-BSD' in platform.system():
         release = re.sub('\-.*\Z', '', ustr(platform.release()))  # pylint: disable=W1401
         osinfo = ['nsbsd', release, '', 'nsbsd']

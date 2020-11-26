@@ -1,0 +1,14 @@
+# 
+
+# deb cdrom:[Devuan GNU/Linux 2.1 (ascii) amd64 DVD1 - 2019-12-21 07:24:54 UTC]/ ascii contrib main non-free
+
+# deb cdrom:[Devuan GNU/Linux 2.1 (ascii) amd64 DVD1 - 2019-12-21 07:24:54 UTC]/ ascii contrib main non-free
+
+deb http://gb.deb.devuan.org/merged ascii main
+deb-src http://gb.deb.devuan.org/merged ascii main
+
+deb http://gb.deb.devuan.org/merged ascii-security main
+deb-src http://gb.deb.devuan.org/merged ascii-security main
+
+deb http://gb.deb.devuan.org/merged ascii-updates main
+deb-src http://gb.deb.devuan.org/merged ascii-updates main

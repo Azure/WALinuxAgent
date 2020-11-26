@@ -38,9 +38,15 @@ from azurelinuxagent.common.utils import shellutil, fileutil
 from tests.common.mock_environment import MockCommand
 from tests.common.mock_cgroup_environment import mock_cgroup_environment, UnitFilePaths
 from tests.tools import AgentTestCase, patch, mock_sleep, i_am_root, data_dir
+# from tests.tools import skip_if_predicate_false, is_systemd_present
+# is_systemd_present has been replaced by osutil.systemd.is_systemd()
+from tests.tools import skip_if_predicate_false
+from azurelinuxagent.common.osutil import systemd
+
 from tests.utils.miscellaneous_tools import format_processes, wait_for
 
 
+@skip_if_predicate_false(systemd.is_systemd, "No point in running systemd-based tests on systems not using systemd")
 class CGroupConfiguratorSystemdTestCase(AgentTestCase):
     @classmethod
     def tearDownClass(cls):

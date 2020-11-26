@@ -20,12 +20,15 @@ from distutils.version import LooseVersion as Version  # pylint: disable=no-name
 
 import azurelinuxagent.common.logger as logger
 from azurelinuxagent.common.version import DISTRO_NAME, DISTRO_CODE_NAME, DISTRO_VERSION, DISTRO_FULL_NAME
+# code to re-check debian as reported distro - may be devuan
+from azurelinuxagent.common.extralib.debian_recheck import DebianRecheck
 from .alpine import AlpineOSUtil
 from .arch import ArchUtil
 from .bigip import BigIpOSUtil
 from .clearlinux import ClearLinuxUtil
 from .coreos import CoreOSUtil
 from .debian import DebianOSBaseUtil, DebianOSModernUtil
+from .devuan import DevuanOSUtil
 from .default import DefaultOSUtil
 from .freebsd import FreeBSDOSUtil
 from .gaia import GaiaOSUtil
@@ -93,11 +96,27 @@ def _get_osutil(distro_name, distro_code_name, distro_version, distro_full_name)
         return SUSEOSUtil()
 
     if distro_name == "debian":
-        if "sid" in distro_version or Version(distro_version) > Version("7"):
+# merge separate variables into dict for checking:
+        protodistinfo = {
+            'ID' : distro_name,
+            'RELEASE' : distro_version,
+            'CODENAME' : distro_code_name,
+            'DESCRIPTION' : distro_full_name,
+        }
+        recheck = DebianRecheck(protodistinfo)
+        if recheck.get_id() == "devuan":
+            return DevuanOSUtil()
+
+        if "sid" in distro_version or Version(distro_version) > Version("7"):  # pylint: disable=R1705
             return DebianOSModernUtil()
 
         return DebianOSBaseUtil()
 
+# once the issues with devuan/debian detection have been fixed:
+    if distro_name == "devuan":
+        return DevuanOSUtil()
+
+    # pylint: disable=R1714
     if distro_name in ("redhat", "rhel", "centos", "oracle"):
         if Version(distro_version) < Version("7"):
             return Redhat6xOSUtil()

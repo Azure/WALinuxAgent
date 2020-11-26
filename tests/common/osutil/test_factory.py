@@ -23,6 +23,7 @@ from azurelinuxagent.common.osutil.coreos import CoreOSUtil
 from azurelinuxagent.common.osutil.debian import DebianOSBaseUtil, DebianOSModernUtil
 from azurelinuxagent.common.osutil.default import DefaultOSUtil
 from azurelinuxagent.common.osutil.factory import _get_osutil
+from azurelinuxagent.common.osutil.devuan import DevuanOSUtil
 from azurelinuxagent.common.osutil.freebsd import FreeBSDOSUtil
 from azurelinuxagent.common.osutil.gaia import GaiaOSUtil
 from azurelinuxagent.common.osutil.iosxe import IosxeOSUtil
@@ -179,6 +180,23 @@ class TestOsUtilFactory(AgentTestCase):
                           distro_version="8")
         self.assertTrue(isinstance(ret, DebianOSModernUtil))
         self.assertEqual(ret.get_service_name(), "walinuxagent")
+
+# test devuan support (at present, just check ascii (2.1) and beowulf (3.0)
+
+    def test_get_osutil_it_should_return_devuan(self):
+        ret = _get_osutil(distro_name="devuan",
+                          distro_code_name="",
+                          distro_full_name="",
+                          distro_version="2.1")
+        self.assertTrue(type(ret) == DevuanOSUtil) # pylint: disable=unidiomatic-typecheck
+        self.assertEqual(ret.get_service_name(), "waagent")
+
+        ret = _get_osutil(distro_name="devuan",
+                          distro_code_name="",
+                          distro_full_name="",
+                          distro_version="3.0")
+        self.assertTrue(type(ret) == DevuanOSUtil) # pylint: disable=unidiomatic-typecheck
+        self.assertEqual(ret.get_service_name(), "waagent")
 
     def test_get_osutil_it_should_return_redhat(self):
         ret = _get_osutil(distro_name="redhat",

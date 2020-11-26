@@ -15,8 +15,10 @@ import os
 import re
 # need io for file read compatibility between python v2 and v3
 import io
-# for some reason this breaks travis builds (works in local builds)
-# move to inside check_debian_plain() - seems to work then.
+# for some reason using logger seems to break travis builds
+# (works in local builds)
+# using localdbg() instead to get information about travis errors
+# (all messages sent to STDERR)
 # from azurelinuxagent.common import logger
 
 import sys
@@ -30,7 +32,16 @@ class DebianRecheck():
     encountered, re-set all the information to that given at the start
     """
 
-    debugfl = 1
+# collecting lookup filenames/paths here - avoid having
+# constants defined in methods, and enable more intensive testing
+    SOURCES_LIST = "/etc/apt/sources.list"
+    ORIGINS_FILENAME = "/etc/dpkg/origins/default"
+    LISTS_BASE = "/var/lib/apt/lists/"
+
+
+# change to 1 to activate local debugging (messages to
+# stderr from localdbg()
+    debugfl = 0
 
     localdistinfo = {
         'ID' : '',
@@ -82,6 +93,9 @@ class DebianRecheck():
 ##################################################################
         self.localdbg("__init__: entered")
         self.dump_distinfo(distinfo)
+# ensure that each run of __init__ starts with the
+# sourcedata ok flag set to 1 (enable detailed testing)
+        self.sourcedata['ok'] = 1
 # copy in existing keys/values from distinfo:
         for k in distinfo.keys():
             self.localdistinfo[k] = distinfo[k]
@@ -170,13 +184,14 @@ self.sourcedata['codename']+')'
         if found, add it to sourcedata
         if not, set sourcedata['ok'] to 0
         """
-        originsfilename = "/etc/dpkg/origins/default"
         distid = ""
         sline = ""
 
+        self.localdbg("find_distid: ORIGINS_FILENAME = "+self.ORIGINS_FILENAME)
         try:
-            originsfile = io.open(originsfilename, 'r')
+            originsfile = io.open(self.ORIGINS_FILENAME, 'r')
         except: # pylint: disable=bare-except
+            self.localdbg("find_distid: ERROR: unable to open "+self.ORIGINS_FILENAME)
             self.sourcedata['ok'] = 0
             return
 
@@ -186,7 +201,7 @@ self.sourcedata['codename']+')'
                 break
         sline = sline.strip()
         if sline == "":
-#           logger.error("check_debian_plain: did not find a vendor")
+#           logger.error("find_distid: did not find a vendor")
             self.localdbg("ERROR: did not find a vendor")
             self.sourcedata['ok'] = 0
             return
@@ -194,7 +209,7 @@ self.sourcedata['codename']+')'
         originsfile.close()
         distid = sline.split()[1]
         self.localdbg('distid='+distid)
-#       logger.info("check_debian_plain: distid="+distid)
+#       logger.info("find_distid: distid="+distid)
         self.sourcedata['id'] = distid
 
     def dump_tokenlist(self, tokenlist):
@@ -211,12 +226,12 @@ self.sourcedata['codename']+')'
         to point to the primary source;
         """
 # extract dist/version/release data from sources.list entry
-        if not os.path.isfile("/etc/apt/sources.list"):
-#           logger.error("check_debian_plain: WARNING: did not find sources.list file")
-            self.localdbg("ERROR: did not find sources.list file")
+        if not os.path.isfile(self.SOURCES_LIST):
+#           logger.error("find_sourcedata: WARNING: did not find sources.list file")
+            self.localdbg("ERROR: did not find file "+self.SOURCES_LIST)
             self.sourcedata['ok'] = 0
         else:
-            slfile = io.open("/etc/apt/sources.list", "r")
+            slfile = io.open(self.SOURCES_LIST, "r")
             sline = ""
             for line in slfile:
 # skip lines relating to a cdrom
@@ -230,9 +245,9 @@ self.sourcedata['codename']+')'
             slfile.close()
             sline = sline.strip()
             if sline == "":
-#               logger.error("check_debian_plain: unable to find useful line in sources.list")
+#               logger.error("find_sourcedata: unable to find useful line in sources.list")
                 self.localdbg("ERROR: unable to "+\
-"find required line in sources.list")
+"find required line in "+self.SOURCES_LIST)
                 self.sourcedata['ok'] = 0
             else:
                 tokenlist = sline.split(' ')
@@ -273,7 +288,8 @@ self.sourcedata['codename']+')'
         release file, and check if it exists.
         If unsuccessful, set sourcedata['ok'] to 0
         """
-        aptdir = "/var/lib/apt/lists/"
+#       aptdir = "/var/lib/apt/lists/"
+# (replaced by self.LISTS_BASE)
         relfilename = ""
         testfilename = ""
         filenamebase = ""
@@ -286,12 +302,12 @@ self.sourcedata['section']+\
 '_dists_'+self.sourcedata['codename']+'_'
 
 # release file name may end in _Release or _InRelease - check for both
-            testfilename = aptdir+filenamebase+'InRelease'
+            testfilename = self.LISTS_BASE+filenamebase+'InRelease'
             self.localdbg("trying testfilename="+testfilename)
             if os.path.isfile(testfilename):
                 relfilename = testfilename
             else:
-                testfilename = aptdir+filenamebase+'Release'
+                testfilename = self.LISTS_BASE+filenamebase+'Release'
                 self.localdbg("not found: trying testfilename="+testfilename)
                 if os.path.isfile(testfilename):
                     relfilename = testfilename
@@ -333,7 +349,7 @@ self.sourcedata['relfilename']+\
         relfile.close()
 
         if self.sourcedata['version'] == "":
-#           logger.error("check_debian_plain: unable to find version")
+#           logger.error("find_version: unable to find version")
             self.localdbg("ERROR: unable to find version")
             self.sourcedata['ok'] = 0
 
@@ -369,9 +385,6 @@ def test():
     print("(before ***** start ******)")
     print(distinfo_proto)
     print("(before ***** end ******)")
-# NB: for actual use, we can construct the dictionary in the
-# function call (no need to use a pre-constructed dictionary)
-#    distinfo_actual=check_debian_plain(distinfo_proto)
     recheck = DebianRecheck(distinfo_proto)
     distinfo_actual = recheck.get_localdistinfo()
     print("(after ***** start ******)")

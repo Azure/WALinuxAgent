@@ -219,8 +219,25 @@ class TestHttpOperations(AgentTestCase):
     @patch('azurelinuxagent.common.conf.get_httpproxy_port')
     @patch('azurelinuxagent.common.conf.get_httpproxy_host')
     def test_get_http_proxy_configuration_requires_host(self, mock_host, mock_port):
+# This test doesn't seem to work - possibly because in _get_http_proxy(),
+# if host is None, the proxy url is taken from the value for "http_proxy" in
+# os.environ, and the host is parsed out of that. For some reason, at the
+# point that the test is run, the environment contains a value for http_proxy
+# (maybe a side-effect from a previous test)
+# Working around this by cleaning up the environment before running the test.
         mock_host.return_value = None
         mock_port.return_value = None
+# (clean up environment)
+        try:
+            del os.environ['http_proxy']
+        except: # pylint: disable=bare-except
+            pass
+
+        try:
+            del os.environ['https_proxy']
+        except: # pylint: disable=bare-except
+            pass
+
         h, p = restutil._get_http_proxy()
         self.assertEqual(None, h)
         self.assertEqual(None, p)
@@ -302,6 +319,30 @@ class TestHttpOperations(AgentTestCase):
                 self.assertEqual(i, j)
 
     def test_get_no_proxy_default(self):
+# As with test_get_http_configuration_requires_host above, this test
+# seems to fail due to environment variables having been set, presumably
+# by previous tests. Work around by cleaning up environment before the test.
+
+        try:
+            del os.environ['http_proxy']
+        except: # pylint: disable=bare-except
+            pass
+
+        try:
+            del os.environ['https_proxy']
+        except: # pylint: disable=bare-except
+            pass
+
+        try:
+            del os.environ['no_proxy']
+        except: # pylint: disable=bare-except
+            pass
+
+        try:
+            del os.environ['NO_PROXY']
+        except: # pylint: disable=bare-except
+            pass
+
         no_proxy_generator = restutil.get_no_proxy()
         self.assertIsNone(no_proxy_generator)
 

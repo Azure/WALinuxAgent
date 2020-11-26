@@ -13,6 +13,8 @@ py3env/
 .Python
 env/
 build/
+# Adding for downstream use in build environment
+debian/
 develop-eggs/
 dist/
 downloads/

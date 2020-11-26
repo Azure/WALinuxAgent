@@ -1,0 +1,4 @@
+Vendor: Devuan
+Vendor-URL: https://www.devuan.org/
+Bugs: debbugs://bugs.devuan.org
+Parent: Debian

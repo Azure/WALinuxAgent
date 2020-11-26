@@ -1,0 +1,21 @@
+# 
+
+# deb cdrom:[Devuan GNU/Linux 3.0 (beowulf) amd64 - netinstall 20200526]/ beowulf contrib main non-free
+
+#deb cdrom:[Devuan GNU/Linux 3.0 (beowulf) amd64 - netinstall 20200526]/ beowulf contrib main non-free
+
+deb http://deb.devuan.org/merged beowulf main
+deb-src http://deb.devuan.org/merged beowulf main
+
+deb http://deb.devuan.org/merged beowulf-security main
+deb-src http://deb.devuan.org/merged beowulf-security main
+
+# beowulf-updates, previously known as 'volatile'
+deb http://deb.devuan.org/merged beowulf-updates main
+deb-src http://deb.devuan.org/merged beowulf-updates main
+
+# This system was installed using small removable media
+# (e.g. netinst, live or single CD). The matching "deb cdrom"
+# entries were disabled at the end of the installation process.
+# For information about how to configure apt package sources,
+# see the sources.list(5) manual.

@@ -1,0 +1,605 @@
+#!/bin/bash
+# walinuxagent.sysvinit
+# sysvinit script to start and stop the waagent daemon.
+# 
+# This script takes into account the possibility that both daemon and
+# non-daemon instances of waagent may be running concurrently (e.g. when
+# "waagent -deprovision" is being run) and attempts to ensure that any
+# non-daemon instances are preserved when the daemon instance is stopped.
+# 
+### BEGIN INIT INFO
+# Provides:          walinuxagent
+# Required-Start:    $remote_fs $syslog $network
+# Required-Stop:     $remote_fs
+# X-Start-Before:    cloud-init
+# Default-Start:     2 3 4 5
+# Default-Stop:      0 1 6
+# Short-Description: Microsoft Azure Linux Agent
+### END INIT INFO
+
+DESC="Microsoft Azure Linux Agent"
+INTERPRETER="/usr/bin/python3"
+DAEMON='/usr/sbin/waagent'
+DAEMON_ARGS='-daemon'
+START_ARGS='--background'
+PIDFILE='/var/run/waagent.pid'
+NAME='waagent'
+# set to 1 to enable a lot of debugging output
+DEBUG=0
+
+. /lib/lsb/init-functions
+
+debugmsg() {
+	# output a console message if DEBUG is set
+	# (can be enabled dynamically by giving "debug" as an extra argument)
+	if [ "x${DEBUG}" == "x1" ] ; then
+		echo "[debug]: $1" >&2
+	fi
+	return 0
+}
+
+create_pidfile() {
+	# find the PID of the running daemon and
+	# write it into the pidfile (after sanity checks)
+	local PID
+	if [ -z "${PIDFILE}" ] ; then
+		debugmsg "create_pidfile: ERROR: pidfile is not defined"
+		return 1
+	fi
+	PID=$(get_daemon_pid)
+	debugmsg "create_pidfile: daemon process PID = ${PID}"
+	if [ -z "${PID}" ] ; then
+		debugmsg "create_pidfile: ERROR: no daemon process found - cannot create pidfile"
+	else 
+		debugmsg "create_pidfile: (re)creating pidfile ${PIDFILE}"
+		echo "${PID}" > ${PIDFILE}
+	fi
+	return 0
+}
+
+remove_pidfile() {
+	# remove the pidfile, after sanity checking
+	if [ -z "${PIDFILE}" ] ; then
+		debugmsg "remove_pidfile(): ERROR: pidfile not defined"
+		return 1
+	fi
+	if [ ! -e "${PIDFILE}" ] ; then
+		debugmsg "remove_pidfile(): ERROR: file ${PIDFILE} does not exist"
+		return 1
+	fi
+	debugmsg "remove_pidfile(): removing pidfile ${PIDFILE}"
+	rm -f ${PIDFILE}
+	return 0
+}
+
+check_non_daemon_instances() {
+	# check if there are any non-daemon instances of waagent running
+	local NDPIDLIST i NDPIDCT
+	declare -a NDPIDLIST
+	debugmsg "check_non_daemon_instance: after init, #NDPIDLIST=${#NDPIDLIST[*]}"
+#	NDPIDLIST=$(	ps ax |
+#		grep -e "${INTERPRETER}" -e "${DAEMON}" -e "${DAEMON_ARGS}" |
+#		grep -v  -e 'grep' |
+#		awk '{ print $1 }')
+# use readarray so that we don't get a dummy first element
+	readarray -t NDPIDLIST < <( ps ax | 
+		grep "${INTERPRETER}" |
+		grep "${DAEMON}" |
+		grep -v -- "${DAEMON_ARGS}" |
+		grep -v  "grep" |
+		awk '{ print $1 }')
+	NDPIDCT=${#NDPIDLIST[@]}
+	debugmsg "check_non_daemon_instances: NDPIDCT=${NDPIDCT}"
+	debugmsg "check_non_daemon_instances: NDPIDLIST[0] = ${NDPIDLIST[0]}"
+	if [ ${NDPIDCT} -gt 0 ] ; then
+		debugmsg "check_non_daemon_instances: WARNING: non-daemon instances of waagent exist"
+	else
+		debugmsg "check_non_daemon_instances: no non-daemon instances of waagent are currently running"
+	fi
+	for (( i = 0 ; i < ${NDPIDCT} ; i++ )) ; do
+		debugmsg "check_non_daemon_instances: WARNING: process ${NDPIDLIST[${i}]} is a non-daemon waagent instance"
+	done
+	return 0 
+}
+
+get_daemon_pid() {
+	# (re)create PIDLIST, return the first entry
+	local PID
+	create_pidlist
+	PID=${PIDLIST[0]}	
+	if [ -z "${PID}" ] ; then
+		debugmsg "get_daemon_pid: : WARNING: no waagent daemon process found"
+	fi
+	echo "${PID}"
+}
+
+recheck_status() {
+	# after an attempt to stop the daemon, re-check the status
+	# and take any further actions required.
+	# (NB: at the moment, we only re-check once. Possible improvement
+	# would be to iterate the re-check up to a given maximum tries). 
+	local STATUS NEWSTATUS
+	get_status
+	STATUS=$?
+	debugmsg "stop_waagent: status is now ${STATUS}"
+	# ideal if stop has been successful: STATUS=3 - no daemon process,  but
+	# pidfile still exists (we now need to delete it)
+	case ${STATUS} in 
+		0)
+			# stop didn't work
+			# what to do? maybe try kill -9 ? 
+			debugmsg "recheck_status: ERROR: unable to stop waagent"
+			debugmsg "recheck_status: trying again with kill -9"
+			kill_daemon_from_pid 1
+			# probably need to check status again? 
+			get_status
+			NEW_STATUS=$?
+			if [ "x${NEW_STATUS}" == "x3" ] ; then
+				debugmsg "recheck_status: successfully stopped. Now removing pidfile"
+				remove_pidfile
+				log_end_msg 0 || true
+			else
+				# could probably do something more productive here
+				debugmsg "recheck_status: unable to stop daemon - giving up"
+				log_end_msg 1 || true
+				exit 1
+			fi
+		;;
+		1) 
+			# still running, and pidfile now doesn't match. Try forcing kill
+			debugmsg "recheck_status: ERROR: waagent daemon still running and pidfile has changed"
+			debugmsg "recheck_status: trying again with kill -9"
+			kill_daemon_from_pidlist 1
+			# recheck status
+			get_status
+			NEW_STATUS=$?
+			if [ "x${NEW_STATUS}" == "x3" ] ; then
+				debugmsg "recheck_status: successfully stopped. Now removing pidfile"
+				remove_pidfile
+				log_end_msg 0 || true
+			else 
+				# what now?
+				debugmsg "recheck_status: ERROR: unable to stop daemon - giving up"
+				log_end_msg 1 || true
+				exit 1
+			fi
+		;;
+		2) 
+			# still running, but now the pidfile doesn't exist. 
+			debugmsg "recheck_status: ERROR: waagent daemon still running and now pidfile does not exist"
+			debugmsg "recheck_status: trying to kill again from the pidlist, using -9"
+			kill_daemon_from_pidlist 1
+			get_status
+			NEW_STATUS=$?
+			if [ "x${NEW_STATUS}" == "x3" -o "x${NEW_STATUS}" == "x4" ] ; then
+				debugmsg "recheck_status: waagent successfully stopped." 
+				remove_pidfile
+				log_end_msg 0 || true
+			else 
+				# what now?
+				debugmsg "recheck_status: ERROR: unable to stop daemon"
+				debugmsg "recheck_status: manual intervention required"
+				log_end_msg 1 || true
+				exit 1
+			fi
+		;;
+		3) 
+			# THIS IS THE EXPECTED CASE: daemon is no longer running and
+			# the pidfile still exists. Delete the pidfile and we're done.
+			debugmsg "recheck_status: waagent daemon stopped successfully. Now removing pidfile"
+			remove_pidfile
+			log_end_msg 0 || true
+		;;
+		4) 
+			# successfully stopped - but no pidfile (unexpected)
+			debugmsg "recheck_status: WARNING: waagent successfully stopped"
+			debugmsg "recheck_status:  -  but pidfile unexpectedly removed"
+			# we assume all OK at this point
+			log_end_msg 0 || true
+		;;
+		5) 
+			# so weird that we can't figure out what's going on							
+			debugmsg "recheck_status: ERROR: unable to determine waagent status"
+			debugmsg "recheck_status: manual intervention required"
+			log_end_msg 1 || true
+			exit 1
+		;;
+	esac
+}
+
+start_waagent() {
+	# we use start-stop-daemon for starting waagent
+	local STATUS
+	get_status
+	STATUS=$?
+	# check the status value - take appropriate action
+	debugmsg "start_waagent: STATUS=${STATUS}"
+	case "${STATUS}" in 
+		0) 
+			debugmsg "start_waagent: waagent is already running"
+			log_daemon_msg "waagent is already running"
+			log_end_msg 0 || true
+		;;
+		1)
+			# running, but pid and pidfile don't match
+			# how to fix? Probably best to stop, and then re-start.
+			# Alternative would be to rewrite the pidfile, but that might
+			# be unsafe. REVISIT
+			debugmsg "start_waagent: waagent is running, but the process PID and"
+			debugmsg "the pid in ${PIDFILE} do not match"
+			debugmsg "Restarting waagent daemon"
+			log_daemon_msg "waagent is running but the pidfile is corrupt - restarting waagent"
+			stop_waagent
+			log_daemon_msg "Starting ${NAME} daemon"
+			start-stop-daemon --start --quiet --pidfile ${PIDFILE} --background --name ${NAME} --exec ${INTERPRETER} -- ${DAEMON} ${DAEMON_ARGS}
+			log_end_msg $? || true
+		;;
+		2)
+			# running, but no pidfile
+			# in this case, we just identify the waagent daemon process and
+			# create the pidfile
+			debugmsg "start_waagent: waagent is running, but pidfile ${PIDFILE} does not exist"
+			debugmsg "start_waagent: creating ${PIDFILE} now"
+			log_daemon_msg "waagent is running but the pidfile does not exist - re-creating it"
+			create_pidfile
+			log_end_msg $? || true
+		;;
+		3)
+			# not running, but the pidfile still exists
+			# just start waagent, at which point the pidfile will be re-created
+			debugmsg "start_waagent: WARNING: old pidfile still exists"
+			debugmsg "start_waagent: it will be overwritten by new start operation"
+			log_daemon_msg "Starting ${NAME} daemon"
+			start-stop-daemon --start --quiet --pidfile ${PIDFILE} --background --startas /usr/bin/python3 --name waagent --exec ${INTERPRETER} -- ${DAEMON} ${DAEMON_ARGS}
+			log_end_msg $? || true
+		;;
+		4)
+			# not running, and no pidfile
+			# just start waagent
+			debugmsg "start_waagent: waagent is not currently running and no pidfile exists"
+			log_daemon_msg "Starting ${NAME} daemon"
+			start-stop-daemon --start --quiet --pidfile ${PIDFILE} --background  --name "${NAME}" --exec ${INTERPRETER} -- ${DAEMON} ${DAEMON_ARGS}
+			log_end_msg $? || true
+		;;
+		5)
+			# get_status can't figure out what's going on.
+			# try doing a stop to clean up any mess, then attempt to start waagent
+			# will probably require manual intervention
+			# (REVISIT: in this case, maybe we should re-check the status?)
+			debugmsg "start_waagent: unable to determine current status"
+			debugmsg "start_waagent: trying to stop waagent first, and then start it"
+			stop_waagent
+			log_daemon_msg "Starting ${NAME} daemon"
+			start-stop-daemon --start --quiet --pidfile ${PIDFILE} --background --name ${NAME} --exec ${INTERPRETER} -- ${DAEMON} ${DAEMON_ARGS}
+			log_end_msg $? || true
+		;;
+	esac
+}
+
+get_pid_from_pidfile() {
+	# retrieve the PID from the current pidfile, after sanity checks
+	# PID output on stdout; return code true or false depending on whether
+	# PID retrieved successfully
+	local PID STATUS
+	PID=""
+	# be pessimistic
+	STATUS=1
+	# sanity check
+	if [ -z ${PIDFILE} ] ; then
+		debugmsg "get_pid_from_pidfile: ERROR: PIDFILE does not contain a value"
+	else
+		read PID < ${PIDFILE}
+		if [ -z "${PID}" ] ; then
+			debugmsg "get_pid_from_pidfile: ERROR: ${PIDFILE} does not contain a pid"
+		else
+			STATUS=0
+		fi
+	fi
+	if [ "x${STATUS}" == "x0" ] ; then
+		debugmsg "get_pid_from_pidfile: SUCCESS: PID=${PID}"
+	fi
+	echo "${PID}"
+	return ${STATUS}
+}
+
+kill_daemon_from_pidlist() {
+	# if at least one waagent daemon process is running, but there is 
+	# no pidfile, or the pidfile is apparently corrupt, kill the daemon
+	# directly from the process list. Avoid killing any non-daemon
+	# waagent processes.
+	# If called with "1" as first argument, use kill -9 rather than
+	# normal kill
+	local i PIDCT FORCE
+	FORCE=0
+	if [ "x${1}" == "x1" ] ; then
+		debugmsg "kill_daemon_from_pidlist: WARNING: using kill -9"
+		FORCE=1
+	fi
+	debugmsg "kill_daemon_from_pidlist: killing daemon using pid(s) in PIDLIST"
+	PIDCT=${#PIDLIST[*]} 
+	if [ "${PIDCT}" -eq 0 ] ; then
+		debugmsg "kill_daemon_from_pidlist: ERROR: no pids in PIDLIST"
+		return 1
+	fi
+	for (( i=0 ; i < ${PIDCT} ; i++ )) ; do
+		debugmsg "kill_daemon_from_pidlist: killing waagent daemon process ${PIDLIST[${i}]}"
+		if [ "x${FORCE}" == "x1" ] ; then
+			kill -9 ${PIDLIST[${i}]}
+		else 
+			kill ${PIDLIST[${i}]}
+		fi
+	done
+	return 0	
+}
+
+kill_daemon_from_pidfile() {
+	# retrieve the pid from the pidfile if possible, and if so, kill
+	# the given process
+	local PID FORCE
+	if [ -z "${PIDFILE}" ] ; then
+		debugmsg "kill_daemon_from_pidfile(): ERROR: no pidfile defined"
+		return 1
+	fi	
+	read PID < ${PIDFILE}
+	if [ -z "${PID}" ] ; then
+		debugmsg "kill_daemon_from_pidfile(): ERROR: ${PIDFILE} empty or unable to be read"
+		return 1
+	fi
+	FORCE=0
+	if [ "x${1}" == "x1" ] ; then
+		debugmsg "kill_daemon_from_pidfile: WARNING: using kill -9"
+		FORCE=1
+	fi
+	debugmsg "kill_daemon_from_pidfile(): killing waagent process ${PID}"
+	if [ "x${FORCE}" == "x1" ] ; then
+		kill -9 ${PID}
+	else
+		kill ${PID}
+	fi
+	return 0
+}
+
+stop_waagent() {
+	# check the current status and if the waagent daemon is running, attempt
+	# to stop it.
+	# start-stop-daemon is avoided here
+	local STATUS PID RC
+	get_status	
+	STATUS=$?
+	debugmsg "stop_waagent: current status = ${STATUS}"
+	case "${STATUS}" in
+		0)
+			# daemon running and pid in pidfile is valid
+			log_daemon_msg "Stopping ${NAME} daemon (using pid in pidfile)"
+			# can't use start-stop-daemon because it won't accept the pidfile, 
+			# and instead will try to stop all python processes
+			# get pid from pidfile, if we've got one
+			PID=$(get_pid_from_pidfile)
+			RC=$?
+			if [ "x${RC}" != "x0" ] ; then
+				debugmsg "stop_waagent: ERROR: unable to get the pid from the pid file"
+				debugmsg "stop_waagent: killing the daemon from process list"
+				kill_daemon_from_pidlist
+			fi
+			# got the pid - kill the process
+			kill_daemon_from_pidfile
+			sleep 5
+			# re-check that it was really killed, and try again if necessary
+			debugmsg "stop_waagent: re-checking status"
+			recheck_status
+		;;
+		1)	
+			# running, but pid and pidfile don't match
+			# - try killing directly from process list
+			debugmsg "waagent running, but process pid and pid in ${PIDFILE} do not match"
+			debugmsg "(maybe waagent was restarted without updating ${PIDFILE})"
+			log_daemon_msg "Stopping ${NAME} daemon (using process list)"
+			kill_daemon_from_pidlist
+			recheck_status
+		;;
+		2)
+			# running, but no pidfile
+			# kill from process list
+			debugmsg "waagent running but no pidfile - killing from process list"
+			log_daemon_msg "Stopping ${NAME} daemon (using process list)"
+			kill_daemon_from_pidlist
+			recheck_status
+		;;
+		3)
+			# not running but pidfile exists - clean up
+			debugmsg "waagent is not running but pidfile exists - removing it"
+			log_daemon_msg "waagent is already stopped"
+			remove_pidfile
+			log_end_msg 0 || true
+		;;
+		4)
+			# not running and no pidfile
+			debugmsg "waagent is not running"
+			log_daemon_msg "waagent is already stopped"
+			log_end_msg 0 || true
+		;;
+		5)
+			# weirdness - call for help
+			debugmsg "ERROR: unable to determine waagent status - manual intervention required"
+			log_daemon_msg "WARNING: unable to determine status of waagent daemon - manual intervention required"
+			log_end_msg 1 || true
+		;;
+	esac
+}
+
+check_daemons() {
+	# check for running waagent daemon processes
+	local ENTRY
+	ps ax |
+	grep "${INTERPRETER}" |
+	grep "${DAEMON}" |
+	grep -- "${DAEMON_ARGS}" |
+	grep -v 'grep' |
+	while read ENTRY ; do
+		debugmsg "check_daemons(): ENTRY='${ENTRY}'"
+	done
+	return 0
+}
+
+create_pidlist() {
+	# initialise the list of waagent daemon processes
+	# NB: there should only be one - both this script and waagent itself
+	# attempt to avoid starting more than one daemon process.
+	# However, we use an array just in case.
+  readarray -t PIDLIST < <( ps ax | 
+   grep "${INTERPRETER}" |
+	 grep "${DAEMON}" |
+	 grep --  "${DAEMON_ARGS}" |
+   grep -v 'grep' |
+   awk '{ print $1 }')
+	if [ "${#PIDLIST[*]}" -eq 0 ] ; then
+		debugmsg "create_pidlist: WARNING: no waagent daemons found"
+	elif [ "${#PIDLIST[*]}" -gt 1 ] ; then
+		debugmsg "create_pidlist: WARNING: multiple waagent daemons running"
+	fi
+	return 0
+}
+
+get_status() {
+	# Check the current status of waagent
+	# Possibilities:
+	# 0 - running, pidfile exists, and pid of process matches that in pidfile
+	# 1 - running, pidfile exists, but pids don't match
+	# 2 - running, but pidfile does not exist
+	# 3 - apparently not running, but pidfile exists
+	# 4 - apparently not running, and no pidfile
+	# 5 - status unclear
+	local FOUND RPID SPID ENTRY STATUS DAEMON_RUNNING PIDCT
+	PIDCT=0
+	DAEMON_RUNNING=
+	SPID=
+	RPID=
+	ENTRY=
+	# assume the worst as the default
+	STATUS=5
+	# if we've got a pidfile, read the pid from it
+	if [ -e ${PIDFILE} ] ; then
+		read SPID < ${PIDFILE}
+	fi
+	# preliminary check:
+	check_daemons
+	create_pidlist
+	# should only be one element in the array  - if more, something's wrong 
+	# (waagent shouldn't allow a daemon to start if one is already running)
+	# However, we use an array just in case.
+	PIDCT=${#PIDLIST[@]}
+	debugmsg "get_status: PIDCT=${PIDCT}"
+	if [ ${PIDCT} -eq 0 ] ; then
+		# not running
+		if [ -z "${SPID}" ] ; then
+			# no pidfile either
+			STATUS=4
+		else
+			# pidfile exists, but daemon not running
+			STATUS=3
+		fi
+	else 
+		# at least one daemon process is running
+		if [ ${PIDCT} -gt 1 ] ; then
+			debugmsg "get_status: WARNING: more than one waagent daemon running"
+			debugmsg "get_status: (should not happen)"
+		else
+			debugmsg "get_status: only one daemon instance running - as expected"
+		fi
+		if [ -z "${SPID}" ] ; then
+			# (but no pidfile)
+			STATUS=2
+		else
+			# running and got pidfile
+			# does SPID match at least one of the running daemons?
+			# (REVISIT: should we do more to cater for possible concurrent daemons?
+			# It should be virtually impossible for them to exist)
+			FOUND=0
+			for (( i=0 ; i <= ${PIDCT} ; i++ )) ; do
+				debugmsg "get_status: checking running daemon process ${PIDLIST[${i}]}"
+				if [ "${PIDLIST[${i}]}" == ${SPID} ] ; then
+					debugmsg "get_status: daemon process ${PIDLIST[${i}]} matches PID in pid file"
+					FOUND=1
+					break
+				fi
+			done
+			if [ "${FOUND}" -eq 1 ] ; then
+				STATUS=0
+			else	
+				# running, and pidfile exists - but no running daemon process
+				# matches the one in the pidfile
+				STATUS=1
+			fi
+		fi
+	fi
+	return ${STATUS}
+}
+
+waagent_status() {
+	# get the current status of the waagent daemon, and return it
+	local STATUS
+	get_status
+	STATUS=$?
+	debugmsg "waagent status = ${STATUS}"
+	case ${STATUS} in 
+		0) 
+			log_daemon_msg "waagent is running and the pid file is valid"
+		;;
+		1) 
+			log_daemon_msg "WARNING: waagent is running, but the pid of the process and the pid in the pidfile do not match"
+		;;
+		2)
+			log_daemon_msg "WARNING: waagent is running but the pidfile does not exist"
+		;;
+		3) 
+			log_daemon_msg "WARNING: waagent is not running but a pidfile exists"
+		;;
+		4) 
+			log_daemon_msg "waagent is not running"
+		;;	
+		5) 
+			log_daemon_msg "ERROR: cannot determine status"
+		;;
+	esac
+	log_end_msg 0 || true
+	return 0
+}
+
+
+#########################################################################
+# MAINLINE
+# Usage: "service [scriptname] [ start | stop | status | restart ] [ debug ]
+# (specifying debug as extra argument enables debugging output)
+#########################################################################
+
+export PATH="${PATH}:+$PATH:}/usr/sbin:/sbin"
+
+declare -a PIDLIST
+
+if [ ! -z "$2" -a "$2" == "debug" ] ; then
+	DEBUG=1
+fi
+
+# pre-check for non-daemon (e.g. console) instances of waagent
+check_non_daemon_instances
+
+case "$1" in
+	start)
+		start_waagent
+	;;
+
+	stop) 
+		stop_waagent
+	;;
+
+	status)
+		waagent_status
+	;;
+
+	restart)
+		stop_waagent
+		start_waagent
+	;;
+
+esac
+exit 0

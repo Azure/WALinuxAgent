@@ -177,6 +177,16 @@ def get_data_files(name, version, fullname):  # pylint: disable=R0912
         set_udev_files(data_files, dest="/lib/udev/rules.d")
         if debian_has_systemd():
             set_systemd_files(data_files, dest=systemd_dir_path)
+    elif name == 'devuan':
+# adding setup clause for devuan - debian without systemd
+        set_files(data_files, dest="/etc/init.d",
+                  src=['init/devuan/walinuxagent'])
+        set_files(data_files, dest="/etc/default",
+                  src=['init/devuan/default/walinuxagent'])
+        set_conf_files(data_files, src=['config/devuan/waagent.conf'])
+        set_logrotate_files(data_files)
+# not sure whether this is relevant for devuan:
+        set_udev_files(data_files, dest="/lib/udev/rules.d")
     elif name == 'iosxe':
         set_conf_files(data_files, src=["config/iosxe/waagent.conf"])
         set_logrotate_files(data_files)
@@ -272,6 +282,9 @@ setuptools.setup(
     install_requires=requires,
     cmdclass={
         'install': install
-    }
+    },
+    # need the following or the startup script isn't created:
+    entry_points={
+        'console_scripts' : ['waagent=azurelinuxagent.agent:main'],
+    },
 )
-
