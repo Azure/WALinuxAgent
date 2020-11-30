@@ -223,10 +223,8 @@ exit({0})
             except Exception:
                 pass
 
-            self.assertEqual(mock_logger.info.call_count, 0)
-            self.assertEqual(mock_logger.verbose.call_count, 0)
-            self.assertEqual(mock_logger.warn.call_count, 0)
-            self.assertEqual(mock_logger.error.call_count, 0)
+            self.assertEqual(mock_logger.warn.call_count, 0, "Did not expect any WARNINGS; Got: {0}".format(mock_logger.warn.call_args))
+            self.assertEqual(mock_logger.error.call_count, 0, "Did not expect any ERRORS; Got: {0}".format(mock_logger.error.call_args))
 
     def test_run_command_it_should_not_log_by_default(self):
         self.__it_should_not_log_by_default(
