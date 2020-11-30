@@ -395,7 +395,7 @@ class TestWireProtocol(AgentTestCase):
             with patch("azurelinuxagent.common.AgentGlobals._MultiConfigFeature.is_supported", False):
                 exthandlers_handler.run()
                 self.assertIsNotNone(protocol.aggregate_status, "Aggregate status should not be None")
-                if not "supportedFeatures" in protocol.aggregate_status:
+                if "supportedFeatures" not in protocol.aggregate_status:
                     # In the case Multi-config was the only feature available, 'supportedFeatures' should not be
                     # reported in the status blob as its not supported as of now.
                     # Asserting no other feature was available
