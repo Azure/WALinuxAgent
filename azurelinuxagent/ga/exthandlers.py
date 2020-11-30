@@ -36,6 +36,7 @@ import azurelinuxagent.common.conf as conf
 import azurelinuxagent.common.logger as logger
 import azurelinuxagent.common.utils.fileutil as fileutil
 import azurelinuxagent.common.version as version
+from azurelinuxagent.common.AgentGlobals import FeatureNames, AgentGlobals
 from azurelinuxagent.common.cgroupconfigurator import CGroupConfigurator
 from azurelinuxagent.common.datacontract import get_properties, set_properties
 from azurelinuxagent.common.errorstate import ErrorState
@@ -80,11 +81,6 @@ _TRUNCATED_SUFFIX = u" ... [TRUNCATED]"
 # Status file specific retries and delays.
 _NUM_OF_STATUS_FILE_RETRIES = 5
 _STATUS_FILE_RETRY_DELAY = 2  # seconds
-
-_ENABLE_EXTENSION_TELEMETRY_PIPELINE = False
-
-def is_extension_telemetry_pipeline_enabled():
-    return _ENABLE_EXTENSION_TELEMETRY_PIPELINE
 
 
 class ValidHandlerStatus(object):  # pylint: disable=R0903
@@ -979,7 +975,7 @@ class ExtHandlerInstance(object):  # pylint: disable=R0904
             conf_dir = self.get_conf_dir()
             fileutil.mkdir(conf_dir, mode=0o700)
 
-            if is_extension_telemetry_pipeline_enabled():
+            if AgentGlobals.get_feature_by_name(FeatureNames.ExtensionTelemetryPipeline).is_supported:
                 fileutil.mkdir(self.get_extension_events_dir(), mode=0o700)
 
             seq_no, status_path = self.get_status_file_path()  # pylint: disable=W0612
@@ -1422,7 +1418,7 @@ class ExtHandlerInstance(object):  # pylint: disable=R0904
                 HandlerEnvironment.heartbeatFile: self.get_heartbeat_file() 
             }
 
-        if is_extension_telemetry_pipeline_enabled():
+        if AgentGlobals.get_feature_by_name(FeatureNames.ExtensionTelemetryPipeline).is_supported:
             handler_env[HandlerEnvironment.eventsFolder] = self.get_extension_events_dir()
 
         env = [{

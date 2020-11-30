@@ -386,15 +386,16 @@ def vm_status_to_v1(vm_status, ext_statuses):
         'guestOSInfo': v1_ga_guest_info
     }
 
-    if AgentGlobals.get_supported_features():
-        supported_features = []
-        for key, val in AgentGlobals.get_supported_features().items():
+    supported_features = []
+    for _, feature in AgentGlobals.get_crp_supported_features().items():
+        if feature.is_supported:
             supported_features.append(
                 {
-                    "Key": key,
-                    "Value": val
+                    "Key": feature.name,
+                    "Value": feature.version
                 }
             )
+    if supported_features:
         v1_vm_status["supportedFeatures"] = supported_features
 
     return v1_vm_status

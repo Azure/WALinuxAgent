@@ -30,7 +30,6 @@ import time
 import traceback
 import uuid
 import zipfile
-
 from datetime import datetime, timedelta
 
 import azurelinuxagent.common.conf as conf
@@ -38,28 +37,25 @@ import azurelinuxagent.common.logger as logger
 import azurelinuxagent.common.utils.fileutil as fileutil
 import azurelinuxagent.common.utils.restutil as restutil
 import azurelinuxagent.common.utils.textutil as textutil
+from azurelinuxagent.common.AgentGlobals import AgentGlobals, FeatureNames
 from azurelinuxagent.common.cgroupapi import CGroupsApi
 from azurelinuxagent.common.cgroupconfigurator import CGroupConfigurator
-
 from azurelinuxagent.common.event import add_event, initialize_event_logger_vminfo_common_parameters, \
     elapsed_milliseconds, WALAEventOperation, EVENTS_DIRECTORY
 from azurelinuxagent.common.exception import ResourceGoneError, UpdateError
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.osutil import get_osutil
-from azurelinuxagent.common.protocol.util import get_protocol_util
 from azurelinuxagent.common.protocol.hostplugin import HostPluginProtocol
+from azurelinuxagent.common.protocol.util import get_protocol_util
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
-from azurelinuxagent.common.version import AGENT_NAME, AGENT_VERSION, AGENT_DIR_PATTERN, CURRENT_AGENT,\
+from azurelinuxagent.common.version import AGENT_NAME, AGENT_VERSION, AGENT_DIR_PATTERN, CURRENT_AGENT, \
     CURRENT_VERSION, DISTRO_NAME, DISTRO_VERSION, is_current_agent_installed, get_lis_version, \
     has_logrotate, PY_VERSION_MAJOR, PY_VERSION_MINOR, PY_VERSION_MICRO
 from azurelinuxagent.ga.collect_logs import get_collect_logs_handler, is_log_collection_allowed
-from azurelinuxagent.ga.env import get_env_handler
 from azurelinuxagent.ga.collect_telemetry_events import get_collect_telemetry_events_handler
-
-from azurelinuxagent.ga.exthandlers import HandlerManifest, get_traceback, ExtHandlersHandler, list_agent_lib_directory, \
-    is_extension_telemetry_pipeline_enabled
+from azurelinuxagent.ga.env import get_env_handler
+from azurelinuxagent.ga.exthandlers import HandlerManifest, get_traceback, ExtHandlersHandler, list_agent_lib_directory
 from azurelinuxagent.ga.monitor import get_monitor_handler
-
 # pylint: disable=C0302
 from azurelinuxagent.ga.send_telemetry_events import get_send_telemetry_events_handler
 
@@ -819,7 +815,7 @@ class UpdateHandler(object):  # pylint: disable=R0902
                 continue
 
         try:
-            if not is_extension_telemetry_pipeline_enabled():
+            if not AgentGlobals.get_feature_by_name(FeatureNames.ExtensionTelemetryPipeline).is_supported:
                 # If extension telemetry pipeline is disabled, ensure we delete all existing extension events directory
                 # because the agent will not be listening on those events.
                 extension_event_dirs = glob.glob(os.path.join(conf.get_ext_log_dir(), "*", EVENTS_DIRECTORY))

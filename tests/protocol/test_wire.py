@@ -27,7 +27,7 @@ import uuid
 from datetime import datetime, timedelta
 
 from azurelinuxagent.common import conf
-from azurelinuxagent.common.AgentGlobals import AgentGlobals
+from azurelinuxagent.common.AgentGlobals import AgentGlobals, FeatureNames
 from azurelinuxagent.common.exception import ResourceGoneError, ProtocolError, \
     ExtensionDownloadError, HttpError
 from azurelinuxagent.common.protocol.goal_state import ExtensionsConfig
@@ -383,7 +383,7 @@ class TestWireProtocol(AgentTestCase):
                 exthandlers_handler.run()
                 self.assertIsNotNone(protocol.aggregate_status, "Aggregate status should not be None")
                 self.assertIn("supportedFeatures", protocol.aggregate_status, "supported features not reported")
-                multi_config_feature = AgentGlobals.get_multi_config_feature()
+                multi_config_feature = AgentGlobals.get_feature_by_name(FeatureNames.MultiConfig)
                 found = False
                 for feature in protocol.aggregate_status['supportedFeatures']:
                     if feature['Key'] == multi_config_feature.name and feature['Value'] == multi_config_feature.version:
@@ -391,12 +391,26 @@ class TestWireProtocol(AgentTestCase):
                         break
                 self.assertTrue(found, "Multi-config name should be present in supportedFeatures")
 
-            # No features should be reported if no features present
-            with patch.object(AgentGlobals, "get_supported_features", return_value={}):
+            # Feature should not be reported if not present
+            with patch("azurelinuxagent.common.AgentGlobals._MultiConfigFeature.is_supported", False):
                 exthandlers_handler.run()
                 self.assertIsNotNone(protocol.aggregate_status, "Aggregate status should not be None")
-                self.assertNotIn("supportedFeatures", protocol.aggregate_status,
-                                 "supported features should not be reported")
+                if not "supportedFeatures" in protocol.aggregate_status:
+                    # In the case Multi-config was the only feature available, 'supportedFeatures' should not be
+                    # reported in the status blob as its not supported as of now.
+                    # Asserting no other feature was available
+                    self.assertEqual(1, len(AgentGlobals.get_crp_supported_features()),
+                                     "supportedFeatures should be available if there are more features")
+                    return
+
+                # If there are other features available, confirm MultiConfig was not reported
+                multi_config_feature = AgentGlobals.get_feature_by_name(FeatureNames.MultiConfig)
+                found = False
+                for feature in protocol.aggregate_status['supportedFeatures']:
+                    if feature['Key'] == multi_config_feature.name and feature['Value'] == multi_config_feature.version:
+                        found = True
+                        break
+                self.assertFalse(found, "Multi-config name should be present in supportedFeatures")
 
     @patch("azurelinuxagent.common.utils.restutil.http_request")
     def test_send_event(self, mock_http_request, *args):

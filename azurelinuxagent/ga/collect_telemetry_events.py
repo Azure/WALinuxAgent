@@ -26,6 +26,7 @@ from collections import defaultdict
 
 import azurelinuxagent.common.logger as logger
 from azurelinuxagent.common import conf
+from azurelinuxagent.common.AgentGlobals import AgentGlobals, FeatureNames
 from azurelinuxagent.common.event import EVENTS_DIRECTORY, TELEMETRY_LOG_EVENT_ID, \
     TELEMETRY_LOG_PROVIDER_ID, add_event, WALAEventOperation, add_log_event, get_event_logger, \
     CollectOrReportEventDebugInfo, EVENT_FILE_REGEX, parse_event
@@ -34,7 +35,7 @@ from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.interfaces import ThreadHandlerInterface
 from azurelinuxagent.common.telemetryevent import TelemetryEvent, TelemetryEventParam, \
     GuestAgentGenericLogsSchema, GuestAgentExtensionEventsSchema
-from azurelinuxagent.ga.exthandlers import HANDLER_NAME_PATTERN, is_extension_telemetry_pipeline_enabled
+from azurelinuxagent.ga.exthandlers import HANDLER_NAME_PATTERN
 from azurelinuxagent.ga.periodic_operation import PeriodicOperation
 
 
@@ -562,9 +563,9 @@ class CollectTelemetryEventsHandler(ThreadHandlerInterface):
             _CollectAndEnqueueEventsPeriodicOperation(self._send_telemetry_events_handler)
         ]
 
-        logger.info("Extension Telemetry pipeline enabled: {0}".format(
-            is_extension_telemetry_pipeline_enabled()))
-        if is_extension_telemetry_pipeline_enabled():
+        etp_feature = AgentGlobals.get_feature_by_name(FeatureNames.ExtensionTelemetryPipeline)
+        logger.info("Extension Telemetry pipeline enabled: {0}".format(etp_feature.is_supported))
+        if etp_feature.is_supported:
             periodic_operations.append(_ProcessExtensionEventsPeriodicOperation(self._send_telemetry_events_handler))
 
         logger.info("Successfully started the {0} thread".format(self.get_thread_name()))

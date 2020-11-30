@@ -1569,7 +1569,7 @@ class TestUpdate(UpdateTestCase):  # pylint: disable=too-many-public-methods
 
             # Rerun the update handler and ensure that the HandlerEnvironment file is recreated with eventsFolder
             # flag in HandlerEnvironment.json file
-            with patch('azurelinuxagent.ga.exthandlers.is_extension_telemetry_pipeline_enabled', return_value=True):
+            with patch("azurelinuxagent.common.AgentGlobals._ExtensionTelemetryPipelineFeature.is_supported", True):
                 update_handler.set_iterations(1)
                 update_handler.run(debug=True)
 
@@ -1585,7 +1585,7 @@ class TestUpdate(UpdateTestCase):  # pylint: disable=too-many-public-methods
     def _setup_test_for_ext_event_dirs_retention(self):
         try:
             with self._get_update_handler(test_data=DATA_FILE_MULTIPLE_EXT) as (update_handler, protocol):
-                with patch('azurelinuxagent.ga.exthandlers._ENABLE_EXTENSION_TELEMETRY_PIPELINE', True):
+                with patch("azurelinuxagent.common.AgentGlobals._ExtensionTelemetryPipelineFeature.is_supported", True):
                     update_handler.run(debug=True)
                     expected_events_dirs = glob.glob(os.path.join(conf.get_ext_log_dir(), "*", EVENTS_DIRECTORY))
                     no_of_extensions = protocol.mock_wire_data.get_no_of_plugins_in_extension_config()
@@ -1605,7 +1605,7 @@ class TestUpdate(UpdateTestCase):  # pylint: disable=too-many-public-methods
     def test_it_should_delete_extension_events_directory_if_extension_telemetry_pipeline_disabled(self):
         # Disable extension telemetry pipeline and ensure events directory got deleted
         with self._setup_test_for_ext_event_dirs_retention() as (update_handler, expected_events_dirs):
-            with patch('azurelinuxagent.ga.exthandlers._ENABLE_EXTENSION_TELEMETRY_PIPELINE', False):
+            with patch("azurelinuxagent.common.AgentGlobals._ExtensionTelemetryPipelineFeature.is_supported", False):
                 update_handler.run(debug=True)
                 for ext_dir in expected_events_dirs:
                     self.assertFalse(os.path.exists(ext_dir), "Extension directory {0} still exists!".format(ext_dir))

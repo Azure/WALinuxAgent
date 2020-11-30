@@ -17,6 +17,16 @@
 # Requires Python 2.6+ and Openssl 1.0+
 
 
+# too-few-public-methods<R0903> Disabled: This class is used as an Enum
+class FeatureNames(object):  # pylint: disable=R0903
+    """
+    Enum for defining the Feature Names for all internal and CRP features
+    """
+    MultiConfig = "MultipleExtensionsPerHandler"
+    ExtensionTelemetryPipeline = "ExtensionTelemetryPipeline"
+
+
+
 class AgentFeature(object):
     """
     Interface for defining new features that the Linux Guest Agent supports
@@ -42,7 +52,7 @@ class AgentFeature(object):
 
 class _MultiConfigFeature(AgentFeature):
 
-    __NAME = "MultipleExtensionsPerHandler"
+    __NAME = FeatureNames.MultiConfig
     __VERSION = "1.0"
     __SUPPORTED = False
 
@@ -50,6 +60,16 @@ class _MultiConfigFeature(AgentFeature):
         super(_MultiConfigFeature, self).__init__(name=_MultiConfigFeature.__NAME,
                                                   version=_MultiConfigFeature.__VERSION,
                                                   supported=_MultiConfigFeature.__SUPPORTED)
+
+
+class _ExtensionTelemetryPipelineFeature(AgentFeature):
+
+    __NAME = FeatureNames.ExtensionTelemetryPipeline
+    __SUPPORTED = False
+
+    def __init__(self):
+        super(_ExtensionTelemetryPipelineFeature, self).__init__(name=_ExtensionTelemetryPipelineFeature.__NAME,
+                                                                 supported=_ExtensionTelemetryPipelineFeature.__SUPPORTED)
 
 
 class AgentGlobals(object):
@@ -63,33 +83,34 @@ class AgentGlobals(object):
     #
     _container_id = "00000000-0000-0000-0000-000000000000"
 
-    # Feature List
-    __multi_config_feature = _MultiConfigFeature()
+    # Features that we need to report to CRP in the status blob if we support them (Eg: MultiConfig)
+    __crp_supported_features = {
+        FeatureNames.MultiConfig: _MultiConfigFeature()
+    }
+
+    # Features that we use internally in the Guest Agent (Eg: ExtensionTelemetryPipeline)
+    __internal_features = {
+        FeatureNames.ExtensionTelemetryPipeline: _ExtensionTelemetryPipelineFeature()
+    }
 
     @staticmethod
-    def get_multi_config_feature():
-        return AgentGlobals.__multi_config_feature
+    def get_feature_by_name(feature_name):
+        if feature_name in AgentGlobals.__internal_features:
+            return AgentGlobals.__internal_features[feature_name]
+
+        if feature_name in AgentGlobals.__crp_supported_features:
+            return AgentGlobals.__crp_supported_features[feature_name]
+
+        raise NotImplementedError("Feature with Name: {0} not found".format(feature_name))
 
     @staticmethod
-    def get_supported_features():
+    def get_crp_supported_features():
         """
         List of features that the GuestAgent currently supports (like FastTrack, MultiConfig, etc).
-        We need to send this list as part of Status reporting to inform CRP of all the features it supports.
-        :return: Dict containing all supported features. Empty dict if no features supported
-        Eg:
-            {
-                "MultipleExtensionsPerHandler": "1.0",
-                "FastTrack": "1.0"
-            }
+        We need to send this list as part of Status reporting to inform CRP of all the features the agent supports.
+        :return: Dict containing all CRP supported features by their names
         """
-
-        supported_features = dict()
-
-        multi_config = AgentGlobals.get_multi_config_feature()
-        if multi_config.is_supported:
-            supported_features[multi_config.name] = multi_config.version
-
-        return supported_features
+        return AgentGlobals.__crp_supported_features
 
     @staticmethod
     def get_container_id():
