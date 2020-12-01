@@ -78,6 +78,13 @@ class VMAgentManifestList(DataContract):  # pylint: disable=R0903
         self.vmAgentManifests = DataContractList(VMAgentManifest)  # pylint: disable=C0103
 
 
+class RequiredFeature(DataContract):
+    def __init__(self, name, value=None):
+        self.name = name
+        # As per the docs, this is a reserved field and not currently in use.
+        self.value = value
+
+
 class Extension(DataContract):  # pylint: disable=R0903
     def __init__(self,  # pylint: disable=R0913
                  name=None,

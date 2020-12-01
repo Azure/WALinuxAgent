@@ -29,7 +29,7 @@ from azurelinuxagent.common.exception import ProtocolError
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.protocol.restapi import Cert, CertList, Extension, ExtHandler, ExtHandlerList, \
     ExtHandlerVersionUri, RemoteAccessUser, RemoteAccessUsersList, \
-    VMAgentManifest, VMAgentManifestList, VMAgentManifestUri
+    VMAgentManifest, VMAgentManifestList, VMAgentManifestUri, RequiredFeature
 from azurelinuxagent.common.utils import fileutil
 from azurelinuxagent.common.utils.cryptutil import CryptUtil
 from azurelinuxagent.common.utils.textutil import parse_doc, findall, find, findtext, getattrib, gettext
@@ -293,6 +293,7 @@ class ExtensionsConfig(object):  # pylint: disable=R0903
         self.status_upload_blob = None
         self.status_upload_blob_type = None
         self.artifacts_profile_blob = None
+        self.required_features = []
 
         if xml_text is None:
             return
@@ -317,6 +318,10 @@ class ExtensionsConfig(object):  # pylint: disable=R0903
         plugins = findall(plugins_list, "Plugin")
         plugin_settings_list = find(xml_doc, "PluginSettings")
         plugin_settings = findall(plugin_settings_list, "Plugin")
+        required_features_list = find(xml_doc, "RequiredFeatures")
+
+        if required_features_list is not None:
+            self._parse_required_features(required_features_list)
 
         for plugin in plugins:
             ext_handler = ExtensionsConfig._parse_plugin(plugin)
@@ -329,6 +334,12 @@ class ExtensionsConfig(object):  # pylint: disable=R0903
         status_upload_node = find(xml_doc, "StatusUploadBlob")
         self.status_upload_blob_type = getattrib(status_upload_node, "statusBlobType")
         logger.verbose("Extension config shows status blob type as [{0}]", self.status_upload_blob_type)
+
+    def _parse_required_features(self, required_features_list):
+        for required_feature in findall(required_features_list, "RequiredFeature"):
+            feature_name = find(required_feature, "Name")
+            feature_value = find(required_feature, "Value")
+            self.required_features.append(RequiredFeature(name=feature_name, value=feature_value))
 
     @staticmethod
     def _parse_plugin(plugin):

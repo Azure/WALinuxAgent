@@ -286,6 +286,7 @@ class ExtHandlersHandler(object):
 
             if self._extension_processing_allowed() and self._incarnation_changed(etag):
                 logger.info("ProcessGoalState started [incarnation {0}]".format(etag))
+                # Verify we satisfy all required features, if any. If not, report failure here itself, no need to process anything further.
                 self.handle_ext_handlers(etag)
                 self.last_etag = etag
 
