@@ -168,16 +168,16 @@ exit({0})
 
     def test_run_pipe_should_execute_a_pipe_with_more_than_two_commands(self):
         #
-        # The test pipe splits the output of "ls" in lines and count the number of lines.
+        # The test pipe splits the output of "ls" in lines and then greps for "."
         #
-        # Sample output of "ls":
+        # Sample output of "ls -d .":
         #     drwxrwxr-x 13 nam nam 4096 Nov 13 16:54 .
         #
-        pipe = [["ls", "-ld", "."], ["sed", "s/ /\\n/g"], ["wc", "-l"]]
+        pipe = [["ls", "-ld", "."], ["sed", "-r", "s/\\s+/\\n/g"], ["grep", "\\."]]
 
         output = shellutil.run_pipe(pipe)
 
-        self.assertEqual(int(output), 9)
+        self.assertEqual(".\n", output, "The pipe did not produce the expected output. Got: {0}".format(output))
 
     def __it_should_raise_an_exception_when_the_command_fails(self, action):
         with self.assertRaises(shellutil.CommandError) as context_manager:
