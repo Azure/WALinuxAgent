@@ -106,7 +106,10 @@ class RedhatOSUtil(Redhat6xOSUtil):
         to hostname.
         """
         hostnamectl_cmd = ['hostnamectl', 'set-hostname', hostname, '--static']
-        if self._run_command_without_raising(hostnamectl_cmd, log_error=False) != 0:
+
+        try:
+            shellutil.run_command(hostnamectl_cmd, log_error=False)
+        except shellutil.CommandError:
             logger.warn("[{0}] failed, attempting fallback".format(' '.join(hostnamectl_cmd)))
             DefaultOSUtil.set_hostname(self, hostname)
 
