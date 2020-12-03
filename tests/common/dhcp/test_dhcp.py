@@ -15,10 +15,11 @@
 # Requires Python 2.6+ and Openssl 1.0+
 #
 
+import os
 import mock
 import azurelinuxagent.common.dhcp as dhcp
 import azurelinuxagent.common.osutil.default as osutil
-from tests.tools import AgentTestCase, open_patch, patch
+from tests.tools import AgentTestCase, open_patch, patch, skip_if_predicate_true
 
 
 class TestDHCP(AgentTestCase):
@@ -57,6 +58,7 @@ class TestDHCP(AgentTestCase):
         self.assertTrue(dhcp_handler.routes is None)
         self.assertTrue(dhcp_handler.gateway is None)
 
+    @skip_if_predicate_true(lambda: "AZUREIMAGE" in os.environ, "This test is running on Azure pipeline and should be skipped")
     def test_wireserver_route_not_exists(self):
         # setup
         dhcp_handler = dhcp.get_dhcp_handler()
@@ -84,6 +86,7 @@ class TestDHCP(AgentTestCase):
             self.assertTrue(dhcp_handler.dhcp_cache_exists)
             self.assertEqual(dhcp_handler.endpoint, "foo")
 
+    @skip_if_predicate_true(lambda: "AZUREIMAGE" in os.environ, "This test is running on Azure pipeline and should be skipped")
     def test_dhcp_skip_cache(self):
         handler = dhcp.get_dhcp_handler()
         handler.osutil = osutil.DefaultOSUtil()
@@ -99,9 +102,9 @@ class TestDHCP(AgentTestCase):
                     # endpoint comes from cache
                     self.assertFalse(handler.skip_cache)
                     handler.run()
-                    self.assertTrue(patch_dhcp_cache.call_count == 1)
-                    self.assertTrue(patch_dhcp_send.call_count == 0)
-                    self.assertTrue(handler.endpoint == endpoint)
+                    self.assertEqual(patch_dhcp_cache.call_count, 1)
+                    self.assertEqual(patch_dhcp_send.call_count, 0)
+                    self.assertEqual(handler.endpoint, endpoint)
 
                     # reset
                     handler.skip_cache = True
@@ -110,5 +113,5 @@ class TestDHCP(AgentTestCase):
                     # endpoint comes from dhcp request
                     self.assertTrue(handler.skip_cache)
                     handler.run()
-                    self.assertTrue(patch_dhcp_cache.call_count == 1)
-                    self.assertTrue(patch_dhcp_send.call_count == 1)
+                    self.assertEqual(patch_dhcp_cache.call_count, 1)
+                    self.assertEqual(patch_dhcp_send.call_count, 1)
