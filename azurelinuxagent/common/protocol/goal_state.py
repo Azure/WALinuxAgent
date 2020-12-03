@@ -290,7 +290,7 @@ class ExtensionsConfig(object):  # pylint: disable=R0903
         self.xml_text = xml_text
         self.ext_handlers = ExtHandlerList()
         self.vmagent_manifests = VMAgentManifestList()
-        self.in_vm_metadata = InVMGoalStateMetaData()
+        self.in_vm_gs_metadata = InVMGoalStateMetaData()
         self.status_upload_blob = None
         self.status_upload_blob_type = None
         self.artifacts_profile_blob = None
@@ -331,7 +331,7 @@ class ExtensionsConfig(object):  # pylint: disable=R0903
         self.status_upload_blob_type = getattrib(status_upload_node, "statusBlobType")
         logger.verbose("Extension config shows status blob type as [{0}]", self.status_upload_blob_type)
 
-        self.in_vm_metadata.parse_node(find(xml_doc, "InVMGoalStateMetaData"))
+        self.in_vm_gs_metadata.parse_node(find(xml_doc, "InVMGoalStateMetaData"))
 
     @staticmethod
     def _parse_plugin(plugin):

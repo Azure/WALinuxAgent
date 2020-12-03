@@ -278,8 +278,8 @@ class ExtHandlersHandler(object):
     def get_activity_and_correlation_id(self):
 
         def check_empty(value): return value if value else "NA"
-        in_vm_metadata = self.protocol.get_in_vm_metadata()
-        return check_empty(in_vm_metadata.activity_id), check_empty(in_vm_metadata.correlation_id)
+        in_vm_gs_metadata = self.protocol.get_in_vm_gs_metadata()
+        return check_empty(in_vm_gs_metadata.activity_id), check_empty(in_vm_gs_metadata.correlation_id)
 
     def run(self):
 

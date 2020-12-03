@@ -122,8 +122,8 @@ class WireProtocol(DataContract):
     def get_incarnation(self):
         return self.client.get_goal_state().incarnation
 
-    def get_in_vm_metadata(self):
-        return self.client.get_ext_conf().in_vm_metadata
+    def get_in_vm_gs_metadata(self):
+        return self.client.get_ext_conf().in_vm_gs_metadata
 
     def get_vmagent_manifests(self):
         goal_state = self.client.get_goal_state()
