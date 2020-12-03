@@ -1,0 +1,138 @@
+# Python package
+# Create and test a Python package on multiple Python versions.
+# Add steps that analyze code, save the dist with the build record, publish to a PyPI-compatible index, and more:
+# https://docs.microsoft.com/azure/devops/pipelines/languages/python
+
+trigger:
+- main
+- master
+- develop
+
+variables:
+  MIN_COVERAGE_GOAL: 60
+
+strategy:
+  matrix:
+    Python26:
+      python.version: '2.6'
+      NOSEOPTS: "--verbose"
+      SETUPOPTS: ""
+      PYLINTFILES: "azurelinuxagent setup.py makepkg.py tests"
+      AZUREIMAGE: 'ubuntu-16.04'
+    Python27:
+      python.version: '2.7'
+      NOSEOPTS: "--verbose --with-timer"
+      SETUPOPTS: ""
+      PYLINTOPTS: "--rcfile=ci/2.7.pylintrc"
+      PYLINTFILES: "azurelinuxagent setup.py makepkg.py tests"
+      AZUREIMAGE: 'ubuntu-18.04'
+    Python34:
+      python.version: '3.4'
+      NOSEOPTS: "--verbose --with-timer"
+      SETUPOPTS: ""
+      PYLINTOPTS: "--rcfile=ci/2.7.pylintrc"
+      PYLINTFILES: "azurelinuxagent setup.py makepkg.py tests"
+      AZUREIMAGE: 'ubuntu-16.04'
+    Python36:
+      python.version: '3.6'
+      NOSEOPTS: "--verbose --with-timer"
+      SETUPOPTS: ""
+      PYLINTOPTS: "--rcfile=ci/3.6.pylintrc"
+      PYLINTFILES: "azurelinuxagent setup.py makepkg.py tests"
+      AZUREIMAGE: 'ubuntu-18.04'
+    Python37:
+      python.version: '3.7'
+      NOSEOPTS: "--verbose --with-timer"
+      SETUPOPTS: ""
+      PYLINTOPTS: "--rcfile=ci/3.6.pylintrc"
+      PYLINTFILES: "azurelinuxagent setup.py makepkg.py tests"
+      AZUREIMAGE: 'ubuntu-18.04'
+    Python38:
+      python.version: '3.8'
+      NOSEOPTS: "--verbose --with-coverage --with-xunit --xunit-file=nosetests.__uuid__.xml --with-timer --cover-erase --cover-inclusive --cover-branches --cover-package=azurelinuxagent"
+      SETUPOPTS: ""
+      PYLINTOPTS: "--rcfile=ci/3.6.pylintrc"
+      PYLINTFILES: "azurelinuxagent setup.py makepkg.py tests"
+      AZUREIMAGE: 'ubuntu-latest'
+
+pool:
+  vmImage: '$(AZUREIMAGE)'
+
+steps:
+- task: UsePythonVersion@0
+  inputs:
+    versionSpec: '$(python.version)'
+  continueOnError: true
+  displayName: 'Use Python $(python.version)'
+
+- script:  |
+    CURRENT_VERSION=$(python -c 'import sys; print(str(sys.version_info[0])+"."+str(sys.version_info[1]))')
+    if [[ $PYTHON_VERSION == $CURRENT_VERSION ]]; then echo Python $CURRENT_VERSION already installed. Nothing to do; exit 0; fi
+    sudo add-apt-repository ppa:deadsnakes/ppa -y
+    sudo apt-get update -y
+    sudo apt install python$(python.version) python$(python.version)-dev -y
+    sudo ln -sf /usr/bin/python$(python.version) /usr/bin/python
+    PATH="/usr/bin/${PATH:+:${PATH}}"
+    echo $PATH
+    echo "Installed python$(python.version)"
+    python -V
+    curl https://bootstrap.pypa.io/$(python.version)/get-pip.py -o get-pip.py
+    sudo env "PATH=$PATH" python get-pip.py
+  displayName: 'Manual install $(python.version)'
+
+- script: |
+    sudo env "PATH=$PATH" python -m pip install --upgrade pip  || true
+    sudo env "PATH=$PATH" pip install -r requirements.txt
+    sudo env "PATH=$PATH" pip install -r test-requirements.txt
+  displayName: 'Install dependencies'
+
+- script: |
+    echo export NOSEOPTS=\"$(NOSEOPTS)\"
+    echo export SETUPOPTS=\"$(SETUPOPTS)\"
+    echo export PYLINTOPTS=\"$(PYLINTOPTS)\"
+    echo export PYLINTFILES=\"$(PYLINTFILES)\"
+    echo echo PYTHON_VERSION=$PYTHON_VERSION
+    echo bash ./ci/nosetests.sh
+    export NOSEOPTS="$(NOSEOPTS)"
+    export SETUPOPTS="$(SETUPOPTS)"
+    export PYLINTOPTS="$(PYLINTOPTS)"
+    export PYLINTFILES="$(PYLINTFILES)"
+    EXIT_CODE=0
+    bash ./ci/nosetests.sh || EXIT_CODE=$(($EXIT_CODE || $?))
+    if [ ! -z "$SETUPOPTS" ]; then /usr/bin/env python setup.py $SETUPOPTS || EXIT_CODE=$(($EXIT_CODE || $?)); fi
+    exit $EXIT_CODE
+  displayName: 'Run Tests'
+
+- script: |
+    if [[ $PYTHON_VERSION != 3.8 ]]; then echo Skipping code check for python $PYTHON_VERSION; exit 0; fi
+    echo looking for coverage files :; ls -alh | grep -i coverage
+    sudo env "PATH=$PATH" coverage combine coverage.*.data
+    sudo env "PATH=$PATH" coverage xml
+    COVERAGE_PERCENT=$(coverage report | tail -n 1 | rev | cut -d ' ' -f 1 | cut -c 2- | rev)
+    EXIT_code=1
+    echo Codecoverage : $COVERAGE_PERCENT%
+    if [ "$COVERAGE_PERCENT" -eq "$COVERAGE_PERCENT" ] && [ "$COVERAGE_PERCENT" -gt "$MIN_COVERAGE_GOAL" ]; then 
+       echo Pass coverage check.
+      EXIT_CODE=0;
+    else 
+      echo Failed coverage check. Found $COVERAGE_PERCENT%, expected minimum of $MIN_COVERAGE_GOAL%;
+      EXIT_CODE=1;
+    fi
+    echo pylint $PYLINTOPTS --jobs=0 $PYLINTFILES 
+    pylint $PYLINTOPTS --jobs=0 $PYLINTFILES || EXIT_CODE=$(($EXIT_CODE || $?))
+    codecov -t $(CODECOV_TOKEN)
+    exit $EXIT_CODE
+  condition: succeededOrFailed()
+  displayName: 'Run Coverage'
+
+- task: PublishTestResults@2
+  condition: succeededOrFailed()
+  inputs:
+    testResultsFiles: '$(System.DefaultWorkingDirectory)/**/nosetests.*.xml'
+    testRunTitle: 'Publish test results for Python $(python.version)'
+
+- task: PublishCodeCoverageResults@1
+  inputs:
+    codeCoverageTool: Cobertura
+    summaryFileLocation: '$(System.DefaultWorkingDirectory)/**/coverage.xml'
+    testRunTitle: 'Publish test results for Cobertura Python $(python.version)'
