@@ -275,11 +275,21 @@ class ExtHandlersHandler(object):
         # Skip processing if GoalState incarnation did not change
         return self.last_etag != etag
 
-    def get_activity_and_correlation_id(self):
+    def get_goal_state_debug_metadata(self):
+        """
+        This function fetches metadata fetched from the GoalState for better debuggability
+        :return: Tuple (activity_id, correlation_id, gs_created_timestamp) or "NA" for any property that's not available
+        """
 
         def check_empty(value): return value if value not in (None, "") else "NA"
+
         in_vm_gs_metadata = self.protocol.get_in_vm_gs_metadata()
-        return check_empty(in_vm_gs_metadata.activity_id), check_empty(in_vm_gs_metadata.correlation_id)
+        gs_creation_time = check_empty(in_vm_gs_metadata.created_on_ticks)
+        gs_creation_time = gs_creation_time.strftime(
+            logger.Logger.LogTimeFormatInUTC) if gs_creation_time != "NA" else gs_creation_time
+
+        return check_empty(in_vm_gs_metadata.activity_id), check_empty(
+            in_vm_gs_metadata.correlation_id), gs_creation_time
 
     def run(self):
 
@@ -291,12 +301,11 @@ class ExtHandlersHandler(object):
             self.log_report = True
 
             if self._extension_processing_allowed() and self._incarnation_changed(etag):
-                activity_id, correlation_id = self.get_activity_and_correlation_id()
+                activity_id, correlation_id, gs_creation_time = self.get_goal_state_debug_metadata()
 
                 logger.info(
-                    "ProcessGoalState started [Incarnation: {0}; Activity Id: {1}; Correlation Id: {2}]".format(etag,
-                                                                                                                activity_id,
-                                                                                                                correlation_id))
+                    "ProcessGoalState started [Incarnation: {0}; Activity Id: {1}; Correlation Id: {2}; GS Creation Time: {3}]".format(
+                        etag, activity_id, correlation_id, gs_creation_time))
                 self.handle_ext_handlers(etag)
                 self.last_etag = etag
 

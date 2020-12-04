@@ -1304,9 +1304,10 @@ class TestExtension(ExtensionTestCase):
 
         exthandlers_handler.run()
         self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.0.0")
-        activity_id, correlation_id = exthandlers_handler.get_activity_and_correlation_id()
+        activity_id, correlation_id, gs_creation_time = exthandlers_handler.get_goal_state_debug_metadata()
         self.assertEqual(activity_id, "555e551c-600e-4fb4-90ba-8ab8ec28eccc", "Incorrect activity Id")
         self.assertEqual(correlation_id, "400de90b-522e-491f-9d89-ec944661f531", "Incorrect correlation Id")
+        self.assertEqual(gs_creation_time, '2020-11-09T17:48:50.000000Z', "Incorrect GS Creation time")
 
         # If the data is not provided in ExtensionConfig, it should just be None
         test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE)
@@ -1314,9 +1315,10 @@ class TestExtension(ExtensionTestCase):
 
         exthandlers_handler.run()
         self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.0.0")
-        activity_id, correlation_id = exthandlers_handler.get_activity_and_correlation_id()
+        activity_id, correlation_id, gs_creation_time = exthandlers_handler.get_goal_state_debug_metadata()
         self.assertEqual(activity_id, "NA", "Activity Id should be NA")
         self.assertEqual(correlation_id, "NA", "Correlation Id should be NA")
+        self.assertEqual(gs_creation_time, "NA", "GS Creation time should be NA")
 
     def _assert_ext_status(self, report_ext_status, expected_status,
                            expected_seq_no):

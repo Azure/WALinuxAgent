@@ -362,9 +362,9 @@ class UpdateHandler(object):  # pylint: disable=R0902
                     if last_etag != exthandlers_handler.last_etag:
                         self._ensure_readonly_files()
                         duration = elapsed_milliseconds(utc_start)
-                        activity_id, correlation_id = exthandlers_handler.get_activity_and_correlation_id()
-                        msg = 'ProcessGoalState completed [Incarnation: {0}; {1} ms; Activity Id: {2}; Correlation Id: {3}]'.format(
-                            exthandlers_handler.last_etag, duration, activity_id, correlation_id)
+                        activity_id, correlation_id, gs_creation_time = exthandlers_handler.get_goal_state_debug_metadata()
+                        msg = 'ProcessGoalState completed [Incarnation: {0}; {1} ms; Activity Id: {2}; Correlation Id: {3}; GS Creation Time: {4}]'.format(
+                            exthandlers_handler.last_etag, duration, activity_id, correlation_id, gs_creation_time)
                         logger.info(msg)
                         add_event(
                             AGENT_NAME,
