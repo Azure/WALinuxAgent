@@ -381,7 +381,8 @@ class ExtHandlersHandler(object):
 
     def handle_ext_handlers(self, etag=None):
         if not self.ext_handlers.extHandlers:
-            logger.verbose("No extension handler config found")
+            # This is a valid case, some extensions dont have any settings. Just log and exit processing
+            logger.info("No extension handlers found, not processing anything.")
             return
 
         wait_until = datetime.datetime.utcnow() + datetime.timedelta(minutes=_DEFAULT_EXT_TIMEOUT_MINUTES)

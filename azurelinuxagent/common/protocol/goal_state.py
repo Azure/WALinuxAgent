@@ -364,7 +364,9 @@ class ExtensionsConfig(object):  # pylint: disable=R0903
         handler_name = ext_handler.name
         version = ext_handler.properties.version
 
+        def is_not_empty(obj): return obj not in (None, "", [])
         def to_lower(str_to_change): return str_to_change.lower() if str_to_change is not None else None
+
         ext_handler_plugin_settings = [x for x in plugin_settings if to_lower(getattrib(x, "name")) == to_lower(handler_name)]
         if not ext_handler_plugin_settings:
             return
@@ -386,13 +388,13 @@ class ExtensionsConfig(object):  # pylint: disable=R0903
         runtime_settings_nodes = findall(plugin_settings_node, "RuntimeSettings")
         extension_runtime_settings_nodes = findall(plugin_settings_node, "ExtensionRuntimeSettings")
 
-        if runtime_settings_nodes and extension_runtime_settings_nodes:
+        if is_not_empty(runtime_settings_nodes) and is_not_empty(extension_runtime_settings_nodes):
             # There can only be a single RuntimeSettings node or multiple ExtensionRuntimeSettings nodes per Plugin
             msg = "Both RuntimeSettings and ExtensionRuntimeSettings found for the same handler: {0} and version: {1}".format(
                 handler_name, version)
             raise ExtensionConfigError(msg)
 
-        if runtime_settings_nodes:
+        if is_not_empty(runtime_settings_nodes):
             if len(runtime_settings_nodes) > 1:
                 msg = "Multiple RuntimeSettings found for the same handler: {0} and version: {1} (Expected: 1; Available: {2})".format(
                     handler_name, version, len(runtime_settings_nodes))
@@ -400,7 +402,7 @@ class ExtensionsConfig(object):  # pylint: disable=R0903
             # Only Runtime settings available, parse that
             ExtensionsConfig.__parse_runtime_settings(plugin_settings_node, runtime_settings_nodes[0], handler_name,
                                                       ext_handler)
-        else:
+        elif is_not_empty(extension_runtime_settings_nodes):
             # Parse the ExtensionRuntime settings for the given extension
             ExtensionsConfig.__parse_extension_runtime_settings(plugin_settings_node, extension_runtime_settings_nodes,
                                                                 ext_handler)
