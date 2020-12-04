@@ -26,7 +26,6 @@ class FeatureNames(object):  # pylint: disable=R0903
     ExtensionTelemetryPipeline = "ExtensionTelemetryPipeline"
 
 
-
 class AgentFeature(object):
     """
     Interface for defining new features that the Linux Guest Agent supports
