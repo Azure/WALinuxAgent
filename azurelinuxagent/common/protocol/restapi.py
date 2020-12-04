@@ -149,7 +149,7 @@ class InVMGoalStateMetaData(DataContract):  # pylint: disable=R0903
                 # C# ticks is a number of ticks since midnight 0001-01-01 00:00:00 (every tick is 1/10000000 of second)
                 # and UNIX timestamp is number of seconds since beginning of the UNIX epoch (1970-01-01 01:00:00).
                 # This function converts the ticks to datetime object that Python recognises.
-                return datetime.min + timedelta(seconds=int(ticks) / 10 ** 7)
+                return datetime.min + timedelta(seconds=float(ticks) / 10 ** 7)
             except Exception:
                 return None
 

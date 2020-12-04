@@ -1307,7 +1307,7 @@ class TestExtension(ExtensionTestCase):
         activity_id, correlation_id, gs_creation_time = exthandlers_handler.get_goal_state_debug_metadata()
         self.assertEqual(activity_id, "555e551c-600e-4fb4-90ba-8ab8ec28eccc", "Incorrect activity Id")
         self.assertEqual(correlation_id, "400de90b-522e-491f-9d89-ec944661f531", "Incorrect correlation Id")
-        self.assertEqual(gs_creation_time, '2020-11-09T17:48:50.000000Z', "Incorrect GS Creation time")
+        self.assertEqual(gs_creation_time, '2020-11-09T17:48:50.412125Z', "Incorrect GS Creation time")
 
         # If the data is not provided in ExtensionConfig, it should just be None
         test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE)
