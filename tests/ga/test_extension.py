@@ -3068,8 +3068,7 @@ class TestMultiConfigExtensions(ExtensionTestCase):
                 expected_handler = expected_handlers.pop(ext_handler.name)
                 self.assertEqual(expected_handler.state, ext_handler.properties.state)
                 self.assertEqual(expected_handler.version, ext_handler.properties.version)
-                is_invalid, _ = ext_handler.is_invalid_with_reason
-                self.assertEqual(expected_handler.is_invalid, is_invalid)
+                self.assertEqual(expected_handler.is_invalid, ext_handler.is_invalid)
                 self.assertEqual(len(expected_handler.extensions), len(ext_handler.properties.extensions))
 
                 for extension in ext_handler.properties.extensions:

@@ -475,9 +475,8 @@ class ExtHandlersHandler(object):
         ext_handler_i = ExtHandlerInstance(ext_handler, self.protocol)
         try:
             # Ensure the extension config was valid
-            handler_invalid, invalid_reason = ext_handler.is_invalid_with_reason
-            if handler_invalid:
-                raise ExtensionConfigError(invalid_reason)
+            if ext_handler.is_invalid:
+                raise ExtensionConfigError(ext_handler.invalid_reason)
 
             state = ext_handler.properties.state
 

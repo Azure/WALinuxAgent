@@ -116,11 +116,15 @@ class ExtHandler(DataContract):  # pylint: disable=R0903
         self.__invalid_handler_reason = None
 
     @property
-    def is_invalid_with_reason(self):
-        return self.__invalid_handler_reason is not None, self.__invalid_handler_reason
+    def is_invalid(self):
+        return self.__invalid_handler_reason is not None
 
-    @is_invalid_with_reason.setter
-    def is_invalid_with_reason(self, value):
+    @property
+    def invalid_reason(self):
+        return self.__invalid_handler_reason
+
+    @invalid_reason.setter
+    def invalid_reason(self, value):
         self.__invalid_handler_reason = value
 
     def sort_key(self):
