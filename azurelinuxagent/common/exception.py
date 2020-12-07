@@ -83,18 +83,21 @@ class ExtensionOperationError(ExtensionError):
 
 
 class ExtensionUpdateError(ExtensionError):
-    # When failed to update an extension
-    pass
+    """
+    Error raised when failed to update an extension
+    """
 
 
 class ExtensionDownloadError(ExtensionError):
-    # When failed to download and setup an extension
-    pass
+    """
+    Error raised when failed to download and setup an extension
+    """
 
 
 class ExtensionConfigError(ExtensionError):
-    # When extension config file is malformed.
-    pass
+    """
+    Error raised when extension config file is malformed
+    """
 
 
 class ProvisionError(AgentError):
@@ -143,8 +146,9 @@ class ProtocolError(AgentError):
 
 
 class ProtocolNotFoundError(ProtocolError):
-    # Azure protocol endpoint not found
-    pass
+    """
+    Error raised when Azure protocol endpoint not found
+    """
 
 
 class HttpError(AgentError):
@@ -157,8 +161,9 @@ class HttpError(AgentError):
 
 
 class InvalidContainerError(HttpError):
-    # Container id sent in the header is invalid
-    pass
+    """
+    Error raised when Container id sent in the header is invalid
+    """
 
 
 class EventError(AgentError):
