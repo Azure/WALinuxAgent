@@ -18,7 +18,10 @@
 #
 
 import socket
+from datetime import datetime, timedelta
+
 from azurelinuxagent.common.future import ustr
+from azurelinuxagent.common.utils.textutil import getattrib
 from azurelinuxagent.common.version import DISTRO_VERSION, DISTRO_NAME, CURRENT_VERSION
 from azurelinuxagent.common.datacontract import DataContract, DataContractList
 
@@ -123,6 +126,37 @@ class ExtHandler(DataContract):  # pylint: disable=R0903
         if self.properties.state != u"enabled":
             level = (0 - level) - 1
         return level
+
+
+# too-few-public-methods<R0903> Disabled: More public methods are not needed here.
+class InVMGoalStateMetaData(DataContract):  # pylint: disable=R0903
+    """
+    Object for parsing the GoalState MetaData received from CRP
+    Eg: <InVMGoalStateMetaData inSvdSeqNo="2" createdOnTicks="637405409304121230" activityId="555e551c-600e-4fb4-90ba-8ab8ec28eccc" correlationId="400de90b-522e-491f-9d89-ec944661f531" />
+    """
+    def __init__(self):
+        self.in_svd_seq_no = None
+        self.created_on_ticks = None
+        self.activity_id = None
+        self.correlation_id = None
+
+    def parse_node(self, in_vm_metadata_node):
+
+        def __ticks_to_datetime(ticks):
+            if ticks in (None, ""):
+                return None
+            try:
+                # C# ticks is a number of ticks since midnight 0001-01-01 00:00:00 (every tick is 1/10000000 of second)
+                # and UNIX timestamp is number of seconds since beginning of the UNIX epoch (1970-01-01 01:00:00).
+                # This function converts the ticks to datetime object that Python recognises.
+                return datetime.min + timedelta(seconds=float(ticks) / 10 ** 7)
+            except Exception:
+                return None
+
+        self.correlation_id = getattrib(in_vm_metadata_node, "correlationId")
+        self.activity_id = getattrib(in_vm_metadata_node, "activityId")
+        self.created_on_ticks = __ticks_to_datetime(getattrib(in_vm_metadata_node, "createdOnTicks"))
+        self.in_svd_seq_no = getattrib(in_vm_metadata_node, "inSvdSeqNo")
 
 
 class ExtHandlerList(DataContract):  # pylint: disable=R0903
