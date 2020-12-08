@@ -21,13 +21,10 @@ import socket
 import time
 from datetime import datetime, timedelta
 
-
-from azurelinuxagent.common.exception import GoalStateStatusCodes
+from azurelinuxagent.common.datacontract import DataContract, DataContractList
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.utils.textutil import getattrib
 from azurelinuxagent.common.version import DISTRO_VERSION, DISTRO_NAME, CURRENT_VERSION
-from azurelinuxagent.common.datacontract import DataContract, DataContractList
-from azurelinuxagent.ga.exthandlers import GoalStateState
 
 
 class VMInfo(DataContract):  # pylint: disable=R0903
@@ -266,7 +263,7 @@ class VMStatus(DataContract):  # pylint: disable=R0903
 
 
 class GoalStateAggregateStatus(DataContract):
-    def __init__(self, status=GoalStateState.Success, seq_no=-1, message="", code=GoalStateStatusCodes.Success):
+    def __init__(self, status=None, seq_no=-1, message="", code=None):
         self.message = message
         self.in_svd_seq_no = seq_no
         self.status = status

@@ -317,7 +317,7 @@ class ExtHandlersHandler(object):
                     "ProcessGoalState started [Incarnation: {0}; Activity Id: {1}; Correlation Id: {2}; GS Creation Time: {3}]".format(
                         etag, activity_id, correlation_id, gs_creation_time))
 
-                self.__handle_extensions(etag)
+                self.__process_and_handle_extensions(etag)
                 self.last_etag = etag
 
             self.report_ext_handlers_status()
@@ -333,7 +333,7 @@ class ExtHandlersHandler(object):
                       message=detailed_msg)
             return
 
-    def __handle_extensions(self, etag):
+    def __process_and_handle_extensions(self, etag):
         try:
             # Verify we satisfy all required features, if any. If not, report failure here itself, no need to process anything further.
             # if !required_features:
@@ -343,6 +343,7 @@ class ExtHandlersHandler(object):
             # else:
             self.handle_ext_handlers(etag)
             self.__gs_aggregate_status = GoalStateAggregateStatus(status=GoalStateState.Success, seq_no=etag,
+                                                                  code=GoalStateStatusCodes.Success,
                                                                   message="GoalState executed successfully")
         except Exception as error:
             msg = "Unexpected error when processing goal state: {0}; {1}".format(ustr(error), traceback.format_exc())
