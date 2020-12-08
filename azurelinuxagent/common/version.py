@@ -129,6 +129,8 @@ def get_distro():
 
     if os.path.exists("/etc/euleros-release"):
         osinfo[0] = "euleros"
+    if os.path.exists("/etc/mariner-release"):
+        osinfo[0] = "mariner"
 
     # The platform.py lib has issue with detecting BIG-IP linux distribution.
     # Merge the following patch provided by F5.
