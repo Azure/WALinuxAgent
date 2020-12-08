@@ -311,8 +311,8 @@ class ExtensionsConfig(object):  # pylint: disable=R0903
             manifest = VMAgentManifest()
             manifest.family = family
             for uri in uris:
-                manifestUri = VMAgentManifestUri(uri=gettext(uri))  # pylint: disable=C0103
-                manifest.versionsManifestUris.append(manifestUri)
+                manifest_uri = VMAgentManifestUri(uri=gettext(uri))
+                manifest.versionsManifestUris.append(manifest_uri)
             self.vmagent_manifests.vmAgentManifests.append(manifest)
 
         plugins_list = find(xml_doc, "Plugins")

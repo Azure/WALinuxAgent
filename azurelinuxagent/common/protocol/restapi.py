@@ -18,12 +18,16 @@
 #
 
 import socket
+import time
 from datetime import datetime, timedelta
 
+
+from azurelinuxagent.common.exception import GoalStateStatusCodes
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.utils.textutil import getattrib
 from azurelinuxagent.common.version import DISTRO_VERSION, DISTRO_NAME, CURRENT_VERSION
 from azurelinuxagent.common.datacontract import DataContract, DataContractList
+from azurelinuxagent.ga.exthandlers import GoalStateState
 
 
 class VMInfo(DataContract):  # pylint: disable=R0903
@@ -253,11 +257,26 @@ class VMAgentStatus(DataContract):  # pylint: disable=R0903
         self.osname = DISTRO_NAME
         self.osversion = DISTRO_VERSION
         self.extensionHandlers = DataContractList(ExtHandlerStatus)  # pylint: disable=C0103
+        self.vm_artifacts_aggregate_status = VMArtifactsAggregateStatus()
 
 
 class VMStatus(DataContract):  # pylint: disable=R0903
     def __init__(self, status, message):
         self.vmAgent = VMAgentStatus(status=status, message=message)  # pylint: disable=C0103
+
+
+class GoalStateAggregateStatus(DataContract):
+    def __init__(self, status=GoalStateState.Success, seq_no=-1, message="", code=GoalStateStatusCodes.Success):
+        self.message = message
+        self.in_svd_seq_no = seq_no
+        self.status = status
+        self.code = code
+        self.utc_timestamp = time.gmtime()
+
+
+class VMArtifactsAggregateStatus(DataContract):
+    def __init__(self):
+        self.goal_state_aggregate_status = GoalStateAggregateStatus()
 
 
 class RemoteAccessUser(DataContract):  # pylint: disable=R0903
