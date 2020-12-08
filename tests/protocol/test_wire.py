@@ -353,9 +353,19 @@ class TestWireProtocol(AgentTestCase):
             'osVersion': DISTRO_VERSION,
             'version': str(CURRENT_VERSION),
         }
+        v1_artifact_aggregate_status = {
+            "goalStateAggregateStatus": {
+                "formattedMessage": {"lang": "en-US", "message": ""},
+                "timestampUTC": timestamp,
+                "inSvdSeqNo": -1,
+                "status": None,
+                "code": None
+            }
+        }
         v1_agg_status = {
             'guestAgentStatus': v1_ga_status,
-            'handlerAggregateStatus': []
+            'handlerAggregateStatus': [],
+            'vmArtifactsAggregateStatus': v1_artifact_aggregate_status
         }
         v1_vm_status = {
             'version': '1.1',
