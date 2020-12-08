@@ -29,7 +29,7 @@ from azurelinuxagent.common.exception import ProtocolError
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.protocol.restapi import Cert, CertList, Extension, ExtHandler, ExtHandlerList, \
     ExtHandlerVersionUri, RemoteAccessUser, RemoteAccessUsersList, \
-    VMAgentManifest, VMAgentManifestList, VMAgentManifestUri, RequiredFeature
+    VMAgentManifest, VMAgentManifestList, VMAgentManifestUri, InVMGoalStateMetaData, RequiredFeature
 from azurelinuxagent.common.utils import fileutil
 from azurelinuxagent.common.utils.cryptutil import CryptUtil
 from azurelinuxagent.common.utils.textutil import parse_doc, findall, find, findtext, getattrib, gettext
@@ -290,6 +290,7 @@ class ExtensionsConfig(object):  # pylint: disable=R0903
         self.xml_text = xml_text
         self.ext_handlers = ExtHandlerList()
         self.vmagent_manifests = VMAgentManifestList()
+        self.in_vm_gs_metadata = InVMGoalStateMetaData()
         self.status_upload_blob = None
         self.status_upload_blob_type = None
         self.artifacts_profile_blob = None
@@ -334,6 +335,8 @@ class ExtensionsConfig(object):  # pylint: disable=R0903
         status_upload_node = find(xml_doc, "StatusUploadBlob")
         self.status_upload_blob_type = getattrib(status_upload_node, "statusBlobType")
         logger.verbose("Extension config shows status blob type as [{0}]", self.status_upload_blob_type)
+
+        self.in_vm_gs_metadata.parse_node(find(xml_doc, "InVMGoalStateMetaData"))
 
     def _parse_required_features(self, required_features_list):
         for required_feature in findall(required_features_list, "RequiredFeature"):
