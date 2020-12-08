@@ -285,7 +285,8 @@ class Certificates(object):  # pylint: disable=R0903
 
 
 # too-few-public-methods<R0903> Disabled: This is just a data object that does not need any public methods
-class ExtensionsConfig(object):  # pylint: disable=R0903
+# too-many-instance-attributes<R0902> Disabled: All relevant fields matching the ExtensionConfig from CRP
+class ExtensionsConfig(object):  # pylint: disable=R0903,R0902
     def __init__(self, xml_text):
         self.xml_text = xml_text
         self.ext_handlers = ExtHandlerList()
