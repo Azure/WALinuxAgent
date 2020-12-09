@@ -853,7 +853,7 @@ class TestHostPlugin(HttpRequestPredicates, AgentTestCase):  # pylint: disable=t
         self.assertEqual(False, actual)
 
 
-class MockResponse:  # pylint: disable=too-few-public-methods
+class MockResponse:
     def __init__(self, body, status_code, reason=''):
         self.body = body
         self.status = status_code

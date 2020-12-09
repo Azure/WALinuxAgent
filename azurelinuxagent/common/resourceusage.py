@@ -30,11 +30,11 @@ PROC_COMM_FILENAME_FORMAT = "/proc/{0}/comm"
 PROC_STATUS_FILENAME_FORMAT = "/proc/{0}/status"
 
 
-class ResourceUsage(object):  # pylint: disable=R0903
+class ResourceUsage(object): 
     pass
 
 
-class MemoryResourceUsage(ResourceUsage):  # pylint: disable=R0903
+class MemoryResourceUsage(ResourceUsage): 
     @staticmethod
     def get_memory_usage_from_proc_statm(process_id):
         proc_pid_rss = 0

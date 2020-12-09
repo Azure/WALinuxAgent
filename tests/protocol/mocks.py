@@ -209,7 +209,7 @@ class HttpRequestPredicates(object):
                                                                  restutil.HOST_PLUGIN_PORT)
 
 
-class MockHttpResponse:  # pylint: disable=too-few-public-methods
+class MockHttpResponse:
     def __init__(self, status, body=''):
         self.body = body
         self.status = status
