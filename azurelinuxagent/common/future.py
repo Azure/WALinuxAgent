@@ -131,3 +131,14 @@ def get_openwrt_platform():
                 if product_matches.group(1) == "OpenWrt":
                     result[0] = "openwrt"
     return result
+
+
+def array_to_string_or_bytes(buffer):
+    # Python 3.9 removed the tostring() method on arrays, the new alias is tobytes()
+    if sys.version_info[0] == 2:
+        return buffer.tostring()
+
+    if sys.version_info[0] == 3 and sys.version_info[1] <= 8:
+        return buffer.tostring()
+
+    return buffer.tobytes()

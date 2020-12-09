@@ -24,6 +24,8 @@ import socket
 import struct
 import time
 
+from azurelinuxagent.common.future import array_to_string_or_bytes
+
 try:
     # WAAgent > 2.1.3
     import azurelinuxagent.common.logger as logger
@@ -287,12 +289,8 @@ class BigIpOSUtil(DefaultOSUtil):
         if retsize == (expected * struct_size):
             logger.warn(('SIOCGIFCONF returned more than {0} up '
                          'network interfaces.'), expected)
-        try:
-            # Python 3.9 removed the tostring() method on arrays, tobytes() is the new alias
-            sock = buff.tostring()
-        except AttributeError:
-            sock = buff.tobytes()  # pylint: disable=no-member
 
+        sock = array_to_string_or_bytes(buff)
         for i in range(0, struct_size * expected, struct_size):
             iface = self._format_single_interface_name(sock, i)
 
