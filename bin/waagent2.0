@@ -2669,7 +2669,7 @@ def GetFirstActiveNetworkInterfaceNonLoopback():
     retsize=(struct.unpack('iL', fcntl.ioctl(s.fileno(), 0x8912, struct.pack('iL',expected*struct_size,buff.buffer_info()[0]))))[0]
     if retsize == (expected*struct_size) :
         Warn('SIOCGIFCONF returned more than ' + str(expected) + ' up network interfaces.')
-    s=buff.tostring()
+    s=buff.tobytes()
     preferred_nic = Config.get("Network.Interface")
     for i in range(0,struct_size*expected,struct_size):
         iface=s[i:i+16].split(b'\0', 1)[0]

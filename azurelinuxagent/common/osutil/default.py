@@ -804,7 +804,7 @@ class DefaultOSUtil(object):  # pylint: disable=R0904
             logger.warn(('SIOCGIFCONF returned more than {0} up '
                          'network interfaces.'), expected)
 
-        ifconf_buff = buff.tostring()
+        ifconf_buff = buff.tobytes()
 
         ifaces = {}
         for i in range(0, array_size, struct_size):

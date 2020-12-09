@@ -287,7 +287,7 @@ class BigIpOSUtil(DefaultOSUtil):
         if retsize == (expected * struct_size):
             logger.warn(('SIOCGIFCONF returned more than {0} up '
                          'network interfaces.'), expected)
-        sock = buff.tostring()
+        sock = buff.tobytes()
         for i in range(0, struct_size * expected, struct_size):
             iface = self._format_single_interface_name(sock, i)
 
