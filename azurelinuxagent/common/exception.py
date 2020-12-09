@@ -231,7 +231,7 @@ class ServiceStoppedError(AgentError):
         super(ServiceStoppedError, self).__init__(msg, inner)
 
 
-class ExtensionErrorCodes(object):  # pylint: disable=R0903
+class ExtensionErrorCodes(object):
     """
     Common Error codes used across by Compute RP for better understanding
     the cause and clarify common occurring errors

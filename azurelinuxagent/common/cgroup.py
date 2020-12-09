@@ -29,12 +29,12 @@ from azurelinuxagent.common.utils import fileutil
 MetricValue = namedtuple('Metric', ['category', 'counter', 'instance', 'value'])
 
 
-class MetricsCategory(object):  # pylint: disable=R0903
+class MetricsCategory(object):
     MEMORY_CATEGORY = "Memory"
     CPU_CATEGORY = "CPU"
 
 
-class MetricsCounter(object):  # pylint: disable=R0903
+class MetricsCounter(object):
     PROCESSOR_PERCENT_TIME = "% Processor Time"
     TOTAL_MEM_USAGE = "Total Memory Usage"
     MAX_MEM_USAGE = "Max Memory Usage"
@@ -43,7 +43,7 @@ class MetricsCounter(object):  # pylint: disable=R0903
 re_user_system_times = re.compile(r'user (\d+)\nsystem (\d+)\n')  # pylint: disable=invalid-name
 
 
-class CGroupContollers(object):  # pylint: disable=R0903
+class CGroupContollers(object):
     CPU = "cpu"
     MEMORY = "memory"
 
