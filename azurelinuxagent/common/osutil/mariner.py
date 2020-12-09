@@ -37,6 +37,7 @@ class MarinerOSUtil(DefaultOSUtil):
     def __init__(self):
         super(MarinerOSUtil, self).__init__()
         self.agent_conf_file_path = '/etc/waagent.conf'
+        self.jit_enabled = True
 
     def is_dhcp_enabled(self):
         return True
