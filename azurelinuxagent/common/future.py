@@ -133,12 +133,12 @@ def get_openwrt_platform():
     return result
 
 
-def array_to_string_or_bytes(buffer):
+def array_to_string_or_bytes(buff):
     # Python 3.9 removed the tostring() method on arrays, the new alias is tobytes()
     if sys.version_info[0] == 2:
-        return buffer.tostring()
+        return buff.tostring()
 
     if sys.version_info[0] == 3 and sys.version_info[1] <= 8:
-        return buffer.tostring()
+        return buff.tostring()
 
-    return buffer.tobytes()
+    return buff.tobytes()
