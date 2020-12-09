@@ -83,11 +83,12 @@ _STATUS_FILE_RETRY_DELAY = 2  # seconds
 
 _ENABLE_EXTENSION_TELEMETRY_PIPELINE = False
 
+
 def is_extension_telemetry_pipeline_enabled():
     return _ENABLE_EXTENSION_TELEMETRY_PIPELINE
 
 
-class ValidHandlerStatus(object):  # pylint: disable=R0903
+class ValidHandlerStatus(object):
     transitioning = "transitioning"
     warning = "warning"
     error = "error"
@@ -98,8 +99,7 @@ class ValidHandlerStatus(object):  # pylint: disable=R0903
 _EXTENSION_TERMINAL_STATUSES = [ValidHandlerStatus.error, ValidHandlerStatus.success]
 
 
-# too-few-public-methods<R0903> Disabled: This class is used as an Enum
-class ExtCommandEnvVariable(object):  # pylint: disable=R0903
+class ExtCommandEnvVariable(object):
     Prefix = "AZURE_GUEST_AGENT"
     DisableReturnCode = "{0}_DISABLE_CMD_EXIT_CODE".format(Prefix)
     UninstallReturnCode = "{0}_UNINSTALL_CMD_EXIT_CODE".format(Prefix)
@@ -228,14 +228,14 @@ def migrate_handler_state():
     return
 
 
-class ExtHandlerState(object):  # pylint: disable=R0903
+class ExtHandlerState(object):
     NotInstalled = "NotInstalled"
     Installed = "Installed"
     Enabled = "Enabled"
     FailedUpgrade = "FailedUpgrade"
 
 
-class ExtensionRequestedState(object):  # pylint: disable=R0903
+class ExtensionRequestedState(object):
     """
     This is the state of the Extension as requested by the Goal State.
     CRP only supports 2 states as of now - Enabled and Uninstall
@@ -1635,7 +1635,7 @@ class ExtHandlerInstance(object):  # pylint: disable=R0904
             return truncated_field, len(truncated_field)
 
 
-class HandlerEnvironment(object):  # pylint: disable=R0903
+class HandlerEnvironment(object):
     # HandlerEnvironment.json schema version
     schemaVersion = 1.0
     fileName = "HandlerEnvironment.json"

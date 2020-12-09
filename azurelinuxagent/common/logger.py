@@ -178,7 +178,7 @@ class Logger(object):
         self.appenders = [appender for appender in self.appenders if not isinstance(appender, ConsoleAppender)]
 
 
-class Appender(object):  # pylint: disable=R0903
+class Appender(object):
     def __init__(self, level):
         self.appender_lock = False
         self.level = level
@@ -187,7 +187,7 @@ class Appender(object):  # pylint: disable=R0903
         pass
 
 
-class ConsoleAppender(Appender):  # pylint: disable=R0903
+class ConsoleAppender(Appender):
     def __init__(self, level, path):
         super(ConsoleAppender, self).__init__(level)
         self.path = path
@@ -201,7 +201,7 @@ class ConsoleAppender(Appender):  # pylint: disable=R0903
                 pass
 
 
-class FileAppender(Appender):  # pylint: disable=R0903
+class FileAppender(Appender):
     def __init__(self, level, path):
         super(FileAppender, self).__init__(level)
         self.path = path
@@ -215,7 +215,7 @@ class FileAppender(Appender):  # pylint: disable=R0903
                 pass
 
 
-class StdoutAppender(Appender):  # pylint: disable=R0903
+class StdoutAppender(Appender):
     def __init__(self, level):  # pylint: disable=W0235
         super(StdoutAppender, self).__init__(level)
 
@@ -227,7 +227,7 @@ class StdoutAppender(Appender):  # pylint: disable=R0903
                 pass
 
 
-class TelemetryAppender(Appender):  # pylint: disable=R0903
+class TelemetryAppender(Appender):
     def __init__(self, level, event_func):
         super(TelemetryAppender, self).__init__(level)
         self.event_func = event_func
@@ -244,7 +244,7 @@ class TelemetryAppender(Appender):  # pylint: disable=R0903
 DEFAULT_LOGGER = Logger()
 
 
-class LogLevel(object):  # pylint: disable=R0903
+class LogLevel(object):
     VERBOSE = 0
     INFO = 1
     WARNING = 2
@@ -257,7 +257,7 @@ class LogLevel(object):  # pylint: disable=R0903
     ]
 
 
-class AppenderType(object):  # pylint: disable=R0903
+class AppenderType(object):
     FILE = 0
     CONSOLE = 1
     STDOUT = 2

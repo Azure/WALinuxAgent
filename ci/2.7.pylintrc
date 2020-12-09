@@ -33,7 +33,6 @@
 # simplifiable-if-statement<R1703>: Used when an if statement can be replaced with 'bool(test)'.
 # singleton-comparison<C0121>: (hi-pri) Used when an expression is compared to singleton values like True, False or None.
 # super-init-not-called<W0231>: (hi-pri) Used when an ancestor class method has an __init__ method which is not called by a derived class.
-# too-few-public-methods<R0903>: Used when class has too few public methods, so be sure it's really worth it.
 # too-many-arguments<R0913>: Used when a function or method takes too many arguments.
 # too-many-branches<R0912>: Used when a function or method has too many branches, making it hard to follow.
 # too-many-instance-attributes<R0902>: Used when class has too many instance attributes, try to reduce this to get a simpler (and so easier to use) class.
@@ -94,7 +93,8 @@ disable=bad-continuation, # Buggy, **REMOVED in pylint-2.6.0**
     useless-object-inheritance, # Used when a class inherit from object, which under python3 is implicit (3+ only)
     duplicate-code, # Indicates that a set of similar lines has been detected among multiple file. TODO: this is on our "fix" list, and is thus left last.
     fixme, # Used when a warning note as FIXME or TODO is detected
-    too-many-locals # Used when a function or method has too many local variables.
+    too-many-locals, # Used when a function or method has too many local variables
+    too-few-public-methods  # Used when class has too few public methods, so be sure it's really worth it
 
 
 # This section controls the duplicate-code error.

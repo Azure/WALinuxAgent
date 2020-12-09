@@ -157,8 +157,7 @@ class GoalState(object):  # pylint: disable=R0902
         return goal_state if goal_state.incarnation != incarnation else None
 
 
-# too-few-public-methods<R0903> Disabled: This is just a data object that does not need any public methods
-class HostingEnv(object):  # pylint: disable=R0903
+class HostingEnv(object):
     def __init__(self, xml_text):
         self.xml_text = xml_text
         xml_doc = parse_doc(xml_text)
@@ -170,14 +169,12 @@ class HostingEnv(object):  # pylint: disable=R0903
         self.deployment_name = getattrib(deployment, "name")
 
 
-# too-few-public-methods<R0903> Disabled: This is just a data object that does not need any public methods
-class SharedConfig(object):  # pylint: disable=R0903
+class SharedConfig(object):
     def __init__(self, xml_text):
         self.xml_text = xml_text
 
 
-# too-few-public-methods<R0903> Disabled: This is just a data object that does not need any public methods
-class Certificates(object):  # pylint: disable=R0903
+class Certificates(object):
     def __init__(self, xml_text):  # pylint: disable=R0912
         self.cert_list = CertList()
 
@@ -284,8 +281,7 @@ class Certificates(object):  # pylint: disable=R0903
         return file_name
 
 
-# too-few-public-methods<R0903> Disabled: This is just a data object that does not need any public methods
-class ExtensionsConfig(object):  # pylint: disable=R0903
+class ExtensionsConfig(object):
     def __init__(self, xml_text):
         self.xml_text = xml_text
         self.ext_handlers = ExtHandlerList()
@@ -410,8 +406,7 @@ class ExtensionsConfig(object):  # pylint: disable=R0903
             ext_handler.properties.extensions.append(ext)
 
 
-# too-few-public-methods<R0903> Disabled: This is just a data object that does not need any public methods
-class RemoteAccess(object):  # pylint: disable=R0903
+class RemoteAccess(object):
     """
     Object containing information about user accounts
     """

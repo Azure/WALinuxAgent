@@ -25,7 +25,7 @@ from azurelinuxagent.pa.provision.default import ProvisionHandler
 from tests.tools import AgentTestCase, Mock, patch
 
 
-class MockDaemonCall(object):  # pylint: disable=too-few-public-methods
+class MockDaemonCall(object):
     def __init__(self, daemon_handler, count):
         self.daemon_handler = daemon_handler
         self.count = count
