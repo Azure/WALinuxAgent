@@ -80,7 +80,7 @@ class SUSEOSUtil(SUSE11OSUtil):
         self._run_command_without_raising(["systemctl", "start", "{}.service".format(self.dhclient_name)],
                                           log_error=False)
 
-    def start_network(self) :
+    def start_network(self):
         self._run_command_without_raising(["systemctl", "start", "network.service"], log_error=False)
 
     def restart_ssh_service(self):
