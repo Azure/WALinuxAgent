@@ -129,6 +129,7 @@ def get_distro():
 
     if os.path.exists("/etc/euleros-release"):
         osinfo[0] = "euleros"
+
     if os.path.exists("/etc/mariner-release"):
         osinfo[0] = "mariner"
 
