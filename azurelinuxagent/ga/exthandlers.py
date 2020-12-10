@@ -83,7 +83,7 @@ _NUM_OF_STATUS_FILE_RETRIES = 5
 _STATUS_FILE_RETRY_DELAY = 2  # seconds
 
 
-class ValidHandlerStatus(object):  # pylint: disable=R0903
+class ValidHandlerStatus(object):
     transitioning = "transitioning"
     warning = "warning"
     error = "error"
@@ -94,8 +94,7 @@ class ValidHandlerStatus(object):  # pylint: disable=R0903
 _EXTENSION_TERMINAL_STATUSES = [ValidHandlerStatus.error, ValidHandlerStatus.success]
 
 
-# too-few-public-methods<R0903> Disabled: This class is used as an Enum
-class ExtCommandEnvVariable(object):  # pylint: disable=R0903
+class ExtCommandEnvVariable(object):
     Prefix = "AZURE_GUEST_AGENT"
     DisableReturnCode = "{0}_DISABLE_CMD_EXIT_CODE".format(Prefix)
     UninstallReturnCode = "{0}_UNINSTALL_CMD_EXIT_CODE".format(Prefix)
@@ -224,14 +223,14 @@ def migrate_handler_state():
     return
 
 
-class ExtHandlerState(object):  # pylint: disable=R0903
+class ExtHandlerState(object):
     NotInstalled = "NotInstalled"
     Installed = "Installed"
     Enabled = "Enabled"
     FailedUpgrade = "FailedUpgrade"
 
 
-class ExtensionRequestedState(object):  # pylint: disable=R0903
+class ExtensionRequestedState(object):
     """
     This is the state of the Extension as requested by the Goal State.
     CRP only supports 2 states as of now - Enabled and Uninstall
@@ -271,6 +270,22 @@ class ExtHandlersHandler(object):
         # Skip processing if GoalState incarnation did not change
         return self.last_etag != etag
 
+    def get_goal_state_debug_metadata(self):
+        """
+        This function fetches metadata fetched from the GoalState for better debuggability
+        :return: Tuple (activity_id, correlation_id, gs_created_timestamp) or "NA" for any property that's not available
+        """
+
+        def check_empty(value): return value if value not in (None, "") else "NA"
+
+        in_vm_gs_metadata = self.protocol.get_in_vm_gs_metadata()
+        gs_creation_time = check_empty(in_vm_gs_metadata.created_on_ticks)
+        gs_creation_time = gs_creation_time.strftime(
+            logger.Logger.LogTimeFormatInUTC) if gs_creation_time != "NA" else gs_creation_time
+
+        return check_empty(in_vm_gs_metadata.activity_id), check_empty(
+            in_vm_gs_metadata.correlation_id), gs_creation_time
+
     def run(self):
 
         try:
@@ -281,15 +296,19 @@ class ExtHandlersHandler(object):
             self.log_report = True
 
             if self._extension_processing_allowed() and self._incarnation_changed(etag):
-                logger.info("ProcessGoalState started [incarnation {0}]".format(etag))
+                activity_id, correlation_id, gs_creation_time = self.get_goal_state_debug_metadata()
+
+                logger.info(
+                    "ProcessGoalState started [Incarnation: {0}; Activity Id: {1}; Correlation Id: {2}; GS Creation Time: {3}]".format(
+                        etag, activity_id, correlation_id, gs_creation_time))
                 self.handle_ext_handlers(etag)
                 self.last_etag = etag
 
             self.report_ext_handlers_status()
             self._cleanup_outdated_handlers()
-        except Exception as e:  # pylint: disable=C0103
-            msg = u"Exception processing extension handlers: {0}".format(ustr(e))
-            detailed_msg = '{0} {1}'.format(msg, traceback.extract_tb(get_traceback(e)))
+        except Exception as error:
+            msg = u"Exception processing extension handlers: {0}".format(ustr(error))
+            detailed_msg = '{0} {1}'.format(msg, traceback.extract_tb(get_traceback(error)))
             logger.warn(msg)
             add_event(AGENT_NAME,
                       version=CURRENT_VERSION,
@@ -1611,7 +1630,7 @@ class ExtHandlerInstance(object):  # pylint: disable=R0904
             return truncated_field, len(truncated_field)
 
 
-class HandlerEnvironment(object):  # pylint: disable=R0903
+class HandlerEnvironment(object):
     # HandlerEnvironment.json schema version
     schemaVersion = 1.0
     fileName = "HandlerEnvironment.json"

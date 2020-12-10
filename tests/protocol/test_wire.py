@@ -1304,7 +1304,7 @@ class UpdateHostPluginFromGoalStateTestCase(AgentTestCase):
                 self.assertEqual(protocol.client.get_shared_conf().xml_text, shared_conf_xml_text)
 
 
-class MockResponse:  # pylint: disable=too-few-public-methods
+class MockResponse:
     def __init__(self, body, status_code, reason=None):
         self.body = body
         self.status = status_code

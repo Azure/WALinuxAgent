@@ -42,7 +42,6 @@
 # singleton-comparison<C0121>: (hi-pri) Used when an expression is compared to singleton values like True, False or None.
 # subprocess-popen-preexec-fn<W1509>: (hi-pri) The preexec_fn parameter is not safe to use in the presence of threads in your application. The child process could deadlock before exec is called.
 # super-init-not-called<W0231>: (hi-pri) Used when an ancestor class method has an __init__ method which is not called by a derived class.
-# too-few-public-methods<R0903>: Used when class has too few public methods, so be sure it's really worth it.
 # too-many-ancestors<R0901>: (hi-pri) Used when class has too many parent classes, try to reduce this to get a simpler (and so easier to use) class.
 # too-many-arguments<R0913>: Used when a function or method takes too many arguments.
 # too-many-branches<R0912>: Used when a function or method has too many branches, making it hard to follow.
@@ -91,7 +90,8 @@ disable=bad-whitespace, # Used when a wrong number of spaces is used around an o
     useless-object-inheritance, # Used when a class inherit from object, which under python3 is implicit
     duplicate-code, # Indicates that a set of similar lines has been detected among multiple file. TODO: this is on our "fix" list, and is thus left last.
     fixme, # Used when a warning note as FIXME or TODO is detected
-    too-many-locals # Used when a function or method has too many local variables.
+    too-many-locals, # Used when a function or method has too many local variables
+    too-few-public-methods  # Used when class has too few public methods, so be sure it's really worth it
 
 # This section controls the duplicate-code error.
 [SIMILARITIES]

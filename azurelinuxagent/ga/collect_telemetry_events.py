@@ -43,8 +43,7 @@ def get_collect_telemetry_events_handler(send_telemetry_events_handler):
     return CollectTelemetryEventsHandler(send_telemetry_events_handler)
 
 
-# too-few-public-methods<R0903> Disabled: This class is used as an Enum
-class ExtensionEventSchema(object):  # pylint: disable=R0903
+class ExtensionEventSchema(object):
     """
     Class for defining the schema for Extension Events.
 
