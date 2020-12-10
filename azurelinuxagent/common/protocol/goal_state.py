@@ -307,61 +307,11 @@ class ExtensionsConfig(object):
             manifest = VMAgentManifest()
             manifest.family = family
             for uri in uris:
-                manifestUri = VMAgentManifestUri(uri=gettext(uri))  # pylint: disable=C0103
-                manifest.versionsManifestUris.append(manifestUri)
+                manifest_uri = VMAgentManifestUri(uri=gettext(uri))
+                manifest.versionsManifestUris.append(manifest_uri)
             self.vmagent_manifests.vmAgentManifests.append(manifest)
 
-        plugins_list = find(xml_doc, "Plugins")
-        plugins = findall(plugins_list, "Plugin")
-        plugin_settings_list = find(xml_doc, "PluginSettings")
-        plugin_settings = findall(plugin_settings_list, "Plugin")
-
-        for plugin in plugins:
-            """
-            Sample ExtensionConfig Plugin and PluginSettings:
-            <Plugins>
-              <Plugin name="Microsoft.CPlat.Core.NullSeqB" version="2.0.1" location="https://zrdfepirv2cbn04prdstr01a.blob.core.windows.net/f72653efd9e349ed9842c8b99e4c1712/Microsoft.CPlat.Core_NullSeqB_useast2euap_manifest.xml" state="enabled" autoUpgrade="false" failoverlocation="https://zrdfepirv2cbz06prdstr01a.blob.core.windows.net/f72653efd9e349ed9842c8b99e4c1712/Microsoft.CPlat.Core_NullSeqB_useast2euap_manifest.xml" runAsStartupTask="false" isJson="true" useExactVersion="true" />
-              <Plugin name="Microsoft.CPlat.Core.NullSeqA" version="2.0.1" location="https://zrdfepirv2cbn04prdstr01a.blob.core.windows.net/f72653efd9e349ed9842c8b99e4c1712/Microsoft.CPlat.Core_NullSeqA_useast2euap_manifest.xml" state="enabled" autoUpgrade="false" failoverlocation="https://zrdfepirv2cbn06prdstr01a.blob.core.windows.net/f72653efd9e349ed9842c8b99e4c1712/Microsoft.CPlat.Core_NullSeqA_useast2euap_manifest.xml" runAsStartupTask="false" isJson="true" useExactVersion="true" />
-            </Plugins>
-            <PluginSettings>
-              <Plugin name="Microsoft.CPlat.Core.NullSeqA" version="2.0.1">
-                <DependsOn dependencyLevel="1">
-                  <DependsOnExtension handler="Microsoft.CPlat.Core.NullSeqB" />
-                </DependsOn>
-                <RuntimeSettings seqNo="0">{
-                  "runtimeSettings": [
-                    {
-                      "handlerSettings": {
-                        "publicSettings": {"01_add_extensions_with_dependency":"ff2a3da6-8e12-4ab6-a4ca-4e3a473ab385"}
-                      }
-                    }
-                  ]
-                }
-                </RuntimeSettings>
-              </Plugin>
-              <Plugin name="Microsoft.CPlat.Core.NullSeqB" version="2.0.1">
-                <RuntimeSettings seqNo="0">{
-                  "runtimeSettings": [
-                    {
-                      "handlerSettings": {
-                        "publicSettings": {"01_add_extensions_with_dependency":"2e837740-cf7e-4528-b3a4-241002618f05"}
-                      }
-                    }
-                  ]
-                }
-                </RuntimeSettings>
-              </Plugin>
-            </PluginSettings>
-            """
-
-            ext_handler = ExtHandler()
-            try:
-                ExtensionsConfig._parse_plugin(ext_handler, plugin)
-                ExtensionsConfig._parse_plugin_settings(ext_handler, plugin_settings)
-            except ExtensionConfigError as error:
-                ext_handler.invalid_reason = ustr(error)
-
-            self.ext_handlers.extHandlers.append(ext_handler)
+        self.__parse_plugins_and_settings_and_populate_ext_handlers(xml_doc)
 
         self.status_upload_blob = findtext(xml_doc, "StatusUploadBlob")
         self.artifacts_profile_blob = findtext(xml_doc, "InVMArtifactsProfileBlob")
@@ -371,6 +321,60 @@ class ExtensionsConfig(object):
         logger.verbose("Extension config shows status blob type as [{0}]", self.status_upload_blob_type)
 
         self.in_vm_gs_metadata.parse_node(find(xml_doc, "InVMGoalStateMetaData"))
+
+    def __parse_plugins_and_settings_and_populate_ext_handlers(self, xml_doc):
+        """
+        Sample ExtensionConfig Plugin and PluginSettings:
+
+        <Plugins>
+          <Plugin name="Microsoft.CPlat.Core.NullSeqB" version="2.0.1" location="https://zrdfepirv2cbn04prdstr01a.blob.core.windows.net/f72653efd9e349ed9842c8b99e4c1712/Microsoft.CPlat.Core_NullSeqB_useast2euap_manifest.xml" state="enabled" autoUpgrade="false" failoverlocation="https://zrdfepirv2cbz06prdstr01a.blob.core.windows.net/f72653efd9e349ed9842c8b99e4c1712/Microsoft.CPlat.Core_NullSeqB_useast2euap_manifest.xml" runAsStartupTask="false" isJson="true" useExactVersion="true" />
+          <Plugin name="Microsoft.CPlat.Core.NullSeqA" version="2.0.1" location="https://zrdfepirv2cbn04prdstr01a.blob.core.windows.net/f72653efd9e349ed9842c8b99e4c1712/Microsoft.CPlat.Core_NullSeqA_useast2euap_manifest.xml" state="enabled" autoUpgrade="false" failoverlocation="https://zrdfepirv2cbn06prdstr01a.blob.core.windows.net/f72653efd9e349ed9842c8b99e4c1712/Microsoft.CPlat.Core_NullSeqA_useast2euap_manifest.xml" runAsStartupTask="false" isJson="true" useExactVersion="true" />
+        </Plugins>
+        <PluginSettings>
+          <Plugin name="Microsoft.CPlat.Core.NullSeqA" version="2.0.1">
+            <DependsOn dependencyLevel="1">
+              <DependsOnExtension handler="Microsoft.CPlat.Core.NullSeqB" />
+            </DependsOn>
+            <RuntimeSettings seqNo="0">{
+              "runtimeSettings": [
+                {
+                  "handlerSettings": {
+                    "publicSettings": {"01_add_extensions_with_dependency":"ff2a3da6-8e12-4ab6-a4ca-4e3a473ab385"}
+                  }
+                }
+              ]
+            }
+            </RuntimeSettings>
+          </Plugin>
+          <Plugin name="Microsoft.CPlat.Core.NullSeqB" version="2.0.1">
+            <RuntimeSettings seqNo="0">{
+              "runtimeSettings": [
+                {
+                  "handlerSettings": {
+                    "publicSettings": {"01_add_extensions_with_dependency":"2e837740-cf7e-4528-b3a4-241002618f05"}
+                  }
+                }
+              ]
+            }
+            </RuntimeSettings>
+          </Plugin>
+        </PluginSettings>
+        """
+
+        plugins_list = find(xml_doc, "Plugins")
+        plugins = findall(plugins_list, "Plugin")
+        plugin_settings_list = find(xml_doc, "PluginSettings")
+        plugin_settings = findall(plugin_settings_list, "Plugin")
+
+        for plugin in plugins:
+            ext_handler = ExtHandler()
+            try:
+                ExtensionsConfig._parse_plugin(ext_handler, plugin)
+                ExtensionsConfig._parse_plugin_settings(ext_handler, plugin_settings)
+            except ExtensionConfigError as error:
+                ext_handler.invalid_reason = ustr(error)
+
+            self.ext_handlers.extHandlers.append(ext_handler)
 
     @staticmethod
     def _parse_plugin(ext_handler, plugin):
