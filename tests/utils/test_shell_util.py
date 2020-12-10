@@ -444,8 +444,9 @@ time.sleep(60)
                 self.assertEqual(
                     started_commands_expected,
                     started_commands,
-                    "The command_started callback was not invoked with the correct processes. Got: {0}".format(
-                        [self._get_command_line(pid) for pid in started_commands_expected]))
+                    "The command_started callback was not invoked with the correct processes.\nExpected: {0}\nGot: {1}".format(
+                        [self._get_command_line(pid) for pid in started_commands_expected],
+                        [self._get_command_line(pid) for pid in started_commands]))
 
             finally:
                 # terminate the child processes, since they are blocked
@@ -468,8 +469,9 @@ time.sleep(60)
             self.assertEqual(
                 started_commands,
                 completed_commands,
-                "The command_completed callback does not match the invocations of command_started. Got: {0}".format(
-                    [self._get_command_line(pid) for pid in started_commands]))
+                "The command_completed callback does not match the invocations of command_started.\nStarted: {0}\nCompleted: {1}".format(
+                    [self._get_command_line(pid) for pid in started_commands],
+                    [self._get_command_line(pid) for pid in completed_commands]))
         finally:
             shellutil.set_on_command_started_callback(None)
             shellutil.set_on_command_completed_callback(None)
@@ -483,10 +485,10 @@ time.sleep(60)
             cmdline = '/proc/{0}/cmdline'.format(pid)
             if os.path.exists(cmdline):
                 with open(cmdline, "r") as cmdline_file:
-                    return cmdline_file.read()
+                    return "[PID: {0}] {1}".format(pid, cmdline_file.read())
         except Exception:
             pass
-        return "UNKNOWN [PID: {0}]".format(pid)
+        return "[PID: {0}] UNKNOWN".format(pid)
 
     @staticmethod
     def _to_seconds(time_delta):
