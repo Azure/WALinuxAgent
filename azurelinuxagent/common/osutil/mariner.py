@@ -16,22 +16,9 @@
 # Requires Python 2.6+ and Openssl 1.0+
 #
 
-import os  # pylint: disable=W0611
-import re  # pylint: disable=W0611
-import pwd  # pylint: disable=W0611
-import shutil  # pylint: disable=W0611
-import socket  # pylint: disable=W0611
-import array  # pylint: disable=W0611
-import struct  # pylint: disable=W0611
-import fcntl  # pylint: disable=W0611
-import time  # pylint: disable=W0611
-import base64  # pylint: disable=W0611
 import errno
 import azurelinuxagent.common.conf as conf
-import azurelinuxagent.common.logger as logger  # pylint: disable=W0611
 import azurelinuxagent.common.utils.fileutil as fileutil
-import azurelinuxagent.common.utils.shellutil as shellutil
-import azurelinuxagent.common.utils.textutil as textutil  # pylint: disable=W0611
 from azurelinuxagent.common.osutil.default import DefaultOSUtil
 from azurelinuxagent.common.exception import OSUtilError
 
@@ -45,31 +32,31 @@ class MarinerOSUtil(DefaultOSUtil):
         return True
 
     def start_network(self) :
-        return shellutil.run("systemctl start systemd-networkd", chk_err=False)
+        self._run_command_without_raising(["systemctl", "start", "systemd-networkd"], log_error=True)
 
     def restart_if(self, ifname=None, retries=None, wait=None):
-        shellutil.run("systemctl restart systemd-networkd")
+        self._run_command_without_raising(["systemctl", "restart", "systemd-networkd"])
 
     def restart_ssh_service(self):
-        shellutil.run("systemctl restart sshd")
+        self._run_command_without_raising(["systemctl", "restart", "sshd"])
 
     def stop_dhcp_service(self):
-        return shellutil.run("systemctl stop systemd-networkd", chk_err=False)
+        self._run_command_without_raising(["systemctl", "stop", "systemd-networkd"], log_error=True)
 
     def start_dhcp_service(self):
-        return shellutil.run("systemctl start systemd-networkd", chk_err=False)
+        self._run_command_without_raising(["systemctl", "start", "systemd-networkd"], log_error=True)
 
     def start_agent_service(self):
-        return shellutil.run("systemctl start {0}".format(self.service_name), chk_err=False)
+        self._run_command_without_raising(["systemctl", "start", "{0}".format(self.service_name)], log_error=True)
 
     def stop_agent_service(self):
-        return shellutil.run("systemctl stop {0}".format(self.service_name), chk_err=False)
+        self._run_command_without_raising(["systemctl", "stop", "{0}".format(self.service_name)], log_error=True)
 
     def register_agent_service(self):
-        return shellutil.run("systemctl enable {0}".format(self.service_name), chk_err=False)
+        self._run_command_without_raising(["systemctl", "enable", "{0}".format(self.service_name)], log_error=True)
 
     def unregister_agent_service(self):
-        return shellutil.run("systemctl disable {0}".format(self.service_name), chk_err=False)
+        self._run_command_without_raising(["systemctl", "disable", "{0}".format(self.service_name)], log_error=True)
 
     def get_dhcp_pid(self):
         return self._get_dhcp_pid(["pidof", "systemd-networkd"])
@@ -88,12 +75,11 @@ class MarinerOSUtil(DefaultOSUtil):
             except (IOError, OSError) as file_read_err:
                 if file_read_err.errno != errno.ENOENT:
                     raise
-                new_passwd = ["root:*LOCK*:14600::::::"]
-            else:
-                passwd = passwd_content.split('\n')
-                new_passwd = [x for x in passwd if not x.startswith("root:")]
-                new_passwd.insert(0, "root:*LOCK*:14600::::::")
+                    new_passwd = ["root:*LOCK*:14600::::::"]
+                else:
+                    passwd = passwd_content.split('\n')
+                    new_passwd = [x for x in passwd if not x.startswith("root:")]
+                    new_passwd.insert(0, "root:*LOCK*:14600::::::")
             fileutil.write_file(passwd_file_path, "\n".join(new_passwd))
-        except IOError as e:  # pylint: disable=C0103
-            raise OSUtilError("Failed to delete root password:{0}".format(e))
-        pass  # pylint: disable=W0107
+        except IOError as err:
+            raise OSUtilError("Failed to delete root password:{0}".format(err))
