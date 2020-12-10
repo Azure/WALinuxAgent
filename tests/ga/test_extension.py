@@ -1022,8 +1022,8 @@ class TestExtension(ExtensionTestCase):
         for enable_extensions in [False, True]:
             tmp_lib_dir = tempfile.mkdtemp(prefix="ExtensionEnabled{0}".format(enable_extensions))
             with patch("azurelinuxagent.common.conf.get_lib_dir", return_value=tmp_lib_dir):
-                with patch("azurelinuxagent.common.AgentGlobals._ExtensionTelemetryPipelineFeature.is_supported",
-                           enable_extensions):
+                with patch('azurelinuxagent.ga.exthandlers.is_extension_telemetry_pipeline_enabled',
+                           return_value=enable_extensions):
                     # Create new object for each run to force re-installation of extensions as we
                     # only create handler_environment on installation
                     test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE_MULTIPLE_EXT)
@@ -1058,7 +1058,7 @@ class TestExtension(ExtensionTestCase):
         test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE)
         exthandlers_handler, protocol = self._create_mock(test_data, *args)  # pylint: disable=no-value-for-parameter
 
-        with patch("azurelinuxagent.common.AgentGlobals._ExtensionTelemetryPipelineFeature.is_supported", True):
+        with patch('azurelinuxagent.ga.exthandlers.is_extension_telemetry_pipeline_enabled', return_value=True):
             exthandlers_handler.run()
             self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.0.0")
             self._assert_ext_status(protocol.report_ext_status, "success", 0)

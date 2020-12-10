@@ -23,7 +23,6 @@ class FeatureNames(object):  # pylint: disable=R0903
     Enum for defining the Feature Names for all internal and CRP features
     """
     MultiConfig = "MultipleExtensionsPerHandler"
-    ExtensionTelemetryPipeline = "ExtensionTelemetryPipeline"
 
 
 class AgentFeature(object):
@@ -61,16 +60,6 @@ class _MultiConfigFeature(AgentFeature):
                                                   supported=_MultiConfigFeature.__SUPPORTED)
 
 
-class _ExtensionTelemetryPipelineFeature(AgentFeature):
-
-    __NAME = FeatureNames.ExtensionTelemetryPipeline
-    __SUPPORTED = False
-
-    def __init__(self):
-        super(_ExtensionTelemetryPipelineFeature, self).__init__(name=_ExtensionTelemetryPipelineFeature.__NAME,
-                                                                 supported=_ExtensionTelemetryPipelineFeature.__SUPPORTED)
-
-
 class AgentGlobals(object):
     """
     This class is used for setting AgentGlobals which can be used all throughout the Agent.
@@ -87,16 +76,8 @@ class AgentGlobals(object):
         FeatureNames.MultiConfig: _MultiConfigFeature()
     }
 
-    # Features that we use internally in the Guest Agent (Eg: ExtensionTelemetryPipeline)
-    __internal_features = {
-        FeatureNames.ExtensionTelemetryPipeline: _ExtensionTelemetryPipelineFeature()
-    }
-
     @staticmethod
     def get_feature_by_name(feature_name):
-        if feature_name in AgentGlobals.__internal_features:
-            return AgentGlobals.__internal_features[feature_name]
-
         if feature_name in AgentGlobals.__crp_supported_features:
             return AgentGlobals.__crp_supported_features[feature_name]
 
