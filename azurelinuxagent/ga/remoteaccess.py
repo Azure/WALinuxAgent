@@ -42,7 +42,7 @@ def get_remote_access_handler(protocol):
     return RemoteAccessHandler(protocol)
 
 
-class RemoteAccessHandler(object):  # pylint: disable=R0903
+class RemoteAccessHandler(object): 
     def __init__(self, protocol):
         self._os_util = get_osutil()
         self._protocol = protocol

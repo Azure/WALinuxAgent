@@ -42,7 +42,7 @@ def read_input(message):
         return raw_input(message)  # pylint: disable=E0602
 
 
-class DeprovisionAction(object):  # pylint: disable=R0903
+class DeprovisionAction(object):
     def __init__(self, func, args=None, kwargs=None):
         if args is None:
             args = []

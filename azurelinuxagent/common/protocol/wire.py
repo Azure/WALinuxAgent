@@ -1290,7 +1290,7 @@ class VersionInfo(object):
         return self.supported
 
 
-class ExtensionManifest(object):  # pylint: disable=R0903
+class ExtensionManifest(object): 
     def __init__(self, xml_text):
         if xml_text is None:
             raise ValueError("ExtensionManifest is None")
@@ -1335,7 +1335,7 @@ class ExtensionManifest(object):  # pylint: disable=R0903
 
 
 # Do not extend this class
-class InVMArtifactsProfile(object):  # pylint: disable=R0903
+class InVMArtifactsProfile(object):
     """
     deserialized json string of InVMArtifactsProfile.
     It is expected to contain the following fields:
