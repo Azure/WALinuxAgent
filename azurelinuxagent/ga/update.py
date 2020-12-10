@@ -362,20 +362,21 @@ class UpdateHandler(object):  # pylint: disable=R0902
                     if last_etag != exthandlers_handler.last_etag:
                         self._ensure_readonly_files()
                         duration = elapsed_milliseconds(utc_start)
-                        logger.info('ProcessGoalState completed [incarnation {0}; {1} ms]',
-                                    exthandlers_handler.last_etag,
-                                    duration)
+                        activity_id, correlation_id, gs_creation_time = exthandlers_handler.get_goal_state_debug_metadata()
+                        msg = 'ProcessGoalState completed [Incarnation: {0}; {1} ms; Activity Id: {2}; Correlation Id: {3}; GS Creation Time: {4}]'.format(
+                            exthandlers_handler.last_etag, duration, activity_id, correlation_id, gs_creation_time)
+                        logger.info(msg)
                         add_event(
                             AGENT_NAME,
                             op=WALAEventOperation.ProcessGoalState,
                             duration=duration,
-                            message="Incarnation {0}".format(exthandlers_handler.last_etag))
+                            message=msg)
 
                 self._send_heartbeat_telemetry(protocol)
                 time.sleep(goal_state_interval)
 
-        except Exception as e:  # pylint: disable=C0103
-            msg = u"Agent {0} failed with exception: {1}".format(CURRENT_AGENT, ustr(e))
+        except Exception as error:
+            msg = u"Agent {0} failed with exception: {1}".format(CURRENT_AGENT, ustr(error))
             self._set_sentinel(msg=msg)
             logger.warn(msg)
             logger.warn(traceback.format_exc())

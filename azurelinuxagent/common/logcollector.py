@@ -63,7 +63,7 @@ _UNCOMPRESSED_ARCHIVE_SIZE_LIMIT = 150 * 1024 * 1024  # 150 MB
 _LOGGER = logging.getLogger(__name__)
 
 
-class LogCollector(object):  # pylint: disable=R0903
+class LogCollector(object):
 
     _TRUNCATED_FILE_PREFIX = "truncated_"
 
