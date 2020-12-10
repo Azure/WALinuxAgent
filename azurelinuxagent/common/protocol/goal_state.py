@@ -317,6 +317,42 @@ class ExtensionsConfig(object):
         plugin_settings = findall(plugin_settings_list, "Plugin")
 
         for plugin in plugins:
+            """
+            Sample ExtensionConfig Plugin and PluginSettings:
+            <Plugins>
+              <Plugin name="Microsoft.CPlat.Core.NullSeqB" version="2.0.1" location="https://zrdfepirv2cbn04prdstr01a.blob.core.windows.net/f72653efd9e349ed9842c8b99e4c1712/Microsoft.CPlat.Core_NullSeqB_useast2euap_manifest.xml" state="enabled" autoUpgrade="false" failoverlocation="https://zrdfepirv2cbz06prdstr01a.blob.core.windows.net/f72653efd9e349ed9842c8b99e4c1712/Microsoft.CPlat.Core_NullSeqB_useast2euap_manifest.xml" runAsStartupTask="false" isJson="true" useExactVersion="true" />
+              <Plugin name="Microsoft.CPlat.Core.NullSeqA" version="2.0.1" location="https://zrdfepirv2cbn04prdstr01a.blob.core.windows.net/f72653efd9e349ed9842c8b99e4c1712/Microsoft.CPlat.Core_NullSeqA_useast2euap_manifest.xml" state="enabled" autoUpgrade="false" failoverlocation="https://zrdfepirv2cbn06prdstr01a.blob.core.windows.net/f72653efd9e349ed9842c8b99e4c1712/Microsoft.CPlat.Core_NullSeqA_useast2euap_manifest.xml" runAsStartupTask="false" isJson="true" useExactVersion="true" />
+            </Plugins>
+            <PluginSettings>
+              <Plugin name="Microsoft.CPlat.Core.NullSeqA" version="2.0.1">
+                <DependsOn dependencyLevel="1">
+                  <DependsOnExtension handler="Microsoft.CPlat.Core.NullSeqB" />
+                </DependsOn>
+                <RuntimeSettings seqNo="0">{
+                  "runtimeSettings": [
+                    {
+                      "handlerSettings": {
+                        "publicSettings": {"01_add_extensions_with_dependency":"ff2a3da6-8e12-4ab6-a4ca-4e3a473ab385"}
+                      }
+                    }
+                  ]
+                }
+                </RuntimeSettings>
+              </Plugin>
+              <Plugin name="Microsoft.CPlat.Core.NullSeqB" version="2.0.1">
+                <RuntimeSettings seqNo="0">{
+                  "runtimeSettings": [
+                    {
+                      "handlerSettings": {
+                        "publicSettings": {"01_add_extensions_with_dependency":"2e837740-cf7e-4528-b3a4-241002618f05"}
+                      }
+                    }
+                  ]
+                }
+                </RuntimeSettings>
+              </Plugin>
+            </PluginSettings>
+            """
 
             ext_handler = ExtHandler()
             try:
@@ -338,15 +374,25 @@ class ExtensionsConfig(object):
 
     @staticmethod
     def _parse_plugin(ext_handler, plugin):
+        """
+        Sample config:
+
+        <Plugins>
+              <Plugin name="Microsoft.CPlat.Core.NullSeqB" version="2.0.1" location="https://zrdfepirv2cbn04prdstr01a.blob.core.windows.net/f72653efd9e349ed9842c8b99e4c1712/Microsoft.CPlat.Core_NullSeqB_useast2euap_manifest.xml" state="enabled" autoUpgrade="false" failoverlocation="https://zrdfepirv2cbz06prdstr01a.blob.core.windows.net/f72653efd9e349ed9842c8b99e4c1712/Microsoft.CPlat.Core_NullSeqB_useast2euap_manifest.xml" runAsStartupTask="false" isJson="true" useExactVersion="true" />
+              <Plugin name="Microsoft.CPlat.Core.NullSeqA" version="2.0.1" location="https://zrdfepirv2cbn04prdstr01a.blob.core.windows.net/f72653efd9e349ed9842c8b99e4c1712/Microsoft.CPlat.Core_NullSeqA_useast2euap_manifest.xml" state="enabled" autoUpgrade="false" failoverlocation="https://zrdfepirv2cbn06prdstr01a.blob.core.windows.net/f72653efd9e349ed9842c8b99e4c1712/Microsoft.CPlat.Core_NullSeqA_useast2euap_manifest.xml" runAsStartupTask="false" isJson="true" useExactVersion="true" />
+        </Plugins>
+        """
 
         def _raise_config_error_if_none(attr_name, value):
             if value is None:
                 raise ExtensionConfigError("{0} is None for ExtensionConfig, failing Extension.".format(attr_name))
             return value
 
-        ext_handler.name = _raise_config_error_if_none("Handler Name", getattrib(plugin, "name"))
-        ext_handler.properties.version = _raise_config_error_if_none("Handler Version", getattrib(plugin, "version"))
-        ext_handler.properties.state = _raise_config_error_if_none("Handler State", getattrib(plugin, "state"))
+        ext_handler.name = _raise_config_error_if_none("Extensions.Plugins.Plugin.name", getattrib(plugin, "name"))
+        ext_handler.properties.version = _raise_config_error_if_none("Extensions.Plugins.Plugin.version",
+                                                                     getattrib(plugin, "version"))
+        ext_handler.properties.state = _raise_config_error_if_none("Extensions.Plugins.Plugin.state",
+                                                                   getattrib(plugin, "state"))
 
         location = getattrib(plugin, "location")
         failover_location = getattrib(plugin, "failoverlocation")
@@ -361,6 +407,39 @@ class ExtensionsConfig(object):
 
     @staticmethod
     def _parse_plugin_settings(ext_handler, plugin_settings):
+        """
+        Sample config:
+
+        <PluginSettings>
+            <Plugin name="Microsoft.CPlat.Core.NullSeqA" version="2.0.1">
+                <DependsOn dependencyLevel="1">
+                  <DependsOnExtension handler="Microsoft.CPlat.Core.NullSeqB" />
+                </DependsOn>
+                <RuntimeSettings seqNo="0">{
+                  "runtimeSettings": [
+                    {
+                      "handlerSettings": {
+                        "publicSettings": {"01_add_extensions_with_dependency":"ff2a3da6-8e12-4ab6-a4ca-4e3a473ab385"}
+                      }
+                    }
+                  ]
+                }
+                </RuntimeSettings>
+            </Plugin>
+            <Plugin name="Microsoft.CPlat.Core.RunCommandHandlerWindows" version="2.0.2">
+                <ExtensionRuntimeSettings seqNo="4" name="firstRunCommand" state="enabled">{
+                  "runtimeSettings": [
+                    {
+                      "handlerSettings": {
+                        "publicSettings": {"source":{"script":"Write-Host First: Hello World TestTry2!"},"parameters":[{"name":"extensionName","value":"firstRunCommand"}],"timeoutInSeconds":120}
+                      }
+                    }
+                  ]
+                }
+                </ExtensionRuntimeSettings>
+            </Plugin>
+        </PluginSettings>
+        """
         if plugin_settings is None:
             return
 

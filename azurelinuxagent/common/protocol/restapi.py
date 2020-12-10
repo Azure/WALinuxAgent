@@ -82,6 +82,15 @@ class VMAgentManifestList(DataContract):
 
 
 class Extension(DataContract):
+    """
+    The runtime settings associated with a Handler
+    -   Maps to Extension.PluginSettings.Plugin.RuntimeSettings for single config extensions in the ExtensionConfig.xml
+        Eg: 1.settings, 2.settings
+    -   Maps to Extension.PluginSettings.Plugin.ExtensionRuntimeSettings for multi-config extensions in the
+        ExtensionConfig.xml
+        Eg: <extensionName>.1.settings, <extensionName>.2.settings
+    """
+
     def __init__(self,  # pylint: disable=R0913
                  name=None,
                  sequenceNumber=None,
@@ -112,6 +121,12 @@ class ExtHandlerVersionUri(DataContract):
 
 
 class ExtHandler(DataContract):
+    """
+    The main Plugin/handler specified by the publishers.
+    Maps to Extension.PluginSettings.Plugins.Plugin in the ExtensionConfig.xml file
+    Eg: Microsoft.OSTC.CustomScript
+    """
+
     def __init__(self, name=None):
         self.name = name
         self.properties = ExtHandlerProperties()
