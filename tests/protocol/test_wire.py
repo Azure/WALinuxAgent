@@ -27,7 +27,8 @@ import uuid
 from datetime import datetime, timedelta
 
 from azurelinuxagent.common import conf
-from azurelinuxagent.common.AgentGlobals import AgentGlobals, FeatureNames
+from azurelinuxagent.common.AgentSupportedFeature import CRPSupportedFeatureNames, get_supported_feature_by_name, \
+    get_agent_supported_features_list_for_crp
 from azurelinuxagent.common.exception import ResourceGoneError, ProtocolError, \
     ExtensionDownloadError, HttpError
 from azurelinuxagent.common.protocol.goal_state import ExtensionsConfig
@@ -379,11 +380,11 @@ class TestWireProtocol(AgentTestCase):
             protocol.set_http_handlers(http_put_handler=mock_http_put)
             exthandlers_handler = get_exthandlers_handler(protocol)
 
-            with patch("azurelinuxagent.common.AgentGlobals._MultiConfigFeature.is_supported", True):
+            with patch("azurelinuxagent.common.AgentSupportedFeature._MultiConfigFeature.is_supported", True):
                 exthandlers_handler.run()
                 self.assertIsNotNone(protocol.aggregate_status, "Aggregate status should not be None")
                 self.assertIn("supportedFeatures", protocol.aggregate_status, "supported features not reported")
-                multi_config_feature = AgentGlobals.get_feature_by_name(FeatureNames.MultiConfig)
+                multi_config_feature = get_supported_feature_by_name(CRPSupportedFeatureNames.MultiConfig)
                 found = False
                 for feature in protocol.aggregate_status['supportedFeatures']:
                     if feature['Key'] == multi_config_feature.name and feature['Value'] == multi_config_feature.version:
@@ -392,19 +393,19 @@ class TestWireProtocol(AgentTestCase):
                 self.assertTrue(found, "Multi-config name should be present in supportedFeatures")
 
             # Feature should not be reported if not present
-            with patch("azurelinuxagent.common.AgentGlobals._MultiConfigFeature.is_supported", False):
+            with patch("azurelinuxagent.common.AgentSupportedFeature._MultiConfigFeature.is_supported", False):
                 exthandlers_handler.run()
                 self.assertIsNotNone(protocol.aggregate_status, "Aggregate status should not be None")
                 if "supportedFeatures" not in protocol.aggregate_status:
                     # In the case Multi-config was the only feature available, 'supportedFeatures' should not be
                     # reported in the status blob as its not supported as of now.
-                    # Asserting no other feature was available
-                    self.assertEqual(1, len(AgentGlobals.get_crp_supported_features()),
+                    # Asserting no other feature was available to report back to crp
+                    self.assertEqual(1, len(get_agent_supported_features_list_for_crp()),
                                      "supportedFeatures should be available if there are more features")
                     return
 
                 # If there are other features available, confirm MultiConfig was not reported
-                multi_config_feature = AgentGlobals.get_feature_by_name(FeatureNames.MultiConfig)
+                multi_config_feature = get_supported_feature_by_name(CRPSupportedFeatureNames.MultiConfig)
                 found = False
                 for feature in protocol.aggregate_status['supportedFeatures']:
                     if feature['Key'] == multi_config_feature.name and feature['Value'] == multi_config_feature.version:

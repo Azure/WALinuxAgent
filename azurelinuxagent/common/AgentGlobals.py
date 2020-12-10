@@ -17,49 +17,6 @@
 # Requires Python 2.6+ and Openssl 1.0+
 
 
-# too-few-public-methods<R0903> Disabled: This class is used as an Enum
-class FeatureNames(object):  # pylint: disable=R0903
-    """
-    Enum for defining the Feature Names for all internal and CRP features
-    """
-    MultiConfig = "MultipleExtensionsPerHandler"
-
-
-class AgentFeature(object):
-    """
-    Interface for defining new features that the Linux Guest Agent supports
-    """
-
-    def __init__(self, name, version="1.0", supported=False):
-        self.__name = name
-        self.__version = version
-        self.__supported = supported
-
-    @property
-    def name(self):
-        return self.__name
-
-    @property
-    def version(self):
-        return self.__version
-
-    @property
-    def is_supported(self):
-        return self.__supported
-
-
-class _MultiConfigFeature(AgentFeature):
-
-    __NAME = FeatureNames.MultiConfig
-    __VERSION = "1.0"
-    __SUPPORTED = False
-
-    def __init__(self):
-        super(_MultiConfigFeature, self).__init__(name=_MultiConfigFeature.__NAME,
-                                                  version=_MultiConfigFeature.__VERSION,
-                                                  supported=_MultiConfigFeature.__SUPPORTED)
-
-
 class AgentGlobals(object):
     """
     This class is used for setting AgentGlobals which can be used all throughout the Agent.
@@ -70,27 +27,6 @@ class AgentGlobals(object):
     # fetch the goal state.
     #
     _container_id = "00000000-0000-0000-0000-000000000000"
-
-    # Features that we need to report to CRP in the status blob if we support them (Eg: MultiConfig)
-    __crp_supported_features = {
-        FeatureNames.MultiConfig: _MultiConfigFeature()
-    }
-
-    @staticmethod
-    def get_feature_by_name(feature_name):
-        if feature_name in AgentGlobals.__crp_supported_features:
-            return AgentGlobals.__crp_supported_features[feature_name]
-
-        raise NotImplementedError("Feature with Name: {0} not found".format(feature_name))
-
-    @staticmethod
-    def get_crp_supported_features():
-        """
-        List of features that the GuestAgent currently supports (like FastTrack, MultiConfig, etc).
-        We need to send this list as part of Status reporting to inform CRP of all the features the agent supports.
-        :return: Dict containing all CRP supported features by their names
-        """
-        return AgentGlobals.__crp_supported_features
 
     @staticmethod
     def get_container_id():

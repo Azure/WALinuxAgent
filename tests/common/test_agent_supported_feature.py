@@ -14,18 +14,20 @@
 #
 # Requires Python 2.6+ and Openssl 1.0+
 #
-from azurelinuxagent.common.AgentGlobals import AgentGlobals, FeatureNames
+from azurelinuxagent.common.AgentSupportedFeature import CRPSupportedFeatureNames, \
+    get_agent_supported_features_list_for_crp, get_supported_feature_by_name
 from tests.tools import AgentTestCase
 
 
-class TestAgentGlobals(AgentTestCase):
+class TestAgentSupportedFeature(AgentTestCase):
 
     def test_it_should_return_features_properly(self):
-        self.assertIn(FeatureNames.MultiConfig, AgentGlobals.get_crp_supported_features(),
+        self.assertIn(CRPSupportedFeatureNames.MultiConfig, get_agent_supported_features_list_for_crp(),
                       "Multi-config should be fetched in crp_supported_features")
-        self.assertEqual(FeatureNames.MultiConfig, AgentGlobals.get_feature_by_name(FeatureNames.MultiConfig).name,
-                      "Invalid/Wrong feature returned")
+        self.assertEqual(CRPSupportedFeatureNames.MultiConfig,
+                         get_supported_feature_by_name(CRPSupportedFeatureNames.MultiConfig).name,
+                         "Invalid/Wrong feature returned")
 
         # Raise error if feature name not found
         with self.assertRaises(NotImplementedError):
-            AgentGlobals.get_feature_by_name("ABC")
+            get_supported_feature_by_name("ABC")
