@@ -14,7 +14,7 @@
 #
 # Requires Python 2.6+ and Openssl 1.0+
 #
-from azurelinuxagent.common.AgentSupportedFeature import CRPSupportedFeatureNames, \
+from azurelinuxagent.common.agent_supported_feature import CRPSupportedFeatureNames, \
     get_agent_supported_features_list_for_crp, get_supported_feature_by_name
 from tests.tools import AgentTestCase
 

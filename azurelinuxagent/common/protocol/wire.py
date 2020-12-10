@@ -27,7 +27,7 @@ from collections import defaultdict
 import azurelinuxagent.common.conf as conf
 import azurelinuxagent.common.logger as logger
 import azurelinuxagent.common.utils.textutil as textutil
-from azurelinuxagent.common.AgentSupportedFeature import get_agent_supported_features_list_for_crp
+from azurelinuxagent.common.agent_supported_feature import get_agent_supported_features_list_for_crp
 from azurelinuxagent.common.datacontract import validate_param
 from azurelinuxagent.common.event import add_event, WALAEventOperation, report_event, \
     CollectOrReportEventDebugInfo, add_periodic

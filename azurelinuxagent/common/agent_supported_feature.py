@@ -58,14 +58,14 @@ class _MultiConfigFeature(AgentSupportedFeature):
                                                   supported=_MultiConfigFeature.__SUPPORTED)
 
 
-__crp_supported_features = {
+__CRP_SUPPORTED_FEATURES = {
     CRPSupportedFeatureNames.MultiConfig: _MultiConfigFeature()
 }
 
 
 def get_supported_feature_by_name(feature_name):
-    if feature_name in __crp_supported_features:
-        return __crp_supported_features[feature_name]
+    if feature_name in __CRP_SUPPORTED_FEATURES:
+        return __CRP_SUPPORTED_FEATURES[feature_name]
 
     raise NotImplementedError("Feature with Name: {0} not found".format(feature_name))
 
@@ -80,4 +80,4 @@ def get_agent_supported_features_list_for_crp():
                 MultipleExtensionsPerHandler: _MultiConfigFeature()
             }
     """
-    return __crp_supported_features
+    return __CRP_SUPPORTED_FEATURES
