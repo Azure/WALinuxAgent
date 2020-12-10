@@ -24,7 +24,7 @@ import socket
 import struct
 import time
 
-from azurelinuxagent.common.future import array_to_string_or_bytes
+from azurelinuxagent.common.future import array_to_bytes
 
 try:
     # WAAgent > 2.1.3
@@ -290,7 +290,7 @@ class BigIpOSUtil(DefaultOSUtil):
             logger.warn(('SIOCGIFCONF returned more than {0} up '
                          'network interfaces.'), expected)
 
-        sock = array_to_string_or_bytes(buff)
+        sock = array_to_bytes(buff)
         for i in range(0, struct_size * expected, struct_size):
             iface = self._format_single_interface_name(sock, i)
 
