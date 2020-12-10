@@ -123,6 +123,9 @@ class WireProtocol(DataContract):
     def get_incarnation(self):
         return self.client.get_goal_state().incarnation
 
+    def get_in_vm_gs_metadata(self):
+        return self.client.get_ext_conf().in_vm_gs_metadata
+
     def get_vmagent_manifests(self):
         goal_state = self.client.get_goal_state()
         ext_conf = self.client.get_ext_conf()
@@ -1301,7 +1304,7 @@ class VersionInfo(object):
         return self.supported
 
 
-class ExtensionManifest(object):  # pylint: disable=R0903
+class ExtensionManifest(object): 
     def __init__(self, xml_text):
         if xml_text is None:
             raise ValueError("ExtensionManifest is None")
@@ -1346,7 +1349,7 @@ class ExtensionManifest(object):  # pylint: disable=R0903
 
 
 # Do not extend this class
-class InVMArtifactsProfile(object):  # pylint: disable=R0903
+class InVMArtifactsProfile(object):
     """
     deserialized json string of InVMArtifactsProfile.
     It is expected to contain the following fields:

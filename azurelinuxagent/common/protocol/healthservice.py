@@ -26,7 +26,7 @@ from azurelinuxagent.common.utils import restutil
 from azurelinuxagent.common.version import AGENT_NAME, CURRENT_VERSION
 
 
-class Observation(object):  # pylint: disable=R0903
+class Observation(object):
     def __init__(self, name, is_healthy, description='', value=''):
         if name is None:
             raise ValueError("Observation name must be provided")

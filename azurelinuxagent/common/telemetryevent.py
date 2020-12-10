@@ -20,7 +20,8 @@
 from azurelinuxagent.common.datacontract import DataContract, DataContractList
 from azurelinuxagent.common.version import AGENT_NAME
 
-class CommonTelemetryEventSchema(object):  # pylint: disable=R0903
+
+class CommonTelemetryEventSchema(object):
 
     # Common schema keys for GuestAgentExtensionEvents, GuestAgentGenericLogs
     # and GuestAgentPerformanceCounterEvents tables in Kusto.
@@ -44,7 +45,8 @@ class CommonTelemetryEventSchema(object):  # pylint: disable=R0903
     VMId = "VMId"
     ImageOrigin = "ImageOrigin"
 
-class GuestAgentGenericLogsSchema(CommonTelemetryEventSchema):  # pylint: disable=R0903
+
+class GuestAgentGenericLogsSchema(CommonTelemetryEventSchema):
 
     # GuestAgentGenericLogs table specific schema keys
     EventName = "EventName"
@@ -53,7 +55,8 @@ class GuestAgentGenericLogsSchema(CommonTelemetryEventSchema):  # pylint: disabl
     Context2 = "Context2"
     Context3 = "Context3"
 
-class GuestAgentExtensionEventsSchema(CommonTelemetryEventSchema):  # pylint: disable=R0903
+
+class GuestAgentExtensionEventsSchema(CommonTelemetryEventSchema):
 
     # GuestAgentExtensionEvents table specific schema keys
     ExtensionType = "ExtensionType"
@@ -65,7 +68,8 @@ class GuestAgentExtensionEventsSchema(CommonTelemetryEventSchema):  # pylint: di
     Message = "Message"
     Duration = "Duration"
 
-class GuestAgentPerfCounterEventsSchema(CommonTelemetryEventSchema):  # pylint: disable=R0903
+
+class GuestAgentPerfCounterEventsSchema(CommonTelemetryEventSchema):
 
     # GuestAgentPerformanceCounterEvents table specific schema keys
     Category = "Category"
@@ -73,7 +77,8 @@ class GuestAgentPerfCounterEventsSchema(CommonTelemetryEventSchema):  # pylint: 
     Instance = "Instance"
     Value = "Value"
 
-class TelemetryEventParam(DataContract):  # pylint: disable=R0903
+
+class TelemetryEventParam(DataContract):
     def __init__(self, name=None, value=None):
         self.name = name
         self.value = value

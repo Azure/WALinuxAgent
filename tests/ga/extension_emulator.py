@@ -31,14 +31,13 @@ from tests.tools import Mock, patch
 from tests.protocol.mocks import HttpRequestPredicates
 
 
-class ExtensionCommandNames(object):  # pylint: disable=too-few-public-methods
-    # Linter reports too few public methods, but the use-case for this class
-    # does not require any.
+class ExtensionCommandNames(object):
     INSTALL = "install"
     UNINSTALL = "uninstall"
     UPDATE = "update"
     ENABLE = "enable"
     DISABLE = "disable"
+
 
 class Actions(object):
     """
