@@ -97,26 +97,31 @@ def run_get_output(cmd, chk_err=True, log_cmd=True, expected_errors=None):
         expected_errors = []
     if log_cmd:
         logger.verbose(u"Command: [{0}]", cmd)
-    try:
-        output = subprocess.check_output(cmd, stderr=subprocess.STDOUT, shell=True)
-        output = __encode_command_output(output)
-    except subprocess.CalledProcessError as e:  # pylint: disable=C0103
-        output = __encode_command_output(e.output)
 
-        if chk_err:
-            msg = u"Command: [{0}], " \
-                  u"return code: [{1}], " \
-                  u"result: [{2}]".format(cmd, e.returncode, output)
-            if e.returncode in expected_errors:
-                logger.info(msg)
-            else:
-                logger.error(msg)
-        return e.returncode, output
-    except Exception as e:  # pylint: disable=C0103
+    try:
+        process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, shell=True)
+        _invoke_on_command_started_callback(process.pid)
+
+        output, _ = process.communicate()
+        _invoke_on_command_completed_callback(process.pid)
+
+        output = __encode_command_output(output)
+
+        if process.returncode != 0:
+            if chk_err:
+                msg = u"Command: [{0}], " \
+                      u"return code: [{1}], " \
+                      u"result: [{2}]".format(cmd, process.returncode, output)
+                if process.returncode in expected_errors:
+                    logger.info(msg)
+                else:
+                    logger.error(msg)
+            return process.returncode, output
+    except Exception as exception:
         if chk_err:
             logger.error(u"Command [{0}] raised unexpected exception: [{1}]"
-                         .format(cmd, ustr(e)))
-        return -1, ustr(e)
+                         .format(cmd, ustr(exception)))
+        return -1, ustr(exception)
     return 0, output
 
 
@@ -236,8 +241,10 @@ def run_command(command, input=None, stdin=None, stdout=subprocess.PIPE, stderr=
             communicate_input = None
 
         process = subprocess.Popen(command, stdin=popen_stdin, stdout=stdout, stderr=stderr, shell=False)
+        _invoke_on_command_started_callback(process.pid)
 
         command_stdout, command_stderr = process.communicate(input=communicate_input)
+        _invoke_on_command_completed_callback(process.pid)
 
         return process.returncode, command_stdout, command_stderr
 
@@ -286,9 +293,11 @@ def run_pipe(pipe, stdin=None, stdout=subprocess.PIPE, stderr=subprocess.PIPE, l
             while i < len(pipe) - 1:
                 processes.append(subprocess.Popen(pipe[i], stdin=popen_stdin, stdout=subprocess.PIPE, stderr=popen_stderr))
                 popen_stdin = processes[i].stdout
+                _invoke_on_command_started_callback(processes[i].pid)
                 i += 1
 
             processes.append(subprocess.Popen(pipe[i], stdin=popen_stdin, stdout=stdout, stderr=popen_stderr))
+            _invoke_on_command_started_callback(processes[i].pid)
 
             i = 0
             while i < len(processes) - 1:
@@ -296,6 +305,9 @@ def run_pipe(pipe, stdin=None, stdout=subprocess.PIPE, stderr=subprocess.PIPE, l
                 i += 1
 
             pipe_stdout, pipe_stderr = processes[i].communicate()
+
+            for proc in processes:
+                _invoke_on_command_completed_callback(proc.pid)
 
             if stderr_file is not None:
                 stderr_file.seek(0)
@@ -325,4 +337,50 @@ def quote(word_list):
 
     return " ".join(list("'{0}'".format(s.replace("'", "'\\''")) for s in word_list))
 
-# End shell command util functions
+
+#
+# The run_command/run_pipe/run/run_get_output functions use these callbacks to notify when a command has been started
+# and when it completes.
+#
+# The callbacks are executed in the context of the thread executing run_command/run_pipe/run/run_get_output so they
+# should be used only to perform very fast operations or otherwise would block that thread. Also, errors in the
+# callback are ignored, so they should do they own error handling.
+#
+# Only 1 callback is maintained for each of those notifications. Setting a callback overrides the previous value.
+# Set the callback to None to stop the notifications
+#
+# C0103: Constant name "foo" doesn't conform to UPPER_CASE naming style (invalid-name) -- Disabled: These are not constants
+_on_command_started_callback = None  # pylint:disable=C0103
+_on_command_completed_callback = None  # pylint:disable=C0103
+
+
+def set_on_command_started_callback(callback):
+    # W0603: Using the global statement (global-statement) - Disabled: global is required to modify this variable
+    # C0103: Constant name "foo" doesn't conform to UPPER_CASE naming style (invalid-name) -- Disabled: This is not a constant
+    global _on_command_started_callback  # pylint:disable=W0603,C0103
+    _on_command_started_callback = callback
+
+
+def set_on_command_completed_callback(callback):
+    # W0603: Using the global statement (global-statement) - Disabled: global is required to modify this variable
+    # C0103: Constant name "foo" doesn't conform to UPPER_CASE naming style (invalid-name) -- Disabled: This is not a constant
+    global _on_command_completed_callback  # pylint:disable=W0603,C0103
+    _on_command_completed_callback = callback
+
+
+def _invoke_on_command_started_callback(pid):
+    if _on_command_started_callback is not None:
+        try:
+            _on_command_started_callback(pid)
+        except Exception:
+            pass
+
+
+def _invoke_on_command_completed_callback(pid):
+    if _on_command_completed_callback is not None:
+        try:
+            _on_command_completed_callback(pid)
+        except Exception:
+            pass
+
+

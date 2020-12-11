@@ -139,7 +139,7 @@ ENDORSED_IMAGE_INFO_MATCHER_JSON = """{
 }"""
 
 
-class ImageInfoMatcher(object):  # pylint: disable=R0903
+class ImageInfoMatcher(object):
     def __init__(self, doc):
         self.doc = json.loads(doc)
 
