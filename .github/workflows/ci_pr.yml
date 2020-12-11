@@ -7,7 +7,7 @@ on:
     branches: [ "*" ]
 
 jobs:
-  legacy:
+  test-legacy-python-versions:
     
     name: "Python 2.6 Unit Tests"
     runs-on: ubuntu-16.04
@@ -41,10 +41,10 @@ jobs:
     
     - name: Test with nosetests
       run: |
-        ./ci/nosetests.sh || EXIT_CODE=$?
-        exit $EXIT_CODE
+        ./ci/nosetests.sh
+        exit $?
 
-  build:
+  test-current-python-versions:
     
     strategy:
       fail-fast: false
@@ -53,37 +53,30 @@ jobs:
 
           - python-version: 2.7
             PYLINTOPTS: "--rcfile=ci/2.7.pylintrc"
-            NOSEOPTS: "--verbose --with-timer"
-            PYLINTFILES: "azurelinuxagent setup.py makepkg.py tests"
 
           - python-version: 3.4
             PYLINTOPTS: "--rcfile=ci/2.7.pylintrc"
-            NOSEOPTS: "--verbose --with-timer"
-            PYLINTFILES: "azurelinuxagent setup.py makepkg.py tests"
 
           - python-version: 3.6
             PYLINTOPTS: "--rcfile=ci/3.6.pylintrc"
-            NOSEOPTS: "--verbose --with-timer"
-            PYLINTFILES: "azurelinuxagent setup.py makepkg.py tests"
 
           - python-version: 3.7
             PYLINTOPTS: "--rcfile=ci/3.6.pylintrc"
-            NOSEOPTS: "--verbose --with-timer"
-            PYLINTFILES: "azurelinuxagent setup.py makepkg.py tests"
-
+            
           - python-version: 3.8
             PYLINTOPTS: "--rcfile=ci/3.6.pylintrc"
-            NOSEOPTS: "--verbose --with-coverage --with-xunit --xunit-file=nosetests.__uuid__.xml
-              --with-timer --cover-erase --cover-inclusive --cover-branches --cover-package=azurelinuxagent"
-            PYLINTFILES: "azurelinuxagent setup.py makepkg.py tests"
+
+          - python-version: 3.9
+            PYLINTOPTS: "--rcfile=ci/3.6.pylintrc"
+            NOSEOPTS: "--with-coverage --cover-erase --cover-inclusive --cover-branches --cover-package=azurelinuxagent"
     
     name: "Python ${{ matrix.python-version }} Unit Tests"
     runs-on: ubuntu-18.04
 
     env:
       PYLINTOPTS: ${{ matrix.PYLINTOPTS }}
-      PYLINTFILES: ${{ matrix.PYLINTFILES }}
-      NOSEOPTS: ${{ matrix.NOSEOPTS }}
+      PYLINTFILES: "azurelinuxagent setup.py makepkg.py tests"
+      NOSEOPTS: "--verbose --with-timer ${{ matrix.additional-nose-opts }}"
       PYTHON_VERSION: ${{ matrix.python-version }}
 
     steps:
@@ -97,6 +90,7 @@ jobs:
         python-version: ${{ matrix.python-version }}
     
     - name: Install dependencies
+      id: install-dependencies
       run: |
         sudo env "PATH=$PATH" python -m pip install --upgrade pip
         sudo env "PATH=$PATH" pip install -r requirements.txt
@@ -107,31 +101,19 @@ jobs:
         pylint $PYLINTOPTS --jobs=0 $PYLINTFILES
 
     - name: Test with nosetests
-      if: always()
+      if: steps.install-dependencies.outcome == 'success'
       run: |
-        ./ci/nosetests.sh || EXIT_CODE=$?
-        exit $EXIT_CODE
+        ./ci/nosetests.sh
+        exit $?
 
-    - name: Run Coverage
-      env:
-        MIN_COVERAGE_GOAL: 60
+    - name: Compile Coverage
       if: matrix.python-version == 3.8
       run: |
         echo looking for coverage files :
         ls -alh | grep -i coverage
         sudo env "PATH=$PATH" coverage combine coverage.*.data
         sudo env "PATH=$PATH" coverage xml
-        COVERAGE_PERCENT=$(coverage report | tail -n 1 | rev | cut -d ' ' -f 1 | cut -c 2- | rev)
-        EXIT_CODE=1
-        echo Codecoverage : $COVERAGE_PERCENT%
-        if [ "$COVERAGE_PERCENT" -eq "$COVERAGE_PERCENT" ] && [ "$COVERAGE_PERCENT" -gt "$MIN_COVERAGE_GOAL" ]; then 
-          echo Pass coverage check.
-          EXIT_CODE=0;
-        else 
-          echo Failed coverage check. Found $COVERAGE_PERCENT%, expected minimum of $MIN_COVERAGE_GOAL%;
-          EXIT_CODE=1;
-        fi
-        exit $EXIT_CODE
+        sudo env "PATH=$PATH" coverage report
 
     - name: Upload Coverage
       if: ${{ github.event_name == 'pull_request' }} && matrix.python-version == 3.8
