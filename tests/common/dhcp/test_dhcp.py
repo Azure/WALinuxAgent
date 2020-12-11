@@ -48,8 +48,8 @@ class TestDHCP(AgentTestCase):
                         "00FCFFFF	0	0	0   \n"
 
         with patch("os.path.exists", return_value=True):
-            mo = mock.mock_open(read_data=routing_table)  # pylint: disable=invalid-name
-            with patch(open_patch(), mo):
+            open_file_mock = mock.mock_open(read_data=routing_table)  # pylint: disable=invalid-name
+            with patch(open_patch(), open_file_mock):
                 self.assertTrue(dhcp_handler.wireserver_route_exists)
 
         # test
@@ -65,7 +65,18 @@ class TestDHCP(AgentTestCase):
         self.assertTrue(dhcp_handler.gateway is None)
 
         # execute
-        self.assertFalse(dhcp_handler.wireserver_route_exists)
+        routing_table = "\
+            Iface	Destination	Gateway 	Flags	RefCnt	Use	Metric	" \
+                        "Mask		MTU	Window	IRTT \n\
+            eth0	00345B0A	00000000	0001	0	    0	5	" \
+                        "00000000	0	0	0   \n\
+            lo	    00000000	01345B0A	0003	0	    0	1	" \
+                        "00FCFFFF	0	0	0   \n"
+
+        with patch("os.path.exists", return_value=True):
+            open_file_mock = mock.mock_open(read_data=routing_table) 
+            with patch(open_patch(), open_file_mock):
+                self.assertFalse(dhcp_handler.wireserver_route_exists)
 
         # test
         self.assertTrue(dhcp_handler.endpoint is None)
@@ -87,6 +98,17 @@ class TestDHCP(AgentTestCase):
     def test_dhcp_skip_cache(self):
         handler = dhcp.get_dhcp_handler()
         handler.osutil = osutil.DefaultOSUtil()
+
+        routing_table = "\
+            Iface	Destination	Gateway 	Flags	RefCnt	Use	Metric	" \
+                        "Mask		MTU	Window	IRTT \n\
+            eth0	00345B0A	00000000	0001	0	    0	5	" \
+                        "00000000	0	0	0   \n\
+            lo	    00000000	01345B0A	0003	0	    0	1	" \
+                        "00FCFFFF	0	0	0   \n"
+
+        open_file_mock = mock.mock_open(read_data=routing_table) 
+
         with patch('os.path.exists', return_value=False):
             with patch.object(osutil.DefaultOSUtil, 'get_dhcp_lease_endpoint')\
                     as patch_dhcp_cache:
@@ -98,7 +120,11 @@ class TestDHCP(AgentTestCase):
 
                     # endpoint comes from cache
                     self.assertFalse(handler.skip_cache)
-                    handler.run()
+
+                    with patch("os.path.exists", return_value=True):
+                        with patch(open_patch(), open_file_mock):
+                            handler.run()
+                    
                     self.assertTrue(patch_dhcp_cache.call_count == 1)
                     self.assertTrue(patch_dhcp_send.call_count == 0)
                     self.assertTrue(handler.endpoint == endpoint)
@@ -109,6 +135,10 @@ class TestDHCP(AgentTestCase):
 
                     # endpoint comes from dhcp request
                     self.assertTrue(handler.skip_cache)
-                    handler.run()
+
+                    with patch("os.path.exists", return_value=True):
+                        with patch(open_patch(), open_file_mock):
+                            handler.run()
+                    
                     self.assertTrue(patch_dhcp_cache.call_count == 1)
                     self.assertTrue(patch_dhcp_send.call_count == 1)
