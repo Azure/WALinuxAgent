@@ -107,7 +107,7 @@ jobs:
         exit $?
 
     - name: Compile Coverage
-      if: matrix.python-version == 3.8
+      if: matrix.python-version == 3.9
       run: |
         echo looking for coverage files :
         ls -alh | grep -i coverage
@@ -116,7 +116,7 @@ jobs:
         sudo env "PATH=$PATH" coverage report
 
     - name: Upload Coverage
-      if: ${{ github.event_name == 'pull_request' }} && matrix.python-version == 3.8
+      if: ${{ github.event_name == 'pull_request' }} && matrix.python-version == 3.9
       uses: codecov/codecov-action@v1
       with:
         file: ./coverage.xml
