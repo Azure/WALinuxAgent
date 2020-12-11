@@ -18,6 +18,7 @@
 
 from azurelinuxagent.common.osutil.default import DefaultOSUtil
 
+
 class MarinerOSUtil(DefaultOSUtil):
     def __init__(self):
         super(MarinerOSUtil, self).__init__()
