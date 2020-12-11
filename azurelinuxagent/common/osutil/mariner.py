@@ -25,7 +25,6 @@ from azurelinuxagent.common.exception import OSUtilError
 class MarinerOSUtil(DefaultOSUtil):
     def __init__(self):
         super(MarinerOSUtil, self).__init__()
-        self.agent_conf_file_path = '/etc/waagent.conf'
         self.jit_enabled = True
 
     def is_dhcp_enabled(self):
@@ -63,23 +62,3 @@ class MarinerOSUtil(DefaultOSUtil):
 
     def conf_sshd(self, disable_password):
         pass
-
-    def del_root_password(self):
-        try:
-            passwd_file_path = conf.get_passwd_file_path()
-            try:
-                passwd_content = fileutil.read_file(passwd_file_path)
-                if not passwd_content:
-                    # Empty file is no better than no file
-                    raise IOError(errno.ENOENT, "Empty File", passwd_file_path)
-            except (IOError, OSError) as file_read_err:
-                if file_read_err.errno != errno.ENOENT:
-                    raise
-                    new_passwd = ["root:*LOCK*:14600::::::"]
-                else:
-                    passwd = passwd_content.split('\n')
-                    new_passwd = [x for x in passwd if not x.startswith("root:")]
-                    new_passwd.insert(0, "root:*LOCK*:14600::::::")
-            fileutil.write_file(passwd_file_path, "\n".join(new_passwd))
-        except IOError as err:
-            raise OSUtilError("Failed to delete root password:{0}".format(err))
