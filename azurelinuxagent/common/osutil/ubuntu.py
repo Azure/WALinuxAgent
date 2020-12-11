@@ -100,15 +100,16 @@ class Ubuntu18OSUtil(Ubuntu16OSUtil):
         """
         retry_limit=retries+1
         for attempt in range(1, retry_limit):
-            return_code=shellutil.run("systemctl restart systemd-networkd")
-            if return_code == 0:
-                return
-            logger.warn("failed to restart systemd-networkd")
-            if attempt < retry_limit:
-                logger.info("retrying in {0} seconds".format(wait))
-                time.sleep(wait)
-            else:
-                logger.warn("exceeded restart retries")
+            try:
+                shellutil.run_command(["systemctl", "restart", "systemd-networkd"])
+
+            except shellutil.CommandError as cmd_err:
+                logger.warn("failed to restart systemd-networkd: return code {1}".format(cmd_err.returncode))
+                if attempt < retry_limit:
+                    logger.info("retrying in {0} seconds".format(wait))
+                    time.sleep(wait)
+                else:
+                    logger.warn("exceeded restart retries")
 
     def get_dhcp_pid(self):
         return self._get_dhcp_pid(["pidof", "systemd-networkd"])
