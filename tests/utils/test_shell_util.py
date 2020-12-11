@@ -366,16 +366,16 @@ exit({0})
 
     # R0912: Too many branches (13/12) (too-many-branches) -- Disabled: Branches are sequential
     def test_run_command_run_pipe_run_get_output_should_notify_when_commands_start_and_complete(self):  # pylint:disable=R0912
-        # The children processes run this script, which creates a file (this signals that process has started) and then sleeps for a long time
+        # The children processes run this script, which creates a file with the PIDs of the script and its parent and then sleeps for a long time
         child_script = os.path.join(self.tmp_dir, "should_notify_when_commands_start_and_complete.py")
         AgentTestCase.create_script(child_script, """
 import os
 import sys
 import time
 
-with open(sys.argv[1], "w") as signal_file:
-    signal_file.write("{0} {1}".format(os.getpid(), os.getppid()))
-time.sleep(60)
+with open(sys.argv[1], "w") as pid_file:
+    pid_file.write("{0} {1}".format(os.getpid(), os.getppid()))
+time.sleep(120)
 """)
 
         threads = []
@@ -392,18 +392,18 @@ time.sleep(60)
             shellutil.set_on_command_completed_callback(lambda pid: completed_commands.append(pid))  # pylint:disable=W0108
 
             try:
-                # we use these files to signal that the commands are running
-                signal_files = [os.path.join(self.tmp_dir, "should_notify_when_commands_start_and_complete.txt.{0}".format(i)) for i in range(4)]
+                # each of these files will contain the PIDs of the command that created it and its parent
+                pid_files = [os.path.join(self.tmp_dir, "should_notify_when_commands_start_and_complete.txt.{0}".format(i)) for i in range(4)]
 
                 # we test these commands
                 commands_to_execute = [
                     # run_get_output must be the first in this list; see the code to fetch the PIDs a few lines below
-                    lambda: shellutil.run_get_output("{0} {1}".format(child_script, signal_files[0])),
-                    lambda: shellutil.run_command([child_script, signal_files[1]]),
-                    lambda: shellutil.run_pipe([[child_script, signal_files[2]], [child_script, signal_files[3]]]),
+                    lambda: shellutil.run_get_output("{0} {1}".format(child_script, pid_files[0])),
+                    lambda: shellutil.run_command([child_script, pid_files[1]]),
+                    lambda: shellutil.run_pipe([[child_script, pid_files[2]], [child_script, pid_files[3]]]),
                 ]
 
-                # start each command on a separate thread (since we need to examine them while they are running)
+                # start each command on a separate thread (since we need to examine the processes running the commands while they are running)
                 def invoke(command):
                     try:
                         command()
@@ -416,17 +416,11 @@ time.sleep(60)
                     thread.start()
                     threads.append(thread)
 
-                # wait for all the commands to create their signal files (this indicates the child processes are running and are alive)
-                all_children_started = False
-                start_time = datetime.datetime.now()
-                while not all_children_started and self._to_seconds(datetime.datetime.now() - start_time) < 30:
-                    all_children_started = all(os.path.exists(file) for file in signal_files)
-                    time.sleep(0.01)
-                if not all_children_started:
+                # now fetch the PIDs in the files created by the commands, but wait until they are created
+                if not self._wait_for(lambda: all(os.path.exists(file) and os.path.getsize(file) > 0 for file in pid_files)):
                     raise Exception("The child processes did not start within the allowed timeout")
 
-                # now fetch the PIDs in the signal files
-                for sig_file in signal_files:
+                for sig_file in pid_files:
                     with open(sig_file, "r") as read_handle:
                         pids = read_handle.read().split()
                         child_processes.append(int(pids[0]))
@@ -436,9 +430,10 @@ time.sleep(60)
                 # shell, so in that case we need to use the parent's pid (which was the process we started)
                 started_commands_expected = parent_processes[0:1] + child_processes[1:]
 
-                #
-                # Check the command_started callback
-                #
+                # wait for the command_started callbacks and verify them
+                if not self._wait_for(lambda: len(started_commands) == len(commands_to_execute) + 1):   # +1 because run_pipe starts 2 commands
+                    raise Exception("The child processes did not complete within the allowed timeout")
+
                 started_commands.sort()
                 started_commands_expected.sort()
                 self.assertEqual(
@@ -456,13 +451,8 @@ time.sleep(60)
                     except Exception:
                         pass  # no need to handle this error
 
-            #
-            # Check the command_completed callback, but we need to wait for the callbacks first
-            #
-            start_time = datetime.datetime.now()
-            while len(completed_commands) != len(started_commands) and self._to_seconds (datetime.datetime.now() - start_time) < 10:
-                time.sleep(0.01)
-            if len(completed_commands) != len(started_commands):
+            # wait for the command_completed callbacks, and verify them
+            if not self._wait_for(lambda: len(completed_commands) == len(started_commands)):
                 raise Exception("The child processes did not complete within the allowed timeout")
 
             completed_commands.sort()
@@ -489,6 +479,15 @@ time.sleep(60)
         except Exception:
             pass
         return "[PID: {0}] UNKNOWN".format(pid)
+
+    @staticmethod
+    def _wait_for(predicate):
+        start_time = datetime.datetime.now()
+        while RunCommandTestCase._to_seconds(datetime.datetime.now() - start_time) < 30:
+            if predicate():
+                return True
+            time.sleep(0.01)
+        return False
 
     @staticmethod
     def _to_seconds(time_delta):

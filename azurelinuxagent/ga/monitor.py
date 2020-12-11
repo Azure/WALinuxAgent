@@ -16,11 +16,13 @@
 #
 
 import datetime
+import os
 import threading
 import uuid
 
 import azurelinuxagent.common.logger as logger
 import azurelinuxagent.common.utils.networkutil as networkutil
+from azurelinuxagent.common.cgroupapi import CGroupsApi
 from azurelinuxagent.common.cgroupconfigurator import CGroupConfigurator
 from azurelinuxagent.common.cgroupstelemetry import CGroupsTelemetry
 from azurelinuxagent.common.errorstate import ErrorState
@@ -31,6 +33,7 @@ from azurelinuxagent.common.osutil import get_osutil
 from azurelinuxagent.common.protocol.healthservice import HealthService
 from azurelinuxagent.common.protocol.imds import get_imds_client
 from azurelinuxagent.common.protocol.util import get_protocol_util
+from azurelinuxagent.common.utils import shellutil
 from azurelinuxagent.common.utils.restutil import IOErrorCounter
 from azurelinuxagent.common.utils.textutil import hash_strings
 from azurelinuxagent.common.version import AGENT_NAME, CURRENT_VERSION
@@ -54,14 +57,22 @@ class PollResourceUsageOperation(PeriodicOperation):
             period=datetime.timedelta(minutes=5))
         self._last_error = None
         self._error_count = 0
+        self._agent_processes = [CGroupsApi.get_daemon_pid(), os.getpid()]
+        shellutil.set_on_command_started_callback(lambda pid: self._agent_processes.append(pid))
+        shellutil.set_on_command_completed_callback(lambda pid: self._agent_processes.remove(pid))
 
     def _operation_impl(self):
-        #
-        # Check the processes in the agent cgroup
-        #
+        self._check_agent_processes()
+
+        for metric in CGroupsTelemetry.poll_all_tracked():
+            report_metric(metric.category, metric.counter, metric.instance, metric.value)
+
+    def _check_agent_processes(self):
         processes_check_error = None
         try:
-            processes = CGroupConfigurator.get_instance().get_processes_in_agent_cgroup()
+            processes_in_cgroup = CGroupConfigurator.get_instance().get_processes_in_agent_cgroup()
+            agent_processes = self._agent_processes.copy()  # copy the array since other threads may invoke the callbacks while we are using it
+
 
             if processes is not None:
                 unexpected_processes = []
@@ -82,14 +93,6 @@ class PollResourceUsageOperation(PeriodicOperation):
             self._last_error = processes_check_error
             logger.info(processes_check_error)
             add_event(op=WALAEventOperation.CGroupsDebug, message=processes_check_error)
-
-        #
-        # Report metrics
-        #
-        metrics = CGroupsTelemetry.poll_all_tracked()
-
-        for metric in metrics:
-            report_metric(metric.category, metric.counter, metric.instance, metric.value)
 
 
 class ResetPeriodicLogMessagesOperation(PeriodicOperation):

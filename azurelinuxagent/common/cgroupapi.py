@@ -150,15 +150,19 @@ class CGroupsApi(object):
 
                 if os.path.exists(procs_file):
                     procs_file_contents = fileutil.read_file(procs_file).strip()
-                    daemon_pid = fileutil.read_file(get_agent_pid_file_path()).strip()
+                    daemon_pid = CGroupsApi.get_daemon_pid()
 
-                    if daemon_pid in procs_file_contents:
+                    if ustr(daemon_pid) in procs_file_contents:
                         operation(controller, daemon_pid)
         finally:
             for _, cgroup in legacy_cgroups:
                 logger.info('Removing {0}', cgroup)
                 shutil.rmtree(cgroup, ignore_errors=True)
         return len(legacy_cgroups)
+
+    @staticmethod
+    def get_daemon_pid():
+        return int(fileutil.read_file(get_agent_pid_file_path()).strip())
 
 
 class FileSystemCgroupsApi(CGroupsApi):
