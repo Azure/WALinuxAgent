@@ -68,7 +68,7 @@ jobs:
 
           - python-version: 3.9
             PYLINTOPTS: "--rcfile=ci/3.6.pylintrc"
-            NOSEOPTS: "--with-coverage --cover-erase --cover-inclusive --cover-branches --cover-package=azurelinuxagent"
+            additional-nose-opts: "--with-coverage --cover-erase --cover-inclusive --cover-branches --cover-package=azurelinuxagent"
     
     name: "Python ${{ matrix.python-version }} Unit Tests"
     runs-on: ubuntu-18.04
