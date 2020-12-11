@@ -32,7 +32,7 @@ class MarinerOSUtil(DefaultOSUtil):
         return True
 
     def start_network(self) :
-        self._run_command_without_raising(["systemctl", "start", "systemd-networkd"], log_error=True)
+        self._run_command_without_raising(["systemctl", "start", "systemd-networkd"], log_error=False)
 
     def restart_if(self, ifname=None, retries=None, wait=None):
         self._run_command_without_raising(["systemctl", "restart", "systemd-networkd"])
@@ -41,22 +41,22 @@ class MarinerOSUtil(DefaultOSUtil):
         self._run_command_without_raising(["systemctl", "restart", "sshd"])
 
     def stop_dhcp_service(self):
-        self._run_command_without_raising(["systemctl", "stop", "systemd-networkd"], log_error=True)
+        self._run_command_without_raising(["systemctl", "stop", "systemd-networkd"], log_error=False)
 
     def start_dhcp_service(self):
-        self._run_command_without_raising(["systemctl", "start", "systemd-networkd"], log_error=True)
+        self._run_command_without_raising(["systemctl", "start", "systemd-networkd"], log_error=False)
 
     def start_agent_service(self):
-        self._run_command_without_raising(["systemctl", "start", "{0}".format(self.service_name)], log_error=True)
+        self._run_command_without_raising(["systemctl", "start", "{0}".format(self.service_name)], log_error=False)
 
     def stop_agent_service(self):
-        self._run_command_without_raising(["systemctl", "stop", "{0}".format(self.service_name)], log_error=True)
+        self._run_command_without_raising(["systemctl", "stop", "{0}".format(self.service_name)], log_error=False)
 
     def register_agent_service(self):
-        self._run_command_without_raising(["systemctl", "enable", "{0}".format(self.service_name)], log_error=True)
+        self._run_command_without_raising(["systemctl", "enable", "{0}".format(self.service_name)], log_error=False)
 
     def unregister_agent_service(self):
-        self._run_command_without_raising(["systemctl", "disable", "{0}".format(self.service_name)], log_error=True)
+        self._run_command_without_raising(["systemctl", "disable", "{0}".format(self.service_name)], log_error=False)
 
     def get_dhcp_pid(self):
         return self._get_dhcp_pid(["pidof", "systemd-networkd"])
