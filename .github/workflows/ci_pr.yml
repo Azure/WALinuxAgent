@@ -101,7 +101,7 @@ jobs:
         pylint $PYLINTOPTS --jobs=0 $PYLINTFILES
 
     - name: Test with nosetests
-      if: steps.install-dependencies.outcome == 'success'
+      if: success() || (failure() && steps.install-dependencies.outcome == 'success')
       run: |
         ./ci/nosetests.sh
         exit $?
