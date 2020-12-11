@@ -48,7 +48,7 @@ class TestDHCP(AgentTestCase):
                         "00FCFFFF	0	0	0   \n"
 
         with patch("os.path.exists", return_value=True):
-            open_file_mock = mock.mock_open(read_data=routing_table)  # pylint: disable=invalid-name
+            open_file_mock = mock.mock_open(read_data=routing_table) 
             with patch(open_patch(), open_file_mock):
                 self.assertTrue(dhcp_handler.wireserver_route_exists)
 
