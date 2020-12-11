@@ -16,11 +16,7 @@
 # Requires Python 2.6+ and Openssl 1.0+
 #
 
-import errno
-import azurelinuxagent.common.conf as conf
-import azurelinuxagent.common.utils.fileutil as fileutil
 from azurelinuxagent.common.osutil.default import DefaultOSUtil
-from azurelinuxagent.common.exception import OSUtilError
 
 class MarinerOSUtil(DefaultOSUtil):
     def __init__(self):
