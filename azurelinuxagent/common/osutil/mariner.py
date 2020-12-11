@@ -26,7 +26,7 @@ class MarinerOSUtil(DefaultOSUtil):
     def is_dhcp_enabled(self):
         return True
 
-    def start_network(self) :
+    def start_network(self):
         self._run_command_without_raising(["systemctl", "start", "systemd-networkd"], log_error=False)
 
     def restart_if(self, ifname=None, retries=None, wait=None):
