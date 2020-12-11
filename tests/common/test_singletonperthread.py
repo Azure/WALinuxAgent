@@ -6,7 +6,7 @@ from azurelinuxagent.common.singletonperthread import SingletonPerThread
 from tests.tools import AgentTestCase, clear_singleton_instances
 
 
-class TestClassToTestSingletonPerThread(SingletonPerThread):  # pylint: disable=too-few-public-methods
+class TestClassToTestSingletonPerThread(SingletonPerThread):
     """
     Since these tests deal with testing in a multithreaded environment,
     we employ the use of multiprocessing.Queue() to ensure that the data is consistent.
