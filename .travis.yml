@@ -51,6 +51,12 @@ matrix:
           SETUPOPTS=""
           PYLINTOPTS="--rcfile=ci/3.6.pylintrc"
           PYLINTFILES="azurelinuxagent setup.py makepkg.py tests"
+    - python: 3.9
+      env:
+        - >-
+          NOSEOPTS="--verbose --with-timer" SETUPOPTS=""
+          PYLINTOPTS="--rcfile=ci/3.6.pylintrc"
+          PYLINTFILES="azurelinuxagent setup.py makepkg.py tests"
 
 install:
   - pip install -r requirements.txt
