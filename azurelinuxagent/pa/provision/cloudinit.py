@@ -74,6 +74,8 @@ class CloudInitProvisionHandler(ProvisionHandler):
         Wait for cloud-init to copy ovf-env.xml file from provision ISO
         """
         ovf_file_path = os.path.join(conf.get_lib_dir(), OVF_FILE_NAME)
+        logging_interval = 10
+        max_logging_interval = 320
         for retry in range(0, max_retry):
             if os.path.isfile(ovf_file_path):
                 try:
@@ -86,14 +88,16 @@ class CloudInitProvisionHandler(ProvisionHandler):
                                                              ustr(pe)))
             else:
                 if retry < max_retry - 1:
-                    logger.info(
-                        "Waiting for cloud-init to copy ovf-env.xml to {0} "
-                        "[{1} retries remaining, "
-                        "sleeping {2}s]".format(ovf_file_path,
-                                                max_retry - retry,
-                                                sleep_time))
-                    if not cloud_init_is_enabled():
-                        logger.warn("cloud-init does not appear to be enabled")
+                    if retry % logging_interval == 0:
+                        logger.info(
+                            "Waiting for cloud-init to copy ovf-env.xml to {0} "
+                            "[{1} retries remaining, "
+                            "sleeping {2}s between retries]".format(ovf_file_path,
+                                                    max_retry - retry,
+                                                    sleep_time))
+                        if not cloud_init_is_enabled():
+                            logger.warn("cloud-init does not appear to be enabled")
+                        logging_interval = min(logging_interval * 2, max_logging_interval)
                     time.sleep(sleep_time)
         raise ProvisionError("Giving up, ovf-env.xml was not copied to {0} "
                              "after {1}s".format(ovf_file_path,
@@ -105,6 +109,8 @@ class CloudInitProvisionHandler(ProvisionHandler):
         """
         keypair_type = conf.get_ssh_host_keypair_type()  # pylint: disable=W0612
         path = conf.get_ssh_key_public_path()
+        logging_interval = 10
+        max_logging_interval = 320
         for retry in range(0, max_retry):
             if os.path.isfile(path):
                 logger.info("ssh host key found at: {0}".format(path))
@@ -115,13 +121,15 @@ class CloudInitProvisionHandler(ProvisionHandler):
                 except ProvisionError:
                     logger.warn("Could not get thumbprint from {0}".format(path))
             if retry < max_retry - 1:
-                logger.info("Waiting for ssh host key be generated at {0} "
-                            "[{1} attempts remaining, "
-                            "sleeping {2}s]".format(path,
-                                                    max_retry - retry,
-                                                    sleep_time))
-                if not cloud_init_is_enabled():
-                    logger.warn("cloud-init does not appear to be running")
+                if retry % logging_interval == 0:
+                    logger.info("Waiting for ssh host key be generated at {0} "
+                                "[{1} attempts remaining, "
+                                "sleeping {2}s between retries]".format(path,
+                                                        max_retry - retry,
+                                                        sleep_time))
+                    if not cloud_init_is_enabled():
+                        logger.warn("cloud-init does not appear to be running")
+                    logging_interval = min(logging_interval * 2, max_logging_interval)
                 time.sleep(sleep_time)
         raise ProvisionError("Giving up, ssh host key was not found at {0} "
                              "after {1}s".format(path,
