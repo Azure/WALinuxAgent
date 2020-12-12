@@ -372,7 +372,7 @@ class ExtensionsConfig(object):
                 ExtensionsConfig._parse_plugin(ext_handler, plugin)
                 ExtensionsConfig._parse_plugin_settings(ext_handler, plugin_settings)
             except ExtensionConfigError as error:
-                ext_handler.invalid_reason = ustr(error)
+                ext_handler.invalid_setting_reason = ustr(error)
 
             self.ext_handlers.extHandlers.append(ext_handler)
 
@@ -387,16 +387,23 @@ class ExtensionsConfig(object):
         </Plugins>
         """
 
-        def _raise_config_error_if_none(attr_name, value):
-            if value is None:
-                raise ExtensionConfigError("{0} is None for ExtensionConfig, failing Extension.".format(attr_name))
+        def _log_error_if_none(attr_name, value):
+            # Plugin Name and Version are very essential fields, without them we wont be able to even report back to CRP
+            # about that handler. For those cases we need to fail the GoalState completely but currently we dont support
+            # reporting status at a GoalState level (we only report at a handler level).
+            # Once that functionality is added to the GA, we would raise here rather than just report error in our logs.
+            if value in (None, ""):
+                add_event(AGENT_NAME, op=WALAEventOperation.InvalidExtensionConfig,
+                          message="{0} is None for ExtensionConfig, logging error".format(attr_name),
+                          log_event=True, is_success=False)
             return value
 
-        ext_handler.name = _raise_config_error_if_none("Extensions.Plugins.Plugin.name", getattrib(plugin, "name"))
-        ext_handler.properties.version = _raise_config_error_if_none("Extensions.Plugins.Plugin.version",
-                                                                     getattrib(plugin, "version"))
-        ext_handler.properties.state = _raise_config_error_if_none("Extensions.Plugins.Plugin.state",
-                                                                   getattrib(plugin, "state"))
+        ext_handler.name = _log_error_if_none("Extensions.Plugins.Plugin.name", getattrib(plugin, "name"))
+        ext_handler.properties.version = _log_error_if_none("Extensions.Plugins.Plugin.version",
+                                                            getattrib(plugin, "version"))
+        ext_handler.properties.state = getattrib(plugin, "state")
+        if ext_handler.properties.state in (None, ""):
+            raise ExtensionConfigError("Received empty Extensions.Plugins.Plugin.state, failing Handler")
 
         location = getattrib(plugin, "location")
         failover_location = getattrib(plugin, "failoverlocation")
@@ -404,10 +411,6 @@ class ExtensionsConfig(object):
             version_uri = ExtHandlerVersionUri()
             version_uri.uri = uri
             ext_handler.versionUris.append(version_uri)
-
-    @staticmethod
-    def __is_not_empty(obj):
-        return obj not in (None, "", [])
 
     @staticmethod
     def _parse_plugin_settings(ext_handler, plugin_settings):
@@ -460,7 +463,7 @@ class ExtensionsConfig(object):
         if len(settings) != len(ext_handler_plugin_settings):
             msg = "ExtHandler PluginSettings Version Mismatch! Expected PluginSettings version: {0} for Handler: {1} but found versions: ({2})".format(
                 version, handler_name, ', '.join(set([getattrib(x, "version") for x in ext_handler_plugin_settings])))
-            add_event(AGENT_NAME, op=WALAEventOperation.PluginSettingsVersionMismatch, message=msg, log_event=False,
+            add_event(AGENT_NAME, op=WALAEventOperation.PluginSettingsVersionMismatch, message=msg, log_event=True,
                       is_success=False)
             raise ExtensionConfigError(msg)
 
@@ -473,14 +476,13 @@ class ExtensionsConfig(object):
         runtime_settings_nodes = findall(plugin_settings_node, "RuntimeSettings")
         extension_runtime_settings_nodes = findall(plugin_settings_node, "ExtensionRuntimeSettings")
 
-        if ExtensionsConfig.__is_not_empty(runtime_settings_nodes) and ExtensionsConfig.__is_not_empty(
-                extension_runtime_settings_nodes):
+        if runtime_settings_nodes is not [] and extension_runtime_settings_nodes is not []:
             # There can only be a single RuntimeSettings node or multiple ExtensionRuntimeSettings nodes per Plugin
             msg = "Both RuntimeSettings and ExtensionRuntimeSettings found for the same handler: {0} and version: {1}".format(
                 handler_name, version)
             raise ExtensionConfigError(msg)
 
-        if ExtensionsConfig.__is_not_empty(runtime_settings_nodes):
+        if runtime_settings_nodes is not []:
             if len(runtime_settings_nodes) > 1:
                 msg = "Multiple RuntimeSettings found for the same handler: {0} and version: {1} (Expected: 1; Available: {2})".format(
                     handler_name, version, len(runtime_settings_nodes))
@@ -488,7 +490,7 @@ class ExtensionsConfig(object):
             # Only Runtime settings available, parse that
             ExtensionsConfig.__parse_runtime_settings(plugin_settings_node, runtime_settings_nodes[0], handler_name,
                                                       ext_handler)
-        elif ExtensionsConfig.__is_not_empty(extension_runtime_settings_nodes):
+        elif extension_runtime_settings_nodes is not []:
             # Parse the ExtensionRuntime settings for the given extension
             ExtensionsConfig.__parse_extension_runtime_settings(plugin_settings_node, extension_runtime_settings_nodes,
                                                                 ext_handler)
@@ -594,7 +596,7 @@ class ExtensionsConfig(object):
         dependency_levels = defaultdict(int)
         for depends_on_node in findall(plugin_settings_node, "DependsOn"):
             extension_name = getattrib(depends_on_node, "name")
-            if not ExtensionsConfig.__is_not_empty(extension_name):
+            if extension_name in (None, ""):
                 raise ExtensionConfigError("No Name not specified for DependsOn object in ExtensionRuntimeSettings for MultiConfig!")
 
             dependency_level = ExtensionsConfig.__get_dependency_level_from_node(depends_on_node, extension_name)
@@ -603,11 +605,11 @@ class ExtensionsConfig(object):
         for extension_runtime_setting_node in extension_runtime_settings_nodes:
             # Name and State will only be set for ExtensionRuntimeSettings for Multi-Config
             extension_name = getattrib(extension_runtime_setting_node, "name")
-            if not ExtensionsConfig.__is_not_empty(extension_name):
+            if extension_name in (None, ""):
                 raise ExtensionConfigError("Extension Name not specified for ExtensionRuntimeSettings for MultiConfig!")
             # State can either be `enabled` (default) or `disabled`
             state = getattrib(extension_runtime_setting_node, "state")
-            state = state if ExtensionsConfig.__is_not_empty(state) else "enabled"
+            state = state if state not in (None, "") else "enabled"
             ExtensionsConfig.__parse_and_add_extension_settings(extension_runtime_setting_node, extension_name,
                                                                 ext_handler, dependency_levels[extension_name],
                                                                 state=state)
@@ -615,7 +617,7 @@ class ExtensionsConfig(object):
     @staticmethod
     def __parse_and_add_extension_settings(settings_node, name, ext_handler, depends_on_level, state="enabled"):
         seq_no = getattrib(settings_node, "seqNo")
-        if not ExtensionsConfig.__is_not_empty(seq_no):
+        if seq_no in (None, ""):
             raise ExtensionConfigError("SeqNo not specified for the Extension: {0}".format(name))
         try:
             runtime_settings = json.loads(gettext(settings_node))

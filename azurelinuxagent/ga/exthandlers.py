@@ -401,7 +401,6 @@ class ExtHandlersHandler(object):
 
     def handle_ext_handlers(self, etag=None):
         if not self.ext_handlers.extHandlers:
-            # This is a valid case, some extensions dont have any settings. Just log and exit processing
             logger.info("No extension handlers found, not processing anything.")
             return
 
@@ -495,8 +494,8 @@ class ExtHandlersHandler(object):
         ext_handler_i = ExtHandlerInstance(ext_handler, self.protocol)
         try:
             # Ensure the extension config was valid
-            if ext_handler.is_invalid:
-                raise ExtensionConfigError(ext_handler.invalid_reason)
+            if ext_handler.is_invalid_setting:
+                raise ExtensionConfigError(ext_handler.invalid_setting_reason)
 
             state = ext_handler.properties.state
 
@@ -528,9 +527,11 @@ class ExtHandlersHandler(object):
 
         except ExtensionConfigError as error:
             # Catch and report Invalid ExtensionConfig errors here to fail fast rather than timing out after 90 min
+            err_msg = "Ran into config errors: {0}. \nPlease retry again as another operation with updated settings".format(
+                ustr(error))
             self.__handle_and_report_ext_handler_errors(ext_handler_i, error,
                                                         report_op=WALAEventOperation.InvalidExtensionConfig,
-                                                        message="[Retryable Error] {0}".format(ustr(error)))
+                                                        message=err_msg)
         except ExtensionUpdateError as error:
             # Not reporting the error as it has already been reported from the old version
             self.handle_ext_handler_error(ext_handler_i, error, error.code, report_telemetry_event=False)

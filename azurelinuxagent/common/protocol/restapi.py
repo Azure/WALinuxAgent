@@ -131,19 +131,19 @@ class ExtHandler(DataContract):
         self.name = name
         self.properties = ExtHandlerProperties()
         self.versionUris = DataContractList(ExtHandlerVersionUri)  # pylint: disable=C0103
-        self.__invalid_handler_reason = None
+        self.__invalid_handler_setting_reason = None
 
     @property
-    def is_invalid(self):
-        return self.__invalid_handler_reason is not None
+    def is_invalid_setting(self):
+        return self.__invalid_handler_setting_reason is not None
 
     @property
-    def invalid_reason(self):
-        return self.__invalid_handler_reason
+    def invalid_setting_reason(self):
+        return self.__invalid_handler_setting_reason
 
-    @invalid_reason.setter
-    def invalid_reason(self, value):
-        self.__invalid_handler_reason = value
+    @invalid_setting_reason.setter
+    def invalid_setting_reason(self, value):
+        self.__invalid_handler_setting_reason = value
 
     def sort_key(self):
         levels = [e.dependencyLevel for e in self.properties.extensions]
