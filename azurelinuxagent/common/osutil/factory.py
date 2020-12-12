@@ -30,6 +30,7 @@ from .default import DefaultOSUtil
 from .freebsd import FreeBSDOSUtil
 from .gaia import GaiaOSUtil
 from .iosxe import IosxeOSUtil
+from .mariner import MarinerOSUtil
 from .nsbsd import NSBSDOSUtil
 from .openbsd import OpenBSDOSUtil
 from .openwrt import OpenWRTOSUtil
@@ -119,6 +120,9 @@ def _get_osutil(distro_name, distro_code_name, distro_version, distro_full_name)
 
     if distro_name == "iosxe":
         return IosxeOSUtil()
+
+    if distro_name == "mariner":
+        return MarinerOSUtil()
 
     if distro_name == "nsbsd":
         return NSBSDOSUtil()
