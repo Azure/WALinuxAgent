@@ -3071,7 +3071,7 @@ class TestMultiConfigExtensions(ExtensionTestCase):
             self.name = name
             self.version = version
             self.state = state
-            self.is_invalid = False
+            self.is_invalid_setting = False
             self.extensions = dict()
 
     # too-few-public-methods<R0903> Disabled: This is just a test class used for verification purposes.
