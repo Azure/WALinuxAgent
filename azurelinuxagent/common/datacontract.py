@@ -27,7 +27,7 @@ Base class for data contracts between guest and host and utilities to manipulate
 # pylint: enable=W0105
 
 
-class DataContract(object):  # pylint: disable=R0903
+class DataContract(object):
     pass
 
 
