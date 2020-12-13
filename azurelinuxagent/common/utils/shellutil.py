@@ -355,6 +355,6 @@ def _on_command_completed(pid):
 
 
 def get_running_commands():
-    return _running_commands.copy()  # since get can be called from another thread return a copy of the array
+    return _running_commands[:]  # return a copy, since the call may originate on another thread
 
 
