@@ -27,6 +27,8 @@ import uuid
 from datetime import datetime, timedelta
 
 from azurelinuxagent.common import conf
+from azurelinuxagent.common.agent_supported_feature import CRPSupportedFeatureNames, get_supported_feature_by_name, \
+    get_agent_supported_features_list_for_crp
 from azurelinuxagent.common.exception import ResourceGoneError, ProtocolError, \
     ExtensionDownloadError, HttpError
 from azurelinuxagent.common.protocol.goal_state import ExtensionsConfig
@@ -38,10 +40,11 @@ from azurelinuxagent.common.telemetryevent import GuestAgentExtensionEventsSchem
     TelemetryEventParam, TelemetryEvent
 from azurelinuxagent.common.utils import restutil
 from azurelinuxagent.common.version import CURRENT_VERSION, DISTRO_NAME, DISTRO_VERSION
+from azurelinuxagent.ga.exthandlers import get_exthandlers_handler
 from tests.ga.test_monitor import random_generator
 from tests.protocol import mockwiredata
 from tests.protocol.mocks import mock_wire_protocol, HttpRequestPredicates
-from tests.protocol.mockwiredata import DATA_FILE_NO_EXT
+from tests.protocol.mockwiredata import DATA_FILE_NO_EXT, DATA_FILE
 from tests.protocol.mockwiredata import WireProtocolData
 from tests.tools import Mock, patch, AgentTestCase
 
@@ -364,6 +367,51 @@ class TestWireProtocol(AgentTestCase):
             'guestOSInfo': v1_ga_guest_info
         }
         self.assertEqual(json.dumps(v1_vm_status), actual.to_json())
+
+    def test_it_should_report_supported_features_in_status_blob_if_supported(self, *_):
+        with mock_wire_protocol(DATA_FILE) as protocol:
+
+            def mock_http_put(url, *args, **__):
+                if not HttpRequestPredicates.is_host_plugin_status_request(url):
+                    # Skip reading the HostGA request data as its encoded
+                    protocol.aggregate_status = json.loads(args[0])
+
+            protocol.aggregate_status = {}
+            protocol.set_http_handlers(http_put_handler=mock_http_put)
+            exthandlers_handler = get_exthandlers_handler(protocol)
+
+            with patch("azurelinuxagent.common.agent_supported_feature._MultiConfigFeature.is_supported", True):
+                exthandlers_handler.run()
+                self.assertIsNotNone(protocol.aggregate_status, "Aggregate status should not be None")
+                self.assertIn("supportedFeatures", protocol.aggregate_status, "supported features not reported")
+                multi_config_feature = get_supported_feature_by_name(CRPSupportedFeatureNames.MultiConfig)
+                found = False
+                for feature in protocol.aggregate_status['supportedFeatures']:
+                    if feature['Key'] == multi_config_feature.name and feature['Value'] == multi_config_feature.version:
+                        found = True
+                        break
+                self.assertTrue(found, "Multi-config name should be present in supportedFeatures")
+
+            # Feature should not be reported if not present
+            with patch("azurelinuxagent.common.agent_supported_feature._MultiConfigFeature.is_supported", False):
+                exthandlers_handler.run()
+                self.assertIsNotNone(protocol.aggregate_status, "Aggregate status should not be None")
+                if "supportedFeatures" not in protocol.aggregate_status:
+                    # In the case Multi-config was the only feature available, 'supportedFeatures' should not be
+                    # reported in the status blob as its not supported as of now.
+                    # Asserting no other feature was available to report back to crp
+                    self.assertEqual(1, len(get_agent_supported_features_list_for_crp()),
+                                     "supportedFeatures should be available if there are more features")
+                    return
+
+                # If there are other features available, confirm MultiConfig was not reported
+                multi_config_feature = get_supported_feature_by_name(CRPSupportedFeatureNames.MultiConfig)
+                found = False
+                for feature in protocol.aggregate_status['supportedFeatures']:
+                    if feature['Key'] == multi_config_feature.name and feature['Value'] == multi_config_feature.version:
+                        found = True
+                        break
+                self.assertFalse(found, "Multi-config name should be present in supportedFeatures")
 
     @patch("azurelinuxagent.common.utils.restutil.http_request")
     def test_send_event(self, mock_http_request, *args):
