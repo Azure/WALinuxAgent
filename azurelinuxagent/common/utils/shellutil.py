@@ -352,7 +352,8 @@ def _popen(*args, **kwargs):
 
 
 def _on_command_completed(pid):
-    _running_commands.remove(pid)
+    with _running_commands_lock:
+        _running_commands.remove(pid)
 
 
 def get_running_commands():
