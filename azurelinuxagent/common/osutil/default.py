@@ -44,7 +44,7 @@ import azurelinuxagent.common.utils.textutil as textutil
 # pylint: enable=R0801
 
 from azurelinuxagent.common.exception import OSUtilError
-from azurelinuxagent.common.future import ustr
+from azurelinuxagent.common.future import ustr, array_to_bytes
 from azurelinuxagent.common.utils.cryptutil import CryptUtil
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
 from azurelinuxagent.common.utils.networkutil import RouteEntry, NetworkInterfaceCard
@@ -584,7 +584,7 @@ class DefaultOSUtil(object):  # pylint: disable=R0904
         logger.info("Configured SSH client probing to keep connections alive.")
 
     def get_dvd_device(self, dev_dir='/dev'):
-        pattern = r'(sr[0-9]|hd[c-z]|cdrom[0-9]|cd[0-9])'
+        pattern = r'(sr[0-9]|hd[c-z]|cdrom[0-9]|cd[0-9]|vd[b-z])'
         device_list = os.listdir(dev_dir)
         for dvd in [re.match(pattern, dev) for dev in device_list]:
             if dvd is not None:
@@ -619,7 +619,7 @@ class DefaultOSUtil(object):  # pylint: disable=R0904
         for retry in range(1, max_retry):
             return_code, err = self.mount(dvd_device,
                                           mount_point,
-                                          option=["-o", "ro", "-t", "udf,iso9660"],
+                                          option=["-o", "ro", "-t", "udf,iso9660,vfat"],
                                           chk_err=False)
             if return_code == 0:  # pylint: disable=R1705
                 logger.info("Successfully mounted dvd")
@@ -645,6 +645,12 @@ class DefaultOSUtil(object):  # pylint: disable=R0904
 
     def eject_dvd(self, chk_err=True):
         dvd = self.get_dvd_device()
+        dev = dvd.rsplit('/', 1)[1]
+        pattern = r'(vd[b-z])'
+        # We should not eject if the disk is not a cdrom
+        if re.search(pattern, dev):
+            return
+
         try:
             shellutil.run_command(["eject", dvd])
         except shellutil.CommandError as cmd_err:
@@ -798,8 +804,7 @@ class DefaultOSUtil(object):  # pylint: disable=R0904
             logger.warn(('SIOCGIFCONF returned more than {0} up '
                          'network interfaces.'), expected)
 
-        ifconf_buff = buff.tostring()
-
+        ifconf_buff = array_to_bytes(buff)
         ifaces = {}
         for i in range(0, array_size, struct_size):
             iface = ifconf_buff[i:i + IFNAMSIZ].split(b'\0', 1)[0]
@@ -1472,7 +1477,7 @@ class DefaultOSUtil(object):  # pylint: disable=R0904
     def _run_command_raising_OSUtilError(cmd, err_msg, cmd_input=None):  # pylint: disable=C0103
         # This method runs shell command using the new secure shellutil.run_command and raises OSUtilErrors on failures.
         try:
-            return shellutil.run_command(cmd, log_error=True, cmd_input=cmd_input)
+            return shellutil.run_command(cmd, log_error=True, input=cmd_input)
         except shellutil.CommandError as e:  # pylint: disable=C0103
             raise OSUtilError(
                 "{0}, Retcode: {1}, Output: {2}, Error: {3}".format(err_msg, e.returncode, e.stdout, e.stderr))

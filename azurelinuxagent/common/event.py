@@ -65,7 +65,7 @@ def send_logs_to_telemetry():
     return SEND_LOGS_TO_TELEMETRY
 
 
-class WALAEventOperation:  # pylint: disable=R0903,no-init
+class WALAEventOperation:  # pylint: disable=no-init
     ActivateResourceDisk = "ActivateResourceDisk"
     AgentBlacklisted = "AgentBlacklisted"
     AgentEnabled = "AgentEnabled"
@@ -79,6 +79,7 @@ class WALAEventOperation:  # pylint: disable=R0903,no-init
     CollectEventUnicodeErrors = "CollectEventUnicodeErrors"
     ConfigurationChange = "ConfigurationChange"
     CustomData = "CustomData"
+    DefaultChannelChange = "DefaultChannelChange"
     Deploy = "Deploy"
     Disable = "Disable"
     Downgrade = "Downgrade"

@@ -63,7 +63,7 @@ _UNCOMPRESSED_ARCHIVE_SIZE_LIMIT = 150 * 1024 * 1024  # 150 MB
 _LOGGER = logging.getLogger(__name__)
 
 
-class LogCollector(object):  # pylint: disable=R0903
+class LogCollector(object):
 
     _TRUNCATED_FILE_PREFIX = "truncated_"
 
@@ -115,7 +115,7 @@ class LogCollector(object):  # pylint: disable=R0903
             return ustr(output, encoding="utf-8", errors="backslashreplace")
 
         try:
-            process = subprocess.Popen(command, stdin=subprocess.PIPE, stdout=stdout, stderr=subprocess.PIPE, shell=False)
+            process = subprocess.Popen(command, stdout=stdout, stderr=subprocess.PIPE, shell=False)
             stdout, stderr = process.communicate()
             return_code = process.returncode
         except Exception as e:  # pylint: disable=C0103

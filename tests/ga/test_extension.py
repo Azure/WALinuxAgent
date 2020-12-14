@@ -1297,6 +1297,29 @@ class TestExtension(ExtensionTestCase):
             self.assertEqual(etag, exthandlers_handler.last_etag,
                              "Last etag and etag should be same if extension processing is enabled")
 
+    def test_it_should_parse_in_vm_metadata_properly(self, mock_get, mock_crypt, *args):
+
+        test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE_IN_VM_META_DATA)
+        exthandlers_handler, protocol = self._create_mock(test_data, mock_get, mock_crypt, *args)
+
+        exthandlers_handler.run()
+        self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.0.0")
+        activity_id, correlation_id, gs_creation_time = exthandlers_handler.get_goal_state_debug_metadata()
+        self.assertEqual(activity_id, "555e551c-600e-4fb4-90ba-8ab8ec28eccc", "Incorrect activity Id")
+        self.assertEqual(correlation_id, "400de90b-522e-491f-9d89-ec944661f531", "Incorrect correlation Id")
+        self.assertEqual(gs_creation_time, '2020-11-09T17:48:50.412125Z', "Incorrect GS Creation time")
+
+        # If the data is not provided in ExtensionConfig, it should just be None
+        test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE)
+        exthandlers_handler, protocol = self._create_mock(test_data, mock_get, mock_crypt, *args)
+
+        exthandlers_handler.run()
+        self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.0.0")
+        activity_id, correlation_id, gs_creation_time = exthandlers_handler.get_goal_state_debug_metadata()
+        self.assertEqual(activity_id, "NA", "Activity Id should be NA")
+        self.assertEqual(correlation_id, "NA", "Correlation Id should be NA")
+        self.assertEqual(gs_creation_time, "NA", "GS Creation time should be NA")
+
     def _assert_ext_status(self, report_ext_status, expected_status,
                            expected_seq_no):
         self.assertTrue(report_ext_status.called)
@@ -2168,8 +2191,10 @@ class TestExtension(ExtensionTestCase):
                 printenv | grep ConfigSequenceNumber
                 """
 
-        base_dir = os.path.join(conf.get_lib_dir(), 'OSTCExtensions.ExampleHandlerLinux-1.0.0', test_file_name)
-        self.create_script(test_file_name, test_file, base_dir)
+        base_dir = os.path.join(conf.get_lib_dir(), 'OSTCExtensions.ExampleHandlerLinux-1.0.0')
+        if not os.path.exists(base_dir):
+            os.mkdir(base_dir)
+        self.create_script(os.path.join(base_dir, test_file_name), test_file)
 
         test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE_EXT_SINGLE)
         exthandlers_handler, protocol = self._create_mock(test_data, *args)  # pylint: disable=unused-variable,no-value-for-parameter
@@ -2192,8 +2217,10 @@ class TestExtension(ExtensionTestCase):
             test_data.ext_conf = test_data.ext_conf.replace('seqNo="0"', 'seqNo="1"')
             test_data.manifest = test_data.manifest.replace('1.0.0', '1.0.1')
             expected_seq_no = 1
-            base_dir = os.path.join(conf.get_lib_dir(), 'OSTCExtensions.ExampleHandlerLinux-1.0.1', test_file_name)
-            self.create_script(test_file_name, test_file, base_dir)
+            base_dir = os.path.join(conf.get_lib_dir(), 'OSTCExtensions.ExampleHandlerLinux-1.0.1')
+            if not os.path.exists(base_dir):
+                os.mkdir(base_dir)
+            self.create_script(os.path.join(base_dir, test_file_name), test_file)
 
             with patch.object(ExtHandlerInstance, 'report_event') as mock_report_event:
                 exthandlers_handler.run()
@@ -2230,13 +2257,17 @@ class TestExtension(ExtensionTestCase):
             exit %s
         """ % exit_code
 
-        error_dir = os.path.join(conf.get_lib_dir(), 'OSTCExtensions.ExampleHandlerLinux-1.0.0', test_error_file_name)
-        self.create_script(test_error_file_name, test_error_content, error_dir)
+        error_dir = os.path.join(conf.get_lib_dir(), 'OSTCExtensions.ExampleHandlerLinux-1.0.0')
+        if not os.path.exists(error_dir):
+            os.mkdir(error_dir)
+        self.create_script(os.path.join(error_dir, test_error_file_name), test_error_content)
 
         test_data, exthandlers_handler, protocol = self._set_up_update_test_and_update_gs(Mock(), *args)  # pylint: disable=unused-variable
 
-        base_dir = os.path.join(conf.get_lib_dir(), 'OSTCExtensions.ExampleHandlerLinux-1.0.1', test_file_name)
-        self.create_script(test_file_name, test_file, base_dir)
+        base_dir = os.path.join(conf.get_lib_dir(), 'OSTCExtensions.ExampleHandlerLinux-1.0.1')
+        if not os.path.exists(base_dir):
+            os.mkdir(base_dir)
+        self.create_script(os.path.join(base_dir, test_file_name), test_file)
 
         with patch("azurelinuxagent.ga.exthandlers.ExtHandlerInstance.load_manifest", return_value=manifest):
             with patch.object(ExtHandlerInstance, 'report_event') as mock_report_event:

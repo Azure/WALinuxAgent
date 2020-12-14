@@ -264,7 +264,7 @@ class TestHostPlugin(HttpRequestPredicates, AgentTestCase):  # pylint: disable=t
             self.assertEqual(sas_url, patch_put.call_args[0][0])
 
             # ensure host plugin is not set as default
-            self.assertFalse(wire.HostPluginProtocol.is_default_channel())
+            self.assertFalse(wire.HostPluginProtocol.is_default_channel)
 
     @patch("azurelinuxagent.common.protocol.hostplugin.HostPluginProtocol.ensure_initialized",
            return_value=True)
@@ -296,7 +296,7 @@ class TestHostPlugin(HttpRequestPredicates, AgentTestCase):  # pylint: disable=t
             self.assertEqual(sas_url, patch_put.call_args[0][0])
 
             # ensure host plugin is not set as default
-            self.assertFalse(wire.HostPluginProtocol.is_default_channel())
+            self.assertFalse(wire.HostPluginProtocol.is_default_channel)
 
     @patch("azurelinuxagent.common.protocol.hostplugin.HostPluginProtocol.ensure_initialized",
            return_value=True)
@@ -330,7 +330,7 @@ class TestHostPlugin(HttpRequestPredicates, AgentTestCase):  # pylint: disable=t
             self.assertEqual(sas_url, patch_put.call_args[0][0])
 
             # ensure host plugin is not set as default
-            self.assertFalse(wire.HostPluginProtocol.is_default_channel())
+            self.assertFalse(wire.HostPluginProtocol.is_default_channel)
 
     @patch("azurelinuxagent.common.protocol.hostplugin.HostPluginProtocol.ensure_initialized",
            return_value=True)
@@ -362,14 +362,14 @@ class TestHostPlugin(HttpRequestPredicates, AgentTestCase):  # pylint: disable=t
             self.assertEqual(sas_url, patch_put.call_args[0][0])
 
             # ensure host plugin is not set as default
-            self.assertFalse(wire.HostPluginProtocol.is_default_channel())
+            self.assertFalse(wire.HostPluginProtocol.is_default_channel)
 
     @patch("azurelinuxagent.common.event.add_event")
     def test_put_status_error_reporting(self, patch_add_event):
         """
         Validate the telemetry when uploading status fails
         """
-        wire.HostPluginProtocol.set_default_channel(False)
+        wire.HostPluginProtocol.is_default_channel = False
         with patch.object(wire.StatusBlob, "upload", return_value=False):
             with self.create_mock_protocol() as wire_protocol:
                 wire_protocol_client = wire_protocol.client
@@ -386,7 +386,7 @@ class TestHostPlugin(HttpRequestPredicates, AgentTestCase):  # pylint: disable=t
                         # The agent tries to upload using a direct connection, and that succeeds.
                         self.assertEqual(1, wire_protocol_client.status_blob.upload.call_count)  # pylint: disable=no-member
                         # The agent never touches the default protocol is this code path, so no change.
-                        self.assertFalse(wire.HostPluginProtocol.is_default_channel())
+                        self.assertFalse(wire.HostPluginProtocol.is_default_channel)
                         # The agent never logs telemetry event for direct fallback
                         self.assertEqual(1, patch_add_event.call_count)
                         self.assertEqual('ReportStatus', patch_add_event.call_args[1]['op'])
@@ -853,7 +853,7 @@ class TestHostPlugin(HttpRequestPredicates, AgentTestCase):  # pylint: disable=t
         self.assertEqual(False, actual)
 
 
-class MockResponse:  # pylint: disable=too-few-public-methods
+class MockResponse:
     def __init__(self, body, status_code, reason=''):
         self.body = body
         self.status = status_code

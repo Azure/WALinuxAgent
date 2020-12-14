@@ -18,6 +18,7 @@
 #
 
 import subprocess
+import tempfile
 
 import azurelinuxagent.common.logger as logger
 from azurelinuxagent.common.future import ustr
@@ -96,38 +97,63 @@ def run_get_output(cmd, chk_err=True, log_cmd=True, expected_errors=None):
         expected_errors = []
     if log_cmd:
         logger.verbose(u"Command: [{0}]", cmd)
-    try:
-        output = subprocess.check_output(cmd,
-                                         stderr=subprocess.STDOUT,
-                                         shell=True)
-        output = _encode_command_output(output)
-    except subprocess.CalledProcessError as e:  # pylint: disable=C0103
-        output = _encode_command_output(e.output)
 
-        if chk_err:
-            msg = u"Command: [{0}], " \
-                  u"return code: [{1}], " \
-                  u"result: [{2}]".format(cmd, e.returncode, output)
-            if e.returncode in expected_errors:
-                logger.info(msg)
-            else:
-                logger.error(msg)
-        return e.returncode, output
-    except Exception as e:  # pylint: disable=C0103
+    try:
+        process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, shell=True)
+        _invoke_on_command_started_callback(process.pid)
+
+        output, _ = process.communicate()
+        _invoke_on_command_completed_callback(process.pid)
+
+        output = __encode_command_output(output)
+
+        if process.returncode != 0:
+            if chk_err:
+                msg = u"Command: [{0}], " \
+                      u"return code: [{1}], " \
+                      u"result: [{2}]".format(cmd, process.returncode, output)
+                if process.returncode in expected_errors:
+                    logger.info(msg)
+                else:
+                    logger.error(msg)
+            return process.returncode, output
+    except Exception as exception:
         if chk_err:
             logger.error(u"Command [{0}] raised unexpected exception: [{1}]"
-                         .format(cmd, ustr(e)))
-        return -1, ustr(e)
+                         .format(cmd, ustr(exception)))
+        return -1, ustr(exception)
     return 0, output
 
 
-def _encode_command_output(output):
-    return ustr(output, encoding='utf-8', errors="backslashreplace")
+def __format_command(command):
+    """
+    Formats the command taken by run_command/run_pipe.
+
+    Examples:
+        > __format_command("sort")
+        'sort'
+        > __format_command(["sort", "-u"])
+        'sort -u'
+        > __format_command([["sort"], ["unique", "-n"]])
+        'sort | unique -n'
+    """
+    if isinstance(command, list):
+        if command and isinstance(command[0], list):
+            return " | ".join([" ".join(cmd) for cmd in command])
+        return " ".join(command)
+    return command
+
+
+def __encode_command_output(output):
+    """
+    Encodes the stdout/stderr returned by subprocess.communicate()
+    """
+    return ustr(output if output is not None else b'', encoding='utf-8', errors="backslashreplace")
 
 
 class CommandError(Exception):
     """
-    Exception raised by run_command when the command returns an error
+    Exception raised by run_command/run_pipe when the command returns an error
     """
     @staticmethod
     def _get_message(command, return_code, stderr):
@@ -142,47 +168,157 @@ class CommandError(Exception):
         self.stderr = stderr
 
 
-def run_command(command, log_error=False, cmd_input=None):
+def __run_command(command_action, command, log_error, encode_output):
     """
-        Executes the given command and returns its stdout as a string. If cmd_input is specified, then we pass the cmd_input
-        to stdin and execute the command. Currently we only support string input for stdin.
-        If there are any errors executing the command it logs details about the failure and raises a RunCommandException;
-        if 'log_error' is True, it also logs details about the error.
+    Executes the given command_action and returns its stdout. The command_action is a function that executes a command/pipe
+    and returns its exit code, stdout, and stderr.
+
+    If there are any errors executing the command it raises a RunCommandException; if 'log_error'
+    is True, it also logs details about the error.
+
+    If encode_output is True the stdout is returned as a string, otherwise it is returned as a bytes object.
+    """
+    try:
+        return_code, stdout, stderr = command_action()
+
+        if encode_output:
+            stdout = __encode_command_output(stdout)
+            stderr = __encode_command_output(stderr)
+
+        if return_code != 0:
+            if log_error:
+                logger.error(
+                    "Command: [{0}], return code: [{1}], stdout: [{2}] stderr: [{3}]",
+                    __format_command(command),
+                    return_code,
+                    stdout,
+                    stderr)
+            raise CommandError(command=__format_command(command), return_code=return_code, stdout=stdout, stderr=stderr)
+
+        return stdout
+
+    except CommandError:
+        raise
+    except Exception as exception:
+        if log_error:
+            logger.error(u"Command [{0}] raised unexpected exception: [{1}]", __format_command(command), ustr(exception))
+        raise
+
+
+# W0622: Redefining built-in 'input'  -- disabled: the parameter name mimics subprocess.communicate()
+# R0913: Too many arguments (8/5) -- disabled: the parameter list mimics subprocess.Popen()/communicate()
+def run_command(command, input=None, stdin=None, stdout=subprocess.PIPE, stderr=subprocess.PIPE, log_error=False, encode_input=True, encode_output=True):  # pylint:disable=W0622,R0913
+    """
+        Executes the given command and returns its stdout.
+
+        If there are any errors executing the command it raises a RunCommandException; if 'log_error'
+        is True, it also logs details about the error.
+
+        If encode_output is True the stdout is returned as a string, otherwise it is returned as a bytes object.
+
+        This function is a thin wrapper around Popen/communicate in the subprocess module:
+           * The 'input' parameter corresponds to the same parameter in communicate
+           * The 'stdin' parameter corresponds to the same parameters in Popen
+           * Only one of 'input' and 'stdin' can be specified
+           * The 'stdout' and 'stderr' parameters correspond to the same parameters in Popen, except that they
+             default to subprocess.PIPE instead of None
+           * If the output of the command is redirected using the 'stdout' or 'stderr' parameters (i.e. if the
+             value for these parameters is anything other than the default (subprocess.PIPE)), then the corresponding
+             values returned by this function or the CommandError exception will be empty strings.
 
         Note: This is the preferred method to execute shell commands over `azurelinuxagent.common.utils.shellutil.run` function.
     """
-    def format_command(cmd):
-        return " ".join(cmd) if isinstance(cmd, list) else command
+    if input is not None and stdin is not None:
+        raise ValueError("The input and stdin arguments are mutually exclusive")
 
-    # Currently we only support PIPE for stdin/stdout/stderr, but acceptable options as per python docs are -
-    # PIPE, an existing file descriptor (a positive integer), an existing file object, and None
-    stdin = subprocess.PIPE if cmd_input else None
-    try:
-        # Starting Python 3.4+, you need to encode the string, i.e. you need to pass Bytes to the input rather than
-        # string to process.communicate()
-        process_input = cmd_input.encode() if cmd_input else None
+    def command_action():
+        popen_stdin = communicate_input = None
+        if input is not None:
+            popen_stdin = subprocess.PIPE
+            communicate_input = input.encode() if encode_input and isinstance(input, str) else input  # communicate() needs an array of bytes
+        if stdin is not None:
+            popen_stdin = stdin
+            communicate_input = None
 
-        process = subprocess.Popen(command, stdin=stdin, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=False)
-        stdout, stderr = process.communicate(input=process_input)
-        returncode = process.returncode
-    except Exception as e:  # pylint: disable=C0103
-        if log_error:
-            logger.error(u"Command [{0}] raised unexpected exception: [{1}]", format_command(command), ustr(e))
-        raise
+        process = subprocess.Popen(command, stdin=popen_stdin, stdout=stdout, stderr=stderr, shell=False)
+        _invoke_on_command_started_callback(process.pid)
 
-    if returncode != 0:
-        encoded_stdout = _encode_command_output(stdout)
-        encoded_stderr = _encode_command_output(stderr)
-        if log_error:
-            logger.error(
-                "Command: [{0}], return code: [{1}], stdout: [{2}] stderr: [{3}]",
-                format_command(command),
-                returncode,
-                encoded_stdout,
-                encoded_stderr)
-        raise CommandError(command=command, return_code=returncode, stdout=encoded_stdout, stderr=encoded_stderr)
+        command_stdout, command_stderr = process.communicate(input=communicate_input)
+        _invoke_on_command_completed_callback(process.pid)
 
-    return _encode_command_output(stdout)
+        return process.returncode, command_stdout, command_stderr
+
+    return __run_command(command_action=command_action, command=command, log_error=log_error, encode_output=encode_output)
+
+
+# R0913: Too many arguments (7/5) -- disabled: the parameter list mimics subprocess.Popen()
+def run_pipe(pipe, stdin=None, stdout=subprocess.PIPE, stderr=subprocess.PIPE, log_error=False, encode_output=True):   # pylint:disable=R0913
+    """
+        Executes the given commands as a pipe and returns its stdout as a string.
+
+        The pipe is a list of commands, which in turn are a list of strings, e.g.
+
+            [["sort"], ["uniq", "-n"]] represents 'sort | unique -n'
+
+        If there are any errors executing the command it raises a RunCommandException; if 'log_error'
+        is True, it also logs details about the error.
+
+        If encode_output is True the stdout is returned as a string, otherwise it is returned as a bytes object.
+
+        This function is a thin wrapper around Popen/communicate in the subprocess module:
+           * The 'stdin' parameter is used as input for the first command in the pipe
+           * The 'stdout', and 'stderr' can be used to redirect the output of the pipe
+           * If the output of the pipe is redirected using the 'stdout' or 'stderr' parameters (i.e. if the
+             value for these parameters is anything other than the default (subprocess.PIPE)), then the corresponding
+             values returned by this function or the CommandError exception will be empty strings.
+    """
+    if len(pipe) < 2:
+        raise ValueError("The pipe must consist of at least 2 commands")
+
+    def command_action():
+        stderr_file = None
+
+        try:
+            popen_stdin = stdin
+            # If stderr is subprocess.PIPE each call to Popen would create a new pipe. We want to collect the stderr of all the
+            # commands in the pipe so we replace stderr with a temporary file that we read once the pipe completes.
+            if stderr == subprocess.PIPE:
+                stderr_file = tempfile.TemporaryFile()
+                popen_stderr = stderr_file
+            else:
+                popen_stderr = stderr
+
+            processes = []
+            i = 0
+            while i < len(pipe) - 1:
+                processes.append(subprocess.Popen(pipe[i], stdin=popen_stdin, stdout=subprocess.PIPE, stderr=popen_stderr))
+                popen_stdin = processes[i].stdout
+                _invoke_on_command_started_callback(processes[i].pid)
+                i += 1
+
+            processes.append(subprocess.Popen(pipe[i], stdin=popen_stdin, stdout=stdout, stderr=popen_stderr))
+            _invoke_on_command_started_callback(processes[i].pid)
+
+            i = 0
+            while i < len(processes) - 1:
+                processes[i].stdout.close()  # see https://docs.python.org/2/library/subprocess.html#replacing-shell-pipeline
+                i += 1
+
+            pipe_stdout, pipe_stderr = processes[i].communicate()
+
+            for proc in processes:
+                _invoke_on_command_completed_callback(proc.pid)
+
+            if stderr_file is not None:
+                stderr_file.seek(0)
+                pipe_stderr = stderr_file.read()
+
+            return processes[i].returncode, pipe_stdout, pipe_stderr
+        finally:
+            if stderr_file is not None:
+                stderr_file.close()
+
+    return __run_command(command_action=command_action, command=pipe, log_error=log_error, encode_output=encode_output)
 
 
 def quote(word_list):
@@ -201,4 +337,50 @@ def quote(word_list):
 
     return " ".join(list("'{0}'".format(s.replace("'", "'\\''")) for s in word_list))
 
-# End shell command util functions
+
+#
+# The run_command/run_pipe/run/run_get_output functions use these callbacks to notify when a command has been started
+# and when it completes.
+#
+# The callbacks are executed in the context of the thread executing run_command/run_pipe/run/run_get_output so they
+# should be used only to perform very fast operations or otherwise would block that thread. Also, errors in the
+# callback are ignored, so they should do they own error handling.
+#
+# Only 1 callback is maintained for each of those notifications. Setting a callback overrides the previous value.
+# Set the callback to None to stop the notifications
+#
+# C0103: Constant name "foo" doesn't conform to UPPER_CASE naming style (invalid-name) -- Disabled: These are not constants
+_on_command_started_callback = None  # pylint:disable=C0103
+_on_command_completed_callback = None  # pylint:disable=C0103
+
+
+def set_on_command_started_callback(callback):
+    # W0603: Using the global statement (global-statement) - Disabled: global is required to modify this variable
+    # C0103: Constant name "foo" doesn't conform to UPPER_CASE naming style (invalid-name) -- Disabled: This is not a constant
+    global _on_command_started_callback  # pylint:disable=W0603,C0103
+    _on_command_started_callback = callback
+
+
+def set_on_command_completed_callback(callback):
+    # W0603: Using the global statement (global-statement) - Disabled: global is required to modify this variable
+    # C0103: Constant name "foo" doesn't conform to UPPER_CASE naming style (invalid-name) -- Disabled: This is not a constant
+    global _on_command_completed_callback  # pylint:disable=W0603,C0103
+    _on_command_completed_callback = callback
+
+
+def _invoke_on_command_started_callback(pid):
+    if _on_command_started_callback is not None:
+        try:
+            _on_command_started_callback(pid)
+        except Exception:
+            pass
+
+
+def _invoke_on_command_completed_callback(pid):
+    if _on_command_completed_callback is not None:
+        try:
+            _on_command_completed_callback(pid)
+        except Exception:
+            pass
+
+
