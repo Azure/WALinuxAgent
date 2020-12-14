@@ -19,6 +19,7 @@
 
 import subprocess
 import tempfile
+import threading
 
 import azurelinuxagent.common.logger as logger
 from azurelinuxagent.common.future import ustr
@@ -99,8 +100,7 @@ def run_get_output(cmd, chk_err=True, log_cmd=True, expected_errors=None):
         logger.verbose(u"Command: [{0}]", cmd)
 
     try:
-        process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, shell=True)
-        _on_command_started(process.pid)
+        process = _popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, shell=True)
 
         output, _ = process.communicate()
         _on_command_completed(process.pid)
@@ -240,8 +240,7 @@ def run_command(command, input=None, stdin=None, stdout=subprocess.PIPE, stderr=
             popen_stdin = stdin
             communicate_input = None
 
-        process = subprocess.Popen(command, stdin=popen_stdin, stdout=stdout, stderr=stderr, shell=False)
-        _on_command_started(process.pid)
+        process = _popen(command, stdin=popen_stdin, stdout=stdout, stderr=stderr, shell=False)
 
         command_stdout, command_stderr = process.communicate(input=communicate_input)
         _on_command_completed(process.pid)
@@ -291,13 +290,11 @@ def run_pipe(pipe, stdin=None, stdout=subprocess.PIPE, stderr=subprocess.PIPE, l
             processes = []
             i = 0
             while i < len(pipe) - 1:
-                processes.append(subprocess.Popen(pipe[i], stdin=popen_stdin, stdout=subprocess.PIPE, stderr=popen_stderr))
+                processes.append(_popen(pipe[i], stdin=popen_stdin, stdout=subprocess.PIPE, stderr=popen_stderr))
                 popen_stdin = processes[i].stdout
-                _on_command_started(processes[i].pid)
                 i += 1
 
-            processes.append(subprocess.Popen(pipe[i], stdin=popen_stdin, stdout=stdout, stderr=popen_stderr))
-            _on_command_started(processes[i].pid)
+            processes.append(_popen(pipe[i], stdin=popen_stdin, stdout=stdout, stderr=popen_stderr))
 
             i = 0
             while i < len(processes) - 1:
@@ -342,12 +339,16 @@ def quote(word_list):
 # The run_command/run_pipe/run/run_get_output functions maintain a list of the commands that they are currently executing.
 #
 #
-# C0103: Constant name "_running_commands" doesn't conform to UPPER_CASE naming style (invalid-name) -- Disabled: _running_commands is not a constant
+# C0103: Constant name "foo" doesn't conform to UPPER_CASE naming style (invalid-name) -- Disabled: these are not constants
 _running_commands = []  # pylint:disable=C0103
+_running_commands_lock = threading.RLock()  # pylint:disable=C0103
 
 
-def _on_command_started(pid):
-    _running_commands.append(pid)
+def _popen(*args, **kwargs):
+    with _running_commands_lock:
+        process = subprocess.Popen(*args, **kwargs)
+        _running_commands.append(process.pid)
+        return process
 
 
 def _on_command_completed(pid):
@@ -355,6 +356,14 @@ def _on_command_completed(pid):
 
 
 def get_running_commands():
-    return _running_commands[:]  # return a copy, since the call may originate on another thread
+    """
+    Returns the commands started by run/run_get_output/run_command/run_pipe that are currently running.
+
+    NOTE: This function is not synchronized with process completion, so the returned array may include processes that have
+    already completed. Also, keep in mind that by the time this function returns additional processes may have
+    started or completed.
+    """
+    with _running_commands_lock:
+        return _running_commands[:]  # return a copy, since the call may originate on another thread
 
 

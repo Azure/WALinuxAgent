@@ -24,9 +24,8 @@ import time
 import unittest
 
 from azurelinuxagent.common.future import ustr
-from tests.tools import AgentTestCase, patch
-
 import azurelinuxagent.common.utils.shellutil as shellutil
+from tests.tools import AgentTestCase, patch
 
 
 class ShellQuoteTestCase(AgentTestCase):
@@ -424,20 +423,25 @@ time.sleep(120)
                 # shell, so in that case we need to use the parent's pid (i.e. the shell that we started)
                 started_commands = parent_processes[0:1] + child_processes[1:]
 
-                # wait for the PIDs of all the commands to show up
-                if not self._wait_for(lambda: len(shellutil.get_running_commands()) == len(commands_to_execute) + 1):  # +1 because run_pipe starts 2 commands
-                    raise Exception("The child processes did not complete within the allowed timeout")
+                # wait for all the commands to start
+                running_commands = [[]]
 
-                # check that shellutil is keeping track of all the commands we started
-                running_commands = shellutil.get_running_commands()
+                def all_commands_running():
+                    running_commands[0] = shellutil.get_running_commands()
+                    return len(running_commands[0]) == len(commands_to_execute) + 1  # +1 because run_pipe starts 2 commands
+
+                if not self._wait_for(all_commands_running):
+                    self.fail("shellutil.get_running_commands() did not report the expected number of commands after the allowed timeout. Got: {0}".format(
+                        self._format_pids(running_commands[0])))
 
                 started_commands.sort()
-                running_commands.sort()
+                running_commands[0].sort()
+
                 self.assertEqual(
                     started_commands,
-                    running_commands,
-                    "The command_started callback was not invoked with the correct processes.\nExpected: {0}\nGot: {1}".format(
-                        self._format_pids(started_commands), self._format_pids(running_commands)))
+                    running_commands[0],
+                    "shellutil.get_running_commands() did not return the expected commands.\nExpected: {0}\nGot: {1}".format(
+                        self._format_pids(started_commands), self._format_pids(running_commands[0])))
 
             finally:
                 # terminate the child processes, since they are blocked
@@ -446,9 +450,11 @@ time.sleep(120)
 
             # once the processes complete, their PIDs should go away
             running_commands = [[]]
+
             def all_commands_completed():
                 running_commands[0] = shellutil.get_running_commands()
                 return len(running_commands[0]) == 0
+
             if not self._wait_for(all_commands_completed):
                 self.fail("shellutil.get_running_commands() should return empty after the commands complete. Got: {0}".format(
                     self._format_pids(running_commands[0])))
