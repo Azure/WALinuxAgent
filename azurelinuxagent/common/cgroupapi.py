@@ -625,9 +625,7 @@ Description=Slice for Azure VM Extensions"""
             cpu_cgroup_path = os.path.join(CGROUPS_FILE_SYSTEM_ROOT, controller, 'system.slice', slice_name)
             cgroups.append(CGroup.create(cpu_cgroup_path, controller, extension_name))
 
-        self._foreach_controller(create_cgroup,
-                                 'Cannot retrieve cgroup for extension {0}; resource usage will not be tracked.'.format(
-                                     extension_name))
+        self._foreach_controller(create_cgroup, 'Cannot retrieve cgroup for extension {0}; resource usage will not be tracked.'.format(extension_name))
 
         return cgroups
 
