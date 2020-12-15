@@ -190,8 +190,8 @@ class CGroupConfigurator(object):
             #   └─azure-vmextensions.slice
 
             # Both methods will log info on success, log warning and emit telemetry on failure.
-            self.__create_azure_cgroups_root()
-            self.__create_extension_cgroups_root()
+            self.create_azure_cgroups_root()
+            self.create_extension_cgroups_root()
 
         def _invoke_cgroup_operation(self, operation, error_message, on_error=None):
             """
@@ -210,7 +210,7 @@ class CGroupConfigurator(object):
                     except Exception as exception:
                         logger.warn("CGroupConfigurator._invoke_cgroup_operation: {0}".format(ustr(exception)))
 
-        def __create_azure_cgroups_root(self):
+        def create_azure_cgroups_root(self):
             """"
             Creates the container (cgroup) that includes the cgroups for anything related to the Agent and VM extensions.
             """
@@ -224,7 +224,7 @@ class CGroupConfigurator(object):
 
             self._invoke_cgroup_operation(__impl, error_message, on_error=__on_error)
 
-        def __create_extension_cgroups_root(self):
+        def create_extension_cgroups_root(self):
             """
             Creates the container (directory/cgroup) that includes the cgroups for all extensions (/sys/fs/cgroup/*/walinuxagent.extensions)
             """

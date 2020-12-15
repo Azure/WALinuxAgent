@@ -167,9 +167,8 @@ cgroup on /sys/fs/cgroup/blkio type cgroup (rw,nosuid,nodev,noexec,relatime,blki
 
         # List of operations to test, and the functions to mock used in order to do verifications
         operations = [
-            [configurator.create_extension_cgroups_root,                     "azurelinuxagent.common.cgroupapi.SystemdCgroupsApi.create_extension_cgroups_root"],
-            [lambda: configurator.create_extension_cgroups("A.B.C-1.0.0"),   "azurelinuxagent.common.cgroupapi.SystemdCgroupsApi.create_extension_cgroups"],
-            [lambda: configurator.remove_extension_cgroups("A.B.C-1.0.0"),   "azurelinuxagent.common.cgroupapi.SystemdCgroupsApi.remove_extension_cgroups"]
+            [configurator.create_extension_cgroups_root, "azurelinuxagent.common.cgroupapi.SystemdCgroupsApi.create_extension_cgroups_root"],
+            [lambda: configurator.remove_extension_cgroups("A.B.C-1.0.0"),    "azurelinuxagent.common.cgroupapi.SystemdCgroupsApi.remove_extension_cgroups"]
         ]
 
         for operation in operations:
@@ -186,7 +185,6 @@ cgroup on /sys/fs/cgroup/blkio type cgroup (rw,nosuid,nodev,noexec,relatime,blki
             # List of operations to test, and the functions to mock in order to raise exceptions
             operations = [
                 [configurator.create_extension_cgroups_root,                     "azurelinuxagent.common.cgroupapi.SystemdCgroupsApi.create_extension_cgroups_root"],
-                [lambda: configurator.create_extension_cgroups("A.B.C-1.0.0"),   "azurelinuxagent.common.cgroupapi.SystemdCgroupsApi.create_extension_cgroups"],
                 [lambda: configurator.remove_extension_cgroups("A.B.C-1.0.0"),   "azurelinuxagent.common.cgroupapi.SystemdCgroupsApi.remove_extension_cgroups"]
             ]
 
