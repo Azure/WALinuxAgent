@@ -431,8 +431,8 @@ time.sleep(120)
                     return len(running_commands[0]) >= len(commands_to_execute) + 1  # +1 because run_pipe starts 2 commands
 
                 if not self._wait_for(all_commands_running):
-                    self.fail("shellutil.get_running_commands() did not report the expected number of commands after the allowed timeout. Got: {0}".format(
-                        self._format_pids(running_commands[0])))
+                    self.fail("shellutil.get_running_commands() did not report the expected number of commands after the allowed timeout.\nExpected: {0}\nGot: {1}".format(
+                        self._format_pids(started_commands), self._format_pids(running_commands[0])))
 
                 started_commands.sort()
                 running_commands[0].sort()
