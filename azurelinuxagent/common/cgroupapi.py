@@ -39,6 +39,7 @@ from azurelinuxagent.common.version import get_distro
 CGROUPS_FILE_SYSTEM_ROOT = '/sys/fs/cgroup'
 CGROUP_CONTROLLERS = ["cpu", "memory"]
 VM_AGENT_CGROUP_NAME = "walinuxagent.service"
+AZURE_CGROUP_NAME = "azure"
 EXTENSIONS_ROOT_CGROUP_NAME = "walinuxagent.extensions"
 UNIT_FILES_FILE_SYSTEM_PATH = "/etc/systemd/system"
 SYSTEMD_RUN_PATH = "/run/systemd/system/"
@@ -48,6 +49,9 @@ class CGroupsApi(object):
     """
     Interface for the cgroups API
     """
+    def create_azure_cgroups_root(self):
+        raise NotImplementedError()
+
     def create_extension_cgroups_root(self):
         raise NotImplementedError()
 
@@ -308,6 +312,9 @@ class FileSystemCgroupsApi(CGroupsApi):
 
         return cgroups
 
+    def create_azure_cgroups_root(self):
+        pass
+
     def create_extension_cgroups_root(self):
         """
         Creates the directory within the cgroups file system that will contain the cgroups for the extensions.
@@ -557,23 +564,33 @@ class SystemdCgroupsApi(CGroupsApi):
             raise CGroupsException("Failed to create and start {0}. Error: {1}".format(unit_filename, ustr(e)))
 
     @staticmethod
+    def _get_azure_slice_name():
+        return "{0}.slice".format(AZURE_CGROUP_NAME)
+
+    @staticmethod
     def _get_extensions_slice_root_name():
-        return "system-{0}.slice".format(EXTENSIONS_ROOT_CGROUP_NAME)
+        return "{0}-{1}.slice".format(AZURE_CGROUP_NAME, EXTENSIONS_ROOT_CGROUP_NAME)
 
     def _get_extension_slice_name(self, extension_name):
         return "system-{0}-{1}.slice".format(EXTENSIONS_ROOT_CGROUP_NAME, self._get_extension_cgroup_name(extension_name))
 
+    def create_azure_cgroups_root(self):
+        unit_contents = """
+[Unit]
+Description=Slice for Azure VM Agent and Extensions"""
+        unit_filename = self._get_azure_slice_name()
+
+        self.create_and_start_unit(unit_filename, unit_contents)
+        logger.info("Created root slice for Azure VM Agent and Extensions {0}".format(unit_filename))
+
     def create_extension_cgroups_root(self):
         unit_contents = """
 [Unit]
-Description=Slice for walinuxagent extensions
-DefaultDependencies=no
-Before=slices.target
-Requires=system.slice
-After=system.slice"""
+Description=Slice for Azure VM Extensions"""
         unit_filename = self._get_extensions_slice_root_name()
+
         self.create_and_start_unit(unit_filename, unit_contents)
-        logger.info("Created slice for walinuxagent extensions {0}".format(unit_filename))
+        logger.info("Created root slice for Azure VM Extensions {0}".format(unit_filename))
 
     def create_extension_cgroups(self, extension_name):
         # TODO: The slice created by this function is not used currently. We need to create the extension scopes within

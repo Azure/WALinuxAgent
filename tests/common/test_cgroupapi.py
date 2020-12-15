@@ -504,28 +504,44 @@ class SystemdCgroupsApiTestCase(AgentTestCase):
 
     def test_get_extensions_slice_root_name_should_return_the_root_slice_for_extensions(self):
         root_slice_name = SystemdCgroupsApi()._get_extensions_slice_root_name()  # pylint: disable=protected-access
-        self.assertEqual(root_slice_name, "system-walinuxagent.extensions.slice")
+        self.assertEqual(root_slice_name, "azure-walinuxagent.extensions.slice")
 
     def test_get_extension_slice_name_should_return_the_slice_for_the_given_extension(self):
         extension_name = "Microsoft.Azure.DummyExtension-1.0"
         extension_slice_name = SystemdCgroupsApi()._get_extension_slice_name(extension_name)  # pylint: disable=protected-access
         self.assertEqual(extension_slice_name, "system-walinuxagent.extensions-Microsoft.Azure.DummyExtension_1.0.slice")
 
+    def __assert_unit_is_loaded_and_active(self, unit_name):
+        status = shellutil.run_command(["systemctl", "status", unit_name])
+        self.assertIn("Loaded: loaded", status, "Unit {0} should have been loaded!".format(unit_name))
+        self.assertIn("Active: active", status, "Unit {0} should have been active!".format(unit_name))
+
+    @staticmethod
+    def __clean_up_unit(unit_name):
+        shellutil.run_command(["systemctl", "stop", unit_name ])
+        shellutil.run_command(["systemctl", "disable", unit_name])
+        os.remove("/etc/systemd/system/{0}".format(unit_name))
+        shellutil.run_command(["systemctl", "daemon-reload"])
+
+    @attr('requires_sudo')
+    def test_create_azure_cgroups_root_should_create_azure_root_slice(self):
+        self.assertTrue(i_am_root(), "Test does not run when non-root")
+
+        SystemdCgroupsApi().create_azure_cgroups_root()
+        unit_name = SystemdCgroupsApi()._get_azure_slice_name()  # pylint: disable=protected-access
+
+        self.__assert_unit_is_loaded_and_active(unit_name)
+        self.__clean_up_unit(unit_name)
+
     @attr('requires_sudo')
     def test_create_extension_cgroups_root_should_create_extensions_root_slice(self):
         self.assertTrue(i_am_root(), "Test does not run when non-root")
 
         SystemdCgroupsApi().create_extension_cgroups_root()
-
         unit_name = SystemdCgroupsApi()._get_extensions_slice_root_name()  # pylint: disable=protected-access
-        status = shellutil.run_command(["systemctl", "status", unit_name])
-        self.assertIn("Loaded: loaded", status)
-        self.assertIn("Active: active", status)
 
-        shellutil.run_command(["systemctl", "stop", unit_name ])
-        shellutil.run_command(["systemctl", "disable", unit_name])
-        os.remove("/etc/systemd/system/{0}".format(unit_name))
-        shellutil.run_command(["systemctl", "daemon-reload"])
+        self.__assert_unit_is_loaded_and_active(unit_name)
+        self.__clean_up_unit(unit_name)
 
     def test_get_processes_in_cgroup_should_return_the_processes_within_the_cgroup(self):
         with mock_cgroup_commands():
