@@ -23,6 +23,11 @@ from tests.tools import AgentTestCase, open_patch, patch
 
 class TestDHCP(AgentTestCase):
 
+    DEFAULT_ROUTING_TABLE = "\
+            Iface	Destination	Gateway 	Flags	RefCnt	Use	Metric	Mask		MTU	Window	IRTT \n\
+            eth0	00345B0A	00000000	0001	0	    0	5	00000000	0	0	0   \n\
+            lo	    00000000	01345B0A	0003	0	    0	1	00FCFFFF	0	0	0   \n"
+
     def setUp(self):
         AgentTestCase.setUp(self)
 
@@ -37,15 +42,8 @@ class TestDHCP(AgentTestCase):
         self.assertTrue(dhcp_handler.gateway is None)
 
         # execute
-        routing_table = "\
-            Iface	Destination	Gateway 	Flags	RefCnt	Use	Metric	" \
-                        "Mask		MTU	Window	IRTT \n\
-            eth0	00000000	10813FA8	0003	0	    0	5	" \
-                        "00000000	0	0	0   \n\
-            eth0	00345B0A	00000000	0001	0	    0	5	" \
-                        "00000000	0	0	0   \n\
-            lo	    00000000	01345B0A	0003	0	    0	1	" \
-                        "00FCFFFF	0	0	0   \n"
+        routing_table = TestDHCP.DEFAULT_ROUTING_TABLE + \
+            "eth0	00000000	10813FA8	0003	0	    0	5	00000000	0	0	0   \n"
 
         with patch("os.path.exists", return_value=True):
             open_file_mock = mock.mock_open(read_data=routing_table) 
@@ -65,16 +63,9 @@ class TestDHCP(AgentTestCase):
         self.assertTrue(dhcp_handler.gateway is None)
 
         # execute
-        routing_table = "\
-            Iface	Destination	Gateway 	Flags	RefCnt	Use	Metric	" \
-                        "Mask		MTU	Window	IRTT \n\
-            eth0	00345B0A	00000000	0001	0	    0	5	" \
-                        "00000000	0	0	0   \n\
-            lo	    00000000	01345B0A	0003	0	    0	1	" \
-                        "00FCFFFF	0	0	0   \n"
 
         with patch("os.path.exists", return_value=True):
-            open_file_mock = mock.mock_open(read_data=routing_table) 
+            open_file_mock = mock.mock_open(read_data=TestDHCP.DEFAULT_ROUTING_TABLE) 
             with patch(open_patch(), open_file_mock):
                 self.assertFalse(dhcp_handler.wireserver_route_exists)
 
@@ -99,15 +90,7 @@ class TestDHCP(AgentTestCase):
         handler = dhcp.get_dhcp_handler()
         handler.osutil = osutil.DefaultOSUtil()
 
-        routing_table = "\
-            Iface	Destination	Gateway 	Flags	RefCnt	Use	Metric	" \
-                        "Mask		MTU	Window	IRTT \n\
-            eth0	00345B0A	00000000	0001	0	    0	5	" \
-                        "00000000	0	0	0   \n\
-            lo	    00000000	01345B0A	0003	0	    0	1	" \
-                        "00FCFFFF	0	0	0   \n"
-
-        open_file_mock = mock.mock_open(read_data=routing_table) 
+        open_file_mock = mock.mock_open(read_data=TestDHCP.DEFAULT_ROUTING_TABLE) 
 
         with patch('os.path.exists', return_value=False):
             with patch.object(osutil.DefaultOSUtil, 'get_dhcp_lease_endpoint')\
