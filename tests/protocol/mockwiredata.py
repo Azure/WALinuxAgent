@@ -94,7 +94,7 @@ DATA_FILE_REMOTE_ACCESS["goal_state"] = "wire/goal_state_remote_access.xml"
 DATA_FILE_REMOTE_ACCESS["remote_access"] = "wire/remote_access_single_account.xml"
 
 DATA_FILE_PLUGIN_SETTINGS_MISMATCH = DATA_FILE.copy()
-DATA_FILE_PLUGIN_SETTINGS_MISMATCH["ext_conf"] = "wire/ext_conf_plugin_settings_version_mismatch.xml"
+DATA_FILE_PLUGIN_SETTINGS_MISMATCH["ext_conf"] = "wire/invalid_config/ext_conf_plugin_settings_version_mismatch.xml"
 
 
 class WireProtocolData(object):  # pylint: disable=too-many-instance-attributes
