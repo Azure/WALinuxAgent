@@ -68,10 +68,6 @@ def consume_memory():
     return waste
 
 
-def make_new_cgroup(name="test-cgroup"):
-    return CGroupConfigurator.get_instance().create_extension_cgroups(name)
-
-
 class TestCGroupsTelemetry(AgentTestCase):
     NumSummarizationValues = 7
 

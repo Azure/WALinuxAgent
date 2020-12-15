@@ -556,28 +556,6 @@ class SystemdCgroupsApiTestCase(AgentTestCase):
             extension_handler_present = any(re.search(r"(WALinuxAgent-.+\.egg|waagent) -run-exthandlers", command) for (pid, command) in processes)
             self.assertTrue(extension_handler_present, "Could not find the extension handler in the cgroup: [{0}]".format(processes))
 
-    @attr('requires_sudo')
-    def test_create_extension_cgroups_should_create_extension_slice(self):
-        self.assertTrue(i_am_root(), "Test does not run when non-root")
-
-        extension_name = "Microsoft.Azure.DummyExtension-1.0"
-        cgroups = SystemdCgroupsApi().create_extension_cgroups(extension_name)
-        cpu_cgroup, memory_cgroup = cgroups[0], cgroups[1]
-        self.assertEqual(cpu_cgroup.path, "/sys/fs/cgroup/cpu/system.slice/Microsoft.Azure.DummyExtension_1.0")
-        self.assertEqual(memory_cgroup.path, "/sys/fs/cgroup/memory/system.slice/Microsoft.Azure.DummyExtension_1.0")
-
-        unit_name = SystemdCgroupsApi()._get_extension_slice_name(extension_name)  # pylint: disable=protected-access
-        self.assertEqual("system-walinuxagent.extensions-Microsoft.Azure.DummyExtension_1.0.slice", unit_name)
-
-        _, status = shellutil.run_get_output("systemctl status {0}".format(unit_name))
-        self.assertIn("Loaded: loaded", status)
-        self.assertIn("Active: active", status)
-
-        shellutil.run_get_output("systemctl stop {0}".format(unit_name))
-        shellutil.run_get_output("systemctl disable {0}".format(unit_name))
-        os.remove("/etc/systemd/system/{0}".format(unit_name))
-        shellutil.run_get_output("systemctl daemon-reload")
-
     def assert_cgroups_created(self, extension_cgroups):
         self.assertEqual(len(extension_cgroups), 2,
                          'start_extension_command did not return the expected number of cgroups')

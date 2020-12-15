@@ -17,7 +17,6 @@
 
 from __future__ import print_function
 
-import os
 import re
 import subprocess
 
@@ -52,11 +51,6 @@ class CGroupConfiguratorSystemdTestCase(AgentTestCase):
                         mocks.add_command(command[0], command[1])
                 configurator.initialize()
         return configurator
-
-    def test_initialize_should_create_root_slices_for_agent_and_extensions(self):
-        configurator = CGroupConfiguratorSystemdTestCase._get_new_cgroup_configurator_instance()
-        self.assertTrue(os.path.exists("/etc/systemd/system/azure.slice"))
-        self.assertTrue(os.path.exists("/etc/systemd/system/azure-vmextensions.slice"))
 
     def test_initialize_should_start_tracking_the_agent_cgroups(self):
         configurator = CGroupConfiguratorSystemdTestCase._get_new_cgroup_configurator_instance()

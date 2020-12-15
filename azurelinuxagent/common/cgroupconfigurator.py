@@ -158,17 +158,6 @@ class CGroupConfigurator(object):
 
                 log_cgroup_info('Cgroups enabled: {0}', self._cgroups_enabled)
 
-                # Create root slices for agent and agent and extensions for systemd-managed distros.
-                # The hierarchy is as follows:
-                # ├─system.slice
-                # ...
-                # └─azure.slice
-                #   └─azure-vmextensions.slice
-
-                # Both methods will log info on success, log warning and emit telemetry on failure.
-                self.__create_azure_cgroups_root()
-                self.__create_extension_cgroups_root()
-
             except Exception as exception:
                 message = "Error initializing cgroups: {0}".format(ustr(exception))
                 logger.warn(message)
@@ -191,6 +180,18 @@ class CGroupConfigurator(object):
         def disable(self):
             self._cgroups_enabled = False
             CGroupsTelemetry.reset()
+
+        def create_slices(self):
+            # Create root slices for agent and agent and extensions for systemd-managed distros.
+            # The hierarchy is as follows:
+            # ├─system.slice
+            # ...
+            # └─azure.slice
+            #   └─azure-vmextensions.slice
+
+            # Both methods will log info on success, log warning and emit telemetry on failure.
+            self.__create_azure_cgroups_root()
+            self.__create_extension_cgroups_root()
 
         def _invoke_cgroup_operation(self, operation, error_message, on_error=None):
             """
@@ -236,15 +237,6 @@ class CGroupConfigurator(object):
                 add_event(op=WALAEventOperation.CGroupsInitialize, message="{0} Error: {1}".format(error_message, ustr(exception)))
 
             self._invoke_cgroup_operation(__impl, error_message, on_error=__on_error)
-
-        def create_extension_cgroups(self, name):
-            """
-            Creates and returns the cgroups for the given extension
-            """
-            def __impl():
-                return self._cgroups_api.create_extension_cgroups(name)
-
-            return self._invoke_cgroup_operation(__impl, "Failed to create a cgroup for extension '{0}'; resource usage will not be tracked.".format(name))
 
         def remove_extension_cgroups(self, name):
             """

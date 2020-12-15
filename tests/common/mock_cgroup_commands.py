@@ -125,11 +125,9 @@ def mock_cgroup_commands():
             with patch("azurelinuxagent.common.cgroupapi.fileutil.read_file", side_effect=mock_read_file):
                 with patch('azurelinuxagent.common.cgroupapi.CGroupsApi.cgroups_supported', return_value=True):
                     with patch('azurelinuxagent.common.cgroupapi.CGroupsApi.is_systemd', return_value=True):
-                        with patch('azurelinuxagent.common.cgroupapi.CGroupsApi.create_azure_cgroups_root'):
-                            with patch('azurelinuxagent.common.cgroupapi.CGroupsApi.create_extension_cgroups_root'):
-                                patcher.commands = __DEFAULT_COMMANDS[:]
-                                patcher.files = __DEFAULT_FILES[:]
-                                patcher.add_file = add_file
-                                patcher.add_command = add_command
-                                yield patcher
+                        patcher.commands = __DEFAULT_COMMANDS[:]
+                        patcher.files = __DEFAULT_FILES[:]
+                        patcher.add_file = add_file
+                        patcher.add_command = add_command
+                        yield patcher
 

@@ -592,23 +592,6 @@ Description=Slice for Azure VM Extensions"""
         self.create_and_start_unit(unit_filename, unit_contents)
         logger.info("Created root slice for Azure VM Extensions {0}".format(unit_filename))
 
-    def create_extension_cgroups(self, extension_name):
-        # TODO: The slice created by this function is not used currently. We need to create the extension scopes within
-        #  this slice and use the slice to monitor the cgroups. Also see comment in get_extension_cgroups.
-        # the slice.
-        unit_contents = """
-[Unit]
-Description=Slice for extension {0}
-DefaultDependencies=no
-Before=slices.target
-Requires=system-{1}.slice
-After=system-{1}.slice""".format(extension_name, EXTENSIONS_ROOT_CGROUP_NAME)
-        unit_filename = self._get_extension_slice_name(extension_name)
-        self.create_and_start_unit(unit_filename, unit_contents)
-        logger.info("Created slice for {0}".format(unit_filename))
-
-        return self.get_extension_cgroups(extension_name)
-
     def remove_extension_cgroups(self, extension_name):
         # For transient units, cgroups are released automatically when the unit stops, so it is sufficient
         # to call stop on them. Persistent cgroups are released when the unit is disabled and its configuration
@@ -625,21 +608,6 @@ After=system-{1}.slice""".format(extension_name, EXTENSIONS_ROOT_CGROUP_NAME)
             shellutil.run_command(["systemctl", "daemon-reload"])
         except Exception as e:  # pylint: disable=C0103
             raise CGroupsException("Failed to remove {0}. Error: {1}".format(unit_filename, ustr(e)))
-
-    def get_extension_cgroups(self, extension_name):
-        # TODO: The slice returned by this function is not used currently. We need to create the extension scopes within
-        #  this slice and use the slice to monitor the cgroups. Also see comment in create_extension_cgroups.
-        slice_name = self._get_extension_cgroup_name(extension_name)
-
-        cgroups = []
-
-        def create_cgroup(controller):
-            cpu_cgroup_path = os.path.join(CGROUPS_FILE_SYSTEM_ROOT, controller, 'system.slice', slice_name)
-            cgroups.append(CGroup.create(cpu_cgroup_path, controller, extension_name))
-
-        self._foreach_controller(create_cgroup, 'Cannot retrieve cgroup for extension {0}; resource usage will not be tracked.'.format(extension_name))
-
-        return cgroups
 
     def get_agent_unit_name(self):
         if self._agent_unit_name is None:
