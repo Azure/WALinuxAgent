@@ -1337,8 +1337,8 @@ class DefaultOSUtil(object):  # pylint: disable=R0904
             os.kill(pid, 0)
         except (ValueError, TypeError):
             return False
-        except OSError as e:  # pylint: disable=C0103
-            if e.errno == errno.EPERM:
+        except OSError as os_error:
+            if os_error.errno == errno.EPERM:
                 return True
             return False
         return True
