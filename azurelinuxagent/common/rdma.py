@@ -395,6 +395,10 @@ class RDMADeviceHandler(object):
                 if mac_ip[0] == mac_addr:
                     ret = 0
                     try:
+                        # bring up the interface and set its IP address
+                        ip_command = ["ip", "link", "set", nic, "up"]
+                        shellutil.run_command(ip_command)
+
                         ip_command = ["ip", "addr", "add", "{0}/16".format(mac_ip[1]), "dev", nic]
                         shellutil.run_command(ip_command)
                     except shellutil.CommandError as error:
