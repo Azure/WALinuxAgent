@@ -31,7 +31,6 @@ from tests.tools import AgentTestCase, patch, mock_sleep
 class CGroupConfiguratorSystemdTestCase(AgentTestCase):
     @classmethod
     def tearDownClass(cls):
-        # protected-access<W0212> Disabled: OK to access CGroupConfigurator._instance from unit test for CGroupConfigurator
         CGroupConfigurator._instance = None  # pylint: disable=protected-access
         AgentTestCase.tearDownClass()
 
@@ -63,6 +62,8 @@ class CGroupConfiguratorSystemdTestCase(AgentTestCase):
             "The Agent's CPU is not being tracked. Tracked: {0}".format(tracked))
         self.assertTrue(any(cg for cg in tracked if cg.name == 'walinuxagent.service' and 'memory' in cg.path),
             "The Agent's memory is not being tracked. Tracked: {0}".format(tracked))
+
+        self.fail("Oopsie!")
 
     def test_initialize_should_start_tracking_other_controllers_when_one_is_not_present(self):
         configurator = CGroupConfiguratorSystemdTestCase._get_new_cgroup_configurator_instance(
