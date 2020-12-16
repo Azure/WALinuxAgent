@@ -879,7 +879,7 @@ Description=Slice for Azure VM Extensions""")
                     self.assertFalse(os.path.exists(azure_slice_path))
                     self.assertFalse(os.path.exists(extensions_slice_path))
         finally:
-            CGroupConfigurator._instance = None
+            CGroupConfigurator._instance = None  # pylint: disable=protected-access
 
     def _test_evaluate_agent_health(self, child_agent_index=0):
         self.prepare_agents()

@@ -20,7 +20,6 @@ import random
 import time
 
 from azurelinuxagent.common.cgroup import CGroup
-from azurelinuxagent.common.cgroupconfigurator import CGroupConfigurator
 from azurelinuxagent.common.cgroupstelemetry import CGroupsTelemetry
 from azurelinuxagent.common.utils import fileutil
 from tests.tools import AgentTestCase, data_dir, patch
