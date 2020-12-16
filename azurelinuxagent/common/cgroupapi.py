@@ -40,7 +40,7 @@ CGROUPS_FILE_SYSTEM_ROOT = '/sys/fs/cgroup'
 CGROUP_CONTROLLERS = ["cpu", "memory"]
 VM_AGENT_CGROUP_NAME = "walinuxagent.service"
 AZURE_CGROUP_NAME = "azure"
-EXTENSIONS_ROOT_CGROUP_NAME = "walinuxagent.extensions"
+EXTENSIONS_ROOT_CGROUP_NAME = "vmextensions"
 UNIT_FILES_FILE_SYSTEM_PATH = "/etc/systemd/system"
 SYSTEMD_RUN_PATH = "/run/systemd/system/"
 
@@ -313,6 +313,7 @@ class FileSystemCgroupsApi(CGroupsApi):
         return cgroups
 
     def create_azure_cgroups_root(self):
+        # TODO: will be implemented when we focus on non-systemd distros
         pass
 
     def create_extension_cgroups_root(self):
@@ -575,8 +576,7 @@ class SystemdCgroupsApi(CGroupsApi):
         return "system-{0}-{1}.slice".format(EXTENSIONS_ROOT_CGROUP_NAME, self._get_extension_cgroup_name(extension_name))
 
     def create_azure_cgroups_root(self):
-        unit_contents = """
-[Unit]
+        unit_contents = """[Unit]
 Description=Slice for Azure VM Agent and Extensions"""
         unit_filename = self._get_azure_slice_name()
 
@@ -584,8 +584,7 @@ Description=Slice for Azure VM Agent and Extensions"""
         logger.info("Created root slice for Azure VM Agent and Extensions {0}".format(unit_filename))
 
     def create_extension_cgroups_root(self):
-        unit_contents = """
-[Unit]
+        unit_contents = """[Unit]
 Description=Slice for Azure VM Extensions"""
         unit_filename = self._get_extensions_slice_root_name()
 

@@ -375,10 +375,10 @@ class FileSystemCgroupsApiTestCase(_MockedFileSystemTestCase):
     def test_create_extension_cgroups_root_should_create_root_directory_for_extensions(self):
         FileSystemCgroupsApi().create_extension_cgroups_root()
 
-        cpu_cgroup = os.path.join(self.cgroups_file_system_root, "cpu", "walinuxagent.extensions")
+        cpu_cgroup = os.path.join(self.cgroups_file_system_root, "cpu", "vmextensions")
         self.assertTrue(os.path.exists(cpu_cgroup))
 
-        memory_cgroup = os.path.join(self.cgroups_file_system_root, "memory", "walinuxagent.extensions")
+        memory_cgroup = os.path.join(self.cgroups_file_system_root, "memory", "vmextensions")
         self.assertTrue(os.path.exists(memory_cgroup))
 
     def test_create_extension_cgroups_should_create_cgroups_on_all_controllers(self):
@@ -387,7 +387,7 @@ class FileSystemCgroupsApiTestCase(_MockedFileSystemTestCase):
         extension_cgroups = api.create_extension_cgroups("Microsoft.Compute.TestExtension-1.2.3")
 
         def assert_cgroup_created(controller):
-            cgroup_path = os.path.join(self.cgroups_file_system_root, controller, "walinuxagent.extensions",
+            cgroup_path = os.path.join(self.cgroups_file_system_root, controller, "vmextensions",
                                        "Microsoft.Compute.TestExtension_1.2.3")
 
             self.assertTrue(any(cgroups.path == cgroup_path for cgroups in extension_cgroups))
@@ -504,12 +504,12 @@ class SystemdCgroupsApiTestCase(AgentTestCase):
 
     def test_get_extensions_slice_root_name_should_return_the_root_slice_for_extensions(self):
         root_slice_name = SystemdCgroupsApi()._get_extensions_slice_root_name()  # pylint: disable=protected-access
-        self.assertEqual(root_slice_name, "azure-walinuxagent.extensions.slice")
+        self.assertEqual(root_slice_name, "azure-vmextensions.slice")
 
     def test_get_extension_slice_name_should_return_the_slice_for_the_given_extension(self):
         extension_name = "Microsoft.Azure.DummyExtension-1.0"
         extension_slice_name = SystemdCgroupsApi()._get_extension_slice_name(extension_name)  # pylint: disable=protected-access
-        self.assertEqual(extension_slice_name, "system-walinuxagent.extensions-Microsoft.Azure.DummyExtension_1.0.slice")
+        self.assertEqual(extension_slice_name, "system-vmextensions-Microsoft.Azure.DummyExtension_1.0.slice")
 
     def __assert_unit_is_loaded_and_active(self, unit_name):
         status = shellutil.run_command(["systemctl", "status", unit_name])

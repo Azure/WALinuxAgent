@@ -184,6 +184,8 @@ class CGroupConfigurator(object):
         def create_slices(self):
             # Create root slices for agent and agent and extensions for systemd-managed distros.
             # The hierarchy is as follows:
+            # ├─user.slice
+            # ...
             # ├─system.slice
             # ...
             # └─azure.slice
@@ -241,9 +243,9 @@ class CGroupConfigurator(object):
         def create_extension_cgroups(self, name):
             """
             Creates and returns the cgroups for the given extension
-            """	
+            """
             def __impl():
-                return self._cgroups_api.create_extension_cgroups(name)	
+                return self._cgroups_api.create_extension_cgroups(name)
 
             return self._invoke_cgroup_operation(__impl, "Failed to create a cgroup for extension '{0}'; resource usage will not be tracked.".format(name))
 

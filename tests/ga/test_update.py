@@ -20,6 +20,7 @@ from threading import currentThread
 from mock import PropertyMock
 
 from azurelinuxagent.common import conf
+from azurelinuxagent.common.cgroupconfigurator import CGroupConfigurator
 from azurelinuxagent.common.event import EVENTS_DIRECTORY
 from azurelinuxagent.common.exception import ProtocolError, UpdateError, ResourceGoneError
 from azurelinuxagent.common.future import ustr
@@ -38,6 +39,7 @@ from azurelinuxagent.ga.exthandlers import ExtHandlerInstance, HandlerEnvironmen
 from azurelinuxagent.ga.update import GuestAgent, GuestAgentError, MAX_FAILURE, AGENT_MANIFEST_FILE, \
     get_update_handler, ORPHAN_POLL_INTERVAL, AGENT_PARTITION_FILE, AGENT_ERROR_FILE, ORPHAN_WAIT_INTERVAL, \
     CHILD_LAUNCH_RESTART_MAX, CHILD_HEALTH_INTERVAL, UpdateHandler
+from tests.common.mock_cgroup_commands import mock_cgroup_commands
 from tests.protocol.mocks import mock_wire_protocol
 from tests.protocol.mockwiredata import DATA_FILE, DATA_FILE_MULTIPLE_EXT
 from tests.tools import AgentTestCase, call, data_dir, DEFAULT, patch, load_bin_data, load_data, Mock, MagicMock, \
@@ -836,6 +838,48 @@ class TestUpdate(UpdateTestCase):  # pylint: disable=too-many-public-methods
             self.assertEqual(
                 stat.S_IRUSR | stat.S_IWUSR | stat.S_IRGRP | stat.S_IROTH,
                 mode)
+
+    def test_ensure_cgroups_initialized_creates_slices(self):
+        try:
+            azure_slice_path = os.path.join(self.tmp_dir, "azure.slice")
+            extensions_slice_path = os.path.join(self.tmp_dir, "azure-vmextensions.slice")
+
+            self.assertFalse(os.path.exists(azure_slice_path))
+            self.assertFalse(os.path.exists(extensions_slice_path))
+
+            CGroupConfigurator._instance = None  # pylint: disable=protected-access
+            with mock_cgroup_commands() as mocks:
+                # Mock out all the actual calls to systemd
+                mocks.add_file(r"^/etc/systemd/system/azure.slice$", azure_slice_path)
+                mocks.add_file(r"^/etc/systemd/system/azure-vmextensions.slice$", extensions_slice_path)
+
+                mocks.add_command("systemctl daemon-reload", "")
+                mocks.add_command("systemctl start azure.slice", "")
+                mocks.add_command("systemctl start azure-vmextensions.slice", "")
+
+                with patch.object(CGroupConfigurator.get_instance(), "enabled", return_value=True):
+                    self.update_handler._ensure_cgroups_initialized()  # pylint: disable=protected-access
+
+                    # Ensure we created the slice files with proper content if cgroups are enabled
+                    self.assertTrue(os.path.exists(azure_slice_path))
+                    self.assertTrue(os.path.exists(extensions_slice_path))
+                    self.assertEqual(fileutil.read_file(azure_slice_path), """[Unit]
+Description=Slice for Azure VM Agent and Extensions""")
+                    self.assertEqual(fileutil.read_file(extensions_slice_path), """[Unit]
+Description=Slice for Azure VM Extensions""")
+
+                # Clean files up for next assertion
+                os.remove(azure_slice_path)
+                os.remove(extensions_slice_path)
+
+                with patch.object(CGroupConfigurator.get_instance(), "enabled", return_value=False):
+                    self.update_handler._ensure_cgroups_initialized()  # pylint: disable=protected-access
+
+                    # Ensure we don't create the slice files if cgroups are disabled
+                    self.assertFalse(os.path.exists(azure_slice_path))
+                    self.assertFalse(os.path.exists(extensions_slice_path))
+        finally:
+            CGroupConfigurator._instance = None
 
     def _test_evaluate_agent_health(self, child_agent_index=0):
         self.prepare_agents()
