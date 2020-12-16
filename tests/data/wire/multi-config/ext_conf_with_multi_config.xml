@@ -1,0 +1,131 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Extensions version="1.0.0.0" goalStateIncarnation="4"><GuestAgentExtension xmlns:i="http://www.w3.org/2001/XMLSchema-instance">
+  <GAFamilies>
+      <GAFamily>
+          <Name>Prod</Name>
+          <Uris>
+              <Uri>http://mock-goal-state/manifest_of_ga.xml</Uri>
+          </Uris>
+      </GAFamily>
+      <GAFamily>
+          <Name>Test</Name>
+          <Uris>
+              <Uri>http://mock-goal-state/manifest_of_ga.xml</Uri>
+          </Uris>
+      </GAFamily>
+  </GAFamilies>
+  <Location>eastus</Location>
+  <ServiceName>CRP</ServiceName>
+</GuestAgentExtension>
+<RequiredFeatures>
+  <RequiredFeature>
+    <Name>MultipleExtensionsPerHandler</Name>
+  </RequiredFeature>
+</RequiredFeatures>
+<StatusUploadBlob statusBlobType="PageBlob">https://test.blob.core.windows.net/$system/lrwinmcdn_0.0f3bfecf-f14f-4c7d-8275-9dee7310fe8c.status?sv=2018-03-28&amp;sr=b&amp;sk=system-1&amp;sig=1%2b%2f4nL3kZJyUb7EKxSVGQ%2fHLpXBZxCU8Zo4diPFPv5o%3d&amp;se=9999-01-01T00%3a00%3a00Z&amp;sp=w</StatusUploadBlob>
+<Plugins>
+  <Plugin name="Microsoft.CPlat.Core.RunCommandHandlerWindows" version="2.0.2" location="http://mock-goal-state/rdfepirv2bl3prdstr01.blob.core.windows.net/f72653efd9e349ed9842c8b99e4c1712/Microsoft.CPlat.Core_RunCommandHandlerWindows_useast_manifest.xml" state="enabled" autoUpgrade="true" failoverlocation="http://mock-goal-state/zrdfepirv2bl5prdstr06.blob.core.windows.net/f72653efd9e349ed9842c8b99e4c1712/Microsoft.CPlat.Core_RunCommandHandlerWindows_useast_manifest.xml" runAsStartupTask="false" isJson="true" useExactVersion="true" />
+  <Plugin name="Microsoft.Azure.Security.AntimalwareSignature.AntimalwareConfiguration" version="2.0.53.0" location="http://mock-goal-state/zrdfepirv2bl6prdstr05a.blob.core.windows.net/4eb6e001f5e54cb9b17d94fd6ffad9a7/Microsoft.Azure.Security.AntimalwareSignature_AntimalwareConfiguration_useast_manifest.xml" state="enabled" autoUpgrade="true" failoverlocation="http://mock-goal-state/rdfepirv2bl3prdstr03.blob.core.windows.net/4eb6e001f5e54cb9b17d94fd6ffad9a7/Microsoft.Azure.Security.AntimalwareSignature_AntimalwareConfiguration_useast_manifest.xml" runAsStartupTask="false" isJson="true" useExactVersion="true" />
+  <Plugin name="Microsoft.Azure.Geneva.GenevaMonitoring" version="2.20.0.1" location="http://mock-goal-state/rdfepirv2bl2prdstr02.blob.core.windows.net/dfe9924e0f8c4d6d83e1d19f1e8238fc/Microsoft.Azure.Geneva_GenevaMonitoring_useast_manifest.xml" state="enabled" autoUpgrade="true" failoverlocation="http://mock-goal-state/zrdfepirv2bl5prdstr06.blob.core.windows.net/dfe9924e0f8c4d6d83e1d19f1e8238fc/Microsoft.Azure.Geneva_GenevaMonitoring_useast_manifest.xml" runAsStartupTask="false" isJson="true" useExactVersion="true" />
+  <Plugin name="Microsoft.Compute.CustomScriptExtension" version="1.10.9" location="http://mock-goal-state/zrdfepirv2bl6prdstr05a.blob.core.windows.net/bfd5c281a7dc4e4b84381eb0b47e3aaf/Microsoft.Compute_CustomScriptExtension_useast_manifest.xml" state="enabled" autoUpgrade="false" failoverlocation="http://mock-goal-state/rdfepirv2bl2prdstr02.blob.core.windows.net/bfd5c281a7dc4e4b84381eb0b47e3aaf/Microsoft.Compute_CustomScriptExtension_useast_manifest.xml" runAsStartupTask="false" isJson="true" useExactVersion="true" />
+  <Plugin name="Microsoft.Compute.VMAccessAgent" version="2.4.7" location="http://mock-goal-state/rdfepirv2bl3prdstr01.blob.core.windows.net/bfd5c281a7dc4e4b84381eb0b47e3aaf/Microsoft.Compute_VMAccessAgent_useast_manifest.xml" state="enabled" autoUpgrade="true" failoverlocation="http://mock-goal-state/zrdfepirv2bl5prdstr06.blob.core.windows.net/bfd5c281a7dc4e4b84381eb0b47e3aaf/Microsoft.Compute_VMAccessAgent_useast_manifest.xml" runAsStartupTask="false" isJson="true" useExactVersion="true" />
+</Plugins>
+<PluginSettings>
+  <Plugin name="Microsoft.CPlat.Core.RunCommandHandlerWindows" version="2.0.2">
+    <DependsOn dependencyLevel="3" name="secondRunCommand">
+      <DependsOnExtension extension="firstRunCommand" handler="Microsoft.CPlat.Core.RunCommandHandlerWindows" />
+      <DependsOnExtension handler="Microsoft.Compute.CustomScriptExtension" />
+      <DependsOnExtension handler="Microsoft.Compute.VMAccessAgent" />
+    </DependsOn>
+    <DependsOn dependencyLevel="4" name="thirdRunCommand">
+      <DependsOnExtension extension="firstRunCommand" handler="Microsoft.CPlat.Core.RunCommandHandlerWindows" />
+      <DependsOnExtension extension="secondRunCommand" handler="Microsoft.CPlat.Core.RunCommandHandlerWindows" />
+      <DependsOnExtension handler="Microsoft.Compute.CustomScriptExtension" />
+      <DependsOnExtension handler="Microsoft.Compute.VMAccessAgent" />
+    </DependsOn>
+    <ExtensionRuntimeSettings seqNo="2" name="firstRunCommand" state="enabled">{
+  "runtimeSettings": [
+    {
+      "handlerSettings": {
+        "publicSettings": {"source":{"script":"Write-Host First: Hello World 1234!"},"parameters":[{"name":"extensionName","value":"firstRunCommand"}],"timeoutInSeconds":120}
+      }
+    }
+  ]
+}</ExtensionRuntimeSettings>
+    <ExtensionRuntimeSettings seqNo="2" name="secondRunCommand" state="enabled">{
+  "runtimeSettings": [
+    {
+      "handlerSettings": {
+        "publicSettings": {"source":{"script":"Write-Host First: Hello World 1234!"},"parameters":[{"name":"extensionName","value":"secondRunCommand"}],"timeoutInSeconds":120}
+      }
+    }
+  ]
+}</ExtensionRuntimeSettings>
+    <ExtensionRuntimeSettings seqNo="1" name="thirdRunCommand" state="enabled">{
+  "runtimeSettings": [
+    {
+      "handlerSettings": {
+        "publicSettings": {"source":{"script":"Write-Host Third: Hello World 3!"},"parameters":[{"name":"extensionName","value":"thirdRunCommand"}],"timeoutInSeconds":120}
+      }
+    }
+  ]
+}</ExtensionRuntimeSettings>
+  </Plugin>
+  <Plugin name="Microsoft.Compute.CustomScriptExtension" version="1.10.9">
+    <DependsOn dependencyLevel="1">
+      <DependsOnExtension extension="firstRunCommand" handler="Microsoft.CPlat.Core.RunCommandHandlerWindows" />
+    </DependsOn>
+    <RuntimeSettings seqNo="2">{
+  "runtimeSettings": [
+    {
+      "handlerSettings": {
+        "publicSettings": {"fileUris":["https://test.blob.core.windows.net/windowsagent/VerifyAgentRunning.ps1"],"commandToExecute":"echo Hello 1234"}
+      }
+    }
+  ]
+}</RuntimeSettings>
+  </Plugin>
+  <Plugin name="Microsoft.Azure.Security.AntimalwareSignature.AntimalwareConfiguration" version="2.0.53.0">
+    <RuntimeSettings seqNo="1">{
+  "runtimeSettings": [
+    {
+      "handlerSettings": {
+        "publicSettings": {}
+      }
+    }
+  ]
+}</RuntimeSettings>
+  </Plugin>
+  <Plugin name="Microsoft.Azure.Geneva.GenevaMonitoring" version="2.20.0.1">
+    <RuntimeSettings seqNo="1">{
+  "runtimeSettings": [
+    {
+      "handlerSettings": {
+        "publicSettings": {}
+      }
+    }
+  ]
+}</RuntimeSettings>
+  </Plugin>
+  <Plugin name="Microsoft.Compute.VMAccessAgent" version="2.4.7">
+    <DependsOn dependencyLevel="2">
+      <DependsOnExtension extension="firstRunCommand" handler="Microsoft.CPlat.Core.RunCommandHandlerWindows" />
+      <DependsOnExtension handler="Microsoft.Compute.CustomScriptExtension" />
+    </DependsOn>
+    <RuntimeSettings seqNo="1">{
+  "runtimeSettings": [
+    {
+      "handlerSettings": {
+        "protectedSettingsCertThumbprint": "EE22B5ECAC6A83B581A7CAC1772BEBD0E016649F",
+        "protectedSettings": "MIIByAYJKoZIhvcNAQcDoIIBuTCCAbUCAQAxggFpMIIBZQIBADBNMDkxNzA1BgoJkiaJk/IsZAEZFidXaW5kb3dzIEF6dXJlIENSUCBDZXJ0aWZpY2F0ZSBHZW5lcmF0b3ICEC9nmIRFUMGqQOFdBaBjrNswDQYJKoZIhvcNAQEBBQAEggEAylzH/UuK3909SCbqecUyrd+V6EqTJ7Xe7hzMtYtfVTI3TBDnDlFLLzazawgXpsmOV96II9Bk4Kpo7rvwDuZWZulYWuBWw2q8/XPIpZ+hQg2TaV5A2l9N4gBU6JQ/6axHjCsuq7CUOpK9/Yq019I9HP2SqK8Ao4lMEKLR4AGMnoc+x8aKuFvhn+ClYF/75Pz+h1kgVGvj11LMM5u9M87M6Fie6UlbpFjZmBuZaPiyhfAxQxWqsJBsZ8AaUYzy21Wh3YEC54Pqx3n5kOzMH9Q+G5SkgJQ1SBEhf0gLdzeIKX2jEwOAhrL1tVtglUPxHxK5I9NACCvxou7xRtJgvbsYATBDBgkqhkiG9w0BBwEwFAYIKoZIhvcNAwcECE8EEkK33SSegCCJOYYNsSXz9s87019rTptS0oBvlZgijlB+NQzvNpzAow==",
+        "publicSettings": {"UserName":"test1234"}
+      }
+    }
+  ]
+}</RuntimeSettings>
+  </Plugin>
+</PluginSettings>
+<InVMArtifactsProfileBlob>https://test.blob.core.windows.net/$system/lrwinmcdn_0.0f3bfecf-f14f-4c7d-8275-9dee7310fe8c.vmSettings?sv=2018-03-28&amp;sr=b&amp;sk=system-1&amp;sig=8YHwmibhasT0r9MZgL09QmFwL7ZV%2bg%2b49QP5Zwe4ksY%3d&amp;se=9999-01-01T00%3a00%3a00Z&amp;sp=r</InVMArtifactsProfileBlob>
+<InVMGoalStateMetaData inSvdSeqNo="3" createdOnTicks="637415129555522297" />
+<HealthProbe id="0f3bfecf-f14f-4c7d-8275-9dee7310fe8c" type="loadbalancer" port="80" />
+<HealthStatusBlobUri>https://test.blob.core.windows.net/$system/lrwinmcdn_0.0f3bfecf-f14f-4c7d-8275-9dee7310fe8c.vmHealth?sv=2018-03-28&amp;sr=b&amp;sk=system-1&amp;sig=DQSxfPRZEoGBGIFl%2f4bFZ0LM9RNr9DbUEmmtkiQkWkE%3d&amp;se=9999-01-01T00%3a00%3a00Z&amp;sp=rw</HealthStatusBlobUri></Extensions>

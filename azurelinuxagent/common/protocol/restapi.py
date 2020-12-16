@@ -82,19 +82,30 @@ class VMAgentManifestList(DataContract):
 
 
 class Extension(DataContract):
+    """
+    The runtime settings associated with a Handler
+    -   Maps to Extension.PluginSettings.Plugin.RuntimeSettings for single config extensions in the ExtensionConfig.xml
+        Eg: 1.settings, 2.settings
+    -   Maps to Extension.PluginSettings.Plugin.ExtensionRuntimeSettings for multi-config extensions in the
+        ExtensionConfig.xml
+        Eg: <extensionName>.1.settings, <extensionName>.2.settings
+    """
+
     def __init__(self,  # pylint: disable=R0913
                  name=None,
                  sequenceNumber=None,
                  publicSettings=None,
                  protectedSettings=None,
                  certificateThumbprint=None,
-                 dependencyLevel=0):
+                 dependencyLevel=0,
+                 state="enabled"):
         self.name = name
         self.sequenceNumber = sequenceNumber  # pylint: disable=C0103
         self.publicSettings = publicSettings  # pylint: disable=C0103
         self.protectedSettings = protectedSettings  # pylint: disable=C0103
         self.certificateThumbprint = certificateThumbprint  # pylint: disable=C0103
         self.dependencyLevel = dependencyLevel  # pylint: disable=C0103
+        self.state = state
 
 
 class ExtHandlerProperties(DataContract):
@@ -110,10 +121,29 @@ class ExtHandlerVersionUri(DataContract):
 
 
 class ExtHandler(DataContract):
+    """
+    The main Plugin/handler specified by the publishers.
+    Maps to Extension.PluginSettings.Plugins.Plugin in the ExtensionConfig.xml file
+    Eg: Microsoft.OSTC.CustomScript
+    """
+
     def __init__(self, name=None):
         self.name = name
         self.properties = ExtHandlerProperties()
         self.versionUris = DataContractList(ExtHandlerVersionUri)  # pylint: disable=C0103
+        self.__invalid_handler_setting_reason = None
+
+    @property
+    def is_invalid_setting(self):
+        return self.__invalid_handler_setting_reason is not None
+
+    @property
+    def invalid_setting_reason(self):
+        return self.__invalid_handler_setting_reason
+
+    @invalid_setting_reason.setter
+    def invalid_setting_reason(self, value):
+        self.__invalid_handler_setting_reason = value
 
     def sort_key(self):
         levels = [e.dependencyLevel for e in self.properties.extensions]
