@@ -1921,37 +1921,48 @@ class FreeBSDDistro(AbstractDistro):
         """
         code,output=RunGetOutput("ifconfig",chk_err=False)
         Log(output)
+
+        # find iface by listing devices and eliminating lo0
         retries=10
-        cmd='ifconfig | grep -A2 -B2 ether | grep -B3 inet | grep -A4 UP '
-        code=1
-
-        while code > 0 :
-            if code > 0 and retries == 0:
-                Error("GetFreeBSDEthernetInfo - Failed to detect ethernet interface")
-                return None, None, None
-            code,output=RunGetOutput(cmd,chk_err=False)
-            retries-=1
-            if code > 0 and retries > 0 :
+        iface = ''
+        while iface == '':
+            # get list of interfaces, elminiate lo0, take first
+            code,iface=RunGetOutput("ifconfig -l | tr ' ' '\n'|grep -v lo0 | head -1", chk_err=False)
+            if iface == '':
+                if retries == 0:
+                    Log("GetFreeBSDEthernetInfo - Error: failed to detect ethernet interface")
+                    return None, None, None
                 Log("GetFreeBSDEthernetInfo - Error: retry ethernet detection " + str(retries))
-                if retries == 9 :
-                    c,o=RunGetOutput("ifconfig | grep -A1 -B2 ether",chk_err=False)
-                    if c == 0:
-                        t=o.replace('\n',' ')
-                        t=t.split()
-                        i=t[0][:-1]
-                        Log(RunGetOutput('id')[1])
-                        Run('dhclient '+i)
+                retries-=1
+                time.sleep(5)
+        iface = iface.strip('\n')
+
+        # now that we have an iface value to use, parse values, look for inet first
+        # loop until we get one. Dhcp might be working.
+        retries=10
+        inet = ''
+        while inet == '':
+            cmd="ifconfig " + iface + " | grep inet | cut -f2 | cut -d' ' -f2"
+            code,inet=RunGetOutput(cmd)
+            if "does not exist" in inet:
+                    Log('GetFreeBSDEthernetInfo - Error: interface ' + iface + ' does not exist.')
+                    return None, None, None
+            if code > 0 or inet == '':
+                if retries == 0:
+                    Log("GetFreeBSDEthernetInfo - Error: failed to detect ipv4")
+                    return None, None, None
+                Log("GetFreeBSDEthernetInfo - Error: retry ipv4 detection " + str(retries))
+                retries-=1
+                # after the first failure to get the inet address, (re)start dhclient
+                if retries == 9:
+                    Run('dhclient '+iface)
                 time.sleep(10)
+        inet = inet.strip('\n')
 
-        j=output.replace('\n',' ')
-        j=j.split()
-        iface=j[0][:-1]
-
-        for i in range(len(j)):
-            if j[i] == 'inet' :
-                inet=j[i+1]
-            elif j[i] == 'ether' :
-                mac=j[i+1]
+        # now parse out macaddr
+        cmd="ifconfig " + iface + " | grep ether | cut -f2 | cut -d' ' -f2"
+        code,mac=RunGetOutput(cmd)
+        mac = mac.strip('\n')
 
         return iface, inet, mac
 
