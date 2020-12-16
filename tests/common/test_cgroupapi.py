@@ -509,7 +509,7 @@ class SystemdCgroupsApiTestCase(AgentTestCase):
     def test_get_extension_slice_name_should_return_the_slice_for_the_given_extension(self):
         extension_name = "Microsoft.Azure.DummyExtension-1.0"
         extension_slice_name = SystemdCgroupsApi()._get_extension_slice_name(extension_name)  # pylint: disable=protected-access
-        self.assertEqual(extension_slice_name, "system-vmextensions-Microsoft.Azure.DummyExtension_1.0.slice")
+        self.assertEqual(extension_slice_name, "azure-vmextensions-Microsoft.Azure.DummyExtension_1.0.slice")
 
     def __assert_unit_is_loaded_and_active(self, unit_name):
         status = shellutil.run_command(["systemctl", "status", unit_name])

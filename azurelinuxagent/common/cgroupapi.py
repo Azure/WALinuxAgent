@@ -573,7 +573,7 @@ class SystemdCgroupsApi(CGroupsApi):
         return "{0}-{1}.slice".format(AZURE_CGROUP_NAME, EXTENSIONS_ROOT_CGROUP_NAME)
 
     def _get_extension_slice_name(self, extension_name):
-        return "system-{0}-{1}.slice".format(EXTENSIONS_ROOT_CGROUP_NAME, self._get_extension_cgroup_name(extension_name))
+        return "{0}-{1}-{2}.slice".format(AZURE_CGROUP_NAME, EXTENSIONS_ROOT_CGROUP_NAME, self._get_extension_cgroup_name(extension_name))
 
     def create_azure_cgroups_root(self):
         unit_contents = """[Unit]
