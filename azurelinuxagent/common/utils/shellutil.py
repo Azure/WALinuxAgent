@@ -19,6 +19,7 @@
 
 import subprocess
 import tempfile
+import threading
 
 import azurelinuxagent.common.logger as logger
 from azurelinuxagent.common.future import ustr
@@ -99,11 +100,10 @@ def run_get_output(cmd, chk_err=True, log_cmd=True, expected_errors=None):
         logger.verbose(u"Command: [{0}]", cmd)
 
     try:
-        process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, shell=True)
-        _invoke_on_command_started_callback(process.pid)
+        process = _popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, shell=True)
 
         output, _ = process.communicate()
-        _invoke_on_command_completed_callback(process.pid)
+        _on_command_completed(process.pid)
 
         output = __encode_command_output(output)
 
@@ -240,11 +240,10 @@ def run_command(command, input=None, stdin=None, stdout=subprocess.PIPE, stderr=
             popen_stdin = stdin
             communicate_input = None
 
-        process = subprocess.Popen(command, stdin=popen_stdin, stdout=stdout, stderr=stderr, shell=False)
-        _invoke_on_command_started_callback(process.pid)
+        process = _popen(command, stdin=popen_stdin, stdout=stdout, stderr=stderr, shell=False)
 
         command_stdout, command_stderr = process.communicate(input=communicate_input)
-        _invoke_on_command_completed_callback(process.pid)
+        _on_command_completed(process.pid)
 
         return process.returncode, command_stdout, command_stderr
 
@@ -291,13 +290,11 @@ def run_pipe(pipe, stdin=None, stdout=subprocess.PIPE, stderr=subprocess.PIPE, l
             processes = []
             i = 0
             while i < len(pipe) - 1:
-                processes.append(subprocess.Popen(pipe[i], stdin=popen_stdin, stdout=subprocess.PIPE, stderr=popen_stderr))
+                processes.append(_popen(pipe[i], stdin=popen_stdin, stdout=subprocess.PIPE, stderr=popen_stderr))
                 popen_stdin = processes[i].stdout
-                _invoke_on_command_started_callback(processes[i].pid)
                 i += 1
 
-            processes.append(subprocess.Popen(pipe[i], stdin=popen_stdin, stdout=stdout, stderr=popen_stderr))
-            _invoke_on_command_started_callback(processes[i].pid)
+            processes.append(_popen(pipe[i], stdin=popen_stdin, stdout=stdout, stderr=popen_stderr))
 
             i = 0
             while i < len(processes) - 1:
@@ -307,7 +304,7 @@ def run_pipe(pipe, stdin=None, stdout=subprocess.PIPE, stderr=subprocess.PIPE, l
             pipe_stdout, pipe_stderr = processes[i].communicate()
 
             for proc in processes:
-                _invoke_on_command_completed_callback(proc.pid)
+                _on_command_completed(proc.pid)
 
             if stderr_file is not None:
                 stderr_file.seek(0)
@@ -339,48 +336,35 @@ def quote(word_list):
 
 
 #
-# The run_command/run_pipe/run/run_get_output functions use these callbacks to notify when a command has been started
-# and when it completes.
+# The run_command/run_pipe/run/run_get_output functions maintain a list of the commands that they are currently executing.
 #
-# The callbacks are executed in the context of the thread executing run_command/run_pipe/run/run_get_output so they
-# should be used only to perform very fast operations or otherwise would block that thread. Also, errors in the
-# callback are ignored, so they should do they own error handling.
 #
-# Only 1 callback is maintained for each of those notifications. Setting a callback overrides the previous value.
-# Set the callback to None to stop the notifications
-#
-# C0103: Constant name "foo" doesn't conform to UPPER_CASE naming style (invalid-name) -- Disabled: These are not constants
-_on_command_started_callback = None  # pylint:disable=C0103
-_on_command_completed_callback = None  # pylint:disable=C0103
+# C0103: Constant name "foo" doesn't conform to UPPER_CASE naming style (invalid-name) -- Disabled: these are not constants
+_running_commands = []  # pylint:disable=C0103
+_running_commands_lock = threading.RLock()  # pylint:disable=C0103
 
 
-def set_on_command_started_callback(callback):
-    # W0603: Using the global statement (global-statement) - Disabled: global is required to modify this variable
-    # C0103: Constant name "foo" doesn't conform to UPPER_CASE naming style (invalid-name) -- Disabled: This is not a constant
-    global _on_command_started_callback  # pylint:disable=W0603,C0103
-    _on_command_started_callback = callback
+def _popen(*args, **kwargs):
+    with _running_commands_lock:
+        process = subprocess.Popen(*args, **kwargs)
+        _running_commands.append(process.pid)
+        return process
 
 
-def set_on_command_completed_callback(callback):
-    # W0603: Using the global statement (global-statement) - Disabled: global is required to modify this variable
-    # C0103: Constant name "foo" doesn't conform to UPPER_CASE naming style (invalid-name) -- Disabled: This is not a constant
-    global _on_command_completed_callback  # pylint:disable=W0603,C0103
-    _on_command_completed_callback = callback
+def _on_command_completed(pid):
+    with _running_commands_lock:
+        _running_commands.remove(pid)
 
 
-def _invoke_on_command_started_callback(pid):
-    if _on_command_started_callback is not None:
-        try:
-            _on_command_started_callback(pid)
-        except Exception:
-            pass
+def get_running_commands():
+    """
+    Returns the commands started by run/run_get_output/run_command/run_pipe that are currently running.
 
-
-def _invoke_on_command_completed_callback(pid):
-    if _on_command_completed_callback is not None:
-        try:
-            _on_command_completed_callback(pid)
-        except Exception:
-            pass
+    NOTE: This function is not synchronized with process completion, so the returned array may include processes that have
+    already completed. Also, keep in mind that by the time this function returns additional processes may have
+    started or completed.
+    """
+    with _running_commands_lock:
+        return _running_commands[:]  # return a copy, since the call may originate on another thread
 
 

@@ -127,6 +127,12 @@ def get_data_files(name, version, fullname):  # pylint: disable=R0912
                        src=["config/clearlinux/waagent.conf"])
         set_systemd_files(data_files, dest='/usr/lib/systemd/system',
                           src=["init/clearlinux/waagent.service"])
+    elif name == 'mariner':
+        set_bin_files(data_files, dest="/usr/bin")
+        set_conf_files(data_files, dest="/etc",
+                       src=["config/mariner/waagent.conf"])
+        set_systemd_files(data_files, dest='/usr/lib/systemd/system',
+                          src=["init/mariner/waagent.service"])
     elif name == 'ubuntu':
         set_bin_files(data_files)
         set_conf_files(data_files, src=["config/ubuntu/waagent.conf"])
