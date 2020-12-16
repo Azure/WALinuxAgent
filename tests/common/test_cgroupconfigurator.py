@@ -31,12 +31,14 @@ from tests.tools import AgentTestCase, patch, mock_sleep
 class CGroupConfiguratorSystemdTestCase(AgentTestCase):
     @classmethod
     def tearDownClass(cls):
-        CGroupConfigurator._instance = None
+        # protected-access<W0212> Disabled: OK to access CGroupConfigurator._instance from unit test for CGroupConfigurator
+        CGroupConfigurator._instance = None  # pylint: disable=protected-access
         AgentTestCase.tearDownClass()
 
     @staticmethod
     def _get_new_cgroup_configurator_instance(initialize=True, mock_commands=None, mock_files=None):
-        CGroupConfigurator._instance = None
+        # protected-access<W0212> Disabled: OK to access CGroupConfigurator._instance from unit test for CGroupConfigurator
+        CGroupConfigurator._instance = None  # pylint: disable=protected-access
         configurator = CGroupConfigurator.get_instance()
         CGroupsTelemetry.reset()
         if initialize:
