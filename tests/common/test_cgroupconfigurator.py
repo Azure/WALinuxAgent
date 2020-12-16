@@ -62,8 +62,6 @@ class CGroupConfiguratorSystemdTestCase(AgentTestCase):
         self.assertTrue(any(cg for cg in tracked if cg.name == 'walinuxagent.service' and 'memory' in cg.path),
             "The Agent's memory is not being tracked. Tracked: {0}".format(tracked))
 
-        self.fail("Oopsie!")
-
     def test_initialize_should_start_tracking_other_controllers_when_one_is_not_present(self):
         configurator = CGroupConfiguratorSystemdTestCase._get_new_cgroup_configurator_instance(
             mock_commands=[(r"^mount -t cgroup$",
