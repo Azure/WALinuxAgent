@@ -17,16 +17,20 @@
 
 from __future__ import print_function
 
-import re
+import os
+import signal
 import subprocess
+import threading
 
+from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.cgroup import CGroup
-from azurelinuxagent.common.cgroupconfigurator import CGroupConfigurator
+from azurelinuxagent.common.cgroupconfigurator import CGroupConfigurator, UnexpectedProcessesInCGroupException
 from azurelinuxagent.common.cgroupstelemetry import CGroupsTelemetry
 from azurelinuxagent.common.exception import CGroupsException
+from azurelinuxagent.common.utils import shellutil
 from tests.common.mock_cgroup_commands import mock_cgroup_commands
 from tests.tools import AgentTestCase, patch, mock_sleep
-
+from tests.utils.miscelaneous_tools import format_processes, wait_for
 
 class CGroupConfiguratorSystemdTestCase(AgentTestCase):
     @classmethod
@@ -204,21 +208,6 @@ cgroup on /sys/fs/cgroup/blkio type cgroup (rw,nosuid,nodev,noexec,relatime,blki
                     message = args[0]
                     self.assertIn("A TEST EXCEPTION", message)
 
-    def test_get_processes_in_agent_cgroup_should_return_the_processes_within_the_agent_cgroup(self):
-        with mock_cgroup_commands():
-            configurator = CGroupConfiguratorSystemdTestCase._get_new_cgroup_configurator_instance()
-
-            processes = configurator.get_processes_in_agent_cgroup()
-
-            self.assertTrue(len(processes) >= 2,
-                "The cgroup should contain at least 2 procceses (daemon and extension handler): [{0}]".format(processes))
-
-            daemon_present = any("waagent -daemon" in command for (pid, command) in processes)
-            self.assertTrue(daemon_present, "Could not find the daemon in the cgroup: [{0}]".format(processes))
-
-            extension_handler_present = any(re.search(r"(WALinuxAgent-.+\.egg|waagent) -run-exthandlers", command) for (pid, command) in processes)
-            self.assertTrue(extension_handler_present, "Could not find the extension handler in the cgroup: [{0}]".format(processes))
-
     @patch('time.sleep', side_effect=lambda _: mock_sleep())
     def test_start_extension_command_should_not_use_systemd_when_cgroups_are_not_enabled(self, _):
         configurator = CGroupConfiguratorSystemdTestCase._get_new_cgroup_configurator_instance()
@@ -307,4 +296,114 @@ cgroup on /sys/fs/cgroup/blkio type cgroup (rw,nosuid,nodev,noexec,relatime,blki
                     stderr=subprocess.PIPE)
 
                 self.assertIn("A TEST EXCEPTION", str(context_manager.exception))
+
+    def test_check_processes_in_agent_cgroup_should_raise_when_there_are_unexpected_processes_in_the_agent_cgroup(self):
+        CGroupConfiguratorSystemdTestCase._get_new_cgroup_configurator_instance()
+
+        # the test script recursively creates a number of descendant processes as given by its argument; then it blocks by calling read
+        pids_file = os.path.join(self.tmp_dir, "pids.txt")
+        test_script = os.path.join(self.tmp_dir, "create_descendants.sh")
+        AgentTestCase.create_script(test_script, """
+echo $$ >> {0}
+
+if [ $1 -gt 1 ]
+then
+    $0 $(($1 - 1))
+else
+    read
+fi
+""".format(pids_file))
+
+        thread = None
+        child_commands = []
+        extension_process = None
+
+        try:
+            number_of_descendants = 3
+
+            # start the script on a separate thread
+            def run_script():
+                try:
+                    shellutil.run_command([test_script, ustr(number_of_descendants)])
+                except shellutil.CommandError as command_error:
+                    if command_error.returncode != -9:  # test cleanup terminates the commands, so this is expected
+                        raise
+
+            thread = threading.Thread(target=run_script)
+            thread.start()
+
+            # wait for the child processes
+            def processes_started():
+                if not os.path.exists(pids_file):
+                    return False
+                with open(pids_file, "r") as file:
+                    processes_started.pids = file.read().split()
+                    return len(processes_started.pids) == number_of_descendants
+            processes_started.pids = []
+
+            if not wait_for(processes_started):
+                raise Exception("The child processes were not started within the allowed timeout. Expected {0} processes; got: {1}".format(
+                    number_of_descendants, format_processes(processes_started.pids)))
+            child_commands = [int(pid) for pid in processes_started.pids]
+
+            # wait for shellutil to become aware of the process
+            def commands_running():
+                commands_running.commands = shellutil.get_running_commands()
+                return len(commands_running.commands) > 0
+            commands_running.commands = []
+
+            if not wait_for(commands_running):
+                raise Exception("shellutil did not start tracking the child proceess within the allowed timeout")
+
+            if len(commands_running.commands) != 1 or commands_running.commands[0] != child_commands[0]:
+                raise Exception("shellutil is not tracking the expected process. Expected: {0} Got: {1}".format(
+                    format_processes(child_commands[0]), format_processes(commands_running.commands)))
+
+            # extensions are started using Popen instead of run_command; simulate one
+            extension_process = subprocess.Popen("read", shell=True)
+            extension = extension_process.pid
+
+            #
+            # That was a long test setup. Now let's verify that check_processes_in_agent_cgroup raises when there
+            # are unexpected processes in the agent's cgroup; for this, use process 1.
+            #
+            # in the actual agent these would be the daemon, the extension handler, and the commands started by the agent
+            expected_processes = [os.getppid(), os.getpid()] + child_commands
+
+            with patch("azurelinuxagent.common.cgroupconfigurator.CGroupsApi.get_processes_in_cgroup", return_value=expected_processes + [1, extension]):
+                with self.assertRaises(UnexpectedProcessesInCGroupException) as context_manager:
+                    CGroupConfigurator.get_instance().check_processes_in_agent_cgroup()
+
+                unexpected = context_manager.exception.unexpected
+                unexpected.sort()
+
+                self.assertEqual(2, len(unexpected), "Expected 2 processes that do not belong to the agent's cgroup. Got: {0}".format(unexpected))
+                self.assertTrue(unexpected[0].startswith("[PID: 1]"), "Process 1 should have been reported. Got: {0}".format(unexpected))
+                self.assertTrue(unexpected[1].startswith("[PID: {0}]".format(extension)), "Process {0} should have been reported. Got: {1}".format(extension, unexpected))
+
+            #
+            # And now verify that it does not raise when only the expected processes are in the cgroup
+            #
+            error = None
+            try:
+                with patch("azurelinuxagent.common.cgroupconfigurator.CGroupsApi.get_processes_in_cgroup", return_value=expected_processes):
+                    CGroupConfigurator.get_instance().check_processes_in_agent_cgroup()
+            except UnexpectedProcessesInCGroupException as exception:
+                error = exception
+            # we fail outside the except clause, otherwise the failure is reported as "During handling of the above exception, another exception occurred:..."
+            if error is not None:
+                self.fail("The check of the agent's cgroup should not have reported errors. Unexpected processes: {0}".format(error.unexpected))
+
+        finally:
+            # terminate the child processes, since they are blocked
+            for pid in child_commands:
+                os.kill(pid, signal.SIGKILL)
+            # wait for the thread that was running the test script
+            if thread is not None:
+                thread.join(timeout=5)
+            # wait for the extension process
+            if extension_process is not None:
+                os.kill(extension, signal.SIGKILL)
+                extension_process.wait(timeout=5)
+
 
