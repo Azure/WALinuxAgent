@@ -18,6 +18,7 @@
 from __future__ import print_function
 
 import os
+import random
 import signal
 import subprocess
 import threading
@@ -366,40 +367,50 @@ else:
                 raise Exception("shellutil is not tracking the expected process. Expected: {0} Got: {1}".format(
                     format_processes(child_commands[0]), format_processes(commands_running.commands)))
 
-            # extensions are started using Popen instead of run_command; simulate one
-            extension_process = subprocess.Popen("sleep 120", shell=True)
-            extension = extension_process.pid
-
             #
             # That was a long test setup. Now let's verify that check_processes_in_agent_cgroup raises when there
-            # are unexpected processes in the agent's cgroup; for this, use process 1.
+            # are unexpected processes in the agent's cgroup.
             #
-            # in the actual agent these would be the daemon, the extension handler, and the commands started by the agent
-            expected_processes = [os.getppid(), os.getpid()] + child_commands
+            # For the agent's processes, we use the current process and its parent (in the actual agent these would be the daemon and the extension
+            # handler), and the commands started by the agent.
+            #
+            # For other processes, we use process 1, an extension (extensions are started using Popen instead of run_command so we just start an
+            # arbitrary process using Popen), and a process that already completed (for which we use a random number).
+            agent_processes = [os.getppid(), os.getpid()] + child_commands
 
-            with patch("azurelinuxagent.common.cgroupconfigurator.CGroupsApi.get_processes_in_cgroup", return_value=expected_processes + [1, extension]):
+            extension_process = subprocess.Popen("sleep 120", shell=True)
+            random.seed()
+            completed = random.randint(1000, 10000)
+            while os.path.exists("/proc/{0}".format(completed)):  # ensure we do not use an existing process
+                completed = random.randint(1000, 10000)
+            other_processes = [1, extension_process.pid, completed]
+
+            with patch("azurelinuxagent.common.cgroupconfigurator.CGroupsApi.get_processes_in_cgroup", return_value=agent_processes + other_processes):
                 with self.assertRaises(UnexpectedProcessesInCGroupException) as context_manager:
                     CGroupConfigurator.get_instance().check_processes_in_agent_cgroup()
 
-                unexpected = context_manager.exception.unexpected
-                unexpected.sort()
+                reported = context_manager.exception.unexpected
 
-                self.assertEqual(2, len(unexpected), "Expected 2 processes that do not belong to the agent's cgroup. Got: {0}".format(unexpected))
-                self.assertTrue(unexpected[0].startswith("[PID: 1]"), "Process 1 should have been reported. Got: {0}".format(unexpected))
-                self.assertTrue(unexpected[1].startswith("[PID: {0}]".format(extension)), "Process {0} should have been reported. Got: {1}".format(extension, unexpected))
+                self.assertEqual(
+                    len(other_processes), len(reported),
+                    "An incorrect number of processes was reported. Expected: {0} Got: {1}".format(format_processes(other_processes), reported))
+                for pid in other_processes:
+                    self.assertTrue(
+                        any(reported_process.startswith("[PID: {0}]".format(pid)) for reported_process in reported),
+                        "Process {0} was not reported. Got: {1}".format(format_processes([pid]), reported))
 
             #
             # And now verify that it does not raise when only the expected processes are in the cgroup
             #
             error = None
             try:
-                with patch("azurelinuxagent.common.cgroupconfigurator.CGroupsApi.get_processes_in_cgroup", return_value=expected_processes):
+                with patch("azurelinuxagent.common.cgroupconfigurator.CGroupsApi.get_processes_in_cgroup", return_value=agent_processes):
                     CGroupConfigurator.get_instance().check_processes_in_agent_cgroup()
             except UnexpectedProcessesInCGroupException as exception:
                 error = exception
             # we fail outside the except clause, otherwise the failure is reported as "During handling of the above exception, another exception occurred:..."
             if error is not None:
-                self.fail("The check of the agent's cgroup should not have reported errors. Unexpected processes: {0}".format(error.unexpected))
+                self.fail("The check of the agent's cgroup should not have reported errors. Reported processes: {0}".format(error.unexpected))
 
         finally:
             # terminate the child processes, since they are blocked
