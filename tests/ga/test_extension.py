@@ -548,6 +548,48 @@ class TestExtension(ExtensionTestCase):
             # The extension manifest should be downloaded twice now as incarnation changed once
             _assert_handler_status_and_manifest_download_count(protocol, test_data, 2)
 
+    def test_it_should_fail_handler_on_bad_extension_config_and_report_error(self, mock_get, mock_crypt_util, *args):
+
+        invalid_config_dir = os.path.join(data_dir, "wire", "invalid_config")
+        self.assertGreater(len(os.listdir(invalid_config_dir)), 0, "Not even a single bad config file found")
+
+        for bad_config_file_path in os.listdir(invalid_config_dir):
+            bad_conf = DATA_FILE.copy()
+            bad_conf["ext_conf"] = os.path.join(invalid_config_dir, bad_config_file_path)
+            test_data = mockwiredata.WireProtocolData(bad_conf)
+            exthandlers_handler, protocol = self._create_mock(test_data, mock_get, mock_crypt_util, *args)
+
+            with patch('azurelinuxagent.common.event.add_event') as patch_add_event:
+                exthandlers_handler.run()
+                self._assert_handler_status(protocol.report_vm_status, "NotReady", 0, "1.0.0")
+
+                invalid_config_errors = [kw for _, kw in patch_add_event.call_args_list if
+                                         kw['op'] == WALAEventOperation.InvalidExtensionConfig]
+                self.assertEqual(1, len(invalid_config_errors), "Error not logged and reported to Kusto")
+
+    def test_it_should_process_valid_extensions_if_present(self, mock_get, mock_crypt_util, *args):
+
+        bad_conf = DATA_FILE.copy()
+        bad_conf["ext_conf"] = os.path.join("wire", "ext_conf_invalid_and_valid_handlers.xml")
+        test_data = mockwiredata.WireProtocolData(bad_conf)
+        exthandlers_handler, protocol = self._create_mock(test_data, mock_get, mock_crypt_util, *args)
+
+        exthandlers_handler.run()
+        self.assertTrue(protocol.report_vm_status.called)
+        args, _ = protocol.report_vm_status.call_args
+        vm_status = args[0]
+        expected_handlers = ["OSTCExtensions.InvalidExampleHandlerLinux", "OSTCExtensions.ValidExampleHandlerLinux"]
+        self.assertEqual(2, len(vm_status.vmAgent.extensionHandlers))
+        for handler in vm_status.vmAgent.extensionHandlers:
+            expected_status = "NotReady" if "InvalidExampleHandlerLinux" in handler.name else "Ready"
+            expected_ext_count = 0 if "InvalidExampleHandlerLinux" in handler.name else 1
+            self.assertEqual(expected_status, handler.status, "Invalid status")
+            self.assertIn(handler.name, expected_handlers, "Handler not found")
+            self.assertEqual("1.0.0", handler.version, "Incorrect handler version")
+            self.assertEqual(expected_ext_count, len(handler.extensions), "Incorrect extensions enabled")
+            expected_handlers.remove(handler.name)
+        self.assertEqual(0, len(expected_handlers), "All handlers not reported status")
+
     def test_ext_zip_file_packages_removed_in_update_case(self, *args):
         # Test enable scenario.
         test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE)
@@ -3007,6 +3049,120 @@ class TestCollectExtensionStatus(ExtensionTestCase):
                                              "Encountered the following error".format("TestHandler", "1.0.0"))
         self.assertEqual(ext_status.status, ValidHandlerStatus.error)
         self.assertEqual(len(ext_status.substatusList), 0)
+
+
+class TestMultiConfigExtensions(ExtensionTestCase):
+
+    _MULTI_CONFIG_TEST_DATA = os.path.join("wire", "multi-config")
+
+    def setUp(self):
+        ExtensionTestCase.setUp(self)
+        self.mock_sleep = patch("time.sleep", lambda *_: mock_sleep(0.0001))
+        self.mock_sleep.start()
+        self.test_data = DATA_FILE.copy()
+
+    def tearDown(self):
+        self.mock_sleep.stop()
+        ExtensionTestCase.tearDown(self)
+
+    # too-few-public-methods<R0903> Disabled: This is just a test class used for verification purposes.
+    class _TestExtHandlerObject:  # pylint: disable=R0903
+        def __init__(self, name, version, state="enabled"):
+            self.name = name
+            self.version = version
+            self.state = state
+            self.is_invalid_setting = False
+            self.extensions = dict()
+
+    # too-few-public-methods<R0903> Disabled: This is just a test class used for verification purposes.
+    class _TestExtensionObject:  # pylint: disable=R0903
+        def __init__(self, name, seq_no, dependency_level="0", state="enabled"):
+            self.name = name
+            self.seq_no = seq_no
+            self.dependency_level = int(dependency_level)
+            self.state = state
+
+    def _mock_and_assert_ext_handlers(self, expected_handlers):
+        with mock_wire_protocol(self.test_data) as protocol:
+            ext_handlers, _ = protocol.get_ext_handlers()
+            for ext_handler in ext_handlers.extHandlers:
+                if ext_handler.name not in expected_handlers:
+                    continue
+                expected_handler = expected_handlers.pop(ext_handler.name)
+                self.assertEqual(expected_handler.state, ext_handler.properties.state)
+                self.assertEqual(expected_handler.version, ext_handler.properties.version)
+                self.assertEqual(expected_handler.is_invalid_setting, ext_handler.is_invalid_setting)
+                self.assertEqual(len(expected_handler.extensions), len(ext_handler.properties.extensions))
+
+                for extension in ext_handler.properties.extensions:
+                    self.assertIn(extension.name, expected_handler.extensions)
+                    expected_extension = expected_handler.extensions.pop(extension.name)
+                    self.assertEqual(expected_extension.seq_no, extension.sequenceNumber)
+                    self.assertEqual(expected_extension.state, extension.state)
+                    self.assertEqual(expected_extension.dependency_level, extension.dependencyLevel)
+
+                self.assertEqual(0, len(expected_handler.extensions), "All extensions not verified for handler")
+
+            self.assertEqual(0, len(expected_handlers), "All handlers not verified")
+
+    def _get_mock_expected_handler_data(self, rc_extensions, vmaccess_extensions, geneva_extensions):
+        # Set expected handler data
+        run_command_test_handler = self._TestExtHandlerObject("Microsoft.CPlat.Core.RunCommandHandlerWindows", "2.0.2")
+        run_command_test_handler.extensions.update(rc_extensions)
+
+        vm_access_test_handler = self._TestExtHandlerObject("Microsoft.Compute.VMAccessAgent", "2.4.7")
+        vm_access_test_handler.extensions.update(vmaccess_extensions)
+
+        geneva_test_handler = self._TestExtHandlerObject("Microsoft.Azure.Geneva.GenevaMonitoring", "2.20.0.1")
+        geneva_test_handler.extensions.update(geneva_extensions)
+
+        expected_handlers = {
+            run_command_test_handler.name: run_command_test_handler,
+            vm_access_test_handler.name: vm_access_test_handler,
+            geneva_test_handler.name: geneva_test_handler
+        }
+        return expected_handlers
+
+    def test_it_should_parse_multi_config_settings_properly(self):
+        self.test_data['ext_conf'] = os.path.join(self._MULTI_CONFIG_TEST_DATA, "ext_conf_with_multi_config.xml")
+
+        rc_extensions = dict()
+        rc_extensions["firstRunCommand"] = self._TestExtensionObject(name="firstRunCommand", seq_no="2")
+        rc_extensions["secondRunCommand"] = self._TestExtensionObject(name="secondRunCommand", seq_no="2",
+                                                                      dependency_level="3")
+        rc_extensions["thirdRunCommand"] = self._TestExtensionObject(name="thirdRunCommand", seq_no="1",
+                                                                     dependency_level="4")
+
+        vmaccess_extensions = {
+            "Microsoft.Compute.VMAccessAgent": self._TestExtensionObject(name="Microsoft.Compute.VMAccessAgent",
+                                                                         seq_no="1", dependency_level="2")}
+
+        geneva_extensions = {"Microsoft.Azure.Geneva.GenevaMonitoring": self._TestExtensionObject(
+            name="Microsoft.Azure.Geneva.GenevaMonitoring", seq_no="1")}
+
+        expected_handlers = self._get_mock_expected_handler_data(rc_extensions, vmaccess_extensions, geneva_extensions)
+        self._mock_and_assert_ext_handlers(expected_handlers)
+
+    def test_it_should_parse_multi_config_with_disable_state_properly(self):
+        self.test_data['ext_conf'] = os.path.join(self._MULTI_CONFIG_TEST_DATA,
+                                                  "ext_conf_with_disabled_multi_config.xml")
+
+        rc_extensions = dict()
+        rc_extensions["firstRunCommand"] = self._TestExtensionObject(name="firstRunCommand", seq_no="3")
+        rc_extensions["secondRunCommand"] = self._TestExtensionObject(name="secondRunCommand", seq_no="3",
+                                                                      dependency_level="1")
+        rc_extensions["thirdRunCommand"] = self._TestExtensionObject(name="thirdRunCommand", seq_no="1",
+                                                                     dependency_level="4", state="disabled")
+
+        vmaccess_extensions = {
+            "Microsoft.Compute.VMAccessAgent": self._TestExtensionObject(name="Microsoft.Compute.VMAccessAgent",
+                                                                         seq_no="2", dependency_level="2")}
+
+        geneva_extensions = {"Microsoft.Azure.Geneva.GenevaMonitoring": self._TestExtensionObject(
+            name="Microsoft.Azure.Geneva.GenevaMonitoring", seq_no="2")}
+
+        expected_handlers = self._get_mock_expected_handler_data(rc_extensions, vmaccess_extensions, geneva_extensions)
+        self._mock_and_assert_ext_handlers(expected_handlers)
 
 
 if __name__ == '__main__':

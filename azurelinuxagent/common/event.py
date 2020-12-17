@@ -105,6 +105,7 @@ class WALAEventOperation:  # pylint: disable=no-init
     OSInfo = "OSInfo"
     Partition = "Partition"
     PluginSettingsVersionMismatch = "PluginSettingsVersionMismatch"
+    InvalidExtensionConfig = "InvalidExtensionConfig"
     ProcessGoalState = "ProcessGoalState"
     Provision = "Provision"
     ProvisionGuestAgent = "ProvisionGuestAgent"
