@@ -408,9 +408,8 @@ else:
             # wait for the thread that was running the test script
             if thread is not None:
                 thread.join(timeout=5)
-            # wait for the extension process
+            # terminate the extension process
             if extension_process is not None:
                 extension_process.terminate()
-                extension_process.wait(timeout=5)
 
 
