@@ -300,20 +300,27 @@ cgroup on /sys/fs/cgroup/blkio type cgroup (rw,nosuid,nodev,noexec,relatime,blki
     def test_check_processes_in_agent_cgroup_should_raise_when_there_are_unexpected_processes_in_the_agent_cgroup(self):
         CGroupConfiguratorSystemdTestCase._get_new_cgroup_configurator_instance()
 
-        # the test script recursively creates a number of descendant processes as given by its argument; then it blocks by calling read
+        # the test script recursively creates a number of descendant processes as given by its argument, then it blocks for a long time
         pids_file = os.path.join(self.tmp_dir, "pids.txt")
-        test_script = os.path.join(self.tmp_dir, "create_descendants.sh")
+        test_script = os.path.join(self.tmp_dir, "create_descendants.py")
         AgentTestCase.create_script(test_script, """
-echo $$ >> {0}
+#!/usr/bin/env python3
+import os
+import subprocess
+import sys
+import time
 
-if [ $1 -gt 1 ]
-then
-    $0 $(($1 - 1))
-else
-    read
-fi
-""".format(pids_file))
+count = int(sys.argv[1])
+output = sys.argv[2]
 
+with open(output, 'a') as output_file:
+    output_file.write('{0}\\n'.format(os.getpid()))
+
+if count > 1:
+    subprocess.Popen([sys.argv[0], str(count - 1), output]).wait()
+else:
+    time.sleep(120)
+""")
         thread = None
         child_commands = []
         extension_process = None
@@ -324,7 +331,7 @@ fi
             # start the script on a separate thread
             def run_script():
                 try:
-                    shellutil.run_command([test_script, ustr(number_of_descendants)])
+                    shellutil.run_command([test_script, ustr(number_of_descendants), pids_file])
                 except shellutil.CommandError as command_error:
                     if command_error.returncode != -9:  # test cleanup terminates the commands, so this is expected
                         raise
@@ -353,14 +360,14 @@ fi
             commands_running.commands = []
 
             if not wait_for(commands_running):
-                raise Exception("shellutil did not start tracking the child proceess within the allowed timeout")
+                raise Exception("shellutil did not start tracking the child process within the allowed timeout")
 
             if len(commands_running.commands) != 1 or commands_running.commands[0] != child_commands[0]:
                 raise Exception("shellutil is not tracking the expected process. Expected: {0} Got: {1}".format(
                     format_processes(child_commands[0]), format_processes(commands_running.commands)))
 
             # extensions are started using Popen instead of run_command; simulate one
-            extension_process = subprocess.Popen("read", shell=True)
+            extension_process = subprocess.Popen("sleep 120", shell=True)
             extension = extension_process.pid
 
             #
@@ -403,7 +410,7 @@ fi
                 thread.join(timeout=5)
             # wait for the extension process
             if extension_process is not None:
-                os.kill(extension, signal.SIGKILL)
+                extension_process.terminate()
                 extension_process.wait(timeout=5)
 
 
