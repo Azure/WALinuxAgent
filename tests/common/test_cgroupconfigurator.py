@@ -343,8 +343,8 @@ else:
             def processes_started():
                 if not os.path.exists(pids_file):
                     return False
-                with open(pids_file, "r") as file:
-                    processes_started.pids = file.read().split()
+                with open(pids_file, "r") as pids:
+                    processes_started.pids = pids.read().split()
                     return len(processes_started.pids) == number_of_descendants
             processes_started.pids = []
 
