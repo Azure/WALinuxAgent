@@ -184,7 +184,7 @@ class CGroupConfigurator(object):
 
         def create_slices(self):
             if not self.enabled():
-                return None
+                return
 
             # Create root slices for agent and agent and extensions for systemd-managed distros.
             # The hierarchy is as follows:

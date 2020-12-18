@@ -557,8 +557,8 @@ class SystemdCgroupsApi(CGroupsApi):
         try:
             unit_path = os.path.join(UNIT_FILES_FILE_SYSTEM_PATH, unit_filename)
             fileutil.write_file(unit_path, unit_contents)
-        except Exception as e:  # pylint: disable=C0103
-            raise CGroupsException("Failed to create and start {0}. Error: {1}".format(unit_filename, ustr(e)))
+        except Exception as error:
+            raise CGroupsException("Failed to create and start {0}. Error: {1}".format(unit_filename, ustr(error)))
 
     @staticmethod
     def _get_azure_slice_name():
