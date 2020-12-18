@@ -49,10 +49,10 @@ class CGroupsApi(object):
     """
     Interface for the cgroups API
     """
-    def create_azure_cgroups_root(self):
+    def create_azure_slice(self):
         raise NotImplementedError()
 
-    def create_extension_cgroups_root(self):
+    def create_extensions_slice(self):
         raise NotImplementedError()
 
     def create_extension_cgroups(self, extension_name):
@@ -163,6 +163,14 @@ class CGroupsApi(object):
                 logger.info('Removing {0}', cgroup)
                 shutil.rmtree(cgroup, ignore_errors=True)
         return len(legacy_cgroups)
+
+    @staticmethod
+    def get_root_azure_slice():
+        return os.path.join(UNIT_FILES_FILE_SYSTEM_PATH, AZURE_CGROUP_NAME, ".slice")
+
+    @staticmethod
+    def get_root_extensions_slice():
+        return os.path.join(UNIT_FILES_FILE_SYSTEM_PATH, EXTENSIONS_ROOT_CGROUP_NAME, ".slice")
 
 
 class FileSystemCgroupsApi(CGroupsApi):
@@ -312,11 +320,11 @@ class FileSystemCgroupsApi(CGroupsApi):
 
         return cgroups
 
-    def create_azure_cgroups_root(self):
+    def create_azure_slice(self):
         # TODO: will be implemented when we focus on non-systemd distros
         pass
 
-    def create_extension_cgroups_root(self):
+    def create_extensions_slice(self):
         """
         Creates the directory within the cgroups file system that will contain the cgroups for the extensions.
         """
@@ -569,13 +577,13 @@ class SystemdCgroupsApi(CGroupsApi):
         return "{0}.slice".format(AZURE_CGROUP_NAME)
 
     @staticmethod
-    def _get_extensions_slice_root_name():
+    def _get_extensions_root_slice_name():
         return "{0}-{1}.slice".format(AZURE_CGROUP_NAME, EXTENSIONS_ROOT_CGROUP_NAME)
 
     def _get_extension_slice_name(self, extension_name):
         return "{0}-{1}-{2}.slice".format(AZURE_CGROUP_NAME, EXTENSIONS_ROOT_CGROUP_NAME, self._get_extension_cgroup_name(extension_name))
 
-    def create_azure_cgroups_root(self):
+    def create_azure_slice(self):
         unit_contents = """[Unit]
 Description=Slice for Azure VM Agent and Extensions"""
         unit_filename = self._get_azure_slice_name()
@@ -583,10 +591,10 @@ Description=Slice for Azure VM Agent and Extensions"""
         self.create_and_start_unit(unit_filename, unit_contents)
         logger.info("Created root slice for Azure VM Agent and Extensions {0}".format(unit_filename))
 
-    def create_extension_cgroups_root(self):
+    def create_extensions_slice(self):
         unit_contents = """[Unit]
 Description=Slice for Azure VM Extensions"""
-        unit_filename = self._get_extensions_slice_root_name()
+        unit_filename = self._get_extensions_root_slice_name()
 
         self.create_and_start_unit(unit_filename, unit_contents)
         logger.info("Created root slice for Azure VM Extensions {0}".format(unit_filename))

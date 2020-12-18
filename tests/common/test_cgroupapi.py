@@ -373,7 +373,7 @@ class FileSystemCgroupsApiTestCase(_MockedFileSystemTestCase):
         assert_cgroup_created("memory")
 
     def test_create_extension_cgroups_root_should_create_root_directory_for_extensions(self):
-        FileSystemCgroupsApi().create_extension_cgroups_root()
+        FileSystemCgroupsApi().create_extensions_slice()
 
         cpu_cgroup = os.path.join(self.cgroups_file_system_root, "cpu", "vmextensions")
         self.assertTrue(os.path.exists(cpu_cgroup))
@@ -383,7 +383,7 @@ class FileSystemCgroupsApiTestCase(_MockedFileSystemTestCase):
 
     def test_create_extension_cgroups_should_create_cgroups_on_all_controllers(self):
         api = FileSystemCgroupsApi()
-        api.create_extension_cgroups_root()
+        api.create_extensions_slice()
         extension_cgroups = api.create_extension_cgroups("Microsoft.Compute.TestExtension-1.2.3")
 
         def assert_cgroup_created(controller):
@@ -398,7 +398,7 @@ class FileSystemCgroupsApiTestCase(_MockedFileSystemTestCase):
 
     def test_remove_extension_cgroups_should_remove_all_cgroups(self):
         api = FileSystemCgroupsApi()
-        api.create_extension_cgroups_root()
+        api.create_extensions_slice()
         extension_cgroups = api.create_extension_cgroups("Microsoft.Compute.TestExtension-1.2.3")
 
         api.remove_extension_cgroups("Microsoft.Compute.TestExtension-1.2.3")
@@ -408,7 +408,7 @@ class FileSystemCgroupsApiTestCase(_MockedFileSystemTestCase):
 
     def test_remove_extension_cgroups_should_log_a_warning_when_the_cgroup_contains_active_tasks(self):
         api = FileSystemCgroupsApi()
-        api.create_extension_cgroups_root()
+        api.create_extensions_slice()
         api.create_extension_cgroups("Microsoft.Compute.TestExtension-1.2.3")
 
         with patch("azurelinuxagent.common.cgroupapi.logger.warn") as mock_logger_warn:
@@ -421,7 +421,7 @@ class FileSystemCgroupsApiTestCase(_MockedFileSystemTestCase):
 
     def test_get_extension_cgroups_should_return_all_cgroups(self):
         api = FileSystemCgroupsApi()
-        api.create_extension_cgroups_root()
+        api.create_extensions_slice()
         created = api.create_extension_cgroups("Microsoft.Compute.TestExtension-1.2.3")
 
         retrieved = api.get_extension_cgroups("Microsoft.Compute.TestExtension-1.2.3")
@@ -434,7 +434,7 @@ class FileSystemCgroupsApiTestCase(_MockedFileSystemTestCase):
     @patch('time.sleep', side_effect=lambda _: mock_sleep())
     def test_start_extension_command_should_add_the_child_process_to_the_extension_cgroup(self, _):
         api = FileSystemCgroupsApi()
-        api.create_extension_cgroups_root()
+        api.create_extensions_slice()
 
         with tempfile.TemporaryFile(dir=self.tmp_dir, mode="w+b") as stdout:
             with tempfile.TemporaryFile(dir=self.tmp_dir, mode="w+b") as stderr:
@@ -503,7 +503,7 @@ class SystemdCgroupsApiTestCase(AgentTestCase):
             self.assertEqual(cpu_accounting, "no", "Property {0} of {1} is incorrect".format("CPUAccounting", "walinuxagent.service"))
 
     def test_get_extensions_slice_root_name_should_return_the_root_slice_for_extensions(self):
-        root_slice_name = SystemdCgroupsApi()._get_extensions_slice_root_name()  # pylint: disable=protected-access
+        root_slice_name = SystemdCgroupsApi()._get_extensions_root_slice_name()  # pylint: disable=protected-access
         self.assertEqual(root_slice_name, "azure-vmextensions.slice")
 
     def test_get_extension_slice_name_should_return_the_slice_for_the_given_extension(self):
@@ -527,7 +527,7 @@ class SystemdCgroupsApiTestCase(AgentTestCase):
     def test_create_azure_cgroups_root_should_create_azure_root_slice(self):
         self.assertTrue(i_am_root(), "Test does not run when non-root")
 
-        SystemdCgroupsApi().create_azure_cgroups_root()
+        SystemdCgroupsApi().create_azure_slice()
         unit_name = SystemdCgroupsApi()._get_azure_slice_name()  # pylint: disable=protected-access
 
         self.__assert_unit_is_loaded_and_active(unit_name)
@@ -537,8 +537,8 @@ class SystemdCgroupsApiTestCase(AgentTestCase):
     def test_create_extension_cgroups_root_should_create_extensions_root_slice(self):
         self.assertTrue(i_am_root(), "Test does not run when non-root")
 
-        SystemdCgroupsApi().create_extension_cgroups_root()
-        unit_name = SystemdCgroupsApi()._get_extensions_slice_root_name()  # pylint: disable=protected-access
+        SystemdCgroupsApi().create_extensions_slice()
+        unit_name = SystemdCgroupsApi()._get_extensions_root_slice_name()  # pylint: disable=protected-access
 
         self.__assert_unit_is_loaded_and_active(unit_name)
         self.__clean_up_unit(unit_name)

@@ -69,6 +69,13 @@ def set_systemd_files(data_files, dest="/lib/systemd/system", src=None):
     data_files.append((dest, src))
 
 
+def set_systemd_cgroups_files(data_files, dest="/etc/systemd/system", src=None):
+    if src is None:
+        src = ["init/ubuntu/azure.slice",
+               "init/ubuntu/azure-vmextensions.slice"]
+    data_files.append((dest, src))
+
+
 def set_freebsd_rc_files(data_files, dest="/etc/rc.d/", src=None):
     if src is None:
         src = ["init/freebsd/waagent"]
@@ -151,6 +158,7 @@ def get_data_files(name, version, fullname):  # pylint: disable=R0912
             # Ubuntu15.04+ uses systemd
             set_systemd_files(data_files,
                               src=["init/ubuntu/walinuxagent.service"])
+            set_systemd_cgroups_files(data_files)
     elif name == 'suse' or name == 'opensuse':  # pylint: disable=R1714
         set_bin_files(data_files)
         set_conf_files(data_files, src=["config/suse/waagent.conf"])
