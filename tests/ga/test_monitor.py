@@ -24,7 +24,7 @@ import string
 
 from azurelinuxagent.common import event, logger
 from azurelinuxagent.common.cgroup import CGroup, CpuCgroup, MemoryCgroup, MetricValue
-from azurelinuxagent.common.cgroupconfigurator import CGroupConfigurator
+from azurelinuxagent.common.cgroupconfigurator import CGroupConfigurator, UnexpectedProcessesInCGroupException
 from azurelinuxagent.common.cgroupstelemetry import CGroupsTelemetry
 from azurelinuxagent.common.event import EVENTS_DIRECTORY
 from azurelinuxagent.common.logger import Logger
@@ -193,15 +193,13 @@ class TestExtensionMetricsDataTelemetry(AgentTestCase):
         self.assertEqual(3, patch_add_metric.call_count)  # Three metrics being sent.
 
     @patch('azurelinuxagent.common.event.EventLogger.add_metric')
-    @patch('azurelinuxagent.common.event.EventLogger.add_event')
     @patch("azurelinuxagent.common.cgroupstelemetry.CGroupsTelemetry.poll_all_tracked")
     def test_send_extension_metrics_telemetry_for_empty_cgroup(self, patch_poll_all_tracked,  # pylint: disable=unused-argument
-                                                               patch_add_event, patch_add_metric,*args):
+                                                               patch_add_metric,*args):
         patch_poll_all_tracked.return_value = []
 
         PollResourceUsageOperation().run()
         self.assertEqual(1, patch_poll_all_tracked.call_count)
-        self.assertEqual(0, patch_add_event.call_count)
         self.assertEqual(0, patch_add_metric.call_count)
 
     @patch('azurelinuxagent.common.event.EventLogger.add_metric')
@@ -293,26 +291,8 @@ class PollResourceUsageOperationTestCase(AgentTestCase):
         CGroupConfigurator._instance = None  # pylint: disable=protected-access
         AgentTestCase.tearDownClass()
 
-    def test_it_should_report_processes_that_do_not_belong_to_the_agent_cgroup(self):
-        with mock_cgroup_commands() as mock_commands:
-            mock_commands.add_command(r'^systemd-cgls.+/walinuxagent.service$',
-''' 
-Directory /sys/fs/cgroup/cpu/system.slice/walinuxagent.service:
-├─27519 /usr/bin/python3 -u /usr/sbin/waagent -daemon
-├─27547 python3 -u bin/WALinuxAgent-2.2.48.1-py2.7.egg -run-exthandlers
-├─6200 systemd-cgls /sys/fs/cgroup/cpu,cpuacct/system.slice/walinuxagent.service
-├─5821 pidof systemd-networkd
-├─5822 iptables --version
-├─5823 iptables -w -t security -D OUTPUT -d 168.63.129.16 -p tcp -m conntrack --ctstate INVALID,NEW -j ACCEPT
-├─5824 iptables -w -t security -D OUTPUT -d 168.63.129.16 -p tcp -m owner --uid-owner 0 -j ACCEPT
-├─5825 ip route show
-├─5826 ifdown eth0 && ifup eth0
-├─5699 bash /var/lib/waagent/Microsoft.CPlat.Core.RunCommandLinux-1.0.1/bin/run-command-shim enable
-├─5701 tee -ia /var/log/azure/run-command/handler.log
-├─5719 /var/lib/waagent/Microsoft.CPlat.Core.RunCommandLinux-1.0.1/bin/run-command-extension enable
-├─5727 /bin/sh -c /var/lib/waagent/run-command/download/1/script.sh
-└─5728 /bin/sh /var/lib/waagent/run-command/download/1/script.sh
-''')
+    def test_it_should_issue_a_telemetry_event_when_there_are_processes_that_do_not_belong_to_the_agent_cgroup(self):
+        with patch.object(CGroupConfigurator.get_instance(), "check_processes_in_agent_cgroup", side_effect=UnexpectedProcessesInCGroupException(["A-TEST-PROCESS"])):
             with patch("azurelinuxagent.ga.monitor.add_event") as add_event_patcher:
                 PollResourceUsageOperation().run()
 
@@ -320,22 +300,11 @@ Directory /sys/fs/cgroup/cpu/system.slice/walinuxagent.service:
 
                 self.assertEqual(1, len(messages), "Exactly 1 telemetry event should have been reported. Events: {0}".format(messages))
 
-                unexpected_processes = [
-                    'bash /var/lib/waagent/Microsoft.CPlat.Core.RunCommandLinux-1.0.1/bin/run-command-shim enable',
-                    'tee -ia /var/log/azure/run-command/handler.log',
-                    '/var/lib/waagent/Microsoft.CPlat.Core.RunCommandLinux-1.0.1/bin/run-command-extension enable',
-                    '/bin/sh -c /var/lib/waagent/run-command/download/1/script.sh',
-                    '/bin/sh /var/lib/waagent/run-command/download/1/script.sh',
-                ]
-
-                for fp in unexpected_processes:  # pylint: disable=invalid-name
-                    self.assertIn(fp, messages[0], "[{0}] was not reported as an unexpected process. Events: {1}".format(fp, messages))
-
                 # The list of processes in the message is an array of strings: "['foo', ..., 'bar']"
                 search = re.search(r'\[(?P<processes>.+)\]', messages[0])
                 self.assertIsNotNone(search, "The event message is not in the expected format: {0}".format(messages[0]))
                 processes = search.group('processes')
-                self.assertEqual(5, len(processes.split(',')), 'Extra processes were reported as unexpected: {0}'.format(processes))
+                self.assertIn("A-TEST-PROCESS", processes, 'Extra processes were reported as unexpected: {0}'.format(processes))
 
 
 @patch("azurelinuxagent.common.utils.restutil.http_post")
