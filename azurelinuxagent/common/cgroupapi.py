@@ -108,7 +108,7 @@ class CGroupsApi(object):
     @staticmethod
     def get_processes_in_cgroup(cgroup_path):
         with open(os.path.join(cgroup_path, "cgroup.procs"), "r") as cgroup_procs:
-            return cgroup_procs.read().split()
+            return [int(pid) for pid in cgroup_procs.read().split()]
 
     @staticmethod
     def _foreach_controller(operation, message):
