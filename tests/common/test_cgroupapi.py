@@ -193,18 +193,6 @@ class SystemdCgroupsApiTestCase(AgentTestCase):
         extension_slice_name = SystemdCgroupsApi()._get_extension_slice_name(extension_name)  # pylint: disable=protected-access
         self.assertEqual(extension_slice_name, "system-walinuxagent.extensions-Microsoft.Azure.DummyExtension_1.0.slice")
 
-    def test_get_processes_in_cgroup_should_return_the_processes_within_the_cgroup(self):
-        with mock_cgroup_commands():
-            processes = SystemdCgroupsApi.get_processes_in_cgroup("/sys/fs/cgroup/cpu/system.slice/walinuxagent.service")
-
-            self.assertTrue(len(processes) >= 2,
-                            "The cgroup should contain at least 2 procceses (daemon and extension handler): [{0}]".format(processes))
-
-            daemon_present = any("waagent -daemon" in command for (pid, command) in processes)
-            self.assertTrue(daemon_present, "Could not find the daemon in the cgroup: [{0}]".format(processes))
-
-            extension_handler_present = any(re.search(r"(WALinuxAgent-.+\.egg|waagent) -run-exthandlers", command) for (pid, command) in processes)
-            self.assertTrue(extension_handler_present, "Could not find the extension handler in the cgroup: [{0}]".format(processes))
 
     def assert_cgroups_created(self, extension_cgroups):
         self.assertEqual(len(extension_cgroups), 2,

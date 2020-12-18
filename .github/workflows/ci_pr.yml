@@ -23,7 +23,7 @@ jobs:
       run: |
         sudo add-apt-repository ppa:deadsnakes/ppa -y
         sudo apt-get update -y
-        sudo apt install python2.6 python2.6-dev -y
+        sudo apt-get install python2.6 python2.6-dev -y
         sudo ln -sf /usr/bin/python2.6 /usr/bin/python
         PATH="/usr/bin/${PATH:+:${PATH}}"
         echo $PATH
@@ -76,7 +76,7 @@ jobs:
     env:
       PYLINTOPTS: ${{ matrix.PYLINTOPTS }}
       PYLINTFILES: "azurelinuxagent setup.py makepkg.py tests"
-      NOSEOPTS: "--verbose --with-timer ${{ matrix.additional-nose-opts }}"
+      NOSEOPTS: "--with-timer ${{ matrix.additional-nose-opts }}"
       PYTHON_VERSION: ${{ matrix.python-version }}
 
     steps:

@@ -59,9 +59,9 @@ class CGroupsApi(object):
         try:
             for cgroup in extension_cgroups:
                 CGroupsTelemetry.track_cgroup(cgroup)
-        except Exception as e:  # pylint: disable=C0103
+        except Exception as exception:
             logger.warn("Cannot add cgroup '{0}' to tracking list; resource usage will not be tracked. "
-                        "Error: {1}".format(cgroup.path, ustr(e)))
+                        "Error: {1}".format(cgroup.path, ustr(exception)))
 
     @staticmethod
     def _get_extension_cgroup_name(extension_name):
@@ -82,6 +82,11 @@ class CGroupsApi(object):
         sd_booted() in libsystemd, or /usr/sbin/service
         """
         return os.path.exists(SYSTEMD_RUN_PATH)
+
+    @staticmethod
+    def get_processes_in_cgroup(cgroup_path):
+        with open(os.path.join(cgroup_path, "cgroup.procs"), "r") as cgroup_procs:
+            return [int(pid) for pid in cgroup_procs.read().split()]
 
     @staticmethod
     def _foreach_controller(operation, message):
@@ -128,15 +133,19 @@ class CGroupsApi(object):
 
                 if os.path.exists(procs_file):
                     procs_file_contents = fileutil.read_file(procs_file).strip()
-                    daemon_pid = fileutil.read_file(get_agent_pid_file_path()).strip()
+                    daemon_pid = CGroupsApi.get_daemon_pid()
 
-                    if daemon_pid in procs_file_contents:
+                    if ustr(daemon_pid) in procs_file_contents:
                         operation(controller, daemon_pid)
         finally:
             for _, cgroup in legacy_cgroups:
                 logger.info('Removing {0}', cgroup)
                 shutil.rmtree(cgroup, ignore_errors=True)
         return len(legacy_cgroups)
+
+    @staticmethod
+    def get_daemon_pid():
+        return int(fileutil.read_file(get_agent_pid_file_path()).strip())
 
 
 class SystemdCgroupsApi(CGroupsApi):
@@ -277,30 +286,6 @@ class SystemdCgroupsApi(CGroupsApi):
         if self._agent_unit_name is None:
             self._agent_unit_name = get_osutil().get_service_name() + ".service"
         return self._agent_unit_name
-
-    @staticmethod
-    def get_processes_in_cgroup(cgroup_path):
-        """
-        Returns an array of tuples with the PID and command line of the processes that are currently
-        within the cgroup for the given path (which must be within the cgroup filesystem).
-        """
-        #
-        # The output of the command is similar to
-        #
-        #     Directory /sys/fs/cgroup/cpu/system.slice/walinuxagent.service:
-        #     ├─27519 /usr/bin/python3 -u /usr/sbin/waagent -daemon
-        #     └─27547 python3 -u bin/WALinuxAgent-2.2.48.1-py2.7.egg -run-exthandlers
-        #
-        output = shellutil.run_command(['systemd-cgls', cgroup_path])
-
-        processes = []
-
-        for line in output.splitlines():
-            match = re.match('[^\d]*(?P<pid>\d+)\s+(?P<command>.+)', line)  # pylint: disable=W1401
-            if match is not None:
-                processes.append((match.group('pid'), match.group('command')))
-
-        return processes
 
     @staticmethod
     def _is_systemd_failure(scope_name, stderr):

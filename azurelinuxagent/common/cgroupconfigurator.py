@@ -15,7 +15,6 @@
 # Requires Python 2.6+ and Openssl 1.0+
 
 import os
-import re
 import subprocess
 
 from azurelinuxagent.common import logger
@@ -25,15 +24,28 @@ from azurelinuxagent.common.cgroupstelemetry import CGroupsTelemetry
 from azurelinuxagent.common.exception import ExtensionErrorCodes, CGroupsException
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.version import get_distro
+from azurelinuxagent.common.utils import shellutil
 from azurelinuxagent.common.utils.extensionprocessutil import handle_process_completion
 from azurelinuxagent.common.event import add_event, WALAEventOperation
+
+
+class UnexpectedProcessesInCGroupException(CGroupsException):
+    """
+    Raised by CGroupConfigurator.check_processes_in_agent_cgroup() when the agent's cgroup includes processes
+    that should not belong to it.
+    The 'unexpected' property is a list of the processes (strings) that should not belong to the agent's cgroup
+    """
+    def __init__(self, unexpected):
+        super(UnexpectedProcessesInCGroupException, self).__init__("Unexpected processes in agent's cgroup")
+        self.unexpected = unexpected
 
 
 class CGroupConfigurator(object):
     """
     This class implements the high-level operations on CGroups (e.g. initialization, creation, etc)
 
-    NOTE: with the exception of start_extension_command, none of the methods in this class raise exceptions (cgroup operations should not block extensions)
+    NOTE: with the exception of start_extension_command and check_processes_in_agent_cgroup, none of the methods in this class
+    raise exceptions (cgroup operations should not block extensions)
     """
     # too-many-instance-attributes<R0902> Disabled: class complexity is OK
     # invalid-name<C0103> Disabled: class is private, so name starts with __
@@ -198,29 +210,70 @@ class CGroupConfigurator(object):
                     except Exception as exception:
                         logger.warn("CGroupConfigurator._invoke_cgroup_operation: {0}".format(ustr(exception)))
 
-        def get_processes_in_agent_cgroup(self):
+        def check_processes_in_agent_cgroup(self):
             """
-            Returns an array of tuples with the PID and command line of the processes that are currently within the cgroup for the given unit.
-
-            The return value can be None if cgroups are not enabled or if an error occurs during the operation.
+            Verifies that the agent's cgroup includes only the current process, its parent and commands started using shellutil (i.e. the extension handler,
+            the daemon, and the commands started by the extension handler, respectively).
+            Other processes started by the agent (e.g. extensions) and processes not started by the agent (e.g. services installed by extensions) should
+            belong to their own cgroup.
+            The function raises an UnexpectedProcessesInCGroupException if the check fails.
             """
-            def __impl():
-                if self._agent_cpu_cgroup_path is None:
-                    return []
-                return self._cgroups_api.get_processes_in_cgroup(self._agent_cpu_cgroup_path)  # pylint: disable=E1101
+            if not self.enabled():
+                return
 
-            def __on_error(exception):
-                #
-                # Send telemetry for a small sample of errors (if any)
-                #
-                self._get_processes_in_agent_cgroup_error_count = self._get_processes_in_agent_cgroup_error_count + 1
-                if self._get_processes_in_agent_cgroup_error_count <= 5:
-                    message = "Failed to list the processes in the agent's cgroup: {0}", ustr(exception)
-                    if message != self._get_processes_in_agent_cgroup_last_error:
-                        add_event(op=WALAEventOperation.CGroupsDebug, message=message)
-                    self._get_processes_in_agent_cgroup_last_error = message
+            daemon = os.getppid()
+            extension_handler = os.getpid()
+            agent_commands = set()
+            agent_commands.update(shellutil.get_running_commands())
+            agent_cgroup = CGroupsApi.get_processes_in_cgroup(self._agent_cpu_cgroup_path)
+            # get the running commands again in case a new command was started while we were fetching the processes in the cgroup;
+            agent_commands.update(shellutil.get_running_commands())
 
-            return self._invoke_cgroup_operation(__impl, "Failed to list the processes in the agent's cgroup.", on_error=__on_error)
+            unexpected = []
+            for process in agent_cgroup:
+                if process in (daemon, extension_handler):
+                    continue
+                # check if the process is a command started by the agent or a descendant of one of those commands
+                current = process
+                while current != 0 and current not in agent_commands:
+                    current = self._get_parent(current)
+                if current == 0:
+                    unexpected.append(process)
+                    if len(unexpected) >= 5:  # collect just a small sample
+                        break
+            if unexpected:
+                raise UnexpectedProcessesInCGroupException(unexpected=self._format_processes(unexpected))
+
+        @staticmethod
+        def _format_processes(pid_list):
+            """
+            Formats the given PIDs as a sequence of strings containing the PIDs and their corresponding command line (truncated to 40 chars)
+            """
+            def get_command_line(pid):
+                try:
+                    cmdline = '/proc/{0}/cmdline'.format(pid)
+                    if os.path.exists(cmdline):
+                        with open(cmdline, "r") as cmdline_file:
+                            return "[PID: {0}] {1:40.40}".format(pid, cmdline_file.read())
+                except Exception:
+                    pass
+                return "[PID: {0}] UNKNOWN".format(pid)
+
+            return [get_command_line(pid) for pid in pid_list]
+
+        @staticmethod
+        def _get_parent(pid):
+            """
+            Returns the parent of the given process. If the parent cannot be determined returns 0 (which is the PID for the scheduler)
+            """
+            try:
+                stat = '/proc/{0}/stat'.format(pid)
+                if os.path.exists(stat):
+                    with open(stat, "r") as stat_file:
+                        return int(stat_file.read().split()[3])
+            except Exception:
+                pass
+            return 0
 
         # too-many-arguments<R0913> Disabled: argument list mimics Popen's
         def start_extension_command(self, extension_name, command, timeout, shell, cwd, env, stdout, stderr, error_code=ExtensionErrorCodes.PluginUnknownFailure):  # pylint: disable=R0913
@@ -273,41 +326,3 @@ class CGroupConfigurator(object):
         if CGroupConfigurator._instance is None:
             CGroupConfigurator._instance = CGroupConfigurator.__Impl()
         return CGroupConfigurator._instance
-
-    @staticmethod
-    def is_agent_process(command_line):
-        """
-        Returns true if the given command line corresponds to a process started by the agent.
-
-        NOTE: The function uses pattern matching to determine whether the process was spawned by the agent; this is more of a heuristic
-        than an exact check.
-        """
-        patterns = [
-            r".*waagent -daemon.*",
-            r".*(WALinuxAgent-.+\.egg|waagent) -run-exthandlers",
-            # The processes in the agent's cgroup are listed using systemd-cgls
-            r"^systemd-cgls.*walinuxagent.*$",
-            # Extensions are started using systemd-run
-            r"^systemd-run --unit=.+ --scope ",
-            #
-            # The rest of the commands are started by the environment thread; many of them are distro-specific so this list may need
-            # additions as we add support for more distros.
-            #
-            # *** Monitor DHCP client restart
-            #
-            r"^pidof (dhclient|dhclient3|systemd-networkd)",
-            r"^ip route (show|add)",
-            #
-            # *** Enable firewall
-            #
-            r"^iptables --version$",
-            r"^iptables .+ -t security",
-            #
-            # *** Monitor host name changes
-            #
-            r"^ifdown .+ && ifup .+",
-        ]
-        for p in patterns:  # pylint: disable=C0103
-            if re.match(p, command_line) is not None:
-                return True
-        return False
