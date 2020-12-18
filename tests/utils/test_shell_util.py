@@ -84,15 +84,14 @@ class RunGetOutputTestCase(AgentTestCase):
 
         self.assertEqual(mock_logger.error.call_count, 1)
 
-        args, kwargs = mock_logger.error.call_args  # pylint: disable=unused-variable
+        args, _ = mock_logger.error.call_args
 
         message = args[0]  # message is similar to "Command: [exit 99], return code: [99], result: []"
         self.assertIn("[{0}]".format(command), message)
         self.assertIn("[{0}]".format(return_code), message)
 
-        self.assertEqual(mock_logger.verbose.call_count, 0)
-        self.assertEqual(mock_logger.info.call_count, 0)
-        self.assertEqual(mock_logger.warn.call_count, 0)
+        self.assertEqual(mock_logger.info.call_count, 0, "Did not expect any info messages. Got: {0}".format(mock_logger.info.call_args_list))
+        self.assertEqual(mock_logger.warn.call_count, 0, "Did not expect any warnings. Got: {0}".format(mock_logger.warn.call_args_list))
 
     def test_it_should_log_expected_errors_as_info(self):
         return_code = 99
@@ -103,15 +102,14 @@ class RunGetOutputTestCase(AgentTestCase):
 
         self.assertEqual(mock_logger.info.call_count, 1)
 
-        args, kwargs = mock_logger.info.call_args  # pylint: disable=unused-variable
+        args, _ = mock_logger.info.call_args
 
         message = args[0]  # message is similar to "Command: [exit 99], return code: [99], result: []"
         self.assertIn("[{0}]".format(command), message)
         self.assertIn("[{0}]".format(return_code), message)
 
-        self.assertEqual(mock_logger.verbose.call_count, 0)
-        self.assertEqual(mock_logger.warn.call_count, 0)
-        self.assertEqual(mock_logger.error.call_count, 0)
+        self.assertEqual(mock_logger.warn.call_count, 0, "Did not expect any warnings. Got: {0}".format(mock_logger.warn.call_args_list))
+        self.assertEqual(mock_logger.error.call_count, 0, "Did not expect any errors. Got: {0}".format(mock_logger.error.call_args_list))
 
     def test_it_should_log_unexpected_errors_as_errors(self):
         return_code = 99
@@ -122,15 +120,14 @@ class RunGetOutputTestCase(AgentTestCase):
 
         self.assertEqual(mock_logger.error.call_count, 1)
 
-        args, kwargs = mock_logger.error.call_args  # pylint: disable=unused-variable
+        args, _ = mock_logger.error.call_args
 
         message = args[0]  # message is similar to "Command: [exit 99], return code: [99], result: []"
         self.assertIn("[{0}]".format(command), message)
         self.assertIn("[{0}]".format(return_code), message)
 
-        self.assertEqual(mock_logger.info.call_count, 0)
-        self.assertEqual(mock_logger.verbose.call_count, 0)
-        self.assertEqual(mock_logger.warn.call_count, 0)
+        self.assertEqual(mock_logger.info.call_count, 0, "Did not expect any info messages. Got: {0}".format(mock_logger.info.call_args_list))
+        self.assertEqual(mock_logger.warn.call_count, 0, "Did not expect any warnings. Got: {0}".format(mock_logger.warn.call_args_list))
 
 
 # R0904: Too many public methods (24/20)  -- disabled: each method is a unit test
