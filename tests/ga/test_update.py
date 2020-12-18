@@ -853,10 +853,6 @@ class TestUpdate(UpdateTestCase):  # pylint: disable=too-many-public-methods
                 mocks.add_file(r"^/etc/systemd/system/azure.slice$", azure_slice_path)
                 mocks.add_file(r"^/etc/systemd/system/azure-vmextensions.slice$", extensions_slice_path)
 
-                mocks.add_command("systemctl daemon-reload", "")
-                mocks.add_command("systemctl start azure.slice", "")
-                mocks.add_command("systemctl start azure-vmextensions.slice", "")
-
                 with patch.object(CGroupConfigurator.get_instance(), "enabled", return_value=True):
                     self.update_handler._ensure_cgroups_initialized()  # pylint: disable=protected-access
 

@@ -183,6 +183,9 @@ class CGroupConfigurator(object):
             CGroupsTelemetry.reset()
 
         def create_slices(self):
+            if not self.enabled():
+                return None
+
             # Create root slices for agent and agent and extensions for systemd-managed distros.
             # The hierarchy is as follows:
             # ├─user.slice
@@ -192,13 +195,13 @@ class CGroupConfigurator(object):
             # └─azure.slice
             #   └─azure-vmextensions.slice
 
-            # Both methods will log info on success, log warning and emit telemetry on failure.
+            # Both methods will log to local log and emit telemetry.
             # The slices will be created if they don't previously exist.
 
-            if not os.path.exists(CGroupsApi.get_root_azure_slice()):
+            if not os.path.exists(SystemdCgroupsApi.get_azure_slice()):
                 self.create_azure_slice()
 
-            if not os.path.exists(CGroupsApi.get_root_extensions_slice()):
+            if not os.path.exists(SystemdCgroupsApi.get_extensions_slice()):
                 self.create_extensions_slice()
 
         def _invoke_cgroup_operation(self, operation, error_message, on_error=None):

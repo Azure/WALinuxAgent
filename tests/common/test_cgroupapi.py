@@ -523,25 +523,27 @@ class SystemdCgroupsApiTestCase(AgentTestCase):
         os.remove("/etc/systemd/system/{0}".format(unit_name))
         shellutil.run_command(["systemctl", "daemon-reload"])
 
-    @attr('requires_sudo')
-    def test_create_azure_cgroups_root_should_create_azure_root_slice(self):
-        self.assertTrue(i_am_root(), "Test does not run when non-root")
+    def test_create_azure_slice_should_create_unit_file(self):
+        azure_slice_path = os.path.join(self.tmp_dir, "azure.slice")
+        self.assertFalse(os.path.exists(azure_slice_path))
 
-        SystemdCgroupsApi().create_azure_slice()
-        unit_name = SystemdCgroupsApi()._get_azure_slice_name()  # pylint: disable=protected-access
+        with mock_cgroup_commands() as mocks:
+            # Mock out the actual calls to /etc/systemd
+            mocks.add_file(r"^/etc/systemd/system/azure.slice$", azure_slice_path)
+            SystemdCgroupsApi().create_azure_slice()
 
-        self.__assert_unit_is_loaded_and_active(unit_name)
-        self.__clean_up_unit(unit_name)
+        self.assertTrue(os.path.exists(azure_slice_path))
 
-    @attr('requires_sudo')
-    def test_create_extension_cgroups_root_should_create_extensions_root_slice(self):
-        self.assertTrue(i_am_root(), "Test does not run when non-root")
+    def test_create_extensions_slice_should_create_unit_file(self):
+        extensions_slice_path = os.path.join(self.tmp_dir, "azure-vmextensions.slice")
+        self.assertFalse(os.path.exists(extensions_slice_path))
 
-        SystemdCgroupsApi().create_extensions_slice()
-        unit_name = SystemdCgroupsApi()._get_extensions_root_slice_name()  # pylint: disable=protected-access
+        with mock_cgroup_commands() as mocks:
+            # Mock out the actual calls to /etc/systemd
+            mocks.add_file(r"^/etc/systemd/system/azure-vmextensions.slice$", extensions_slice_path)
+            SystemdCgroupsApi().create_extensions_slice()
 
-        self.__assert_unit_is_loaded_and_active(unit_name)
-        self.__clean_up_unit(unit_name)
+        self.assertTrue(os.path.exists(extensions_slice_path))
 
     def test_get_processes_in_cgroup_should_return_the_processes_within_the_cgroup(self):
         with mock_cgroup_commands():
