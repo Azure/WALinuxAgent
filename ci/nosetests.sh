@@ -10,7 +10,7 @@ echo "========================================="
 nosetests -a '!requires_sudo' tests $NOSEOPTS || EXIT_CODE=$(($EXIT_CODE || $?))
 echo EXIT_CODE no_sudo nosetests = $EXIT_CODE
 
-[[ $NOSEOPTS == *"--with-coverage"* ]] && \
+[[ -f .coverage ]] && \
     sudo mv .coverage coverage.$(uuidgen).no_sudo.data
 
 echo "========================================="
@@ -19,7 +19,7 @@ echo "========================================="
 sudo env "PATH=$PATH" nosetests -a 'requires_sudo' tests $NOSEOPTS || EXIT_CODE=$(($EXIT_CODE || $?))
 echo EXIT_CODE with_sudo nosetests = $EXIT_CODE
 
-[[ $NOSEOPTS == *"--with-coverage"* ]] && \
+[[ -f .coverage ]] && \
     sudo mv .coverage coverage.$(uuidgen).with_sudo.data
 
 exit "$EXIT_CODE"
