@@ -198,33 +198,6 @@ class CGroupConfigurator(object):
                     except Exception as exception:
                         logger.warn("CGroupConfigurator._invoke_cgroup_operation: {0}".format(ustr(exception)))
 
-        def create_extension_cgroups_root(self):
-            """
-            Creates the container (directory/cgroup) that includes the cgroups for all extensions (/sys/fs/cgroup/*/walinuxagent.extensions)
-            """
-            def __impl():
-                self._cgroups_api.create_extension_cgroups_root()
-
-            self._invoke_cgroup_operation(__impl, "Failed to create a root cgroup for extensions; resource usage for extensions will not be tracked.")
-
-        def create_extension_cgroups(self, name):
-            """
-            Creates and returns the cgroups for the given extension
-            """
-            def __impl():
-                return self._cgroups_api.create_extension_cgroups(name)
-
-            return self._invoke_cgroup_operation(__impl, "Failed to create a cgroup for extension '{0}'; resource usage will not be tracked.".format(name))
-
-        def remove_extension_cgroups(self, name):
-            """
-            Deletes the cgroup for the given extension
-            """
-            def __impl():
-                self._cgroups_api.remove_extension_cgroups(name)
-
-            self._invoke_cgroup_operation(__impl, "Failed to delete cgroups for extension '{0}'.".format(name))
-
         def get_processes_in_agent_cgroup(self):
             """
             Returns an array of tuples with the PID and command line of the processes that are currently within the cgroup for the given unit.
