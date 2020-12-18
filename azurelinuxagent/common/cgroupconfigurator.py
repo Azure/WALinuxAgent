@@ -238,7 +238,7 @@ class CGroupConfigurator(object):
             Creates the container (cgroup) that includes the cgroups for anything related to the Agent and VM extensions.
             """
             def __impl():
-                self._cgroups_api.create_azure_slice()
+                self._cgroups_api.create_azure_slice()  # pylint: disable=no-member
 
             error_message = "Failed to create a root cgroup for agent and extensions; resource usage for agent and extensions will not be tracked."
 
