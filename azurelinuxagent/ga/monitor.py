@@ -21,7 +21,7 @@ import uuid
 
 import azurelinuxagent.common.logger as logger
 import azurelinuxagent.common.utils.networkutil as networkutil
-from azurelinuxagent.common.cgroupconfigurator import CGroupConfigurator
+from azurelinuxagent.common.cgroupconfigurator import CGroupConfigurator, UnexpectedProcessesInCGroupException
 from azurelinuxagent.common.cgroupstelemetry import CGroupsTelemetry
 from azurelinuxagent.common.errorstate import ErrorState
 from azurelinuxagent.common.event import add_event, WALAEventOperation, report_metric
@@ -56,39 +56,20 @@ class PollResourceUsageOperation(PeriodicOperation):
         self._error_count = 0
 
     def _operation_impl(self):
-        #
-        # Check the processes in the agent cgroup
-        #
-        processes_check_error = None
         try:
-            processes = CGroupConfigurator.get_instance().get_processes_in_agent_cgroup()
+            CGroupConfigurator.get_instance().check_processes_in_agent_cgroup()
+        except UnexpectedProcessesInCGroupException as exception:
+            exception.unexpected.sort()
+            message = "The agent's cgroup includes unexpected processes: {0}".format(exception.unexpected)
 
-            if processes is not None:
-                unexpected_processes = []
+            # Report a small sample of errors
+            if message != self._last_error and self._error_count < 5:
+                self._error_count += 1
+                self._last_error = message
+                logger.info(message)
+                add_event(op=WALAEventOperation.CGroupsDebug, message=message)
 
-                for (_, command_line) in processes:
-                    if not CGroupConfigurator.is_agent_process(command_line):
-                        unexpected_processes.append(command_line)
-
-                if unexpected_processes:
-                    unexpected_processes.sort()
-                    processes_check_error = "The agent's cgroup includes unexpected processes: {0}".format(ustr(unexpected_processes))
-        except Exception as exception:
-            processes_check_error = "Failed to check the processes in the agent's cgroup: {0}".format(ustr(exception))
-
-        # Report a small sample of errors
-        if processes_check_error != self._last_error and self._error_count < 5:
-            self._error_count += 1
-            self._last_error = processes_check_error
-            logger.info(processes_check_error)
-            add_event(op=WALAEventOperation.CGroupsDebug, message=processes_check_error)
-
-        #
-        # Report metrics
-        #
-        metrics = CGroupsTelemetry.poll_all_tracked()
-
-        for metric in metrics:
+        for metric in CGroupsTelemetry.poll_all_tracked():
             report_metric(metric.category, metric.counter, metric.instance, metric.value)
 
 
