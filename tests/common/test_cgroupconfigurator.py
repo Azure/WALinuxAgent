@@ -31,7 +31,7 @@ from azurelinuxagent.common.exception import CGroupsException
 from azurelinuxagent.common.utils import shellutil
 from tests.common.mock_cgroup_commands import mock_cgroup_commands
 from tests.tools import AgentTestCase, patch, mock_sleep
-from tests.utils.miscelaneous_tools import format_processes, wait_for
+from tests.utils.miscellaneous_tools import format_processes, wait_for
 
 class CGroupConfiguratorSystemdTestCase(AgentTestCase):
     @classmethod

@@ -24,7 +24,7 @@ import unittest
 from azurelinuxagent.common.future import ustr
 import azurelinuxagent.common.utils.shellutil as shellutil
 from tests.tools import AgentTestCase, patch
-from tests.utils.miscelaneous_tools import wait_for, format_processes
+from tests.utils.miscellaneous_tools import wait_for, format_processes
 
 
 class ShellQuoteTestCase(AgentTestCase):
