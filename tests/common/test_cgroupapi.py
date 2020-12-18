@@ -185,14 +185,35 @@ class SystemdCgroupsApiTestCase(AgentTestCase):
             self.assertEqual(cpu_accounting, "no", "Property {0} of {1} is incorrect".format("CPUAccounting", "walinuxagent.service"))
 
     def test_get_extensions_slice_root_name_should_return_the_root_slice_for_extensions(self):
-        root_slice_name = SystemdCgroupsApi()._get_extensions_slice_root_name()  # pylint: disable=protected-access
-        self.assertEqual(root_slice_name, "system-walinuxagent.extensions.slice")
+        root_slice_name = SystemdCgroupsApi()._get_extensions_root_slice_name()  # pylint: disable=protected-access
+        self.assertEqual(root_slice_name, "azure-vmextensions.slice")
 
     def test_get_extension_slice_name_should_return_the_slice_for_the_given_extension(self):
         extension_name = "Microsoft.Azure.DummyExtension-1.0"
         extension_slice_name = SystemdCgroupsApi()._get_extension_slice_name(extension_name)  # pylint: disable=protected-access
-        self.assertEqual(extension_slice_name, "system-walinuxagent.extensions-Microsoft.Azure.DummyExtension_1.0.slice")
+        self.assertEqual(extension_slice_name, "azure-vmextensions-Microsoft.Azure.DummyExtension_1.0.slice")
 
+    def test_create_azure_slice_should_create_unit_file(self):
+        azure_slice_path = os.path.join(self.tmp_dir, "azure.slice")
+        self.assertFalse(os.path.exists(azure_slice_path))
+
+        with mock_cgroup_commands() as mocks:
+            # Mock out the actual calls to /etc/systemd
+            mocks.add_file(r"^/etc/systemd/system/azure.slice$", azure_slice_path)
+            SystemdCgroupsApi().create_azure_slice()
+
+        self.assertTrue(os.path.exists(azure_slice_path))
+
+    def test_create_extensions_slice_should_create_unit_file(self):
+        extensions_slice_path = os.path.join(self.tmp_dir, "azure-vmextensions.slice")
+        self.assertFalse(os.path.exists(extensions_slice_path))
+
+        with mock_cgroup_commands() as mocks:
+            # Mock out the actual calls to /etc/systemd
+            mocks.add_file(r"^/etc/systemd/system/azure-vmextensions.slice$", extensions_slice_path)
+            SystemdCgroupsApi().create_extensions_slice()
+
+        self.assertTrue(os.path.exists(extensions_slice_path))
 
     def assert_cgroups_created(self, extension_cgroups):
         self.assertEqual(len(extension_cgroups), 2,

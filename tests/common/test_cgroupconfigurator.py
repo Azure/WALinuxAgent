@@ -166,6 +166,44 @@ cgroup on /sys/fs/cgroup/blkio type cgroup (rw,nosuid,nodev,noexec,relatime,blki
         # protected-access<W0212> Disabled: OK to access CGroupConfigurator._tracked from unit test for CGroupConfigurator
         self.assertEqual(len(CGroupsTelemetry._tracked), 0)  # pylint: disable=protected-access
 
+    def test_cgroup_operations_should_not_invoke_the_cgroup_api_when_cgroups_are_not_enabled(self):
+        configurator = CGroupConfiguratorSystemdTestCase._get_new_cgroup_configurator_instance()
+        configurator.disable()
+
+        # List of operations to test, and the functions to mock used in order to do verifications
+        operations = [
+            [configurator.create_extensions_slice, "azurelinuxagent.common.cgroupapi.SystemdCgroupsApi.create_extensions_slice"],
+        ]
+
+        for operation in operations:
+            with patch(operation[1]) as mock_cgroup_api_operation:
+                operation[0]()
+
+            self.assertEqual(mock_cgroup_api_operation.call_count, 0)
+
+    def test_cgroup_operations_should_log_a_warning_when_the_cgroup_api_raises_an_exception(self):
+        configurator = CGroupConfiguratorSystemdTestCase._get_new_cgroup_configurator_instance()
+
+        # cleanup_legacy_cgroups disables cgroups on error, so make disable() a no-op
+        with patch.object(configurator, "disable"):
+            # List of operations to test, and the functions to mock in order to raise exceptions
+            operations = [
+                [configurator.create_extensions_slice, "azurelinuxagent.common.cgroupapi.SystemdCgroupsApi.create_extensions_slice"],
+            ]
+
+            def raise_exception(*_):
+                raise Exception("A TEST EXCEPTION")
+
+            for operation in operations:
+                with patch("azurelinuxagent.common.cgroupconfigurator.logger.warn") as mock_logger_warn:
+                    with patch(operation[1], raise_exception):
+                        operation[0]()
+
+                    self.assertEqual(mock_logger_warn.call_count, 1)
+
+                    args, _ = mock_logger_warn.call_args
+                    message = args[0]
+                    self.assertIn("A TEST EXCEPTION", message)
 
     @patch('time.sleep', side_effect=lambda _: mock_sleep())
     def test_start_extension_command_should_not_use_systemd_when_cgroups_are_not_enabled(self, _):
