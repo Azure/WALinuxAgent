@@ -511,18 +511,6 @@ class SystemdCgroupsApiTestCase(AgentTestCase):
         extension_slice_name = SystemdCgroupsApi()._get_extension_slice_name(extension_name)  # pylint: disable=protected-access
         self.assertEqual(extension_slice_name, "azure-vmextensions-Microsoft.Azure.DummyExtension_1.0.slice")
 
-    def __assert_unit_is_loaded_and_active(self, unit_name):
-        status = shellutil.run_command(["systemctl", "status", unit_name])
-        self.assertIn("Loaded: loaded", status, "Unit {0} should have been loaded!".format(unit_name))
-        self.assertIn("Active: active", status, "Unit {0} should have been active!".format(unit_name))
-
-    @staticmethod
-    def __clean_up_unit(unit_name):
-        shellutil.run_command(["systemctl", "stop", unit_name ])
-        shellutil.run_command(["systemctl", "disable", unit_name])
-        os.remove("/etc/systemd/system/{0}".format(unit_name))
-        shellutil.run_command(["systemctl", "daemon-reload"])
-
     def test_create_azure_slice_should_create_unit_file(self):
         azure_slice_path = os.path.join(self.tmp_dir, "azure.slice")
         self.assertFalse(os.path.exists(azure_slice_path))

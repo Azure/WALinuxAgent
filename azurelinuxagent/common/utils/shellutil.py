@@ -207,7 +207,7 @@ def __run_command(command_action, command, log_error, encode_output):
 
 # W0622: Redefining built-in 'input'  -- disabled: the parameter name mimics subprocess.communicate()
 # R0913: Too many arguments (8/5) -- disabled: the parameter list mimics subprocess.Popen()/communicate()
-def run_command(command, input=None, stdin=None, stdout=subprocess.PIPE, stderr=subprocess.PIPE, log_error=False, encode_input=True, encode_output=True):  # pylint:disable=W0622,R0913
+def run_command(command, input=None, stdin=None, stdout=subprocess.PIPE, stderr=subprocess.PIPE, log_error=False, encode_input=True, encode_output=True, track_process=True):  # pylint:disable=W0622,R0913
     """
         Executes the given command and returns its stdout.
 
@@ -215,6 +215,8 @@ def run_command(command, input=None, stdin=None, stdout=subprocess.PIPE, stderr=
         is True, it also logs details about the error.
 
         If encode_output is True the stdout is returned as a string, otherwise it is returned as a bytes object.
+
+        If track_process is False the command is not added to list of running commands
 
         This function is a thin wrapper around Popen/communicate in the subprocess module:
            * The 'input' parameter corresponds to the same parameter in communicate
@@ -240,10 +242,14 @@ def run_command(command, input=None, stdin=None, stdout=subprocess.PIPE, stderr=
             popen_stdin = stdin
             communicate_input = None
 
-        process = _popen(command, stdin=popen_stdin, stdout=stdout, stderr=stderr, shell=False)
+        if track_process:
+            process = _popen(command, stdin=popen_stdin, stdout=stdout, stderr=stderr, shell=False)
+        else:
+            process = subprocess.Popen(command, stdin=popen_stdin, stdout=stdout, stderr=stderr, shell=False)
 
         command_stdout, command_stderr = process.communicate(input=communicate_input)
-        _on_command_completed(process.pid)
+        if track_process:
+            _on_command_completed(process.pid)
 
         return process.returncode, command_stdout, command_stderr
 
