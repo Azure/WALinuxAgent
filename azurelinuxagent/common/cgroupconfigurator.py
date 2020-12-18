@@ -1,3 +1,4 @@
+# -*- encoding: utf-8 -*-
 # Copyright 2018 Microsoft Corporation
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -193,6 +194,28 @@ class CGroupConfigurator(object):
             self._cgroups_enabled = False
             CGroupsTelemetry.reset()
 
+        def create_slices(self):
+            if not self.enabled():
+                return
+
+            # Create root slices for agent and agent and extensions for systemd-managed distros.
+            # The hierarchy is as follows:
+            # ├─user.slice
+            # ...
+            # ├─system.slice
+            # ...
+            # └─azure.slice
+            #   └─azure-vmextensions.slice
+
+            # Both methods will log to local log and emit telemetry.
+            # The slices will be created if they don't previously exist.
+
+            if not os.path.exists(SystemdCgroupsApi.get_azure_slice()):
+                self.create_azure_slice()
+
+            if not os.path.exists(SystemdCgroupsApi.get_extensions_slice()):
+                self.create_extensions_slice()
+
         def _invoke_cgroup_operation(self, operation, error_message, on_error=None):
             """
             Ensures the given operation is invoked only if cgroups are enabled and traps any errors on the operation.
@@ -210,14 +233,33 @@ class CGroupConfigurator(object):
                     except Exception as exception:
                         logger.warn("CGroupConfigurator._invoke_cgroup_operation: {0}".format(ustr(exception)))
 
-        def create_extension_cgroups_root(self):
+        def create_azure_slice(self):
+            """"
+            Creates the container (cgroup) that includes the cgroups for anything related to the Agent and VM extensions.
+            """
+            def __impl():
+                self._cgroups_api.create_azure_slice()  # pylint: disable=no-member
+
+            error_message = "Failed to create a root cgroup for agent and extensions; resource usage for agent and extensions will not be tracked."
+
+            def __on_error(exception):
+                add_event(op=WALAEventOperation.CGroupsInitialize, message="{0} Error: {1}".format(error_message, ustr(exception)))
+
+            self._invoke_cgroup_operation(__impl, error_message, on_error=__on_error)
+
+        def create_extensions_slice(self):
             """
             Creates the container (directory/cgroup) that includes the cgroups for all extensions (/sys/fs/cgroup/*/walinuxagent.extensions)
             """
             def __impl():
-                self._cgroups_api.create_extension_cgroups_root()
+                self._cgroups_api.create_extensions_slice()
 
-            self._invoke_cgroup_operation(__impl, "Failed to create a root cgroup for extensions; resource usage for extensions will not be tracked.")
+            error_message = "Failed to create a root cgroup for extensions; resource usage for extensions will not be tracked."
+
+            def __on_error(exception):
+                add_event(op=WALAEventOperation.CGroupsInitialize, message="{0} Error: {1}".format(error_message, ustr(exception)))
+
+            self._invoke_cgroup_operation(__impl, error_message, on_error=__on_error)
 
         def create_extension_cgroups(self, name):
             """

@@ -373,21 +373,21 @@ class FileSystemCgroupsApiTestCase(_MockedFileSystemTestCase):
         assert_cgroup_created("memory")
 
     def test_create_extension_cgroups_root_should_create_root_directory_for_extensions(self):
-        FileSystemCgroupsApi().create_extension_cgroups_root()
+        FileSystemCgroupsApi().create_extensions_slice()
 
-        cpu_cgroup = os.path.join(self.cgroups_file_system_root, "cpu", "walinuxagent.extensions")
+        cpu_cgroup = os.path.join(self.cgroups_file_system_root, "cpu", "vmextensions")
         self.assertTrue(os.path.exists(cpu_cgroup))
 
-        memory_cgroup = os.path.join(self.cgroups_file_system_root, "memory", "walinuxagent.extensions")
+        memory_cgroup = os.path.join(self.cgroups_file_system_root, "memory", "vmextensions")
         self.assertTrue(os.path.exists(memory_cgroup))
 
     def test_create_extension_cgroups_should_create_cgroups_on_all_controllers(self):
         api = FileSystemCgroupsApi()
-        api.create_extension_cgroups_root()
+        api.create_extensions_slice()
         extension_cgroups = api.create_extension_cgroups("Microsoft.Compute.TestExtension-1.2.3")
 
         def assert_cgroup_created(controller):
-            cgroup_path = os.path.join(self.cgroups_file_system_root, controller, "walinuxagent.extensions",
+            cgroup_path = os.path.join(self.cgroups_file_system_root, controller, "vmextensions",
                                        "Microsoft.Compute.TestExtension_1.2.3")
 
             self.assertTrue(any(cgroups.path == cgroup_path for cgroups in extension_cgroups))
@@ -398,7 +398,7 @@ class FileSystemCgroupsApiTestCase(_MockedFileSystemTestCase):
 
     def test_remove_extension_cgroups_should_remove_all_cgroups(self):
         api = FileSystemCgroupsApi()
-        api.create_extension_cgroups_root()
+        api.create_extensions_slice()
         extension_cgroups = api.create_extension_cgroups("Microsoft.Compute.TestExtension-1.2.3")
 
         api.remove_extension_cgroups("Microsoft.Compute.TestExtension-1.2.3")
@@ -408,7 +408,7 @@ class FileSystemCgroupsApiTestCase(_MockedFileSystemTestCase):
 
     def test_remove_extension_cgroups_should_log_a_warning_when_the_cgroup_contains_active_tasks(self):
         api = FileSystemCgroupsApi()
-        api.create_extension_cgroups_root()
+        api.create_extensions_slice()
         api.create_extension_cgroups("Microsoft.Compute.TestExtension-1.2.3")
 
         with patch("azurelinuxagent.common.cgroupapi.logger.warn") as mock_logger_warn:
@@ -421,7 +421,7 @@ class FileSystemCgroupsApiTestCase(_MockedFileSystemTestCase):
 
     def test_get_extension_cgroups_should_return_all_cgroups(self):
         api = FileSystemCgroupsApi()
-        api.create_extension_cgroups_root()
+        api.create_extensions_slice()
         created = api.create_extension_cgroups("Microsoft.Compute.TestExtension-1.2.3")
 
         retrieved = api.get_extension_cgroups("Microsoft.Compute.TestExtension-1.2.3")
@@ -434,7 +434,7 @@ class FileSystemCgroupsApiTestCase(_MockedFileSystemTestCase):
     @patch('time.sleep', side_effect=lambda _: mock_sleep())
     def test_start_extension_command_should_add_the_child_process_to_the_extension_cgroup(self, _):
         api = FileSystemCgroupsApi()
-        api.create_extension_cgroups_root()
+        api.create_extensions_slice()
 
         with tempfile.TemporaryFile(dir=self.tmp_dir, mode="w+b") as stdout:
             with tempfile.TemporaryFile(dir=self.tmp_dir, mode="w+b") as stderr:
@@ -503,51 +503,35 @@ class SystemdCgroupsApiTestCase(AgentTestCase):
             self.assertEqual(cpu_accounting, "no", "Property {0} of {1} is incorrect".format("CPUAccounting", "walinuxagent.service"))
 
     def test_get_extensions_slice_root_name_should_return_the_root_slice_for_extensions(self):
-        root_slice_name = SystemdCgroupsApi()._get_extensions_slice_root_name()  # pylint: disable=protected-access
-        self.assertEqual(root_slice_name, "system-walinuxagent.extensions.slice")
+        root_slice_name = SystemdCgroupsApi()._get_extensions_root_slice_name()  # pylint: disable=protected-access
+        self.assertEqual(root_slice_name, "azure-vmextensions.slice")
 
     def test_get_extension_slice_name_should_return_the_slice_for_the_given_extension(self):
         extension_name = "Microsoft.Azure.DummyExtension-1.0"
         extension_slice_name = SystemdCgroupsApi()._get_extension_slice_name(extension_name)  # pylint: disable=protected-access
-        self.assertEqual(extension_slice_name, "system-walinuxagent.extensions-Microsoft.Azure.DummyExtension_1.0.slice")
+        self.assertEqual(extension_slice_name, "azure-vmextensions-Microsoft.Azure.DummyExtension_1.0.slice")
 
-    @attr('requires_sudo')
-    def test_create_extension_cgroups_root_should_create_extensions_root_slice(self):
-        self.assertTrue(i_am_root(), "Test does not run when non-root")
+    def test_create_azure_slice_should_create_unit_file(self):
+        azure_slice_path = os.path.join(self.tmp_dir, "azure.slice")
+        self.assertFalse(os.path.exists(azure_slice_path))
 
-        SystemdCgroupsApi().create_extension_cgroups_root()
+        with mock_cgroup_commands() as mocks:
+            # Mock out the actual calls to /etc/systemd
+            mocks.add_file(r"^/etc/systemd/system/azure.slice$", azure_slice_path)
+            SystemdCgroupsApi().create_azure_slice()
 
-        unit_name = SystemdCgroupsApi()._get_extensions_slice_root_name()  # pylint: disable=protected-access
-        status = shellutil.run_command(["systemctl", "status", unit_name])
-        self.assertIn("Loaded: loaded", status)
-        self.assertIn("Active: active", status)
+        self.assertTrue(os.path.exists(azure_slice_path))
 
-        shellutil.run_command(["systemctl", "stop", unit_name ])
-        shellutil.run_command(["systemctl", "disable", unit_name])
-        os.remove("/etc/systemd/system/{0}".format(unit_name))
-        shellutil.run_command(["systemctl", "daemon-reload"])
+    def test_create_extensions_slice_should_create_unit_file(self):
+        extensions_slice_path = os.path.join(self.tmp_dir, "azure-vmextensions.slice")
+        self.assertFalse(os.path.exists(extensions_slice_path))
 
-    @attr('requires_sudo')
-    def test_create_extension_cgroups_should_create_extension_slice(self):
-        self.assertTrue(i_am_root(), "Test does not run when non-root")
+        with mock_cgroup_commands() as mocks:
+            # Mock out the actual calls to /etc/systemd
+            mocks.add_file(r"^/etc/systemd/system/azure-vmextensions.slice$", extensions_slice_path)
+            SystemdCgroupsApi().create_extensions_slice()
 
-        extension_name = "Microsoft.Azure.DummyExtension-1.0"
-        cgroups = SystemdCgroupsApi().create_extension_cgroups(extension_name)
-        cpu_cgroup, memory_cgroup = cgroups[0], cgroups[1]
-        self.assertEqual(cpu_cgroup.path, "/sys/fs/cgroup/cpu/system.slice/Microsoft.Azure.DummyExtension_1.0")
-        self.assertEqual(memory_cgroup.path, "/sys/fs/cgroup/memory/system.slice/Microsoft.Azure.DummyExtension_1.0")
-
-        unit_name = SystemdCgroupsApi()._get_extension_slice_name(extension_name)  # pylint: disable=protected-access
-        self.assertEqual("system-walinuxagent.extensions-Microsoft.Azure.DummyExtension_1.0.slice", unit_name)
-
-        _, status = shellutil.run_get_output("systemctl status {0}".format(unit_name))
-        self.assertIn("Loaded: loaded", status)
-        self.assertIn("Active: active", status)
-
-        shellutil.run_get_output("systemctl stop {0}".format(unit_name))
-        shellutil.run_get_output("systemctl disable {0}".format(unit_name))
-        os.remove("/etc/systemd/system/{0}".format(unit_name))
-        shellutil.run_get_output("systemctl daemon-reload")
+        self.assertTrue(os.path.exists(extensions_slice_path))
 
     def assert_cgroups_created(self, extension_cgroups):
         self.assertEqual(len(extension_cgroups), 2,
