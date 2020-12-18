@@ -527,19 +527,6 @@ class SystemdCgroupsApiTestCase(AgentTestCase):
         os.remove("/etc/systemd/system/{0}".format(unit_name))
         shellutil.run_command(["systemctl", "daemon-reload"])
 
-    def test_get_processes_in_cgroup_should_return_the_processes_within_the_cgroup(self):
-        with mock_cgroup_commands():
-            processes = SystemdCgroupsApi.get_processes_in_cgroup("/sys/fs/cgroup/cpu/system.slice/walinuxagent.service")
-
-            self.assertTrue(len(processes) >= 2,
-                            "The cgroup should contain at least 2 procceses (daemon and extension handler): [{0}]".format(processes))
-
-            daemon_present = any("waagent -daemon" in command for (pid, command) in processes)
-            self.assertTrue(daemon_present, "Could not find the daemon in the cgroup: [{0}]".format(processes))
-
-            extension_handler_present = any(re.search(r"(WALinuxAgent-.+\.egg|waagent) -run-exthandlers", command) for (pid, command) in processes)
-            self.assertTrue(extension_handler_present, "Could not find the extension handler in the cgroup: [{0}]".format(processes))
-
     @attr('requires_sudo')
     def test_create_extension_cgroups_should_create_extension_slice(self):
         self.assertTrue(i_am_root(), "Test does not run when non-root")
