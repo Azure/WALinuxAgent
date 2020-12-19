@@ -261,24 +261,6 @@ class CGroupConfigurator(object):
 
             self._invoke_cgroup_operation(__impl, error_message, on_error=__on_error)
 
-        def create_extension_cgroups(self, name):
-            """
-            Creates and returns the cgroups for the given extension
-            """
-            def __impl():
-                return self._cgroups_api.create_extension_cgroups(name)
-
-            return self._invoke_cgroup_operation(__impl, "Failed to create a cgroup for extension '{0}'; resource usage will not be tracked.".format(name))
-
-        def remove_extension_cgroups(self, name):
-            """
-            Deletes the cgroup for the given extension
-            """
-            def __impl():
-                self._cgroups_api.remove_extension_cgroups(name)
-
-            self._invoke_cgroup_operation(__impl, "Failed to delete cgroups for extension '{0}'.".format(name))
-
         def check_processes_in_agent_cgroup(self):
             """
             Verifies that the agent's cgroup includes only the current process, its parent and commands started using shellutil (i.e. the extension handler,
