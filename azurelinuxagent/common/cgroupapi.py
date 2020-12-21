@@ -70,13 +70,6 @@ class CGroupsApi(object):
         return extension_name.replace('-', '_')
 
     @staticmethod
-    def create():
-        """
-        Factory method to create the correct API for the current platform
-        """
-        return SystemdCgroupsApi()
-
-    @staticmethod
     def is_systemd():
         """
         Determine if systemd is managing system services; the implementation follows the same strategy as, for example,
@@ -88,24 +81,6 @@ class CGroupsApi(object):
     def get_processes_in_cgroup(cgroup_path):
         with open(os.path.join(cgroup_path, "cgroup.procs"), "r") as cgroup_procs:
             return [int(pid) for pid in cgroup_procs.read().split()]
-
-    @staticmethod
-    def _foreach_controller(operation, message):
-        """
-        Executes the given operation on all controllers that need to be tracked; outputs 'message' if the controller
-        is not mounted or if an error occurs in the operation
-        :return: Returns a list of error messages or an empty list if no errors occurred
-        """
-        mounted_controllers = os.listdir(CGROUPS_FILE_SYSTEM_ROOT)
-
-        for controller in CGROUP_CONTROLLERS:
-            try:
-                if controller not in mounted_controllers:
-                    logger.warn('Cgroup controller "{0}" is not mounted. {1}', controller, message)
-                else:
-                    operation(controller)
-            except Exception as e:  # pylint: disable=C0103
-                logger.warn('Error in cgroup controller "{0}": {1}. {2}', controller, ustr(e), message)
 
     @staticmethod
     def _foreach_legacy_cgroup(operation):
@@ -299,7 +274,7 @@ Description=Slice for Azure VM Agent and Extensions"""
         unit_filename = self._get_azure_slice_name()
         self.create_unit_file(unit_filename, unit_contents)
 
-        message = "Created root slice for Azure VM Agent and Extensions {0}".format(unit_filename)
+        message = "Created slice for Azure VM Agent and Extensions {0}".format(unit_filename)
         add_event(op=WALAEventOperation.CGroupsInitialize, is_success=True, log_event=False, message=message)
         logger.info(message)
 
@@ -310,7 +285,7 @@ Description=Slice for Azure VM Extensions"""
 
         self.create_unit_file(unit_filename, unit_contents)
 
-        message = "Created root slice for Azure VM Extensions {0}".format(unit_filename)
+        message = "Created slice for Azure VM Extensions {0}".format(unit_filename)
         add_event(op=WALAEventOperation.CGroupsInitialize, is_success=True, log_event=False, message=message)
         logger.info(message)
 
