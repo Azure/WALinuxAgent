@@ -72,12 +72,6 @@ class CGroupsApiTestCase(_MockedFileSystemTestCase):
             with patch("azurelinuxagent.common.cgroupapi.get_distro", return_value=distro):
                 self.assertEqual(CGroupsApi.cgroups_supported(), supported, "cgroups_supported() failed on {0}".format(distro))
 
-    def test_create_should_return_a_SystemdCgroupsApi_on_systemd_platforms(self):  # pylint: disable=invalid-name
-        with patch("azurelinuxagent.common.cgroupapi.CGroupsApi.is_systemd", return_value=True):
-            api = CGroupsApi.create()
-
-        self.assertTrue(type(api) == SystemdCgroupsApi)  # pylint: disable=unidiomatic-typecheck
-
     def test_is_systemd_should_return_true_when_systemd_manages_current_process(self):
         path_exists = os.path.exists
 
@@ -113,41 +107,6 @@ class CGroupsApiTestCase(_MockedFileSystemTestCase):
         self.assertFalse(is_systemd)
 
         self.assertTrue(mock_path_exists.path_tested, 'The expected path was not tested; the implementation of CGroupsApi._is_systemd() may have changed.')
-
-    def test_foreach_controller_should_execute_operation_on_all_mounted_controllers(self):
-        executed_controllers = []
-
-        def controller_operation(controller):
-            executed_controllers.append(controller)
-
-        CGroupsApi._foreach_controller(controller_operation, 'A dummy message')  # pylint: disable=protected-access
-
-        # The setUp method mocks azurelinuxagent.common.cgroupapi.CGROUPS_FILE_SYSTEM_ROOT to have the cpu and memory controllers mounted
-        self.assertIn('cpu', executed_controllers, 'The operation was not executed on the cpu controller')
-        self.assertIn('memory', executed_controllers, 'The operation was not executed on the memory controller')
-        self.assertEqual(len(executed_controllers), 2, 'The operation was not executed on unexpected controllers: {0}'.format(executed_controllers))
-
-    def test_foreach_controller_should_handle_errors_in_individual_controllers(self):
-        successful_controllers = []
-
-        def controller_operation(controller):
-            if controller == 'cpu':
-                raise Exception('A test exception')
-
-            successful_controllers.append(controller)
-
-        with patch("azurelinuxagent.common.cgroupapi.logger.warn") as mock_logger_warn:
-            CGroupsApi._foreach_controller(controller_operation, 'A dummy message')  # pylint: disable=protected-access
-
-            self.assertIn('memory', successful_controllers, 'The operation was not executed on the memory controller')
-            self.assertEqual(len(successful_controllers), 1, 'The operation was not executed on unexpected controllers: {0}'.format(successful_controllers))
-
-            args, kwargs = mock_logger_warn.call_args  # pylint: disable=unused-variable
-            (message_format, controller, error, message) = args
-            self.assertEqual(message_format, 'Error in cgroup controller "{0}": {1}. {2}')
-            self.assertEqual(controller, 'cpu')
-            self.assertEqual(error, 'A test exception')
-            self.assertEqual(message, 'A dummy message')
 
 
 @skip_if_predicate_false(is_systemd_present, "Systemd cgroups API doesn't manage cgroups on systems not using systemd.")

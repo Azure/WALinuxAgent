@@ -78,9 +78,9 @@ class CGroupConfigurator(object):
                 #
                 # check systemd
                 #
-                self._cgroups_api = CGroupsApi.create()
+                self._cgroups_api = SystemdCgroupsApi()
 
-                if not isinstance(self._cgroups_api, SystemdCgroupsApi):
+                if not self._cgroups_api.is_systemd():
                     message = "systemd was not detected on {0}".format(get_distro())
                     logger.warn(message)
                     add_event(op=WALAEventOperation.CGroupsInitialize, is_success=False, message=message, log_event=False)
@@ -91,7 +91,7 @@ class CGroupConfigurator(object):
                     logger.info(message)
                     add_event(op=WALAEventOperation.CGroupsInfo, message=message)
 
-                log_cgroup_info("systemd version: {0}", self._cgroups_api.get_systemd_version())  # pylint: disable=E1101
+                log_cgroup_info("systemd version: {0}", self._cgroups_api.get_systemd_version())
 
                 #
                 # Older versions of the daemon (2.2.31-2.2.40) wrote their PID to /sys/fs/cgroup/{cpu,memory}/WALinuxAgent/WALinuxAgent.  When running
@@ -106,7 +106,7 @@ class CGroupConfigurator(object):
                 #
                 # check v1 controllers
                 #
-                cpu_controller_root, memory_controller_root = self._cgroups_api.get_cgroup_mount_points()  # pylint: disable=E1101
+                cpu_controller_root, memory_controller_root = self._cgroups_api.get_cgroup_mount_points()
 
                 if cpu_controller_root is not None:
                     logger.info("The CPU cgroup controller is mounted at {0}", cpu_controller_root)
@@ -121,15 +121,15 @@ class CGroupConfigurator(object):
                 #
                 # check v2 controllers
                 #
-                cgroup2_mount_point, cgroup2_controllers = self._cgroups_api.get_cgroup2_controllers()  # pylint: disable=E1101
+                cgroup2_mount_point, cgroup2_controllers = self._cgroups_api.get_cgroup2_controllers()
                 if cgroup2_mount_point is not None:
                     log_cgroup_info("cgroups v2 mounted at {0}.  Controllers: [{1}]", cgroup2_mount_point, cgroup2_controllers)
 
                 #
                 # check the cgroups for the agent
                 #
-                agent_unit_name = self._cgroups_api.get_agent_unit_name()  # pylint: disable=E1101
-                cpu_cgroup_relative_path, memory_cgroup_relative_path = self._cgroups_api.get_process_cgroup_relative_paths("self")  # pylint: disable=E1101
+                agent_unit_name = self._cgroups_api.get_agent_unit_name()
+                cpu_cgroup_relative_path, memory_cgroup_relative_path = self._cgroups_api.get_process_cgroup_relative_paths("self")
                 expected_relative_path = os.path.join('system.slice', agent_unit_name)
                 if cpu_cgroup_relative_path is None:
                     log_cgroup_info("The agent's process is not within a CPU cgroup")
@@ -137,7 +137,7 @@ class CGroupConfigurator(object):
                     if cpu_cgroup_relative_path != expected_relative_path:
                         log_cgroup_info("The Agent is not in the expected cgroup; will not enable cgroup monitoring. CPU relative path:[{0}] Expected:[{1}]", cpu_cgroup_relative_path, expected_relative_path)
                         return
-                    cpu_accounting = self._cgroups_api.get_unit_property(agent_unit_name, "CPUAccounting")  # pylint: disable=E1101
+                    cpu_accounting = self._cgroups_api.get_unit_property(agent_unit_name, "CPUAccounting")
                     log_cgroup_info('CPUAccounting: {0}', cpu_accounting)
 
                 if memory_cgroup_relative_path is None:
@@ -146,7 +146,7 @@ class CGroupConfigurator(object):
                     if memory_cgroup_relative_path != expected_relative_path:
                         log_cgroup_info("The Agent is not in the expected cgroup; will not enable cgroup monitoring. Memory relative path:[{0}] Expected:[{1}]", memory_cgroup_relative_path, expected_relative_path)
                         return
-                    memory_accounting = self._cgroups_api.get_unit_property(agent_unit_name, "MemoryAccounting")  # pylint: disable=E1101
+                    memory_accounting = self._cgroups_api.get_unit_property(agent_unit_name, "MemoryAccounting")
                     log_cgroup_info('MemoryAccounting: {0}', memory_accounting)
 
                 #
@@ -216,50 +216,33 @@ class CGroupConfigurator(object):
             if not os.path.exists(SystemdCgroupsApi.get_extensions_slice()):
                 self.create_extensions_slice()
 
-        def _invoke_cgroup_operation(self, operation, error_message, on_error=None):
-            """
-            Ensures the given operation is invoked only if cgroups are enabled and traps any errors on the operation.
-            """
-            if not self.enabled():
-                return None
-
-            try:
-                return operation()
-            except Exception as exception:
-                logger.warn("{0} Error: {1}".format(error_message, ustr(exception)))
-                if on_error is not None:
-                    try:
-                        on_error(exception)
-                    except Exception as exception:
-                        logger.warn("CGroupConfigurator._invoke_cgroup_operation: {0}".format(ustr(exception)))
-
         def create_azure_slice(self):
             """"
-            Creates the container (cgroup) that includes the cgroups for anything related to the Agent and VM extensions.
+            Creates the slice for the VM Agent and extensions.
             """
-            def __impl():
-                self._cgroups_api.create_azure_slice()  # pylint: disable=no-member
+            if not self.enabled():
+                return
 
-            error_message = "Failed to create a root cgroup for agent and extensions; resource usage for agent and extensions will not be tracked."
-
-            def __on_error(exception):
-                add_event(op=WALAEventOperation.CGroupsInitialize, message="{0} Error: {1}".format(error_message, ustr(exception)))
-
-            self._invoke_cgroup_operation(__impl, error_message, on_error=__on_error)
+            try:
+                self._cgroups_api.create_azure_slice()
+            except Exception as exception:
+                error_message = "Failed to create the azure slice. Error: {0}".format(ustr(exception))
+                logger.warn(error_message)
+                add_event(op=WALAEventOperation.CGroupsInitialize, message=error_message)
 
         def create_extensions_slice(self):
             """
-            Creates the container (directory/cgroup) that includes the cgroups for all extensions (/sys/fs/cgroup/*/walinuxagent.extensions)
+            Creates the slice that includes the cgroups for all extensions
             """
-            def __impl():
+            if not self.enabled():
+                return
+
+            try:
                 self._cgroups_api.create_extensions_slice()
-
-            error_message = "Failed to create a root cgroup for extensions; resource usage for extensions will not be tracked."
-
-            def __on_error(exception):
-                add_event(op=WALAEventOperation.CGroupsInitialize, message="{0} Error: {1}".format(error_message, ustr(exception)))
-
-            self._invoke_cgroup_operation(__impl, error_message, on_error=__on_error)
+            except Exception as exception:
+                error_message = "Failed to create slice for VM extensions. Error: {0}".format(ustr(exception))
+                logger.warn(error_message)
+                add_event(op=WALAEventOperation.CGroupsInitialize, message=error_message)
 
         def check_processes_in_agent_cgroup(self):
             """
