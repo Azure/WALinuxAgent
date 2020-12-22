@@ -19,6 +19,7 @@ import os
 import re
 import shutil
 import subprocess
+import threading
 import uuid
 
 from azurelinuxagent.common import logger
@@ -131,6 +132,8 @@ class SystemdCgroupsApi(CGroupsApi):
     def __init__(self):
         self._cgroup_mountpoints = None
         self._agent_unit_name = None
+        self._systemd_run_commands = []
+        self._systemd_run_commands_lock = threading.RLock()
 
     @staticmethod
     def get_systemd_version():
@@ -148,6 +151,13 @@ class SystemdCgroupsApi(CGroupsApi):
     @staticmethod
     def get_extensions_slice():
         return os.path.join(UNIT_FILES_FILE_SYSTEM_PATH, EXTENSIONS_CGROUP_NAME, ".slice")
+
+    def get_systemd_run_commands(self):
+        """
+        Returns a list of the systemd-run commands currently running (given as PIDs)
+        """
+        with self._systemd_run_commands_lock:
+            return self._systemd_run_commands[:]
 
     def get_cgroup_mount_points(self):
         """
@@ -301,18 +311,21 @@ Description=Slice for Azure VM Extensions"""
         unit_not_found = "Unit {0} not found.".format(scope_name)
         return unit_not_found in stderr or scope_name not in stderr
 
-    def start_extension_command(self, extension_name, command, timeout, shell, cwd, env, stdout, stderr,  # pylint: disable=R0913
-                                error_code=ExtensionErrorCodes.PluginUnknownFailure):
+    # R0913: Too many arguments (7/5) -- disabled: the parameter list mimics subprocess.Popen()
+    # R0912: Too many branches (14/12) -- disabled: branches are sequential
+    def start_extension_command(self, extension_name, command, timeout, shell, cwd, env, stdout, stderr, error_code=ExtensionErrorCodes.PluginUnknownFailure):   # pylint: disable=R0913,R0912
         scope = "{0}_{1}".format(self._get_extension_cgroup_name(extension_name), uuid.uuid4())
 
-        process = subprocess.Popen(  # pylint: disable=W1509
-            "systemd-run --unit={0} --scope {1}".format(scope, command),
-            shell=shell,
-            cwd=cwd,
-            stdout=stdout,
-            stderr=stderr,
-            env=env,
-            preexec_fn=os.setsid)
+        with self._systemd_run_commands_lock:
+            process = subprocess.Popen(  # pylint: disable=W1509
+                "systemd-run --unit={0} --scope {1}".format(scope, command),
+                shell=shell,
+                cwd=cwd,
+                stdout=stdout,
+                stderr=stderr,
+                env=env,
+                preexec_fn=os.setsid)
+            self._systemd_run_commands.append(process.pid)
 
         scope_name = scope + '.scope'
 
@@ -345,12 +358,16 @@ Description=Slice for Azure VM Extensions"""
 
         # Wait for process completion or timeout
         try:
-            process_output = handle_process_completion(process=process,
-                                                       command=command,
-                                                       timeout=timeout,
-                                                       stdout=stdout,
-                                                       stderr=stderr,
-                                                       error_code=error_code)
+            try:
+                process_output = handle_process_completion(process=process,
+                                                           command=command,
+                                                           timeout=timeout,
+                                                           stdout=stdout,
+                                                           stderr=stderr,
+                                                           error_code=error_code)
+            finally:
+                with self._systemd_run_commands_lock:
+                    self._systemd_run_commands.remove(process.pid)
         except ExtensionError as e:  # pylint: disable=C0103
             # The extension didn't terminate successfully. Determine whether it was due to systemd errors or
             # extension errors.
