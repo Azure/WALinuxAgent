@@ -28,10 +28,10 @@ import threading
 from azurelinuxagent.common.cgroup import CGroup
 from azurelinuxagent.common.cgroupconfigurator import CGroupConfigurator, UnexpectedProcessesInCGroupException
 from azurelinuxagent.common.cgroupstelemetry import CGroupsTelemetry
-from azurelinuxagent.common.exception import CGroupsException, ExtensionOperationError
+from azurelinuxagent.common.exception import CGroupsException
 from azurelinuxagent.common.utils import shellutil
 from tests.common.mock_cgroup_commands import mock_cgroup_commands
-from tests.tools import AgentTestCase, patch, mock_sleep, skip_if_predicate_true
+from tests.tools import AgentTestCase, patch, mock_sleep
 from tests.utils.miscellaneous_tools import format_processes, wait_for
 
 class CGroupConfiguratorSystemdTestCase(AgentTestCase):
@@ -327,13 +327,13 @@ exit 0
         def wait_for_processes(processes_file):
             def _all_present():
                 if os.path.exists(processes_file):
-                    with open(processes_file, "r") as file:
-                        _all_present.processes = [int(process) for process in file.read().split()]
+                    with open(processes_file, "r") as file_stream:
+                        _all_present.processes = [int(process) for process in file_stream.read().split()]
                 return len(_all_present.processes) >= number_of_descendants
             _all_present.processes = []
 
             if not wait_for(_all_present):
-                raise Exception("Timeout waiting for processes. Expected {0}}; got: {1}".format(
+                raise Exception("Timeout waiting for processes. Expected {0}; got: {1}".format(
                     number_of_descendants, format_processes(_all_present.processes)))
 
             return _all_present.processes
@@ -393,7 +393,9 @@ exit 0
             # check_processes_in_agent_cgroup uses shellutil and the cgroups api to get the commands that are currently running;
             # wait for all the processes to show up
             #
-            if not wait_for(lambda: len(shellutil.get_running_commands()) > 0 and len(configurator._cgroups_api.get_systemd_run_commands()) > 0):
+            # len-as-condition: Do not use `len(SEQUENCE)` to determine if a sequence is empty - Disabled: explicit check improves readability
+            # protected-access: Access to a protected member _cgroups_api of a client class - Disabled: OK to access protected member in this unit test
+            if not wait_for(lambda: len(shellutil.get_running_commands()) > 0 and len(configurator._cgroups_api.get_systemd_run_commands()) > 0):  # pylint:disable=len-as-condition,protected-access
                 raise Exception("Timeout while attempting to track the child commands")
 
             #
