@@ -404,7 +404,7 @@ exit 0
             # For the agent's processes, we use the current process and its parent (in the actual agent these would be the daemon and the extension
             # handler), and the commands started by the agent.
             #
-            # For other processes, we use process 1, a process that already completed, and an extensions. Note that extensions are started using
+            # For other processes, we use process 1, a process that already completed, and an extension. Note that extensions are started using
             # systemd-run and the process for that commands belongs to the agent's cgroup but the processes for the extension should be in a
             # different cgroup
             #
