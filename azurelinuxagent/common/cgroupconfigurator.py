@@ -246,10 +246,11 @@ class CGroupConfigurator(object):
 
         def check_processes_in_agent_cgroup(self):
             """
-            Verifies that the agent's cgroup includes only the current process, its parent and commands started using shellutil (i.e. the extension handler,
-            the daemon, and the commands started by the extension handler, respectively).
-            Other processes started by the agent (e.g. extensions) and processes not started by the agent (e.g. services installed by extensions) should
-            belong to their own cgroup.
+            Verifies that the agent's cgroup includes only the current process, its parent, commands started using shellutil and instances of systemd-run
+            (those processes correspond, respectively, to the extension handler, the daemon, commands started by the extension handler, and the systemd-run
+            commands used to start extensions on their own cgroup).
+            Other processes started by the agent (e.g. extensions) and processes not started by the agent (e.g. services installed by extensions) are reported
+            as unexpected, since they should belong to their own cgroup.
             The function raises an UnexpectedProcessesInCGroupException if the check fails.
             """
             if not self.enabled():
@@ -259,13 +260,17 @@ class CGroupConfigurator(object):
             extension_handler = os.getpid()
             agent_commands = set()
             agent_commands.update(shellutil.get_running_commands())
+            systemd_run_commands = set()
+            systemd_run_commands.update(self._cgroups_api.get_systemd_run_commands())
             agent_cgroup = CGroupsApi.get_processes_in_cgroup(self._agent_cpu_cgroup_path)
-            # get the running commands again in case a new command was started while we were fetching the processes in the cgroup;
+            # get the running commands again in case new commands were started while we were fetching the processes in the cgroup;
             agent_commands.update(shellutil.get_running_commands())
+            systemd_run_commands.update(self._cgroups_api.get_systemd_run_commands())
 
             unexpected = []
             for process in agent_cgroup:
-                if process in (daemon, extension_handler):
+                # Note that the agent uses systemd-run to start extensions; systemd-run belongs to the agent cgroup, though the extensions don't
+                if process in (daemon, extension_handler) or process in systemd_run_commands:
                     continue
                 # check if the process is a command started by the agent or a descendant of one of those commands
                 current = process

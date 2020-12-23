@@ -19,11 +19,12 @@ from __future__ import print_function
 
 import os
 import random
-import signal
+import re
 import subprocess
+import tempfile
+import time
 import threading
 
-from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.cgroup import CGroup
 from azurelinuxagent.common.cgroupconfigurator import CGroupConfigurator, UnexpectedProcessesInCGroupException
 from azurelinuxagent.common.cgroupstelemetry import CGroupsTelemetry
@@ -295,91 +296,127 @@ cgroup on /sys/fs/cgroup/blkio type cgroup (rw,nosuid,nodev,noexec,relatime,blki
                 self.assertIn("A TEST EXCEPTION", str(context_manager.exception))
 
     def test_check_processes_in_agent_cgroup_should_raise_when_there_are_unexpected_processes_in_the_agent_cgroup(self):
-        CGroupConfiguratorSystemdTestCase._get_new_cgroup_configurator_instance()
+        configurator = CGroupConfiguratorSystemdTestCase._get_new_cgroup_configurator_instance()
 
-        # the test script recursively creates a number of descendant processes as given by its argument, then it blocks for a long time
-        pids_file = os.path.join(self.tmp_dir, "pids.txt")
-        test_script = os.path.join(self.tmp_dir, "create_descendants.py")
+        # The test script recursively creates a given number of descendant processes, then it blocks until the
+        # 'stop_file' exists. It produces an output file containing the PID of each descendant process.
+        test_script = os.path.join(self.tmp_dir, "create_processes.sh")
+        stop_file = os.path.join(self.tmp_dir, "create_processes.stop")
         AgentTestCase.create_script(test_script, """
-#!/usr/bin/env python3
-import os
-import subprocess
-import sys
-import time
+#!/usr/bin/env bash
+set -euo pipefail
 
-count = int(sys.argv[1])
-output = sys.argv[2]
+if [[ $# != 2 ]]; then
+    echo "Usage: $0 <output_file> <count>"
+    exit 1
+fi
 
-with open(output, 'a') as output_file:
-    output_file.write('{0}\\n'.format(os.getpid()))
+echo $$ >> $1
 
-if count > 1:
-    subprocess.Popen([sys.argv[0], str(count - 1), output]).wait()
-else:
-    time.sleep(120)
-""")
-        thread = None
-        child_commands = []
-        extension_process = None
+if [[ $2 > 1 ]]; then
+    $0 $1 $(($2 - 1))
+else
+    timeout 30s /usr/bin/env bash -c "while ! [[ -f {0} ]]; do sleep 0.25s; done"
+fi
+
+exit 0
+""".format(stop_file))
+
+        number_of_descendants = 3
+
+        def wait_for_processes(processes_file):
+            def _all_present():
+                if os.path.exists(processes_file):
+                    with open(processes_file, "r") as file_stream:
+                        _all_present.processes = [int(process) for process in file_stream.read().split()]
+                return len(_all_present.processes) >= number_of_descendants
+            _all_present.processes = []
+
+            if not wait_for(_all_present):
+                raise Exception("Timeout waiting for processes. Expected {0}; got: {1}".format(
+                    number_of_descendants, format_processes(_all_present.processes)))
+
+            return _all_present.processes
+
+        threads = []
 
         try:
-            number_of_descendants = 3
+            #
+            # Start the processes that will be used by the test. We use two sets of processes: the first set simulates a command executed by the agent
+            # (e.g. iptables) and its child processes, if any. The second set of processes simulates an extension.
+            #
+            agent_command_output = os.path.join(self.tmp_dir, "agent_command.pids")
+            agent_command = threading.Thread(target=lambda: shellutil.run_command([test_script, agent_command_output, str(number_of_descendants)]))
+            agent_command.start()
+            threads.append(agent_command)
+            agent_command_processes = wait_for_processes(agent_command_output)
 
-            # start the script on a separate thread
-            def run_script():
-                try:
-                    shellutil.run_command([test_script, ustr(number_of_descendants), pids_file])
-                except shellutil.CommandError as command_error:
-                    if command_error.returncode != -9:  # test cleanup terminates the commands, so this is expected
-                        raise
+            extension_output = os.path.join(self.tmp_dir, "extension.pids")
 
-            thread = threading.Thread(target=run_script)
-            thread.start()
+            def start_extension():
+                original_sleep = time.sleep
+                original_popen = subprocess.Popen
 
-            # wait for the child processes
-            def processes_started():
-                if not os.path.exists(pids_file):
-                    return False
-                with open(pids_file, "r") as pids:
-                    processes_started.pids = pids.read().split()
-                    return len(processes_started.pids) == number_of_descendants
-            processes_started.pids = []
+                # Extensions are stated using systemd-run; mock Popen to remove the call to systemd-run; the test script creates a couple of
+                # child processes, which would simulate the extension's processes.
+                def mock_popen(command, *args, **kwargs):
+                    match = re.match(r"^systemd-run --unit=[^\s]+ --scope (.+)", command)
+                    is_systemd_run = match is not None
+                    if is_systemd_run:
+                        command = match.group(1)
+                    process = original_popen(command, *args, **kwargs)
+                    if is_systemd_run:
+                        start_extension.systemd_run_pid = process.pid
+                    return process
 
-            if not wait_for(processes_started):
-                raise Exception("The child processes were not started within the allowed timeout. Expected {0} processes; got: {1}".format(
-                    number_of_descendants, format_processes(processes_started.pids)))
-            child_commands = [int(pid) for pid in processes_started.pids]
+                with patch('time.sleep', side_effect=lambda _: original_sleep(0.1)):  # start_extension_command has a small delay; skip it
+                    with patch("azurelinuxagent.common.cgroupapi.subprocess.Popen", side_effect=mock_popen):
+                        with tempfile.TemporaryFile(dir=self.tmp_dir, mode="w+b") as stdout:
+                            with tempfile.TemporaryFile(dir=self.tmp_dir, mode="w+b") as stderr:
+                                configurator.start_extension_command(
+                                    extension_name="TestExtension",
+                                    command="{0} {1} {2}".format(test_script, extension_output, number_of_descendants),
+                                    timeout=30,
+                                    shell=True,
+                                    cwd=self.tmp_dir,
+                                    env={},
+                                    stdout=stdout,
+                                    stderr=stderr)
+            start_extension.systemd_run_pid = None
 
-            # wait for shellutil to become aware of the process
-            def commands_running():
-                commands_running.commands = shellutil.get_running_commands()
-                return len(commands_running.commands) > 0
-            commands_running.commands = []
-
-            if not wait_for(commands_running):
-                raise Exception("shellutil did not start tracking the child process within the allowed timeout")
-
-            if len(commands_running.commands) != 1 or commands_running.commands[0] != child_commands[0]:
-                raise Exception("shellutil is not tracking the expected process. Expected: {0} Got: {1}".format(
-                    format_processes(child_commands[0]), format_processes(commands_running.commands)))
+            extension = threading.Thread(target=start_extension)
+            extension.start()
+            threads.append(extension)
+            extension_processes = wait_for_processes(extension_output)
 
             #
-            # That was a long test setup. Now let's verify that check_processes_in_agent_cgroup raises when there
-            # are unexpected processes in the agent's cgroup.
+            # check_processes_in_agent_cgroup uses shellutil and the cgroups api to get the commands that are currently running;
+            # wait for all the processes to show up
+            #
+            # len-as-condition: Do not use `len(SEQUENCE)` to determine if a sequence is empty - Disabled: explicit check improves readability
+            # protected-access: Access to a protected member _cgroups_api of a client class - Disabled: OK to access protected member in this unit test
+            if not wait_for(lambda: len(shellutil.get_running_commands()) > 0 and len(configurator._cgroups_api.get_systemd_run_commands()) > 0):  # pylint:disable=len-as-condition,protected-access
+                raise Exception("Timeout while attempting to track the child commands")
+
+            #
+            # Verify that check_processes_in_agent_cgroup raises when there are unexpected processes in the agent's cgroup.
             #
             # For the agent's processes, we use the current process and its parent (in the actual agent these would be the daemon and the extension
             # handler), and the commands started by the agent.
             #
-            # For other processes, we use process 1, an extension (extensions are started using Popen instead of run_command so we just start an
-            # arbitrary process using Popen), and a process that already completed (for which we use a random number).
-            agent_processes = [os.getppid(), os.getpid()] + child_commands
-
-            extension_process = subprocess.Popen("sleep 120", shell=True)
-            random.seed()
-            completed = random.randint(1000, 10000)
-            while os.path.exists("/proc/{0}".format(completed)):  # ensure we do not use an existing process
+            # For other processes, we use process 1, a process that already completed, and an extension. Note that extensions are started using
+            # systemd-run and the process for that commands belongs to the agent's cgroup but the processes for the extension should be in a
+            # different cgroup
+            #
+            def get_completed_process():
+                random.seed()
                 completed = random.randint(1000, 10000)
-            other_processes = [1, extension_process.pid, completed]
+                while os.path.exists("/proc/{0}".format(completed)):  # ensure we do not use an existing process
+                    completed = random.randint(1000, 10000)
+                return completed
+
+            agent_processes = [os.getppid(), os.getpid()] + agent_command_processes + [start_extension.systemd_run_pid]
+            other_processes = [1, get_completed_process()] + extension_processes
 
             with patch("azurelinuxagent.common.cgroupconfigurator.CGroupsApi.get_processes_in_cgroup", return_value=agent_processes + other_processes):
                 with self.assertRaises(UnexpectedProcessesInCGroupException) as context_manager:
@@ -409,14 +446,9 @@ else:
                 self.fail("The check of the agent's cgroup should not have reported errors. Reported processes: {0}".format(error.unexpected))
 
         finally:
-            # terminate the child processes, since they are blocked
-            for pid in child_commands:
-                os.kill(pid, signal.SIGKILL)
-            # wait for the thread that was running the test script
-            if thread is not None:
+            # create the file that stops the test process and wait for them to complete
+            open(stop_file, "w").close()
+            for thread in threads:
                 thread.join(timeout=5)
-            # terminate the extension process
-            if extension_process is not None:
-                extension_process.terminate()
 
 
