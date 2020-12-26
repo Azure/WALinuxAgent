@@ -206,7 +206,6 @@ def __run_command(command_action, command, log_error, encode_output):
 
 
 # W0622: Redefining built-in 'input'  -- disabled: the parameter name mimics subprocess.communicate()
-# R0913: Too many arguments (8/5) -- disabled: the parameter list mimics subprocess.Popen()/communicate()
 def run_command(command, input=None, stdin=None, stdout=subprocess.PIPE, stderr=subprocess.PIPE, log_error=False, encode_input=True, encode_output=True, track_process=True):  # pylint:disable=W0622
     """
         Executes the given command and returns its stdout.
@@ -256,7 +255,6 @@ def run_command(command, input=None, stdin=None, stdout=subprocess.PIPE, stderr=
     return __run_command(command_action=command_action, command=command, log_error=log_error, encode_output=encode_output)
 
 
-# R0913: Too many arguments (7/5) -- disabled: the parameter list mimics subprocess.Popen()
 def run_pipe(pipe, stdin=None, stdout=subprocess.PIPE, stderr=subprocess.PIPE, log_error=False, encode_output=True): 
     """
         Executes the given commands as a pipe and returns its stdout as a string.
@@ -345,7 +343,6 @@ def quote(word_list):
 # The run_command/run_pipe/run/run_get_output functions maintain a list of the commands that they are currently executing.
 #
 #
-# C0103: Constant name "foo" doesn't conform to UPPER_CASE naming style (invalid-name) -- Disabled: these are not constants
 _running_commands = []
 _running_commands_lock = threading.RLock()
 

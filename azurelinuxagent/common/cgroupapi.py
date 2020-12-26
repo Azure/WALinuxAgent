@@ -311,8 +311,6 @@ Description=Slice for Azure VM Extensions"""
         unit_not_found = "Unit {0} not found.".format(scope_name)
         return unit_not_found in stderr or scope_name not in stderr
 
-    # R0913: Too many arguments (7/5) -- disabled: the parameter list mimics subprocess.Popen()
-    # R0912: Too many branches (14/12) -- disabled: branches are sequential
     def start_extension_command(self, extension_name, command, timeout, shell, cwd, env, stdout, stderr, error_code=ExtensionErrorCodes.PluginUnknownFailure): 
         scope = "{0}_{1}".format(self._get_extension_cgroup_name(extension_name), uuid.uuid4())
 

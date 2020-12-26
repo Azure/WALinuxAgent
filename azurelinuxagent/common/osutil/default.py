@@ -40,7 +40,6 @@ import azurelinuxagent.common.logger as logger
 import azurelinuxagent.common.utils.fileutil as fileutil
 import azurelinuxagent.common.utils.shellutil as shellutil
 import azurelinuxagent.common.utils.textutil as textutil
-# pylint: enable=R0801
 
 from azurelinuxagent.common.exception import OSUtilError
 from azurelinuxagent.common.future import ustr, array_to_bytes

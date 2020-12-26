@@ -44,9 +44,6 @@ elif sys.version_info[0] == 2:
     # We want to suppress the following:
     #   -   undefined-variable<E0602>: 
     #           These builtins are not defined in python3
-    #   -   invalid-name<C0103>: 
-    #           The defined variables are constants, but don't use UPPER_SNAKE_CASE 
-    #           as we're redefining some builtins that also do not use that format.
     #   -   redefined-builtin<W0622>:
     #           This is intentional, so that code that wants to use builtins we're
     #           assigning new names to doesn't need to check python versions before
@@ -59,7 +56,6 @@ elif sys.version_info[0] == 2:
     range = xrange
     int = long
 
-    # pylint: enable=undefined-variable,invalid-name,redefined-builtin
 
     if sys.version_info[1] >= 7:
         from collections import OrderedDict  # For Py 2.7+

@@ -130,7 +130,6 @@ class RunGetOutputTestCase(AgentTestCase):
         self.assertEqual(mock_logger.warn.call_count, 0, "Did not expect any warnings. Got: {0}".format(mock_logger.warn.call_args_list))
 
 
-# R0904: Too many public methods (24/20)  -- disabled: each method is a unit test
 class RunCommandTestCase(AgentTestCase):
     """
     Tests for shellutil.run_command/run_pipe
@@ -360,7 +359,6 @@ exit({0})
 
         self.assertTrue(isinstance(output, bytes), "The return value should be a bytes object. Got: '{0}'".format(type(output)))
 
-    # R0912: Too many branches (13/12) (too-many-branches) -- Disabled: Branches are sequential
     def test_run_command_run_pipe_run_get_output_should_keep_track_of_the_running_commands(self):
         # The children processes run this script, which creates a file with the PIDs of the script and its parent and then sleeps for a long time
         child_script = os.path.join(self.tmp_dir, "write_pids.py")

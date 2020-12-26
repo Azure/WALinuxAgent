@@ -48,8 +48,6 @@ class CGroupConfigurator(object):
     NOTE: with the exception of start_extension_command and check_processes_in_agent_cgroup, none of the methods in this class
     raise exceptions (cgroup operations should not block extensions)
     """
-    # too-many-instance-attributes<R0902> Disabled: class complexity is OK
-    # invalid-name<C0103> Disabled: class is private, so name starts with __
     class __Impl(object):
         def __init__(self):
             self._initialized = False
@@ -61,7 +59,6 @@ class CGroupConfigurator(object):
             self._get_processes_in_agent_cgroup_last_error = None
             self._get_processes_in_agent_cgroup_error_count = 0
 
-        # too-many-branches<R0912> Disabled: branches are sequential, not nested
         def initialize(self):
             try:
                 if self._initialized:
@@ -314,7 +311,6 @@ class CGroupConfigurator(object):
                 pass
             return 0
 
-        # too-many-arguments<R0913> Disabled: argument list mimics Popen's
         def start_extension_command(self, extension_name, command, timeout, shell, cwd, env, stdout, stderr, error_code=ExtensionErrorCodes.PluginUnknownFailure):
             """
             Starts a command (install/enable/etc) for an extension and adds the command's PID to the extension's cgroup

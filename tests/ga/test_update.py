@@ -1705,7 +1705,6 @@ class MonitorThreadTest(AgentTestCase):
         self._test_run(invocations=invocations)
         return thread
 
-    # too-many-arguments<R0913> Disabled: The number of arguments maps to the number of threads
     def test_start_threads(self, mock_env, mock_monitor, mock_collect_logs, mock_telemetry_send_events, mock_telemetry_collector):
         self.assertTrue(self.update_handler.running)
 

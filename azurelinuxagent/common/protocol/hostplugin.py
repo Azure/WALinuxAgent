@@ -56,7 +56,6 @@ _HEADER_ARTIFACT_MANIFEST_LOCATION = "x-ms-artifact-manifest-location"
 MAXIMUM_PAGEBLOB_PAGE_SIZE = 4 * 1024 * 1024  # Max page size: 4MB
 
 
-# too-many-instance-attributes<R0902> Disabled: all attributes are necessary
 class HostPluginProtocol(object):
     is_default_channel = False
 

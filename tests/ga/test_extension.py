@@ -3063,7 +3063,6 @@ class TestMultiConfigExtensions(ExtensionTestCase):
         self.mock_sleep.stop()
         ExtensionTestCase.tearDown(self)
 
-    # too-few-public-methods<R0903> Disabled: This is just a test class used for verification purposes.
     class _TestExtHandlerObject:
         def __init__(self, name, version, state="enabled"):
             self.name = name
@@ -3072,7 +3071,6 @@ class TestMultiConfigExtensions(ExtensionTestCase):
             self.is_invalid_setting = False
             self.extensions = dict()
 
-    # too-few-public-methods<R0903> Disabled: This is just a test class used for verification purposes.
     class _TestExtensionObject:
         def __init__(self, name, seq_no, dependency_level="0", state="enabled"):
             self.name = name
