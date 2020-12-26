@@ -3066,7 +3066,7 @@ class TestMultiConfigExtensions(ExtensionTestCase):
         ExtensionTestCase.tearDown(self)
 
     # too-few-public-methods<R0903> Disabled: This is just a test class used for verification purposes.
-    class _TestExtHandlerObject:  # pylint: disable=R0903
+    class _TestExtHandlerObject:
         def __init__(self, name, version, state="enabled"):
             self.name = name
             self.version = version
@@ -3075,7 +3075,7 @@ class TestMultiConfigExtensions(ExtensionTestCase):
             self.extensions = dict()
 
     # too-few-public-methods<R0903> Disabled: This is just a test class used for verification purposes.
-    class _TestExtensionObject:  # pylint: disable=R0903
+    class _TestExtensionObject:
         def __init__(self, name, seq_no, dependency_level="0", state="enabled"):
             self.name = name
             self.seq_no = seq_no

@@ -49,7 +49,7 @@ def get_daemon_handler():
     return DaemonHandler()
 
 
-class DaemonHandler(object):  # pylint: disable=R0902
+class DaemonHandler(object):
     """
     Main thread of daemon. It will invoke other threads to do actual work
     """
@@ -81,7 +81,7 @@ class DaemonHandler(object):  # pylint: disable=R0902
         while self.running:
             try:
                 self.daemon(child_args)
-            except Exception as e:  # pylint: disable=W0612,C0103
+            except Exception as e:  # pylint: disable=W0612
                 err_msg = traceback.format_exc()
                 add_event(name=AGENT_NAME, is_success=False, message=ustr(err_msg),
                           op=WALAEventOperation.UnhandledError)
@@ -160,13 +160,13 @@ class DaemonHandler(object):  # pylint: disable=R0902
                 #   incarnation number. A forced update ensures the most
                 #   current values.
                 protocol = self.protocol_util.get_protocol()
-                if type(protocol) is not WireProtocol:  # pylint: disable=C0123
+                if type(protocol) is not WireProtocol:
                     raise Exception("Attempt to setup RDMA without Wireserver")
 
                 protocol.client.update_goal_state(forced=True)
 
                 setup_rdma_device(nd_version, protocol.client.get_shared_conf())
-            except Exception as e:  # pylint: disable=C0103
+            except Exception as e:
                 logger.error("Error setting up rdma device: %s" % e)
         else:
             logger.info("RDMA capabilities are not enabled, skipping")

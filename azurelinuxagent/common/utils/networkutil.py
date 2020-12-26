@@ -22,7 +22,7 @@ class RouteEntry(object):
     Represents a single route. The destination, gateway, and mask members are hex representations of the IPv4 address in
     network byte order.
     """
-    def __init__(self, interface, destination, gateway, mask, flags, metric):  # pylint: disable=R0913
+    def __init__(self, interface, destination, gateway, mask, flags, metric):
         self.interface = interface
         self.destination = destination
         self.gateway = gateway
@@ -49,12 +49,12 @@ class RouteEntry(object):
         return self._net_hex_to_dotted_quad(self.mask)
 
     def to_json(self):
-        f = '{{"Iface": "{0}", "Destination": "{1}", "Gateway": "{2}", "Mask": "{3}", "Flags": "{4:#06x}", "Metric": "{5}"}}'  # pylint: disable=C0103
+        f = '{{"Iface": "{0}", "Destination": "{1}", "Gateway": "{2}", "Mask": "{3}", "Flags": "{4:#06x}", "Metric": "{5}"}}'
         return f.format(self.interface, self.destination_quad(), self.gateway_quad(), self.mask_quad(),
                        self.flags, self.metric) 
 
     def __str__(self):
-        f = "Iface: {0}\tDestination: {1}\tGateway: {2}\tMask: {3}\tFlags: {4:#06x}\tMetric: {5}"  # pylint: disable=C0103
+        f = "Iface: {0}\tDestination: {1}\tGateway: {2}\tMask: {3}\tFlags: {4:#06x}\tMetric: {5}"
         return f.format(self.interface, self.destination_quad(), self.gateway_quad(), self.mask_quad(),
                         self.flags, self.metric)
 

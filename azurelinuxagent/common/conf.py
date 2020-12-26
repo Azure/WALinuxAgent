@@ -55,7 +55,7 @@ class ConfigurationProvider(object):
 
     def get_switch(self, key, default_val):
         val = self.values.get(key)
-        if val is not None and val.lower() == 'y':  # pylint: disable=R1705
+        if val is not None and val.lower() == 'y':
             return True
         elif val is not None and val.lower() == 'n':
             return False
@@ -77,7 +77,7 @@ def load_conf_from_file(conf_file_path, conf=__conf__):
     """
     Load conf file from: conf_file_path
     """
-    if os.path.isfile(conf_file_path) == False:  # pylint: disable=C0121
+    if os.path.isfile(conf_file_path) == False:
         raise AgentConfigError(("Missing configuration in {0}"
                                 "").format(conf_file_path))
     try:

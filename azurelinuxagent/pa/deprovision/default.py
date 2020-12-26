@@ -33,7 +33,7 @@ from azurelinuxagent.ga.exthandlers import HANDLER_COMPLETE_NAME_PATTERN
 
 
 def read_input(message):
-    if sys.version_info[0] >= 3:  # pylint: disable=R1705
+    if sys.version_info[0] >= 3:
         return input(message)
     else:
         # This is not defined in python3, and the linter will thus 
@@ -163,7 +163,7 @@ class DeprovisionHandler(object):
         files = [f for f in \
                     [os.path.join(lib_dir, kf) for kf in known_files] \
                         if os.path.isfile(f)]
-        for p in known_files_glob:  # pylint: disable=C0103
+        for p in known_files_glob:
             files += glob.glob(os.path.join(lib_dir, p))
 
         if len(files) > 0:  # pylint: disable=len-as-condition
@@ -242,13 +242,13 @@ class DeprovisionHandler(object):
             return True
 
         confirm = read_input("Do you want to proceed (y/n)")
-        return True if confirm.lower().startswith('y') else False  # pylint: disable=R1719
+        return True if confirm.lower().startswith('y') else False
     
     def do_warnings(self, warnings):
         for warning in warnings:
             print(warning)
 
-    def handle_interrupt_signal(self, signum, frame):  # pylint: disable=W0613,R1711
+    def handle_interrupt_signal(self, signum, frame):  # pylint: disable=W0613
         if not self.actions_running:
             print("Deprovision is interrupted.")
             sys.exit(0)

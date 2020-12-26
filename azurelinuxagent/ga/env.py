@@ -48,7 +48,7 @@ def get_env_handler():
     return EnvHandler()
 
 
-class EnvHandler(ThreadHandlerInterface):  # pylint: disable=R0902
+class EnvHandler(ThreadHandlerInterface):
     """
     Monitor changes to dhcp and hostname.
     If dhcp client process re-start has occurred, reset routes, dhcp with fabric.
@@ -118,13 +118,13 @@ class EnvHandler(ThreadHandlerInterface):  # pylint: disable=R0902
             self._protocol = self.protocol_util.get_protocol()
             while not self.stopped:
                 try:
-                    for op in self._periodic_operations:  # pylint: disable=C0103
+                    for op in self._periodic_operations:
                         op.run()
-                except Exception as e:  # pylint: disable=C0103
+                except Exception as e:
                     logger.error("An error occurred in the environment thread main loop; will skip the current iteration.\n{0}", ustr(e))
                 finally:
                     PeriodicOperation.sleep_until_next_operation(self._periodic_operations)
-        except Exception as e:  # pylint: disable=C0103
+        except Exception as e:
             logger.error("An error occurred in the environment thread; will exit the thread.\n{0}", ustr(e))
 
     def _remove_persistent_net_rules_period(self):

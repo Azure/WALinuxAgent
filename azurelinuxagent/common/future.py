@@ -21,9 +21,9 @@ if sys.version_info[0] == 3:
     from urllib.parse import urlparse  # pylint: disable=W0611,import-error,no-name-in-module
 
     """Rename Python3 str to ustr"""  # pylint: disable=W0105
-    ustr = str  # pylint: disable=C0103
+    ustr = str
 
-    bytebuffer = memoryview  # pylint: disable=C0103
+    bytebuffer = memoryview
 
     # We aren't using these imports in this file, but we want them to be available
     # to import from this module in others.
@@ -62,7 +62,7 @@ elif sys.version_info[0] == 2:
     # pylint: enable=undefined-variable,invalid-name,redefined-builtin
 
     if sys.version_info[1] >= 7:
-        from collections import OrderedDict  # For Py 2.7+  # pylint: disable=C0412
+        from collections import OrderedDict  # For Py 2.7+
     else:
         from ordereddict import OrderedDict  # Works only on 2.6  # pylint: disable=E0401
 else:
@@ -120,7 +120,7 @@ def get_openwrt_platform():
     openwrt_version = re.compile(r"^DISTRIB_RELEASE=['\"](\d+\.\d+.\d+)['\"]")
     openwrt_product = re.compile(r"^DISTRIB_ID=['\"]([\w-]+)['\"]")
 
-    with open('/etc/openwrt_release', 'r') as fh:  # pylint: disable=C0103
+    with open('/etc/openwrt_release', 'r') as fh:
         content = fh.readlines()
         for line in content:
             version_matches = openwrt_version.match(line)

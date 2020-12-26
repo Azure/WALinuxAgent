@@ -21,7 +21,7 @@ from distutils import version  # pylint: disable=no-name-in-module
 import re
 
 
-class FlexibleVersion(version.Version):  # pylint: disable=R0902
+class FlexibleVersion(version.Version):
     """
     A more flexible implementation of distutils.version.StrictVersion
 
@@ -40,7 +40,7 @@ class FlexibleVersion(version.Version):  # pylint: disable=R0902
         http://stackoverflow.com/questions/12255554/sort-versions-in-python
     """
 
-    def __init__(self, vstring=None, sep='.', prerel_tags=('alpha', 'beta', 'rc')):  # pylint: disable=R1711
+    def __init__(self, vstring=None, sep='.', prerel_tags=('alpha', 'beta', 'rc')):
         version.Version.__init__(self) 
 
         if sep is None:
@@ -81,8 +81,8 @@ class FlexibleVersion(version.Version):  # pylint: disable=R0902
     def patch(self):
         return self.version[2] if len(self.version) > 2 else 0
 
-    def _parse(self, vstring):  # pylint: disable=R1711
-        m = self.version_re.match(vstring)  # pylint: disable=C0103
+    def _parse(self, vstring):
+        m = self.version_re.match(vstring)
         if not m:
             raise ValueError("Invalid version number '{0}'".format(vstring))
 
@@ -94,7 +94,7 @@ class FlexibleVersion(version.Version):  # pylint: disable=R0902
         tag_num = m.group(self._nn_prerel_num)
 
         if tag is not None and tag_num is not None:
-            self.prerelease = (tag, int(tag_num) if len(tag_num) else None)  # pylint: disable=C1801
+            self.prerelease = (tag, int(tag_num) if len(tag_num) else None)
 
         self.version = tuple(map(int, self.sep_re.split(m.group(self._nn_version))))
         return
@@ -180,16 +180,16 @@ class FlexibleVersion(version.Version):  # pylint: disable=R0902
         return True
 
     def _assemble(self, version, sep, prerel_sep, prerelease):  # pylint: disable=W0621
-        s = sep.join(map(str, version))  # pylint: disable=C0103
+        s = sep.join(map(str, version))
         if prerelease is not None:
             if prerel_sep is not None:
-                s += prerel_sep  # pylint: disable=C0103
-            s += prerelease[0]  # pylint: disable=C0103
+                s += prerel_sep
+            s += prerelease[0]
             if prerelease[1] is not None:
-                s += str(prerelease[1])  # pylint: disable=C0103
+                s += str(prerelease[1])
         return s
 
-    def _compile_pattern(self):  # pylint: disable=R1711
+    def _compile_pattern(self):
         sep, self.sep_re = self._compile_separator(self.sep)
 
         if self.prerel_tags:

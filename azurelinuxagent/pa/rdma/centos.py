@@ -38,7 +38,7 @@ class CentOSRDMAHandler(RDMAHandler):
     version_minor = None
 
     def __init__(self, distro_version):
-        v = distro_version.split('.')  # pylint: disable=C0103
+        v = distro_version.split('.')
         if len(v) < 2:
             raise Exception('Unexpected centos version: %s' % distro_version)
         self.version_major, self.version_minor = v[0], v[1]
@@ -68,7 +68,7 @@ class CentOSRDMAHandler(RDMAHandler):
         if installed_pkg:
             logger.info(
                 'RDMA: driver package present: {0}'.format(installed_pkg))
-            if self.is_rdma_package_up_to_date(installed_pkg, fw_version):  # pylint: disable=R1705
+            if self.is_rdma_package_up_to_date(installed_pkg, fw_version):
                 logger.info('RDMA: driver package is up-to-date')
                 return
             else:
@@ -87,7 +87,7 @@ class CentOSRDMAHandler(RDMAHandler):
 
     @staticmethod
     def get_int_rdma_version(version):
-        s = version.split('.')  # pylint: disable=C0103
+        s = version.split('.')
         if len(s) == 0:  # pylint: disable=len-as-condition
             raise Exception('Unexpected RDMA firmware version: "%s"' % version)
         return s[0]
@@ -180,7 +180,7 @@ class CentOSRDMAHandler(RDMAHandler):
 
     @staticmethod
     def get_file_by_pattern(file_list, pattern):
-        for l in file_list:  # pylint: disable=C0103
+        for l in file_list:
             if re.match(pattern, l):
                 return l
         return None

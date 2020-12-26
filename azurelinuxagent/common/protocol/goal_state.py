@@ -45,9 +45,9 @@ TRANSPORT_PRV_FILE_NAME = "TransportPrivate.pem"
 
 
 # too-many-instance-attributes<R0902> Disabled: The goal state consists of a good number of properties
-class GoalState(object):  # pylint: disable=R0902
+class GoalState(object):
     # too-many-branches<R0912> Disable: Branches are sequential, not nested
-    def __init__(self, wire_client, full_goal_state=False, base_incarnation=None):  # pylint: disable=R0912
+    def __init__(self, wire_client, full_goal_state=False, base_incarnation=None):
         """
         Fetches the goal state using the given wire client.
 
@@ -176,7 +176,7 @@ class SharedConfig(object):
 
 
 class Certificates(object):
-    def __init__(self, xml_text):  # pylint: disable=R0912
+    def __init__(self, xml_text):
         self.cert_list = CertList()
 
         # Save the certificates
@@ -190,7 +190,7 @@ class Certificates(object):
             return
 
         # if the certificates format is not Pkcs7BlobWithPfxContents do not parse it
-        certificateFormat = findtext(xml_doc, "Format")  # pylint: disable=C0103
+        certificateFormat = findtext(xml_doc, "Format")
         if certificateFormat and certificateFormat != "Pkcs7BlobWithPfxContents":
             logger.warn("The Format is not Pkcs7BlobWithPfxContents. Format is " + certificateFormat)
             return

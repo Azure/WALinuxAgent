@@ -52,12 +52,12 @@ class Logger(object):
     def set_prefix(self, prefix):
         self.prefix = prefix
 
-    def _is_period_elapsed(self, delta, h):  # pylint: disable=C0103
+    def _is_period_elapsed(self, delta, h):
         return h not in self.logger.periodic_messages or \
             (self.logger.periodic_messages[h] + delta) <= datetime.now()
 
     def _periodic(self, delta, log_level_op, msg_format, *args):
-        h = hash(msg_format)  # pylint: disable=C0103
+        h = hash(msg_format)
         if self._is_period_elapsed(delta, h):
             log_level_op(msg_format, *args)
             self.logger.periodic_messages[h] = datetime.now()
@@ -125,7 +125,7 @@ class Logger(object):
                     log_appender.appender_lock = False
 
         # if msg_format is not unicode convert it to unicode
-        if type(msg_format) is not ustr:  # pylint: disable=C0123
+        if type(msg_format) is not ustr:
             msg_format = ustr(msg_format, errors="backslashreplace")
         if len(args) > 0:  # pylint: disable=len-as-condition
             msg = msg_format.format(*args)
@@ -337,7 +337,7 @@ def log(level, msg_format, *args):
 
 
 def _create_logger_appender(appender_type, level=LogLevel.INFO, path=None):
-    if appender_type == AppenderType.CONSOLE:  # pylint: disable=R1705
+    if appender_type == AppenderType.CONSOLE:
         return ConsoleAppender(level, path)
     elif appender_type == AppenderType.FILE:
         return FileAppender(level, path)

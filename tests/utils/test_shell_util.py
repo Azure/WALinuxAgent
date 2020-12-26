@@ -131,7 +131,7 @@ class RunGetOutputTestCase(AgentTestCase):
 
 
 # R0904: Too many public methods (24/20)  -- disabled: each method is a unit test
-class RunCommandTestCase(AgentTestCase):  # pylint: disable=R0904
+class RunCommandTestCase(AgentTestCase):
     """
     Tests for shellutil.run_command/run_pipe
     """
@@ -361,7 +361,7 @@ exit({0})
         self.assertTrue(isinstance(output, bytes), "The return value should be a bytes object. Got: '{0}'".format(type(output)))
 
     # R0912: Too many branches (13/12) (too-many-branches) -- Disabled: Branches are sequential
-    def test_run_command_run_pipe_run_get_output_should_keep_track_of_the_running_commands(self):  # pylint:disable=R0912
+    def test_run_command_run_pipe_run_get_output_should_keep_track_of_the_running_commands(self):
         # The children processes run this script, which creates a file with the PIDs of the script and its parent and then sleeps for a long time
         child_script = os.path.join(self.tmp_dir, "write_pids.py")
         AgentTestCase.create_script(child_script, """

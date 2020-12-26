@@ -169,10 +169,10 @@ class ImageInfoMatcher(object):
         return _is_match_walk(self.doc, [ publisher, offer, sku, version ])
 
 
-class ComputeInfo(DataContract):  # pylint: disable=R0902
+class ComputeInfo(DataContract):
     __matcher = ImageInfoMatcher(ENDORSED_IMAGE_INFO_MATCHER_JSON)
 
-    def __init__(self,  # pylint: disable=R0913
+    def __init__(self,
                  location=None,
                  name=None,
                  offer=None,
@@ -193,19 +193,19 @@ class ComputeInfo(DataContract):  # pylint: disable=R0902
         self.location = location
         self.name = name
         self.offer = offer
-        self.osType = osType  # pylint: disable=C0103
-        self.placementGroupId = placementGroupId  # pylint: disable=C0103
-        self.platformFaultDomain = platformFaultDomain  # pylint: disable=C0103
-        self.platformUpdateDomain = placementUpdateDomain  # pylint: disable=C0103
+        self.osType = osType
+        self.placementGroupId = placementGroupId
+        self.platformFaultDomain = platformFaultDomain
+        self.platformUpdateDomain = placementUpdateDomain
         self.publisher = publisher
-        self.resourceGroupName = resourceGroupName  # pylint: disable=C0103
+        self.resourceGroupName = resourceGroupName
         self.sku = sku
-        self.subscriptionId = subscriptionId  # pylint: disable=C0103
+        self.subscriptionId = subscriptionId
         self.tags = tags
         self.version = version
-        self.vmId = vmId  # pylint: disable=C0103
-        self.vmSize = vmSize  # pylint: disable=C0103
-        self.vmScaleSetName = vmScaleSetName  # pylint: disable=C0103
+        self.vmId = vmId
+        self.vmSize = vmSize
+        self.vmScaleSetName = vmScaleSetName
         self.zone = zone
 
     @property
@@ -227,12 +227,12 @@ class ComputeInfo(DataContract):  # pylint: disable=R0902
             if self.publisher == "":
                 return IMDS_IMAGE_ORIGIN_CUSTOM
 
-            if ComputeInfo.__matcher.is_match(self.publisher, self.offer, self.sku, self.version):  # pylint: disable=R1705
+            if ComputeInfo.__matcher.is_match(self.publisher, self.offer, self.sku, self.version):
                 return IMDS_IMAGE_ORIGIN_ENDORSED
             else:
                 return IMDS_IMAGE_ORIGIN_PLATFORM
 
-        except Exception as e:  # pylint: disable=C0103
+        except Exception as e:
             logger.periodic_warn(logger.EVERY_FIFTEEN_MINUTES,
                                  "[PERIODIC] Could not determine the image origin from IMDS: {0}".format(ustr(e)))
             return IMDS_IMAGE_ORIGIN_UNKNOWN
@@ -260,7 +260,7 @@ class ImdsClient(object):
         url = self._get_metadata_url(endpoint, resource_path)
         return restutil.http_get(url, headers=headers, use_proxy=False)
 
-    def _get_metadata_from_endpoint(self, endpoint, resource_path, headers):  # pylint: disable=R0911
+    def _get_metadata_from_endpoint(self, endpoint, resource_path, headers):
         """
         Get metadata from one of the IMDS endpoints.
 
@@ -276,7 +276,7 @@ class ImdsClient(object):
             resp = self._http_get(endpoint=endpoint, resource_path=resource_path, headers=headers)
         except ResourceGoneError:
             return IMDS_INTERNAL_SERVER_ERROR, "IMDS error in /metadata/{0}: HTTP Failed with Status Code 410: Gone".format(resource_path)
-        except HttpError as e:  # pylint: disable=C0103
+        except HttpError as e:
             msg = str(e)
             if self._regex_throttled.match(msg):
                 return IMDS_RESPONSE_ERROR, "IMDS error in /metadata/{0}: Throttled".format(resource_path)
@@ -313,7 +313,7 @@ class ImdsClient(object):
             endpoint = self._wireserver_endpoint
             status, resp = self._get_metadata_from_endpoint(endpoint, resource_path, headers)
 
-        if status == IMDS_RESPONSE_SUCCESS:  # pylint: disable=R1705
+        if status == IMDS_RESPONSE_SUCCESS:
             return MetadataResult(True, False, resp)
         elif status == IMDS_INTERNAL_SERVER_ERROR:
             return MetadataResult(False, True, resp)
@@ -359,7 +359,7 @@ class ImdsClient(object):
         # ensure the response is valid json
         try:
             json_data = json.loads(ustr(result.response, encoding="utf-8"))
-        except Exception as e:  # pylint: disable=C0103
+        except Exception as e:
             return False, "JSON parsing failed: {0}".format(ustr(e))
 
         # ensure all expected fields are present and have a value
@@ -372,7 +372,7 @@ class ImdsClient(object):
             self.check_field(json_data['network']['interface'][0], 'ipv4')
             self.check_field(json_data['network']['interface'][0]['ipv4'], 'ipAddress')
             self.check_field(json_data['network']['interface'][0]['ipv4']['ipAddress'][0], 'privateIpAddress')
-        except ValueError as v:  # pylint: disable=C0103
+        except ValueError as v:
             return False, ustr(v)
 
         return True, ''

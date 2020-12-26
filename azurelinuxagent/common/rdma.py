@@ -76,7 +76,7 @@ class RDMAHandler(object):
     driver_module_name = 'hv_network_direct'
     nd_version = None
 
-    def get_rdma_version(self):  # pylint: disable=R1710
+    def get_rdma_version(self):
         """Retrieve the firmware version information from the system.
            This depends on information provided by the Linux kernel."""
 
@@ -126,8 +126,8 @@ class RDMAHandler(object):
         exitcode, ps_out = shellutil.run_get_output("ps -ef")
         if exitcode != 0:
             raise Exception('RDMA: ps -ef failed: %s' % ps_out)
-        for n in kvp_daemon_names:  # pylint: disable=C0103
-            if n in ps_out:  # pylint: disable=R1705
+        for n in kvp_daemon_names:
+            if n in ps_out:
                 logger.info('RDMA: kvp daemon (%s) is running' % n)
                 return True
             else:
@@ -222,7 +222,7 @@ class RDMADeviceHandler(object):
             else:
                 logger.info("RDMA: provisioning Network Direct RDMA device.")
                 self.provision_network_direct_rdma()
-        except Exception as e:  # pylint: disable=C0103
+        except Exception as e:
             logger.error("RDMA: device processing failed: {0}".format(e))
 
     def provision_network_direct_rdma(self):
@@ -248,8 +248,8 @@ class RDMADeviceHandler(object):
         if retcode == 0:
             version = re.search("version:\s+(\d+)\.(\d+)\.(\d+)\D", out, re.IGNORECASE)  # pylint: disable=W1401
             if version:
-                v1 = int(version.groups(0)[0])  # pylint: disable=C0103
-                v2 = int(version.groups(0)[1])  # pylint: disable=C0103
+                v1 = int(version.groups(0)[0])
+                v2 = int(version.groups(0)[1])
                 if v1 > 4 or v1 == 4 and v2 > 0:
                     logger.info("Skip setting /dev/hvnd_rdma on 4.1 or later")
                     skip_rdma_device = True
@@ -266,7 +266,7 @@ class RDMADeviceHandler(object):
 
         RDMADeviceHandler.update_network_interface(self.mac_addr, self.ipv4_addr)
 
-    def provision_sriov_rdma(self):  # pylint: disable=R1711
+    def provision_sriov_rdma(self):
 
         (key, value) = self.read_ipoib_data()
         if key:
@@ -417,7 +417,7 @@ class RDMADeviceHandler(object):
     def update_iboip_interface(ipv4_addr, timeout_sec, check_interval_sec):
         logger.info("Wait for ib0 become available")
         total_retries = timeout_sec / check_interval_sec
-        n = 0  # pylint: disable=C0103
+        n = 0
         found_ib0 = None
         while not found_ib0 and n < total_retries:
             ret, output = shellutil.run_get_output("ifconfig -a")
@@ -427,7 +427,7 @@ class RDMADeviceHandler(object):
             if found_ib0:
                 break
             time.sleep(check_interval_sec)
-            n += 1  # pylint: disable=C0103
+            n += 1
 
         if not found_ib0:
             raise Exception("ib0 is not available")
@@ -446,7 +446,7 @@ class RDMADeviceHandler(object):
         infiniband interface.
         """
         logger.info("Updating DAPL configuration file")
-        for f in paths:  # pylint: disable=C0103
+        for f in paths:
             logger.info("RDMA: trying {0}".format(f))
             if not os.path.isfile(f):
                 logger.info(
@@ -474,7 +474,7 @@ class RDMADeviceHandler(object):
         data = RDMADeviceHandler.generate_rdma_config(ipv4_addr, mac_addr)
         logger.info(
             "RDMA: Updating device with configuration: {0}".format(data))
-        with open(path, "w") as f:  # pylint: disable=C0103
+        with open(path, "w") as f:
             logger.info("RDMA: Device opened for writing")
             f.write(data)
         logger.info("RDMA: Updated device with IPv4/MAC addr successfully")
@@ -487,7 +487,7 @@ class RDMADeviceHandler(object):
     def wait_rdma_device(path, timeout_sec, check_interval_sec):
         logger.info("RDMA: waiting for device={0} timeout={1}s".format(path, timeout_sec))
         total_retries = timeout_sec / check_interval_sec
-        n = 0  # pylint: disable=C0103
+        n = 0
         while n < total_retries:
             if os.path.exists(path):
                 logger.info("RDMA: device ready")
@@ -495,7 +495,7 @@ class RDMADeviceHandler(object):
             logger.verbose(
                 "RDMA: device not ready, sleep {0}s".format(check_interval_sec))
             time.sleep(check_interval_sec)
-            n += 1  # pylint: disable=C0103
+            n += 1
         logger.error("RDMA device wait timed out")
         raise Exception("The device did not show up in {0} seconds ({1} retries)".format(
             timeout_sec, total_retries))
@@ -506,16 +506,16 @@ class RDMADeviceHandler(object):
             "RDMA: waiting for any Infiniband device at directory={0} timeout={1}s".format(
                 directory, timeout_sec))
         total_retries = timeout_sec / check_interval_sec
-        n = 0  # pylint: disable=C0103
+        n = 0
         while n < total_retries:
-            r = os.listdir(directory)  # pylint: disable=C0103
+            r = os.listdir(directory)
             if r:
                 logger.info("RDMA: device found in {0}".format(directory))
                 return
             logger.verbose(
                 "RDMA: device not ready, sleep {0}s".format(check_interval_sec))
             time.sleep(check_interval_sec)
-            n += 1  # pylint: disable=C0103
+            n += 1
         logger.error("RDMA device wait timed out")
         raise Exception("The device did not show up in {0} seconds ({1} retries)".format(
             timeout_sec, total_retries))

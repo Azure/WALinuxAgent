@@ -66,7 +66,7 @@ class Redhat6xOSUtil(DefaultOSUtil):
         try:
             cryptutil = CryptUtil(conf.get_openssl_cmd())
             ssh_rsa_pubkey = cryptutil.asn1_to_ssh(pubkey)
-        except CryptError as e:  # pylint: disable=C0103
+        except CryptError as e:
             raise OSUtilError(ustr(e))
         fileutil.append_file(output_file, ssh_rsa_pubkey)
 

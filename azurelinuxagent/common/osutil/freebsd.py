@@ -29,7 +29,7 @@ from azurelinuxagent.common.osutil.default import DefaultOSUtil
 from azurelinuxagent.common.future import ustr
 
 
-class FreeBSDOSUtil(DefaultOSUtil):  # pylint: disable=R0904
+class FreeBSDOSUtil(DefaultOSUtil):
 
     def __init__(self):
         super(FreeBSDOSUtil, self).__init__()
@@ -241,10 +241,10 @@ class FreeBSDOSUtil(DefaultOSUtil):  # pylint: disable=R0904
             :rtype: int
             """
             bitmask_flags = 0
-            RTF_UP = 0x0001  # pylint: disable=C0103
-            RTF_GATEWAY = 0x0002  # pylint: disable=C0103
-            RTF_HOST = 0x0004  # pylint: disable=C0103
-            RTF_DYNAMIC = 0x0010  # pylint: disable=C0103
+            RTF_UP = 0x0001
+            RTF_GATEWAY = 0x0002
+            RTF_HOST = 0x0004
+            RTF_DYNAMIC = 0x0010
             if "U" in ascii_route_flags:
                 bitmask_flags |= RTF_UP
             if "G" in ascii_route_flags:
@@ -317,7 +317,7 @@ class FreeBSDOSUtil(DefaultOSUtil):  # pylint: disable=R0904
                     except Exception:
                         # Skip the route
                         continue
-        except Exception as e:  # pylint: disable=C0103
+        except Exception as e:
             logger.error("Cannot read route table [{0}]", ustr(e))
         return linux_style_route_file
 
@@ -348,8 +348,8 @@ class FreeBSDOSUtil(DefaultOSUtil):  # pylint: disable=R0904
         the primary has the lowest Metric.
         :return: the interface which has the default route
         """
-        RTF_GATEWAY = 0x0002  # pylint: disable=C0103
-        DEFAULT_DEST = "00000000"  # pylint: disable=C0103
+        RTF_GATEWAY = 0x0002
+        DEFAULT_DEST = "00000000"
 
         primary_interface = None
 
@@ -406,8 +406,8 @@ class FreeBSDOSUtil(DefaultOSUtil):  # pylint: disable=R0904
         specify the route manually to get it work in a VNET environment.
         SEE ALSO: man ip(4) IP_ONESBCAST,
         """
-        RTF_GATEWAY = 0x0002  # pylint: disable=C0103
-        DEFAULT_DEST = "00000000"  # pylint: disable=C0103
+        RTF_GATEWAY = 0x0002
+        DEFAULT_DEST = "00000000"
 
         route_table = self.read_route_table()
         routes = self.get_list_of_routes(route_table)
@@ -516,14 +516,14 @@ class FreeBSDOSUtil(DefaultOSUtil):  # pylint: disable=R0904
         """
         if port_id > 3:
             return None
-        g0 = "00000000"  # pylint: disable=C0103
+        g0 = "00000000"
         if port_id > 1:
-            g0 = "00000001"  # pylint: disable=C0103
+            g0 = "00000001"
             port_id = port_id - 2
         err, output = shellutil.run_get_output('sysctl dev.storvsc | grep pnpinfo | grep deviceid=')
         if err:
             return None
-        g1 = "000" + ustr(port_id)  # pylint: disable=C0103
+        g1 = "000" + ustr(port_id)
         g0g1 = "{0}-{1}".format(g0, g1)
 
         # pylint: disable=W0105
