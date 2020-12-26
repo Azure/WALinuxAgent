@@ -147,7 +147,7 @@ class ExtHandler(DataContract):
 
     def sort_key(self):
         levels = [e.dependencyLevel for e in self.properties.extensions]
-        if len(levels) == 0:  # pylint: disable=len-as-condition
+        if len(levels) == 0:
             level = 0
         else:
             level = min(levels)

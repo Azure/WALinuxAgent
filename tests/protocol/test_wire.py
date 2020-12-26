@@ -1,4 +1,4 @@
-# -*- encoding: utf-8 -*-  # pylint: disable=too-many-lines
+# -*- encoding: utf-8 -*-
 # Copyright 2018 Microsoft Corporation
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -48,13 +48,13 @@ from tests.protocol.mockwiredata import DATA_FILE_NO_EXT, DATA_FILE
 from tests.protocol.mockwiredata import WireProtocolData
 from tests.tools import Mock, patch, AgentTestCase
 
-data_with_bom = b'\xef\xbb\xbfhehe'  # pylint: disable=invalid-name
-testurl = 'http://foo'  # pylint: disable=invalid-name
-testtype = 'BlockBlob'  # pylint: disable=invalid-name
+data_with_bom = b'\xef\xbb\xbfhehe'
+testurl = 'http://foo'
+testtype = 'BlockBlob'
 WIRESERVER_URL = '168.63.129.16'
 
 
-def get_event(message, duration=30000, evt_type="", is_internal=False, is_success=True,  # pylint: disable=invalid-name,too-many-arguments
+def get_event(message, duration=30000, evt_type="", is_internal=False, is_success=True,
               name="", op="Unknown", version=CURRENT_VERSION, eventId=1):
     event = TelemetryEvent(eventId, "XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX")
     event.parameters.append(TelemetryEventParam(GuestAgentExtensionEventsSchema.Name, name))
@@ -82,7 +82,6 @@ def create_mock_protocol(artifacts_profile_blob=None, status_upload_blob=None, s
         yield protocol
 
 
-# pylint: disable=too-many-public-methods
 @patch("time.sleep")
 @patch("azurelinuxagent.common.protocol.wire.CryptUtil")
 @patch("azurelinuxagent.common.protocol.healthservice.HealthService._report")
@@ -92,7 +91,7 @@ class TestWireProtocol(AgentTestCase):
         super(TestWireProtocol, self).setUp()
         HostPluginProtocol.is_default_channel = False
 
-    def _test_getters(self, test_data, certsMustBePresent, __, MockCryptUtil, _):  # pylint: disable=invalid-name
+    def _test_getters(self, test_data, certsMustBePresent, __, MockCryptUtil, _):
         MockCryptUtil.side_effect = test_data.mock_crypt_util
 
         with patch.object(restutil, 'http_get', test_data.mock_http_get):
@@ -208,8 +207,8 @@ class TestWireProtocol(AgentTestCase):
             # assert
             self.assertTrue(http_patch.call_count == 5)
             for i in range(0, 5):
-                c = http_patch.call_args_list[i][-1]['use_proxy']  # pylint: disable=invalid-name
-                self.assertTrue(c == (True if i != 3 else False))  # pylint: disable=simplifiable-if-expression
+                c = http_patch.call_args_list[i][-1]['use_proxy']
+                self.assertTrue(c == (True if i != 3 else False))
 
     def test_status_blob_parsing(self, *args):  # pylint: disable=unused-argument
         with mock_wire_protocol(mockwiredata.DATA_FILE) as protocol:
@@ -227,7 +226,7 @@ class TestWireProtocol(AgentTestCase):
             self.assertEqual(goal_state.role_config_name, host_plugin.role_config_name)
 
     def test_upload_status_blob_should_use_the_host_channel_by_default(self, *_):
-        def http_put_handler(url, *_, **__):  # pylint: disable=inconsistent-return-statements
+        def http_put_handler(url, *_, **__):
             if protocol.get_endpoint() in url and url.endswith('/status'):
                 return MockResponse(body=b'', status_code=200)
 
@@ -692,7 +691,7 @@ class TestWireClient(HttpRequestPredicates, AgentTestCase):
         def http_get_handler(url, *_, **kwargs):
             if url == manifest_url:
                 return HttpError("Exception to fake an error on the direct channel")
-            if self.is_host_plugin_extension_request(url, kwargs, manifest_url):  # pylint: disable=no-else-return
+            if self.is_host_plugin_extension_request(url, kwargs, manifest_url):
                 # fake a stale goal state then succeed once the goal state has been refreshed
                 if http_get_handler.goal_state_requests == 0:
                     http_get_handler.goal_state_requests += 1
@@ -728,7 +727,7 @@ class TestWireClient(HttpRequestPredicates, AgentTestCase):
         manifest_url = 'https://fake_host/fake_manifest.xml'
 
         def http_get_handler(url, *_, **kwargs):
-            if url == manifest_url or self.is_host_plugin_extension_request(url, kwargs, manifest_url):  # pylint: disable=no-else-return
+            if url == manifest_url or self.is_host_plugin_extension_request(url, kwargs, manifest_url):
                 return ResourceGoneError("Exception to fake an error on either channel")
             elif self.is_goal_state_request(url):
                 protocol.track_url(url)  # keep track of goal state requests
@@ -758,7 +757,7 @@ class TestWireClient(HttpRequestPredicates, AgentTestCase):
             self.assertEqual(HostPluginProtocol.is_default_channel, False)
 
     def test_get_artifacts_profile_should_not_invoke_host_channel_when_direct_channel_succeeds(self):
-        def http_get_handler(url, *_, **__):  # pylint: disable=useless-return
+        def http_get_handler(url, *_, **__):
             if self.is_in_vm_artifacts_profile_request(url):
                 protocol.track_url(url)
             return None
@@ -868,7 +867,7 @@ class TestWireClient(HttpRequestPredicates, AgentTestCase):
             self.assertFalse(HostPluginProtocol.is_default_channel, "The default channel should not have changed")
 
     def test_upload_logs_should_not_refresh_plugin_when_first_attempt_succeeds(self):
-        def http_put_handler(url, *_, **__):  # pylint: disable=inconsistent-return-statements
+        def http_put_handler(url, *_, **__):
             if self.is_host_plugin_put_logs_request(url):
                 return MockResponse(body=b'', status_code=200)
 
@@ -1160,7 +1159,6 @@ class UpdateGoalStateTestCase(AgentTestCase):
                 self.assertEqual(len(archives), 2, "Two goal states should have been archived")
                 self.assertEqual(archives[1], second_archive_name, "The name of goal state archive should match the second goal state timestamp and incarnation")
 
-# pylint: enable=too-many-public-methods
 
 
 class TryUpdateGoalStateTestCase(HttpRequestPredicates, AgentTestCase):
@@ -1214,10 +1212,10 @@ class TryUpdateGoalStateTestCase(HttpRequestPredicates, AgentTestCase):
             with create_log_and_telemetry_mocks() as (logger, add_event):
                 protocol.client.try_update_goal_state()
 
-                lc = logger_calls()  # pylint: disable=invalid-name
+                lc = logger_calls()
                 self.assertTrue(len(lc) == 0, "A successful call should not produce any log messages: [{0}]".format(lc))
 
-                tc = telemetry_calls()  # pylint: disable=invalid-name
+                tc = telemetry_calls()
                 self.assertTrue(len(tc) == 0, "A successful call should not produce any telemetry events: [{0}]".format(tc))
 
             #
@@ -1227,12 +1225,12 @@ class TryUpdateGoalStateTestCase(HttpRequestPredicates, AgentTestCase):
             with create_log_and_telemetry_mocks() as (logger, add_event):
                 protocol.client.try_update_goal_state()
 
-                w = warnings()  # pylint: disable=invalid-name
-                pw = periodic_warnings()  # pylint: disable=invalid-name
+                w = warnings()
+                pw = periodic_warnings()
                 self.assertEqual(len(w), 1, "A failure should have produced a warning: [{0}]".format(w))
                 self.assertEqual(len(pw), 1, "A failure should have produced a periodic warning: [{0}]".format(pw))
 
-                gs = goal_state_events()  # pylint: disable=invalid-name
+                gs = goal_state_events()
                 self.assertTrue(len(gs) == 1 and 'is_success=False' in gs[0], "A failure should produce a telemetry event (success=false): [{0}]".format(gs))
 
             #
@@ -1243,12 +1241,12 @@ class TryUpdateGoalStateTestCase(HttpRequestPredicates, AgentTestCase):
                 protocol.client.try_update_goal_state()
                 protocol.client.try_update_goal_state()
 
-                w = warnings()  # pylint: disable=invalid-name
-                pw = periodic_warnings()  # pylint: disable=invalid-name
+                w = warnings()
+                pw = periodic_warnings()
                 self.assertTrue(len(w) == 0, "Subsequent failures should not produce warnings: [{0}]".format(w))
                 self.assertEqual(len(pw), 3, "Subsequent failures should produce periodic warnings: [{0}]".format(pw))
 
-                tc = telemetry_calls()  # pylint: disable=invalid-name
+                tc = telemetry_calls()
                 self.assertTrue(len(tc) == 0, "Subsequent failures should not produce any telemetry events: [{0}]".format(tc))
 
             #
@@ -1258,13 +1256,13 @@ class TryUpdateGoalStateTestCase(HttpRequestPredicates, AgentTestCase):
             with create_log_and_telemetry_mocks() as (logger, add_event):
                 protocol.client.try_update_goal_state()
 
-                s = success_messages()  # pylint: disable=invalid-name
-                w = warnings()  # pylint: disable=invalid-name
-                pw = periodic_warnings()  # pylint: disable=invalid-name
+                s = success_messages()
+                w = warnings()
+                pw = periodic_warnings()
                 self.assertEqual(len(s), 1, "Recovering after failures should have produced an info message: [{0}]".format(s))
                 self.assertTrue(len(w) == 0 and len(pw) == 0, "Recovering after failures should have not produced any warnings: [{0}] [{1}]".format(w, pw))
 
-                gs = goal_state_events()  # pylint: disable=invalid-name
+                gs = goal_state_events()
                 self.assertTrue(len(gs) == 1 and 'is_success=True' in gs[0], "Recovering after failures should produce a telemetry event (success=true): [{0}]".format(gs))
 
 

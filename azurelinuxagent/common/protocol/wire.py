@@ -334,7 +334,7 @@ def ext_status_to_v1(ext_name, ext_status):
         "version": 1.0,
         "timestampUTC": timestamp
     }
-    if len(v1_sub_status) != 0:  # pylint: disable=len-as-condition
+    if len(v1_sub_status) != 0:
         v1_ext_status['status']['substatus'] = v1_sub_status
     return v1_ext_status
 
@@ -353,7 +353,7 @@ def ext_handler_status_to_v1(handler_status, ext_statuses, timestamp):  # pylint
             "message": handler_status.message
         }
 
-    if len(handler_status.extensions) > 0:  # pylint: disable=len-as-condition
+    if len(handler_status.extensions) > 0:
         # Currently, no more than one extension per handler
         ext_name = handler_status.extensions[0]
         ext_status = ext_statuses.get(ext_name)

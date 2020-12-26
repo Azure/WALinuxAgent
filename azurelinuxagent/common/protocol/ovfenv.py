@@ -95,7 +95,7 @@ class OvfEnv(object):
         
         auth_option = findtext(conf_set, "DisableSshPasswordAuthentication", 
                                namespace=wans)
-        if auth_option is not None and auth_option.lower() == "true":  # pylint: disable=simplifiable-if-statement
+        if auth_option is not None and auth_option.lower() == "true":
             self.disable_ssh_password_auth = True
         else:
             self.disable_ssh_password_auth = False

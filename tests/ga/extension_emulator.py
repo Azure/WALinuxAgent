@@ -66,7 +66,7 @@ class Actions(object):
         return return_code, fail_action
 
 
-def extension_emulator(name="OSTCExtensions.ExampleHandlerLinux", version="1.0.0",  # pylint: disable=too-many-arguments
+def extension_emulator(name="OSTCExtensions.ExampleHandlerLinux", version="1.0.0",
     update_mode="UpdateWithInstall", report_heartbeat=False, continue_on_update_failure=False,
     install_action=Actions.succeed_action, uninstall_action=Actions.succeed_action, 
     enable_action=Actions.succeed_action, disable_action=Actions.succeed_action,
@@ -171,7 +171,7 @@ class ExtensionEmulator:
     A wrapper class for the possible actions and options that an extension might support.
     """
 
-    def __init__(self, name, version,  # pylint: disable=too-many-arguments
+    def __init__(self, name, version,
         update_mode, report_heartbeat,
         continue_on_update_failure,
         install_action, uninstall_action,

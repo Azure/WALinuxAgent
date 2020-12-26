@@ -71,7 +71,7 @@ class FlexibleVersion(version.Version):
 
     @property
     def major(self):
-        return self.version[0] if len(self.version) > 0 else 0  # pylint: disable=len-as-condition
+        return self.version[0] if len(self.version) > 0 else 0
 
     @property
     def minor(self):

@@ -198,7 +198,7 @@ def main(args=None):
     """
     if args is None:
         args = []
-    if len(args) <= 0:  # pylint: disable=len-as-condition
+    if len(args) <= 0:
         args = sys.argv[1:]
     command, force, verbose, debug, conf_file_path, log_collector_full_mode = parse_args(args)
     if command == "version":

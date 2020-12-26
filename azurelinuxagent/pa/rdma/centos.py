@@ -88,7 +88,7 @@ class CentOSRDMAHandler(RDMAHandler):
     @staticmethod
     def get_int_rdma_version(version):
         s = version.split('.')
-        if len(s) == 0:  # pylint: disable=len-as-condition
+        if len(s) == 0:
             raise Exception('Unexpected RDMA firmware version: "%s"' % version)
         return s[0]
 

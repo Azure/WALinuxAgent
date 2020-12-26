@@ -31,7 +31,7 @@ import socket
 import struct
 import sys
 import time
-from pwd import getpwall  # pylint: disable=ungrouped-imports
+from pwd import getpwall
 
 import array
 
@@ -538,7 +538,7 @@ class DefaultOSUtil(object):
         Checks and sets self.selinux = True if SELinux is available on system.
         """
         if self.selinux == None:
-            if shellutil.run("which getenforce", chk_err=False) == 0:  # pylint: disable=simplifiable-if-statement
+            if shellutil.run("which getenforce", chk_err=False) == 0:
                 self.selinux = True
             else:
                 self.selinux = False
@@ -807,7 +807,7 @@ class DefaultOSUtil(object):
         ifaces = {}
         for i in range(0, array_size, struct_size):
             iface = ifconf_buff[i:i + IFNAMSIZ].split(b'\0', 1)[0]
-            if len(iface) > 0:  # pylint: disable=len-as-condition
+            if len(iface) > 0:
                 iface_name = iface.decode('latin-1')
                 if iface_name not in ifaces:
                     ifaces[iface_name] = socket.inet_ntoa(ifconf_buff[i + 20:i + 24])
@@ -860,7 +860,7 @@ class DefaultOSUtil(object):
         route_list = []
         for entry in proc_net_route[1:]:
             route = entry.split("\t")
-            if len(route) > 0:  # pylint: disable=len-as-condition
+            if len(route) > 0:
                 route_obj = RouteEntry(route[idx_iface], route[idx_dest], route[idx_gw], route[idx_mask],
                                        route[idx_flags], route[idx_metric])
                 route_list.append(route_obj)
@@ -926,7 +926,7 @@ class DefaultOSUtil(object):
 
         candidates = list(filter(is_default, DefaultOSUtil.get_list_of_routes(route_table)))
 
-        if len(candidates) > 0:  # pylint: disable=len-as-condition
+        if len(candidates) > 0:
             def get_metric(route):
                 return int(route.metric)
 

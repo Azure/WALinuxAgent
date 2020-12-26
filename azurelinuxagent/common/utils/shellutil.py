@@ -157,7 +157,7 @@ class CommandError(Exception):
     """
     @staticmethod
     def _get_message(command, return_code, stderr):
-        command_name = command[0] if isinstance(command, list) and len(command) > 0 else command  # pylint: disable=len-as-condition
+        command_name = command[0] if isinstance(command, list) and len(command) > 0 else command
         return "'{0}' failed: {1} ({2})".format(command_name, return_code, stderr.rstrip())
 
     def __init__(self, command, return_code, stdout, stderr):

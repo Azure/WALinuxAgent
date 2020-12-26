@@ -382,5 +382,5 @@ class ImdsClient(object):
         if field not in dict_obj or dict_obj[field] is None:
             raise ValueError('Missing field: [{0}]'.format(field))
 
-        if len(dict_obj[field]) == 0:  # pylint: disable=len-as-condition
+        if len(dict_obj[field]) == 0:
             raise ValueError('Empty field: [{0}]'.format(field))

@@ -69,7 +69,7 @@ class TestExtHandlers(AgentTestCase):
         Parse a status report for a successful execution of an extension.
         """
 
-        # pylint: disable=invalid-name
+      
         s = '''[{
     "status": {
       "status": "success",
@@ -85,7 +85,6 @@ class TestExtHandlers(AgentTestCase):
     "timestampUTC": "2018-04-20T21:20:24Z"
   }
 ]'''
-        # pylint: enable=invalid-name
         ext_status = ExtensionStatus(seq_no=0)
         parse_ext_status(ext_status, json.loads(s))
 
@@ -105,7 +104,7 @@ class TestExtHandlers(AgentTestCase):
         The agent should handle this gracefully, and convert all unknown
         status/status values into an error.
         """
-        # pylint: disable=invalid-name
+      
         s = '''[{ 
     "status": {
       "status": "failed",
@@ -120,7 +119,6 @@ class TestExtHandlers(AgentTestCase):
     "version": "1.0",
     "timestampUTC": "2018-04-20T20:50:22Z"
 }]'''
-        # pylint: enable=invalid-name
         ext_status = ExtensionStatus(seq_no=0)
         parse_ext_status(ext_status, json.loads(s))
 
@@ -189,7 +187,7 @@ class TestExtHandlers(AgentTestCase):
         """
 
         # Validating empty status case
-        s = '''[]'''  # pylint: disable=invalid-name
+        s = '''[]'''
         ext_status = ExtensionStatus(seq_no=0)
         parse_ext_status(ext_status, json.loads(s))
 
@@ -215,7 +213,7 @@ class TestExtHandlers(AgentTestCase):
 
     @patch('azurelinuxagent.common.event.EventLogger.add_event')
     @patch('azurelinuxagent.ga.exthandlers.ExtHandlerInstance._get_last_modified_seq_no_from_config_files')
-    def assert_extension_sequence_number(self,  # pylint: disable=too-many-arguments
+    def assert_extension_sequence_number(self,
                                          patch_get_largest_seq,
                                          patch_add_event,
                                          goal_state_sequence_number,

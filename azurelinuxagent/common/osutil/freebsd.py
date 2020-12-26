@@ -295,7 +295,7 @@ class FreeBSDOSUtil(DefaultOSUtil):
             netstat_routes = _get_netstat_rn_ipv4_routes()
             # Make sure the `netstat -rn -f inet` contains columns for Netif, Destination, Gateway and Flags which are needed to convert
             # to the Linux Format
-            if len(netstat_routes) > 0:  # pylint: disable=len-as-condition
+            if len(netstat_routes) > 0:
                 missing_headers = []
                 if "Netif" not in netstat_routes[0]:
                     missing_headers.append("Netif")
@@ -363,7 +363,7 @@ class FreeBSDOSUtil(DefaultOSUtil):
 
         candidates = list(filter(is_default, self.get_list_of_routes(route_table)))
 
-        if len(candidates) > 0:  # pylint: disable=len-as-condition
+        if len(candidates) > 0:
             def get_metric(route):
                 return int(route.metric)
 

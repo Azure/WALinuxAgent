@@ -29,7 +29,7 @@ import azurelinuxagent.common.utils.fileutil as fileutil
 import azurelinuxagent.common.utils.shellutil as shellutil
 from azurelinuxagent.common.utils.textutil import parse_doc, find, getattrib
 
-dapl_config_paths = [  # pylint: disable=invalid-name
+dapl_config_paths = [
     '/etc/dat.conf',
     '/etc/rdma/dat.conf',
     '/usr/local/etc/dat.conf'
@@ -183,7 +183,7 @@ class RDMAHandler(object):
             logger.error('RDMA: Failed to reboot the system')
 
 
-dapl_config_paths = [  # pylint: disable=invalid-name
+dapl_config_paths = [
     '/etc/dat.conf', '/etc/rdma/dat.conf', '/usr/local/etc/dat.conf']
 
 
@@ -550,6 +550,6 @@ class RDMADeviceHandler(object):
             raise Exception("Failed to get ifname with mac: {0}".format(mac))
         output = match.group(0)
         eths = re.findall(r"eth\d", output)
-        if eths is None or len(eths) == 0:  # pylint: disable=len-as-condition
+        if eths is None or len(eths) == 0:
             raise Exception("ifname with mac: {0} not found".format(mac))
         return eths[-1]

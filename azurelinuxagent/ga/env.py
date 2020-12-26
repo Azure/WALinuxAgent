@@ -171,7 +171,7 @@ class EnvHandler(ThreadHandlerInterface):
             # the new value and the comparison should not be affected by the order of the items in the list
             pid = sorted(self.osutil.get_dhcp_pid())
 
-            if len(pid) == 0 and self.dhcp_warning_enabled:  # pylint: disable=len-as-condition
+            if len(pid) == 0 and self.dhcp_warning_enabled:
                 logger.warn("Dhcp client is not running.")
         except Exception as exception:
             if self.dhcp_warning_enabled:
@@ -185,7 +185,7 @@ class EnvHandler(ThreadHandlerInterface):
         self.handle_dhclient_restart()
 
     def handle_dhclient_restart(self):
-        if len(self.dhcp_id_list) == 0:  # pylint: disable=len-as-condition
+        if len(self.dhcp_id_list) == 0:
             self.dhcp_id_list = self.get_dhcp_client_pid()
             return
 
@@ -193,7 +193,7 @@ class EnvHandler(ThreadHandlerInterface):
             return
 
         new_pid = self.get_dhcp_client_pid()
-        if len(new_pid) != 0 and new_pid != self.dhcp_id_list:  # pylint: disable=len-as-condition
+        if len(new_pid) != 0 and new_pid != self.dhcp_id_list:
             logger.info("EnvMonitor: Detected dhcp client restart. Restoring routing table.")
             self.dhcp_handler.conf_routes()
             self.dhcp_id_list = new_pid

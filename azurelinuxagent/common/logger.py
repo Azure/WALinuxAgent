@@ -127,7 +127,7 @@ class Logger(object):
         # if msg_format is not unicode convert it to unicode
         if type(msg_format) is not ustr:
             msg_format = ustr(msg_format, errors="backslashreplace")
-        if len(args) > 0:  # pylint: disable=len-as-condition
+        if len(args) > 0:
             msg = msg_format.format(*args)
         else:
             msg = msg_format

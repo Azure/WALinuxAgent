@@ -88,8 +88,8 @@ class NetworkInterfaceCard:
     def __str__(self):
         entries = ['"name": "{0}"'.format(self.name),
                    '"link": "{0}"'.format(self.link)]
-        if len(self.ipv4) > 0:  # pylint: disable=len-as-condition
+        if len(self.ipv4) > 0:
             entries.append('"ipv4": {0}'.format(self._json_array(self.ipv4)))
-        if len(self.ipv6) > 0:  # pylint: disable=len-as-condition
+        if len(self.ipv6) > 0:
             entries.append('"ipv6": {0}'.format(self._json_array(self.ipv6)))
         return "{{ {0} }}".format(", ".join(entries))

@@ -40,7 +40,7 @@ class MetricsCounter(object):
     MAX_MEM_USAGE = "Max Memory Usage"
 
 
-re_user_system_times = re.compile(r'user (\d+)\nsystem (\d+)\n')  # pylint: disable=invalid-name
+re_user_system_times = re.compile(r'user (\d+)\nsystem (\d+)\n')
 
 
 class CGroupContollers(object):
@@ -116,7 +116,7 @@ class CGroup(object):
         try:
             tasks = self._get_parameters("tasks")
             if tasks:
-                return len(tasks) != 0  # pylint: disable=len-as-condition
+                return len(tasks) != 0
         except (IOError, OSError) as e:
             if e.errno == errno.ENOENT:
                 # only suppressing file not found exceptions.

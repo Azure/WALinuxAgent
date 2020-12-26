@@ -47,7 +47,7 @@ class TestResourceDisk(AgentTestCase):
     @patch(
         'azurelinuxagent.daemon.resourcedisk.default.ResourceDiskHandler.check_existing_swap_file',
         return_value=False)
-    def test_create_swap_space(  # pylint: disable=too-many-arguments
+    def test_create_swap_space(
             self,
             mock_check_existing_swap_file,  # pylint: disable=unused-argument
             mock_isfile,  # pylint: disable=unused-argument

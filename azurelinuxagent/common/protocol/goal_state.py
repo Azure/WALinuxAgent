@@ -663,7 +663,7 @@ class RemoteAccess(object):
         self.incarnation = None
         self.user_list = RemoteAccessUsersList()
 
-        if self.xml_text is None or len(self.xml_text) == 0:  # pylint: disable=len-as-condition
+        if self.xml_text is None or len(self.xml_text) == 0:
             return
 
         xml_doc = parse_doc(self.xml_text)

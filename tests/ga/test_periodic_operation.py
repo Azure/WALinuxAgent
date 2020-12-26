@@ -26,7 +26,7 @@ class TestPeriodicOperation(AgentTestCase):
             operation.run_time = datetime.datetime.utcnow()
         operation.run_time = None
 
-        op = PeriodicOperation("test_operation", operation, period=datetime.timedelta(hours=1))  # pylint: disable=invalid-name
+        op = PeriodicOperation("test_operation", operation, period=datetime.timedelta(hours=1))
         op.run()
 
         expected = operation.run_time + datetime.timedelta(hours=1)
@@ -39,7 +39,7 @@ class TestPeriodicOperation(AgentTestCase):
             operation.run_time = datetime.datetime.utcnow()
         operation.run_time = None
 
-        op = PeriodicOperation("test_operation", operation, period=3600)  # pylint: disable=invalid-name
+        op = PeriodicOperation("test_operation", operation, period=3600)
         op.run()
 
         expected = operation.run_time + datetime.timedelta(hours=1)
@@ -133,7 +133,7 @@ class TestPeriodicOperation(AgentTestCase):
             PeriodicOperation("one", lambda: None, period=datetime.timedelta(minutes=11)),
             PeriodicOperation("one", lambda: None, period=datetime.timedelta(days=1))
         ]
-        for op in operations:  # pylint: disable=invalid-name
+        for op in operations:
             op.run()
 
         def mock_sleep(seconds):

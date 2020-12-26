@@ -19,9 +19,9 @@ import re
 
 from azurelinuxagent.common.utils.textutil import parse_doc, find, findall
 from tests.tools import load_bin_data, load_data, MagicMock, Mock
-from azurelinuxagent.common.exception import HttpError, ResourceGoneError  # pylint: disable=ungrouped-imports
-from azurelinuxagent.common.future import httpclient  # pylint: disable=ungrouped-imports
-from azurelinuxagent.common.utils.cryptutil import CryptUtil  # pylint: disable=ungrouped-imports
+from azurelinuxagent.common.exception import HttpError, ResourceGoneError
+from azurelinuxagent.common.future import httpclient
+from azurelinuxagent.common.utils.cryptutil import CryptUtil
 
 DATA_FILE = {
         "version_info": "wire/version_info.xml",
@@ -97,7 +97,7 @@ DATA_FILE_PLUGIN_SETTINGS_MISMATCH = DATA_FILE.copy()
 DATA_FILE_PLUGIN_SETTINGS_MISMATCH["ext_conf"] = "wire/invalid_config/ext_conf_plugin_settings_version_mismatch.xml"
 
 
-class WireProtocolData(object):  # pylint: disable=too-many-instance-attributes
+class WireProtocolData(object):
     def __init__(self, data_files=None):
         if data_files is None:
             data_files = DATA_FILE
@@ -160,7 +160,7 @@ class WireProtocolData(object):  # pylint: disable=too-many-instance-attributes
         if in_vm_artifacts_profile_file is not None:
             self.in_vm_artifacts_profile = load_data(in_vm_artifacts_profile_file)
 
-    def mock_http_get(self, url, *args, **kwargs):  # pylint: disable=unused-argument,too-many-branches
+    def mock_http_get(self, url, *args, **kwargs):  # pylint: disable=unused-argument
         content = None
 
         resp = MagicMock()
@@ -201,7 +201,7 @@ class WireProtocolData(object):  # pylint: disable=too-many-instance-attributes
             # A stale GoalState results in a 400 from the HostPlugin
             # for which the HTTP handler in restutil raises ResourceGoneError
             if self.emulate_stale_goal_state:
-                if "extensionArtifact" in url:  # pylint: disable=no-else-raise
+                if "extensionArtifact" in url:
                     self.emulate_stale_goal_state = False
                     self.call_counts["extensionArtifact"] += 1
                     raise ResourceGoneError()

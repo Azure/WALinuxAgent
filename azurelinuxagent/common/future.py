@@ -52,7 +52,7 @@ elif sys.version_info[0] == 2:
     #           assigning new names to doesn't need to check python versions before
     #           doing so.
 
-    # pylint: disable=undefined-variable,invalid-name,redefined-builtin
+    # pylint: disable=undefined-variable,redefined-builtin
 
     ustr = unicode # Rename Python2 unicode to ustr 
     bytebuffer = buffer

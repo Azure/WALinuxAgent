@@ -141,7 +141,7 @@ class DeprovisionHandler(object):
             files += glob.glob(os.path.join(ext_base, 'config', 'HandlerStatus'))
             files += glob.glob(os.path.join(ext_base, 'mrseq'))
 
-            if len(files) > 0:  # pylint: disable=len-as-condition
+            if len(files) > 0:
                 actions.append(DeprovisionAction(fileutil.rm_files, files))
 
     def del_lib_dir_files(self, warnings, actions):  # pylint: disable=W0613
@@ -166,7 +166,7 @@ class DeprovisionHandler(object):
         for p in known_files_glob:
             files += glob.glob(os.path.join(lib_dir, p))
 
-        if len(files) > 0:  # pylint: disable=len-as-condition
+        if len(files) > 0:
             actions.append(DeprovisionAction(fileutil.rm_files, files))
 
     def reset_hostname(self, warnings, actions):  # pylint: disable=W0613

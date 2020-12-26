@@ -939,7 +939,7 @@ class ExtHandlerInstance(object):
         begin_utc = datetime.datetime.utcnow()
         self.set_operation(WALAEventOperation.Download)
 
-        if self.pkg is None or self.pkg.uris is None or len(self.pkg.uris) == 0:  # pylint: disable=len-as-condition
+        if self.pkg is None or self.pkg.uris is None or len(self.pkg.uris) == 0:
             raise ExtensionDownloadError("No package uri found")
 
         destination = os.path.join(conf.get_lib_dir(), self.get_extension_package_zipfile_name())
@@ -1424,7 +1424,7 @@ class ExtHandlerInstance(object):
 
     def update_settings(self):
         if self.ext_handler.properties.extensions is None or \
-                len(self.ext_handler.properties.extensions) == 0:  # pylint: disable=len-as-condition
+                len(self.ext_handler.properties.extensions) == 0:
             # This is the behavior of waagent 2.0.x
             # The new agent has to be consistent with the old one.
             self.logger.info("Extension has no settings, write empty 0.settings")
@@ -1583,7 +1583,7 @@ class ExtHandlerInstance(object):
         runtime_settings = self.ext_handler.properties.extensions
         # If no runtime_settings available for this ext_handler, then return 0 (this is the behavior we follow
         # for update_settings)
-        if not runtime_settings or len(runtime_settings) == 0:  # pylint: disable=len-as-condition
+        if not runtime_settings or len(runtime_settings) == 0:
             return "0"
         # Currently for every runtime settings we use the same sequence number
         # (Check : def parse_plugin_settings(self, ext_handler, plugin_settings) in wire.py)

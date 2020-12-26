@@ -221,7 +221,7 @@ class LogCollector(object):
             contents = entry.split(",")
             if len(contents) != 2:
                 # If it's not a comment or an empty line, it's a malformed entry
-                if not entry.startswith("#") and len(entry.strip()) > 0:  # pylint: disable=len-as-condition
+                if not entry.startswith("#") and len(entry.strip()) > 0:
                     _LOGGER.error("Couldn't parse \"%s\"", entry)
                 continue
 

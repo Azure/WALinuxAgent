@@ -259,7 +259,7 @@ def _encode_message(op, message):
     :return: gzip'ed and base64 encoded message, or the original message
     """
 
-    if len(message) == 0:  # pylint: disable=len-as-condition
+    if len(message) == 0:
         return message
 
     if op not in SHOULD_ENCODE_MESSAGE_OP:

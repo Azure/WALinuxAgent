@@ -88,8 +88,8 @@ class TestImds(AgentTestCase):
         test_subject = imds.ImdsClient(restutil.KNOWN_WIRESERVER_IP)
         self.assertRaises(ValueError, test_subject.get_compute)
 
-    def test_deserialize_ComputeInfo(self):  # pylint: disable=invalid-name
-        # pylint: disable=invalid-name
+    def test_deserialize_ComputeInfo(self):
+      
         s = '''{
         "location": "westcentralus",
         "name": "unit_test",
@@ -109,7 +109,6 @@ class TestImds(AgentTestCase):
         "vmScaleSetName": "MyScaleSet",
         "zone": "In"
         }'''
-        # pylint: enable=invalid-name
 
         data = json.loads(s)
 
@@ -140,7 +139,7 @@ class TestImds(AgentTestCase):
         image_origin = self._setup_image_origin_assert("", "", "", "")
         self.assertEqual(imds.IMDS_IMAGE_ORIGIN_CUSTOM, image_origin)
 
-    def test_is_endorsed_CentOS(self):  # pylint: disable=invalid-name
+    def test_is_endorsed_CentOS(self):
         self.assertEqual(imds.IMDS_IMAGE_ORIGIN_ENDORSED, self._setup_image_origin_assert("OpenLogic", "CentOS", "6.3", ""))
         self.assertEqual(imds.IMDS_IMAGE_ORIGIN_ENDORSED, self._setup_image_origin_assert("OpenLogic", "CentOS", "6.4", ""))
         self.assertEqual(imds.IMDS_IMAGE_ORIGIN_ENDORSED, self._setup_image_origin_assert("OpenLogic", "CentOS", "6.5", ""))
@@ -165,7 +164,7 @@ class TestImds(AgentTestCase):
         self.assertEqual(imds.IMDS_IMAGE_ORIGIN_PLATFORM, self._setup_image_origin_assert("OpenLogic", "CentOS", "6.2", ""))
         self.assertEqual(imds.IMDS_IMAGE_ORIGIN_PLATFORM, self._setup_image_origin_assert("OpenLogic", "CentOS", "6.1", ""))
 
-    def test_is_endorsed_CoreOS(self):  # pylint: disable=invalid-name
+    def test_is_endorsed_CoreOS(self):
         self.assertEqual(imds.IMDS_IMAGE_ORIGIN_ENDORSED, self._setup_image_origin_assert("CoreOS", "CoreOS", "stable", "494.4.0"))
         self.assertEqual(imds.IMDS_IMAGE_ORIGIN_ENDORSED, self._setup_image_origin_assert("CoreOS", "CoreOS", "stable", "899.17.0"))
         self.assertEqual(imds.IMDS_IMAGE_ORIGIN_ENDORSED, self._setup_image_origin_assert("CoreOS", "CoreOS", "stable", "1688.5.3"))
@@ -174,7 +173,7 @@ class TestImds(AgentTestCase):
         self.assertEqual(imds.IMDS_IMAGE_ORIGIN_PLATFORM, self._setup_image_origin_assert("CoreOS", "CoreOS", "alpha", ""))
         self.assertEqual(imds.IMDS_IMAGE_ORIGIN_PLATFORM, self._setup_image_origin_assert("CoreOS", "CoreOS", "beta", ""))
 
-    def test_is_endorsed_Debian(self):  # pylint: disable=invalid-name
+    def test_is_endorsed_Debian(self):
         self.assertEqual(imds.IMDS_IMAGE_ORIGIN_ENDORSED, self._setup_image_origin_assert("credativ", "Debian", "7", ""))
         self.assertEqual(imds.IMDS_IMAGE_ORIGIN_ENDORSED, self._setup_image_origin_assert("credativ", "Debian", "8", ""))
         self.assertEqual(imds.IMDS_IMAGE_ORIGIN_ENDORSED, self._setup_image_origin_assert("credativ", "Debian", "9", ""))
@@ -182,7 +181,7 @@ class TestImds(AgentTestCase):
         self.assertEqual(imds.IMDS_IMAGE_ORIGIN_PLATFORM, self._setup_image_origin_assert("credativ", "Debian", "9-DAILY", ""))
         self.assertEqual(imds.IMDS_IMAGE_ORIGIN_PLATFORM, self._setup_image_origin_assert("credativ", "Debian", "10-DAILY", ""))
 
-    def test_is_endorsed_Rhel(self):  # pylint: disable=invalid-name
+    def test_is_endorsed_Rhel(self):
         self.assertEqual(imds.IMDS_IMAGE_ORIGIN_ENDORSED, self._setup_image_origin_assert("RedHat", "RHEL", "6.7", ""))
         self.assertEqual(imds.IMDS_IMAGE_ORIGIN_ENDORSED, self._setup_image_origin_assert("RedHat", "RHEL", "6.8", ""))
         self.assertEqual(imds.IMDS_IMAGE_ORIGIN_ENDORSED, self._setup_image_origin_assert("RedHat", "RHEL", "6.9", ""))
@@ -208,7 +207,7 @@ class TestImds(AgentTestCase):
 
         self.assertEqual(imds.IMDS_IMAGE_ORIGIN_PLATFORM, self._setup_image_origin_assert("RedHat", "RHEL", "6.6", ""))
 
-    def test_is_endorsed_SuSE(self):  # pylint: disable=invalid-name
+    def test_is_endorsed_SuSE(self):
         self.assertEqual(imds.IMDS_IMAGE_ORIGIN_ENDORSED, self._setup_image_origin_assert("SuSE", "SLES", "11-SP4", ""))
         self.assertEqual(imds.IMDS_IMAGE_ORIGIN_ENDORSED, self._setup_image_origin_assert("SuSE", "SLES-BYOS", "11-SP4", ""))
 
@@ -232,7 +231,7 @@ class TestImds(AgentTestCase):
 
         self.assertEqual(imds.IMDS_IMAGE_ORIGIN_PLATFORM, self._setup_image_origin_assert("SuSE", "SLES", "11-SP3", ""))
 
-    def test_is_endorsed_UbuntuServer(self):  # pylint: disable=invalid-name
+    def test_is_endorsed_UbuntuServer(self):
         self.assertEqual(imds.IMDS_IMAGE_ORIGIN_ENDORSED, self._setup_image_origin_assert("Canonical", "UbuntuServer", "14.04.0-LTS", ""))
         self.assertEqual(imds.IMDS_IMAGE_ORIGIN_ENDORSED, self._setup_image_origin_assert("Canonical", "UbuntuServer", "14.04.1-LTS", ""))
         self.assertEqual(imds.IMDS_IMAGE_ORIGIN_ENDORSED, self._setup_image_origin_assert("Canonical", "UbuntuServer", "14.04.2-LTS", ""))
@@ -253,14 +252,13 @@ class TestImds(AgentTestCase):
 
     @staticmethod
     def _setup_image_origin_assert(publisher, offer, sku, version):
-        # pylint: disable=invalid-name
+      
         s = '''{{
             "publisher": "{0}",
             "offer": "{1}",
             "sku": "{2}",
             "version": "{3}"
         }}'''.format(publisher, offer, sku, version)
-        # pylint: enable=invalid-name
 
         data = json.loads(s)
         compute_info = imds.ComputeInfo()
@@ -347,7 +345,7 @@ class TestImds(AgentTestCase):
         if isinstance(obj, list):
             self._update_field(obj[0], fields, val)
         else:
-            f = fields[0]  # pylint: disable=invalid-name
+            f = fields[0]
             if len(fields) == 1:
                 if val is None:
                     del obj[f]
@@ -357,9 +355,9 @@ class TestImds(AgentTestCase):
                 self._update_field(obj[f], fields[1:], val)
 
     @staticmethod
-    def _imds_response(f):  # pylint: disable=invalid-name
+    def _imds_response(f):
         path = os.path.join(data_dir, "imds", "{0}.json".format(f))
-        with open(path, "rb") as fh:  # pylint: disable=invalid-name
+        with open(path, "rb") as fh:
             return fh.read()
 
     def _assert_validation(self, http_status_code, http_response, expected_valid, expected_response):
@@ -461,7 +459,7 @@ class TestImds(AgentTestCase):
                     self.assertEqual(expected_useragent, kwargs['headers']['User-Agent'])
                 self.assertEqual(2 if has_primary_ioerror else 1, test_subject._http_get.call_count)  # pylint: disable=protected-access
 
-    def _mock_imds_setup(self, primary_ioerror=False, secondary_ioerror=False, gone_error=False, throttled=False, bad_request=False):  # pylint: disable=too-many-arguments
+    def _mock_imds_setup(self, primary_ioerror=False, secondary_ioerror=False, gone_error=False, throttled=False, bad_request=False):
         self._mock_imds_expect_fallback = primary_ioerror  # pylint: disable=attribute-defined-outside-init
         self._mock_imds_primary_ioerror = primary_ioerror  # pylint: disable=attribute-defined-outside-init
         self._mock_imds_secondary_ioerror = secondary_ioerror  # pylint: disable=attribute-defined-outside-init

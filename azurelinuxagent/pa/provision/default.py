@@ -171,7 +171,7 @@ class ProvisionHandler(object):
 
         s = fileutil.read_file(ProvisionHandler.provisioned_file_path()).strip()
         if not self.osutil.is_current_instance_id(s):
-            if len(s) > 0:  # pylint: disable=len-as-condition
+            if len(s) > 0:
                 logger.warn("VM is provisioned, "
                             "but the VM unique identifier has changed -- "
                             "clearing cached state")

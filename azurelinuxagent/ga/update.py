@@ -714,7 +714,7 @@ class UpdateHandler(object):
 
             manifests = [m for m in manifest_list.vmAgentManifests \
                          if m.family == family and len(m.versionsManifestUris) > 0]
-            if len(manifests) == 0:  # pylint: disable=len-as-condition
+            if len(manifests) == 0:
                 logger.verbose(u"Incarnation {0} has no {1} agent updates",
                                etag, family)
                 return False
@@ -750,7 +750,7 @@ class UpdateHandler(object):
 
         pid_dir, pid_name, pid_re = self._get_pid_parts()
 
-        previous_pid_file = None if len(pid_files) <= 0 else pid_files[-1]  # pylint: disable=len-as-condition
+        previous_pid_file = None if len(pid_files) <= 0 else pid_files[-1]
         pid_index = -1 \
             if previous_pid_file is None \
             else int(pid_re.match(os.path.basename(previous_pid_file)).group(1))
@@ -1050,7 +1050,7 @@ class GuestAgent(object):
                 msg = u"Agent {0} has a malformed {1}".format(self.name, AGENT_MANIFEST_FILE)
                 raise UpdateError(msg)
             if type(manifests) is list:
-                if len(manifests) <= 0:  # pylint: disable=len-as-condition
+                if len(manifests) <= 0:
                     msg = u"Agent {0} has an empty {1}".format(self.name, AGENT_MANIFEST_FILE)
                     raise UpdateError(msg)
                 manifest = manifests[0]
@@ -1059,7 +1059,7 @@ class GuestAgent(object):
 
         try:
             self.manifest = HandlerManifest(manifest)  # pylint: disable=W0201
-            if len(self.manifest.get_enable_command()) <= 0:  # pylint: disable=len-as-condition
+            if len(self.manifest.get_enable_command()) <= 0:
                 raise Exception(u"Manifest is missing the enable command")
         except Exception as e:
             msg = u"Agent {0} has an illegal {1}: {2}".format(
