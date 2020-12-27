@@ -70,7 +70,8 @@
 
 [MESSAGES CONTROL]
 
-disable=bad-continuation, # Buggy, **REMOVED in pylint-2.6.0**
+disable=C,R, # (C) convention, for programming standard violation (R) refactor, for bad code smell
+    bad-continuation, # Buggy, **REMOVED in pylint-2.6.0**
     bad-option-value, # pylint does not recognize the error code/symbol (needed to supress breaking changes across pylint versions)
     bad-whitespace, # Used when a wrong number of spaces is used around an operator, bracket or block opener.
     broad-except, # Used when an except catches a too general exception, possibly burying unrelated errors.

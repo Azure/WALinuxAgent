@@ -66,7 +66,7 @@
 
 [MESSAGES CONTROL]
 
-disable=R,C,
+disable=C,R, # (C) convention, for programming standard violation (R) refactor, for bad code smell
     bad-whitespace, # Used when a wrong number of spaces is used around an operator, bracket or block opener. **REMOVED IN pylint-2.6.0**
     broad-except, # Used when an except catches a too general exception, possibly burying unrelated errors.
     consider-iterating-dictionary, # Emitted when the keys of a dictionary are iterated through the .keys() method.
