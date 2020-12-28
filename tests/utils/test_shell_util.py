@@ -15,17 +15,16 @@
 #
 # Requires Python 2.6+ and Openssl 1.0+
 #
-import datetime
 import os
 import signal
 import tempfile
 import threading
-import time
 import unittest
 
 from azurelinuxagent.common.future import ustr
 import azurelinuxagent.common.utils.shellutil as shellutil
 from tests.tools import AgentTestCase, patch
+from tests.utils.miscellaneous_tools import wait_for, format_processes
 
 
 class ShellQuoteTestCase(AgentTestCase):
@@ -85,15 +84,14 @@ class RunGetOutputTestCase(AgentTestCase):
 
         self.assertEqual(mock_logger.error.call_count, 1)
 
-        args, kwargs = mock_logger.error.call_args  # pylint: disable=unused-variable
+        args, _ = mock_logger.error.call_args
 
         message = args[0]  # message is similar to "Command: [exit 99], return code: [99], result: []"
         self.assertIn("[{0}]".format(command), message)
         self.assertIn("[{0}]".format(return_code), message)
 
-        self.assertEqual(mock_logger.verbose.call_count, 0)
-        self.assertEqual(mock_logger.info.call_count, 0)
-        self.assertEqual(mock_logger.warn.call_count, 0)
+        self.assertEqual(mock_logger.info.call_count, 0, "Did not expect any info messages. Got: {0}".format(mock_logger.info.call_args_list))
+        self.assertEqual(mock_logger.warn.call_count, 0, "Did not expect any warnings. Got: {0}".format(mock_logger.warn.call_args_list))
 
     def test_it_should_log_expected_errors_as_info(self):
         return_code = 99
@@ -104,15 +102,14 @@ class RunGetOutputTestCase(AgentTestCase):
 
         self.assertEqual(mock_logger.info.call_count, 1)
 
-        args, kwargs = mock_logger.info.call_args  # pylint: disable=unused-variable
+        args, _ = mock_logger.info.call_args
 
         message = args[0]  # message is similar to "Command: [exit 99], return code: [99], result: []"
         self.assertIn("[{0}]".format(command), message)
         self.assertIn("[{0}]".format(return_code), message)
 
-        self.assertEqual(mock_logger.verbose.call_count, 0)
-        self.assertEqual(mock_logger.warn.call_count, 0)
-        self.assertEqual(mock_logger.error.call_count, 0)
+        self.assertEqual(mock_logger.warn.call_count, 0, "Did not expect any warnings. Got: {0}".format(mock_logger.warn.call_args_list))
+        self.assertEqual(mock_logger.error.call_count, 0, "Did not expect any errors. Got: {0}".format(mock_logger.error.call_args_list))
 
     def test_it_should_log_unexpected_errors_as_errors(self):
         return_code = 99
@@ -123,15 +120,14 @@ class RunGetOutputTestCase(AgentTestCase):
 
         self.assertEqual(mock_logger.error.call_count, 1)
 
-        args, kwargs = mock_logger.error.call_args  # pylint: disable=unused-variable
+        args, _ = mock_logger.error.call_args
 
         message = args[0]  # message is similar to "Command: [exit 99], return code: [99], result: []"
         self.assertIn("[{0}]".format(command), message)
         self.assertIn("[{0}]".format(return_code), message)
 
-        self.assertEqual(mock_logger.info.call_count, 0)
-        self.assertEqual(mock_logger.verbose.call_count, 0)
-        self.assertEqual(mock_logger.warn.call_count, 0)
+        self.assertEqual(mock_logger.info.call_count, 0, "Did not expect any info messages. Got: {0}".format(mock_logger.info.call_args_list))
+        self.assertEqual(mock_logger.warn.call_count, 0, "Did not expect any warnings. Got: {0}".format(mock_logger.warn.call_args_list))
 
 
 # R0904: Too many public methods (24/20)  -- disabled: each method is a unit test
@@ -410,7 +406,7 @@ time.sleep(120)
                     threads.append(thread)
 
                 # now fetch the PIDs in the files created by the commands, but wait until they are created
-                if not self._wait_for(lambda: all(os.path.exists(file) and os.path.getsize(file) > 0 for file in pid_files)):
+                if not wait_for(lambda: all(os.path.exists(file) and os.path.getsize(file) > 0 for file in pid_files)):
                     raise Exception("The child processes did not start within the allowed timeout")
 
                 for sig_file in pid_files:
@@ -424,24 +420,23 @@ time.sleep(120)
                 started_commands = parent_processes[0:1] + child_processes[1:]
 
                 # wait for all the commands to start
-                running_commands = [[]]
-
                 def all_commands_running():
-                    running_commands[0] = shellutil.get_running_commands()
-                    return len(running_commands[0]) >= len(commands_to_execute) + 1  # +1 because run_pipe starts 2 commands
+                    all_commands_running.running_commands = shellutil.get_running_commands()
+                    return len(all_commands_running.running_commands) >= len(commands_to_execute) + 1  # +1 because run_pipe starts 2 commands
+                all_commands_running.running_commands = []
 
-                if not self._wait_for(all_commands_running):
+                if not wait_for(all_commands_running):
                     self.fail("shellutil.get_running_commands() did not report the expected number of commands after the allowed timeout.\nExpected: {0}\nGot: {1}".format(
-                        self._format_pids(started_commands), self._format_pids(running_commands[0])))
+                        format_processes(started_commands), format_processes(all_commands_running.running_commands)))
 
                 started_commands.sort()
-                running_commands[0].sort()
+                all_commands_running.running_commands.sort()
 
                 self.assertEqual(
                     started_commands,
-                    running_commands[0],
+                    all_commands_running.running_commands,
                     "shellutil.get_running_commands() did not return the expected commands.\nExpected: {0}\nGot: {1}".format(
-                        self._format_pids(started_commands), self._format_pids(running_commands[0])))
+                        format_processes(started_commands), format_processes(all_commands_running.running_commands)))
 
             finally:
                 # terminate the child processes, since they are blocked
@@ -449,47 +444,18 @@ time.sleep(120)
                     os.kill(pid, signal.SIGKILL)
 
             # once the processes complete, their PIDs should go away
-            running_commands = [[]]
+            def no_commands_running():
+                no_commands_running.running_commands = shellutil.get_running_commands()
+                return len(no_commands_running.running_commands) == 0
+            no_commands_running.running_commands = []
 
-            def all_commands_completed():
-                running_commands[0] = shellutil.get_running_commands()
-                return len(running_commands[0]) == 0
-
-            if not self._wait_for(all_commands_completed):
+            if not wait_for(no_commands_running):
                 self.fail("shellutil.get_running_commands() should return empty after the commands complete. Got: {0}".format(
-                    self._format_pids(running_commands[0])))
+                    format_processes(no_commands_running.running_commands)))
 
         finally:
             for thread in threads:
                 thread.join(timeout=5)
-
-    @staticmethod
-    def _format_pids(pids):
-        return ustr([RunCommandTestCase._get_command_line(pid) for pid in pids])
-
-    @staticmethod
-    def _get_command_line(pid):
-        try:
-            cmdline = '/proc/{0}/cmdline'.format(pid)
-            if os.path.exists(cmdline):
-                with open(cmdline, "r") as cmdline_file:
-                    return "[PID: {0}] {1}".format(pid, cmdline_file.read())
-        except Exception:
-            pass
-        return "[PID: {0}] UNKNOWN".format(pid)
-
-    @staticmethod
-    def _wait_for(predicate):
-        start_time = datetime.datetime.now()
-        while RunCommandTestCase._to_seconds(datetime.datetime.now() - start_time) < 10:
-            if predicate():
-                return True
-            time.sleep(0.01)
-        return False
-
-    @staticmethod
-    def _to_seconds(time_delta):
-        return (time_delta.microseconds + (time_delta.seconds + time_delta.days * 24 * 3600) * 10**6) / 10**6
 
 
 if __name__ == '__main__':
