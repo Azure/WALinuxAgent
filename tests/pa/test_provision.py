@@ -255,7 +255,6 @@ class TestProvision(AgentTestCase):
         return_value='B9F3C233-9913-9F42-8EB3-BA656DF32502')
     @patch('azurelinuxagent.common.conf.get_provisioning_agent', return_value='waagent')
     @patch('azurelinuxagent.pa.provision.default.cloud_init_is_enabled', return_value=False)
-  
     def test_provision_telemetry_fail(self,
                                       distro_name,
                                       distro_version,

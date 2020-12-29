@@ -68,8 +68,6 @@ class TestExtHandlers(AgentTestCase):
         """
         Parse a status report for a successful execution of an extension.
         """
-
-      
         s = '''[{
     "status": {
       "status": "success",
@@ -104,7 +102,6 @@ class TestExtHandlers(AgentTestCase):
         The agent should handle this gracefully, and convert all unknown
         status/status values into an error.
         """
-      
         s = '''[{ 
     "status": {
       "status": "failed",

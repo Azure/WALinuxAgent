@@ -89,7 +89,6 @@ class TestImds(AgentTestCase):
         self.assertRaises(ValueError, test_subject.get_compute)
 
     def test_deserialize_ComputeInfo(self):
-      
         s = '''{
         "location": "westcentralus",
         "name": "unit_test",
@@ -252,7 +251,6 @@ class TestImds(AgentTestCase):
 
     @staticmethod
     def _setup_image_origin_assert(publisher, offer, sku, version):
-      
         s = '''{{
             "publisher": "{0}",
             "offer": "{1}",
