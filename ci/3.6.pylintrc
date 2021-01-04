@@ -1,41 +1,5 @@
 # python 3.6+ uses the latest pylint version, whose docs can be found here: http://pylint.pycqa.org/en/stable/technical_reference/features.html
 
-# The source code suppresses the following errors in python3.6+:
-
-# assignment-from-none<E1128>: (hi-pri) Used when an assignment is done on a function call but the inferred function returns nothing but None.
-# attribute-defined-outside-init<W0201>: (hi-pri) Used when an instance attribute is defined outside the __init__ method.
-# bad-open-mode<W1501>: (hi-pri) Python supports: r, w, a[, x] modes with b, +, and U (only with r) options.
-# bad-super-call<E1003>: (hi-pri) Used when another argument than the current class is given as first argument of the super builtin.
-# bare-except<W0702>: (hi-pri) Used when an except clause doesn't specify exceptions type to catch.
-# cell-var-from-loop<W0640>: (hi-pri) A variable used in a closure is defined in a loop. This will result in all closures using the same value for the closed-over variable.
-# duplicate-string-formatting-argument<W1308>: (hi-pri) Used when we detect that a string formatting is repeating an argument instead of using named string arguments
-# expression-not-assigned<W0106>: (hi-pri) Used when an expression that is not a function call is assigned to nothing.
-# function-redefined<E0102>: (hi-pri) Used when a function / class / method is redefined.
-# global-statement<W0603>: Used when you use the "global" statement to update a global variable.
-# implicit-str-concat<W1404>: (hi-pri) String literals are implicitly concatenated in a literal iterable definition : maybe a comma is missing ?
-# import-error<E0401>: (hi-pri) Used when pylint has been unable to import a module.
-# keyword-arg-before-vararg<W1113>: (hi-pri) When defining a keyword argument before variable positional arguments, one can end up in having multiple values passed for the aforementioned parameter in case the method is called with keyword arguments.
-# lost-exception<W0150>: (needs review) Used when a break or a return statement is found inside the finally clause of a try...finally block: the exceptions raised in the try clause will be silently swallowed instead of being re-raised.
-# no-member<E1101>: (hi-pri) Used when a variable is accessed for an unexistent member.
-# no-value-for-parameter<E1120>: (hi-pri) Used when a function call passes too few arguments.
-# pointless-string-statement<W0105>: (hi-pri) Used when a string is used as a statement (which of course has no effect). This is a particular case of W0104 with its own message so you can easily disable it if you're using those strings as documentation, instead of comments.
-# protected-access<W0212>: Used when a protected member (i.e. class member with a name beginning with an underscore) is access outside the class or a descendant of the class where it's defined.
-# raising-format-tuple<W0715>: (hi-pri) Used when passing multiple arguments to an exception constructor, the first of them a string literal containing what appears to be placeholders intended for formatting
-# redefined-builtin<W0622>: (hi-pri) Used when a variable or function override a built-in.
-# redefined-outer-name<W0621>: (hi-pri) Used when a variable's name hides a name defined in the outer scope.
-# redundant-unittest-assert<W1503>: (hi-pri) The first argument of assertTrue and assertFalse is a condition. If a constant is passed as parameter, that condition will be always true.
-# signature-differs<W0222>: (hi-pri) Used when a method signature is different than in the implemented interface or in an overridden method.
-# subprocess-popen-preexec-fn<W1509>: (hi-pri) The preexec_fn parameter is not safe to use in the presence of threads in your application. The child process could deadlock before exec is called.
-# super-init-not-called<W0231>: (hi-pri) Used when an ancestor class method has an __init__ method which is not called by a derived class.
-# unnecessary-lambda<W0108>: Used when the body of a lambda expression is a function call on the same argument list as the lambda itself
-# unnecessary-pass<W0107>: (hi-pri) Used when a "pass" statement that can be avoided is encountered.
-# unused-argument<W0613>: (hi-pri) Used when a function or method argument is not used.
-# unused-import<W0611>: (hi-pri) Used when an imported module or variable is not used.
-# unused-variable<W0612>: (hi-pri) Used when a variable is defined but not used.
-# used-before-assignment<E0601>: (hi-pri) Used when a local variable is accessed before its assignment.
-# useless-else-on-loop<W0120>: (hi-pri) Loops should only have an else clause if they can exit early with a break statement, otherwise the statements under else should be on the same scope as the loop itself.
-# useless-super-delegation<W0235>: Used whenever we can detect that an overridden method is useless, relying on super() delegation to do the same thing as another method from the MRO.
-
 [MESSAGES CONTROL]
 
 disable=C, # (C) convention, for programming standard violation
