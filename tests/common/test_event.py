@@ -126,7 +126,7 @@ class TestEvent(HttpRequestPredicates, AgentTestCase):
         self.assertTrue(all(param is not None for param in event.parameters))
 
     def test_add_event_should_use_the_container_id_from_the_most_recent_goal_state(self):
-        def create_event_and_return_container_id():
+        def create_event_and_return_container_id():  # pylint: disable=inconsistent-return-statements
             event.add_event(name='Event')
             event_list = self._collect_events()
             self.assertEqual(len(event_list), 1, "Could not find the event created by add_event")

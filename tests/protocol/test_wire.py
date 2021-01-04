@@ -226,7 +226,7 @@ class TestWireProtocol(AgentTestCase):
             self.assertEqual(goal_state.role_config_name, host_plugin.role_config_name)
 
     def test_upload_status_blob_should_use_the_host_channel_by_default(self, *_):
-        def http_put_handler(url, *_, **__):
+        def http_put_handler(url, *_, **__):  # pylint: disable=inconsistent-return-statements
             if protocol.get_endpoint() in url and url.endswith('/status'):
                 return MockResponse(body=b'', status_code=200)
 
@@ -867,7 +867,7 @@ class TestWireClient(HttpRequestPredicates, AgentTestCase):
             self.assertFalse(HostPluginProtocol.is_default_channel, "The default channel should not have changed")
 
     def test_upload_logs_should_not_refresh_plugin_when_first_attempt_succeeds(self):
-        def http_put_handler(url, *_, **__):
+        def http_put_handler(url, *_, **__):  # pylint: disable=inconsistent-return-statements
             if self.is_host_plugin_put_logs_request(url):
                 return MockResponse(body=b'', status_code=200)
 

@@ -553,7 +553,7 @@ class DefaultOSUtil(object):
         else:
             return False
 
-    def set_selinux_context(self, path, con):
+    def set_selinux_context(self, path, con):  # pylint: disable=R1710
         """
         Calls shell 'chcon' with 'path' and 'con' context.
         Returns exit result.

@@ -76,7 +76,7 @@ class RDMAHandler(object):
     driver_module_name = 'hv_network_direct'
     nd_version = None
 
-    def get_rdma_version(self):
+    def get_rdma_version(self):  # pylint: disable=R1710
         """Retrieve the firmware version information from the system.
            This depends on information provided by the Linux kernel."""
 

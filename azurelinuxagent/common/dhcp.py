@@ -197,7 +197,7 @@ class DhcpHandler(object):
         self.endpoint, self.gateway, self.routes = parse_dhcp_resp(resp)
 
 
-def validate_dhcp_resp(request, response):
+def validate_dhcp_resp(request, response):  # pylint: disable=R1710
     bytes_recv = len(response)
     if bytes_recv < 0xF6:
         logger.error("HandleDhcpResponse: Too few bytes received:{0}",

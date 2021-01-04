@@ -110,8 +110,8 @@ class ExtCommandEnvVariable(object):
     WireProtocolAddress = "{0}_WIRE_PROTOCOL_ADDRESS".format(Prefix)
 
 
-def get_traceback(e):
-    if sys.version_info[0] == 3:
+def get_traceback(e):  # pylint: disable=R1710
+    if sys.version_info[0] == 3:  # pylint: disable=R1705
         return e.__traceback__
     elif sys.version_info[0] == 2:
         ex_type, ex, tb = sys.exc_info()  # pylint: disable=W0612
@@ -1317,7 +1317,7 @@ class ExtHandlerInstance(object):
                 self.logger.error(u"Failed to report extension status: {0}", e)
         return active_exts
 
-    def collect_heartbeat(self):
+    def collect_heartbeat(self):  # pylint: disable=R1710
         man = self.load_manifest()
         if not man.is_report_heartbeat():
             return
@@ -1639,8 +1639,8 @@ class ExtHandlerInstance(object):
         return processed_substatus
 
     @staticmethod
-    def _truncate_message(field, truncate_size=_MAX_SUBSTATUS_FIELD_LENGTH):
-        if field is None:
+    def _truncate_message(field, truncate_size=_MAX_SUBSTATUS_FIELD_LENGTH):  # pylint: disable=R1710
+        if field is None:  # pylint: disable=R1705
             return
         else:
             truncated_field = field if len(field) < truncate_size else field[:truncate_size] + _TRUNCATED_SUFFIX

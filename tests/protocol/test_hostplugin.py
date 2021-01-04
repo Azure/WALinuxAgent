@@ -532,7 +532,7 @@ class TestHostPlugin(HttpRequestPredicates, AgentTestCase):
                         exp_method, exp_url, exp_data)
 
     def test_validate_http_request_for_put_vm_log(self):
-        def http_put_handler(url, *args, **kwargs):
+        def http_put_handler(url, *args, **kwargs):  # pylint: disable=inconsistent-return-statements
             if self.is_host_plugin_put_logs_request(url):
                 http_put_handler.args, http_put_handler.kwargs = args, kwargs
                 return MockResponse(body=b'', status_code=200)
@@ -574,7 +574,7 @@ class TestHostPlugin(HttpRequestPredicates, AgentTestCase):
             self.assertTrue(UUID_PATTERN.match(headers["x-ms-client-correlationid"]), "Correlation id is not in GUID form!")
 
     def test_put_vm_log_should_raise_an_exception_when_request_fails(self):
-        def http_put_handler(url, *args, **kwargs):
+        def http_put_handler(url, *args, **kwargs):  # pylint: disable=inconsistent-return-statements
             if self.is_host_plugin_put_logs_request(url):
                 http_put_handler.args, http_put_handler.kwargs = args, kwargs
                 return MockResponse(body=ustr('Gone'), status_code=410)

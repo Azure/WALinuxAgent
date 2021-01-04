@@ -38,8 +38,31 @@
 
 [MESSAGES CONTROL]
 
-disable=C,R, # (C) convention, for programming standard violation (R) refactor, for bad code smell
-    bad-whitespace, # Used when a wrong number of spaces is used around an operator, bracket or block opener. **REMOVED IN pylint-2.6.0**
-    broad-except, # Used when an except catches a too general exception, possibly burying unrelated errors.
-    raise-missing-from, # Python 3's exception chaining means it shows the traceback of the current exception, but also the original exception. Not using raise from makes the traceback inaccurate, because the message implies there is a bug in the exception-handling code itself, which is a separate situation than wrapping an exception.
+disable=C, # (C) convention, for programming standard violation
+    consider-using-dict-comprehension, # (R1717): *Consider using a dictionary comprehension*
+    consider-using-in, # (R1714): *Consider merging these comparisons with "in" to %r*
+    consider-using-set-comprehension, # (R1718): *Consider using a set comprehension*
+    duplicate-code, # (R0801): *Similar lines in %s files*
+    no-else-break, # (R1723): *Unnecessary "%s" after "break"*
+    no-else-continue, # (R1724): *Unnecessary "%s" after "continue"*
+    no-else-raise, # (R1720): *Unnecessary "%s" after "raise"*
+    no-else-return, # (R1705): *Unnecessary "%s" after "return"*
+    no-self-use, # (R0201): *Method could be a function*
+    simplifiable-if-expression, # (R1719): *The if expression can be replaced with %s*
+    simplifiable-if-statement, # (R1703): *The if statement can be replaced with %s*
+    super-with-arguments, # (R1725): *Consider using Python 3 style super() without arguments*
+    too-few-public-methods, # (R0903): *Too few public methods (%s/%s)*
+    too-many-ancestors, # (R0901): *Too many ancestors (%s/%s)*
+    too-many-arguments, # (R0913): *Too many arguments (%s/%s)*
+    too-many-branches, # (R0912): *Too many branches (%s/%s)*
+    too-many-instance-attributes, # (R0902): *Too many instance attributes (%s/%s)*
+    too-many-locals, # (R0914): *Too many local variables (%s/%s)*
+    too-many-nested-blocks, # (R1702): *Too many nested blocks (%s/%s)*
+    too-many-public-methods, # (R0904): *Too many public methods (%s/%s)*
+    too-many-return-statements, # (R0911): *Too many return statements (%s/%s)*
+    too-many-statements, # (R0915): *Too many statements (%s/%s)*
+    useless-object-inheritance, # (R0205): *Class %r inherits from object, can be safely removed from bases in python3*
+    useless-return, # (R1711): *Useless return at end of function or method*
+    broad-except, # (W0703): *Catching too general exception %s*
+    raise-missing-from, # (W0707): *Consider explicitly re-raising using the 'from' keyword*
     fixme, # Used when a warning note as FIXME or TODO is detected
