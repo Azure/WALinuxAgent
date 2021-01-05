@@ -123,7 +123,7 @@ class OpenWRTOSUtil(DefaultOSUtil):
 
     def restart_ssh_service(self):  # pylint: disable=R1710
         # Since Dropbear is the default ssh server on OpenWRt, lets do a sanity check
-        if os.path.exists("/etc/init.d/sshd"):  # pylint: disable=R1705
+        if os.path.exists("/etc/init.d/sshd"):
             return shellutil.run("/etc/init.d/sshd restart", chk_err=True)
         else:
             logger.warn("sshd service does not exists")

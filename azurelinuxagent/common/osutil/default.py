@@ -1,4 +1,4 @@
-#  # pylint: disable=C0302
+#
 # Copyright 2018 Microsoft Corporation
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -31,17 +31,15 @@ import socket
 import struct
 import sys
 import time
-from pwd import getpwall  # pylint: disable=ungrouped-imports
+from pwd import getpwall
 
 import array
 
-# pylint: disable=R0801
 import azurelinuxagent.common.conf as conf
 import azurelinuxagent.common.logger as logger
 import azurelinuxagent.common.utils.fileutil as fileutil
 import azurelinuxagent.common.utils.shellutil as shellutil
 import azurelinuxagent.common.utils.textutil as textutil
-# pylint: enable=R0801
 
 from azurelinuxagent.common.exception import OSUtilError
 from azurelinuxagent.common.future import ustr, array_to_bytes
@@ -117,7 +115,7 @@ def _get_firewall_delete_conntrack_drop_command(wait, destination):
 PACKET_PATTERN = "^\s*(\d+)\s+(\d+)\s+DROP\s+.*{0}[^\d]*$"  # pylint: disable=W1401
 ALL_CPUS_REGEX = re.compile('^cpu .*')
 
-_enable_firewall = True  # pylint: disable=C0103
+_enable_firewall = True
 
 DMIDECODE_CMD = 'dmidecode --string system-uuid'
 PRODUCT_ID_FILE = '/sys/class/dmi/id/product_uuid'
@@ -136,7 +134,7 @@ STORAGE_DEVICE_PATH = '/sys/bus/vmbus/devices/'
 GEN2_DEVICE_ID = 'f8b3781a-1e82-4818-a1c3-63d806ec15bb'
 
 
-class DefaultOSUtil(object):  # pylint: disable=R0904
+class DefaultOSUtil(object):
     def __init__(self):
         self.agent_conf_file_path = '/etc/waagent.conf'
         self.selinux = None
@@ -150,7 +148,7 @@ class DefaultOSUtil(object):  # pylint: disable=R0904
 
     def get_firewall_dropped_packets(self, dst_ip=None):
         # If a previous attempt failed, do not retry
-        global _enable_firewall  # pylint: disable=W0603,C0103
+        global _enable_firewall  # pylint: disable=W0603
         if not _enable_firewall:
             return 0
 
@@ -162,11 +160,11 @@ class DefaultOSUtil(object):  # pylint: disable=R0904
 
                 pattern = re.compile(PACKET_PATTERN.format(dst_ip))
                 for line in output.split('\n'):
-                    m = pattern.match(line)  # pylint: disable=C0103
+                    m = pattern.match(line)
                     if m is not None:
                         return int(m.group(1))
 
-            except Exception as e:  # pylint: disable=C0103
+            except Exception as e:
                 if isinstance(e, CommandError) and e.returncode == 3:  # pylint: disable=E1101
                     # Transient error  that we ignore.  This code fires every loop
                     # of the daemon (60m), so we will get the value eventually.
@@ -176,7 +174,7 @@ class DefaultOSUtil(object):  # pylint: disable=R0904
 
             return 0
 
-        except Exception as e:  # pylint: disable=C0103
+        except Exception as e:
             _enable_firewall = False
             logger.warn("Unable to retrieve firewall packets dropped"
                         "{0}".format(ustr(e)))
@@ -186,12 +184,12 @@ class DefaultOSUtil(object):  # pylint: disable=R0904
         # Determine if iptables will serialize access
         try:
             output = shellutil.run_command(_get_iptables_version_command())
-        except Exception as e:  # pylint: disable=C0103
+        except Exception as e:
             msg = "Unable to determine version of iptables: {0}".format(ustr(e))
             logger.warn(msg)
             raise Exception(msg)
 
-        m = _IPTABLES_VERSION_PATTERN.match(output)  # pylint: disable=C0103
+        m = _IPTABLES_VERSION_PATTERN.match(output)
         if m is None:
             msg = "iptables did not return version information: {0}".format(output)
             logger.warn(msg)
@@ -209,8 +207,8 @@ class DefaultOSUtil(object):  # pylint: disable=R0904
         """
         for i in range(1, 100):  # pylint: disable=W0612
             try:
-                rc = shellutil.run_command(rule)  # pylint: disable=W0612,C0103
-            except CommandError as e:  # pylint: disable=C0103
+                rc = shellutil.run_command(rule)  # pylint: disable=W0612
+            except CommandError as e:
                 if e.returncode == 1:
                     return
                 if e.returncode == 2:
@@ -218,7 +216,7 @@ class DefaultOSUtil(object):  # pylint: disable=R0904
 
     def remove_firewall(self, dst_ip, uid):
         # If a previous attempt failed, do not retry
-        global _enable_firewall  # pylint: disable=W0603,C0103
+        global _enable_firewall  # pylint: disable=W0603
         if not _enable_firewall:
             return False
 
@@ -233,7 +231,7 @@ class DefaultOSUtil(object):  # pylint: disable=R0904
 
             return True
 
-        except Exception as e:  # pylint: disable=C0103
+        except Exception as e:
             _enable_firewall = False
             logger.info("Unable to remove firewall -- "
                         "no further attempts will be made: "
@@ -242,7 +240,7 @@ class DefaultOSUtil(object):  # pylint: disable=R0904
 
     def enable_firewall(self, dst_ip, uid):
         # If a previous attempt failed, do not retry
-        global _enable_firewall  # pylint: disable=W0603,C0103
+        global _enable_firewall  # pylint: disable=W0603
         if not _enable_firewall:
             return False
 
@@ -256,7 +254,7 @@ class DefaultOSUtil(object):  # pylint: disable=R0904
                 shellutil.run_command(drop_rule)
                 logger.verbose("Firewall appears established")
                 return True
-            except CommandError as e:  # pylint: disable=C0103
+            except CommandError as e:
                 if e.returncode == 2:
                     self.remove_firewall(dst_ip, uid)
                     msg = "please upgrade iptables to a version that supports the -C option"
@@ -267,7 +265,7 @@ class DefaultOSUtil(object):  # pylint: disable=R0904
             try:
                 accept_rule = _get_firewall_accept_command(wait, "-A", dst_ip, uid)
                 shellutil.run_command(accept_rule)
-            except Exception as e:  # pylint: disable=C0103
+            except Exception as e:
                 msg = "Unable to add ACCEPT firewall rule '{0}' - {1}".format(accept_rule, ustr(e))
                 logger.warn(msg)
                 raise Exception(msg)
@@ -275,7 +273,7 @@ class DefaultOSUtil(object):  # pylint: disable=R0904
             try:
                 drop_rule = _get_firewall_drop_command(wait, "-A", dst_ip)
                 shellutil.run_command(drop_rule)
-            except Exception as e:  # pylint: disable=C0103
+            except Exception as e:
                 msg = "Unable to add DROP firewall rule '{0}' - {1}".format(drop_rule, ustr(e))
                 logger.warn(msg)
                 raise Exception(msg)
@@ -285,12 +283,12 @@ class DefaultOSUtil(object):  # pylint: disable=R0904
             try:
                 output = shellutil.run_command(_get_firewall_list_command(wait))
                 logger.info("Firewall rules:\n{0}".format(output))
-            except Exception as e:  # pylint: disable=C0103
+            except Exception as e:
                 logger.warn("Listing firewall rules failed: {0}".format(ustr(e)))
 
             return True
 
-        except Exception as e:  # pylint: disable=C0103
+        except Exception as e:
             _enable_firewall = False
             logger.info("Unable to establish firewall -- "
                         "no further attempts will be made: "
@@ -347,10 +345,10 @@ class DefaultOSUtil(object):  # pylint: disable=R0904
         If nothing works (for old VMs), return the empty string
         """
         if os.path.isfile(PRODUCT_ID_FILE):
-            s = fileutil.read_file(PRODUCT_ID_FILE).strip()  # pylint: disable=C0103
+            s = fileutil.read_file(PRODUCT_ID_FILE).strip()
 
         else:
-            rc, s = shellutil.run_get_output(DMIDECODE_CMD)  # pylint: disable=C0103
+            rc, s = shellutil.run_get_output(DMIDECODE_CMD)
             if rc != 0 or UUID_PATTERN.match(s) is None:
                 return ""
 
@@ -379,11 +377,11 @@ class DefaultOSUtil(object):  # pylint: disable=R0904
                                                         "/etc/login.defs")
             if uidmin_def is not None:
                 uidmin = int(uidmin_def.split()[1])
-        except IOError as e:  # pylint: disable=W0612,C0103
+        except IOError as e:  # pylint: disable=W0612
             pass
-        if uidmin == None:  # pylint: disable=C0121
+        if uidmin == None:
             uidmin = 100
-        if userentry != None and userentry[2] < uidmin:  # pylint: disable=C0121,R1705,R1703
+        if userentry != None and userentry[2] < uidmin:
             return True
         else:
             return False
@@ -449,7 +447,7 @@ class DefaultOSUtil(object):  # pylint: disable=R0904
                     sudoers = content.split("\n")
                     sudoers = [x for x in sudoers if username not in x]
                     fileutil.write_file(sudoers_wagent, "\n".join(sudoers))
-                except IOError as e:  # pylint: disable=C0103
+                except IOError as e:
                     raise OSUtilError("Failed to remove sudoer: {0}".format(e))
 
     def del_root_password(self):
@@ -460,7 +458,7 @@ class DefaultOSUtil(object):  # pylint: disable=R0904
             new_passwd = [x for x in passwd if not x.startswith("root:")]
             new_passwd.insert(0, "root:*LOCK*:14600::::::")
             fileutil.write_file(passwd_file_path, "\n".join(new_passwd))
-        except IOError as e:  # pylint: disable=C0103
+        except IOError as e:
             raise OSUtilError("Failed to delete root password:{0}".format(e))
 
     @staticmethod
@@ -538,8 +536,8 @@ class DefaultOSUtil(object):  # pylint: disable=R0904
         """
         Checks and sets self.selinux = True if SELinux is available on system.
         """
-        if self.selinux == None:  # pylint: disable=C0121
-            if shellutil.run("which getenforce", chk_err=False) == 0:  # pylint: disable=simplifiable-if-statement
+        if self.selinux == None:
+            if shellutil.run("which getenforce", chk_err=False) == 0:
                 self.selinux = True
             else:
                 self.selinux = False
@@ -549,7 +547,7 @@ class DefaultOSUtil(object):  # pylint: disable=R0904
         """
         Calls shell command 'getenforce' and returns True if 'Enforcing'.
         """
-        if self.is_selinux_system():  # pylint: disable=R1705
+        if self.is_selinux_system():
             output = shellutil.run_get_output("getenforce")[1]
             return output.startswith("Enforcing")
         else:
@@ -594,7 +592,7 @@ class DefaultOSUtil(object):  # pylint: disable=R0904
         raise OSUtilError(msg="Failed to get dvd device from {0}".format(dev_dir),
                           inner=inner_detail)
 
-    def mount_dvd(self,  # pylint: disable=R0913
+    def mount_dvd(self,
                   max_retry=6,
                   chk_err=True,
                   dvd_device=None,
@@ -621,7 +619,7 @@ class DefaultOSUtil(object):  # pylint: disable=R0904
                                           mount_point,
                                           option=["-o", "ro", "-t", "udf,iso9660,vfat"],
                                           chk_err=False)
-            if return_code == 0:  # pylint: disable=R1705
+            if return_code == 0:
                 logger.info("Successfully mounted dvd")
                 return
             else:
@@ -664,7 +662,7 @@ class DefaultOSUtil(object):  # pylint: disable=R0904
     def try_load_atapiix_mod(self):
         try:
             self.load_atapiix_mod()
-        except Exception as e:  # pylint: disable=C0103
+        except Exception as e:
             logger.warn("Could not load ATAPI driver: {0}".format(e))
 
     def load_atapiix_mod(self):
@@ -808,7 +806,7 @@ class DefaultOSUtil(object):  # pylint: disable=R0904
         ifaces = {}
         for i in range(0, array_size, struct_size):
             iface = ifconf_buff[i:i + IFNAMSIZ].split(b'\0', 1)[0]
-            if len(iface) > 0:  # pylint: disable=len-as-condition
+            if len(iface) > 0:
                 iface_name = iface.decode('latin-1')
                 if iface_name not in ifaces:
                     ifaces[iface_name] = socket.inet_ntoa(ifconf_buff[i + 20:i + 24])
@@ -825,7 +823,7 @@ class DefaultOSUtil(object):  # pylint: disable=R0904
         if primary in ifaces:
             return primary, ifaces[primary]
 
-        for iface_name in ifaces.keys():  # pylint: disable=C0201
+        for iface_name in ifaces.keys():
             if not self.is_loopback(iface_name):
                 logger.info("Choosing non-primary [{0}]".format(iface_name))
                 return iface_name, ifaces[iface_name]
@@ -861,7 +859,7 @@ class DefaultOSUtil(object):  # pylint: disable=R0904
         route_list = []
         for entry in proc_net_route[1:]:
             route = entry.split("\t")
-            if len(route) > 0:  # pylint: disable=len-as-condition
+            if len(route) > 0:
                 route_obj = RouteEntry(route[idx_iface], route[idx_dest], route[idx_gw], route[idx_mask],
                                        route[idx_flags], route[idx_metric])
                 route_list.append(route_obj)
@@ -879,7 +877,7 @@ class DefaultOSUtil(object):  # pylint: disable=R0904
         try:
             with open('/proc/net/route') as routing_table:
                 return list(map(str.strip, routing_table.readlines()))
-        except Exception as e:  # pylint: disable=C0103
+        except Exception as e:
             logger.error("Cannot read route table [{0}]", ustr(e))
 
         return []
@@ -912,8 +910,8 @@ class DefaultOSUtil(object):  # pylint: disable=R0904
         :return: the interface which has the default route
         """
         # from linux/route.h
-        RTF_GATEWAY = 0x02  # pylint: disable=C0103
-        DEFAULT_DEST = "00000000"  # pylint: disable=C0103
+        RTF_GATEWAY = 0x02
+        DEFAULT_DEST = "00000000"
 
         primary_interface = None
 
@@ -927,7 +925,7 @@ class DefaultOSUtil(object):  # pylint: disable=R0904
 
         candidates = list(filter(is_default, DefaultOSUtil.get_list_of_routes(route_table)))
 
-        if len(candidates) > 0:  # pylint: disable=len-as-condition
+        if len(candidates) > 0:
             def get_metric(route):
                 return int(route.metric)
 
@@ -961,7 +959,7 @@ class DefaultOSUtil(object):  # pylint: disable=R0904
         """
         Determine if a named interface is loopback.
         """
-        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)  # pylint: disable=C0103
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
         ifname_buff = ifname + ('\0' * 256)
         result = fcntl.ioctl(s.fileno(), IOCTL_SIOCGIFFLAGS, ifname_buff)
         flags, = struct.unpack('H', result[16:18])
@@ -982,7 +980,7 @@ class DefaultOSUtil(object):  # pylint: disable=R0904
         return None
 
     @staticmethod
-    def get_endpoint_from_leases_path(pathglob):  # pylint: disable=R0912
+    def get_endpoint_from_leases_path(pathglob):
         """
         Try to discover and decode the wireserver endpoint in the
         specified dhcp leases path.
@@ -991,16 +989,16 @@ class DefaultOSUtil(object):  # pylint: disable=R0904
         """
         endpoint = None
 
-        HEADER_LEASE = "lease"  # pylint: disable=C0103
-        HEADER_OPTION_245 = "option unknown-245"  # pylint: disable=C0103
-        HEADER_EXPIRE = "expire"  # pylint: disable=C0103
-        FOOTER_LEASE = "}"  # pylint: disable=C0103
-        FORMAT_DATETIME = "%Y/%m/%d %H:%M:%S"  # pylint: disable=C0103
+        HEADER_LEASE = "lease"
+        HEADER_OPTION_245 = "option unknown-245"
+        HEADER_EXPIRE = "expire"
+        FOOTER_LEASE = "}"
+        FORMAT_DATETIME = "%Y/%m/%d %H:%M:%S"
         option_245_re = re.compile(
             r'\s*option\s+unknown-245\s+([0-9a-fA-F]+):([0-9a-fA-F]+):([0-9a-fA-F]+):([0-9a-fA-F]+);')
 
         logger.info("looking for leases in path [{0}]".format(pathglob))
-        for lease_file in glob.glob(pathglob):  # pylint: disable=R1702
+        for lease_file in glob.glob(pathglob):
             leases = open(lease_file).read()
             if HEADER_OPTION_245 in leases:
                 cached_endpoint = None
@@ -1051,7 +1049,7 @@ class DefaultOSUtil(object):  # pylint: disable=R0904
                 if route.startswith("0.0.0.0 ") or route.startswith("default "):
                     return False
             return True
-        except CommandError as e:  # pylint: disable=C0103
+        except CommandError as e:
             logger.warn("Cannot get the routing table. {0} failed: {1}", ustr(route_cmd), ustr(e))
             return False
 
@@ -1251,7 +1249,7 @@ class DefaultOSUtil(object):  # pylint: disable=R0904
         device = None
         # We have to try device IDs for both Gen1 and Gen2 VMs.
         logger.info('Searching gen1 prefix {0} or gen2 {1}'.format(gen1_device_prefix, gen2_device_id))
-        try:  # pylint: disable=R1702
+        try:
             for vmbus, guid in DefaultOSUtil._enumerate_device_id():
                 if guid.startswith(gen1_device_prefix) or guid == gen2_device_id:
                     for root, dirs, files in os.walk(STORAGE_DEVICE_PATH + vmbus):  # pylint: disable=W0612
@@ -1263,14 +1261,14 @@ class DefaultOSUtil(object):  # pylint: disable=R0904
                         #   0 - OS disk
                         #   1 - Resource disk
                         #   2 - CDROM
-                        if root_path_parts[-1] == 'block' and (  # pylint: disable=R1705
+                        if root_path_parts[-1] == 'block' and (
                                 guid != gen2_device_id or
                                 root_path_parts[-2].split(':')[-1] == '1'):
                             device = dirs[0]
                             return device
                         else:
                             # older distros
-                            for d in dirs:  # pylint: disable=C0103
+                            for d in dirs:
                                 if ':' in d and "block" == d.split(':')[0]:
                                     device = d.split(':')[1]
                                     return device
@@ -1284,9 +1282,9 @@ class DefaultOSUtil(object):  # pylint: disable=R0904
         """
         if port_id > 3:
             return None
-        g0 = "00000000"  # pylint: disable=C0103
+        g0 = "00000000"
         if port_id > 1:
-            g0 = "00000001"  # pylint: disable=C0103
+            g0 = "00000001"
             port_id = port_id - 2
 
         gen1_device_prefix = '{0}-000{1}'.format(g0, port_id)
@@ -1474,12 +1472,12 @@ class DefaultOSUtil(object):  # pylint: disable=R0904
                 break
 
     @staticmethod
-    def _run_command_raising_OSUtilError(cmd, err_msg, cmd_input=None):  # pylint: disable=C0103
+    def _run_command_raising_OSUtilError(cmd, err_msg, cmd_input=None):
         # This method runs shell command using the new secure shellutil.run_command and raises OSUtilErrors on failures.
         try:
             return shellutil.run_command(cmd, log_error=True, input=cmd_input)
-        except shellutil.CommandError as e:  # pylint: disable=C0103
+        except shellutil.CommandError as e:
             raise OSUtilError(
                 "{0}, Retcode: {1}, Output: {2}, Error: {3}".format(err_msg, e.returncode, e.stdout, e.stderr))
-        except Exception as e:  # pylint: disable=C0103
+        except Exception as e:
             raise OSUtilError("{0}, Retcode: {1}, Error: {2}".format(err_msg, -1, ustr(e)))

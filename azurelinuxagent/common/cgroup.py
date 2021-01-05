@@ -40,7 +40,7 @@ class MetricsCounter(object):
     MAX_MEM_USAGE = "Max Memory Usage"
 
 
-re_user_system_times = re.compile(r'user (\d+)\nsystem (\d+)\n')  # pylint: disable=invalid-name
+re_user_system_times = re.compile(r'user (\d+)\nsystem (\d+)\n')
 
 
 class CGroupContollers(object):
@@ -105,7 +105,7 @@ class CGroup(object):
             parameter_filename = self._get_cgroup_file(parameter_name)
             logger.error("File {0} is empty but should not be".format(parameter_filename))
             raise CGroupsException("File {0} is empty but should not be".format(parameter_filename))
-        except Exception as e:  # pylint: disable=C0103
+        except Exception as e:
             if isinstance(e, (IOError, OSError)) and e.errno == errno.ENOENT:  # pylint: disable=E1101
                 raise e
             parameter_filename = self._get_cgroup_file(parameter_name)
@@ -116,8 +116,8 @@ class CGroup(object):
         try:
             tasks = self._get_parameters("tasks")
             if tasks:
-                return len(tasks) != 0  # pylint: disable=len-as-condition
-        except (IOError, OSError) as e:  # pylint: disable=C0103
+                return len(tasks) != 0
+        except (IOError, OSError) as e:
             if e.errno == errno.ENOENT:
                 # only suppressing file not found exceptions.
                 pass
@@ -125,7 +125,7 @@ class CGroup(object):
                 logger.periodic_warn(logger.EVERY_HALF_HOUR,
                                      'Could not get list of tasks from "tasks" file in the cgroup: {0}.'
                                      ' Internal error: {1}'.format(self.path, ustr(e)))
-        except CGroupsException as e:  # pylint: disable=C0103
+        except CGroupsException as e:
             logger.periodic_warn(logger.EVERY_HALF_HOUR,
                                  'Could not get list of tasks from "tasks" file in the cgroup: {0}.'
                                  ' Internal error: {1}'.format(self.path, ustr(e)))
@@ -162,7 +162,7 @@ class CpuCgroup(CGroup):
         """
         try:
             cpu_stat = self._get_file_contents('cpuacct.stat')
-        except Exception as e:  # pylint: disable=C0103
+        except Exception as e:
             if not isinstance(e, (IOError, OSError)) or e.errno != errno.ENOENT:  # pylint: disable=E1101
                 raise CGroupsException("Failed to read cpuacct.stat: {0}".format(ustr(e)))
             if not allow_no_such_file_or_directory_error:
@@ -243,7 +243,7 @@ class MemoryCgroup(CGroup):
         usage = None
         try:
             usage = self._get_parameters('memory.usage_in_bytes', first_line_only=True)
-        except Exception as e:  # pylint: disable=C0103
+        except Exception as e:
             if isinstance(e, (IOError, OSError)) and e.errno == errno.ENOENT:  # pylint: disable=E1101
                 raise
             raise CGroupsException("Exception while attempting to read {0}".format("memory.usage_in_bytes"), e)
@@ -260,7 +260,7 @@ class MemoryCgroup(CGroup):
         usage = None
         try:
             usage = self._get_parameters('memory.max_usage_in_bytes', first_line_only=True)
-        except Exception as e:  # pylint: disable=C0103
+        except Exception as e:
             if isinstance(e, (IOError, OSError)) and e.errno == errno.ENOENT:  # pylint: disable=E1101
                 raise
             raise CGroupsException("Exception while attempting to read {0}".format("memory.usage_in_bytes"), e)

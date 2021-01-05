@@ -49,10 +49,10 @@ class TestSingletonPerThread(AgentTestCase):
         self.errors = Queue()
         clear_singleton_instances(TestClassToTestSingletonPerThread)
 
-    def _setup_multithread_and_execute(self, func1, args1, func2, args2, t1_name=None, t2_name=None):  # pylint: disable=too-many-arguments
+    def _setup_multithread_and_execute(self, func1, args1, func2, args2, t1_name=None, t2_name=None):
 
-        t1 = Thread(target=func1, args=args1)  # pylint: disable=invalid-name
-        t2 = Thread(target=func2, args=args2)  # pylint: disable=invalid-name
+        t1 = Thread(target=func1, args=args1)
+        t2 = Thread(target=func2, args=args2)
         t1.setName(t1_name if t1_name else self.THREAD_NAME_1)
         t2.setName(t2_name if t2_name else self.THREAD_NAME_2)
         t1.start()
@@ -63,22 +63,22 @@ class TestSingletonPerThread(AgentTestCase):
         errs = []
         while not self.errors.empty():
             errs.append(self.errors.get())
-        if len(errs) > 0:  # pylint: disable=len-as-condition
+        if len(errs) > 0:
             raise Exception("Errors: %s" % ' , '.join(errs))
 
     @staticmethod
-    def _get_test_class_instance(q, err):  # pylint: disable=invalid-name
+    def _get_test_class_instance(q, err):
         try:
             obj = TestClassToTestSingletonPerThread()
             q.put(obj)
-        except Exception as e:  # pylint: disable=invalid-name
+        except Exception as e:
             err.put(str(e))
 
     def _parse_instances_and_return_thread_objects(self, instances, t1_name=None, t2_name=None):
         obj1, obj2 = instances.get(), instances.get()
 
         def check_obj(name):
-            if obj1.name == name:  # pylint: disable=no-else-return
+            if obj1.name == name:
                 return obj1
             elif obj2.name == name:
                 return obj2

@@ -60,7 +60,7 @@ def _create_monitor_handler(enabled_operations=None, iterations=1):
         enabled_operations = []
 
     def run(self):
-        if len(enabled_operations) == 0 or self._name in enabled_operations:  # pylint: disable=protected-access,len-as-condition
+        if len(enabled_operations) == 0 or self._name in enabled_operations:  # pylint: disable=protected-access
             run.original_definition(self)
     run.original_definition = PeriodicOperation.run
 

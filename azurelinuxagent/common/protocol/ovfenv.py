@@ -38,7 +38,7 @@ def _validate_ovf(val, msg):
         raise ProtocolError("Failed to validate OVF: {0}".format(msg))
 
 
-class OvfEnv(object):  # pylint: disable=R0902
+class OvfEnv(object):
     """
     Read, and process provisioning info from provisioning file OvfEnv.xml
     """
@@ -95,7 +95,7 @@ class OvfEnv(object):  # pylint: disable=R0902
         
         auth_option = findtext(conf_set, "DisableSshPasswordAuthentication", 
                                namespace=wans)
-        if auth_option is not None and auth_option.lower() == "true":  # pylint: disable=simplifiable-if-statement
+        if auth_option is not None and auth_option.lower() == "true":
             self.disable_ssh_password_auth = True
         else:
             self.disable_ssh_password_auth = False

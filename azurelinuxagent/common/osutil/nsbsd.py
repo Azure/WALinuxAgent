@@ -47,7 +47,7 @@ class NSBSDOSUtil(FreeBSDOSUtil):
                     break
                 server = server[:-1] # remove last '='
                 cmd = "grep '{}' /etc/hosts".format(server) + " | awk '{print $1}'"
-                ret, ip = shellutil.run_get_output(cmd)  # pylint: disable=C0103
+                ret, ip = shellutil.run_get_output(cmd)
                 servers.append(ip)
             self.resolver.nameservers = servers
             dns.resolver.override_system_resolver(self.resolver)

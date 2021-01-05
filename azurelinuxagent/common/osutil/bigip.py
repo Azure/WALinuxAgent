@@ -63,7 +63,7 @@ class BigIpOSUtil(DefaultOSUtil):
         for retries in range(1, 100):  # pylint: disable=W0612
             # Retry until mcpd completes startup:
             logger.info("Checking to see if mcpd is up")
-            rc = shellutil.run("/usr/bin/tmsh -a show sys mcp-state field-fmt 2>/dev/null | grep phase | grep running", chk_err=False)  # pylint: disable=C0103
+            rc = shellutil.run("/usr/bin/tmsh -a show sys mcp-state field-fmt 2>/dev/null | grep phase | grep running", chk_err=False)
             if rc == 0:
                 logger.info("mcpd is up!")
                 break
@@ -78,7 +78,7 @@ class BigIpOSUtil(DefaultOSUtil):
 
     def _save_sys_config(self):
         cmd = "/usr/bin/tmsh save sys config"
-        rc = shellutil.run(cmd)  # pylint: disable=C0103
+        rc = shellutil.run(cmd)
         if rc != 0:
             logger.error("WARNING: Cannot save sys config on 1st boot.")
         return rc
@@ -295,7 +295,7 @@ class BigIpOSUtil(DefaultOSUtil):
             iface = self._format_single_interface_name(sock, i)
 
             # Azure public was returning "lo:1" when deploying WAF
-            if b'lo' in iface:  # pylint: disable=R1724
+            if b'lo' in iface:
                 continue
             else:
                 break
@@ -327,7 +327,7 @@ class BigIpOSUtil(DefaultOSUtil):
         """
         for retries in range(1, 100):  # pylint: disable=W0612
             # Retry until devices are ready
-            if os.path.exists("/sys/bus/vmbus/devices/"):  # pylint: disable=R1723
+            if os.path.exists("/sys/bus/vmbus/devices/"):
                 break
             else:
                 time.sleep(10)

@@ -311,9 +311,7 @@ Description=Slice for Azure VM Extensions"""
         unit_not_found = "Unit {0} not found.".format(scope_name)
         return unit_not_found in stderr or scope_name not in stderr
 
-    # R0913: Too many arguments (7/5) -- disabled: the parameter list mimics subprocess.Popen()
-    # R0912: Too many branches (14/12) -- disabled: branches are sequential
-    def start_extension_command(self, extension_name, command, timeout, shell, cwd, env, stdout, stderr, error_code=ExtensionErrorCodes.PluginUnknownFailure):   # pylint: disable=R0913,R0912
+    def start_extension_command(self, extension_name, command, timeout, shell, cwd, env, stdout, stderr, error_code=ExtensionErrorCodes.PluginUnknownFailure): 
         scope = "{0}_{1}".format(self._get_extension_cgroup_name(extension_name), uuid.uuid4())
 
         with self._systemd_run_commands_lock:
@@ -349,11 +347,11 @@ Description=Slice for Azure VM Extensions"""
                 memory_cgroup_path = os.path.join(memory_cgroup_mountpoint, cgroup_relative_path)
                 CGroupsTelemetry.track_cgroup(MemoryCgroup(extension_name, memory_cgroup_path))
 
-        except IOError as e:  # pylint: disable=C0103
+        except IOError as e:
             if e.errno == 2:  # 'No such file or directory'
                 logger.info("The extension command already completed; will not track resource usage")
             logger.info("Failed to start tracking resource usage for the extension: {0}", ustr(e))
-        except Exception as e:  # pylint: disable=C0103
+        except Exception as e:
             logger.info("Failed to start tracking resource usage for the extension: {0}", ustr(e))
 
         # Wait for process completion or timeout
@@ -368,13 +366,13 @@ Description=Slice for Azure VM Extensions"""
             finally:
                 with self._systemd_run_commands_lock:
                     self._systemd_run_commands.remove(process.pid)
-        except ExtensionError as e:  # pylint: disable=C0103
+        except ExtensionError as e:
             # The extension didn't terminate successfully. Determine whether it was due to systemd errors or
             # extension errors.
             systemd_failure = self._is_systemd_failure(scope, stderr)
             process_output = read_output(stdout, stderr)
 
-            if not systemd_failure:  # pylint: disable=R1720
+            if not systemd_failure:
                 # There was an extension error; it either timed out or returned a non-zero exit code. Re-raise the error
                 raise
             else:

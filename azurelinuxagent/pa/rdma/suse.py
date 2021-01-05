@@ -25,7 +25,7 @@ from azurelinuxagent.common.rdma import RDMAHandler
 
 class SUSERDMAHandler(RDMAHandler):
 
-    def install_driver(self):  # pylint: disable=R0912,R1710
+    def install_driver(self):  # pylint: disable=R1710
         """Install the appropriate driver package for the RDMA firmware"""
 
         fw_version = self.get_rdma_version()

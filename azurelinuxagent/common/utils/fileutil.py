@@ -21,7 +21,7 @@
 File operation util functions
 """
 
-import errno as errno  # pylint: disable=C0414
+import errno as errno
 import glob
 import os
 import pwd
@@ -135,11 +135,11 @@ def rm_dirs(*args):
     """
     Remove the contents of each directory
     """
-    for p in args:  # pylint: disable=C0103
+    for p in args:
         if not os.path.isdir(p):
             continue
 
-        for pp in os.listdir(p):  # pylint: disable=C0103
+        for pp in os.listdir(p):
             path = os.path.join(p, pp)
             if os.path.isfile(path):
                 os.remove(path)
@@ -186,7 +186,7 @@ def findstr_in_file(file_path, line_str):
     (Trailing whitespace is ignored.)
     """
     try:
-        with open(file_path, 'r') as fh:  # pylint: disable=C0103
+        with open(file_path, 'r') as fh:
             for line in fh.readlines():
                 if line_str == line.rstrip():
                     return True
@@ -201,7 +201,7 @@ def findre_in_file(file_path, line_re):
     Return match object if found in file.
     """
     try:
-        with open(file_path, 'r') as fh:  # pylint: disable=C0103
+        with open(file_path, 'r') as fh:
             pattern = re.compile(line_re)
             for line in fh.readlines():
                 match = re.search(pattern, line)
@@ -224,7 +224,7 @@ def get_all_files(root_path):
     return result
 
 
-def clean_ioerror(e, paths=None):  # pylint: disable=C0103
+def clean_ioerror(e, paths=None):
     """
     Clean-up possibly bad files and directories after an IO error.
     The code ignores *all* errors since disk state may be unhealthy.

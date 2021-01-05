@@ -70,11 +70,11 @@ def get_user_dictionary(users):
     return user_dictionary
 
 
-def mock_add_event(name, op, is_success, version, message):  # pylint: disable=invalid-name
+def mock_add_event(name, op, is_success, version, message):
     TestRemoteAccessHandler.eventing_data = (name, op, is_success, version, message)
 
 
-class TestRemoteAccessHandler(AgentTestCase):  # pylint: disable=too-many-public-methods
+class TestRemoteAccessHandler(AgentTestCase):
     eventing_data = [()]
 
     def setUp(self):
@@ -235,7 +235,7 @@ class TestRemoteAccessHandler(AgentTestCase):  # pylint: disable=too-many-public
         for user in test_users:
             if rah._is_jit_user(user):  # pylint: disable=protected-access
                 failed_results += "incorrectly identified '{0} as a JIT_Account'.  ".format(user)
-        if len(failed_results) > 0:  # pylint: disable=len-as-condition
+        if len(failed_results) > 0:
             self.fail(failed_results)
 
     @patch('azurelinuxagent.common.utils.cryptutil.CryptUtil.decrypt_secret', return_value="]aPPEv}uNg1FPnl?")

@@ -75,11 +75,11 @@ class TestProtocolUtil(AgentTestCase):
         def get_protocol_util_instance():
             try:
                 protocol_util_instances.append(get_protocol_util())
-            except Exception as e:  # pylint: disable=invalid-name
+            except Exception as e:
                 errors.append(e)
 
-        t1 = Thread(target=get_protocol_util_instance)  # pylint: disable=invalid-name
-        t2 = Thread(target=get_protocol_util_instance)  # pylint: disable=invalid-name
+        t1 = Thread(target=get_protocol_util_instance)
+        t2 = Thread(target=get_protocol_util_instance)
         t1.start()
         t2.start()
         t1.join()
@@ -89,7 +89,7 @@ class TestProtocolUtil(AgentTestCase):
         self.assertNotEqual(protocol_util_instances[0], protocol_util_instances[1], "The instances created by different threads should be different")
     
     @patch("azurelinuxagent.common.protocol.util.WireProtocol")
-    def test_detect_protocol(self, WireProtocol, _):  # pylint: disable=invalid-name
+    def test_detect_protocol(self, WireProtocol, _):
         WireProtocol.return_value = MagicMock()
 
         protocol_util = get_protocol_util()
@@ -109,7 +109,7 @@ class TestProtocolUtil(AgentTestCase):
 
     @patch("azurelinuxagent.common.conf.get_lib_dir")
     @patch("azurelinuxagent.common.protocol.util.WireProtocol")
-    def test_detect_protocol_no_dhcp(self, WireProtocol, mock_get_lib_dir, _):  # pylint: disable=invalid-name
+    def test_detect_protocol_no_dhcp(self, WireProtocol, mock_get_lib_dir, _):
         WireProtocol.return_value.detect = Mock()
         mock_get_lib_dir.return_value = self.tmp_dir
 
@@ -135,7 +135,7 @@ class TestProtocolUtil(AgentTestCase):
         self.assertRaises(ProtocolError, protocol_util._detect_protocol)  # pylint: disable=protected-access
 
     @patch("azurelinuxagent.common.protocol.util.WireProtocol")
-    def test_get_protocol(self, WireProtocol, _):  # pylint: disable=invalid-name
+    def test_get_protocol(self, WireProtocol, _):
         WireProtocol.return_value = MagicMock()
 
         protocol_util = get_protocol_util()
@@ -161,7 +161,7 @@ class TestProtocolUtil(AgentTestCase):
         # Setup Protocol file with WireProtocol
         dir = tempfile.gettempdir()  # pylint: disable=redefined-builtin
         filename = os.path.join(dir, PROTOCOL_FILE_NAME)
-        with open(filename, "w") as f:  # pylint: disable=invalid-name
+        with open(filename, "w") as f:
             f.write(WIRE_PROTOCOL_NAME)
 
         # Setup MDS Certificates
@@ -200,7 +200,7 @@ class TestProtocolUtil(AgentTestCase):
         # Setup Protocol file with MetadataProtocol
         dir = tempfile.gettempdir()  # pylint: disable=redefined-builtin
         protocol_filename = os.path.join(dir, PROTOCOL_FILE_NAME)
-        with open(protocol_filename, "w") as f:  # pylint: disable=invalid-name
+        with open(protocol_filename, "w") as f:
             f.write(_METADATA_PROTOCOL_NAME)
 
         # Setup MDS Certificates
@@ -234,11 +234,11 @@ class TestProtocolUtil(AgentTestCase):
         protocol_util.osutil.enable_firewall.assert_called_once()
 
         # Check Protocol File is updated to WireProtocol
-        with open(os.path.join(dir, PROTOCOL_FILE_NAME), "r") as f:  # pylint: disable=invalid-name
+        with open(os.path.join(dir, PROTOCOL_FILE_NAME), "r") as f:
             self.assertEqual(f.read(), WIRE_PROTOCOL_NAME)
         
         # Check Endpoint file is updated to WireServer IP
-        with open(os.path.join(dir, ENDPOINT_FILE_NAME), 'r') as f:  # pylint: disable=invalid-name
+        with open(os.path.join(dir, ENDPOINT_FILE_NAME), 'r') as f:
             self.assertEqual(f.read(), KNOWN_WIRESERVER_IP)
 
     @patch('azurelinuxagent.common.conf.get_lib_dir')
@@ -272,11 +272,11 @@ class TestProtocolUtil(AgentTestCase):
         protocol_util.osutil.enable_firewall.assert_not_called()
 
         # Check Protocol File is updated to WireProtocol
-        with open(os.path.join(dir, PROTOCOL_FILE_NAME), "r") as f:  # pylint: disable=invalid-name
+        with open(os.path.join(dir, PROTOCOL_FILE_NAME), "r") as f:
             self.assertEqual(f.read(), WIRE_PROTOCOL_NAME)
         
         # Check Endpoint file is updated to WireServer IP
-        with open(os.path.join(dir, ENDPOINT_FILE_NAME), 'r') as f:  # pylint: disable=invalid-name
+        with open(os.path.join(dir, ENDPOINT_FILE_NAME), 'r') as f:
             self.assertEqual(f.read(), KNOWN_WIRESERVER_IP)
 
     @patch("azurelinuxagent.common.protocol.util.fileutil")
@@ -290,25 +290,25 @@ class TestProtocolUtil(AgentTestCase):
         # Test get endpoint for io error
         mock_fileutil.read_file.side_effect = IOError()
 
-        ep = protocol_util.get_wireserver_endpoint()  # pylint: disable=invalid-name
+        ep = protocol_util.get_wireserver_endpoint()
         self.assertEqual(ep, KNOWN_WIRESERVER_IP)
 
         # Test get endpoint when file not found
         mock_fileutil.read_file.side_effect = IOError(ENOENT, 'File not found')
 
-        ep = protocol_util.get_wireserver_endpoint()  # pylint: disable=invalid-name
+        ep = protocol_util.get_wireserver_endpoint()
         self.assertEqual(ep, KNOWN_WIRESERVER_IP)
 
         # Test get endpoint for empty file
         mock_fileutil.read_file.return_value = ""
 
-        ep = protocol_util.get_wireserver_endpoint()  # pylint: disable=invalid-name
+        ep = protocol_util.get_wireserver_endpoint()
         self.assertEqual(ep, KNOWN_WIRESERVER_IP)
 
         # Test set endpoint for io error
         mock_fileutil.write_file.side_effect = IOError()
 
-        ep = protocol_util.get_wireserver_endpoint()  # pylint: disable=invalid-name
+        ep = protocol_util.get_wireserver_endpoint()
         self.assertRaises(OSUtilError, protocol_util._set_wireserver_endpoint, 'abc')  # pylint: disable=protected-access
 
         # Test clear endpoint for io error

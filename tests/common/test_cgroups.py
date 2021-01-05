@@ -30,7 +30,7 @@ from tests.tools import AgentTestCase, patch, data_dir
 
 def consume_cpu_time():
     waste = 0
-    for x in range(1, 200000):  # pylint: disable=unused-variable,invalid-name
+    for x in range(1, 200000):  # pylint: disable=unused-variable
         waste += random.random()
     return waste
 
@@ -207,12 +207,12 @@ class TestMemoryCgroup(AgentTestCase):
     def test_get_metrics_when_files_not_present(self):
         test_mem_cg = MemoryCgroup("test_extension", os.path.join(data_dir, "cgroups"))
 
-        with self.assertRaises(IOError) as e:  # pylint: disable=invalid-name
+        with self.assertRaises(IOError) as e:
             test_mem_cg.get_memory_usage()
 
         self.assertEqual(e.exception.errno, errno.ENOENT)
 
-        with self.assertRaises(IOError) as e:  # pylint: disable=invalid-name
+        with self.assertRaises(IOError) as e:
             test_mem_cg.get_max_memory_usage()
 
         self.assertEqual(e.exception.errno, errno.ENOENT)
