@@ -44,7 +44,7 @@ import azurelinuxagent.common.utils.textutil as textutil
 # pylint: enable=R0801
 
 from azurelinuxagent.common.exception import OSUtilError
-from azurelinuxagent.common.future import ustr
+from azurelinuxagent.common.future import ustr, array_to_bytes
 from azurelinuxagent.common.utils.cryptutil import CryptUtil
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
 from azurelinuxagent.common.utils.networkutil import RouteEntry, NetworkInterfaceCard
@@ -804,8 +804,7 @@ class DefaultOSUtil(object):  # pylint: disable=R0904
             logger.warn(('SIOCGIFCONF returned more than {0} up '
                          'network interfaces.'), expected)
 
-        ifconf_buff = buff.tostring()
-
+        ifconf_buff = array_to_bytes(buff)
         ifaces = {}
         for i in range(0, array_size, struct_size):
             iface = ifconf_buff[i:i + IFNAMSIZ].split(b'\0', 1)[0]
@@ -1338,8 +1337,8 @@ class DefaultOSUtil(object):  # pylint: disable=R0904
             os.kill(pid, 0)
         except (ValueError, TypeError):
             return False
-        except OSError as e:  # pylint: disable=C0103
-            if e.errno == errno.EPERM:
+        except OSError as os_error:
+            if os_error.errno == errno.EPERM:
                 return True
             return False
         return True

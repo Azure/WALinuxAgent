@@ -19,6 +19,7 @@
 
 import subprocess
 import tempfile
+import threading
 
 import azurelinuxagent.common.logger as logger
 from azurelinuxagent.common.future import ustr
@@ -97,26 +98,30 @@ def run_get_output(cmd, chk_err=True, log_cmd=True, expected_errors=None):
         expected_errors = []
     if log_cmd:
         logger.verbose(u"Command: [{0}]", cmd)
-    try:
-        output = subprocess.check_output(cmd, stderr=subprocess.STDOUT, shell=True)
-        output = __encode_command_output(output)
-    except subprocess.CalledProcessError as e:  # pylint: disable=C0103
-        output = __encode_command_output(e.output)
 
-        if chk_err:
-            msg = u"Command: [{0}], " \
-                  u"return code: [{1}], " \
-                  u"result: [{2}]".format(cmd, e.returncode, output)
-            if e.returncode in expected_errors:
-                logger.info(msg)
-            else:
-                logger.error(msg)
-        return e.returncode, output
-    except Exception as e:  # pylint: disable=C0103
+    try:
+        process = _popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, shell=True)
+
+        output, _ = process.communicate()
+        _on_command_completed(process.pid)
+
+        output = __encode_command_output(output)
+
+        if process.returncode != 0:
+            if chk_err:
+                msg = u"Command: [{0}], " \
+                      u"return code: [{1}], " \
+                      u"result: [{2}]".format(cmd, process.returncode, output)
+                if process.returncode in expected_errors:
+                    logger.info(msg)
+                else:
+                    logger.error(msg)
+            return process.returncode, output
+    except Exception as exception:
         if chk_err:
             logger.error(u"Command [{0}] raised unexpected exception: [{1}]"
-                         .format(cmd, ustr(e)))
-        return -1, ustr(e)
+                         .format(cmd, ustr(exception)))
+        return -1, ustr(exception)
     return 0, output
 
 
@@ -202,7 +207,7 @@ def __run_command(command_action, command, log_error, encode_output):
 
 # W0622: Redefining built-in 'input'  -- disabled: the parameter name mimics subprocess.communicate()
 # R0913: Too many arguments (8/5) -- disabled: the parameter list mimics subprocess.Popen()/communicate()
-def run_command(command, input=None, stdin=None, stdout=subprocess.PIPE, stderr=subprocess.PIPE, log_error=False, encode_input=True, encode_output=True):  # pylint:disable=W0622,R0913
+def run_command(command, input=None, stdin=None, stdout=subprocess.PIPE, stderr=subprocess.PIPE, log_error=False, encode_input=True, encode_output=True, track_process=True):  # pylint:disable=W0622,R0913
     """
         Executes the given command and returns its stdout.
 
@@ -210,6 +215,8 @@ def run_command(command, input=None, stdin=None, stdout=subprocess.PIPE, stderr=
         is True, it also logs details about the error.
 
         If encode_output is True the stdout is returned as a string, otherwise it is returned as a bytes object.
+
+        If track_process is False the command is not added to list of running commands
 
         This function is a thin wrapper around Popen/communicate in the subprocess module:
            * The 'input' parameter corresponds to the same parameter in communicate
@@ -235,9 +242,14 @@ def run_command(command, input=None, stdin=None, stdout=subprocess.PIPE, stderr=
             popen_stdin = stdin
             communicate_input = None
 
-        process = subprocess.Popen(command, stdin=popen_stdin, stdout=stdout, stderr=stderr, shell=False)
+        if track_process:
+            process = _popen(command, stdin=popen_stdin, stdout=stdout, stderr=stderr, shell=False)
+        else:
+            process = subprocess.Popen(command, stdin=popen_stdin, stdout=stdout, stderr=stderr, shell=False)
 
         command_stdout, command_stderr = process.communicate(input=communicate_input)
+        if track_process:
+            _on_command_completed(process.pid)
 
         return process.returncode, command_stdout, command_stderr
 
@@ -284,11 +296,11 @@ def run_pipe(pipe, stdin=None, stdout=subprocess.PIPE, stderr=subprocess.PIPE, l
             processes = []
             i = 0
             while i < len(pipe) - 1:
-                processes.append(subprocess.Popen(pipe[i], stdin=popen_stdin, stdout=subprocess.PIPE, stderr=popen_stderr))
+                processes.append(_popen(pipe[i], stdin=popen_stdin, stdout=subprocess.PIPE, stderr=popen_stderr))
                 popen_stdin = processes[i].stdout
                 i += 1
 
-            processes.append(subprocess.Popen(pipe[i], stdin=popen_stdin, stdout=stdout, stderr=popen_stderr))
+            processes.append(_popen(pipe[i], stdin=popen_stdin, stdout=stdout, stderr=popen_stderr))
 
             i = 0
             while i < len(processes) - 1:
@@ -296,6 +308,9 @@ def run_pipe(pipe, stdin=None, stdout=subprocess.PIPE, stderr=subprocess.PIPE, l
                 i += 1
 
             pipe_stdout, pipe_stderr = processes[i].communicate()
+
+            for proc in processes:
+                _on_command_completed(proc.pid)
 
             if stderr_file is not None:
                 stderr_file.seek(0)
@@ -325,4 +340,37 @@ def quote(word_list):
 
     return " ".join(list("'{0}'".format(s.replace("'", "'\\''")) for s in word_list))
 
-# End shell command util functions
+
+#
+# The run_command/run_pipe/run/run_get_output functions maintain a list of the commands that they are currently executing.
+#
+#
+# C0103: Constant name "foo" doesn't conform to UPPER_CASE naming style (invalid-name) -- Disabled: these are not constants
+_running_commands = []  # pylint:disable=C0103
+_running_commands_lock = threading.RLock()  # pylint:disable=C0103
+
+
+def _popen(*args, **kwargs):
+    with _running_commands_lock:
+        process = subprocess.Popen(*args, **kwargs)
+        _running_commands.append(process.pid)
+        return process
+
+
+def _on_command_completed(pid):
+    with _running_commands_lock:
+        _running_commands.remove(pid)
+
+
+def get_running_commands():
+    """
+    Returns the commands started by run/run_get_output/run_command/run_pipe that are currently running.
+
+    NOTE: This function is not synchronized with process completion, so the returned array may include processes that have
+    already completed. Also, keep in mind that by the time this function returns additional processes may have
+    started or completed.
+    """
+    with _running_commands_lock:
+        return _running_commands[:]  # return a copy, since the call may originate on another thread
+
+

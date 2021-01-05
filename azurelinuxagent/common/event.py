@@ -65,7 +65,7 @@ def send_logs_to_telemetry():
     return SEND_LOGS_TO_TELEMETRY
 
 
-class WALAEventOperation:  # pylint: disable=R0903,no-init
+class WALAEventOperation:  # pylint: disable=no-init
     ActivateResourceDisk = "ActivateResourceDisk"
     AgentBlacklisted = "AgentBlacklisted"
     AgentEnabled = "AgentEnabled"
@@ -105,6 +105,7 @@ class WALAEventOperation:  # pylint: disable=R0903,no-init
     OSInfo = "OSInfo"
     Partition = "Partition"
     PluginSettingsVersionMismatch = "PluginSettingsVersionMismatch"
+    InvalidExtensionConfig = "InvalidExtensionConfig"
     ProcessGoalState = "ProcessGoalState"
     Provision = "Provision"
     ProvisionGuestAgent = "ProvisionGuestAgent"

@@ -68,6 +68,9 @@ def set_systemd_files(data_files, dest="/lib/systemd/system", src=None):
         src = ["init/waagent.service"]
     data_files.append((dest, src))
 
+    set_files(data_files, dest="/etc/systemd/system", src=["init/ubuntu/azure.slice",
+                                                           "init/ubuntu/azure-vmextensions.slice"])
+
 
 def set_freebsd_rc_files(data_files, dest="/etc/rc.d/", src=None):
     if src is None:
@@ -127,6 +130,12 @@ def get_data_files(name, version, fullname):  # pylint: disable=R0912
                        src=["config/clearlinux/waagent.conf"])
         set_systemd_files(data_files, dest='/usr/lib/systemd/system',
                           src=["init/clearlinux/waagent.service"])
+    elif name == 'mariner':
+        set_bin_files(data_files, dest="/usr/bin")
+        set_conf_files(data_files, dest="/etc",
+                       src=["config/mariner/waagent.conf"])
+        set_systemd_files(data_files, dest='/usr/lib/systemd/system',
+                          src=["init/mariner/waagent.service"])
     elif name == 'ubuntu':
         set_bin_files(data_files)
         set_conf_files(data_files, src=["config/ubuntu/waagent.conf"])
@@ -153,7 +162,7 @@ def get_data_files(name, version, fullname):  # pylint: disable=R0912
         if fullname == 'SUSE Linux Enterprise Server' and \
                 version.startswith('11') or \
                 fullname == 'openSUSE' and version.startswith(
-                    '13.1'): 
+                    '13.1'):
             set_sysv_files(data_files, dest='/etc/init.d',
                            src=["init/suse/waagent"])
         else:
@@ -187,7 +196,7 @@ def get_data_files(name, version, fullname):  # pylint: disable=R0912
         set_bin_files(data_files)
         set_conf_files(data_files)
         set_logrotate_files(data_files)
-        set_sysv_files(data_files, dest='/etc/init.d', src=["init/openwrt/waagent"])  
+        set_sysv_files(data_files, dest='/etc/init.d', src=["init/openwrt/waagent"])
     else:
         # Use default setting
         set_bin_files(data_files)

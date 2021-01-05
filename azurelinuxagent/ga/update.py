@@ -525,6 +525,7 @@ class UpdateHandler(object):  # pylint: disable=R0902
     def _ensure_cgroups_initialized(self):
         configurator = CGroupConfigurator.get_instance()
         configurator.initialize()
+        configurator.create_slices()
 
     def _evaluate_agent_health(self, latest_agent):
         """

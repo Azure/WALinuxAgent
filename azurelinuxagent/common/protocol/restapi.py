@@ -27,7 +27,7 @@ from azurelinuxagent.common.utils.textutil import getattrib
 from azurelinuxagent.common.version import DISTRO_VERSION, DISTRO_NAME, CURRENT_VERSION
 
 
-class VMInfo(DataContract):  # pylint: disable=R0903
+class VMInfo(DataContract):
     def __init__(self,  # pylint: disable=R0913
                  subscriptionId=None,
                  vmName=None,
@@ -41,12 +41,12 @@ class VMInfo(DataContract):  # pylint: disable=R0903
         self.tenantName = tenantName  # pylint: disable=C0103
 
 
-class CertificateData(DataContract):  # pylint: disable=R0903
+class CertificateData(DataContract):
     def __init__(self, certificateData=None):
         self.certificateData = certificateData  # pylint: disable=C0103
 
 
-class Cert(DataContract):  # pylint: disable=R0903
+class Cert(DataContract):
     def __init__(self,  # pylint: disable=R0913
                  name=None,
                  thumbprint=None,
@@ -60,24 +60,24 @@ class Cert(DataContract):  # pylint: disable=R0903
         self.storeName = storeName  # pylint: disable=C0103
 
 
-class CertList(DataContract):  # pylint: disable=R0903
+class CertList(DataContract):
     def __init__(self):
         self.certificates = DataContractList(Cert)
 
 
 # TODO: confirm vmagent manifest schema
-class VMAgentManifestUri(DataContract):  # pylint: disable=R0903
+class VMAgentManifestUri(DataContract):
     def __init__(self, uri=None):
         self.uri = uri
 
 
-class VMAgentManifest(DataContract):  # pylint: disable=R0903
+class VMAgentManifest(DataContract):
     def __init__(self, family=None):
         self.family = family
         self.versionsManifestUris = DataContractList(VMAgentManifestUri)  # pylint: disable=C0103
 
 
-class VMAgentManifestList(DataContract):  # pylint: disable=R0903
+class VMAgentManifestList(DataContract):
     def __init__(self):
         self.vmAgentManifests = DataContractList(VMAgentManifest)  # pylint: disable=C0103
 
@@ -89,39 +89,68 @@ class RequiredFeature(DataContract):
         self.value = value
 
 
-class Extension(DataContract):  # pylint: disable=R0903
+class Extension(DataContract):
+    """
+    The runtime settings associated with a Handler
+    -   Maps to Extension.PluginSettings.Plugin.RuntimeSettings for single config extensions in the ExtensionConfig.xml
+        Eg: 1.settings, 2.settings
+    -   Maps to Extension.PluginSettings.Plugin.ExtensionRuntimeSettings for multi-config extensions in the
+        ExtensionConfig.xml
+        Eg: <extensionName>.1.settings, <extensionName>.2.settings
+    """
     def __init__(self,  # pylint: disable=R0913
                  name=None,
                  sequenceNumber=None,
                  publicSettings=None,
                  protectedSettings=None,
                  certificateThumbprint=None,
-                 dependencyLevel=0):
+                 dependencyLevel=0,
+                 state="enabled"):
         self.name = name
         self.sequenceNumber = sequenceNumber  # pylint: disable=C0103
         self.publicSettings = publicSettings  # pylint: disable=C0103
         self.protectedSettings = protectedSettings  # pylint: disable=C0103
         self.certificateThumbprint = certificateThumbprint  # pylint: disable=C0103
         self.dependencyLevel = dependencyLevel  # pylint: disable=C0103
+        self.state = state
 
 
-class ExtHandlerProperties(DataContract):  # pylint: disable=R0903
+class ExtHandlerProperties(DataContract):
     def __init__(self):
         self.version = None
         self.state = None
         self.extensions = DataContractList(Extension)
 
 
-class ExtHandlerVersionUri(DataContract):  # pylint: disable=R0903
+class ExtHandlerVersionUri(DataContract):
     def __init__(self):
         self.uri = None
 
 
-class ExtHandler(DataContract):  # pylint: disable=R0903
+class ExtHandler(DataContract):
+    """
+    The main Plugin/handler specified by the publishers.
+    Maps to Extension.PluginSettings.Plugins.Plugin in the ExtensionConfig.xml file
+    Eg: Microsoft.OSTC.CustomScript
+    """
+
     def __init__(self, name=None):
         self.name = name
         self.properties = ExtHandlerProperties()
         self.versionUris = DataContractList(ExtHandlerVersionUri)  # pylint: disable=C0103
+        self.__invalid_handler_setting_reason = None
+
+    @property
+    def is_invalid_setting(self):
+        return self.__invalid_handler_setting_reason is not None
+
+    @property
+    def invalid_setting_reason(self):
+        return self.__invalid_handler_setting_reason
+
+    @invalid_setting_reason.setter
+    def invalid_setting_reason(self, value):
+        self.__invalid_handler_setting_reason = value
 
     def sort_key(self):
         levels = [e.dependencyLevel for e in self.properties.extensions]
@@ -136,8 +165,7 @@ class ExtHandler(DataContract):  # pylint: disable=R0903
         return level
 
 
-# too-few-public-methods<R0903> Disabled: More public methods are not needed here.
-class InVMGoalStateMetaData(DataContract):  # pylint: disable=R0903
+class InVMGoalStateMetaData(DataContract):
     """
     Object for parsing the GoalState MetaData received from CRP
     Eg: <InVMGoalStateMetaData inSvdSeqNo="2" createdOnTicks="637405409304121230" activityId="555e551c-600e-4fb4-90ba-8ab8ec28eccc" correlationId="400de90b-522e-491f-9d89-ec944661f531" />
@@ -167,17 +195,17 @@ class InVMGoalStateMetaData(DataContract):  # pylint: disable=R0903
         self.in_svd_seq_no = getattrib(in_vm_metadata_node, "inSvdSeqNo")
 
 
-class ExtHandlerList(DataContract):  # pylint: disable=R0903
+class ExtHandlerList(DataContract):
     def __init__(self):
         self.extHandlers = DataContractList(ExtHandler)  # pylint: disable=C0103
 
 
-class ExtHandlerPackageUri(DataContract):  # pylint: disable=R0903
+class ExtHandlerPackageUri(DataContract):
     def __init__(self, uri=None):
         self.uri = uri
 
 
-class ExtHandlerPackage(DataContract):  # pylint: disable=R0903
+class ExtHandlerPackage(DataContract):
     def __init__(self, version=None):
         self.version = version
         self.uris = DataContractList(ExtHandlerPackageUri)
@@ -186,18 +214,18 @@ class ExtHandlerPackage(DataContract):  # pylint: disable=R0903
         self.disallow_major_upgrade = False
 
 
-class ExtHandlerPackageList(DataContract):  # pylint: disable=R0903
+class ExtHandlerPackageList(DataContract):
     def __init__(self):
         self.versions = DataContractList(ExtHandlerPackage)
 
 
-class VMProperties(DataContract):  # pylint: disable=R0903
+class VMProperties(DataContract):
     def __init__(self, certificateThumbprint=None):
         # TODO need to confirm the property name
         self.certificateThumbprint = certificateThumbprint  # pylint: disable=C0103
 
 
-class ProvisionStatus(DataContract):  # pylint: disable=R0903
+class ProvisionStatus(DataContract):
     def __init__(self, status=None, subStatus=None, description=None):
         self.status = status
         self.subStatus = subStatus  # pylint: disable=C0103
@@ -205,7 +233,7 @@ class ProvisionStatus(DataContract):  # pylint: disable=R0903
         self.properties = VMProperties()
 
 
-class ExtensionSubStatus(DataContract):  # pylint: disable=R0903
+class ExtensionSubStatus(DataContract):
     def __init__(self, name=None, status=None, code=None, message=None):
         self.name = name
         self.status = status
@@ -213,7 +241,7 @@ class ExtensionSubStatus(DataContract):  # pylint: disable=R0903
         self.message = message
 
 
-class ExtensionStatus(DataContract):  # pylint: disable=R0903
+class ExtensionStatus(DataContract):
     def __init__(self,  # pylint: disable=R0913
                  configurationAppliedTime=None,
                  operation=None,
@@ -230,7 +258,7 @@ class ExtensionStatus(DataContract):  # pylint: disable=R0903
         self.substatusList = DataContractList(ExtensionSubStatus)  # pylint: disable=C0103
 
 
-class ExtHandlerStatus(DataContract):  # pylint: disable=R0903
+class ExtHandlerStatus(DataContract):
     def __init__(self,  # pylint: disable=R0913
                  name=None,
                  version=None,
@@ -245,7 +273,7 @@ class ExtHandlerStatus(DataContract):  # pylint: disable=R0903
         self.extensions = DataContractList(ustr)
 
 
-class VMAgentStatus(DataContract):  # pylint: disable=R0903
+class VMAgentStatus(DataContract):
     def __init__(self, status=None, message=None):
         self.status = status
         self.message = message
@@ -257,7 +285,7 @@ class VMAgentStatus(DataContract):  # pylint: disable=R0903
         self.vm_artifacts_aggregate_status = VMArtifactsAggregateStatus()
 
 
-class VMStatus(DataContract):  # pylint: disable=R0903
+class VMStatus(DataContract):
     def __init__(self, status, message):
         self.vmAgent = VMAgentStatus(status=status, message=message)  # pylint: disable=C0103
 
@@ -276,14 +304,14 @@ class VMArtifactsAggregateStatus(DataContract):
         self.goal_state_aggregate_status = GoalStateAggregateStatus()
 
 
-class RemoteAccessUser(DataContract):  # pylint: disable=R0903
+class RemoteAccessUser(DataContract):
     def __init__(self, name, encrypted_password, expiration):
         self.name = name
         self.encrypted_password = encrypted_password
         self.expiration = expiration
 
 
-class RemoteAccessUsersList(DataContract):  # pylint: disable=R0903
+class RemoteAccessUsersList(DataContract):
     def __init__(self):
         self.users = DataContractList(RemoteAccessUser)
 

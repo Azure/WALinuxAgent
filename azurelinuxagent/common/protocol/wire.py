@@ -27,6 +27,7 @@ from collections import defaultdict
 import azurelinuxagent.common.conf as conf
 import azurelinuxagent.common.logger as logger
 import azurelinuxagent.common.utils.textutil as textutil
+from azurelinuxagent.common.agent_supported_feature import get_agent_supported_features_list_for_crp
 from azurelinuxagent.common.datacontract import validate_param
 from azurelinuxagent.common.event import add_event, WALAEventOperation, report_event, \
     CollectOrReportEventDebugInfo, add_periodic
@@ -405,6 +406,19 @@ def vm_status_to_v1(vm_status, ext_statuses):
         'aggregateStatus': v1_agg_status,
         'guestOSInfo': v1_ga_guest_info
     }
+
+    supported_features = []
+    for _, feature in get_agent_supported_features_list_for_crp().items():
+        if feature.is_supported:
+            supported_features.append(
+                {
+                    "Key": feature.name,
+                    "Value": feature.version
+                }
+            )
+    if supported_features:
+        v1_vm_status["supportedFeatures"] = supported_features
+
     return v1_vm_status
 
 
@@ -1308,7 +1322,7 @@ class VersionInfo(object):
         return self.supported
 
 
-class ExtensionManifest(object):  # pylint: disable=R0903
+class ExtensionManifest(object): 
     def __init__(self, xml_text):
         if xml_text is None:
             raise ValueError("ExtensionManifest is None")
@@ -1353,7 +1367,7 @@ class ExtensionManifest(object):  # pylint: disable=R0903
 
 
 # Do not extend this class
-class InVMArtifactsProfile(object):  # pylint: disable=R0903
+class InVMArtifactsProfile(object):
     """
     deserialized json string of InVMArtifactsProfile.
     It is expected to contain the following fields:

@@ -16,12 +16,15 @@
 # Requires Python 2.6+ and Openssl 1.0+
 #
 import os
+import signal
 import tempfile
+import threading
 import unittest
 
 from azurelinuxagent.common.future import ustr
 import azurelinuxagent.common.utils.shellutil as shellutil
 from tests.tools import AgentTestCase, patch
+from tests.utils.miscellaneous_tools import wait_for, format_processes
 
 
 class ShellQuoteTestCase(AgentTestCase):
@@ -81,15 +84,14 @@ class RunGetOutputTestCase(AgentTestCase):
 
         self.assertEqual(mock_logger.error.call_count, 1)
 
-        args, kwargs = mock_logger.error.call_args  # pylint: disable=unused-variable
+        args, _ = mock_logger.error.call_args
 
         message = args[0]  # message is similar to "Command: [exit 99], return code: [99], result: []"
         self.assertIn("[{0}]".format(command), message)
         self.assertIn("[{0}]".format(return_code), message)
 
-        self.assertEqual(mock_logger.verbose.call_count, 0)
-        self.assertEqual(mock_logger.info.call_count, 0)
-        self.assertEqual(mock_logger.warn.call_count, 0)
+        self.assertEqual(mock_logger.info.call_count, 0, "Did not expect any info messages. Got: {0}".format(mock_logger.info.call_args_list))
+        self.assertEqual(mock_logger.warn.call_count, 0, "Did not expect any warnings. Got: {0}".format(mock_logger.warn.call_args_list))
 
     def test_it_should_log_expected_errors_as_info(self):
         return_code = 99
@@ -100,15 +102,14 @@ class RunGetOutputTestCase(AgentTestCase):
 
         self.assertEqual(mock_logger.info.call_count, 1)
 
-        args, kwargs = mock_logger.info.call_args  # pylint: disable=unused-variable
+        args, _ = mock_logger.info.call_args
 
         message = args[0]  # message is similar to "Command: [exit 99], return code: [99], result: []"
         self.assertIn("[{0}]".format(command), message)
         self.assertIn("[{0}]".format(return_code), message)
 
-        self.assertEqual(mock_logger.verbose.call_count, 0)
-        self.assertEqual(mock_logger.warn.call_count, 0)
-        self.assertEqual(mock_logger.error.call_count, 0)
+        self.assertEqual(mock_logger.warn.call_count, 0, "Did not expect any warnings. Got: {0}".format(mock_logger.warn.call_args_list))
+        self.assertEqual(mock_logger.error.call_count, 0, "Did not expect any errors. Got: {0}".format(mock_logger.error.call_args_list))
 
     def test_it_should_log_unexpected_errors_as_errors(self):
         return_code = 99
@@ -119,15 +120,14 @@ class RunGetOutputTestCase(AgentTestCase):
 
         self.assertEqual(mock_logger.error.call_count, 1)
 
-        args, kwargs = mock_logger.error.call_args  # pylint: disable=unused-variable
+        args, _ = mock_logger.error.call_args
 
         message = args[0]  # message is similar to "Command: [exit 99], return code: [99], result: []"
         self.assertIn("[{0}]".format(command), message)
         self.assertIn("[{0}]".format(return_code), message)
 
-        self.assertEqual(mock_logger.info.call_count, 0)
-        self.assertEqual(mock_logger.verbose.call_count, 0)
-        self.assertEqual(mock_logger.warn.call_count, 0)
+        self.assertEqual(mock_logger.info.call_count, 0, "Did not expect any info messages. Got: {0}".format(mock_logger.info.call_args_list))
+        self.assertEqual(mock_logger.warn.call_count, 0, "Did not expect any warnings. Got: {0}".format(mock_logger.warn.call_args_list))
 
 
 # R0904: Too many public methods (24/20)  -- disabled: each method is a unit test
@@ -359,6 +359,103 @@ exit({0})
         output = shellutil.run_pipe([["echo", "TEST STRING"], [self.__create_tee_script()]], encode_output=False)
 
         self.assertTrue(isinstance(output, bytes), "The return value should be a bytes object. Got: '{0}'".format(type(output)))
+
+    # R0912: Too many branches (13/12) (too-many-branches) -- Disabled: Branches are sequential
+    def test_run_command_run_pipe_run_get_output_should_keep_track_of_the_running_commands(self):  # pylint:disable=R0912
+        # The children processes run this script, which creates a file with the PIDs of the script and its parent and then sleeps for a long time
+        child_script = os.path.join(self.tmp_dir, "write_pids.py")
+        AgentTestCase.create_script(child_script, """
+import os
+import sys
+import time
+
+with open(sys.argv[1], "w") as pid_file:
+    pid_file.write("{0} {1}".format(os.getpid(), os.getppid()))
+time.sleep(120)
+""")
+
+        threads = []
+
+        try:
+            child_processes = []
+            parent_processes = []
+
+            try:
+                # each of these files will contain the PIDs of the command that created it and its parent
+                pid_files = [os.path.join(self.tmp_dir, "pids.txt.{0}".format(i)) for i in range(4)]
+
+                # we test these functions in shellutil
+                commands_to_execute = [
+                    # run_get_output must be the first in this list; see the code to fetch the PIDs a few lines below
+                    lambda: shellutil.run_get_output("{0} {1}".format(child_script, pid_files[0])),
+                    lambda: shellutil.run_command([child_script, pid_files[1]]),
+                    lambda: shellutil.run_pipe([[child_script, pid_files[2]], [child_script, pid_files[3]]]),
+                ]
+
+                # start each command on a separate thread (since we need to examine the processes running the commands while they are running)
+                def invoke(command):
+                    try:
+                        command()
+                    except shellutil.CommandError as command_error:
+                        if command_error.returncode != -9:  # test cleanup terminates the commands, so this is expected
+                            raise
+
+                for cmd in commands_to_execute:
+                    thread = threading.Thread(target=invoke, args=(cmd,))
+                    thread.start()
+                    threads.append(thread)
+
+                # now fetch the PIDs in the files created by the commands, but wait until they are created
+                if not wait_for(lambda: all(os.path.exists(file) and os.path.getsize(file) > 0 for file in pid_files)):
+                    raise Exception("The child processes did not start within the allowed timeout")
+
+                for sig_file in pid_files:
+                    with open(sig_file, "r") as read_handle:
+                        pids = read_handle.read().split()
+                        child_processes.append(int(pids[0]))
+                        parent_processes.append(int(pids[1]))
+
+                # the first item to in the PIDs we fetched corresponds to run_get_output, which invokes the command using the
+                # shell, so in that case we need to use the parent's pid (i.e. the shell that we started)
+                started_commands = parent_processes[0:1] + child_processes[1:]
+
+                # wait for all the commands to start
+                def all_commands_running():
+                    all_commands_running.running_commands = shellutil.get_running_commands()
+                    return len(all_commands_running.running_commands) >= len(commands_to_execute) + 1  # +1 because run_pipe starts 2 commands
+                all_commands_running.running_commands = []
+
+                if not wait_for(all_commands_running):
+                    self.fail("shellutil.get_running_commands() did not report the expected number of commands after the allowed timeout.\nExpected: {0}\nGot: {1}".format(
+                        format_processes(started_commands), format_processes(all_commands_running.running_commands)))
+
+                started_commands.sort()
+                all_commands_running.running_commands.sort()
+
+                self.assertEqual(
+                    started_commands,
+                    all_commands_running.running_commands,
+                    "shellutil.get_running_commands() did not return the expected commands.\nExpected: {0}\nGot: {1}".format(
+                        format_processes(started_commands), format_processes(all_commands_running.running_commands)))
+
+            finally:
+                # terminate the child processes, since they are blocked
+                for pid in child_processes:
+                    os.kill(pid, signal.SIGKILL)
+
+            # once the processes complete, their PIDs should go away
+            def no_commands_running():
+                no_commands_running.running_commands = shellutil.get_running_commands()
+                return len(no_commands_running.running_commands) == 0
+            no_commands_running.running_commands = []
+
+            if not wait_for(no_commands_running):
+                self.fail("shellutil.get_running_commands() should return empty after the commands complete. Got: {0}".format(
+                    format_processes(no_commands_running.running_commands)))
+
+        finally:
+            for thread in threads:
+                thread.join(timeout=5)
 
 
 if __name__ == '__main__':

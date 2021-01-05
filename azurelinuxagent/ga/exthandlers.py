@@ -42,7 +42,7 @@ from azurelinuxagent.common.errorstate import ErrorState
 from azurelinuxagent.common.event import add_event, elapsed_milliseconds, report_event, WALAEventOperation, \
     add_periodic, EVENTS_DIRECTORY
 from azurelinuxagent.common.exception import ExtensionDownloadError, ExtensionError, ExtensionErrorCodes, \
-    ExtensionOperationError, ExtensionUpdateError, ProtocolError, ProtocolNotFoundError, GoalStateStatusCodes
+    ExtensionOperationError, ExtensionUpdateError, ProtocolError, ProtocolNotFoundError, ExtensionConfigError, GoalStateStatusCodes
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.protocol.restapi import ExtensionStatus, ExtensionSubStatus, ExtHandler, ExtHandlerStatus, \
     VMStatus, GoalStateAggregateStatus
@@ -83,11 +83,12 @@ _STATUS_FILE_RETRY_DELAY = 2  # seconds
 
 _ENABLE_EXTENSION_TELEMETRY_PIPELINE = False
 
+
 def is_extension_telemetry_pipeline_enabled():
     return _ENABLE_EXTENSION_TELEMETRY_PIPELINE
 
 
-class ValidHandlerStatus(object):  # pylint: disable=R0903
+class ValidHandlerStatus(object):
     transitioning = "transitioning"
     warning = "warning"
     error = "error"
@@ -98,8 +99,7 @@ class ValidHandlerStatus(object):  # pylint: disable=R0903
 _EXTENSION_TERMINAL_STATUSES = [ValidHandlerStatus.error, ValidHandlerStatus.success]
 
 
-# too-few-public-methods<R0903> Disabled: This class is used as an Enum
-class ExtCommandEnvVariable(object):  # pylint: disable=R0903
+class ExtCommandEnvVariable(object):
     Prefix = "AZURE_GUEST_AGENT"
     DisableReturnCode = "{0}_DISABLE_CMD_EXIT_CODE".format(Prefix)
     UninstallReturnCode = "{0}_UNINSTALL_CMD_EXIT_CODE".format(Prefix)
@@ -228,14 +228,14 @@ def migrate_handler_state():
     return
 
 
-class ExtHandlerState(object):  # pylint: disable=R0903
+class ExtHandlerState(object):
     NotInstalled = "NotInstalled"
     Installed = "Installed"
     Enabled = "Enabled"
     FailedUpgrade = "FailedUpgrade"
 
 
-class ExtensionRequestedState(object):  # pylint: disable=R0903
+class ExtensionRequestedState(object):
     """
     This is the state of the Extension as requested by the Goal State.
     CRP only supports 2 states as of now - Enabled and Uninstall
@@ -437,7 +437,7 @@ class ExtHandlersHandler(object):
 
     def handle_ext_handlers(self, etag=None):
         if not self.ext_handlers.extHandlers:
-            logger.verbose("No extension handler config found")
+            logger.info("No extension handlers found, not processing anything.")
             return
 
         wait_until = datetime.datetime.utcnow() + datetime.timedelta(minutes=_DEFAULT_EXT_TIMEOUT_MINUTES)
@@ -527,8 +527,12 @@ class ExtHandlersHandler(object):
         :param etag: Current incarnation of the GoalState
         :return: True if the operation was successful, False if not
         """
+        ext_handler_i = ExtHandlerInstance(ext_handler, self.protocol)
         try:
-            ext_handler_i = ExtHandlerInstance(ext_handler, self.protocol)
+            # Ensure the extension config was valid
+            if ext_handler.is_invalid_setting:
+                raise ExtensionConfigError(ext_handler.invalid_setting_reason)
+
             state = ext_handler.properties.state
 
             # The Guest Agent currently only supports 1 installed version per extension on the VM.
@@ -557,11 +561,20 @@ class ExtHandlersHandler(object):
 
             return True
 
+        except ExtensionConfigError as error:
+            # Catch and report Invalid ExtensionConfig errors here to fail fast rather than timing out after 90 min
+            err_msg = "Ran into config errors: {0}. \nPlease retry again as another operation with updated settings".format(
+                ustr(error))
+            self.__handle_and_report_ext_handler_errors(ext_handler_i, error,
+                                                        report_op=WALAEventOperation.InvalidExtensionConfig,
+                                                        message=err_msg)
         except ExtensionUpdateError as error:
             # Not reporting the error as it has already been reported from the old version
             self.handle_ext_handler_error(ext_handler_i, error, error.code, report_telemetry_event=False)
         except ExtensionDownloadError as error:
-            self.handle_ext_handler_download_error(ext_handler_i, error, error.code)
+            msg = "Failed to download artifacts: {0}".format(ustr(error))
+            self.__handle_and_report_ext_handler_errors(ext_handler_i, error, report_op=WALAEventOperation.Download,
+                                                        message=msg)
         except ExtensionError as error:
             self.handle_ext_handler_error(ext_handler_i, error, error.code)
         except Exception as error:
@@ -569,19 +582,18 @@ class ExtHandlersHandler(object):
 
         return False
 
-    def handle_ext_handler_error(self, ext_handler_i, e, code=-1, report_telemetry_event=True):  # pylint: disable=C0103
-        msg = ustr(e)
+    @staticmethod
+    def handle_ext_handler_error(ext_handler_i, error, code=-1, report_telemetry_event=True):
+        msg = ustr(error)
         ext_handler_i.set_handler_status(message=msg, code=code)
 
         if report_telemetry_event:
             ext_handler_i.report_event(message=msg, is_success=False, log_event=True)
 
-    def handle_ext_handler_download_error(self, ext_handler_i, e, code=-1):  # pylint: disable=C0103
-        msg = ustr(e)
-        ext_handler_i.set_handler_status(message=msg, code=code)
-
-        report_event(op=WALAEventOperation.Download, is_success=False, log_event=True,
-                     message="Failed to download artifacts: {0}".format(msg))
+    @staticmethod
+    def __handle_and_report_ext_handler_errors(ext_handler_i, error, report_op, message):
+        ext_handler_i.set_handler_status(message=message, code=error.code)
+        report_event(op=report_op, is_success=False, log_event=True, message=message)
 
     def handle_enable(self, ext_handler_i):
         self.log_process = True
@@ -1675,7 +1687,7 @@ class ExtHandlerInstance(object):  # pylint: disable=R0904
             return truncated_field, len(truncated_field)
 
 
-class HandlerEnvironment(object):  # pylint: disable=R0903
+class HandlerEnvironment(object):
     # HandlerEnvironment.json schema version
     schemaVersion = 1.0
     fileName = "HandlerEnvironment.json"

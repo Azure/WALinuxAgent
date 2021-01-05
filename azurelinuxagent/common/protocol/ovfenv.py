@@ -37,7 +37,8 @@ def _validate_ovf(val, msg):
     if val is None:
         raise ProtocolError("Failed to validate OVF: {0}".format(msg))
 
-class OvfEnv(object):  # pylint: disable=R0903,R0902
+
+class OvfEnv(object):  # pylint: disable=R0902
     """
     Read, and process provisioning info from provisioning file OvfEnv.xml
     """
