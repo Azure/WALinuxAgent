@@ -26,13 +26,14 @@ import time
 import threading
 
 from azurelinuxagent.common.cgroup import CGroup
-from azurelinuxagent.common.cgroupconfigurator import CGroupConfigurator, UnexpectedProcessesInCGroupException
+from azurelinuxagent.common.cgroupconfigurator import CGroupConfigurator
 from azurelinuxagent.common.cgroupstelemetry import CGroupsTelemetry
 from azurelinuxagent.common.exception import CGroupsException
 from azurelinuxagent.common.utils import shellutil
 from tests.common.mock_cgroup_commands import mock_cgroup_commands
 from tests.tools import AgentTestCase, patch, mock_sleep
 from tests.utils.miscellaneous_tools import format_processes, wait_for
+
 
 class CGroupConfiguratorSystemdTestCase(AgentTestCase):
     @classmethod
@@ -295,7 +296,7 @@ cgroup on /sys/fs/cgroup/blkio type cgroup (rw,nosuid,nodev,noexec,relatime,blki
 
                 self.assertIn("A TEST EXCEPTION", str(context_manager.exception))
 
-    def test_check_processes_in_agent_cgroup_should_raise_when_there_are_unexpected_processes_in_the_agent_cgroup(self):
+    def test_check_processes_in_agent_cgroup_should_disable_cgroups_when_there_are_unexpected_processes_in_the_agent_cgroup(self):
         configurator = CGroupConfiguratorSystemdTestCase._get_new_cgroup_configurator_instance()
 
         # The test script recursively creates a given number of descendant processes, then it blocks until the
@@ -414,40 +415,41 @@ exit 0
                     completed = random.randint(1000, 10000)
                 return completed
 
+            def get_telemetry_event_messages():
+                return [kwargs["message"] for (_, kwargs) in add_event_patcher.call_args_list if "The agent's cgroup includes unexpected processes" in kwargs["message"]]
+
             agent_processes = [os.getppid(), os.getpid()] + agent_command_processes + [start_extension.systemd_run_pid]
             other_processes = [1, get_completed_process()] + extension_processes
 
             with patch("azurelinuxagent.common.cgroupconfigurator.CGroupsApi.get_processes_in_cgroup", return_value=agent_processes + other_processes):
-                with self.assertRaises(UnexpectedProcessesInCGroupException) as context_manager:
-                    CGroupConfigurator.get_instance().check_processes_in_agent_cgroup()
+                with patch("azurelinuxagent.common.cgroupconfigurator.add_event") as add_event_patcher:
+                    cgroup_configurator = CGroupConfigurator.get_instance()
 
-                reported = context_manager.exception.unexpected
+                    return_value = cgroup_configurator.check_processes_in_agent_cgroup()
 
-                self.assertEqual(
-                    len(other_processes), len(reported),
-                    "An incorrect number of processes was reported. Expected: {0} Got: {1}".format(format_processes(other_processes), reported))
-                for pid in other_processes:
-                    self.assertTrue(
-                        any(reported_process.startswith("[PID: {0}]".format(pid)) for reported_process in reported),
-                        "Process {0} was not reported. Got: {1}".format(format_processes([pid]), reported))
+                    self.assertFalse(return_value, "check_processes_in_agent_cgroup() should have failed")
+                    self.assertFalse(cgroup_configurator.enabled(), "Cgroups should have been disabled")
 
-            #
-            # And now verify that it does not raise when only the expected processes are in the cgroup
-            #
-            error = None
-            try:
-                with patch("azurelinuxagent.common.cgroupconfigurator.CGroupsApi.get_processes_in_cgroup", return_value=agent_processes):
-                    CGroupConfigurator.get_instance().check_processes_in_agent_cgroup()
-            except UnexpectedProcessesInCGroupException as exception:
-                error = exception
-            # we fail outside the except clause, otherwise the failure is reported as "During handling of the above exception, another exception occurred:..."
-            if error is not None:
-                self.fail("The check of the agent's cgroup should not have reported errors. Reported processes: {0}".format(error.unexpected))
+                    messages = get_telemetry_event_messages()
+
+                    self.assertEqual(1, len(messages), "Exactly 1 telemetry event should have been reported. Events: {0}".format(messages))
+
+                    # The list of processes in the message is an array of strings: "['foo', ..., 'bar']"
+                    search = re.search(r'\[(?P<processes>.+)\]', messages[0])
+                    self.assertIsNotNone(search, "The event message is not in the expected format: {0}".format(messages[0]))
+                    reported = search.group('processes').split(',')
+
+                    self.assertEqual(
+                        len(other_processes), len(reported),
+                        "An incorrect number of processes was reported. Expected: {0} Got: {1}".format(format_processes(other_processes), reported))
+                    for pid in other_processes:
+                        self.assertTrue(
+                            any("[PID: {0}]".format(pid) in reported_process for reported_process in reported),
+                            "Process {0} was not reported. Got: {1}".format(format_processes([pid]), reported))
 
         finally:
             # create the file that stops the test process and wait for them to complete
             open(stop_file, "w").close()
             for thread in threads:
                 thread.join(timeout=5)
-
 

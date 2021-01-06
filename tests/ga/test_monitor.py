@@ -19,12 +19,10 @@ import contextlib
 import datetime
 import os
 import random
-import re
 import string
 
 from azurelinuxagent.common import event, logger
 from azurelinuxagent.common.cgroup import CGroup, CpuCgroup, MemoryCgroup, MetricValue
-from azurelinuxagent.common.cgroupconfigurator import CGroupConfigurator, UnexpectedProcessesInCGroupException
 from azurelinuxagent.common.cgroupstelemetry import CGroupsTelemetry
 from azurelinuxagent.common.event import EVENTS_DIRECTORY
 from azurelinuxagent.common.logger import Logger
@@ -32,7 +30,6 @@ from azurelinuxagent.common.protocol.util import ProtocolUtil
 from azurelinuxagent.common.protocol.wire import WireProtocol
 from azurelinuxagent.ga.monitor import get_monitor_handler, MonitorHandler, PeriodicOperation, \
     ResetPeriodicLogMessagesOperation, PollResourceUsageOperation
-from tests.common.mock_cgroup_commands import mock_cgroup_commands
 from tests.protocol.mocks import mock_wire_protocol, HttpRequestPredicates, MockHttpResponse
 from tests.protocol.mockwiredata import DATA_FILE
 from tests.tools import Mock, MagicMock, patch, AgentTestCase, clear_singleton_instances
@@ -275,36 +272,6 @@ class TestExtensionMetricsDataTelemetry(AgentTestCase):
                             patch_get_memory_usage.return_value = memory_usage_values[i]  # example 200 MB
                             patch_get_memory_max_usage.return_value = max_memory_usage_values[i]  # example 450 MB
                             CGroupsTelemetry.poll_all_tracked()
-
-
-class PollResourceUsageOperationTestCase(AgentTestCase):
-    @classmethod
-    def setUpClass(cls):
-        AgentTestCase.setUpClass()
-        # ensure cgroups are enabled by forcing a new instance
-        CGroupConfigurator._instance = None  # pylint: disable=protected-access
-        with mock_cgroup_commands():
-            CGroupConfigurator.get_instance().initialize()
-
-    @classmethod
-    def tearDownClass(cls):
-        CGroupConfigurator._instance = None  # pylint: disable=protected-access
-        AgentTestCase.tearDownClass()
-
-    def test_it_should_issue_a_telemetry_event_when_there_are_processes_that_do_not_belong_to_the_agent_cgroup(self):
-        with patch.object(CGroupConfigurator.get_instance(), "check_processes_in_agent_cgroup", side_effect=UnexpectedProcessesInCGroupException(["A-TEST-PROCESS"])):
-            with patch("azurelinuxagent.ga.monitor.add_event") as add_event_patcher:
-                PollResourceUsageOperation().run()
-
-                messages = [kwargs["message"] for (_, kwargs) in add_event_patcher.call_args_list if "The agent's cgroup includes unexpected processes" in kwargs["message"]]
-
-                self.assertEqual(1, len(messages), "Exactly 1 telemetry event should have been reported. Events: {0}".format(messages))
-
-                # The list of processes in the message is an array of strings: "['foo', ..., 'bar']"
-                search = re.search(r'\[(?P<processes>.+)\]', messages[0])
-                self.assertIsNotNone(search, "The event message is not in the expected format: {0}".format(messages[0]))
-                processes = search.group('processes')
-                self.assertIn("A-TEST-PROCESS", processes, 'Extra processes were reported as unexpected: {0}'.format(processes))
 
 
 @patch("azurelinuxagent.common.utils.restutil.http_post")
