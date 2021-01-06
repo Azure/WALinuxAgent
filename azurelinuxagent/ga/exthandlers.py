@@ -36,6 +36,7 @@ import azurelinuxagent.common.conf as conf
 import azurelinuxagent.common.logger as logger
 import azurelinuxagent.common.utils.fileutil as fileutil
 import azurelinuxagent.common.version as version
+from azurelinuxagent.common.agent_supported_feature import get_agent_supported_features_list_for_crp
 from azurelinuxagent.common.cgroupconfigurator import CGroupConfigurator
 from azurelinuxagent.common.datacontract import get_properties, set_properties
 from azurelinuxagent.common.errorstate import ErrorState
@@ -333,18 +334,24 @@ class ExtHandlersHandler(object):
                       message=detailed_msg)
             return
 
+    def __all_required_features_supported(self):
+        required_features = self.protocol.get_required_features()
+        supported_features = get_agent_supported_features_list_for_crp()
+        return all(feature in supported_features for feature in required_features)
+
     def __process_and_handle_extensions(self, etag):
         try:
             # Verify we satisfy all required features, if any. If not, report failure here itself, no need to process anything further.
-            # if !required_features:
-            #   self.gs_aggregate_status = GoalStateAggregateStatus(status=GoalStateState.Failed, seq_no=etag,
-            #                                                     code=GoalStateStatusCodes.GoalStateUnsupportedRequiredFeatures,
-            #                                                     message="Unsupported required features")
-            # else:
-            self.handle_ext_handlers(etag)
-            self.__gs_aggregate_status = GoalStateAggregateStatus(status=GoalStateState.Success, seq_no=etag,
-                                                                  code=GoalStateStatusCodes.Success,
-                                                                  message="GoalState executed successfully")
+            if not self.__all_required_features_supported():
+                # ToDo: What happens in windows if there are no status to report? Empty status or transitioning? Verify!!
+                self.__gs_aggregate_status = GoalStateAggregateStatus(status=GoalStateState.Failed, seq_no=etag,
+                                                                    code=GoalStateStatusCodes.GoalStateUnsupportedRequiredFeatures,
+                                                                    message="Unsupported required features")
+            else:
+                self.handle_ext_handlers(etag)
+                self.__gs_aggregate_status = GoalStateAggregateStatus(status=GoalStateState.Success, seq_no=etag,
+                                                                      code=GoalStateStatusCodes.Success,
+                                                                      message="GoalState executed successfully")
         except Exception as error:
             msg = "Unexpected error when processing goal state: {0}; {1}".format(ustr(error), traceback.format_exc())
             self.__gs_aggregate_status = GoalStateAggregateStatus(status=GoalStateState.Failed, seq_no=etag,

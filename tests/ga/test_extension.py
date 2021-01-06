@@ -3164,6 +3164,9 @@ class TestMultiConfigExtensions(ExtensionTestCase):
         expected_handlers = self._get_mock_expected_handler_data(rc_extensions, vmaccess_extensions, geneva_extensions)
         self._mock_and_assert_ext_handlers(expected_handlers)
 
+    def test_it_should_persist_goal_state_aggregate_status_until_new_incarnation(self):
+        raise NotImplementedError
+
 
 if __name__ == '__main__':
     unittest.main()

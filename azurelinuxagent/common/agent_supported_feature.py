@@ -80,4 +80,4 @@ def get_agent_supported_features_list_for_crp():
                 MultipleExtensionsPerHandler: _MultiConfigFeature()
             }
     """
-    return __CRP_SUPPORTED_FEATURES
+    return dict((name, feature) for name, feature in __CRP_SUPPORTED_FEATURES.items() if feature.is_supported)
