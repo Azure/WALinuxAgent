@@ -21,7 +21,7 @@ import uuid
 
 import azurelinuxagent.common.logger as logger
 import azurelinuxagent.common.utils.networkutil as networkutil
-from azurelinuxagent.common.cgroupconfigurator import CGroupConfigurator, UnexpectedProcessesInCGroupException
+from azurelinuxagent.common.cgroupconfigurator import CGroupConfigurator
 from azurelinuxagent.common.cgroupstelemetry import CGroupsTelemetry
 from azurelinuxagent.common.errorstate import ErrorState
 from azurelinuxagent.common.event import add_event, WALAEventOperation, report_metric
@@ -52,22 +52,10 @@ class PollResourceUsageOperation(PeriodicOperation):
             name="poll resource usage",
             operation=self._operation_impl,
             period=datetime.timedelta(minutes=5))
-        self._last_error = None
-        self._error_count = 0
 
-    def _operation_impl(self):
-        try:
-            CGroupConfigurator.get_instance().check_processes_in_agent_cgroup()
-        except UnexpectedProcessesInCGroupException as exception:
-            exception.unexpected.sort()
-            message = "The agent's cgroup includes unexpected processes: {0}".format(exception.unexpected)
-
-            # Report a small sample of errors
-            if message != self._last_error and self._error_count < 5:
-                self._error_count += 1
-                self._last_error = message
-                logger.info(message)
-                add_event(op=WALAEventOperation.CGroupsDebug, message=message)
+    @staticmethod
+    def _operation_impl():
+        CGroupConfigurator.get_instance().check_processes_in_agent_cgroup()
 
         for metric in CGroupsTelemetry.poll_all_tracked():
             report_metric(metric.category, metric.counter, metric.instance, metric.value)
@@ -164,9 +152,8 @@ class MonitorHandler(ThreadHandlerInterface):
             PeriodicOperation("send_host_plugin_heartbeat", self.send_host_plugin_heartbeat, self.HOST_PLUGIN_HEARTBEAT_PERIOD),
             PeriodicOperation("send_imds_heartbeat", self.send_imds_heartbeat, self.IMDS_HEARTBEAT_PERIOD),
             ReportNetworkConfigurationChangesOperation(),
+            PollResourceUsageOperation()
         ]
-        if CGroupConfigurator.get_instance().enabled():
-            self._periodic_operations.append(PollResourceUsageOperation())
 
         self.protocol = None
         self.protocol_util = None
