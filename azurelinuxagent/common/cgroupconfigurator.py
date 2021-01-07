@@ -257,7 +257,7 @@ class CGroupConfigurator(object):
                 systemd_run_commands = set()
                 systemd_run_commands.update(self._cgroups_api.get_systemd_run_commands())
                 agent_cgroup = CGroupsApi.get_processes_in_cgroup(self._agent_cpu_cgroup_path)
-                # get the running commands again in case new commands were started while we were fetching the processes in the cgroup;
+                # get the running commands again in case new commands started or completed while we were fetching the processes in the cgroup;
                 agent_commands.update(shellutil.get_running_commands())
                 systemd_run_commands.update(self._cgroups_api.get_systemd_run_commands())
 
@@ -276,7 +276,7 @@ class CGroupConfigurator(object):
                             break
                 if unexpected:
                     unexpected = self._format_processes(unexpected)
-                    unexpected.sort()
+                    unexpected.sort()  # sort the PIDs so that the error message stays more consistent across different calls to this check
                     log_message("The agent's cgroup includes unexpected processes; disabling CPU enforcement. Unexpected: {0}".format(unexpected))
                     self.disable()
                     return False
