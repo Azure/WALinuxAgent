@@ -247,7 +247,7 @@ class CGroupConfigurator(object):
                     self._check_processes_in_agent_cgroup_error_count += 1
                     self._check_processes_in_agent_cgroup_last_error = message
                     logger.info(message)
-                    add_event(op=WALAEventOperation.CGroupsDebug, message=message)
+                    add_event(op=WALAEventOperation.CGroupsDisabled, message=message)
 
             try:
                 daemon = os.getppid()
@@ -334,7 +334,7 @@ class CGroupConfigurator(object):
                 except SystemdRunError as exception:
                     event_msg = 'Failed to start extension {0} using systemd-run. Will disable resource enforcement and retry invoking the extension without systemd. ' \
                                 'Systemd-run error: {1}'.format(extension_name, ustr(exception))
-                    add_event(op=WALAEventOperation.CGroupsDisable, is_success=False, log_event=False, message=event_msg)
+                    add_event(op=WALAEventOperation.CGroupsDisabled, is_success=False, log_event=False, message=event_msg)
                     logger.info(event_msg)
                     self.disable()
                     # fall-through and re-invoke the extension
