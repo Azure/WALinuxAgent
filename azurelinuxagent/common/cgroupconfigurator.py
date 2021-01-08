@@ -20,7 +20,7 @@ import subprocess
 
 from azurelinuxagent.common import logger
 from azurelinuxagent.common.cgroup import CpuCgroup, MemoryCgroup
-from azurelinuxagent.common.cgroupapi import CGroupsApi, SystemdCgroupsApi
+from azurelinuxagent.common.cgroupapi import CGroupsApi, SystemdCgroupsApi, SystemdRunError
 from azurelinuxagent.common.cgroupstelemetry import CGroupsTelemetry
 from azurelinuxagent.common.exception import ExtensionErrorCodes, CGroupsException
 from azurelinuxagent.common.future import ustr
@@ -247,7 +247,7 @@ class CGroupConfigurator(object):
                     self._check_processes_in_agent_cgroup_error_count += 1
                     self._check_processes_in_agent_cgroup_last_error = message
                     logger.info(message)
-                    add_event(op=WALAEventOperation.CGroupsDebug, message=message)
+                    add_event(op=WALAEventOperation.CGroupsDisabled, message=message)
 
             try:
                 daemon = os.getppid()
@@ -328,34 +328,20 @@ class CGroupConfigurator(object):
             :param stderr: File object to redirect stderr to
             :param error_code: Extension error code to raise in case of error
             """
-            if not self.enabled():
-                # subprocess-popen-preexec-fn<W1509> Disabled: code is not multi-threaded
-                process = subprocess.Popen(command,  # pylint: disable=W1509
-                                           shell=shell,
-                                           cwd=cwd,
-                                           env=env,
-                                           stdout=stdout,
-                                           stderr=stderr,
-                                           preexec_fn=os.setsid)
+            if self.enabled():
+                try:
+                    return self._cgroups_api.start_extension_command(extension_name, command, timeout, shell=shell, cwd=cwd, env=env, stdout=stdout, stderr=stderr, error_code=error_code)
+                except SystemdRunError as exception:
+                    event_msg = 'Failed to start extension {0} using systemd-run. Will disable resource enforcement and retry invoking the extension without systemd. ' \
+                                'Systemd-run error: {1}'.format(extension_name, ustr(exception))
+                    add_event(op=WALAEventOperation.CGroupsDisabled, is_success=False, log_event=False, message=event_msg)
+                    logger.info(event_msg)
+                    self.disable()
+                    # fall-through and re-invoke the extension
 
-                process_output = handle_process_completion(process=process,
-                                                           command=command,
-                                                           timeout=timeout,
-                                                           stdout=stdout,
-                                                           stderr=stderr,
-                                                           error_code=error_code)
-            else:
-                process_output = self._cgroups_api.start_extension_command(extension_name,
-                                                                          command, 
-                                                                          timeout, 
-                                                                          shell=shell, 
-                                                                          cwd=cwd, 
-                                                                          env=env, 
-                                                                          stdout=stdout, 
-                                                                          stderr=stderr, 
-                                                                          error_code=error_code) 
-
-            return process_output
+            # subprocess-popen-preexec-fn<W1509> Disabled: code is not multi-threaded
+            process = subprocess.Popen(command, shell=shell, cwd=cwd, env=env, stdout=stdout, stderr=stderr, preexec_fn=os.setsid)  # pylint: disable=W1509
+            return handle_process_completion(process=process, command=command, timeout=timeout, stdout=stdout, stderr=stderr, error_code=error_code)
 
     # unique instance for the singleton
     _instance = None
