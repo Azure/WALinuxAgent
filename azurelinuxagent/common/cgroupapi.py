@@ -379,6 +379,7 @@ Description=Slice for Azure VM Extensions"""
             stderr.truncate(0)
 
             if isinstance(e, ExtensionOperationError):
+                # no-member: Instance of 'ExtensionError' has no 'exit_code' member (no-member) - Disabled: e is actually an ExtensionOperationError
                 err_msg = 'Systemd process exited with code %s and output %s' % (e.exit_code, process_output)  # pylint: disable=no-member
             else:
                 err_msg = "Systemd timed-out, output: %s" % process_output

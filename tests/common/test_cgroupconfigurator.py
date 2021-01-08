@@ -30,6 +30,7 @@ from nose.plugins.attrib import attr
 from azurelinuxagent.common.cgroup import CGroup
 from azurelinuxagent.common.cgroupconfigurator import CGroupConfigurator
 from azurelinuxagent.common.cgroupstelemetry import CGroupsTelemetry
+from azurelinuxagent.common.event import WALAEventOperation
 from azurelinuxagent.common.exception import CGroupsException, ExtensionError, ExtensionErrorCodes
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.utils import shellutil
@@ -336,7 +337,7 @@ cgroup on /sys/fs/cgroup/blkio type cgroup (rw,nosuid,nodev,noexec,relatime,blki
                     self.assertIn("Failed to find executable syntax_error: No such file or directory",
                                   kwargs['message'])
                     self.assertEqual(False, kwargs['is_success'])
-                    self.assertEqual('CGroupsDisable', kwargs['op'])
+                    self.assertEqual(WALAEventOperation.CGroupsDisabled, kwargs['op'])
 
                     extension_calls = [args[0] for (args, _) in popen_patch.call_args_list if command in args[0]]
 
