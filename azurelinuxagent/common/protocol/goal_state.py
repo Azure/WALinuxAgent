@@ -322,9 +322,9 @@ class ExtensionsConfig(object):
 
     def get_redacted_xml_text(self):
         protected_settings = []
-        extensions = [ext_handler.properties.extensions for ext_handler in self.ext_handlers.extHandlers]
-        for extension in extensions:
-            protected_settings.append(extension[0].protectedSettings)
+        for ext_handler in self.ext_handlers.extHandlers:
+            for extension in ext_handler.properties.extensions:
+                protected_settings.append(extension.protectedSettings)
 
         xml_text = self.xml_text
         for settings in protected_settings:
