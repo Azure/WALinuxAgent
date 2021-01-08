@@ -321,14 +321,10 @@ class ExtensionsConfig(object):
         self.in_vm_gs_metadata.parse_node(find(xml_doc, "InVMGoalStateMetaData"))
 
     def get_redacted_xml_text(self):
-        protected_settings = []
+        xml_text = self.xml_text
         for ext_handler in self.ext_handlers.extHandlers:
             for extension in ext_handler.properties.extensions:
-                protected_settings.append(extension.protectedSettings)
-
-        xml_text = self.xml_text
-        for settings in protected_settings:
-            xml_text = xml_text.replace(settings, "*** REDACTED ***")
+                xml_text = xml_text.replace(extension.protectedSettings, "*** REDACTED ***")
         return xml_text
 
     def __parse_plugins_and_settings_and_populate_ext_handlers(self, xml_doc):
