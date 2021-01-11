@@ -45,7 +45,7 @@
         </Plugin>
         <Plugin name="Microsoft.OSTCExtensions.Edp.ExampleExtensionLinuxInTest" version="1.0.0">
             <RuntimeSettings seqNo="0">
-                {"runtimeSettings":[{"handlerSettings":{"protectedSettingsCertThumbprint":"4037FBF5F1F3014F99B5D6C7799E9B20E6871CB3","protectedSettings":"yJiYWNrdXBNZXRhZGF0YSI6W3siS2V5IjoiT3BlcmF0aW9uSWQiLCJWYWx1ZSI6ImEwZTM2YzQwLWFjMzYtNGRiYS1iMDM1LWIyYTdmZDA1MjA5OSJ9LHsiS2V5Ijoidm1JZCIsIlZhbHVlIjoiMjA5OWM0YTEtZjQ0Ni00MmVlLTliYTUtMmExY2MyNGI5MzY2In0seyJLZXkiOiJDcmVhdGVkQnkiLCJWYWx1ZSI6IkNSUCJ9LHsiS2V5IjoiUGFyZW50UmVzb3VyY2VJZCIsIlZhbHVlIjoiXC9TdWJzY3JpcHRpb25zXC9hNTNmNzA5NC1hMTZjLTQ3YWYtYWJlNC1iMDVjMDVkMGQ3OWFcL1Jlc291cmNlR3JvdXBzXC9BWlVSRUJBQ0tVUFJHX1dFU1RVUzJfMVwvVk1SZXN0b3JlUG9pbnRDb2xsZWN0aW9uc1wvQVpVUkVCQUNLVVBfTkFNLVUxOF8yNDYyOTA5NjIyOTE4ODJcL1ZNUmVzdG9yZVBvaW50c1wvQVpVUkVCQUNLVVBfMjAyMDEyMTRfMTE1ODI5In1dLCJpbmNsdWRlZERpc2tzIjp7ImRhdGFEaXNrTHVuTGlzdCI6W10sImlzQW55RGlza0V4Y2x1ZGVkIjpmYWxzZSwiaXNPU0Rpc2tJbmNsdWRlZCI6dHJ1ZX0sInNuYXBzaG90VGFza1Rva2VuIjpudWxsfQ==","publicSettings":{"foo":"bar"}}}]}
+                {"runtimeSettings":[{"handlerSettings":{"publicSettings":{"foo":"bar"}}}]}
             </RuntimeSettings>
         </Plugin>
     </PluginSettings>

@@ -1167,7 +1167,8 @@ class UpdateGoalStateTestCase(AgentTestCase):
             protected_settings = []
             for ext_handler in goal_state.ext_conf.ext_handlers.extHandlers:
                 for extension in ext_handler.properties.extensions:
-                    protected_settings.append(extension.protectedSettings)
+                    if extension.protectedSettings is not None:
+                        protected_settings.append(extension.protectedSettings)
             if len(protected_settings) == 0:
                 raise Exception("The test goal state does not include any protected settings")
 
