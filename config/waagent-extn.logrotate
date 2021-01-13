@@ -1,4 +1,4 @@
-/var/log/azure/*/*.log {
+/var/log/azure/*/CommandExecution.log {
     # Old versions of log files are compressed with gzip by default.
     compress
 
