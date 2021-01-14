@@ -305,11 +305,11 @@ class ImdsClient(object):
 
         if resp.status >= 500:
             return IMDS_INTERNAL_SERVER_ERROR, "IMDS error in /metadata/{0}: {1}".format(
-                                               resource_path, restutil.read_response_error(resp))
+                                               resource_path, restutil.read_response_error(resp)) 
 
         if restutil.request_failed(resp):
             return IMDS_RESPONSE_ERROR, "IMDS error in /metadata/{0}: {1}".format(
-                                        resource_path, restutil.read_response_error(resp))
+                                        resource_path, restutil.read_response_error(resp)) 
 
         return IMDS_RESPONSE_SUCCESS, resp.read()
 

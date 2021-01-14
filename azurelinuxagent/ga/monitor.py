@@ -19,19 +19,18 @@ import datetime
 import threading
 import uuid
 
-from azurelinuxagent.common.utils import textutil
-
 import azurelinuxagent.common.logger as logger
 import azurelinuxagent.common.utils.networkutil as networkutil
 from azurelinuxagent.common.cgroupconfigurator import CGroupConfigurator
 from azurelinuxagent.common.cgroupstelemetry import CGroupsTelemetry
 from azurelinuxagent.common.errorstate import ErrorState
-from azurelinuxagent.common.event import add_event, WALAEventOperation, report_metric, collect_events
+from azurelinuxagent.common.event import add_event, WALAEventOperation, report_metric
 from azurelinuxagent.common.future import ustr
+from azurelinuxagent.common.interfaces import ThreadHandlerInterface
 from azurelinuxagent.common.osutil import get_osutil
-from azurelinuxagent.common.protocol.util import get_protocol_util
 from azurelinuxagent.common.protocol.healthservice import HealthService
 from azurelinuxagent.common.protocol.imds import get_imds_client
+from azurelinuxagent.common.protocol.util import get_protocol_util
 from azurelinuxagent.common.utils.restutil import IOErrorCounter
 from azurelinuxagent.common.utils.textutil import hash_strings
 from azurelinuxagent.common.version import AGENT_NAME, CURRENT_VERSION
@@ -53,43 +52,12 @@ class PollResourceUsageOperation(PeriodicOperation):
             name="poll resource usage",
             operation=self._operation_impl,
             period=datetime.timedelta(minutes=5))
-        self._last_error = None
-        self._error_count = 0
 
-    def _operation_impl(self):
-        #
-        # Check the processes in the agent cgroup
-        #
-        processes_check_error = None
-        try:
-            processes = CGroupConfigurator.get_instance().get_processes_in_agent_cgroup()
+    @staticmethod
+    def _operation_impl():
+        CGroupConfigurator.get_instance().check_processes_in_agent_cgroup()
 
-            if processes is not None:
-                unexpected_processes = []
-
-                for (_, command_line) in processes:
-                    if not CGroupConfigurator.is_agent_process(command_line):
-                        unexpected_processes.append(command_line)
-
-                if len(unexpected_processes) > 0:
-                    unexpected_processes.sort()
-                    processes_check_error = "The agent's cgroup includes unexpected processes: {0}".format(ustr(unexpected_processes))
-        except Exception as e:
-            processes_check_error = "Failed to check the processes in the agent's cgroup: {0}".format(ustr(e))
-
-        # Report a small sample of errors
-        if processes_check_error != self._last_error and self._error_count < 5:
-            self._error_count += 1
-            self._last_error = processes_check_error
-            logger.info(processes_check_error)
-            add_event(op=WALAEventOperation.CGroupsDebug, message=processes_check_error)
-
-        #
-        # Report metrics
-        #
-        metrics = CGroupsTelemetry.poll_all_tracked()
-
-        for metric in metrics:
+        for metric in CGroupsTelemetry.poll_all_tracked():
             report_metric(metric.category, metric.counter, metric.instance, metric.value)
 
 
@@ -157,7 +125,7 @@ class ReportNetworkConfigurationChangesOperation(PeriodicOperation):
             self.last_nic_state = nic_state
 
 
-class MonitorHandler(object):
+class MonitorHandler(ThreadHandlerInterface):
     # telemetry
     EVENT_COLLECTION_PERIOD = datetime.timedelta(minutes=1)
     # host plugin
@@ -167,6 +135,12 @@ class MonitorHandler(object):
     IMDS_HEARTBEAT_PERIOD = datetime.timedelta(minutes=1)
     IMDS_HEALTH_PERIOD = datetime.timedelta(minutes=3)
 
+    _THREAD_NAME = "MonitorHandler"
+
+    @staticmethod
+    def get_thread_name():
+        return MonitorHandler._THREAD_NAME
+
     def __init__(self):
         self.osutil = get_osutil()
         self.imds_client = None
@@ -174,13 +148,13 @@ class MonitorHandler(object):
         self.event_thread = None
         self._periodic_operations = [
             ResetPeriodicLogMessagesOperation(),
-            PeriodicOperation("collect_and_send_events", self.collect_and_send_events, self.EVENT_COLLECTION_PERIOD),
             ReportNetworkErrorsOperation(),
-            PollResourceUsageOperation(),
             PeriodicOperation("send_host_plugin_heartbeat", self.send_host_plugin_heartbeat, self.HOST_PLUGIN_HEARTBEAT_PERIOD),
             PeriodicOperation("send_imds_heartbeat", self.send_imds_heartbeat, self.IMDS_HEARTBEAT_PERIOD),
             ReportNetworkConfigurationChangesOperation(),
+            PollResourceUsageOperation()
         ]
+
         self.protocol = None
         self.protocol_util = None
         self.health_service = None
@@ -191,7 +165,7 @@ class MonitorHandler(object):
         self.imds_errorstate = ErrorState(min_timedelta=MonitorHandler.IMDS_HEALTH_PERIOD)
 
     def run(self):
-        self.start(init_data=True)
+        self.start()
 
     def stop(self):
         self.should_run = False
@@ -219,16 +193,18 @@ class MonitorHandler(object):
     def is_alive(self):
         return self.event_thread is not None and self.event_thread.is_alive()
 
-    def start(self, init_data=False):
-        self.event_thread = threading.Thread(target=self.daemon, args=(init_data,))
+    def start(self):
+        self.event_thread = threading.Thread(target=self.daemon)
         self.event_thread.setDaemon(True)
-        self.event_thread.setName("MonitorHandler")
+        self.event_thread.setName(self.get_thread_name())
         self.event_thread.start()
 
-    def daemon(self, init_data=False):
+    def daemon(self):
         try:
-            if init_data:
+            if self.protocol_util is None or self.protocol is None:
                 self.init_protocols()
+
+            if self.imds_client is None:
                 self.init_imds_client()
 
             while not self.stopped():
@@ -244,19 +220,6 @@ class MonitorHandler(object):
                     PeriodicOperation.sleep_until_next_operation(self._periodic_operations)
         except Exception as e:
             logger.error("An error occurred in the monitor thread; will exit the thread.\n{0}", ustr(e))
-
-    def collect_and_send_events(self):
-        """
-        Periodically send any events located in the events folder
-        """
-        try:
-            event_list = collect_events()
-
-            if len(event_list.events) > 0:
-                self.protocol.report_event(event_list)
-        except Exception as e:
-            err_msg = "Failure in collecting/sending Agent events: {0}".format(ustr(e))
-            add_event(op=WALAEventOperation.UnhandledError, message=err_msg, is_success=False)
 
     def send_imds_heartbeat(self):
         """

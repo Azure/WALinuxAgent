@@ -16,11 +16,9 @@
 #
 # Requires Python 2.6+ and Openssl 1.0+
 #
-
 import glob
 import json
 import os
-import platform
 import random
 import re
 import shutil
@@ -40,9 +38,11 @@ import azurelinuxagent.common.logger as logger
 import azurelinuxagent.common.utils.fileutil as fileutil
 import azurelinuxagent.common.utils.restutil as restutil
 import azurelinuxagent.common.utils.textutil as textutil
+from azurelinuxagent.common.cgroupapi import CGroupsApi
 from azurelinuxagent.common.cgroupconfigurator import CGroupConfigurator
 
-from azurelinuxagent.common.event import add_event, initialize_event_logger_vminfo_common_parameters, elapsed_milliseconds, WALAEventOperation
+from azurelinuxagent.common.event import add_event, initialize_event_logger_vminfo_common_parameters, \
+    elapsed_milliseconds, WALAEventOperation, EVENTS_DIRECTORY
 from azurelinuxagent.common.exception import ResourceGoneError, UpdateError
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.osutil import get_osutil
@@ -50,12 +50,19 @@ from azurelinuxagent.common.protocol.util import get_protocol_util
 from azurelinuxagent.common.protocol.hostplugin import HostPluginProtocol
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
 from azurelinuxagent.common.version import AGENT_NAME, AGENT_VERSION, AGENT_DIR_PATTERN, CURRENT_AGENT,\
-    CURRENT_VERSION, DISTRO_NAME, DISTRO_VERSION, is_current_agent_installed, PY_VERSION_MAJOR, PY_VERSION_MINOR, \
-    PY_VERSION_MICRO
+    CURRENT_VERSION, DISTRO_NAME, DISTRO_VERSION, is_current_agent_installed, get_lis_version, \
+    has_logrotate, PY_VERSION_MAJOR, PY_VERSION_MINOR, PY_VERSION_MICRO
+from azurelinuxagent.ga.collect_logs import get_collect_logs_handler, is_log_collection_allowed
+from azurelinuxagent.ga.env import get_env_handler
+from azurelinuxagent.ga.collect_telemetry_events import get_collect_telemetry_events_handler
 
-from azurelinuxagent.ga.exthandlers import HandlerManifest, get_traceback
+from azurelinuxagent.ga.exthandlers import HandlerManifest, get_traceback, ExtHandlersHandler, list_agent_lib_directory, \
+    is_extension_telemetry_pipeline_enabled
+from azurelinuxagent.ga.monitor import get_monitor_handler
 
-AGENT_ERROR_FILE = "error.json" # File name for agent error record
+from azurelinuxagent.ga.send_telemetry_events import get_send_telemetry_events_handler
+
+AGENT_ERROR_FILE = "error.json"  # File name for agent error record
 AGENT_MANIFEST_FILE = "HandlerManifest.json"
 AGENT_PARTITION_FILE = "partition"
 
@@ -64,7 +71,7 @@ CHILD_LAUNCH_INTERVAL = 5 * 60
 CHILD_LAUNCH_RESTART_MAX = 3
 CHILD_POLL_INTERVAL = 60
 
-MAX_FAILURE = 3 # Max failure allowed for agent before blacklisted
+MAX_FAILURE = 3  # Max failure allowed for agent before blacklisted
 
 GOAL_STATE_INTERVAL_DISABLED = 5 * 60
 
@@ -86,13 +93,7 @@ def get_update_handler():
     return UpdateHandler()
 
 
-def get_python_cmd():
-    major_version = platform.python_version_tuple()[0]
-    return "python" if int(major_version) <= 2 else "python{0}".format(major_version)
-
-
 class UpdateHandler(object):
-
     TELEMETRY_HEARTBEAT_PERIOD = timedelta(minutes=30)
 
     def __init__(self):
@@ -153,7 +154,7 @@ class UpdateHandler(object):
             # Launch the correct Python version for python-based agents
             cmds = textutil.safe_shlex_split(agent_cmd)
             if cmds[0].lower() == "python":
-                cmds[0] = get_python_cmd()
+                cmds[0] = sys.executable
                 agent_cmd = " ".join(cmds)
 
             self._evaluate_agent_health(latest_agent)
@@ -258,24 +259,30 @@ class UpdateHandler(object):
             protocol = self.protocol_util.get_protocol()
             protocol.update_goal_state()
 
+            # Initialize the common parameters for telemetry events
             initialize_event_logger_vminfo_common_parameters(protocol)
 
             # Log OS-specific info.
-            os_info_msg = u"Distro: {0}-{1}; OSUtil: {2}; AgentService: {3}; Python: {4}.{5}.{6}".format(
-                DISTRO_NAME, DISTRO_VERSION, type(self.osutil).__name__, self.osutil.service_name, PY_VERSION_MAJOR,
-                PY_VERSION_MINOR, PY_VERSION_MICRO)
+            os_info_msg = u"Distro: {dist_name}-{dist_ver}; "\
+                u"OSUtil: {util_name}; AgentService: {service_name}; "\
+                u"Python: {py_major}.{py_minor}.{py_micro}; "\
+                u"systemd: {systemd}; "\
+                u"LISDrivers: {lis_ver}; "\
+                u"logrotate: {has_logrotate};".format(
+                    dist_name=DISTRO_NAME, dist_ver=DISTRO_VERSION,
+                    util_name=type(self.osutil).__name__,
+                    service_name=self.osutil.service_name,
+                    py_major=PY_VERSION_MAJOR, py_minor=PY_VERSION_MINOR,
+                    py_micro=PY_VERSION_MICRO, systemd=CGroupsApi.is_systemd(),
+                    lis_ver=get_lis_version(), has_logrotate=has_logrotate()
+            )
+
             logger.info(os_info_msg)
             add_event(AGENT_NAME, op=WALAEventOperation.OSInfo, message=os_info_msg)
-            
-            # Launch monitoring threads
-            from azurelinuxagent.ga.monitor import get_monitor_handler
-            monitor_thread = get_monitor_handler()
-            monitor_thread.run()
 
-            from azurelinuxagent.ga.env import get_env_handler
-            env_thread = get_env_handler()
-            env_thread.run()
-
+            #
+            # Perform initialization tasks
+            #
             from azurelinuxagent.ga.exthandlers import get_exthandlers_handler, migrate_handler_state
             exthandlers_handler = get_exthandlers_handler(protocol)
             migrate_handler_state()
@@ -289,6 +296,23 @@ class UpdateHandler(object):
             self._ensure_partition_assigned()
             self._ensure_readonly_files()
             self._ensure_cgroups_initialized()
+            self._ensure_extension_telemetry_state_configured_properly(protocol)
+
+            # Get all thread handlers
+            telemetry_handler = get_send_telemetry_events_handler(self.protocol_util)
+            all_thread_handlers = [
+                get_monitor_handler(),
+                get_env_handler(),
+                telemetry_handler,
+                get_collect_telemetry_events_handler(telemetry_handler)
+            ]
+
+            if is_log_collection_allowed():
+                all_thread_handlers.append(get_collect_logs_handler())
+
+            # Launch all monitoring threads
+            for thread_handler in all_thread_handlers:
+                thread_handler.run()
 
             goal_state_interval = conf.get_goal_state_period() if conf.get_extensions_enabled() else GOAL_STATE_INTERVAL_DISABLED
 
@@ -303,13 +327,10 @@ class UpdateHandler(object):
                 #
                 # Check that all the threads are still running
                 #
-                if not monitor_thread.is_alive():
-                    logger.warn(u"Monitor thread died, restarting")
-                    monitor_thread.start()
-
-                if not env_thread.is_alive():
-                    logger.warn(u"Environment thread died, restarting")
-                    env_thread.start()
+                for thread_handler in all_thread_handlers:
+                    if not thread_handler.is_alive():
+                        logger.warn("{0} thread died, restarting".format(thread_handler.get_thread_name()))
+                        thread_handler.start()
 
                 #
                 # Process the goal state
@@ -340,20 +361,21 @@ class UpdateHandler(object):
                     if last_etag != exthandlers_handler.last_etag:
                         self._ensure_readonly_files()
                         duration = elapsed_milliseconds(utc_start)
-                        logger.info('ProcessGoalState completed [incarnation {0}; {1} ms]',
-                                    exthandlers_handler.last_etag,
-                                    duration)
+                        activity_id, correlation_id, gs_creation_time = exthandlers_handler.get_goal_state_debug_metadata()
+                        msg = 'ProcessGoalState completed [Incarnation: {0}; {1} ms; Activity Id: {2}; Correlation Id: {3}; GS Creation Time: {4}]'.format(
+                            exthandlers_handler.last_etag, duration, activity_id, correlation_id, gs_creation_time)
+                        logger.info(msg)
                         add_event(
                             AGENT_NAME,
                             op=WALAEventOperation.ProcessGoalState,
                             duration=duration,
-                            message="Incarnation {0}".format(exthandlers_handler.last_etag))
+                            message=msg)
 
                 self._send_heartbeat_telemetry(protocol)
                 time.sleep(goal_state_interval)
 
-        except Exception as e:
-            msg = u"Agent {0} failed with exception: {1}".format(CURRENT_AGENT, ustr(e))
+        except Exception as error:
+            msg = u"Agent {0} failed with exception: {1}".format(CURRENT_AGENT, ustr(error))
             self._set_sentinel(msg=msg)
             logger.warn(msg)
             logger.warn(traceback.format_exc())
@@ -370,7 +392,7 @@ class UpdateHandler(object):
 
         if self.child_process is None:
             return
-        
+
         logger.info(
             u"Agent {0} forwarding signal {1} to {2}",
             CURRENT_AGENT,
@@ -396,7 +418,7 @@ class UpdateHandler(object):
 
         if not conf.get_autoupdate_enabled():
             return None
-        
+
         self._find_agents()
         available_agents = [agent for agent in self.agents
                             if agent.is_available
@@ -408,7 +430,7 @@ class UpdateHandler(object):
         try:
             if not self._is_clean_start:
                 msg = u"Agent did not terminate cleanly: {0}".format(
-                            fileutil.read_file(self._sentinel_file_path()))
+                    fileutil.read_file(self._sentinel_file_path()))
                 logger.info(msg)
                 add_event(
                     AGENT_NAME,
@@ -449,7 +471,7 @@ class UpdateHandler(object):
             logger.warn("Failed to log changes in configuration: {0}", ustr(e))
 
     def _ensure_no_orphans(self, orphan_wait_interval=ORPHAN_WAIT_INTERVAL):
-        pid_files, ignored = self._write_pid_file()
+        pid_files, ignored = self._write_pid_file()  # pylint: disable=W0612
         for pid_file in pid_files:
             try:
                 pid = fileutil.read_file(pid_file)
@@ -464,7 +486,7 @@ class UpdateHandler(object):
                             pid)
                         os.kill(pid, signal.SIGKILL)
                         break
-                    
+
                     logger.info(
                         u"{0} waiting for orphan process {1} to terminate",
                         CURRENT_AGENT,
@@ -502,6 +524,7 @@ class UpdateHandler(object):
     def _ensure_cgroups_initialized(self):
         configurator = CGroupConfigurator.get_instance()
         configurator.initialize()
+        configurator.create_slices()
 
     def _evaluate_agent_health(self, latest_agent):
         """
@@ -523,12 +546,12 @@ class UpdateHandler(object):
         self.child_launch_attempts += 1
 
         if (time.time() - self.child_launch_time) <= CHILD_LAUNCH_INTERVAL \
-            and self.child_launch_attempts >= CHILD_LAUNCH_RESTART_MAX:
-                msg = u"Agent {0} restarted more than {1} times in {2} seconds".format(
-                    self.child_agent.name,
-                    CHILD_LAUNCH_RESTART_MAX,
-                    CHILD_LAUNCH_INTERVAL)
-                raise Exception(msg)
+                and self.child_launch_attempts >= CHILD_LAUNCH_RESTART_MAX:
+            msg = u"Agent {0} restarted more than {1} times in {2} seconds".format(
+                self.child_agent.name,
+                CHILD_LAUNCH_RESTART_MAX,
+                CHILD_LAUNCH_INTERVAL)
+            raise Exception(msg)
         return
 
     def _filter_blacklisted_agents(self):
@@ -547,16 +570,16 @@ class UpdateHandler(object):
 
     def _get_host_plugin(self, protocol):
         return protocol.client.get_host_plugin() if protocol and protocol.client else None
-    
+
     def _get_pid_parts(self):
         pid_file = conf.get_agent_pid_file_path()
         pid_dir = os.path.dirname(pid_file)
         pid_name = os.path.basename(pid_file)
-        pid_re = re.compile("(\d+)_{0}".format(re.escape(pid_name)))
+        pid_re = re.compile("(\d+)_{0}".format(re.escape(pid_name)))  # pylint: disable=W1401
         return pid_dir, pid_name, pid_re
 
     def _get_pid_files(self):
-        pid_dir, pid_name, pid_re = self._get_pid_parts()
+        pid_dir, pid_name, pid_re = self._get_pid_parts()  # pylint: disable=W0612
         pid_files = [os.path.join(pid_dir, f) for f in os.listdir(pid_dir) if pid_re.match(f)]
         pid_files.sort(key=lambda f: int(pid_re.match(os.path.basename(f)).group(1)))
         return pid_files
@@ -590,7 +613,7 @@ class UpdateHandler(object):
     def _load_agents(self):
         path = os.path.join(conf.get_lib_dir(), "{0}-*".format(AGENT_NAME))
         return [GuestAgent(path=agent_dir)
-                        for agent_dir in glob.iglob(path) if os.path.isdir(agent_dir)]
+                for agent_dir in glob.iglob(path) if os.path.isdir(agent_dir)]
 
     def _partition(self):
         return int(fileutil.read_file(self._partition_file))
@@ -628,7 +651,9 @@ class UpdateHandler(object):
                 logger.warn(u"Purging {0} raised exception: {1}", agent_path, ustr(e))
         return
 
-    def _set_agents(self, agents=[]):
+    def _set_agents(self, agents=None):
+        if agents is None:
+            agents = []
         self.agents = agents
         self.agents.sort(key=lambda agent: agent.version, reverse=True)
         return
@@ -649,6 +674,8 @@ class UpdateHandler(object):
         return os.path.join(conf.get_lib_dir(), AGENT_SENTINEL_FILE)
 
     def _shutdown(self):
+        # Todo: Ensure all threads stopped when shutting down the main extension handler to ensure that the state of
+        # all threads is clean.
         self.running = False
 
         if not os.path.isfile(self._sentinel_file_path()):
@@ -671,7 +698,7 @@ class UpdateHandler(object):
         now = time.time()
         if self.last_attempt_time is not None:
             next_attempt_time = self.last_attempt_time + \
-                                    conf.get_autoupdate_frequency()
+                                conf.get_autoupdate_frequency()
         else:
             next_attempt_time = now
         if next_attempt_time > now:
@@ -686,10 +713,10 @@ class UpdateHandler(object):
             manifest_list, etag = protocol.get_vmagent_manifests()
 
             manifests = [m for m in manifest_list.vmAgentManifests \
-                            if m.family == family and len(m.versionsManifestUris) > 0]
+                         if m.family == family and len(m.versionsManifestUris) > 0]
             if len(manifests) == 0:
                 logger.verbose(u"Incarnation {0} has no {1} agent updates",
-                                etag, family)
+                               etag, family)
                 return False
 
             pkg_list = protocol.get_vmagent_pkgs(manifests[0])
@@ -710,11 +737,12 @@ class UpdateHandler(object):
             # Return True if current agent is no longer available or an
             # agent with a higher version number is available
             return not self._is_version_eligible(base_version) \
-                or (len(self.agents) > 0 and self.agents[0].version > base_version)
+                   or (len(self.agents) > 0 and self.agents[0].version > base_version)
 
-        except Exception as e:
+        except Exception as e:  # pylint: disable=W0612
             msg = u"Exception retrieving agent manifests: {0}".format(ustr(traceback.format_exc()))
-            add_event(AGENT_NAME, op=WALAEventOperation.Download, version=CURRENT_VERSION, is_success=False, message=msg)
+            add_event(AGENT_NAME, op=WALAEventOperation.Download, version=CURRENT_VERSION, is_success=False,
+                      message=msg)
             return False
 
     def _write_pid_file(self):
@@ -722,13 +750,11 @@ class UpdateHandler(object):
 
         pid_dir, pid_name, pid_re = self._get_pid_parts()
 
-        previous_pid_file = None \
-                        if len(pid_files) <= 0 \
-                        else pid_files[-1]
+        previous_pid_file = None if len(pid_files) <= 0 else pid_files[-1]
         pid_index = -1 \
-                    if previous_pid_file is None \
-                    else int(pid_re.match(os.path.basename(previous_pid_file)).group(1))
-        pid_file = os.path.join(pid_dir, "{0}_{1}".format(pid_index+1, pid_name))
+            if previous_pid_file is None \
+            else int(pid_re.match(os.path.basename(previous_pid_file)).group(1))
+        pid_file = os.path.join(pid_dir, "{0}_{1}".format(pid_index + 1, pid_name))
 
         try:
             fileutil.write_file(pid_file, ustr(os.getpid()))
@@ -750,21 +776,58 @@ class UpdateHandler(object):
         if datetime.utcnow() >= (self._last_telemetry_heartbeat + UpdateHandler.TELEMETRY_HEARTBEAT_PERIOD):
             dropped_packets = self.osutil.get_firewall_dropped_packets(protocol.get_endpoint())
             auto_update_enabled = 1 if conf.get_autoupdate_enabled() else 0
+
             telemetry_msg = "{0};{1};{2};{3};{4}".format(self._heartbeat_counter, self._heartbeat_id, dropped_packets,
-                                                         self._heartbeat_update_goal_state_error_count, auto_update_enabled)
-
-            add_event(name=AGENT_NAME, version=CURRENT_VERSION, op=WALAEventOperation.HeartBeat, is_success=True,
-                      message=telemetry_msg, log_event=False)
-            self._heartbeat_counter += 1
-            self._heartbeat_update_goal_state_error_count = 0
-
+                                                         self._heartbeat_update_goal_state_error_count,
+                                                         auto_update_enabled)
             debug_log_msg = "[DEBUG HeartbeatCounter: {0};HeartbeatId: {1};DroppedPackets: {2};" \
                             "UpdateGSErrors: {3};AutoUpdate: {4}]".format(self._heartbeat_counter,
                                                                           self._heartbeat_id, dropped_packets,
                                                                           self._heartbeat_update_goal_state_error_count,
                                                                           auto_update_enabled)
+
+            # Write Heartbeat events/logs
+            add_event(name=AGENT_NAME, version=CURRENT_VERSION, op=WALAEventOperation.HeartBeat, is_success=True,
+                      message=telemetry_msg, log_event=False)
             logger.info(u"[HEARTBEAT] Agent {0} is running as the goal state agent {1}", CURRENT_AGENT, debug_log_msg)
+
+            # Update/Reset the counters
+            self._heartbeat_counter += 1
+            self._heartbeat_update_goal_state_error_count = 0
             self._last_telemetry_heartbeat = datetime.utcnow()
+
+    @staticmethod
+    def _ensure_extension_telemetry_state_configured_properly(protocol):
+        for name, path in list_agent_lib_directory(skip_agent_package=True):
+
+            try:
+                handler_instance = ExtHandlersHandler.get_ext_handler_instance_from_path(name=name,
+                                                                                         path=path,
+                                                                                         protocol=protocol)
+            except Exception:
+                # Ignore errors if any
+                continue
+
+            try:
+                if handler_instance is not None:
+                    # Recreate the HandlerEnvironment for existing extensions on startup.
+                    # This is to ensure that existing extensions can start using the telemetry pipeline if they support
+                    # it and also ensures that the extensions are not sending out telemetry if the Agent has to disable the feature.
+                    handler_instance.create_handler_env()
+            except Exception as e:
+                logger.warn(
+                    "Unable to re-create HandlerEnvironment file on service startup. Error: {0}".format(ustr(e)))
+                continue
+
+        try:
+            if not is_extension_telemetry_pipeline_enabled():
+                # If extension telemetry pipeline is disabled, ensure we delete all existing extension events directory
+                # because the agent will not be listening on those events.
+                extension_event_dirs = glob.glob(os.path.join(conf.get_ext_log_dir(), "*", EVENTS_DIRECTORY))
+                for ext_dir in extension_event_dirs:
+                    shutil.rmtree(ext_dir, ignore_errors=True)
+        except Exception as e:
+            logger.warn("Error when trying to delete existing Extension events directory. Error: {0}".format(ustr(e)))
 
 
 class GuestAgent(object):
@@ -810,7 +873,7 @@ class GuestAgent(object):
             self.mark_failure(is_fatal=os.path.isfile(self.get_agent_pkg_path()))
 
             msg = u"Agent {0} install failed with exception: {1}".format(
-                        self.name, ustr(e))
+                self.name, ustr(e))
             detailed_msg = '{0} {1}'.format(msg, traceback.extract_tb(get_traceback(e)))
             add_event(
                 AGENT_NAME,
@@ -853,7 +916,7 @@ class GuestAgent(object):
     @property
     def is_downloaded(self):
         return self.is_blacklisted or \
-                os.path.isfile(self.get_agent_manifest_path())
+               os.path.isfile(self.get_agent_manifest_path())
 
     def mark_failure(self, is_fatal=False):
         try:
@@ -876,7 +939,7 @@ class GuestAgent(object):
         if self.pkg is None:
             raise UpdateError(u"Agent {0} is missing package and download URIs".format(
                 self.name))
-        
+
         self._download()
         self._unpack()
 
@@ -897,11 +960,11 @@ class GuestAgent(object):
         uris_shuffled = self.pkg.uris
         random.shuffle(uris_shuffled)
         for uri in uris_shuffled:
-            if not HostPluginProtocol.is_default_channel() and self._fetch(uri.uri):
+            if not HostPluginProtocol.is_default_channel and self._fetch(uri.uri):
                 break
 
             elif self.host is not None and self.host.ensure_initialized():
-                if not HostPluginProtocol.is_default_channel():
+                if not HostPluginProtocol.is_default_channel:
                     logger.warn("Download failed, switching to host plugin")
                 else:
                     logger.verbose("Using host plugin as default channel")
@@ -909,9 +972,9 @@ class GuestAgent(object):
                 uri, headers = self.host.get_artifact_request(uri.uri, self.host.manifest_uri)
                 try:
                     if self._fetch(uri, headers=headers, use_proxy=False):
-                        if not HostPluginProtocol.is_default_channel():
+                        if not HostPluginProtocol.is_default_channel:
                             logger.verbose("Setting host plugin as default channel")
-                            HostPluginProtocol.set_default_channel(True)
+                            HostPluginProtocol.is_default_channel = True
                         break
                     else:
                         logger.warn("Host plugin download failed")
@@ -919,7 +982,7 @@ class GuestAgent(object):
                 # If the HostPlugin rejects the request,
                 # let the error continue, but set to use the HostPlugin
                 except ResourceGoneError:
-                    HostPluginProtocol.set_default_channel(True)
+                    HostPluginProtocol.is_default_channel = True
                     raise
 
             else:
@@ -995,7 +1058,7 @@ class GuestAgent(object):
                 manifest = manifests
 
         try:
-            self.manifest = HandlerManifest(manifest)
+            self.manifest = HandlerManifest(manifest)  # pylint: disable=W0201
             if len(self.manifest.get_enable_command()) <= 0:
                 raise Exception(u"Manifest is missing the enable command")
         except Exception as e:
@@ -1010,9 +1073,9 @@ class GuestAgent(object):
             self.name,
             self.get_agent_manifest_path())
         logger.verbose(u"Successfully loaded Agent {0} {1}: {2}",
-            self.name,
-            AGENT_MANIFEST_FILE,
-            ustr(self.manifest.data))
+                       self.name,
+                       AGENT_MANIFEST_FILE,
+                       ustr(self.manifest.data))
         return
 
     def _unpack(self):
@@ -1024,7 +1087,7 @@ class GuestAgent(object):
 
         except Exception as e:
             fileutil.clean_ioerror(e,
-                paths=[self.get_agent_dir(), self.get_agent_pkg_path()])
+                                   paths=[self.get_agent_dir(), self.get_agent_pkg_path()])
 
             msg = u"Exception unpacking Agent {0} from {1}: {2}".format(
                 self.name,
@@ -1053,11 +1116,11 @@ class GuestAgentError(object):
 
         self.clear()
         return
-   
+
     def mark_failure(self, is_fatal=False):
-        self.last_failure = time.time()
+        self.last_failure = time.time()  # pylint: disable=W0201
         self.failure_count += 1
-        self.was_fatal = is_fatal
+        self.was_fatal = is_fatal  # pylint: disable=W0201
         return
 
     def clear(self):
@@ -1081,23 +1144,23 @@ class GuestAgentError(object):
             with open(self.path, 'w') as f:
                 json.dump(self.to_json(), f)
         return
-    
+
     def from_json(self, data):
-        self.last_failure = max(
+        self.last_failure = max(  # pylint: disable=W0201
             self.last_failure,
             data.get(u"last_failure", 0.0))
-        self.failure_count = max(
+        self.failure_count = max(  # pylint: disable=W0201
             self.failure_count,
             data.get(u"failure_count", 0))
-        self.was_fatal = self.was_fatal or data.get(u"was_fatal", False)
+        self.was_fatal = self.was_fatal or data.get(u"was_fatal", False)  # pylint: disable=W0201
         return
 
     def to_json(self):
         data = {
             u"last_failure": self.last_failure,
             u"failure_count": self.failure_count,
-            u"was_fatal" : self.was_fatal
-        }  
+            u"was_fatal": self.was_fatal
+        }
         return data
 
     def __str__(self):

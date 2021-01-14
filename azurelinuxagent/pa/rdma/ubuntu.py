@@ -17,10 +17,10 @@
 # Requires Python 2.6+ and Openssl 1.0+
 #
 
-import glob
+import glob  # pylint: disable=W0611
 import os
 import re
-import time
+import time  # pylint: disable=W0611
 import azurelinuxagent.common.conf as conf
 import azurelinuxagent.common.logger as logger
 import azurelinuxagent.common.utils.shellutil as shellutil
@@ -37,7 +37,7 @@ class UbuntuRDMAHandler(RDMAHandler):
             logger.error("RDMA: Could not determine firmware version. No driver will be installed")
             return
         #replace . with _, we are looking for number like 144_0
-        nd_version = re.sub('\.', '_', nd_version)
+        nd_version = re.sub('\.', '_', nd_version)  # pylint: disable=W1401
 
         #Check to see if we need to reconfigure driver
         status,module_name = shellutil.run_get_output('modprobe -R hv_network_direct', chk_err=False)
@@ -52,7 +52,7 @@ class UbuntuRDMAHandler(RDMAHandler):
             return
 
         #Reconfigure driver if one is available
-        status,output = shellutil.run_get_output('modinfo hv_network_direct_%s' % nd_version);
+        status,output = shellutil.run_get_output('modinfo hv_network_direct_%s' % nd_version)
         if status == 0:
             logger.info("RDMA: driver with ND version is installed. Link to module name")
             self.update_modprobed_conf(nd_version)
@@ -79,13 +79,13 @@ class UbuntuRDMAHandler(RDMAHandler):
         status,output = shellutil.run_get_output('apt-cache show --no-all-versions linux-azure')
         if status != 0:
             return
-        r = re.search('Version: (\S+)', output)
+        r = re.search('Version: (\S+)', output)  # pylint: disable=W1401
         if not r:
             logger.error("RDMA: version not found in package linux-azure.")
             return
         package_version = r.groups()[0]
         #Remove the ending .<upload number> after <ABI number>
-        package_version = re.sub("\.\d+$", "", package_version)
+        package_version = re.sub("\.\d+$", "", package_version)  # pylint: disable=W1401
 
         logger.info('RDMA: kernel_version=%s package_version=%s' % (kernel_version, package_version))
         kernel_version_array = [ int(x) for x in kernel_version.split('.') ]
@@ -111,9 +111,9 @@ class UbuntuRDMAHandler(RDMAHandler):
             f = open(modprobed_file, 'r')
             lines = f.read()
             f.close()
-        r = re.search('alias hv_network_direct hv_network_direct_\S+', lines)
+        r = re.search('alias hv_network_direct hv_network_direct_\S+', lines)  # pylint: disable=W1401
         if r:
-            lines = re.sub('alias hv_network_direct hv_network_direct_\S+', 'alias hv_network_direct hv_network_direct_%s' % nd_version, lines)
+            lines = re.sub('alias hv_network_direct hv_network_direct_\S+', 'alias hv_network_direct hv_network_direct_%s' % nd_version, lines)  # pylint: disable=W1401
         else:
             lines += '\nalias hv_network_direct hv_network_direct_%s\n' % nd_version
         f = open('/etc/modprobe.d/vmbus-rdma.conf', 'w')

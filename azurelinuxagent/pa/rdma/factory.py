@@ -15,15 +15,14 @@
 # Requires Python 2.6+ and Openssl 1.0+
 #
 
+from distutils.version import LooseVersion as Version  # pylint: disable=no-name-in-module, import-error
+
 import azurelinuxagent.common.logger as logger
-
-from azurelinuxagent.common.version import DISTRO_FULL_NAME, DISTRO_VERSION
 from azurelinuxagent.common.rdma import RDMAHandler
-from .suse import SUSERDMAHandler
+from azurelinuxagent.common.version import DISTRO_FULL_NAME, DISTRO_VERSION
 from .centos import CentOSRDMAHandler
+from .suse import SUSERDMAHandler
 from .ubuntu import UbuntuRDMAHandler
-
-from distutils.version import LooseVersion as Version
 
 
 def get_rdma_handler(

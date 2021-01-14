@@ -17,7 +17,7 @@
 # Requires Python 2.6+ and Openssl 1.0+
 #
 
-from distutils import version
+from distutils import version  # pylint: disable=no-name-in-module
 import re
 
 
@@ -100,13 +100,13 @@ class FlexibleVersion(version.Version):
         return
 
     def __add__(self, increment):
-        version = list(self.version)
+        version = list(self.version)  # pylint: disable=W0621
         version[-1] += increment
         vstring = self._assemble(version, self.sep, self.prerel_sep, self.prerelease)
         return FlexibleVersion(vstring=vstring, sep=self.sep, prerel_tags=self.prerel_tags)
 
     def __sub__(self, decrement):
-        version = list(self.version)
+        version = list(self.version)  # pylint: disable=W0621
         if version[-1] <= 0:
             raise ArithmeticError("Cannot decrement final numeric component of {0} below zero" \
                 .format(self))
@@ -179,7 +179,7 @@ class FlexibleVersion(version.Version):
 
         return True
 
-    def _assemble(self, version, sep, prerel_sep, prerelease):
+    def _assemble(self, version, sep, prerel_sep, prerelease):  # pylint: disable=W0621
         s = sep.join(map(str, version))
         if prerelease is not None:
             if prerel_sep is not None:
@@ -195,11 +195,11 @@ class FlexibleVersion(version.Version):
         if self.prerel_tags:
             tags = '|'.join(re.escape(tag) for tag in self.prerel_tags)
             self.prerel_tags_set = dict(zip(self.prerel_tags, range(len(self.prerel_tags))))
-            release_re = '(?:{prerel_sep}(?P<{tn}>{tags})(?P<{nn}>\d*))?'.format(
-                        prerel_sep=self._re_prerel_sep,
-                        tags=tags,
-                        tn=self._nn_prerel_tag,
-                        nn=self._nn_prerel_num)
+            release_re = '(?:{prerel_sep}(?P<{tn}>{tags})(?P<{nn}>\d*))?'.format(  # pylint: disable=W1401
+                        prerel_sep=self._re_prerel_sep, 
+                        tags=tags, 
+                        tn=self._nn_prerel_tag, 
+                        nn=self._nn_prerel_num) 
         else:
             release_re = ''
 

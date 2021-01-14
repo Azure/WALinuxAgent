@@ -32,13 +32,13 @@ class TestDataContract(unittest.TestCase):
         obj.foo = "foo"
         obj.bar.append(1)
         data = get_properties(obj)
-        self.assertEquals("foo", data["foo"])
-        self.assertEquals(list, type(data["bar"]))
+        self.assertEqual("foo", data["foo"])
+        self.assertEqual(list, type(data["bar"]))
 
     def test_set_properties(self):
         obj = SampleDataContract()
         data = {
-                'foo' : 1, 
+                'foo' : 1,
                 'baz': 'a'
         }
         set_properties('sample', obj, data)

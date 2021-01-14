@@ -18,7 +18,10 @@
 #
 
 import socket
+from datetime import datetime, timedelta
+
 from azurelinuxagent.common.future import ustr
+from azurelinuxagent.common.utils.textutil import getattrib
 from azurelinuxagent.common.version import DISTRO_VERSION, DISTRO_NAME, CURRENT_VERSION
 from azurelinuxagent.common.datacontract import DataContract, DataContractList
 
@@ -79,19 +82,30 @@ class VMAgentManifestList(DataContract):
 
 
 class Extension(DataContract):
+    """
+    The runtime settings associated with a Handler
+    -   Maps to Extension.PluginSettings.Plugin.RuntimeSettings for single config extensions in the ExtensionConfig.xml
+        Eg: 1.settings, 2.settings
+    -   Maps to Extension.PluginSettings.Plugin.ExtensionRuntimeSettings for multi-config extensions in the
+        ExtensionConfig.xml
+        Eg: <extensionName>.1.settings, <extensionName>.2.settings
+    """
+
     def __init__(self,
                  name=None,
                  sequenceNumber=None,
                  publicSettings=None,
                  protectedSettings=None,
                  certificateThumbprint=None,
-                 dependencyLevel=0):
+                 dependencyLevel=0,
+                 state="enabled"):
         self.name = name
         self.sequenceNumber = sequenceNumber
         self.publicSettings = publicSettings
         self.protectedSettings = protectedSettings
         self.certificateThumbprint = certificateThumbprint
         self.dependencyLevel = dependencyLevel
+        self.state = state
 
 
 class ExtHandlerProperties(DataContract):
@@ -107,10 +121,29 @@ class ExtHandlerVersionUri(DataContract):
 
 
 class ExtHandler(DataContract):
+    """
+    The main Plugin/handler specified by the publishers.
+    Maps to Extension.PluginSettings.Plugins.Plugin in the ExtensionConfig.xml file
+    Eg: Microsoft.OSTC.CustomScript
+    """
+
     def __init__(self, name=None):
         self.name = name
         self.properties = ExtHandlerProperties()
         self.versionUris = DataContractList(ExtHandlerVersionUri)
+        self.__invalid_handler_setting_reason = None
+
+    @property
+    def is_invalid_setting(self):
+        return self.__invalid_handler_setting_reason is not None
+
+    @property
+    def invalid_setting_reason(self):
+        return self.__invalid_handler_setting_reason
+
+    @invalid_setting_reason.setter
+    def invalid_setting_reason(self, value):
+        self.__invalid_handler_setting_reason = value
 
     def sort_key(self):
         levels = [e.dependencyLevel for e in self.properties.extensions]
@@ -123,6 +156,36 @@ class ExtHandler(DataContract):
         if self.properties.state != u"enabled":
             level = (0 - level) - 1
         return level
+
+
+class InVMGoalStateMetaData(DataContract):
+    """
+    Object for parsing the GoalState MetaData received from CRP
+    Eg: <InVMGoalStateMetaData inSvdSeqNo="2" createdOnTicks="637405409304121230" activityId="555e551c-600e-4fb4-90ba-8ab8ec28eccc" correlationId="400de90b-522e-491f-9d89-ec944661f531" />
+    """
+    def __init__(self):
+        self.in_svd_seq_no = None
+        self.created_on_ticks = None
+        self.activity_id = None
+        self.correlation_id = None
+
+    def parse_node(self, in_vm_metadata_node):
+
+        def __ticks_to_datetime(ticks):
+            if ticks in (None, ""):
+                return None
+            try:
+                # C# ticks is a number of ticks since midnight 0001-01-01 00:00:00 (every tick is 1/10000000 of second)
+                # and UNIX timestamp is number of seconds since beginning of the UNIX epoch (1970-01-01 01:00:00).
+                # This function converts the ticks to datetime object that Python recognises.
+                return datetime.min + timedelta(seconds=float(ticks) / 10 ** 7)
+            except Exception:
+                return None
+
+        self.correlation_id = getattrib(in_vm_metadata_node, "correlationId")
+        self.activity_id = getattrib(in_vm_metadata_node, "activityId")
+        self.created_on_ticks = __ticks_to_datetime(getattrib(in_vm_metadata_node, "createdOnTicks"))
+        self.in_svd_seq_no = getattrib(in_vm_metadata_node, "inSvdSeqNo")
 
 
 class ExtHandlerList(DataContract):

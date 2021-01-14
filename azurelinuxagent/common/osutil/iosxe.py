@@ -17,13 +17,15 @@
 # Requires Python 2.6+ and Openssl 1.0+
 #
 
+import os
+
 import azurelinuxagent.common.logger as logger
 import azurelinuxagent.common.utils.shellutil as shellutil
 from azurelinuxagent.common.future import ustr
-from azurelinuxagent.common.osutil.default import DefaultOSUtil
-from azurelinuxagent.common.osutil.redhat import Redhat6xOSUtil
-from azurelinuxagent.common.utils import textutil
+from azurelinuxagent.common.osutil.default import DefaultOSUtil, PRODUCT_ID_FILE, DMIDECODE_CMD, UUID_PATTERN
+from azurelinuxagent.common.utils import textutil, fileutil  # pylint: disable=W0611
 
+# pylint: disable=W0105
 '''
 The IOSXE distribution is a variant of the Centos distribution, 
 version 7.1.
@@ -33,8 +35,10 @@ the waagent environment:
  - no provisioning is performed
  - no DHCP-based services are available
 '''
+# pylint: enable=W0105
+
 class IosxeOSUtil(DefaultOSUtil):
-    def __init__(self):
+    def __init__(self):  # pylint: disable=W0235
         super(IosxeOSUtil, self).__init__()
 
     def set_hostname(self, hostname):
@@ -55,7 +59,7 @@ class IosxeOSUtil(DefaultOSUtil):
         Restart NetworkManager first before publishing hostname
         """
         shellutil.run("service NetworkManager restart")
-        super(RedhatOSUtil, self).publish_hostname(hostname)
+        super(IosxeOSUtil, self).publish_hostname(hostname)
 
     def register_agent_service(self):
         return shellutil.run("systemctl enable waagent", chk_err=False)

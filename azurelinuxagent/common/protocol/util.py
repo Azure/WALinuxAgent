@@ -198,9 +198,11 @@ class ProtocolUtil(SingletonPerThread):
             try:
                 endpoint = self.dhcp_handler.endpoint
                 if endpoint is None:
+                    # pylint: disable=W0105
                     '''
                     Check if DHCP can be used to get the wire protocol endpoint
-                    '''
+                    ''' 
+                    # pylint: enable=W0105
                     dhcp_available = self.osutil.is_dhcp_available()
                     if dhcp_available:
                         logger.info("WireServer endpoint is not found. Rerun dhcp handler")

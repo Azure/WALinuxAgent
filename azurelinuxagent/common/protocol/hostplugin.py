@@ -57,7 +57,7 @@ MAXIMUM_PAGEBLOB_PAGE_SIZE = 4 * 1024 * 1024  # Max page size: 4MB
 
 
 class HostPluginProtocol(object):
-    _is_default_channel = False
+    is_default_channel = False
 
     FETCH_REPORTING_PERIOD = datetime.timedelta(minutes=1)
     STATUS_REPORTING_PERIOD = datetime.timedelta(minutes=1)
@@ -83,14 +83,6 @@ class HostPluginProtocol(object):
     def _extract_deployment_id(role_config_name):
         # Role config name consists of: <deployment id>.<incarnation>(...)
         return role_config_name.split(".")[0] if role_config_name is not None else None
-
-    @staticmethod
-    def is_default_channel():
-        return HostPluginProtocol._is_default_channel
-
-    @staticmethod
-    def set_default_channel(is_default):
-        HostPluginProtocol._is_default_channel = is_default
 
     def update_container_id(self, new_container_id):
         self.container_id = new_container_id
@@ -230,13 +222,12 @@ class HostPluginProtocol(object):
         url = URI_FORMAT_PUT_LOG.format(self.endpoint, HOST_PLUGIN_PORT)
         response = restutil.http_put(url,
                                      data=content,
-                                     headers=self._build_log_headers())
+                                     headers=self._build_log_headers(),
+                                     redact_data=True)
 
         if restutil.request_failed(response):
             error_response = restutil.read_response_error(response)
             raise HttpError("HostGAPlugin: Upload VM logs failed: {0}".format(error_response))
-        else:
-            logger.info("HostGAPlugin: Upload VM logs succeeded")
 
         return response
 

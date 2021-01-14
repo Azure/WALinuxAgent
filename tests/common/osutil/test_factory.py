@@ -15,23 +15,23 @@
 # Requires Python 2.4+ and Openssl 1.0+
 #
 
-from azurelinuxagent.common.osutil.factory import _get_osutil
-from azurelinuxagent.common.osutil.default import DefaultOSUtil
+from azurelinuxagent.common.osutil.alpine import AlpineOSUtil
 from azurelinuxagent.common.osutil.arch import ArchUtil
+from azurelinuxagent.common.osutil.bigip import BigIpOSUtil
 from azurelinuxagent.common.osutil.clearlinux import ClearLinuxUtil
 from azurelinuxagent.common.osutil.coreos import CoreOSUtil
 from azurelinuxagent.common.osutil.debian import DebianOSBaseUtil, DebianOSModernUtil
+from azurelinuxagent.common.osutil.default import DefaultOSUtil
+from azurelinuxagent.common.osutil.factory import _get_osutil
 from azurelinuxagent.common.osutil.freebsd import FreeBSDOSUtil
+from azurelinuxagent.common.osutil.gaia import GaiaOSUtil
+from azurelinuxagent.common.osutil.iosxe import IosxeOSUtil
 from azurelinuxagent.common.osutil.openbsd import OpenBSDOSUtil
+from azurelinuxagent.common.osutil.openwrt import OpenWRTOSUtil
 from azurelinuxagent.common.osutil.redhat import RedhatOSUtil, Redhat6xOSUtil
 from azurelinuxagent.common.osutil.suse import SUSEOSUtil, SUSE11OSUtil
 from azurelinuxagent.common.osutil.ubuntu import UbuntuOSUtil, Ubuntu12OSUtil, Ubuntu14OSUtil, \
     UbuntuSnappyOSUtil, Ubuntu16OSUtil, Ubuntu18OSUtil
-from azurelinuxagent.common.osutil.alpine import AlpineOSUtil
-from azurelinuxagent.common.osutil.bigip import BigIpOSUtil
-from azurelinuxagent.common.osutil.gaia import GaiaOSUtil
-from azurelinuxagent.common.osutil.iosxe import IosxeOSUtil
-from azurelinuxagent.common.osutil.openwrt import OpenWRTOSUtil
 from tests.tools import AgentTestCase, patch
 
 
@@ -49,232 +49,246 @@ class TestOsUtilFactory(AgentTestCase):
                           distro_code_name="",
                           distro_version="",
                           distro_full_name="")
-        self.assertTrue(type(ret) == DefaultOSUtil)
-        self.assertEquals(patch_logger.call_count, 1)
-        self.assertEquals(ret.get_service_name(), "waagent")
+        self.assertTrue(isinstance(ret, DefaultOSUtil))
+        self.assertEqual(patch_logger.call_count, 1)
+        self.assertEqual(ret.get_service_name(), "waagent")
 
     def test_get_osutil_it_should_return_ubuntu(self):
         ret = _get_osutil(distro_name="ubuntu",
                           distro_code_name="",
                           distro_version="10.04",
                           distro_full_name="")
-        self.assertTrue(type(ret) == UbuntuOSUtil)
-        self.assertEquals(ret.get_service_name(), "walinuxagent")
+        self.assertTrue(isinstance(ret, UbuntuOSUtil))
+        self.assertEqual(ret.get_service_name(), "walinuxagent")
 
         ret = _get_osutil(distro_name="ubuntu",
                           distro_code_name="",
                           distro_version="12.04",
                           distro_full_name="")
-        self.assertTrue(type(ret) == Ubuntu12OSUtil)
-        self.assertEquals(ret.get_service_name(), "walinuxagent")
+        self.assertTrue(isinstance(ret, Ubuntu12OSUtil))
+        self.assertEqual(ret.get_service_name(), "walinuxagent")
 
         ret = _get_osutil(distro_name="ubuntu",
                           distro_code_name="trusty",
                           distro_version="14.04",
                           distro_full_name="")
-        self.assertTrue(type(ret) == Ubuntu14OSUtil)
-        self.assertEquals(ret.get_service_name(), "walinuxagent")
+        self.assertTrue(isinstance(ret, Ubuntu14OSUtil))
+        self.assertEqual(ret.get_service_name(), "walinuxagent")
 
         ret = _get_osutil(distro_name="ubuntu",
                           distro_code_name="xenial",
                           distro_version="16.04",
                           distro_full_name="")
-        self.assertTrue(type(ret) == Ubuntu16OSUtil)
-        self.assertEquals(ret.get_service_name(), "walinuxagent")
+        self.assertTrue(isinstance(ret, Ubuntu16OSUtil))
+        self.assertEqual(ret.get_service_name(), "walinuxagent")
 
         ret = _get_osutil(distro_name="ubuntu",
                           distro_code_name="bionic",
                           distro_version="18.04",
                           distro_full_name="")
-        self.assertTrue(type(ret) == Ubuntu18OSUtil)
-        self.assertEquals(ret.get_service_name(), "walinuxagent")
+        self.assertTrue(isinstance(ret, Ubuntu18OSUtil))
+        self.assertEqual(ret.get_service_name(), "walinuxagent")
 
         ret = _get_osutil(distro_name="ubuntu",
                           distro_code_name="focal",
                           distro_version="20.04",
                           distro_full_name="")
-        self.assertTrue(type(ret) == Ubuntu18OSUtil)
-        self.assertEquals(ret.get_service_name(), "walinuxagent")
+        self.assertTrue(isinstance(ret, Ubuntu18OSUtil))
+        self.assertEqual(ret.get_service_name(), "walinuxagent")
 
         ret = _get_osutil(distro_name="ubuntu",
                           distro_code_name="",
                           distro_version="10.04",
                           distro_full_name="Snappy Ubuntu Core")
-        self.assertTrue(type(ret) == UbuntuSnappyOSUtil)
-        self.assertEquals(ret.get_service_name(), "walinuxagent")
+        self.assertTrue(isinstance(ret, UbuntuSnappyOSUtil))
+        self.assertEqual(ret.get_service_name(), "walinuxagent")
 
     def test_get_osutil_it_should_return_arch(self):
         ret = _get_osutil(distro_name="arch",
                           distro_code_name="",
                           distro_version="",
                           distro_full_name="")
-        self.assertTrue(type(ret) == ArchUtil)
-        self.assertEquals(ret.get_service_name(), "waagent")
+        self.assertTrue(isinstance(ret, ArchUtil))
+        self.assertEqual(ret.get_service_name(), "waagent")
 
     def test_get_osutil_it_should_return_clear_linux(self):
         ret = _get_osutil(distro_name="clear linux",
                           distro_code_name="",
                           distro_version="",
                           distro_full_name="Clear Linux")
-        self.assertTrue(type(ret) == ClearLinuxUtil)
-        self.assertEquals(ret.get_service_name(), "waagent")
+        self.assertTrue(isinstance(ret, ClearLinuxUtil))
+        self.assertEqual(ret.get_service_name(), "waagent")
 
     def test_get_osutil_it_should_return_alpine(self):
         ret = _get_osutil(distro_name="alpine",
                           distro_code_name="",
                           distro_version="",
                           distro_full_name="")
-        self.assertTrue(type(ret) == AlpineOSUtil)
-        self.assertEquals(ret.get_service_name(), "waagent")
+        self.assertTrue(isinstance(ret, AlpineOSUtil))
+        self.assertEqual(ret.get_service_name(), "waagent")
 
     def test_get_osutil_it_should_return_kali(self):
         ret = _get_osutil(distro_name="kali",
                           distro_code_name="",
                           distro_version="",
                           distro_full_name="")
-        self.assertTrue(type(ret) == DebianOSBaseUtil)
-        self.assertEquals(ret.get_service_name(), "waagent")
+        self.assertTrue(isinstance(ret, DebianOSBaseUtil))
+        self.assertEqual(ret.get_service_name(), "waagent")
 
     def test_get_osutil_it_should_return_coreos(self):
         ret = _get_osutil(distro_name="coreos",
                           distro_code_name="",
                           distro_version="",
                           distro_full_name="")
-        self.assertTrue(type(ret) == CoreOSUtil)
-        self.assertEquals(ret.get_service_name(), "waagent")
+        self.assertTrue(isinstance(ret, CoreOSUtil))
+        self.assertEqual(ret.get_service_name(), "waagent")
 
     def test_get_osutil_it_should_return_suse(self):
         ret = _get_osutil(distro_name="suse",
                           distro_code_name="",
                           distro_version="10",
                           distro_full_name="")
-        self.assertTrue(type(ret) == SUSEOSUtil)
-        self.assertEquals(ret.get_service_name(), "waagent")
+        self.assertTrue(isinstance(ret, SUSEOSUtil))
+        self.assertEqual(ret.get_service_name(), "waagent")
 
         ret = _get_osutil(distro_name="suse",
                           distro_code_name="",
                           distro_full_name="SUSE Linux Enterprise Server",
                           distro_version="11")
-        self.assertTrue(type(ret) == SUSE11OSUtil)
-        self.assertEquals(ret.get_service_name(), "waagent")
+        self.assertTrue(isinstance(ret, SUSE11OSUtil))
+        self.assertEqual(ret.get_service_name(), "waagent")
 
         ret = _get_osutil(distro_name="suse",
                           distro_code_name="",
                           distro_full_name="openSUSE",
                           distro_version="12")
-        self.assertTrue(type(ret) == SUSE11OSUtil)
-        self.assertEquals(ret.get_service_name(), "waagent")
+        self.assertTrue(isinstance(ret, SUSE11OSUtil))
+        self.assertEqual(ret.get_service_name(), "waagent")
 
     def test_get_osutil_it_should_return_debian(self):
         ret = _get_osutil(distro_name="debian",
                           distro_code_name="",
                           distro_full_name="",
                           distro_version="7")
-        self.assertTrue(type(ret) == DebianOSBaseUtil)
-        self.assertEquals(ret.get_service_name(), "waagent")
+        self.assertTrue(isinstance(ret, DebianOSBaseUtil))
+        self.assertEqual(ret.get_service_name(), "waagent")
 
         ret = _get_osutil(distro_name="debian",
                           distro_code_name="",
                           distro_full_name="",
                           distro_version="8")
-        self.assertTrue(type(ret) == DebianOSModernUtil)
-        self.assertEquals(ret.get_service_name(), "walinuxagent")
+        self.assertTrue(isinstance(ret, DebianOSModernUtil))
+        self.assertEqual(ret.get_service_name(), "walinuxagent")
 
     def test_get_osutil_it_should_return_redhat(self):
         ret = _get_osutil(distro_name="redhat",
                           distro_code_name="",
                           distro_full_name="",
                           distro_version="6")
-        self.assertTrue(type(ret) == Redhat6xOSUtil)
-        self.assertEquals(ret.get_service_name(), "waagent")
+        self.assertTrue(isinstance(ret, Redhat6xOSUtil))
+        self.assertEqual(ret.get_service_name(), "waagent")
+
+        ret = _get_osutil(distro_name="rhel",
+                          distro_code_name="",
+                          distro_full_name="",
+                          distro_version="6")
+        self.assertTrue(isinstance(ret, Redhat6xOSUtil))
+        self.assertEqual(ret.get_service_name(), "waagent")
 
         ret = _get_osutil(distro_name="centos",
                           distro_code_name="",
                           distro_full_name="",
                           distro_version="6")
-        self.assertTrue(type(ret) == Redhat6xOSUtil)
-        self.assertEquals(ret.get_service_name(), "waagent")
+        self.assertTrue(isinstance(ret, Redhat6xOSUtil))
+        self.assertEqual(ret.get_service_name(), "waagent")
 
         ret = _get_osutil(distro_name="oracle",
                           distro_code_name="",
                           distro_full_name="",
                           distro_version="6")
-        self.assertTrue(type(ret) == Redhat6xOSUtil)
-        self.assertEquals(ret.get_service_name(), "waagent")
+        self.assertTrue(isinstance(ret, Redhat6xOSUtil))
+        self.assertEqual(ret.get_service_name(), "waagent")
 
         ret = _get_osutil(distro_name="redhat",
                           distro_code_name="",
                           distro_full_name="",
                           distro_version="7")
-        self.assertTrue(type(ret) == RedhatOSUtil)
-        self.assertEquals(ret.get_service_name(), "waagent")
+        self.assertTrue(isinstance(ret, RedhatOSUtil))
+        self.assertEqual(ret.get_service_name(), "waagent")
+
+        ret = _get_osutil(distro_name="rhel",
+                          distro_code_name="",
+                          distro_full_name="",
+                          distro_version="7")
+        self.assertTrue(isinstance(ret, RedhatOSUtil))
+        self.assertEqual(ret.get_service_name(), "waagent")
 
         ret = _get_osutil(distro_name="centos",
                           distro_code_name="",
                           distro_full_name="",
                           distro_version="7")
-        self.assertTrue(type(ret) == RedhatOSUtil)
-        self.assertEquals(ret.get_service_name(), "waagent")
+        self.assertTrue(isinstance(ret, RedhatOSUtil))
+        self.assertEqual(ret.get_service_name(), "waagent")
 
         ret = _get_osutil(distro_name="oracle",
                           distro_code_name="",
                           distro_full_name="",
                           distro_version="7")
-        self.assertTrue(type(ret) == RedhatOSUtil)
-        self.assertEquals(ret.get_service_name(), "waagent")
+        self.assertTrue(isinstance(ret, RedhatOSUtil))
+        self.assertEqual(ret.get_service_name(), "waagent")
 
     def test_get_osutil_it_should_return_euleros(self):
         ret = _get_osutil(distro_name="euleros",
                           distro_code_name="",
                           distro_version="",
                           distro_full_name="")
-        self.assertTrue(type(ret) == RedhatOSUtil)
-        self.assertEquals(ret.get_service_name(), "waagent")
+        self.assertTrue(isinstance(ret, RedhatOSUtil))
+        self.assertEqual(ret.get_service_name(), "waagent")
 
     def test_get_osutil_it_should_return_freebsd(self):
         ret = _get_osutil(distro_name="freebsd",
                           distro_code_name="",
                           distro_version="",
                           distro_full_name="")
-        self.assertTrue(type(ret) == FreeBSDOSUtil)
-        self.assertEquals(ret.get_service_name(), "waagent")
+        self.assertTrue(isinstance(ret, FreeBSDOSUtil))
+        self.assertEqual(ret.get_service_name(), "waagent")
 
     def test_get_osutil_it_should_return_openbsd(self):
         ret = _get_osutil(distro_name="openbsd",
                           distro_code_name="",
                           distro_version="",
                           distro_full_name="")
-        self.assertTrue(type(ret) == OpenBSDOSUtil)
-        self.assertEquals(ret.get_service_name(), "waagent")
+        self.assertTrue(isinstance(ret, OpenBSDOSUtil))
+        self.assertEqual(ret.get_service_name(), "waagent")
 
     def test_get_osutil_it_should_return_bigip(self):
         ret = _get_osutil(distro_name="bigip",
                           distro_code_name="",
                           distro_version="",
                           distro_full_name="")
-        self.assertTrue(type(ret) == BigIpOSUtil)
-        self.assertEquals(ret.get_service_name(), "waagent")
+        self.assertTrue(isinstance(ret, BigIpOSUtil))
+        self.assertEqual(ret.get_service_name(), "waagent")
 
     def test_get_osutil_it_should_return_gaia(self):
         ret = _get_osutil(distro_name="gaia",
                           distro_code_name="",
                           distro_version="",
                           distro_full_name="")
-        self.assertTrue(type(ret) == GaiaOSUtil)
-        self.assertEquals(ret.get_service_name(), "waagent")
+        self.assertTrue(isinstance(ret, GaiaOSUtil))
+        self.assertEqual(ret.get_service_name(), "waagent")
 
     def test_get_osutil_it_should_return_iosxe(self):
         ret = _get_osutil(distro_name="iosxe",
                           distro_code_name="",
                           distro_version="",
                           distro_full_name="")
-        self.assertTrue(type(ret) == IosxeOSUtil)
-        self.assertEquals(ret.get_service_name(), "waagent")
+        self.assertTrue(isinstance(ret, IosxeOSUtil))
+        self.assertEqual(ret.get_service_name(), "waagent")
 
     def test_get_osutil_it_should_return_openwrt(self):
         ret = _get_osutil(distro_name="openwrt",
                           distro_code_name="",
                           distro_version="",
                           distro_full_name="")
-        self.assertTrue(type(ret) == OpenWRTOSUtil)
-        self.assertEquals(ret.get_service_name(), "waagent")
+        self.assertTrue(isinstance(ret, OpenWRTOSUtil))
+        self.assertEqual(ret.get_service_name(), "waagent")

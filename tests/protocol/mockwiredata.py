@@ -43,6 +43,9 @@ DATA_FILE_IN_VM_ARTIFACTS_PROFILE = DATA_FILE.copy()
 DATA_FILE_IN_VM_ARTIFACTS_PROFILE["ext_conf"] = "wire/ext_conf_in_vm_artifacts_profile.xml"
 DATA_FILE_IN_VM_ARTIFACTS_PROFILE["in_vm_artifacts_profile"] = "wire/in_vm_artifacts_profile.json"
 
+DATA_FILE_IN_VM_META_DATA = DATA_FILE.copy()
+DATA_FILE_IN_VM_META_DATA["ext_conf"] = "wire/ext_conf_in_vm_metadata.xml"
+
 DATA_FILE_NO_EXT = DATA_FILE.copy()
 DATA_FILE_NO_EXT["goal_state"] = "wire/goal_state_no_ext.xml"
 DATA_FILE_NO_EXT["ext_conf"] = None
@@ -77,6 +80,9 @@ DATA_FILE_EXT_SINGLE["manifest"] = "wire/manifest_deletion.xml"
 DATA_FILE_MULTIPLE_EXT = DATA_FILE.copy()
 DATA_FILE_MULTIPLE_EXT["ext_conf"] = "wire/ext_conf_multiple_extensions.xml"
 
+DATA_FILE_CASE_MISMATCH_EXT = DATA_FILE.copy()
+DATA_FILE_CASE_MISMATCH_EXT["ext_conf"] = "wire/ext_conf_settings_case_mismatch.xml"
+
 DATA_FILE_NO_CERT_FORMAT = DATA_FILE.copy()
 DATA_FILE_NO_CERT_FORMAT["certs"] = "wire/certs_no_format_specified.xml"
 
@@ -88,11 +94,13 @@ DATA_FILE_REMOTE_ACCESS["goal_state"] = "wire/goal_state_remote_access.xml"
 DATA_FILE_REMOTE_ACCESS["remote_access"] = "wire/remote_access_single_account.xml"
 
 DATA_FILE_PLUGIN_SETTINGS_MISMATCH = DATA_FILE.copy()
-DATA_FILE_PLUGIN_SETTINGS_MISMATCH["ext_conf"] = "wire/ext_conf_plugin_settings_version_mismatch.xml"
+DATA_FILE_PLUGIN_SETTINGS_MISMATCH["ext_conf"] = "wire/invalid_config/ext_conf_plugin_settings_version_mismatch.xml"
 
 
 class WireProtocolData(object):
-    def __init__(self, data_files=DATA_FILE):
+    def __init__(self, data_files=None):
+        if data_files is None:
+            data_files = DATA_FILE
         self.emulate_stale_goal_state = False
         self.call_counts = {
             "comp=versions": 0,
@@ -152,7 +160,7 @@ class WireProtocolData(object):
         if in_vm_artifacts_profile_file is not None:
             self.in_vm_artifacts_profile = load_data(in_vm_artifacts_profile_file)
 
-    def mock_http_get(self, url, *args, **kwargs):
+    def mock_http_get(self, url, *args, **kwargs):  # pylint: disable=unused-argument
         content = None
 
         resp = MagicMock()
@@ -205,9 +213,9 @@ class WireProtocolData(object):
             if "extensionArtifact" in url:
                 self.call_counts["extensionArtifact"] += 1
                 if "headers" not in kwargs:
-                    raise ValueError("HostPlugin request is missing the HTTP headers: {0}", kwargs)
+                    raise ValueError("HostPlugin request is missing the HTTP headers: {0}", kwargs)  # pylint: disable=raising-format-tuple
                 if "x-ms-artifact-location" not in kwargs["headers"]:
-                    raise ValueError("HostPlugin request is missing the x-ms-artifact-location header: {0}", kwargs)
+                    raise ValueError("HostPlugin request is missing the x-ms-artifact-location header: {0}", kwargs)  # pylint: disable=raising-format-tuple
                 url = kwargs["headers"]["x-ms-artifact-location"]
 
             if "manifest.xml" in url:
@@ -230,7 +238,7 @@ class WireProtocolData(object):
         resp.read = Mock(return_value=content.encode("utf-8"))
         return resp
 
-    def mock_http_post(self, url, *args, **kwargs):
+    def mock_http_post(self, url, *args, **kwargs):  # pylint: disable=unused-argument
         content = None
 
         resp = MagicMock()
@@ -245,7 +253,7 @@ class WireProtocolData(object):
         resp.read = Mock(return_value=content.encode("utf-8"))
         return resp
 
-    def mock_http_put(self, url, *args, **kwargs):
+    def mock_http_put(self, url, *args, **kwargs):  # pylint: disable=unused-argument
         content = None
 
         resp = MagicMock()
@@ -295,7 +303,7 @@ class WireProtocolData(object):
     def replace_xml_element_value(xml_document, element_name, element_value):
         new_xml_document = re.sub(r'(?<=<{0}>).+(?=</{0}>)'.format(element_name), element_value, xml_document)
         if new_xml_document == xml_document:
-            raise Exception("Could not match element '{0}'", element_name)
+            raise Exception("Could not match element '{0}'", element_name)  # pylint: disable=raising-format-tuple
         return new_xml_document
 
     @staticmethod

@@ -38,7 +38,7 @@ class FreeBSDResourceDiskHandler(ResourceDiskHandler):
     2. GPT: The resource disk partition is /dev/da1p2, /dev/da1p1 is for reserved usage.
     """
 
-    def __init__(self):
+    def __init__(self):  # pylint: disable=W0235
         super(FreeBSDResourceDiskHandler, self).__init__()
 
     @staticmethod

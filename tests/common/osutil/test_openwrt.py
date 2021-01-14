@@ -14,10 +14,11 @@
 #
 # Requires Python 2.6+ and Openssl 1.0+
 #
-from azurelinuxagent.common.osutil.openwrt import OpenWRTOSUtil
-from .test_default import osutil_get_dhcp_pid_should_return_a_list_of_pids
-from tests.tools import AgentTestCase
 import unittest
+
+from azurelinuxagent.common.osutil.openwrt import OpenWRTOSUtil
+from tests.tools import AgentTestCase
+from .test_default import osutil_get_dhcp_pid_should_return_a_list_of_pids
 
 
 class TestOpenWRTOSUtil(AgentTestCase):

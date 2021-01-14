@@ -30,11 +30,11 @@ PROC_COMM_FILENAME_FORMAT = "/proc/{0}/comm"
 PROC_STATUS_FILENAME_FORMAT = "/proc/{0}/status"
 
 
-class ResourceUsage(object):
+class ResourceUsage(object): 
     pass
 
 
-class MemoryResourceUsage(ResourceUsage):
+class MemoryResourceUsage(ResourceUsage): 
     @staticmethod
     def get_memory_usage_from_proc_statm(process_id):
         proc_pid_rss = 0

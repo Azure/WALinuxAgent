@@ -243,9 +243,9 @@ class OpenBSDOSUtil(DefaultOSUtil):
 
         for retry in range(0, max_retry):
             retcode = self.mount(dvd_device,
-                                mount_point,
-                                option="-o ro -t udf",
-                                chk_err=False)
+                                mount_point, 
+                                option=["-o", "ro", "-t", "udf"], 
+                                chk_err=False) 
             if retcode == 0:
                 logger.info("Successfully mounted DVD")
                 return
@@ -293,7 +293,7 @@ class OpenBSDOSUtil(DefaultOSUtil):
     def set_scsi_disks_timeout(self, timeout):
         pass
 
-    def check_pid_alive(self, pid):
+    def check_pid_alive(self, pid):  # pylint: disable=R1710
         if not pid:
             return
         return shellutil.run('ps -p {0}'.format(pid), chk_err=False) == 0

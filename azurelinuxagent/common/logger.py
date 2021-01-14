@@ -87,7 +87,7 @@ class Logger(object):
         self.log(LogLevel.ERROR, msg_format, *args)
 
     def log(self, level, msg_format, *args):
-        def write_log(log_appender):
+        def write_log(log_appender):  # pylint: disable=W0612
             """
             The appender_lock flag is used to signal if the logger is currently in use. This prevents a subsequent log
             coming in due to writing of a log statement to be not written.
@@ -165,6 +165,18 @@ class Logger(object):
         appender = _create_logger_appender(appender_type, level, path)
         self.appenders.append(appender)
 
+    def console_output_enabled(self):
+        """
+        Returns True if the current list of appenders includes at least one ConsoleAppender
+        """
+        return any(isinstance(appender, ConsoleAppender) for appender in self.appenders)
+
+    def disable_console_output(self):
+        """
+        Removes all ConsoleAppenders from the current list of appenders
+        """
+        self.appenders = [appender for appender in self.appenders if not isinstance(appender, ConsoleAppender)]
+
 
 class Appender(object):
     def __init__(self, level):
@@ -204,7 +216,7 @@ class FileAppender(Appender):
 
 
 class StdoutAppender(Appender):
-    def __init__(self, level):
+    def __init__(self, level):  # pylint: disable=W0235
         super(StdoutAppender, self).__init__(level)
 
     def write(self, level, msg):
@@ -254,6 +266,14 @@ class AppenderType(object):
 
 def add_logger_appender(appender_type, level=LogLevel.INFO, path=None):
     DEFAULT_LOGGER.add_appender(appender_type, level, path)
+
+
+def console_output_enabled():
+    return DEFAULT_LOGGER.console_output_enabled()
+
+
+def disable_console_output():
+    DEFAULT_LOGGER.disable_console_output()
 
 
 def reset_periodic():

@@ -34,17 +34,16 @@ from threading import currentThread
 import azurelinuxagent.common.conf as conf
 import azurelinuxagent.common.event as event
 import azurelinuxagent.common.logger as logger
-from azurelinuxagent.common.cgroupconfigurator import CGroupConfigurator
-from azurelinuxagent.common.osutil.factory import _get_osutil
-from azurelinuxagent.common.osutil.ubuntu import Ubuntu14OSUtil, Ubuntu16OSUtil
+from azurelinuxagent.common.future import range  # pylint: disable=redefined-builtin
+from azurelinuxagent.common.cgroupapi import SYSTEMD_RUN_PATH
 from azurelinuxagent.common.utils import fileutil
 from azurelinuxagent.common.version import PY_VERSION_MAJOR
 
 try:
-    from unittest.mock import Mock, patch, MagicMock, ANY, DEFAULT, call, PropertyMock
+    from unittest.mock import Mock, patch, MagicMock, ANY, DEFAULT, call, PropertyMock  # pylint: disable=unused-import
 
     # Import mock module for Python2 and Python3
-    from bin.waagent2 import Agent
+    from bin.waagent2 import Agent  # pylint: disable=unused-import
 except ImportError:
     from mock import Mock, patch, MagicMock, ANY, DEFAULT, call, PropertyMock
 
@@ -120,7 +119,7 @@ def running_under_travis():
 
 
 def is_systemd_present():
-    return os.path.exists("/run/systemd/system")
+    return os.path.exists(SYSTEMD_RUN_PATH)
 
 
 def i_am_root():
@@ -139,7 +138,7 @@ class AgentTestCase(unittest.TestCase):
         if not hasattr(cls, "assertRegex"):
             cls.assertRegex = cls.assertRegexpMatches if hasattr(cls, "assertRegexpMatches") else cls.emulate_assertRegexpMatches
         if not hasattr(cls, "assertNotRegex"):
-            cls.assertNotRegex = cls.assertNotRegexpMatches if hasattr(cls, "assertNotRegexpMatches") else cls.emulate_assertNotRegexpMatches
+            cls.assertNotRegex = cls.assertNotRegexpMatches if hasattr(cls, "assertNotRegexpMatches") else cls.emulate_assertNotRegexpMatches  # pylint: disable=no-member
         if not hasattr(cls, "assertIn"):
             cls.assertIn = cls.emulate_assertIn
         if not hasattr(cls, "assertNotIn"):
@@ -257,22 +256,22 @@ class AgentTestCase(unittest.TestCase):
             return self
 
         @staticmethod
-        def _get_type_name(type):
+        def _get_type_name(type):  # pylint: disable=redefined-builtin
             return type.__name__ if hasattr(type, "__name__") else str(type)
 
         def __exit__(self, exception_type, exception, *_):
             if exception_type is None:
-                expected = AgentTestCase._AssertRaisesContextManager._get_type_name(self._expected_exception_type)
+                expected = AgentTestCase._AssertRaisesContextManager._get_type_name(self._expected_exception_type)  # pylint: disable=protected-access
                 self._test_case.fail("Did not raise an exception; expected '{0}'".format(expected))
             if not issubclass(exception_type, self._expected_exception_type):
-                raised = AgentTestCase._AssertRaisesContextManager._get_type_name(exception_type)
-                expected = AgentTestCase._AssertRaisesContextManager._get_type_name(self._expected_exception_type)
+                raised = AgentTestCase._AssertRaisesContextManager._get_type_name(exception_type)  # pylint: disable=protected-access
+                expected = AgentTestCase._AssertRaisesContextManager._get_type_name(self._expected_exception_type)  # pylint: disable=protected-access
                 self._test_case.fail("Raised '{0}', but expected '{1}'".format(raised, expected))
 
-            self.exception = exception
+            self.exception = exception  # pylint: disable=attribute-defined-outside-init
             return True
 
-    def emulate_assertRaises(self, exception_type, function=None, *args, **kwargs):
+    def emulate_assertRaises(self, exception_type, function=None, *args, **kwargs):  # pylint: disable=keyword-arg-before-vararg
         # return a context manager only when function is not provided; otherwise use the original assertRaises
         if function is None:
             return AgentTestCase._AssertRaisesContextManager(exception_type, self)
@@ -358,7 +357,7 @@ class AgentTestCase(unittest.TestCase):
             elements = (seq_type_name.capitalize(), seq1_repr, seq2_repr)
             differing = '%ss differ: %s != %s\n' % elements
 
-            for i in xrange(min(len1, len2)):
+            for i in range(min(len1, len2)):
                 try:
                     item1 = seq1[i]
                 except (TypeError, IndexError, NotImplementedError):
@@ -422,32 +421,20 @@ class AgentTestCase(unittest.TestCase):
             fileutil.write_file(f, "faux content")
             time.sleep(with_sleep)
 
-    def create_script(self, file_name, contents, file_path=None):
+    @staticmethod
+    def create_script(script_file, contents):
         """
-        Creates an executable script with the given contents.
-        If file_name ends with ".py", it creates a Python3 script, otherwise it creates a bash script
-        :param file_name: The name of the file to create the script with
-        :param contents: Contents of the script file
-        :param file_path: The path of the file where to create it in (we use /tmp/ by default)
-        :return:
+        Creates an executable script with the given contents. If file ends with ".py", it creates a Python3 script,
+        otherwise it creates a bash script.
         """
-        if not file_path:
-            file_path = os.path.join(self.tmp_dir, file_name)
-
-        directory = os.path.dirname(file_path)
-        if not os.path.exists(directory):
-            os.mkdir(directory)
-
-        with open(file_path, "w") as script:
-            if file_name.endswith(".py"):
+        with open(script_file, "w") as script:
+            if script_file.endswith(".py"):
                 script.write("#!/usr/bin/env python3\n")
             else:
                 script.write("#!/usr/bin/env bash\n")
             script.write(contents)
 
-        os.chmod(file_path, stat.S_IRUSR | stat.S_IWUSR | stat.S_IXUSR)
-
-        return file_name
+        os.chmod(script_file, stat.S_IRUSR | stat.S_IWUSR | stat.S_IXUSR)
 
 
 def load_data(name):
@@ -519,7 +506,7 @@ def distros(distro_name=".*", distro_version=".*", distro_full_name=".*"):
 
 def clear_singleton_instances(cls):
     # Adding this lock to avoid any race conditions
-    with cls._lock:
+    with cls._lock:  # pylint: disable=protected-access
         obj_name = "%s__%s" % (cls.__name__, currentThread().getName())  # Object Name = className__threadName
-        if obj_name in cls._instances:
-            del cls._instances[obj_name]
+        if obj_name in cls._instances:  # pylint: disable=protected-access
+            del cls._instances[obj_name]  # pylint: disable=protected-access
