@@ -695,6 +695,9 @@ class SystemdCgroupsApiTestCase(AgentTestCase):
 
                     self.assertIn("TEST_OUTPUT\n", command_output, "The test output was not captured")
 
+                    self.assertIn("TEST_OUTPUT\n", command_output, "The test output was not captured")
+
+
     @patch('time.sleep', side_effect=lambda _: mock_sleep())
     def test_start_extension_command_should_invoke_the_command_directly_if_systemd_times_out(self, _):
         # Systemd has its own internal timeout which is shorter than what we define for extension operation timeout.
