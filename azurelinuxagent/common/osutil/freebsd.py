@@ -22,13 +22,14 @@ import binascii
 import azurelinuxagent.common.utils.fileutil as fileutil
 import azurelinuxagent.common.utils.shellutil as shellutil
 import azurelinuxagent.common.utils.textutil as textutil
-from azurelinuxagent.common.utils.networkutil import RouteEntry
+from azurelinuxagent.common.utils.networkutil import RouteEntry  # pylint: disable=W0611
 import azurelinuxagent.common.logger as logger
 from azurelinuxagent.common.exception import OSUtilError
 from azurelinuxagent.common.osutil.default import DefaultOSUtil
 from azurelinuxagent.common.future import ustr
 
-class FreeBSDOSUtil(DefaultOSUtil):
+
+class FreeBSDOSUtil(DefaultOSUtil):  # pylint: disable=R0904
 
     def __init__(self):
         super(FreeBSDOSUtil, self).__init__()
@@ -126,7 +127,7 @@ class FreeBSDOSUtil(DefaultOSUtil):
         :return: Entries in the ipv4 route priority list from `netstat -rn -f inet` in the linux `/proc/net/route` style
         :rtype: list(str)
         """
-            
+
         def _get_netstat_rn_ipv4_routes():
             """
             Runs `netstat -rn -f inet` and parses its output and returns a list of routes where the key is the column name
@@ -135,12 +136,12 @@ class FreeBSDOSUtil(DefaultOSUtil):
             :return: List of dictionaries representing routes in the ipv4 route priority list from `netstat -rn -f inet`
             :rtype: list(dict)
             """
-            cmd = [ "netstat", "-rn", "-f", "inet" ]
+            cmd = ["netstat", "-rn", "-f", "inet"]
             output = shellutil.run_command(cmd, log_error=True)
             output_lines = output.split("\n")
             if len(output_lines) < 3:
                 raise OSUtilError("`netstat -rn -f inet` output seems to be empty")
-            output_lines = [ line.strip() for line in output_lines if line ]
+            output_lines = [line.strip() for line in output_lines if line]
             if "Internet:" not in output_lines:
                 raise OSUtilError("`netstat -rn -f inet` output seems to contain no ipv4 routes")
             route_header_line = output_lines.index("Internet:") + 1
@@ -155,7 +156,7 @@ class FreeBSDOSUtil(DefaultOSUtil):
             for i in range(0, n_route_headers - 1):
                 route_columns[_route_headers[i]] = (
                     output_lines[route_header_line].index(_route_headers[i]),
-                    (output_lines[route_header_line].index(_route_headers[i+1]) - 1)
+                    (output_lines[route_header_line].index(_route_headers[i + 1]) - 1)
                 )
             route_columns[_route_headers[n_route_headers - 1]] = (
                 output_lines[route_header_line].index(_route_headers[n_route_headers - 1]),
@@ -167,7 +168,8 @@ class FreeBSDOSUtil(DefaultOSUtil):
             for i in range(0, n_netstat_routes):
                 netstat_route = {}
                 for column in route_columns:
-                    netstat_route[column] = netstat_route_list[i][route_columns[column][0]:route_columns[column][1]].strip()
+                    netstat_route[column] = netstat_route_list[i][
+                                            route_columns[column][0]:route_columns[column][1]].strip()
                 netstat_route["Metric"] = n_netstat_routes - i
                 netstat_routes.append(netstat_route)
             # Return the Sections
@@ -182,7 +184,8 @@ class FreeBSDOSUtil(DefaultOSUtil):
             :rtype: string
             """
             # Raises socket.error if the IP is not a valid IPv4
-            return "%08X" % int(binascii.hexlify(struct.pack("!I", struct.unpack("=I", socket.inet_pton(socket.AF_INET, ipv4_ascii_address))[0])), 16)
+            return "%08X" % int(binascii.hexlify(
+                struct.pack("!I", struct.unpack("=I", socket.inet_pton(socket.AF_INET, ipv4_ascii_address))[0])), 16)
 
         def _ipv4_cidr_mask_to_hex(ipv4_cidr_mask):
             """
@@ -192,7 +195,8 @@ class FreeBSDOSUtil(DefaultOSUtil):
             :return: 8 character long hex string representation of the IP
             :rtype: string
             """
-            return "{0:08x}".format(struct.unpack("=I", struct.pack("!I", (0xffffffff << (32 - ipv4_cidr_mask)) & 0xffffffff))[0]).upper()
+            return "{0:08x}".format(
+                struct.unpack("=I", struct.pack("!I", (0xffffffff << (32 - ipv4_cidr_mask)) & 0xffffffff))[0]).upper()
 
         def _ipv4_cidr_destination_to_hex(destination):
             """
@@ -216,7 +220,7 @@ class FreeBSDOSUtil(DefaultOSUtil):
             hex_destination_ip = _ipv4_ascii_address_to_hex(destination_ip)
             hex_destination_subnetmask = _ipv4_cidr_mask_to_hex(destination_subnetmask)
             return hex_destination_ip, hex_destination_subnetmask
-        
+
         def _try_ipv4_gateway_to_hex(gateway):
             """
             If the gateway is an IPv4 address, return its IP in hex, else, return "00000000"
@@ -237,10 +241,10 @@ class FreeBSDOSUtil(DefaultOSUtil):
             :rtype: int
             """
             bitmask_flags = 0
-            RTF_UP = 0x0001
-            RTF_GATEWAY = 0x0002
-            RTF_HOST = 0x0004
-            RTF_DYNAMIC = 0x0010
+            RTF_UP = 0x0001  # pylint: disable=C0103
+            RTF_GATEWAY = 0x0002  # pylint: disable=C0103
+            RTF_HOST = 0x0004  # pylint: disable=C0103
+            RTF_DYNAMIC = 0x0010  # pylint: disable=C0103
             if "U" in ascii_route_flags:
                 bitmask_flags |= RTF_UP
             if "G" in ascii_route_flags:
@@ -285,13 +289,13 @@ class FreeBSDOSUtil(DefaultOSUtil):
                 dummy_irtt
             )
 
-        linux_style_route_file = [ "Iface\tDestination\tGateway\tFlags\tRefCnt\tUse\tMetric\tMask\tMTU\tWindow\tIRTT" ]
+        linux_style_route_file = ["Iface\tDestination\tGateway\tFlags\tRefCnt\tUse\tMetric\tMask\tMTU\tWindow\tIRTT"]
 
         try:
             netstat_routes = _get_netstat_rn_ipv4_routes()
             # Make sure the `netstat -rn -f inet` contains columns for Netif, Destination, Gateway and Flags which are needed to convert
             # to the Linux Format
-            if len(netstat_routes) > 0:
+            if len(netstat_routes) > 0:  # pylint: disable=len-as-condition
                 missing_headers = []
                 if "Netif" not in netstat_routes[0]:
                     missing_headers.append("Netif")
@@ -302,7 +306,9 @@ class FreeBSDOSUtil(DefaultOSUtil):
                 if "Flags" not in netstat_routes[0]:
                     missing_headers.append("Flags")
                 if missing_headers:
-                    raise KeyError("`netstat -rn -f inet` output is missing columns required to convert to the Linux /proc/net/route format; columns are [{0}]".format(missing_headers))
+                    raise KeyError(
+                        "`netstat -rn -f inet` output is missing columns required to convert to the Linux /proc/net/route format; columns are [{0}]".format(
+                            missing_headers))
                 # Parse the Netstat IPv4 Routes
                 for netstat_route in netstat_routes:
                     try:
@@ -311,7 +317,7 @@ class FreeBSDOSUtil(DefaultOSUtil):
                     except Exception:
                         # Skip the route
                         continue
-        except Exception as e:
+        except Exception as e:  # pylint: disable=C0103
             logger.error("Cannot read route table [{0}]", ustr(e))
         return linux_style_route_file
 
@@ -342,9 +348,9 @@ class FreeBSDOSUtil(DefaultOSUtil):
         the primary has the lowest Metric.
         :return: the interface which has the default route
         """
-        RTF_GATEWAY = 0x0002
-        DEFAULT_DEST = "00000000"
-        
+        RTF_GATEWAY = 0x0002  # pylint: disable=C0103
+        DEFAULT_DEST = "00000000"  # pylint: disable=C0103
+
         primary_interface = None
 
         if not self.disable_route_warning:
@@ -357,9 +363,10 @@ class FreeBSDOSUtil(DefaultOSUtil):
 
         candidates = list(filter(is_default, self.get_list_of_routes(route_table)))
 
-        if len(candidates) > 0:
+        if len(candidates) > 0:  # pylint: disable=len-as-condition
             def get_metric(route):
                 return int(route.metric)
+
             primary_route = min(candidates, key=get_metric)
             primary_interface = primary_route.interface
 
@@ -399,14 +406,14 @@ class FreeBSDOSUtil(DefaultOSUtil):
         specify the route manually to get it work in a VNET environment.
         SEE ALSO: man ip(4) IP_ONESBCAST,
         """
-        RTF_GATEWAY = 0x0002
-        DEFAULT_DEST = "00000000"
+        RTF_GATEWAY = 0x0002  # pylint: disable=C0103
+        DEFAULT_DEST = "00000000"  # pylint: disable=C0103
 
         route_table = self.read_route_table()
         routes = self.get_list_of_routes(route_table)
         for route in routes:
             if (route.destination == DEFAULT_DEST) and (RTF_GATEWAY & route.flags):
-               return False
+                return False
         return True
 
     def is_dhcp_enabled(self):
@@ -433,7 +440,7 @@ class FreeBSDOSUtil(DefaultOSUtil):
         if chk_err and retcode != 0:
             raise OSUtilError("Failed to eject dvd: ret={0}".format(retcode))
 
-    def restart_if(self, ifname):
+    def restart_if(self, ifname, retries=None, wait=None):
         # Restart dhclient only to publish hostname
         shellutil.run("/etc/rc.d/dhclient restart {0}".format(ifname), chk_err=False)
 
@@ -443,7 +450,7 @@ class FreeBSDOSUtil(DefaultOSUtil):
         if ret:
             raise OSUtilError("Failed to get total memory: {0}".format(output))
         try:
-            return int(output)/1024/1024
+            return int(output) / 1024 / 1024
         except ValueError:
             raise OSUtilError("Failed to get total memory: {0}".format(output))
 
@@ -509,33 +516,39 @@ class FreeBSDOSUtil(DefaultOSUtil):
         """
         if port_id > 3:
             return None
-        g0 = "00000000"
+        g0 = "00000000"  # pylint: disable=C0103
         if port_id > 1:
-            g0 = "00000001"
+            g0 = "00000001"  # pylint: disable=C0103
             port_id = port_id - 2
         err, output = shellutil.run_get_output('sysctl dev.storvsc | grep pnpinfo | grep deviceid=')
         if err:
             return None
-        g1 = "000" + ustr(port_id)
+        g1 = "000" + ustr(port_id)  # pylint: disable=C0103
         g0g1 = "{0}-{1}".format(g0, g1)
+
+        # pylint: disable=W0105
         """
         search 'X' from 'dev.storvsc.X.%pnpinfo: classid=32412632-86cb-44a2-9b5c-50d1417354f5 deviceid=00000000-0001-8899-0000-000000000000'
         """
+        # pylint: enable=W0105
+
         cmd_search_ide = "sysctl dev.storvsc | grep pnpinfo | grep deviceid={0}".format(g0g1)
         err, output = shellutil.run_get_output(cmd_search_ide)
         if err:
             return None
         cmd_extract_id = cmd_search_ide + "|awk -F . '{print $3}'"
         err, output = shellutil.run_get_output(cmd_extract_id)
+        # pylint: disable=W0105
         """
         try to search 'blkvscX' and 'storvscX' to find device name
         """
+        # pylint: enable=W0105
         output = output.rstrip()
         cmd_search_blkvsc = "camcontrol devlist -b | grep blkvsc{0} | awk '{{print $1}}'".format(output)
         err, output = shellutil.run_get_output(cmd_search_blkvsc)
         if err == 0:
             output = output.rstrip()
-            cmd_search_dev="camcontrol devlist | grep {0} | awk -F \( '{{print $2}}'|sed -e 's/.*(//'| sed -e 's/).*//'".format(output)
+            cmd_search_dev = "camcontrol devlist | grep {0} | awk -F \( '{{print $2}}'|sed -e 's/.*(//'| sed -e 's/).*//'".format(output)  # pylint: disable=W1401
             err, output = shellutil.run_get_output(cmd_search_dev)
             if err == 0:
                 for possible in output.rstrip().split(','):
@@ -546,7 +559,7 @@ class FreeBSDOSUtil(DefaultOSUtil):
         err, output = shellutil.run_get_output(cmd_search_storvsc)
         if err == 0:
             output = output.rstrip()
-            cmd_search_dev="camcontrol devlist | grep {0} | awk -F \( '{{print $2}}'|sed -e 's/.*(//'| sed -e 's/).*//'".format(output)
+            cmd_search_dev = "camcontrol devlist | grep {0} | awk -F \( '{{print $2}}'|sed -e 's/.*(//'| sed -e 's/).*//'".format(output)  # pylint: disable=W1401
             err, output = shellutil.run_get_output(cmd_search_dev)
             if err == 0:
                 for possible in output.rstrip().split(','):

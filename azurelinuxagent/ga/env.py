@@ -28,6 +28,7 @@ import azurelinuxagent.common.logger as logger
 from azurelinuxagent.common.dhcp import get_dhcp_handler
 from azurelinuxagent.common.event import add_periodic, WALAEventOperation
 from azurelinuxagent.common.future import ustr
+from azurelinuxagent.common.interfaces import ThreadHandlerInterface
 from azurelinuxagent.common.osutil import get_osutil
 from azurelinuxagent.common.protocol.util import get_protocol_util
 from azurelinuxagent.common.utils.archive import StateArchiver
@@ -35,18 +36,19 @@ from azurelinuxagent.common.version import AGENT_NAME, CURRENT_VERSION
 from azurelinuxagent.ga.periodic_operation import PeriodicOperation
 
 CACHE_PATTERNS = [
-    re.compile("^(.*)\.(\d+)\.(agentsManifest)$", re.IGNORECASE),
-    re.compile("^(.*)\.(\d+)\.(manifest\.xml)$", re.IGNORECASE),
-    re.compile("^(.*)\.(\d+)\.(xml)$", re.IGNORECASE)
+    re.compile("^(.*)\.(\d+)\.(agentsManifest)$", re.IGNORECASE), # pylint: disable=W1401
+    re.compile("^(.*)\.(\d+)\.(manifest\.xml)$", re.IGNORECASE), # pylint: disable=W1401
+    re.compile("^(.*)\.(\d+)\.(xml)$", re.IGNORECASE) # pylint: disable=W1401
 ]
 
 MAXIMUM_CACHED_FILES = 50
+
 
 def get_env_handler():
     return EnvHandler()
 
 
-class EnvHandler(object):
+class EnvHandler(ThreadHandlerInterface): # pylint: disable=R0902
     """
     Monitor changes to dhcp and hostname.
     If dhcp client process re-start has occurred, reset routes, dhcp with fabric.
@@ -54,6 +56,13 @@ class EnvHandler(object):
     Monitor scsi disk.
     If new scsi disk found, set timeout
     """
+
+    _THREAD_NAME = "EnvHandler"
+
+    @staticmethod
+    def get_thread_name():
+        return EnvHandler._THREAD_NAME
+
     def __init__(self):
         self.osutil = get_osutil()
         self.dhcp_handler = get_dhcp_handler()
@@ -97,7 +106,7 @@ class EnvHandler(object):
     def start(self):
         self.server_thread = threading.Thread(target=self.monitor)
         self.server_thread.setDaemon(True)
-        self.server_thread.setName("EnvHandler")
+        self.server_thread.setName(self.get_thread_name())
         self.server_thread.start()
 
     def monitor(self):
@@ -109,13 +118,13 @@ class EnvHandler(object):
             self._protocol = self.protocol_util.get_protocol()
             while not self.stopped:
                 try:
-                    for op in self._periodic_operations:
+                    for op in self._periodic_operations: # pylint: disable=C0103
                         op.run()
-                except Exception as e:
+                except Exception as e: # pylint: disable=C0103
                     logger.error("An error occurred in the environment thread main loop; will skip the current iteration.\n{0}", ustr(e))
                 finally:
                     PeriodicOperation.sleep_until_next_operation(self._periodic_operations)
-        except Exception as e:
+        except Exception as e: # pylint: disable=C0103
             logger.error("An error occurred in the environment thread; will exit the thread.\n{0}", ustr(e))
 
     def _remove_persistent_net_rules_period(self):
@@ -162,7 +171,7 @@ class EnvHandler(object):
             # the new value and the comparison should not be affected by the order of the items in the list
             pid = sorted(self.osutil.get_dhcp_pid())
 
-            if len(pid) == 0 and self.dhcp_warning_enabled:
+            if len(pid) == 0 and self.dhcp_warning_enabled: # pylint: disable=len-as-condition
                 logger.warn("Dhcp client is not running.")
         except Exception as exception:
             if self.dhcp_warning_enabled:
@@ -176,7 +185,7 @@ class EnvHandler(object):
         self.handle_dhclient_restart()
 
     def handle_dhclient_restart(self):
-        if len(self.dhcp_id_list) == 0:
+        if len(self.dhcp_id_list) == 0: # pylint: disable=len-as-condition
             self.dhcp_id_list = self.get_dhcp_client_pid()
             return
 
@@ -184,7 +193,7 @@ class EnvHandler(object):
             return
 
         new_pid = self.get_dhcp_client_pid()
-        if len(new_pid) != 0 and new_pid != self.dhcp_id_list:
+        if len(new_pid) != 0 and new_pid != self.dhcp_id_list: # pylint: disable=len-as-condition
             logger.info("EnvMonitor: Detected dhcp client restart. Restoring routing table.")
             self.dhcp_handler.conf_routes()
             self.dhcp_id_list = new_pid

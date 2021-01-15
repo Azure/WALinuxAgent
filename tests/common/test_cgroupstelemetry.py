@@ -27,7 +27,7 @@ from tests.tools import AgentTestCase, data_dir, patch
 
 
 def raise_ioerror(*_):
-    e = IOError()
+    e = IOError() # pylint: disable=invalid-name
     from errno import EIO
     e.errno = EIO
     raise e
@@ -38,7 +38,7 @@ def median(lst):
     l_len = len(data)
     if l_len < 1:
         return None
-    if l_len % 2 == 0:
+    if l_len % 2 == 0: # pylint: disable=no-else-return
         return (data[int((l_len - 1) / 2)] + data[int((l_len + 1) / 2)]) / 2.0
     else:
         return data[int((l_len - 1) / 2)]
@@ -54,14 +54,14 @@ def generate_metric_list(lst):
 
 def consume_cpu_time():
     waste = 0
-    for x in range(1, 200000):
+    for x in range(1, 200000): # pylint: disable=unused-variable,invalid-name
         waste += random.random()
     return waste
 
 
 def consume_memory():
     waste = []
-    for x in range(1, 3):
+    for x in range(1, 3): # pylint: disable=unused-variable,invalid-name
         waste.append([random.random()] * 10000)
         time.sleep(0.1)
         waste *= 0
@@ -135,7 +135,7 @@ class TestCGroupsTelemetry(AgentTestCase):
                 elif metric.counter == "Max Memory Usage":
                     self.assertEqual(metric.value, max_memory_metric_value)
 
-    def test_telemetry_polling_with_active_cgroups(self, *args):
+    def test_telemetry_polling_with_active_cgroups(self, *args): # pylint: disable=unused-argument
         num_extensions = 3
 
         self._track_new_extension_cgroups(num_extensions)
@@ -157,7 +157,7 @@ class TestCGroupsTelemetry(AgentTestCase):
                         patch_get_memory_max_usage.return_value = current_max_memory  # example 450 MB
                         num_polls = 10
 
-                        for data_count in range(1, num_polls + 1):
+                        for data_count in range(1, num_polls + 1): # pylint: disable=unused-variable
                             metrics = CGroupsTelemetry.poll_all_tracked()
 
                             self.assertEqual(len(metrics), num_extensions * num_of_metrics_per_extn_expected)
@@ -170,7 +170,7 @@ class TestCGroupsTelemetry(AgentTestCase):
     @patch("azurelinuxagent.common.cgroup.CGroup.is_active", return_value=False)
     def test_telemetry_polling_with_inactive_cgroups(self, *_):
         num_extensions = 5
-        no_extensions_expected = 0
+        no_extensions_expected = 0 # pylint: disable=unused-variable
 
         self._track_new_extension_cgroups(num_extensions)
         self._assert_cgroups_are_tracked(num_extensions)
@@ -189,15 +189,15 @@ class TestCGroupsTelemetry(AgentTestCase):
     @patch("azurelinuxagent.common.cgroup.CpuCgroup.get_cpu_usage")
     @patch("azurelinuxagent.common.cgroup.CGroup.is_active")
     @patch("azurelinuxagent.common.resourceusage.MemoryResourceUsage.get_memory_usage_from_proc_statm")
-    def test_telemetry_polling_with_changing_cgroups_state(self, patch_get_statm, patch_is_active, patch_get_cpu_usage,
+    def test_telemetry_polling_with_changing_cgroups_state(self, patch_get_statm, patch_is_active, patch_get_cpu_usage, # pylint: disable=unused-argument,too-many-arguments
                                                            patch_get_mem, patch_get_max_mem, *args):
         num_extensions = 5
         self._track_new_extension_cgroups(num_extensions)
 
         patch_is_active.return_value = True
 
-        no_extensions_expected = 0
-        expected_data_count = 1
+        no_extensions_expected = 0 # pylint: disable=unused-variable
+        expected_data_count = 1 # pylint: disable=unused-variable
 
         current_cpu = 30
         current_memory = 209715200
@@ -241,7 +241,7 @@ class TestCGroupsTelemetry(AgentTestCase):
 
         with patch("azurelinuxagent.common.utils.fileutil.read_file", side_effect=io_error_2):
             poll_count = 1
-            for data_count in range(poll_count, 10):
+            for data_count in range(poll_count, 10): # pylint: disable=unused-variable
                 CGroupsTelemetry.poll_all_tracked()
                 self.assertEqual(0, patch_periodic_warn.call_count)
 
@@ -264,7 +264,7 @@ class TestCGroupsTelemetry(AgentTestCase):
             # each collect per controller would generate a log statement, and each cgroup would invoke a
             # is active check raising an exception
 
-            for data_count in range(poll_count, 10):
+            for data_count in range(poll_count, 10): # pylint: disable=unused-variable
                 CGroupsTelemetry.poll_all_tracked()
                 self.assertEqual(poll_count * expected_count_per_call, patch_periodic_warn.call_count)
 
@@ -277,7 +277,7 @@ class TestCGroupsTelemetry(AgentTestCase):
         with patch("azurelinuxagent.common.utils.fileutil.read_file", return_value=''):
             with patch("azurelinuxagent.common.logger.periodic_warn") as patch_periodic_warn:
                 expected_call_count = 2  # 1 periodic warning for the cpu cgroups, and 1 for memory
-                for data_count in range(1, 10):
+                for data_count in range(1, 10): # pylint: disable=unused-variable
                     CGroupsTelemetry.poll_all_tracked()
                     self.assertEqual(expected_call_count, patch_periodic_warn.call_count)
 
@@ -285,7 +285,7 @@ class TestCGroupsTelemetry(AgentTestCase):
     @patch("azurelinuxagent.common.cgroup.MemoryCgroup.get_memory_usage")
     @patch("azurelinuxagent.common.cgroup.CpuCgroup.get_cpu_usage")
     @patch("azurelinuxagent.common.cgroup.CGroup.is_active")
-    def test_telemetry_calculations(self,  patch_is_active, patch_get_cpu_usage, patch_get_memory_usage, patch_get_memory_max_usage, *args):
+    def test_telemetry_calculations(self,  patch_is_active, patch_get_cpu_usage, patch_get_memory_usage, patch_get_memory_max_usage, *args): # pylint: disable=unused-argument
         num_polls = 10
         num_extensions = 1
 
@@ -296,7 +296,7 @@ class TestCGroupsTelemetry(AgentTestCase):
         max_memory_usage_values = [random.randint(0, 8 * 1024 ** 3) for _ in range(num_polls)]
 
         self._track_new_extension_cgroups(num_extensions)
-        self.assertEqual(2 * num_extensions, len(CGroupsTelemetry._tracked))
+        self.assertEqual(2 * num_extensions, len(CGroupsTelemetry._tracked)) # pylint: disable=protected-access
 
         for i in range(num_polls):
             patch_is_active.return_value = True
@@ -310,28 +310,28 @@ class TestCGroupsTelemetry(AgentTestCase):
             self.assertEqual(len(metrics), 3 * num_extensions)
             self._assert_polled_metrics_equal(metrics, cpu_percent_values[i], memory_usage_values[i], max_memory_usage_values[i])
 
-    def test_cgroup_tracking(self, *args):
+    def test_cgroup_tracking(self, *args): # pylint: disable=unused-argument
         num_extensions = 5
         num_controllers = 2
         self._track_new_extension_cgroups(num_extensions)
         self._assert_cgroups_are_tracked(num_extensions)
-        self.assertEqual(num_extensions * num_controllers, len(CGroupsTelemetry._tracked))
+        self.assertEqual(num_extensions * num_controllers, len(CGroupsTelemetry._tracked)) # pylint: disable=protected-access
 
-    def test_cgroup_pruning(self, *args):
+    def test_cgroup_pruning(self, *args): # pylint: disable=unused-argument
         num_extensions = 5
         num_controllers = 2
         self._track_new_extension_cgroups(num_extensions)
         self._assert_cgroups_are_tracked(num_extensions)
-        self.assertEqual(num_extensions * num_controllers, len(CGroupsTelemetry._tracked))
+        self.assertEqual(num_extensions * num_controllers, len(CGroupsTelemetry._tracked)) # pylint: disable=protected-access
 
         CGroupsTelemetry.prune_all_tracked()
         for i in range(num_extensions):
             self.assertFalse(CGroupsTelemetry.is_tracked("dummy_cpu_path_{0}".format(i)))
             self.assertFalse(CGroupsTelemetry.is_tracked("dummy_memory_path_{0}".format(i)))
 
-        self.assertEqual(0, len(CGroupsTelemetry._tracked))
+        self.assertEqual(0, len(CGroupsTelemetry._tracked)) # pylint: disable=protected-access
 
-    def test_cgroup_is_tracked(self, *args):
+    def test_cgroup_is_tracked(self, *args): # pylint: disable=unused-argument
         num_extensions = 5
         self._track_new_extension_cgroups(num_extensions)
         self._assert_cgroups_are_tracked(num_extensions)
@@ -339,7 +339,7 @@ class TestCGroupsTelemetry(AgentTestCase):
         self.assertFalse(CGroupsTelemetry.is_tracked("not_present_memory_dummy_path"))
 
     @patch("azurelinuxagent.common.cgroup.MemoryCgroup.get_memory_usage", side_effect=raise_ioerror)
-    def test_process_cgroup_metric_with_no_memory_cgroup_mounted(self, *args):
+    def test_process_cgroup_metric_with_no_memory_cgroup_mounted(self, *args): # pylint: disable=unused-argument
         num_extensions = 5
         self._track_new_extension_cgroups(num_extensions)
 
@@ -352,7 +352,7 @@ class TestCGroupsTelemetry(AgentTestCase):
 
                 poll_count = 1
 
-                for data_count in range(poll_count, 10):
+                for data_count in range(poll_count, 10): # pylint: disable=unused-variable
                     metrics = CGroupsTelemetry.poll_all_tracked()
 
                     self.assertEqual(len(metrics), num_extensions * 1)  # Only CPU populated
@@ -360,7 +360,7 @@ class TestCGroupsTelemetry(AgentTestCase):
 
 
     @patch("azurelinuxagent.common.cgroup.CpuCgroup.get_cpu_usage", side_effect=raise_ioerror)
-    def test_process_cgroup_metric_with_no_cpu_cgroup_mounted(self, *args):
+    def test_process_cgroup_metric_with_no_cpu_cgroup_mounted(self, *args): # pylint: disable=unused-argument
         num_extensions = 5
 
         self._track_new_extension_cgroups(num_extensions)
@@ -376,7 +376,7 @@ class TestCGroupsTelemetry(AgentTestCase):
                     patch_get_memory_usage.return_value = current_memory  # example 200 MB
                     patch_get_memory_max_usage.return_value = current_max_memory  # example 450 MB
                     num_polls = 10
-                    for data_count in range(1, num_polls + 1):
+                    for data_count in range(1, num_polls + 1): # pylint: disable=unused-variable
                         metrics = CGroupsTelemetry.poll_all_tracked()
                         # Memory is only populated, CPU is not. Thus 2 metrics per cgroup.
                         self.assertEqual(len(metrics), num_extensions * 2)
@@ -385,7 +385,7 @@ class TestCGroupsTelemetry(AgentTestCase):
     @patch("azurelinuxagent.common.cgroup.MemoryCgroup.get_memory_usage", side_effect=raise_ioerror)
     @patch("azurelinuxagent.common.cgroup.MemoryCgroup.get_max_memory_usage", side_effect=raise_ioerror)
     @patch("azurelinuxagent.common.cgroup.CpuCgroup.get_cpu_usage", side_effect=raise_ioerror)
-    def test_extension_telemetry_not_sent_for_empty_perf_metrics(self, *args):
+    def test_extension_telemetry_not_sent_for_empty_perf_metrics(self, *args): # pylint: disable=unused-argument
         num_extensions = 5
         self._track_new_extension_cgroups(num_extensions)
 
@@ -394,7 +394,7 @@ class TestCGroupsTelemetry(AgentTestCase):
             patch_is_active.return_value = False
             poll_count = 1
 
-            for data_count in range(poll_count, 10):
+            for data_count in range(poll_count, 10): # pylint: disable=unused-variable
                 metrics = CGroupsTelemetry.poll_all_tracked()
                 self.assertEqual(0, len(metrics))
 

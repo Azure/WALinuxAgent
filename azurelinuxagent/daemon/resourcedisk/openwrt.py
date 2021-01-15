@@ -18,7 +18,7 @@
 # Requires Python 2.6+ and Openssl 1.0+
 #
 import os
-import errno as errno
+from time import sleep
 
 import azurelinuxagent.common.logger as logger
 import azurelinuxagent.common.utils.fileutil as fileutil
@@ -35,7 +35,7 @@ class OpenWRTResourceDiskHandler(ResourceDiskHandler):
             self.fs = 'ffs'
 
     def reread_partition_table(self, device):
-        ret, output = shellutil.run_get_output("hdparm -z {0}".format(device), chk_err=False)
+        ret, output = shellutil.run_get_output("hdparm -z {0}".format(device), chk_err=False) # pylint: disable=W0612
         if ret != 0:
             logger.warn("Failed refresh the partition table.")
 

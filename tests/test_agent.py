@@ -38,6 +38,8 @@ Extensions.GoalStatePeriod = 6
 HttpProxy.Host = None
 HttpProxy.Port = None
 Lib.Dir = /var/lib/waagent
+Logs.Collect = False
+Logs.CollectPeriod = 3600
 Logs.Console = True
 Logs.Verbose = False
 OS.AllowHTTP = False
@@ -82,33 +84,31 @@ class TestAgent(AgentTestCase):
 
     def test_accepts_configuration_path(self):
         conf_path = os.path.join(data_dir, "test_waagent.conf")
-        c, f, v, d, cfp = parse_args(["-configuration-path:" + conf_path])
+        c, f, v, d, cfp, lcm = parse_args(["-configuration-path:" + conf_path]) # pylint: disable=unused-variable,invalid-name
         self.assertEqual(cfp, conf_path)
 
     @patch("os.path.exists", return_value=True)
     def test_checks_configuration_path(self, mock_exists):
         conf_path = "/foo/bar-baz/something.conf"
-        c, f, v, d, cfp = parse_args(["-configuration-path:"+conf_path])
+        c, f, v, d, cfp, lcm = parse_args(["-configuration-path:"+conf_path]) # pylint: disable=unused-variable,invalid-name
         self.assertEqual(cfp, conf_path)
         self.assertEqual(mock_exists.call_count, 1)
 
     @patch("sys.stderr")
     @patch("os.path.exists", return_value=False)
     @patch("sys.exit", side_effect=Exception)
-    def test_rejects_missing_configuration_path(self, mock_exit, mock_exists, mock_stderr):
+    def test_rejects_missing_configuration_path(self, mock_exit, mock_exists, mock_stderr): # pylint: disable=unused-argument
         try:
-            c, f, v, d, cfp = parse_args(["-configuration-path:/foo/bar.conf"])
-            self.assertTrue(False)
+            c, f, v, d, cfp, lcm = parse_args(["-configuration-path:/foo/bar.conf"]) # pylint: disable=unused-variable,invalid-name
         except Exception:
             self.assertEqual(mock_exit.call_count, 1)
 
     def test_configuration_path_defaults_to_none(self):
-        c, f, v, d, cfp = parse_args([])
+        c, f, v, d, cfp, lcm = parse_args([]) # pylint: disable=unused-variable,invalid-name
         self.assertEqual(cfp, None)
 
     def test_agent_accepts_configuration_path(self):
-        Agent(False,
-                conf_file_path=os.path.join(data_dir, "test_waagent.conf"))
+        Agent(False, conf_file_path=os.path.join(data_dir, "test_waagent.conf"))
         self.assertTrue(conf.get_fips_enabled())
 
     @patch("azurelinuxagent.common.conf.load_conf_from_file")
@@ -151,7 +151,7 @@ class TestAgent(AgentTestCase):
         mock_dir.return_value = ext_log_dir
 
         self.assertFalse(os.path.isdir(ext_log_dir))
-        agent = Agent(False,
+        agent = Agent(False, # pylint: disable=unused-variable
                     conf_file_path=os.path.join(data_dir, "test_waagent.conf"))
         self.assertTrue(os.path.isdir(ext_log_dir))
 
@@ -164,8 +164,8 @@ class TestAgent(AgentTestCase):
 
         self.assertTrue(os.path.isfile(ext_log_dir))
         self.assertFalse(os.path.isdir(ext_log_dir))
-        agent = Agent(False,
-                    conf_file_path=os.path.join(data_dir, "test_waagent.conf"))
+        agent = Agent(False, # pylint: disable=unused-variable
+                      conf_file_path=os.path.join(data_dir, "test_waagent.conf"))
         self.assertTrue(os.path.isfile(ext_log_dir))
         self.assertFalse(os.path.isdir(ext_log_dir))
         self.assertEqual(1, mock_log.call_count)
@@ -178,6 +178,38 @@ class TestAgent(AgentTestCase):
         for k in sorted(configuration.keys()):
             actual_configuration.append("{0} = {1}".format(k, configuration[k]))
         self.assertListEqual(EXPECTED_CONFIGURATION, actual_configuration)
+
+    def test_checks_log_collector_mode(self):
+        # Specify full mode
+        c, f, v, d, cfp, lcm = parse_args(["-collect-logs", "-full"]) # pylint: disable=unused-variable,invalid-name
+        self.assertEqual(c, "collect-logs")
+        self.assertEqual(lcm, True)
+
+        # Defaults to None if mode not specified
+        c, f, v, d, cfp, lcm = parse_args(["-collect-logs"]) # pylint: disable=unused-variable,invalid-name
+        self.assertEqual(c, "collect-logs")
+        self.assertEqual(lcm, False)
+
+    @patch("sys.stderr")
+    @patch("sys.exit", side_effect=Exception)
+    def test_rejects_invalid_log_collector_mode(self, mock_exit, mock_stderr): # pylint: disable=unused-argument
+        try:
+            c, f, v, d, cfp, lcm = parse_args(["-collect-logs", "-notvalid"]) # pylint: disable=unused-variable,invalid-name
+        except Exception:
+            self.assertEqual(mock_exit.call_count, 1)
+
+    @patch("os.path.exists", return_value=True)
+    @patch("azurelinuxagent.agent.LogCollector")
+    def test_calls_collect_logs_with_proper_mode(self, mock_log_collector, *args): # pylint: disable=unused-argument
+        agent = Agent(False, conf_file_path=os.path.join(data_dir, "test_waagent.conf"))
+
+        agent.collect_logs(is_full_mode=True)
+        full_mode = mock_log_collector.call_args_list[0][0][0]
+        self.assertTrue(full_mode)
+
+        agent.collect_logs(is_full_mode=False)
+        full_mode = mock_log_collector.call_args_list[1][0][0]
+        self.assertFalse(full_mode)
 
     def test_agent_usage_message(self):
         message = usage()
@@ -194,6 +226,7 @@ class TestAgent(AgentTestCase):
         self.assertTrue("-start" in message)
         self.assertTrue("-run-exthandlers" in message)
         self.assertTrue("-show-configuration" in message)
+        self.assertTrue("-collect-logs" in message)
 
         # sanity check
         self.assertFalse("-not-a-valid-option" in message)

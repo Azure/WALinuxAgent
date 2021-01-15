@@ -18,8 +18,10 @@
 #
 
 import subprocess
+
 import azurelinuxagent.common.logger as logger
 from azurelinuxagent.common.future import ustr
+
 
 if not hasattr(subprocess, 'check_output'):
     def check_output(*popenargs, **kwargs):
@@ -40,7 +42,7 @@ if not hasattr(subprocess, 'check_output'):
 
     # Exception classes used by this module.
     class CalledProcessError(Exception):
-        def __init__(self, returncode, cmd, output=None):
+        def __init__(self, returncode, cmd, output=None): # pylint: disable=W0231
             self.returncode = returncode
             self.cmd = cmd
             self.output = output
@@ -53,9 +55,12 @@ if not hasattr(subprocess, 'check_output'):
     subprocess.check_output = check_output
     subprocess.CalledProcessError = CalledProcessError
 
+# pylint: disable=W0105
 """
 Shell command util functions
-"""
+""" 
+# pylint: enable=W0105
+
 
 def has_command(cmd):
     """
@@ -63,18 +68,19 @@ def has_command(cmd):
     """
     return not run(cmd, False)
 
-def run(cmd, chk_err=True, expected_errors=[]):
+
+def run(cmd, chk_err=True, expected_errors=[]): # pylint: disable=W0102
     """
     Note: Deprecating in favour of `azurelinuxagent.common.utils.shellutil.run_command` function.
     Calls run_get_output on 'cmd', returning only the return code.
     If chk_err=True then errors will be reported in the log.
     If chk_err=False then errors will be suppressed from the log.
     """
-    retcode, out = run_get_output(cmd, chk_err=chk_err, expected_errors=expected_errors)
+    retcode, out = run_get_output(cmd, chk_err=chk_err, expected_errors=expected_errors) # pylint: disable=W0612
     return retcode
 
 
-def run_get_output(cmd, chk_err=True, log_cmd=True, expected_errors=[]):
+def run_get_output(cmd, chk_err=True, log_cmd=True, expected_errors=[]): # pylint: disable=W0102
     """
     Wrapper for subprocess.check_output.
     Execute 'cmd'.  Returns return code and STDOUT, trapping expected
@@ -91,7 +97,7 @@ def run_get_output(cmd, chk_err=True, log_cmd=True, expected_errors=[]):
                                          stderr=subprocess.STDOUT,
                                          shell=True)
         output = _encode_command_output(output)
-    except subprocess.CalledProcessError as e:
+    except subprocess.CalledProcessError as e: # pylint: disable=C0103
         output = _encode_command_output(e.output)
 
         if chk_err:
@@ -103,7 +109,7 @@ def run_get_output(cmd, chk_err=True, log_cmd=True, expected_errors=[]):
             else:
                 logger.error(msg)
         return e.returncode, output
-    except Exception as e:
+    except Exception as e: # pylint: disable=C0103
         if chk_err:
             logger.error(u"Command [{0}] raised unexpected exception: [{1}]"
                          .format(cmd, ustr(e)))
@@ -121,11 +127,11 @@ class CommandError(Exception):
     """
     @staticmethod
     def _get_message(command, return_code, stderr):
-        command_name = command[0] if isinstance(command, list) and len(command) > 0 else command
+        command_name = command[0] if isinstance(command, list) and len(command) > 0 else command # pylint: disable=len-as-condition
         return "'{0}' failed: {1} ({2})".format(command_name, return_code, stderr.rstrip())
 
     def __init__(self, command, return_code, stdout, stderr):
-        super(Exception, self).__init__(CommandError._get_message(command, return_code, stderr))
+        super(Exception, self).__init__(CommandError._get_message(command, return_code, stderr)) # pylint: disable=E1003
         self.command = command
         self.returncode = return_code
         self.stdout = stdout
@@ -148,13 +154,14 @@ def run_command(command, log_error=False, cmd_input=None):
     # PIPE, an existing file descriptor (a positive integer), an existing file object, and None
     stdin = subprocess.PIPE if cmd_input else None
     try:
-        # Starting Python 3.4+, you need to encode the string, i.e. you need to pass Bytes to the input rather than string to process.communicate()
+        # Starting Python 3.4+, you need to encode the string, i.e. you need to pass Bytes to the input rather than
+        # string to process.communicate()
         process_input = cmd_input.encode() if cmd_input else None
 
         process = subprocess.Popen(command, stdin=stdin, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=False)
         stdout, stderr = process.communicate(input=process_input)
         returncode = process.returncode
-    except Exception as e:
+    except Exception as e: # pylint: disable=C0103
         if log_error:
             logger.error(u"Command [{0}] raised unexpected exception: [{1}]", format_command(command), ustr(e))
         raise

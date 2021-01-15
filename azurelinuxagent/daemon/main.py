@@ -49,7 +49,7 @@ def get_daemon_handler():
     return DaemonHandler()
 
 
-class DaemonHandler(object):
+class DaemonHandler(object): # pylint: disable=R0902
     """
     Main thread of daemon. It will invoke other threads to do actual work
     """
@@ -81,7 +81,7 @@ class DaemonHandler(object):
         while self.running:
             try:
                 self.daemon(child_args)
-            except Exception as e:
+            except Exception as e: # pylint: disable=W0612,C0103
                 err_msg = traceback.format_exc()
                 add_event(name=AGENT_NAME, is_success=False, message=ustr(err_msg),
                           op=WALAEventOperation.UnhandledError)
@@ -125,12 +125,12 @@ class DaemonHandler(object):
     def daemon(self, child_args=None):
         logger.info("Run daemon")
 
-        self.protocol_util = get_protocol_util()
-        self.scvmm_handler = get_scvmm_handler()
-        self.resourcedisk_handler = get_resourcedisk_handler()
-        self.rdma_handler = get_rdma_handler()
-        self.provision_handler = get_provision_handler()
-        self.update_handler = get_update_handler()
+        self.protocol_util = get_protocol_util() # pylint: disable=W0201
+        self.scvmm_handler = get_scvmm_handler() # pylint: disable=W0201
+        self.resourcedisk_handler = get_resourcedisk_handler() # pylint: disable=W0201
+        self.rdma_handler = get_rdma_handler() # pylint: disable=W0201
+        self.provision_handler = get_provision_handler() # pylint: disable=W0201
+        self.update_handler = get_update_handler() # pylint: disable=W0201
 
         if conf.get_detect_scvmm_env():
             self.scvmm_handler.run()
@@ -160,18 +160,23 @@ class DaemonHandler(object):
                 #   incarnation number. A forced update ensures the most
                 #   current values.
                 protocol = self.protocol_util.get_protocol()
-                if type(protocol) is not WireProtocol:
+                if type(protocol) is not WireProtocol: # pylint: disable=C0123
                     raise Exception("Attempt to setup RDMA without Wireserver")
 
                 protocol.client.update_goal_state(forced=True)
 
                 setup_rdma_device(nd_version, protocol.client.get_shared_conf())
-            except Exception as e:
+            except Exception as e: # pylint: disable=C0103
                 logger.error("Error setting up rdma device: %s" % e)
         else:
             logger.info("RDMA capabilities are not enabled, skipping")
 
         self.sleep_if_disabled()
+
+        # Disable output to /dev/console once provisioning has completed
+        if logger.console_output_enabled():
+            logger.info("End of log to /dev/console. The agent will now check for updates and then will process extensions.")
+            logger.disable_console_output()
 
         while self.running:
             self.update_handler.run_latest(child_args=child_args)

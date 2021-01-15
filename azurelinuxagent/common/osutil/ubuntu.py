@@ -39,10 +39,18 @@ class Ubuntu14OSUtil(DefaultOSUtil):
         return shellutil.run("service networking start", chk_err=False)
 
     def stop_agent_service(self):
-        return shellutil.run("service {0} stop".format(self.service_name), chk_err=False)
+        try:
+            shellutil.run_command(["service", self.service_name, "stop"])
+        except shellutil.CommandError as cmd_err:
+            return cmd_err.returncode
+        return 0
 
     def start_agent_service(self):
-        return shellutil.run("service {0} start".format(self.service_name), chk_err=False)
+        try:
+            shellutil.run_command(["service", self.service_name, "start"])
+        except shellutil.CommandError as cmd_err:
+            return cmd_err.returncode
+        return 0
 
     def remove_rules_files(self, rules_files=""):
         pass
@@ -55,7 +63,7 @@ class Ubuntu14OSUtil(DefaultOSUtil):
 
 
 class Ubuntu12OSUtil(Ubuntu14OSUtil):
-    def __init__(self):
+    def __init__(self): # pylint: disable=W0235
         super(Ubuntu12OSUtil, self).__init__()
 
     # Override
@@ -109,7 +117,7 @@ class Ubuntu18OSUtil(Ubuntu16OSUtil):
 
 
 class UbuntuOSUtil(Ubuntu16OSUtil):
-    def __init__(self):
+    def __init__(self): # pylint: disable=W0235
         super(UbuntuOSUtil, self).__init__()
 
     def restart_if(self, ifname, retries=3, wait=5):
@@ -119,15 +127,17 @@ class UbuntuOSUtil(Ubuntu16OSUtil):
         """
         retry_limit=retries+1
         for attempt in range(1, retry_limit):
-            return_code=shellutil.run("ip link set {0} down && ip link set {0} up".format(ifname))
-            if return_code == 0:
-                return
-            logger.warn("failed to restart {0}: return code {1}".format(ifname, return_code))
-            if attempt < retry_limit:
-                logger.info("retrying in {0} seconds".format(wait))
-                time.sleep(wait)
-            else:
-                logger.warn("exceeded restart retries")
+            try:
+                shellutil.run_command(["ip", "link", "set", ifname, "down"])
+                shellutil.run_command(["ip", "link", "set", ifname, "up"])
+
+            except shellutil.CommandError as cmd_err:
+                logger.warn("failed to restart {0}: return code {1}".format(ifname, cmd_err.returncode))
+                if attempt < retry_limit:
+                    logger.info("retrying in {0} seconds".format(wait))
+                    time.sleep(wait)
+                else:
+                    logger.warn("exceeded restart retries")
 
 
 class UbuntuSnappyOSUtil(Ubuntu14OSUtil):
