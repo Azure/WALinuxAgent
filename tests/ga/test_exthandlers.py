@@ -208,17 +208,12 @@ class TestExtHandlers(AgentTestCase):
         self.assertEqual(0, ext_status.sequenceNumber)
         self.assertEqual(0, len(ext_status.substatusList))
 
-    @patch('azurelinuxagent.common.event.EventLogger.add_event')
-    @patch('azurelinuxagent.ga.exthandlers.ExtHandlerInstance._get_last_modified_seq_no_from_config_files')
     def assert_extension_sequence_number(self,
-                                         patch_get_largest_seq,
-                                         patch_add_event,
                                          goal_state_sequence_number,
                                          disk_sequence_number,
                                          expected_sequence_number):
         ext = Extension()
         ext.sequenceNumber = goal_state_sequence_number
-        patch_get_largest_seq.return_value = disk_sequence_number
 
         ext_handler_props = ExtHandlerProperties()
         ext_handler_props.version = "1.2.3"
@@ -235,15 +230,7 @@ class TestExtHandlers(AgentTestCase):
             gs_int = False
 
         if gs_int and gs_seq_int != disk_sequence_number:
-            self.assertEqual(1, patch_add_event.call_count)
-            args, kw_args = patch_add_event.call_args  # pylint: disable=unused-variable
-            self.assertEqual('SequenceNumberMismatch', kw_args['op'])
-            self.assertEqual(False, kw_args['is_success'])
-            self.assertEqual('Goal state: {0}, disk: {1}'
-                             .format(gs_seq_int, disk_sequence_number),
-                             kw_args['message'])
-        else:
-            self.assertEqual(0, patch_add_event.call_count)
+            self.assertEqual(seq, gs_seq_int)
 
         self.assertEqual(expected_sequence_number, seq)
         if seq > -1:
@@ -252,19 +239,20 @@ class TestExtHandlers(AgentTestCase):
             self.assertIsNone(path)
 
     def test_extension_sequence_number(self):
-        self.assert_extension_sequence_number(goal_state_sequence_number="12",  # pylint: disable=no-value-for-parameter
+        # We always use the sequence number from the goal state, not from disk
+        self.assert_extension_sequence_number(goal_state_sequence_number="12",
                                               disk_sequence_number=366,
                                               expected_sequence_number=12)
 
-        self.assert_extension_sequence_number(goal_state_sequence_number=" 12 ",  # pylint: disable=no-value-for-parameter
+        self.assert_extension_sequence_number(goal_state_sequence_number=" 12 ",
                                               disk_sequence_number=366,
                                               expected_sequence_number=12)
 
-        self.assert_extension_sequence_number(goal_state_sequence_number=" foo",  # pylint: disable=no-value-for-parameter
+        self.assert_extension_sequence_number(goal_state_sequence_number=" foo",
                                               disk_sequence_number=3,
-                                              expected_sequence_number=3)
+                                              expected_sequence_number=-1)
 
-        self.assert_extension_sequence_number(goal_state_sequence_number="-1",  # pylint: disable=no-value-for-parameter
+        self.assert_extension_sequence_number(goal_state_sequence_number="-1",
                                               disk_sequence_number=3,
                                               expected_sequence_number=-1)
 
@@ -284,6 +272,7 @@ class TestExtHandlers(AgentTestCase):
                 self.assertTrue("1.0.2" in plugin_setting_mismatch_calls[0]['message'] and "1.0.1" in plugin_setting_mismatch_calls[0]['message'],
                               "Error message should contain the incorrect versions")
                 self.assertFalse(plugin_setting_mismatch_calls[0]['is_success'], "The event should be false")
+
 
 class LaunchCommandTestCase(AgentTestCase):
     """
