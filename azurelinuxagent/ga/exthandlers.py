@@ -1138,50 +1138,10 @@ class ExtHandlerInstance(object):
                              "Skip install during upgrade.")
         self.set_handler_state(ExtHandlerState.Installed)
 
-    def _get_last_modified_seq_no_from_config_files(self):
-        """
-        The sequence number is not guaranteed to always be strictly increasing. To ensure we always get the latest one,
-        fetching the sequence number from config file that was last modified (and not necessarily the largest).
-        :return: Last modified Sequence number or -1 on errors
-
-        Note: This function is going to be deprecated soon. We should only rely on seqNo from GoalState rather than file system.
-        """
-        seq_no = -1
-
-        try:
-            largest_modified_time = 0
-            conf_dir = self.get_conf_dir()
-            for item in os.listdir(conf_dir):
-                item_path = os.path.join(conf_dir, item)
-                if not os.path.isfile(item_path):
-                    continue
-                try:
-                    separator = item.rfind(".")
-                    if separator > 0 and item[separator + 1:] == 'settings':
-                        curr_seq_no = int(item.split('.')[0])
-                        curr_modified_time = os.path.getmtime(item_path)
-                        if curr_modified_time > largest_modified_time:
-                            seq_no = curr_seq_no
-                            largest_modified_time = curr_modified_time
-                except (ValueError, IndexError, TypeError):
-                    self.logger.verbose("Failed to parse file name: {0}", item)
-                    continue
-        except Exception as error:
-            logger.verbose("Error fetching sequence number from config files: {0}".format(ustr(error)))
-            seq_no = -1
-
-        return seq_no
-
     def get_status_file_path(self, extension=None):
         path = None
-        # Todo: Remove check on filesystem for fetching sequence number (legacy behaviour).
-        # We should technically only fetch the sequence number from GoalState and not rely on the filesystem at all,
-        # But since we still have Kusto data from the operation below (~0.000065% VMs are still reporting
-        # WALAEventOperation.SequenceNumberMismatch), keeping this as is with modified logic for fetching
-        # sequence number from filesystem. Based on the new data we will eventually phase this out.
-        seq_no = self._get_last_modified_seq_no_from_config_files()
+        seq_no = -1
 
-        # Issue 1116: use the sequence number from goal state where possible
         if extension is not None and extension.sequenceNumber is not None:
             try:
                 gs_seq_no = int(extension.sequenceNumber)
@@ -1196,9 +1156,7 @@ class ExtHandlerInstance(object):
                 logger.error('Sequence number [{0}] does not appear to be valid'.format(extension.sequenceNumber))
 
         if seq_no > -1:
-            path = os.path.join(
-                self.get_status_dir(),
-                "{0}.status".format(seq_no))
+            path = os.path.join(self.get_status_dir(), "{0}.status".format(seq_no))
 
         return seq_no, path
 
