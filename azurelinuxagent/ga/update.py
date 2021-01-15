@@ -446,26 +446,27 @@ class UpdateHandler(object):
     @staticmethod
     def _emit_changes_in_default_configuration():
         try:
+            def log_and_emit_event(msg):
+                logger.info(msg)
+                add_event(AGENT_NAME, op=WALAEventOperation.ConfigurationChange, message=msg)
+
             def log_if_int_changed_from_default(name, current):
                 default = conf.get_int_default_value(name)
                 if default != current:
-                    msg = "{0} changed from its default; new value: {1}".format(name, current)
-                    logger.info(msg)
-                    add_event(AGENT_NAME, op=WALAEventOperation.ConfigurationChange, message=msg)
+                    log_and_emit_event("{0} changed from its default; new value: {1}".format(name, current))
 
             log_if_int_changed_from_default("Extensions.GoalStatePeriod", conf.get_goal_state_period())
 
             if not conf.enable_firewall():
-                message = "OS.EnableFirewall is False"
-                logger.info(message)
-                add_event(AGENT_NAME, op=WALAEventOperation.ConfigurationChange, message=message)
+                log_and_emit_event("OS.EnableFirewall is False")
             else:
                 log_if_int_changed_from_default("OS.EnableFirewallPeriod", conf.get_enable_firewall_period())
 
             if conf.get_lib_dir() != "/var/lib/waagent":
-                message = "lib dir is in an unexpected location: {0}".format(conf.get_lib_dir())
-                logger.info(message)
-                add_event(AGENT_NAME, op=WALAEventOperation.ConfigurationChange, message=message)
+                log_and_emit_event("lib dir is in an unexpected location: {0}".format(conf.get_lib_dir()))
+
+            if conf.get_fips_enabled():
+                log_and_emit_event("OS.EnableFIPS is True")
 
         except Exception as e:
             logger.warn("Failed to log changes in configuration: {0}", ustr(e))
