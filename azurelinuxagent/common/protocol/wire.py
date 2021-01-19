@@ -607,11 +607,13 @@ class WireClient(object):
         except IOError as e:
             raise ProtocolError("Failed to read cache: {0}".format(e))
 
-    def save_cache(self, local_file, data):
+    @staticmethod
+    def _save_cache(data, file_name):
         try:
-            fileutil.write_file(local_file, data)
+            file_path = os.path.join(conf.get_lib_dir(), file_name)
+            fileutil.write_file(file_path, data)
         except IOError as e:
-            fileutil.clean_ioerror(e, paths=[local_file])
+            fileutil.clean_ioerror(e, paths=[file_name])
             raise ProtocolError("Failed to write cache: {0}".format(e))
 
     @staticmethod
@@ -780,21 +782,18 @@ class WireClient(object):
             logger.warn("Failed to save the previous goal state to the history folder: {0}", ustr(e))
 
         try:
-            local_file = os.path.join(conf.get_lib_dir(), INCARNATION_FILE_NAME)
-            self.save_cache(local_file, self._goal_state.incarnation)
-
             def save_if_not_none(goal_state_property, file_name):
-                file_path = os.path.join(conf.get_lib_dir(), file_name)
-
                 if goal_state_property is not None and goal_state_property.xml_text is not None:
-                    self.save_cache(file_path, goal_state_property.xml_text)
+                    self._save_cache(goal_state_property.xml_text, file_name)
 
             # NOTE: Certificates are saved in Certificate.__init__
+            self._save_cache(self._goal_state.incarnation, INCARNATION_FILE_NAME)
             save_if_not_none(self._goal_state, GOAL_STATE_FILE_NAME.format(self._goal_state.incarnation))
             save_if_not_none(self._goal_state.hosting_env, HOSTING_ENV_FILE_NAME)
             save_if_not_none(self._goal_state.shared_conf, SHARED_CONF_FILE_NAME)
-            save_if_not_none(self._goal_state.ext_conf, EXT_CONF_FILE_NAME.format(self._goal_state.incarnation))
             save_if_not_none(self._goal_state.remote_access, REMOTE_ACCESS_FILE_NAME.format(self._goal_state.incarnation))
+            if self._goal_state.ext_conf is not None and self._goal_state.ext_conf.xml_text is not None:
+                self._save_cache(self._goal_state.ext_conf.get_redacted_xml_text(), EXT_CONF_FILE_NAME.format(self._goal_state.incarnation))
 
         except Exception as e:
             logger.warn("Failed to save the goal state to disk: {0}", ustr(e))
@@ -833,12 +832,9 @@ class WireClient(object):
         if self._goal_state is None:
             raise ProtocolError("Trying to fetch Extension Manifest before initialization!")
 
-        local_file = MANIFEST_FILE_NAME.format(ext_handler.name, self.get_goal_state().incarnation)
-        local_file = os.path.join(conf.get_lib_dir(), local_file)
-
         try:
             xml_text = self.fetch_manifest(ext_handler.versionUris)
-            self.save_cache(local_file, xml_text)
+            self._save_cache(xml_text, MANIFEST_FILE_NAME.format(ext_handler.name, self.get_goal_state().incarnation))
             return ExtensionManifest(xml_text)
         except Exception as e:
             raise ExtensionDownloadError("Failed to retrieve extension manifest. Error: {0}".format(ustr(e)))

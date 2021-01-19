@@ -35,7 +35,7 @@ from azurelinuxagent.common.protocol.goal_state import ExtensionsConfig
 from azurelinuxagent.common.protocol.hostplugin import HostPluginProtocol
 from azurelinuxagent.common.protocol.restapi import VMAgentManifestUri
 from azurelinuxagent.common.protocol.wire import WireProtocol, WireClient, \
-    InVMArtifactsProfile, StatusBlob, VMStatus
+    InVMArtifactsProfile, StatusBlob, VMStatus, EXT_CONF_FILE_NAME
 from azurelinuxagent.common.telemetryevent import GuestAgentExtensionEventsSchema, \
     TelemetryEventParam, TelemetryEvent
 from azurelinuxagent.common.utils import restutil
@@ -1159,6 +1159,34 @@ class UpdateGoalStateTestCase(AgentTestCase):
                 self.assertEqual(len(archives), 2, "Two goal states should have been archived")
                 self.assertEqual(archives[1], second_archive_name, "The name of goal state archive should match the second goal state timestamp and incarnation")
 
+    def test_update_goal_state_should_not_persist_the_protected_settings(self):
+        with mock_wire_protocol(mockwiredata.DATA_FILE_MULTIPLE_EXT) as protocol:
+            # instantiating the protocol fetches the goal state, so there is no need to do another call to update_goal_state()
+            goal_state = protocol.client.get_goal_state()
+
+            protected_settings = []
+            for ext_handler in goal_state.ext_conf.ext_handlers.extHandlers:
+                for extension in ext_handler.properties.extensions:
+                    if extension.protectedSettings is not None:
+                        protected_settings.append(extension.protectedSettings)
+            if len(protected_settings) == 0:
+                raise Exception("The test goal state does not include any protected settings")
+
+            extensions_config_file = os.path.join(conf.get_lib_dir(), EXT_CONF_FILE_NAME.format(goal_state.incarnation))
+            if not os.path.exists(extensions_config_file):
+                raise Exception("Cannot find {0}".format(extensions_config_file))
+
+            with open(extensions_config_file, "r") as stream:
+                extensions_config = stream.read()
+
+                for settings in protected_settings:
+                    self.assertNotIn(settings, extensions_config, "The protectedSettings should not have been saved to {0}".format(extensions_config_file))
+
+                matches = re.findall(r'"protectedSettings"\s*:\s*"\*\*\* REDACTED \*\*\*"', extensions_config)
+                self.assertEqual(
+                    len(matches),
+                    len(protected_settings),
+                    "Could not find the expected number of redacted settings. Expected {0}.\n{1}".format(len(protected_settings), extensions_config))
 
 
 class TryUpdateGoalStateTestCase(HttpRequestPredicates, AgentTestCase):
