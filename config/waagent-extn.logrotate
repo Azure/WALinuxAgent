@@ -1,4 +1,6 @@
 /var/log/azure/*/CommandExecution.log {
+    # Note: logrotate counts multiple configs for the same file as a fatal error.
+
     # Old versions of log files are compressed with gzip by default.
     compress
 
