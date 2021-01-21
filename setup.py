@@ -52,8 +52,7 @@ def set_conf_files(data_files, dest="/etc", src=None):
 
 def set_logrotate_files(data_files, dest="/etc/logrotate.d", src=None):
     if src is None:
-        src = ["config/waagent.logrotate",
-               "config/waagent-extn.logrotate"]
+        src = ["config/waagent.logrotate"]
     data_files.append((dest, src))
 
 
