@@ -1656,7 +1656,7 @@ class HandlerEnvironment(object):
     configFolder = "configFolder"
     statusFolder = "statusFolder"
     heartbeatFile = "heartbeatFile"
-    eventsFolder = "eventsFolder"
+    eventsFolder = "eventsFolder_preview"
     name = "name"
     version = "version"
 
