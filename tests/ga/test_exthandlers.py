@@ -306,7 +306,7 @@ class TestExtHandlers(AgentTestCase):
         with open(log_file_path, "a") as log_file:
             log_file.write(old_logfile_contents)
 
-        instance = ExtHandlerInstance(ext_handler=ext_handler, protocol=None,
+        _ = ExtHandlerInstance(ext_handler=ext_handler, protocol=None,
             execution_log_max_size=(len(first_line)+len(second_line)//2))
 
         with open(log_file_path) as truncated_log_file:
