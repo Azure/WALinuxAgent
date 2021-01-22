@@ -27,6 +27,7 @@ from azurelinuxagent.common.exception import ExtensionError, ExtensionErrorCodes
 from azurelinuxagent.common.protocol.restapi import ExtensionStatus, Extension, ExtHandler, ExtHandlerProperties
 from azurelinuxagent.common.protocol.util import ProtocolUtil
 from azurelinuxagent.common.protocol.wire import WireProtocol
+from azurelinuxagent.common.utils import fileutil
 from azurelinuxagent.common.utils.extensionprocessutil import TELEMETRY_MESSAGE_MAX_LEN, format_stdout_stderr, \
     read_output
 from azurelinuxagent.ga.exthandlers import parse_ext_status, ExtHandlerInstance, ExtCommandEnvVariable, \
@@ -284,6 +285,32 @@ class TestExtHandlers(AgentTestCase):
                 self.assertTrue("1.0.2" in plugin_setting_mismatch_calls[0]['message'] and "1.0.1" in plugin_setting_mismatch_calls[0]['message'],
                               "Error message should contain the incorrect versions")
                 self.assertFalse(plugin_setting_mismatch_calls[0]['is_success'], "The event should be false")
+
+    @patch("azurelinuxagent.common.conf.get_ext_log_dir")
+    def test_command_extension_log_truncates_correctly(self, mock_log_dir):
+        log_dir_path = os.path.join(self.tmp_dir, "log_directory")
+        mock_log_dir.return_value = log_dir_path
+
+        ext_handler_props = ExtHandlerProperties()
+        ext_handler_props.version = "1.2.3"
+        ext_handler = ExtHandler(name='foo')
+        ext_handler.properties = ext_handler_props
+
+        first_line = "This is the first line!"
+        second_line = "This is the second line."
+        old_logfile_contents = "{first_line}\n{second_line}\n".format(first_line=first_line, second_line=second_line)
+
+        log_file_path = os.path.join(log_dir_path, "foo", "CommandExecution.log")
+
+        fileutil.mkdir(os.path.join(log_dir_path, "foo"), mode=0o755)
+        with open(log_file_path, "a") as log_file:
+            log_file.write(old_logfile_contents)
+
+        instance = ExtHandlerInstance(ext_handler=ext_handler, protocol=None,
+            execution_log_max_size=(len(first_line)+len(second_line)//2))
+
+        with open(log_file_path) as truncated_log_file:
+            self.assertEqual(truncated_log_file.read(), "{second_line}\n".format(second_line=second_line))
 
 class LaunchCommandTestCase(AgentTestCase):
     """

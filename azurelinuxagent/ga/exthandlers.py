@@ -768,7 +768,7 @@ class ExtHandlersHandler(object):
 
 
 class ExtHandlerInstance(object):
-    def __init__(self, ext_handler, protocol):
+    def __init__(self, ext_handler, protocol, execution_log_max_size=(10 * 1024 * 1024)):
         self.ext_handler = ext_handler
         self.protocol = protocol
         self.operation = None
@@ -783,6 +783,19 @@ class ExtHandlerInstance(object):
             self.logger.error(u"Failed to create extension log dir: {0}", e)
 
         log_file = os.path.join(self.get_log_dir(), "CommandExecution.log")
+
+        try:
+            if os.stat(log_file).st_size > execution_log_max_size:
+                with open(log_file, "rb") as existing_log_file_buffer:
+                    existing_log_file_buffer.seek(-1 * execution_log_max_size, 2)
+                    _ = existing_log_file_buffer.readline()
+
+                    fileutil.write_file("".join([log_file, ".tmp"]), existing_log_file_buffer.read(), asbin=True)
+                    os.rename("".join([log_file, ".tmp"]), log_file)
+
+        except FileNotFoundError:
+            pass
+
         self.logger.add_appender(logger.AppenderType.FILE,
                                  logger.LogLevel.INFO, log_file)
 
