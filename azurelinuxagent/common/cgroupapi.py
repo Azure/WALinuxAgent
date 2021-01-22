@@ -26,7 +26,6 @@ from azurelinuxagent.common import logger
 from azurelinuxagent.common.cgroup import CpuCgroup, MemoryCgroup
 from azurelinuxagent.common.cgroupstelemetry import CGroupsTelemetry
 from azurelinuxagent.common.conf import get_agent_pid_file_path
-from azurelinuxagent.common.event import add_event, WALAEventOperation
 from azurelinuxagent.common.exception import CGroupsException, ExtensionErrorCodes, ExtensionError, ExtensionOperationError
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.osutil import get_osutil
@@ -38,10 +37,6 @@ from azurelinuxagent.common.version import get_distro
 
 CGROUPS_FILE_SYSTEM_ROOT = '/sys/fs/cgroup'
 CGROUP_CONTROLLERS = ["cpu", "memory"]
-VM_AGENT_CGROUP_NAME = "walinuxagent.service"
-AZURE_CGROUP_NAME = "azure"
-EXTENSIONS_CGROUP_NAME = "vmextensions"
-UNIT_FILES_FILE_SYSTEM_PATH = "/etc/systemd/system"
 SYSTEMD_RUN_PATH = "/run/systemd/system/"
 
 
@@ -152,14 +147,6 @@ class SystemdCgroupsApi(CGroupsApi):
         #
         return shellutil.run_command(['systemctl', '--version'])
 
-    @staticmethod
-    def get_azure_slice():
-        return os.path.join(UNIT_FILES_FILE_SYSTEM_PATH, AZURE_CGROUP_NAME, ".slice")
-
-    @staticmethod
-    def get_extensions_slice():
-        return os.path.join(UNIT_FILES_FILE_SYSTEM_PATH, EXTENSIONS_CGROUP_NAME, ".slice")
-
     def get_systemd_run_commands(self):
         """
         Returns a list of the systemd-run commands currently running (given as PIDs)
@@ -266,46 +253,6 @@ class SystemdCgroupsApi(CGroupsApi):
         if match is None:
             raise ValueError("Can't find property {0} of {1}", property_name, unit_name)  # pylint: disable=W0715
         return match.group('value')
-
-    @staticmethod
-    def create_unit_file(unit_filename, unit_contents):
-        try:
-            unit_path = os.path.join(UNIT_FILES_FILE_SYSTEM_PATH, unit_filename)
-            fileutil.write_file(unit_path, unit_contents)
-        except Exception as error:
-            raise CGroupsException("Failed to create and start {0}. Error: {1}".format(unit_filename, ustr(error)))
-
-    @staticmethod
-    def _get_azure_slice_name():
-        return "{0}.slice".format(AZURE_CGROUP_NAME)
-
-    @staticmethod
-    def _get_extensions_root_slice_name():
-        return "{0}-{1}.slice".format(AZURE_CGROUP_NAME, EXTENSIONS_CGROUP_NAME)
-
-    def _get_extension_slice_name(self, extension_name):
-        return "{0}-{1}-{2}.slice".format(AZURE_CGROUP_NAME, EXTENSIONS_CGROUP_NAME, self._get_extension_cgroup_name(extension_name))
-
-    def create_azure_slice(self):
-        unit_contents = """[Unit]
-Description=Slice for Azure VM Agent and Extensions"""
-        unit_filename = self._get_azure_slice_name()
-        self.create_unit_file(unit_filename, unit_contents)
-
-        message = "Created slice for Azure VM Agent and Extensions {0}".format(unit_filename)
-        add_event(op=WALAEventOperation.CGroupsInitialize, is_success=True, log_event=False, message=message)
-        logger.info(message)
-
-    def create_extensions_slice(self):
-        unit_contents = """[Unit]
-Description=Slice for Azure VM Extensions"""
-        unit_filename = self._get_extensions_root_slice_name()
-
-        self.create_unit_file(unit_filename, unit_contents)
-
-        message = "Created slice for Azure VM Extensions {0}".format(unit_filename)
-        add_event(op=WALAEventOperation.CGroupsInitialize, is_success=True, log_event=False, message=message)
-        logger.info(message)
 
     def get_agent_unit_name(self):
         if self._agent_unit_name is None:

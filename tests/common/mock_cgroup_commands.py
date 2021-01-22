@@ -60,6 +60,8 @@ cgroup on /sys/fs/cgroup/blkio type cgroup (rw,nosuid,nodev,noexec,relatime,blki
 '''MemoryAccounting=no
 '''),
 
+    (r"^systemctl daemon-reload", ""),
+
     (r"^systemd-run --unit=([^\s]+) --scope ([^\s]+)",
 ''' 
 Running scope as unit: TEST_UNIT.scope
@@ -74,12 +76,20 @@ __DEFAULT_FILES = [
     (r"^/sys/fs/cgroup/unified/cgroup.controllers$", os.path.join(data_dir, 'cgroups', 'sys_fs_cgroup_unified_cgroup.controllers')),
 ]
 
+# These paths are mapped to the given tmp_dir, e.g. "/lib/systemd/system" becomes "<tmp_dir>/lib/systemd/system".
+# The mapping is done only during calls to fileutil.read_file, fileutil.write_file and os.path.exists.
+__SYSTEM_PATHS = [
+    "/lib/systemd/system",
+    "/etc/systemd/system"
+]
+
 
 @contextlib.contextmanager
-def mock_cgroup_commands():
+def mock_cgroup_commands(tmp_dir):
     original_popen = subprocess.Popen
     original_read_file = fileutil.read_file
     original_write_file = fileutil.write_file
+    original_mkdir = os.mkdir
     original_path_exists = os.path.exists
 
     def add_file(pattern, file_path):
@@ -101,37 +111,44 @@ def mock_cgroup_commands():
                 break
 
         return original_popen(command, *args, **kwargs)
-    
-    def mock_read_file(filepath, **kwargs):
-        for item in patcher.files:
-            match = re.match(item[0], filepath)
-            if match is not None:
-                filepath = item[1]
-        return original_read_file(filepath, **kwargs)
 
-    def mock_write_file(filepath, content, **kwargs):
-        for item in patcher.files:
-            match = re.match(item[0], filepath)
-            if match is not None:
-                filepath = item[1]
-        return original_write_file(filepath, content, **kwargs)
-
-    def mock_path_exists(path):
+    def get_mapped_path(path):
         for item in patcher.files:
             match = re.match(item[0], path)
             if match is not None:
-                return True
-        return original_path_exists(path)
+                return item[1]
+        for item in __SYSTEM_PATHS:
+            mapped = re.sub(r"^({0})".format(item), r"{0}\1".format(tmp_dir), path)
+            if mapped != path:
+                mapped_parent = os.path.split(mapped)[0]
+                if not original_path_exists(mapped_parent):
+                    os.makedirs(mapped_parent)
+                return mapped
+        return path
+
+    def mock_read_file(filepath, **kwargs):
+        return original_read_file(get_mapped_path(filepath), **kwargs)
+
+    def mock_write_file(filepath, content, **kwargs):
+        return original_write_file(get_mapped_path(filepath), content, **kwargs)
+
+    def mock_mkdir(path, *args, **kwargs):
+        return original_mkdir(get_mapped_path(path), *args, **kwargs)
+
+    def mock_path_exists(path):
+        return original_path_exists(get_mapped_path(path))
 
     with patch("azurelinuxagent.common.cgroupapi.subprocess.Popen", side_effect=mock_popen) as patcher:
-        with patch("azurelinuxagent.common.cgroupapi.os.path.exists", side_effect=mock_path_exists):
-            with patch("azurelinuxagent.common.cgroupapi.fileutil.read_file", side_effect=mock_read_file):
-                with patch("azurelinuxagent.common.cgroupapi.fileutil.write_file", side_effect=mock_write_file):
-                    with patch('azurelinuxagent.common.cgroupapi.CGroupsApi.cgroups_supported', return_value=True):
-                        with patch('azurelinuxagent.common.cgroupapi.CGroupsApi.is_systemd', return_value=True):
-                            patcher.commands = __DEFAULT_COMMANDS[:]
-                            patcher.files = __DEFAULT_FILES[:]
-                            patcher.add_file = add_file
-                            patcher.add_command = add_command
-                            yield patcher
+        with patch("azurelinuxagent.common.cgroupconfigurator.os.mkdir", side_effect=mock_mkdir):
+            with patch("azurelinuxagent.common.cgroupapi.os.path.exists", side_effect=mock_path_exists):
+                with patch("azurelinuxagent.common.cgroupapi.fileutil.read_file", side_effect=mock_read_file):
+                    with patch("azurelinuxagent.common.cgroupapi.fileutil.write_file", side_effect=mock_write_file):
+                        with patch('azurelinuxagent.common.cgroupapi.CGroupsApi.cgroups_supported', return_value=True):
+                            with patch('azurelinuxagent.common.cgroupapi.CGroupsApi.is_systemd', return_value=True):
+                                patcher.commands = __DEFAULT_COMMANDS[:]
+                                patcher.files = __DEFAULT_FILES[:]
+                                patcher.add_file = add_file
+                                patcher.add_command = add_command
+                                patcher.get_mapped_path = get_mapped_path
+                                yield patcher
 
