@@ -793,7 +793,7 @@ class ExtHandlerInstance(object):
                     fileutil.write_file("".join([log_file, ".tmp"]), existing_log_file_buffer.read(), asbin=True)
                     os.rename("".join([log_file, ".tmp"]), log_file)
 
-        except IOError:
+        except (IOError, OSError):
             pass
 
         self.logger.add_appender(logger.AppenderType.FILE,
