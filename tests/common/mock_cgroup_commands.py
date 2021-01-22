@@ -77,7 +77,7 @@ __DEFAULT_FILES = [
 ]
 
 # These paths are mapped to the given tmp_dir, e.g. "/lib/systemd/system" becomes "<tmp_dir>/lib/systemd/system".
-# The mapping is done only during calls to fileutil.read_file, fileutil.write_file and os.path.exists.
+# The mapping is done only during calls to fileutil.read_file, fileutil.write_file, fileutil.mkdir and os.path.exists.
 __SYSTEM_PATHS = [
     "/lib/systemd/system",
     "/etc/systemd/system"
@@ -89,7 +89,7 @@ def mock_cgroup_commands(tmp_dir):
     original_popen = subprocess.Popen
     original_read_file = fileutil.read_file
     original_write_file = fileutil.write_file
-    original_mkdir = os.mkdir
+    original_mkdir = fileutil.mkdir
     original_path_exists = os.path.exists
 
     def add_file(pattern, file_path):
@@ -139,7 +139,7 @@ def mock_cgroup_commands(tmp_dir):
         return original_path_exists(get_mapped_path(path))
 
     with patch("azurelinuxagent.common.cgroupapi.subprocess.Popen", side_effect=mock_popen) as patcher:
-        with patch("azurelinuxagent.common.cgroupconfigurator.os.mkdir", side_effect=mock_mkdir):
+        with patch("azurelinuxagent.common.cgroupconfigurator.fileutil.mkdir", side_effect=mock_mkdir):
             with patch("azurelinuxagent.common.cgroupapi.os.path.exists", side_effect=mock_path_exists):
                 with patch("azurelinuxagent.common.cgroupapi.fileutil.read_file", side_effect=mock_read_file):
                     with patch("azurelinuxagent.common.cgroupapi.fileutil.write_file", side_effect=mock_write_file):

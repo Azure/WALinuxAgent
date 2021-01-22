@@ -211,7 +211,7 @@ class CGroupConfigurator(object):
                 self._create_unit_file(extensions_slice_override, _EXTENSIONS_SLICE_CONTENTS)
                 drop_in_parent, _ = os.path.split(agent_drop_in_file)
                 if not os.path.exists(drop_in_parent):
-                    os.mkdir(drop_in_parent, mode=0o755)
+                    fileutil.mkdir(drop_in_parent, mode=0o755)
                 self._create_unit_file(agent_drop_in_file, _AGENT_DROP_IN_CONTENTS)
                 # reload the systemd configuration, but the new slice will not be used until the agent's service restarts
                 try:
