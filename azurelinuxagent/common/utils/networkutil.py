@@ -118,6 +118,12 @@ class AddFirewallRules(object):
 
     @staticmethod
     def add_iptables_rules(wait, dst_ip, uid):
+        def _raise_if_empty(val, name):
+            if val == "":
+                raise Exception("{0} should not be empty".format(name))
+
+        _raise_if_empty(dst_ip, "Destination IP")
+        _raise_if_empty(uid, "User ID")
         accept_rule = AddFirewallRules.get_iptables_accept_command(wait, "-A", dst_ip, uid)
         try:
             shellutil.run_command(accept_rule)

@@ -26,11 +26,7 @@
 import sys
 import re
 from azurelinuxagent.common.future import ustr
-
-
-def _raise_if_empty(val, name):
-    if val == "":
-        raise Exception("{0} should not be empty".format(name))
+from azurelinuxagent.common.utils.networkutil import AddFirewallRules
 
 
 def _setup_firewall_rules():
@@ -49,11 +45,11 @@ def _setup_firewall_rules():
             elif re.match("^([-/]*)w", arg):
                 wait = "-w"
 
-        _raise_if_empty(dst_ip, "Destination IP")
-        _raise_if_empty(uid, "User ID")
         AddFirewallRules.add_iptables_rules(wait, dst_ip, uid)
+        print("Setting Firewall rules completed")
     except Exception as error:
         print("Unable to setup firewall rules: {0}".format(ustr(error)))
+        sys.exit(1)
 
 
 if __name__ == '__main__':
