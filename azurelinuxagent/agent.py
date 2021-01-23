@@ -38,6 +38,7 @@ from azurelinuxagent.common.logcollector import LogCollector, OUTPUT_RESULTS_FIL
 from azurelinuxagent.common.osutil import get_osutil
 from azurelinuxagent.common.utils import fileutil
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
+from azurelinuxagent.common.utils.networkutil import AddFirewallRules
 from azurelinuxagent.common.version import AGENT_NAME, AGENT_LONG_VERSION, AGENT_VERSION, \
     DISTRO_NAME, DISTRO_VERSION, \
     PY_VERSION_MAJOR, PY_VERSION_MINOR, \
@@ -60,7 +61,7 @@ class AgentCommands(object):
     ShowConfig = "show-configuration"
     Help = "help"
     CollectLogs = "collect-logs"
-    SetupFirewall = "setup_firewall"
+    SetupFirewall = "setup-firewall"
     Provision = "provision"
 
 
@@ -230,11 +231,11 @@ def main(args=None):
     if len(args) <= 0:
         args = sys.argv[1:]
     command, force, verbose, debug, conf_file_path, log_collector_full_mode, firewall_metadata = parse_args(args)
-    if command == "version":
+    if command == AgentCommands.Version:
         version()
-    elif command == "help":
+    elif command == AgentCommands.Help:
         print(usage())
-    elif command == "start":
+    elif command == AgentCommands.Start:
         start(conf_file_path=conf_file_path)
     else:
         try:
@@ -286,7 +287,7 @@ def parse_args(sys_args):
             conf_file_path = m.group(1)
             if not os.path.exists(conf_file_path):
                 print("Error: Configuration file {0} does not exist".format(
-                        conf_file_path), file=sys.stderr) 
+                        conf_file_path), file=sys.stderr)
                 print(usage())
                 sys.exit(1)
         elif re.match("^([-/]*)deprovision\\+user", arg):
@@ -352,7 +353,7 @@ def usage():
     s += ("usage: {0} [-verbose] [-force] [-help] "
            "-configuration-path:<path to configuration file>" 
            "-deprovision[+user]|-register-service|-version|-daemon|-start|"
-           "-run-exthandlers|-show-configuration|-collect-logs [-full]"
+           "-run-exthandlers|-show-configuration|-collect-logs [-full]|-setup-firewall"
            "").format(sys.argv[0])
     s += "\n"
     return s

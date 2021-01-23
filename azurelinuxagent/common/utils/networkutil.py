@@ -126,6 +126,7 @@ class AddFirewallRules(object):
         _raise_if_empty(uid, "User ID")
         accept_rule = AddFirewallRules.get_iptables_accept_command(wait, "-A", dst_ip, uid)
         try:
+            accept_rule = ['/x/y/z', 'should-fail', 'oops']
             shellutil.run_command(accept_rule)
         except Exception as e:
             msg = "Unable to add ACCEPT firewall rule '{0}' - {1}".format(accept_rule, ustr(e))
