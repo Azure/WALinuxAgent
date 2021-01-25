@@ -201,6 +201,7 @@ class CGroupConfigurator(object):
                 # remove the overrides in case they were created by a previous version of the agent
                 self._cleanup_unit_file(azure_slice_override)
                 self._cleanup_unit_file(extensions_slice_override)
+                self._cleanup_unit_file(agent_drop_in_file)
                 return _AZURE_SLICE
 
             if os.path.exists(azure_slice_override):
