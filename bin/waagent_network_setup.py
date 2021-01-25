@@ -29,6 +29,13 @@ from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.utils.networkutil import AddFirewallRules
 
 
+def __usage():
+    """
+    Return the usage for this script
+    """
+    return "\nUsage: {0} [-help] -dst_ip=<Wireserver IP> -uid=[User ID] [-w|--wait]\n".format(sys.argv[0])
+
+
 def _setup_firewall_rules():
     print("Setting up firewall rules")
     try:
@@ -40,12 +47,20 @@ def _setup_firewall_rules():
         # The command to call this would look something like this -
         # ExecStart=PYPATH /usr/sbin/waagent_network_setup.py --dst_ip=1.2.3.4 --uid=9999 [-w]
         for arg in args:
-            if re.match("^([-/]*)dst_ip=(?P<dst_ip>[\d.]{7,})", arg):
-                dst_ip = re.match("^([-/]*)dst_ip=(?P<dst_ip>[\d.]{7,})", arg).group('dst_ip')
-            elif re.match("^([-/]*)uid=(?P<uid>[\d]+)", arg):
-                uid = re.match("^([-/]*)uid=(?P<uid>[\d]+)", arg).group('uid')
-            elif re.match("^([-/]*)w", arg):
+            dst_ip_match = re.match("^([-/]*)dst_ip=(?P<dst_ip>[\d.]{7,})", arg)
+            uid_match = re.match("^([-/]*)uid=(?P<uid>[\d]+)", arg)
+            wait_match = re.match("^([-/]*)(w|wait)$", arg)
+
+            if dst_ip_match:
+                dst_ip = dst_ip_match.group('dst_ip')
+            elif uid_match:
+                uid = uid_match.group('uid')
+            elif wait_match:
                 wait = "-w"
+            else:
+                # If any command is not recognised, just print the help command and exit
+                print(__usage())
+                sys.exit(0)
 
         AddFirewallRules.add_iptables_rules(wait, dst_ip, uid)
         print("Setting Firewall rules completed")
