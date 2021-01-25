@@ -101,20 +101,25 @@ class NetworkInterfaceCard:
 class AddFirewallRules(object):
 
     @staticmethod
+    def _add_wait(wait, command):
+        """
+        If 'wait' is True, adds the wait option (-w) to the given iptables command line
+        """
+        if wait:
+            command.insert(1, "-w")
+        return command
+
+    @staticmethod
     def get_iptables_accept_command(wait, command, destination, owner_uid):
         cmd = ["iptables", "-t", "security", command, "OUTPUT", "-d", destination, "-p", "tcp", "-m", "owner",
                "--uid-owner", str(owner_uid), "-j" "ACCEPT"]
-        if wait != "":
-            cmd.insert(1, "-w")
-        return cmd
+        return AddFirewallRules._add_wait(wait, cmd)
 
     @staticmethod
     def get_iptables_drop_command(wait, command, destination):
         cmd = ["iptables", "-t", "security", command, "OUTPUT", "-d", destination, "-p", "tcp", "-m", "conntrack",
                "--ctstate", "INVALID,NEW", "-j", "DROP"]
-        if wait != "":
-            cmd.insert(1, "-w")
-        return cmd
+        return AddFirewallRules._add_wait(wait, cmd)
 
     @staticmethod
     def add_iptables_rules(wait, dst_ip, uid):
