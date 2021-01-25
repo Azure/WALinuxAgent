@@ -38,31 +38,12 @@ from azurelinuxagent.common.logcollector import LogCollector, OUTPUT_RESULTS_FIL
 from azurelinuxagent.common.osutil import get_osutil
 from azurelinuxagent.common.utils import fileutil
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
-from azurelinuxagent.common.utils.networkutil import AddFirewallRules
 from azurelinuxagent.common.version import AGENT_NAME, AGENT_LONG_VERSION, AGENT_VERSION, \
     DISTRO_NAME, DISTRO_VERSION, \
     PY_VERSION_MAJOR, PY_VERSION_MINOR, \
     PY_VERSION_MICRO, GOAL_STATE_AGENT_VERSION, \
     get_daemon_version, set_daemon_version
 from azurelinuxagent.pa.provision.default import ProvisionHandler
-
-
-class AgentCommands(object):
-    """
-    This is the list of all commands that the Linux Guest Agent supports
-    """
-    DeprovisionUser = "deprovision+user"
-    Deprovision = "deprovision"
-    Daemon = "daemon"
-    Start = "start"
-    RegisterService = "register-service"
-    RunExthandlers = "run-exthandlers"
-    Version = "version"
-    ShowConfig = "show-configuration"
-    Help = "help"
-    CollectLogs = "collect-logs"
-    SetupFirewall = "setup-firewall"
-    Provision = "provision"
 
 
 class Agent(object):
@@ -209,17 +190,6 @@ class Agent(object):
             print("Detailed log output can be found at {0}".format(OUTPUT_RESULTS_FILE_PATH))
             sys.exit(1)
 
-    @staticmethod
-    def setup_firewall(firewall_metadata):
-
-        print("Setting up firewall for the WALinux Agent")
-        try:
-            AddFirewallRules.add_iptables_rules("-w", firewall_metadata['dst_ip'], firewall_metadata['uid'])
-        except Exception as error:
-            print("Unable to add firewall rules. Error: {0}".format(ustr(error)))
-            sys.exit(1)
-        print("Firewall set correctly")
-
 
 def main(args=None):
     """
@@ -230,34 +200,32 @@ def main(args=None):
         args = []
     if len(args) <= 0:
         args = sys.argv[1:]
-    command, force, verbose, debug, conf_file_path, log_collector_full_mode, firewall_metadata = parse_args(args)
-    if command == AgentCommands.Version:
+    command, force, verbose, debug, conf_file_path, log_collector_full_mode = parse_args(args)
+    if command == "version":
         version()
-    elif command == AgentCommands.Help:
+    elif command == "help":
         print(usage())
-    elif command == AgentCommands.Start:
+    elif command == "start":
         start(conf_file_path=conf_file_path)
     else:
         try:
             agent = Agent(verbose, conf_file_path=conf_file_path)
-            if command == AgentCommands.DeprovisionUser:
+            if command == "deprovision+user":
                 agent.deprovision(force, deluser=True)
-            elif command == AgentCommands.Deprovision:
+            elif command == "deprovision":
                 agent.deprovision(force, deluser=False)
-            elif command == AgentCommands.Provision:
+            elif command == "provision":
                 agent.provision()
-            elif command == AgentCommands.RegisterService:
+            elif command == "register-service":
                 agent.register_service()
-            elif command == AgentCommands.Daemon:
+            elif command == "daemon":
                 agent.daemon()
-            elif command == AgentCommands.RunExthandlers:
+            elif command == "run-exthandlers":
                 agent.run_exthandlers(debug)
-            elif command == AgentCommands.ShowConfig:
+            elif command == "show-configuration":
                 agent.show_configuration()
-            elif command == AgentCommands.CollectLogs:
+            elif command == "collect-logs":
                 agent.collect_logs(log_collector_full_mode)
-            elif command == AgentCommands.SetupFirewall:
-                agent.setup_firewall(firewall_metadata)
         except Exception:
             logger.error(u"Failed to run '{0}': {1}",
                          command,
@@ -268,18 +236,12 @@ def parse_args(sys_args):
     """
     Parse command line arguments
     """
-    cmd = AgentCommands.Help
+    cmd = "help"
     force = False
     verbose = False
     debug = False
     conf_file_path = None
     log_collector_full_mode = False
-    firewall_metadata = {
-        "dst_ip": None,
-        "uid": None
-    }
-
-    regex_cmd_format = "^([-/]*){0}"
 
     for arg in sys_args:
         m = re.match("^(?:[-/]*)configuration-path:([\w/\.\-_]+)", arg)  # pylint: disable=W1401
@@ -291,45 +253,38 @@ def parse_args(sys_args):
                 print(usage())
                 sys.exit(1)
         elif re.match("^([-/]*)deprovision\\+user", arg):
-            cmd = AgentCommands.DeprovisionUser
-        elif re.match(regex_cmd_format.format(AgentCommands.Deprovision), arg):
-            cmd = AgentCommands.Deprovision
-        elif re.match(regex_cmd_format.format(AgentCommands.Daemon), arg):
-            cmd = AgentCommands.Daemon
-        elif re.match(regex_cmd_format.format(AgentCommands.Start), arg):
-            cmd = AgentCommands.Start
-        elif re.match(regex_cmd_format.format(AgentCommands.RegisterService), arg):
-            cmd = AgentCommands.RegisterService
-        elif re.match(regex_cmd_format.format(AgentCommands.RunExthandlers), arg):
-            cmd = AgentCommands.RunExthandlers
-        elif re.match(regex_cmd_format.format(AgentCommands.Version), arg):
-            cmd = AgentCommands.Version
-        elif re.match(regex_cmd_format.format("verbose"), arg):
+            cmd = "deprovision+user"
+        elif re.match("^([-/]*)deprovision", arg):
+            cmd = "deprovision"
+        elif re.match("^([-/]*)daemon", arg):
+            cmd = "daemon"
+        elif re.match("^([-/]*)start", arg):
+            cmd = "start"
+        elif re.match("^([-/]*)register-service", arg):
+            cmd = "register-service"
+        elif re.match("^([-/]*)run-exthandlers", arg):
+            cmd = "run-exthandlers"
+        elif re.match("^([-/]*)version", arg):
+            cmd = "version"
+        elif re.match("^([-/]*)verbose", arg):
             verbose = True
-        elif re.match(regex_cmd_format.format("debug"), arg):
+        elif re.match("^([-/]*)debug", arg):
             debug = True
-        elif re.match(regex_cmd_format.format("force"), arg):
+        elif re.match("^([-/]*)force", arg):
             force = True
-        elif re.match(regex_cmd_format.format(AgentCommands.ShowConfig), arg):
-            cmd = AgentCommands.ShowConfig
+        elif re.match("^([-/]*)show-configuration", arg):
+            cmd = "show-configuration"
         elif re.match("^([-/]*)(help|usage|\\?)", arg):
-            cmd = AgentCommands.Help
-        elif re.match(regex_cmd_format.format(AgentCommands.CollectLogs), arg):
-            cmd = AgentCommands.CollectLogs
-        elif re.match(regex_cmd_format.format("full"), arg):
+            cmd = "help"
+        elif re.match("^([-/]*)collect-logs", arg):
+            cmd = "collect-logs"
+        elif re.match("^([-/]*)full", arg):
             log_collector_full_mode = True
-        elif re.match(regex_cmd_format.format(AgentCommands.SetupFirewall), arg):
-            cmd = AgentCommands.SetupFirewall
-        elif re.match(regex_cmd_format.format("dst_ip=(?P<dst_ip>[\d.]{7,})"), arg):
-            firewall_metadata['dst_ip'] = re.match(regex_cmd_format.format("dst_ip=(?P<dst_ip>[\d.]{7,})"), arg).group(
-                'dst_ip')
-        elif re.match(regex_cmd_format.format("uid=(?P<uid>[\d]+)"), arg):
-            firewall_metadata['uid'] = re.match(regex_cmd_format.format("uid=(?P<uid>[\d]+)"), arg).group('uid')
         else:
-            cmd = AgentCommands.Help
+            cmd = "help"
             break
 
-    return cmd, force, verbose, debug, conf_file_path, log_collector_full_mode, firewall_metadata
+    return cmd, force, verbose, debug, conf_file_path, log_collector_full_mode
 
 
 def version():
@@ -353,7 +308,7 @@ def usage():
     s += ("usage: {0} [-verbose] [-force] [-help] "
            "-configuration-path:<path to configuration file>" 
            "-deprovision[+user]|-register-service|-version|-daemon|-start|"
-           "-run-exthandlers|-show-configuration|-collect-logs [-full]|-setup-firewall"
+           "-run-exthandlers|-show-configuration|-collect-logs [-full]"
            "").format(sys.argv[0])
     s += "\n"
     return s
