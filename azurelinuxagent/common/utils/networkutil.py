@@ -112,7 +112,7 @@ class AddFirewallRules(object):
     @staticmethod
     def get_iptables_accept_command(wait, command, destination, owner_uid):
         cmd = ["iptables", "-t", "security", command, "OUTPUT", "-d", destination, "-p", "tcp", "-m", "owner",
-               "--uid-owner", str(owner_uid), "-j" "ACCEPT"]
+               "--uid-owner", str(owner_uid), "-j", "ACCEPT"]
         return AddFirewallRules._add_wait(wait, cmd)
 
     @staticmethod
