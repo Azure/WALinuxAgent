@@ -116,7 +116,7 @@ class TestPeriodicOperation(AgentTestCase):
         with patch("azurelinuxagent.common.logger.warn") as warn_patcher:
             for i in range(2):
                 def operation():
-                    raise Exception("WARNING {0}".format(i))
+                    raise Exception("WARNING {0}".format(i))  # pylint: disable=cell-var-from-loop
 
                 pop = PeriodicOperation("test_operation", operation, period=datetime.timedelta(hours=1))
                 for _ in range(5):

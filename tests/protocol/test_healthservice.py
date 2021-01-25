@@ -56,7 +56,7 @@ class TestHealthService(AgentTestCase):
         self.assertEqual(description, obs_description)
 
     def assert_telemetry(self, call_args, response=''):
-        args, kw_args = call_args
+        args, kw_args = call_args  # pylint: disable=unused-variable
         self.assertFalse(kw_args['is_success'])
         self.assertEqual('HealthObservation', kw_args['op'])
         obs = json.loads(kw_args['message'])
@@ -208,7 +208,7 @@ class TestHealthService(AgentTestCase):
 
         # make 100 observations
         for i in range(0, 100):
-            health_service._observe(is_healthy=True, name='{0}'.format(i))
+            health_service._observe(is_healthy=True, name='{0}'.format(i))  # pylint: disable=protected-access
 
         # ensure we keep only 10
         self.assertEqual(10, len(health_service.observations))

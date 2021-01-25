@@ -1,4 +1,4 @@
-import random
+import random  # pylint: disable=unused-import
 import re
 import unittest
 
@@ -18,12 +18,12 @@ class TestFlexibleVersion(unittest.TestCase):
         for t in tests:
             t_escaped = re.escape(t)
             t_re = re.compile(t_escaped)
-            self.assertEqual((t_escaped, t_re), self.v._compile_separator(t))
-        self.assertEqual(('', re.compile('')),  self.v._compile_separator(None))
+            self.assertEqual((t_escaped, t_re), self.v._compile_separator(t))  # pylint: disable=protected-access
+        self.assertEqual(('', re.compile('')),  self.v._compile_separator(None))  # pylint: disable=protected-access
         return
 
     def test_compile_pattern(self):
-        self.v._compile_pattern()
+        self.v._compile_pattern()  # pylint: disable=protected-access
         tests = {
             '1': True,
             '1.2': True,
@@ -87,8 +87,8 @@ class TestFlexibleVersion(unittest.TestCase):
 
     def test_compile_pattern_sep(self):
         self.v.sep = '-'
-        self.v._compile_pattern()
-        tests = {
+        self.v._compile_pattern()  # pylint: disable=protected-access
+        tests = { 
             '1': True,
             '1-2': True,
             '1-2-3': True,
@@ -97,9 +97,7 @@ class TestFlexibleVersion(unittest.TestCase):
 
             '1alpha': True,
             '1-alpha': True,
-            '1-alpha': True,
             '1alpha0': True,
-            '1-alpha0': True,
             '1-alpha0': True,
             '1-2alpha': True,
             '1-2.alpha': True,
@@ -110,9 +108,7 @@ class TestFlexibleVersion(unittest.TestCase):
 
             '1beta': True,
             '1-beta': True,
-            '1-beta': True,
             '1beta0': True,
-            '1-beta0': True,
             '1-beta0': True,
             '1-2beta': True,
             '1-2.beta': True,
@@ -123,9 +119,7 @@ class TestFlexibleVersion(unittest.TestCase):
 
             '1rc': True,
             '1-rc': True,
-            '1-rc': True,
             '1rc0': True,
-            '1-rc0': True,
             '1-rc0': True,
             '1-2rc': True,
             '1-2.rc': True,
@@ -151,7 +145,7 @@ class TestFlexibleVersion(unittest.TestCase):
 
     def test_compile_pattern_prerel(self):
         self.v.prerel_tags = ('a', 'b', 'c')
-        self.v._compile_pattern()
+        self.v._compile_pattern()  # pylint: disable=protected-access
         tests = {
             '1': True,
             '1.2': True,
@@ -218,56 +212,64 @@ class TestFlexibleVersion(unittest.TestCase):
         v1 = FlexibleVersion('1.2.3')
         v2 = FlexibleVersion('1-2-3', sep='-')
         try:
-            v1 == v2
-            self.assertTrue(False, "Incompatible separators failed to raise an exception")
+            v1 == v2  # pylint: disable=pointless-statement
+            self.assertTrue(False, "Incompatible separators failed to raise an exception")  # pylint: disable=redundant-unittest-assert
         except ValueError:
             pass
         except Exception as e:
             t = e.__class__.__name__
+            # pylint: disable=redundant-unittest-assert
             self.assertTrue(False, "Incompatible separators raised an unexpected exception: {0}" \
                 .format(t))
+            # pylint: enable=redundant-unittest-assert
         return
 
     def test_ensure_compatible_prerel(self):
         v1 = FlexibleVersion('1.2.3', prerel_tags=('alpha', 'beta', 'rc'))
         v2 = FlexibleVersion('1.2.3', prerel_tags=('a', 'b', 'c'))
         try:
-            v1 == v2
-            self.assertTrue(False, "Incompatible prerel_tags failed to raise an exception")
+            v1 == v2  # pylint: disable=pointless-statement
+            self.assertTrue(False, "Incompatible prerel_tags failed to raise an exception")  # pylint: disable=redundant-unittest-assert
         except ValueError:
             pass
         except Exception as e:
             t = e.__class__.__name__
+            # pylint: disable=redundant-unittest-assert
             self.assertTrue(False, "Incompatible prerel_tags raised an unexpected exception: {0}" \
                 .format(t))
+            # pylint: enable=redundant-unittest-assert
         return
 
     def test_ensure_compatible_prerel_length(self):
         v1 = FlexibleVersion('1.2.3', prerel_tags=('a', 'b', 'c'))
         v2 = FlexibleVersion('1.2.3', prerel_tags=('a', 'b'))
         try:
-            v1 == v2
-            self.assertTrue(False, "Incompatible prerel_tags failed to raise an exception")
+            v1 == v2  # pylint: disable=pointless-statement
+            self.assertTrue(False, "Incompatible prerel_tags failed to raise an exception")  # pylint: disable=redundant-unittest-assert
         except ValueError:
             pass
         except Exception as e:
             t = e.__class__.__name__
+            # pylint: disable=redundant-unittest-assert
             self.assertTrue(False, "Incompatible prerel_tags raised an unexpected exception: {0}" \
                 .format(t))
+            # pylint: enable=redundant-unittest-assert
         return
 
     def test_ensure_compatible_prerel_order(self):
         v1 = FlexibleVersion('1.2.3', prerel_tags=('a', 'b'))
         v2 = FlexibleVersion('1.2.3', prerel_tags=('b', 'a'))
         try:
-            v1 == v2
-            self.assertTrue(False, "Incompatible prerel_tags failed to raise an exception")
+            v1 == v2  # pylint: disable=pointless-statement
+            self.assertTrue(False, "Incompatible prerel_tags failed to raise an exception")  # pylint: disable=redundant-unittest-assert
         except ValueError:
             pass
         except Exception as e:
             t = e.__class__.__name__
+            # pylint: disable=redundant-unittest-assert
             self.assertTrue(False, "Incompatible prerel_tags raised an unexpected exception: {0}" \
                 .format(t))
+            # pylint: enable=redundant-unittest-assert
         return
 
     def test_major(self):
@@ -321,7 +323,7 @@ class TestFlexibleVersion(unittest.TestCase):
         }
         for test in iter(tests):
             expectation = tests[test]
-            self.v._parse(test)
+            self.v._parse(test)  # pylint: disable=protected-access
             self.assertEqual(expectation, (self.v.version, self.v.prerelease))
         return
 
@@ -335,13 +337,13 @@ class TestFlexibleVersion(unittest.TestCase):
 
     def test_decrement_disallows_below_zero(self):
         try:
-            FlexibleVersion('1.0') - 1
-            self.assertTrue(False, "Decrement failed to raise an exception")
+            FlexibleVersion('1.0') - 1  # pylint: disable=expression-not-assigned
+            self.assertTrue(False, "Decrement failed to raise an exception")  # pylint: disable=redundant-unittest-assert
         except ArithmeticError:
             pass
         except Exception as e:
             t = e.__class__.__name__
-            self.assertTrue(False, "Decrement raised an unexpected exception: {0}".format(t))
+            self.assertTrue(False, "Decrement raised an unexpected exception: {0}".format(t))  # pylint: disable=redundant-unittest-assert
         return
 
     def test_increment(self):

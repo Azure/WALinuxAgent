@@ -1,0 +1,24 @@
+[
+    {
+        "EventLevel": "INFO",
+        "Message": "Starting IaaS ScriptHandler Extension v1",
+        "Version": "1",
+        "TaskName": "Extension Info",
+        "EventPid": "5676",
+        "EventTid": "1",
+        "OperationId": "e1065def-7571-42c2-88a2-4f8b4c8f226d",
+        "TimeStamp": "2019-12-12T01:11:38.2298194Z",
+        "BadEvent": true
+    },
+    {
+        "EventLevel": "INFO",
+        "Message": "HandlerEnvironment = Version: 1, HandlerEnvironment: [LogFolder: \"C:\\WindowsAzure\\Logs\\Plugins\\Microsoft.Compute.CustomScriptExtension\\1.10.3\", ConfigFolder: \"C:\\Packages\\Plugins\\Microsoft.Compute.CustomScriptExtension\\1.10.3\\RuntimeSettings\", StatusFolder: \"C:\\Packages\\Plugins\\Microsoft.Compute.CustomScriptExtension\\1.10.3\\Status\", HeartbeatFile: \"C:\\Packages\\Plugins\\Microsoft.Compute.CustomScriptExtension\\1.10.3\\Status\\HeartBeat.Json\"]",
+        "Version": "1",
+        "TaskName": "Extension Info",
+        "EventPid": "5676",
+        "EventTid": "1",
+        "OperationId": "e1065def-7571-42c2-88a2-4f8b4c8f226d",
+        "TimeStamp": "2019-12-12T01:11:38.2318168Z",
+        "BadEvent": true
+    }
+]

@@ -1,0 +1,11 @@
+{
+        "EventLevel": "INFO",
+        "Message": "Enabling Handler",
+        "Version": "1",
+        "TaskName": "Handler Operation",
+        "EventPid": "3228",
+        "EventTid": "1",
+        "OperationId": "519e4beb-018a-4bd9-8d8e-c5226cf7f56e",
+        "TimeStamp": "2019-12-12T01:20:05.0950244Z",
+        "BadEvent": true
+}

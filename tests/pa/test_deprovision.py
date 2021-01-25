@@ -32,7 +32,7 @@ class TestDeprovision(AgentTestCase):
     @patch('azurelinuxagent.common.protocol.util.get_protocol_util')
     @patch('azurelinuxagent.pa.deprovision.default.read_input')
     def test_confirmation(self,
-            mock_read, mock_protocol, mock_util, mock_signal):
+            mock_read, mock_protocol, mock_util, mock_signal):  # pylint: disable=unused-argument
         dh = DeprovisionHandler()
 
         dh.setup = Mock()
@@ -120,7 +120,7 @@ class TestDeprovision(AgentTestCase):
         deprovision_handler = get_deprovision_handler(distro_name,
                                                       distro_version,
                                                       distro_full_name)
-        warnings, actions = deprovision_handler.setup(deluser=False)
+        warnings, actions = deprovision_handler.setup(deluser=False)  # pylint: disable=unused-variable
         assert any("/etc/resolv.conf" in w for w in warnings)
 
     @distros("ubuntu")
@@ -133,7 +133,7 @@ class TestDeprovision(AgentTestCase):
                                                       distro_full_name)
 
         with patch("os.path.realpath", return_value="/run/resolvconf/resolv.conf"):
-            warnings, actions = deprovision_handler.setup(deluser=False)
+            warnings, actions = deprovision_handler.setup(deluser=False)  # pylint: disable=unused-variable
             assert any("/etc/resolvconf/resolv.conf.d/tail" in w for w in warnings)
 
 

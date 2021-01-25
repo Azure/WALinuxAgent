@@ -40,6 +40,7 @@ from azurelinuxagent.common.osutil import get_osutil
 from azurelinuxagent.common.protocol.restapi import ProvisionStatus
 from azurelinuxagent.common.protocol.util import get_protocol_util
 from azurelinuxagent.common.version import AGENT_NAME
+from azurelinuxagent.pa.provision.cloudinitdetect import cloud_init_is_enabled
 
 CUSTOM_DATA_FILE = "CustomData"
 CLOUD_INIT_PATTERN = b".*/bin/cloud-init.*"
@@ -62,16 +63,16 @@ class ProvisionHandler(object):
 
         try:
             utc_start = datetime.utcnow()
-            thumbprint = None
+            thumbprint = None  # pylint: disable=W0612
 
-            if self.is_provisioned():
+            if self.check_provisioned_file():
                 logger.info("Provisioning already completed, skipping.")
                 return
 
             logger.info("Running default provisioning handler")
 
-            if not self.validate_cloud_init(is_expected=False):
-                raise ProvisionError("cloud-init appears to be running, "
+            if cloud_init_is_enabled():
+                raise ProvisionError("cloud-init appears to be installed and enabled, "
                                         "this is not expected, cannot continue")
 
             logger.info("Copying ovf-env.xml")
@@ -105,36 +106,12 @@ class ProvisionHandler(object):
             return
 
     @staticmethod
-    def validate_cloud_init(is_expected=True):
-        is_running = False
-        if os.path.isdir("/proc"):
-            pids = [pid for pid in os.listdir('/proc') if pid.isdigit()]
-        else:
-            pids = []
-        for pid in pids:
-            try:
-                with open(os.path.join('/proc', pid, 'cmdline'), 'rb') as fh:
-                    pname = fh.read()
-                    if CLOUD_INIT_REGEX.match(pname):
-                        is_running = True
-                        msg = "cloud-init is running [PID {0}, {1}]".format(pid,
-                                                                            pname)
-                        if is_expected:
-                            logger.verbose(msg)
-                        else:
-                            logger.error(msg)
-                        break
-            except IOError:
-                continue
-        return is_running == is_expected
-
-    @staticmethod
     def _get_uptime_seconds():
         try:
             with open('/proc/uptime') as fh:
                 uptime, _ = fh.readline().split()
                 return uptime
-        except:
+        except:  # pylint: disable=W0702
             return 0
 
     def reg_ssh_host_key(self):
@@ -142,10 +119,12 @@ class ProvisionHandler(object):
         if conf.get_regenerate_ssh_host_key():
             fileutil.rm_files(conf.get_ssh_key_glob())
             if conf.get_ssh_host_keypair_mode() == "auto":
+                # pylint: disable=W0105
                 '''
                 The -A option generates all supported key types.
                 This is supported since OpenSSH 5.9 (2011).
                 '''
+                # pylint: enable=W0105
                 shellutil.run("ssh-keygen -A")
             else:
                 keygen_cmd = "ssh-keygen -N '' -t {0} -f {1}"
@@ -163,26 +142,34 @@ class ProvisionHandler(object):
             raise ProvisionError(("Failed to generate ssh host key: "
                                   "ret={0}, out= {1}").format(ret[0], ret[1]))
 
-    def provisioned_file_path(self):
+    @staticmethod
+    def provisioned_file_path():
         return os.path.join(conf.get_lib_dir(), PROVISIONED_FILE)
 
-    def is_provisioned(self):
-        '''
-        A VM is considered provisionend *anytime* the provisioning
+    @staticmethod
+    def is_provisioned():
+        """
+        A VM is considered provisioned *anytime* the provisioning
         sentinel file exists and not provisioned *anytime* the file
         is absent.
+        """
+        return os.path.isfile(ProvisionHandler.provisioned_file_path())
 
+    def check_provisioned_file(self):
+        """
         If the VM was provisioned using an agent that did not record
         the VM unique identifier, the provisioning file will be re-written
         to include the identifier.
 
         A warning is logged *if* the VM unique identifier has changed
         since VM was provisioned.
-        '''
-        if not os.path.isfile(self.provisioned_file_path()):
+
+        Returns False if the VM has not been provisioned.
+        """
+        if not ProvisionHandler.is_provisioned():
             return False
 
-        s = fileutil.read_file(self.provisioned_file_path()).strip()
+        s = fileutil.read_file(ProvisionHandler.provisioned_file_path()).strip()
         if not self.osutil.is_current_instance_id(s):
             if len(s) > 0:
                 logger.warn("VM is provisioned, "
@@ -200,7 +187,7 @@ class ProvisionHandler(object):
 
     def write_provisioned(self):
         fileutil.write_file(
-            self.provisioned_file_path(),
+            ProvisionHandler.provisioned_file_path(),
             get_osutil().get_instance_id())
 
     @staticmethod

@@ -23,37 +23,19 @@ import random
 
 from azurelinuxagent.common.cgroup import CpuCgroup, MemoryCgroup, CGroup
 from azurelinuxagent.common.exception import CGroupsException
+from azurelinuxagent.common.osutil import get_osutil
 from azurelinuxagent.common.utils import fileutil
 from tests.tools import AgentTestCase, patch, data_dir
 
 
 def consume_cpu_time():
     waste = 0
-    for x in range(1, 200000):
+    for x in range(1, 200000):  # pylint: disable=unused-variable
         waste += random.random()
     return waste
 
 
 class TestCGroup(AgentTestCase):
-    @staticmethod
-    def _clean_up_test_files():
-        with open(os.path.join(data_dir, "cgroups", "cpu_mount", "tasks"), mode="wb") as tasks:
-            tasks.truncate(0)
-        with open(os.path.join(data_dir, "cgroups", "memory_mount", "tasks"), mode="wb") as tasks:
-            tasks.truncate(0)
-        with open(os.path.join(data_dir, "cgroups", "cpu_mount", "cgroup.procs"), mode="wb") as procs:
-            procs.truncate(0)
-        with open(os.path.join(data_dir, "cgroups", "memory_mount", "cgroup.procs"), mode="wb") as procs:
-            procs.truncate(0)
-
-    def setUp(self):
-        AgentTestCase.setUp(self)
-        TestCGroup._clean_up_test_files()
-
-    def tearDown(self):
-        AgentTestCase.tearDown(self)
-        TestCGroup._clean_up_test_files()
-
     def test_correct_creation(self):
         test_cgroup = CGroup.create("dummy_path", "cpu", "test_extension")
         self.assertIsInstance(test_cgroup, CpuCgroup)
@@ -68,58 +50,30 @@ class TestCGroup(AgentTestCase):
         self.assertEqual(test_cgroup.name, "test_extension")
 
     def test_is_active(self):
-        test_cgroup = CGroup.create(os.path.join(data_dir, "cgroups", "cpu_mount"), "cpu", "test_extension")
+        test_cgroup = CGroup.create(self.tmp_dir, "cpu", "test_extension")
         self.assertEqual(False, test_cgroup.is_active())
 
-        with open(os.path.join(data_dir, "cgroups", "cpu_mount", "tasks"), mode="wb") as tasks:
+        with open(os.path.join(self.tmp_dir, "tasks"), mode="wb") as tasks:
             tasks.write(str(1000).encode())
 
         self.assertEqual(True, test_cgroup.is_active())
-
-        test_cgroup = CGroup.create(os.path.join(data_dir, "cgroups", "memory_mount"), "memory", "test_extension")
-        self.assertEqual(False, test_cgroup.is_active())
-
-        with open(os.path.join(data_dir, "cgroups", "memory_mount", "tasks"), mode="wb") as tasks:
-            tasks.write(str(1000).encode())
-
-        self.assertEqual(True, test_cgroup.is_active())
-
-    def test_get_tracked_processes(self):
-        test_cgroup = CGroup.create(os.path.join(data_dir, "cgroups", "cpu_mount"), "cpu", "test_extension")
-        self.assertListEqual(test_cgroup.get_tracked_processes(), [])
-
-        with open(os.path.join(data_dir, "cgroups", "cpu_mount", "cgroup.procs"), mode="wb") as tasks:
-            tasks.write(str(1000).encode())
-
-        self.assertEqual(['1000'], test_cgroup.get_tracked_processes())
-
-        test_cgroup = CGroup.create(os.path.join(data_dir, "cgroups", "memory_mount"), "memory", "test_extension")
-        self.assertListEqual(test_cgroup.get_tracked_processes(), [])
-
-        with open(os.path.join(data_dir, "cgroups", "memory_mount", "cgroup.procs"), mode="wb") as tasks:
-            tasks.write(str(1000).encode())
-
-        self.assertEqual(['1000'], test_cgroup.get_tracked_processes())
 
     @patch("azurelinuxagent.common.logger.periodic_warn")
     def test_is_active_file_not_present(self, patch_periodic_warn):
-        test_cgroup = CGroup.create(os.path.join(data_dir, "cgroups", "not_cpu_mount"), "cpu", "test_extension")
+        test_cgroup = CGroup.create(self.tmp_dir, "cpu", "test_extension")
         self.assertEqual(False, test_cgroup.is_active())
 
-        test_cgroup = CGroup.create(os.path.join(data_dir, "cgroups", "not_memory_mount"), "memory", "test_extension")
+        test_cgroup = CGroup.create(os.path.join(self.tmp_dir, "this_cgroup_does_not_exist"), "memory", "test_extension")
         self.assertEqual(False, test_cgroup.is_active())
 
         self.assertEqual(0, patch_periodic_warn.call_count)
 
     @patch("azurelinuxagent.common.logger.periodic_warn")
     def test_is_active_incorrect_file(self, patch_periodic_warn):
-        test_cgroup = CGroup.create(os.path.join(data_dir, "cgroups", "cpu_mount", "tasks"), "cpu", "test_extension")
+        open(os.path.join(self.tmp_dir, "tasks"), mode="wb").close()
+        test_cgroup = CGroup.create(os.path.join(self.tmp_dir, "tasks"), "cpu", "test_extension")
         self.assertEqual(False, test_cgroup.is_active())
         self.assertEqual(1, patch_periodic_warn.call_count)
-
-        test_cgp = CGroup.create(os.path.join(data_dir, "cgroups", "memory_mount", "tasks"), "memory", "test_extension")
-        self.assertEqual(False, test_cgp.is_active())
-        self.assertEqual(2, patch_periodic_warn.call_count)
 
 
 class TestCpuCgroup(AgentTestCase):
@@ -166,10 +120,12 @@ class TestCpuCgroup(AgentTestCase):
 
         cgroup.initialize_cpu_usage()
 
-        self.assertEquals(cgroup._current_cgroup_cpu, 63763)
-        self.assertEquals(cgroup._current_system_cpu, 5496872)
+        self.assertEqual(cgroup._current_cgroup_cpu, 63763)  # pylint: disable=protected-access
+        self.assertEqual(cgroup._current_system_cpu, 5496872)  # pylint: disable=protected-access
 
     def test_get_cpu_usage_should_return_the_cpu_usage_since_its_last_invocation(self):
+        osutil = get_osutil()
+
         cgroup = CpuCgroup("test", "/sys/fs/cgroup/cpu/system.slice/test")
 
         TestCpuCgroup.mock_read_file_map = {
@@ -186,7 +142,7 @@ class TestCpuCgroup(AgentTestCase):
 
         cpu_usage = cgroup.get_cpu_usage()
 
-        self.assertEquals(cpu_usage, 0.031)
+        self.assertEqual(cpu_usage, round(100.0 * 0.000307697876885 * osutil.get_processor_cores(), 3))
 
         TestCpuCgroup.mock_read_file_map = {
             "/proc/stat": os.path.join(data_dir, "cgroups", "proc_stat_t2"),
@@ -195,7 +151,7 @@ class TestCpuCgroup(AgentTestCase):
 
         cpu_usage = cgroup.get_cpu_usage()
 
-        self.assertEquals(cpu_usage, 0.045)
+        self.assertEqual(cpu_usage, round(100.0 * 0.000445181085968 * osutil.get_processor_cores(), 3))
 
     def test_initialie_cpu_usage_should_set_the_cgroup_usage_to_0_when_the_cgroup_does_not_exist(self):
         cgroup = CpuCgroup("test", "/sys/fs/cgroup/cpu/system.slice/test")
@@ -210,8 +166,8 @@ class TestCpuCgroup(AgentTestCase):
 
         cgroup.initialize_cpu_usage()
 
-        self.assertEquals(cgroup._current_cgroup_cpu, 0)
-        self.assertEquals(cgroup._current_system_cpu, 5496872)  # check the system usage just for test sanity
+        self.assertEqual(cgroup._current_cgroup_cpu, 0)  # pylint: disable=protected-access
+        self.assertEqual(cgroup._current_system_cpu, 5496872)  # check the system usage just for test sanity  # pylint: disable=protected-access
 
 
     def test_initialize_cpu_usage_should_raise_an_exception_when_called_more_than_once(self):
@@ -231,7 +187,7 @@ class TestCpuCgroup(AgentTestCase):
         cgroup = CpuCgroup("test", "/sys/fs/cgroup/cpu/system.slice/test")
 
         with self.assertRaises(CGroupsException):
-            cpu_usage = cgroup.get_cpu_usage()
+            cpu_usage = cgroup.get_cpu_usage()  # pylint: disable=unused-variable
 
 
 class TestMemoryCgroup(AgentTestCase):

@@ -14,23 +14,23 @@
 #
 # Requires Python 2.6+ and Openssl 1.0+
 
+import array
 import os
 import socket
-import array
 import time
+
 import azurelinuxagent.common.logger as logger
+from azurelinuxagent.common.exception import DhcpError
+from azurelinuxagent.common.osutil import get_osutil
+from azurelinuxagent.common.utils.restutil import KNOWN_WIRESERVER_IP
 from azurelinuxagent.common.utils.textutil import hex_dump, hex_dump2, \
     hex_dump3, \
     compare_bytes, str_to_ord, \
     unpack_big_endian, \
     int_to_ip4_addr
-from azurelinuxagent.common.exception import DhcpError
-from azurelinuxagent.common.osutil import get_osutil
-
 
 # the kernel routing table representation of 168.63.129.16
 KNOWN_WIRESERVER_IP_ENTRY = '10813FA8'
-from azurelinuxagent.common.utils.restutil import KNOWN_WIRESERVER_IP
 
 
 def get_dhcp_handler():
@@ -100,7 +100,7 @@ class DhcpHandler(object):
             logger.error(
                 "Could not determine whether route exists to {0}: {1}".format(
                     KNOWN_WIRESERVER_IP, e))
-                    
+
         return route_exists
 
     @property
@@ -116,7 +116,7 @@ class DhcpHandler(object):
         exists = False
 
         logger.info("Checking for dhcp lease cache")
-        cached_endpoint = self.osutil.get_dhcp_lease_endpoint()
+        cached_endpoint = self.osutil.get_dhcp_lease_endpoint()  # pylint: disable=E1128
         if cached_endpoint is not None:
             self.endpoint = cached_endpoint
             exists = True
@@ -157,11 +157,14 @@ class DhcpHandler(object):
             self.endpoint = KNOWN_WIRESERVER_IP
             return
 
+        # pylint: disable=W0105
         """
         Build dhcp request with mac addr
         Configure route to allow dhcp traffic
         Stop dhcp service if necessary
         """
+        # pylint: enable=W0105
+
         logger.info("Send dhcp request")
         mac_addr = self.osutil.get_mac_addr()
 
@@ -194,7 +197,7 @@ class DhcpHandler(object):
         self.endpoint, self.gateway, self.routes = parse_dhcp_resp(resp)
 
 
-def validate_dhcp_resp(request, response):
+def validate_dhcp_resp(request, response):  # pylint: disable=R1710
     bytes_recv = len(response)
     if bytes_recv < 0xF6:
         logger.error("HandleDhcpResponse: Too few bytes received:{0}",
@@ -228,7 +231,7 @@ def validate_dhcp_resp(request, response):
                         "doesn't match the request")
 
 
-def parse_route(response, option, i, length, bytes_recv):
+def parse_route(response, option, i, length, bytes_recv):  # pylint: disable=W0613
     # http://msdn.microsoft.com/en-us/library/cc227282%28PROT.10%29.aspx
     logger.verbose("Routes at offset: {0} with length:{1}", hex(i),
                    hex(length))
@@ -386,7 +389,7 @@ def build_dhcp_request(mac_addr, request_broadcast):
         # set broadcast flag to true to request the dhcp server
         # to respond to a boradcast address,
         # this is useful when user dhclient fails.
-        request[0x0A] = 0x80;
+        request[0x0A] = 0x80
 
     # fill in ClientHardwareAddress
     for a in range(0, 6):

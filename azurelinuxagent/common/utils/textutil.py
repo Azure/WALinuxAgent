@@ -24,8 +24,8 @@ import re
 import string
 import struct
 import sys
-import zlib
 import xml.dom.minidom as minidom
+import zlib
 
 
 def parse_doc(xml_text):
@@ -93,12 +93,12 @@ def getattrib(node, attr_name):
         return None
 
 
-def unpack(buf, offset, range):
+def unpack(buf, offset, value_range):
     """
     Unpack bytes into python values.
     """
     result = 0
-    for i in range:
+    for i in value_range:
         result = (result << 8) | str_to_ord(buf[offset + i])
     return result
 
@@ -133,9 +133,9 @@ def hex_dump2(buf):
 
 def is_in_range(a, low, high):
     """
-    Return True if 'a' in 'low' <= a >= 'high'
+    Return True if 'a' in 'low' <= a <= 'high'
     """
-    return (a >= low and a <= high)
+    return low <= a <= high
 
 
 def is_printable(ch):
@@ -147,7 +147,7 @@ def is_printable(ch):
             or is_in_range(ch, str_to_ord('0'), str_to_ord('9')))
 
 
-def hex_dump(buffer, size):
+def hex_dump(buffer, size):  # pylint: disable=redefined-builtin
     """
     Return Hex formated dump of a 'buffer' of 'size'.
     """
@@ -345,10 +345,10 @@ def swap_hexstring(s, width=2):
         s = ('0' * (width - (len(s) % width))) + s
 
     return ''.join(reversed(
-                        re.findall(
-                                r'[a-f0-9]{{{0}}}'.format(width),
-                                s,
-                                re.IGNORECASE)))
+                        re.findall( 
+                                r'[a-f0-9]{{{0}}}'.format(width), 
+                                s, 
+                                re.IGNORECASE))) 
 
 
 def parse_json(json_str):

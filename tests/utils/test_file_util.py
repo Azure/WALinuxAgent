@@ -15,18 +15,17 @@
 # Requires Python 2.6+ and Openssl 1.0+
 #
 
-import errno as errno
+import errno
 import glob
+import os
 import random
+import shutil
 import string
 import tempfile
-import uuid
-import os
-import shutil
 import unittest
+import uuid
 
 import azurelinuxagent.common.utils.fileutil as fileutil
-
 from azurelinuxagent.common.future import ustr
 from tests.tools import AgentTestCase, patch
 
@@ -39,7 +38,7 @@ class TestFileOperations(AgentTestCase):
         fileutil.write_file(test_file, content)
 
         content_read = fileutil.read_file(test_file)
-        self.assertEquals(content, content_read)
+        self.assertEqual(content, content_read)
         os.remove(test_file)
 
     def test_write_file_content_is_None(self):
@@ -51,8 +50,8 @@ class TestFileOperations(AgentTestCase):
             fileutil.write_file(test_file, None)
 
             self.fail("expected write_file to throw an exception")
-        except:
-            self.assertEquals(False, os.path.exists(test_file))
+        except:  # pylint: disable=bare-except
+            self.assertEqual(False, os.path.exists(test_file))
 
     def test_rw_utf8_file(self):
         test_file=os.path.join(self.tmp_dir, self.test_file)
@@ -60,7 +59,7 @@ class TestFileOperations(AgentTestCase):
         fileutil.write_file(test_file, content, encoding="utf-8")
 
         content_read = fileutil.read_file(test_file)
-        self.assertEquals(content, content_read)
+        self.assertEqual(content, content_read)
         os.remove(test_file)
 
     def test_remove_bom(self):
@@ -68,7 +67,7 @@ class TestFileOperations(AgentTestCase):
         data = b'\xef\xbb\xbfhehe'
         fileutil.write_file(test_file, data, asbin=True)
         data = fileutil.read_file(test_file, remove_bom=True)
-        self.assertNotEquals(0xbb, ord(data[0]))
+        self.assertNotEqual(0xbb, ord(data[0]))
    
     def test_append_file(self):
         test_file=os.path.join(self.tmp_dir, self.test_file)
@@ -76,7 +75,7 @@ class TestFileOperations(AgentTestCase):
         fileutil.append_file(test_file, content)
 
         content_read = fileutil.read_file(test_file)
-        self.assertEquals(content, content_read)
+        self.assertEqual(content, content_read)
 
         os.remove(test_file)
 
@@ -91,19 +90,19 @@ Third line with more words
 '''
             )
 
-        self.assertNotEquals(
+        self.assertNotEqual(
             None,
             fileutil.findre_in_file(fp, ".*rst line$"))
-        self.assertNotEquals(
+        self.assertNotEqual(
             None,
             fileutil.findre_in_file(fp, ".*ond line$"))
-        self.assertNotEquals(
+        self.assertNotEqual(
             None,
             fileutil.findre_in_file(fp, ".*with more.*"))
-        self.assertNotEquals(
+        self.assertNotEqual(
             None,
             fileutil.findre_in_file(fp, "^Third.*"))
-        self.assertEquals(
+        self.assertEqual(
             None,
             fileutil.findre_in_file(fp, "^Do not match.*"))
 
@@ -127,11 +126,11 @@ Third line with more words
     def test_get_last_path_element(self):
         filepath = '/tmp/abc.def'
         filename = fileutil.base_name(filepath)
-        self.assertEquals('abc.def', filename)
+        self.assertEqual('abc.def', filename)
 
         filepath = '/tmp/abc'
         filename = fileutil.base_name(filepath)
-        self.assertEquals('abc', filename)
+        self.assertEqual('abc', filename)
 
     def test_remove_files(self):
         random_word = lambda : ''.join(random.choice(string.ascii_uppercase + string.digits) for _ in range(5))
@@ -141,7 +140,7 @@ Third line with more words
         test_file2 = os.path.join(self.tmp_dir, 'another_file')
         test_files = [test_file + random_word() for _ in range(5)] + \
                      [test_file2 + random_word() for _ in range(5)]
-        for file in test_files:
+        for file in test_files:  # pylint: disable=redefined-builtin
             open(file, 'a').close()
 
         #Remove files using fileutil.rm_files
@@ -188,7 +187,7 @@ Third line with more words
         expected_files.extend([test_file_in_subdir + random_word() for _ in range(5)] + \
                      [test_file_in_subdir2 + random_word() for _ in range(5)])
 
-        for file in expected_files:
+        for file in expected_files:  # pylint: disable=redefined-builtin
             open(file, 'a').close()
 
         # Get All files using fileutil.get_all_files

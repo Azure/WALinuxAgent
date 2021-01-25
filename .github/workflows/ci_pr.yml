@@ -1,0 +1,122 @@
+name: CI Unit tests
+
+on:
+  push:
+    branches: [ "*" ]
+  pull_request:
+    branches: [ "*" ]
+
+jobs:
+  test-legacy-python-versions:
+    
+    name: "Python 2.6 Unit Tests"
+    runs-on: ubuntu-16.04
+
+    strategy:
+      fail-fast: false
+    env:
+      NOSEOPTS: "--verbose"
+
+    steps:
+
+    - name: Install Python 2.6
+      run: |
+        sudo add-apt-repository ppa:deadsnakes/ppa -y
+        sudo apt-get update -y
+        sudo apt-get install python2.6 python2.6-dev -y
+        sudo ln -sf /usr/bin/python2.6 /usr/bin/python
+        PATH="/usr/bin/${PATH:+:${PATH}}"
+        echo $PATH
+        echo "Installed python2.6"
+        python -V
+        curl https://bootstrap.pypa.io/2.6/get-pip.py -o get-pip.py
+        sudo env "PATH=$PATH" python get-pip.py
+
+    - uses: actions/checkout@v2
+
+    - name: Install dependencies
+      run: |
+        sudo env "PATH=$PATH" pip install -r requirements.txt
+        sudo env "PATH=$PATH" pip install -r test-requirements.txt
+    
+    - name: Test with nosetests
+      run: |
+        ./ci/nosetests.sh
+        exit $?
+
+  test-current-python-versions:
+    
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+
+          - python-version: 2.7
+            PYLINTOPTS: "--rcfile=ci/2.7.pylintrc"
+
+          - python-version: 3.4
+            PYLINTOPTS: "--rcfile=ci/2.7.pylintrc"
+
+          - python-version: 3.6
+            PYLINTOPTS: "--rcfile=ci/3.6.pylintrc"
+
+          - python-version: 3.7
+            PYLINTOPTS: "--rcfile=ci/3.6.pylintrc"
+            
+          - python-version: 3.8
+            PYLINTOPTS: "--rcfile=ci/3.6.pylintrc"
+
+          - python-version: 3.9
+            PYLINTOPTS: "--rcfile=ci/3.6.pylintrc"
+            additional-nose-opts: "--with-coverage --cover-erase --cover-inclusive --cover-branches --cover-package=azurelinuxagent"
+    
+    name: "Python ${{ matrix.python-version }} Unit Tests"
+    runs-on: ubuntu-18.04
+
+    env:
+      PYLINTOPTS: ${{ matrix.PYLINTOPTS }}
+      PYLINTFILES: "azurelinuxagent setup.py makepkg.py tests"
+      NOSEOPTS: "--with-timer ${{ matrix.additional-nose-opts }}"
+      PYTHON_VERSION: ${{ matrix.python-version }}
+
+    steps:
+    
+    - name: Checkout WALinuxAgent repo
+      uses: actions/checkout@v2
+
+    - name: Setup Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v2
+      with:
+        python-version: ${{ matrix.python-version }}
+    
+    - name: Install dependencies
+      id: install-dependencies
+      run: |
+        sudo env "PATH=$PATH" python -m pip install --upgrade pip
+        sudo env "PATH=$PATH" pip install -r requirements.txt
+        sudo env "PATH=$PATH" pip install -r test-requirements.txt
+
+    - name: Run pylint
+      run: |
+        pylint $PYLINTOPTS --jobs=0 $PYLINTFILES
+
+    - name: Test with nosetests
+      if: success() || (failure() && steps.install-dependencies.outcome == 'success')
+      run: |
+        ./ci/nosetests.sh
+        exit $?
+
+    - name: Compile Coverage
+      if: matrix.python-version == 3.9
+      run: |
+        echo looking for coverage files :
+        ls -alh | grep -i coverage
+        sudo env "PATH=$PATH" coverage combine coverage.*.data
+        sudo env "PATH=$PATH" coverage xml
+        sudo env "PATH=$PATH" coverage report
+
+    - name: Upload Coverage
+      if: matrix.python-version == 3.9
+      uses: codecov/codecov-action@v1
+      with:
+        file: ./coverage.xml

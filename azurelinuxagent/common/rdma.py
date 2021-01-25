@@ -71,16 +71,16 @@ def setup_rdma_device(nd_version, shared_conf):
     logger.info("RDMA: device is set up")
     return
 
-class RDMAHandler(object):
 
+class RDMAHandler(object):
     driver_module_name = 'hv_network_direct'
     nd_version = None
 
-    def get_rdma_version(self):
+    def get_rdma_version(self):  # pylint: disable=R1710
         """Retrieve the firmware version information from the system.
            This depends on information provided by the Linux kernel."""
 
-        if self.nd_version :
+        if self.nd_version:
             return self.nd_version
 
         kvp_key_size = 512
@@ -94,20 +94,22 @@ class RDMAHandler(object):
             logger.error(error_msg % driver_info_source)
             return
 
-        f = open(driver_info_source)
-        while True :
-            key = f.read(kvp_key_size)
-            value = f.read(kvp_value_size)
-            if key and value :
-                key_0 = key.split("\x00")[0]
-                value_0 = value.split("\x00")[0]
-                if key_0 == "NdDriverVersion" :
-                    f.close()
-                    self.nd_version = value_0
-                    return self.nd_version
-            else :
-                break
-        f.close()
+        with open(driver_info_source, "rb") as pool_file:
+            while True:
+                key = pool_file.read(kvp_key_size)
+                value = pool_file.read(kvp_value_size)
+                if key and value:
+                    key_0 = key.partition(b"\x00")[0]
+                    if key_0:
+                        key_0 = key_0.decode()
+                    value_0 = value.partition(b"\x00")[0]
+                    if value_0:
+                        value_0 = value_0.decode()
+                    if key_0 == "NdDriverVersion":
+                        self.nd_version = value_0
+                        return self.nd_version
+                else:
+                    break
 
         error_msg = 'RDMA: NdDriverVersion not found in "%s"'
         logger.error(error_msg % driver_info_source)
@@ -121,17 +123,16 @@ class RDMAHandler(object):
         # for suse, it uses hv_kvp_daemon
         kvp_daemon_names = ['hypervkvpd', 'hv_kvp_daemon']
 
-        exitcode, ps_out  = shellutil.run_get_output("ps -ef")
+        exitcode, ps_out = shellutil.run_get_output("ps -ef")
         if exitcode != 0:
             raise Exception('RDMA: ps -ef failed: %s' % ps_out)
-        for n in  kvp_daemon_names:
+        for n in kvp_daemon_names:
             if n in ps_out:
                 logger.info('RDMA: kvp daemon (%s) is running' % n)
                 return True
             else:
                 logger.verbose('RDMA: kvp daemon (%s) is not running' % n)
         return False
-
 
     def load_driver_module(self):
         """Load the kernel driver, this depends on the proper driver
@@ -165,7 +166,7 @@ class RDMAHandler(object):
     def is_driver_loaded(self):
         """Check if the network module is loaded in kernel space"""
         cmd = 'lsmod | grep ^%s' % self.driver_module_name
-        status, loaded_modules = shellutil.run_get_output(cmd)
+        status, loaded_modules = shellutil.run_get_output(cmd)  # pylint: disable=W0612
         logger.info('RDMA: Checking if the module loaded.')
         if loaded_modules:
             logger.info('RDMA: module loaded.')
@@ -185,8 +186,8 @@ class RDMAHandler(object):
 dapl_config_paths = [
     '/etc/dat.conf', '/etc/rdma/dat.conf', '/usr/local/etc/dat.conf']
 
-class RDMADeviceHandler(object):
 
+class RDMADeviceHandler(object):
     """
     Responsible for writing RDMA IP and MAC address to the /dev/hvnd_rdma
     interface.
@@ -200,7 +201,7 @@ class RDMADeviceHandler(object):
     ipoib_check_interval_sec = 1
 
     ipv4_addr = None
-    mac_adr = None
+    mac_addr = None
     nd_version = None
 
     def __init__(self, ipv4_addr, mac_addr, nd_version):
@@ -215,16 +216,16 @@ class RDMADeviceHandler(object):
 
     def process(self):
         try:
-            if not self.nd_version :
+            if not self.nd_version:
                 logger.info("RDMA: provisioning SRIOV RDMA device.")
                 self.provision_sriov_rdma()
-            else :
+            else:
                 logger.info("RDMA: provisioning Network Direct RDMA device.")
                 self.provision_network_direct_rdma()
         except Exception as e:
             logger.error("RDMA: device processing failed: {0}".format(e))
 
-    def provision_network_direct_rdma(self) :
+    def provision_network_direct_rdma(self):
         RDMADeviceHandler.update_dat_conf(dapl_config_paths, self.ipv4_addr)
 
         if not conf.enable_check_rdma_driver():
@@ -234,22 +235,22 @@ class RDMADeviceHandler(object):
 
         skip_rdma_device = False
         module_name = "hv_network_direct"
-        retcode,out = shellutil.run_get_output("modprobe -R %s" % module_name, chk_err=False)
+        retcode, out = shellutil.run_get_output("modprobe -R %s" % module_name, chk_err=False)
         if retcode == 0:
             module_name = out.strip()
         else:
             logger.info("RDMA: failed to resolve module name. Use original name")
-        retcode,out = shellutil.run_get_output("modprobe %s" % module_name)
+        retcode, out = shellutil.run_get_output("modprobe %s" % module_name)
         if retcode != 0:
             logger.error("RDMA: failed to load module %s" % module_name)
             return
-        retcode,out = shellutil.run_get_output("modinfo %s" % module_name)
+        retcode, out = shellutil.run_get_output("modinfo %s" % module_name)
         if retcode == 0:
-            version = re.search("version:\s+(\d+)\.(\d+)\.(\d+)\D", out, re.IGNORECASE)
+            version = re.search("version:\s+(\d+)\.(\d+)\.(\d+)\D", out, re.IGNORECASE)  # pylint: disable=W1401
             if version:
                 v1 = int(version.groups(0)[0])
                 v2 = int(version.groups(0)[1])
-                if v1>4 or v1==4 and v2>0:
+                if v1 > 4 or v1 == 4 and v2 > 0:
                     logger.info("Skip setting /dev/hvnd_rdma on 4.1 or later")
                     skip_rdma_device = True
             else:
@@ -265,16 +266,157 @@ class RDMADeviceHandler(object):
 
         RDMADeviceHandler.update_network_interface(self.mac_addr, self.ipv4_addr)
 
-    def provision_sriov_rdma(self) :
-        RDMADeviceHandler.wait_any_rdma_device(
-            self.sriov_dir, self.device_check_timeout_sec, self.device_check_interval_sec)
-        RDMADeviceHandler.update_iboip_interface(self.ipv4_addr, self.ipoib_check_timeout_sec, self.ipoib_check_interval_sec)
-        return
+    def provision_sriov_rdma(self):
+
+        (key, value) = self.read_ipoib_data()
+        if key:
+            # provision multiple IP over IB addresses
+            logger.info("RDMA: provisioning multiple IP over IB addresses")
+            self.provision_sriov_multiple_ib(value)
+        elif self.ipv4_addr:
+            logger.info("RDMA: provisioning single IP over IB address")
+            # provision a single IP over IB address
+            RDMADeviceHandler.wait_any_rdma_device(self.sriov_dir,
+                self.device_check_timeout_sec, self.device_check_interval_sec)
+            RDMADeviceHandler.update_iboip_interface(self.ipv4_addr,
+                self.ipoib_check_timeout_sec, self.ipoib_check_interval_sec)
+        else:
+            logger.info("RDMA: missing IP address")
+
+    def read_ipoib_data(self) :
+
+        # read from KVP pool 0 to figure out the IP over IB addresses
+        kvp_key_size = 512
+        kvp_value_size = 2048
+        driver_info_source = '/var/lib/hyperv/.kvp_pool_0'
+
+        if not os.path.isfile(driver_info_source):
+            logger.error("RDMA: can't read KVP pool 0")
+            return (None, None)
+
+        key_0 = None
+        value_0 = None
+        with open(driver_info_source, "rb") as pool_file:
+            while True:
+                key = pool_file.read(kvp_key_size)
+                value = pool_file.read(kvp_value_size)
+                if key and value:
+                    key_0 = key.partition(b"\x00")[0]
+                    if key_0 :
+                        key_0 = key_0.decode()
+                    if key_0 == "IPoIB_Data":
+                        value_0 = value.partition(b"\x00")[0]
+                        if value_0 :
+                            value_0 = value_0.decode()
+                        break
+                else:
+                    break
+
+        if key_0 == "IPoIB_Data":
+            return (key_0, value_0)
+
+        return (None, None)
+
+    def provision_sriov_multiple_ib(self, value) :
+
+        mac_ip_array = []
+
+        values = value.split("|")
+        num_ips = len(values) - 1
+        # values[0] tells how many IPs. Format - NUMPAIRS:<number>
+        match = re.match(r"NUMPAIRS:(\d+)", values[0])
+        if match:
+            num = int(match.groups(0)[0])
+            if num != num_ips:
+                logger.error("RDMA: multiple IPs reported num={0} actual number of IPs={1}".format(num, num_ips))
+                return
+        else:
+            logger.error("RDMA: failed to find number of IP addresses in {0}".format(values[0]))
+            return
+
+        for i in range(1, num_ips+1):
+            # each MAC/IP entry is of format <MAC>:<IP>
+            match = re.match(r"([^:]+):(\d+\.\d+\.\d+\.\d+)", values[i])
+            if match:
+                mac_addr = match.groups(0)[0]
+                ipv4_addr = match.groups(0)[1]
+                mac_ip_array.append((mac_addr, ipv4_addr))
+            else:
+                logger.error("RDMA: failed to find MAC/IP address in {0}".format(values[i]))
+                return
+
+        # try to assign all MAC/IP addresses to IB interfaces
+        # retry for up to 60 times, with 1 seconds delay between each
+        retry = 60
+        while retry > 0:
+            count = self.update_iboip_interfaces(mac_ip_array)
+            if count == len(mac_ip_array):
+                return
+
+            time.sleep(1)
+            retry -= 1
+
+        logger.error("RDMA: failed to set all IP over IB addresses")
+
+    # Assign addresses to all IP over IB interfaces specified in mac_ip_array
+    # Return the number of IP addresses successfully assigned
+
+    def update_iboip_interfaces(self, mac_ip_array):
+
+        net_dir = "/sys/class/net"
+        nics = os.listdir(net_dir)
+        count = 0
+
+        for nic in nics:
+            # look for IBoIP interface of format ibXXX
+            if not re.match(r"ib\d+", nic):
+                continue
+
+            mac_addr = None
+            with open(os.path.join(net_dir, nic, "address")) as address_file:
+                mac_addr = address_file.read()
+
+            if not mac_addr:
+                logger.error("RDMA: can't read address for device {0}".format(nic))
+                continue
+
+            mac_addr = mac_addr.upper()
+
+            match = re.match(r".+(\w\w):(\w\w):(\w\w):\w\w:\w\w:(\w\w):(\w\w):(\w\w)\n", mac_addr)
+            if not match:
+                logger.error("RDMA: failed to parse address for device {0} address {1}".format(nic, mac_addr))
+                continue
+
+            # format an MAC address without :
+            mac_addr = ""
+            mac_addr = mac_addr.join(match.groups(0))
+
+            for mac_ip in mac_ip_array:
+                if mac_ip[0] == mac_addr:
+                    ret = 0
+                    try:
+                        ip_command = ["ip", "addr", "add", "{0}/16".format(mac_ip[1]), "dev", nic]
+                        shellutil.run_command(ip_command)
+                    except shellutil.CommandError as error:
+                        ret = error.returncode
+
+                    if ret == 0:
+                        logger.info("RDMA: set address {0} to device {1}".format(mac_ip[1], nic))
+
+                    if ret and ret != 2:
+                        # return value 2 means the address is already set
+                        logger.error("RDMA: failed to set IP address {0} on device {1}".format(mac_ip[1], nic))
+                    else:
+                        count += 1
+
+                    break
+
+        return count
 
     @staticmethod
-    def update_iboip_interface(ipv4_addr, timeout_sec, check_interval_sec) :
+    def update_iboip_interface(ipv4_addr, timeout_sec, check_interval_sec):
         logger.info("Wait for ib0 become available")
-        total_retries = timeout_sec/check_interval_sec
+        total_retries = timeout_sec / check_interval_sec
         n = 0
         found_ib0 = None
         while not found_ib0 and n < total_retries:
@@ -322,7 +464,7 @@ class RDMADeviceHandler(object):
 
     @staticmethod
     def replace_dat_conf_contents(cfg, ipv4_addr):
-        old = "ofa-v2-ib0 u2.0 nonthreadsafe default libdaplofa.so.2 dapl.2.0 \"\S+ 0\""
+        old = "ofa-v2-ib0 u2.0 nonthreadsafe default libdaplofa.so.2 dapl.2.0 \"\S+ 0\""  # pylint: disable=W1401
         new = "ofa-v2-ib0 u2.0 nonthreadsafe default libdaplofa.so.2 dapl.2.0 \"{0} 0\"".format(
             ipv4_addr)
         return re.sub(old, new, cfg)
@@ -344,7 +486,7 @@ class RDMADeviceHandler(object):
     @staticmethod
     def wait_rdma_device(path, timeout_sec, check_interval_sec):
         logger.info("RDMA: waiting for device={0} timeout={1}s".format(path, timeout_sec))
-        total_retries = timeout_sec/check_interval_sec
+        total_retries = timeout_sec / check_interval_sec
         n = 0
         while n < total_retries:
             if os.path.exists(path):
@@ -359,16 +501,16 @@ class RDMADeviceHandler(object):
             timeout_sec, total_retries))
 
     @staticmethod
-    def wait_any_rdma_device(dir, timeout_sec, check_interval_sec):
+    def wait_any_rdma_device(directory, timeout_sec, check_interval_sec):
         logger.info(
             "RDMA: waiting for any Infiniband device at directory={0} timeout={1}s".format(
-            dir, timeout_sec))
-        total_retries = timeout_sec/check_interval_sec
+                directory, timeout_sec))
+        total_retries = timeout_sec / check_interval_sec
         n = 0
         while n < total_retries:
-            r = os.listdir(dir)
+            r = os.listdir(directory)
             if r:
-                logger.info("RDMA: device found in {0}".format(dir))
+                logger.info("RDMA: device found in {0}".format(directory))
                 return
             logger.verbose(
                 "RDMA: device not ready, sleep {0}s".format(check_interval_sec))
@@ -380,11 +522,11 @@ class RDMADeviceHandler(object):
 
     @staticmethod
     def update_network_interface(mac_addr, ipv4_addr):
-        netmask=16
-        
+        netmask = 16
+
         logger.info("RDMA: will update the network interface with IPv4/MAC")
 
-        if_name=RDMADeviceHandler.get_interface_by_mac(mac_addr)
+        if_name = RDMADeviceHandler.get_interface_by_mac(mac_addr)
         logger.info("RDMA: network interface found: {0}", if_name)
         logger.info("RDMA: bringing network interface up")
         if shellutil.run("ifconfig {0} up".format(if_name)) != 0:
@@ -402,7 +544,7 @@ class RDMADeviceHandler(object):
         if ret != 0:
             raise Exception("Failed to list network interfaces")
         output = output.replace('\n', '')
-        match = re.search(r"(eth\d).*(HWaddr|ether) {0}".format(mac), 
+        match = re.search(r"(eth\d).*(HWaddr|ether) {0}".format(mac),
                           output, re.IGNORECASE)
         if match is None:
             raise Exception("Failed to get ifname with mac: {0}".format(mac))

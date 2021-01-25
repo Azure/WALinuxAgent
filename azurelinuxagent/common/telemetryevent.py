@@ -20,6 +20,7 @@
 from azurelinuxagent.common.datacontract import DataContract, DataContractList
 from azurelinuxagent.common.version import AGENT_NAME
 
+
 class CommonTelemetryEventSchema(object):
 
     # Common schema keys for GuestAgentExtensionEvents, GuestAgentGenericLogs
@@ -44,6 +45,7 @@ class CommonTelemetryEventSchema(object):
     VMId = "VMId"
     ImageOrigin = "ImageOrigin"
 
+
 class GuestAgentGenericLogsSchema(CommonTelemetryEventSchema):
 
     # GuestAgentGenericLogs table specific schema keys
@@ -52,6 +54,7 @@ class GuestAgentGenericLogsSchema(CommonTelemetryEventSchema):
     Context1 = "Context1"
     Context2 = "Context2"
     Context3 = "Context3"
+
 
 class GuestAgentExtensionEventsSchema(CommonTelemetryEventSchema):
 
@@ -65,6 +68,7 @@ class GuestAgentExtensionEventsSchema(CommonTelemetryEventSchema):
     Message = "Message"
     Duration = "Duration"
 
+
 class GuestAgentPerfCounterEventsSchema(CommonTelemetryEventSchema):
 
     # GuestAgentPerformanceCounterEvents table specific schema keys
@@ -72,6 +76,7 @@ class GuestAgentPerfCounterEventsSchema(CommonTelemetryEventSchema):
     Counter = "Counter"
     Instance = "Instance"
     Value = "Value"
+
 
 class TelemetryEventParam(DataContract):
     def __init__(self, name=None, value=None):
@@ -107,8 +112,3 @@ class TelemetryEvent(DataContract):
             if param.name == GuestAgentExtensionEventsSchema.Version:
                 return param.value
         return None
-
-
-class TelemetryEventList(DataContract):
-    def __init__(self):
-        self.events = DataContractList(TelemetryEvent)
