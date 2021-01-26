@@ -19,6 +19,7 @@
 import json
 import os
 import re
+import time
 from collections import defaultdict
 
 import azurelinuxagent.common.conf as conf
@@ -26,11 +27,12 @@ import azurelinuxagent.common.logger as logger
 from azurelinuxagent.common.AgentGlobals import AgentGlobals
 from azurelinuxagent.common.datacontract import set_properties
 from azurelinuxagent.common.event import add_event, WALAEventOperation
+from azurelinuxagent.common.exception import IncompleteGoalStateError
 from azurelinuxagent.common.exception import ProtocolError, ExtensionConfigError
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.protocol.restapi import Cert, CertList, Extension, ExtHandler, ExtHandlerList, \
-    ExtHandlerVersionUri, RemoteAccessUser, RemoteAccessUsersList, \
-    VMAgentManifest, VMAgentManifestList, VMAgentManifestUri, InVMGoalStateMetaData
+    ExtHandlerVersionUri, RemoteAccessUser, RemoteAccessUsersList, VMAgentManifest, VMAgentManifestList, \
+    VMAgentManifestUri, InVMGoalStateMetaData
 from azurelinuxagent.common.utils import fileutil
 from azurelinuxagent.common.utils.cryptutil import CryptUtil
 from azurelinuxagent.common.utils.textutil import parse_doc, findall, find, findtext, getattrib, gettext
@@ -42,6 +44,8 @@ P7M_FILE_NAME = "Certificates.p7m"
 PEM_FILE_NAME = "Certificates.pem"
 TRANSPORT_CERT_FILE_NAME = "TransportCert.pem"
 TRANSPORT_PRV_FILE_NAME = "TransportPrivate.pem"
+
+_NUM_GS_FETCH_RETRIES = 6
 
 
 class GoalState(object):
@@ -59,14 +63,22 @@ class GoalState(object):
         directly.
 
         """
-        try:
-            uri = GOAL_STATE_URI.format(wire_client.get_endpoint())
+        uri = GOAL_STATE_URI.format(wire_client.get_endpoint())
+
+        for _ in range(0, _NUM_GS_FETCH_RETRIES):
             self.xml_text = wire_client.fetch_config(uri, wire_client.get_header())
             xml_doc = parse_doc(self.xml_text)
-
             self.incarnation = findtext(xml_doc, "Incarnation")
-            self.expected_state = findtext(xml_doc, "ExpectedState")
+
             role_instance = find(xml_doc, "RoleInstance")
+            if role_instance:
+                break
+            time.sleep(0.5)
+        else:
+            raise IncompleteGoalStateError("Fetched goal state without a RoleInstance [incarnation {inc}]".format(inc=self.incarnation))
+
+        try:
+            self.expected_state = findtext(xml_doc, "ExpectedState")
             self.role_instance_id = findtext(role_instance, "InstanceId")
             role_config = find(role_instance, "Configuration")
             self.role_config_name = findtext(role_config, "ConfigName")
@@ -77,15 +89,11 @@ class GoalState(object):
 
             AgentGlobals.update_container_id(self.container_id)
 
-            fetch_full_goal_state = False
             if full_goal_state:
-                fetch_full_goal_state = True
                 reason = 'force update'
-            elif base_incarnation is not None and self.incarnation != base_incarnation:
-                fetch_full_goal_state = True
+            elif base_incarnation not in (None, self.incarnation):
                 reason = 'new incarnation'
-
-            if not fetch_full_goal_state:
+            else:
                 self.hosting_env = None
                 self.shared_conf = None
                 self.certs = None
