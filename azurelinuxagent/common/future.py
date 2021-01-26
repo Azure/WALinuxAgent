@@ -128,6 +128,17 @@ def get_openwrt_platform():
                     result[0] = "openwrt"
     return result
 
+def is_file_not_found_error(exception):
+    # Python 2 uses IOError(errno=2)
+    if sys.version_info[0] == 2:
+        return isinstance(exception, IOError) and exception.errno == 2
+    
+    # Python 3 has its own type for this error.
+    elif sys.version_info[0] == 3:
+        return isinstance(exception, FileNotFoundError)
+    
+    else:
+        raise ImportError("Unknown python version: {0}".format(sys.version_info))
 
 def array_to_bytes(buff):
     # Python 3.9 removed the tostring() method on arrays, the new alias is tobytes()
