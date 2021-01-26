@@ -135,7 +135,12 @@ def is_file_not_found_error(exception):
     
     # Python 3 has its own type for this error.
     elif sys.version_info[0] == 3:
+        # pylint for python2 complains, but FileNotFoundError is
+        # defined for python3.
+        
+        # pylint: disable=undefined-variable
         return isinstance(exception, FileNotFoundError)
+        # pylint: enable=undefined-variable
     
     else:
         raise ImportError("Unknown python version: {0}".format(sys.version_info))
