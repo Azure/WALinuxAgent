@@ -40,19 +40,19 @@ from azurelinuxagent.common.utils import fileutil
 from azurelinuxagent.common.version import PY_VERSION_MAJOR
 
 try:
-    from unittest.mock import Mock, patch, MagicMock, ANY, DEFAULT, call, PropertyMock  # pylint: disable=unused-import,ungrouped-imports
+    from unittest.mock import Mock, patch, MagicMock, ANY, DEFAULT, call, PropertyMock  # pylint: disable=unused-import
 
     # Import mock module for Python2 and Python3
     from bin.waagent2 import Agent  # pylint: disable=unused-import
 except ImportError:
     from mock import Mock, patch, MagicMock, ANY, DEFAULT, call, PropertyMock
 
-test_dir = os.path.dirname(os.path.abspath(__file__))  # pylint: disable=invalid-name
-data_dir = os.path.join(test_dir, "data")  # pylint: disable=invalid-name
+test_dir = os.path.dirname(os.path.abspath(__file__))
+data_dir = os.path.join(test_dir, "data")
 
-debug = False  # pylint: disable=invalid-name
+debug = False
 if os.environ.get('DEBUG') == '1':
-    debug = True  # pylint: disable=invalid-name
+    debug = True
 
 # Enable verbose logger to stdout
 if debug:
@@ -132,7 +132,7 @@ def is_python_version_26():
 
 class AgentTestCase(unittest.TestCase):
     @classmethod
-    def setUpClass(cls):  # pylint: disable=too-many-branches
+    def setUpClass(cls):
         # Setup newer unittest assertions missing in prior versions of Python
 
         if not hasattr(cls, "assertRegex"):
@@ -195,53 +195,53 @@ class AgentTestCase(unittest.TestCase):
         if not debug and self.tmp_dir is not None:
             shutil.rmtree(self.tmp_dir)
 
-    def emulate_assertIn(self, a, b, msg=None):  # pylint: disable=invalid-name
+    def emulate_assertIn(self, a, b, msg=None):
         if a not in b:
             msg = msg if msg is not None else "{0} not found in {1}".format(_safe_repr(a), _safe_repr(b))
             self.fail(msg)
 
-    def emulate_assertNotIn(self, a, b, msg=None):  # pylint: disable=invalid-name
+    def emulate_assertNotIn(self, a, b, msg=None):
         if a in b:
             msg = msg if msg is not None else "{0} unexpectedly found in {1}".format(_safe_repr(a), _safe_repr(b))
             self.fail(msg)
 
-    def emulate_assertGreater(self, a, b, msg=None):  # pylint: disable=invalid-name
+    def emulate_assertGreater(self, a, b, msg=None):
         if not a > b:
             msg = msg if msg is not None else '{0} not greater than {1}'.format(_safe_repr(a), _safe_repr(b))
             self.fail(msg)
 
-    def emulate_assertGreaterEqual(self, a, b, msg=None):  # pylint: disable=invalid-name
+    def emulate_assertGreaterEqual(self, a, b, msg=None):
         if not a >= b:
             msg = msg if msg is not None else '{0} not greater or equal to {1}'.format(_safe_repr(a), _safe_repr(b))
             self.fail(msg)
 
-    def emulate_assertLess(self, a, b, msg=None):  # pylint: disable=invalid-name
+    def emulate_assertLess(self, a, b, msg=None):
         if not a < b:
             msg = msg if msg is not None else '{0} not less than {1}'.format(_safe_repr(a), _safe_repr(b))
             self.fail(msg)
 
-    def emulate_assertLessEqual(self, a, b, msg=None):  # pylint: disable=invalid-name
+    def emulate_assertLessEqual(self, a, b, msg=None):
         if not a <= b:
             msg = msg if msg is not None else '{0} not less or equal to {1}'.format(_safe_repr(a), _safe_repr(b))
             self.fail(msg)
 
-    def emulate_assertIsNone(self, x, msg=None):  # pylint: disable=invalid-name
+    def emulate_assertIsNone(self, x, msg=None):
         if x is not None:
             msg = msg if msg is not None else '{0} is not None'.format(_safe_repr(x))
             self.fail(msg)
 
-    def emulate_assertIsNotNone(self, x, msg=None):  # pylint: disable=invalid-name
+    def emulate_assertIsNotNone(self, x, msg=None):
         if x is None:
             msg = msg if msg is not None else '{0} is None'.format(_safe_repr(x))
             self.fail(msg)
 
-    def emulate_assertRegexpMatches(self, text, regexp, msg=None):  # pylint: disable=invalid-name
+    def emulate_assertRegexpMatches(self, text, regexp, msg=None):
         if re.search(regexp, text) is not None:
             return
         msg = msg if msg is not None else "'{0}' does not match '{1}'.".format(text, regexp)
         self.fail(msg)
 
-    def emulate_assertNotRegexpMatches(self, text, regexp, msg=None):  # pylint: disable=invalid-name
+    def emulate_assertNotRegexpMatches(self, text, regexp, msg=None):
         if re.search(regexp, text, flags=1) is None:
             return
         msg = msg if msg is not None else "'{0}' should not match '{1}'.".format(text, regexp)
@@ -271,7 +271,7 @@ class AgentTestCase(unittest.TestCase):
             self.exception = exception  # pylint: disable=attribute-defined-outside-init
             return True
 
-    def emulate_assertRaises(self, exception_type, function=None, *args, **kwargs):  # pylint: disable=invalid-name,keyword-arg-before-vararg
+    def emulate_assertRaises(self, exception_type, function=None, *args, **kwargs):  # pylint: disable=keyword-arg-before-vararg
         # return a context manager only when function is not provided; otherwise use the original assertRaises
         if function is None:
             return AgentTestCase._AssertRaisesContextManager(exception_type, self)
@@ -283,15 +283,15 @@ class AgentTestCase(unittest.TestCase):
     def emulate_raises_regex(self, exception_type, regex, function, *args, **kwargs):
         try:
             function(*args, **kwargs)
-        except Exception as e:  # pylint: disable=invalid-name
-            if re.search(regex, str(e), flags=1) is not None:  # pylint: disable=no-else-return
+        except Exception as e:
+            if re.search(regex, str(e), flags=1) is not None:
                 return
             else:
                 self.fail("Expected exception {0} matching {1}.  Actual: {2}".format(
                     exception_type, regex, str(e)))
         self.fail("No exception was thrown.  Expected exception {0} matching {1}".format(exception_type, regex))
 
-    def emulate_assertDictEqual(self, first, second, msg=None):  # pylint: disable=invalid-name
+    def emulate_assertDictEqual(self, first, second, msg=None):
         def fail(message):
             self.fail(self._formatMessage(msg, message))
 
@@ -305,7 +305,7 @@ class AgentTestCase(unittest.TestCase):
             if k not in first:
                 fail("'{0}' is missing from first".format(k))
 
-    def emulate_assertListEqual(self, seq1, seq2, msg=None, seq_type=None):  # pylint: disable=too-many-branches,invalid-name
+    def emulate_assertListEqual(self, seq1, seq2, msg=None, seq_type=None):
         """An equality assertion for ordered sequences (like lists and tuples).
 
         For the purposes of this function, a valid ordered sequence type is one
@@ -378,7 +378,7 @@ class AgentTestCase(unittest.TestCase):
                     break
             else:
                 if (len1 == len2 and seq_type is None and
-                    type(seq1) != type(seq2)):  # pylint: disable=unidiomatic-typecheck
+                    type(seq1) != type(seq2)):
                     # The sequences are the same, but have differing types.
                     return
 
@@ -400,15 +400,15 @@ class AgentTestCase(unittest.TestCase):
                 except (TypeError, IndexError, NotImplementedError):
                     differing += ('Unable to index element %d '
                                   'of second %s\n' % (len1, seq_type_name))
-        standardMsg = differing  # pylint: disable=invalid-name
-        diffMsg = '\n' + '\n'.join(  # pylint: disable=invalid-name
+        standardMsg = differing
+        diffMsg = '\n' + '\n'.join(
             difflib.ndiff(pprint.pformat(seq1).splitlines(),
                           pprint.pformat(seq2).splitlines()))
-        standardMsg = self._truncateMessage(standardMsg, diffMsg)  # pylint: disable=invalid-name
+        standardMsg = self._truncateMessage(standardMsg, diffMsg)
         msg = self._formatMessage(msg, standardMsg)
         self.fail(msg)
 
-    def emulate_assertIsInstance(self, obj, object_type, msg=None):  # pylint: disable=invalid-name
+    def emulate_assertIsInstance(self, obj, object_type, msg=None):
         if not isinstance(obj, object_type):
             msg = msg if msg is not None else '{0} is not an instance of {1}'.format(_safe_repr(obj),
                                                                                      _safe_repr(object_type))
@@ -417,7 +417,7 @@ class AgentTestCase(unittest.TestCase):
     @staticmethod
     def _create_files(tmp_dir, prefix, suffix, count, with_sleep=0):
         for i in range(count):
-            f = os.path.join(tmp_dir, '.'.join((prefix, str(i), suffix)))  # pylint: disable=invalid-name
+            f = os.path.join(tmp_dir, '.'.join((prefix, str(i), suffix)))
             fileutil.write_file(f, "faux content")
             time.sleep(with_sleep)
 
@@ -451,7 +451,7 @@ def load_bin_data(name):
         return data_file.read()
 
 
-supported_distro = [  # pylint: disable=invalid-name
+supported_distro = [
     ["ubuntu", "12.04", ""],
     ["ubuntu", "14.04", ""],
     ["ubuntu", "14.10", ""],

@@ -36,7 +36,7 @@ def freebsd_system():
     return ["FreeBSD"]
 
 
-def freebsd_system_release(x, y, z):  # pylint: disable=unused-argument,invalid-name
+def freebsd_system_release(x, y, z):  # pylint: disable=unused-argument
     return "10.0"
 
 
@@ -44,7 +44,7 @@ def openbsd_system():
     return ["OpenBSD"]
 
 
-def openbsd_system_release(x, y, z):  # pylint: disable=unused-argument,invalid-name
+def openbsd_system_release(x, y, z):  # pylint: disable=unused-argument
     return "20.0"
 
 

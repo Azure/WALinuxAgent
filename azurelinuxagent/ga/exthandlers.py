@@ -1,4 +1,4 @@
-# Microsoft Azure Linux Agent  # pylint: disable=C0302
+# Microsoft Azure Linux Agent
 #
 # Copyright Microsoft Corporation
 #
@@ -81,7 +81,7 @@ _TRUNCATED_SUFFIX = u" ... [TRUNCATED]"
 _NUM_OF_STATUS_FILE_RETRIES = 5
 _STATUS_FILE_RETRY_DELAY = 2  # seconds
 
-_ENABLE_EXTENSION_TELEMETRY_PIPELINE = False
+_ENABLE_EXTENSION_TELEMETRY_PIPELINE = True
 
 
 def is_extension_telemetry_pipeline_enabled():
@@ -110,11 +110,11 @@ class ExtCommandEnvVariable(object):
     WireProtocolAddress = "{0}_WIRE_PROTOCOL_ADDRESS".format(Prefix)
 
 
-def get_traceback(e):  # pylint: disable=R1710,C0103
+def get_traceback(e):  # pylint: disable=R1710
     if sys.version_info[0] == 3:  # pylint: disable=R1705
         return e.__traceback__
     elif sys.version_info[0] == 2:
-        ex_type, ex, tb = sys.exc_info()  # pylint: disable=W0612,C0103
+        ex_type, ex, tb = sys.exc_info()  # pylint: disable=W0612
         return tb
 
 
@@ -214,7 +214,7 @@ def migrate_handler_state():
                 if os.path.isfile(from_path) and not os.path.isfile(to_path):
                     try:
                         shutil.move(from_path, to_path)
-                    except Exception as e:  # pylint: disable=C0103
+                    except Exception as e:
                         logger.warn(
                             "Exception occurred migrating {0} {1} file: {2}",
                             handler,
@@ -223,7 +223,7 @@ def migrate_handler_state():
 
     try:
         shutil.rmtree(handler_state_path)
-    except Exception as e:  # pylint: disable=C0103
+    except Exception as e:
         logger.warn("Exception occurred removing {0}: {1}", handler_state_path, str(e))
     return
 
@@ -332,12 +332,12 @@ class ExtHandlersHandler(object):
             # Handler in skip_handlers list, not parsing it
             return None
 
-        eh = ExtHandler(name=handler_name)  # pylint: disable=C0103
+        eh = ExtHandler(name=handler_name)
         eh.properties.version = str(FlexibleVersion(name[separator + 1:]))
 
         return ExtHandlerInstance(eh, protocol)
 
-    def _cleanup_outdated_handlers(self):  # pylint: disable=R0912
+    def _cleanup_outdated_handlers(self):
         handlers = []
         pkgs = []
         ext_handlers_in_gs = [ext_handler.name for ext_handler in self.ext_handlers.extHandlers]
@@ -371,7 +371,7 @@ class ExtHandlersHandler(object):
             try:
                 os.remove(pkg)
                 logger.verbose("Removed orphaned extension package {0}".format(pkg))
-            except OSError as e:  # pylint: disable=C0103
+            except OSError as e:
                 logger.warn("Failed to remove orphaned package {0}: {1}".format(pkg, e.strerror))
 
         # Finally, remove the directories and packages of the orphaned handlers, i.e. Any extension directory that
@@ -383,7 +383,7 @@ class ExtHandlersHandler(object):
                 try:
                     os.remove(pkg)
                     logger.verbose("Removed extension package {0}".format(pkg))
-                except OSError as e:  # pylint: disable=C0103
+                except OSError as e:
                     logger.warn("Failed to remove extension package {0}: {1}".format(pkg, e.strerror))
 
     def _extension_processing_allowed(self):
@@ -569,7 +569,7 @@ class ExtHandlersHandler(object):
                                   handler_state.lower())
         # We go through the entire process of downloading and initializing the extension if it's either a fresh
         # extension or if it's a retry of a previously failed upgrade.
-        if handler_state == ExtHandlerState.NotInstalled or handler_state == ExtHandlerState.FailedUpgrade:  # pylint: disable=R1714
+        if handler_state == ExtHandlerState.NotInstalled or handler_state == ExtHandlerState.FailedUpgrade:
             ext_handler_i.set_handler_state(ExtHandlerState.NotInstalled)
             ext_handler_i.download()
             ext_handler_i.initialize()
@@ -599,7 +599,7 @@ class ExtHandlersHandler(object):
             try:
                 continue_on_update_failure = ext_handler_i.load_manifest().is_continue_on_update_failure()
                 func()
-            except ExtensionError as e:  # pylint: disable=C0103
+            except ExtensionError as e:
                 # Reporting the event with the old handler and raising a new ExtensionUpdateError to set the
                 # handler status on the new version
                 msg = "%s; ContinueOnUpdate: %s" % (ustr(e), continue_on_update_failure)
@@ -655,7 +655,7 @@ class ExtHandlersHandler(object):
             # Try uninstalling the extension and swallow any exceptions in case of failures after logging them
             try:
                 ext_handler_i.uninstall()
-            except ExtensionError as e:  # pylint: disable=C0103
+            except ExtensionError as e:
                 ext_handler_i.report_event(message=ustr(e), is_success=False)
 
         ext_handler_i.remove_ext_handler()
@@ -669,7 +669,7 @@ class ExtHandlersHandler(object):
             for ext_handler in self.ext_handlers.extHandlers:
                 try:
                     self.report_ext_handler_status(vm_status, ext_handler)
-                except ExtensionError as e:  # pylint: disable=C0103
+                except ExtensionError as e:
                     add_event(
                         AGENT_NAME,
                         version=CURRENT_VERSION,
@@ -683,11 +683,11 @@ class ExtHandlersHandler(object):
             if self.log_report:
                 logger.verbose("Completed vm agent status report")
             self.report_status_error_state.reset()
-        except ProtocolNotFoundError as e:  # pylint: disable=C0103
+        except ProtocolNotFoundError as e:
             self.report_status_error_state.incr()
             message = "Failed to report vm agent status: {0}".format(e)
             logger.verbose(message)
-        except ProtocolError as e:  # pylint: disable=C0103
+        except ProtocolError as e:
             self.report_status_error_state.incr()
             message = "Failed to report vm agent status: {0}".format(e)
             add_event(AGENT_NAME,
@@ -754,20 +754,20 @@ class ExtHandlersHandler(object):
             try:
                 active_exts = ext_handler_i.report_ext_status()
                 handler_status.extensions.extend(active_exts)
-            except ExtensionError as e:  # pylint: disable=C0103
+            except ExtensionError as e:
                 ext_handler_i.set_handler_status(message=ustr(e), code=e.code)
 
             try:
                 heartbeat = ext_handler_i.collect_heartbeat()
                 if heartbeat is not None:
                     handler_status.status = heartbeat.get('status')
-            except ExtensionError as e:  # pylint: disable=C0103
+            except ExtensionError as e:
                 ext_handler_i.set_handler_status(message=ustr(e), code=e.code)
 
         vm_status.vmAgent.extensionHandlers.append(handler_status)
 
 
-class ExtHandlerInstance(object):  # pylint: disable=R0904
+class ExtHandlerInstance(object):
     def __init__(self, ext_handler, protocol):
         self.ext_handler = ext_handler
         self.protocol = protocol
@@ -779,7 +779,7 @@ class ExtHandlerInstance(object):  # pylint: disable=R0904
 
         try:
             fileutil.mkdir(self.get_log_dir(), mode=0o755)
-        except IOError as e:  # pylint: disable=C0103
+        except IOError as e:
             self.logger.error(u"Failed to create extension log dir: {0}", e)
 
         log_file = os.path.join(self.get_log_dir(), "CommandExecution.log")
@@ -790,7 +790,7 @@ class ExtHandlerInstance(object):  # pylint: disable=R0904
         self.logger.verbose("Decide which version to use")
         try:
             pkg_list = self.protocol.get_ext_handler_pkgs(self.ext_handler)
-        except ProtocolError as e:  # pylint: disable=C0103
+        except ProtocolError as e:
             raise ExtensionError("Failed to get ext handler pkgs", e)
         except ExtensionDownloadError:
             self.set_operation(WALAEventOperation.Download)
@@ -903,7 +903,7 @@ class ExtHandlerInstance(object):  # pylint: disable=R0904
                 if os.path.isfile(status_file):
                     shutil.copy2(status_file, new_ext_status_dir)
 
-    def set_operation(self, op):  # pylint: disable=C0103
+    def set_operation(self, op):
         self.operation = op
 
     def report_event(self, message="", is_success=True, duration=0, log_event=True):
@@ -939,7 +939,7 @@ class ExtHandlerInstance(object):  # pylint: disable=R0904
         begin_utc = datetime.datetime.utcnow()
         self.set_operation(WALAEventOperation.Download)
 
-        if self.pkg is None or self.pkg.uris is None or len(self.pkg.uris) == 0:  # pylint: disable=len-as-condition
+        if self.pkg is None or self.pkg.uris is None or len(self.pkg.uris) == 0:
             raise ExtensionDownloadError("No package uri found")
 
         destination = os.path.join(conf.get_lib_dir(), self.get_extension_package_zipfile_name())
@@ -999,7 +999,7 @@ class ExtHandlerInstance(object):  # pylint: disable=R0904
         try:
             man = fileutil.read_file(man_file, remove_bom=True)
             fileutil.write_file(self.get_manifest_file(), man)
-        except IOError as e:  # pylint: disable=C0103
+        except IOError as e:
             fileutil.clean_ioerror(e, paths=[self.get_base_dir(), self.pkg_file])
             raise ExtensionDownloadError(u"Failed to save HandlerManifest.json", e)
 
@@ -1035,7 +1035,7 @@ class ExtHandlerInstance(object):  # pylint: disable=R0904
                 ]
                 fileutil.write_file(status_path, json.dumps(status))
 
-        except IOError as e:  # pylint: disable=C0103
+        except IOError as e:
             fileutil.clean_ioerror(e, paths=[self.get_base_dir(), self.pkg_file])
             raise ExtensionDownloadError(u"Failed to initialize extension '{0}'".format(self.get_full_name()), e)
 
@@ -1102,7 +1102,7 @@ class ExtHandlerInstance(object):  # pylint: disable=R0904
                         raise exception
 
                 shutil.rmtree(base_dir, onerror=on_rmtree_error)
-        except IOError as e:  # pylint: disable=C0103
+        except IOError as e:
             message = "Failed to remove extension handler directory: {0}".format(e)
             self.report_event(message=message, is_success=False)
             self.logger.warn(message)
@@ -1214,7 +1214,7 @@ class ExtHandlerInstance(object):  # pylint: disable=R0904
 
         try:
             data_str, data = self._read_and_parse_json_status_file(ext_status_file)
-        except ExtensionStatusError as e:  # pylint: disable=C0103
+        except ExtensionStatusError as e:
             msg = ""
             if e.code == ExtensionStatusError.CouldNotReadStatusFile:
                 ext_status.code = ExtensionErrorCodes.PluginUnknownFailure
@@ -1250,7 +1250,7 @@ class ExtHandlerInstance(object):  # pylint: disable=R0904
                                            .format(ext.name, self.ext_handler.properties.version, seq_no,
                                                    ext_status_file, len(data_str), _MAX_STATUS_FILE_SIZE_IN_BYTES),
                                            code=ExtensionStatusError.MaxSizeExceeded)
-        except ExtensionStatusError as e:  # pylint: disable=C0103
+        except ExtensionStatusError as e:
             msg = u"For Extension Handler {0}-{1} for the sequence number {2}, the status file {3}. " \
                   u"Encountered the following error: {4}".format(ext.name, self.ext_handler.properties.version, seq_no,
                                                                  ext_status_file, ustr(e))
@@ -1313,7 +1313,7 @@ class ExtHandlerInstance(object):  # pylint: disable=R0904
                 self.protocol.report_ext_status(self.ext_handler.name, ext.name,
                                                 ext_status)
                 active_exts.append(ext.name)
-            except ProtocolError as e:  # pylint: disable=C0103
+            except ProtocolError as e:
                 self.logger.error(u"Failed to report extension status: {0}", e)
         return active_exts
 
@@ -1335,9 +1335,9 @@ class ExtHandlerInstance(object):  # pylint: disable=R0904
         try:
             heartbeat_json = fileutil.read_file(heartbeat_file)
             heartbeat = json.loads(heartbeat_json)[0]['heartbeat']
-        except IOError as e:  # pylint: disable=C0103
+        except IOError as e:
             raise ExtensionError("Failed to get heartbeat file:{0}".format(e))
-        except (ValueError, KeyError) as e:  # pylint: disable=C0103
+        except (ValueError, KeyError) as e:
             raise ExtensionError("Malformed heartbeat file: {0}".format(e))
         return heartbeat
 
@@ -1388,7 +1388,7 @@ class ExtHandlerInstance(object):  # pylint: disable=R0904
                         stderr=stderr,
                         error_code=extension_error_code)
 
-                except OSError as e:  # pylint: disable=C0103
+                except OSError as e:
                     raise ExtensionError("Failed to launch '{0}': {1}".format(full_path, e.strerror),
                                          code=extension_error_code)
 
@@ -1404,7 +1404,7 @@ class ExtHandlerInstance(object):  # pylint: disable=R0904
         man_file = self.get_manifest_file()
         try:
             data = json.loads(fileutil.read_file(man_file))
-        except (IOError, OSError) as e:  # pylint: disable=C0103
+        except (IOError, OSError) as e:
             raise ExtensionError('Failed to load manifest file ({0}): {1}'.format(man_file, e.strerror),
                                  code=ExtensionErrorCodes.PluginHandlerManifestNotFound)
         except ValueError:
@@ -1417,14 +1417,14 @@ class ExtHandlerInstance(object):  # pylint: disable=R0904
         settings_file = os.path.join(self.get_conf_dir(), settings_file)
         try:
             fileutil.write_file(settings_file, settings)
-        except IOError as e:  # pylint: disable=C0103
+        except IOError as e:
             fileutil.clean_ioerror(e,
                                    paths=[settings_file])
             raise ExtensionError(u"Failed to update settings file", e)
 
     def update_settings(self):
         if self.ext_handler.properties.extensions is None or \
-                len(self.ext_handler.properties.extensions) == 0:  # pylint: disable=len-as-condition
+                len(self.ext_handler.properties.extensions) == 0:
             # This is the behavior of waagent 2.0.x
             # The new agent has to be consistent with the old one.
             self.logger.info("Extension has no settings, write empty 0.settings")
@@ -1464,7 +1464,7 @@ class ExtHandlerInstance(object):  # pylint: disable=R0904
         }]
         try:
             fileutil.write_file(self.get_env_file(), json.dumps(env))
-        except IOError as e:  # pylint: disable=C0103
+        except IOError as e:
             fileutil.clean_ioerror(e,
                                    paths=[self.get_base_dir(), self.pkg_file])
             raise ExtensionDownloadError(u"Failed to save handler environment", e)
@@ -1476,7 +1476,7 @@ class ExtHandlerInstance(object):  # pylint: disable=R0904
             if not os.path.exists(state_dir):
                 fileutil.mkdir(state_dir, mode=0o700)
             fileutil.write_file(state_file, handler_state)
-        except IOError as e:  # pylint: disable=C0103
+        except IOError as e:
             fileutil.clean_ioerror(e, paths=[state_file])
             self.logger.error("Failed to set state: {0}", e)
 
@@ -1488,7 +1488,7 @@ class ExtHandlerInstance(object):  # pylint: disable=R0904
 
         try:
             return fileutil.read_file(state_file)
-        except IOError as e:  # pylint: disable=C0103
+        except IOError as e:
             self.logger.error("Failed to get state: {0}", e)
             return ExtHandlerState.NotInstalled
 
@@ -1583,7 +1583,7 @@ class ExtHandlerInstance(object):  # pylint: disable=R0904
         runtime_settings = self.ext_handler.properties.extensions
         # If no runtime_settings available for this ext_handler, then return 0 (this is the behavior we follow
         # for update_settings)
-        if not runtime_settings or len(runtime_settings) == 0:  # pylint: disable=len-as-condition
+        if not runtime_settings or len(runtime_settings) == 0:
             return "0"
         # Currently for every runtime settings we use the same sequence number
         # (Check : def parse_plugin_settings(self, ext_handler, plugin_settings) in wire.py)
@@ -1603,15 +1603,15 @@ class ExtHandlerInstance(object):  # pylint: disable=R0904
                 data_str = fileutil.read_file(ext_status_file)
                 data = json.loads(data_str)
                 break
-            except IOError as e:  # pylint: disable=C0103
+            except IOError as e:
                 failed_to_read = True
                 raised_exception = e
-            except (ValueError, TypeError) as e:  # pylint: disable=C0103
+            except (ValueError, TypeError) as e:
                 failed_to_parse_json = True
                 raised_exception = e
             time.sleep(_STATUS_FILE_RETRY_DELAY)
 
-        if failed_to_read:  # pylint: disable=R1720
+        if failed_to_read:
             raise ExtensionStatusError(msg=ustr(raised_exception), inner=raised_exception,
                                        code=ExtensionStatusError.CouldNotReadStatusFile)
         elif failed_to_parse_json:
@@ -1656,7 +1656,7 @@ class HandlerEnvironment(object):
     configFolder = "configFolder"
     statusFolder = "statusFolder"
     heartbeatFile = "heartbeatFile"
-    eventsFolder = "eventsFolder"
+    eventsFolder = "eventsFolder_preview"
     name = "name"
     version = "version"
 

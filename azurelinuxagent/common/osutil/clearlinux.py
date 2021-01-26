@@ -91,6 +91,6 @@ class ClearLinuxUtil(DefaultOSUtil):
                 new_passwd = [x for x in passwd if not x.startswith("root:")]
                 new_passwd.insert(0, "root:*LOCK*:14600::::::")
             fileutil.write_file(passwd_file_path, "\n".join(new_passwd))
-        except IOError as e:  # pylint: disable=C0103
+        except IOError as e:
             raise OSUtilError("Failed to delete root password:{0}".format(e))
         pass  # pylint: disable=W0107

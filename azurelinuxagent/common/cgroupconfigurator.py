@@ -20,7 +20,7 @@ import subprocess
 
 from azurelinuxagent.common import logger
 from azurelinuxagent.common.cgroup import CpuCgroup, MemoryCgroup
-from azurelinuxagent.common.cgroupapi import CGroupsApi, SystemdCgroupsApi
+from azurelinuxagent.common.cgroupapi import CGroupsApi, SystemdCgroupsApi, SystemdRunError
 from azurelinuxagent.common.cgroupstelemetry import CGroupsTelemetry
 from azurelinuxagent.common.exception import ExtensionErrorCodes, CGroupsException
 from azurelinuxagent.common.future import ustr
@@ -30,27 +30,14 @@ from azurelinuxagent.common.utils.extensionprocessutil import handle_process_com
 from azurelinuxagent.common.event import add_event, WALAEventOperation
 
 
-class UnexpectedProcessesInCGroupException(CGroupsException):
-    """
-    Raised by CGroupConfigurator.check_processes_in_agent_cgroup() when the agent's cgroup includes processes
-    that should not belong to it.
-    The 'unexpected' property is a list of the processes (strings) that should not belong to the agent's cgroup
-    """
-    def __init__(self, unexpected):
-        super(UnexpectedProcessesInCGroupException, self).__init__("Unexpected processes in agent's cgroup")
-        self.unexpected = unexpected
-
-
 class CGroupConfigurator(object):
     """
     This class implements the high-level operations on CGroups (e.g. initialization, creation, etc)
 
-    NOTE: with the exception of start_extension_command and check_processes_in_agent_cgroup, none of the methods in this class
+    NOTE: with the exception of start_extension_command, none of the methods in this class
     raise exceptions (cgroup operations should not block extensions)
     """
-    # too-many-instance-attributes<R0902> Disabled: class complexity is OK
-    # invalid-name<C0103> Disabled: class is private, so name starts with __
-    class __Impl(object):  # pylint: disable=R0902,C0103
+    class __Impl(object):
         def __init__(self):
             self._initialized = False
             self._cgroups_supported = False
@@ -58,11 +45,10 @@ class CGroupConfigurator(object):
             self._cgroups_api = None
             self._agent_cpu_cgroup_path = None
             self._agent_memory_cgroup_path = None
-            self._get_processes_in_agent_cgroup_last_error = None
-            self._get_processes_in_agent_cgroup_error_count = 0
+            self._check_processes_in_agent_cgroup_last_error = None
+            self._check_processes_in_agent_cgroup_error_count = 0
 
-        # too-many-branches<R0912> Disabled: branches are sequential, not nested
-        def initialize(self):  # pylint: disable=R0912
+        def initialize(self):
             try:
                 if self._initialized:
                     return
@@ -251,37 +237,52 @@ class CGroupConfigurator(object):
             commands used to start extensions on their own cgroup).
             Other processes started by the agent (e.g. extensions) and processes not started by the agent (e.g. services installed by extensions) are reported
             as unexpected, since they should belong to their own cgroup.
-            The function raises an UnexpectedProcessesInCGroupException if the check fails.
             """
             if not self.enabled():
-                return
+                return True
 
-            daemon = os.getppid()
-            extension_handler = os.getpid()
-            agent_commands = set()
-            agent_commands.update(shellutil.get_running_commands())
-            systemd_run_commands = set()
-            systemd_run_commands.update(self._cgroups_api.get_systemd_run_commands())
-            agent_cgroup = CGroupsApi.get_processes_in_cgroup(self._agent_cpu_cgroup_path)
-            # get the running commands again in case new commands were started while we were fetching the processes in the cgroup;
-            agent_commands.update(shellutil.get_running_commands())
-            systemd_run_commands.update(self._cgroups_api.get_systemd_run_commands())
+            def log_message(message):
+                # Report only a small sample of errors
+                if message != self._check_processes_in_agent_cgroup_last_error and self._check_processes_in_agent_cgroup_error_count < 5:
+                    self._check_processes_in_agent_cgroup_error_count += 1
+                    self._check_processes_in_agent_cgroup_last_error = message
+                    logger.info(message)
+                    add_event(op=WALAEventOperation.CGroupsDisabled, message=message)
 
-            unexpected = []
-            for process in agent_cgroup:
-                # Note that the agent uses systemd-run to start extensions; systemd-run belongs to the agent cgroup, though the extensions don't
-                if process in (daemon, extension_handler) or process in systemd_run_commands:
-                    continue
-                # check if the process is a command started by the agent or a descendant of one of those commands
-                current = process
-                while current != 0 and current not in agent_commands:
-                    current = self._get_parent(current)
-                if current == 0:
-                    unexpected.append(process)
-                    if len(unexpected) >= 5:  # collect just a small sample
-                        break
-            if unexpected:
-                raise UnexpectedProcessesInCGroupException(unexpected=self._format_processes(unexpected))
+            try:
+                daemon = os.getppid()
+                extension_handler = os.getpid()
+                agent_commands = set()
+                agent_commands.update(shellutil.get_running_commands())
+                systemd_run_commands = set()
+                systemd_run_commands.update(self._cgroups_api.get_systemd_run_commands())
+                agent_cgroup = CGroupsApi.get_processes_in_cgroup(self._agent_cpu_cgroup_path)
+                # get the running commands again in case new commands started or completed while we were fetching the processes in the cgroup;
+                agent_commands.update(shellutil.get_running_commands())
+                systemd_run_commands.update(self._cgroups_api.get_systemd_run_commands())
+
+                unexpected = []
+                for process in agent_cgroup:
+                    # Note that the agent uses systemd-run to start extensions; systemd-run belongs to the agent cgroup, though the extensions don't
+                    if process in (daemon, extension_handler) or process in systemd_run_commands:
+                        continue
+                    # check if the process is a command started by the agent or a descendant of one of those commands
+                    current = process
+                    while current != 0 and current not in agent_commands:
+                        current = self._get_parent(current)
+                    if current == 0:
+                        unexpected.append(process)
+                        if len(unexpected) >= 5:  # collect just a small sample
+                            break
+                if unexpected:
+                    unexpected = self._format_processes(unexpected)
+                    unexpected.sort()  # sort the PIDs so that the error message stays more consistent across different calls to this check
+                    log_message("The agent's cgroup includes unexpected processes; disabling CPU enforcement. Unexpected: {0}".format(unexpected))
+                    self.disable()
+                    return False
+            except Exception as exception:
+                log_message("Failed to check the processes in the agent's cgroup: {0}".format(ustr(exception)))
+            return True
 
         @staticmethod
         def _format_processes(pid_list):
@@ -314,8 +315,7 @@ class CGroupConfigurator(object):
                 pass
             return 0
 
-        # too-many-arguments<R0913> Disabled: argument list mimics Popen's
-        def start_extension_command(self, extension_name, command, timeout, shell, cwd, env, stdout, stderr, error_code=ExtensionErrorCodes.PluginUnknownFailure):  # pylint: disable=R0913
+        def start_extension_command(self, extension_name, command, timeout, shell, cwd, env, stdout, stderr, error_code=ExtensionErrorCodes.PluginUnknownFailure):
             """
             Starts a command (install/enable/etc) for an extension and adds the command's PID to the extension's cgroup
             :param extension_name: The extension executing the command
@@ -328,34 +328,20 @@ class CGroupConfigurator(object):
             :param stderr: File object to redirect stderr to
             :param error_code: Extension error code to raise in case of error
             """
-            if not self.enabled():
-                # subprocess-popen-preexec-fn<W1509> Disabled: code is not multi-threaded
-                process = subprocess.Popen(command,  # pylint: disable=W1509
-                                           shell=shell,
-                                           cwd=cwd,
-                                           env=env,
-                                           stdout=stdout,
-                                           stderr=stderr,
-                                           preexec_fn=os.setsid)
+            if self.enabled():
+                try:
+                    return self._cgroups_api.start_extension_command(extension_name, command, timeout, shell=shell, cwd=cwd, env=env, stdout=stdout, stderr=stderr, error_code=error_code)
+                except SystemdRunError as exception:
+                    event_msg = 'Failed to start extension {0} using systemd-run. Will disable resource enforcement and retry invoking the extension without systemd. ' \
+                                'Systemd-run error: {1}'.format(extension_name, ustr(exception))
+                    add_event(op=WALAEventOperation.CGroupsDisabled, is_success=False, log_event=False, message=event_msg)
+                    logger.info(event_msg)
+                    self.disable()
+                    # fall-through and re-invoke the extension
 
-                process_output = handle_process_completion(process=process,
-                                                           command=command,
-                                                           timeout=timeout,
-                                                           stdout=stdout,
-                                                           stderr=stderr,
-                                                           error_code=error_code)
-            else:
-                process_output = self._cgroups_api.start_extension_command(extension_name,
-                                                                          command, 
-                                                                          timeout, 
-                                                                          shell=shell, 
-                                                                          cwd=cwd, 
-                                                                          env=env, 
-                                                                          stdout=stdout, 
-                                                                          stderr=stderr, 
-                                                                          error_code=error_code) 
-
-            return process_output
+            # subprocess-popen-preexec-fn<W1509> Disabled: code is not multi-threaded
+            process = subprocess.Popen(command, shell=shell, cwd=cwd, env=env, stdout=stdout, stderr=stderr, preexec_fn=os.setsid)  # pylint: disable=W1509
+            return handle_process_completion(process=process, command=command, timeout=timeout, stdout=stdout, stderr=stderr, error_code=error_code)
 
     # unique instance for the singleton
     _instance = None

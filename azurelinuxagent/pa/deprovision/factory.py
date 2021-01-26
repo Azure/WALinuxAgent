@@ -31,7 +31,7 @@ def get_deprovision_handler(distro_name=DISTRO_NAME,
     if distro_name == "arch":
         return ArchDeprovisionHandler()
     if distro_name == "ubuntu":
-        if Version(distro_version) >= Version('18.04'):  # pylint: disable=R1705
+        if Version(distro_version) >= Version('18.04'):
             return Ubuntu1804DeprovisionHandler()
         else:
             return UbuntuDeprovisionHandler()

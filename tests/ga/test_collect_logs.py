@@ -90,7 +90,7 @@ class TestCollectLogs(AgentTestCase, HttpRequestPredicates):
         AgentTestCase.tearDown(self)
 
     def _create_dummy_archive(self, size=1024):
-        with open(self.archive_path, "wb") as f:  # pylint: disable=C0103
+        with open(self.archive_path, "wb") as f:
             f.truncate(size)
 
     def test_it_should_invoke_all_periodic_operations(self):

@@ -29,7 +29,7 @@ from azurelinuxagent.common.rdma import RDMAHandler
 
 class UbuntuRDMAHandler(RDMAHandler):
 
-    def install_driver(self):  # pylint: disable=R0912,R0911
+    def install_driver(self):
         #Install the appropriate driver package for the RDMA firmware
 
         nd_version = self.get_rdma_version()
@@ -79,7 +79,7 @@ class UbuntuRDMAHandler(RDMAHandler):
         status,output = shellutil.run_get_output('apt-cache show --no-all-versions linux-azure')
         if status != 0:
             return
-        r = re.search('Version: (\S+)', output)  # pylint: disable=W1401,C0103
+        r = re.search('Version: (\S+)', output)  # pylint: disable=W1401
         if not r:
             logger.error("RDMA: version not found in package linux-azure.")
             return
@@ -108,15 +108,15 @@ class UbuntuRDMAHandler(RDMAHandler):
         if not os.path.isfile(modprobed_file):
             logger.info("RDMA: %s not found, it will be created" % modprobed_file)
         else:
-            f = open(modprobed_file, 'r')  # pylint: disable=C0103
+            f = open(modprobed_file, 'r')
             lines = f.read()
             f.close()
-        r = re.search('alias hv_network_direct hv_network_direct_\S+', lines)  # pylint: disable=W1401,C0103
+        r = re.search('alias hv_network_direct hv_network_direct_\S+', lines)  # pylint: disable=W1401
         if r:
             lines = re.sub('alias hv_network_direct hv_network_direct_\S+', 'alias hv_network_direct hv_network_direct_%s' % nd_version, lines)  # pylint: disable=W1401
         else:
             lines += '\nalias hv_network_direct hv_network_direct_%s\n' % nd_version
-        f = open('/etc/modprobe.d/vmbus-rdma.conf', 'w')  # pylint: disable=C0103
+        f = open('/etc/modprobe.d/vmbus-rdma.conf', 'w')
         f.write(lines)
         f.close()
         logger.info("RDMA: hv_network_direct alias updated to ND %s" % nd_version)

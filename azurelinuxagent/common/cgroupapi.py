@@ -45,6 +45,14 @@ UNIT_FILES_FILE_SYSTEM_PATH = "/etc/systemd/system"
 SYSTEMD_RUN_PATH = "/run/systemd/system/"
 
 
+class SystemdRunError(CGroupsException):
+    """
+    Raised when systemd-run fails
+    """
+    def __init__(self, msg=None):
+        super(SystemdRunError, self).__init__(msg)
+
+
 class CGroupsApi(object):
     @staticmethod
     def cgroups_supported():
@@ -311,9 +319,7 @@ Description=Slice for Azure VM Extensions"""
         unit_not_found = "Unit {0} not found.".format(scope_name)
         return unit_not_found in stderr or scope_name not in stderr
 
-    # R0913: Too many arguments (7/5) -- disabled: the parameter list mimics subprocess.Popen()
-    # R0912: Too many branches (14/12) -- disabled: branches are sequential
-    def start_extension_command(self, extension_name, command, timeout, shell, cwd, env, stdout, stderr, error_code=ExtensionErrorCodes.PluginUnknownFailure):   # pylint: disable=R0913,R0912
+    def start_extension_command(self, extension_name, command, timeout, shell, cwd, env, stdout, stderr, error_code=ExtensionErrorCodes.PluginUnknownFailure): 
         scope = "{0}_{1}".format(self._get_extension_cgroup_name(extension_name), uuid.uuid4())
 
         with self._systemd_run_commands_lock:
@@ -349,73 +355,38 @@ Description=Slice for Azure VM Extensions"""
                 memory_cgroup_path = os.path.join(memory_cgroup_mountpoint, cgroup_relative_path)
                 CGroupsTelemetry.track_cgroup(MemoryCgroup(extension_name, memory_cgroup_path))
 
-        except IOError as e:  # pylint: disable=C0103
+        except IOError as e:
             if e.errno == 2:  # 'No such file or directory'
                 logger.info("The extension command already completed; will not track resource usage")
             logger.info("Failed to start tracking resource usage for the extension: {0}", ustr(e))
-        except Exception as e:  # pylint: disable=C0103
+        except Exception as e:
             logger.info("Failed to start tracking resource usage for the extension: {0}", ustr(e))
 
         # Wait for process completion or timeout
         try:
-            try:
-                process_output = handle_process_completion(process=process,
-                                                           command=command,
-                                                           timeout=timeout,
-                                                           stdout=stdout,
-                                                           stderr=stderr,
-                                                           error_code=error_code)
-            finally:
-                with self._systemd_run_commands_lock:
-                    self._systemd_run_commands.remove(process.pid)
-        except ExtensionError as e:  # pylint: disable=C0103
+            return handle_process_completion(process=process, command=command, timeout=timeout, stdout=stdout, stderr=stderr, error_code=error_code)
+        except ExtensionError as e:
             # The extension didn't terminate successfully. Determine whether it was due to systemd errors or
             # extension errors.
-            systemd_failure = self._is_systemd_failure(scope, stderr)
-            process_output = read_output(stdout, stderr)
-
-            if not systemd_failure:  # pylint: disable=R1720
+            if not self._is_systemd_failure(scope, stderr):
                 # There was an extension error; it either timed out or returned a non-zero exit code. Re-raise the error
                 raise
+
+            # There was an issue with systemd-run. We need to log it and retry the extension without systemd.
+            process_output = read_output(stdout, stderr)
+            # Reset the stdout and stderr
+            stdout.truncate(0)
+            stderr.truncate(0)
+
+            if isinstance(e, ExtensionOperationError):
+                # no-member: Instance of 'ExtensionError' has no 'exit_code' member (no-member) - Disabled: e is actually an ExtensionOperationError
+                err_msg = 'Systemd process exited with code %s and output %s' % (e.exit_code, process_output)  # pylint: disable=no-member
             else:
-                # There was an issue with systemd-run. We need to log it and retry the extension without systemd.
-                if isinstance(e, ExtensionOperationError):
-                    err_msg = 'Systemd process exited with code %s and output %s' % (e.exit_code, process_output)  # pylint: disable=no-member
-                else:
-                    err_msg = "Systemd timed-out, output: %s" % process_output
-                    
-                event_msg = 'Failed to run systemd-run for unit {0}.scope. ' \
-                            'Will retry invoking the extension without systemd. ' \
-                            'Systemd-run error: {1}'.format(scope, err_msg)
-                add_event(op=WALAEventOperation.InvokeCommandUsingSystemd, is_success=False, log_event=False, message=event_msg)
-                logger.warn(event_msg)
-
-                # Reset the stdout and stderr
-                stdout.truncate(0)
-                stderr.truncate(0)
-
-                # Try invoking the process again, this time without systemd-run
-                logger.info('Extension invocation using systemd failed, falling back to regular invocation '
-                            'without cgroups tracking.')
-                process = subprocess.Popen(command,  # pylint: disable=W1509
-                                           shell=shell,
-                                           cwd=cwd,
-                                           env=env,
-                                           stdout=stdout,
-                                           stderr=stderr,
-                                           preexec_fn=os.setsid)
-
-                process_output = handle_process_completion(process=process,
-                                                           command=command,
-                                                           timeout=timeout,
-                                                           stdout=stdout,
-                                                           stderr=stderr,
-                                                           error_code=error_code)
-
-                return process_output
-
-        # The process terminated in time and successfully
-        return process_output
+                err_msg = "Systemd timed-out, output: %s" % process_output
+            raise SystemdRunError(err_msg)
+        finally:
+            with self._systemd_run_commands_lock:
+                self._systemd_run_commands.remove(process.pid)
 
     def cleanup_legacy_cgroups(self):
         """

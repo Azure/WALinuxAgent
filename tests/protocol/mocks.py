@@ -72,7 +72,7 @@ def mock_wire_protocol(mock_wire_data_file, http_get_handler=None, http_post_han
     #
     original_http_request = restutil.http_request
 
-    def http_request(method, url, data, **kwargs):  # pylint: disable=too-many-branches
+    def http_request(method, url, data, **kwargs):
         # if there is a handler for the request, use it
         handler = None
         if method == 'GET':

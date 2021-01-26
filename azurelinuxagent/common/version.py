@@ -65,7 +65,7 @@ def get_f5_platform():
     f5_version = re.compile("^Version: (\d+\.\d+\.\d+)")  # pylint: disable=W1401
     f5_product = re.compile("^Product: ([\w-]+)")  # pylint: disable=W1401
 
-    with open('/VERSION', 'r') as fh:  # pylint: disable=C0103
+    with open('/VERSION', 'r') as fh:
         content = fh.readlines()
         for line in content:
             version_matches = f5_version.match(line)
@@ -89,10 +89,10 @@ def get_f5_platform():
 def get_checkpoint_platform():
     take = build = release = ""
     full_name = open("/etc/cp-release").read().strip()
-    with open("/etc/cloud-version") as f:  # pylint: disable=C0103
+    with open("/etc/cloud-version") as f:
         for line in f:
-            k, _, v = line.partition(": ")  # pylint: disable=C0103
-            v = v.strip()  # pylint: disable=C0103
+            k, _, v = line.partition(": ")
+            v = v.strip()
             if k == "release":
                 release = v
             elif k == "take":

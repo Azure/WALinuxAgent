@@ -51,8 +51,8 @@ class FreeBSDResourceDiskHandler(ResourceDiskHandler):
                 dic[geom_name] = line[8:]
         return dic
 
-    def mount_resource_disk(self, mount_point):  # pylint: disable=R0912
-        fs = self.fs  # pylint: disable=C0103
+    def mount_resource_disk(self, mount_point):
+        fs = self.fs
         if fs != 'ufs':
             raise ResourceDiskError(
                 "Unsupported filesystem type:{0}, only ufs is supported.".format(fs))

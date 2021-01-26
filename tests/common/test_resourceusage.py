@@ -23,7 +23,7 @@ from tests.tools import AgentTestCase, data_dir, patch
 
 
 def raise_ioerror(*_):
-    e = IOError()  # pylint: disable=invalid-name
+    e = IOError()
     from errno import ENOENT
     e.errno = ENOENT
     raise e

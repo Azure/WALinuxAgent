@@ -16,13 +16,16 @@
 # Requires Python 2.6+ and Openssl 1.0+
 #
 
+from azurelinuxagent.common.future import ustr
+from azurelinuxagent.common.utils import shellutil
+
 
 class RouteEntry(object):
     """
     Represents a single route. The destination, gateway, and mask members are hex representations of the IPv4 address in
     network byte order.
     """
-    def __init__(self, interface, destination, gateway, mask, flags, metric):  # pylint: disable=R0913
+    def __init__(self, interface, destination, gateway, mask, flags, metric):
         self.interface = interface
         self.destination = destination
         self.gateway = gateway
@@ -49,12 +52,12 @@ class RouteEntry(object):
         return self._net_hex_to_dotted_quad(self.mask)
 
     def to_json(self):
-        f = '{{"Iface": "{0}", "Destination": "{1}", "Gateway": "{2}", "Mask": "{3}", "Flags": "{4:#06x}", "Metric": "{5}"}}'  # pylint: disable=C0103
+        f = '{{"Iface": "{0}", "Destination": "{1}", "Gateway": "{2}", "Mask": "{3}", "Flags": "{4:#06x}", "Metric": "{5}"}}'
         return f.format(self.interface, self.destination_quad(), self.gateway_quad(), self.mask_quad(),
-                       self.flags, self.metric) 
+                       self.flags, self.metric)
 
     def __str__(self):
-        f = "Iface: {0}\tDestination: {1}\tGateway: {2}\tMask: {3}\tFlags: {4:#06x}\tMetric: {5}"  # pylint: disable=C0103
+        f = "Iface: {0}\tDestination: {1}\tGateway: {2}\tMask: {3}\tFlags: {4:#06x}\tMetric: {5}"
         return f.format(self.interface, self.destination_quad(), self.gateway_quad(), self.mask_quad(),
                         self.flags, self.metric)
 
@@ -88,8 +91,54 @@ class NetworkInterfaceCard:
     def __str__(self):
         entries = ['"name": "{0}"'.format(self.name),
                    '"link": "{0}"'.format(self.link)]
-        if len(self.ipv4) > 0:  # pylint: disable=len-as-condition
+        if len(self.ipv4) > 0:
             entries.append('"ipv4": {0}'.format(self._json_array(self.ipv4)))
-        if len(self.ipv6) > 0:  # pylint: disable=len-as-condition
+        if len(self.ipv6) > 0:
             entries.append('"ipv6": {0}'.format(self._json_array(self.ipv6)))
         return "{{ {0} }}".format(", ".join(entries))
+
+
+class AddFirewallRules(object):
+
+    @staticmethod
+    def _add_wait(wait, command):
+        """
+        If 'wait' is True, adds the wait option (-w) to the given iptables command line
+        """
+        if wait:
+            command.insert(1, "-w")
+        return command
+
+    @staticmethod
+    def get_iptables_accept_command(wait, command, destination, owner_uid):
+        cmd = ["iptables", "-t", "security", command, "OUTPUT", "-d", destination, "-p", "tcp", "-m", "owner",
+               "--uid-owner", str(owner_uid), "-j", "ACCEPT"]
+        return AddFirewallRules._add_wait(wait, cmd)
+
+    @staticmethod
+    def get_iptables_drop_command(wait, command, destination):
+        cmd = ["iptables", "-t", "security", command, "OUTPUT", "-d", destination, "-p", "tcp", "-m", "conntrack",
+               "--ctstate", "INVALID,NEW", "-j", "DROP"]
+        return AddFirewallRules._add_wait(wait, cmd)
+
+    @staticmethod
+    def add_iptables_rules(wait, dst_ip, uid):
+        def _raise_if_empty(val, name):
+            if val == "":
+                raise Exception("{0} should not be empty".format(name))
+
+        _raise_if_empty(dst_ip, "Destination IP")
+        _raise_if_empty(uid, "User ID")
+        accept_rule = AddFirewallRules.get_iptables_accept_command(wait, "-A", dst_ip, uid)
+        try:
+            shellutil.run_command(accept_rule)
+        except Exception as e:
+            msg = "Unable to add ACCEPT firewall rule '{0}' - {1}".format(accept_rule, ustr(e))
+            raise Exception(msg)
+
+        drop_rule = AddFirewallRules.get_iptables_drop_command(wait, "-A", dst_ip)
+        try:
+            shellutil.run_command(drop_rule)
+        except Exception as e:
+            msg = "Unable to add DROP firewall rule '{0}' - {1}".format(drop_rule, ustr(e))
+            raise Exception(msg)

@@ -151,6 +151,12 @@ class ProtocolNotFoundError(ProtocolError):
     """
 
 
+class IncompleteGoalStateError(ProtocolError):
+    """
+    Goal state is returned incomplete.
+    """
+
+
 class HttpError(AgentError):
     """
     Http request failure

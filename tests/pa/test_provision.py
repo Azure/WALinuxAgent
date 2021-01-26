@@ -61,7 +61,7 @@ class TestProvision(AgentTestCase):
     @patch('azurelinuxagent.common.conf.get_provision_enabled',
         return_value=False)
     def test_provisioning_is_skipped_when_not_enabled(self, mock_conf):  # pylint: disable=unused-argument
-        ph = ProvisionHandler()  # pylint: disable=invalid-name
+        ph = ProvisionHandler()
         ph.osutil = DefaultOSUtil()
         ph.osutil.get_instance_id = Mock(
                         return_value='B9F3C233-9913-9F42-8EB3-BA656DF32502')
@@ -78,7 +78,7 @@ class TestProvision(AgentTestCase):
 
     @patch('os.path.isfile', return_value=False)
     def test_check_provisioned_file_not_provisioned(self, mock_isfile):  # pylint: disable=unused-argument
-        ph = ProvisionHandler()  # pylint: disable=invalid-name
+        ph = ProvisionHandler()
         self.assertFalse(ph.check_provisioned_file())
 
     @patch('os.path.isfile', return_value=True)
@@ -88,7 +88,7 @@ class TestProvision(AgentTestCase):
     def test_check_provisioned_file_is_provisioned(self,
             mock_deprovision, mock_read, mock_isfile):  # pylint: disable=unused-argument
 
-        ph = ProvisionHandler()  # pylint: disable=invalid-name
+        ph = ProvisionHandler()
         ph.osutil = Mock()
         ph.osutil.is_current_instance_id = Mock(return_value=True)
         ph.write_provisioned = Mock()
@@ -107,7 +107,7 @@ class TestProvision(AgentTestCase):
     def test_check_provisioned_file_not_deprovisioned(self,
             mock_deprovision, mock_read, mock_isfile):  # pylint: disable=unused-argument
 
-        ph = ProvisionHandler()  # pylint: disable=invalid-name
+        ph = ProvisionHandler()
         ph.osutil = Mock()
         ph.osutil.is_current_instance_id = Mock(return_value=False)
         ph.report_ready = Mock()
@@ -188,7 +188,7 @@ class TestProvision(AgentTestCase):
            return_value='B9F3C233-9913-9F42-8EB3-BA656DF32502')
     @patch('azurelinuxagent.pa.provision.default.ProvisionHandler.write_agent_disabled')
     @patch('azurelinuxagent.pa.provision.default.cloud_init_is_enabled', return_value=False)
-    def _provision_test(self,  # pylint: disable=invalid-name,too-many-arguments
+    def _provision_test(self,
                         distro_name,
                         distro_version,
                         distro_full_name,
@@ -206,7 +206,7 @@ class TestProvision(AgentTestCase):
          1. Provision
          2. GuestState
         """
-        ph = get_provision_handler(distro_name,  # pylint: disable=invalid-name
+        ph = get_provision_handler(distro_name,
                                    distro_version,
                                    distro_full_name)
         ph.report_event = MagicMock()
@@ -239,7 +239,7 @@ class TestProvision(AgentTestCase):
             self.assertTrue(kw_args['message'] == provisionMessage)
             self.assertTrue(kw_args['is_success'])
 
-            expected_disabled = True if provisionMessage == 'false' else False  # pylint: disable=simplifiable-if-expression
+            expected_disabled = True if provisionMessage == 'false' else False
             self.assertTrue(patch_write_agent_disabled.call_count == expected_disabled)
 
         else:
@@ -255,7 +255,6 @@ class TestProvision(AgentTestCase):
         return_value='B9F3C233-9913-9F42-8EB3-BA656DF32502')
     @patch('azurelinuxagent.common.conf.get_provisioning_agent', return_value='waagent')
     @patch('azurelinuxagent.pa.provision.default.cloud_init_is_enabled', return_value=False)
-    # pylint:disable=too-many-arguments
     def test_provision_telemetry_fail(self,
                                       distro_name,
                                       distro_version,
@@ -270,7 +269,7 @@ class TestProvision(AgentTestCase):
 
          1. Provision
         """
-        ph = get_provision_handler(distro_name, distro_version,  # pylint: disable=invalid-name
+        ph = get_provision_handler(distro_name, distro_version,
                                    distro_full_name)
         ph.report_event = MagicMock()
         ph.reg_ssh_host_key = MagicMock(side_effect=ProvisionError(
@@ -299,7 +298,7 @@ class TestProvision(AgentTestCase):
                                           distro_name,
                                           distro_version,
                                           distro_full_name):
-        ph = get_provision_handler(distro_name,  # pylint: disable=invalid-name
+        ph = get_provision_handler(distro_name,
                                    distro_version,
                                    distro_full_name)
 

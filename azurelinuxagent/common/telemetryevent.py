@@ -89,8 +89,8 @@ class TelemetryEventParam(DataContract):
 
 class TelemetryEvent(DataContract):
     def __init__(self, eventId=None, providerId=None):
-        self.eventId = eventId  # pylint: disable=C0103
-        self.providerId = providerId  # pylint: disable=C0103
+        self.eventId = eventId
+        self.providerId = providerId
         self.parameters = DataContractList(TelemetryEventParam)
         self.file_type = ""
 

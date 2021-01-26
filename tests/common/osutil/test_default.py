@@ -38,14 +38,14 @@ from tests.tools import AgentTestCase, patch, open_patch, load_data, \
     running_under_travis, skip_if_predicate_true
 
 
-actual_get_proc_net_route = 'azurelinuxagent.common.osutil.default.DefaultOSUtil._get_proc_net_route'  # pylint: disable=invalid-name
+actual_get_proc_net_route = 'azurelinuxagent.common.osutil.default.DefaultOSUtil._get_proc_net_route'
 
 
 def fake_is_loopback(_, iface):
     return iface.startswith('lo')
 
 
-class TestOSUtil(AgentTestCase):  # pylint: disable=too-many-public-methods
+class TestOSUtil(AgentTestCase):
     def setUp(self):
         AgentTestCase.setUp(self)
 
@@ -118,14 +118,14 @@ class TestOSUtil(AgentTestCase):  # pylint: disable=too-many-public-methods
     def test_empty_proc_net_route(self):
         routing_table = ""
 
-        mo = mock.mock_open(read_data=routing_table)  # pylint: disable=invalid-name
+        mo = mock.mock_open(read_data=routing_table)
         with patch(open_patch(), mo):
             self.assertEqual(len(osutil.DefaultOSUtil().read_route_table()), 0)
 
     def test_no_routes(self):
         routing_table = 'Iface\tDestination\tGateway \tFlags\tRefCnt\tUse\tMetric\tMask\t\tMTU\tWindow\tIRTT        \n'
 
-        mo = mock.mock_open(read_data=routing_table)  # pylint: disable=invalid-name
+        mo = mock.mock_open(read_data=routing_table)
         with patch(open_patch(), mo):
             raw_route_list = osutil.DefaultOSUtil().read_route_table()
 
@@ -134,7 +134,7 @@ class TestOSUtil(AgentTestCase):  # pylint: disable=too-many-public-methods
     def test_bogus_proc_net_route(self):
         routing_table = 'Iface\tDestination\tGateway \tFlags\t\tUse\tMetric\t\neth0\t00000000\t00000000\t0001\t\t0\t0\n'
 
-        mo = mock.mock_open(read_data=routing_table)  # pylint: disable=invalid-name
+        mo = mock.mock_open(read_data=routing_table)
         with patch(open_patch(), mo):
             raw_route_list = osutil.DefaultOSUtil().read_route_table()
 
@@ -150,7 +150,7 @@ class TestOSUtil(AgentTestCase):  # pylint: disable=too-many-public-methods
             'docker0\t002BA8C0\t00000000\t0001\t0\t0\t10\t00FFFFFF\t0\t0\t0    \n'
         known_sha1_hash = b'\x1e\xd1k\xae[\xf8\x9b\x1a\x13\xd0\xbbT\xa4\xe3Y\xa3\xdd\x0b\xbd\xa9'
 
-        mo = mock.mock_open(read_data=routing_table)  # pylint: disable=invalid-name
+        mo = mock.mock_open(read_data=routing_table)
         with patch(open_patch(), mo):
             raw_route_list = osutil.DefaultOSUtil().read_route_table()
 
@@ -233,7 +233,7 @@ class TestOSUtil(AgentTestCase):  # pylint: disable=too-many-public-methods
         eth0	00345B0A	00000000	0001	0	    0	5	00000000	0	0	0   \n\
         lo	    00000000	01345B0A	0003	0	    0	1	00FCFFFF	0	0	0   \n"
 
-        mo = mock.mock_open(read_data=routing_table)  # pylint: disable=invalid-name
+        mo = mock.mock_open(read_data=routing_table)
         with patch(open_patch(), mo):
             self.assertFalse(osutil.DefaultOSUtil().is_primary_interface('lo'))
             self.assertTrue(osutil.DefaultOSUtil().is_primary_interface('eth0'))
@@ -247,7 +247,7 @@ class TestOSUtil(AgentTestCase):  # pylint: disable=too-many-public-methods
         "bond0	10813FA8	0100000A	0007	0	    0	0	00000000	0	0	0   \n" \
         "bond0	FEA9FEA9	0100000A	0007	0	    0	0	00000000	0	0	0   \n"
 
-        mo = mock.mock_open(read_data=routing_table)  # pylint: disable=invalid-name
+        mo = mock.mock_open(read_data=routing_table)
         with patch(open_patch(), mo):
             self.assertFalse(osutil.DefaultOSUtil().is_primary_interface('eth0'))
             self.assertTrue(osutil.DefaultOSUtil().is_primary_interface('bond0'))
@@ -259,7 +259,7 @@ class TestOSUtil(AgentTestCase):  # pylint: disable=too-many-public-methods
         high	00000000	01345B0A	0003	0	    0	5	00000000	0	0	0   \n\
         low1	00000000	01345B0A	0003	0	    0	1	00FCFFFF	0	0	0   \n"
 
-        mo = mock.mock_open(read_data=routing_table)  # pylint: disable=invalid-name
+        mo = mock.mock_open(read_data=routing_table)
         with patch(open_patch(), mo):
             self.assertTrue(osutil.DefaultOSUtil().is_primary_interface('low1'))
 
@@ -269,7 +269,7 @@ class TestOSUtil(AgentTestCase):  # pylint: disable=too-many-public-methods
         first	00000000	01345B0A	0003	0	    0	1	00000000	0	0	0   \n\
         secnd	00000000	01345B0A	0003	0	    0	1	00FCFFFF	0	0	0   \n"
 
-        mo = mock.mock_open(read_data=routing_table)  # pylint: disable=invalid-name
+        mo = mock.mock_open(read_data=routing_table)
         with patch(open_patch(), mo):
             self.assertTrue(osutil.DefaultOSUtil().is_primary_interface('first'))
 
@@ -279,7 +279,7 @@ class TestOSUtil(AgentTestCase):  # pylint: disable=too-many-public-methods
         nflg	00000000	01345B0A	0001	0	    0	1	00000000	0	0	0   \n\
         flgs	00000000	01345B0A	0003	0	    0	1	00FCFFFF	0	0	0   \n"
 
-        mo = mock.mock_open(read_data=routing_table)  # pylint: disable=invalid-name
+        mo = mock.mock_open(read_data=routing_table)
         with patch(open_patch(), mo):
             self.assertTrue(osutil.DefaultOSUtil().is_primary_interface('flgs'))
 
@@ -289,7 +289,7 @@ class TestOSUtil(AgentTestCase):  # pylint: disable=too-many-public-methods
         ndst	00000001	01345B0A	0003	0	    0	1	00000000	0	0	0   \n\
         nflg	00000000	01345B0A	0001	0	    0	1	00FCFFFF	0	0	0   \n"
 
-        mo = mock.mock_open(read_data=routing_table)  # pylint: disable=invalid-name
+        mo = mock.mock_open(read_data=routing_table)
         with patch(open_patch(), mo):
             self.assertFalse(osutil.DefaultOSUtil().is_primary_interface('ndst'))
             self.assertFalse(osutil.DefaultOSUtil().is_primary_interface('nflg'))
@@ -302,7 +302,7 @@ class TestOSUtil(AgentTestCase):  # pylint: disable=too-many-public-methods
             patch_primary.return_value = ''
             try:
                 osutil.DefaultOSUtil().get_first_if()[0]
-            except Exception as e:  # pylint: disable=unused-variable,invalid-name
+            except Exception as e:  # pylint: disable=unused-variable
                 print(traceback.format_exc())
                 exception = True
             self.assertFalse(exception)
@@ -628,7 +628,7 @@ Match host 192.168.1.2\n\
         self.assertTrue(os.path.isfile(waagent_sudoers))
 
         count = -1
-        with open(waagent_sudoers, 'r') as f:  # pylint: disable=invalid-name
+        with open(waagent_sudoers, 'r') as f:
             count = len(f.readlines())
         self.assertEqual(1, count)
 
@@ -636,7 +636,7 @@ Match host 192.168.1.2\n\
         util.conf_sudoer("FooBar")
 
         count = -1
-        with open(waagent_sudoers, 'r') as f:  # pylint: disable=invalid-name
+        with open(waagent_sudoers, 'r') as f:
             count = len(f.readlines())
         print("WRITING TO {0}".format(waagent_sudoers))
         self.assertEqual(1, count)
@@ -686,7 +686,7 @@ Match host 192.168.1.2\n\
         def mock_popen(command, *args, **kwargs):
             command_string = TestOSUtil._command_to_string(command)
             if command_string in mocked_commands:
-                if command_string != version_command and command_string != list_command:  # pylint: disable=consider-using-in
+                if command_string != version_command and command_string != list_command:
                     command_calls.append(command_string)
                 output, exit_code = mocked_commands[command_string]
                 command = "echo '{0}' && exit {1}".format(output, exit_code)

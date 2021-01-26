@@ -26,7 +26,7 @@ from tests.tools import AgentTestCase, data_dir, patch
 
 
 def raise_ioerror(*_):
-    e = IOError()  # pylint: disable=invalid-name
+    e = IOError()
     from errno import EIO
     e.errno = EIO
     raise e
@@ -37,7 +37,7 @@ def median(lst):
     l_len = len(data)
     if l_len < 1:
         return None
-    if l_len % 2 == 0:  # pylint: disable=no-else-return
+    if l_len % 2 == 0:
         return (data[int((l_len - 1) / 2)] + data[int((l_len + 1) / 2)]) / 2.0
     else:
         return data[int((l_len - 1) / 2)]
@@ -53,14 +53,14 @@ def generate_metric_list(lst):
 
 def consume_cpu_time():
     waste = 0
-    for x in range(1, 200000):  # pylint: disable=unused-variable,invalid-name
+    for x in range(1, 200000):  # pylint: disable=unused-variable
         waste += random.random()
     return waste
 
 
 def consume_memory():
     waste = []
-    for x in range(1, 3):  # pylint: disable=unused-variable,invalid-name
+    for x in range(1, 3):  # pylint: disable=unused-variable
         waste.append([random.random()] * 10000)
         time.sleep(0.1)
         waste *= 0
@@ -184,7 +184,7 @@ class TestCGroupsTelemetry(AgentTestCase):
     @patch("azurelinuxagent.common.cgroup.CpuCgroup.get_cpu_usage")
     @patch("azurelinuxagent.common.cgroup.CGroup.is_active")
     @patch("azurelinuxagent.common.resourceusage.MemoryResourceUsage.get_memory_usage_from_proc_statm")
-    def test_telemetry_polling_with_changing_cgroups_state(self, patch_get_statm, patch_is_active, patch_get_cpu_usage,  # pylint: disable=unused-argument,too-many-arguments
+    def test_telemetry_polling_with_changing_cgroups_state(self, patch_get_statm, patch_is_active, patch_get_cpu_usage,  # pylint: disable=unused-argument
                                                            patch_get_mem, patch_get_max_mem, *args):
         num_extensions = 5
         self._track_new_extension_cgroups(num_extensions)

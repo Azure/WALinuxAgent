@@ -250,7 +250,7 @@ class TestLogger(AgentTestCase):
     @patch("azurelinuxagent.common.logger.ConsoleAppender.write")
     @patch("azurelinuxagent.common.logger.FileAppender.write")
     def test_add_appender(self, mock_file_write, mock_console_write, mock_telem_write, mock_stdout_write):
-        lg = logger.Logger(logger.DEFAULT_LOGGER, "TestLogger1")  # pylint: disable=invalid-name
+        lg = logger.Logger(logger.DEFAULT_LOGGER, "TestLogger1")
 
         lg.add_appender(logger.AppenderType.FILE, logger.LogLevel.INFO, path=self.log_file)
         lg.add_appender(logger.AppenderType.TELEMETRY, logger.LogLevel.WARNING, path=add_log_event)
@@ -298,7 +298,7 @@ class TestLogger(AgentTestCase):
     @patch("azurelinuxagent.common.logger.ConsoleAppender.write")
     @patch("azurelinuxagent.common.logger.FileAppender.write")
     def test_set_prefix(self, mock_file_write, mock_console_write, mock_telem_write, mock_stdout_write):
-        lg = logger.Logger(logger.DEFAULT_LOGGER)  # pylint: disable=invalid-name
+        lg = logger.Logger(logger.DEFAULT_LOGGER)
         prefix = "YoloLogger"
 
         lg.set_prefix(prefix)
@@ -338,7 +338,7 @@ class TestLogger(AgentTestCase):
         logger.add_logger_appender(logger.AppenderType.STDOUT, logger.LogLevel.WARNING)
         logger.set_prefix(parent_prefix)
 
-        lg = logger.Logger(logger.DEFAULT_LOGGER, child_prefix)  # pylint: disable=invalid-name
+        lg = logger.Logger(logger.DEFAULT_LOGGER, child_prefix)
 
         lg.error("Test Log")
         self.assertEqual(1, mock_file_write.call_count)
@@ -383,7 +383,7 @@ class TestLogger(AgentTestCase):
                 logcontent = logfile.read()
                 # Checking the contents of the event file.
                 self.assertIn("Test Log - Warning", logcontent)
-        except Exception as e:  # pylint: disable=invalid-name
+        except Exception as e:
             self.assertFalse(True, "The log file looks like it isn't correctly setup for this test. Take a look. "  # pylint: disable=redundant-unittest-assert
                                    "{0}".format(e))
 
@@ -417,7 +417,7 @@ class TestLogger(AgentTestCase):
     @patch("azurelinuxagent.common.logger.ConsoleAppender.write")
     @patch("azurelinuxagent.common.event.send_logs_to_telemetry", return_value=True)
     @patch("azurelinuxagent.common.conf.get_lib_dir")
-    def test_telemetry_logger_check_all_file_logs_written_when_events_gt_MAX_NUMBER_OF_EVENTS(self, mock_lib_dir, *_):  # pylint: disable=invalid-name
+    def test_telemetry_logger_check_all_file_logs_written_when_events_gt_MAX_NUMBER_OF_EVENTS(self, mock_lib_dir, *_):
         mock_lib_dir.return_value = self.lib_dir
         __event_logger__.event_dir = self.event_dir
         no_of_log_statements = MAX_NUMBER_OF_EVENTS + 100
@@ -453,7 +453,7 @@ class TestLogger(AgentTestCase):
                 self.assertRegex(logcontent[1001], r"(.*WARNING\s*{0}\s*\[PERIODIC\]\s*Too many files under:.*{1}, "
                                                    r"current count\:\s*\d+,\s*removing oldest\s*.*)".format(prefix,
                                                                                                             self.event_dir))
-        except Exception as e:  # pylint: disable=invalid-name
+        except Exception as e:
             self.assertFalse(True, "The log file looks like it isn't correctly setup for this test. "  # pylint: disable=redundant-unittest-assert
                                    "Take a look. {0}".format(e))
 

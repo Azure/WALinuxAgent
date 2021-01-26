@@ -36,7 +36,7 @@ UUID_PATTERN = re.compile(
     re.IGNORECASE)
 
 
-class OpenBSDOSUtil(DefaultOSUtil):  # pylint: disable=R0904
+class OpenBSDOSUtil(DefaultOSUtil):
 
     def __init__(self):
         super(OpenBSDOSUtil, self).__init__()
@@ -146,21 +146,21 @@ class OpenBSDOSUtil(DefaultOSUtil):  # pylint: disable=R0904
     def stop_dhcp_service(self):
         pass
 
-    def get_dhcp_lease_endpoint(self):  # pylint: disable=R0912
+    def get_dhcp_lease_endpoint(self):
         """
         OpenBSD has a sligthly different lease file format.
         """
         endpoint = None
         pathglob = '/var/db/dhclient.leases.{}'.format(self.get_first_if()[0])
 
-        HEADER_LEASE = "lease"  # pylint: disable=C0103
-        HEADER_OPTION = "option option-245"  # pylint: disable=C0103
-        HEADER_EXPIRE = "expire"  # pylint: disable=C0103
-        FOOTER_LEASE = "}"  # pylint: disable=C0103
-        FORMAT_DATETIME = "%Y/%m/%d %H:%M:%S %Z"  # pylint: disable=C0103
+        HEADER_LEASE = "lease"
+        HEADER_OPTION = "option option-245"
+        HEADER_EXPIRE = "expire"
+        FOOTER_LEASE = "}"
+        FORMAT_DATETIME = "%Y/%m/%d %H:%M:%S %Z"
 
         logger.info("looking for leases in path [{0}]".format(pathglob))
-        for lease_file in glob.glob(pathglob):  # pylint: disable=R1702
+        for lease_file in glob.glob(pathglob):
             leases = open(lease_file).read()
             if HEADER_OPTION in leases:
                 cached_endpoint = None
@@ -228,7 +228,7 @@ class OpenBSDOSUtil(DefaultOSUtil):  # pylint: disable=R0904
                 return "/dev/{0}".format(dvd.group(0))
         raise OSUtilError("Failed to get DVD device")
 
-    def mount_dvd(self,  # pylint: disable=R0913
+    def mount_dvd(self,
                   max_retry=6,
                   chk_err=True,
                   dvd_device=None,
