@@ -79,7 +79,7 @@ if __name__ == '__main__':
     unit file if it changes.
     
     This service would run before the network would be setup, so we need to maintain state of the previous Wireserver IP
-    to ensure we cover all attack vectors to the Wire IP.
+    to ensure we restrict access to the Wire IP.
     """
     _setup_firewall_rules()
 
