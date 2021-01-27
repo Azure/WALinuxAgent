@@ -14,9 +14,11 @@
 #
 # Requires Python 2.6+ and Openssl 1.0+
 #
+import subprocess
+
+from mock.mock import patch
 
 import azurelinuxagent.common.utils.networkutil as networkutil
-
 from tests.tools import AgentTestCase
 
 
@@ -60,3 +62,36 @@ class TestNetworkOperations(AgentTestCase):
         nic.add_ipv6("ipv6-1")
         nic.add_ipv4("ipv4-1")
         self.assertEqual(str(nic), '{ "name": "test0", "link": "link INFO", "ipv4": ["ipv4-1"], "ipv6": ["ipv6-1"] }')
+
+
+class TestAddFirewallRules(AgentTestCase):
+
+    def test_it_should_add_firewall_rules(self):
+        test_dst_ip = "1.2.3.4"
+        test_uid = 9999
+        test_wait = "-w"
+        original_popen = subprocess.Popen
+        commands_called = []
+
+        def mock_popen(command, *args, **kwargs):
+            if "iptables" in command:
+                commands_called.append(command)
+                command = ["echo", "iptables"]
+            return original_popen(command, *args, **kwargs)
+
+        with patch("azurelinuxagent.common.utils.shellutil.subprocess.Popen", side_effect=mock_popen):
+            networkutil.AddFirewallRules.add_iptables_rules(test_wait, test_dst_ip, test_uid)
+
+        self.assertTrue(all(test_dst_ip in cmd for cmd in commands_called), "Dest IP was not set correctly in iptables")
+        self.assertTrue(all(test_wait in cmd for cmd in commands_called), "The wait was not set properly")
+        self.assertTrue(all(str(test_uid) in cmd for cmd in commands_called if "ACCEPT" in cmd),
+                        "The UID is not set for the accept command")
+
+    def test_it_should_raise_if_invalid_data(self):
+        with self.assertRaises(Exception) as context_manager:
+            networkutil.AddFirewallRules.add_iptables_rules(wait="", dst_ip="", uid=9999)
+        self.assertIn("Destination IP should not be empty", str(context_manager.exception))
+
+        with self.assertRaises(Exception) as context_manager:
+            networkutil.AddFirewallRules.add_iptables_rules(wait="", dst_ip="1.2.3.4", uid="")
+        self.assertIn("User ID should not be empty", str(context_manager.exception))
