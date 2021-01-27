@@ -200,16 +200,16 @@ class CGroupConfigurator(object):
                 logger.info(message)
                 add_event(op=WALAEventOperation.CGroupsInitialize, is_success=False, message=message, log_event=False)
 
-            for unit in azure_units:
+            for unit_name, unit_description in azure_units:
                 location = "Unknown"
                 try:
-                    location = SystemdCgroupsApi.get_unit_property(unit, "Slice")
+                    location = SystemdCgroupsApi.get_unit_property(unit_name, "Slice")
                 except Exception as exception:
-                    message = "Failed to query Slice for {0}: {1}".format(unit, ustr(exception))
+                    message = "Failed to query Slice for {0}: {1}".format(unit_name, ustr(exception))
                     logger.info(message)
                     add_event(op=WALAEventOperation.CGroupsInitialize, is_success=False, message=message, log_event=False)
 
-                message = "Found an Azure unit under {0}: {1}".format(location, unit)
+                message = "Found an Azure unit under {0}: {1}".format(location, unit_description)
                 logger.info(message)
                 add_event(op=WALAEventOperation.CGroupsInitialize, message=message)
 
