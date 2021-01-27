@@ -217,7 +217,7 @@ class CGroupConfigurator(object):
                 try:
                     cgroups = shellutil.run_command('systemd-cgls')
                     for line in cgroups.split('\n'):
-                        if re.match('[^\x00-\xff]+azure\.slice\s*', line, re.UNICODE):
+                        if re.match(r'[^\x00-\xff]+azure\.slice\s*', line, re.UNICODE):
                             logger.info(ustr("Found a cgroup for azure.slice\n{0}").format(cgroups))
                             add_event(op=WALAEventOperation.CGroupsInitialize, message="Found a cgroup for azure.slice")
                 except shellutil.CommandError as command_error:
