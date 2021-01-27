@@ -187,34 +187,31 @@ class CGroupConfigurator(object):
 
         @staticmethod
         def __collect_azure_unit_telemetry():
-            azure_unit_name = None
-            azure_unit_description = None
+            azure_units = []
+
             try:
                 units = shellutil.run_command(['systemctl', 'list-units', 'azure*', '-all'])
                 for line in units.split('\n'):
                     match = re.match(r'\s?(azure[^\s]*)\s?', line, re.IGNORECASE)
                     if match is not None:
-                        azure_unit_name = match.group(1)
-                        azure_unit_description = line
+                        azure_units.append((match.group(1), line))
             except shellutil.CommandError as command_error:
                 message = "Failed to list systemd units: {0}".format(ustr(command_error))
                 logger.info(message)
                 add_event(op=WALAEventOperation.CGroupsInitialize, is_success=False, message=message, log_event=False)
 
-            if azure_unit_name is None:
-                return
+            for unit in azure_units:
+                location = "Unknown"
+                try:
+                    location = SystemdCgroupsApi.get_unit_property(unit, "Slice")
+                except Exception as exception:
+                    message = "Failed to query Slice for {0}: {1}".format(unit, ustr(exception))
+                    logger.info(message)
+                    add_event(op=WALAEventOperation.CGroupsInitialize, is_success=False, message=message, log_event=False)
 
-            azure_unit_location = "Unknown"
-            try:
-                azure_unit_location = SystemdCgroupsApi.get_unit_property(azure_unit_name, "Slice")
-            except Exception as exception:
-                message = "Failed to query Slice for {0}: {1}".format(azure_unit_name, ustr(exception))
+                message = "Found an Azure unit under {0}: {1}".format(location, unit)
                 logger.info(message)
-                add_event(op=WALAEventOperation.CGroupsInitialize, is_success=False, message=message, log_event=False)
-
-            message = "Found an Azure unit under {0}: {1}".format(azure_unit_location, azure_unit_description)
-            logger.info(message)
-            add_event(op=WALAEventOperation.CGroupsInitialize, message=message)
+                add_event(op=WALAEventOperation.CGroupsInitialize, message=message)
 
         @staticmethod
         def __collect_agent_unit_files_telemetry():
