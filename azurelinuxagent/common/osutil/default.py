@@ -45,7 +45,7 @@ from azurelinuxagent.common.exception import OSUtilError
 from azurelinuxagent.common.future import ustr, array_to_bytes
 from azurelinuxagent.common.utils.cryptutil import CryptUtil
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
-from azurelinuxagent.common.utils.networkutil import RouteEntry, NetworkInterfaceCard
+from azurelinuxagent.common.utils.networkutil import RouteEntry, NetworkInterfaceCard, AddFirewallRules
 from azurelinuxagent.common.utils.shellutil import CommandError
 
 __RULES_FILES__ = ["/lib/udev/rules.d/75-persistent-net-generator.rules",
@@ -75,14 +75,11 @@ def _get_iptables_version_command():
 
 
 def _get_firewall_accept_command(wait, command, destination, owner_uid):
-    return _add_wait(wait,
-                     ["iptables", "-t", "security", command, "OUTPUT", "-d", destination, "-p", "tcp", "-m", "owner",
-                      "--uid-owner", str(owner_uid), "-j" "ACCEPT"])  # pylint: disable=W1404,W1403
+    return AddFirewallRules.get_iptables_accept_command(wait, command, destination, owner_uid)
 
 
 def _get_firewall_drop_command(wait, command, destination):
-    return _add_wait(wait, ["iptables", "-t", "security", command, "OUTPUT", "-d", destination, "-p", "tcp", "-m",
-                            "conntrack", "--ctstate", "INVALID,NEW", "-j", "DROP"])
+    return AddFirewallRules.get_iptables_drop_command(wait, command, destination)
 
 
 def _get_firewall_list_command(wait):
@@ -263,20 +260,10 @@ class DefaultOSUtil(object):
 
             # Otherwise, append both rules
             try:
-                accept_rule = _get_firewall_accept_command(wait, "-A", dst_ip, uid)
-                shellutil.run_command(accept_rule)
-            except Exception as e:
-                msg = "Unable to add ACCEPT firewall rule '{0}' - {1}".format(accept_rule, ustr(e))
-                logger.warn(msg)
-                raise Exception(msg)
-
-            try:
-                drop_rule = _get_firewall_drop_command(wait, "-A", dst_ip)
-                shellutil.run_command(drop_rule)
-            except Exception as e:
-                msg = "Unable to add DROP firewall rule '{0}' - {1}".format(drop_rule, ustr(e))
-                logger.warn(msg)
-                raise Exception(msg)
+                AddFirewallRules.add_iptables_rules(wait, dst_ip, uid)
+            except Exception as error:
+                logger.warn(ustr(error))
+                raise
 
             logger.info("Successfully added Azure fabric firewall rules")
 

@@ -249,7 +249,7 @@ def parse_args(sys_args):
             conf_file_path = m.group(1)
             if not os.path.exists(conf_file_path):
                 print("Error: Configuration file {0} does not exist".format(
-                        conf_file_path), file=sys.stderr) 
+                        conf_file_path), file=sys.stderr)
                 print(usage())
                 sys.exit(1)
         elif re.match("^([-/]*)deprovision\\+user", arg):
