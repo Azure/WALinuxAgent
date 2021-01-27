@@ -239,8 +239,13 @@ class CGroupConfigurator(object):
                 add_event(op=WALAEventOperation.CGroupsInitialize, is_success=False, message=message, log_event=False)
 
             for unit_file in agent_unit_files:
-                with open(unit_file, "r") as file_object:
-                    message = "Found a custom unit file for the agent: {0}\n{1}".format(unit_file, file_object.read())
+                try:
+                    with open(unit_file, "r") as file_object:
+                        message = "Found a custom unit file for the agent: {0}\n{1}".format(unit_file, file_object.read())
+                        logger.info(message)
+                        add_event(op=WALAEventOperation.CGroupsInitialize, message=message)
+                except Exception as exception:
+                    message = "Can't read {0}: {1}".format(unit_file, ustr(exception))
                     logger.info(message)
                     add_event(op=WALAEventOperation.CGroupsInitialize, message=message)
 
