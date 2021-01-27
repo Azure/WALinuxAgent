@@ -132,18 +132,16 @@ def is_file_not_found_error(exception):
     # Python 2 uses IOError(errno=2)
     if sys.version_info[0] == 2:
         return isinstance(exception, IOError) and exception.errno == 2
+
+    # pylint for python2 complains, but FileNotFoundError is
+    # defined for python3.
     
-    # Python 3 has its own type for this error.
+    # pylint: disable=undefined-variable
     elif sys.version_info[0] == 3:
-        # pylint for python2 complains, but FileNotFoundError is
-        # defined for python3.
-        
-        # pylint: disable=undefined-variable
         return isinstance(exception, FileNotFoundError)
-        # pylint: enable=undefined-variable
     
-    else:
-        raise ImportError("Unknown python version: {0}".format(sys.version_info))
+    return isinstance(exception, FileNotFoundError)
+    # pylint: enable=undefined-variable
 
 def array_to_bytes(buff):
     # Python 3.9 removed the tostring() method on arrays, the new alias is tobytes()
