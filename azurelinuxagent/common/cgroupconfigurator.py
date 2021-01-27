@@ -201,17 +201,29 @@ class CGroupConfigurator(object):
                 add_event(op=WALAEventOperation.CGroupsInitialize, is_success=False, message=message, log_event=False)
 
             for unit_name, unit_description in azure_units:
-                location = "Unknown"
+                unit_slice = "Unknown"
                 try:
-                    location = SystemdCgroupsApi.get_unit_property(unit_name, "Slice")
+                    unit_slice = SystemdCgroupsApi.get_unit_property(unit_name, "Slice")
                 except Exception as exception:
                     message = "Failed to query Slice for {0}: {1}".format(unit_name, ustr(exception))
                     logger.info(message)
                     add_event(op=WALAEventOperation.CGroupsInitialize, is_success=False, message=message, log_event=False)
 
-                message = "Found an Azure unit under {0}: {1}".format(location, unit_description)
+                message = "Found an Azure unit under slice {0}: {1}".format(unit_slice, unit_description)
                 logger.info(message)
                 add_event(op=WALAEventOperation.CGroupsInitialize, message=message)
+
+            if len(azure_units) == 0:
+                try:
+                    cgroups = shellutil.run_command('systemd-cgls')
+                    for line in cgroups.split('\n'):
+                        if re.match('[^\x00-\xff]+azure\.slice\s*', line, re.UNICODE):
+                            logger.info(ustr("Found a cgroup for azure.slice\n{0}").format(cgroups))
+                            add_event(op=WALAEventOperation.CGroupsInitialize, message="Found a cgroup for azure.slice")
+                except shellutil.CommandError as command_error:
+                    message = "Failed to list systemd units: {0}".format(ustr(command_error))
+                    logger.info(message)
+                    add_event(op=WALAEventOperation.CGroupsInitialize, is_success=False, message=message, log_event=False)
 
         @staticmethod
         def __collect_agent_unit_files_telemetry():
