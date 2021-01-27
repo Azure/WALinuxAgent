@@ -128,6 +128,20 @@ def get_openwrt_platform():
                     result[0] = "openwrt"
     return result
 
+def is_file_not_found_error(exception):
+    
+    # pylint for python2 complains, but FileNotFoundError is
+    # defined for python3.
+    
+    # pylint: disable=undefined-variable
+
+    if sys.version_info[0] == 2:
+        # Python 2 uses IOError(errno=2)
+        return isinstance(exception, IOError) and exception.errno == 2
+    elif sys.version_info[0] == 3:
+        return isinstance(exception, FileNotFoundError)
+    
+    return isinstance(exception, FileNotFoundError)
 
 def array_to_bytes(buff):
     # Python 3.9 removed the tostring() method on arrays, the new alias is tobytes()
