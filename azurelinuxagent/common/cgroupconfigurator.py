@@ -281,11 +281,17 @@ class CGroupConfigurator(object):
             if not os.path.exists(vmextensions_slice):
                 files_to_create.append((vmextensions_slice, _VMEXTENSIONS_SLICE_CONTENTS))
 
-            if not fileutil.findstr_in_file(agent_unit_file, "Slice=azure.slice") and not os.path.exists(agent_drop_in_file_slice):
-                files_to_create.append((agent_drop_in_file_slice, _AGENT_DROP_IN_FILE_SLICE_CONTENTS))
+            if fileutil.findstr_in_file(agent_unit_file, "Slice=azure.slice"):
+                self._cleanup_unit_file(agent_drop_in_file_slice)
+            else:
+                if not os.path.exists(agent_drop_in_file_slice):
+                    files_to_create.append((agent_drop_in_file_slice, _AGENT_DROP_IN_FILE_SLICE_CONTENTS))
 
-            if not fileutil.findstr_in_file(agent_unit_file, "CPUAccounting=yes") and not os.path.exists(agent_drop_in_file_cpu_accounting):
-                files_to_create.append((agent_drop_in_file_cpu_accounting, _AGENT_DROP_IN_FILE_CPU_ACCOUNTING_CONTENTS))
+            if fileutil.findstr_in_file(agent_unit_file, "CPUAccounting=yes"):
+                self._cleanup_unit_file(agent_drop_in_file_cpu_accounting)
+            else:
+                if not os.path.exists(agent_drop_in_file_cpu_accounting):
+                    files_to_create.append((agent_drop_in_file_cpu_accounting, _AGENT_DROP_IN_FILE_CPU_ACCOUNTING_CONTENTS))
 
             if len(files_to_create) > 0:
                 try:
@@ -294,6 +300,7 @@ class CGroupConfigurator(object):
 
                     # reload the systemd configuration, but the new slice will not be used until the agent's service restarts
                     try:
+                        logger.info("Executing systemctl daemon-reload...")
                         shellutil.run_command(["systemctl", "daemon-reload"])
                     except Exception as exception:
                         self.__log_cgroup_warning("daemon-reload failed: {0}", ustr(exception))
