@@ -271,7 +271,7 @@ class SystemdCgroupsApi(CGroupsApi):
 
         with self._systemd_run_commands_lock:
             process = subprocess.Popen(  # pylint: disable=W1509
-                "systemd-run --unit={0} --scope {1}".format(scope, command),
+                "systemd-run --unit={0} --scope --slice=azure-vmextensions.slice {1}".format(scope, command),
                 shell=shell,
                 cwd=cwd,
                 stdout=stdout,
@@ -286,22 +286,15 @@ class SystemdCgroupsApi(CGroupsApi):
 
         try:
             # systemd-run creates the scope under the system slice by default
-            cgroup_relative_path = os.path.join('system.slice', scope_name)
+            cgroup_relative_path = os.path.join('azure.slice/azure-vmextensions.slice', scope_name)
 
-            cpu_cgroup_mountpoint, memory_cgroup_mountpoint = self.get_cgroup_mount_points()
+            cpu_cgroup_mountpoint, _ = self.get_cgroup_mount_points()
 
             if cpu_cgroup_mountpoint is None:
                 logger.info("The CPU controller is not mounted; will not track resource usage")
             else:
                 cpu_cgroup_path = os.path.join(cpu_cgroup_mountpoint, cgroup_relative_path)
                 CGroupsTelemetry.track_cgroup(CpuCgroup(extension_name, cpu_cgroup_path))
-
-            if memory_cgroup_mountpoint is None:
-                logger.info("The memory controller is not mounted; will not track resource usage")
-            else:
-                memory_cgroup_path = os.path.join(memory_cgroup_mountpoint, cgroup_relative_path)
-                CGroupsTelemetry.track_cgroup(MemoryCgroup(extension_name, memory_cgroup_path))
-
         except IOError as e:
             if e.errno == 2:  # 'No such file or directory'
                 logger.info("The extension command already completed; will not track resource usage")

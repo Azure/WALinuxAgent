@@ -202,9 +202,6 @@ class SystemdCgroupsApiTestCase(AgentTestCase):
             self.assertTrue(
                 any(cg for cg in tracked if cg.name == 'Microsoft.Compute.TestExtension-1.2.3' and 'cpu' in cg.path),
                 "The extension's CPU is not being tracked")
-            self.assertTrue(
-                any(cg for cg in tracked if cg.name == 'Microsoft.Compute.TestExtension-1.2.3' and 'memory' in cg.path),
-                "The extension's memory is not being tracked")
 
     @patch('time.sleep', side_effect=lambda _: mock_sleep())
     def test_start_extension_command_should_use_systemd_to_execute_the_command(self, _):

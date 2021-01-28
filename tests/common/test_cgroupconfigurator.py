@@ -252,9 +252,6 @@ cgroup on /sys/fs/cgroup/blkio type cgroup (rw,nosuid,nodev,noexec,relatime,blki
         self.assertTrue(
             any(cg for cg in tracked if cg.name == 'Microsoft.Compute.TestExtension-1.2.3' and 'cpu' in cg.path),
             "The extension's CPU is not being tracked")
-        self.assertTrue(
-            any(cg for cg in tracked if cg.name == 'Microsoft.Compute.TestExtension-1.2.3' and 'memory' in cg.path),
-            "The extension's memory is not being tracked")
 
     def test_start_extension_command_should_raise_an_exception_when_the_command_cannot_be_started(self):
         with self._get_cgroup_configurator() as configurator:
@@ -572,7 +569,7 @@ exit 0
                 # Extensions are stated using systemd-run; mock Popen to remove the call to systemd-run; the test script creates a couple of
                 # child processes, which would simulate the extension's processes.
                 def mock_popen(command, *args, **kwargs):
-                    match = re.match(r"^systemd-run --unit=[^\s]+ --scope (.+)", command)
+                    match = re.match(r"^systemd-run --unit=[^\s]+ --scope --slice=[^\s]+ (.+)", command)
                     is_systemd_run = match is not None
                     if is_systemd_run:
                         command = match.group(1)
