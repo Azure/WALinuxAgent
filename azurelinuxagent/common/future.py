@@ -136,8 +136,8 @@ def is_file_not_found_error(exception):
     # pylint: disable=undefined-variable
 
     if sys.version_info[0] == 2:
-        # Python 2 uses IOError(errno=2)
-        return isinstance(exception, IOError) and exception.errno == 2
+        # Python 2 uses OSError(errno=2)
+        return isinstance(exception, OSError) and exception.errno == 2
     elif sys.version_info[0] == 3:
         return isinstance(exception, FileNotFoundError)
     
