@@ -19,16 +19,13 @@ import contextlib
 import os
 import re
 import subprocess
+import sys
 
+from azurelinuxagent.common.osutil import get_osutil
 from azurelinuxagent.common.utils import fileutil
 from tests.tools import patch, data_dir
 
-#
-# Default values for the mocked commands.
-#
-# The output comes from an Ubuntu 18 system
-#
-__DEFAULT_COMMANDS = [
+__MOCKED_COMMANDS = [
     (r"^systemctl --version$",
 '''systemd 237
 +PAM +AUDIT +SELINUX +IMA +APPARMOR +SMACK +SYSVINIT +UTMP +LIBCRYPTSETUP +GCRYPT +GNUTLS +ACL +XZ +LZ4 +SECCOMP +BLKID +ELFUTILS +KMOD -IDN2 +IDN -PCRE2 default-hierarchy=hybrid
@@ -70,33 +67,52 @@ Thu 28 May 2020 07:25:55 AM PDT
 
 ]
 
-__DEFAULT_FILES = [
+__service_file = "{0}.service".format(get_osutil().get_service_name())
+
+__MOCKED_FILES = [
     (r"^/proc/self/cgroup$", os.path.join(data_dir, 'cgroups', 'proc_self_cgroup')),
     (r"^/proc/[0-9]+/cgroup$", os.path.join(data_dir, 'cgroups', 'proc_pid_cgroup')),
     (r"^/sys/fs/cgroup/unified/cgroup.controllers$", os.path.join(data_dir, 'cgroups', 'sys_fs_cgroup_unified_cgroup.controllers')),
+    (r"^/lib/systemd/system/{0}$".format(__service_file), os.path.join(data_dir, 'init', __service_file + "_system-slice")),
 ]
 
-# These paths are mapped to the given tmp_dir, e.g. "/lib/systemd/system" becomes "<tmp_dir>/lib/systemd/system".
-# The mapping is done only during calls to fileutil.read_file, fileutil.write_file, fileutil.mkdir and os.path.exists.
-__SYSTEM_PATHS = [
-    "/lib/systemd/system",
-    "/etc/systemd/system"
+__MOCKED_PATHS = [
+    r"^(/lib/systemd/system)",
+    r"^(/etc/systemd/system)"
 ]
 
-
+# W0212: Access to a protected member __commands of a client class (protected-access) - Disabled: patcher.__commands is added
+# only for debugging purposes and should not be public (hence it is marked as private).
+# pylint: disable=protected-access
 @contextlib.contextmanager
 def mock_cgroup_commands(tmp_dir):
+    """
+    Creates a set of mocks useful for tests related to cgroups (currently it only provides support for systemd platforms).
+
+    The function mocks Popen, fileutil.mkdir, os.path.exists and the open builtin function.
+
+    The mock for Popen looks for a match in __MOCKED_COMMANDS and, if found, forwards the call to the the echo command
+    to produce the output for the matching item. Otherwise it forwards the call to the original Popen function.
+
+    The mocks for the other functions first look for a match in __MOCKED_FILES and, if found, map the file to the
+    corresponding path in the matching item. If there is no match, then it checks if the file is under one of the paths
+    in  __MOCKED_PATHS and map the path to the given tmp_dir (e.g. "/lib/systemd/system" becomes
+    "<tmp_dir>/lib/systemd/system".) If there no matches, the path is not changed. Once this mapping has completed
+    the mocks invoke the corresponding original function.
+
+    Matches are done using regular expressions; the regular expressions in __MOCKED_PATHS must create group 0 to indicate
+    the section of the path that needs to be mapped (i.e. use parenthesis around the section that needs to be mapped.)
+    done using
+
+    The command output used in __MOCKED_COMMANDS come from an Ubuntu 18 system.
+    """
     original_popen = subprocess.Popen
-    original_read_file = fileutil.read_file
-    original_write_file = fileutil.write_file
     original_mkdir = fileutil.mkdir
     original_path_exists = os.path.exists
+    original_open = open
 
-    def add_file(pattern, file_path):
-        patcher.files.insert(0, (pattern, file_path))
-
-    def add_command(pattern, output):
-        patcher.commands.insert(0, (pattern, output))
+    def add_command_mock(pattern, output):
+        patcher.__commands.insert(0, (pattern, output))
 
     def mock_popen(command, *args, **kwargs):
         if isinstance(command, list):
@@ -104,7 +120,7 @@ def mock_cgroup_commands(tmp_dir):
         else:
             command_string = command
 
-        for cmd in patcher.commands:
+        for cmd in patcher.__commands:
             match = re.match(cmd[0], command_string)
             if match is not None:
                 command = ["echo", cmd[1]]
@@ -113,12 +129,13 @@ def mock_cgroup_commands(tmp_dir):
         return original_popen(command, *args, **kwargs)
 
     def get_mapped_path(path):
-        for item in patcher.files:
+        for item in __MOCKED_FILES:
             match = re.match(item[0], path)
             if match is not None:
                 return item[1]
-        for item in __SYSTEM_PATHS:
-            mapped = re.sub(r"^({0})".format(item), r"{0}\1".format(tmp_dir), path)
+
+        for item in __MOCKED_PATHS:
+            mapped = re.sub(item, r"{0}\1".format(tmp_dir), path)
             if mapped != path:
                 mapped_parent = os.path.split(mapped)[0]
                 if not original_path_exists(mapped_parent):
@@ -126,29 +143,23 @@ def mock_cgroup_commands(tmp_dir):
                 return mapped
         return path
 
-    def mock_read_file(filepath, **kwargs):
-        return original_read_file(get_mapped_path(filepath), **kwargs)
-
-    def mock_write_file(filepath, content, **kwargs):
-        return original_write_file(get_mapped_path(filepath), content, **kwargs)
-
     def mock_mkdir(path, *args, **kwargs):
         return original_mkdir(get_mapped_path(path), *args, **kwargs)
+
+    def mock_open(path, *args, **kwargs):
+        return original_open(get_mapped_path(path), *args, **kwargs)
 
     def mock_path_exists(path):
         return original_path_exists(get_mapped_path(path))
 
+    builtin_popen = "__builtin__.open" if sys.version_info[0] == 2 else "builtins.open"
     with patch("azurelinuxagent.common.cgroupapi.subprocess.Popen", side_effect=mock_popen) as patcher:
         with patch("azurelinuxagent.common.cgroupconfigurator.fileutil.mkdir", side_effect=mock_mkdir):
             with patch("azurelinuxagent.common.cgroupapi.os.path.exists", side_effect=mock_path_exists):
-                with patch("azurelinuxagent.common.cgroupapi.fileutil.read_file", side_effect=mock_read_file):
-                    with patch("azurelinuxagent.common.cgroupapi.fileutil.write_file", side_effect=mock_write_file):
-                        with patch('azurelinuxagent.common.cgroupapi.CGroupsApi.cgroups_supported', return_value=True):
-                            with patch('azurelinuxagent.common.cgroupapi.CGroupsApi.is_systemd', return_value=True):
-                                patcher.commands = __DEFAULT_COMMANDS[:]
-                                patcher.files = __DEFAULT_FILES[:]
-                                patcher.add_file = add_file
-                                patcher.add_command = add_command
-                                patcher.get_mapped_path = get_mapped_path
-                                yield patcher
-
+                with patch(builtin_popen, side_effect=mock_open):
+                    with patch('azurelinuxagent.common.cgroupapi.CGroupsApi.cgroups_supported', return_value=True):
+                        with patch('azurelinuxagent.common.cgroupapi.CGroupsApi.is_systemd', return_value=True):
+                            patcher.__commands = __MOCKED_COMMANDS[:]
+                            patcher.add_command_mock = add_command_mock
+                            patcher.get_mapped_path = get_mapped_path
+                            yield patcher

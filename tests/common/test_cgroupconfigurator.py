@@ -49,18 +49,15 @@ class CGroupConfiguratorSystemdTestCase(AgentTestCase):
         AgentTestCase.tearDownClass()
 
     @contextlib.contextmanager
-    def _get_cgroup_configurator(self, initialize=True, mock_commands=None, mock_files=None):
+    def _get_cgroup_configurator(self, initialize=True, command_mocks=None):
         # protected-access<W0212> Disabled: OK to access CGroupConfigurator._instance from unit test for CGroupConfigurator
         CGroupConfigurator._instance = None  # pylint: disable=protected-access
         configurator = CGroupConfigurator.get_instance()
         CGroupsTelemetry.reset()
         with mock_cgroup_commands(self.tmp_dir) as mocks:
-            if mock_files is not None:
-                for item in mock_files:
-                    mocks.add_file(item[0], item[1])
-            if mock_commands is not None:
-                for command in mock_commands:
-                    mocks.add_command(command[0], command[1])
+            if command_mocks is not None:
+                for command in command_mocks:
+                    mocks.add_command_mock(command[0], command[1])
             configurator.mocks = mocks
             if initialize:
                 configurator.initialize()
@@ -78,7 +75,7 @@ class CGroupConfiguratorSystemdTestCase(AgentTestCase):
                 "The Agent's memory is not being tracked. Tracked: {0}".format(tracked))
 
     def test_initialize_should_start_tracking_other_controllers_when_one_is_not_present(self):
-        mock_commands = [(
+        command_mocks = [(
             r"^mount -t cgroup$",
 '''cgroup on /sys/fs/cgroup/systemd type cgroup (rw,nosuid,nodev,noexec,relatime,xattr,name=systemd)
 cgroup on /sys/fs/cgroup/rdma type cgroup (rw,nosuid,nodev,noexec,relatime,rdma)
@@ -92,7 +89,7 @@ cgroup on /sys/fs/cgroup/pids type cgroup (rw,nosuid,nodev,noexec,relatime,pids)
 cgroup on /sys/fs/cgroup/devices type cgroup (rw,nosuid,nodev,noexec,relatime,devices)
 cgroup on /sys/fs/cgroup/blkio type cgroup (rw,nosuid,nodev,noexec,relatime,blkio)
 ''')]
-        with self._get_cgroup_configurator(mock_commands=mock_commands) as configurator:
+        with self._get_cgroup_configurator(command_mocks=command_mocks) as configurator:
             # protected-access<W0212> Disabled: OK to access CGroupConfigurator._tracked from unit test for CGroupConfigurator
             tracked = CGroupsTelemetry._tracked  # pylint: disable=protected-access
 
@@ -103,7 +100,7 @@ cgroup on /sys/fs/cgroup/blkio type cgroup (rw,nosuid,nodev,noexec,relatime,blki
                 "The Agent's memory is not being tracked. Tracked: {0}".format(tracked))
 
     def test_initialize_should_not_enable_cgroups_is_the_cpu_and_memory_controllers_are_not_present(self):
-        mock_commands = [(
+        command_mocks = [(
 r"^mount -t cgroup$",
 '''cgroup on /sys/fs/cgroup/systemd type cgroup (rw,nosuid,nodev,noexec,relatime,xattr,name=systemd)
 cgroup on /sys/fs/cgroup/rdma type cgroup (rw,nosuid,nodev,noexec,relatime,rdma)
@@ -116,7 +113,7 @@ cgroup on /sys/fs/cgroup/pids type cgroup (rw,nosuid,nodev,noexec,relatime,pids)
 cgroup on /sys/fs/cgroup/devices type cgroup (rw,nosuid,nodev,noexec,relatime,devices)
 cgroup on /sys/fs/cgroup/blkio type cgroup (rw,nosuid,nodev,noexec,relatime,blkio)
 ''')]
-        with self._get_cgroup_configurator(mock_commands=mock_commands) as configurator:
+        with self._get_cgroup_configurator(command_mocks=command_mocks) as configurator:
             # protected-access<W0212> Disabled: OK to access CGroupConfigurator._tracked from unit test for CGroupConfigurator
             tracked = CGroupsTelemetry._tracked  # pylint: disable=protected-access
 
@@ -124,7 +121,7 @@ cgroup on /sys/fs/cgroup/blkio type cgroup (rw,nosuid,nodev,noexec,relatime,blki
             self.assertEqual(len(tracked), 0, "No cgroups should be tracked. Tracked: {0}".format(tracked))
 
     def test_initialize_should_not_enable_cgroups_when_the_agent_is_not_in_the_system_slice(self):
-        mock_commands = [(
+        command_mocks = [(
 r"^mount -t cgroup$",
 '''cgroup on /sys/fs/cgroup/systemd type cgroup (rw,nosuid,nodev,noexec,relatime,xattr,name=systemd)
 cgroup on /sys/fs/cgroup/rdma type cgroup (rw,nosuid,nodev,noexec,relatime,rdma)
@@ -138,7 +135,7 @@ cgroup on /sys/fs/cgroup/devices type cgroup (rw,nosuid,nodev,noexec,relatime,de
 cgroup on /sys/fs/cgroup/blkio type cgroup (rw,nosuid,nodev,noexec,relatime,blkio)
 ''')]
 
-        with self._get_cgroup_configurator(mock_commands=mock_commands) as configurator:
+        with self._get_cgroup_configurator(command_mocks=command_mocks) as configurator:
             # protected-access<W0212> Disabled: OK to access CGroupConfigurator._tracked from unit test for CGroupConfigurator
             tracked = CGroupsTelemetry._tracked  # pylint: disable=protected-access
 
@@ -147,7 +144,7 @@ cgroup on /sys/fs/cgroup/blkio type cgroup (rw,nosuid,nodev,noexec,relatime,blki
 
     def test_initialize_should_create_slice_unit_files_when_they_do_not_exist(self):
         with self._get_cgroup_configurator() as configurator:
-            # When the unit files do not exist under /lib/systemd/system, initialize() should create them under /etc/systemd/system
+            # When the unit files do not exist under /lib/systemd/system, initialize() should create them
             # (note that the mock CGroupConfigurator maps these files to a test location, so we need to use the mapped path)
             agent_unit_name = get_osutil().get_service_name() + ".service"
             azure_slice_unit_file = configurator.mocks.get_mapped_path("/lib/systemd/system/azure.slice")
