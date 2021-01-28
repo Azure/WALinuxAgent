@@ -32,25 +32,33 @@ from azurelinuxagent.common.utils.extensionprocessutil import handle_process_com
 from azurelinuxagent.common.event import add_event, WALAEventOperation
 
 _AZURE_SLICE = "azure.slice"
-_AZURE_SLICE_CONTENTS = \
-"""
+_AZURE_SLICE_CONTENTS = """
 [Unit]
 Description=Slice for Azure VM Agent and Extensions
 DefaultDependencies=no
 Before=slices.target
 """
-_EXTENSIONS_SLICE = "azure-vmextensions.slice"
-_EXTENSIONS_SLICE_CONTENTS = \
-"""
+_VMEXTENSIONS_SLICE = "azure-vmextensions.slice"
+_VMEXTENSIONS_SLICE_CONTENTS = """
 [Unit]
 Description=Slice for Azure VM Extensions
 DefaultDependencies=no
 Before=slices.target
+[Slice]
+CPUAccounting=yes
 """
-_AGENT_DROP_IN_CONTENTS = \
-"""
+_AGENT_DROP_IN_FILE_SLICE = "10-Slice.conf"
+_AGENT_DROP_IN_FILE_SLICE_CONTENTS = """
+# This drop-in unit file was created by the Azure VM Agent.
+# Do not edit.
 [Service]
 Slice=azure.slice
+"""
+_AGENT_DROP_IN_FILE_CPU_ACCOUNTING = "11-CPUAccounting.conf"
+_AGENT_DROP_IN_FILE_CPU_ACCOUNTING_CONTENTS = """
+# This drop-in unit file was created by the Azure VM Agent.
+# Do not edit.
+[Service]
 CPUAccounting=yes
 """
 
@@ -91,8 +99,9 @@ class CGroupConfigurator(object):
 
                 self.__log_cgroup_info("systemd version: {0}", self._cgroups_api.get_systemd_version())
 
-                self.__collect_azure_unit_telemetry()
-                self.__collect_agent_unit_files_telemetry()
+                # This is temporarily disabled while we analyze telemetry. Likely it will be removed.
+                # self.__collect_azure_unit_telemetry()
+                # self.__collect_agent_unit_files_telemetry()
 
                 if not self.__check_no_legacy_cgroups():
                     return
@@ -239,58 +248,71 @@ class CGroupConfigurator(object):
                         ├─walinuxagent.service
                         │ ├─5759 /usr/bin/python3 -u /usr/sbin/waagent -daemon
                         │ └─5764 python3 -u bin/WALinuxAgent-2.2.53-py2.7.egg -run-exthandlers
-                        └─vmextensions.slice
+                        └─azure-vmextensions.slice
                           └─Microsoft.CPlat.Extension.slice
                               └─5894 /usr/bin/python3 /var/lib/waagent/Microsoft.CPlat.Extension-1.0.0.0/enable.py
 
-            This method ensures that "azure.slice" and "vmextensions.slice" are created. Setup should create those slices
-            under /lib/systemd/system; if they do not exist, __ensure_azure_slices_exist creates overrides under /etc/systemd/system.
-            The method also cleans up unit files left over from previous versions of the agent.
+            This method ensures that the "azure" and "vmextensions" slices are created. Setup should create those slices
+            under /lib/systemd/system; but if they do not exist, __ensure_azure_slices_exist will create them.
+            It also creates drop-in files to set the agent's slice and CPU accounting properties if they have not been
+            set up in the agent's unit file.
+            Lastly, the method also cleans up unit files left over from previous versions of the agent.
 
-            Returns the slice under which the agent should be running.
+            Returns the slice under which the agent should currently be running.
             """
 
             # Older agents used to create this slice, but it was never used. Cleanup the file.
             self._cleanup_unit_file("/etc/systemd/system/system-walinuxagent.extensions.slice")
 
             azure_slice = os.path.join("/lib/systemd/system", _AZURE_SLICE)
-            azure_slice_override = os.path.join("/etc/systemd/system", _AZURE_SLICE)
-            extensions_slice_override = os.path.join("/etc/systemd/system", _EXTENSIONS_SLICE)
-            agent_drop_in_file = "/etc/systemd/system/{0}.d/10-azure-{0}.conf".format(self._cgroups_api.get_agent_unit_name())
+            vmextensions_slice = os.path.join("/lib/systemd/system", _VMEXTENSIONS_SLICE)
+            agent_unit_file = "/lib/systemd/system/{0}".format(self._cgroups_api.get_agent_unit_name())
+            agent_drop_in_file_slice = "/lib/systemd/system/{0}.d/{1}".format(self._cgroups_api.get_agent_unit_name(), _AGENT_DROP_IN_FILE_SLICE)
+            agent_drop_in_file_cpu_accounting = "/lib/systemd/system/{0}.d/{1}".format(self._cgroups_api.get_agent_unit_name(), _AGENT_DROP_IN_FILE_CPU_ACCOUNTING)
+
+            files_to_create = []
+            return_azure_slice = False
 
             if os.path.exists(azure_slice):
-                # remove the overrides in case they were created by a previous version of the agent
-                self._cleanup_unit_file(azure_slice_override)
-                self._cleanup_unit_file(extensions_slice_override)
-                self._cleanup_unit_file(agent_drop_in_file)
-                return _AZURE_SLICE
+                return_azure_slice = True
+            else:
+                files_to_create.append((azure_slice, _AZURE_SLICE_CONTENTS))
 
-            if os.path.exists(azure_slice_override):
-                return _AZURE_SLICE
+            if not os.path.exists(vmextensions_slice):
+                files_to_create.append((vmextensions_slice, _VMEXTENSIONS_SLICE_CONTENTS))
 
-            if not os.path.exists(azure_slice_override):
-                self._create_unit_file(azure_slice_override, _AZURE_SLICE_CONTENTS)
-                self._create_unit_file(extensions_slice_override, _EXTENSIONS_SLICE_CONTENTS)
-                drop_in_parent, _ = os.path.split(agent_drop_in_file)
-                if not os.path.exists(drop_in_parent):
-                    fileutil.mkdir(drop_in_parent, mode=0o755)
-                self._create_unit_file(agent_drop_in_file, _AGENT_DROP_IN_CONTENTS)
-                # reload the systemd configuration, but the new slice will not be used until the agent's service restarts
+            if not fileutil.findstr_in_file(agent_unit_file, "Slice=azure.slice") and not os.path.exists(agent_drop_in_file_slice):
+                files_to_create.append((agent_drop_in_file_slice, _AGENT_DROP_IN_FILE_SLICE_CONTENTS))
+
+            if not fileutil.findstr_in_file(agent_unit_file, "CPUAccounting=yes") and not os.path.exists(agent_drop_in_file_cpu_accounting):
+                files_to_create.append((agent_drop_in_file_cpu_accounting, _AGENT_DROP_IN_FILE_CPU_ACCOUNTING_CONTENTS))
+
+            if len(files_to_create) > 0:
                 try:
-                    shellutil.run_command(["systemctl", "daemon-reload"])
-                except Exception as exception:
-                    self.__log_cgroup_warning("daemon-reload failed: {0}", ustr(exception))
+                    for path, contents in files_to_create:
+                        self._create_unit_file(path, contents)
 
-            return "system.slice"
+                    # reload the systemd configuration, but the new slice will not be used until the agent's service restarts
+                    try:
+                        shellutil.run_command(["systemctl", "daemon-reload"])
+                    except Exception as exception:
+                        self.__log_cgroup_warning("daemon-reload failed: {0}", ustr(exception))
+                except Exception as exception:
+                    for unit_file in files_to_create:
+                        self._cleanup_unit_file(unit_file)
+
+            return _AZURE_SLICE if return_azure_slice else "system.slice"
 
         def _create_unit_file(self, path, contents):
             try:
+                parent, _ = os.path.split(path)
+                if not os.path.exists(parent):
+                    fileutil.mkdir(parent, mode=0o755)
                 fileutil.write_file(path, contents)
                 self.__log_cgroup_info("Created {0}", path)
             except Exception as exception:
-                self.__log_cgroup_info("Failed to create {0} - {1}", path, ustr(exception))
-                return False
-            return True
+                self.__log_cgroup_warning("Failed to create {0} - {1}", path, ustr(exception))
+                raise
 
         def _cleanup_unit_file(self, path):
             if os.path.exists(path):
@@ -298,7 +320,7 @@ class CGroupConfigurator(object):
                     os.remove(path)
                     self.__log_cgroup_info("Removed {0}", path)
                 except Exception as exception:
-                    self.__log_cgroup_info("Failed to remove {0}: {1}", path, ustr(exception))
+                    self.__log_cgroup_warning("Failed to remove {0}: {1}", path, ustr(exception))
 
         def __get_agent_cgroups(self, agent_slice, cpu_controller_root, memory_controller_root):
             agent_service_name = self._cgroups_api.get_agent_unit_name()
@@ -313,7 +335,7 @@ class CGroupConfigurator(object):
                     cpu_accounting = self._cgroups_api.get_unit_property(agent_service_name, "CPUAccounting")
                     self.__log_cgroup_info('CPUAccounting: {0}', cpu_accounting)
                 else:
-                    memory_cgroup_relative_path = None  # Set the path to None to prevent monitoring
+                    cpu_cgroup_relative_path = None  # Set the path to None to prevent monitoring
                     self.__log_cgroup_warning(
                         "The Agent is not in the expected CPU cgroup; will not enable monitoring. Cgroup:[{0}] Expected:[{1}]",
                         cpu_cgroup_relative_path,

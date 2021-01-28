@@ -145,36 +145,20 @@ cgroup on /sys/fs/cgroup/blkio type cgroup (rw,nosuid,nodev,noexec,relatime,blki
             self.assertFalse(configurator.enabled(), "Cgroups should not be enabled")
             self.assertEqual(len(tracked), 0, "No cgroups should be tracked. Tracked: {0}".format(tracked))
 
-    def test_initialize_should_create_slice_unit_files_when_they_do_exist(self):
+    def test_initialize_should_create_slice_unit_files_when_they_do_not_exist(self):
         with self._get_cgroup_configurator() as configurator:
             # When the unit files do not exist under /lib/systemd/system, initialize() should create them under /etc/systemd/system
             # (note that the mock CGroupConfigurator maps these files to a test location, so we need to use the mapped path)
             agent_unit_name = get_osutil().get_service_name() + ".service"
-            azure_slice_unit_file = configurator.mocks.get_mapped_path("/etc/systemd/system/azure.slice")
-            extensions_slice_unit_file = configurator.mocks.get_mapped_path("/etc/systemd/system/azure-vmextensions.slice")
-            agent_drop_in_file = configurator.mocks.get_mapped_path("/etc/systemd/system/{0}.d/10-azure-{0}.conf".format(agent_unit_name))
+            azure_slice_unit_file = configurator.mocks.get_mapped_path("/lib/systemd/system/azure.slice")
+            extensions_slice_unit_file = configurator.mocks.get_mapped_path("/lib/systemd/system/azure-vmextensions.slice")
+            agent_drop_in_file_slice = configurator.mocks.get_mapped_path("/lib/systemd/system/{0}.d/10-Slice.conf".format(agent_unit_name))
+            agent_drop_in_file_cpu_accounting = configurator.mocks.get_mapped_path("/lib/systemd/system/{0}.d/11-CPUAccounting.conf".format(agent_unit_name))
 
             self.assertTrue(os.path.exists(azure_slice_unit_file), "{0} was not created".format(azure_slice_unit_file))
             self.assertTrue(os.path.exists(extensions_slice_unit_file), "{0} was not created".format(extensions_slice_unit_file))
-            self.assertTrue(os.path.exists(agent_drop_in_file), "{0} was not created".format(agent_drop_in_file))
-
-    def test_initialize_should_not_create_slice_unit_files_when_they_exist(self):
-        with self._get_cgroup_configurator(initialize=False) as configurator:
-            # When the unit files exist under /lib/systemd/system, initialize() should not create overrides under /etc/systemd/system
-            # (note that the mock CGroupConfigurator maps these files to a test location, so we need to use the mapped path)
-            open(configurator.mocks.get_mapped_path("/lib/systemd/system/azure.slice"), "w").close()
-            open(configurator.mocks.get_mapped_path("/lib/systemd/system/azure-vmextensions.slice"), "w").close()
-
-            configurator.initialize()
-
-            agent_unit_name = get_osutil().get_service_name() + ".service"
-            azure_slice_override = configurator.mocks.get_mapped_path("/etc/systemd/system/azure.slice")
-            extensions_slice_override = configurator.mocks.get_mapped_path("/etc/systemd/system/azure-vmextensions.slice")
-            agent_drop_in_file = configurator.mocks.get_mapped_path("/etc/systemd/system/{0}.d/10-azure-{0}.conf".format(agent_unit_name))
-
-            self.assertFalse(os.path.exists(azure_slice_override), "{0} should not have been created".format(azure_slice_override))
-            self.assertFalse(os.path.exists(extensions_slice_override), "{0} should not have been created".format(extensions_slice_override))
-            self.assertFalse(os.path.exists(agent_drop_in_file), "{0} should not have been created".format(agent_drop_in_file))
+            self.assertTrue(os.path.exists(agent_drop_in_file_slice), "{0} was not created".format(agent_drop_in_file_slice))
+            self.assertTrue(os.path.exists(agent_drop_in_file_cpu_accounting), "{0} was not created".format(agent_drop_in_file_cpu_accounting))
 
     def test_enable_and_disable_should_change_the_enabled_state_of_cgroups(self):
         with self._get_cgroup_configurator() as configurator:
