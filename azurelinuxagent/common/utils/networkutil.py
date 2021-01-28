@@ -18,6 +18,7 @@
 
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.utils import shellutil
+from azurelinuxagent.common.utils.shellutil import CommandError
 
 
 class RouteEntry(object):
@@ -98,7 +99,27 @@ class NetworkInterfaceCard:
         return "{{ {0} }}".format(", ".join(entries))
 
 
+class FirewallCmdDirectCommands(object):
+    # firewall-cmd --direct --passthrough ipv4 -t security -A OUTPUT -d 1.2.3.5 -p tcp -m owner --uid-owner 999 -j ACCEPT
+    # success
+    PassThrough = "--passthrough"
+
+    # firewall-cmd --direct --query-passthrough ipv4 -t security -A OUTPUT -d 1.2.3.5 -p tcp -m owner --uid-owner 9999 -j ACCEPT
+    # yes
+    # firewall-cmd --direct --query-passthrough ipv4 -t security -A OUTPUT -d 1.2.3.5 -p tcp -m owner --uid-owner 999 -j ACCEPT
+    # no
+    QueryPassThrough = "--query-passthrough"
+
+
 class AddFirewallRules(object):
+    """
+    This class is a utility class which is only meant to orchestrate adding Firewall rules (both iptables and firewalld).
+    This would also be called from a separate utility binary which would be very early up in the boot order of the VM,
+    due to which it would not have access to basic mounts like file-system.
+    Please make sure to not log anything in any function this class.
+    """
+
+    __ACCEPT_COMMAND = "-A"
 
     @staticmethod
     def _add_wait(wait, command):
@@ -106,39 +127,104 @@ class AddFirewallRules(object):
         If 'wait' is True, adds the wait option (-w) to the given iptables command line
         """
         if wait:
-            command.insert(1, "-w")
+            command.append("-w")
         return command
 
     @staticmethod
-    def get_iptables_accept_command(wait, command, destination, owner_uid):
-        cmd = ["iptables", "-t", "security", command, "OUTPUT", "-d", destination, "-p", "tcp", "-m", "owner",
-               "--uid-owner", str(owner_uid), "-j", "ACCEPT"]
+    def __get_iptables_base_command():
+        return ["iptables"]
+
+    @staticmethod
+    def __get_firewalld_base_command(command):
+        # For more documentation - https://firewalld.org/documentation/man-pages/firewall-cmd.html
+        return ["firewall-cmd", "--permanent", "--direct", command, "ipv4"]
+
+    @staticmethod
+    def __get_common_command_params(command, destination):
+        return ["-t", "security", command, "OUTPUT", "-d", destination, "-p", "tcp", "-m"]
+
+    @staticmethod
+    def __get_common_accept_command_params(wait, command, destination, uid):
+        cmd = AddFirewallRules.__get_common_command_params(command, destination)
+        cmd.extend(["owner", "--uid-owner", str(uid), "-j", "ACCEPT"])
         return AddFirewallRules._add_wait(wait, cmd)
+
+    @staticmethod
+    def __get_common_drop_command_params(wait, command, destination):
+        cmd = AddFirewallRules.__get_common_command_params(command, destination)
+        cmd.extend(["conntrack", "--ctstate", "INVALID,NEW", "-j", "DROP"])
+        return AddFirewallRules._add_wait(wait, cmd)
+
+    @staticmethod
+    def get_iptables_accept_command(wait, command, destination, owner_uid):
+        cmd = AddFirewallRules.__get_iptables_base_command()
+        cmd.extend(AddFirewallRules.__get_common_accept_command_params(wait, command, destination, owner_uid))
+        return cmd
 
     @staticmethod
     def get_iptables_drop_command(wait, command, destination):
-        cmd = ["iptables", "-t", "security", command, "OUTPUT", "-d", destination, "-p", "tcp", "-m", "conntrack",
-               "--ctstate", "INVALID,NEW", "-j", "DROP"]
-        return AddFirewallRules._add_wait(wait, cmd)
+        cmd = AddFirewallRules.__get_iptables_base_command()
+        cmd.extend(AddFirewallRules.__get_common_drop_command_params(wait, command, destination))
+        return cmd
+
+    @staticmethod
+    def get_firewalld_accept_command(wait, command, destination, uid):
+        cmd = AddFirewallRules.__get_firewalld_base_command(command)
+        cmd.extend(
+            AddFirewallRules.__get_common_accept_command_params(wait, AddFirewallRules.__ACCEPT_COMMAND, destination,
+                                                                uid))
+        return cmd
+
+    @staticmethod
+    def get_firewalld_drop_command(wait, command, destination):
+        cmd = AddFirewallRules.__get_firewalld_base_command(command)
+        cmd.extend(
+            AddFirewallRules.__get_common_drop_command_params(wait, AddFirewallRules.__ACCEPT_COMMAND, destination))
+        return cmd
+
+    @staticmethod
+    def __raise_if_empty(val, name):
+        if val == "":
+            raise Exception("{0} should not be empty".format(name))
+
+    @staticmethod
+    def __execute_cmd(cmd):
+        try:
+            shellutil.run_command(cmd)
+        except CommandError as error:
+            msg = "Command {0} failed with exit-code: {1}\nStdout: {2}\nStderr: {3}".format(' '.join(cmd),
+                                                                                            error.returncode,
+                                                                                            ustr(error.stdout),
+                                                                                            ustr(error.stderr))
+            raise Exception(msg)
 
     @staticmethod
     def add_iptables_rules(wait, dst_ip, uid):
-        def _raise_if_empty(val, name):
-            if val == "":
-                raise Exception("{0} should not be empty".format(name))
 
-        _raise_if_empty(dst_ip, "Destination IP")
-        _raise_if_empty(uid, "User ID")
-        accept_rule = AddFirewallRules.get_iptables_accept_command(wait, "-A", dst_ip, uid)
-        try:
-            shellutil.run_command(accept_rule)
-        except Exception as e:
-            msg = "Unable to add ACCEPT firewall rule '{0}' - {1}".format(accept_rule, ustr(e))
-            raise Exception(msg)
+        AddFirewallRules.__raise_if_empty(dst_ip, "Destination IP")
+        AddFirewallRules.__raise_if_empty(uid, "User ID")
 
-        drop_rule = AddFirewallRules.get_iptables_drop_command(wait, "-A", dst_ip)
-        try:
-            shellutil.run_command(drop_rule)
-        except Exception as e:
-            msg = "Unable to add DROP firewall rule '{0}' - {1}".format(drop_rule, ustr(e))
-            raise Exception(msg)
+        accept_rule = AddFirewallRules.get_iptables_accept_command(wait, AddFirewallRules.__ACCEPT_COMMAND, dst_ip, uid)
+        AddFirewallRules.__execute_cmd(accept_rule)
+
+        drop_rule = AddFirewallRules.get_iptables_drop_command(wait, AddFirewallRules.__ACCEPT_COMMAND, dst_ip)
+        AddFirewallRules.__execute_cmd(drop_rule)
+
+    @staticmethod
+    def __execute_firewalld_commands(command, wait, dst_ip, uid):
+        AddFirewallRules.__raise_if_empty(dst_ip, "Destination IP")
+        AddFirewallRules.__raise_if_empty(uid, "User ID")
+
+        accept_cmd = AddFirewallRules.get_firewalld_accept_command(wait, command, dst_ip, uid)
+        AddFirewallRules.__execute_cmd(accept_cmd)
+
+        drop_cmd = AddFirewallRules.get_firewalld_drop_command(wait, command, dst_ip)
+        AddFirewallRules.__execute_cmd(drop_cmd)
+
+    @staticmethod
+    def add_firewalld_rules(wait, dst_ip, uid):
+        AddFirewallRules.__execute_firewalld_commands(FirewallCmdDirectCommands.PassThrough, wait, dst_ip, uid)
+
+    @staticmethod
+    def check_firewalld_rule_applied(wait, dst_ip, uid):
+        AddFirewallRules.__execute_firewalld_commands(FirewallCmdDirectCommands.QueryPassThrough, wait, dst_ip, uid)

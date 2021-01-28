@@ -143,6 +143,14 @@ class DefaultOSUtil(object):
     def get_service_name():
         return "waagent"
 
+    @staticmethod
+    def get_systemd_unit_file_install_path():
+        return "/lib/systemd/system"
+
+    @staticmethod
+    def get_agent_bin_path():
+        return "/usr/sbin"
+
     def get_firewall_dropped_packets(self, dst_ip=None):
         # If a previous attempt failed, do not retry
         global _enable_firewall  # pylint: disable=W0603
@@ -245,7 +253,6 @@ class DefaultOSUtil(object):
             wait = self.get_firewall_will_wait()
 
             # If the DROP rule exists, make no changes
-            firewall_established = False  # pylint: disable=W0612
             try:
                 drop_rule = _get_firewall_drop_command(wait, "-C", dst_ip)
                 shellutil.run_command(drop_rule)

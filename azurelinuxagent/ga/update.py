@@ -38,6 +38,7 @@ import azurelinuxagent.common.logger as logger
 import azurelinuxagent.common.utils.fileutil as fileutil
 import azurelinuxagent.common.utils.restutil as restutil
 import azurelinuxagent.common.utils.textutil as textutil
+from azurelinuxagent.common.persist_firewall_rules import PersistFirewallRules
 from azurelinuxagent.common.cgroupapi import CGroupsApi
 from azurelinuxagent.common.cgroupconfigurator import CGroupConfigurator
 
@@ -297,6 +298,7 @@ class UpdateHandler(object):
             self._ensure_readonly_files()
             self._ensure_cgroups_initialized()
             self._ensure_extension_telemetry_state_configured_properly(protocol)
+            self._ensure_firewall_rules_persisted(dst_ip=protocol.get_endpoint())
 
             # Get all thread handlers
             telemetry_handler = get_send_telemetry_events_handler(self.protocol_util)
@@ -828,6 +830,13 @@ class UpdateHandler(object):
                     shutil.rmtree(ext_dir, ignore_errors=True)
         except Exception as e:
             logger.warn("Error when trying to delete existing Extension events directory. Error: {0}".format(ustr(e)))
+
+    @staticmethod
+    def _ensure_firewall_rules_persisted(dst_ip):
+        try:
+            PersistFirewallRules(dst_ip=dst_ip, uid=os.getuid()).setup()
+        except Exception as error:
+            logger.warn("Unable to persist the firewall rules: {0}".format(ustr(error)))
 
 
 class GuestAgent(object):

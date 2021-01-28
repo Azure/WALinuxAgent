@@ -24,6 +24,14 @@ class MarinerOSUtil(DefaultOSUtil):
         super(MarinerOSUtil, self).__init__()
         self.jit_enabled = True
 
+    @staticmethod
+    def get_systemd_unit_file_install_path():
+        return "/usr/lib/systemd/system"
+
+    @staticmethod
+    def get_agent_bin_path():
+        return "/usr/bin"
+
     def is_dhcp_enabled(self):
         return True
 
