@@ -21,8 +21,7 @@ from azurelinuxagent.common import logger
 from azurelinuxagent.common.cgroupapi import SYSTEMD_RUN_PATH
 from azurelinuxagent.common.logger import Logger
 from azurelinuxagent.common.protocol.util import ProtocolUtil
-from azurelinuxagent.ga.collect_logs import get_collect_logs_handler, CollectLogsHandler, is_log_collection_allowed
-from azurelinuxagent.ga.periodic_operation import PeriodicOperation
+from azurelinuxagent.ga.collect_logs import get_collect_logs_handler, is_log_collection_allowed
 from tests.protocol.mocks import mock_wire_protocol, HttpRequestPredicates, MockHttpResponse
 from tests.protocol.mockwiredata import DATA_FILE
 from tests.tools import Mock, MagicMock, patch, AgentTestCase, clear_singleton_instances, skip_if_predicate_true, \
