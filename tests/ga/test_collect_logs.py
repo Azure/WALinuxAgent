@@ -93,21 +93,6 @@ class TestCollectLogs(AgentTestCase, HttpRequestPredicates):
         with open(self.archive_path, "wb") as f:
             f.truncate(size)
 
-    def test_it_should_invoke_all_periodic_operations(self):
-        invoked_operations = []
-
-        with _create_collect_logs_handler() as collect_logs_handler:
-            def mock_run(self):
-                invoked_operations.append(self._name)
-
-            with patch.object(PeriodicOperation, "run", side_effect=mock_run, spec=CollectLogsHandler.run):
-                collect_logs_handler.run_and_wait()
-
-                expected_operations = ["collect_and_send_logs"]
-
-                self.assertEqual(invoked_operations.sort(), expected_operations.sort(),
-                                 "The collect logs thread did not invoke the expected operations")
-
     def test_it_should_only_collect_logs_if_conditions_are_met(self):
         # In order to collect logs, three conditions have to be met:
         # 1) the flag must be set to true in the conf file
