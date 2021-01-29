@@ -53,21 +53,24 @@ def _create_monitor_handler(enabled_operations=None, iterations=1):
         * run_and_wait() - invokes run() and wait() on the MonitorHandler
 
     """
-    if enabled_operations is None:
-        enabled_operations = []
+    def periodic_operation_run_mock(self):
+        if self._name in enabled_operations:  # pylint: disable=protected-access
+            periodic_operation_run_mock.original_definition(self)
+    periodic_operation_run_mock.original_definition = PeriodicOperation.run
 
-    def run(self):
-        if len(enabled_operations) == 0 or self._name in enabled_operations:  # pylint: disable=protected-access
-            run.original_definition(self)
-    run.original_definition = PeriodicOperation.run
+    periodic_operation_run_patch = None
 
-    with mock_wire_protocol(DATA_FILE) as protocol:
-        protocol_util = MagicMock()
-        protocol_util.get_protocol = Mock(return_value=protocol)
-        with patch("azurelinuxagent.ga.monitor.get_protocol_util", return_value=protocol_util):
-            with patch.object(PeriodicOperation, "run", side_effect=run, autospec=True):
+    try:
+        with mock_wire_protocol(DATA_FILE) as protocol:
+            protocol_util = MagicMock()
+            protocol_util.get_protocol = Mock(return_value=protocol)
+            with patch("azurelinuxagent.ga.monitor.get_protocol_util", return_value=protocol_util):
                 with patch("azurelinuxagent.ga.monitor.MonitorHandler.stopped", side_effect=[False] * iterations + [True]):
                     with patch("time.sleep"):
+                        if enabled_operations is not None:
+                            periodic_operation_run_patch = patch.object(PeriodicOperation, "run", side_effect=periodic_operation_run_mock, autospec=True)
+                            periodic_operation_run_patch.start()
+
                         def run_and_wait():
                             monitor_handler.run()
                             monitor_handler.join()
@@ -75,7 +78,11 @@ def _create_monitor_handler(enabled_operations=None, iterations=1):
                         monitor_handler = get_monitor_handler()
                         monitor_handler.get_mock_wire_protocol = lambda: protocol
                         monitor_handler.run_and_wait = run_and_wait
+
                         yield monitor_handler
+    finally:
+        if periodic_operation_run_patch is not None:
+            periodic_operation_run_patch.stop()
 
 
 class TestMonitor(AgentTestCase, HttpRequestPredicates):
@@ -98,16 +105,21 @@ class TestMonitor(AgentTestCase, HttpRequestPredicates):
             def mock_run(self):
                 invoked_operations.append(self._name)
 
-            with patch.object(PeriodicOperation, "run", side_effect=mock_run, spec=MonitorHandler.run):
+            with patch.object(PeriodicOperation, "run", side_effect=mock_run, autospec=True):
                 monitor_handler.run_and_wait()
 
                 expected_operations = [
-                    "reset_loggers", "collect_and_send_events", "send_telemetry_heartbeat",
-                    "poll_telemetry_metrics usage", "send_telemetry_metrics usage", "send_host_plugin_heartbeat",
-                    "send_imds_heartbeat", "log_altered_network_configuration"
+                    'poll resource usage',
+                    'report network configuration changes',
+                    'report network errors',
+                    'reset periodic log messages',
+                    'send_host_plugin_heartbeat',
+                    'send_imds_heartbeat'
                 ]
 
-                self.assertEqual(invoked_operations.sort(), expected_operations.sort(), "The monitor thread did not invoke the expected operations")
+                invoked_operations.sort()
+                expected_operations.sort()
+                self.assertEqual(invoked_operations, expected_operations, "The monitor thread did not invoke the expected operations")
 
     def test_it_should_report_host_ga_health(self):
         with _create_monitor_handler(enabled_operations=["send_host_plugin_heartbeat"]) as monitor_handler:
