@@ -28,7 +28,7 @@ from azurelinuxagent.common.event import EVENTS_DIRECTORY
 from azurelinuxagent.common.logger import Logger
 from azurelinuxagent.common.protocol.util import ProtocolUtil
 from azurelinuxagent.common.protocol.wire import WireProtocol
-from azurelinuxagent.ga.monitor import get_monitor_handler, MonitorHandler, PeriodicOperation, \
+from azurelinuxagent.ga.monitor import get_monitor_handler, PeriodicOperation, \
     ResetPeriodicLogMessagesOperation, PollResourceUsageOperation
 from tests.protocol.mocks import mock_wire_protocol, HttpRequestPredicates, MockHttpResponse
 from tests.protocol.mockwiredata import DATA_FILE
