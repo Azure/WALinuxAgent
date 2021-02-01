@@ -118,7 +118,7 @@ class SendHostPluginHeartbeatOperationTestCase(AgentTestCase, HttpRequestPredica
                     self.assertTrue(len(heartbeat_events) == 1, "The monitor thread should have reported exactly 1 telemetry event for an unhealthy host ga plugin")
                     self.assertFalse(heartbeat_events[0]['is_success'], 'The reported event should indicate failure')
 
-    def test_it_should_not_send_a_healt_signal_when_the_hearbeat_fails(self):
+    def test_it_should_not_send_a_health_signal_when_the_hearbeat_fails(self):
         with _mock_wire_protocol() as protocol:
             with patch('azurelinuxagent.common.event.EventLogger.add_event') as add_event_patcher:
                 health_service_post_requests = []
