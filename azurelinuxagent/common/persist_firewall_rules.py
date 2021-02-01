@@ -29,35 +29,41 @@ from azurelinuxagent.common.utils.networkutil import AddFirewallRules
 from azurelinuxagent.common.utils.shellutil import CommandError
 
 
-class PersistFirewallRules(object):
+class PersistFirewallRulesHandler(object):
 
     __SERVICE_FILE_CONTENT = """
-    # This drop-in unit file was created by the Azure VM Agent.
-    # Do not edit.
-    [Unit]
-    Description=Setup network rules for WALinuxAgent 
-    Before=network-pre.target
-    Wants=network-pre.target
-    DefaultDependencies=no
-    ConditionPathExists={0}
-    
-    [Service]
-    Type=oneshot
-    Environment="DST_IP={1}" "UID={2}" "WAIT={3}"
-    ExecStart={4} {0} --dst_ip=${DST_IP} --uid=${UID} ${WAIT}
-    RemainAfterExit=false
-    
-    [Install]
-    WantedBy=network.target
-    """
+# This drop-in unit file was created by the Azure VM Agent.
+# Do not edit.
+[Unit]
+Description=Setup network rules for WALinuxAgent 
+Before=network-pre.target
+Wants=network-pre.target
+DefaultDependencies=no
+ConditionPathExists={0}
+
+[Service]
+Type=oneshot
+Environment="DST_IP={1}" "UID={2}" "WAIT={3}"
+ExecStart={4} {0} --dst_ip=${{DST_IP}} --uid=${{UID}} ${{WAIT}}
+RemainAfterExit=false
+
+[Install]
+WantedBy=network.target
+"""
 
     __OVERRIDE_CONTENT = """
-    # This drop-in unit file was created by the Azure VM Agent.
-    # Do not edit.
-    [Service]
-    Environment=
-    Environment="DST_IP={0}" "UID={1}" "WAIT={2}"
-    """
+# This drop-in unit file was created by the Azure VM Agent.
+# Do not edit.
+[Service]
+Environment=
+Environment="DST_IP={0}" "UID={1}" "WAIT={2}"
+"""
+
+    _AGENT_NETWORK_SETUP_BIN_FILE = "waagent_network_setup.py"
+    _AGENT_NETWORK_SETUP_NAME_FORMAT = "{0}-network-setup.service"
+    _DROP_IN_ENV_FILE_NAME = "10-environment.conf"
+
+    _FIREWALLD_RUNNING_CMD = ["firewall-cmd", "--state"]
 
     def __init__(self, dst_ip, uid):
         """
@@ -71,10 +77,10 @@ class PersistFirewallRules(object):
             - Do this everytime on service restart
         """
         osutil = get_osutil()
-        self._network_setup_service_name = "{0}-network-setup.service".format(osutil.get_service_name())
+        self._network_setup_service_name = self._AGENT_NETWORK_SETUP_NAME_FORMAT.format(osutil.get_service_name())
         self._is_systemd = CGroupsApi.is_systemd()
         self._systemd_file_path = osutil.get_systemd_unit_file_install_path()
-        self._agent_network_setup_file = os.path.join(osutil.get_agent_bin_path(), "waagent_network_setup.py")
+        self._agent_network_setup_bin_file = os.path.join(osutil.get_agent_bin_path(), self._AGENT_NETWORK_SETUP_BIN_FILE)
         self._dst_ip = dst_ip
         self._uid = uid
         self._wait = osutil.get_firewall_will_wait()
@@ -85,9 +91,9 @@ class PersistFirewallRules(object):
         # https://docs.fedoraproject.org/en-US/Fedora/19/html/Security_Guide/sec-Check_if_firewalld_is_running.html
         # Eg:    firewall-cmd --state
         #           >   running
-        firewalld_state = ["firewall-cmd", "--state"]
+        firewalld_state = PersistFirewallRulesHandler._FIREWALLD_RUNNING_CMD
         try:
-            return shellutil.run_command(firewalld_state) == "running"
+            return shellutil.run_command(firewalld_state).rstrip() == "running"
         except CommandError as error:
             logger.info("{0} command returned error/not running: {1}".format(' '.join(firewalld_state), ustr(error)))
         return False
@@ -132,7 +138,7 @@ class PersistFirewallRules(object):
         # Check if the custom service has already been enabled
         cmd = ["systemctl", "is-enabled", self._network_setup_service_name]
         try:
-            return shellutil.run_command(cmd) == "enabled"
+            return shellutil.run_command(cmd).rstrip() == "enabled"
         except CommandError as error:
             logger.info(
                 "Service: {0} not enabled, command: {1} failed.\nStdout: {2}\nStderr: {3}".format(self._network_setup_service_name,
@@ -146,7 +152,7 @@ class PersistFirewallRules(object):
             logger.info("Service: {0} already enabled. No change needed.".format(self._network_setup_service_name))
         else:
             # Ensure waagent_network_setup.py is available in the desired spot
-            self.__set_network_setup_file()
+            self.__set_network_setup_bin_file()
             # Create unit file with default values
             self.__set_service_unit_file()
 
@@ -154,23 +160,25 @@ class PersistFirewallRules(object):
         # This is to handle the case where WireIP can change midway on service restarts.
         self.__set_drop_in_file()
 
-    def __set_network_setup_file(self):
-        if os.path.exists(self._agent_network_setup_file):
-            logger.verbose("{0} file exists in the expected place".format(self._agent_network_setup_file))
+    def __set_network_setup_bin_file(self):
+        if os.path.exists(self._agent_network_setup_bin_file):
+            logger.verbose("{0} file exists in the expected place".format(self._agent_network_setup_bin_file))
             return
 
         logger.warn("Network file: {0} not available in the expected path. Copying it over".format(
-            self._agent_network_setup_file))
+            self._agent_network_setup_bin_file))
         try:
-            shutil.copyfile(os.path.join("bin", fileutil.base_name(self._agent_network_setup_file)),
-                            self._agent_network_setup_file)
-            fileutil.chmod(self._agent_network_setup_file, 0o744)
+            parent, _ = os.path.split(os.path.abspath(__file__))
+            shutil.copyfile(os.path.join(parent, fileutil.base_name(self._agent_network_setup_bin_file)),
+                            self._agent_network_setup_bin_file)
+            fileutil.chmod(self._agent_network_setup_bin_file, 0o744)
         except Exception:
-            self.__remove_file_without_raising(self._agent_network_setup_file)
+            self.__remove_file_without_raising(self._agent_network_setup_bin_file)
             raise
 
     def __set_drop_in_file(self):
-        drop_in_file = os.path.join(self._systemd_file_path, "{0}.d".format(self._network_setup_service_name), "10-environment.conf")
+        drop_in_file = os.path.join(self._systemd_file_path, "{0}.d".format(self._network_setup_service_name),
+                                    self._DROP_IN_ENV_FILE_NAME)
         parent, _ = os.path.split(drop_in_file)
         try:
             if not os.path.exists(parent):
@@ -181,12 +189,12 @@ class PersistFirewallRules(object):
             raise
 
     def __set_service_unit_file(self):
-        service_file = os.path.join(self._systemd_file_path, self._network_setup_service_name)
+        service_unit_file = os.path.join(self._systemd_file_path, self._network_setup_service_name)
         try:
-            fileutil.write_file(service_file,
-                                self.__SERVICE_FILE_CONTENT.format(self._agent_network_setup_file, self._dst_ip,
+            fileutil.write_file(service_unit_file,
+                                self.__SERVICE_FILE_CONTENT.format(self._agent_network_setup_bin_file, self._dst_ip,
                                                                    self._uid, self._wait, sys.executable))
-            fileutil.chmod(service_file, 0o644)
+            fileutil.chmod(service_unit_file, 0o644)
 
             # Finally enable the service. This is needed to ensure the service is started on system boot
             cmd = ["systemctl", "enable", self._network_setup_service_name]
@@ -194,14 +202,13 @@ class PersistFirewallRules(object):
                 shellutil.run_command(cmd)
             except CommandError as error:
                 msg = "Unable to enable service: {0}; deleting service file: {1}. Command: {2}, Exit-code: {3}.\nstdout: {4}\nstderr: {5}".format(
-                    self._network_setup_service_name, service_file, ' '.join(cmd), error.returncode, error.stdout,
+                    self._network_setup_service_name, service_unit_file, ' '.join(cmd), error.returncode, error.stdout,
                     error.stderr)
                 raise Exception(msg)
 
         except Exception:
-            self.__remove_file_without_raising(service_file)
+            self.__remove_file_without_raising(service_unit_file)
             raise
-
 
     @staticmethod
     def __remove_file_without_raising(file_path):
@@ -210,8 +217,3 @@ class PersistFirewallRules(object):
                 os.remove(file_path)
             except Exception as error:
                 logger.warn("Unable to delete file: {0}; Error: {1}".format(file_path, ustr(error)))
-
-
-
-
-

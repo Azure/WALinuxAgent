@@ -38,7 +38,7 @@ import azurelinuxagent.common.logger as logger
 import azurelinuxagent.common.utils.fileutil as fileutil
 import azurelinuxagent.common.utils.restutil as restutil
 import azurelinuxagent.common.utils.textutil as textutil
-from azurelinuxagent.common.persist_firewall_rules import PersistFirewallRules
+from azurelinuxagent.common.persist_firewall_rules import PersistFirewallRulesHandler
 from azurelinuxagent.common.cgroupapi import CGroupsApi
 from azurelinuxagent.common.cgroupconfigurator import CGroupConfigurator
 
@@ -834,7 +834,7 @@ class UpdateHandler(object):
     @staticmethod
     def _ensure_firewall_rules_persisted(dst_ip):
         try:
-            PersistFirewallRules(dst_ip=dst_ip, uid=os.getuid()).setup()
+            PersistFirewallRulesHandler(dst_ip=dst_ip, uid=os.getuid()).setup()
         except Exception as error:
             logger.warn("Unable to persist the firewall rules: {0}".format(ustr(error)))
 
