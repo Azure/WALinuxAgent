@@ -255,7 +255,7 @@ class MonitorHandler(ThreadHandlerInterface):
     def daemon(self):
         try:
             # The protocol needs to be instantiated in the monitor thread itself (to avoid concurrency issues with the protocol object each
-            # thread a different instance as per the SingletonPerThread model.
+            # thread uses a different instance as per the SingletonPerThread model.
             protocol_util = get_protocol_util()
             protocol = protocol_util.get_protocol()
             health_service = HealthService(protocol.get_endpoint())
