@@ -17,7 +17,6 @@
 
 import datetime
 import threading
-import uuid
 
 import azurelinuxagent.common.logger as logger
 import azurelinuxagent.common.utils.networkutil as networkutil
@@ -100,7 +99,6 @@ class ReportNetworkConfigurationChangesOperation(PeriodicOperation):
     """
     Periodic operation to check and log changes in network configuration.
     """
-
     def __init__(self):
         super(ReportNetworkConfigurationChangesOperation, self).__init__(
             name="report network configuration changes",
@@ -125,116 +123,86 @@ class ReportNetworkConfigurationChangesOperation(PeriodicOperation):
             self.last_nic_state = nic_state
 
 
-class MonitorHandler(ThreadHandlerInterface):
-    # telemetry
-    EVENT_COLLECTION_PERIOD = datetime.timedelta(minutes=1)
-    # host plugin
-    HOST_PLUGIN_HEARTBEAT_PERIOD = datetime.timedelta(minutes=1)
-    HOST_PLUGIN_HEALTH_PERIOD = datetime.timedelta(minutes=5)
-    # imds
-    IMDS_HEARTBEAT_PERIOD = datetime.timedelta(minutes=1)
-    IMDS_HEALTH_PERIOD = datetime.timedelta(minutes=3)
+class SendHostPluginHeartbeatOperation(PeriodicOperation):
+    """
+    Periodic operation for reporting the HostGAPlugin's health. The signal is 'Healthy' when we have been able to communicate with
+    plugin at least once in the last _HOST_PLUGIN_HEALTH_PERIOD.
+    """
+    def __init__(self, protocol, health_service):
+        super(SendHostPluginHeartbeatOperation, self).__init__(
+            name="send_host_plugin_heartbeat",
+            operation=self._operation_impl,
+            period=SendHostPluginHeartbeatOperation._HOST_PLUGIN_HEARTBEAT_PERIOD)
+        self.protocol = protocol
+        self.health_service = health_service
+        self.host_plugin_error_state = ErrorState(min_timedelta=SendHostPluginHeartbeatOperation._HOST_PLUGIN_HEALTH_PERIOD)
 
-    _THREAD_NAME = "MonitorHandler"
+    _HOST_PLUGIN_HEARTBEAT_PERIOD = datetime.timedelta(minutes=1)
+    _HOST_PLUGIN_HEALTH_PERIOD = datetime.timedelta(minutes=5)
 
-    @staticmethod
-    def get_thread_name():
-        return MonitorHandler._THREAD_NAME
-
-    def __init__(self):
-        self.osutil = get_osutil()
-        self.imds_client = None
-
-        self.event_thread = None
-        self._periodic_operations = [
-            ResetPeriodicLogMessagesOperation(),
-            ReportNetworkErrorsOperation(),
-            PeriodicOperation("send_host_plugin_heartbeat", self.send_host_plugin_heartbeat, self.HOST_PLUGIN_HEARTBEAT_PERIOD),
-            PeriodicOperation("send_imds_heartbeat", self.send_imds_heartbeat, self.IMDS_HEARTBEAT_PERIOD),
-            ReportNetworkConfigurationChangesOperation(),
-            PollResourceUsageOperation()
-        ]
-
-        self.protocol = None
-        self.protocol_util = None
-        self.health_service = None
-
-        self.should_run = True
-        self.heartbeat_id = str(uuid.uuid4()).upper()
-        self.host_plugin_errorstate = ErrorState(min_timedelta=MonitorHandler.HOST_PLUGIN_HEALTH_PERIOD)
-        self.imds_errorstate = ErrorState(min_timedelta=MonitorHandler.IMDS_HEALTH_PERIOD)
-
-    def run(self):
-        self.start()
-
-    def stop(self):
-        self.should_run = False
-        if self.is_alive():
-            self.join()
-
-    def join(self):
-        self.event_thread.join()
-
-    def stopped(self):
-        return not self.should_run
-
-    def init_protocols(self):
-        # The initialization of ProtocolUtil for the Monitor thread should be done within the thread itself rather
-        # than initializing it in the ExtHandler thread. This is done to avoid any concurrency issues as each
-        # thread would now have its own ProtocolUtil object as per the SingletonPerThread model.
-        self.protocol_util = get_protocol_util()
-        self.protocol = self.protocol_util.get_protocol()
-        self.health_service = HealthService(self.protocol.get_endpoint())
-
-    def init_imds_client(self):
-        wireserver_endpoint = self.protocol_util.get_wireserver_endpoint()
-        self.imds_client = get_imds_client(wireserver_endpoint)
-
-    def is_alive(self):
-        return self.event_thread is not None and self.event_thread.is_alive()
-
-    def start(self):
-        self.event_thread = threading.Thread(target=self.daemon)
-        self.event_thread.setDaemon(True)
-        self.event_thread.setName(self.get_thread_name())
-        self.event_thread.start()
-
-    def daemon(self):
+    def _operation_impl(self):
         try:
-            if self.protocol_util is None or self.protocol is None:
-                self.init_protocols()
+            host_plugin = self.protocol.client.get_host_plugin()
+            host_plugin.ensure_initialized()
+            is_currently_healthy = host_plugin.get_health()
 
-            if self.imds_client is None:
-                self.init_imds_client()
+            if is_currently_healthy:
+                self.host_plugin_error_state.reset()
+            else:
+                self.host_plugin_error_state.incr()
 
-            while not self.stopped():
-                try:
-                    self.protocol.update_host_plugin_from_goal_state()
+            is_healthy = self.host_plugin_error_state.is_triggered() is False
+            logger.verbose("HostGAPlugin health: {0}", is_healthy)
 
-                    for op in self._periodic_operations:
-                        op.run()
+            self.health_service.report_host_plugin_heartbeat(is_healthy)
 
-                except Exception as e:
-                    logger.error("An error occurred in the monitor thread main loop; will skip the current iteration.\n{0}", ustr(e))
-                finally:
-                    PeriodicOperation.sleep_until_next_operation(self._periodic_operations)
+            if not is_healthy:
+                add_event(
+                    name=AGENT_NAME,
+                    version=CURRENT_VERSION,
+                    op=WALAEventOperation.HostPluginHeartbeatExtended,
+                    is_success=False,
+                    message='{0} since successful heartbeat'.format(self.host_plugin_error_state.fail_time),
+                    log_event=False)
+
         except Exception as e:
-            logger.error("An error occurred in the monitor thread; will exit the thread.\n{0}", ustr(e))
+            msg = "Exception sending host plugin heartbeat: {0}".format(ustr(e))
+            add_event(
+                name=AGENT_NAME,
+                version=CURRENT_VERSION,
+                op=WALAEventOperation.HostPluginHeartbeat,
+                is_success=False,
+                message=msg,
+                log_event=False)
 
-    def send_imds_heartbeat(self):
-        """
-        Send a health signal every IMDS_HEARTBEAT_PERIOD. The signal is 'Healthy' when we have
-        successfully called and validated a response in the last IMDS_HEALTH_PERIOD.
-        """
+
+class SendImdsHeartbeatOperation(PeriodicOperation):
+    """
+    Periodic operation to report the IDMS's health. The signal is 'Healthy' when we have successfully called and validated
+    a response in the last _IMDS_HEALTH_PERIOD.
+    """
+    def __init__(self, protocol_util, health_service):
+        super(SendImdsHeartbeatOperation, self).__init__(
+            name="send_imds_heartbeat",
+            operation=self._operation_impl,
+            period=SendImdsHeartbeatOperation._IMDS_HEARTBEAT_PERIOD)
+        self.health_service = health_service
+        self.imds_client = get_imds_client(protocol_util.get_wireserver_endpoint())
+        self.imds_error_state = ErrorState(min_timedelta=SendImdsHeartbeatOperation._IMDS_HEALTH_PERIOD)
+
+    _IMDS_HEARTBEAT_PERIOD = datetime.timedelta(minutes=1)
+    _IMDS_HEALTH_PERIOD = datetime.timedelta(minutes=3)
+
+    def _operation_impl(self):
         try:
             is_currently_healthy, response = self.imds_client.validate()
 
             if is_currently_healthy:
-                self.imds_errorstate.reset()
+                self.imds_error_state.reset()
             else:
-                self.imds_errorstate.incr()
+                self.imds_error_state.incr()
 
-            is_healthy = self.imds_errorstate.is_triggered() is False
+            is_healthy = self.imds_error_state.is_triggered() is False
             logger.verbose("IMDS health: {0} [{1}]", is_healthy, response)
 
             self.health_service.report_imds_status(is_healthy, response)
@@ -249,42 +217,69 @@ class MonitorHandler(ThreadHandlerInterface):
                 message=msg,
                 log_event=False)
 
-    def send_host_plugin_heartbeat(self):
-        """
-        Send a health signal every HOST_PLUGIN_HEARTBEAT_PERIOD. The signal is 'Healthy' when we have been able to
-        communicate with HostGAPlugin at least once in the last HOST_PLUGIN_HEALTH_PERIOD.
-        """
+
+class MonitorHandler(ThreadHandlerInterface):
+    _THREAD_NAME = "MonitorHandler"
+
+    @staticmethod
+    def get_thread_name():
+        return MonitorHandler._THREAD_NAME
+
+    def __init__(self):
+        self.monitor_thread = None
+        self.should_run = True
+
+    def run(self):
+        self.start()
+
+    def stop(self):
+        self.should_run = False
+        if self.is_alive():
+            self.join()
+
+    def join(self):
+        self.monitor_thread.join()
+
+    def stopped(self):
+        return not self.should_run
+
+    def is_alive(self):
+        return self.monitor_thread is not None and self.monitor_thread.is_alive()
+
+    def start(self):
+        self.monitor_thread = threading.Thread(target=self.daemon)
+        self.monitor_thread.setDaemon(True)
+        self.monitor_thread.setName(self.get_thread_name())
+        self.monitor_thread.start()
+
+    def daemon(self):
         try:
-            host_plugin = self.protocol.client.get_host_plugin()
-            host_plugin.ensure_initialized()
-            is_currently_healthy = host_plugin.get_health()
+            # The protocol needs to be instantiated in the monitor thread itself (to avoid concurrency issues with the protocol object each
+            # thread a different instance as per the SingletonPerThread model.
+            protocol_util = get_protocol_util()
+            protocol = protocol_util.get_protocol()
+            health_service = HealthService(protocol.get_endpoint())
+            periodic_operations = [
+                ResetPeriodicLogMessagesOperation(),
+                ReportNetworkErrorsOperation(),
+                ReportNetworkConfigurationChangesOperation(),
+                PollResourceUsageOperation(),
+                SendHostPluginHeartbeatOperation(protocol, health_service),
+                SendImdsHeartbeatOperation(protocol_util, health_service)
+            ]
 
-            if is_currently_healthy:
-                self.host_plugin_errorstate.reset()
-            else:
-                self.host_plugin_errorstate.incr()
+            while not self.stopped():
+                try:
+                    protocol.update_host_plugin_from_goal_state()
 
-            is_healthy = self.host_plugin_errorstate.is_triggered() is False
-            logger.verbose("HostGAPlugin health: {0}", is_healthy)
+                    for op in periodic_operations:
+                        op.run()
 
-            self.health_service.report_host_plugin_heartbeat(is_healthy)
-
-            if not is_healthy:
-                add_event(
-                    name=AGENT_NAME,
-                    version=CURRENT_VERSION,
-                    op=WALAEventOperation.HostPluginHeartbeatExtended,
-                    is_success=False,
-                    message='{0} since successful heartbeat'.format(self.host_plugin_errorstate.fail_time),
-                    log_event=False)
-
+                except Exception as e:
+                    logger.error("An error occurred in the monitor thread main loop; will skip the current iteration.\n{0}", ustr(e))
+                finally:
+                    PeriodicOperation.sleep_until_next_operation(periodic_operations)
         except Exception as e:
-            msg = "Exception sending host plugin heartbeat: {0}".format(ustr(e))
-            add_event(
-                name=AGENT_NAME,
-                version=CURRENT_VERSION,
-                op=WALAEventOperation.HostPluginHeartbeat,
-                is_success=False,
-                message=msg,
-                log_event=False)
+            logger.error("An error occurred in the monitor thread; will exit the thread.\n{0}", ustr(e))
+
 

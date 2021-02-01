@@ -16,7 +16,6 @@
 # Requires Python 2.6+ and Openssl 1.0+
 #
 import contextlib
-import datetime
 import os
 import random
 import string
@@ -25,11 +24,11 @@ from azurelinuxagent.common import event, logger
 from azurelinuxagent.common.cgroup import CGroup, CpuCgroup, MemoryCgroup, MetricValue
 from azurelinuxagent.common.cgroupstelemetry import CGroupsTelemetry
 from azurelinuxagent.common.event import EVENTS_DIRECTORY
-from azurelinuxagent.common.logger import Logger
+from azurelinuxagent.common.protocol.healthservice import HealthService
 from azurelinuxagent.common.protocol.util import ProtocolUtil
 from azurelinuxagent.common.protocol.wire import WireProtocol
 from azurelinuxagent.ga.monitor import get_monitor_handler, PeriodicOperation, \
-    ResetPeriodicLogMessagesOperation, PollResourceUsageOperation
+    ResetPeriodicLogMessagesOperation, SendHostPluginHeartbeatOperation, PollResourceUsageOperation
 from tests.protocol.mocks import mock_wire_protocol, HttpRequestPredicates, MockHttpResponse
 from tests.protocol.mockwiredata import DATA_FILE
 from tests.tools import Mock, MagicMock, patch, AgentTestCase, clear_singleton_instances
@@ -40,127 +39,129 @@ def random_generator(size=6, chars=string.ascii_uppercase + string.digits + stri
 
 
 @contextlib.contextmanager
-def _create_monitor_handler(enabled_operations=None, iterations=1):
-    """
-    Creates an instance of MonitorHandler that
-        * Uses a mock_wire_protocol for network requests,
-        * Executes only the operations given in the 'enabled_operations' parameter,
-        * Runs its main loop only the number of times given in the 'iterations' parameter, and
-        * Does not sleep at the end of each iteration
+def _mock_wire_protocol():
+    # Since ProtocolUtil is a singleton per thread, we need to clear it to ensure that the test cases do not
+    # reuse a previous state
+    clear_singleton_instances(ProtocolUtil)
 
-    The returned MonitorHandler is augmented with 2 methods:
-        * get_mock_wire_protocol() - returns the mock protocol
-        * run_and_wait() - invokes run() and wait() on the MonitorHandler
-
-    """
-    def periodic_operation_run_mock(self):
-        if self._name in enabled_operations:  # pylint: disable=protected-access
-            periodic_operation_run_mock.original_definition(self)
-    periodic_operation_run_mock.original_definition = PeriodicOperation.run
-
-    periodic_operation_run_patch = None
-
-    try:
-        with mock_wire_protocol(DATA_FILE) as protocol:
-            protocol_util = MagicMock()
-            protocol_util.get_protocol = Mock(return_value=protocol)
-            with patch("azurelinuxagent.ga.monitor.get_protocol_util", return_value=protocol_util):
-                with patch("azurelinuxagent.ga.monitor.MonitorHandler.stopped", side_effect=[False] * iterations + [True]):
-                    with patch("time.sleep"):
-                        if enabled_operations is not None:
-                            periodic_operation_run_patch = patch.object(PeriodicOperation, "run", side_effect=periodic_operation_run_mock, autospec=True)
-                            periodic_operation_run_patch.start()
-
-                        def run_and_wait():
-                            monitor_handler.run()
-                            monitor_handler.join()
-
-                        monitor_handler = get_monitor_handler()
-                        monitor_handler.get_mock_wire_protocol = lambda: protocol
-                        monitor_handler.run_and_wait = run_and_wait
-
-                        yield monitor_handler
-    finally:
-        if periodic_operation_run_patch is not None:
-            periodic_operation_run_patch.stop()
+    with mock_wire_protocol(DATA_FILE) as protocol:
+        protocol_util = MagicMock()
+        protocol_util.get_protocol = Mock(return_value=protocol)
+        with patch("azurelinuxagent.ga.monitor.get_protocol_util", return_value=protocol_util):
+            yield protocol
 
 
-class TestMonitor(AgentTestCase, HttpRequestPredicates):
-    def setUp(self):
-        AgentTestCase.setUp(self)
-        prefix = "UnitTest"
-        logger.DEFAULT_LOGGER = Logger(prefix=prefix)
-
-        # Since ProtocolUtil is a singleton per thread, we need to clear it to ensure that the test cases do not
-        # reuse a previous state
-        clear_singleton_instances(ProtocolUtil)
-
-    def tearDown(self):
-        AgentTestCase.tearDown(self)
-
+class MonitorHandlerTestCase(AgentTestCase):
     def test_it_should_invoke_all_periodic_operations(self):
+        def periodic_oepration_run(self):
+            invoked_operations.append(self._name)
         invoked_operations = []
 
-        with _create_monitor_handler() as monitor_handler:
-            def mock_run(self):
-                invoked_operations.append(self._name)
+        with _mock_wire_protocol():
+            with patch("azurelinuxagent.ga.monitor.MonitorHandler.stopped", side_effect=[False, True]):
+                with patch("time.sleep"):
+                    with patch.object(PeriodicOperation, "run", side_effect=periodic_oepration_run, autospec=True):
+                        invoked_operations = []
 
-            with patch.object(PeriodicOperation, "run", side_effect=mock_run, autospec=True):
-                monitor_handler.run_and_wait()
+                        monitor_handler = get_monitor_handler()
+                        monitor_handler.run()
+                        monitor_handler.join()
 
-                expected_operations = [
-                    'poll resource usage',
-                    'report network configuration changes',
-                    'report network errors',
-                    'reset periodic log messages',
-                    'send_host_plugin_heartbeat',
-                    'send_imds_heartbeat'
-                ]
+                        expected_operations = [
+                            'poll resource usage',
+                            'report network configuration changes',
+                            'report network errors',
+                            'reset periodic log messages',
+                            'send_host_plugin_heartbeat',
+                            'send_imds_heartbeat'
+                        ]
 
-                invoked_operations.sort()
-                expected_operations.sort()
-                self.assertEqual(invoked_operations, expected_operations, "The monitor thread did not invoke the expected operations")
+                        invoked_operations.sort()
+                        expected_operations.sort()
 
+                        self.assertEqual(invoked_operations, expected_operations, "The monitor thread did not invoke the expected operations")
+
+
+class SendHostPluginHeartbeatOperationTestCase(AgentTestCase, HttpRequestPredicates):
     def test_it_should_report_host_ga_health(self):
-        with _create_monitor_handler(enabled_operations=["send_host_plugin_heartbeat"]) as monitor_handler:
+        with _mock_wire_protocol() as protocol:
             def http_post_handler(url, _, **__):
                 if self.is_health_service_request(url):
                     http_post_handler.health_service_posted = True
                     return MockHttpResponse(status=200)
                 return None
             http_post_handler.health_service_posted = False
+            protocol.set_http_handlers(http_post_handler=http_post_handler)
 
-            monitor_handler.get_mock_wire_protocol().set_http_handlers(http_post_handler=http_post_handler)
+            health_service = HealthService(protocol.get_endpoint())
 
-            monitor_handler.run_and_wait()
+            SendHostPluginHeartbeatOperation(protocol, health_service).run()
 
             self.assertTrue(http_post_handler.health_service_posted, "The monitor thread did not report host ga plugin health")
 
     def test_it_should_report_a_telemetry_event_when_host_plugin_is_not_healthy(self):
-        with _create_monitor_handler(enabled_operations=["send_host_plugin_heartbeat"]) as monitor_handler:
-            def http_get_handler(url, *_, **__):
-                if self.is_host_plugin_health_request(url):
-                    return MockHttpResponse(status=503)
-                return None
-
-            monitor_handler.get_mock_wire_protocol().set_http_handlers(http_get_handler=http_get_handler)
-
+        with _mock_wire_protocol() as protocol:
             # the error triggers only after ERROR_STATE_DELTA_DEFAULT
             with patch('azurelinuxagent.common.errorstate.ErrorState.is_triggered', return_value=True):
                 with patch('azurelinuxagent.common.event.EventLogger.add_event') as add_event_patcher:
-                    monitor_handler.run_and_wait()
+                    def http_get_handler(url, *_, **__):
+                        if self.is_host_plugin_health_request(url):
+                            return MockHttpResponse(status=503)
+                        return None
+                    protocol.set_http_handlers(http_get_handler=http_get_handler)
+
+                    health_service = HealthService(protocol.get_endpoint())
+
+                    SendHostPluginHeartbeatOperation(protocol, health_service).run()
 
                     heartbeat_events = [kwargs for _, kwargs in add_event_patcher.call_args_list if kwargs['op'] == 'HostPluginHeartbeatExtended']
                     self.assertTrue(len(heartbeat_events) == 1, "The monitor thread should have reported exactly 1 telemetry event for an unhealthy host ga plugin")
                     self.assertFalse(heartbeat_events[0]['is_success'], 'The reported event should indicate failure')
 
+    def test_it_should_not_send_a_healt_signal_when_the_hearbeat_fails(self):
+        with _mock_wire_protocol() as protocol:
+            with patch('azurelinuxagent.common.event.EventLogger.add_event') as add_event_patcher:
+                health_service_post_requests = []
+
+                def http_get_handler(url, *_, **__):
+                    if self.is_host_plugin_health_request(url):
+                        del health_service_post_requests[:]  # clear the requests; after this error there should be no more POSTs
+                        raise IOError('A CLIENT ERROR')
+                    return None
+
+                def http_post_handler(url, _, **__):
+                    if self.is_health_service_request(url):
+                        health_service_post_requests.append(url)
+                        return MockHttpResponse(status=200)
+                    return None
+
+                protocol.set_http_handlers(http_get_handler=http_get_handler, http_post_handler=http_post_handler)
+
+                health_service = HealthService(protocol.get_endpoint())
+
+                SendHostPluginHeartbeatOperation(protocol, health_service).run()
+
+                self.assertEqual(0, len(health_service_post_requests), "No health signals should have been posted: {0}".format(health_service_post_requests))
+
+                heartbeat_events = [kwargs for _, kwargs in add_event_patcher.call_args_list if kwargs['op'] == 'HostPluginHeartbeat']
+                self.assertTrue(len(heartbeat_events) == 1, "The monitor thread should have reported exactly 1 telemetry event for an unhealthy host ga plugin")
+                self.assertFalse(heartbeat_events[0]['is_success'], 'The reported event should indicate failure')
+                self.assertIn('A CLIENT ERROR', heartbeat_events[0]['message'], 'The failure does not include the expected message')
+
+
+class ResetPeriodicLogMessagesOperationTestCase(AgentTestCase, HttpRequestPredicates):
     def test_it_should_clear_periodic_log_messages(self):
+        logger.reset_periodic()
+
         # Adding 100 different messages
-        for i in range(100):
+        expected = 100
+        for i in range(expected):
             logger.periodic_info(logger.EVERY_DAY, "Test {0}".format(i))
 
-        if len(logger.DEFAULT_LOGGER.periodic_messages) != 100:
-            raise Exception('Test setup error: the periodic messages were not added')
+        actual = len(logger.DEFAULT_LOGGER.periodic_messages)
+
+        if actual != expected:
+            raise Exception('Test setup error: the periodic messages were not added. Got: {0} Expected: {1}'.format(actual, expected))
 
         ResetPeriodicLogMessagesOperation().run()
 
@@ -285,33 +286,3 @@ class TestExtensionMetricsDataTelemetry(AgentTestCase):
                             patch_get_memory_max_usage.return_value = max_memory_usage_values[i]  # example 450 MB
                             CGroupsTelemetry.poll_all_tracked()
 
-
-@patch("azurelinuxagent.common.utils.restutil.http_post")
-@patch('azurelinuxagent.common.protocol.wire.WireClient.get_goal_state')
-@patch('azurelinuxagent.common.event.EventLogger.add_event')
-@patch("azurelinuxagent.common.utils.restutil.http_get")
-class TestMonitorFailure(AgentTestCase):
-
-    @patch("azurelinuxagent.common.protocol.healthservice.HealthService.report_host_plugin_heartbeat")
-    def test_error_heartbeat_creates_no_signal(self, patch_report_heartbeat, patch_http_get, patch_add_event, *args):  # pylint: disable=unused-argument
-
-        monitor_handler = get_monitor_handler()
-        protocol = WireProtocol('endpoint')
-        protocol.update_goal_state = MagicMock()
-        with patch('azurelinuxagent.common.protocol.util.ProtocolUtil.get_protocol', return_value=protocol):
-            monitor_handler.init_protocols()
-            monitor_handler.last_host_plugin_heartbeat = datetime.datetime.utcnow() - datetime.timedelta(hours=1)
-
-            patch_http_get.side_effect = IOError('client error')
-            monitor_handler.send_host_plugin_heartbeat()
-
-            # health report should not be made
-            self.assertEqual(0, patch_report_heartbeat.call_count)
-
-            # telemetry with failure details is sent
-            self.assertEqual(1, patch_add_event.call_count)
-            self.assertEqual('HostPluginHeartbeat', patch_add_event.call_args[1]['op'])
-            self.assertTrue('client error' in patch_add_event.call_args[1]['message'])
-
-            self.assertEqual(False, patch_add_event.call_args[1]['is_success'])
-            monitor_handler.stop()
