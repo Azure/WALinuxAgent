@@ -16,6 +16,7 @@
 # Requires Python 2.6+ and Openssl 1.0+
 
 import os
+import re
 import subprocess
 
 from azurelinuxagent.common import logger
@@ -24,6 +25,7 @@ from azurelinuxagent.common.cgroupapi import CGroupsApi, SystemdCgroupsApi, Syst
 from azurelinuxagent.common.cgroupstelemetry import CGroupsTelemetry
 from azurelinuxagent.common.exception import ExtensionErrorCodes, CGroupsException
 from azurelinuxagent.common.future import ustr
+from azurelinuxagent.common.osutil import get_osutil
 from azurelinuxagent.common.version import get_distro
 from azurelinuxagent.common.utils import shellutil
 from azurelinuxagent.common.utils.extensionprocessutil import handle_process_completion
@@ -78,6 +80,9 @@ class CGroupConfigurator(object):
                     add_event(op=WALAEventOperation.CGroupsInfo, message=message)
 
                 log_cgroup_info("systemd version: {0}", self._cgroups_api.get_systemd_version())
+
+                self.__collect_azure_unit_telemetry()
+                self.__collect_agent_unit_files_telemetry()
 
                 #
                 # Older versions of the daemon (2.2.31-2.2.40) wrote their PID to /sys/fs/cgroup/{cpu,memory}/WALinuxAgent/WALinuxAgent.  When running
@@ -179,6 +184,79 @@ class CGroupConfigurator(object):
         def disable(self):
             self._cgroups_enabled = False
             CGroupsTelemetry.reset()
+
+        @staticmethod
+        def __collect_azure_unit_telemetry():
+            azure_units = []
+
+            try:
+                units = shellutil.run_command(['systemctl', 'list-units', 'azure*', '-all'])
+                for line in units.split('\n'):
+                    match = re.match(r'\s?(azure[^\s]*)\s?', line, re.IGNORECASE)
+                    if match is not None:
+                        azure_units.append((match.group(1), line))
+            except shellutil.CommandError as command_error:
+                message = "Failed to list systemd units: {0}".format(ustr(command_error))
+                logger.info(message)
+                add_event(op=WALAEventOperation.CGroupsInitialize, is_success=False, message=message, log_event=False)
+
+            for unit_name, unit_description in azure_units:
+                unit_slice = "Unknown"
+                try:
+                    unit_slice = SystemdCgroupsApi.get_unit_property(unit_name, "Slice")
+                except Exception as exception:
+                    message = "Failed to query Slice for {0}: {1}".format(unit_name, ustr(exception))
+                    logger.info(message)
+                    add_event(op=WALAEventOperation.CGroupsInitialize, is_success=False, message=message, log_event=False)
+
+                message = "Found an Azure unit under slice {0}: {1}".format(unit_slice, unit_description)
+                logger.info(message)
+                add_event(op=WALAEventOperation.CGroupsInitialize, message=message)
+
+            if len(azure_units) == 0:
+                try:
+                    cgroups = shellutil.run_command('systemd-cgls')
+                    for line in cgroups.split('\n'):
+                        if re.match(r'[^\x00-\xff]+azure\.slice\s*', line, re.UNICODE):
+                            logger.info(ustr("Found a cgroup for azure.slice\n{0}").format(cgroups))
+                            add_event(op=WALAEventOperation.CGroupsInitialize, message="Found a cgroup for azure.slice")
+                except shellutil.CommandError as command_error:
+                    message = "Failed to list systemd units: {0}".format(ustr(command_error))
+                    logger.info(message)
+                    add_event(op=WALAEventOperation.CGroupsInitialize, is_success=False, message=message, log_event=False)
+
+        @staticmethod
+        def __collect_agent_unit_files_telemetry():
+            agent_unit_files = []
+            agent_service_name = get_osutil().get_service_name()
+            try:
+                fragment_path = SystemdCgroupsApi.get_unit_property(agent_service_name, "FragmentPath")
+                if fragment_path != "/lib/systemd/system/{0}.service".format(agent_service_name):
+                    agent_unit_files.append(fragment_path)
+            except Exception as exception:
+                message = "Failed to query the agent's FragmentPath: {0}".format(ustr(exception))
+                logger.info(message)
+                add_event(op=WALAEventOperation.CGroupsInitialize, is_success=False, message=message, log_event=False)
+
+            try:
+                drop_in_paths = SystemdCgroupsApi.get_unit_property(agent_service_name, "DropInPaths")
+                for path in drop_in_paths.split():
+                    agent_unit_files.append(path)
+            except Exception as exception:
+                message = "Failed to query the agent's DropInPaths: {0}".format(ustr(exception))
+                logger.info(message)
+                add_event(op=WALAEventOperation.CGroupsInitialize, is_success=False, message=message, log_event=False)
+
+            for unit_file in agent_unit_files:
+                try:
+                    with open(unit_file, "r") as file_object:
+                        message = "Found a custom unit file for the agent: {0}\n{1}".format(unit_file, file_object.read())
+                        logger.info(message)
+                        add_event(op=WALAEventOperation.CGroupsInitialize, message=message)
+                except Exception as exception:
+                    message = "Can't read {0}: {1}".format(unit_file, ustr(exception))
+                    logger.info(message)
+                    add_event(op=WALAEventOperation.CGroupsInitialize, message=message)
 
         def create_slices(self):
             if not self.enabled():
