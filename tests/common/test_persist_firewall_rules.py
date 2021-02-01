@@ -39,6 +39,7 @@ class TestPersistFirewallRulesHandler(AgentTestCase):
         self._expected_service_name = ""
         self._drop_in_file = ""
         self._network_service_bin_file = ""
+        self._network_service_unit_file = ""
 
     def setUp(self):
         AgentTestCase.setUp(self)

@@ -9,6 +9,7 @@ import json
 import os
 import shutil
 import stat
+import subprocess
 import sys
 import tempfile
 import time
@@ -1620,6 +1621,25 @@ Description=Slice for Azure VM Extensions""")
                 content = json.load(handler_env_content_file)
             self.assertIn(HandlerEnvironment.eventsFolder, content[0][HandlerEnvironment.handlerEnvironment],
                           "{0} not found in HandlerEnv file".format(HandlerEnvironment.eventsFolder))
+
+    def test_it_should_setup_firewall_rules_on_startup(self):
+        iterations = 1
+        original_popen = subprocess.Popen
+        executed_commands = []
+
+        def _mock_popen(cmd, *args, **kwargs):
+            if 'firewall-cmd' in cmd:
+                executed_commands.append(cmd)
+                cmd = ["echo", "running"]
+            return original_popen(cmd, *args, **kwargs)
+
+        with self._get_update_handler(iterations) as (update_handler, protocol):
+            with patch("azurelinuxagent.common.utils.shellutil.subprocess.Popen", side_effect=_mock_popen):
+                update_handler.run(debug=True)
+
+        # Firewall-cmd should only be called 3 times - 1st to check if running, 2nd & 3rd for the QueryPassThrough cmd
+        self.assertEqual(3, len(executed_commands), "The number of times firwall-cmd should be called is only 3")
+
 
     @contextlib.contextmanager
     def _setup_test_for_ext_event_dirs_retention(self):
