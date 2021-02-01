@@ -33,12 +33,12 @@ class TestPersistFirewallRulesHandler(AgentTestCase):
 
     original_popen = subprocess.Popen
 
-    def __init__(self):
+    def __init__(self, *args, **kwargs):
+        super(TestPersistFirewallRulesHandler, self).__init__(*args, **kwargs)
         self._expected_service_name = ""
         self._expected_service_name = ""
         self._drop_in_file = ""
         self._network_service_bin_file = ""
-
 
     def setUp(self):
         AgentTestCase.setUp(self)
