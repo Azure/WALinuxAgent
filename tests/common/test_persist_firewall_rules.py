@@ -19,14 +19,14 @@ import os
 import shutil
 import subprocess
 import uuid
-from unittest.mock import patch, MagicMock
+
 
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.osutil.default import DefaultOSUtil
 from azurelinuxagent.common.persist_firewall_rules import PersistFirewallRulesHandler
 from azurelinuxagent.common.utils import fileutil
 from azurelinuxagent.common.utils.networkutil import AddFirewallRules, FirewallCmdDirectCommands
-from tests.tools import AgentTestCase
+from tests.tools import AgentTestCase, MagicMock, patch
 
 
 class TestPersistFirewallRulesHandler(AgentTestCase):
@@ -68,8 +68,16 @@ class TestPersistFirewallRulesHandler(AgentTestCase):
         osutil.get_agent_bin_path = MagicMock(return_value=self.__agent_bin_dir)
         osutil.get_systemd_unit_file_install_path = MagicMock(return_value=self.__systemd_dir)
 
-        self._expected_service_name = PersistFirewallRulesHandler._AGENT_NETWORK_SETUP_NAME_FORMAT.format(
+        # protected-access<W0212> Disabled: OK to access PersistFirewallRulesHandler._* from unit test for PersistFirewallRuleHandler
+        # attribute-defined-outside-init<W0201> Disabled: OK for the test class as we're mocking osutil
+        self._expected_service_name = PersistFirewallRulesHandler._AGENT_NETWORK_SETUP_NAME_FORMAT.format(  # pylint: disable=protected-access, attribute-defined-outside-init
             osutil.get_service_name())
+
+        self._network_service_unit_file = os.path.join(self.__systemd_dir, self._expected_service_name)
+        self._drop_in_file = os.path.join(self.__systemd_dir, "{0}.d".format(self._expected_service_name),
+                                          PersistFirewallRulesHandler._DROP_IN_ENV_FILE_NAME)  # pylint: disable=protected-access
+        self._network_service_bin_file = os.path.join(self.__agent_bin_dir,
+                                                      PersistFirewallRulesHandler._AGENT_NETWORK_SETUP_BIN_FILE)  # pylint: disable=protected-access
 
         # Just for these tests, ignoring the mode of mkdir to allow non-sudo tests
         orig_mkdir = fileutil.mkdir
@@ -111,19 +119,20 @@ class TestPersistFirewallRulesHandler(AgentTestCase):
             self.assertNotIn(systemctl_command, self.__executed_commands, "Systemctl command {0} found".format(cmd))
 
     def __assert_firewall_cmd_running_called(self, validate_command_called=True):
-        cmd = PersistFirewallRulesHandler._FIREWALLD_RUNNING_CMD
+        # protected-access<W0212> Disabled: OK to access PersistFirewallRulesHandler._* from unit test for PersistFirewallRuleHandler
+        cmd = PersistFirewallRulesHandler._FIREWALLD_RUNNING_CMD    # pylint: disable=protected-access
         if validate_command_called:
             self.assertIn(cmd, self.__executed_commands, "Firewall state not checked")
         else:
             self.assertNotIn(cmd, self.__executed_commands, "Firewall state not checked")
 
-    def __assert_network_service_setup_properly(self, unit_file, drop_in_file, bin_file):
+    def __assert_network_service_setup_properly(self):
         self.__assert_systemctl_called(cmd="is-enabled", validate_command_called=True)
         self.__assert_systemctl_called(cmd="enable", validate_command_called=True)
         self.__assert_firewall_called(cmd=FirewallCmdDirectCommands.PassThrough, validate_command_called=False)
-        self.assertTrue(os.path.exists(unit_file), "Service unit file should be there")
-        self.assertTrue(os.path.exists(drop_in_file), "Drop in file should be there")
-        self.assertTrue(os.path.exists(bin_file), "Network setup Binary file should be there")
+        self.assertTrue(os.path.exists(self._network_service_unit_file), "Service unit file should be there")
+        self.assertTrue(os.path.exists(self._drop_in_file), "Drop in file should be there")
+        self.assertTrue(os.path.exists(self._network_service_bin_file), "Network setup Binary file should be there")
 
     @staticmethod
     def __mock_network_setup_service_enabled(cmd):
@@ -168,20 +177,17 @@ class TestPersistFirewallRulesHandler(AgentTestCase):
         test_str = 'Environment="DST_IP={0}" "UID={1}" "WAIT={2}"'
         self.__replace_popen_cmd = TestPersistFirewallRulesHandler.__mock_network_setup_service_disabled
         with self._get_persist_firewall_rules_handler() as handler:
-            drop_in_file = os.path.join(self.__systemd_dir, "{0}.d".format(self._expected_service_name),
-                                        PersistFirewallRulesHandler._DROP_IN_ENV_FILE_NAME)
-            network_service_unit_file = os.path.join(self.__systemd_dir, self._expected_service_name)
-            self.assertFalse(os.path.exists(drop_in_file), "Drop in file should not be there")
-            self.assertFalse(os.path.exists(network_service_unit_file), "Unit file not present")
+            self.assertFalse(os.path.exists(self._drop_in_file), "Drop in file should not be there")
+            self.assertFalse(os.path.exists(self._network_service_unit_file), "Unit file not present")
             handler.setup()
 
         self.__assert_systemctl_called(cmd="is-enabled", validate_command_called=True)
         self.__assert_firewall_called(cmd=FirewallCmdDirectCommands.PassThrough, validate_command_called=False)
-        self.assertTrue(os.path.exists(drop_in_file), "Drop in file should be there")
-        self.assertTrue(fileutil.findstr_in_file(drop_in_file, test_str.format(self.__test_dst_ip, self.__test_uid,
+        self.assertTrue(os.path.exists(self._drop_in_file), "Drop in file should be there")
+        self.assertTrue(fileutil.findstr_in_file(self._drop_in_file, test_str.format(self.__test_dst_ip, self.__test_uid,
                                                                                self.__test_wait)),
                         "DropIn file not set correctly")
-        self.assertTrue(fileutil.findstr_in_file(network_service_unit_file,
+        self.assertTrue(fileutil.findstr_in_file(self._network_service_unit_file,
                                                  test_str.format(self.__test_dst_ip, self.__test_uid,
                                                                  self.__test_wait)),
                         "Service Unit file file not set correctly")
@@ -193,17 +199,15 @@ class TestPersistFirewallRulesHandler(AgentTestCase):
         # The service should say its enabled now
         self.__replace_popen_cmd = TestPersistFirewallRulesHandler.__mock_network_setup_service_enabled
         with self._get_persist_firewall_rules_handler() as handler:
-            drop_in_file = os.path.join(self.__systemd_dir, "{0}.d".format(self._expected_service_name),
-                                        PersistFirewallRulesHandler._DROP_IN_ENV_FILE_NAME)
             # The Drop-in file should be available on the 2nd run
-            self.assertTrue(os.path.exists(drop_in_file), "Drop in file should be there")
+            self.assertTrue(os.path.exists(self._drop_in_file), "Drop in file should be there")
             handler.setup()
 
-        self.assertTrue(fileutil.findstr_in_file(drop_in_file, test_str.format(self.__test_dst_ip, self.__test_uid,
+        self.assertTrue(fileutil.findstr_in_file(self._drop_in_file, test_str.format(self.__test_dst_ip, self.__test_uid,
                                                                                self.__test_wait)),
                         "DropIn file not set correctly")
         # Unit file should NOT be updated
-        self.assertFalse(fileutil.findstr_in_file(network_service_unit_file,
+        self.assertFalse(fileutil.findstr_in_file(self._network_service_unit_file,
                                                   test_str.format(self.__test_dst_ip, self.__test_uid,
                                                                   self.__test_wait)),
                          "Service Unit file file should not be updated")
@@ -211,7 +215,8 @@ class TestPersistFirewallRulesHandler(AgentTestCase):
     def test_it_should_use_firewalld_if_available(self):
 
         def __mock_firewalld_running_and_not_applied(cmd):
-            if cmd == PersistFirewallRulesHandler._FIREWALLD_RUNNING_CMD:
+            # protected-access<W0212> Disabled: OK to access PersistFirewallRulesHandler._* from unit test for PersistFirewallRuleHandler
+            if cmd == PersistFirewallRulesHandler._FIREWALLD_RUNNING_CMD:   # pylint: disable=protected-access
                 return True, ["echo", "running"]
             # This is to fail the check if firewalld-rules are already applied
             cmds_to_fail = ["firewall-cmd", FirewallCmdDirectCommands.QueryPassThrough, "conntrack"]
@@ -233,17 +238,12 @@ class TestPersistFirewallRulesHandler(AgentTestCase):
     def test_it_should_set_up_custom_service_if_no_firewalld(self):
         self.__replace_popen_cmd = TestPersistFirewallRulesHandler.__mock_network_setup_service_disabled
         with self._get_persist_firewall_rules_handler() as handler:
-            network_service_unit_file = os.path.join(self.__systemd_dir, self._expected_service_name)
-            drop_in_file = os.path.join(self.__systemd_dir, "{0}.d".format(self._expected_service_name),
-                                        PersistFirewallRulesHandler._DROP_IN_ENV_FILE_NAME)
-            network_service_bin_file = os.path.join(self.__agent_bin_dir,
-                                                    PersistFirewallRulesHandler._AGENT_NETWORK_SETUP_BIN_FILE)
-            self.assertFalse(os.path.exists(network_service_unit_file), "Service unit file should not be there")
-            self.assertFalse(os.path.exists(drop_in_file), "Drop in file should not be there")
-            self.assertFalse(os.path.exists(network_service_bin_file), "Network setup binary file file should not be there")
+            self.assertFalse(os.path.exists(self._network_service_unit_file), "Service unit file should not be there")
+            self.assertFalse(os.path.exists(self._drop_in_file), "Drop in file should not be there")
+            self.assertFalse(os.path.exists(self._network_service_bin_file), "Network setup binary file file should not be there")
             handler.setup()
 
-        self.__assert_network_service_setup_properly(network_service_unit_file, drop_in_file, network_service_bin_file)
+        self.__assert_network_service_setup_properly()
 
     def test_it_should_cleanup_files_on_error(self):
 
@@ -278,20 +278,15 @@ class TestPersistFirewallRulesHandler(AgentTestCase):
 
     def test_it_should_not_replace_network_setup_binary_file_if_available(self):
 
-        network_service_bin_file = os.path.join(self.__agent_bin_dir,
-                                                PersistFirewallRulesHandler._AGENT_NETWORK_SETUP_BIN_FILE)
         guid = ustr(uuid.uuid4())
-        fileutil.write_file(network_service_bin_file, guid)
-        self.assertTrue(os.path.exists(network_service_bin_file), "Bin file should be present")
 
         self.__replace_popen_cmd = TestPersistFirewallRulesHandler.__mock_network_setup_service_disabled
         with self._get_persist_firewall_rules_handler() as handler:
-            network_service_unit_file = os.path.join(self.__systemd_dir, self._expected_service_name)
-            drop_in_file = os.path.join(self.__systemd_dir, "{0}.d".format(self._expected_service_name),
-                                        PersistFirewallRulesHandler._DROP_IN_ENV_FILE_NAME)
-            self.assertFalse(os.path.exists(network_service_unit_file), "Service unit file should not be there")
-            self.assertFalse(os.path.exists(drop_in_file), "Drop in file should not be there")
+            fileutil.write_file(self._network_service_bin_file, guid)
+            self.assertTrue(os.path.exists(self._network_service_bin_file), "Bin file should be present")
+            self.assertFalse(os.path.exists(self._network_service_unit_file), "Service unit file should not be there")
+            self.assertFalse(os.path.exists(self._drop_in_file), "Drop in file should not be there")
             handler.setup()
 
-        self.__assert_network_service_setup_properly(network_service_unit_file, drop_in_file, network_service_bin_file)
-        self.assertTrue(fileutil.findstr_in_file(network_service_bin_file, guid), "Bin file should not be updated")
+        self.__assert_network_service_setup_properly()
+        self.assertTrue(fileutil.findstr_in_file(self._network_service_bin_file, guid), "Bin file should not be updated")

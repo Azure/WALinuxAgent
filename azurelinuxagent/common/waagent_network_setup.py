@@ -47,8 +47,8 @@ def _setup_firewall_rules():
         # The command to call this would look something like this -
         # ExecStart=PYPATH /usr/sbin/waagent_network_setup.py --dst_ip=1.2.3.4 --uid=9999 [-w]
         for arg in args:
-            dst_ip_match = re.match("^([-/]*)dst_ip=(?P<dst_ip>[\d.]{7,})", arg)
-            uid_match = re.match("^([-/]*)uid=(?P<uid>[\d]+)", arg)
+            dst_ip_match = re.match("^([-/]*)dst_ip=(?P<dst_ip>[\\d.]{7,})", arg)
+            uid_match = re.match("^([-/]*)uid=(?P<uid>[\\d]+)", arg)
             wait_match = re.match("^([-/]*)(w|wait)$", arg)
 
             if dst_ip_match:
@@ -70,16 +70,16 @@ def _setup_firewall_rules():
 
 
 if __name__ == '__main__':
-    """
-    This file would be called by the waagent-network-setup service to bridge the gap between the system reboot and 
-    waagent.service start. The sole purpose of this file is to setup firewall rules for the VM.
-    
-    The parameters for this file would be set in the unit file for the service, which would be created dynamically the 
-    first time waagent.service starts. On every service restart, we would monitor the Wireserver IP and reset it in the 
-    unit file if it changes.
-    
-    This service would run before the network would be setup, so we need to maintain state of the previous Wireserver IP
-    to ensure we restrict access to the Wire IP.
-    """
+
+    # This file would be called by the waagent-network-setup service to bridge the gap between the system reboot and
+    # waagent.service start. The sole purpose of this file is to setup firewall rules for the VM.
+    #
+    # The parameters for this file would be set in the unit file for the service, which would be created dynamically the
+    # first time waagent.service starts. On every service restart, we would monitor the Wireserver IP and reset it in the
+    # unit file if it changes.
+    #
+    # This service would run before the network would be setup, so we need to maintain state of the previous Wireserver IP
+    # to ensure we restrict access to the Wire IP.
+
     _setup_firewall_rules()
 
