@@ -33,6 +33,13 @@ class TestPersistFirewallRulesHandler(AgentTestCase):
 
     original_popen = subprocess.Popen
 
+    def __init__(self):
+        self._expected_service_name = ""
+        self._expected_service_name = ""
+        self._drop_in_file = ""
+        self._network_service_bin_file = ""
+
+
     def setUp(self):
         AgentTestCase.setUp(self)
         # Override for mocking Popen, should be of the form - (True/False, cmd-to-execute-if-True)
@@ -69,8 +76,7 @@ class TestPersistFirewallRulesHandler(AgentTestCase):
         osutil.get_systemd_unit_file_install_path = MagicMock(return_value=self.__systemd_dir)
 
         # protected-access<W0212> Disabled: OK to access PersistFirewallRulesHandler._* from unit test for PersistFirewallRuleHandler
-        # attribute-defined-outside-init<W0201> Disabled: OK for the test class as we're mocking osutil
-        self._expected_service_name = PersistFirewallRulesHandler._AGENT_NETWORK_SETUP_NAME_FORMAT.format(  # pylint: disable=protected-access, attribute-defined-outside-init
+        self._expected_service_name = PersistFirewallRulesHandler._AGENT_NETWORK_SETUP_NAME_FORMAT.format(  # pylint: disable=protected-access
             osutil.get_service_name())
 
         self._network_service_unit_file = os.path.join(self.__systemd_dir, self._expected_service_name)
@@ -257,9 +263,7 @@ class TestPersistFirewallRulesHandler(AgentTestCase):
 
         self.__replace_popen_cmd = TestPersistFirewallRulesHandler.__mock_network_setup_service_disabled
         with self._get_persist_firewall_rules_handler() as handler:
-            test_files = [os.path.join(self.__systemd_dir, "{0}.d".format(self._expected_service_name),
-                                       PersistFirewallRulesHandler._DROP_IN_ENV_FILE_NAME),
-                          os.path.join(self.__systemd_dir, self._expected_service_name)]
+            test_files = [self._drop_in_file, self._network_service_unit_file]
             for file_to_fail in test_files:
                 files_to_fail = [file_to_fail]
                 with patch("azurelinuxagent.common.persist_firewall_rules.fileutil.write_file",
