@@ -1633,7 +1633,7 @@ Description=Slice for Azure VM Extensions""")
                 cmd = ["echo", "running"]
             return original_popen(cmd, *args, **kwargs)
 
-        with self._get_update_handler(iterations) as (update_handler, protocol):
+        with self._get_update_handler(iterations) as (update_handler, _):
             with patch("azurelinuxagent.common.utils.shellutil.subprocess.Popen", side_effect=_mock_popen):
                 update_handler.run(debug=True)
 
