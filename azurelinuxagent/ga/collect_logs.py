@@ -34,7 +34,6 @@ from azurelinuxagent.common.protocol.util import get_protocol_util
 from azurelinuxagent.common.utils import shellutil
 from azurelinuxagent.common.utils.shellutil import CommandError
 from azurelinuxagent.common.version import PY_VERSION_MAJOR, PY_VERSION_MINOR, AGENT_NAME, CURRENT_VERSION
-from azurelinuxagent.ga.periodic_operation import PeriodicOperation
 
 
 def get_collect_logs_handler():
@@ -85,10 +84,7 @@ class CollectLogsHandler(ThreadHandlerInterface):
         self.event_thread = None
         self.should_run = True
         self.last_state = None
-
-        self._periodic_operations = [
-            PeriodicOperation("collect_and_send_logs", self.collect_and_send_logs, conf.get_collect_logs_period())
-        ]
+        self.period = conf.get_collect_logs_period()
 
     def run(self):
         self.start()
@@ -127,13 +123,12 @@ class CollectLogsHandler(ThreadHandlerInterface):
 
             while not self.stopped():
                 try:
-                    for op in self._periodic_operations:
-                        op.run()
+                    self.collect_and_send_logs()
                 except Exception as e:
                     logger.error("An error occurred in the log collection thread main loop; "
                                  "will skip the current iteration.\n{0}", ustr(e))
                 finally:
-                    PeriodicOperation.sleep_until_next_operation(self._periodic_operations)
+                    time.sleep(self.period)
         except Exception as e:
             logger.error("An error occurred in the log collection thread; will exit the thread.\n{0}", ustr(e))
 
