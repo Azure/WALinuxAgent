@@ -148,8 +148,8 @@ def get_distro():
     osinfo[0] = osinfo[0].strip('"').strip(' ').lower()
     return osinfo
 
-COMMAND_ABSENT = "Absent"
-COMMAND_FAILED = "Failed"
+COMMAND_ABSENT = ustr("Absent")
+COMMAND_FAILED = ustr("Failed")
 
 
 def get_lis_version():
