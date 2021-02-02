@@ -55,6 +55,7 @@ WantedBy=network.target
 # This drop-in unit file was created by the Azure VM Agent.
 # Do not edit.
 [Service]
+# The first line clears the old data, and the 2nd line overwrites it.
 Environment=
 Environment="DST_IP={0}" "UID={1}" "WAIT={2}"
 """
@@ -67,14 +68,10 @@ Environment="DST_IP={0}" "UID={1}" "WAIT={2}"
 
     def __init__(self, dst_ip, uid):
         """
-        If not, then create the new service file and copy it over to the /lib/systemd/system/ if doesnt exist
-          - Check if unit file already exists, if it does, leave it
-          - Else
-              - Dynamically create the unit file and setup the IPs correctly
-              - Check if /sbin/walinuxagent_setup_service.py exists
-              - If not, then copy it over
-          - Create a drop in conf file in /etc/systemd/system/waagent-network-setup.d/override.conf and override the ExecStart with the new values
-            - Do this everytime on service restart
+        This class deals with ensuring that Firewall rules are persisted over system reboots.
+        It tries to employ using Firewalld.service if present first as it already has provisions for persistent rules.
+        If not, it then creates a new agent-network-setup.service file and copy it over to the osutil.get_systemd_unit_file_install_path() dynamically
+        On top of it, on every service restart it ensures that the WireIP is overwritten and the new IP is blocked as well.
         """
         osutil = get_osutil()
         self._network_setup_service_name = self._AGENT_NETWORK_SETUP_NAME_FORMAT.format(osutil.get_service_name())
@@ -94,7 +91,7 @@ Environment="DST_IP={0}" "UID={1}" "WAIT={2}"
         firewalld_state = PersistFirewallRulesHandler._FIREWALLD_RUNNING_CMD
         try:
             return shellutil.run_command(firewalld_state).rstrip() == "running"
-        except CommandError as error:
+        except Exception as error:
             logger.info("{0} command returned error/not running: {1}".format(' '.join(firewalld_state), ustr(error)))
         return False
 
@@ -139,12 +136,14 @@ Environment="DST_IP={0}" "UID={1}" "WAIT={2}"
         cmd = ["systemctl", "is-enabled", self._network_setup_service_name]
         try:
             return shellutil.run_command(cmd).rstrip() == "enabled"
-        except CommandError as error:
-            logger.info(
-                "Service: {0} not enabled, command: {1} failed.\nStdout: {2}\nStderr: {3}".format(self._network_setup_service_name,
-                                                                                                  ' '.join(cmd),
-                                                                                                  error.stdout,
-                                                                                                  error.stderr))
+        except Exception as error:
+            msg = "Ran into error, {0} not enabled. Error: {1}".format(self._network_setup_service_name, ustr(error))
+            if isinstance(error, CommandError):
+                msg = "{0}. Command: {1}, ExitCode: {2}\nStdout: {3}\nStderr: {4}".format(msg, ' '.join(cmd),
+                                                                                          error.returncode,
+                                                                                          error.stdout,
+                                                                                          error.stderr)
+            logger.info(msg)
             return False
 
     def _setup_network_setup_service(self):
