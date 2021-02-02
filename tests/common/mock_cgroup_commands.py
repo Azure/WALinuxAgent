@@ -102,7 +102,6 @@ def mock_cgroup_commands(tmp_dir):
 
     Matches are done using regular expressions; the regular expressions in __MOCKED_PATHS must create group 0 to indicate
     the section of the path that needs to be mapped (i.e. use parenthesis around the section that needs to be mapped.)
-    done using
 
     The command output used in __MOCKED_COMMANDS come from an Ubuntu 18 system.
     """

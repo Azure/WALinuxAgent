@@ -304,7 +304,8 @@ class CGroupConfigurator(object):
                         shellutil.run_command(["systemctl", "daemon-reload"])
                     except Exception as exception:
                         self.__log_cgroup_warning("daemon-reload failed: {0}", ustr(exception))
-                except Exception as exception:
+                except Exception:
+                    # the exception is already logged in the above functions
                     for unit_file in files_to_create:
                         self._cleanup_unit_file(unit_file)
 
