@@ -53,14 +53,14 @@ def _mock_wire_protocol():
 
 class MonitorHandlerTestCase(AgentTestCase):
     def test_it_should_invoke_all_periodic_operations(self):
-        def periodic_oepration_run(self):
+        def periodic_operation_run(self):
             invoked_operations.append(self._name)
         invoked_operations = []
 
         with _mock_wire_protocol():
             with patch("azurelinuxagent.ga.monitor.MonitorHandler.stopped", side_effect=[False, True]):
                 with patch("time.sleep"):
-                    with patch.object(PeriodicOperation, "run", side_effect=periodic_oepration_run, autospec=True):
+                    with patch.object(PeriodicOperation, "run", side_effect=periodic_operation_run, autospec=True):
                         invoked_operations = []
 
                         monitor_handler = get_monitor_handler()
