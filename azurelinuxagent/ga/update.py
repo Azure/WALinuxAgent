@@ -835,6 +835,7 @@ class UpdateHandler(object):
     def _ensure_firewall_rules_persisted(dst_ip):
         try:
             PersistFirewallRulesHandler(dst_ip=dst_ip, uid=os.getuid()).setup()
+            logger.info("Persistent firewall rules added successfully")
         except Exception as error:
             msg = "Unable to persist the firewall rules: {0}".format(ustr(error))
             add_event(

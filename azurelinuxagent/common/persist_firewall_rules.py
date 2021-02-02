@@ -155,6 +155,7 @@ Environment="DST_IP={0}" "UID={1}" "WAIT={2}"
             self.__set_network_setup_bin_file()
             # Create unit file with default values
             self.__set_service_unit_file()
+            logger.info("Successfully added and enabled the {0}".format(self._network_setup_service_name))
 
         # Even if service is enabled, we need to overwrite the drop-in file with the current IP in case it changed.
         # This is to handle the case where WireIP can change midway on service restarts.
@@ -184,6 +185,7 @@ Environment="DST_IP={0}" "UID={1}" "WAIT={2}"
             if not os.path.exists(parent):
                 fileutil.mkdir(parent, mode=0o755)
             fileutil.write_file(drop_in_file, self.__OVERRIDE_CONTENT.format(self._dst_ip, self._uid, self._wait))
+            logger.info("Drop-in file {0} successfully updated".format(drop_in_file))
         except Exception:
             self.__remove_file_without_raising(drop_in_file)
             raise
