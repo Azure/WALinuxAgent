@@ -136,15 +136,14 @@ Environment="DST_IP={0}" "UID={1}" "WAIT={2}"
         cmd = ["systemctl", "is-enabled", self._network_setup_service_name]
         try:
             return shellutil.run_command(cmd).rstrip() == "enabled"
+        except CommandError as error:
+            msg = "{0} not enabled. Command: {1}, ExitCode: {2}\nStdout: {3}\nStderr: {4}".format(
+                self._network_setup_service_name, ' '.join(cmd), error.returncode, error.stdout, error.stderr)
         except Exception as error:
             msg = "Ran into error, {0} not enabled. Error: {1}".format(self._network_setup_service_name, ustr(error))
-            if isinstance(error, CommandError):
-                msg = "{0}. Command: {1}, ExitCode: {2}\nStdout: {3}\nStderr: {4}".format(msg, ' '.join(cmd),
-                                                                                          error.returncode,
-                                                                                          error.stdout,
-                                                                                          error.stderr)
-            logger.info(msg)
-            return False
+
+        logger.info(msg)
+        return False
 
     def _setup_network_setup_service(self):
         if self.__verify_network_setup_service_enabled():
