@@ -117,7 +117,8 @@ Environment="DST_IP={0}" "UID={1}" "WAIT={2}"
         try:
             AddFirewallRules.check_firewalld_rule_applied(self._wait, self._dst_ip, self._uid)
         except Exception as error:
-            logger.warn("Firewall Rules not applied: {0}\n. Setting them now".format(ustr(error)))
+            logger.info(
+                "Check if Firewall rules already applied using firewalld.service failed: {0}".format(ustr(error)))
             return False
 
         return True
@@ -127,9 +128,10 @@ Environment="DST_IP={0}" "UID={1}" "WAIT={2}"
             logger.info("Firewall rules already set. No change needed.")
             return
 
+        logger.info("Firewall rules not added yet, adding them now using firewalld.service")
         # Add rules if not already set
         AddFirewallRules.add_firewalld_rules(self._wait, self._dst_ip, self._uid)
-        logger.info("Successfully set the firewall commands using firewalld.service")
+        logger.info("Successfully added the firewall commands using firewalld.service")
 
     def __verify_network_setup_service_enabled(self):
         # Check if the custom service has already been enabled
