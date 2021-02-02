@@ -98,7 +98,7 @@ Environment="DST_IP={0}" "UID={1}" "WAIT={2}"
     def setup(self):
         if self._is_firewall_service_running():
             logger.info("Firewalld.service present on the VM, setting up permanent rules on the VM")
-            # Incase of a failure, this would throw. In such a case, we don't need to try to setup our custom service
+            # In case of a failure, this would throw. In such a case, we don't need to try to setup our custom service
             # because on system reboot, all iptable rules are reset by firewalld.service so it would be a no-op.
             self._setup_permanent_firewalld_rules()
             return
@@ -156,7 +156,7 @@ Environment="DST_IP={0}" "UID={1}" "WAIT={2}"
             # Create unit file with default values
             self.__set_service_unit_file()
 
-        # Even if service is enabled, we need to overwrite the drop-in file with the current IP incase it changed.
+        # Even if service is enabled, we need to overwrite the drop-in file with the current IP in case it changed.
         # This is to handle the case where WireIP can change midway on service restarts.
         self.__set_drop_in_file()
 

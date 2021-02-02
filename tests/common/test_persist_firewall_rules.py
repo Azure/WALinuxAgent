@@ -185,7 +185,7 @@ class TestPersistFirewallRulesHandler(AgentTestCase):
         self.__replace_popen_cmd = TestPersistFirewallRulesHandler.__mock_network_setup_service_disabled
         with self._get_persist_firewall_rules_handler() as handler:
             self.assertFalse(os.path.exists(self._drop_in_file), "Drop in file should not be there")
-            self.assertFalse(os.path.exists(self._network_service_unit_file), "Unit file not present")
+            self.assertFalse(os.path.exists(self._network_service_unit_file), "Unit file should not be present")
             handler.setup()
 
         self.__assert_systemctl_called(cmd="is-enabled", validate_command_called=True)

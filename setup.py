@@ -67,9 +67,6 @@ def set_systemd_files(data_files, dest, src=None):
         src = ["init/waagent.service"]
     data_files.append((dest, src))
 
-    set_files(data_files, dest="/etc/systemd/system", src=["init/ubuntu/azure.slice",
-                                                           "init/ubuntu/azure-vmextensions.slice"])
-
 
 def set_freebsd_rc_files(data_files, dest="/etc/rc.d/", src=None):
     if src is None:
