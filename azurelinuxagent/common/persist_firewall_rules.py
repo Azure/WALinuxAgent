@@ -182,7 +182,7 @@ Environment="DST_IP={0}" "UID={1}" "WAIT={2}"
         parent, _ = os.path.split(drop_in_file)
         try:
             if not os.path.exists(parent):
-                fileutil.mkdir(parent, mode=0o644)
+                fileutil.mkdir(parent, mode=0o755)
             fileutil.write_file(drop_in_file, self.__OVERRIDE_CONTENT.format(self._dst_ip, self._uid, self._wait))
         except Exception:
             self.__remove_file_without_raising(drop_in_file)
