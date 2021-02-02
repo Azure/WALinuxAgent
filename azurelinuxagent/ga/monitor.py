@@ -144,6 +144,8 @@ class SendHostPluginHeartbeatOperation(PeriodicOperation):
         try:
             host_plugin = self.protocol.client.get_host_plugin()
             host_plugin.ensure_initialized()
+            self.protocol.update_host_plugin_from_goal_state()
+
             is_currently_healthy = host_plugin.get_health()
 
             if is_currently_healthy:
@@ -270,8 +272,6 @@ class MonitorHandler(ThreadHandlerInterface):
 
             while not self.stopped():
                 try:
-                    protocol.update_host_plugin_from_goal_state()
-
                     for op in periodic_operations:
                         op.run()
 
