@@ -19,6 +19,7 @@ import datetime
 import threading
 import uuid
 
+import azurelinuxagent.common.conf as conf
 import azurelinuxagent.common.logger as logger
 import azurelinuxagent.common.utils.networkutil as networkutil
 from azurelinuxagent.common.cgroupconfigurator import CGroupConfigurator
@@ -151,9 +152,13 @@ class MonitorHandler(ThreadHandlerInterface):
             ReportNetworkErrorsOperation(),
             PeriodicOperation("send_host_plugin_heartbeat", self.send_host_plugin_heartbeat, self.HOST_PLUGIN_HEARTBEAT_PERIOD),
             PeriodicOperation("send_imds_heartbeat", self.send_imds_heartbeat, self.IMDS_HEARTBEAT_PERIOD),
-            ReportNetworkConfigurationChangesOperation(),
             PollResourceUsageOperation()
         ]
+
+        if conf.get_monitor_network_configuration_changes():
+            self._periodic_operations.append(ReportNetworkConfigurationChangesOperation())
+        else:
+            logger.info("Monitor.NetworkConfigurationChanges is set to disabled.")
 
         self.protocol = None
         self.protocol_util = None
