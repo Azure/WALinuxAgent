@@ -79,7 +79,7 @@ class MonitorHandlerTestCase(AgentTestCase):
                                     'send_imds_heartbeat'
                                 ]
 
-                                if monitor_network_changes():
+                                if network_changes:
                                     expected_operations.append('report network configuration changes')
 
                                 invoked_operations.sort()
