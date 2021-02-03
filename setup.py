@@ -40,7 +40,7 @@ def set_files(data_files, dest=None, src=None):
 
 def set_bin_files(data_files, dest="/usr/sbin", src=None):
     if src is None:
-        src = ["bin/waagent", "bin/waagent2.0"]
+        src = ["bin/waagent", "bin/waagent2.0", "bin/waagent_network_setup.py"]
     data_files.append((dest, src))
 
 
