@@ -51,6 +51,26 @@ RemainAfterExit=false
 WantedBy=network.target
 """
 
+    __SERVICE_FILE_CONTENT_WITH_CURRENT_BIN = """
+# This drop-in unit file was created by the Azure VM Agent.
+# Do not edit.
+[Unit]
+Description=Setup network rules for WALinuxAgent 
+Before=network-pre.target
+Wants=network-pre.target
+DefaultDependencies=no
+ConditionPathExists={0}
+
+[Service]
+Type=oneshot
+Environment="EGG={0}" "DST_IP={1}" "UID={2}" "WAIT={3}"
+ExecStart={4} ${{EGG}} --dst_ip=${{DST_IP}} --uid=${{UID}} ${{WAIT}}
+RemainAfterExit=false
+
+[Install]
+WantedBy=network.target
+"""
+
     __OVERRIDE_CONTENT = """
 # This drop-in unit file was created by the Azure VM Agent.
 # Do not edit.
@@ -152,7 +172,7 @@ Environment="DST_IP={0}" "UID={1}" "WAIT={2}"
             logger.info("Service: {0} already enabled. No change needed.".format(self._network_setup_service_name))
         else:
             # Ensure waagent_network_setup.py is available in the desired spot
-            self.__set_network_setup_bin_file()
+            # self.__set_network_setup_bin_file()
             # Create unit file with default values
             self.__set_service_unit_file()
             logger.info("Successfully added and enabled the {0}".format(self._network_setup_service_name))
@@ -193,9 +213,13 @@ Environment="DST_IP={0}" "UID={1}" "WAIT={2}"
     def __set_service_unit_file(self):
         service_unit_file = os.path.join(self._systemd_file_path, self._network_setup_service_name)
         try:
+            # fileutil.write_file(service_unit_file,
+            #                     self.__SERVICE_FILE_CONTENT.format(self._agent_network_setup_bin_file, self._dst_ip,
+            #                                                        self._uid, self._wait, sys.executable))
             fileutil.write_file(service_unit_file,
-                                self.__SERVICE_FILE_CONTENT.format(self._agent_network_setup_bin_file, self._dst_ip,
-                                                                   self._uid, self._wait, sys.executable))
+                                self.__SERVICE_FILE_CONTENT_WITH_CURRENT_BIN.format(self._agent_network_setup_bin_file,
+                                                                                    self._dst_ip, self._uid, self._wait,
+                                                                                    sys.executable))
             fileutil.chmod(service_unit_file, 0o644)
 
             # Finally enable the service. This is needed to ensure the service is started on system boot
