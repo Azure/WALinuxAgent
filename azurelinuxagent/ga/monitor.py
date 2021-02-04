@@ -18,6 +18,7 @@
 import datetime
 import threading
 
+import azurelinuxagent.common.conf as conf
 import azurelinuxagent.common.logger as logger
 import azurelinuxagent.common.utils.networkutil as networkutil
 from azurelinuxagent.common.cgroupconfigurator import CGroupConfigurator
@@ -264,11 +265,15 @@ class MonitorHandler(ThreadHandlerInterface):
             periodic_operations = [
                 ResetPeriodicLogMessagesOperation(),
                 ReportNetworkErrorsOperation(),
-                ReportNetworkConfigurationChangesOperation(),
                 PollResourceUsageOperation(),
                 SendHostPluginHeartbeatOperation(protocol, health_service),
                 SendImdsHeartbeatOperation(protocol_util, health_service)
             ]
+
+            if conf.get_monitor_network_configuration_changes():
+                periodic_operations.append(ReportNetworkConfigurationChangesOperation())
+            else:
+                logger.info("Monitor.NetworkConfigurationChanges is set to disabled.")
 
             while not self.stopped():
                 try:
