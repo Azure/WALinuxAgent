@@ -1,9 +1,6 @@
 #
-# NOTE:
-#   This file hosted on WALinuxAgent repository only for reference purposes.
-#   Please refer to a recent image to find out the up-to-date systemd unit file.
+# NOTE: This is the service file used in older versions of the agent (<= 2.2.54)
 #
-
 [Unit]
 Description=Azure Linux Agent
 

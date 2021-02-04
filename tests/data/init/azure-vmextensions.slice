@@ -1,0 +1,6 @@
+[Unit]
+Description=Slice for Azure VM Extensions
+DefaultDependencies=no
+Before=slices.target
+[Slice]
+CPUAccounting=yes

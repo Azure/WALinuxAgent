@@ -1,0 +1,4 @@
+[Unit]
+Description=Slice for Azure VM Agent and Extensions
+DefaultDependencies=no
+Before=slices.target

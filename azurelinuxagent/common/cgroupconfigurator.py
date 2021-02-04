@@ -20,7 +20,7 @@ import re
 import subprocess
 
 from azurelinuxagent.common import logger
-from azurelinuxagent.common.cgroup import CpuCgroup, MemoryCgroup
+from azurelinuxagent.common.cgroup import CpuCgroup
 from azurelinuxagent.common.cgroupapi import CGroupsApi, SystemdCgroupsApi, SystemdRunError
 from azurelinuxagent.common.cgroupstelemetry import CGroupsTelemetry
 from azurelinuxagent.common.exception import ExtensionErrorCodes, CGroupsException
@@ -60,6 +60,13 @@ _AGENT_DROP_IN_FILE_CPU_ACCOUNTING_CONTENTS = """
 # Do not edit.
 [Service]
 CPUAccounting=yes
+"""
+_AGENT_DROP_IN_FILE_CPU_QUOTA = "12-CPUQuota.conf"
+_AGENT_DROP_IN_FILE_CPU_QUOTA_CONTENTS = """
+# This drop-in unit file was created by the Azure VM Agent.
+# Do not edit.
+[Service]
+CPUQuota=5%
 """
 
 class CGroupConfigurator(object):
@@ -106,22 +113,20 @@ class CGroupConfigurator(object):
                 if not self.__check_no_legacy_cgroups():
                     return
 
+                agent_unit_name = self._cgroups_api.get_agent_unit_name()
+                agent_slice = self._cgroups_api.get_unit_property(agent_unit_name, "Slice")
+                if agent_slice not in (_AZURE_SLICE, "system.slice"):
+                    self.__log_cgroup_warning("The agent is within an unexpected slice: {0}", agent_slice)
+                    return
+
+                self.__setup_unit_files()
+
                 cpu_controller_root, memory_controller_root = self.__get_cgroup_controllers()
-
-                agent_slice = self.__ensure_azure_slices_exist()
-
                 self._agent_cpu_cgroup_path, self._agent_memory_cgroup_path = self.__get_agent_cgroups(agent_slice, cpu_controller_root, memory_controller_root)
 
-                agent_service_name = self._cgroups_api.get_agent_unit_name()
                 if self._agent_cpu_cgroup_path is not None:
                     self.__log_cgroup_info("Agent CPU cgroup: {0}", self._agent_cpu_cgroup_path)
-                    CGroupsTelemetry.track_cgroup(CpuCgroup(agent_service_name, self._agent_cpu_cgroup_path))
-
-                if self._agent_memory_cgroup_path is not None:
-                    self.__log_cgroup_info("Agent Memory cgroup: {0}", self._agent_memory_cgroup_path)
-                    CGroupsTelemetry.track_cgroup(MemoryCgroup(agent_service_name, self._agent_memory_cgroup_path))
-
-                if self._agent_cpu_cgroup_path is not None or self._agent_memory_cgroup_path is not None:
+                    CGroupsTelemetry.track_cgroup(CpuCgroup(agent_unit_name, self._agent_cpu_cgroup_path))
                     self._cgroups_enabled = True
 
                 self.__log_cgroup_info('Cgroups enabled: {0}', self._cgroups_enabled)
@@ -235,7 +240,7 @@ class CGroupConfigurator(object):
 
             return cpu_controller_root, memory_controller_root
 
-        def __ensure_azure_slices_exist(self):
+        def __setup_unit_files(self):
             """
             The agent creates "azure.slice" for use by extensions and the agent. The agent runs under "azure.slice" directly and each
             extension runs under its own slice ("Microsoft.CPlat.Extension.slice" in the example below). All the slices for
@@ -254,8 +259,10 @@ class CGroupConfigurator(object):
 
             This method ensures that the "azure" and "vmextensions" slices are created. Setup should create those slices
             under /lib/systemd/system; but if they do not exist, __ensure_azure_slices_exist will create them.
-            It also creates drop-in files to set the agent's slice and CPU accounting properties if they have not been
+
+            It also creates drop-in files to set the agent's Slice, CPUAccounting, and CPUQuota properties if they have not been
             set up in the agent's unit file.
+
             Lastly, the method also cleans up unit files left over from previous versions of the agent.
 
             Returns the slice under which the agent should currently be running.
@@ -269,36 +276,42 @@ class CGroupConfigurator(object):
             agent_unit_file = "/lib/systemd/system/{0}".format(self._cgroups_api.get_agent_unit_name())
             agent_drop_in_file_slice = "/lib/systemd/system/{0}.d/{1}".format(self._cgroups_api.get_agent_unit_name(), _AGENT_DROP_IN_FILE_SLICE)
             agent_drop_in_file_cpu_accounting = "/lib/systemd/system/{0}.d/{1}".format(self._cgroups_api.get_agent_unit_name(), _AGENT_DROP_IN_FILE_CPU_ACCOUNTING)
+            agent_drop_in_file_cpu_quota = "/lib/systemd/system/{0}.d/{1}".format(self._cgroups_api.get_agent_unit_name(), _AGENT_DROP_IN_FILE_CPU_QUOTA)
+            agent_unit_name = self._cgroups_api.get_agent_unit_name()
 
             files_to_create = []
-            return_azure_slice = False
 
-            if os.path.exists(azure_slice):
-                return_azure_slice = True
-            else:
+            if not os.path.exists(azure_slice):
                 files_to_create.append((azure_slice, _AZURE_SLICE_CONTENTS))
 
             if not os.path.exists(vmextensions_slice):
                 files_to_create.append((vmextensions_slice, _VMEXTENSIONS_SLICE_CONTENTS))
 
-            if fileutil.findstr_in_file(agent_unit_file, "Slice=azure.slice"):
+            if fileutil.findre_in_file(agent_unit_file, r"Slice=") is not None:
                 self._cleanup_unit_file(agent_drop_in_file_slice)
             else:
                 if not os.path.exists(agent_drop_in_file_slice):
                     files_to_create.append((agent_drop_in_file_slice, _AGENT_DROP_IN_FILE_SLICE_CONTENTS))
 
-            if fileutil.findstr_in_file(agent_unit_file, "CPUAccounting=yes"):
+            if fileutil.findre_in_file(agent_unit_file, r"CPUAccounting=") is not None:
                 self._cleanup_unit_file(agent_drop_in_file_cpu_accounting)
             else:
                 if not os.path.exists(agent_drop_in_file_cpu_accounting):
                     files_to_create.append((agent_drop_in_file_cpu_accounting, _AGENT_DROP_IN_FILE_CPU_ACCOUNTING_CONTENTS))
+
+            if fileutil.findre_in_file(agent_unit_file, r"CPUQuota=") is not None:
+                self._cleanup_unit_file(agent_drop_in_file_cpu_quota)
+            else:
+                if not os.path.exists(agent_drop_in_file_cpu_quota):
+                    files_to_create.append((agent_drop_in_file_cpu_quota, _AGENT_DROP_IN_FILE_CPU_QUOTA_CONTENTS))
 
             if len(files_to_create) > 0:
                 try:
                     for path, contents in files_to_create:
                         self._create_unit_file(path, contents)
 
-                    # reload the systemd configuration, but the new slice will not be used until the agent's service restarts
+                    # reload the systemd configuration, but the new slice will not be used until the agent's service restarts,
+                    # but the changes in CPU quota will apply after the reload
                     try:
                         logger.info("Executing systemctl daemon-reload...")
                         shellutil.run_command(["systemctl", "daemon-reload"])
@@ -309,7 +322,7 @@ class CGroupConfigurator(object):
                     for unit_file in files_to_create:
                         self._cleanup_unit_file(unit_file)
 
-            return _AZURE_SLICE if return_azure_slice else "system.slice"
+            logger.info("Agent's CPUQuota: {0}",   self._cgroups_api.get_unit_property(agent_unit_name, "CPUQuotaPerSecUSec"))
 
         def _create_unit_file(self, path, contents):
             try:
