@@ -833,17 +833,21 @@ class UpdateHandler(object):
 
     @staticmethod
     def _ensure_firewall_rules_persisted(dst_ip):
+        is_success = False
         try:
             PersistFirewallRulesHandler(dst_ip=dst_ip, uid=os.getuid()).setup()
-            logger.info("Persistent firewall rules added successfully")
+            msg = "Persistent firewall rules added successfully"
+            is_success = True
+            logger.info(msg)
         except Exception as error:
             msg = "Unable to persist the firewall rules: {0}".format(ustr(error))
-            add_event(
-                AGENT_NAME,
-                op=WALAEventOperation.PersistFirewallRules,
-                is_success=False,
-                message=msg,
-                log_event=True)
+            logger.error(msg)
+
+        add_event(
+            op=WALAEventOperation.PersistFirewallRules,
+            is_success=is_success,
+            message=msg,
+            log_event=False)
 
 
 class GuestAgent(object):

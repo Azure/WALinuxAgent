@@ -40,7 +40,7 @@ def set_files(data_files, dest=None, src=None):
 
 def set_bin_files(data_files, dest, src=None):
     if src is None:
-        src = ["bin/waagent", "bin/waagent2.0", "azurelinuxagent/common/waagent_network_setup.py"]
+        src = ["bin/waagent", "bin/waagent2.0"]
     data_files.append((dest, src))
 
 

@@ -18,7 +18,7 @@ import contextlib
 import os
 import shutil
 import subprocess
-import uuid
+import sys
 
 
 from azurelinuxagent.common.future import ustr
@@ -38,7 +38,6 @@ class TestPersistFirewallRulesHandler(AgentTestCase):
         self._expected_service_name = ""
         self._expected_service_name = ""
         self._drop_in_file = ""
-        self._network_service_bin_file = ""
         self._network_service_unit_file = ""
 
     def setUp(self):
@@ -83,8 +82,6 @@ class TestPersistFirewallRulesHandler(AgentTestCase):
         self._network_service_unit_file = os.path.join(self.__systemd_dir, self._expected_service_name)
         self._drop_in_file = os.path.join(self.__systemd_dir, "{0}.d".format(self._expected_service_name),
                                           PersistFirewallRulesHandler._DROP_IN_ENV_FILE_NAME)  # pylint: disable=protected-access
-        self._network_service_bin_file = os.path.join(self.__agent_bin_dir,
-                                                      PersistFirewallRulesHandler._AGENT_NETWORK_SETUP_BIN_FILE)  # pylint: disable=protected-access
 
         # Just for these tests, ignoring the mode of mkdir to allow non-sudo tests
         orig_mkdir = fileutil.mkdir
@@ -97,24 +94,20 @@ class TestPersistFirewallRulesHandler(AgentTestCase):
 
     def __assert_firewall_called(self, cmd, validate_command_called=True):
         if validate_command_called:
-            self.assertIn(AddFirewallRules.get_firewalld_accept_command(wait=self.__test_wait,
-                                                                        command=cmd,
+            self.assertIn(AddFirewallRules.get_firewalld_accept_command(command=cmd,
                                                                         destination=self.__test_dst_ip,
                                                                         uid=self.__test_uid),
                           self.__executed_commands, "Firewall {0} command not found".format(cmd))
-            self.assertIn(AddFirewallRules.get_firewalld_drop_command(wait=self.__test_wait,
-                                                                      command=cmd,
+            self.assertIn(AddFirewallRules.get_firewalld_drop_command(command=cmd,
                                                                       destination=self.__test_dst_ip),
                           self.__executed_commands, "Firewall {0} command not found".format(cmd))
         else:
-            self.assertNotIn(AddFirewallRules.get_firewalld_accept_command(wait=self.__test_wait,
-                                                                           command=cmd,
+            self.assertNotIn(AddFirewallRules.get_firewalld_accept_command(command=cmd,
                                                                            destination=self.__test_dst_ip,
                                                                            uid=self.__test_uid),
                              self.__executed_commands,
                              "Firewall {0} command found".format(cmd))
-            self.assertNotIn(AddFirewallRules.get_firewalld_drop_command(wait=self.__test_wait,
-                                                                         command=cmd,
+            self.assertNotIn(AddFirewallRules.get_firewalld_drop_command(command=cmd,
                                                                          destination=self.__test_dst_ip),
                              self.__executed_commands, "Firewall {0} command found".format(cmd))
 
@@ -139,7 +132,6 @@ class TestPersistFirewallRulesHandler(AgentTestCase):
         self.__assert_firewall_called(cmd=FirewallCmdDirectCommands.PassThrough, validate_command_called=False)
         self.assertTrue(os.path.exists(self._network_service_unit_file), "Service unit file should be there")
         self.assertTrue(os.path.exists(self._drop_in_file), "Drop in file should be there")
-        self.assertTrue(os.path.exists(self._network_service_bin_file), "Network setup Binary file should be there")
 
     @staticmethod
     def __mock_network_setup_service_enabled(cmd):
@@ -181,7 +173,9 @@ class TestPersistFirewallRulesHandler(AgentTestCase):
         self.__assert_firewall_called(cmd=FirewallCmdDirectCommands.PassThrough, validate_command_called=False)
 
     def test_it_should_always_replace_only_drop_in_file_if_using_custom_network_service(self):
-        test_str = 'Environment="DST_IP={0}" "UID={1}" "WAIT={2}"'
+        test_str = 'Environment="EGG={0}" "DST_IP={1}" "UID={2}" "WAIT={3}"'
+        current_exe_path = os.path.join(os.getcwd(), sys.argv[0])
+
         self.__replace_popen_cmd = TestPersistFirewallRulesHandler.__mock_network_setup_service_disabled
         with self._get_persist_firewall_rules_handler() as handler:
             self.assertFalse(os.path.exists(self._drop_in_file), "Drop in file should not be there")
@@ -191,11 +185,11 @@ class TestPersistFirewallRulesHandler(AgentTestCase):
         self.__assert_systemctl_called(cmd="is-enabled", validate_command_called=True)
         self.__assert_firewall_called(cmd=FirewallCmdDirectCommands.PassThrough, validate_command_called=False)
         self.assertTrue(os.path.exists(self._drop_in_file), "Drop in file should be there")
-        self.assertTrue(fileutil.findstr_in_file(self._drop_in_file, test_str.format(self.__test_dst_ip, self.__test_uid,
-                                                                               self.__test_wait)),
-                        "DropIn file not set correctly")
+        self.assertTrue(fileutil.findstr_in_file(self._drop_in_file,
+                                                 test_str.format(current_exe_path, self.__test_dst_ip, self.__test_uid,
+                                                                 self.__test_wait)), "DropIn file not set correctly")
         self.assertTrue(fileutil.findstr_in_file(self._network_service_unit_file,
-                                                 test_str.format(self.__test_dst_ip, self.__test_uid,
+                                                 test_str.format(current_exe_path, self.__test_dst_ip, self.__test_uid,
                                                                  self.__test_wait)),
                         "Service Unit file file not set correctly")
 
@@ -210,12 +204,12 @@ class TestPersistFirewallRulesHandler(AgentTestCase):
             self.assertTrue(os.path.exists(self._drop_in_file), "Drop in file should be there")
             handler.setup()
 
-        self.assertTrue(fileutil.findstr_in_file(self._drop_in_file, test_str.format(self.__test_dst_ip, self.__test_uid,
-                                                                               self.__test_wait)),
-                        "DropIn file not set correctly")
+        self.assertTrue(fileutil.findstr_in_file(self._drop_in_file,
+                                                 test_str.format(current_exe_path, self.__test_dst_ip, self.__test_uid,
+                                                                 self.__test_wait)), "DropIn file not set correctly")
         # Unit file should NOT be updated
         self.assertFalse(fileutil.findstr_in_file(self._network_service_unit_file,
-                                                  test_str.format(self.__test_dst_ip, self.__test_uid,
+                                                  test_str.format(current_exe_path, self.__test_dst_ip, self.__test_uid,
                                                                   self.__test_wait)),
                          "Service Unit file file should not be updated")
 
@@ -247,7 +241,6 @@ class TestPersistFirewallRulesHandler(AgentTestCase):
         with self._get_persist_firewall_rules_handler() as handler:
             self.assertFalse(os.path.exists(self._network_service_unit_file), "Service unit file should not be there")
             self.assertFalse(os.path.exists(self._drop_in_file), "Drop in file should not be there")
-            self.assertFalse(os.path.exists(self._network_service_bin_file), "Network setup binary file file should not be there")
             handler.setup()
 
         self.__assert_network_service_setup_properly()
@@ -280,18 +273,3 @@ class TestPersistFirewallRulesHandler(AgentTestCase):
                         os.remove(test_file)
                     except Exception:
                         pass
-
-    def test_it_should_not_replace_network_setup_binary_file_if_available(self):
-
-        guid = ustr(uuid.uuid4())
-
-        self.__replace_popen_cmd = TestPersistFirewallRulesHandler.__mock_network_setup_service_disabled
-        with self._get_persist_firewall_rules_handler() as handler:
-            fileutil.write_file(self._network_service_bin_file, guid)
-            self.assertTrue(os.path.exists(self._network_service_bin_file), "Bin file should be present")
-            self.assertFalse(os.path.exists(self._network_service_unit_file), "Service unit file should not be there")
-            self.assertFalse(os.path.exists(self._drop_in_file), "Drop in file should not be there")
-            handler.setup()
-
-        self.__assert_network_service_setup_properly()
-        self.assertTrue(fileutil.findstr_in_file(self._network_service_bin_file, guid), "Bin file should not be updated")

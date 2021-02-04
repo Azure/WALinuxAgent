@@ -18,10 +18,9 @@
 import os
 import sys
 
-import shutil
-
 from azurelinuxagent.common import logger
 from azurelinuxagent.common.cgroupapi import CGroupsApi
+from azurelinuxagent.common.event import add_event, WALAEventOperation
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.osutil import get_osutil
 from azurelinuxagent.common.utils import shellutil, fileutil
@@ -32,39 +31,18 @@ from azurelinuxagent.common.utils.shellutil import CommandError
 class PersistFirewallRulesHandler(object):
 
     __SERVICE_FILE_CONTENT = """
-# This drop-in unit file was created by the Azure VM Agent.
+# This unit file was created by the Azure VM Agent.
 # Do not edit.
 [Unit]
 Description=Setup network rules for WALinuxAgent 
 Before=network-pre.target
 Wants=network-pre.target
 DefaultDependencies=no
-ConditionPathExists={0}
 
 [Service]
 Type=oneshot
-Environment="DST_IP={1}" "UID={2}" "WAIT={3}"
-ExecStart={4} {0} --dst_ip=${{DST_IP}} --uid=${{UID}} ${{WAIT}}
-RemainAfterExit=false
-
-[Install]
-WantedBy=network.target
-"""
-
-    __SERVICE_FILE_CONTENT_WITH_CURRENT_BIN = """
-# This drop-in unit file was created by the Azure VM Agent.
-# Do not edit.
-[Unit]
-Description=Setup network rules for WALinuxAgent 
-Before=network-pre.target
-Wants=network-pre.target
-DefaultDependencies=no
-ConditionPathExists={0}
-
-[Service]
-Type=oneshot
-Environment="EGG={0}" "DST_IP={1}" "UID={2}" "WAIT={3}"
-ExecStart={4} ${{EGG}} --dst_ip=${{DST_IP}} --uid=${{UID}} ${{WAIT}}
+Environment="EGG={egg_path}" "DST_IP={wire_ip}" "UID={user_id}" "WAIT={wait}"
+ExecStart={py_path} ${{EGG}} --setup-firewall --dst_ip=${{DST_IP}} --uid=${{UID}} ${{WAIT}}
 RemainAfterExit=false
 
 [Install]
@@ -77,10 +55,9 @@ WantedBy=network.target
 [Service]
 # The first line clears the old data, and the 2nd line overwrites it.
 Environment=
-Environment="DST_IP={0}" "UID={1}" "WAIT={2}"
+Environment="EGG={egg_path}" "DST_IP={wire_ip}" "UID={user_id}" "WAIT={wait}"
 """
 
-    _AGENT_NETWORK_SETUP_BIN_FILE = "waagent_network_setup.py"
     _AGENT_NETWORK_SETUP_NAME_FORMAT = "{0}-network-setup.service"
     _DROP_IN_ENV_FILE_NAME = "10-environment.conf"
 
@@ -97,10 +74,11 @@ Environment="DST_IP={0}" "UID={1}" "WAIT={2}"
         self._network_setup_service_name = self._AGENT_NETWORK_SETUP_NAME_FORMAT.format(osutil.get_service_name())
         self._is_systemd = CGroupsApi.is_systemd()
         self._systemd_file_path = osutil.get_systemd_unit_file_install_path()
-        self._agent_network_setup_bin_file = os.path.join(osutil.get_agent_bin_path(), self._AGENT_NETWORK_SETUP_BIN_FILE)
         self._dst_ip = dst_ip
         self._uid = uid
         self._wait = osutil.get_firewall_will_wait()
+        # The custom service will try to call the current agent executable to setup the firewall rules
+        self._current_agent_executable_path = os.path.join(os.getcwd(), sys.argv[0])
 
     @staticmethod
     def _is_firewall_service_running():
@@ -135,7 +113,7 @@ Environment="DST_IP={0}" "UID={1}" "WAIT={2}"
         # Check if firewall-rules have already been enabled
         # This function would also return False if the dest-ip is changed. So no need to check separately for that
         try:
-            AddFirewallRules.check_firewalld_rule_applied(self._wait, self._dst_ip, self._uid)
+            AddFirewallRules.check_firewalld_rule_applied(self._dst_ip, self._uid)
         except Exception as error:
             logger.info(
                 "Check if Firewall rules already applied using firewalld.service failed: {0}".format(ustr(error)))
@@ -150,7 +128,7 @@ Environment="DST_IP={0}" "UID={1}" "WAIT={2}"
 
         logger.info("Firewall rules not added yet, adding them now using firewalld.service")
         # Add rules if not already set
-        AddFirewallRules.add_firewalld_rules(self._wait, self._dst_ip, self._uid)
+        AddFirewallRules.add_firewalld_rules(self._dst_ip, self._uid)
         logger.info("Successfully added the firewall commands using firewalld.service")
 
     def __verify_network_setup_service_enabled(self):
@@ -170,9 +148,9 @@ Environment="DST_IP={0}" "UID={1}" "WAIT={2}"
     def _setup_network_setup_service(self):
         if self.__verify_network_setup_service_enabled():
             logger.info("Service: {0} already enabled. No change needed.".format(self._network_setup_service_name))
+            self.__log_network_setup_service_logs()
+
         else:
-            # Ensure waagent_network_setup.py is available in the desired spot
-            # self.__set_network_setup_bin_file()
             # Create unit file with default values
             self.__set_service_unit_file()
             logger.info("Successfully added and enabled the {0}".format(self._network_setup_service_name))
@@ -181,22 +159,6 @@ Environment="DST_IP={0}" "UID={1}" "WAIT={2}"
         # This is to handle the case where WireIP can change midway on service restarts.
         self.__set_drop_in_file()
 
-    def __set_network_setup_bin_file(self):
-        if os.path.exists(self._agent_network_setup_bin_file):
-            logger.verbose("{0} file exists in the expected place".format(self._agent_network_setup_bin_file))
-            return
-
-        logger.warn("Network file: {0} not available in the expected path. Copying it over".format(
-            self._agent_network_setup_bin_file))
-        try:
-            parent, _ = os.path.split(os.path.abspath(__file__))
-            shutil.copyfile(os.path.join(parent, fileutil.base_name(self._agent_network_setup_bin_file)),
-                            self._agent_network_setup_bin_file)
-            fileutil.chmod(self._agent_network_setup_bin_file, 0o744)
-        except Exception:
-            self.__remove_file_without_raising(self._agent_network_setup_bin_file)
-            raise
-
     def __set_drop_in_file(self):
         drop_in_file = os.path.join(self._systemd_file_path, "{0}.d".format(self._network_setup_service_name),
                                     self._DROP_IN_ENV_FILE_NAME)
@@ -204,7 +166,11 @@ Environment="DST_IP={0}" "UID={1}" "WAIT={2}"
         try:
             if not os.path.exists(parent):
                 fileutil.mkdir(parent, mode=0o755)
-            fileutil.write_file(drop_in_file, self.__OVERRIDE_CONTENT.format(self._dst_ip, self._uid, self._wait))
+            fileutil.write_file(drop_in_file,
+                                self.__OVERRIDE_CONTENT.format(egg_path=self._current_agent_executable_path,
+                                                               wire_ip=self._dst_ip,
+                                                               user_id=self._uid,
+                                                               wait=self._wait))
             logger.info("Drop-in file {0} successfully updated".format(drop_in_file))
         except Exception:
             self.__remove_file_without_raising(drop_in_file)
@@ -213,13 +179,12 @@ Environment="DST_IP={0}" "UID={1}" "WAIT={2}"
     def __set_service_unit_file(self):
         service_unit_file = os.path.join(self._systemd_file_path, self._network_setup_service_name)
         try:
-            # fileutil.write_file(service_unit_file,
-            #                     self.__SERVICE_FILE_CONTENT.format(self._agent_network_setup_bin_file, self._dst_ip,
-            #                                                        self._uid, self._wait, sys.executable))
             fileutil.write_file(service_unit_file,
-                                self.__SERVICE_FILE_CONTENT_WITH_CURRENT_BIN.format(self._agent_network_setup_bin_file,
-                                                                                    self._dst_ip, self._uid, self._wait,
-                                                                                    sys.executable))
+                                self.__SERVICE_FILE_CONTENT.format(egg_path=self._current_agent_executable_path,
+                                                                   wire_ip=self._dst_ip,
+                                                                   user_id=self._uid,
+                                                                   wait=self._wait,
+                                                                   py_path=sys.executable))
             fileutil.chmod(service_unit_file, 0o644)
 
             # Finally enable the service. This is needed to ensure the service is started on system boot
@@ -243,3 +208,28 @@ Environment="DST_IP={0}" "UID={1}" "WAIT={2}"
                 os.remove(file_path)
             except Exception as error:
                 logger.warn("Unable to delete file: {0}; Error: {1}".format(file_path, ustr(error)))
+
+    def __log_network_setup_service_logs(self):
+        # Get logs from journalctl - https://www.freedesktop.org/software/systemd/man/journalctl.html
+        cmd = ["journalctl", "-u", self._network_setup_service_name, "-b"]
+        cmd_success = False
+        try:
+            stdout = shellutil.run_command(cmd)
+            msg = "Logs from the {0} since system boot: {1}".format(self._network_setup_service_name, stdout)
+            cmd_success = True
+            logger.info(msg)
+        except CommandError as error:
+            msg = "Command: {0} failed with ExitCode: {1}\nStdout: {2}\nStderr: {3}".format(' '.join(cmd),
+                                                                                            error.returncode,
+                                                                                            error.stdout, error.stderr)
+            logger.warn(msg)
+        except Exception as error:
+            msg = "Ran into unexpected error when getting logs for {0} service. Error: {1}".format(
+                self._network_setup_service_name, ustr(error))
+            logger.warn(msg)
+
+        add_event(
+            op=WALAEventOperation.PersistFirewallRules,
+            is_success=cmd_success,
+            message=msg,
+            log_event=False)

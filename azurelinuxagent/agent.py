@@ -212,9 +212,10 @@ class Agent(object):
     @staticmethod
     def setup_firewall(firewall_metadata):
 
-        print("Setting up firewall for the WALinux Agent")
+        print("Setting up firewall for the WALinux Agent with args: {0}".format(firewall_metadata))
         try:
-            AddFirewallRules.add_iptables_rules("-w", firewall_metadata['dst_ip'], firewall_metadata['uid'])
+            AddFirewallRules.add_iptables_rules(firewall_metadata['wait'], firewall_metadata['dst_ip'],
+                                                firewall_metadata['uid'])
         except Exception as error:
             print("Unable to add firewall rules. Error: {0}".format(ustr(error)))
             sys.exit(1)
@@ -230,11 +231,11 @@ def main(args=None):
     if len(args) <= 0:
         args = sys.argv[1:]
     command, force, verbose, debug, conf_file_path, log_collector_full_mode, firewall_metadata = parse_args(args)
-    if command == "version":
+    if command == AgentCommands.Version:
         version()
-    elif command == "help":
+    elif command == AgentCommands.Help:
         print(usage())
-    elif command == "start":
+    elif command == AgentCommands.Start:
         start(conf_file_path=conf_file_path)
     else:
         try:
@@ -275,12 +276,16 @@ def parse_args(sys_args):
     log_collector_full_mode = False
     firewall_metadata = {
         "dst_ip": None,
-        "uid": None
+        "uid": None,
+        "wait": ""
     }
 
     regex_cmd_format = "^([-/]*){0}"
 
     for arg in sys_args:
+        if arg == "":
+            # Don't parse an empty parameter
+            continue
         m = re.match("^(?:[-/]*)configuration-path:([\w/\.\-_]+)", arg)  # pylint: disable=W1401
         if not m is None:
             conf_file_path = m.group(1)
@@ -319,11 +324,13 @@ def parse_args(sys_args):
             log_collector_full_mode = True
         elif re.match(regex_cmd_format.format(AgentCommands.SetupFirewall), arg):
             cmd = AgentCommands.SetupFirewall
-        elif re.match(regex_cmd_format.format("dst_ip=(?P<dst_ip>[\d.]{7,})"), arg):
-            firewall_metadata['dst_ip'] = re.match(regex_cmd_format.format("dst_ip=(?P<dst_ip>[\d.]{7,})"), arg).group(
+        elif re.match(regex_cmd_format.format("dst_ip=(?P<dst_ip>[\\d.]{7,})"), arg):
+            firewall_metadata['dst_ip'] = re.match(regex_cmd_format.format("dst_ip=(?P<dst_ip>[\\d.]{7,})"), arg).group(
                 'dst_ip')
-        elif re.match(regex_cmd_format.format("uid=(?P<uid>[\d]+)"), arg):
-            firewall_metadata['uid'] = re.match(regex_cmd_format.format("uid=(?P<uid>[\d]+)"), arg).group('uid')
+        elif re.match(regex_cmd_format.format("uid=(?P<uid>[\\d]+)"), arg):
+            firewall_metadata['uid'] = re.match(regex_cmd_format.format("uid=(?P<uid>[\\d]+)"), arg).group('uid')
+        elif re.match(regex_cmd_format.format("(w|wait)$"), arg):
+            firewall_metadata['wait'] = "-w"
         else:
             cmd = AgentCommands.Help
             break
@@ -352,7 +359,7 @@ def usage():
     s += ("usage: {0} [-verbose] [-force] [-help] "
            "-configuration-path:<path to configuration file>" 
            "-deprovision[+user]|-register-service|-version|-daemon|-start|"
-           "-run-exthandlers|-show-configuration|-collect-logs [-full]|-setup-firewall [-dst_ip=<IP> -uid=<UID> [-w]]"
+           "-run-exthandlers|-show-configuration|-collect-logs [-full]|-setup-firewall [-dst_ip=<IP> -uid=<UID> [-w/--wait]]"
            "").format(sys.argv[0])
     s += "\n"
     return s

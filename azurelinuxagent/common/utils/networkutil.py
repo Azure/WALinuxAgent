@@ -168,7 +168,7 @@ class AddFirewallRules(object):
         return cmd
 
     @staticmethod
-    def get_firewalld_accept_command(wait, command, destination, uid):
+    def get_firewalld_accept_command(command, destination, uid, wait=""):
         cmd = AddFirewallRules.__get_firewalld_base_command(command)
         cmd.extend(
             AddFirewallRules.__get_common_accept_command_params(wait, AddFirewallRules.__ACCEPT_COMMAND, destination,
@@ -176,7 +176,7 @@ class AddFirewallRules(object):
         return cmd
 
     @staticmethod
-    def get_firewalld_drop_command(wait, command, destination):
+    def get_firewalld_drop_command(command, destination, wait=""):
         cmd = AddFirewallRules.__get_firewalld_base_command(command)
         cmd.extend(
             AddFirewallRules.__get_common_drop_command_params(wait, AddFirewallRules.__ACCEPT_COMMAND, destination))
@@ -211,20 +211,21 @@ class AddFirewallRules(object):
         AddFirewallRules.__execute_cmd(drop_rule)
 
     @staticmethod
-    def __execute_firewalld_commands(command, wait, dst_ip, uid):
+    def __execute_firewalld_commands(command, dst_ip, uid):
         AddFirewallRules.__raise_if_empty(dst_ip, "Destination IP")
         AddFirewallRules.__raise_if_empty(uid, "User ID")
 
-        accept_cmd = AddFirewallRules.get_firewalld_accept_command(wait, command, dst_ip, uid)
+        accept_cmd = AddFirewallRules.get_firewalld_accept_command(command, dst_ip, uid)
         AddFirewallRules.__execute_cmd(accept_cmd)
 
-        drop_cmd = AddFirewallRules.get_firewalld_drop_command(wait, command, dst_ip)
+        drop_cmd = AddFirewallRules.get_firewalld_drop_command(command, dst_ip)
         AddFirewallRules.__execute_cmd(drop_cmd)
 
     @staticmethod
-    def add_firewalld_rules(wait, dst_ip, uid):
-        AddFirewallRules.__execute_firewalld_commands(FirewallCmdDirectCommands.PassThrough, wait, dst_ip, uid)
+    def add_firewalld_rules(dst_ip, uid):
+        # Firwalld.service fails if we set `-w` in the iptables command, so not adding it at all for firewalld commands
+        AddFirewallRules.__execute_firewalld_commands(FirewallCmdDirectCommands.PassThrough, dst_ip, uid)
 
     @staticmethod
-    def check_firewalld_rule_applied(wait, dst_ip, uid):
-        AddFirewallRules.__execute_firewalld_commands(FirewallCmdDirectCommands.QueryPassThrough, wait, dst_ip, uid)
+    def check_firewalld_rule_applied(dst_ip, uid):
+        AddFirewallRules.__execute_firewalld_commands(FirewallCmdDirectCommands.QueryPassThrough, dst_ip, uid)
