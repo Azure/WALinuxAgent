@@ -1292,7 +1292,7 @@ class DefaultOSUtil(object):
             # this file is created at provisioning time with agents >= 2.2.3
             return fileutil.read_file(hostname_record)
         except (IOError, OSError) as e:
-            if not is_file_not_found_error(e):
+            if is_file_not_found_error(e):
                 logger.info('Hostname record does not exist.')
             else:
                 logger.error("Exception reading hostname record: {0}", e)
