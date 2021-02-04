@@ -1399,7 +1399,7 @@ class DefaultOSUtil(object):
             inet_output = run_command(inet_command)
             inet6_output = run_command(inet6_command)
 
-            return "Executing {0}:\n{1}\nExecuting {2}:\n{3}\nExecuting {4}:\n{1}\n".format(all_command, all_output, inet_command, inet_output, inet6_command, inet6_output)
+            return "Executing {0}:\n{1}\nExecuting {2}:\n{3}\nExecuting {4}:\n{5}\n".format(all_command, all_output, inet_command, inet_output, inet6_command, inet6_output)
         else:
             self._update_nic_state_all(state, all_output)
             self._update_nic_state(state, inet_command, NetworkInterfaceCard.add_ipv4, "an IPv4 address")
