@@ -42,7 +42,7 @@ import azurelinuxagent.common.utils.shellutil as shellutil
 import azurelinuxagent.common.utils.textutil as textutil
 
 from azurelinuxagent.common.exception import OSUtilError
-from azurelinuxagent.common.future import ustr, array_to_bytes
+from azurelinuxagent.common.future import ustr, array_to_bytes, is_file_not_found_error
 from azurelinuxagent.common.utils.cryptutil import CryptUtil
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
 from azurelinuxagent.common.utils.networkutil import RouteEntry, NetworkInterfaceCard, AddFirewallRules
@@ -1287,16 +1287,17 @@ class DefaultOSUtil(object):
 
     def get_hostname_record(self):
         hostname_record = conf.get_published_hostname()
-        if not os.path.exists(hostname_record):
+        
+        try:
             # this file is created at provisioning time with agents >= 2.2.3
-            hostname = socket.gethostname()
-            logger.info('Hostname record does not exist, '
-                        'creating [{0}] with hostname [{1}]',
-                        hostname_record,
-                        hostname)
-            self.set_hostname_record(hostname)
-        record = fileutil.read_file(hostname_record)
-        return record
+            return fileutil.read_file(hostname_record)
+        except (IOError, OSError) as e:
+            if not is_file_not_found_error(e):
+                logger.info('Hostname record does not exist.')
+            else:
+                logger.error("Exception reading hostname record: {0}", e)
+            
+            return None
 
     def del_account(self, username):
         if self.is_sys_user(username):
