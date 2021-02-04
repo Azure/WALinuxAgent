@@ -903,6 +903,9 @@ Chain OUTPUT (policy ACCEPT 104 packets, 43628 bytes)
         another_state[name].add_ipv4("xyzzy")
         self.assertNotEqual(state, another_state)
 
+        as_string = osutil.DefaultOSUtil().get_nic_state(as_string=True)
+        self.assertNotEqual(as_string, '')
+
     def test_get_dhcp_pid_should_return_a_list_of_pids(self):
         osutil_get_dhcp_pid_should_return_a_list_of_pids(self, osutil.DefaultOSUtil())
 
