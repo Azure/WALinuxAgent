@@ -92,3 +92,4 @@ ENV/
 
 # pyenv
 .python-version
+.vscode/
