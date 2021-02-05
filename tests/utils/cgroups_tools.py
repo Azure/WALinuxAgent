@@ -16,7 +16,6 @@
 #
 
 import os
-from azurelinuxagent.common.cgroupapi import VM_AGENT_CGROUP_NAME
 from azurelinuxagent.common.utils import fileutil
 
 class CGroupsTools(object):
@@ -42,7 +41,7 @@ class CGroupsTools(object):
 
         This method creates a mock cgroup using the newer path and adds the given PID to it.
         """
-        new_cgroup = os.path.join(cgroups_file_system_root, controller, VM_AGENT_CGROUP_NAME)
+        new_cgroup = os.path.join(cgroups_file_system_root, controller, "walinuxagent.service")
         if not os.path.exists(new_cgroup):
             os.makedirs(new_cgroup)
         fileutil.append_file(os.path.join(new_cgroup, "cgroup.procs"), extension_handler_pid + "\n")
