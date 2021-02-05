@@ -1,0 +1,23 @@
+#
+# NOTE:
+#   This file hosted on WALinuxAgent repository only for reference purposes.
+#   Please refer to a recent image to find out the up-to-date systemd unit file.
+#
+
+[Unit]
+Description=Azure Linux Agent
+
+After=network-online.target cloud-init.service
+Wants=network-online.target sshd.service sshd-keygen.service
+
+ConditionFileIsExecutable=/usr/sbin/waagent
+ConditionPathExists=/etc/waagent.conf
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/python3 -u /usr/sbin/waagent -daemon
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
+

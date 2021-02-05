@@ -16,8 +16,10 @@
 #
 
 import datetime
+import os
 import threading
 
+import azurelinuxagent.common.conf as conf
 import azurelinuxagent.common.logger as logger
 import azurelinuxagent.common.utils.networkutil as networkutil
 from azurelinuxagent.common.cgroupconfigurator import CGroupConfigurator
@@ -108,6 +110,24 @@ class ReportNetworkConfigurationChangesOperation(PeriodicOperation):
         self.last_route_table_hash = b''
         self.last_nic_state = {}
 
+    def log_network_configuration(self):
+        try:
+            route_file = '/proc/net/route'
+            if os.path.exists(route_file):
+                lines = []
+                with open(route_file) as file_object:
+                    for line in file_object:
+                        lines.append(line)
+                        if len(lines) >= 100:
+                            lines.append("<TRUNCATED TO {0} LINES".format(len(lines)))
+                            break
+                logger.info("Routing table from {0}:\n{1}", route_file, ''.join(lines))
+            network_interfaces = self.osutil.get_nic_state(as_string=True)
+            if network_interfaces != '':
+                logger.info("Network interfaces:\n{0}", network_interfaces)
+        except Exception as exception:
+            logger.warn("Error fetching the network configuration: {0}", ustr(exception))
+
     def _operation_impl(self):
         raw_route_list = self.osutil.read_route_table()
         digest = hash_strings(raw_route_list)
@@ -144,6 +164,8 @@ class SendHostPluginHeartbeatOperation(PeriodicOperation):
         try:
             host_plugin = self.protocol.client.get_host_plugin()
             host_plugin.ensure_initialized()
+            self.protocol.update_host_plugin_from_goal_state()
+
             is_currently_healthy = host_plugin.get_health()
 
             if is_currently_healthy:
@@ -262,16 +284,20 @@ class MonitorHandler(ThreadHandlerInterface):
             periodic_operations = [
                 ResetPeriodicLogMessagesOperation(),
                 ReportNetworkErrorsOperation(),
-                ReportNetworkConfigurationChangesOperation(),
                 PollResourceUsageOperation(),
                 SendHostPluginHeartbeatOperation(protocol, health_service),
                 SendImdsHeartbeatOperation(protocol_util, health_service)
             ]
 
+            report_network_configuration_changes = ReportNetworkConfigurationChangesOperation()
+            if conf.get_monitor_network_configuration_changes():
+                periodic_operations.append(report_network_configuration_changes)
+            else:
+                logger.info("Monitor.NetworkConfigurationChanges is disabled.")
+                report_network_configuration_changes.log_network_configuration()
+
             while not self.stopped():
                 try:
-                    protocol.update_host_plugin_from_goal_state()
-
                     for op in periodic_operations:
                         op.run()
 

@@ -92,8 +92,8 @@ class UnitFilePaths:
     cpu_quota = "/lib/systemd/system/walinuxagent.service.d/12-CPUQuota.conf"
 
 
-# W0212: Access to a protected member __commands of a client class (protected-access) - Disabled: __commands, __files and __paths
-# are added only for debugging purposes and should not be public (hence it is marked as private).
+# W0212: Access to a protected member __commands of a client class (protected-access) - Disabled: a few private properties
+# are added to the return value for debugging purposes and should not be public (hence it is marked as private).
 # pylint: disable=protected-access
 @contextlib.contextmanager
 def mock_cgroup_commands(tmp_dir):

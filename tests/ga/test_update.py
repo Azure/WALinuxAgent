@@ -9,6 +9,7 @@ import json
 import os
 import shutil
 import stat
+import subprocess
 import sys
 import tempfile
 import time
@@ -23,6 +24,7 @@ from azurelinuxagent.common import conf
 from azurelinuxagent.common.event import EVENTS_DIRECTORY
 from azurelinuxagent.common.exception import ProtocolError, UpdateError, ResourceGoneError
 from azurelinuxagent.common.future import ustr
+from azurelinuxagent.common.persist_firewall_rules import PersistFirewallRulesHandler
 from azurelinuxagent.common.protocol.goal_state import ExtensionsConfig
 from azurelinuxagent.common.protocol.hostplugin import URI_FORMAT_GET_API_VERSIONS, HOST_PLUGIN_PORT, \
     URI_FORMAT_GET_EXTENSION_ARTIFACT, HostPluginProtocol
@@ -32,6 +34,7 @@ from azurelinuxagent.common.protocol.util import ProtocolUtil
 from azurelinuxagent.common.protocol.wire import WireProtocol
 from azurelinuxagent.common.utils import fileutil, restutil, textutil
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
+from azurelinuxagent.common.utils.networkutil import FirewallCmdDirectCommands
 from azurelinuxagent.common.version import AGENT_PKG_GLOB, AGENT_DIR_GLOB, AGENT_NAME, AGENT_DIR_PATTERN, \
     AGENT_VERSION, CURRENT_AGENT, CURRENT_VERSION
 from azurelinuxagent.ga.exthandlers import ExtHandlerInstance, HandlerEnvironment
@@ -1580,6 +1583,30 @@ class TestUpdate(UpdateTestCase):
                 content = json.load(handler_env_content_file)
             self.assertIn(HandlerEnvironment.eventsFolder, content[0][HandlerEnvironment.handlerEnvironment],
                           "{0} not found in HandlerEnv file".format(HandlerEnvironment.eventsFolder))
+
+    def test_it_should_setup_firewall_rules_on_startup(self):
+        iterations = 1
+        original_popen = subprocess.Popen
+        executed_commands = []
+
+        def _mock_popen(cmd, *args, **kwargs):
+            if 'firewall-cmd' in cmd:
+                executed_commands.append(cmd)
+                cmd = ["echo", "running"]
+            return original_popen(cmd, *args, **kwargs)
+
+        with self._get_update_handler(iterations) as (update_handler, _):
+            with patch("azurelinuxagent.common.utils.shellutil.subprocess.Popen", side_effect=_mock_popen):
+                update_handler.run(debug=True)
+
+        # Firewall-cmd should only be called 3 times - 1st to check if running, 2nd & 3rd for the QueryPassThrough cmd
+        self.assertEqual(3, len(executed_commands), "The number of times firwall-cmd should be called is only 3")
+        # protected-access<W0212> Disabled: OK to access PersistFirewallRulesHandler._* from unit test for PersistFirewallRuleHandler
+        self.assertEqual(PersistFirewallRulesHandler._FIREWALLD_RUNNING_CMD, executed_commands.pop(0),  # pylint: disable=protected-access
+                         "First command should be to check if firewalld is running")
+        self.assertTrue([FirewallCmdDirectCommands.QueryPassThrough in cmd for cmd in executed_commands],
+                        "The remaining commands should only be for querying the firewall commands")
+
 
     @contextlib.contextmanager
     def _setup_test_for_ext_event_dirs_retention(self):

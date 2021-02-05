@@ -102,6 +102,7 @@ class WALAEventOperation:  # pylint: disable=no-init
     LogCollection = "LogCollection"
     OSInfo = "OSInfo"
     Partition = "Partition"
+    PersistFirewallRules = "PersistFirewallRules"
     PluginSettingsVersionMismatch = "PluginSettingsVersionMismatch"
     InvalidExtensionConfig = "InvalidExtensionConfig"
     ProcessGoalState = "ProcessGoalState"

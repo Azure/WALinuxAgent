@@ -43,6 +43,10 @@ class OpenBSDOSUtil(DefaultOSUtil):
         self.jit_enabled = True
         self._scsi_disks_timeout_set = False
 
+    @staticmethod
+    def get_agent_bin_path():
+        return "/usr/local/sbin"
+
     def get_instance_id(self):
         ret, output = shellutil.run_get_output("sysctl -n hw.uuid")
         if ret != 0 or UUID_PATTERN.match(output) is None:

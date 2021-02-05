@@ -61,13 +61,16 @@ class OpenWRTOSUtil(DefaultOSUtil):
     def get_dhcp_pid(self):
         return self._get_dhcp_pid(["pidof", self.dhclient_name])
 
-    def get_nic_state(self):
+    def get_nic_state(self, as_string=False):
         """
         Capture NIC state (IPv4 and IPv6 addresses plus link state).
 
         :return: Dictionary of NIC state objects, with the NIC name as key
         :rtype: dict(str,NetworkInformationCard)
         """
+        if as_string:  # as_string not supported on open wrt
+            return ''
+
         state = {}
         status, output = shellutil.run_get_output("ip -o link", chk_err=False, log_cmd=False)
 
