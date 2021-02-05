@@ -146,7 +146,7 @@ def get_data_files(name, version, fullname):  # pylint: disable=R0912
                       src=["init/ubuntu/snappy/walinuxagent.yml"])
         else:
             # Ubuntu15.04+ uses systemd
-            set_systemd_files(data_files,
+            set_systemd_files(data_files, dest=systemd_dir_path,
                               src=[
                                   "init/ubuntu/walinuxagent.service",
                                   "init/ubuntu/azure.slice",
