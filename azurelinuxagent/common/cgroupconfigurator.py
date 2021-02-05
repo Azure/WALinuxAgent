@@ -1,3 +1,4 @@
+# -*- encoding: utf-8 -*-
 # Copyright 2018 Microsoft Corporation
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -20,11 +21,13 @@ import subprocess
 
 from azurelinuxagent.common import logger
 from azurelinuxagent.common.cgroup import CpuCgroup, MemoryCgroup
-from azurelinuxagent.common.cgroupapi import CGroupsApi, SystemdCgroupsApi
+from azurelinuxagent.common.cgroupapi import CGroupsApi, SystemdCgroupsApi, SystemdRunError
 from azurelinuxagent.common.cgroupstelemetry import CGroupsTelemetry
 from azurelinuxagent.common.exception import ExtensionErrorCodes, CGroupsException
 from azurelinuxagent.common.future import ustr
+from azurelinuxagent.common.osutil import get_osutil
 from azurelinuxagent.common.version import get_distro
+from azurelinuxagent.common.utils import shellutil
 from azurelinuxagent.common.utils.extensionprocessutil import handle_process_completion
 from azurelinuxagent.common.event import add_event, WALAEventOperation
 
@@ -33,9 +36,10 @@ class CGroupConfigurator(object):
     """
     This class implements the high-level operations on CGroups (e.g. initialization, creation, etc)
 
-    NOTE: with the exception of start_extension_command, none of the methods in this class raise exceptions (cgroup operations should not block extensions)
+    NOTE: with the exception of start_extension_command, none of the methods in this class
+    raise exceptions (cgroup operations should not block extensions)
     """
-    class __impl(object):
+    class __Impl(object):
         def __init__(self):
             self._initialized = False
             self._cgroups_supported = False
@@ -43,8 +47,8 @@ class CGroupConfigurator(object):
             self._cgroups_api = None
             self._agent_cpu_cgroup_path = None
             self._agent_memory_cgroup_path = None
-            self._get_processes_in_agent_cgroup_last_error = None
-            self._get_processes_in_agent_cgroup_error_count = 0
+            self._check_processes_in_agent_cgroup_last_error = None
+            self._check_processes_in_agent_cgroup_error_count = 0
 
         def initialize(self):
             try:
@@ -62,9 +66,9 @@ class CGroupConfigurator(object):
                 #
                 # check systemd
                 #
-                self._cgroups_api = CGroupsApi.create()
+                self._cgroups_api = SystemdCgroupsApi()
 
-                if not isinstance(self._cgroups_api, SystemdCgroupsApi):
+                if not self._cgroups_api.is_systemd():
                     message = "systemd was not detected on {0}".format(get_distro())
                     logger.warn(message)
                     add_event(op=WALAEventOperation.CGroupsInitialize, is_success=False, message=message, log_event=False)
@@ -75,12 +79,10 @@ class CGroupConfigurator(object):
                     logger.info(message)
                     add_event(op=WALAEventOperation.CGroupsInfo, message=message)
 
-                def log_cgroup_warn(format_string, *args):
-                    message = format_string.format(*args)
-                    logger.warn(message)
-                    add_event(op=WALAEventOperation.CGroupsInfo, message=message, is_success=False, log_event=False)
-
                 log_cgroup_info("systemd version: {0}", self._cgroups_api.get_systemd_version())
+
+                self.__collect_azure_unit_telemetry()
+                self.__collect_agent_unit_files_telemetry()
 
                 #
                 # Older versions of the daemon (2.2.31-2.2.40) wrote their PID to /sys/fs/cgroup/{cpu,memory}/WALinuxAgent/WALinuxAgent.  When running
@@ -89,7 +91,7 @@ class CGroupConfigurator(object):
                 legacy_cgroups = self._cgroups_api.cleanup_legacy_cgroups()
 
                 if legacy_cgroups > 0:
-                    log_cgroup_warn("The daemon's PID was added to a legacy cgroup; will not monitor resource usage.")
+                    log_cgroup_info("The daemon's PID was added to a legacy cgroup; will not monitor resource usage.")
                     return
 
                 #
@@ -100,58 +102,68 @@ class CGroupConfigurator(object):
                 if cpu_controller_root is not None:
                     logger.info("The CPU cgroup controller is mounted at {0}", cpu_controller_root)
                 else:
-                    log_cgroup_warn("The CPU cgroup controller is not mounted")
+                    log_cgroup_info("The CPU cgroup controller is not mounted")
 
                 if memory_controller_root is not None:
                     logger.info("The memory cgroup controller is mounted at {0}", memory_controller_root)
                 else:
-                    log_cgroup_warn("The memory cgroup controller is not mounted")
+                    log_cgroup_info("The memory cgroup controller is not mounted")
 
                 #
                 # check v2 controllers
                 #
-                cgroup2_mountpoint, cgroup2_controllers = self._cgroups_api.get_cgroup2_controllers()
-                if cgroup2_mountpoint is not None:
-                    log_cgroup_warn("cgroups v2 mounted at {0}.  Controllers: [{1}]", cgroup2_mountpoint, cgroup2_controllers)
+                cgroup2_mount_point, cgroup2_controllers = self._cgroups_api.get_cgroup2_controllers()
+                if cgroup2_mount_point is not None:
+                    log_cgroup_info("cgroups v2 mounted at {0}.  Controllers: [{1}]", cgroup2_mount_point, cgroup2_controllers)
 
                 #
                 # check the cgroups for the agent
                 #
                 agent_unit_name = self._cgroups_api.get_agent_unit_name()
                 cpu_cgroup_relative_path, memory_cgroup_relative_path = self._cgroups_api.get_process_cgroup_relative_paths("self")
+                expected_relative_path = os.path.join('system.slice', agent_unit_name)
                 if cpu_cgroup_relative_path is None:
-                    log_cgroup_warn("The agent's process is not within a CPU cgroup")
+                    log_cgroup_info("The agent's process is not within a CPU cgroup")
                 else:
+                    if cpu_cgroup_relative_path != expected_relative_path:
+                        log_cgroup_info("The Agent is not in the expected cgroup; will not enable cgroup monitoring. CPU relative path:[{0}] Expected:[{1}]", cpu_cgroup_relative_path, expected_relative_path)
+                        return
                     cpu_accounting = self._cgroups_api.get_unit_property(agent_unit_name, "CPUAccounting")
                     log_cgroup_info('CPUAccounting: {0}', cpu_accounting)
 
                 if memory_cgroup_relative_path is None:
-                    log_cgroup_warn("The agent's process is not within a memory cgroup")
+                    log_cgroup_info("The agent's process is not within a memory cgroup")
                 else:
+                    if memory_cgroup_relative_path != expected_relative_path:
+                        log_cgroup_info("The Agent is not in the expected cgroup; will not enable cgroup monitoring. Memory relative path:[{0}] Expected:[{1}]", memory_cgroup_relative_path, expected_relative_path)
+                        return
                     memory_accounting = self._cgroups_api.get_unit_property(agent_unit_name, "MemoryAccounting")
                     log_cgroup_info('MemoryAccounting: {0}', memory_accounting)
 
                 #
                 # All good, enable cgroups and start monitoring the agent
                 #
-                self._cgroups_enabled = True
-
                 if cpu_controller_root is None or cpu_cgroup_relative_path is None:
                     logger.info("Will not track CPU for the agent's cgroup")
                 else:
                     self._agent_cpu_cgroup_path = os.path.join(cpu_controller_root, cpu_cgroup_relative_path)
+                    log_cgroup_info("Agent CPU cgroup: {0}", self._agent_cpu_cgroup_path)
                     CGroupsTelemetry.track_cgroup(CpuCgroup(agent_unit_name, self._agent_cpu_cgroup_path))
 
                 if memory_controller_root is None or memory_cgroup_relative_path is None:
                     logger.info("Will not track memory for the agent's cgroup")
                 else:
                     self._agent_memory_cgroup_path = os.path.join(memory_controller_root, memory_cgroup_relative_path)
+                    log_cgroup_info("Agent Memory cgroup: {0}", self._agent_memory_cgroup_path)
                     CGroupsTelemetry.track_cgroup(MemoryCgroup(agent_unit_name, self._agent_memory_cgroup_path))
 
-                log_cgroup_info("Agent cgroups: CPU: {0} -- MEMORY: {1}", self._agent_cpu_cgroup_path, self._agent_memory_cgroup_path)
+                if self._agent_cpu_cgroup_path is not None or self._agent_memory_cgroup_path is not None:
+                    self._cgroups_enabled = True
 
-            except Exception as e:
-                message = "Error initializing cgroups: {0}".format(ustr(e))
+                log_cgroup_info('Cgroups enabled: {0}', self._cgroups_enabled)
+
+            except Exception as exception:
+                message = "Error initializing cgroups: {0}".format(ustr(exception))
                 logger.warn(message)
                 add_event(op=WALAEventOperation.CGroupsInitialize, is_success=False, message=message, log_event=False)
             finally:
@@ -173,77 +185,215 @@ class CGroupConfigurator(object):
             self._cgroups_enabled = False
             CGroupsTelemetry.reset()
 
-        def _invoke_cgroup_operation(self, operation, error_message, on_error=None):
-            """
-            Ensures the given operation is invoked only if cgroups are enabled and traps any errors on the operation.
-            """
-            if not self.enabled():
-                return None
+        @staticmethod
+        def __collect_azure_unit_telemetry():
+            azure_units = []
 
             try:
-                return operation()
-            except Exception as e:
-                logger.warn("{0} Error: {1}".format(error_message, ustr(e)))
-                if on_error is not None:
-                    try:
-                        on_error(e)
-                    except Exception as ex:
-                        logger.warn("CGroupConfigurator._invoke_cgroup_operation: {0}".format(ustr(e)))
+                units = shellutil.run_command(['systemctl', 'list-units', 'azure*', '-all'])
+                for line in units.split('\n'):
+                    match = re.match(r'\s?(azure[^\s]*)\s?', line, re.IGNORECASE)
+                    if match is not None:
+                        azure_units.append((match.group(1), line))
+            except shellutil.CommandError as command_error:
+                message = "Failed to list systemd units: {0}".format(ustr(command_error))
+                logger.info(message)
+                add_event(op=WALAEventOperation.CGroupsInitialize, is_success=False, message=message, log_event=False)
 
-        def create_extension_cgroups_root(self):
+            for unit_name, unit_description in azure_units:
+                unit_slice = "Unknown"
+                try:
+                    unit_slice = SystemdCgroupsApi.get_unit_property(unit_name, "Slice")
+                except Exception as exception:
+                    message = "Failed to query Slice for {0}: {1}".format(unit_name, ustr(exception))
+                    logger.info(message)
+                    add_event(op=WALAEventOperation.CGroupsInitialize, is_success=False, message=message, log_event=False)
+
+                message = "Found an Azure unit under slice {0}: {1}".format(unit_slice, unit_description)
+                logger.info(message)
+                add_event(op=WALAEventOperation.CGroupsInitialize, message=message)
+
+            if len(azure_units) == 0:
+                try:
+                    cgroups = shellutil.run_command('systemd-cgls')
+                    for line in cgroups.split('\n'):
+                        if re.match(r'[^\x00-\xff]+azure\.slice\s*', line, re.UNICODE):
+                            logger.info(ustr("Found a cgroup for azure.slice\n{0}").format(cgroups))
+                            add_event(op=WALAEventOperation.CGroupsInitialize, message="Found a cgroup for azure.slice")
+                except shellutil.CommandError as command_error:
+                    message = "Failed to list systemd units: {0}".format(ustr(command_error))
+                    logger.info(message)
+                    add_event(op=WALAEventOperation.CGroupsInitialize, is_success=False, message=message, log_event=False)
+
+        @staticmethod
+        def __collect_agent_unit_files_telemetry():
+            agent_unit_files = []
+            agent_service_name = get_osutil().get_service_name()
+            try:
+                fragment_path = SystemdCgroupsApi.get_unit_property(agent_service_name, "FragmentPath")
+                if fragment_path != "/lib/systemd/system/{0}.service".format(agent_service_name):
+                    agent_unit_files.append(fragment_path)
+            except Exception as exception:
+                message = "Failed to query the agent's FragmentPath: {0}".format(ustr(exception))
+                logger.info(message)
+                add_event(op=WALAEventOperation.CGroupsInitialize, is_success=False, message=message, log_event=False)
+
+            try:
+                drop_in_paths = SystemdCgroupsApi.get_unit_property(agent_service_name, "DropInPaths")
+                for path in drop_in_paths.split():
+                    agent_unit_files.append(path)
+            except Exception as exception:
+                message = "Failed to query the agent's DropInPaths: {0}".format(ustr(exception))
+                logger.info(message)
+                add_event(op=WALAEventOperation.CGroupsInitialize, is_success=False, message=message, log_event=False)
+
+            for unit_file in agent_unit_files:
+                try:
+                    with open(unit_file, "r") as file_object:
+                        message = "Found a custom unit file for the agent: {0}\n{1}".format(unit_file, file_object.read())
+                        logger.info(message)
+                        add_event(op=WALAEventOperation.CGroupsInitialize, message=message)
+                except Exception as exception:
+                    message = "Can't read {0}: {1}".format(unit_file, ustr(exception))
+                    logger.info(message)
+                    add_event(op=WALAEventOperation.CGroupsInitialize, message=message)
+
+        def create_slices(self):
+            if not self.enabled():
+                return
+
+            # Create root slices for agent and agent and extensions for systemd-managed distros.
+            # The hierarchy is as follows:
+            # ├─user.slice
+            # ...
+            # ├─system.slice
+            # ...
+            # └─azure.slice
+            #   └─azure-vmextensions.slice
+
+            # Both methods will log to local log and emit telemetry.
+            # The slices will be created if they don't previously exist.
+
+            if not os.path.exists(SystemdCgroupsApi.get_azure_slice()):
+                self.create_azure_slice()
+
+            if not os.path.exists(SystemdCgroupsApi.get_extensions_slice()):
+                self.create_extensions_slice()
+
+        def create_azure_slice(self):
+            """"
+            Creates the slice for the VM Agent and extensions.
             """
-            Creates the container (directory/cgroup) that includes the cgroups for all extensions (/sys/fs/cgroup/*/walinuxagent.extensions)
+            if not self.enabled():
+                return
+
+            try:
+                self._cgroups_api.create_azure_slice()
+            except Exception as exception:
+                error_message = "Failed to create the azure slice. Error: {0}".format(ustr(exception))
+                logger.warn(error_message)
+                add_event(op=WALAEventOperation.CGroupsInitialize, message=error_message)
+
+        def create_extensions_slice(self):
             """
-            def __impl():
-                self._cgroups_api.create_extension_cgroups_root()
-
-            self._invoke_cgroup_operation(__impl, "Failed to create a root cgroup for extensions; resource usage for extensions will not be tracked.")
-
-        def create_extension_cgroups(self, name):
+            Creates the slice that includes the cgroups for all extensions
             """
-            Creates and returns the cgroups for the given extension
+            if not self.enabled():
+                return
+
+            try:
+                self._cgroups_api.create_extensions_slice()
+            except Exception as exception:
+                error_message = "Failed to create slice for VM extensions. Error: {0}".format(ustr(exception))
+                logger.warn(error_message)
+                add_event(op=WALAEventOperation.CGroupsInitialize, message=error_message)
+
+        def check_processes_in_agent_cgroup(self):
             """
-            def __impl():
-                return self._cgroups_api.create_extension_cgroups(name)
-
-            return self._invoke_cgroup_operation(__impl, "Failed to create a cgroup for extension '{0}'; resource usage will not be tracked.".format(name))
-
-        def remove_extension_cgroups(self, name):
+            Verifies that the agent's cgroup includes only the current process, its parent, commands started using shellutil and instances of systemd-run
+            (those processes correspond, respectively, to the extension handler, the daemon, commands started by the extension handler, and the systemd-run
+            commands used to start extensions on their own cgroup).
+            Other processes started by the agent (e.g. extensions) and processes not started by the agent (e.g. services installed by extensions) are reported
+            as unexpected, since they should belong to their own cgroup.
             """
-            Deletes the cgroup for the given extension
+            if not self.enabled():
+                return True
+
+            def log_message(message):
+                # Report only a small sample of errors
+                if message != self._check_processes_in_agent_cgroup_last_error and self._check_processes_in_agent_cgroup_error_count < 5:
+                    self._check_processes_in_agent_cgroup_error_count += 1
+                    self._check_processes_in_agent_cgroup_last_error = message
+                    logger.info(message)
+                    add_event(op=WALAEventOperation.CGroupsDisabled, message=message)
+
+            try:
+                daemon = os.getppid()
+                extension_handler = os.getpid()
+                agent_commands = set()
+                agent_commands.update(shellutil.get_running_commands())
+                systemd_run_commands = set()
+                systemd_run_commands.update(self._cgroups_api.get_systemd_run_commands())
+                agent_cgroup = CGroupsApi.get_processes_in_cgroup(self._agent_cpu_cgroup_path)
+                # get the running commands again in case new commands started or completed while we were fetching the processes in the cgroup;
+                agent_commands.update(shellutil.get_running_commands())
+                systemd_run_commands.update(self._cgroups_api.get_systemd_run_commands())
+
+                unexpected = []
+                for process in agent_cgroup:
+                    # Note that the agent uses systemd-run to start extensions; systemd-run belongs to the agent cgroup, though the extensions don't
+                    if process in (daemon, extension_handler) or process in systemd_run_commands:
+                        continue
+                    # check if the process is a command started by the agent or a descendant of one of those commands
+                    current = process
+                    while current != 0 and current not in agent_commands:
+                        current = self._get_parent(current)
+                    if current == 0:
+                        unexpected.append(process)
+                        if len(unexpected) >= 5:  # collect just a small sample
+                            break
+                if unexpected:
+                    unexpected = self._format_processes(unexpected)
+                    unexpected.sort()  # sort the PIDs so that the error message stays more consistent across different calls to this check
+                    log_message("The agent's cgroup includes unexpected processes; disabling CPU enforcement. Unexpected: {0}".format(unexpected))
+                    self.disable()
+                    return False
+            except Exception as exception:
+                log_message("Failed to check the processes in the agent's cgroup: {0}".format(ustr(exception)))
+            return True
+
+        @staticmethod
+        def _format_processes(pid_list):
             """
-            def __impl():
-                cgroups = self._cgroups_api.remove_extension_cgroups(name)
-                return cgroups
-
-            self._invoke_cgroup_operation(__impl, "Failed to delete cgroups for extension '{0}'.".format(name))
-
-        def get_processes_in_agent_cgroup(self):
+            Formats the given PIDs as a sequence of strings containing the PIDs and their corresponding command line (truncated to 40 chars)
             """
-            Returns an array of tuples with the PID and command line of the processes that are currently within the cgroup for the given unit.
+            def get_command_line(pid):
+                try:
+                    cmdline = '/proc/{0}/cmdline'.format(pid)
+                    if os.path.exists(cmdline):
+                        with open(cmdline, "r") as cmdline_file:
+                            return "[PID: {0}] {1:40.40}".format(pid, cmdline_file.read())
+                except Exception:
+                    pass
+                return "[PID: {0}] UNKNOWN".format(pid)
 
-            The return value can be None if cgroups are not enabled or if an error occurs during the operation.
+            return [get_command_line(pid) for pid in pid_list]
+
+        @staticmethod
+        def _get_parent(pid):
             """
-            def __impl():
-                if self._agent_cpu_cgroup_path is None:
-                    return []
-                return self._cgroups_api.get_processes_in_cgroup(self._agent_cpu_cgroup_path)
+            Returns the parent of the given process. If the parent cannot be determined returns 0 (which is the PID for the scheduler)
+            """
+            try:
+                stat = '/proc/{0}/stat'.format(pid)
+                if os.path.exists(stat):
+                    with open(stat, "r") as stat_file:
+                        return int(stat_file.read().split()[3])
+            except Exception:
+                pass
+            return 0
 
-            def __on_error(exception):
-                #
-                # Send telemetry for a small sample of errors (if any)
-                #
-                self._get_processes_in_agent_cgroup_error_count = self._get_processes_in_agent_cgroup_error_count + 1
-                if self._get_processes_in_agent_cgroup_error_count <= 5:
-                    message = "Failed to list the processes in the agent's cgroup: {0}", ustr(exception)
-                    if message != self._get_processes_in_agent_cgroup_last_error:
-                        add_event(op=WALAEventOperation.CGroupsDebug, message=message)
-                    self._get_processes_in_agent_cgroup_last_error = message
-
-            return self._invoke_cgroup_operation(__impl, "Failed to list the processes in the agent's cgroup.", on_error=__on_error)
-
-        def start_extension_command(self, extension_name, command, timeout, shell, cwd, env, stdout, stderr,
-                                    error_code=ExtensionErrorCodes.PluginUnknownFailure):
+        def start_extension_command(self, extension_name, command, timeout, shell, cwd, env, stdout, stderr, error_code=ExtensionErrorCodes.PluginUnknownFailure):
             """
             Starts a command (install/enable/etc) for an extension and adds the command's PID to the extension's cgroup
             :param extension_name: The extension executing the command
@@ -256,33 +406,20 @@ class CGroupConfigurator(object):
             :param stderr: File object to redirect stderr to
             :param error_code: Extension error code to raise in case of error
             """
-            if not self.enabled():
-                process = subprocess.Popen(command,
-                                           shell=shell,
-                                           cwd=cwd,
-                                           env=env,
-                                           stdout=stdout,
-                                           stderr=stderr,
-                                           preexec_fn=os.setsid)
+            if self.enabled():
+                try:
+                    return self._cgroups_api.start_extension_command(extension_name, command, timeout, shell=shell, cwd=cwd, env=env, stdout=stdout, stderr=stderr, error_code=error_code)
+                except SystemdRunError as exception:
+                    event_msg = 'Failed to start extension {0} using systemd-run. Will disable resource enforcement and retry invoking the extension without systemd. ' \
+                                'Systemd-run error: {1}'.format(extension_name, ustr(exception))
+                    add_event(op=WALAEventOperation.CGroupsDisabled, is_success=False, log_event=False, message=event_msg)
+                    logger.info(event_msg)
+                    self.disable()
+                    # fall-through and re-invoke the extension
 
-                process_output = handle_process_completion(process=process,
-                                                           command=command,
-                                                           timeout=timeout,
-                                                           stdout=stdout,
-                                                           stderr=stderr,
-                                                           error_code=error_code)
-            else:
-                process_output = self._cgroups_api.start_extension_command(extension_name,
-                                                                          command,
-                                                                          timeout,
-                                                                          shell=shell,
-                                                                          cwd=cwd,
-                                                                          env=env,
-                                                                          stdout=stdout,
-                                                                          stderr=stderr,
-                                                                          error_code=error_code)
-
-            return process_output
+            # subprocess-popen-preexec-fn<W1509> Disabled: code is not multi-threaded
+            process = subprocess.Popen(command, shell=shell, cwd=cwd, env=env, stdout=stdout, stderr=stderr, preexec_fn=os.setsid)  # pylint: disable=W1509
+            return handle_process_completion(process=process, command=command, timeout=timeout, stdout=stdout, stderr=stderr, error_code=error_code)
 
     # unique instance for the singleton
     _instance = None
@@ -290,43 +427,5 @@ class CGroupConfigurator(object):
     @staticmethod
     def get_instance():
         if CGroupConfigurator._instance is None:
-            CGroupConfigurator._instance = CGroupConfigurator.__impl()
+            CGroupConfigurator._instance = CGroupConfigurator.__Impl()
         return CGroupConfigurator._instance
-
-    @staticmethod
-    def is_agent_process(command_line):
-        """
-        Returns true if the given command line corresponds to a process started by the agent.
-
-        NOTE: The function uses pattern matching to determine whether the process was spawned by the agent; this is more of a heuristic
-        than an exact check.
-        """
-        patterns = [
-            r".*waagent -daemon.*",
-            r".*(WALinuxAgent-.+\.egg|waagent) -run-exthandlers",
-            # The processes in the agent's cgroup are listed using systemd-cgls
-            r"^systemd-cgls.*walinuxagent.*$",
-            # Extensions are started using systemd-run
-            r"^systemd-run --unit=.+ --scope ",
-            #
-            # The rest of the commands are started by the environment thread; many of them are distro-specific so this list may need
-            # additions as we add support for more distros.
-            #
-            # *** Monitor DHCP client restart
-            #
-            r"^pidof (dhclient|dhclient3|systemd-networkd)",
-            r"^ip route (show|add)",
-            #
-            # *** Enable firewall
-            #
-            r"^iptables --version$",
-            r"^iptables .+ -t security",
-            #
-            # *** Monitor host name changes
-            #
-            r"^ifdown .+ && ifup .+",
-        ]
-        for p in patterns:
-            if re.match(p, command_line) is not None:
-                return True
-        return False

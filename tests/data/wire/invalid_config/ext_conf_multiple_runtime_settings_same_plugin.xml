@@ -1,0 +1,30 @@
+<Extensions version="1.0.0.0" goalStateIncarnation="9">
+	<GuestAgentExtension
+		xmlns:i="http://www.w3.org/2001/XMLSchema-instance">
+		<GAFamilies>
+			<GAFamily>
+				<Name>Prod</Name>
+				<Uris>
+					<Uri>http://mock-goal-state/manifest_of_ga.xml</Uri>
+				</Uris>
+			</GAFamily>
+			<GAFamily>
+				<Name>Test</Name>
+				<Uris>
+					<Uri>http://mock-goal-state/manifest_of_ga.xml</Uri>
+				</Uris>
+			</GAFamily>
+		</GAFamilies>
+	</GuestAgentExtension>
+	<Plugins>
+		<Plugin name="OSTCExtensions.ExampleHandlerLinux" version="1.0.0" location="http://mock-goal-state/rdfepirv2hknprdstr03.blob.core.windows.net/b01058962be54ceca550a390fa5ff064/Microsoft.OSTCExtensions_ExampleHandlerLinux_asiaeast_manifest.xml" config="" state="enabled" autoUpgrade="false" failoverlocation="http://mock-goal-state/rdfepirv2hknprdstr04.blob.core.windows.net/b01058962be54ceca550a390fa5ff064/Microsoft.OSTCExtensions_ExampleHandlerLinux_asiaeast_manifest.xml" runAsStartupTask="false" isJson="true" />
+	</Plugins>
+	<PluginSettings>
+		<Plugin name="OSTCExtensions.ExampleHandlerLinux" version="1.0.0">
+			<RuntimeSettings seqNo="0">{"runtimeSettings":[{"handlerSettings":{"protectedSettingsCertThumbprint":"4037FBF5F1F3014F99B5D6C7799E9B20E6871CB3","protectedSettings":"MIICWgYJK","publicSettings":{"foo":"bar"}}}]}</RuntimeSettings>
+            <RuntimeSettings seqNo="2">{"runtimeSettings":[{"handlerSettings":{"protectedSettingsCertThumbprint":"4037FBF5F1F3014F99B5D6C7799E9B20E6871CB3","protectedSettings":"MIICWgYJK","publicSettings":{"foo":"bar"}}}]}</RuntimeSettings>
+		</Plugin>
+	</PluginSettings>
+	<StatusUploadBlob statusBlobType="BlockBlob">https://test.blob.core.windows.net/vhds/test-cs12.test-cs12.test-cs12.status?sr=b&amp;sp=rw&amp;se=9999-01-01&amp;sk=key1&amp;sv=2014-02-14&amp;sig=hfRh7gzUE7sUtYwke78IOlZOrTRCYvkec4hGZ9zZzXo</StatusUploadBlob>
+</Extensions>
+

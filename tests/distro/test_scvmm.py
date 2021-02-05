@@ -44,7 +44,7 @@ class TestSCVMM(AgentTestCase):
                     failed = False
                     try:
                         scvmm.get_scvmm_handler().run()
-                    except:
+                    except:  # pylint: disable=bare-except
                         failed = True
                     # assert
                     self.assertTrue(failed)

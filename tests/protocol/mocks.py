@@ -99,6 +99,8 @@ def mock_wire_protocol(mock_wire_data_file, http_get_handler=None, http_post_han
                 return protocol.mock_wire_data.mock_http_get(url, **kwargs)
             if method == 'POST':
                 return protocol.mock_wire_data.mock_http_post(url, data, **kwargs)
+            if method == 'PUT':
+                return protocol.mock_wire_data.mock_http_put(url, data, **kwargs)
 
         # the request was not handled; fail or call the original resutil.http_request
         if fail_on_unknown_request:
@@ -132,7 +134,7 @@ def mock_wire_protocol(mock_wire_data_file, http_get_handler=None, http_post_han
     protocol.mock_wire_data = mockwiredata.WireProtocolData(mock_wire_data_file)
     protocol.start = start
     protocol.stop = stop
-    protocol.track_url = lambda url: tracked_urls.append(url)
+    protocol.track_url = lambda url: tracked_urls.append(url)  # pylint: disable=unnecessary-lambda
     protocol.get_tracked_urls = lambda: tracked_urls
     protocol.set_http_handlers = lambda http_get_handler=None, http_post_handler=None, http_put_handler=None:\
         http_handlers(get=http_get_handler, post=http_post_handler, put=http_put_handler)
@@ -200,6 +202,11 @@ class HttpRequestPredicates(object):
             return False
         artifact_location = HttpRequestPredicates._get_host_plugin_request_artifact_location(url, request_kwargs)
         return HttpRequestPredicates.is_in_vm_artifacts_profile_request(artifact_location)
+
+    @staticmethod
+    def is_host_plugin_put_logs_request(url):
+        return url.lower() == 'http://{0}:{1}/vmagentlog'.format(restutil.KNOWN_WIRESERVER_IP,
+                                                                 restutil.HOST_PLUGIN_PORT)
 
 
 class MockHttpResponse:

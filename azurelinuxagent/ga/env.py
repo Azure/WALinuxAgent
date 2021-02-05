@@ -28,6 +28,7 @@ import azurelinuxagent.common.logger as logger
 from azurelinuxagent.common.dhcp import get_dhcp_handler
 from azurelinuxagent.common.event import add_periodic, WALAEventOperation
 from azurelinuxagent.common.future import ustr
+from azurelinuxagent.common.interfaces import ThreadHandlerInterface
 from azurelinuxagent.common.osutil import get_osutil
 from azurelinuxagent.common.protocol.util import get_protocol_util
 from azurelinuxagent.common.utils.archive import StateArchiver
@@ -35,18 +36,19 @@ from azurelinuxagent.common.version import AGENT_NAME, CURRENT_VERSION
 from azurelinuxagent.ga.periodic_operation import PeriodicOperation
 
 CACHE_PATTERNS = [
-    re.compile("^(.*)\.(\d+)\.(agentsManifest)$", re.IGNORECASE),
-    re.compile("^(.*)\.(\d+)\.(manifest\.xml)$", re.IGNORECASE),
-    re.compile("^(.*)\.(\d+)\.(xml)$", re.IGNORECASE)
+    re.compile("^(.*)\.(\d+)\.(agentsManifest)$", re.IGNORECASE),  # pylint: disable=W1401
+    re.compile("^(.*)\.(\d+)\.(manifest\.xml)$", re.IGNORECASE),  # pylint: disable=W1401
+    re.compile("^(.*)\.(\d+)\.(xml)$", re.IGNORECASE)  # pylint: disable=W1401
 ]
 
 MAXIMUM_CACHED_FILES = 50
+
 
 def get_env_handler():
     return EnvHandler()
 
 
-class EnvHandler(object):
+class EnvHandler(ThreadHandlerInterface):
     """
     Monitor changes to dhcp and hostname.
     If dhcp client process re-start has occurred, reset routes, dhcp with fabric.
@@ -54,6 +56,13 @@ class EnvHandler(object):
     Monitor scsi disk.
     If new scsi disk found, set timeout
     """
+
+    _THREAD_NAME = "EnvHandler"
+
+    @staticmethod
+    def get_thread_name():
+        return EnvHandler._THREAD_NAME
+
     def __init__(self):
         self.osutil = get_osutil()
         self.dhcp_handler = get_dhcp_handler()
@@ -97,7 +106,7 @@ class EnvHandler(object):
     def start(self):
         self.server_thread = threading.Thread(target=self.monitor)
         self.server_thread.setDaemon(True)
-        self.server_thread.setName("EnvHandler")
+        self.server_thread.setName(self.get_thread_name())
         self.server_thread.start()
 
     def monitor(self):

@@ -17,7 +17,7 @@
 # Requires Python 2.6+ and Openssl 1.0+
 #
 
-import glob
+import glob  # pylint: disable=W0611
 import os
 import re
 import time
@@ -82,7 +82,7 @@ class CentOSRDMAHandler(RDMAHandler):
         # Example match (pkg name, -, followed by 3 segments, fw_version and -):
         # - pkg=microsoft-hyper-v-rdma-4.1.0.142-20160323.x86_64
         # - fw_version=142
-        pattern = '{0}-(\d+\.){{3,}}({1})-'.format(self.rdma_user_mode_package_name, fw_version)
+        pattern = '{0}-(\d+\.){{3,}}({1})-'.format(self.rdma_user_mode_package_name, fw_version)  # pylint: disable=W1401
         return re.match(pattern, pkg)
 
     @staticmethod
@@ -155,7 +155,7 @@ class CentOSRDMAHandler(RDMAHandler):
 
         # Install kernel mode driver (kmod-microsoft-hyper-v-rdma-*)
         kmod_pkg = self.get_file_by_pattern(
-            pkgs, "%s-(\d+\.){3,}(%s)-\d{8}\.x86_64.rpm" % (self.rdma_kernel_mode_package_name, fw_version))
+            pkgs, "%s-(\d+\.){3,}(%s)-\d{8}\.x86_64.rpm" % (self.rdma_kernel_mode_package_name, fw_version))  # pylint: disable=W1401
         if not kmod_pkg:
             raise Exception("RDMA kernel mode package not found")
         kmod_pkg_path = os.path.join(pkg_dir, kmod_pkg)
@@ -164,7 +164,7 @@ class CentOSRDMAHandler(RDMAHandler):
 
         # Install user mode driver (microsoft-hyper-v-rdma-*)
         umod_pkg = self.get_file_by_pattern(
-            pkgs, "%s-(\d+\.){3,}(%s)-\d{8}\.x86_64.rpm" % (self.rdma_user_mode_package_name, fw_version))
+            pkgs, "%s-(\d+\.){3,}(%s)-\d{8}\.x86_64.rpm" % (self.rdma_user_mode_package_name, fw_version))  # pylint: disable=W1401
         if not umod_pkg:
             raise Exception("RDMA user mode package not found")
         umod_pkg_path = os.path.join(pkg_dir, umod_pkg)
@@ -179,8 +179,8 @@ class CentOSRDMAHandler(RDMAHandler):
             logger.info("RDMA: kernel module is loaded")
 
     @staticmethod
-    def get_file_by_pattern(list, pattern):
-        for l in list:
+    def get_file_by_pattern(file_list, pattern):
+        for l in file_list:
             if re.match(pattern, l):
                 return l
         return None

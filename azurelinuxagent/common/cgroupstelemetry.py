@@ -102,20 +102,13 @@ class CGroupsTelemetry(object):
                     # from it. This would raise IOError with file entry not found (ERRNO: 2). We do not want to log
                     # every occurrences of such case as it would be very verbose. We do want to log all the other
                     # exceptions which could occur, which is why we do a periodic log for all the other errors.
-                    if not isinstance(e, (IOError, OSError)) or e.errno != errno.ENOENT:
+                    if not isinstance(e, (IOError, OSError)) or e.errno != errno.ENOENT:  # pylint: disable=E1101
                         logger.periodic_warn(logger.EVERY_HOUR, '[PERIODIC] Could not collect metrics for cgroup '
                                                                 '{0}. Error : {1}'.format(cgroup.name, ustr(e)))
                 if not cgroup.is_active():
                     CGroupsTelemetry.stop_tracking(cgroup)
 
         return metrics
-
-    @staticmethod
-    def prune_all_tracked():
-        with CGroupsTelemetry._rlock:
-            for cgroup in CGroupsTelemetry._tracked[:]:
-                if not cgroup.is_active():
-                    CGroupsTelemetry.stop_tracking(cgroup)
 
     @staticmethod
     def reset():

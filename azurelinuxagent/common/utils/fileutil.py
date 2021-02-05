@@ -85,7 +85,7 @@ def append_file(filepath, contents, asbin=False, encoding='utf-8'):
 
 
 def base_name(path):
-    head, tail = os.path.split(path)
+    head, tail = os.path.split(path)  # pylint: disable=W0612
     return tail
 
 
@@ -167,7 +167,7 @@ def update_conf_file(path, line_start, val, chk_err=False):
 
 
 def search_file(target_dir_name, target_file_name):
-    for root, dirs, files in os.walk(target_dir_name):
+    for root, dirs, files in os.walk(target_dir_name):  # pylint: disable=W0612
         for file_name in files:
             if file_name == target_file_name:
                 return os.path.join(root, file_name)
@@ -175,7 +175,7 @@ def search_file(target_dir_name, target_file_name):
 
 
 def chmod_tree(path, mode):
-    for root, dirs, files in os.walk(path):
+    for root, dirs, files in os.walk(path):  # pylint: disable=W0612
         for file_name in files:
             os.chmod(os.path.join(root, file_name), mode)
 
@@ -207,7 +207,7 @@ def findre_in_file(file_path, line_re):
                 match = re.search(pattern, line)
                 if match:
                     return match
-    except:
+    except:  # pylint: disable=W0702
         pass
 
     return None
@@ -218,17 +218,19 @@ def get_all_files(root_path):
     Find all files under the given root path
     """
     result = []
-    for root, dirs, files in os.walk(root_path):
-        result.extend([os.path.join(root, file) for file in files])
+    for root, dirs, files in os.walk(root_path):  # pylint: disable=W0612
+        result.extend([os.path.join(root, file) for file in files])  # pylint: disable=redefined-builtin
 
     return result
 
 
-def clean_ioerror(e, paths=[]):
+def clean_ioerror(e, paths=None):
     """
     Clean-up possibly bad files and directories after an IO error.
     The code ignores *all* errors since disk state may be unhealthy.
     """
+    if paths is None:
+        paths = []
     if isinstance(e, IOError) and e.errno in KNOWN_IOERRORS:
         for path in paths:
             if path is None:

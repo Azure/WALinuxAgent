@@ -14,10 +14,11 @@
 #
 # Requires Python 2.6+ and Openssl 1.0+
 #
-from azurelinuxagent.common.osutil.arch import ArchUtil
-from .test_default import osutil_get_dhcp_pid_should_return_a_list_of_pids
-from tests.tools import AgentTestCase
 import unittest
+
+from azurelinuxagent.common.osutil.arch import ArchUtil
+from tests.tools import AgentTestCase
+from .test_default import osutil_get_dhcp_pid_should_return_a_list_of_pids
 
 
 class TestArchUtil(AgentTestCase):

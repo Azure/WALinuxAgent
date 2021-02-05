@@ -120,7 +120,7 @@ class TestResourceDisk(AgentTestCase):
         if os.path.exists(test_file):
             os.remove(test_file)
 
-        with open(test_file, "wb") as file:
+        with open(test_file, "wb") as file:  # pylint: disable=redefined-builtin
             file.write(bytearray(file_size))
 
         os.chmod(test_file, stat.S_ISUID | stat.S_ISGID | stat.S_IRUSR |

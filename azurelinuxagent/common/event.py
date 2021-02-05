@@ -38,7 +38,6 @@ from azurelinuxagent.common.telemetryevent import TelemetryEventParam, Telemetry
 from azurelinuxagent.common.utils import fileutil, textutil
 from azurelinuxagent.common.utils.textutil import parse_doc, findall, find, getattrib
 from azurelinuxagent.common.version import CURRENT_VERSION, CURRENT_AGENT, AGENT_NAME, DISTRO_NAME, DISTRO_VERSION, DISTRO_CODE_NAME, AGENT_EXECUTION_MODE
-from azurelinuxagent.common.telemetryevent import TelemetryEventList
 from azurelinuxagent.common.protocol.imds import get_imds_client
 
 EVENTS_DIRECTORY = "events"
@@ -66,13 +65,14 @@ def send_logs_to_telemetry():
     return SEND_LOGS_TO_TELEMETRY
 
 
-class WALAEventOperation:
+class WALAEventOperation:  # pylint: disable=no-init
     ActivateResourceDisk = "ActivateResourceDisk"
     AgentBlacklisted = "AgentBlacklisted"
     AgentEnabled = "AgentEnabled"
     ArtifactsProfileBlob = "ArtifactsProfileBlob"
     CGroupsCleanUp = "CGroupsCleanUp"
     CGroupsDebug = "CGroupsDebug"
+    CGroupsDisabled = "CGroupsDisabled"
     CGroupsInfo = "CGroupsInfo"
     CGroupsInitialize = "CGroupsInitialize"
     CGroupsLimitsCrossed = "CGroupsLimitsCrossed"
@@ -80,12 +80,14 @@ class WALAEventOperation:
     CollectEventUnicodeErrors = "CollectEventUnicodeErrors"
     ConfigurationChange = "ConfigurationChange"
     CustomData = "CustomData"
+    DefaultChannelChange = "DefaultChannelChange"
     Deploy = "Deploy"
     Disable = "Disable"
     Downgrade = "Downgrade"
     Download = "Download"
     Enable = "Enable"
     ExtensionProcessing = "ExtensionProcessing"
+    ExtensionTelemetryEventProcessing = "ExtensionTelemetryEventProcessing"
     FetchGoalState = "FetchGoalState"
     Firewall = "Firewall"
     HealthCheck = "HealthCheck"
@@ -98,11 +100,12 @@ class WALAEventOperation:
     ImdsHeartbeat = "ImdsHeartbeat"
     Install = "Install"
     InitializeHostPlugin = "InitializeHostPlugin"
-    InvokeCommandUsingSystemd = "InvokeCommandUsingSystemd"
     Log = "Log"
+    LogCollection = "LogCollection"
     OSInfo = "OSInfo"
     Partition = "Partition"
     PluginSettingsVersionMismatch = "PluginSettingsVersionMismatch"
+    InvalidExtensionConfig = "InvalidExtensionConfig"
     ProcessGoalState = "ProcessGoalState"
     Provision = "Provision"
     ProvisionGuestAgent = "ProvisionGuestAgent"
@@ -271,13 +274,64 @@ def _encode_message(op, message):
 
 
 def _log_event(name, op, message, duration, is_success=True):
-    global _EVENT_MSG
+    global _EVENT_MSG  # pylint: disable=W0603
 
     message = _encode_message(op, message)
     if not is_success:
         logger.error(_EVENT_MSG, name, op, message, duration)
     else:
         logger.info(_EVENT_MSG, name, op, message, duration)
+
+
+class CollectOrReportEventDebugInfo(object):
+    """
+    This class is used for capturing and reporting debug info that is captured during event collection and
+    reporting to wireserver.
+    It captures the count of unicode errors and any unexpected errors and also a subset of errors with stacks to help
+    with debugging any potential issues.
+    """
+    __MAX_ERRORS_TO_REPORT = 5
+    OP_REPORT = "Report"
+    OP_COLLECT = "Collect"
+
+    def __init__(self, operation=OP_REPORT):
+        self.__unicode_error_count = 0
+        self.__unicode_errors = set()
+        self.__op_error_count = 0
+        self.__op_errors = set()
+
+        if operation == self.OP_REPORT:
+            self.__unicode_error_event = WALAEventOperation.ReportEventUnicodeErrors
+            self.__op_errors_event = WALAEventOperation.ReportEventErrors
+        elif operation == self.OP_COLLECT:
+            self.__unicode_error_event = WALAEventOperation.CollectEventUnicodeErrors
+            self.__op_errors_event = WALAEventOperation.CollectEventErrors
+
+    def report_debug_info(self):
+
+        def report_dropped_events_error(count, errors, operation_name):
+            err_msg_format = "DroppedEventsCount: {0}\nReasons (first {1} errors): {2}"
+            if count > 0:
+                add_event(op=operation_name,
+                          message=err_msg_format.format(count, CollectOrReportEventDebugInfo.__MAX_ERRORS_TO_REPORT, ', '.join(errors)),
+                          is_success=False)
+
+        report_dropped_events_error(self.__op_error_count, self.__op_errors, self.__op_errors_event)
+        report_dropped_events_error(self.__unicode_error_count, self.__unicode_errors, self.__unicode_error_event)
+
+    @staticmethod
+    def _update_errors_and_get_count(error_count, errors, error):
+        error_count += 1
+        if len(errors) < CollectOrReportEventDebugInfo.__MAX_ERRORS_TO_REPORT:
+            errors.add("{0}: {1}".format(ustr(error), traceback.format_exc()))
+        return error_count
+
+    def update_unicode_error(self, unicode_err):
+        self.__unicode_error_count = self._update_errors_and_get_count(self.__unicode_error_count, self.__unicode_errors,
+                                                                       unicode_err)
+
+    def update_op_error(self, op_err):
+        self.__op_error_count = self._update_errors_and_get_count(self.__op_error_count, self.__op_errors, op_err)
 
 
 class EventLogger(object):
@@ -437,7 +491,7 @@ class EventLogger(object):
         event.parameters.append(TelemetryEventParam(GuestAgentExtensionEventsSchema.OperationSuccess, bool(is_success)))
         event.parameters.append(TelemetryEventParam(GuestAgentExtensionEventsSchema.Message, str(message)))
         event.parameters.append(TelemetryEventParam(GuestAgentExtensionEventsSchema.Duration, int(duration)))
-        self._add_common_event_parameters(event, datetime.utcnow())
+        self.add_common_event_parameters(event, datetime.utcnow())
 
         data = get_properties(event)
         try:
@@ -452,7 +506,7 @@ class EventLogger(object):
         event.parameters.append(TelemetryEventParam(GuestAgentGenericLogsSchema.Context1, self._clean_up_message(message)))
         event.parameters.append(TelemetryEventParam(GuestAgentGenericLogsSchema.Context2, datetime.utcnow().strftime(logger.Logger.LogTimeFormatInUTC)))
         event.parameters.append(TelemetryEventParam(GuestAgentGenericLogsSchema.Context3, ''))
-        self._add_common_event_parameters(event, datetime.utcnow())
+        self.add_common_event_parameters(event, datetime.utcnow())
 
         data = get_properties(event)
         try:
@@ -471,7 +525,6 @@ class EventLogger(object):
         :param bool log_event: If true, log the collected metric in the agent log
         """
         if log_event:
-            from azurelinuxagent.common.version import AGENT_NAME
             message = "Metric {0}/{1} [{2}] = {3}".format(category, counter, instance, value)
             _log_event(AGENT_NAME, "METRIC", message, 0)
 
@@ -480,7 +533,7 @@ class EventLogger(object):
         event.parameters.append(TelemetryEventParam(GuestAgentPerfCounterEventsSchema.Counter, str(counter)))
         event.parameters.append(TelemetryEventParam(GuestAgentPerfCounterEventsSchema.Instance, str(instance)))
         event.parameters.append(TelemetryEventParam(GuestAgentPerfCounterEventsSchema.Value, float(value)))
-        self._add_common_event_parameters(event, datetime.utcnow())
+        self.add_common_event_parameters(event, datetime.utcnow())
 
         data = get_properties(event)
         try:
@@ -529,7 +582,7 @@ class EventLogger(object):
             else:
                 return message
 
-    def _add_common_event_parameters(self, event, event_timestamp):
+    def add_common_event_parameters(self, event, event_timestamp):
         """
         This method is called for all events and ensures all telemetry fields are added before the event is sent out.
         Note that the event timestamp is saved in the OpcodeName field.
@@ -546,128 +599,16 @@ class EventLogger(object):
             # Currently only the GuestAgentExtensionEvents has these columns, the other tables dont have them so skipping
             # this data in those tables.
             common_params.extend([TelemetryEventParam(GuestAgentExtensionEventsSchema.ExtensionType, event.file_type),
-                         TelemetryEventParam(GuestAgentExtensionEventsSchema.IsInternal, False)])
+                         TelemetryEventParam(GuestAgentExtensionEventsSchema.IsInternal, False)]) 
 
         event.parameters.extend(common_params)
         event.parameters.extend(self._common_parameters)
 
-    @staticmethod
-    def _trim_extension_event_parameters(event):
-        """
-        This method is called for extension events before they are sent out. Per the agreement with extension
-        publishers, the parameters that belong to extensions and will be reported intact are Name, Version, Operation,
-        OperationSuccess, Message, and Duration. Since there is nothing preventing extensions to instantiate other
-        fields (which belong to the agent), we call this method to ensure the rest of the parameters are trimmed since
-        they will be replaced with values coming from the agent.
-        :param event: Extension event to trim.
-        :return: Trimmed extension event; containing only extension-specific parameters.
-        """
-        params_to_keep = dict().fromkeys([
-            GuestAgentExtensionEventsSchema.Name,
-            GuestAgentExtensionEventsSchema.Version,
-            GuestAgentExtensionEventsSchema.Operation,
-            GuestAgentExtensionEventsSchema.OperationSuccess,
-            GuestAgentExtensionEventsSchema.Message,
-            GuestAgentExtensionEventsSchema.Duration
-        ])
-        trimmed_params = []
-
-        for param in event.parameters:
-            if param.name in params_to_keep:
-                trimmed_params.append(param)
-
-        event.parameters = trimmed_params
-
-    @staticmethod
-    def report_dropped_events_error(count, errors, op, max_errors_to_report):
-        err_msg_format = "DroppedEventsCount: {0}\nReasons (first {1} errors): {2}"
-        if count > 0:
-            add_event(op=op,
-                      message=err_msg_format.format(count, max_errors_to_report, ', '.join(errors)),
-                      is_success=False)
-
-    def collect_events(self):
-        """
-        Retuns a list of events that need to be sent to the telemetry pipeline and deletes the corresponding files
-        from the events directory.
-        """
-        max_collect_errors_to_report = 5
-        event_list = TelemetryEventList()
-        event_directory_full_path = os.path.join(conf.get_lib_dir(), EVENTS_DIRECTORY)
-        event_files = os.listdir(event_directory_full_path)
-        unicode_error_count, unicode_errors = 0, []
-        collect_event_error_count, collect_event_errors = 0, []
-
-        for event_file in event_files:
-            try:
-                match = EVENT_FILE_REGEX.search(event_file)
-                if match is None:
-                    continue
-
-                event_file_path = os.path.join(event_directory_full_path, event_file)
-
-                try:
-                    logger.verbose("Processing event file: {0}", event_file_path)
-
-                    with open(event_file_path, "rb") as fd:
-                        event_data = fd.read().decode("utf-8")
-
-                    event = parse_event(event_data)
-
-                    # "legacy" events are events produced by previous versions of the agent (<= 2.2.46) and extensions;
-                    # they do not include all the telemetry fields, so we add them here
-                    is_legacy_event = match.group('agent_event') is None
-
-                    if is_legacy_event:
-                        # We'll use the file creation time for the event's timestamp
-                        event_file_creation_time_epoch = os.path.getmtime(event_file_path)
-                        event_file_creation_time = datetime.fromtimestamp(event_file_creation_time_epoch)
-
-                        if event.is_extension_event():
-                            EventLogger._trim_extension_event_parameters(event)
-                            self._add_common_event_parameters(event, event_file_creation_time)
-                        else:
-                            self._update_legacy_agent_event(event, event_file_creation_time)
-
-                    event_list.events.append(event)
-                finally:
-                    os.remove(event_file_path)
-            except UnicodeError as e:
-                unicode_error_count += 1
-                if len(unicode_errors) < max_collect_errors_to_report:
-                    unicode_errors.append(ustr(e))
-            except Exception as e:
-                collect_event_error_count += 1
-                if len(collect_event_errors) < max_collect_errors_to_report:
-                    collect_event_errors.append(ustr(e))
-
-        EventLogger.report_dropped_events_error(collect_event_error_count, collect_event_errors,
-                                                WALAEventOperation.CollectEventErrors, max_collect_errors_to_report)
-        EventLogger.report_dropped_events_error(unicode_error_count, unicode_errors,
-                                                WALAEventOperation.CollectEventUnicodeErrors,
-                                                max_collect_errors_to_report)
-
-        return event_list
-
-    def _update_legacy_agent_event(self, event, event_creation_time):
-        # Ensure that if an agent event is missing a field from the schema defined since 2.2.47, the missing fields
-        # will be appended, ensuring the event schema is complete before the event is reported.
-        new_event = TelemetryEvent()
-        new_event.parameters = []
-        self._add_common_event_parameters(new_event, event_creation_time)
-
-        event_params = dict([(param.name, param.value) for param in event.parameters])
-        new_event_params = dict([(param.name, param.value) for param in new_event.parameters])
-
-        missing_params = set(new_event_params.keys()).difference(set(event_params.keys()))
-        params_to_add = []
-        for param_name in missing_params:
-            params_to_add.append(TelemetryEventParam(param_name, new_event_params[param_name]))
-
-        event.parameters.extend(params_to_add)
-
 
 __event_logger__ = EventLogger()
+
+def get_event_logger():
+    return __event_logger__
 
 
 def elapsed_milliseconds(utc_start):
@@ -681,7 +622,6 @@ def elapsed_milliseconds(utc_start):
 
 
 def report_event(op, is_success=True, message='', log_event=True):
-    from azurelinuxagent.common.version import AGENT_NAME, CURRENT_VERSION
     add_event(AGENT_NAME,
               version=str(CURRENT_VERSION),
               is_success=is_success,
@@ -691,7 +631,6 @@ def report_event(op, is_success=True, message='', log_event=True):
 
 
 def report_periodic(delta, op, is_success=True, message=''):
-    from azurelinuxagent.common.version import AGENT_NAME, CURRENT_VERSION
     add_periodic(delta, AGENT_NAME,
                  version=str(CURRENT_VERSION),
                  is_success=is_success,
@@ -710,7 +649,6 @@ def report_metric(category, counter, instance, value, log_event=False, reporter=
     :param EventLogger reporter: The EventLogger instance to which metric events should be sent
     """
     if reporter.event_dir is None:
-        from azurelinuxagent.common.version import AGENT_NAME
         logger.warn("Cannot report metric event -- Event reporter is not initialized.")
         message = "Metric {0}/{1} [{2}] = {3}".format(category, counter, instance, value)
         _log_event(AGENT_NAME, "METRIC", message, 0)
@@ -768,10 +706,6 @@ def add_periodic(delta, name, op=WALAEventOperation.Unknown, is_success=True, du
 
     reporter.add_periodic(delta, name, op=op, is_success=is_success, duration=duration, version=str(version),
                           message=message, log_event=log_event, force=force)
-
-
-def collect_events(reporter=__event_logger__):
-    return reporter.collect_events()
 
 
 def mark_event_status(name, version, op, status):

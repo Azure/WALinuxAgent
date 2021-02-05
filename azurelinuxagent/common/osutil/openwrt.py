@@ -31,7 +31,7 @@ class OpenWRTOSUtil(DefaultOSUtil):
         super(OpenWRTOSUtil, self).__init__()
         self.agent_conf_file_path = '/etc/waagent.conf'
         self.dhclient_name = 'udhcpc'
-        self.ip_command_output = re.compile('^\d+:\s+(\w+):\s+(.*)$')
+        self.ip_command_output = re.compile('^\d+:\s+(\w+):\s+(.*)$')  # pylint: disable=W1401
         self.jit_enabled = True
         
     def eject_dvd(self, chk_err=True):
@@ -61,13 +61,16 @@ class OpenWRTOSUtil(DefaultOSUtil):
     def get_dhcp_pid(self):
         return self._get_dhcp_pid(["pidof", self.dhclient_name])
 
-    def get_nic_state(self):
+    def get_nic_state(self, as_string=False):
         """
         Capture NIC state (IPv4 and IPv6 addresses plus link state).
 
         :return: Dictionary of NIC state objects, with the NIC name as key
         :rtype: dict(str,NetworkInformationCard)
         """
+        if as_string:  # as_string not supported on open wrt
+            return ''
+
         state = {}
         status, output = shellutil.run_get_output("ip -o link", chk_err=False, log_cmd=False)
 
@@ -121,12 +124,12 @@ class OpenWRTOSUtil(DefaultOSUtil):
     def start_network(self) :
         return shellutil.run("/etc/init.d/network start", chk_err=True)
 
-    def restart_ssh_service(self):
+    def restart_ssh_service(self):  # pylint: disable=R1710
         # Since Dropbear is the default ssh server on OpenWRt, lets do a sanity check
         if os.path.exists("/etc/init.d/sshd"):
             return shellutil.run("/etc/init.d/sshd restart", chk_err=True)
         else:
-            logger.warn("sshd service does not exists", username)
+            logger.warn("sshd service does not exists")
 
     def stop_agent_service(self):
         return shellutil.run("/etc/init.d/{0} stop".format(self.service_name), chk_err=True)

@@ -20,9 +20,11 @@
 from azurelinuxagent.common.exception import ProtocolError
 import azurelinuxagent.common.logger as logger
 
+# pylint: disable=W0105
 """
 Base class for data contracts between guest and host and utilities to manipulate the properties in those contracts
-"""
+""" 
+# pylint: enable=W0105
 
 
 class DataContract(object):
@@ -30,7 +32,7 @@ class DataContract(object):
 
 
 class DataContractList(list):
-    def __init__(self, item_cls):
+    def __init__(self, item_cls):  # pylint: disable=W0231
         self.item_cls = item_cls
 
 

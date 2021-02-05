@@ -1,0 +1,38 @@
+# python2.7 uses pylint 1.9.5, whose docs can be found here: http://pylint.pycqa.org/en/1.9/technical_reference/features.html#messages
+# python3.4 uses pylint 2.3.1, whose docs can be found here: http://pylint.pycqa.org/en/pylint-2.3.1/technical_reference/features.html
+
+[MESSAGES CONTROL]
+
+disable=C, # (C) convention, for programming standard violation
+    consider-using-dict-comprehension, # (R1717): *Consider using a dictionary comprehension*
+    consider-using-in, # (R1714): *Consider merging these comparisons with "in" to %r*
+    consider-using-set-comprehension, # (R1718): *Consider using a set comprehension*
+    duplicate-code, # (R0801): *Similar lines in %s files*
+    no-else-break, # (R1723): *Unnecessary "%s" after "break"*
+    no-else-continue, # (R1724): *Unnecessary "%s" after "continue"*
+    no-else-raise, # (R1720): *Unnecessary "%s" after "raise"*
+    no-else-return, # (R1705): *Unnecessary "%s" after "return"*
+    no-self-use, # (R0201): *Method could be a function*
+    simplifiable-if-expression, # (R1719): *The if expression can be replaced with %s*
+    simplifiable-if-statement, # (R1703): *The if statement can be replaced with %s*
+    super-with-arguments, # (R1725): *Consider using Python 3 style super() without arguments*
+    too-few-public-methods, # (R0903): *Too few public methods (%s/%s)*
+    too-many-ancestors, # (R0901): *Too many ancestors (%s/%s)*
+    too-many-arguments, # (R0913): *Too many arguments (%s/%s)*
+    too-many-branches, # (R0912): *Too many branches (%s/%s)*
+    too-many-instance-attributes, # (R0902): *Too many instance attributes (%s/%s)*
+    too-many-locals, # (R0914): *Too many local variables (%s/%s)*
+    too-many-nested-blocks, # (R1702): *Too many nested blocks (%s/%s)*
+    too-many-public-methods, # (R0904): *Too many public methods (%s/%s)*
+    too-many-return-statements, # (R0911): *Too many return statements (%s/%s)*
+    too-many-statements, # (R0915): *Too many statements (%s/%s)*
+    useless-object-inheritance, # (R0205): *Class %r inherits from object, can be safely removed from bases in python3*
+    useless-return, # (R1711): *Useless return at end of function or method*
+    bad-continuation, # Buggy, **REMOVED in pylint-2.6.0**
+    bad-option-value, # pylint does not recognize the error code/symbol (needed to supress breaking changes across pylint versions)
+    bad-whitespace, # Used when a wrong number of spaces is used around an operator, bracket or block opener.
+    broad-except, # Used when an except catches a too general exception, possibly burying unrelated errors.
+    deprecated-lambda, # Used when a lambda is the first argument to “map” or “filter”. It could be clearer as a list comprehension or generator expression. (2.7 only)
+    missing-docstring, # Used when a module, function, class or method has no docstring
+    old-style-class, # Used when a class is defined that does not inherit from another class and does not inherit explicitly from “object”. (2.7 only)
+    fixme, # Used when a warning note as FIXME or TODO is detected

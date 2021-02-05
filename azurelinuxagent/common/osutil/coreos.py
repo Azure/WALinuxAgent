@@ -54,7 +54,7 @@ class CoreOSUtil(DefaultOSUtil):
     def start_network(self):
         return shellutil.run("systemctl start systemd-networkd", chk_err=False)
 
-    def restart_if(self, *dummy, **_):
+    def restart_if(self, ifname=None, retries=None, wait=None):
         shellutil.run("systemctl restart systemd-networkd")
 
     def restart_ssh_service(self):
