@@ -90,7 +90,7 @@ Environment="EGG={egg_path}" "DST_IP={wire_ip}" "UID={user_id}" "WAIT={wait}"
         try:
             return shellutil.run_command(firewalld_state).rstrip() == "running"
         except Exception as error:
-            logger.info("{0} command returned error/not running: {1}".format(' '.join(firewalld_state), ustr(error)))
+            logger.verbose("{0} command failed: {1}".format(' '.join(firewalld_state), ustr(error)))
         return False
 
     def setup(self):
@@ -105,7 +105,7 @@ Environment="EGG={egg_path}" "DST_IP={wire_ip}" "UID={user_id}" "WAIT={wait}"
             "Firewalld service not running/unavailable, trying to set up {0}".format(self._network_setup_service_name))
 
         if not CGroupsApi.is_systemd():
-            raise Exception("Systemd not enabled, unable to set {0}".format(self._network_setup_service_name))
+            raise Exception("Did not detect Systemd, unable to set {0}".format(self._network_setup_service_name))
 
         self._setup_network_setup_service()
 
@@ -115,7 +115,7 @@ Environment="EGG={egg_path}" "DST_IP={wire_ip}" "UID={user_id}" "WAIT={wait}"
         try:
             AddFirewallRules.check_firewalld_rule_applied(self._dst_ip, self._uid)
         except Exception as error:
-            logger.info(
+            logger.verbose(
                 "Check if Firewall rules already applied using firewalld.service failed: {0}".format(ustr(error)))
             return False
 
@@ -142,7 +142,7 @@ Environment="EGG={egg_path}" "DST_IP={wire_ip}" "UID={user_id}" "WAIT={wait}"
         except Exception as error:
             msg = "Ran into error, {0} not enabled. Error: {1}".format(self._network_setup_service_name, ustr(error))
 
-        logger.info(msg)
+        logger.verbose(msg)
         return False
 
     def _setup_network_setup_service(self):
@@ -151,12 +151,15 @@ Environment="EGG={egg_path}" "DST_IP={wire_ip}" "UID={user_id}" "WAIT={wait}"
             self.__log_network_setup_service_logs()
 
         else:
+            logger.info("Service: {0} not enabled. Adding it now".format(self._network_setup_service_name))
             # Create unit file with default values
             self.__set_service_unit_file()
             logger.info("Successfully added and enabled the {0}".format(self._network_setup_service_name))
 
         # Even if service is enabled, we need to overwrite the drop-in file with the current IP in case it changed.
         # This is to handle the case where WireIP can change midway on service restarts.
+        # Additionally, incase of auto-update this would also update the location of the new EGG file ensuring that
+        # the service is always run from the most latest agent.
         self.__set_drop_in_file()
 
     def __set_drop_in_file(self):
@@ -215,7 +218,7 @@ Environment="EGG={egg_path}" "DST_IP={wire_ip}" "UID={user_id}" "WAIT={wait}"
         cmd_success = False
         try:
             stdout = shellutil.run_command(cmd)
-            msg = "Logs from the {0} since system boot: {1}".format(self._network_setup_service_name, stdout)
+            msg = "Logs from the {0} since system boot:\n {1}".format(self._network_setup_service_name, stdout)
             cmd_success = True
             logger.info(msg)
         except CommandError as error:

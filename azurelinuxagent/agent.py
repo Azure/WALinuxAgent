@@ -216,6 +216,7 @@ class Agent(object):
         try:
             AddFirewallRules.add_iptables_rules(firewall_metadata['wait'], firewall_metadata['dst_ip'],
                                                 firewall_metadata['uid'])
+            print("Successfully set the firewall rules")
         except Exception as error:
             print("Unable to add firewall rules. Error: {0}".format(ustr(error)))
             sys.exit(1)
