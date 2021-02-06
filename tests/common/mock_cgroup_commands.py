@@ -124,14 +124,18 @@ def mock_cgroup_commands(tmp_dir):
     original_path_exists = os.path.exists
     original_open = open
 
+    mocked_commands = __MOCKED_COMMANDS[:]
+    mocked_files = __MOCKED_FILES[:]
+    mocked_paths = __MOCKED_PATHS[:]
+
     def add_command_mock(pattern, output):
-        mock_cgroup_commands.__commands.insert(0, (pattern, output))
+        mocked_commands.insert(0, (pattern, output))
 
     def add_file_mock(actual, mock):
-        mock_cgroup_commands.__files.insert(0, (actual, mock))
+        mocked_files.insert(0, (actual, mock))
 
     def add_path_mock(mock):
-        mock_cgroup_commands.__paths.insert(0, mock)
+        mocked_paths.insert(0, mock)
 
     def mock_popen(command, *args, **kwargs):
         if isinstance(command, list):
@@ -139,7 +143,7 @@ def mock_cgroup_commands(tmp_dir):
         else:
             command_string = command
 
-        for cmd in mock_cgroup_commands.__commands:
+        for cmd in mocked_commands:
             match = re.match(cmd[0], command_string)
             if match is not None:
                 command = ["echo", cmd[1]]
@@ -148,12 +152,12 @@ def mock_cgroup_commands(tmp_dir):
         return original_popen(command, *args, **kwargs)
 
     def get_mapped_path(path):
-        for item in mock_cgroup_commands.__files:
+        for item in mocked_files:
             match = re.match(item[0], path)
             if match is not None:
                 return item[1]
 
-        for item in mock_cgroup_commands.__paths:
+        for item in mocked_paths:
             mapped = re.sub(item, r"{0}\1".format(tmp_dir), path)
             if mapped != path:
                 mapped_parent = os.path.split(mapped)[0]
@@ -180,6 +184,9 @@ def mock_cgroup_commands(tmp_dir):
     def add_data_file(source, target):
         shutil.copyfile(source, get_mapped_path(target))
 
+    for items in data_files:
+        add_data_file(items[0], items[1])
+
     builtin_popen = "__builtin__.open" if sys.version_info[0] == 2 else "builtins.open"
 
     with patch("azurelinuxagent.common.cgroupapi.subprocess.Popen", side_effect=mock_popen):
@@ -188,16 +195,15 @@ def mock_cgroup_commands(tmp_dir):
                 with patch(builtin_popen, side_effect=mock_open):
                     with patch('azurelinuxagent.common.cgroupapi.CGroupsApi.cgroups_supported', return_value=True):
                         with patch('azurelinuxagent.common.cgroupapi.CGroupsApi.is_systemd', return_value=True):
-                            mock_cgroup_commands.__commands = __MOCKED_COMMANDS[:]
-                            mock_cgroup_commands.__files = __MOCKED_FILES[:]
-                            mock_cgroup_commands.__paths = __MOCKED_PATHS[:]
-                            mock_cgroup_commands.add_command_mock = add_command_mock
-                            mock_cgroup_commands.add_file_mock = add_file_mock
-                            mock_cgroup_commands.add_path_mock = add_path_mock
-                            mock_cgroup_commands.add_data_file = add_data_file
-                            mock_cgroup_commands.get_mapped_path = get_mapped_path
-
-                            for items in data_files:
-                                add_data_file(items[0], items[1])
-
-                            yield mock_cgroup_commands
+                            class Object:
+                                pass
+                            mocks = Object()
+                            mocks.__commands = __MOCKED_COMMANDS[:]
+                            mocks.__files = __MOCKED_FILES[:]
+                            mocks.__paths = __MOCKED_PATHS[:]
+                            mocks.add_command_mock = add_command_mock
+                            mocks.add_file_mock = add_file_mock
+                            mocks.add_path_mock = add_path_mock
+                            mocks.add_data_file = add_data_file
+                            mocks.get_mapped_path = get_mapped_path
+                            yield mocks
