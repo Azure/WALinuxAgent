@@ -83,7 +83,8 @@ _MOCKED_PATHS = [
 ]
 
 
-class UnitFilePaths:
+#  Class has no __init__ method (no-init): Disabled; the class is just an enum
+class UnitFilePaths:  # pylint: disable=no-init
     walinuxagent = "/lib/systemd/system/walinuxagent.service"
     azure = "/lib/systemd/system/azure.slice"
     vmextensions = "/lib/systemd/system/azure-vmextensions.slice"
