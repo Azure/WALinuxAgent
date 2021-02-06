@@ -25,8 +25,8 @@ import sys
 from azurelinuxagent.common.utils import fileutil
 from tests.tools import patch, data_dir
 
-__MOCKED_COMMANDS = [
-    (r"^systemctl --version$",
+_MOCKED_COMMANDS = [
+   (r"^systemctl --version$",
 '''systemd 237
 +PAM +AUDIT +SELINUX +IMA +APPARMOR +SMACK +SYSVINIT +UTMP +LIBCRYPTSETUP +GCRYPT +GNUTLS +ACL +XZ +LZ4 +SECCOMP +BLKID +ELFUTILS +KMOD -IDN2 +IDN -PCRE2 default-hierarchy=hybrid
 '''),
@@ -71,13 +71,13 @@ Thu 28 May 2020 07:25:55 AM PDT
 
 ]
 
-__MOCKED_FILES = [
+_MOCKED_FILES = [
     ("/proc/self/cgroup", os.path.join(data_dir, 'cgroups', 'proc_self_cgroup')),
     (r"/proc/[0-9]+/cgroup", os.path.join(data_dir, 'cgroups', 'proc_pid_cgroup')),
     ("/sys/fs/cgroup/unified/cgroup.controllers", os.path.join(data_dir, 'cgroups', 'sys_fs_cgroup_unified_cgroup.controllers'))
 ]
 
-__MOCKED_PATHS = [
+_MOCKED_PATHS = [
     r"^(/lib/systemd/system)",
     r"^(/etc/systemd/system)"
 ]
@@ -92,9 +92,6 @@ class UnitFilePaths:
     cpu_quota = "/lib/systemd/system/walinuxagent.service.d/12-CPUQuota.conf"
 
 
-# W0212: Access to a protected member __commands of a client class (protected-access) - Disabled: a few private properties
-# are added to the return value for debugging purposes and should not be public (hence it is marked as private).
-# pylint: disable=protected-access
 @contextlib.contextmanager
 def mock_cgroup_commands(tmp_dir):
     """
@@ -124,9 +121,9 @@ def mock_cgroup_commands(tmp_dir):
     original_path_exists = os.path.exists
     original_open = open
 
-    mocked_commands = __MOCKED_COMMANDS[:]
-    mocked_files = __MOCKED_FILES[:]
-    mocked_paths = __MOCKED_PATHS[:]
+    mocked_commands = _MOCKED_COMMANDS[:]
+    mocked_files = _MOCKED_FILES[:]
+    mocked_paths = _MOCKED_PATHS[:]
 
     def add_command_mock(pattern, output):
         mocked_commands.insert(0, (pattern, output))
@@ -195,15 +192,14 @@ def mock_cgroup_commands(tmp_dir):
                 with patch(builtin_popen, side_effect=mock_open):
                     with patch('azurelinuxagent.common.cgroupapi.CGroupsApi.cgroups_supported', return_value=True):
                         with patch('azurelinuxagent.common.cgroupapi.CGroupsApi.is_systemd', return_value=True):
-                            class Object:
-                                pass
-                            mocks = Object()
-                            mocks.__commands = __MOCKED_COMMANDS[:]
-                            mocks.__files = __MOCKED_FILES[:]
-                            mocks.__paths = __MOCKED_PATHS[:]
-                            mocks.add_command_mock = add_command_mock
-                            mocks.add_file_mock = add_file_mock
-                            mocks.add_path_mock = add_path_mock
-                            mocks.add_data_file = add_data_file
-                            mocks.get_mapped_path = get_mapped_path
-                            yield mocks
+                            class Mock:
+                                def __init__(self):
+                                    self.__commands = _MOCKED_COMMANDS[:]
+                                    self.__files = _MOCKED_FILES[:]
+                                    self.__paths = _MOCKED_PATHS[:]
+                                    self.add_command_mock = add_command_mock
+                                    self.add_file_mock = add_file_mock
+                                    self.add_path_mock = add_path_mock
+                                    self.add_data_file = add_data_file
+                                    self.get_mapped_path = get_mapped_path
+                            yield Mock()
