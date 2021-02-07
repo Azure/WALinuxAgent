@@ -16,8 +16,10 @@
 #
 
 import datetime
+import os
 import threading
 
+import azurelinuxagent.common.conf as conf
 import azurelinuxagent.common.logger as logger
 import azurelinuxagent.common.utils.networkutil as networkutil
 from azurelinuxagent.common.cgroupconfigurator import CGroupConfigurator
@@ -92,6 +94,24 @@ class ReportNetworkConfigurationChanges(PeriodicOperation):
         self.osutil = get_osutil()
         self.last_route_table_hash = b''
         self.last_nic_state = {}
+
+    def log_network_configuration(self):
+        try:
+            route_file = '/proc/net/route'
+            if os.path.exists(route_file):
+                lines = []
+                with open(route_file) as file_object:
+                    for line in file_object:
+                        lines.append(line)
+                        if len(lines) >= 100:
+                            lines.append("<TRUNCATED TO {0} LINES".format(len(lines)))
+                            break
+                logger.info("Routing table from {0}:\n{1}", route_file, ''.join(lines))
+            network_interfaces = self.osutil.get_nic_state(as_string=True)
+            if network_interfaces != '':
+                logger.info("Network interfaces:\n{0}", network_interfaces)
+        except Exception as exception:
+            logger.warn("Error fetching the network configuration: {0}", ustr(exception))
 
     def _operation(self):
         raw_route_list = self.osutil.read_route_table()
@@ -243,11 +263,17 @@ class MonitorHandler(ThreadHandlerInterface):
             periodic_operations = [
                 ResetPeriodicLogMessages(),
                 ReportNetworkErrors(),
-                ReportNetworkConfigurationChanges(),
                 PollResourceUsage(),
                 SendHostPluginHeartbeat(protocol, health_service),
                 SendImdsHeartbeat(protocol_util, health_service)
             ]
+
+            report_network_configuration_changes = ReportNetworkConfigurationChanges()
+            if conf.get_monitor_network_configuration_changes():
+                periodic_operations.append(report_network_configuration_changes)
+            else:
+                logger.info("Monitor.NetworkConfigurationChanges is disabled.")
+                report_network_configuration_changes.log_network_configuration()
 
             while not self.stopped():
                 try:

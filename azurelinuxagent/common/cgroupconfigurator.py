@@ -27,10 +27,40 @@ from azurelinuxagent.common.exception import ExtensionErrorCodes, CGroupsExcepti
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.osutil import get_osutil
 from azurelinuxagent.common.version import get_distro
-from azurelinuxagent.common.utils import shellutil
+from azurelinuxagent.common.utils import shellutil, fileutil
 from azurelinuxagent.common.utils.extensionprocessutil import handle_process_completion
 from azurelinuxagent.common.event import add_event, WALAEventOperation
 
+_AZURE_SLICE = "azure.slice"
+_AZURE_SLICE_CONTENTS = """
+[Unit]
+Description=Slice for Azure VM Agent and Extensions
+DefaultDependencies=no
+Before=slices.target
+"""
+_VMEXTENSIONS_SLICE = "azure-vmextensions.slice"
+_VMEXTENSIONS_SLICE_CONTENTS = """
+[Unit]
+Description=Slice for Azure VM Extensions
+DefaultDependencies=no
+Before=slices.target
+[Slice]
+CPUAccounting=yes
+"""
+_AGENT_DROP_IN_FILE_SLICE = "10-Slice.conf"
+_AGENT_DROP_IN_FILE_SLICE_CONTENTS = """
+# This drop-in unit file was created by the Azure VM Agent.
+# Do not edit.
+[Service]
+Slice=azure.slice
+"""
+_AGENT_DROP_IN_FILE_CPU_ACCOUNTING = "11-CPUAccounting.conf"
+_AGENT_DROP_IN_FILE_CPU_ACCOUNTING_CONTENTS = """
+# This drop-in unit file was created by the Azure VM Agent.
+# Do not edit.
+[Service]
+CPUAccounting=yes
+"""
 
 class CGroupConfigurator(object):
     """
@@ -55,119 +85,294 @@ class CGroupConfigurator(object):
                 if self._initialized:
                     return
 
-                #
                 # check whether cgroup monitoring is supported on the current distro
-                #
                 self._cgroups_supported = CGroupsApi.cgroups_supported()
                 if not self._cgroups_supported:
                     logger.info("Cgroup monitoring is not supported on {0}", get_distro())
                     return
 
-                #
-                # check systemd
-                #
+                # check that systemd is detected correctly
                 self._cgroups_api = SystemdCgroupsApi()
-
                 if not self._cgroups_api.is_systemd():
-                    message = "systemd was not detected on {0}".format(get_distro())
-                    logger.warn(message)
-                    add_event(op=WALAEventOperation.CGroupsInitialize, is_success=False, message=message, log_event=False)
+                    self.__log_cgroup_warning("systemd was not detected on {0}", get_distro())
                     return
 
-                def log_cgroup_info(format_string, *args):
-                    message = format_string.format(*args)
-                    logger.info(message)
-                    add_event(op=WALAEventOperation.CGroupsInfo, message=message)
+                self.__log_cgroup_info("systemd version: {0}", self._cgroups_api.get_systemd_version())
 
-                log_cgroup_info("systemd version: {0}", self._cgroups_api.get_systemd_version())
+                # This is temporarily disabled while we analyze telemetry. Likely it will be removed.
+                # self.__collect_azure_unit_telemetry()
+                # self.__collect_agent_unit_files_telemetry()
 
-                self.__collect_azure_unit_telemetry()
-                self.__collect_agent_unit_files_telemetry()
-
-                #
-                # Older versions of the daemon (2.2.31-2.2.40) wrote their PID to /sys/fs/cgroup/{cpu,memory}/WALinuxAgent/WALinuxAgent.  When running
-                # under systemd this could produce invalid resource usage data. Do not enable cgroups under this condition.
-                #
-                legacy_cgroups = self._cgroups_api.cleanup_legacy_cgroups()
-
-                if legacy_cgroups > 0:
-                    log_cgroup_info("The daemon's PID was added to a legacy cgroup; will not monitor resource usage.")
+                if not self.__check_no_legacy_cgroups():
                     return
 
-                #
-                # check v1 controllers
-                #
-                cpu_controller_root, memory_controller_root = self._cgroups_api.get_cgroup_mount_points()
+                cpu_controller_root, memory_controller_root = self.__get_cgroup_controllers()
 
-                if cpu_controller_root is not None:
-                    logger.info("The CPU cgroup controller is mounted at {0}", cpu_controller_root)
-                else:
-                    log_cgroup_info("The CPU cgroup controller is not mounted")
+                agent_slice = self.__ensure_azure_slices_exist()
 
-                if memory_controller_root is not None:
-                    logger.info("The memory cgroup controller is mounted at {0}", memory_controller_root)
-                else:
-                    log_cgroup_info("The memory cgroup controller is not mounted")
+                self._agent_cpu_cgroup_path, self._agent_memory_cgroup_path = self.__get_agent_cgroups(agent_slice, cpu_controller_root, memory_controller_root)
 
-                #
-                # check v2 controllers
-                #
-                cgroup2_mount_point, cgroup2_controllers = self._cgroups_api.get_cgroup2_controllers()
-                if cgroup2_mount_point is not None:
-                    log_cgroup_info("cgroups v2 mounted at {0}.  Controllers: [{1}]", cgroup2_mount_point, cgroup2_controllers)
+                agent_service_name = self._cgroups_api.get_agent_unit_name()
+                if self._agent_cpu_cgroup_path is not None:
+                    self.__log_cgroup_info("Agent CPU cgroup: {0}", self._agent_cpu_cgroup_path)
+                    CGroupsTelemetry.track_cgroup(CpuCgroup(agent_service_name, self._agent_cpu_cgroup_path))
 
-                #
-                # check the cgroups for the agent
-                #
-                agent_unit_name = self._cgroups_api.get_agent_unit_name()
-                cpu_cgroup_relative_path, memory_cgroup_relative_path = self._cgroups_api.get_process_cgroup_relative_paths("self")
-                expected_relative_path = os.path.join('system.slice', agent_unit_name)
-                if cpu_cgroup_relative_path is None:
-                    log_cgroup_info("The agent's process is not within a CPU cgroup")
-                else:
-                    if cpu_cgroup_relative_path != expected_relative_path:
-                        log_cgroup_info("The Agent is not in the expected cgroup; will not enable cgroup monitoring. CPU relative path:[{0}] Expected:[{1}]", cpu_cgroup_relative_path, expected_relative_path)
-                        return
-                    cpu_accounting = self._cgroups_api.get_unit_property(agent_unit_name, "CPUAccounting")
-                    log_cgroup_info('CPUAccounting: {0}', cpu_accounting)
-
-                if memory_cgroup_relative_path is None:
-                    log_cgroup_info("The agent's process is not within a memory cgroup")
-                else:
-                    if memory_cgroup_relative_path != expected_relative_path:
-                        log_cgroup_info("The Agent is not in the expected cgroup; will not enable cgroup monitoring. Memory relative path:[{0}] Expected:[{1}]", memory_cgroup_relative_path, expected_relative_path)
-                        return
-                    memory_accounting = self._cgroups_api.get_unit_property(agent_unit_name, "MemoryAccounting")
-                    log_cgroup_info('MemoryAccounting: {0}', memory_accounting)
-
-                #
-                # All good, enable cgroups and start monitoring the agent
-                #
-                if cpu_controller_root is None or cpu_cgroup_relative_path is None:
-                    logger.info("Will not track CPU for the agent's cgroup")
-                else:
-                    self._agent_cpu_cgroup_path = os.path.join(cpu_controller_root, cpu_cgroup_relative_path)
-                    log_cgroup_info("Agent CPU cgroup: {0}", self._agent_cpu_cgroup_path)
-                    CGroupsTelemetry.track_cgroup(CpuCgroup(agent_unit_name, self._agent_cpu_cgroup_path))
-
-                if memory_controller_root is None or memory_cgroup_relative_path is None:
-                    logger.info("Will not track memory for the agent's cgroup")
-                else:
-                    self._agent_memory_cgroup_path = os.path.join(memory_controller_root, memory_cgroup_relative_path)
-                    log_cgroup_info("Agent Memory cgroup: {0}", self._agent_memory_cgroup_path)
-                    CGroupsTelemetry.track_cgroup(MemoryCgroup(agent_unit_name, self._agent_memory_cgroup_path))
+                if self._agent_memory_cgroup_path is not None:
+                    self.__log_cgroup_info("Agent Memory cgroup: {0}", self._agent_memory_cgroup_path)
+                    CGroupsTelemetry.track_cgroup(MemoryCgroup(agent_service_name, self._agent_memory_cgroup_path))
 
                 if self._agent_cpu_cgroup_path is not None or self._agent_memory_cgroup_path is not None:
                     self._cgroups_enabled = True
 
-                log_cgroup_info('Cgroups enabled: {0}', self._cgroups_enabled)
+                self.__log_cgroup_info('Cgroups enabled: {0}', self._cgroups_enabled)
 
             except Exception as exception:
-                message = "Error initializing cgroups: {0}".format(ustr(exception))
-                logger.warn(message)
-                add_event(op=WALAEventOperation.CGroupsInitialize, is_success=False, message=message, log_event=False)
+                self.__log_cgroup_warning("Error initializing cgroups: {0}", ustr(exception))
             finally:
                 self._initialized = True
+
+        @staticmethod
+        def __log_cgroup_info(format_string, *args):
+            message = format_string.format(*args)
+            logger.info(message)
+            add_event(op=WALAEventOperation.CGroupsInfo, message=message)
+
+        @staticmethod
+        def __log_cgroup_warning(format_string, *args):
+            message = format_string.format(*args)
+            logger.info(message)  # log as INFO for now, in the future it should be logged as WARNING
+            add_event(op=WALAEventOperation.CGroupsInfo, message=message, is_success=False, log_event=False)
+
+        def __collect_azure_unit_telemetry(self):
+            azure_units = []
+
+            try:
+                units = shellutil.run_command(['systemctl', 'list-units', 'azure*', '-all'])
+                for line in units.split('\n'):
+                    match = re.match(r'\s?(azure[^\s]*)\s?', line, re.IGNORECASE)
+                    if match is not None:
+                        azure_units.append((match.group(1), line))
+            except shellutil.CommandError as command_error:
+                self.__log_cgroup_warning("Failed to list systemd units: {0}", ustr(command_error))
+
+            for unit_name, unit_description in azure_units:
+                unit_slice = "Unknown"
+                try:
+                    unit_slice = SystemdCgroupsApi.get_unit_property(unit_name, "Slice")
+                except Exception as exception:
+                    self.__log_cgroup_warning("Failed to query Slice for {0}: {1}", unit_name, ustr(exception))
+
+                self.__log_cgroup_info("Found an Azure unit under slice {0}: {1}", unit_slice, unit_description)
+
+            if len(azure_units) == 0:
+                try:
+                    cgroups = shellutil.run_command('systemd-cgls')
+                    for line in cgroups.split('\n'):
+                        if re.match(r'[^\x00-\xff]+azure\.slice\s*', line, re.UNICODE):
+                            logger.info(ustr("Found a cgroup for azure.slice\n{0}").format(cgroups))
+                            # Don't add the output of systemd-cgls to the telemetry, since currently it does not support Unicode
+                            add_event(op=WALAEventOperation.CGroupsInfo, message="Found a cgroup for azure.slice")
+                except shellutil.CommandError as command_error:
+                    self.__log_cgroup_warning("Failed to list systemd units: {0}", ustr(command_error))
+
+        def __collect_agent_unit_files_telemetry(self):
+            agent_unit_files = []
+            agent_service_name = get_osutil().get_service_name()
+            try:
+                fragment_path = SystemdCgroupsApi.get_unit_property(agent_service_name, "FragmentPath")
+                if fragment_path != "/lib/systemd/system/{0}.service".format(agent_service_name):
+                    agent_unit_files.append(fragment_path)
+            except Exception as exception:
+                self.__log_cgroup_warning("Failed to query the agent's FragmentPath: {0}", ustr(exception))
+
+            try:
+                drop_in_paths = SystemdCgroupsApi.get_unit_property(agent_service_name, "DropInPaths")
+                for path in drop_in_paths.split():
+                    agent_unit_files.append(path)
+            except Exception as exception:
+                self.__log_cgroup_warning("Failed to query the agent's DropInPaths: {0}", ustr(exception))
+
+            for unit_file in agent_unit_files:
+                try:
+                    with open(unit_file, "r") as file_object:
+                        self.__log_cgroup_info("Found a custom unit file for the agent: {0}\n{1}", unit_file, file_object.read())
+                except Exception as exception:
+                    self.__log_cgroup_warning("Can't read {0}: {1}", unit_file, ustr(exception))
+
+        def __check_no_legacy_cgroups(self):
+            """
+            Older versions of the daemon (2.2.31-2.2.40) wrote their PID to /sys/fs/cgroup/{cpu,memory}/WALinuxAgent/WALinuxAgent. When running
+            under systemd this could produce invalid resource usage data. Cgroups should not be enabled under this condition.
+            """
+            legacy_cgroups = self._cgroups_api.cleanup_legacy_cgroups()
+            if legacy_cgroups > 0:
+                self.__log_cgroup_warning("The daemon's PID was added to a legacy cgroup; will not monitor resource usage.")
+                return False
+            return True
+
+        def __get_cgroup_controllers(self):
+            #
+            # check v1 controllers
+            #
+            cpu_controller_root, memory_controller_root = self._cgroups_api.get_cgroup_mount_points()
+
+            if cpu_controller_root is not None:
+                logger.info("The CPU cgroup controller is mounted at {0}", cpu_controller_root)
+            else:
+                self.__log_cgroup_warning("The CPU cgroup controller is not mounted")
+
+            if memory_controller_root is not None:
+                logger.info("The memory cgroup controller is mounted at {0}", memory_controller_root)
+            else:
+                self.__log_cgroup_warning("The memory cgroup controller is not mounted")
+
+            #
+            # check v2 controllers
+            #
+            cgroup2_mount_point, cgroup2_controllers = self._cgroups_api.get_cgroup2_controllers()
+            if cgroup2_mount_point is not None:
+                self.__log_cgroup_info("cgroups v2 mounted at {0}.  Controllers: [{1}]", cgroup2_mount_point, cgroup2_controllers)
+
+            return cpu_controller_root, memory_controller_root
+
+        def __ensure_azure_slices_exist(self):
+            """
+            The agent creates "azure.slice" for use by extensions and the agent. The agent runs under "azure.slice" directly and each
+            extension runs under its own slice ("Microsoft.CPlat.Extension.slice" in the example below). All the slices for
+            extensions are grouped under "vmextensions.slice".
+
+            Example:  -.slice
+                      ├─user.slice
+                      ├─system.slice
+                      └─azure.slice
+                        ├─walinuxagent.service
+                        │ ├─5759 /usr/bin/python3 -u /usr/sbin/waagent -daemon
+                        │ └─5764 python3 -u bin/WALinuxAgent-2.2.53-py2.7.egg -run-exthandlers
+                        └─azure-vmextensions.slice
+                          └─Microsoft.CPlat.Extension.slice
+                              └─5894 /usr/bin/python3 /var/lib/waagent/Microsoft.CPlat.Extension-1.0.0.0/enable.py
+
+            This method ensures that the "azure" and "vmextensions" slices are created. Setup should create those slices
+            under /lib/systemd/system; but if they do not exist, __ensure_azure_slices_exist will create them.
+            It also creates drop-in files to set the agent's slice and CPU accounting properties if they have not been
+            set up in the agent's unit file.
+            Lastly, the method also cleans up unit files left over from previous versions of the agent.
+
+            Returns the slice under which the agent should currently be running.
+            """
+
+            # Older agents used to create this slice, but it was never used. Cleanup the file.
+            self._cleanup_unit_file("/etc/systemd/system/system-walinuxagent.extensions.slice")
+
+            azure_slice = os.path.join("/lib/systemd/system", _AZURE_SLICE)
+            vmextensions_slice = os.path.join("/lib/systemd/system", _VMEXTENSIONS_SLICE)
+            agent_unit_file = "/lib/systemd/system/{0}".format(self._cgroups_api.get_agent_unit_name())
+            agent_drop_in_file_slice = "/lib/systemd/system/{0}.d/{1}".format(self._cgroups_api.get_agent_unit_name(), _AGENT_DROP_IN_FILE_SLICE)
+            agent_drop_in_file_cpu_accounting = "/lib/systemd/system/{0}.d/{1}".format(self._cgroups_api.get_agent_unit_name(), _AGENT_DROP_IN_FILE_CPU_ACCOUNTING)
+
+            files_to_create = []
+            return_azure_slice = False
+
+            if os.path.exists(azure_slice):
+                return_azure_slice = True
+            else:
+                files_to_create.append((azure_slice, _AZURE_SLICE_CONTENTS))
+
+            if not os.path.exists(vmextensions_slice):
+                files_to_create.append((vmextensions_slice, _VMEXTENSIONS_SLICE_CONTENTS))
+
+            if fileutil.findstr_in_file(agent_unit_file, "Slice=azure.slice"):
+                self._cleanup_unit_file(agent_drop_in_file_slice)
+            else:
+                if not os.path.exists(agent_drop_in_file_slice):
+                    files_to_create.append((agent_drop_in_file_slice, _AGENT_DROP_IN_FILE_SLICE_CONTENTS))
+
+            if fileutil.findstr_in_file(agent_unit_file, "CPUAccounting=yes"):
+                self._cleanup_unit_file(agent_drop_in_file_cpu_accounting)
+            else:
+                if not os.path.exists(agent_drop_in_file_cpu_accounting):
+                    files_to_create.append((agent_drop_in_file_cpu_accounting, _AGENT_DROP_IN_FILE_CPU_ACCOUNTING_CONTENTS))
+
+            if len(files_to_create) > 0:
+                try:
+                    for path, contents in files_to_create:
+                        self._create_unit_file(path, contents)
+
+                    # reload the systemd configuration, but the new slice will not be used until the agent's service restarts
+                    try:
+                        logger.info("Executing systemctl daemon-reload...")
+                        shellutil.run_command(["systemctl", "daemon-reload"])
+                    except Exception as exception:
+                        self.__log_cgroup_warning("daemon-reload failed: {0}", ustr(exception))
+                except Exception:
+                    # the exception is already logged in the above functions
+                    for unit_file in files_to_create:
+                        self._cleanup_unit_file(unit_file)
+
+            return _AZURE_SLICE if return_azure_slice else "system.slice"
+
+        def _create_unit_file(self, path, contents):
+            try:
+                parent, _ = os.path.split(path)
+                if not os.path.exists(parent):
+                    fileutil.mkdir(parent, mode=0o755)
+                fileutil.write_file(path, contents)
+                self.__log_cgroup_info("Created {0}", path)
+            except Exception as exception:
+                self.__log_cgroup_warning("Failed to create {0} - {1}", path, ustr(exception))
+                raise
+
+        def _cleanup_unit_file(self, path):
+            if os.path.exists(path):
+                try:
+                    os.remove(path)
+                    self.__log_cgroup_info("Removed {0}", path)
+                except Exception as exception:
+                    self.__log_cgroup_warning("Failed to remove {0}: {1}", path, ustr(exception))
+
+        def __get_agent_cgroups(self, agent_slice, cpu_controller_root, memory_controller_root):
+            agent_service_name = self._cgroups_api.get_agent_unit_name()
+
+            expected_relative_path = os.path.join(agent_slice, agent_service_name)
+            cpu_cgroup_relative_path, memory_cgroup_relative_path = self._cgroups_api.get_process_cgroup_relative_paths("self")
+
+            if cpu_cgroup_relative_path is None:
+                self.__log_cgroup_warning("The agent's process is not within a CPU cgroup")
+            else:
+                if cpu_cgroup_relative_path == expected_relative_path:
+                    cpu_accounting = self._cgroups_api.get_unit_property(agent_service_name, "CPUAccounting")
+                    self.__log_cgroup_info('CPUAccounting: {0}', cpu_accounting)
+                else:
+                    cpu_cgroup_relative_path = None  # Set the path to None to prevent monitoring
+                    self.__log_cgroup_warning(
+                        "The Agent is not in the expected CPU cgroup; will not enable monitoring. Cgroup:[{0}] Expected:[{1}]",
+                        cpu_cgroup_relative_path,
+                        expected_relative_path)
+
+            if memory_cgroup_relative_path is None:
+                self.__log_cgroup_warning("The agent's process is not within a memory cgroup")
+            else:
+                if memory_cgroup_relative_path == expected_relative_path:
+                    memory_accounting = self._cgroups_api.get_unit_property(agent_service_name, "MemoryAccounting")
+                    self.__log_cgroup_info('MemoryAccounting: {0}', memory_accounting)
+                else:
+                    memory_cgroup_relative_path = None  # Set the path to None to prevent monitoring
+                    self.__log_cgroup_warning(
+                        "The Agent is not in the expected memory cgroup; will not enable monitoring. CGroup:[{0}] Expected:[{1}]",
+                        memory_cgroup_relative_path,
+                        expected_relative_path)
+
+            if cpu_controller_root is not None and cpu_cgroup_relative_path is not None:
+                agent_cpu_cgroup_path = os.path.join(cpu_controller_root, cpu_cgroup_relative_path)
+            else:
+                agent_cpu_cgroup_path = None
+
+            if memory_controller_root is not None and memory_cgroup_relative_path is not None:
+                agent_memory_cgroup_path = os.path.join(memory_controller_root, memory_cgroup_relative_path)
+            else:
+                agent_memory_cgroup_path = None
+
+            return agent_cpu_cgroup_path, agent_memory_cgroup_path
 
         def enabled(self):
             return self._cgroups_enabled
@@ -184,129 +389,6 @@ class CGroupConfigurator(object):
         def disable(self):
             self._cgroups_enabled = False
             CGroupsTelemetry.reset()
-
-        @staticmethod
-        def __collect_azure_unit_telemetry():
-            azure_units = []
-
-            try:
-                units = shellutil.run_command(['systemctl', 'list-units', 'azure*', '-all'])
-                for line in units.split('\n'):
-                    match = re.match(r'\s?(azure[^\s]*)\s?', line, re.IGNORECASE)
-                    if match is not None:
-                        azure_units.append((match.group(1), line))
-            except shellutil.CommandError as command_error:
-                message = "Failed to list systemd units: {0}".format(ustr(command_error))
-                logger.info(message)
-                add_event(op=WALAEventOperation.CGroupsInitialize, is_success=False, message=message, log_event=False)
-
-            for unit_name, unit_description in azure_units:
-                unit_slice = "Unknown"
-                try:
-                    unit_slice = SystemdCgroupsApi.get_unit_property(unit_name, "Slice")
-                except Exception as exception:
-                    message = "Failed to query Slice for {0}: {1}".format(unit_name, ustr(exception))
-                    logger.info(message)
-                    add_event(op=WALAEventOperation.CGroupsInitialize, is_success=False, message=message, log_event=False)
-
-                message = "Found an Azure unit under slice {0}: {1}".format(unit_slice, unit_description)
-                logger.info(message)
-                add_event(op=WALAEventOperation.CGroupsInitialize, message=message)
-
-            if len(azure_units) == 0:
-                try:
-                    cgroups = shellutil.run_command('systemd-cgls')
-                    for line in cgroups.split('\n'):
-                        if re.match(r'[^\x00-\xff]+azure\.slice\s*', line, re.UNICODE):
-                            logger.info(ustr("Found a cgroup for azure.slice\n{0}").format(cgroups))
-                            add_event(op=WALAEventOperation.CGroupsInitialize, message="Found a cgroup for azure.slice")
-                except shellutil.CommandError as command_error:
-                    message = "Failed to list systemd units: {0}".format(ustr(command_error))
-                    logger.info(message)
-                    add_event(op=WALAEventOperation.CGroupsInitialize, is_success=False, message=message, log_event=False)
-
-        @staticmethod
-        def __collect_agent_unit_files_telemetry():
-            agent_unit_files = []
-            agent_service_name = get_osutil().get_service_name()
-            try:
-                fragment_path = SystemdCgroupsApi.get_unit_property(agent_service_name, "FragmentPath")
-                if fragment_path != "/lib/systemd/system/{0}.service".format(agent_service_name):
-                    agent_unit_files.append(fragment_path)
-            except Exception as exception:
-                message = "Failed to query the agent's FragmentPath: {0}".format(ustr(exception))
-                logger.info(message)
-                add_event(op=WALAEventOperation.CGroupsInitialize, is_success=False, message=message, log_event=False)
-
-            try:
-                drop_in_paths = SystemdCgroupsApi.get_unit_property(agent_service_name, "DropInPaths")
-                for path in drop_in_paths.split():
-                    agent_unit_files.append(path)
-            except Exception as exception:
-                message = "Failed to query the agent's DropInPaths: {0}".format(ustr(exception))
-                logger.info(message)
-                add_event(op=WALAEventOperation.CGroupsInitialize, is_success=False, message=message, log_event=False)
-
-            for unit_file in agent_unit_files:
-                try:
-                    with open(unit_file, "r") as file_object:
-                        message = "Found a custom unit file for the agent: {0}\n{1}".format(unit_file, file_object.read())
-                        logger.info(message)
-                        add_event(op=WALAEventOperation.CGroupsInitialize, message=message)
-                except Exception as exception:
-                    message = "Can't read {0}: {1}".format(unit_file, ustr(exception))
-                    logger.info(message)
-                    add_event(op=WALAEventOperation.CGroupsInitialize, message=message)
-
-        def create_slices(self):
-            if not self.enabled():
-                return
-
-            # Create root slices for agent and agent and extensions for systemd-managed distros.
-            # The hierarchy is as follows:
-            # ├─user.slice
-            # ...
-            # ├─system.slice
-            # ...
-            # └─azure.slice
-            #   └─azure-vmextensions.slice
-
-            # Both methods will log to local log and emit telemetry.
-            # The slices will be created if they don't previously exist.
-
-            if not os.path.exists(SystemdCgroupsApi.get_azure_slice()):
-                self.create_azure_slice()
-
-            if not os.path.exists(SystemdCgroupsApi.get_extensions_slice()):
-                self.create_extensions_slice()
-
-        def create_azure_slice(self):
-            """"
-            Creates the slice for the VM Agent and extensions.
-            """
-            if not self.enabled():
-                return
-
-            try:
-                self._cgroups_api.create_azure_slice()
-            except Exception as exception:
-                error_message = "Failed to create the azure slice. Error: {0}".format(ustr(exception))
-                logger.warn(error_message)
-                add_event(op=WALAEventOperation.CGroupsInitialize, message=error_message)
-
-        def create_extensions_slice(self):
-            """
-            Creates the slice that includes the cgroups for all extensions
-            """
-            if not self.enabled():
-                return
-
-            try:
-                self._cgroups_api.create_extensions_slice()
-            except Exception as exception:
-                error_message = "Failed to create slice for VM extensions. Error: {0}".format(ustr(exception))
-                logger.warn(error_message)
-                add_event(op=WALAEventOperation.CGroupsInitialize, message=error_message)
 
         def check_processes_in_agent_cgroup(self):
             """

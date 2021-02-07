@@ -56,31 +56,36 @@ class MonitorHandlerTestCase(AgentTestCase):
     def test_it_should_invoke_all_periodic_operations(self):
         def periodic_operation_run(self):
             invoked_operations.append(self.__class__.__name__)
-        invoked_operations = []
 
         with _mock_wire_protocol():
-            with patch("azurelinuxagent.ga.monitor.MonitorHandler.stopped", side_effect=[False, True]):
+            with patch("azurelinuxagent.ga.monitor.MonitorHandler.stopped", side_effect=[False, True, False, True]):
                 with patch("time.sleep"):
                     with patch.object(PeriodicOperation, "run", side_effect=periodic_operation_run, autospec=True):
-                        invoked_operations = []
+                        with patch("azurelinuxagent.common.conf.get_monitor_network_configuration_changes") as monitor_network_changes:
+                            for network_changes in [True, False]:
+                                monitor_network_changes.return_value = network_changes
 
-                        monitor_handler = get_monitor_handler()
-                        monitor_handler.run()
-                        monitor_handler.join()
+                                invoked_operations = []
 
-                        expected_operations = [
-                            PollResourceUsage.__name__,
-                            ReportNetworkConfigurationChanges.__name__,
-                            ReportNetworkErrors.__name__,
-                            ResetPeriodicLogMessages.__name__,
-                            SendHostPluginHeartbeat.__name__,
-                            SendImdsHeartbeat.__name__,
-                        ]
+                                monitor_handler = get_monitor_handler()
+                                monitor_handler.run()
+                                monitor_handler.join()
 
-                        invoked_operations.sort()
-                        expected_operations.sort()
+                                expected_operations = [
+                                    PollResourceUsage.__name__,
+                                    ReportNetworkErrors.__name__,
+                                    ResetPeriodicLogMessages.__name__,
+                                    SendHostPluginHeartbeat.__name__,
+                                    SendImdsHeartbeat.__name__,
+                                ]
 
-                        self.assertEqual(invoked_operations, expected_operations, "The monitor thread did not invoke the expected operations")
+                                if network_changes:
+                                    expected_operations.append(ReportNetworkConfigurationChanges.__name__)
+
+                                invoked_operations.sort()
+                                expected_operations.sort()
+
+                                self.assertEqual(invoked_operations, expected_operations, "The monitor thread did not invoke the expected operations")
 
 
 class SendHostPluginHeartbeatOperationTestCase(AgentTestCase, HttpRequestPredicates):

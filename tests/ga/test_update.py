@@ -9,6 +9,7 @@ import json
 import os
 import shutil
 import stat
+import subprocess
 import sys
 import tempfile
 import time
@@ -20,10 +21,10 @@ from threading import currentThread
 from mock import PropertyMock
 
 from azurelinuxagent.common import conf
-from azurelinuxagent.common.cgroupconfigurator import CGroupConfigurator
 from azurelinuxagent.common.event import EVENTS_DIRECTORY
 from azurelinuxagent.common.exception import ProtocolError, UpdateError, ResourceGoneError
 from azurelinuxagent.common.future import ustr
+from azurelinuxagent.common.persist_firewall_rules import PersistFirewallRulesHandler
 from azurelinuxagent.common.protocol.goal_state import ExtensionsConfig
 from azurelinuxagent.common.protocol.hostplugin import URI_FORMAT_GET_API_VERSIONS, HOST_PLUGIN_PORT, \
     URI_FORMAT_GET_EXTENSION_ARTIFACT, HostPluginProtocol
@@ -33,13 +34,13 @@ from azurelinuxagent.common.protocol.util import ProtocolUtil
 from azurelinuxagent.common.protocol.wire import WireProtocol
 from azurelinuxagent.common.utils import fileutil, restutil, textutil
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
+from azurelinuxagent.common.utils.networkutil import FirewallCmdDirectCommands
 from azurelinuxagent.common.version import AGENT_PKG_GLOB, AGENT_DIR_GLOB, AGENT_NAME, AGENT_DIR_PATTERN, \
     AGENT_VERSION, CURRENT_AGENT, CURRENT_VERSION
 from azurelinuxagent.ga.exthandlers import ExtHandlerInstance, HandlerEnvironment
 from azurelinuxagent.ga.update import GuestAgent, GuestAgentError, MAX_FAILURE, AGENT_MANIFEST_FILE, \
     get_update_handler, ORPHAN_POLL_INTERVAL, AGENT_PARTITION_FILE, AGENT_ERROR_FILE, ORPHAN_WAIT_INTERVAL, \
     CHILD_LAUNCH_RESTART_MAX, CHILD_HEALTH_INTERVAL, UpdateHandler
-from tests.common.mock_cgroup_commands import mock_cgroup_commands
 from tests.protocol.mocks import mock_wire_protocol
 from tests.protocol.mockwiredata import DATA_FILE, DATA_FILE_MULTIPLE_EXT
 from tests.tools import AgentTestCase, call, data_dir, DEFAULT, patch, load_bin_data, load_data, Mock, MagicMock, \
@@ -839,44 +840,6 @@ class TestUpdate(UpdateTestCase):
                 stat.S_IRUSR | stat.S_IWUSR | stat.S_IRGRP | stat.S_IROTH,
                 mode)
 
-    def test_ensure_cgroups_initialized_creates_slices(self):
-        try:
-            azure_slice_path = os.path.join(self.tmp_dir, "azure.slice")
-            extensions_slice_path = os.path.join(self.tmp_dir, "azure-vmextensions.slice")
-
-            self.assertFalse(os.path.exists(azure_slice_path))
-            self.assertFalse(os.path.exists(extensions_slice_path))
-
-            CGroupConfigurator._instance = None  # pylint: disable=protected-access
-            with mock_cgroup_commands() as mocks:
-                # Mock out all the actual calls to systemd
-                mocks.add_file(r"^/etc/systemd/system/azure.slice$", azure_slice_path)
-                mocks.add_file(r"^/etc/systemd/system/azure-vmextensions.slice$", extensions_slice_path)
-
-                with patch.object(CGroupConfigurator.get_instance(), "enabled", return_value=True):
-                    self.update_handler._ensure_cgroups_initialized()  # pylint: disable=protected-access
-
-                    # Ensure we created the slice files with proper content if cgroups are enabled
-                    self.assertTrue(os.path.exists(azure_slice_path))
-                    self.assertTrue(os.path.exists(extensions_slice_path))
-                    self.assertEqual(fileutil.read_file(azure_slice_path), """[Unit]
-Description=Slice for Azure VM Agent and Extensions""")
-                    self.assertEqual(fileutil.read_file(extensions_slice_path), """[Unit]
-Description=Slice for Azure VM Extensions""")
-
-                # Clean files up for next assertion
-                os.remove(azure_slice_path)
-                os.remove(extensions_slice_path)
-
-                with patch.object(CGroupConfigurator.get_instance(), "enabled", return_value=False):
-                    self.update_handler._ensure_cgroups_initialized()  # pylint: disable=protected-access
-
-                    # Ensure we don't create the slice files if cgroups are disabled
-                    self.assertFalse(os.path.exists(azure_slice_path))
-                    self.assertFalse(os.path.exists(extensions_slice_path))
-        finally:
-            CGroupConfigurator._instance = None  # pylint: disable=protected-access
-
     def _test_evaluate_agent_health(self, child_agent_index=0):
         self.prepare_agents()
 
@@ -1620,6 +1583,30 @@ Description=Slice for Azure VM Extensions""")
                 content = json.load(handler_env_content_file)
             self.assertIn(HandlerEnvironment.eventsFolder, content[0][HandlerEnvironment.handlerEnvironment],
                           "{0} not found in HandlerEnv file".format(HandlerEnvironment.eventsFolder))
+
+    def test_it_should_setup_firewall_rules_on_startup(self):
+        iterations = 1
+        original_popen = subprocess.Popen
+        executed_commands = []
+
+        def _mock_popen(cmd, *args, **kwargs):
+            if 'firewall-cmd' in cmd:
+                executed_commands.append(cmd)
+                cmd = ["echo", "running"]
+            return original_popen(cmd, *args, **kwargs)
+
+        with self._get_update_handler(iterations) as (update_handler, _):
+            with patch("azurelinuxagent.common.utils.shellutil.subprocess.Popen", side_effect=_mock_popen):
+                update_handler.run(debug=True)
+
+        # Firewall-cmd should only be called 3 times - 1st to check if running, 2nd & 3rd for the QueryPassThrough cmd
+        self.assertEqual(3, len(executed_commands), "The number of times firwall-cmd should be called is only 3")
+        # protected-access<W0212> Disabled: OK to access PersistFirewallRulesHandler._* from unit test for PersistFirewallRuleHandler
+        self.assertEqual(PersistFirewallRulesHandler._FIREWALLD_RUNNING_CMD, executed_commands.pop(0),  # pylint: disable=protected-access
+                         "First command should be to check if firewalld is running")
+        self.assertTrue([FirewallCmdDirectCommands.QueryPassThrough in cmd for cmd in executed_commands],
+                        "The remaining commands should only be for querying the firewall commands")
+
 
     @contextlib.contextmanager
     def _setup_test_for_ext_event_dirs_retention(self):

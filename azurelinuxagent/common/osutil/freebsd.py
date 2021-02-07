@@ -22,7 +22,6 @@ import binascii
 import azurelinuxagent.common.utils.fileutil as fileutil
 import azurelinuxagent.common.utils.shellutil as shellutil
 import azurelinuxagent.common.utils.textutil as textutil
-from azurelinuxagent.common.utils.networkutil import RouteEntry  # pylint: disable=W0611
 import azurelinuxagent.common.logger as logger
 from azurelinuxagent.common.exception import OSUtilError
 from azurelinuxagent.common.osutil.default import DefaultOSUtil
@@ -35,6 +34,10 @@ class FreeBSDOSUtil(DefaultOSUtil):
         super(FreeBSDOSUtil, self).__init__()
         self._scsi_disks_timeout_set = False
         self.jit_enabled = True
+
+    @staticmethod
+    def get_agent_bin_path():
+        return "/usr/local/sbin"
 
     def set_hostname(self, hostname):
         rc_file_path = '/etc/rc.conf'

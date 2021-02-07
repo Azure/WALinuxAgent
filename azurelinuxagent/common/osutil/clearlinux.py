@@ -42,6 +42,14 @@ class ClearLinuxUtil(DefaultOSUtil):
         self.agent_conf_file_path = '/usr/share/defaults/waagent/waagent.conf'
         self.jit_enabled = True
 
+    @staticmethod
+    def get_systemd_unit_file_install_path():
+        return "/usr/lib/systemd/system"
+
+    @staticmethod
+    def get_agent_bin_path():
+        return "/usr/bin"
+
     def is_dhcp_enabled(self):
         return True
 
