@@ -195,9 +195,9 @@ def mock_cgroup_commands(tmp_dir):
                         with patch('azurelinuxagent.common.cgroupapi.CGroupsApi.is_systemd', return_value=True):
                             class Mock:
                                 def __init__(self):
-                                    self.__commands = _MOCKED_COMMANDS[:]
-                                    self.__files = _MOCKED_FILES[:]
-                                    self.__paths = _MOCKED_PATHS[:]
+                                    self.__commands = mocked_commands
+                                    self.__files = mocked_files
+                                    self.__paths = mocked_paths
                                     self.add_command_mock = add_command_mock
                                     self.add_file_mock = add_file_mock
                                     self.add_path_mock = add_path_mock
