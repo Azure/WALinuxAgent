@@ -78,9 +78,6 @@ class TestPeriodicOperation(AgentTestCase):
         self.assertEqual(pop.invoke_count, 5, "The operation was not invoked after the period elapsed")
 
     class RaiseException(PeriodicOperation):
-        def __init__(self, period):
-            super(TestPeriodicOperation.RaiseException, self).__init__(period)
-
         def _operation(self):
             raise Exception("A test exception")
 
@@ -134,9 +131,6 @@ class TestPeriodicOperation(AgentTestCase):
             self.assertEqual(self._get_number_of_warnings(warn_patcher, "WARNING 1"), 1, "The second error should have been reported exactly 1 time")
 
     class NoOp(PeriodicOperation):
-        def __init__(self, period):
-            super(TestPeriodicOperation.NoOp, self).__init__(period)
-
         def _operation(self):
             pass
 

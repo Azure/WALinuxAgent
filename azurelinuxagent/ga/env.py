@@ -224,7 +224,7 @@ class EnvHandler(ThreadHandlerInterface):
             if conf.get_root_device_scsi_timeout() is not None:
                 periodic_operations.append(SetRootDeviceScsiTimeout(osutil))
             if conf.get_monitor_hostname():
-                periodic_operations.append(MonitorHostNameChanges())
+                periodic_operations.append(MonitorHostNameChanges(osutil))
             while not self.stopped:
                 try:
                     for op in periodic_operations:
