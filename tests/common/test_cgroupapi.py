@@ -25,7 +25,7 @@ import tempfile
 from azurelinuxagent.common.cgroupapi import CGroupsApi, SystemdCgroupsApi, SYSTEMD_RUN_PATH
 from azurelinuxagent.common.cgroupstelemetry import CGroupsTelemetry
 from azurelinuxagent.common.utils import fileutil
-from tests.common.mock_cgroup_commands import mock_cgroup_commands
+from tests.common.mock_cgroup_environment import mock_cgroup_environment
 from tests.tools import AgentTestCase, patch, skip_if_predicate_false, is_systemd_present, mock_sleep
 from tests.utils.cgroups_tools import CGroupsTools
 
@@ -108,25 +108,25 @@ class CGroupsApiTestCase(_MockedFileSystemTestCase):
 @skip_if_predicate_false(is_systemd_present, "Systemd cgroups API doesn't manage cgroups on systems not using systemd.")
 class SystemdCgroupsApiTestCase(AgentTestCase):
     def test_get_systemd_version_should_return_a_version_number(self):
-        with mock_cgroup_commands(self.tmp_dir):
+        with mock_cgroup_environment(self.tmp_dir):
             version_info = SystemdCgroupsApi.get_systemd_version()
             found = re.search(r"systemd \d+", version_info) is not None
             self.assertTrue(found, "Could not determine the systemd version: {0}".format(version_info))
 
     def test_get_cpu_and_memory_mount_points_should_return_the_cgroup_mount_points(self):
-        with mock_cgroup_commands(self.tmp_dir):
+        with mock_cgroup_environment(self.tmp_dir):
             cpu, memory = SystemdCgroupsApi().get_cgroup_mount_points()
             self.assertEqual(cpu, '/sys/fs/cgroup/cpu,cpuacct', "The mount point for the CPU controller is incorrect")
             self.assertEqual(memory, '/sys/fs/cgroup/memory', "The mount point for the memory controller is incorrect")
 
     def test_get_cpu_and_memory_cgroup_relative_paths_for_process_should_return_the_cgroup_relative_paths(self):
-        with mock_cgroup_commands(self.tmp_dir):
+        with mock_cgroup_environment(self.tmp_dir):
             cpu, memory = SystemdCgroupsApi.get_process_cgroup_relative_paths('self')
             self.assertEqual(cpu, "system.slice/walinuxagent.service", "The relative path for the CPU cgroup is incorrect")
             self.assertEqual(memory, "system.slice/walinuxagent.service", "The relative memory for the CPU cgroup is incorrect")
 
     def test_get_cgroup2_controllers_should_return_the_v2_cgroup_controllers(self):
-        with mock_cgroup_commands(self.tmp_dir):
+        with mock_cgroup_environment(self.tmp_dir):
             mount_point, controllers = SystemdCgroupsApi.get_cgroup2_controllers()
 
             self.assertEqual(mount_point, "/sys/fs/cgroup/unified", "Invalid mount point for V2 cgroups")
@@ -134,7 +134,7 @@ class SystemdCgroupsApiTestCase(AgentTestCase):
             self.assertIn("memory", controllers, "The memory controller is not in the list of V2 controllers")
 
     def test_get_unit_property_should_return_the_value_of_the_given_property(self):
-        with mock_cgroup_commands(self.tmp_dir):
+        with mock_cgroup_environment(self.tmp_dir):
             cpu_accounting = SystemdCgroupsApi.get_unit_property("walinuxagent.service", "CPUAccounting")
 
             self.assertEqual(cpu_accounting, "no", "Property {0} of {1} is incorrect".format("CPUAccounting", "walinuxagent.service"))
@@ -169,7 +169,7 @@ class SystemdCgroupsApiTestCase(AgentTestCase):
                 command = "echo TEST_OUTPUT"
             return original_popen(command, *args, **kwargs)
 
-        with mock_cgroup_commands(self.tmp_dir) as mock_commands:  # pylint: disable=unused-variable
+        with mock_cgroup_environment(self.tmp_dir):
             with tempfile.TemporaryFile(dir=self.tmp_dir, mode="w+b") as output_file:
                 with patch("azurelinuxagent.common.cgroupapi.subprocess.Popen", side_effect=mock_popen) as popen_patch:  # pylint: disable=unused-variable
                     command_output = SystemdCgroupsApi().start_extension_command(
@@ -186,7 +186,7 @@ class SystemdCgroupsApiTestCase(AgentTestCase):
 
     @patch('time.sleep', side_effect=lambda _: mock_sleep())
     def test_start_extension_command_should_execute_the_command_in_a_cgroup(self, _):
-        with mock_cgroup_commands(self.tmp_dir):
+        with mock_cgroup_environment(self.tmp_dir):
             SystemdCgroupsApi().start_extension_command(
                 extension_name="Microsoft.Compute.TestExtension-1.2.3",
                 command="test command",
@@ -205,7 +205,7 @@ class SystemdCgroupsApiTestCase(AgentTestCase):
 
     @patch('time.sleep', side_effect=lambda _: mock_sleep())
     def test_start_extension_command_should_use_systemd_to_execute_the_command(self, _):
-        with mock_cgroup_commands(self.tmp_dir):
+        with mock_cgroup_environment(self.tmp_dir):
             with patch("azurelinuxagent.common.cgroupapi.subprocess.Popen", wraps=subprocess.Popen) as popen_patch:
                 SystemdCgroupsApi().start_extension_command(
                     extension_name="Microsoft.Compute.TestExtension-1.2.3",

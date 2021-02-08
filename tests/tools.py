@@ -480,6 +480,11 @@ def open_patch():
     return open_name
 
 
+def patch_builtin(target, *args, **kwargs):
+    prefix = 'builtins' if PY_VERSION_MAJOR >= 3 else '__builtin__'
+    return patch("{0}.{1}".format(prefix, target), *args, **kwargs)
+
+
 def distros(distro_name=".*", distro_version=".*", distro_full_name=".*"):
     """Run test on multiple distros"""
     def decorator(test_method):
