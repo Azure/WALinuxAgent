@@ -41,6 +41,10 @@ class IosxeOSUtil(DefaultOSUtil):
     def __init__(self):  # pylint: disable=W0235
         super(IosxeOSUtil, self).__init__()
 
+    @staticmethod
+    def get_systemd_unit_file_install_path():
+        return "/usr/lib/systemd/system"
+
     def set_hostname(self, hostname):
         """
         Unlike redhat 6.x, redhat 7.x will set hostname via hostnamectl

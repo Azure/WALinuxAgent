@@ -148,8 +148,8 @@ def get_distro():
     osinfo[0] = osinfo[0].strip('"').strip(' ').lower()
     return osinfo
 
-COMMAND_ABSENT = "Absent"
-COMMAND_FAILED = "Failed"
+COMMAND_ABSENT = ustr("Absent")
+COMMAND_FAILED = ustr("Failed")
 
 
 def get_lis_version():
@@ -196,7 +196,7 @@ def has_logrotate():
 
 AGENT_NAME = "WALinuxAgent"
 AGENT_LONG_NAME = "Azure Linux Agent"
-AGENT_VERSION = '2.2.53'
+AGENT_VERSION = '2.2.54'
 AGENT_LONG_VERSION = "{0}-{1}".format(AGENT_NAME, AGENT_VERSION)
 AGENT_DESCRIPTION = """
 The Azure Linux Agent supports the provisioning and running of Linux

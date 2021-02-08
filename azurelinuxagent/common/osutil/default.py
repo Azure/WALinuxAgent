@@ -45,7 +45,7 @@ from azurelinuxagent.common.exception import OSUtilError
 from azurelinuxagent.common.future import ustr, array_to_bytes
 from azurelinuxagent.common.utils.cryptutil import CryptUtil
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
-from azurelinuxagent.common.utils.networkutil import RouteEntry, NetworkInterfaceCard
+from azurelinuxagent.common.utils.networkutil import RouteEntry, NetworkInterfaceCard, AddFirewallRules
 from azurelinuxagent.common.utils.shellutil import CommandError
 
 __RULES_FILES__ = ["/lib/udev/rules.d/75-persistent-net-generator.rules",
@@ -75,14 +75,11 @@ def _get_iptables_version_command():
 
 
 def _get_firewall_accept_command(wait, command, destination, owner_uid):
-    return _add_wait(wait,
-                     ["iptables", "-t", "security", command, "OUTPUT", "-d", destination, "-p", "tcp", "-m", "owner",
-                      "--uid-owner", str(owner_uid), "-j" "ACCEPT"])  # pylint: disable=W1404,W1403
+    return AddFirewallRules.get_iptables_accept_command(wait, command, destination, owner_uid)
 
 
 def _get_firewall_drop_command(wait, command, destination):
-    return _add_wait(wait, ["iptables", "-t", "security", command, "OUTPUT", "-d", destination, "-p", "tcp", "-m",
-                            "conntrack", "--ctstate", "INVALID,NEW", "-j", "DROP"])
+    return AddFirewallRules.get_iptables_drop_command(wait, command, destination)
 
 
 def _get_firewall_list_command(wait):
@@ -145,6 +142,14 @@ class DefaultOSUtil(object):
     @staticmethod
     def get_service_name():
         return "waagent"
+
+    @staticmethod
+    def get_systemd_unit_file_install_path():
+        return "/lib/systemd/system"
+
+    @staticmethod
+    def get_agent_bin_path():
+        return "/usr/sbin"
 
     def get_firewall_dropped_packets(self, dst_ip=None):
         # If a previous attempt failed, do not retry
@@ -248,7 +253,6 @@ class DefaultOSUtil(object):
             wait = self.get_firewall_will_wait()
 
             # If the DROP rule exists, make no changes
-            firewall_established = False  # pylint: disable=W0612
             try:
                 drop_rule = _get_firewall_drop_command(wait, "-C", dst_ip)
                 shellutil.run_command(drop_rule)
@@ -263,20 +267,10 @@ class DefaultOSUtil(object):
 
             # Otherwise, append both rules
             try:
-                accept_rule = _get_firewall_accept_command(wait, "-A", dst_ip, uid)
-                shellutil.run_command(accept_rule)
-            except Exception as e:
-                msg = "Unable to add ACCEPT firewall rule '{0}' - {1}".format(accept_rule, ustr(e))
-                logger.warn(msg)
-                raise Exception(msg)
-
-            try:
-                drop_rule = _get_firewall_drop_command(wait, "-A", dst_ip)
-                shellutil.run_command(drop_rule)
-            except Exception as e:
-                msg = "Unable to add DROP firewall rule '{0}' - {1}".format(drop_rule, ustr(e))
-                logger.warn(msg)
-                raise Exception(msg)
+                AddFirewallRules.add_iptables_rules(wait, dst_ip, uid)
+            except Exception as error:
+                logger.warn(ustr(error))
+                raise
 
             logger.info("Successfully added Azure fabric firewall rules")
 
@@ -1382,55 +1376,57 @@ class DefaultOSUtil(object):
                     break
         return system_cpu
 
-    def get_nic_state(self):
+    def get_nic_state(self, as_string=False):
         """
         Capture NIC state (IPv4 and IPv6 addresses plus link state).
 
-        :return: Dictionary of NIC state objects, with the NIC name as key
+        :return: By default returns a dictionary of NIC state objects, with the NIC name as key. If as_string is True
+                 returns the state as a string
         :rtype: dict(str,NetworkInformationCard)
         """
         state = {}
 
-        status, output = shellutil.run_get_output("ip -a -o link", chk_err=False, log_cmd=False)
-        # pylint: disable=W1401
-        # pylint: disable=W0105
-        """
-        1: lo: <LOOPBACK,UP,LOWER_UP> mtu 65536 qdisc noqueue state UNKNOWN mode DEFAULT group default qlen 1000\    link/loopback 00:00:00:00:00:00 brd 00:00:00:00:00:00 promiscuity 0 addrgenmode eui64
-        2: eth0: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc mq state UP mode DEFAULT group default qlen 1000\    link/ether 00:0d:3a:30:c3:5a brd ff:ff:ff:ff:ff:ff promiscuity 0 addrgenmode eui64
-        3: docker0: <NO-CARRIER,BROADCAST,MULTICAST,UP> mtu 1500 qdisc noqueue state DOWN mode DEFAULT group default \    link/ether 02:42:b5:d5:00:1d brd ff:ff:ff:ff:ff:ff promiscuity 0 \    bridge forward_delay 1500 hello_time 200 max_age 2000 ageing_time 30000 stp_state 0 priority 32768 vlan_filtering 0 vlan_protocol 802.1Q addrgenmode eui64
+        all_command = ["ip", "-a", "-o", "link"]
+        inet_command = ["ip", "-4", "-a", "-o", "address"]
+        inet6_command = ["ip", "-6", "-a", "-o", "address"]
 
-        """
-        # pylint: enable=W0105
-        if status != 0:
-            logger.verbose("Could not fetch NIC link info; status {0}, {1}".format(status, output))
-            return {}
+        try:
+            all_output = shellutil.run_command(all_command)
+        except shellutil.CommandError as command_error:
+            logger.verbose("Could not fetch NIC link info: {0}", ustr(command_error))
+            return "" if as_string else {}
 
-        for entry in output.splitlines():
+        if as_string:
+            def run_command(command):
+                try:
+                    return shellutil.run_command(command)
+                except shellutil.CommandError as command_error:
+                    return str(command_error)
+
+            inet_output = run_command(inet_command)
+            inet6_output = run_command(inet6_command)
+
+            return "Executing {0}:\n{1}\nExecuting {2}:\n{3}\nExecuting {4}:\n{5}\n".format(all_command, all_output, inet_command, inet_output, inet6_command, inet6_output)
+        else:
+            self._update_nic_state_all(state, all_output)
+            self._update_nic_state(state, inet_command, NetworkInterfaceCard.add_ipv4, "an IPv4 address")
+            self._update_nic_state(state, inet6_command, NetworkInterfaceCard.add_ipv6, "an IPv6 address")
+            return state
+
+    @staticmethod
+    def _update_nic_state_all(state, command_output):
+        for entry in command_output.splitlines():
+            # Sample output:
+            #     1: lo: <LOOPBACK,UP,LOWER_UP> mtu 65536 qdisc noqueue state UNKNOWN mode DEFAULT group default qlen 1000\    link/loopback 00:00:00:00:00:00 brd 00:00:00:00:00:00 promiscuity 0 addrgenmode eui64
+            #     2: eth0: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc mq state UP mode DEFAULT group default qlen 1000\    link/ether 00:0d:3a:30:c3:5a brd ff:ff:ff:ff:ff:ff promiscuity 0 addrgenmode eui64
+            #     3: docker0: <NO-CARRIER,BROADCAST,MULTICAST,UP> mtu 1500 qdisc noqueue state DOWN mode DEFAULT group default \    link/ether 02:42:b5:d5:00:1d brd ff:ff:ff:ff:ff:ff promiscuity 0 \    bridge forward_delay 1500 hello_time 200 max_age 2000 ageing_time 30000 stp_state 0 priority 32768 vlan_filtering 0 vlan_protocol 802.1Q addrgenmode eui64
             result = IP_COMMAND_OUTPUT.match(entry)
             if result:
                 name = result.group(1)
                 state[name] = NetworkInterfaceCard(name, result.group(2))
 
-        self._update_nic_state(state, "ip -4 -a -o address", NetworkInterfaceCard.add_ipv4, "an IPv4 address")
-        # pylint: disable=W0105
-        """  # pylint: disable=W1401
-        1: lo    inet 127.0.0.1/8 scope host lo\       valid_lft forever preferred_lft forever
-        2: eth0    inet 10.145.187.220/26 brd 10.145.187.255 scope global eth0\       valid_lft forever preferred_lft forever
-        3: docker0    inet 192.168.43.1/24 brd 192.168.43.255 scope global docker0\       valid_lft forever preferred_lft forever
-        """
-        # pylint: enable=W0105
-
-        self._update_nic_state(state, "ip -6 -a -o address", NetworkInterfaceCard.add_ipv6, "an IPv6 address")
-        # pylint: disable=W0105
-        """  # pylint: disable=W1401
-        1: lo    inet6 ::1/128 scope host \       valid_lft forever preferred_lft forever
-        2: eth0    inet6 fe80::20d:3aff:fe30:c35a/64 scope link \       valid_lft forever preferred_lft forever
-        """
-        # pylint: enable=W0105
-
-        return state
-
-    def _update_nic_state(self, state, ip_command, handler, description):
+    @staticmethod
+    def _update_nic_state(state, ip_command, handler, description):
         """
         Update the state of NICs based on the output of a specified ip subcommand.
 
@@ -1439,18 +1435,27 @@ class DefaultOSUtil(object):
         :param handler: A method on the NetworkInterfaceCard class
         :param str description: Description of the particular information being added to the state
         """
-        status, output = shellutil.run_get_output(ip_command, chk_err=True)
-        if status != 0:
-            return
+        try:
+            output = shellutil.run_command(ip_command)
 
-        for entry in output.splitlines():
-            result = IP_COMMAND_OUTPUT.match(entry)
-            if result:
-                interface_name = result.group(1)
-                if interface_name in state:
-                    handler(state[interface_name], result.group(2))
-                else:
-                    logger.error("Interface {0} has {1} but no link state".format(interface_name, description))
+            for entry in output.splitlines():
+                # family inet sample output:
+                #     1: lo    inet 127.0.0.1/8 scope host lo\       valid_lft forever preferred_lft forever
+                #     2: eth0    inet 10.145.187.220/26 brd 10.145.187.255 scope global eth0\       valid_lft forever preferred_lft forever
+                #     3: docker0    inet 192.168.43.1/24 brd 192.168.43.255 scope global docker0\       valid_lft forever preferred_lft forever
+                #
+                # family inet6 sample output:
+                #     1: lo    inet6 ::1/128 scope host \       valid_lft forever preferred_lft forever
+                #     2: eth0    inet6 fe80::20d:3aff:fe30:c35a/64 scope link \       valid_lft forever preferred_lft forever
+                result = IP_COMMAND_OUTPUT.match(entry)
+                if result:
+                    interface_name = result.group(1)
+                    if interface_name in state:
+                        handler(state[interface_name], result.group(2))
+                    else:
+                        logger.error("Interface {0} has {1} but no link state".format(interface_name, description))
+        except shellutil.CommandError as command_error:
+            logger.error("[{0}] failed: {1}", ' '.join(ip_command), str(command_error))
 
     @staticmethod
     def _run_command_without_raising(cmd, log_error=True):

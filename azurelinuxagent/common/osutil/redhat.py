@@ -99,6 +99,10 @@ class RedhatOSUtil(Redhat6xOSUtil):
         super(RedhatOSUtil, self).__init__()
         self.service_name = self.get_service_name()
 
+    @staticmethod
+    def get_systemd_unit_file_install_path():
+        return "/usr/lib/systemd/system"
+
     def set_hostname(self, hostname):
         """
         Unlike redhat 6.x, redhat 7.x will set hostname via hostnamectl

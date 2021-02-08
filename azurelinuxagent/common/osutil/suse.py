@@ -69,6 +69,10 @@ class SUSEOSUtil(SUSE11OSUtil):
         super(SUSEOSUtil, self).__init__()
         self.dhclient_name = 'wickedd-dhcp4'
 
+    @staticmethod
+    def get_systemd_unit_file_install_path():
+        return "/usr/lib/systemd/system"
+
     def set_hostname(self, hostname):
         self._run_command_without_raising(["hostnamectl", "set-hostname", hostname], log_error=False)
 

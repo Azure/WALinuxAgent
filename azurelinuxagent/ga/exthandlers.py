@@ -43,7 +43,7 @@ from azurelinuxagent.common.event import add_event, elapsed_milliseconds, report
     add_periodic, EVENTS_DIRECTORY
 from azurelinuxagent.common.exception import ExtensionDownloadError, ExtensionError, ExtensionErrorCodes, \
     ExtensionOperationError, ExtensionUpdateError, ProtocolError, ProtocolNotFoundError, ExtensionConfigError
-from azurelinuxagent.common.future import ustr
+from azurelinuxagent.common.future import ustr, is_file_not_found_error
 from azurelinuxagent.common.protocol.restapi import ExtensionStatus, ExtensionSubStatus, ExtHandler, ExtHandlerStatus, \
     VMStatus
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
@@ -81,7 +81,7 @@ _TRUNCATED_SUFFIX = u" ... [TRUNCATED]"
 _NUM_OF_STATUS_FILE_RETRIES = 5
 _STATUS_FILE_RETRY_DELAY = 2  # seconds
 
-_ENABLE_EXTENSION_TELEMETRY_PIPELINE = False
+_ENABLE_EXTENSION_TELEMETRY_PIPELINE = True
 
 
 def is_extension_telemetry_pipeline_enabled():
@@ -768,7 +768,43 @@ class ExtHandlersHandler(object):
 
 
 class ExtHandlerInstance(object):
-    def __init__(self, ext_handler, protocol):
+
+    def __truncate_file_head(self, filename, max_size):
+        try:
+            if os.stat(filename).st_size <= max_size:
+                return
+            
+            with open(filename, "rb") as existing_file:
+                existing_file.seek(-1 * max_size, 2)
+                _ = existing_file.readline()
+
+                with open(filename + ".tmp", "wb") as tmp_file:
+                    shutil.copyfileobj(existing_file, tmp_file)
+
+            os.rename(filename + ".tmp", filename)
+
+        except (IOError, OSError) as e:
+            if is_file_not_found_error(e):
+                # If CommandExecution.log does not exist, it's not noteworthy;
+                # this just means that no extension with self.ext_handler.name is
+                # installed.
+                return
+            
+            logger.error("Exception occurred while attempting to truncate CommandExecution.log "
+                "for extension {0}. Exception is: {1}", self.ext_handler.name, e)
+
+            for f in (filename, filename + ".tmp"):
+                try:
+                    os.remove(f)
+                except (IOError, OSError) as cleanup_exception:
+                    if is_file_not_found_error(cleanup_exception):
+                        logger.info("File '{0}' does not exist.", f)
+                    else:
+                        logger.warn("Exception occurred while attempting "
+                            "to remove file '{0}': {1}", f, cleanup_exception)
+
+
+    def __init__(self, ext_handler, protocol, execution_log_max_size=(10 * 1024 * 1024)):
         self.ext_handler = ext_handler
         self.protocol = protocol
         self.operation = None
@@ -781,10 +817,12 @@ class ExtHandlerInstance(object):
             fileutil.mkdir(self.get_log_dir(), mode=0o755)
         except IOError as e:
             self.logger.error(u"Failed to create extension log dir: {0}", e)
+        else:
+            log_file = os.path.join(self.get_log_dir(), "CommandExecution.log")
 
-        log_file = os.path.join(self.get_log_dir(), "CommandExecution.log")
-        self.logger.add_appender(logger.AppenderType.FILE,
-                                 logger.LogLevel.INFO, log_file)
+            self.__truncate_file_head(log_file, execution_log_max_size)
+
+            self.logger.add_appender(logger.AppenderType.FILE, logger.LogLevel.INFO, log_file)
 
     def decide_version(self, target_state=None):
         self.logger.verbose("Decide which version to use")
@@ -1656,7 +1694,7 @@ class HandlerEnvironment(object):
     configFolder = "configFolder"
     statusFolder = "statusFolder"
     heartbeatFile = "heartbeatFile"
-    eventsFolder = "eventsFolder"
+    eventsFolder = "eventsFolder_preview"
     name = "name"
     version = "version"
 
