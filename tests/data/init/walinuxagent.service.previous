@@ -1,0 +1,20 @@
+#
+# NOTE: This is the service file used in older versions of the agent (<= 2.2.54)
+#
+[Unit]
+Description=Azure Linux Agent
+
+After=network-online.target cloud-init.service
+Wants=network-online.target sshd.service sshd-keygen.service
+
+ConditionFileIsExecutable=/usr/sbin/waagent
+ConditionPathExists=/etc/waagent.conf
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/python3 -u /usr/sbin/waagent -daemon
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
+
