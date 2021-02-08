@@ -35,7 +35,7 @@ from azurelinuxagent.common.event import WALAEventOperation
 from azurelinuxagent.common.exception import CGroupsException, ExtensionError, ExtensionErrorCodes
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.utils import shellutil
-from tests.common.mock_cgroup_commands import mock_cgroup_commands, UnitFilePaths
+from tests.common.mock_cgroup_environment import mock_cgroup_environment, UnitFilePaths
 from tests.tools import AgentTestCase, patch, mock_sleep, i_am_root, data_dir
 from tests.utils.miscellaneous_tools import format_processes, wait_for
 
@@ -53,11 +53,11 @@ class CGroupConfiguratorSystemdTestCase(AgentTestCase):
         CGroupConfigurator._instance = None  # pylint: disable=protected-access
         configurator = CGroupConfigurator.get_instance()
         CGroupsTelemetry.reset()
-        with mock_cgroup_commands(self.tmp_dir) as mocks:
+        with mock_cgroup_environment(self.tmp_dir) as mock_environment:
             if command_mocks is not None:
                 for command in command_mocks:
-                    mocks.add_command_mock(command[0], command[1])
-            configurator.mocks = mocks
+                    mock_environment.add_command(command[0], command[1])
+            configurator.mocks = mock_environment
             if initialize:
                 configurator.initialize()
             yield configurator
@@ -359,14 +359,13 @@ cgroup on /sys/fs/cgroup/blkio type cgroup (rw,nosuid,nodev,noexec,relatime,blki
         original_popen = subprocess.Popen
         systemd_timeout_command = "echo 'Failed to start transient scope unit: Connection timed out' >&2 && exit 1"
 
-        def mock_popen(*args, **kwargs):
+        def mock_popen(command, *args, **kwargs):
             # If trying to invoke systemd, mock what would happen if systemd timed out internally:
             # write failure to stderr and exit with exit code 1.
-            new_args = args
-            if "systemd-run" in args[0]:
-                new_args = (systemd_timeout_command,)
+            if "systemd-run" in command:
+                command = systemd_timeout_command
 
-            return original_popen(new_args, **kwargs)
+            return original_popen(command, *args, **kwargs)
         mock_popen.extension_calls = []
 
         with tempfile.TemporaryFile(dir=self.tmp_dir, mode="w+b") as stdout:
@@ -501,11 +500,10 @@ cgroup on /sys/fs/cgroup/blkio type cgroup (rw,nosuid,nodev,noexec,relatime,blki
 
         original_popen = subprocess.Popen
 
-        def mock_popen(*args, **kwargs):
+        def mock_popen(command, *args, **kwargs):
             # Inject a syntax error to the call
-            systemd_command = args[0].replace('systemd-run', 'systemd-run syntax_error')
-            new_args = (systemd_command,)
-            return original_popen(new_args, **kwargs)
+            systemd_command = command.replace('systemd-run', 'systemd-run syntax_error')
+            return original_popen(systemd_command, *args, **kwargs)
 
         expected_output = "[stdout]\n{0}\n\n\n[stderr]\n"
 
