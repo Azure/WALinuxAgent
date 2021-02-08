@@ -1637,9 +1637,13 @@ Description=Slice for Azure VM Extensions""")
         with patch("azurelinuxagent.common.logger.info") as patch_info:
             with self._get_update_handler(iterations=1) as (update_handler, _):
                 with patch("azurelinuxagent.common.utils.shellutil.subprocess.Popen", side_effect=_mock_popen):
-                    update_handler.run(debug=True)
+                    with patch('azurelinuxagent.common.conf.enable_firewall', return_value=False):
+                        update_handler.run(debug=True)
 
-        self.assertEqual(0, len(executed_firewall_commands), "firwall-cmd should not be called at all")
+        self.assertEqual(0, len(executed_firewall_commands), "firewall-cmd should not be called at all")
+        self.assertTrue(any(
+            "Not setting up persistent firewall rules as OS.EnableFirewall=False" == args[0] for (args, _) in
+            patch_info.call_args_list), "Info not logged properly")
 
     def test_it_should_setup_persistent_firewall_rules_on_startup(self):
         iterations = 1
@@ -1654,7 +1658,8 @@ Description=Slice for Azure VM Extensions""")
 
         with self._get_update_handler(iterations) as (update_handler, _):
             with patch("azurelinuxagent.common.utils.shellutil.subprocess.Popen", side_effect=_mock_popen):
-                update_handler.run(debug=True)
+                with patch('azurelinuxagent.common.conf.enable_firewall', return_value=True):
+                    update_handler.run(debug=True)
 
         # Firewall-cmd should only be called 3 times - 1st to check if running, 2nd & 3rd for the QueryPassThrough cmd
         self.assertEqual(3, len(executed_commands), "The number of times firwall-cmd should be called is only 3")
