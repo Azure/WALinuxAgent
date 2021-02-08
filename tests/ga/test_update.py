@@ -1624,7 +1624,24 @@ Description=Slice for Azure VM Extensions""")
             self.assertIn(HandlerEnvironment.eventsFolder, content[0][HandlerEnvironment.handlerEnvironment],
                           "{0} not found in HandlerEnv file".format(HandlerEnvironment.eventsFolder))
 
-    def test_it_should_setup_firewall_rules_on_startup(self):
+    def test_it_should_not_setup_persistent_firewall_rules_if_EnableFirewall_is_disabled(self):
+        original_popen = subprocess.Popen
+        executed_firewall_commands = []
+
+        def _mock_popen(cmd, *args, **kwargs):
+            if 'firewall-cmd' in cmd:
+                executed_firewall_commands.append(cmd)
+                cmd = ["echo", "running"]
+            return original_popen(cmd, *args, **kwargs)
+
+        with patch("azurelinuxagent.common.logger.info") as patch_info:
+            with self._get_update_handler(iterations=1) as (update_handler, _):
+                with patch("azurelinuxagent.common.utils.shellutil.subprocess.Popen", side_effect=_mock_popen):
+                    update_handler.run(debug=True)
+
+        self.assertEqual(0, len(executed_firewall_commands), "firwall-cmd should not be called at all")
+
+    def test_it_should_setup_persistent_firewall_rules_on_startup(self):
         iterations = 1
         original_popen = subprocess.Popen
         executed_commands = []
