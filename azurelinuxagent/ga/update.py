@@ -833,6 +833,11 @@ class UpdateHandler(object):
 
     @staticmethod
     def _ensure_firewall_rules_persisted(dst_ip):
+
+        if not conf.enable_firewall():
+            logger.info("Not setting up persistent firewall rules as OS.EnableFirewall=False")
+            return
+
         is_success = False
         logger.info("Starting setup for Persistent firewall rules")
         try:
