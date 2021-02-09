@@ -1285,13 +1285,13 @@ class TestExtension(ExtensionTestCase):
         protocol.get_artifacts_profile = MagicMock()
 
         # Disable extension handling blocking
-        exthandlers_handler._extension_processing_allowed = Mock(return_value=False)  # pylint: disable=protected-access
+        exthandlers_handler._extension_processing_allowed = Mock(return_value=False)
         with patch.object(ExtHandlersHandler, 'handle_ext_handlers') as patch_handle_ext_handlers:
             exthandlers_handler.run()
             self.assertEqual(0, patch_handle_ext_handlers.call_count)
 
         # enable extension handling blocking
-        exthandlers_handler._extension_processing_allowed = Mock(return_value=True)  # pylint: disable=protected-access
+        exthandlers_handler._extension_processing_allowed = Mock(return_value=True)
         with patch.object(ExtHandlersHandler, 'handle_ext_handlers') as patch_handle_ext_handlers:
             exthandlers_handler.run()
             self.assertEqual(1, patch_handle_ext_handlers.call_count)

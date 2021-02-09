@@ -120,8 +120,8 @@ class TestCpuCgroup(AgentTestCase):
 
         cgroup.initialize_cpu_usage()
 
-        self.assertEqual(cgroup._current_cgroup_cpu, 63763)  # pylint: disable=protected-access
-        self.assertEqual(cgroup._current_system_cpu, 5496872)  # pylint: disable=protected-access
+        self.assertEqual(cgroup._current_cgroup_cpu, 63763)
+        self.assertEqual(cgroup._current_system_cpu, 5496872)
 
     def test_get_cpu_usage_should_return_the_cpu_usage_since_its_last_invocation(self):
         osutil = get_osutil()
@@ -166,8 +166,8 @@ class TestCpuCgroup(AgentTestCase):
 
         cgroup.initialize_cpu_usage()
 
-        self.assertEqual(cgroup._current_cgroup_cpu, 0)  # pylint: disable=protected-access
-        self.assertEqual(cgroup._current_system_cpu, 5496872)  # check the system usage just for test sanity  # pylint: disable=protected-access
+        self.assertEqual(cgroup._current_cgroup_cpu, 0)
+        self.assertEqual(cgroup._current_system_cpu, 5496872)  # check the system usage just for test sanity
 
 
     def test_initialize_cpu_usage_should_raise_an_exception_when_called_more_than_once(self):

@@ -80,7 +80,7 @@ class CGroupsApiTestCase(_MockedFileSystemTestCase):
         mock_path_exists.path_tested = False
 
         with patch("azurelinuxagent.common.cgroupapi.os.path.exists", mock_path_exists):
-            is_systemd = CGroupsApi.is_systemd()  # pylint: disable=protected-access
+            is_systemd = CGroupsApi.is_systemd()
 
         self.assertTrue(is_systemd)
 
@@ -98,7 +98,7 @@ class CGroupsApiTestCase(_MockedFileSystemTestCase):
         mock_path_exists.path_tested = False
 
         with patch("azurelinuxagent.common.cgroupapi.os.path.exists", mock_path_exists):
-            is_systemd = CGroupsApi.is_systemd()  # pylint: disable=protected-access
+            is_systemd = CGroupsApi.is_systemd()
 
         self.assertFalse(is_systemd)
 
@@ -197,7 +197,7 @@ class SystemdCgroupsApiTestCase(AgentTestCase):
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE)
 
-            tracked = CGroupsTelemetry._tracked  # pylint: disable=protected-access
+            tracked = CGroupsTelemetry._tracked
 
             self.assertTrue(
                 any(cg for cg in tracked if cg.name == 'Microsoft.Compute.TestExtension-1.2.3' and 'cpu' in cg.path),

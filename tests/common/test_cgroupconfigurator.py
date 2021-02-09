@@ -43,14 +43,12 @@ from tests.utils.miscellaneous_tools import format_processes, wait_for
 class CGroupConfiguratorSystemdTestCase(AgentTestCase):
     @classmethod
     def tearDownClass(cls):
-        # protected-access<W0212> Disabled: OK to access CGroupConfigurator._instance from unit test for CGroupConfigurator
-        CGroupConfigurator._instance = None  # pylint: disable=protected-access
+        CGroupConfigurator._instance = None
         AgentTestCase.tearDownClass()
 
     @contextlib.contextmanager
     def _get_cgroup_configurator(self, initialize=True, command_mocks=None):
-        # protected-access<W0212> Disabled: OK to access CGroupConfigurator._instance from unit test for CGroupConfigurator
-        CGroupConfigurator._instance = None  # pylint: disable=protected-access
+        CGroupConfigurator._instance = None
         configurator = CGroupConfigurator.get_instance()
         CGroupsTelemetry.reset()
         with mock_cgroup_commands(self.tmp_dir) as mocks:
@@ -64,8 +62,7 @@ class CGroupConfiguratorSystemdTestCase(AgentTestCase):
 
     def test_initialize_should_start_tracking_the_agent_cgroups(self):
         with self._get_cgroup_configurator() as configurator:
-            # protected-access<W0212> Disabled: OK to access CGroupConfigurator._tracked from unit test for CGroupConfigurator
-            tracked = CGroupsTelemetry._tracked  # pylint: disable=protected-access
+            tracked = CGroupsTelemetry._tracked
 
             self.assertTrue(configurator.enabled(), "Cgroups should be enabled")
             self.assertTrue(any(cg for cg in tracked if cg.name == 'walinuxagent.service' and 'cpu' in cg.path),
@@ -87,8 +84,7 @@ cgroup on /sys/fs/cgroup/cpu,cpuacct type cgroup (rw,nosuid,nodev,noexec,relatim
 cgroup on /sys/fs/cgroup/blkio type cgroup (rw,nosuid,nodev,noexec,relatime,blkio)
 ''')]
         with self._get_cgroup_configurator(command_mocks=command_mocks) as configurator:
-            # protected-access<W0212> Disabled: OK to access CGroupConfigurator._tracked from unit test for CGroupConfigurator
-            tracked = CGroupsTelemetry._tracked  # pylint: disable=protected-access
+            tracked = CGroupsTelemetry._tracked
 
             self.assertTrue(configurator.enabled(), "Cgroups should be enabled")
             self.assertFalse(any(cg for cg in tracked if cg.name == 'walinuxagent.service' and 'memory' in cg.path),
@@ -109,8 +105,7 @@ cgroup on /sys/fs/cgroup/devices type cgroup (rw,nosuid,nodev,noexec,relatime,de
 cgroup on /sys/fs/cgroup/blkio type cgroup (rw,nosuid,nodev,noexec,relatime,blkio)
 ''')]
         with self._get_cgroup_configurator(command_mocks=command_mocks) as configurator:
-            # protected-access<W0212> Disabled: OK to access CGroupConfigurator._tracked from unit test for CGroupConfigurator
-            tracked = CGroupsTelemetry._tracked  # pylint: disable=protected-access
+            tracked = CGroupsTelemetry._tracked
 
             self.assertFalse(configurator.enabled(), "Cgroups should not be enabled")
             self.assertEqual(len(tracked), 0, "No cgroups should be tracked. Tracked: {0}".format(tracked))
@@ -131,8 +126,7 @@ cgroup on /sys/fs/cgroup/blkio type cgroup (rw,nosuid,nodev,noexec,relatime,blki
 ''')]
 
         with self._get_cgroup_configurator(command_mocks=command_mocks) as configurator:
-            # protected-access<W0212> Disabled: OK to access CGroupConfigurator._tracked from unit test for CGroupConfigurator
-            tracked = CGroupsTelemetry._tracked  # pylint: disable=protected-access
+            tracked = CGroupsTelemetry._tracked
 
             self.assertFalse(configurator.enabled(), "Cgroups should not be enabled")
             self.assertEqual(len(tracked), 0, "No cgroups should be tracked. Tracked: {0}".format(tracked))
@@ -209,8 +203,7 @@ cgroup on /sys/fs/cgroup/blkio type cgroup (rw,nosuid,nodev,noexec,relatime,blki
 
             configurator.disable()
 
-            # protected-access<W0212> Disabled: OK to access CGroupConfigurator._tracked from unit test for CGroupConfigurator
-            self.assertEqual(len(CGroupsTelemetry._tracked), 0)  # pylint: disable=protected-access
+            self.assertEqual(len(CGroupsTelemetry._tracked), 0)
 
 
     @patch('time.sleep', side_effect=lambda _: mock_sleep())
@@ -268,8 +261,7 @@ cgroup on /sys/fs/cgroup/blkio type cgroup (rw,nosuid,nodev,noexec,relatime,blki
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE)
 
-        # protected-access<W0212> Disabled: OK to access CGroupConfigurator._tracked from unit test for CGroupConfigurator
-        tracked = CGroupsTelemetry._tracked  # pylint: disable=protected-access
+        tracked = CGroupsTelemetry._tracked
 
         self.assertTrue(
             any(cg for cg in tracked if cg.name == 'Microsoft.Compute.TestExtension-1.2.3' and 'cpu' in cg.path),
@@ -344,7 +336,7 @@ cgroup on /sys/fs/cgroup/blkio type cgroup (rw,nosuid,nodev,noexec,relatime,blki
                         self.assertEqual(command, extension_calls[1],
                                           "The second call to the extension should not have used systemd")
 
-                        self.assertEqual(len(CGroupsTelemetry._tracked), 0, "No cgroups should have been created")  # pylint: disable=protected-access
+                        self.assertEqual(len(CGroupsTelemetry._tracked), 0, "No cgroups should have been created")
 
                         self.assertIn("TEST_OUTPUT\n", command_output, "The test output was not captured")
 
@@ -391,7 +383,7 @@ cgroup on /sys/fs/cgroup/blkio type cgroup (rw,nosuid,nodev,noexec,relatime,blki
                     self.assertIn("systemd-run --unit=Microsoft.Compute.TestExtension_1.2.3", extension_calls[0], "The first call to the extension should have used systemd")
                     self.assertNotIn("systemd-run", extension_calls[1], "The second call to the extension should not have used systemd")
 
-                    self.assertEqual(len(CGroupsTelemetry._tracked), 0, "No cgroups should have been created")  # pylint: disable=protected-access
+                    self.assertEqual(len(CGroupsTelemetry._tracked), 0, "No cgroups should have been created")
 
     @attr('requires_sudo')
     @patch('time.sleep', side_effect=lambda _: mock_sleep())
@@ -624,8 +616,7 @@ exit 0
             # check_processes_in_agent_cgroup uses shellutil and the cgroups api to get the commands that are currently running;
             # wait for all the processes to show up
             #
-            # protected-access: Access to a protected member _cgroups_api of a client class - Disabled: OK to access protected member in this unit test
-            if not wait_for(lambda: len(shellutil.get_running_commands()) > 0 and len(configurator._cgroups_api.get_systemd_run_commands()) > 0):  # pylint:disable=protected-access
+            if not wait_for(lambda: len(shellutil.get_running_commands()) > 0 and len(configurator._cgroups_api.get_systemd_run_commands()) > 0):
                 raise Exception("Timeout while attempting to track the child commands")
 
             #

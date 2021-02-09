@@ -395,7 +395,7 @@ class TestImds(AgentTestCase):
 
             for has_primary_ioerror in (False, True):
                 # secondary endpoint unreachable
-                test_subject._http_get = Mock(side_effect=self._mock_http_get)  # pylint: disable=protected-access
+                test_subject._http_get = Mock(side_effect=self._mock_http_get)
                 self._mock_imds_setup(primary_ioerror=has_primary_ioerror, secondary_ioerror=True)
                 result = test_subject.get_metadata(resource_path=resource_path, is_health=is_health)
                 self.assertFalse(result.success) if has_primary_ioerror else self.assertTrue(result.success)  # pylint: disable=expression-not-assigned
@@ -404,58 +404,58 @@ class TestImds(AgentTestCase):
                     self.assertEqual('IMDS error in /metadata/{0}: Unable to connect to endpoint'.format(resource_path), result.response)
                 else:
                     self.assertEqual('Mock success response', result.response)
-                for _, kwargs in test_subject._http_get.call_args_list:  # pylint: disable=protected-access
+                for _, kwargs in test_subject._http_get.call_args_list:
                     self.assertTrue('User-Agent' in kwargs['headers'])
                     self.assertEqual(expected_useragent, kwargs['headers']['User-Agent'])
-                self.assertEqual(2 if has_primary_ioerror else 1, test_subject._http_get.call_count)  # pylint: disable=protected-access
+                self.assertEqual(2 if has_primary_ioerror else 1, test_subject._http_get.call_count)
 
                 # IMDS success
-                test_subject._http_get = Mock(side_effect=self._mock_http_get)  # pylint: disable=protected-access
+                test_subject._http_get = Mock(side_effect=self._mock_http_get)
                 self._mock_imds_setup(primary_ioerror=has_primary_ioerror)
                 result = test_subject.get_metadata(resource_path=resource_path, is_health=is_health)
                 self.assertTrue(result.success)
                 self.assertFalse(result.service_error)
                 self.assertEqual('Mock success response', result.response)
-                for _, kwargs in test_subject._http_get.call_args_list:  # pylint: disable=protected-access
+                for _, kwargs in test_subject._http_get.call_args_list:
                     self.assertTrue('User-Agent' in kwargs['headers'])
                     self.assertEqual(expected_useragent, kwargs['headers']['User-Agent'])
-                self.assertEqual(2 if has_primary_ioerror else 1, test_subject._http_get.call_count)  # pylint: disable=protected-access
+                self.assertEqual(2 if has_primary_ioerror else 1, test_subject._http_get.call_count)
 
                 # IMDS throttled
-                test_subject._http_get = Mock(side_effect=self._mock_http_get)  # pylint: disable=protected-access
+                test_subject._http_get = Mock(side_effect=self._mock_http_get)
                 self._mock_imds_setup(primary_ioerror=has_primary_ioerror, throttled=True)
                 result = test_subject.get_metadata(resource_path=resource_path, is_health=is_health)
                 self.assertFalse(result.success)
                 self.assertFalse(result.service_error)
                 self.assertEqual('IMDS error in /metadata/{0}: Throttled'.format(resource_path), result.response)
-                for _, kwargs in test_subject._http_get.call_args_list:  # pylint: disable=protected-access
+                for _, kwargs in test_subject._http_get.call_args_list:
                     self.assertTrue('User-Agent' in kwargs['headers'])
                     self.assertEqual(expected_useragent, kwargs['headers']['User-Agent'])
-                self.assertEqual(2 if has_primary_ioerror else 1, test_subject._http_get.call_count)  # pylint: disable=protected-access
+                self.assertEqual(2 if has_primary_ioerror else 1, test_subject._http_get.call_count)
 
                 # IMDS gone error
-                test_subject._http_get = Mock(side_effect=self._mock_http_get)  # pylint: disable=protected-access
+                test_subject._http_get = Mock(side_effect=self._mock_http_get)
                 self._mock_imds_setup(primary_ioerror=has_primary_ioerror, gone_error=True)
                 result = test_subject.get_metadata(resource_path=resource_path, is_health=is_health)
                 self.assertFalse(result.success)
                 self.assertTrue(result.service_error)
                 self.assertEqual('IMDS error in /metadata/{0}: HTTP Failed with Status Code 410: Gone'.format(resource_path), result.response)
-                for _, kwargs in test_subject._http_get.call_args_list:  # pylint: disable=protected-access
+                for _, kwargs in test_subject._http_get.call_args_list:
                     self.assertTrue('User-Agent' in kwargs['headers'])
                     self.assertEqual(expected_useragent, kwargs['headers']['User-Agent'])
-                self.assertEqual(2 if has_primary_ioerror else 1, test_subject._http_get.call_count)  # pylint: disable=protected-access
+                self.assertEqual(2 if has_primary_ioerror else 1, test_subject._http_get.call_count)
 
                 # IMDS bad request
-                test_subject._http_get = Mock(side_effect=self._mock_http_get)  # pylint: disable=protected-access
+                test_subject._http_get = Mock(side_effect=self._mock_http_get)
                 self._mock_imds_setup(primary_ioerror=has_primary_ioerror, bad_request=True)
                 result = test_subject.get_metadata(resource_path=resource_path, is_health=is_health)
                 self.assertFalse(result.success)
                 self.assertFalse(result.service_error)
                 self.assertEqual('IMDS error in /metadata/{0}: [HTTP Failed] [404: reason] Mock not found'.format(resource_path), result.response)
-                for _, kwargs in test_subject._http_get.call_args_list:  # pylint: disable=protected-access
+                for _, kwargs in test_subject._http_get.call_args_list:
                     self.assertTrue('User-Agent' in kwargs['headers'])
                     self.assertEqual(expected_useragent, kwargs['headers']['User-Agent'])
-                self.assertEqual(2 if has_primary_ioerror else 1, test_subject._http_get.call_count)  # pylint: disable=protected-access
+                self.assertEqual(2 if has_primary_ioerror else 1, test_subject._http_get.call_count)
 
     def _mock_imds_setup(self, primary_ioerror=False, secondary_ioerror=False, gone_error=False, throttled=False, bad_request=False):
         self._mock_imds_expect_fallback = primary_ioerror  # pylint: disable=attribute-defined-outside-init

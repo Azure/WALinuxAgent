@@ -261,11 +261,11 @@ class AgentTestCase(unittest.TestCase):
 
         def __exit__(self, exception_type, exception, *_):
             if exception_type is None:
-                expected = AgentTestCase._AssertRaisesContextManager._get_type_name(self._expected_exception_type)  # pylint: disable=protected-access
+                expected = AgentTestCase._AssertRaisesContextManager._get_type_name(self._expected_exception_type)
                 self._test_case.fail("Did not raise an exception; expected '{0}'".format(expected))
             if not issubclass(exception_type, self._expected_exception_type):
-                raised = AgentTestCase._AssertRaisesContextManager._get_type_name(exception_type)  # pylint: disable=protected-access
-                expected = AgentTestCase._AssertRaisesContextManager._get_type_name(self._expected_exception_type)  # pylint: disable=protected-access
+                raised = AgentTestCase._AssertRaisesContextManager._get_type_name(exception_type)
+                expected = AgentTestCase._AssertRaisesContextManager._get_type_name(self._expected_exception_type)
                 self._test_case.fail("Raised '{0}', but expected '{1}'".format(raised, expected))
 
             self.exception = exception  # pylint: disable=attribute-defined-outside-init
@@ -506,7 +506,7 @@ def distros(distro_name=".*", distro_version=".*", distro_full_name=".*"):
 
 def clear_singleton_instances(cls):
     # Adding this lock to avoid any race conditions
-    with cls._lock:  # pylint: disable=protected-access
+    with cls._lock:
         obj_name = "%s__%s" % (cls.__name__, currentThread().getName())  # Object Name = className__threadName
-        if obj_name in cls._instances:  # pylint: disable=protected-access
-            del cls._instances[obj_name]  # pylint: disable=protected-access
+        if obj_name in cls._instances:
+            del cls._instances[obj_name]

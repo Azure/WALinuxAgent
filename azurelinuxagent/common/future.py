@@ -69,7 +69,7 @@ def get_linux_distribution(get_full_name, supported_dists):
     """Abstract platform.linux_distribution() call which is deprecated as of
        Python 3.5 and removed in Python 3.7"""
     try:
-        supported = platform._supported_dists + (supported_dists,)  # pylint: disable=W0212
+        supported = platform._supported_dists + (supported_dists,)
         osinfo = list(
             platform.linux_distribution(  # pylint: disable=W1505
                 full_distribution_name=get_full_name,
