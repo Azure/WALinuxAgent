@@ -8,7 +8,7 @@ disable=C, # (C) convention, for programming standard violation
     consider-using-in, # (R1714): *Consider merging these comparisons with "in" to %r*
     consider-using-set-comprehension, # (R1718): *Consider using a set comprehension*
     duplicate-code, # (R0801): *Similar lines in %s files*
-    no-init, (W0232): Class has no __init__ method
+    no-init, # (W0232): Class has no __init__ method
     no-else-break, # (R1723): *Unnecessary "%s" after "break"*
     no-else-continue, # (R1724): *Unnecessary "%s" after "continue"*
     no-else-raise, # (R1720): *Unnecessary "%s" after "raise"*
