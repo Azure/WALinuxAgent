@@ -110,7 +110,7 @@ class SUSEOSUtil(SUSE11OSUtil):
         )
         if hostname_send_setting:
             value = hostname_send_setting.split('=')[-1]
-            if value == "AUTO" or value == '"{0}"'.format(hostname):
+            if value == '"AUTO"' or value == '"{0}"'.format(hostname):
                 # Return if auto send host-name is configured or the current
                 # hostname is already set up to be sent
                 return
