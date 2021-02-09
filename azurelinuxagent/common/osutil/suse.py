@@ -94,6 +94,10 @@ class SUSEOSUtil(SUSE11OSUtil):
                 else:
                     logger.warn("exceeded restart retries")
 
+    @staticmethod
+    def get_systemd_unit_file_install_path():
+        return "/usr/lib/systemd/system"
+
     def set_hostname(self, hostname):
         self._run_command_without_raising(
             ["hostnamectl", "set-hostname", hostname], log_error=False
