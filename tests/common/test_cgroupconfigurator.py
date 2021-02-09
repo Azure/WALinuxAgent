@@ -34,10 +34,9 @@ from azurelinuxagent.common.cgroupstelemetry import CGroupsTelemetry
 from azurelinuxagent.common.event import WALAEventOperation
 from azurelinuxagent.common.exception import CGroupsException, ExtensionError, ExtensionErrorCodes
 from azurelinuxagent.common.future import ustr
-from azurelinuxagent.common.osutil import get_osutil
 from azurelinuxagent.common.utils import shellutil
-from tests.common.mock_cgroup_commands import mock_cgroup_commands
-from tests.tools import AgentTestCase, patch, mock_sleep, i_am_root
+from tests.common.mock_cgroup_environment import mock_cgroup_environment, UnitFilePaths
+from tests.tools import AgentTestCase, patch, mock_sleep, i_am_root, data_dir
 from tests.utils.miscellaneous_tools import format_processes, wait_for
 
 
@@ -54,11 +53,11 @@ class CGroupConfiguratorSystemdTestCase(AgentTestCase):
         CGroupConfigurator._instance = None  # pylint: disable=protected-access
         configurator = CGroupConfigurator.get_instance()
         CGroupsTelemetry.reset()
-        with mock_cgroup_commands(self.tmp_dir) as mocks:
+        with mock_cgroup_environment(self.tmp_dir) as mock_environment:
             if command_mocks is not None:
                 for command in command_mocks:
-                    mocks.add_command_mock(command[0], command[1])
-            configurator.mocks = mocks
+                    mock_environment.add_command(command[0], command[1])
+            configurator.mocks = mock_environment
             if initialize:
                 configurator.initialize()
             yield configurator
@@ -71,8 +70,6 @@ class CGroupConfiguratorSystemdTestCase(AgentTestCase):
             self.assertTrue(configurator.enabled(), "Cgroups should be enabled")
             self.assertTrue(any(cg for cg in tracked if cg.name == 'walinuxagent.service' and 'cpu' in cg.path),
                 "The Agent's CPU is not being tracked. Tracked: {0}".format(tracked))
-            self.assertTrue(any(cg for cg in tracked if cg.name == 'walinuxagent.service' and 'memory' in cg.path),
-                "The Agent's memory is not being tracked. Tracked: {0}".format(tracked))
 
     def test_initialize_should_start_tracking_other_controllers_when_one_is_not_present(self):
         command_mocks = [(
@@ -84,9 +81,9 @@ cgroup on /sys/fs/cgroup/net_cls,net_prio type cgroup (rw,nosuid,nodev,noexec,re
 cgroup on /sys/fs/cgroup/perf_event type cgroup (rw,nosuid,nodev,noexec,relatime,perf_event)
 cgroup on /sys/fs/cgroup/hugetlb type cgroup (rw,nosuid,nodev,noexec,relatime,hugetlb)
 cgroup on /sys/fs/cgroup/freezer type cgroup (rw,nosuid,nodev,noexec,relatime,freezer)
-cgroup on /sys/fs/cgroup/memory type cgroup (rw,nosuid,nodev,noexec,relatime,memory)
 cgroup on /sys/fs/cgroup/pids type cgroup (rw,nosuid,nodev,noexec,relatime,pids)
 cgroup on /sys/fs/cgroup/devices type cgroup (rw,nosuid,nodev,noexec,relatime,devices)
+cgroup on /sys/fs/cgroup/cpu,cpuacct type cgroup (rw,nosuid,nodev,noexec,relatime,cpu,cpuacct)
 cgroup on /sys/fs/cgroup/blkio type cgroup (rw,nosuid,nodev,noexec,relatime,blkio)
 ''')]
         with self._get_cgroup_configurator(command_mocks=command_mocks) as configurator:
@@ -94,10 +91,8 @@ cgroup on /sys/fs/cgroup/blkio type cgroup (rw,nosuid,nodev,noexec,relatime,blki
             tracked = CGroupsTelemetry._tracked  # pylint: disable=protected-access
 
             self.assertTrue(configurator.enabled(), "Cgroups should be enabled")
-            self.assertFalse(any(cg for cg in tracked if cg.name == 'walinuxagent.service' and 'cpu' in cg.path),
-                "The Agent's CPU should not be tracked. Tracked: {0}".format(tracked))
-            self.assertTrue(any(cg for cg in tracked if cg.name == 'walinuxagent.service' and 'memory' in cg.path),
-                "The Agent's memory is not being tracked. Tracked: {0}".format(tracked))
+            self.assertFalse(any(cg for cg in tracked if cg.name == 'walinuxagent.service' and 'memory' in cg.path),
+                "The Agent's memory should not be tracked. Tracked: {0}".format(tracked))
 
     def test_initialize_should_not_enable_cgroups_is_the_cpu_and_memory_controllers_are_not_present(self):
         command_mocks = [(
@@ -142,20 +137,50 @@ cgroup on /sys/fs/cgroup/blkio type cgroup (rw,nosuid,nodev,noexec,relatime,blki
             self.assertFalse(configurator.enabled(), "Cgroups should not be enabled")
             self.assertEqual(len(tracked), 0, "No cgroups should be tracked. Tracked: {0}".format(tracked))
 
-    def test_initialize_should_create_slice_unit_files_when_they_do_not_exist(self):
+    def test_initialize_should_not_create_unit_files(self):
         with self._get_cgroup_configurator() as configurator:
-            # When the unit files do not exist under /lib/systemd/system, initialize() should create them
-            # (note that the mock CGroupConfigurator maps these files to a test location, so we need to use the mapped path)
-            agent_unit_name = get_osutil().get_service_name() + ".service"
-            azure_slice_unit_file = configurator.mocks.get_mapped_path("/lib/systemd/system/azure.slice")
-            extensions_slice_unit_file = configurator.mocks.get_mapped_path("/lib/systemd/system/azure-vmextensions.slice")
-            agent_drop_in_file_slice = configurator.mocks.get_mapped_path("/lib/systemd/system/{0}.d/10-Slice.conf".format(agent_unit_name))
-            agent_drop_in_file_cpu_accounting = configurator.mocks.get_mapped_path("/lib/systemd/system/{0}.d/11-CPUAccounting.conf".format(agent_unit_name))
+            # get the paths to the mocked files
+            azure_slice_unit_file = configurator.mocks.get_mapped_path(UnitFilePaths.azure)
+            extensions_slice_unit_file = configurator.mocks.get_mapped_path(UnitFilePaths.vmextensions)
+            agent_drop_in_file_slice = configurator.mocks.get_mapped_path(UnitFilePaths.slice)
+            agent_drop_in_file_cpu_accounting = configurator.mocks.get_mapped_path(UnitFilePaths.cpu_accounting)
+            agent_drop_in_file_cpu_quota = configurator.mocks.get_mapped_path(UnitFilePaths.cpu_quota)
 
+            # The mock creates the slice unit files; delete them
+            os.remove(azure_slice_unit_file)
+            os.remove(extensions_slice_unit_file)
+
+            # The service file for the agent includes settings for the slice and cpu accounting, but not for cpu quota; initialize()
+            # should not create drop in files for the first 2, but it should create one the cpu quota
+            self.assertFalse(os.path.exists(azure_slice_unit_file), "{0} should not have been created".format(azure_slice_unit_file))
+            self.assertFalse(os.path.exists(extensions_slice_unit_file), "{0} should not have been created".format(extensions_slice_unit_file))
+            self.assertFalse(os.path.exists(agent_drop_in_file_slice), "{0} should not have been created".format(agent_drop_in_file_slice))
+            self.assertFalse(os.path.exists(agent_drop_in_file_cpu_accounting), "{0} should not have been created".format(agent_drop_in_file_cpu_accounting))
+            self.assertTrue(os.path.exists(agent_drop_in_file_cpu_quota), "{0} was not created".format(agent_drop_in_file_cpu_quota))
+
+    def test_initialize_should_create_unit_files_when_the_agent_service_file_is_not_updated(self):
+        with self._get_cgroup_configurator(initialize=False) as configurator:
+            # get the paths to the mocked files
+            azure_slice_unit_file = configurator.mocks.get_mapped_path(UnitFilePaths.azure)
+            extensions_slice_unit_file = configurator.mocks.get_mapped_path(UnitFilePaths.vmextensions)
+            agent_drop_in_file_slice = configurator.mocks.get_mapped_path(UnitFilePaths.slice)
+            agent_drop_in_file_cpu_accounting = configurator.mocks.get_mapped_path(UnitFilePaths.cpu_accounting)
+            agent_drop_in_file_cpu_quota = configurator.mocks.get_mapped_path(UnitFilePaths.cpu_quota)
+
+            # The mock creates the service and slice unit files; replace the former and delete the latter
+            configurator.mocks.add_data_file(os.path.join(data_dir, 'init', "walinuxagent.service.previous"), UnitFilePaths.walinuxagent)
+            os.remove(azure_slice_unit_file)
+            os.remove(extensions_slice_unit_file)
+
+            configurator.initialize()
+
+            # The older service file for the agent did not include settings for the slice and cpu parameters; in that case, initialize() should
+            # create drop in files to set those properties
             self.assertTrue(os.path.exists(azure_slice_unit_file), "{0} was not created".format(azure_slice_unit_file))
             self.assertTrue(os.path.exists(extensions_slice_unit_file), "{0} was not created".format(extensions_slice_unit_file))
             self.assertTrue(os.path.exists(agent_drop_in_file_slice), "{0} was not created".format(agent_drop_in_file_slice))
             self.assertTrue(os.path.exists(agent_drop_in_file_cpu_accounting), "{0} was not created".format(agent_drop_in_file_cpu_accounting))
+            self.assertTrue(os.path.exists(agent_drop_in_file_cpu_quota), "{0} was not created".format(agent_drop_in_file_cpu_quota))
 
     def test_enable_and_disable_should_change_the_enabled_state_of_cgroups(self):
         with self._get_cgroup_configurator() as configurator:
@@ -334,14 +359,13 @@ cgroup on /sys/fs/cgroup/blkio type cgroup (rw,nosuid,nodev,noexec,relatime,blki
         original_popen = subprocess.Popen
         systemd_timeout_command = "echo 'Failed to start transient scope unit: Connection timed out' >&2 && exit 1"
 
-        def mock_popen(*args, **kwargs):
+        def mock_popen(command, *args, **kwargs):
             # If trying to invoke systemd, mock what would happen if systemd timed out internally:
             # write failure to stderr and exit with exit code 1.
-            new_args = args
-            if "systemd-run" in args[0]:
-                new_args = (systemd_timeout_command,)
+            if "systemd-run" in command:
+                command = systemd_timeout_command
 
-            return original_popen(new_args, **kwargs)
+            return original_popen(command, *args, **kwargs)
         mock_popen.extension_calls = []
 
         with tempfile.TemporaryFile(dir=self.tmp_dir, mode="w+b") as stdout:
@@ -476,11 +500,10 @@ cgroup on /sys/fs/cgroup/blkio type cgroup (rw,nosuid,nodev,noexec,relatime,blki
 
         original_popen = subprocess.Popen
 
-        def mock_popen(*args, **kwargs):
+        def mock_popen(command, *args, **kwargs):
             # Inject a syntax error to the call
-            systemd_command = args[0].replace('systemd-run', 'systemd-run syntax_error')
-            new_args = (systemd_command,)
-            return original_popen(new_args, **kwargs)
+            systemd_command = command.replace('systemd-run', 'systemd-run syntax_error')
+            return original_popen(systemd_command, *args, **kwargs)
 
         expected_output = "[stdout]\n{0}\n\n\n[stderr]\n"
 
