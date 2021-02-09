@@ -8,11 +8,13 @@ disable=C, # (C) convention, for programming standard violation
     consider-using-in, # (R1714): *Consider merging these comparisons with "in" to %r*
     consider-using-set-comprehension, # (R1718): *Consider using a set comprehension*
     duplicate-code, # (R0801): *Similar lines in %s files*
+    no-init, # (W0232): Class has no __init__ method
     no-else-break, # (R1723): *Unnecessary "%s" after "break"*
     no-else-continue, # (R1724): *Unnecessary "%s" after "continue"*
     no-else-raise, # (R1720): *Unnecessary "%s" after "raise"*
     no-else-return, # (R1705): *Unnecessary "%s" after "return"*
     no-self-use, # (R0201): *Method could be a function*
+    protected-access, # (W0212): Access to a protected member of a client class
     simplifiable-if-expression, # (R1719): *The if expression can be replaced with %s*
     simplifiable-if-statement, # (R1703): *The if statement can be replaced with %s*
     super-with-arguments, # (R1725): *Consider using Python 3 style super() without arguments*

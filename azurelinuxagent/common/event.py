@@ -65,7 +65,7 @@ def send_logs_to_telemetry():
     return SEND_LOGS_TO_TELEMETRY
 
 
-class WALAEventOperation:  # pylint: disable=no-init
+class WALAEventOperation:
     ActivateResourceDisk = "ActivateResourceDisk"
     AgentBlacklisted = "AgentBlacklisted"
     AgentEnabled = "AgentEnabled"

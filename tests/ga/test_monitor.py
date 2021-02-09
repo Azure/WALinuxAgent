@@ -228,7 +228,7 @@ class TestExtensionMetricsDataTelemetry(AgentTestCase):
         ioerror.errno = 2
         patch_get_memory_usage.side_effect = ioerror
 
-        CGroupsTelemetry._tracked.append(MemoryCgroup("cgroup_name", "/test/path"))  # pylint: disable=protected-access
+        CGroupsTelemetry._tracked.append(MemoryCgroup("cgroup_name", "/test/path"))
 
         PollResourceUsage().run()
         self.assertEqual(0, patch_periodic_warn.call_count)
@@ -244,7 +244,7 @@ class TestExtensionMetricsDataTelemetry(AgentTestCase):
         ioerror.errno = 2
         patch_cpu_usage.side_effect = ioerror
 
-        CGroupsTelemetry._tracked.append(CpuCgroup("cgroup_name", "/test/path"))  # pylint: disable=protected-access
+        CGroupsTelemetry._tracked.append(CpuCgroup("cgroup_name", "/test/path"))
 
         PollResourceUsage().run()
         self.assertEqual(0, patch_periodic_warn.call_count)
@@ -253,7 +253,7 @@ class TestExtensionMetricsDataTelemetry(AgentTestCase):
     @patch('azurelinuxagent.common.event.EventLogger.add_metric')
     @patch('azurelinuxagent.common.logger.Logger.periodic_warn')
     def test_send_extension_metrics_telemetry_for_unsupported_cgroup(self, patch_periodic_warn, patch_add_metric, *args):  # pylint: disable=unused-argument
-        CGroupsTelemetry._tracked.append(CGroup("cgroup_name", "/test/path", "io"))  # pylint: disable=protected-access
+        CGroupsTelemetry._tracked.append(CGroup("cgroup_name", "/test/path", "io"))
 
         PollResourceUsage().run()
         self.assertEqual(1, patch_periodic_warn.call_count)
@@ -279,7 +279,7 @@ class TestExtensionMetricsDataTelemetry(AgentTestCase):
                                                     "dummy_extension_{0}".format(i))
                 CGroupsTelemetry.track_cgroup(dummy_memory_cgroup)
 
-        self.assertEqual(2 * num_extensions, len(CGroupsTelemetry._tracked))  # pylint: disable=protected-access
+        self.assertEqual(2 * num_extensions, len(CGroupsTelemetry._tracked))
 
         with patch("azurelinuxagent.common.cgroup.MemoryCgroup.get_max_memory_usage") as patch_get_memory_max_usage:
             with patch("azurelinuxagent.common.cgroup.MemoryCgroup.get_memory_usage") as patch_get_memory_usage:
