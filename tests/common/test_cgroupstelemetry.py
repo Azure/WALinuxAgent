@@ -290,7 +290,7 @@ class TestCGroupsTelemetry(AgentTestCase):
         max_memory_usage_values = [random.randint(0, 8 * 1024 ** 3) for _ in range(num_polls)]
 
         self._track_new_extension_cgroups(num_extensions)
-        self.assertEqual(2 * num_extensions, len(CGroupsTelemetry._tracked))  # pylint: disable=protected-access
+        self.assertEqual(2 * num_extensions, len(CGroupsTelemetry._tracked))
 
         for i in range(num_polls):
             patch_is_active.return_value = True
@@ -309,7 +309,7 @@ class TestCGroupsTelemetry(AgentTestCase):
         num_controllers = 2
         self._track_new_extension_cgroups(num_extensions)
         self._assert_cgroups_are_tracked(num_extensions)
-        self.assertEqual(num_extensions * num_controllers, len(CGroupsTelemetry._tracked))  # pylint: disable=protected-access
+        self.assertEqual(num_extensions * num_controllers, len(CGroupsTelemetry._tracked))
 
     def test_cgroup_is_tracked(self, *args):  # pylint: disable=unused-argument
         num_extensions = 5
