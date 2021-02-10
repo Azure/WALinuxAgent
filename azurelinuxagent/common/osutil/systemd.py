@@ -21,10 +21,13 @@ import re
 from azurelinuxagent.common.osutil import get_osutil
 from azurelinuxagent.common.utils import shellutil
 
+
 def _get_osutil():
     if _get_osutil.value is None:
         _get_osutil.value = get_osutil()
     return _get_osutil.value
+
+
 _get_osutil.value = None
 
 
