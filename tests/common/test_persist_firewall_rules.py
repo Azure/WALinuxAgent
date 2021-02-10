@@ -88,7 +88,7 @@ class TestPersistFirewallRulesHandler(AgentTestCase):
         with patch("azurelinuxagent.common.persist_firewall_rules.fileutil.mkdir",
                    side_effect=lambda path, **mode: orig_mkdir(path)):
             with patch("azurelinuxagent.common.persist_firewall_rules.get_osutil", return_value=osutil):
-                with patch('azurelinuxagent.common.cgroupapi.CGroupsApi.is_systemd', return_value=systemd):
+                with patch('azurelinuxagent.common.osutil.systemd.is_systemd', return_value=systemd):
                     with patch("azurelinuxagent.common.utils.shellutil.subprocess.Popen", side_effect=self.__mock_popen):
                         yield PersistFirewallRulesHandler(self.__test_dst_ip, self.__test_uid)
 

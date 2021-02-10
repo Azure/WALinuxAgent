@@ -22,11 +22,11 @@ import re
 import subprocess
 import tempfile
 
-from azurelinuxagent.common.cgroupapi import CGroupsApi, SystemdCgroupsApi, SYSTEMD_RUN_PATH
+from azurelinuxagent.common.cgroupapi import CGroupsApi, SystemdCgroupsApi
 from azurelinuxagent.common.cgroupstelemetry import CGroupsTelemetry
 from azurelinuxagent.common.utils import fileutil
 from tests.common.mock_cgroup_environment import mock_cgroup_environment
-from tests.tools import AgentTestCase, patch, skip_if_predicate_false, is_systemd_present, mock_sleep
+from tests.tools import AgentTestCase, patch, mock_sleep
 from tests.utils.cgroups_tools import CGroupsTools
 
 
@@ -68,44 +68,7 @@ class CGroupsApiTestCase(_MockedFileSystemTestCase):
             with patch("azurelinuxagent.common.cgroupapi.get_distro", return_value=distro):
                 self.assertEqual(CGroupsApi.cgroups_supported(), supported, "cgroups_supported() failed on {0}".format(distro))
 
-    def test_is_systemd_should_return_true_when_systemd_manages_current_process(self):
-        path_exists = os.path.exists
 
-        def mock_path_exists(path):
-            if path == SYSTEMD_RUN_PATH:
-                mock_path_exists.path_tested = True
-                return True
-            return path_exists(path)
-
-        mock_path_exists.path_tested = False
-
-        with patch("azurelinuxagent.common.cgroupapi.os.path.exists", mock_path_exists):
-            is_systemd = CGroupsApi.is_systemd()  # pylint: disable=protected-access
-
-        self.assertTrue(is_systemd)
-
-        self.assertTrue(mock_path_exists.path_tested, 'The expected path was not tested; the implementation of CGroupsApi._is_systemd() may have changed.')
-
-    def test_is_systemd_should_return_false_when_systemd_does_not_manage_current_process(self):
-        path_exists = os.path.exists
-
-        def mock_path_exists(path):
-            if path == SYSTEMD_RUN_PATH:
-                mock_path_exists.path_tested = True
-                return False
-            return path_exists(path)
-
-        mock_path_exists.path_tested = False
-
-        with patch("azurelinuxagent.common.cgroupapi.os.path.exists", mock_path_exists):
-            is_systemd = CGroupsApi.is_systemd()  # pylint: disable=protected-access
-
-        self.assertFalse(is_systemd)
-
-        self.assertTrue(mock_path_exists.path_tested, 'The expected path was not tested; the implementation of CGroupsApi._is_systemd() may have changed.')
-
-
-@skip_if_predicate_false(is_systemd_present, "Systemd cgroups API doesn't manage cgroups on systems not using systemd.")
 class SystemdCgroupsApiTestCase(AgentTestCase):
     def test_get_systemd_version_should_return_a_version_number(self):
         with mock_cgroup_environment(self.tmp_dir):

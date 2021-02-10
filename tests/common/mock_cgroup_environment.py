@@ -101,6 +101,6 @@ def mock_cgroup_environment(tmp_dir):
     ]
 
     with patch('azurelinuxagent.common.cgroupapi.CGroupsApi.cgroups_supported', return_value=True):
-        with patch('azurelinuxagent.common.cgroupapi.CGroupsApi.is_systemd', return_value=True):
+        with patch('azurelinuxagent.common.osutil.systemd.is_systemd', return_value=True):
             with MockEnvironment(tmp_dir, commands=_MOCKED_COMMANDS, paths=_MOCKED_PATHS, files=_MOCKED_FILES, data_files=data_files) as mock:
                 yield mock

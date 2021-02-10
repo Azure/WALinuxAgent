@@ -37,7 +37,6 @@ from azurelinuxagent.common.version import get_distro
 
 CGROUPS_FILE_SYSTEM_ROOT = '/sys/fs/cgroup'
 CGROUP_CONTROLLERS = ["cpu", "memory"]
-SYSTEMD_RUN_PATH = "/run/systemd/system/"
 
 
 class SystemdRunError(CGroupsException):
@@ -72,14 +71,6 @@ class CGroupsApi(object):
     def _get_extension_cgroup_name(extension_name):
         # Since '-' is used as a separator in systemd unit names, we replace it with '_' to prevent side-effects.
         return extension_name.replace('-', '_')
-
-    @staticmethod
-    def is_systemd():
-        """
-        Determine if systemd is managing system services; the implementation follows the same strategy as, for example,
-        sd_booted() in libsystemd, or /usr/sbin/service
-        """
-        return os.path.exists(SYSTEMD_RUN_PATH)
 
     @staticmethod
     def get_processes_in_cgroup(cgroup_path):

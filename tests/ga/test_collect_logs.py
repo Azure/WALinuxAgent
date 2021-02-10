@@ -18,7 +18,6 @@ import contextlib
 import os
 
 from azurelinuxagent.common import logger
-from azurelinuxagent.common.cgroupapi import SYSTEMD_RUN_PATH
 from azurelinuxagent.common.logger import Logger
 from azurelinuxagent.common.protocol.util import ProtocolUtil
 from azurelinuxagent.ga.collect_logs import get_collect_logs_handler, is_log_collection_allowed
@@ -44,18 +43,13 @@ def _create_collect_logs_handler(iterations=1, systemd_present=True):
 
     original_file_exists = os.path.exists
 
-    def mock_file_exists(filepath):
-        if filepath == SYSTEMD_RUN_PATH:
-            return systemd_present
-        return original_file_exists(filepath)
-
     with mock_wire_protocol(DATA_FILE) as protocol:
         protocol_util = MagicMock()
         protocol_util.get_protocol = Mock(return_value=protocol)
         with patch("azurelinuxagent.ga.collect_logs.get_protocol_util", return_value=protocol_util):
             with patch("azurelinuxagent.ga.collect_logs.CollectLogsHandler.stopped", side_effect=[False] * iterations + [True]):
                 with patch("time.sleep"):
-                    with patch("azurelinuxagent.ga.collect_logs.os.path.exists", side_effect=mock_file_exists):
+                    with patch("azurelinuxagent.common.osutil.systemd.is_systemd", return_value=systemd_present):
                         with patch("azurelinuxagent.ga.collect_logs.conf.get_collect_logs", return_value=True):
                             def run_and_wait():
                                 collect_logs_handler.run()
