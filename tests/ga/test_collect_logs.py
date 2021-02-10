@@ -40,9 +40,6 @@ def _create_collect_logs_handler(iterations=1, systemd_present=True):
         * run_and_wait() - invokes run() and wait() on the CollectLogsHandler
 
     """
-
-    original_file_exists = os.path.exists
-
     with mock_wire_protocol(DATA_FILE) as protocol:
         protocol_util = MagicMock()
         protocol_util.get_protocol = Mock(return_value=protocol)
