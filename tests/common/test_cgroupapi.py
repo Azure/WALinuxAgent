@@ -24,6 +24,7 @@ import tempfile
 
 from azurelinuxagent.common.cgroupapi import CGroupsApi, SystemdCgroupsApi
 from azurelinuxagent.common.cgroupstelemetry import CGroupsTelemetry
+from azurelinuxagent.common.osutil import systemd
 from azurelinuxagent.common.utils import fileutil
 from tests.common.mock_cgroup_environment import mock_cgroup_environment
 from tests.tools import AgentTestCase, patch, mock_sleep
@@ -72,7 +73,7 @@ class CGroupsApiTestCase(_MockedFileSystemTestCase):
 class SystemdCgroupsApiTestCase(AgentTestCase):
     def test_get_systemd_version_should_return_a_version_number(self):
         with mock_cgroup_environment(self.tmp_dir):
-            version_info = SystemdCgroupsApi.get_systemd_version()
+            version_info = systemd.get_version()
             found = re.search(r"systemd \d+", version_info) is not None
             self.assertTrue(found, "Could not determine the systemd version: {0}".format(version_info))
 
@@ -98,7 +99,7 @@ class SystemdCgroupsApiTestCase(AgentTestCase):
 
     def test_get_unit_property_should_return_the_value_of_the_given_property(self):
         with mock_cgroup_environment(self.tmp_dir):
-            cpu_accounting = SystemdCgroupsApi.get_unit_property("walinuxagent.service", "CPUAccounting")
+            cpu_accounting = systemd.get_unit_property("walinuxagent.service", "CPUAccounting")
 
             self.assertEqual(cpu_accounting, "no", "Property {0} of {1} is incorrect".format("CPUAccounting", "walinuxagent.service"))
 

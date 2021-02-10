@@ -16,6 +16,16 @@
 # Requires Python 2.6+ and Openssl 1.0+
 #
 import os
+import re
+
+from azurelinuxagent.common.osutil import get_osutil
+from azurelinuxagent.common.utils import shellutil
+
+def _get_osutil():
+    if _get_osutil.value is None:
+        _get_osutil.value = get_osutil()
+    return _get_osutil.value
+_get_osutil.value = None
 
 
 def is_systemd():
@@ -24,4 +34,25 @@ def is_systemd():
     sd_booted() in libsystemd, or /usr/sbin/service
     """
     return os.path.exists("/run/systemd/system/")
+
+
+def get_version():
+    # the output is similar to
+    #    $ systemctl --version
+    #    systemd 245 (245.4-4ubuntu3)
+    #    +PAM +AUDIT +SELINUX +IMA +APPARMOR +SMACK +SYSVINIT +UTMP etc
+    #
+    return shellutil.run_command(['systemctl', '--version'])
+
+
+def get_unit_file_install_path():
+    return _get_osutil().get_systemd_unit_file_install_path()
+
+
+def get_unit_property(unit_name, property_name):
+    output = shellutil.run_command(["systemctl", "show", unit_name, "--property", property_name])
+    match = re.match("[^=]+=(?P<value>.+)", output)
+    if match is None:
+        raise ValueError("Can't find property {0} of {1}", property_name, unit_name)  # pylint: disable=W0715
+    return match.group('value')
 

@@ -129,15 +129,6 @@ class SystemdCgroupsApi(CGroupsApi):
         self._systemd_run_commands = []
         self._systemd_run_commands_lock = threading.RLock()
 
-    @staticmethod
-    def get_systemd_version():
-        # the output is similar to
-        #    $ systemctl --version
-        #    systemd 245 (245.4-4ubuntu3)
-        #    +PAM +AUDIT +SELINUX +IMA +APPARMOR +SMACK +SYSVINIT +UTMP etc
-        #
-        return shellutil.run_command(['systemctl', '--version'])
-
     def get_systemd_run_commands(self):
         """
         Returns a list of the systemd-run commands currently running (given as PIDs)
@@ -236,14 +227,6 @@ class SystemdCgroupsApi(CGroupsApi):
                     controllers = fileutil.read_file(controllers_file)
                 return mount_point, controllers
         return None, None
-
-    @staticmethod
-    def get_unit_property(unit_name, property_name):
-        output = shellutil.run_command(["systemctl", "show", unit_name, "--property", property_name])
-        match = re.match("[^=]+=(?P<value>.+)", output)
-        if match is None:
-            raise ValueError("Can't find property {0} of {1}", property_name, unit_name)  # pylint: disable=W0715
-        return match.group('value')
 
     def get_agent_unit_name(self):
         if self._agent_unit_name is None:
