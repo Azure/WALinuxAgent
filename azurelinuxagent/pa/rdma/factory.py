@@ -32,7 +32,8 @@ def get_rdma_handler(
     """Return the handler object for RDMA driver handling"""
     if (
             (distro_full_name == 'SUSE Linux Enterprise Server' or
-             distro_full_name == 'SLES') and
+             distro_full_name == 'SLES' or
+             distro_full_name == 'SLE_HPC') and
             Version(distro_version) > Version('11')
     ):
         return SUSERDMAHandler()
