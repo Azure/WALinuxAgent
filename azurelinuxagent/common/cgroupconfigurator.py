@@ -126,7 +126,7 @@ class CGroupConfigurator(object):
 
                 if self._agent_cpu_cgroup_path is not None:
                     self.__log_cgroup_info("Agent CPU cgroup: {0}", self._agent_cpu_cgroup_path)
-                    CGroupsTelemetry.track_cgroup(CpuCgroup(agent_unit_name, self._agent_cpu_cgroup_path))
+                    CGroupsTelemetry.track_cgroup(CpuCgroup(agent_unit_name, self._agent_cpu_cgroup_path, track_throttled_time=True))
                     self._cgroups_enabled = True
 
                 self.__log_cgroup_info('Cgroups enabled: {0}', self._cgroups_enabled)
