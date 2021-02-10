@@ -156,6 +156,12 @@ class CpuCgroup(CGroup):
         cpu_ticks = 0
 
         if cpuacct_stat is not None:
+            #
+            # Sample file:
+            #     # cat /sys/fs/cgroup/cpuacct/azure.slice/walinuxagent.service/cpuacct.stat
+            #     user 10190
+            #     system 3160
+            #
             match = re_user_system_times.match(cpuacct_stat)
             if not match:
                 raise CGroupsException("The contents of {0} are invalid: {1}".format(self._get_cgroup_file('cpuacct.stat'), cpuacct_stat))
@@ -166,6 +172,14 @@ class CpuCgroup(CGroup):
     def _get_throttled_time(self):
         try:
             with open(os.path.join(self.path, 'cpu.stat')) as cpu_stat:
+                #
+                # Sample file:
+                #
+                #   # cat /sys/fs/cgroup/cpuacct/azure.slice/walinuxagent.service/cpu.stat
+                #   nr_periods  51660
+                #   nr_throttled 19461
+                #   throttled_time 1529590856339
+                #
                 for line in cpu_stat:
                     match = re.match(r'throttled_time\s+(\d+)', line)
                     if match is not None:
