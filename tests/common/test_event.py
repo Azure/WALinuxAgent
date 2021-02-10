@@ -39,7 +39,7 @@ from azurelinuxagent.common.osutil import get_osutil
 from azurelinuxagent.common.telemetryevent import CommonTelemetryEventSchema, GuestAgentGenericLogsSchema, \
     GuestAgentExtensionEventsSchema, GuestAgentPerfCounterEventsSchema
 from azurelinuxagent.common.version import CURRENT_AGENT, CURRENT_VERSION, AGENT_EXECUTION_MODE
-from azurelinuxagent.ga.collect_telemetry_events import _CollectAndEnqueueEventsPeriodicOperation
+from azurelinuxagent.ga.collect_telemetry_events import _CollectAndEnqueueEvents
 from tests.protocol import mockwiredata
 from tests.protocol.mocks import mock_wire_protocol, HttpRequestPredicates, MockHttpResponse
 from tests.tools import AgentTestCase, data_dir, load_data, patch, skip_if_predicate_true
@@ -99,7 +99,7 @@ class TestEvent(HttpRequestPredicates, AgentTestCase):
         event_list = []
         send_telemetry_events = MagicMock()
         send_telemetry_events.enqueue_event = MagicMock(wraps=event_list.append)
-        event_collector = _CollectAndEnqueueEventsPeriodicOperation(send_telemetry_events)
+        event_collector = _CollectAndEnqueueEvents(send_telemetry_events)
         event_collector.process_events()
         return event_list
 

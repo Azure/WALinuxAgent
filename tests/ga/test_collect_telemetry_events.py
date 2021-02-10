@@ -35,7 +35,7 @@ from azurelinuxagent.common.protocol.util import ProtocolUtil
 from azurelinuxagent.common.telemetryevent import GuestAgentGenericLogsSchema, \
     CommonTelemetryEventSchema
 from azurelinuxagent.common.utils import fileutil
-from azurelinuxagent.ga.collect_telemetry_events import ExtensionEventSchema, _ProcessExtensionEventsPeriodicOperation
+from azurelinuxagent.ga.collect_telemetry_events import ExtensionEventSchema, _ProcessExtensionEvents
 from tests.protocol.mocks import HttpRequestPredicates
 from tests.tools import AgentTestCase, clear_singleton_instances, data_dir
 
@@ -172,7 +172,7 @@ class TestExtensionTelemetryHandler(AgentTestCase, HttpRequestPredicates):
             telemetry_handler = MagicMock(autospec=True)
             telemetry_handler.stopped = MagicMock(return_value=False)
             telemetry_handler.enqueue_event = MagicMock(wraps=event_list.append)
-        extension_telemetry_processor = _ProcessExtensionEventsPeriodicOperation(telemetry_handler)
+        extension_telemetry_processor = _ProcessExtensionEvents(telemetry_handler)
         extension_telemetry_processor.event_list = event_list
         yield extension_telemetry_processor
 
@@ -354,7 +354,7 @@ class TestExtensionTelemetryHandler(AgentTestCase, HttpRequestPredicates):
     def test_it_should_trim_message_if_more_than_limit(self):
         max_len = 100
         no_of_extensions = 2
-        with patch("azurelinuxagent.ga.collect_telemetry_events._ProcessExtensionEventsPeriodicOperation._EXTENSION_EVENT_MAX_MSG_LEN", max_len):
+        with patch("azurelinuxagent.ga.collect_telemetry_events._ProcessExtensionEvents._EXTENSION_EVENT_MAX_MSG_LEN", max_len):
             handler_name_with_count, event_list = self._setup_and_assert_tests_for_max_sizes()  # pylint: disable=unused-variable
             context1_vals = self._get_param_value_from_event_body_if_exists(event_list,
                                                                             GuestAgentGenericLogsSchema.Context1)
@@ -368,7 +368,7 @@ class TestExtensionTelemetryHandler(AgentTestCase, HttpRequestPredicates):
         max_size = 1000
         no_of_extensions = 3
         with patch("azurelinuxagent.ga.collect_telemetry_events.add_log_event") as mock_event:
-            with patch("azurelinuxagent.ga.collect_telemetry_events._ProcessExtensionEventsPeriodicOperation._EXTENSION_EVENT_MAX_SIZE",
+            with patch("azurelinuxagent.ga.collect_telemetry_events._ProcessExtensionEvents._EXTENSION_EVENT_MAX_SIZE",
                        max_size):
                 handler_name_with_count, _ = self._setup_and_assert_tests_for_max_sizes(no_of_extensions, expected_count=0)
                 self._assert_invalid_extension_error_event_reported(mock_event, handler_name_with_count,
@@ -378,7 +378,7 @@ class TestExtensionTelemetryHandler(AgentTestCase, HttpRequestPredicates):
         max_file_size = 10000
         no_of_extensions = 5
         with patch("azurelinuxagent.ga.collect_telemetry_events.add_log_event") as mock_event:
-            with patch("azurelinuxagent.ga.collect_telemetry_events._ProcessExtensionEventsPeriodicOperation._EXTENSION_EVENT_FILE_MAX_SIZE",
+            with patch("azurelinuxagent.ga.collect_telemetry_events._ProcessExtensionEvents._EXTENSION_EVENT_FILE_MAX_SIZE",
                        max_file_size):
                 handler_name_with_count, _ = self._setup_and_assert_tests_for_max_sizes(no_of_extensions, expected_count=0)
 

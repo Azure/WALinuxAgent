@@ -48,122 +48,39 @@ def get_env_handler():
     return EnvHandler()
 
 
-class EnvHandler(ThreadHandlerInterface):
-    """
-    Monitor changes to dhcp and hostname.
-    If dhcp client process re-start has occurred, reset routes, dhcp with fabric.
+class RemovePersistentNetworkRules(PeriodicOperation):
+    def __init__(self, osutil):
+        super(RemovePersistentNetworkRules, self).__init__(conf.get_remove_persistent_net_rules_period())
+        self.osutil = osutil
 
-    Monitor scsi disk.
-    If new scsi disk found, set timeout
-    """
-
-    _THREAD_NAME = "EnvHandler"
-
-    @staticmethod
-    def get_thread_name():
-        return EnvHandler._THREAD_NAME
-
-    def __init__(self):
-        self.osutil = get_osutil()
-        self.dhcp_handler = get_dhcp_handler()
-        self.protocol_util = None
-        self._protocol = None
-        self.stopped = True
-        self.hostname = None
-        self.dhcp_id_list = []
-        self.server_thread = None
-        self.dhcp_warning_enabled = True
-        self.archiver = StateArchiver(conf.get_lib_dir())
-        self._reset_firewall_rules = False
-
-        self._periodic_operations = [
-            PeriodicOperation("_remove_persistent_net_rules", self._remove_persistent_net_rules_period, conf.get_remove_persistent_net_rules_period()),
-            PeriodicOperation("_monitor_dhcp_client_restart", self._monitor_dhcp_client_restart, conf.get_monitor_dhcp_client_restart_period()),
-            PeriodicOperation("_cleanup_goal_state_history", self._cleanup_goal_state_history, conf.get_goal_state_history_cleanup_period())
-        ]
-        if conf.enable_firewall():
-            self._periodic_operations.append(PeriodicOperation("_enable_firewall", self._enable_firewall, conf.get_enable_firewall_period()))
-        if conf.get_root_device_scsi_timeout() is not None:
-            self._periodic_operations.append(PeriodicOperation("_set_root_device_scsi_timeout", self._set_root_device_scsi_timeout, conf.get_root_device_scsi_timeout_period()))
-        if conf.get_monitor_hostname():
-            self._periodic_operations.append(PeriodicOperation("_monitor_hostname", self._monitor_hostname_changes, conf.get_monitor_hostname_period()))
-
-    def run(self):
-        if not self.stopped:
-            logger.info("Stop existing env monitor service.")
-            self.stop()
-
-        self.stopped = False
-        logger.info("Start env monitor service.")
-        self.dhcp_handler.conf_routes()
-        self.hostname = self.osutil.get_hostname_record()
-        self.dhcp_id_list = self.get_dhcp_client_pid()
-        self.start()
-
-    def is_alive(self):
-        return self.server_thread.is_alive()
-
-    def start(self):
-        self.server_thread = threading.Thread(target=self.monitor)
-        self.server_thread.setDaemon(True)
-        self.server_thread.setName(self.get_thread_name())
-        self.server_thread.start()
-
-    def monitor(self):
-        try:
-            # The initialization of ProtocolUtil for the Environment thread should be done within the thread itself rather
-            # than initializing it in the ExtHandler thread. This is done to avoid any concurrency issues as each
-            # thread would now have its own ProtocolUtil object as per the SingletonPerThread model.
-            self.protocol_util = get_protocol_util()
-            self._protocol = self.protocol_util.get_protocol()
-            while not self.stopped:
-                try:
-                    for op in self._periodic_operations:
-                        op.run()
-                except Exception as e:
-                    logger.error("An error occurred in the environment thread main loop; will skip the current iteration.\n{0}", ustr(e))
-                finally:
-                    PeriodicOperation.sleep_until_next_operation(self._periodic_operations)
-        except Exception as e:
-            logger.error("An error occurred in the environment thread; will exit the thread.\n{0}", ustr(e))
-
-    def _remove_persistent_net_rules_period(self):
+    def _operation(self):
         self.osutil.remove_rules_files()
 
-    def _enable_firewall(self):
-        # If the rules ever change we must reset all rules and start over again.
-        #
-        # There was a rule change at 2.2.26, which started dropping non-root traffic
-        # to WireServer.  The previous rules allowed traffic.  Having both rules in
-        # place negated the fix in 2.2.26.
-        if not self._reset_firewall_rules:
-            self.osutil.remove_firewall(dst_ip=self._protocol.get_endpoint(), uid=os.getuid())
-            self._reset_firewall_rules = True
 
-        success = self.osutil.enable_firewall(dst_ip=self._protocol.get_endpoint(), uid=os.getuid())
+class MonitorDhcpClientRestart(PeriodicOperation):
+    def __init__(self, osutil):
+        super(MonitorDhcpClientRestart, self).__init__(conf.get_monitor_dhcp_client_restart_period())
+        self.osutil = osutil
+        self.dhcp_handler = get_dhcp_handler()
+        self.dhcp_handler.conf_routes()
+        self.dhcp_warning_enabled = True
+        self.dhcp_id_list = []
 
-        add_periodic(
-            logger.EVERY_HOUR,
-            AGENT_NAME,
-            version=CURRENT_VERSION,
-            op=WALAEventOperation.Firewall,
-            is_success=success,
-            log_event=False)
+    def _operation(self):
+        if len(self.dhcp_id_list) == 0:
+            self.dhcp_id_list = self._get_dhcp_client_pid()
+            return
 
-    def _set_root_device_scsi_timeout(self):
-        self.osutil.set_scsi_disks_timeout(conf.get_root_device_scsi_timeout())
+        if all(self.osutil.check_pid_alive(pid) for pid in self.dhcp_id_list):
+            return
 
-    def _monitor_hostname_changes(self):
-        curr_hostname = socket.gethostname()
-        if curr_hostname != self.hostname:
-            logger.info("EnvMonitor: Detected hostname change: {0} -> {1}",
-                        self.hostname,
-                        curr_hostname)
-            self.osutil.set_hostname(curr_hostname)
-            self.osutil.publish_hostname(curr_hostname)
-            self.hostname = curr_hostname
+        new_pid = self._get_dhcp_client_pid()
+        if len(new_pid) != 0 and new_pid != self.dhcp_id_list:
+            logger.info("EnvMonitor: Detected dhcp client restart. Restoring routing table.")
+            self.dhcp_handler.conf_routes()
+            self.dhcp_id_list = new_pid
 
-    def get_dhcp_client_pid(self):
+    def _get_dhcp_client_pid(self):
         pid = []
 
         try:
@@ -181,34 +98,148 @@ class EnvHandler(ThreadHandlerInterface):
 
         return pid
 
-    def _monitor_dhcp_client_restart(self):
-        self.handle_dhclient_restart()
 
-    def handle_dhclient_restart(self):
-        if len(self.dhcp_id_list) == 0:
-            self.dhcp_id_list = self.get_dhcp_client_pid()
-            return
+class CleanupGoalStateHistory(PeriodicOperation):
+    def __init__(self):
+        super(CleanupGoalStateHistory, self).__init__(conf.get_goal_state_history_cleanup_period())
+        self.archiver = StateArchiver(conf.get_lib_dir())
 
-        if all(self.osutil.check_pid_alive(pid) for pid in self.dhcp_id_list):
-            return
-
-        new_pid = self.get_dhcp_client_pid()
-        if len(new_pid) != 0 and new_pid != self.dhcp_id_list:
-            logger.info("EnvMonitor: Detected dhcp client restart. Restoring routing table.")
-            self.dhcp_handler.conf_routes()
-            self.dhcp_id_list = new_pid
-
-    def _cleanup_goal_state_history(self):
+    def _operation(self):
         """
         Purge history and create a .zip of the history that has been preserved.
         """
         self.archiver.purge()
         self.archiver.archive()
 
+
+class EnableFirewall(PeriodicOperation):
+    def __init__(self, osutil, protocol):
+        super(EnableFirewall, self).__init__(conf.get_enable_firewall_period())
+        self._osutil = osutil
+        self._protocol = protocol
+        self._reset_firewall_rules = False
+
+    def _operation(self):
+        # If the rules ever change we must reset all rules and start over again.
+        #
+        # There was a rule change at 2.2.26, which started dropping non-root traffic
+        # to WireServer.  The previous rules allowed traffic.  Having both rules in
+        # place negated the fix in 2.2.26.
+        if not self._reset_firewall_rules:
+            self._osutil.remove_firewall(dst_ip=self._protocol.get_endpoint(), uid=os.getuid())
+            self._reset_firewall_rules = True
+
+        success = self._osutil.enable_firewall(dst_ip=self._protocol.get_endpoint(), uid=os.getuid())
+
+        add_periodic(
+            logger.EVERY_HOUR,
+            AGENT_NAME,
+            version=CURRENT_VERSION,
+            op=WALAEventOperation.Firewall,
+            is_success=success,
+            log_event=False)
+
+
+class SetRootDeviceScsiTimeout(PeriodicOperation):
+    def __init__(self, osutil):
+        super(SetRootDeviceScsiTimeout, self).__init__(conf.get_root_device_scsi_timeout_period())
+        self._osutil = osutil
+
+    def _operation(self):
+        self._osutil.set_scsi_disks_timeout(conf.get_root_device_scsi_timeout())
+
+
+class MonitorHostNameChanges(PeriodicOperation):
+    def __init__(self, osutil):
+        super(MonitorHostNameChanges, self).__init__(conf.get_monitor_hostname_period())
+        self._osutil = osutil
+        self._hostname = self._osutil.get_hostname_record()
+
+    def _operation(self):
+        curr_hostname = socket.gethostname()
+        if curr_hostname != self._hostname:
+            logger.info("EnvMonitor: Detected hostname change: {0} -> {1}",
+                        self._hostname,
+                        curr_hostname)
+            self._osutil.set_hostname(curr_hostname)
+            self._osutil.publish_hostname(curr_hostname)
+            self._hostname = curr_hostname
+
+
+class EnvHandler(ThreadHandlerInterface):
+    """
+    Monitor changes to dhcp and hostname.
+    If dhcp client process re-start has occurred, reset routes, dhcp with fabric.
+
+    Monitor scsi disk.
+    If new scsi disk found, set timeout
+    """
+
+    _THREAD_NAME = "EnvHandler"
+
+    @staticmethod
+    def get_thread_name():
+        return EnvHandler._THREAD_NAME
+
+    def __init__(self):
+        self.stopped = True
+        self.hostname = None
+        self.env_thread = None
+
+    def run(self):
+        if not self.stopped:
+            logger.info("Stop existing env monitor service.")
+            self.stop()
+
+        self.stopped = False
+        logger.info("Starting env monitor service.")
+        self.start()
+
+    def is_alive(self):
+        return self.env_thread.is_alive()
+
+    def start(self):
+        self.env_thread = threading.Thread(target=self.daemon)
+        self.env_thread.setDaemon(True)
+        self.env_thread.setName(self.get_thread_name())
+        self.env_thread.start()
+
+    def daemon(self):
+        try:
+            # The initialization of the protocol needs to be done within the environment thread itself rather
+            # than initializing it in the ExtHandler thread. This is done to avoid any concurrency issues as each
+            # thread would now have its own ProtocolUtil object as per the SingletonPerThread model.
+            protocol_util = get_protocol_util()
+            protocol = protocol_util.get_protocol()
+            osutil = get_osutil()
+
+            periodic_operations = [
+                RemovePersistentNetworkRules(osutil),
+                MonitorDhcpClientRestart(osutil),
+                CleanupGoalStateHistory()
+            ]
+
+            if conf.enable_firewall():
+                periodic_operations.append(EnableFirewall(osutil, protocol))
+            if conf.get_root_device_scsi_timeout() is not None:
+                periodic_operations.append(SetRootDeviceScsiTimeout(osutil))
+            if conf.get_monitor_hostname():
+                periodic_operations.append(MonitorHostNameChanges(osutil))
+            while not self.stopped:
+                try:
+                    for op in periodic_operations:
+                        op.run()
+                except Exception as e:
+                    logger.error("An error occurred in the environment thread main loop; will skip the current iteration.\n{0}", ustr(e))
+                finally:
+                    PeriodicOperation.sleep_until_next_operation(periodic_operations)
+        except Exception as e:
+            logger.error("An error occurred in the environment thread; will exit the thread.\n{0}", ustr(e))
+
     def stop(self):
         """
         Stop server communication and join the thread to main thread.
         """
         self.stopped = True
-        if self.server_thread is not None:
-            self.server_thread.join()
+        if self.env_thread is not None:
+            self.env_thread.join()
