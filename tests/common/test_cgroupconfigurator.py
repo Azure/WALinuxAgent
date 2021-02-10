@@ -28,7 +28,7 @@ import threading
 
 from nose.plugins.attrib import attr
 
-from azurelinuxagent.common.cgroup import CGroup
+from azurelinuxagent.common.cgroup import CpuCgroup, MemoryCgroup
 from azurelinuxagent.common.cgroupconfigurator import CGroupConfigurator
 from azurelinuxagent.common.cgroupstelemetry import CGroupsTelemetry
 from azurelinuxagent.common.event import WALAEventOperation
@@ -204,8 +204,8 @@ cgroup on /sys/fs/cgroup/blkio type cgroup (rw,nosuid,nodev,noexec,relatime,blki
     def test_disable_should_reset_tracked_cgroups(self):
         with self._get_cgroup_configurator(initialize=False) as configurator:
             # Start tracking a couple of dummy cgroups
-            CGroupsTelemetry.track_cgroup(CGroup("dummy", "/sys/fs/cgroup/memory/system.slice/dummy.service", "cpu"))
-            CGroupsTelemetry.track_cgroup(CGroup("dummy", "/sys/fs/cgroup/memory/system.slice/dummy.service", "memory"))
+            CGroupsTelemetry.track_cgroup(CpuCgroup("dummy", "/sys/fs/cgroup/memory/system.slice/dummy.service"))
+            CGroupsTelemetry.track_cgroup(MemoryCgroup("dummy", "/sys/fs/cgroup/memory/system.slice/dummy.service"))
 
             configurator.disable()
 
