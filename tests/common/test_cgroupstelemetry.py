@@ -19,7 +19,7 @@ import os
 import random
 import time
 
-from azurelinuxagent.common.cgroup import CGroup
+from azurelinuxagent.common.cgroup import CpuCgroup, MemoryCgroup
 from azurelinuxagent.common.cgroupstelemetry import CGroupsTelemetry
 from azurelinuxagent.common.utils import fileutil
 from tests.tools import AgentTestCase, data_dir, patch
@@ -105,11 +105,10 @@ class TestCGroupsTelemetry(AgentTestCase):
     @staticmethod
     def _track_new_extension_cgroups(num_extensions):
         for i in range(num_extensions):
-            dummy_cpu_cgroup = CGroup.create("dummy_cpu_path_{0}".format(i), "cpu", "dummy_extension_{0}".format(i))
+            dummy_cpu_cgroup = CpuCgroup("dummy_extension_{0}".format(i), "dummy_cpu_path_{0}".format(i))
             CGroupsTelemetry.track_cgroup(dummy_cpu_cgroup)
 
-            dummy_memory_cgroup = CGroup.create("dummy_memory_path_{0}".format(i), "memory",
-                                                "dummy_extension_{0}".format(i))
+            dummy_memory_cgroup = MemoryCgroup("dummy_extension_{0}".format(i), "dummy_memory_path_{0}".format(i))
             CGroupsTelemetry.track_cgroup(dummy_memory_cgroup)
 
     def _assert_cgroups_are_tracked(self, num_extensions):
