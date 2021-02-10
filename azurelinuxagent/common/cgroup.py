@@ -38,39 +38,25 @@ class MetricsCounter(object):
     PROCESSOR_PERCENT_TIME = "% Processor Time"
     TOTAL_MEM_USAGE = "Total Memory Usage"
     MAX_MEM_USAGE = "Max Memory Usage"
+    THROTTLED_TIME = "Throttled Time"
 
 
 re_user_system_times = re.compile(r'user (\d+)\nsystem (\d+)\n')
 
 
-class CGroupContollers(object):
-    CPU = "cpu"
-    MEMORY = "memory"
-
-
 class CGroup(object):
-    @staticmethod
-    def create(cgroup_path, controller, extension_name):
-        """
-        Factory method to create the correct CGroup.
-        """
-        if controller == CGroupContollers.CPU:
-            return CpuCgroup(extension_name, cgroup_path)
-        if controller == CGroupContollers.MEMORY:
-            return MemoryCgroup(extension_name, cgroup_path)
-        raise CGroupsException('CGroup controller {0} is not supported'.format(controller))
-
-    def __init__(self, name, cgroup_path, controller_type):
+    def __init__(self, name, cgroup_path):
         """
         Initialize _data collection for the Memory controller
         :param: name: Name of the CGroup
         :param: cgroup_path: Path of the controller
-        :param: controller_type:
         :return:
         """
         self.name = name
         self.path = cgroup_path
-        self.controller = controller_type
+
+    def __str__(self):
+        return "{0} [{1}]".format(self.name, self.path)
 
     def _get_cgroup_file(self, file_name):
         return os.path.join(self.path, file_name)
@@ -139,19 +125,17 @@ class CGroup(object):
 
 
 class CpuCgroup(CGroup):
-    def __init__(self, name, cgroup_path):
-        super(CpuCgroup, self).__init__(name, cgroup_path, CGroupContollers.CPU)
+    def __init__(self, name, cgroup_path, track_throttled_time=False):
+        super(CpuCgroup, self).__init__(name, cgroup_path)
 
         self._osutil = get_osutil()
         self._previous_cgroup_cpu = None
         self._previous_system_cpu = None
         self._current_cgroup_cpu = None
         self._current_system_cpu = None
-
-    def __str__(self):
-        return "cgroup: Name: {0}, cgroup_path: {1}; Controller: {2}".format(
-            self.name, self.path, self.controller
-        )
+        self._track_throttled_time = track_throttled_time
+        self._previous_throttled_time = None
+        self._current_throttled_time = None
 
     def _get_cpu_ticks(self, allow_no_such_file_or_directory_error=False):
         """
@@ -161,23 +145,52 @@ class CpuCgroup(CGroup):
         returns 0; this is useful when the function can be called before the cgroup has been created.
         """
         try:
-            cpu_stat = self._get_file_contents('cpuacct.stat')
+            cpuacct_stat = self._get_file_contents('cpuacct.stat')
         except Exception as e:
             if not isinstance(e, (IOError, OSError)) or e.errno != errno.ENOENT:  # pylint: disable=E1101
                 raise CGroupsException("Failed to read cpuacct.stat: {0}".format(ustr(e)))
             if not allow_no_such_file_or_directory_error:
                 raise e
-            cpu_stat = None
+            cpuacct_stat = None
 
         cpu_ticks = 0
 
-        if cpu_stat is not None:
-            match = re_user_system_times.match(cpu_stat)
+        if cpuacct_stat is not None:
+            #
+            # Sample file:
+            #     # cat /sys/fs/cgroup/cpuacct/azure.slice/walinuxagent.service/cpuacct.stat
+            #     user 10190
+            #     system 3160
+            #
+            match = re_user_system_times.match(cpuacct_stat)
             if not match:
-                raise CGroupsException("The contents of {0} are invalid: {1}".format(self._get_cgroup_file('cpuacct.stat'), cpu_stat))
+                raise CGroupsException("The contents of {0} are invalid: {1}".format(self._get_cgroup_file('cpuacct.stat'), cpuacct_stat))
             cpu_ticks = int(match.groups()[0]) + int(match.groups()[1])
 
         return cpu_ticks
+
+    def _get_throttled_time(self):
+        try:
+            with open(os.path.join(self.path, 'cpu.stat')) as cpu_stat:
+                #
+                # Sample file:
+                #
+                #   # cat /sys/fs/cgroup/cpuacct/azure.slice/walinuxagent.service/cpu.stat
+                #   nr_periods  51660
+                #   nr_throttled 19461
+                #   throttled_time 1529590856339
+                #
+                for line in cpu_stat:
+                    match = re.match(r'throttled_time\s+(\d+)', line)
+                    if match is not None:
+                        return int(match.groups()[0])
+                raise Exception("Cannot find throttled_time")
+        except (IOError, OSError) as e:
+            if e.errno == errno.ENOENT:
+                return 0
+            raise CGroupsException("Failed to read cpu.stat: {0}".format(ustr(e)))
+        except Exception as e:
+            raise CGroupsException("Failed to read cpu.stat: {0}".format(ustr(e)))
 
     def _cpu_usage_initialized(self):
         return self._current_cgroup_cpu is not None and self._current_system_cpu is not None
@@ -190,6 +203,8 @@ class CpuCgroup(CGroup):
             raise CGroupsException("initialize_cpu_usage() should be invoked only once")
         self._current_cgroup_cpu = self._get_cpu_ticks(allow_no_such_file_or_directory_error=True)
         self._current_system_cpu = self._osutil.get_total_cpu_ticks_since_boot()
+        if self._track_throttled_time:
+            self._current_throttled_time = self._get_throttled_time()
 
     def get_cpu_usage(self):
         """
@@ -213,26 +228,29 @@ class CpuCgroup(CGroup):
 
         return round(100.0 * self._osutil.get_processor_cores() * float(cgroup_delta) / float(system_delta), 3)
 
+    def get_throttled_time(self):
+        """
+        Computes the throttled time (in nanoseconds) since the last call to this function.
+        NOTE: initialize_cpu_usage() must be invoked before calling this function
+        """
+        if not self._cpu_usage_initialized():
+            raise CGroupsException("initialize_cpu_usage() must be invoked before the first call to get_throttled_time()")
+
+        self._previous_throttled_time = self._current_throttled_time
+        self._current_throttled_time = self._get_throttled_time()
+
+        return  self._current_throttled_time - self._previous_throttled_time
+
     def get_tracked_metrics(self):
-        return [
+        tracked = [
             MetricValue(MetricsCategory.CPU_CATEGORY, MetricsCounter.PROCESSOR_PERCENT_TIME, self.name, self.get_cpu_usage()),
         ]
+        if self._track_throttled_time:
+            tracked.append(MetricValue(MetricsCategory.CPU_CATEGORY, MetricsCounter.THROTTLED_TIME, self.name, self.get_throttled_time()))
+        return tracked
 
 
 class MemoryCgroup(CGroup):
-    def __init__(self, name, cgroup_path):
-        """
-        Initialize _data collection for the Memory controller
-
-        :return: MemoryCgroup
-        """
-        super(MemoryCgroup, self).__init__(name, cgroup_path, CGroupContollers.MEMORY)
-
-    def __str__(self):
-        return "cgroup: Name: {0}, cgroup_path: {1}; Controller: {2}".format(
-            self.name, self.path, self.controller
-        )
-
     def get_memory_usage(self):
         """
         Collect memory.usage_in_bytes from the cgroup.

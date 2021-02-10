@@ -21,7 +21,7 @@ import random
 import string
 
 from azurelinuxagent.common import event, logger
-from azurelinuxagent.common.cgroup import CGroup, CpuCgroup, MemoryCgroup, MetricValue
+from azurelinuxagent.common.cgroup import CpuCgroup, MemoryCgroup, MetricValue
 from azurelinuxagent.common.cgroupstelemetry import CGroupsTelemetry
 from azurelinuxagent.common.event import EVENTS_DIRECTORY
 from azurelinuxagent.common.protocol.healthservice import HealthService
@@ -250,15 +250,6 @@ class TestExtensionMetricsDataTelemetry(AgentTestCase):
         self.assertEqual(0, patch_periodic_warn.call_count)
         self.assertEqual(0, patch_add_metric.call_count)  # No metrics should be sent.
 
-    @patch('azurelinuxagent.common.event.EventLogger.add_metric')
-    @patch('azurelinuxagent.common.logger.Logger.periodic_warn')
-    def test_send_extension_metrics_telemetry_for_unsupported_cgroup(self, patch_periodic_warn, patch_add_metric, *args):  # pylint: disable=unused-argument
-        CGroupsTelemetry._tracked.append(CGroup("cgroup_name", "/test/path", "io"))
-
-        PollResourceUsage().run()
-        self.assertEqual(1, patch_periodic_warn.call_count)
-        self.assertEqual(0, patch_add_metric.call_count)  # No metrics should be sent.
-
     def test_generate_extension_metrics_telemetry_dictionary(self, *args):  # pylint: disable=unused-argument
         num_polls = 10
         num_extensions = 1
@@ -272,11 +263,10 @@ class TestExtensionMetricsDataTelemetry(AgentTestCase):
         # no need to initialize the CPU usage, since we mock get_cpu_usage() below
         with patch("azurelinuxagent.common.cgroup.CpuCgroup.initialize_cpu_usage"):
             for i in range(num_extensions):
-                dummy_cpu_cgroup = CGroup.create("dummy_cpu_path_{0}".format(i), "cpu", "dummy_extension_{0}".format(i))
+                dummy_cpu_cgroup = CpuCgroup("dummy_extension_{0}".format(i), "dummy_cpu_path_{0}".format(i))
                 CGroupsTelemetry.track_cgroup(dummy_cpu_cgroup)
 
-                dummy_memory_cgroup = CGroup.create("dummy_memory_path_{0}".format(i), "memory",
-                                                    "dummy_extension_{0}".format(i))
+                dummy_memory_cgroup = MemoryCgroup("dummy_extension_{0}".format(i), "dummy_memory_path_{0}".format(i))
                 CGroupsTelemetry.track_cgroup(dummy_memory_cgroup)
 
         self.assertEqual(2 * num_extensions, len(CGroupsTelemetry._tracked))

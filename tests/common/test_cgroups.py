@@ -20,8 +20,9 @@ from __future__ import print_function
 import errno
 import os
 import random
+import shutil
 
-from azurelinuxagent.common.cgroup import CpuCgroup, MemoryCgroup, CGroup
+from azurelinuxagent.common.cgroup import CpuCgroup, MemoryCgroup
 from azurelinuxagent.common.exception import CGroupsException
 from azurelinuxagent.common.osutil import get_osutil
 from azurelinuxagent.common.utils import fileutil
@@ -36,21 +37,8 @@ def consume_cpu_time():
 
 
 class TestCGroup(AgentTestCase):
-    def test_correct_creation(self):
-        test_cgroup = CGroup.create("dummy_path", "cpu", "test_extension")
-        self.assertIsInstance(test_cgroup, CpuCgroup)
-        self.assertEqual(test_cgroup.controller, "cpu")
-        self.assertEqual(test_cgroup.path, "dummy_path")
-        self.assertEqual(test_cgroup.name, "test_extension")
-
-        test_cgroup = CGroup.create("dummy_path", "memory", "test_extension")
-        self.assertIsInstance(test_cgroup, MemoryCgroup)
-        self.assertEqual(test_cgroup.controller, "memory")
-        self.assertEqual(test_cgroup.path, "dummy_path")
-        self.assertEqual(test_cgroup.name, "test_extension")
-
     def test_is_active(self):
-        test_cgroup = CGroup.create(self.tmp_dir, "cpu", "test_extension")
+        test_cgroup = CpuCgroup("test_extension", self.tmp_dir)
         self.assertEqual(False, test_cgroup.is_active())
 
         with open(os.path.join(self.tmp_dir, "tasks"), mode="wb") as tasks:
@@ -60,10 +48,10 @@ class TestCGroup(AgentTestCase):
 
     @patch("azurelinuxagent.common.logger.periodic_warn")
     def test_is_active_file_not_present(self, patch_periodic_warn):
-        test_cgroup = CGroup.create(self.tmp_dir, "cpu", "test_extension")
+        test_cgroup = CpuCgroup("test_extension", self.tmp_dir)
         self.assertEqual(False, test_cgroup.is_active())
 
-        test_cgroup = CGroup.create(os.path.join(self.tmp_dir, "this_cgroup_does_not_exist"), "memory", "test_extension")
+        test_cgroup = MemoryCgroup("test_extension", os.path.join(self.tmp_dir, "this_cgroup_does_not_exist"))
         self.assertEqual(False, test_cgroup.is_active())
 
         self.assertEqual(0, patch_periodic_warn.call_count)
@@ -71,7 +59,7 @@ class TestCGroup(AgentTestCase):
     @patch("azurelinuxagent.common.logger.periodic_warn")
     def test_is_active_incorrect_file(self, patch_periodic_warn):
         open(os.path.join(self.tmp_dir, "tasks"), mode="wb").close()
-        test_cgroup = CGroup.create(os.path.join(self.tmp_dir, "tasks"), "cpu", "test_extension")
+        test_cgroup = CpuCgroup("test_extension", os.path.join(self.tmp_dir, "tasks"))
         self.assertEqual(False, test_cgroup.is_active())
         self.assertEqual(1, patch_periodic_warn.call_count)
 
@@ -153,7 +141,7 @@ class TestCpuCgroup(AgentTestCase):
 
         self.assertEqual(cpu_usage, round(100.0 * 0.000445181085968 * osutil.get_processor_cores(), 3))
 
-    def test_initialie_cpu_usage_should_set_the_cgroup_usage_to_0_when_the_cgroup_does_not_exist(self):
+    def test_initialize_cpu_usage_should_set_the_cgroup_usage_to_0_when_the_cgroup_does_not_exist(self):
         cgroup = CpuCgroup("test", "/sys/fs/cgroup/cpu/system.slice/test")
 
         io_error_2 = IOError()
@@ -189,12 +177,19 @@ class TestCpuCgroup(AgentTestCase):
         with self.assertRaises(CGroupsException):
             cpu_usage = cgroup.get_cpu_usage()  # pylint: disable=unused-variable
 
+    def test_get_throttled_time_should_return_the_value_since_its_last_invocation(self):
+        test_file = os.path.join(self.tmp_dir, "cpu.stat")
+        shutil.copyfile(os.path.join(data_dir, "cgroups", "cpu.stat_t0"), test_file)  # throttled_time = 50
+        cgroup = CpuCgroup("test", self.tmp_dir, track_throttled_time=True)
+        cgroup.initialize_cpu_usage()
+        shutil.copyfile(os.path.join(data_dir, "cgroups", "cpu.stat_t1"), test_file)  # throttled_time = 2075541442327
+
+        throttled_time = cgroup.get_throttled_time()
+
+        self.assertEqual(throttled_time, 2075541442327 - 50, "The value of throttled_time is incorrect")
+
 
 class TestMemoryCgroup(AgentTestCase):
-    def test_memory_cgroup_create(self):
-        test_mem_cg = MemoryCgroup("test_extension", os.path.join(data_dir, "cgroups", "memory_mount"))
-        self.assertEqual("memory", test_mem_cg.controller)
-
     def test_get_metrics(self):
         test_mem_cg = MemoryCgroup("test_extension", os.path.join(data_dir, "cgroups", "memory_mount"))
 
