@@ -37,7 +37,6 @@ from azurelinuxagent.common.version import get_distro
 
 CGROUPS_FILE_SYSTEM_ROOT = '/sys/fs/cgroup'
 CGROUP_CONTROLLERS = ["cpu", "memory"]
-SYSTEMD_RUN_PATH = "/run/systemd/system/"
 
 
 class SystemdRunError(CGroupsException):
@@ -72,14 +71,6 @@ class CGroupsApi(object):
     def _get_extension_cgroup_name(extension_name):
         # Since '-' is used as a separator in systemd unit names, we replace it with '_' to prevent side-effects.
         return extension_name.replace('-', '_')
-
-    @staticmethod
-    def is_systemd():
-        """
-        Determine if systemd is managing system services; the implementation follows the same strategy as, for example,
-        sd_booted() in libsystemd, or /usr/sbin/service
-        """
-        return os.path.exists(SYSTEMD_RUN_PATH)
 
     @staticmethod
     def get_processes_in_cgroup(cgroup_path):
@@ -137,15 +128,6 @@ class SystemdCgroupsApi(CGroupsApi):
         self._agent_unit_name = None
         self._systemd_run_commands = []
         self._systemd_run_commands_lock = threading.RLock()
-
-    @staticmethod
-    def get_systemd_version():
-        # the output is similar to
-        #    $ systemctl --version
-        #    systemd 245 (245.4-4ubuntu3)
-        #    +PAM +AUDIT +SELINUX +IMA +APPARMOR +SMACK +SYSVINIT +UTMP etc
-        #
-        return shellutil.run_command(['systemctl', '--version'])
 
     def get_systemd_run_commands(self):
         """
@@ -245,14 +227,6 @@ class SystemdCgroupsApi(CGroupsApi):
                     controllers = fileutil.read_file(controllers_file)
                 return mount_point, controllers
         return None, None
-
-    @staticmethod
-    def get_unit_property(unit_name, property_name):
-        output = shellutil.run_command(["systemctl", "show", unit_name, "--property", property_name])
-        match = re.match("[^=]+=(?P<value>.+)", output)
-        if match is None:
-            raise ValueError("Can't find property {0} of {1}", property_name, unit_name)  # pylint: disable=W0715
-        return match.group('value')
 
     def get_agent_unit_name(self):
         if self._agent_unit_name is None:

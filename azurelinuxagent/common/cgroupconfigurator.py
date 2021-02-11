@@ -25,7 +25,7 @@ from azurelinuxagent.common.cgroupapi import CGroupsApi, SystemdCgroupsApi, Syst
 from azurelinuxagent.common.cgroupstelemetry import CGroupsTelemetry
 from azurelinuxagent.common.exception import ExtensionErrorCodes, CGroupsException
 from azurelinuxagent.common.future import ustr
-from azurelinuxagent.common.osutil import get_osutil
+from azurelinuxagent.common.osutil import get_osutil, systemd
 from azurelinuxagent.common.version import get_distro
 from azurelinuxagent.common.utils import shellutil, fileutil
 from azurelinuxagent.common.utils.extensionprocessutil import handle_process_completion
@@ -100,11 +100,11 @@ class CGroupConfigurator(object):
 
                 # check that systemd is detected correctly
                 self._cgroups_api = SystemdCgroupsApi()
-                if not self._cgroups_api.is_systemd():
+                if not systemd.is_systemd():
                     self.__log_cgroup_warning("systemd was not detected on {0}", get_distro())
                     return
 
-                self.__log_cgroup_info("systemd version: {0}", self._cgroups_api.get_systemd_version())
+                self.__log_cgroup_info("systemd version: {0}", systemd.get_version())
 
                 # This is temporarily disabled while we analyze telemetry. Likely it will be removed.
                 # self.__collect_azure_unit_telemetry()
@@ -114,7 +114,7 @@ class CGroupConfigurator(object):
                     return
 
                 agent_unit_name = self._cgroups_api.get_agent_unit_name()
-                agent_slice = self._cgroups_api.get_unit_property(agent_unit_name, "Slice")
+                agent_slice = systemd.get_unit_property(agent_unit_name, "Slice")
                 if agent_slice not in (_AZURE_SLICE, "system.slice"):
                     self.__log_cgroup_warning("The agent is within an unexpected slice: {0}", agent_slice)
                     return
@@ -163,7 +163,7 @@ class CGroupConfigurator(object):
             for unit_name, unit_description in azure_units:
                 unit_slice = "Unknown"
                 try:
-                    unit_slice = SystemdCgroupsApi.get_unit_property(unit_name, "Slice")
+                    unit_slice = systemd.get_unit_property(unit_name, "Slice")
                 except Exception as exception:
                     self.__log_cgroup_warning("Failed to query Slice for {0}: {1}", unit_name, ustr(exception))
 
@@ -184,14 +184,14 @@ class CGroupConfigurator(object):
             agent_unit_files = []
             agent_service_name = get_osutil().get_service_name()
             try:
-                fragment_path = SystemdCgroupsApi.get_unit_property(agent_service_name, "FragmentPath")
+                fragment_path = systemd.get_unit_property(agent_service_name, "FragmentPath")
                 if fragment_path != "/lib/systemd/system/{0}.service".format(agent_service_name):
                     agent_unit_files.append(fragment_path)
             except Exception as exception:
                 self.__log_cgroup_warning("Failed to query the agent's FragmentPath: {0}", ustr(exception))
 
             try:
-                drop_in_paths = SystemdCgroupsApi.get_unit_property(agent_service_name, "DropInPaths")
+                drop_in_paths = systemd.get_unit_property(agent_service_name, "DropInPaths")
                 for path in drop_in_paths.split():
                     agent_unit_files.append(path)
             except Exception as exception:
@@ -271,12 +271,14 @@ class CGroupConfigurator(object):
             # Older agents used to create this slice, but it was never used. Cleanup the file.
             self._cleanup_unit_file("/etc/systemd/system/system-walinuxagent.extensions.slice")
 
-            azure_slice = os.path.join("/lib/systemd/system", _AZURE_SLICE)
-            vmextensions_slice = os.path.join("/lib/systemd/system", _VMEXTENSIONS_SLICE)
-            agent_unit_file = "/lib/systemd/system/{0}".format(self._cgroups_api.get_agent_unit_name())
-            agent_drop_in_file_slice = "/lib/systemd/system/{0}.d/{1}".format(self._cgroups_api.get_agent_unit_name(), _AGENT_DROP_IN_FILE_SLICE)
-            agent_drop_in_file_cpu_accounting = "/lib/systemd/system/{0}.d/{1}".format(self._cgroups_api.get_agent_unit_name(), _AGENT_DROP_IN_FILE_CPU_ACCOUNTING)
-            agent_drop_in_file_cpu_quota = "/lib/systemd/system/{0}.d/{1}".format(self._cgroups_api.get_agent_unit_name(), _AGENT_DROP_IN_FILE_CPU_QUOTA)
+            systemd_unit_file_install_path = systemd.get_unit_file_install_path()
+            agent_unit_file_dropin_path = os.path.join(systemd_unit_file_install_path, "{0}.d".format(self._cgroups_api.get_agent_unit_name()))
+            azure_slice = os.path.join(systemd_unit_file_install_path, _AZURE_SLICE)
+            vmextensions_slice = os.path.join(systemd_unit_file_install_path, _VMEXTENSIONS_SLICE)
+            agent_unit_file = os.path.join(systemd_unit_file_install_path, self._cgroups_api.get_agent_unit_name())
+            agent_drop_in_file_slice = os.path.join(agent_unit_file_dropin_path, _AGENT_DROP_IN_FILE_SLICE)
+            agent_drop_in_file_cpu_accounting = os.path.join(agent_unit_file_dropin_path, _AGENT_DROP_IN_FILE_CPU_ACCOUNTING)
+            agent_drop_in_file_cpu_quota = os.path.join(agent_unit_file_dropin_path, _AGENT_DROP_IN_FILE_CPU_QUOTA)
             agent_unit_name = self._cgroups_api.get_agent_unit_name()
 
             files_to_create = []
@@ -322,7 +324,7 @@ class CGroupConfigurator(object):
                     for unit_file in files_to_create:
                         self._cleanup_unit_file(unit_file)
 
-            logger.info("Agent's CPUQuota: {0}",   self._cgroups_api.get_unit_property(agent_unit_name, "CPUQuotaPerSecUSec"))
+            logger.info("Agent's CPUQuota: {0}",  systemd.get_unit_property(agent_unit_name, "CPUQuotaPerSecUSec"))
 
         def _create_unit_file(self, path, contents):
             try:
@@ -353,7 +355,7 @@ class CGroupConfigurator(object):
                 self.__log_cgroup_warning("The agent's process is not within a CPU cgroup")
             else:
                 if cpu_cgroup_relative_path == expected_relative_path:
-                    cpu_accounting = self._cgroups_api.get_unit_property(agent_service_name, "CPUAccounting")
+                    cpu_accounting = systemd.get_unit_property(agent_service_name, "CPUAccounting")
                     self.__log_cgroup_info('CPUAccounting: {0}', cpu_accounting)
                 else:
                     cpu_cgroup_relative_path = None  # Set the path to None to prevent monitoring
@@ -366,7 +368,7 @@ class CGroupConfigurator(object):
                 self.__log_cgroup_warning("The agent's process is not within a memory cgroup")
             else:
                 if memory_cgroup_relative_path == expected_relative_path:
-                    memory_accounting = self._cgroups_api.get_unit_property(agent_service_name, "MemoryAccounting")
+                    memory_accounting = systemd.get_unit_property(agent_service_name, "MemoryAccounting")
                     self.__log_cgroup_info('MemoryAccounting: {0}', memory_accounting)
                 else:
                     memory_cgroup_relative_path = None  # Set the path to None to prevent monitoring

@@ -19,10 +19,9 @@ import os
 import sys
 
 from azurelinuxagent.common import logger
-from azurelinuxagent.common.cgroupapi import CGroupsApi
 from azurelinuxagent.common.event import add_event, WALAEventOperation
 from azurelinuxagent.common.future import ustr
-from azurelinuxagent.common.osutil import get_osutil
+from azurelinuxagent.common.osutil import get_osutil, systemd
 from azurelinuxagent.common.utils import shellutil, fileutil
 from azurelinuxagent.common.utils.networkutil import AddFirewallRules
 from azurelinuxagent.common.utils.shellutil import CommandError
@@ -72,7 +71,7 @@ Environment="EGG={egg_path}" "DST_IP={wire_ip}" "UID={user_id}" "WAIT={wait}"
         """
         osutil = get_osutil()
         self._network_setup_service_name = self._AGENT_NETWORK_SETUP_NAME_FORMAT.format(osutil.get_service_name())
-        self._is_systemd = CGroupsApi.is_systemd()
+        self._is_systemd = systemd.is_systemd()
         self._systemd_file_path = osutil.get_systemd_unit_file_install_path()
         self._dst_ip = dst_ip
         self._uid = uid
@@ -104,7 +103,7 @@ Environment="EGG={egg_path}" "DST_IP={wire_ip}" "UID={user_id}" "WAIT={wait}"
         logger.info(
             "Firewalld service not running/unavailable, trying to set up {0}".format(self._network_setup_service_name))
 
-        if not CGroupsApi.is_systemd():
+        if not systemd.is_systemd():
             raise Exception("Did not detect Systemd, unable to set {0}".format(self._network_setup_service_name))
 
         self._setup_network_setup_service()
