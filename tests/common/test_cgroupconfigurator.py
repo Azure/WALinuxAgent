@@ -35,6 +35,7 @@ from azurelinuxagent.common.event import WALAEventOperation
 from azurelinuxagent.common.exception import CGroupsException, ExtensionError, ExtensionErrorCodes
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.utils import shellutil
+from tests.common.mock_environment import MockCommand
 from tests.common.mock_cgroup_environment import mock_cgroup_environment, UnitFilePaths
 from tests.tools import AgentTestCase, patch, mock_sleep, i_am_root, data_dir
 from tests.utils.miscellaneous_tools import format_processes, wait_for
@@ -47,14 +48,14 @@ class CGroupConfiguratorSystemdTestCase(AgentTestCase):
         AgentTestCase.tearDownClass()
 
     @contextlib.contextmanager
-    def _get_cgroup_configurator(self, initialize=True, command_mocks=None):
+    def _get_cgroup_configurator(self, initialize=True, mock_commands=None):
         CGroupConfigurator._instance = None
         configurator = CGroupConfigurator.get_instance()
         CGroupsTelemetry.reset()
         with mock_cgroup_environment(self.tmp_dir) as mock_environment:
-            if command_mocks is not None:
-                for command in command_mocks:
-                    mock_environment.add_command(command[0], command[1])
+            if mock_commands is not None:
+                for command in mock_commands:
+                    mock_environment.add_command(command)
             configurator.mocks = mock_environment
             if initialize:
                 configurator.initialize()
@@ -69,8 +70,7 @@ class CGroupConfiguratorSystemdTestCase(AgentTestCase):
                 "The Agent's CPU is not being tracked. Tracked: {0}".format(tracked))
 
     def test_initialize_should_start_tracking_other_controllers_when_one_is_not_present(self):
-        command_mocks = [(
-            r"^mount -t cgroup$",
+        command_mocks = [MockCommand(r"^mount -t cgroup$",
 '''cgroup on /sys/fs/cgroup/systemd type cgroup (rw,nosuid,nodev,noexec,relatime,xattr,name=systemd)
 cgroup on /sys/fs/cgroup/rdma type cgroup (rw,nosuid,nodev,noexec,relatime,rdma)
 cgroup on /sys/fs/cgroup/cpuset type cgroup (rw,nosuid,nodev,noexec,relatime,cpuset)
@@ -83,16 +83,15 @@ cgroup on /sys/fs/cgroup/devices type cgroup (rw,nosuid,nodev,noexec,relatime,de
 cgroup on /sys/fs/cgroup/cpu,cpuacct type cgroup (rw,nosuid,nodev,noexec,relatime,cpu,cpuacct)
 cgroup on /sys/fs/cgroup/blkio type cgroup (rw,nosuid,nodev,noexec,relatime,blkio)
 ''')]
-        with self._get_cgroup_configurator(command_mocks=command_mocks) as configurator:
+        with self._get_cgroup_configurator(mock_commands=command_mocks) as configurator:
             tracked = CGroupsTelemetry._tracked
 
             self.assertTrue(configurator.enabled(), "Cgroups should be enabled")
             self.assertFalse(any(cg for cg in tracked if cg.name == 'walinuxagent.service' and 'memory' in cg.path),
                 "The Agent's memory should not be tracked. Tracked: {0}".format(tracked))
 
-    def test_initialize_should_not_enable_cgroups_is_the_cpu_and_memory_controllers_are_not_present(self):
-        command_mocks = [(
-r"^mount -t cgroup$",
+    def test_initialize_should_not_enable_cgroups_when_the_cpu_and_memory_controllers_are_not_present(self):
+        command_mocks = [MockCommand(r"^mount -t cgroup$",
 '''cgroup on /sys/fs/cgroup/systemd type cgroup (rw,nosuid,nodev,noexec,relatime,xattr,name=systemd)
 cgroup on /sys/fs/cgroup/rdma type cgroup (rw,nosuid,nodev,noexec,relatime,rdma)
 cgroup on /sys/fs/cgroup/cpuset type cgroup (rw,nosuid,nodev,noexec,relatime,cpuset)
@@ -104,15 +103,14 @@ cgroup on /sys/fs/cgroup/pids type cgroup (rw,nosuid,nodev,noexec,relatime,pids)
 cgroup on /sys/fs/cgroup/devices type cgroup (rw,nosuid,nodev,noexec,relatime,devices)
 cgroup on /sys/fs/cgroup/blkio type cgroup (rw,nosuid,nodev,noexec,relatime,blkio)
 ''')]
-        with self._get_cgroup_configurator(command_mocks=command_mocks) as configurator:
+        with self._get_cgroup_configurator(mock_commands=command_mocks) as configurator:
             tracked = CGroupsTelemetry._tracked
 
             self.assertFalse(configurator.enabled(), "Cgroups should not be enabled")
             self.assertEqual(len(tracked), 0, "No cgroups should be tracked. Tracked: {0}".format(tracked))
 
     def test_initialize_should_not_enable_cgroups_when_the_agent_is_not_in_the_system_slice(self):
-        command_mocks = [(
-r"^mount -t cgroup$",
+        command_mocks = [MockCommand(r"^mount -t cgroup$",
 '''cgroup on /sys/fs/cgroup/systemd type cgroup (rw,nosuid,nodev,noexec,relatime,xattr,name=systemd)
 cgroup on /sys/fs/cgroup/rdma type cgroup (rw,nosuid,nodev,noexec,relatime,rdma)
 cgroup on /sys/fs/cgroup/cpuset type cgroup (rw,nosuid,nodev,noexec,relatime,cpuset)
@@ -125,11 +123,13 @@ cgroup on /sys/fs/cgroup/devices type cgroup (rw,nosuid,nodev,noexec,relatime,de
 cgroup on /sys/fs/cgroup/blkio type cgroup (rw,nosuid,nodev,noexec,relatime,blkio)
 ''')]
 
-        with self._get_cgroup_configurator(command_mocks=command_mocks) as configurator:
+        with self._get_cgroup_configurator(mock_commands=command_mocks) as configurator:
             tracked = CGroupsTelemetry._tracked
+            agent_drop_in_file_cpu_quota = configurator.mocks.get_mapped_path(UnitFilePaths.cpu_quota)
 
             self.assertFalse(configurator.enabled(), "Cgroups should not be enabled")
             self.assertEqual(len(tracked), 0, "No cgroups should be tracked. Tracked: {0}".format(tracked))
+            self.assertFalse(os.path.exists(agent_drop_in_file_cpu_quota), "{0} should not have been created".format(agent_drop_in_file_cpu_quota))
 
     def test_initialize_should_not_create_unit_files(self):
         with self._get_cgroup_configurator() as configurator:
@@ -175,6 +175,28 @@ cgroup on /sys/fs/cgroup/blkio type cgroup (rw,nosuid,nodev,noexec,relatime,blki
             self.assertTrue(os.path.exists(agent_drop_in_file_slice), "{0} was not created".format(agent_drop_in_file_slice))
             self.assertTrue(os.path.exists(agent_drop_in_file_cpu_accounting), "{0} was not created".format(agent_drop_in_file_cpu_accounting))
             self.assertTrue(os.path.exists(agent_drop_in_file_cpu_quota), "{0} was not created".format(agent_drop_in_file_cpu_quota))
+
+    def test_initialize_should_start_tracking_cpu(self):
+        with self._get_cgroup_configurator():
+            for tracked in CGroupsTelemetry._tracked:
+                if tracked.name == "walinuxagent.service" and isinstance(tracked, CpuCgroup):
+                    self.assertTrue(tracked._track_throttled_time, "Throttle time should be tracked")
+                    break
+            else:
+                self.fail("walinuxagent.service is not being tracked")
+
+    def test_initialize_should_not_track_throttled_time_when_setting_the_cpu_quota_fails(self):
+        with self._get_cgroup_configurator(initialize=False) as configurator:
+            configurator.mocks.add_file(UnitFilePaths.cpu_quota, Exception("A TEST EXCEPTION"))
+
+            configurator.initialize()
+
+            for tracked in CGroupsTelemetry._tracked:
+                if tracked.name == "walinuxagent.service" and isinstance(tracked, CpuCgroup):
+                    self.assertFalse(tracked._track_throttled_time, "Throttle time should not be tracked")
+                    break
+            else:
+                raise Exception("Cannot find the tracking cgroup for walinuxagent.service")
 
     def test_enable_and_disable_should_change_the_enabled_state_of_cgroups(self):
         with self._get_cgroup_configurator() as configurator:

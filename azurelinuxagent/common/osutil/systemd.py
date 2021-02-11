@@ -22,13 +22,11 @@ from azurelinuxagent.common.osutil import get_osutil
 from azurelinuxagent.common.utils import shellutil
 
 
-def _get_osutil():
-    if _get_osutil.value is None:
-        _get_osutil.value = get_osutil()
-    return _get_osutil.value
-
-
-_get_osutil.value = None
+def _get_os_util():
+    if _get_os_util.value is None:
+        _get_os_util.value = get_osutil()
+    return _get_os_util.value
+_get_os_util.value = None
 
 
 def is_systemd():
@@ -49,11 +47,38 @@ def get_version():
 
 
 def get_unit_file_install_path():
-    return _get_osutil().get_systemd_unit_file_install_path()
+    """
+    e.g. /lib/systemd/system
+    """
+    return _get_os_util().get_systemd_unit_file_install_path()
+
+
+def get_agent_unit_name():
+    """
+    e.g. walinuxagent.service
+    """
+    return _get_os_util().get_service_name() + ".service"
+
+
+def get_agent_unit_file():
+    """
+    e.g. /lib/systemd/system/walinuxagent.service
+    """
+    return os.path.join(get_unit_file_install_path(), get_agent_unit_name())
+
+
+def get_agent_drop_in_path():
+    """
+    e.g. /lib/systemd/system/walinuxagent.service.d
+    """
+    return os.path.join(get_unit_file_install_path(), "{0}.d".format(get_agent_unit_name()))
 
 
 def get_unit_property(unit_name, property_name):
     output = shellutil.run_command(["systemctl", "show", unit_name, "--property", property_name])
+    # Output is similar to
+    #     # systemctl show walinuxagent.service --property CPUQuotaPerSecUSec
+    #     CPUQuotaPerSecUSec=50ms
     match = re.match("[^=]+=(?P<value>.+)", output)
     if match is None:
         raise ValueError("Can't find property {0} of {1}", property_name, unit_name)  # pylint: disable=W0715

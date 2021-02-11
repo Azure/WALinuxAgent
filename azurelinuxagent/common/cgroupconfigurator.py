@@ -62,12 +62,14 @@ _AGENT_DROP_IN_FILE_CPU_ACCOUNTING_CONTENTS = """
 CPUAccounting=yes
 """
 _AGENT_DROP_IN_FILE_CPU_QUOTA = "12-CPUQuota.conf"
-_AGENT_DROP_IN_FILE_CPU_QUOTA_CONTENTS = """
+_AGENT_DROP_IN_FILE_CPU_QUOTA_CONTENTS_FORMAT = """
 # This drop-in unit file was created by the Azure VM Agent.
 # Do not edit.
 [Service]
-CPUQuota=5%
+CPUQuota={0}%
 """
+_AGENT_CPU_QUOTA = 5
+
 
 class CGroupConfigurator(object):
     """
@@ -113,21 +115,22 @@ class CGroupConfigurator(object):
                 if not self.__check_no_legacy_cgroups():
                     return
 
-                agent_unit_name = self._cgroups_api.get_agent_unit_name()
+                agent_unit_name = systemd.get_agent_unit_name()
                 agent_slice = systemd.get_unit_property(agent_unit_name, "Slice")
                 if agent_slice not in (_AZURE_SLICE, "system.slice"):
                     self.__log_cgroup_warning("The agent is within an unexpected slice: {0}", agent_slice)
                     return
 
-                self.__setup_unit_files()
+                self.__setup_azure_slice()
 
                 cpu_controller_root, memory_controller_root = self.__get_cgroup_controllers()
                 self._agent_cpu_cgroup_path, self._agent_memory_cgroup_path = self.__get_agent_cgroups(agent_slice, cpu_controller_root, memory_controller_root)
 
                 if self._agent_cpu_cgroup_path is not None:
                     self.__log_cgroup_info("Agent CPU cgroup: {0}", self._agent_cpu_cgroup_path)
-                    CGroupsTelemetry.track_cgroup(CpuCgroup(agent_unit_name, self._agent_cpu_cgroup_path, track_throttled_time=True))
                     self._cgroups_enabled = True
+                    track_throttled_time = self.set_cpu_quota(_AGENT_CPU_QUOTA)
+                    CGroupsTelemetry.track_cgroup(CpuCgroup(agent_unit_name, self._agent_cpu_cgroup_path, track_throttled_time=track_throttled_time))
 
                 self.__log_cgroup_info('Cgroups enabled: {0}', self._cgroups_enabled)
 
@@ -240,7 +243,7 @@ class CGroupConfigurator(object):
 
             return cpu_controller_root, memory_controller_root
 
-        def __setup_unit_files(self):
+        def __setup_azure_slice(self):
             """
             The agent creates "azure.slice" for use by extensions and the agent. The agent runs under "azure.slice" directly and each
             extension runs under its own slice ("Microsoft.CPlat.Extension.slice" in the example below). All the slices for
@@ -260,26 +263,22 @@ class CGroupConfigurator(object):
             This method ensures that the "azure" and "vmextensions" slices are created. Setup should create those slices
             under /lib/systemd/system; but if they do not exist, __ensure_azure_slices_exist will create them.
 
-            It also creates drop-in files to set the agent's Slice, CPUAccounting, and CPUQuota properties if they have not been
+            It also creates drop-in files to set the agent's Slice and CPUAccounting if they have not been
             set up in the agent's unit file.
 
             Lastly, the method also cleans up unit files left over from previous versions of the agent.
-
-            Returns the slice under which the agent should currently be running.
             """
 
             # Older agents used to create this slice, but it was never used. Cleanup the file.
             self._cleanup_unit_file("/etc/systemd/system/system-walinuxagent.extensions.slice")
 
-            systemd_unit_file_install_path = systemd.get_unit_file_install_path()
-            agent_unit_file_dropin_path = os.path.join(systemd_unit_file_install_path, "{0}.d".format(self._cgroups_api.get_agent_unit_name()))
-            azure_slice = os.path.join(systemd_unit_file_install_path, _AZURE_SLICE)
-            vmextensions_slice = os.path.join(systemd_unit_file_install_path, _VMEXTENSIONS_SLICE)
-            agent_unit_file = os.path.join(systemd_unit_file_install_path, self._cgroups_api.get_agent_unit_name())
-            agent_drop_in_file_slice = os.path.join(agent_unit_file_dropin_path, _AGENT_DROP_IN_FILE_SLICE)
-            agent_drop_in_file_cpu_accounting = os.path.join(agent_unit_file_dropin_path, _AGENT_DROP_IN_FILE_CPU_ACCOUNTING)
-            agent_drop_in_file_cpu_quota = os.path.join(agent_unit_file_dropin_path, _AGENT_DROP_IN_FILE_CPU_QUOTA)
-            agent_unit_name = self._cgroups_api.get_agent_unit_name()
+            unit_file_install_path = systemd.get_unit_file_install_path()
+            azure_slice = os.path.join(unit_file_install_path, _AZURE_SLICE)
+            vmextensions_slice = os.path.join(unit_file_install_path, _VMEXTENSIONS_SLICE)
+            agent_unit_file = systemd.get_agent_unit_file()
+            agent_drop_in_path = systemd.get_agent_drop_in_path()
+            agent_drop_in_file_slice = os.path.join(agent_drop_in_path, _AGENT_DROP_IN_FILE_SLICE)
+            agent_drop_in_file_cpu_accounting = os.path.join(agent_drop_in_path, _AGENT_DROP_IN_FILE_CPU_ACCOUNTING)
 
             files_to_create = []
 
@@ -301,41 +300,30 @@ class CGroupConfigurator(object):
                 if not os.path.exists(agent_drop_in_file_cpu_accounting):
                     files_to_create.append((agent_drop_in_file_cpu_accounting, _AGENT_DROP_IN_FILE_CPU_ACCOUNTING_CONTENTS))
 
-            if fileutil.findre_in_file(agent_unit_file, r"CPUQuota=") is not None:
-                self._cleanup_unit_file(agent_drop_in_file_cpu_quota)
-            else:
-                if not os.path.exists(agent_drop_in_file_cpu_quota):
-                    files_to_create.append((agent_drop_in_file_cpu_quota, _AGENT_DROP_IN_FILE_CPU_QUOTA_CONTENTS))
-
             if len(files_to_create) > 0:
+                # create the unit files, but if 1 fails remove all and return
                 try:
                     for path, contents in files_to_create:
                         self._create_unit_file(path, contents)
-
-                    # reload the systemd configuration, but the new slice will not be used until the agent's service restarts,
-                    # but the changes in CPU quota will apply after the reload
-                    try:
-                        logger.info("Executing systemctl daemon-reload...")
-                        shellutil.run_command(["systemctl", "daemon-reload"])
-                    except Exception as exception:
-                        self.__log_cgroup_warning("daemon-reload failed: {0}", ustr(exception))
-                except Exception:
-                    # the exception is already logged in the above functions
+                except Exception as exception:
+                    self.__log_cgroup_warning("Failed to create unit files for the azure slice: {0}", ustr(exception))
                     for unit_file in files_to_create:
                         self._cleanup_unit_file(unit_file)
+                    return
 
-            logger.info("Agent's CPUQuota: {0}",  systemd.get_unit_property(agent_unit_name, "CPUQuotaPerSecUSec"))
+                # reload the systemd configuration; the new slices will be used once the agent's service restarts
+                try:
+                    logger.info("Executing systemctl daemon-reload...")
+                    shellutil.run_command(["systemctl", "daemon-reload"])
+                except Exception as exception:
+                    self.__log_cgroup_warning("daemon-reload failed (create azure slice): {0}", ustr(exception))
 
         def _create_unit_file(self, path, contents):
-            try:
-                parent, _ = os.path.split(path)
-                if not os.path.exists(parent):
-                    fileutil.mkdir(parent, mode=0o755)
-                fileutil.write_file(path, contents)
-                self.__log_cgroup_info("Created {0}", path)
-            except Exception as exception:
-                self.__log_cgroup_warning("Failed to create {0} - {1}", path, ustr(exception))
-                raise
+            parent, _ = os.path.split(path)
+            if not os.path.exists(parent):
+                fileutil.mkdir(parent, mode=0o755)
+            fileutil.write_file(path, contents)
+            self.__log_cgroup_info("Created {0}", path)
 
         def _cleanup_unit_file(self, path):
             if os.path.exists(path):
@@ -346,17 +334,17 @@ class CGroupConfigurator(object):
                     self.__log_cgroup_warning("Failed to remove {0}: {1}", path, ustr(exception))
 
         def __get_agent_cgroups(self, agent_slice, cpu_controller_root, memory_controller_root):
-            agent_service_name = self._cgroups_api.get_agent_unit_name()
+            agent_unit_name = systemd.get_agent_unit_name()
 
-            expected_relative_path = os.path.join(agent_slice, agent_service_name)
+            expected_relative_path = os.path.join(agent_slice, agent_unit_name)
             cpu_cgroup_relative_path, memory_cgroup_relative_path = self._cgroups_api.get_process_cgroup_relative_paths("self")
 
             if cpu_cgroup_relative_path is None:
                 self.__log_cgroup_warning("The agent's process is not within a CPU cgroup")
             else:
                 if cpu_cgroup_relative_path == expected_relative_path:
-                    cpu_accounting = systemd.get_unit_property(agent_service_name, "CPUAccounting")
-                    self.__log_cgroup_info('CPUAccounting: {0}', cpu_accounting)
+                    self.__log_cgroup_info('CPUAccounting: {0}', systemd.get_unit_property(agent_unit_name, "CPUAccounting"))
+                    self.__log_cgroup_info('CPUQuota: {0}', systemd.get_unit_property(agent_unit_name, "CPUQuotaPerSecUSec"))
                 else:
                     cpu_cgroup_relative_path = None  # Set the path to None to prevent monitoring
                     self.__log_cgroup_warning(
@@ -368,7 +356,7 @@ class CGroupConfigurator(object):
                 self.__log_cgroup_warning("The agent's process is not within a memory cgroup")
             else:
                 if memory_cgroup_relative_path == expected_relative_path:
-                    memory_accounting = systemd.get_unit_property(agent_service_name, "MemoryAccounting")
+                    memory_accounting = systemd.get_unit_property(agent_unit_name, "MemoryAccounting")
                     self.__log_cgroup_info('MemoryAccounting: {0}', memory_accounting)
                 else:
                     memory_cgroup_relative_path = None  # Set the path to None to prevent monitoring
@@ -392,18 +380,47 @@ class CGroupConfigurator(object):
         def enabled(self):
             return self._cgroups_enabled
 
-        def resource_limits_enforced(self):
-            return False
-
         def enable(self):
             if not self._cgroups_supported:
                 raise CGroupsException("Attempted to enable cgroups, but they are not supported on the current platform")
-
             self._cgroups_enabled = True
 
         def disable(self):
             self._cgroups_enabled = False
             CGroupsTelemetry.reset()
+
+        def set_cpu_quota(self, quota):
+            """
+            Sets the agent's CPU quota to the given percentage (100% == 1 CPU).
+
+            This is done using a dropin file in the default dropin directory; any local overrides on the VM will take precedence
+            over this setting.
+            """
+            logger.info("Setting agent's CPUQuota to {0}%", quota)
+            return self._set_cpu_quota(quota)
+
+        def reset_cpu_quota(self):
+            """
+            Removes any CPUQuota on the agent
+            """
+            logger.info("Resetting agent's CPUQuota")
+            return self._set_cpu_quota('')  # setting an empty value resets to the default (infinity)
+
+        def _set_cpu_quota(self, quota):
+            try:
+                drop_in_file = os.path.join(systemd.get_agent_drop_in_path(), _AGENT_DROP_IN_FILE_CPU_QUOTA)
+                contents = _AGENT_DROP_IN_FILE_CPU_QUOTA_CONTENTS_FORMAT.format(quota)
+                self._create_unit_file(drop_in_file, contents)
+            except Exception as exception:
+                logger.info('Failed to set CPUQuota: {0}', ustr(exception))
+                return False
+            try:
+                logger.info("Executing systemctl daemon-reload...")
+                shellutil.run_command(["systemctl", "daemon-reload"])
+            except Exception as exception:
+                self.__log_cgroup_warning("daemon-reload failed (set quota): {0}", ustr(exception))
+                return False
+            return True
 
         def check_processes_in_agent_cgroup(self):
             """

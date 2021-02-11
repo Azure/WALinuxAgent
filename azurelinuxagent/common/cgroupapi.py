@@ -28,7 +28,6 @@ from azurelinuxagent.common.cgroupstelemetry import CGroupsTelemetry
 from azurelinuxagent.common.conf import get_agent_pid_file_path
 from azurelinuxagent.common.exception import CGroupsException, ExtensionErrorCodes, ExtensionError, ExtensionOperationError
 from azurelinuxagent.common.future import ustr
-from azurelinuxagent.common.osutil import get_osutil
 from azurelinuxagent.common.utils import fileutil, shellutil
 from azurelinuxagent.common.utils.extensionprocessutil import handle_process_completion, read_output, \
     TELEMETRY_MESSAGE_MAX_LEN
@@ -227,11 +226,6 @@ class SystemdCgroupsApi(CGroupsApi):
                     controllers = fileutil.read_file(controllers_file)
                 return mount_point, controllers
         return None, None
-
-    def get_agent_unit_name(self):
-        if self._agent_unit_name is None:
-            self._agent_unit_name = get_osutil().get_service_name() + ".service"
-        return self._agent_unit_name
 
     @staticmethod
     def _is_systemd_failure(scope_name, stderr):

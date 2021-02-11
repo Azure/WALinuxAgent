@@ -65,7 +65,7 @@ class CGroupsTelemetry(object):
         with CGroupsTelemetry._rlock:
             if not CGroupsTelemetry.is_tracked(cgroup.path):
                 CGroupsTelemetry._tracked.append(cgroup)
-                logger.info("Started tracking cgroup: {0}, path: {1}".format(cgroup.name, cgroup.path))
+                logger.info("Started tracking cgroup: {0}", ustr(cgroup))
 
     @staticmethod
     def is_tracked(path):
