@@ -275,7 +275,6 @@ def _encode_message(op, message):
 def _log_event(name, op, message, duration, is_success=True):
     global _EVENT_MSG  # pylint: disable=W0603
 
-    message = _encode_message(op, message)
     if not is_success:
         logger.error(_EVENT_MSG, name, op, message, duration)
     else:
