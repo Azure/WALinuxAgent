@@ -391,7 +391,7 @@ class CGroupConfigurator(object):
 
         def set_cpu_quota(self, quota):
             """
-            Sets the agent's CPU quota to the given percentage (100% == 1 CPU).
+            Sets the agent's CPU quota to the given percentage (100% == 1 CPU) and returns True on success, False otherwise
 
             This is done using a dropin file in the default dropin directory; any local overrides on the VM will take precedence
             over this setting.
@@ -401,7 +401,7 @@ class CGroupConfigurator(object):
 
         def reset_cpu_quota(self):
             """
-            Removes any CPUQuota on the agent
+            Removes any CPUQuota on the agent and returns True on success, False otherwise
             """
             logger.info("Resetting agent's CPUQuota")
             return self._set_cpu_quota('')  # setting an empty value resets to the default (infinity)
