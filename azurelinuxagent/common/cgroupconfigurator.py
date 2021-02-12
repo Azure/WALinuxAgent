@@ -20,7 +20,7 @@ import re
 import subprocess
 
 from azurelinuxagent.common import logger
-from azurelinuxagent.common.cgroup import CpuCgroup
+from azurelinuxagent.common.cgroup import CpuCgroup, AGENT_CGROUP_NAME, MetricsCounter
 from azurelinuxagent.common.cgroupapi import CGroupsApi, SystemdCgroupsApi, SystemdRunError
 from azurelinuxagent.common.cgroupstelemetry import CGroupsTelemetry
 from azurelinuxagent.common.exception import ExtensionErrorCodes, CGroupsException
@@ -86,8 +86,6 @@ class CGroupConfigurator(object):
             self._cgroups_api = None
             self._agent_cpu_cgroup_path = None
             self._agent_memory_cgroup_path = None
-            self._check_processes_in_agent_cgroup_last_error = None
-            self._check_processes_in_agent_cgroup_error_count = 0
 
         def initialize(self):
             try:
@@ -128,9 +126,8 @@ class CGroupConfigurator(object):
 
                 if self._agent_cpu_cgroup_path is not None:
                     self.__log_cgroup_info("Agent CPU cgroup: {0}", self._agent_cpu_cgroup_path)
-                    self._cgroups_enabled = True
-                    track_throttled_time = self.set_cpu_quota(_AGENT_CPU_QUOTA)
-                    CGroupsTelemetry.track_cgroup(CpuCgroup(agent_unit_name, self._agent_cpu_cgroup_path, track_throttled_time=track_throttled_time))
+                    self.enable()
+                    CGroupsTelemetry.track_cgroup(CpuCgroup(AGENT_CGROUP_NAME, self._agent_cpu_cgroup_path))
 
                 self.__log_cgroup_info('Cgroups enabled: {0}', self._cgroups_enabled)
 
@@ -146,10 +143,10 @@ class CGroupConfigurator(object):
             add_event(op=WALAEventOperation.CGroupsInfo, message=message)
 
         @staticmethod
-        def __log_cgroup_warning(format_string, *args):
+        def __log_cgroup_warning(format_string, *args, op=WALAEventOperation.CGroupsInfo):
             message = format_string.format(*args)
             logger.info(message)  # log as INFO for now, in the future it should be logged as WARNING
-            add_event(op=WALAEventOperation.CGroupsInfo, message=message, is_success=False, log_event=False)
+            add_event(op=op, message=message, is_success=False, log_event=False)
 
         def __collect_azure_unit_telemetry(self):
             azure_units = []
@@ -322,8 +319,9 @@ class CGroupConfigurator(object):
             parent, _ = os.path.split(path)
             if not os.path.exists(parent):
                 fileutil.mkdir(parent, mode=0o755)
+            exists = os.path.exists(path)
             fileutil.write_file(path, contents)
-            self.__log_cgroup_info("Created {0}", path)
+            self.__log_cgroup_info("{0} {1}", "Updated" if exists else "Created", path)
 
         def _cleanup_unit_file(self, path):
             if os.path.exists(path):
@@ -377,36 +375,47 @@ class CGroupConfigurator(object):
 
             return agent_cpu_cgroup_path, agent_memory_cgroup_path
 
+        def supported(self):
+            return self._cgroups_supported
+
         def enabled(self):
             return self._cgroups_enabled
 
         def enable(self):
-            if not self._cgroups_supported:
+            if not self.supported():
                 raise CGroupsException("Attempted to enable cgroups, but they are not supported on the current platform")
             self._cgroups_enabled = True
+            self._set_cpu_quota(_AGENT_CPU_QUOTA)
 
-        def disable(self):
+        def disable(self, reason):
             self._cgroups_enabled = False
+            self.__log_cgroup_warning("Disabling resource usage monitoring. Reason: {0}", reason, op=WALAEventOperation.CGroupsDisabled)
+            self._reset_cpu_quota()
             CGroupsTelemetry.reset()
 
-        def set_cpu_quota(self, quota):
+        def _set_cpu_quota(self, quota):
             """
-            Sets the agent's CPU quota to the given percentage (100% == 1 CPU) and returns True on success, False otherwise
+            Sets the agent's CPU quota to the given percentage (100% == 1 CPU)
 
-            This is done using a dropin file in the default dropin directory; any local overrides on the VM will take precedence
+            NOTE: This is done using a dropin file in the default dropin directory; any local overrides on the VM will take precedence
             over this setting.
             """
             logger.info("Setting agent's CPUQuota to {0}%", quota)
-            return self._set_cpu_quota(quota)
+            if self._try_set_cpu_quota(quota):
+                CGroupsTelemetry.set_track_throttled_time(True)
 
-        def reset_cpu_quota(self):
+        def _reset_cpu_quota(self):
             """
-            Removes any CPUQuota on the agent and returns True on success, False otherwise
+            Removes any CPUQuota on the agent
+
+            NOTE: This resets the quota on the agent's default dropin file; any local overrides on the VM will take precedence
+            over this setting.
             """
             logger.info("Resetting agent's CPUQuota")
-            return self._set_cpu_quota('')  # setting an empty value resets to the default (infinity)
+            if self._try_set_cpu_quota(''):  # setting an empty value resets to the default (infinity)
+                CGroupsTelemetry.set_track_throttled_time(False)
 
-        def _set_cpu_quota(self, quota):
+        def _try_set_cpu_quota(self, quota):
             try:
                 drop_in_file = os.path.join(systemd.get_agent_drop_in_path(), _AGENT_DROP_IN_FILE_CPU_QUOTA)
                 contents = _AGENT_DROP_IN_FILE_CPU_QUOTA_CONTENTS_FORMAT.format(quota)
@@ -422,24 +431,36 @@ class CGroupConfigurator(object):
                 return False
             return True
 
-        def check_processes_in_agent_cgroup(self):
+        def check_cgroups(self, cgroup_metrics):
+            if not self.enabled():
+                return
+
+            errors = []
+
+            try:
+                self._check_processes_in_agent_cgroup()
+            except CGroupsException as exception:
+                errors.append(exception)
+
+            try:
+                self._check_agent_throttled_time(cgroup_metrics)
+            except CGroupsException as exception:
+                errors.append(exception)
+
+            if len(errors) > 0:
+                self.disable("Check on cgroups failed:\n{0}".format("\n".join([ustr(e) for e in errors])))
+
+        def _check_processes_in_agent_cgroup(self):
             """
             Verifies that the agent's cgroup includes only the current process, its parent, commands started using shellutil and instances of systemd-run
             (those processes correspond, respectively, to the extension handler, the daemon, commands started by the extension handler, and the systemd-run
             commands used to start extensions on their own cgroup).
             Other processes started by the agent (e.g. extensions) and processes not started by the agent (e.g. services installed by extensions) are reported
             as unexpected, since they should belong to their own cgroup.
-            """
-            if not self.enabled():
-                return True
 
-            def log_message(message):
-                # Report only a small sample of errors
-                if message != self._check_processes_in_agent_cgroup_last_error and self._check_processes_in_agent_cgroup_error_count < 5:
-                    self._check_processes_in_agent_cgroup_error_count += 1
-                    self._check_processes_in_agent_cgroup_last_error = message
-                    logger.info(message)
-                    add_event(op=WALAEventOperation.CGroupsDisabled, message=message)
+            Raises a CGroupsException if the check fails
+            """
+            unexpected = []
 
             try:
                 daemon = os.getppid()
@@ -453,7 +474,6 @@ class CGroupConfigurator(object):
                 agent_commands.update(shellutil.get_running_commands())
                 systemd_run_commands.update(self._cgroups_api.get_systemd_run_commands())
 
-                unexpected = []
                 for process in agent_cgroup:
                     # Note that the agent uses systemd-run to start extensions; systemd-run belongs to the agent cgroup, though the extensions don't
                     if process in (daemon, extension_handler) or process in systemd_run_commands:
@@ -466,15 +486,11 @@ class CGroupConfigurator(object):
                         unexpected.append(process)
                         if len(unexpected) >= 5:  # collect just a small sample
                             break
-                if unexpected:
-                    unexpected = self._format_processes(unexpected)
-                    unexpected.sort()  # sort the PIDs so that the error message stays more consistent across different calls to this check
-                    log_message("The agent's cgroup includes unexpected processes; disabling CPU enforcement. Unexpected: {0}".format(unexpected))
-                    self.disable()
-                    return False
             except Exception as exception:
-                log_message("Failed to check the processes in the agent's cgroup: {0}".format(ustr(exception)))
-            return True
+                self.__log_cgroup_warning("Error checking the processes in the agent's cgroup: {0}".format(ustr(exception)))
+
+            if len(unexpected) > 0:
+                raise CGroupsException("The agent's cgroup includes unexpected processes: {0}".format(self._format_processes(unexpected)))
 
         @staticmethod
         def _format_processes(pid_list):
@@ -492,6 +508,13 @@ class CGroupConfigurator(object):
                 return "[PID: {0}] UNKNOWN".format(pid)
 
             return [get_command_line(pid) for pid in pid_list]
+
+        @staticmethod
+        def _check_agent_throttled_time(cgroup_metrics):
+            for metric in cgroup_metrics:
+                if metric.instance == AGENT_CGROUP_NAME and metric.counter == MetricsCounter.THROTTLED_TIME:
+                    if metric.value > 120: # 2 minutes
+                        raise CGroupsException("The agent has been throttled for {0} seconds".format(metric.value))
 
         @staticmethod
         def _get_parent(pid):
@@ -524,11 +547,8 @@ class CGroupConfigurator(object):
                 try:
                     return self._cgroups_api.start_extension_command(extension_name, command, timeout, shell=shell, cwd=cwd, env=env, stdout=stdout, stderr=stderr, error_code=error_code)
                 except SystemdRunError as exception:
-                    event_msg = 'Failed to start extension {0} using systemd-run. Will disable resource enforcement and retry invoking the extension without systemd. ' \
-                                'Systemd-run error: {1}'.format(extension_name, ustr(exception))
-                    add_event(op=WALAEventOperation.CGroupsDisabled, is_success=False, log_event=False, message=event_msg)
-                    logger.info(event_msg)
-                    self.disable()
+                    reason = 'Failed to start {0} using systemd-run, will try invoking the extension directly. Error: {1}'.format(extension_name, ustr(exception))
+                    self.disable(reason)
                     # fall-through and re-invoke the extension
 
             # subprocess-popen-preexec-fn<W1509> Disabled: code is not multi-threaded

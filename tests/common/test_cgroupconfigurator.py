@@ -28,7 +28,7 @@ import threading
 
 from nose.plugins.attrib import attr
 
-from azurelinuxagent.common.cgroup import CpuCgroup, MemoryCgroup
+from azurelinuxagent.common.cgroup import AGENT_CGROUP_NAME
 from azurelinuxagent.common.cgroupconfigurator import CGroupConfigurator
 from azurelinuxagent.common.cgroupstelemetry import CGroupsTelemetry
 from azurelinuxagent.common.event import WALAEventOperation
@@ -48,7 +48,7 @@ class CGroupConfiguratorSystemdTestCase(AgentTestCase):
         AgentTestCase.tearDownClass()
 
     @contextlib.contextmanager
-    def _get_cgroup_configurator(self, initialize=True, mock_commands=None):
+    def _get_cgroup_configurator(self, initialize=True, enable=True, mock_commands=None):
         CGroupConfigurator._instance = None
         configurator = CGroupConfigurator.get_instance()
         CGroupsTelemetry.reset()
@@ -58,15 +58,23 @@ class CGroupConfiguratorSystemdTestCase(AgentTestCase):
                     mock_environment.add_command(command)
             configurator.mocks = mock_environment
             if initialize:
-                configurator.initialize()
+                if not enable:
+                    with patch.object(configurator, "enable"):
+                        configurator.initialize()
+                else:
+                    configurator.initialize()
             yield configurator
+
+    def test_initialize_should_enabled_cgroups(self):
+        with self._get_cgroup_configurator() as configurator:
+            self.assertTrue(configurator.enabled(), "cgroups were not enabled")
 
     def test_initialize_should_start_tracking_the_agent_cgroups(self):
         with self._get_cgroup_configurator() as configurator:
             tracked = CGroupsTelemetry._tracked
 
             self.assertTrue(configurator.enabled(), "Cgroups should be enabled")
-            self.assertTrue(any(cg for cg in tracked if cg.name == 'walinuxagent.service' and 'cpu' in cg.path),
+            self.assertTrue(any(cg for cg in tracked if cg.name == AGENT_CGROUP_NAME and 'cpu' in cg.path),
                 "The Agent's CPU is not being tracked. Tracked: {0}".format(tracked))
 
     def test_initialize_should_start_tracking_other_controllers_when_one_is_not_present(self):
@@ -138,7 +146,6 @@ cgroup on /sys/fs/cgroup/blkio type cgroup (rw,nosuid,nodev,noexec,relatime,blki
             extensions_slice_unit_file = configurator.mocks.get_mapped_path(UnitFilePaths.vmextensions)
             agent_drop_in_file_slice = configurator.mocks.get_mapped_path(UnitFilePaths.slice)
             agent_drop_in_file_cpu_accounting = configurator.mocks.get_mapped_path(UnitFilePaths.cpu_accounting)
-            agent_drop_in_file_cpu_quota = configurator.mocks.get_mapped_path(UnitFilePaths.cpu_quota)
 
             # The mock creates the slice unit files; delete them
             os.remove(azure_slice_unit_file)
@@ -150,7 +157,6 @@ cgroup on /sys/fs/cgroup/blkio type cgroup (rw,nosuid,nodev,noexec,relatime,blki
             self.assertFalse(os.path.exists(extensions_slice_unit_file), "{0} should not have been created".format(extensions_slice_unit_file))
             self.assertFalse(os.path.exists(agent_drop_in_file_slice), "{0} should not have been created".format(agent_drop_in_file_slice))
             self.assertFalse(os.path.exists(agent_drop_in_file_cpu_accounting), "{0} should not have been created".format(agent_drop_in_file_cpu_accounting))
-            self.assertTrue(os.path.exists(agent_drop_in_file_cpu_quota), "{0} was not created".format(agent_drop_in_file_cpu_quota))
 
     def test_initialize_should_create_unit_files_when_the_agent_service_file_is_not_updated(self):
         with self._get_cgroup_configurator(initialize=False) as configurator:
@@ -159,7 +165,6 @@ cgroup on /sys/fs/cgroup/blkio type cgroup (rw,nosuid,nodev,noexec,relatime,blki
             extensions_slice_unit_file = configurator.mocks.get_mapped_path(UnitFilePaths.vmextensions)
             agent_drop_in_file_slice = configurator.mocks.get_mapped_path(UnitFilePaths.slice)
             agent_drop_in_file_cpu_accounting = configurator.mocks.get_mapped_path(UnitFilePaths.cpu_accounting)
-            agent_drop_in_file_cpu_quota = configurator.mocks.get_mapped_path(UnitFilePaths.cpu_quota)
 
             # The mock creates the service and slice unit files; replace the former and delete the latter
             configurator.mocks.add_data_file(os.path.join(data_dir, 'init', "walinuxagent.service.previous"), UnitFilePaths.walinuxagent)
@@ -174,64 +179,52 @@ cgroup on /sys/fs/cgroup/blkio type cgroup (rw,nosuid,nodev,noexec,relatime,blki
             self.assertTrue(os.path.exists(extensions_slice_unit_file), "{0} was not created".format(extensions_slice_unit_file))
             self.assertTrue(os.path.exists(agent_drop_in_file_slice), "{0} was not created".format(agent_drop_in_file_slice))
             self.assertTrue(os.path.exists(agent_drop_in_file_cpu_accounting), "{0} was not created".format(agent_drop_in_file_cpu_accounting))
-            self.assertTrue(os.path.exists(agent_drop_in_file_cpu_quota), "{0} was not created".format(agent_drop_in_file_cpu_quota))
-
-    def test_initialize_should_start_tracking_cpu(self):
-        with self._get_cgroup_configurator():
-            for tracked in CGroupsTelemetry._tracked:
-                if tracked.name == "walinuxagent.service" and isinstance(tracked, CpuCgroup):
-                    self.assertTrue(tracked._track_throttled_time, "Throttle time should be tracked")
-                    break
-            else:
-                self.fail("walinuxagent.service is not being tracked")
-
-    def test_initialize_should_not_track_throttled_time_when_setting_the_cpu_quota_fails(self):
-        with self._get_cgroup_configurator(initialize=False) as configurator:
-            configurator.mocks.add_file(UnitFilePaths.cpu_quota, Exception("A TEST EXCEPTION"))
-
-            configurator.initialize()
-
-            for tracked in CGroupsTelemetry._tracked:
-                if tracked.name == "walinuxagent.service" and isinstance(tracked, CpuCgroup):
-                    self.assertFalse(tracked._track_throttled_time, "Throttle time should not be tracked")
-                    break
-            else:
-                raise Exception("Cannot find the tracking cgroup for walinuxagent.service")
-
-    def test_enable_and_disable_should_change_the_enabled_state_of_cgroups(self):
-        with self._get_cgroup_configurator() as configurator:
-            self.assertTrue(configurator.enabled(), "CGroupConfigurator should be enabled by default")
-
-            configurator.disable()
-            self.assertFalse(configurator.enabled(), "disable() should disable the CGroupConfigurator")
-
-            configurator.enable()
-            self.assertTrue(configurator.enabled(), "enable() should enable the CGroupConfigurator")
 
     def test_enable_should_raise_cgroups_exception_when_cgroups_are_not_supported(self):
-        with self._get_cgroup_configurator(initialize=False) as configurator:
-            with patch("azurelinuxagent.common.cgroupapi.CGroupsApi.cgroups_supported", return_value=False):
-                configurator.initialize()
-
+        with self._get_cgroup_configurator(enable=False) as configurator:
+            with patch.object(configurator, "supported", return_value=False):
                 with self.assertRaises(CGroupsException) as context_manager:
                     configurator.enable()
                 self.assertIn("Attempted to enable cgroups, but they are not supported on the current platform", str(context_manager.exception))
 
-    def test_disable_should_reset_tracked_cgroups(self):
-        with self._get_cgroup_configurator(initialize=False) as configurator:
-            # Start tracking a couple of dummy cgroups
-            CGroupsTelemetry.track_cgroup(CpuCgroup("dummy", "/sys/fs/cgroup/memory/system.slice/dummy.service"))
-            CGroupsTelemetry.track_cgroup(MemoryCgroup("dummy", "/sys/fs/cgroup/memory/system.slice/dummy.service"))
+    def test_enable_should_set_agent_cpu_quota_and_track_throttled_time(self):
+        with self._get_cgroup_configurator(enable=False) as configurator:
+            agent_drop_in_file_cpu_quota = configurator.mocks.get_mapped_path(UnitFilePaths.cpu_quota)
+            if os.path.exists(agent_drop_in_file_cpu_quota):
+                raise Exception("{0} should not have been created during test setup".format(agent_drop_in_file_cpu_quota))
 
-            configurator.disable()
+            configurator.enable()
 
-            self.assertEqual(len(CGroupsTelemetry._tracked), 0)
+            self.assertTrue(os.path.exists(agent_drop_in_file_cpu_quota), "{0} was not created".format(agent_drop_in_file_cpu_quota))
+            self.assertTrue(CGroupsTelemetry.get_track_throttled_time(), "Throttle time should be tracked")
 
+    def test_enable_should_not_track_throttled_time_when_setting_the_cpu_quota_fails(self):
+        with self._get_cgroup_configurator(enable=False) as configurator:
+            if CGroupsTelemetry.get_track_throttled_time():
+                raise Exception("Test setup should not start tracking Throttle Time")
+
+            configurator.mocks.add_file(UnitFilePaths.cpu_quota, Exception("A TEST EXCEPTION"))
+
+            configurator.enable()
+
+            self.assertFalse(CGroupsTelemetry.get_track_throttled_time(), "Throttle time should not be tracked")
+
+    def test_disable_should_reset_cpu_quota_and_tracked_cgroups(self):
+        with self._get_cgroup_configurator() as configurator:
+            if len(CGroupsTelemetry._tracked) == 0:
+                raise Exception("Test setup should have started tracking at least 1 cgroup (the agent's)")
+            if not CGroupsTelemetry._track_throttled_time:
+                raise Exception("Test setup should have started tracking Throttle Time")
+
+            configurator.disable("UNIT TEST")
+
+            self.assertEqual(len(CGroupsTelemetry._tracked), 0, "No cgroups should be tracked after disable. Tracking: {0}".format(CGroupsTelemetry._tracked))
+            self.assertFalse(CGroupsTelemetry._track_throttled_time, "Throttle Time should not be tracked after disable")
 
     @patch('time.sleep', side_effect=lambda _: mock_sleep())
     def test_start_extension_command_should_not_use_systemd_when_cgroups_are_not_enabled(self, _):
         with self._get_cgroup_configurator() as configurator:
-            configurator.disable()
+            configurator.disable("UNIT TEST")
 
             with patch("azurelinuxagent.common.cgroupapi.subprocess.Popen", wraps=subprocess.Popen) as patcher:
                 configurator.start_extension_command(
@@ -318,7 +311,7 @@ cgroup on /sys/fs/cgroup/blkio type cgroup (rw,nosuid,nodev,noexec,relatime,blki
             original_popen = subprocess.Popen
 
             def mock_popen(command, *args, **kwargs):
-                if command.startswith('systemd-run'):
+                if 'systemd-run' in command:
                     # Inject a syntax error to the call
                     command = command.replace('systemd-run', 'systemd-run syntax_error')
                 return original_popen(command, *args, **kwargs)
@@ -342,13 +335,13 @@ cgroup on /sys/fs/cgroup/blkio type cgroup (rw,nosuid,nodev,noexec,relatime,blki
 
                         self.assertFalse(configurator.enabled(), "Cgroups should have been disabled")
 
-                        args, kwargs = mock_add_event.call_args
-                        self.assertIn("Failed to start extension Microsoft.Compute.TestExtension-1.2.3 using systemd-run.",
-                                      kwargs['message'])
-                        self.assertIn("Failed to find executable syntax_error: No such file or directory",
-                                      kwargs['message'])
-                        self.assertEqual(False, kwargs['is_success'])
-                        self.assertEqual(WALAEventOperation.CGroupsDisabled, kwargs['op'])
+                        disabled_event = [event for event in mock_add_event.call_args_list if event.kwargs['op'] == WALAEventOperation.CGroupsDisabled]
+
+                        self.assertTrue(len(disabled_event) == 1, "Exactly one CGroupsDisabled telemetry event should have been issued. Found: {0}".format(disabled_event))
+                        self.assertIn("Failed to start Microsoft.Compute.TestExtension-1.2.3 using systemd-run",
+                                      disabled_event[0].kwargs['message'],
+                                      "The systemd-run failure was not included in the telemetry message")
+                        self.assertEqual(False, disabled_event[0].kwargs['is_success'], "The telemetry event should indicate a failure")
 
                         extension_calls = [args[0] for (args, _) in popen_patch.call_args_list if command in args[0]]
 
@@ -600,7 +593,7 @@ exit 0
                 original_sleep = time.sleep
                 original_popen = subprocess.Popen
 
-                # Extensions are stated using systemd-run; mock Popen to remove the call to systemd-run; the test script creates a couple of
+                # Extensions are started using systemd-run; mock Popen to remove the call to systemd-run; the test script creates a couple of
                 # child processes, which would simulate the extension's processes.
                 def mock_popen(command, *args, **kwargs):
                     match = re.match(r"^systemd-run --unit=[^\s]+ --scope --slice=[^\s]+ (.+)", command)
@@ -656,40 +649,29 @@ exit 0
                     completed = random.randint(1000, 10000)
                 return completed
 
-            def get_telemetry_event_messages():
-                return [kwargs["message"] for (_, kwargs) in add_event_patcher.call_args_list if "The agent's cgroup includes unexpected processes" in kwargs["message"]]
-
             agent_processes = [os.getppid(), os.getpid()] + agent_command_processes + [start_extension.systemd_run_pid]
             other_processes = [1, get_completed_process()] + extension_processes
 
             with patch("azurelinuxagent.common.cgroupconfigurator.CGroupsApi.get_processes_in_cgroup", return_value=agent_processes + other_processes):
-                with patch("azurelinuxagent.common.cgroupconfigurator.add_event") as add_event_patcher:
-                    cgroup_configurator = CGroupConfigurator.get_instance()
+                with self.assertRaises(CGroupsException) as context_manager:
+                    configurator._check_processes_in_agent_cgroup()
 
-                    return_value = cgroup_configurator.check_processes_in_agent_cgroup()
+                # The list of processes in the message is an array of strings: "['foo', ..., 'bar']"
+                message = ustr(context_manager.exception)
+                search = re.search(r'unexpected processes: \[(?P<processes>.+)\]', message)
+                self.assertIsNotNone(search, "The event message is not in the expected format: {0}".format(message))
+                reported = search.group('processes').split(',')
 
-                    self.assertFalse(return_value, "check_processes_in_agent_cgroup() should have failed")
-                    self.assertFalse(cgroup_configurator.enabled(), "Cgroups should have been disabled")
-
-                    messages = get_telemetry_event_messages()
-
-                    self.assertEqual(1, len(messages), "Exactly 1 telemetry event should have been reported. Events: {0}".format(messages))
-
-                    # The list of processes in the message is an array of strings: "['foo', ..., 'bar']"
-                    search = re.search(r'\[(?P<processes>.+)\]', messages[0])
-                    self.assertIsNotNone(search, "The event message is not in the expected format: {0}".format(messages[0]))
-                    reported = search.group('processes').split(',')
-
-                    self.assertEqual(
-                        len(other_processes), len(reported),
-                        "An incorrect number of processes was reported. Expected: {0} Got: {1}".format(format_processes(other_processes), reported))
-                    for pid in other_processes:
-                        self.assertTrue(
-                            any("[PID: {0}]".format(pid) in reported_process for reported_process in reported),
-                            "Process {0} was not reported. Got: {1}".format(format_processes([pid]), reported))
+                self.assertEqual(
+                    len(other_processes), len(reported),
+                    "An incorrect number of processes was reported. Expected: {0} Got: {1}".format(format_processes(other_processes), reported))
+                for pid in other_processes:
+                    self.assertTrue(
+                        any("[PID: {0}]".format(pid) in reported_process for reported_process in reported),
+                        "Process {0} was not reported. Got: {1}".format(format_processes([pid]), reported))
 
         finally:
-            # create the file that stops the test process and wait for them to complete
+            # create the file that stops the test processes and wait for them to complete
             open(stop_file, "w").close()
             for thread in threads:
                 thread.join(timeout=5)
