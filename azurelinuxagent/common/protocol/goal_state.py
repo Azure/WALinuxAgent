@@ -398,7 +398,12 @@ class ExtensionsConfig(object):
         Sample config:
 
         <Plugins>
-              <Plugin name="Microsoft.CPlat.Core.NullSeqB" version="2.0.1" location="https://zrdfepirv2cbn04prdstr01a.blob.core.windows.net/f72653efd9e349ed9842c8b99e4c1712/Microsoft.CPlat.Core_NullSeqB_useast2euap_manifest.xml" state="enabled" autoUpgrade="false" failoverlocation="https://zrdfepirv2cbz06prdstr01a.blob.core.windows.net/f72653efd9e349ed9842c8b99e4c1712/Microsoft.CPlat.Core_NullSeqB_useast2euap_manifest.xml" runAsStartupTask="false" isJson="true" useExactVersion="true" />
+              <Plugin name="Microsoft.CPlat.Core.NullSeqB" version="2.0.1" location="https://zrdfepirv2cbn04prdstr01a.blob.core.windows.net/f72653efd9e349ed9842c8b99e4c1712/Microsoft.CPlat.Core_NullSeqB_useast2euap_manifest.xml" state="enabled" autoUpgrade="false" failoverlocation="https://zrdfepirv2cbz06prdstr01a.blob.core.windows.net/f72653efd9e349ed9842c8b99e4c1712/Microsoft.CPlat.Core_NullSeqB_useast2euap_manifest.xml" runAsStartupTask="false" isJson="true" useExactVersion="true">
+                <additionalLocation>
+                    <additionalLocation>http://www.publisher.type.failover1.com/</additionalLocation>
+                    <additionalLocation>http://www.publisher.type.failover2.com/</additionalLocation>
+                </additionalLocation>
+              </Plugin>
               <Plugin name="Microsoft.CPlat.Core.NullSeqA" version="2.0.1" location="https://zrdfepirv2cbn04prdstr01a.blob.core.windows.net/f72653efd9e349ed9842c8b99e4c1712/Microsoft.CPlat.Core_NullSeqA_useast2euap_manifest.xml" state="enabled" autoUpgrade="false" failoverlocation="https://zrdfepirv2cbn06prdstr01a.blob.core.windows.net/f72653efd9e349ed9842c8b99e4c1712/Microsoft.CPlat.Core_NullSeqA_useast2euap_manifest.xml" runAsStartupTask="false" isJson="true" useExactVersion="true" />
         </Plugins>
         """
@@ -421,9 +426,19 @@ class ExtensionsConfig(object):
         if ext_handler.properties.state in (None, ""):
             raise ExtensionConfigError("Received empty Extensions.Plugins.Plugin.state, failing Handler")
 
-        location = getattrib(plugin, "location")
-        failover_location = getattrib(plugin, "failoverlocation")
-        for uri in [location, failover_location]:
+        def getattrib_wrapped_in_list(node, attr_name):
+            attr = getattrib(node, attr_name)
+            return [attr] if attr else []
+
+        location = getattrib_wrapped_in_list(plugin, "location")
+        failover_location = getattrib_wrapped_in_list(plugin, "failoverLocation")
+
+        additional_location_node = find(plugin, "additionalLocations")
+        nodes_list = findall(additional_location_node, "additionalLocation") or []
+        additional_locations = [gettext(node) for node in nodes_list]
+
+        locations = location + additional_locations + failover_location
+        for uri in locations:
             version_uri = ExtHandlerVersionUri()
             version_uri.uri = uri
             ext_handler.versionUris.append(version_uri)
