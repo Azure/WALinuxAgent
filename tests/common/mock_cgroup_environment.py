@@ -18,15 +18,15 @@
 import contextlib
 import os
 from tests.tools import patch, data_dir
-from tests.common.mock_environment import MockEnvironment
+from tests.common.mock_environment import MockEnvironment, MockCommand
 
 _MOCKED_COMMANDS = [
-   (r"^systemctl --version$",
+   MockCommand(r"^systemctl --version$",
 '''systemd 237
 +PAM +AUDIT +SELINUX +IMA +APPARMOR +SMACK +SYSVINIT +UTMP +LIBCRYPTSETUP +GCRYPT +GNUTLS +ACL +XZ +LZ4 +SECCOMP +BLKID +ELFUTILS +KMOD -IDN2 +IDN -PCRE2 default-hierarchy=hybrid
 '''),
 
-    (r"^mount -t cgroup$",
+    MockCommand(r"^mount -t cgroup$",
 '''cgroup on /sys/fs/cgroup/systemd type cgroup (rw,nosuid,nodev,noexec,relatime,xattr,name=systemd)
 cgroup on /sys/fs/cgroup/rdma type cgroup (rw,nosuid,nodev,noexec,relatime,rdma)
 cgroup on /sys/fs/cgroup/cpuset type cgroup (rw,nosuid,nodev,noexec,relatime,cpuset)
@@ -40,25 +40,30 @@ cgroup on /sys/fs/cgroup/devices type cgroup (rw,nosuid,nodev,noexec,relatime,de
 cgroup on /sys/fs/cgroup/cpu,cpuacct type cgroup (rw,nosuid,nodev,noexec,relatime,cpu,cpuacct)
 cgroup on /sys/fs/cgroup/blkio type cgroup (rw,nosuid,nodev,noexec,relatime,blkio)
 '''),
-    (r"^mount -t cgroup2$",
+
+    MockCommand(r"^mount -t cgroup2$",
 '''cgroup on /sys/fs/cgroup/unified type cgroup2 (rw,nosuid,nodev,noexec,relatime) 
 '''),
-    (r"^systemctl show walinuxagent\.service --property Slice",
+
+    MockCommand(r"^systemctl show walinuxagent\.service --property Slice",
 '''Slice=system.slice
 '''),
-    (r"^systemctl show walinuxagent\.service --property CPUAccounting$",
+
+    MockCommand(r"^systemctl show walinuxagent\.service --property CPUAccounting$",
 '''CPUAccounting=no
 '''),
-    (r"^systemctl show walinuxagent\.service --property CPUQuotaPerSecUSec$",
+
+    MockCommand(r"^systemctl show walinuxagent\.service --property CPUQuotaPerSecUSec$",
 '''CPUQuotaPerSecUSec=infinity
 '''),
-    (r"^systemctl show walinuxagent\.service --property MemoryAccounting$",
+
+    MockCommand(r"^systemctl show walinuxagent\.service --property MemoryAccounting$",
 '''MemoryAccounting=no
 '''),
 
-    (r"^systemctl daemon-reload", ""),
+    MockCommand(r"^systemctl daemon-reload", ""),
 
-    (r"^systemd-run --unit=([^\s]+) --scope ([^\s]+)",
+    MockCommand(r"^systemd-run --unit=([^\s]+) --scope ([^\s]+)",
 ''' 
 Running scope as unit: TEST_UNIT.scope
 Thu 28 May 2020 07:25:55 AM PDT
