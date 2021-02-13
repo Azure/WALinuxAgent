@@ -65,7 +65,7 @@ class CGroupConfiguratorSystemdTestCase(AgentTestCase):
                     configurator.initialize()
             yield configurator
 
-    def test_initialize_should_enabled_cgroups(self):
+    def test_initialize_should_enable_cgroups(self):
         with self._get_cgroup_configurator() as configurator:
             self.assertTrue(configurator.enabled(), "cgroups were not enabled")
 
@@ -335,13 +335,13 @@ cgroup on /sys/fs/cgroup/blkio type cgroup (rw,nosuid,nodev,noexec,relatime,blki
 
                         self.assertFalse(configurator.enabled(), "Cgroups should have been disabled")
 
-                        disabled_event = [event for event in mock_add_event.call_args_list if event.kwargs['op'] == WALAEventOperation.CGroupsDisabled]
+                        disabled_events = [kwargs for _, kwargs in mock_add_event.call_args_list if kwargs['op'] == WALAEventOperation.CGroupsDisabled]
 
-                        self.assertTrue(len(disabled_event) == 1, "Exactly one CGroupsDisabled telemetry event should have been issued. Found: {0}".format(disabled_event))
+                        self.assertTrue(len(disabled_events) == 1, "Exactly one CGroupsDisabled telemetry event should have been issued. Found: {0}".format(disabled_events))
                         self.assertIn("Failed to start Microsoft.Compute.TestExtension-1.2.3 using systemd-run",
-                                      disabled_event[0].kwargs['message'],
+                                      disabled_events[0]['message'],
                                       "The systemd-run failure was not included in the telemetry message")
-                        self.assertEqual(False, disabled_event[0].kwargs['is_success'], "The telemetry event should indicate a failure")
+                        self.assertEqual(False, disabled_events[0]['is_success'], "The telemetry event should indicate a failure")
 
                         extension_calls = [args[0] for (args, _) in popen_patch.call_args_list if command in args[0]]
 
@@ -692,13 +692,13 @@ exit 0
 
                         self.assertFalse(configurator.enabled(), "An error in {0} should have disabled cgroups".format(method_to_fail))
 
-                        event = [event for event in add_event.call_args_list if event.kwargs["op"] == WALAEventOperation.CGroupsDisabled]
+                        disable_events = [kwargs for _, kwargs in add_event.call_args_list if kwargs["op"] == WALAEventOperation.CGroupsDisabled]
                         self.assertTrue(
-                            len(event) == 1,
-                            "Exactly 1 event should have been emitted when {0} fails. Got: {1}".format(method_to_fail, event))
+                            len(disable_events) == 1,
+                            "Exactly 1 event should have been emitted when {0} fails. Got: {1}".format(method_to_fail, disable_events))
                         self.assertIn(
                             "[CGroupsException] {0}".format(method_to_fail),
-                            event[0].kwargs["message"],
+                            disable_events[0]["message"],
                             "The error message is not correct when {0} failed".format(method_to_fail))
                 finally:
                     for p in patchers:
