@@ -25,7 +25,7 @@ from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.osutil import get_osutil
 from azurelinuxagent.common.utils import fileutil
 
-AGENT_CGROUP_NAME = "waagent"
+AGENT_NAME_TELEMETRY = "walinuxagent.service"  # Name used for telemetry; it needs to be consistent even if the name of the service changes
 
 MetricValue = namedtuple('Metric', ['category', 'counter', 'instance', 'value'])
 
