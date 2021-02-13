@@ -19,7 +19,7 @@ import os.path
 
 import azurelinuxagent.common.conf as conf
 from azurelinuxagent.common.utils import fileutil
-from tests.tools import AgentTestCase, data_dir, patch
+from tests.tools import AgentTestCase, data_dir
 
 
 class TestConf(AgentTestCase):
