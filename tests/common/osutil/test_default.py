@@ -34,9 +34,7 @@ from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.osutil import get_osutil
 from azurelinuxagent.common.utils import fileutil
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
-from tests.tools import AgentTestCase, patch, open_patch, load_data, \
-    running_under_travis, skip_if_predicate_true
-
+from tests.tools import AgentTestCase, patch, open_patch, load_data
 
 actual_get_proc_net_route = 'azurelinuxagent.common.osutil.default.DefaultOSUtil._get_proc_net_route'
 
