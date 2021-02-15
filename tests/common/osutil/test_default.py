@@ -891,7 +891,6 @@ Chain OUTPUT (policy ACCEPT 104 packets, 43628 bytes)
 
             self.assertFalse(osutil._enable_firewall)
 
-    @skip_if_predicate_true(running_under_travis, "The ip command isn't available in Travis")
     def test_get_nic_state(self):
         state = osutil.DefaultOSUtil().get_nic_state()
         self.assertNotEqual(state, {})
