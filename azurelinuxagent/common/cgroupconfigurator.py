@@ -66,7 +66,7 @@ _AGENT_DROP_IN_FILE_CPU_QUOTA_CONTENTS_FORMAT = """
 # This drop-in unit file was created by the Azure VM Agent.
 # Do not edit.
 [Service]
-CPUQuota={0}%
+CPUQuota={0}
 """
 _AGENT_CPU_QUOTA = 5
 _AGENT_THROTTLED_TIME_THRESHOLD = 120  # 2 minutes
@@ -409,8 +409,9 @@ class CGroupConfigurator(object):
             NOTE: This is done using a dropin file in the default dropin directory; any local overrides on the VM will take precedence
             over this setting.
             """
-            logger.info("Setting agent's CPUQuota to {0}%", quota)
-            if CGroupConfigurator._Impl.__try_set_cpu_quota(quota):
+            quota_percentage = "{0}%".format(quota)
+            logger.info("Setting agent's CPUQuota to {0}", quota_percentage)
+            if CGroupConfigurator._Impl.__try_set_cpu_quota(quota_percentage):
                 CGroupsTelemetry.set_track_throttled_time(True)
 
         @staticmethod
