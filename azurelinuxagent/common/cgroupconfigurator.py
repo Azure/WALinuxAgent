@@ -20,7 +20,7 @@ import re
 import subprocess
 
 from azurelinuxagent.common import logger
-from azurelinuxagent.common.cgroup import CpuCgroup
+from azurelinuxagent.common.cgroup import CpuCgroup, AGENT_NAME_TELEMETRY, MetricsCounter
 from azurelinuxagent.common.cgroupapi import CGroupsApi, SystemdCgroupsApi, SystemdRunError
 from azurelinuxagent.common.cgroupstelemetry import CGroupsTelemetry
 from azurelinuxagent.common.exception import ExtensionErrorCodes, CGroupsException
@@ -66,9 +66,22 @@ _AGENT_DROP_IN_FILE_CPU_QUOTA_CONTENTS_FORMAT = """
 # This drop-in unit file was created by the Azure VM Agent.
 # Do not edit.
 [Service]
-CPUQuota={0}%
+CPUQuota={0}
 """
 _AGENT_CPU_QUOTA = 5
+_AGENT_THROTTLED_TIME_THRESHOLD = 120  # 2 minutes
+
+
+def _log_cgroup_info(format_string, *args):
+    message = format_string.format(*args)
+    logger.info(message)
+    add_event(op=WALAEventOperation.CGroupsInfo, message=message)
+
+
+def _log_cgroup_warning(format_string, *args):
+    message = format_string.format(*args)
+    logger.info(message)  # log as INFO for now, in the future it should be logged as WARNING
+    add_event(op=WALAEventOperation.CGroupsInfo, message=message, is_success=False, log_event=False)
 
 
 class CGroupConfigurator(object):
@@ -78,7 +91,7 @@ class CGroupConfigurator(object):
     NOTE: with the exception of start_extension_command, none of the methods in this class
     raise exceptions (cgroup operations should not block extensions)
     """
-    class __Impl(object):
+    class _Impl(object):
         def __init__(self):
             self._initialized = False
             self._cgroups_supported = False
@@ -86,8 +99,6 @@ class CGroupConfigurator(object):
             self._cgroups_api = None
             self._agent_cpu_cgroup_path = None
             self._agent_memory_cgroup_path = None
-            self._check_processes_in_agent_cgroup_last_error = None
-            self._check_processes_in_agent_cgroup_error_count = 0
 
         def initialize(self):
             try:
@@ -103,10 +114,10 @@ class CGroupConfigurator(object):
                 # check that systemd is detected correctly
                 self._cgroups_api = SystemdCgroupsApi()
                 if not systemd.is_systemd():
-                    self.__log_cgroup_warning("systemd was not detected on {0}", get_distro())
+                    _log_cgroup_warning("systemd was not detected on {0}", get_distro())
                     return
 
-                self.__log_cgroup_info("systemd version: {0}", systemd.get_version())
+                _log_cgroup_info("systemd version: {0}", systemd.get_version())
 
                 # This is temporarily disabled while we analyze telemetry. Likely it will be removed.
                 # self.__collect_azure_unit_telemetry()
@@ -118,7 +129,7 @@ class CGroupConfigurator(object):
                 agent_unit_name = systemd.get_agent_unit_name()
                 agent_slice = systemd.get_unit_property(agent_unit_name, "Slice")
                 if agent_slice not in (_AZURE_SLICE, "system.slice"):
-                    self.__log_cgroup_warning("The agent is within an unexpected slice: {0}", agent_slice)
+                    _log_cgroup_warning("The agent is within an unexpected slice: {0}", agent_slice)
                     return
 
                 self.__setup_azure_slice()
@@ -127,31 +138,19 @@ class CGroupConfigurator(object):
                 self._agent_cpu_cgroup_path, self._agent_memory_cgroup_path = self.__get_agent_cgroups(agent_slice, cpu_controller_root, memory_controller_root)
 
                 if self._agent_cpu_cgroup_path is not None:
-                    self.__log_cgroup_info("Agent CPU cgroup: {0}", self._agent_cpu_cgroup_path)
-                    self._cgroups_enabled = True
-                    track_throttled_time = self.set_cpu_quota(_AGENT_CPU_QUOTA)
-                    CGroupsTelemetry.track_cgroup(CpuCgroup(agent_unit_name, self._agent_cpu_cgroup_path, track_throttled_time=track_throttled_time))
+                    _log_cgroup_info("Agent CPU cgroup: {0}", self._agent_cpu_cgroup_path)
+                    self.enable()
+                    CGroupsTelemetry.track_cgroup(CpuCgroup(AGENT_NAME_TELEMETRY, self._agent_cpu_cgroup_path))
 
-                self.__log_cgroup_info('Cgroups enabled: {0}', self._cgroups_enabled)
+                _log_cgroup_info('Cgroups enabled: {0}', self._cgroups_enabled)
 
             except Exception as exception:
-                self.__log_cgroup_warning("Error initializing cgroups: {0}", ustr(exception))
+                _log_cgroup_warning("Error initializing cgroups: {0}", ustr(exception))
             finally:
                 self._initialized = True
 
         @staticmethod
-        def __log_cgroup_info(format_string, *args):
-            message = format_string.format(*args)
-            logger.info(message)
-            add_event(op=WALAEventOperation.CGroupsInfo, message=message)
-
-        @staticmethod
-        def __log_cgroup_warning(format_string, *args):
-            message = format_string.format(*args)
-            logger.info(message)  # log as INFO for now, in the future it should be logged as WARNING
-            add_event(op=WALAEventOperation.CGroupsInfo, message=message, is_success=False, log_event=False)
-
-        def __collect_azure_unit_telemetry(self):
+        def __collect_azure_unit_telemetry():
             azure_units = []
 
             try:
@@ -161,16 +160,16 @@ class CGroupConfigurator(object):
                     if match is not None:
                         azure_units.append((match.group(1), line))
             except shellutil.CommandError as command_error:
-                self.__log_cgroup_warning("Failed to list systemd units: {0}", ustr(command_error))
+                _log_cgroup_warning("Failed to list systemd units: {0}", ustr(command_error))
 
             for unit_name, unit_description in azure_units:
                 unit_slice = "Unknown"
                 try:
                     unit_slice = systemd.get_unit_property(unit_name, "Slice")
                 except Exception as exception:
-                    self.__log_cgroup_warning("Failed to query Slice for {0}: {1}", unit_name, ustr(exception))
+                    _log_cgroup_warning("Failed to query Slice for {0}: {1}", unit_name, ustr(exception))
 
-                self.__log_cgroup_info("Found an Azure unit under slice {0}: {1}", unit_slice, unit_description)
+                _log_cgroup_info("Found an Azure unit under slice {0}: {1}", unit_slice, unit_description)
 
             if len(azure_units) == 0:
                 try:
@@ -181,9 +180,10 @@ class CGroupConfigurator(object):
                             # Don't add the output of systemd-cgls to the telemetry, since currently it does not support Unicode
                             add_event(op=WALAEventOperation.CGroupsInfo, message="Found a cgroup for azure.slice")
                 except shellutil.CommandError as command_error:
-                    self.__log_cgroup_warning("Failed to list systemd units: {0}", ustr(command_error))
+                    _log_cgroup_warning("Failed to list systemd units: {0}", ustr(command_error))
 
-        def __collect_agent_unit_files_telemetry(self):
+        @staticmethod
+        def __collect_agent_unit_files_telemetry():
             agent_unit_files = []
             agent_service_name = get_osutil().get_service_name()
             try:
@@ -191,21 +191,21 @@ class CGroupConfigurator(object):
                 if fragment_path != "/lib/systemd/system/{0}.service".format(agent_service_name):
                     agent_unit_files.append(fragment_path)
             except Exception as exception:
-                self.__log_cgroup_warning("Failed to query the agent's FragmentPath: {0}", ustr(exception))
+                _log_cgroup_warning("Failed to query the agent's FragmentPath: {0}", ustr(exception))
 
             try:
                 drop_in_paths = systemd.get_unit_property(agent_service_name, "DropInPaths")
                 for path in drop_in_paths.split():
                     agent_unit_files.append(path)
             except Exception as exception:
-                self.__log_cgroup_warning("Failed to query the agent's DropInPaths: {0}", ustr(exception))
+                _log_cgroup_warning("Failed to query the agent's DropInPaths: {0}", ustr(exception))
 
             for unit_file in agent_unit_files:
                 try:
                     with open(unit_file, "r") as file_object:
-                        self.__log_cgroup_info("Found a custom unit file for the agent: {0}\n{1}", unit_file, file_object.read())
+                        _log_cgroup_info("Found a custom unit file for the agent: {0}\n{1}", unit_file, file_object.read())
                 except Exception as exception:
-                    self.__log_cgroup_warning("Can't read {0}: {1}", unit_file, ustr(exception))
+                    _log_cgroup_warning("Can't read {0}: {1}", unit_file, ustr(exception))
 
         def __check_no_legacy_cgroups(self):
             """
@@ -214,7 +214,7 @@ class CGroupConfigurator(object):
             """
             legacy_cgroups = self._cgroups_api.cleanup_legacy_cgroups()
             if legacy_cgroups > 0:
-                self.__log_cgroup_warning("The daemon's PID was added to a legacy cgroup; will not monitor resource usage.")
+                _log_cgroup_warning("The daemon's PID was added to a legacy cgroup; will not monitor resource usage.")
                 return False
             return True
 
@@ -227,23 +227,24 @@ class CGroupConfigurator(object):
             if cpu_controller_root is not None:
                 logger.info("The CPU cgroup controller is mounted at {0}", cpu_controller_root)
             else:
-                self.__log_cgroup_warning("The CPU cgroup controller is not mounted")
+                _log_cgroup_warning("The CPU cgroup controller is not mounted")
 
             if memory_controller_root is not None:
                 logger.info("The memory cgroup controller is mounted at {0}", memory_controller_root)
             else:
-                self.__log_cgroup_warning("The memory cgroup controller is not mounted")
+                _log_cgroup_warning("The memory cgroup controller is not mounted")
 
             #
             # check v2 controllers
             #
             cgroup2_mount_point, cgroup2_controllers = self._cgroups_api.get_cgroup2_controllers()
             if cgroup2_mount_point is not None:
-                self.__log_cgroup_info("cgroups v2 mounted at {0}.  Controllers: [{1}]", cgroup2_mount_point, cgroup2_controllers)
+                _log_cgroup_info("cgroups v2 mounted at {0}.  Controllers: [{1}]", cgroup2_mount_point, cgroup2_controllers)
 
             return cpu_controller_root, memory_controller_root
 
-        def __setup_azure_slice(self):
+        @staticmethod
+        def __setup_azure_slice():
             """
             The agent creates "azure.slice" for use by extensions and the agent. The agent runs under "azure.slice" directly and each
             extension runs under its own slice ("Microsoft.CPlat.Extension.slice" in the example below). All the slices for
@@ -270,7 +271,7 @@ class CGroupConfigurator(object):
             """
 
             # Older agents used to create this slice, but it was never used. Cleanup the file.
-            self._cleanup_unit_file("/etc/systemd/system/system-walinuxagent.extensions.slice")
+            CGroupConfigurator._Impl.__cleanup_unit_file("/etc/systemd/system/system-walinuxagent.extensions.slice")
 
             unit_file_install_path = systemd.get_unit_file_install_path()
             azure_slice = os.path.join(unit_file_install_path, _AZURE_SLICE)
@@ -289,13 +290,13 @@ class CGroupConfigurator(object):
                 files_to_create.append((vmextensions_slice, _VMEXTENSIONS_SLICE_CONTENTS))
 
             if fileutil.findre_in_file(agent_unit_file, r"Slice=") is not None:
-                self._cleanup_unit_file(agent_drop_in_file_slice)
+                CGroupConfigurator._Impl.__cleanup_unit_file(agent_drop_in_file_slice)
             else:
                 if not os.path.exists(agent_drop_in_file_slice):
                     files_to_create.append((agent_drop_in_file_slice, _AGENT_DROP_IN_FILE_SLICE_CONTENTS))
 
             if fileutil.findre_in_file(agent_unit_file, r"CPUAccounting=") is not None:
-                self._cleanup_unit_file(agent_drop_in_file_cpu_accounting)
+                CGroupConfigurator._Impl.__cleanup_unit_file(agent_drop_in_file_cpu_accounting)
             else:
                 if not os.path.exists(agent_drop_in_file_cpu_accounting):
                     files_to_create.append((agent_drop_in_file_cpu_accounting, _AGENT_DROP_IN_FILE_CPU_ACCOUNTING_CONTENTS))
@@ -304,11 +305,11 @@ class CGroupConfigurator(object):
                 # create the unit files, but if 1 fails remove all and return
                 try:
                     for path, contents in files_to_create:
-                        self._create_unit_file(path, contents)
+                        CGroupConfigurator._Impl.__create_unit_file(path, contents)
                 except Exception as exception:
-                    self.__log_cgroup_warning("Failed to create unit files for the azure slice: {0}", ustr(exception))
+                    _log_cgroup_warning("Failed to create unit files for the azure slice: {0}", ustr(exception))
                     for unit_file in files_to_create:
-                        self._cleanup_unit_file(unit_file)
+                        CGroupConfigurator._Impl.__cleanup_unit_file(unit_file)
                     return
 
                 # reload the systemd configuration; the new slices will be used once the agent's service restarts
@@ -316,22 +317,25 @@ class CGroupConfigurator(object):
                     logger.info("Executing systemctl daemon-reload...")
                     shellutil.run_command(["systemctl", "daemon-reload"])
                 except Exception as exception:
-                    self.__log_cgroup_warning("daemon-reload failed (create azure slice): {0}", ustr(exception))
+                    _log_cgroup_warning("daemon-reload failed (create azure slice): {0}", ustr(exception))
 
-        def _create_unit_file(self, path, contents):
+        @staticmethod
+        def __create_unit_file(path, contents):
             parent, _ = os.path.split(path)
             if not os.path.exists(parent):
                 fileutil.mkdir(parent, mode=0o755)
+            exists = os.path.exists(path)
             fileutil.write_file(path, contents)
-            self.__log_cgroup_info("Created {0}", path)
+            _log_cgroup_info("{0} {1}", "Updated" if exists else "Created", path)
 
-        def _cleanup_unit_file(self, path):
+        @staticmethod
+        def __cleanup_unit_file(path):
             if os.path.exists(path):
                 try:
                     os.remove(path)
-                    self.__log_cgroup_info("Removed {0}", path)
+                    _log_cgroup_info("Removed {0}", path)
                 except Exception as exception:
-                    self.__log_cgroup_warning("Failed to remove {0}: {1}", path, ustr(exception))
+                    _log_cgroup_warning("Failed to remove {0}: {1}", path, ustr(exception))
 
         def __get_agent_cgroups(self, agent_slice, cpu_controller_root, memory_controller_root):
             agent_unit_name = systemd.get_agent_unit_name()
@@ -340,27 +344,27 @@ class CGroupConfigurator(object):
             cpu_cgroup_relative_path, memory_cgroup_relative_path = self._cgroups_api.get_process_cgroup_relative_paths("self")
 
             if cpu_cgroup_relative_path is None:
-                self.__log_cgroup_warning("The agent's process is not within a CPU cgroup")
+                _log_cgroup_warning("The agent's process is not within a CPU cgroup")
             else:
                 if cpu_cgroup_relative_path == expected_relative_path:
-                    self.__log_cgroup_info('CPUAccounting: {0}', systemd.get_unit_property(agent_unit_name, "CPUAccounting"))
-                    self.__log_cgroup_info('CPUQuota: {0}', systemd.get_unit_property(agent_unit_name, "CPUQuotaPerSecUSec"))
+                    _log_cgroup_info('CPUAccounting: {0}', systemd.get_unit_property(agent_unit_name, "CPUAccounting"))
+                    _log_cgroup_info('CPUQuota: {0}', systemd.get_unit_property(agent_unit_name, "CPUQuotaPerSecUSec"))
                 else:
                     cpu_cgroup_relative_path = None  # Set the path to None to prevent monitoring
-                    self.__log_cgroup_warning(
+                    _log_cgroup_warning(
                         "The Agent is not in the expected CPU cgroup; will not enable monitoring. Cgroup:[{0}] Expected:[{1}]",
                         cpu_cgroup_relative_path,
                         expected_relative_path)
 
             if memory_cgroup_relative_path is None:
-                self.__log_cgroup_warning("The agent's process is not within a memory cgroup")
+                _log_cgroup_warning("The agent's process is not within a memory cgroup")
             else:
                 if memory_cgroup_relative_path == expected_relative_path:
                     memory_accounting = systemd.get_unit_property(agent_unit_name, "MemoryAccounting")
-                    self.__log_cgroup_info('MemoryAccounting: {0}', memory_accounting)
+                    _log_cgroup_info('MemoryAccounting: {0}', memory_accounting)
                 else:
                     memory_cgroup_relative_path = None  # Set the path to None to prevent monitoring
-                    self.__log_cgroup_warning(
+                    _log_cgroup_warning(
                         "The Agent is not in the expected memory cgroup; will not enable monitoring. CGroup:[{0}] Expected:[{1}]",
                         memory_cgroup_relative_path,
                         expected_relative_path)
@@ -377,69 +381,98 @@ class CGroupConfigurator(object):
 
             return agent_cpu_cgroup_path, agent_memory_cgroup_path
 
+        def supported(self):
+            return self._cgroups_supported
+
         def enabled(self):
             return self._cgroups_enabled
 
         def enable(self):
-            if not self._cgroups_supported:
+            if not self.supported():
                 raise CGroupsException("Attempted to enable cgroups, but they are not supported on the current platform")
             self._cgroups_enabled = True
+            self.__set_cpu_quota(_AGENT_CPU_QUOTA)
 
-        def disable(self):
+        def disable(self, reason):
             self._cgroups_enabled = False
+            message = "Disabling resource usage monitoring. Reason: {0}".format(reason)
+            logger.info(message)  # log as INFO for now, in the future it should be logged as WARNING
+            add_event(op=WALAEventOperation.CGroupsDisabled, message=message, is_success=False, log_event=False)
+            self.__reset_cpu_quota()
             CGroupsTelemetry.reset()
 
-        def set_cpu_quota(self, quota):
+        @staticmethod
+        def __set_cpu_quota(quota):
             """
-            Sets the agent's CPU quota to the given percentage (100% == 1 CPU) and returns True on success, False otherwise
+            Sets the agent's CPU quota to the given percentage (100% == 1 CPU)
 
-            This is done using a dropin file in the default dropin directory; any local overrides on the VM will take precedence
+            NOTE: This is done using a dropin file in the default dropin directory; any local overrides on the VM will take precedence
             over this setting.
             """
-            logger.info("Setting agent's CPUQuota to {0}%", quota)
-            return self._set_cpu_quota(quota)
+            quota_percentage = "{0}%".format(quota)
+            _log_cgroup_info("Setting agent's CPUQuota to {0}", quota_percentage)
+            if CGroupConfigurator._Impl.__try_set_cpu_quota(quota_percentage):
+                CGroupsTelemetry.set_track_throttled_time(True)
 
-        def reset_cpu_quota(self):
+        @staticmethod
+        def __reset_cpu_quota():
             """
-            Removes any CPUQuota on the agent and returns True on success, False otherwise
+            Removes any CPUQuota on the agent
+
+            NOTE: This resets the quota on the agent's default dropin file; any local overrides on the VM will take precedence
+            over this setting.
             """
             logger.info("Resetting agent's CPUQuota")
-            return self._set_cpu_quota('')  # setting an empty value resets to the default (infinity)
+            if CGroupConfigurator._Impl.__try_set_cpu_quota(''):  # setting an empty value resets to the default (infinity)
+                CGroupsTelemetry.set_track_throttled_time(False)
 
-        def _set_cpu_quota(self, quota):
+        @staticmethod
+        def __try_set_cpu_quota(quota):
             try:
                 drop_in_file = os.path.join(systemd.get_agent_drop_in_path(), _AGENT_DROP_IN_FILE_CPU_QUOTA)
                 contents = _AGENT_DROP_IN_FILE_CPU_QUOTA_CONTENTS_FORMAT.format(quota)
-                self._create_unit_file(drop_in_file, contents)
+                CGroupConfigurator._Impl.__create_unit_file(drop_in_file, contents)
             except Exception as exception:
-                logger.info('Failed to set CPUQuota: {0}', ustr(exception))
+                _log_cgroup_warning('Failed to set CPUQuota: {0}', ustr(exception))
                 return False
             try:
                 logger.info("Executing systemctl daemon-reload...")
                 shellutil.run_command(["systemctl", "daemon-reload"])
             except Exception as exception:
-                self.__log_cgroup_warning("daemon-reload failed (set quota): {0}", ustr(exception))
+                _log_cgroup_warning("daemon-reload failed (set quota): {0}", ustr(exception))
                 return False
             return True
 
-        def check_processes_in_agent_cgroup(self):
+        def check_cgroups(self, cgroup_metrics):
+            if not self.enabled():
+                return
+
+            errors = []
+
+            try:
+                self._check_processes_in_agent_cgroup()
+            except CGroupsException as exception:
+                errors.append(exception)
+
+            try:
+                self._check_agent_throttled_time(cgroup_metrics)
+            except CGroupsException as exception:
+                errors.append(exception)
+
+            if len(errors) > 0:
+                self.disable("Check on cgroups failed:\n{0}".format("\n".join([ustr(e) for e in errors])))
+
+        def _check_processes_in_agent_cgroup(self):
             """
             Verifies that the agent's cgroup includes only the current process, its parent, commands started using shellutil and instances of systemd-run
             (those processes correspond, respectively, to the extension handler, the daemon, commands started by the extension handler, and the systemd-run
             commands used to start extensions on their own cgroup).
             Other processes started by the agent (e.g. extensions) and processes not started by the agent (e.g. services installed by extensions) are reported
             as unexpected, since they should belong to their own cgroup.
-            """
-            if not self.enabled():
-                return True
 
-            def log_message(message):
-                # Report only a small sample of errors
-                if message != self._check_processes_in_agent_cgroup_last_error and self._check_processes_in_agent_cgroup_error_count < 5:
-                    self._check_processes_in_agent_cgroup_error_count += 1
-                    self._check_processes_in_agent_cgroup_last_error = message
-                    logger.info(message)
-                    add_event(op=WALAEventOperation.CGroupsDisabled, message=message)
+            Raises a CGroupsException if the check fails
+            """
+            unexpected = []
 
             try:
                 daemon = os.getppid()
@@ -453,7 +486,6 @@ class CGroupConfigurator(object):
                 agent_commands.update(shellutil.get_running_commands())
                 systemd_run_commands.update(self._cgroups_api.get_systemd_run_commands())
 
-                unexpected = []
                 for process in agent_cgroup:
                     # Note that the agent uses systemd-run to start extensions; systemd-run belongs to the agent cgroup, though the extensions don't
                     if process in (daemon, extension_handler) or process in systemd_run_commands:
@@ -466,18 +498,14 @@ class CGroupConfigurator(object):
                         unexpected.append(process)
                         if len(unexpected) >= 5:  # collect just a small sample
                             break
-                if unexpected:
-                    unexpected = self._format_processes(unexpected)
-                    unexpected.sort()  # sort the PIDs so that the error message stays more consistent across different calls to this check
-                    log_message("The agent's cgroup includes unexpected processes; disabling CPU enforcement. Unexpected: {0}".format(unexpected))
-                    self.disable()
-                    return False
             except Exception as exception:
-                log_message("Failed to check the processes in the agent's cgroup: {0}".format(ustr(exception)))
-            return True
+                _log_cgroup_warning("Error checking the processes in the agent's cgroup: {0}".format(ustr(exception)))
+
+            if len(unexpected) > 0:
+                raise CGroupsException("The agent's cgroup includes unexpected processes: {0}".format(self.__format_processes(unexpected)))
 
         @staticmethod
-        def _format_processes(pid_list):
+        def __format_processes(pid_list):
             """
             Formats the given PIDs as a sequence of strings containing the PIDs and their corresponding command line (truncated to 40 chars)
             """
@@ -492,6 +520,13 @@ class CGroupConfigurator(object):
                 return "[PID: {0}] UNKNOWN".format(pid)
 
             return [get_command_line(pid) for pid in pid_list]
+
+        @staticmethod
+        def _check_agent_throttled_time(cgroup_metrics):
+            for metric in cgroup_metrics:
+                if metric.instance == AGENT_NAME_TELEMETRY and metric.counter == MetricsCounter.THROTTLED_TIME:
+                    if metric.value > _AGENT_THROTTLED_TIME_THRESHOLD:
+                        raise CGroupsException("The agent has been throttled for {0} seconds".format(metric.value))
 
         @staticmethod
         def _get_parent(pid):
@@ -524,11 +559,8 @@ class CGroupConfigurator(object):
                 try:
                     return self._cgroups_api.start_extension_command(extension_name, command, timeout, shell=shell, cwd=cwd, env=env, stdout=stdout, stderr=stderr, error_code=error_code)
                 except SystemdRunError as exception:
-                    event_msg = 'Failed to start extension {0} using systemd-run. Will disable resource enforcement and retry invoking the extension without systemd. ' \
-                                'Systemd-run error: {1}'.format(extension_name, ustr(exception))
-                    add_event(op=WALAEventOperation.CGroupsDisabled, is_success=False, log_event=False, message=event_msg)
-                    logger.info(event_msg)
-                    self.disable()
+                    reason = 'Failed to start {0} using systemd-run, will try invoking the extension directly. Error: {1}'.format(extension_name, ustr(exception))
+                    self.disable(reason)
                     # fall-through and re-invoke the extension
 
             # subprocess-popen-preexec-fn<W1509> Disabled: code is not multi-threaded
@@ -541,5 +573,5 @@ class CGroupConfigurator(object):
     @staticmethod
     def get_instance():
         if CGroupConfigurator._instance is None:
-            CGroupConfigurator._instance = CGroupConfigurator.__Impl()
+            CGroupConfigurator._instance = CGroupConfigurator._Impl()
         return CGroupConfigurator._instance

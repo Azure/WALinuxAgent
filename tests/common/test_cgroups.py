@@ -22,7 +22,7 @@ import os
 import random
 import shutil
 
-from azurelinuxagent.common.cgroup import CpuCgroup, MemoryCgroup
+from azurelinuxagent.common.cgroup import CpuCgroup, MemoryCgroup, MetricsCounter
 from azurelinuxagent.common.exception import CGroupsException
 from azurelinuxagent.common.osutil import get_osutil
 from azurelinuxagent.common.utils import fileutil
@@ -157,7 +157,6 @@ class TestCpuCgroup(AgentTestCase):
         self.assertEqual(cgroup._current_cgroup_cpu, 0)
         self.assertEqual(cgroup._current_system_cpu, 5496872)  # check the system usage just for test sanity
 
-
     def test_initialize_cpu_usage_should_raise_an_exception_when_called_more_than_once(self):
         cgroup = CpuCgroup("test", "/sys/fs/cgroup/cpu/system.slice/test")
 
@@ -180,13 +179,26 @@ class TestCpuCgroup(AgentTestCase):
     def test_get_throttled_time_should_return_the_value_since_its_last_invocation(self):
         test_file = os.path.join(self.tmp_dir, "cpu.stat")
         shutil.copyfile(os.path.join(data_dir, "cgroups", "cpu.stat_t0"), test_file)  # throttled_time = 50
-        cgroup = CpuCgroup("test", self.tmp_dir, track_throttled_time=True)
+        cgroup = CpuCgroup("test", self.tmp_dir)
         cgroup.initialize_cpu_usage()
         shutil.copyfile(os.path.join(data_dir, "cgroups", "cpu.stat_t1"), test_file)  # throttled_time = 2075541442327
 
         throttled_time = cgroup.get_throttled_time()
 
-        self.assertEqual(throttled_time, 2075541442327 - 50, "The value of throttled_time is incorrect")
+        self.assertEqual(throttled_time, float(2075541442327 - 50) / 1E9, "The value of throttled_time is incorrect")
+
+    def test_get_tracked_metrics_should_return_the_throttled_time(self):
+        cgroup = CpuCgroup("test", os.path.join(data_dir, "cgroups"))
+        cgroup.initialize_cpu_usage()
+
+        def find_throttled_time(metrics):
+            return [m for m in metrics if m.counter == MetricsCounter.THROTTLED_TIME]
+
+        found = find_throttled_time(cgroup.get_tracked_metrics())
+        self.assertTrue(len(found) == 0, "get_tracked_metrics should not fetch the throttled time by default. Found: {0}".format(found))
+
+        found = find_throttled_time(cgroup.get_tracked_metrics(track_throttled_time=True))
+        self.assertTrue(len(found) == 1, "get_tracked_metrics should have fetched the throttled time by default. Found: {0}".format(found))
 
 
 class TestMemoryCgroup(AgentTestCase):
