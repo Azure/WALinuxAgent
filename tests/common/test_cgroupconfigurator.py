@@ -29,12 +29,12 @@ import threading
 from nose.plugins.attrib import attr
 
 from azurelinuxagent.common.cgroup import AGENT_NAME_TELEMETRY, MetricsCounter, MetricValue, MetricsCategory
-from azurelinuxagent.common.cgroupconfigurator import CGroupConfigurator, _AGENT_THROTTLED_TIME_THRESHOLD
+from azurelinuxagent.common.cgroupconfigurator import CGroupConfigurator, _AGENT_THROTTLED_TIME_THRESHOLD, _AGENT_CPU_QUOTA
 from azurelinuxagent.common.cgroupstelemetry import CGroupsTelemetry
 from azurelinuxagent.common.event import WALAEventOperation
 from azurelinuxagent.common.exception import CGroupsException, ExtensionError, ExtensionErrorCodes
 from azurelinuxagent.common.future import ustr
-from azurelinuxagent.common.utils import shellutil
+from azurelinuxagent.common.utils import shellutil, fileutil
 from tests.common.mock_environment import MockCommand
 from tests.common.mock_cgroup_environment import mock_cgroup_environment, UnitFilePaths
 from tests.tools import AgentTestCase, patch, mock_sleep, i_am_root, data_dir
@@ -200,7 +200,11 @@ cgroup on /sys/fs/cgroup/blkio type cgroup (rw,nosuid,nodev,noexec,relatime,blki
 
             configurator.enable()
 
+            expected_quota = "CPUQuota={0}%".format(_AGENT_CPU_QUOTA)
             self.assertTrue(os.path.exists(agent_drop_in_file_cpu_quota), "{0} was not created".format(agent_drop_in_file_cpu_quota))
+            self.assertTrue(
+                fileutil.findre_in_file(agent_drop_in_file_cpu_quota, expected_quota),
+                "CPUQuota was not set correctly. Expected: {0}. Got:\n{1}".format(expected_quota, fileutil.read_file(agent_drop_in_file_cpu_quota)))
             self.assertTrue(CGroupsTelemetry.get_track_throttled_time(), "Throttle time should be tracked")
 
     def test_enable_should_not_track_throttled_time_when_setting_the_cpu_quota_fails(self):
@@ -223,6 +227,11 @@ cgroup on /sys/fs/cgroup/blkio type cgroup (rw,nosuid,nodev,noexec,relatime,blki
 
             configurator.disable("UNIT TEST")
 
+            agent_drop_in_file_cpu_quota = configurator.mocks.get_mapped_path(UnitFilePaths.cpu_quota)
+            self.assertTrue(os.path.exists(agent_drop_in_file_cpu_quota), "{0} was not created".format(agent_drop_in_file_cpu_quota))
+            self.assertTrue(
+                fileutil.findre_in_file(agent_drop_in_file_cpu_quota, "^CPUQuota=$"),
+                "CPUQuota was not set correctly. Expected an empty value. Got:\n{0}".format(fileutil.read_file(agent_drop_in_file_cpu_quota)))
             self.assertEqual(len(CGroupsTelemetry._tracked), 0, "No cgroups should be tracked after disable. Tracking: {0}".format(CGroupsTelemetry._tracked))
             self.assertFalse(CGroupsTelemetry._track_throttled_time, "Throttle Time should not be tracked after disable")
 
@@ -662,7 +671,6 @@ exit 0
                     self.assertTrue(
                         any("[PID: {0}]".format(pid) in reported_process for reported_process in reported),
                         "Process {0} was not reported. Got: {1}".format(format_processes([pid]), reported))
-
         finally:
             # create the file that stops the test processes and wait for them to complete
             open(stop_file, "w").close()
