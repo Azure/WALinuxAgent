@@ -32,6 +32,9 @@ class MockCommand:
         self.return_value = return_value
         self.stderr = stderr
 
+    def __str__(self):
+        return ' '.join(self.command) if isinstance(self.command, list) else self.command
+
 
 class MockEnvironment:
     """

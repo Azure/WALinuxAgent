@@ -25,6 +25,7 @@ from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.osutil import get_osutil
 from azurelinuxagent.common.utils import fileutil
 
+AGENT_NAME_TELEMETRY = "walinuxagent.service"  # Name used for telemetry; it needs to be consistent even if the name of the service changes
 
 MetricValue = namedtuple('Metric', ['category', 'counter', 'instance', 'value'])
 
@@ -117,7 +118,7 @@ class CGroup(object):
                                  ' Internal error: {1}'.format(self.path, ustr(e)))
         return False
 
-    def get_tracked_metrics(self):
+    def get_tracked_metrics(self, **_):
         """
         Retrieves the current value of the metrics tracked for this cgroup and returns them as an array
         """
@@ -125,7 +126,7 @@ class CGroup(object):
 
 
 class CpuCgroup(CGroup):
-    def __init__(self, name, cgroup_path, track_throttled_time=False):
+    def __init__(self, name, cgroup_path):
         super(CpuCgroup, self).__init__(name, cgroup_path)
 
         self._osutil = get_osutil()
@@ -133,7 +134,6 @@ class CpuCgroup(CGroup):
         self._previous_system_cpu = None
         self._current_cgroup_cpu = None
         self._current_system_cpu = None
-        self._track_throttled_time = track_throttled_time
         self._previous_throttled_time = None
         self._current_throttled_time = None
 
@@ -203,8 +203,7 @@ class CpuCgroup(CGroup):
             raise CGroupsException("initialize_cpu_usage() should be invoked only once")
         self._current_cgroup_cpu = self._get_cpu_ticks(allow_no_such_file_or_directory_error=True)
         self._current_system_cpu = self._osutil.get_total_cpu_ticks_since_boot()
-        if self._track_throttled_time:
-            self._current_throttled_time = self._get_throttled_time()
+        self._current_throttled_time = self._get_throttled_time()
 
     def get_cpu_usage(self):
         """
@@ -230,7 +229,7 @@ class CpuCgroup(CGroup):
 
     def get_throttled_time(self):
         """
-        Computes the throttled time (in nanoseconds) since the last call to this function.
+        Computes the throttled time (in seconds) since the last call to this function.
         NOTE: initialize_cpu_usage() must be invoked before calling this function
         """
         if not self._cpu_usage_initialized():
@@ -239,13 +238,13 @@ class CpuCgroup(CGroup):
         self._previous_throttled_time = self._current_throttled_time
         self._current_throttled_time = self._get_throttled_time()
 
-        return  self._current_throttled_time - self._previous_throttled_time
+        return float(self._current_throttled_time - self._previous_throttled_time) / 1E9
 
-    def get_tracked_metrics(self):
+    def get_tracked_metrics(self, **kwargs):
         tracked = [
             MetricValue(MetricsCategory.CPU_CATEGORY, MetricsCounter.PROCESSOR_PERCENT_TIME, self.name, self.get_cpu_usage()),
         ]
-        if self._track_throttled_time:
+        if 'track_throttled_time' in kwargs and kwargs['track_throttled_time']:
             tracked.append(MetricValue(MetricsCategory.CPU_CATEGORY, MetricsCounter.THROTTLED_TIME, self.name, self.get_throttled_time()))
         return tracked
 
@@ -285,7 +284,7 @@ class MemoryCgroup(CGroup):
 
         return int(usage)
 
-    def get_tracked_metrics(self):
+    def get_tracked_metrics(self, **_):
         return [
             MetricValue(MetricsCategory.MEMORY_CATEGORY, MetricsCounter.TOTAL_MEM_USAGE, self.name, self.get_memory_usage()),
             MetricValue(MetricsCategory.MEMORY_CATEGORY, MetricsCounter.MAX_MEM_USAGE, self.name, self.get_max_memory_usage()),

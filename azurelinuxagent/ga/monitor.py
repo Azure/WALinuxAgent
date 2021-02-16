@@ -52,10 +52,12 @@ class PollResourceUsage(PeriodicOperation):
         super(PollResourceUsage, self).__init__(datetime.timedelta(minutes=5))
 
     def _operation(self):
-        CGroupConfigurator.get_instance().check_processes_in_agent_cgroup()
+        tracked_metrics = CGroupsTelemetry.poll_all_tracked()
 
-        for metric in CGroupsTelemetry.poll_all_tracked():
+        for metric in tracked_metrics:
             report_metric(metric.category, metric.counter, metric.instance, metric.value)
+
+        CGroupConfigurator.get_instance().check_cgroups(tracked_metrics)
 
 
 class ResetPeriodicLogMessages(PeriodicOperation):
