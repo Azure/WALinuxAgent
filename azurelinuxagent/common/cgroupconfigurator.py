@@ -410,7 +410,7 @@ class CGroupConfigurator(object):
             over this setting.
             """
             quota_percentage = "{0}%".format(quota)
-            logger.info("Setting agent's CPUQuota to {0}", quota_percentage)
+            _log_cgroup_info("Setting agent's CPUQuota to {0}", quota_percentage)
             if CGroupConfigurator._Impl.__try_set_cpu_quota(quota_percentage):
                 CGroupsTelemetry.set_track_throttled_time(True)
 
@@ -433,7 +433,7 @@ class CGroupConfigurator(object):
                 contents = _AGENT_DROP_IN_FILE_CPU_QUOTA_CONTENTS_FORMAT.format(quota)
                 CGroupConfigurator._Impl.__create_unit_file(drop_in_file, contents)
             except Exception as exception:
-                logger.info('Failed to set CPUQuota: {0}', ustr(exception))
+                _log_cgroup_warning('Failed to set CPUQuota: {0}', ustr(exception))
                 return False
             try:
                 logger.info("Executing systemctl daemon-reload...")
