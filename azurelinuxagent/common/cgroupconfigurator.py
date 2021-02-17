@@ -19,6 +19,7 @@ import os
 import re
 import subprocess
 
+from azurelinuxagent.common import conf
 from azurelinuxagent.common import logger
 from azurelinuxagent.common.cgroup import CpuCgroup, AGENT_NAME_TELEMETRY, MetricsCounter
 from azurelinuxagent.common.cgroupapi import CGroupsApi, SystemdCgroupsApi, SystemdRunError
@@ -103,6 +104,9 @@ class CGroupConfigurator(object):
         def initialize(self):
             try:
                 if self._initialized:
+                    return
+
+                if not conf.get_cgroups_enabled():
                     return
 
                 # check whether cgroup monitoring is supported on the current distro

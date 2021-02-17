@@ -1,3 +1,4 @@
+
 # Microsoft Azure Linux Agent
 
 ## Develop branch status
@@ -218,8 +219,7 @@ OS.SshClientAliveInterval=180
 OS.SshDir=/etc/ssh
 HttpProxy.Host=None
 HttpProxy.Port=None
-CGroups.EnforceLimits=y
-CGroups.Excluded=customscript,runcommand
+CGroups.Enabled=y
 ```
 
 The various configuration options are described in detail below. Configuration
