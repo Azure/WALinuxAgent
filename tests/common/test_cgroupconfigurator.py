@@ -69,6 +69,11 @@ class CGroupConfiguratorSystemdTestCase(AgentTestCase):
         with self._get_cgroup_configurator() as configurator:
             self.assertTrue(configurator.enabled(), "cgroups were not enabled")
 
+    def test_initialize_should_not_enable_cgroups_when_they_are_disabled_in_the_agent_configuration(self):
+        with patch('azurelinuxagent.common.conf.get_cgroups_enabled', return_value=False):
+            with self._get_cgroup_configurator() as configurator:
+                self.assertFalse(configurator.enabled(), "cgroups should not be enabled")
+
     def test_initialize_should_start_tracking_the_agent_cgroups(self):
         with self._get_cgroup_configurator() as configurator:
             tracked = CGroupsTelemetry._tracked
@@ -666,7 +671,6 @@ exit 0
                     self.assertTrue(
                         any("[PID: {0}]".format(pid) in reported_process for reported_process in reported),
                         "Process {0} was not reported. Got: {1}".format(format_processes([pid]), reported))
-
         finally:
             # create the file that stops the test processes and wait for them to complete
             open(stop_file, "w").close()

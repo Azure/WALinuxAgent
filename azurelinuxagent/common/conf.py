@@ -111,7 +111,7 @@ __SWITCH_OPTIONS__ = {
     "ResourceDisk.EnableSwapEncryption": False,
     "AutoUpdate.Enabled": True,
     "EnableOverProvisioning": True,
-    "CGroups.EnforceLimits": False,
+    "CGroups.Enabled": True,
 }
 
 
@@ -134,7 +134,6 @@ __STRING_OPTIONS__ = {
     "ResourceDisk.MountOptions": None,
     "ResourceDisk.Filesystem": "ext3",
     "AutoUpdate.GAFamily": "Prod",
-    "CGroups.Excluded": "customscript,runcommand",
 }
 
 
@@ -453,13 +452,9 @@ def get_disable_agent_file_path(conf=__conf__):
     return os.path.join(get_lib_dir(conf), DISABLE_AGENT_FILE)
 
 
-def get_cgroups_enforce_limits(conf=__conf__):
-    return conf.get_switch("CGroups.EnforceLimits", False)
+def get_cgroups_enabled(conf=__conf__):
+    return conf.get_switch("CGroups.Enabled", True)
 
-
-def get_cgroups_excluded(conf=__conf__):
-    excluded_value = conf.get("CGroups.Excluded", "customscript, runcommand")
-    return [s for s in [i.strip().lower() for i in excluded_value.split(',')] if len(s) > 0] if excluded_value else []
 
 def get_monitor_network_configuration_changes(conf=__conf__):
     return conf.get_switch("Monitor.NetworkConfigurationChanges", False)
