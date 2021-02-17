@@ -113,10 +113,6 @@ def _safe_repr(obj, short=False):
     return result[:_MAX_LENGTH] + ' [truncated]...'
 
 
-def running_under_travis():
-    return 'TRAVIS' in os.environ and os.environ['TRAVIS'] == 'true'
-
-
 def i_am_root():
     return os.geteuid() == 0
 
