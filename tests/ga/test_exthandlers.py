@@ -21,6 +21,7 @@ import subprocess
 import time
 import uuid
 
+from azurelinuxagent.common.agent_supported_feature import AgentSupportedFeature
 from azurelinuxagent.common.cgroupconfigurator import CGroupConfigurator
 from azurelinuxagent.common.event import AGENT_EVENT_FILE_EXTENSION, WALAEventOperation
 from azurelinuxagent.common.exception import ExtensionError, ExtensionErrorCodes
@@ -721,7 +722,10 @@ sys.stderr.write("STDERR")
         self.create_script(os.path.join(self.ext_handler_instance.get_base_dir(), test_file), command)
 
         with patch("subprocess.Popen", wraps=subprocess.Popen) as patch_popen:
-            output = ext_handler_instance.launch_command(test_file)
+            # Returning empty list for get_agent_supported_features_list_for_extensions as we have a separate test for it
+            with patch("azurelinuxagent.ga.exthandlers.get_agent_supported_features_list_for_extensions",
+                       return_value={}):
+                output = ext_handler_instance.launch_command(test_file)
 
             args, kwagrs = patch_popen.call_args  # pylint: disable=unused-variable
             without_os_env = dict((k, v) for (k, v) in kwagrs['env'].items() if k not in os.environ)
@@ -732,3 +736,64 @@ sys.stderr.write("STDERR")
             # This check is checking if the expected values are set for the extension commands
             for helper_var in helper_env_vars:
                 self.assertIn("%s=%s" % (helper_var, helper_env_vars[helper_var]), output)
+
+    def test_it_should_pass_supported_features_list_as_environment_variables(self):
+
+        class TestFeature(AgentSupportedFeature):
+
+            def __init__(self, name, version, supported):
+                super(TestFeature, self).__init__(name=name,
+                                                  version=version,
+                                                  supported=supported)
+
+        test_name = str(uuid.uuid4())
+        test_version = str(uuid.uuid4())
+
+        command = "check_env.py"
+        self.create_script(os.path.join(self.ext_handler_instance.get_base_dir(), command), '''
+import os
+import json
+import sys
+
+features = os.getenv("{0}")
+if not features:
+    print("{0} not found in environment")
+    sys.exit(0)
+l = json.loads(features)
+found = False
+for feature in l:
+    if feature['Key'] == "{1}" and feature['Value'] == "{2}":
+        found = True
+        break
+    
+print("Found Feature %s: %s" % ("{1}", found))
+'''.format(ExtCommandEnvVariable.ExtensionSupportedFeatures, test_name, test_version))
+
+        # It should include all supported features and pass it as Environment Variable to extensions
+        test_supported_features = {test_name: TestFeature(name=test_name, version=test_version, supported=True)}
+        with patch("azurelinuxagent.ga.exthandlers.get_agent_supported_features_list_for_extensions",
+                   return_value=test_supported_features):
+            output = self.ext_handler_instance.launch_command(command)
+
+            self.assertIn("[stdout]\nFound Feature {0}: True".format(test_name), output, "Feature not found")
+
+        # It should not include the feature if feature not supported
+        test_supported_features = {
+            test_name: TestFeature(name=test_name, version=test_version, supported=False),
+            "testFeature": TestFeature(name="testFeature", version="1.2.1", supported=True)
+        }
+        with patch("azurelinuxagent.ga.exthandlers.get_agent_supported_features_list_for_extensions",
+                   return_value=test_supported_features):
+            output = self.ext_handler_instance.launch_command(command)
+
+            self.assertIn("[stdout]\nFound Feature {0}: False".format(test_name), output, "Feature wrongfully found")
+
+        # It should not include the SupportedFeatures Key in Environment variables if no features supported
+        test_supported_features = {test_name: TestFeature(name=test_name, version=test_version, supported=False)}
+        with patch("azurelinuxagent.ga.exthandlers.get_agent_supported_features_list_for_extensions",
+                   return_value=test_supported_features):
+            output = self.ext_handler_instance.launch_command(command)
+
+            self.assertIn(
+                "[stdout]\n{0} not found in environment".format(ExtCommandEnvVariable.ExtensionSupportedFeatures),
+                output, "Environment variable should not be found")

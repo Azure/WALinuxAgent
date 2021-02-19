@@ -43,7 +43,6 @@ class SendTelemetryEventsHandler(ThreadHandlerInterface):
     _MIN_EVENTS_TO_BATCH = 30
     _MIN_BATCH_WAIT_TIME = datetime.timedelta(seconds=5)
 
-
     def __init__(self, protocol_util):
         self._protocol = protocol_util.get_protocol()
         self.should_run = True
@@ -63,7 +62,7 @@ class SendTelemetryEventsHandler(ThreadHandlerInterface):
         return SendTelemetryEventsHandler._THREAD_NAME
 
     def run(self):
-        logger.info("Start Extension Telemetry service.")
+        logger.info("Start SendTelemetryHandler service.")
         self.start()
 
     def is_alive(self):
