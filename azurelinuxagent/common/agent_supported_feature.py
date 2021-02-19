@@ -71,22 +71,24 @@ class _ETPFeature(AgentSupportedFeature):
                                           supported=self.__SUPPORTED)
 
 
-__CRP_SUPPORTED_FEATURES = {
+# This is the list of features that Agent supports and we advertise to CRP
+__CRP_ADVERTISED_FEATURES = {
     SupportedFeatureNames.MultiConfig: _MultiConfigFeature()
 }
 
 
-__EXTENSION_SUPPORTED_FEATURES = {
+# This is the list of features that Agent supports and we advertise to Extensions
+__EXTENSION_ADVERTISED_FEATURES = {
     SupportedFeatureNames.ExtensionTelemetryPipeline: _ETPFeature()
 }
 
 
 def get_supported_feature_by_name(feature_name):
-    if feature_name in __CRP_SUPPORTED_FEATURES:
-        return __CRP_SUPPORTED_FEATURES[feature_name]
+    if feature_name in __CRP_ADVERTISED_FEATURES:
+        return __CRP_ADVERTISED_FEATURES[feature_name]
 
-    if feature_name in __EXTENSION_SUPPORTED_FEATURES:
-        return __EXTENSION_SUPPORTED_FEATURES[feature_name]
+    if feature_name in __EXTENSION_ADVERTISED_FEATURES:
+        return __EXTENSION_ADVERTISED_FEATURES[feature_name]
 
     raise NotImplementedError("Feature with Name: {0} not found".format(feature_name))
 
@@ -101,7 +103,7 @@ def get_agent_supported_features_list_for_crp():
                 MultipleExtensionsPerHandler: _MultiConfigFeature()
             }
     """
-    return __CRP_SUPPORTED_FEATURES
+    return __CRP_ADVERTISED_FEATURES
 
 
 def get_agent_supported_features_list_for_extensions():
@@ -115,4 +117,4 @@ def get_agent_supported_features_list_for_extensions():
                 CRPSupportedFeatureNames.ExtensionTelemetryPipeline: _ETPFeature()
             }
     """
-    return __EXTENSION_SUPPORTED_FEATURES
+    return __EXTENSION_ADVERTISED_FEATURES
