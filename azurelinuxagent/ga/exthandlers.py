@@ -36,6 +36,7 @@ import azurelinuxagent.common.conf as conf
 import azurelinuxagent.common.logger as logger
 import azurelinuxagent.common.utils.fileutil as fileutil
 import azurelinuxagent.common.version as version
+from azurelinuxagent.common.agent_supported_feature import get_agent_supported_features_list_for_extensions
 from azurelinuxagent.common.cgroupconfigurator import CGroupConfigurator
 from azurelinuxagent.common.datacontract import get_properties, set_properties
 from azurelinuxagent.common.errorstate import ErrorState
@@ -108,6 +109,7 @@ class ExtCommandEnvVariable(object):
     ExtensionSeqNumber = "ConfigSequenceNumber"  # At par with Windows Guest Agent
     UpdatingFromVersion = "{0}_UPDATING_FROM_VERSION".format(Prefix)
     WireProtocolAddress = "{0}_WIRE_PROTOCOL_ADDRESS".format(Prefix)
+    ExtensionSupportedFeatures = "{0}_EXTENSION_SUPPORTED_FEATURE".format(Prefix)
 
 
 def get_traceback(e):  # pylint: disable=R1710
@@ -1409,6 +1411,20 @@ class ExtHandlerInstance(object):
                     ExtCommandEnvVariable.ExtensionSeqNumber: str(self.get_seq_no()),
                     ExtCommandEnvVariable.WireProtocolAddress: self.protocol.get_endpoint()
                 })
+
+                supported_features = []
+                for _, feature in get_agent_supported_features_list_for_extensions().items():
+                    if feature.is_supported:
+                        supported_features.append(
+                            {
+                                "Key": feature.name,
+                                "Value": feature.version
+                            }
+                        )
+                if supported_features:
+                    env.update({
+                        ExtCommandEnvVariable.ExtensionSupportedFeatures: supported_features
+                    })
 
                 try:
                     # Some extensions erroneously begin cmd with a slash; don't interpret those

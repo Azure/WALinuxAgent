@@ -21,6 +21,7 @@ class CRPSupportedFeatureNames(object):
     Enum for defining the Feature Names for all features that we report back to CRP
     """
     MultiConfig = "MultipleExtensionsPerHandler"
+    ExtensionTelemetryPipeline = "ExtensionTelemetryPipeline"
 
 
 class AgentSupportedFeature(object):
@@ -58,14 +59,34 @@ class _MultiConfigFeature(AgentSupportedFeature):
                                                   supported=_MultiConfigFeature.__SUPPORTED)
 
 
+class _ETPFeature(AgentSupportedFeature):
+
+    __NAME = CRPSupportedFeatureNames.ExtensionTelemetryPipeline
+    __VERSION = "1.0"
+    __SUPPORTED = True
+
+    def __init__(self):
+        super(_ETPFeature, self).__init__(name=self.__NAME,
+                                          version=self.__VERSION,
+                                          supported=self.__SUPPORTED)
+
+
 __CRP_SUPPORTED_FEATURES = {
     CRPSupportedFeatureNames.MultiConfig: _MultiConfigFeature()
+}
+
+
+__EXTENSION_SUPPORTED_FEATURES = {
+    CRPSupportedFeatureNames.ExtensionTelemetryPipeline: _ETPFeature()
 }
 
 
 def get_supported_feature_by_name(feature_name):
     if feature_name in __CRP_SUPPORTED_FEATURES:
         return __CRP_SUPPORTED_FEATURES[feature_name]
+
+    if feature_name in __EXTENSION_SUPPORTED_FEATURES:
+        return __EXTENSION_SUPPORTED_FEATURES[feature_name]
 
     raise NotImplementedError("Feature with Name: {0} not found".format(feature_name))
 
@@ -81,3 +102,17 @@ def get_agent_supported_features_list_for_crp():
             }
     """
     return __CRP_SUPPORTED_FEATURES
+
+
+def get_agent_supported_features_list_for_extensions():
+    """
+    List of features that the GuestAgent currently supports (like Extension Telemetry Pipeline, etc) needed by Extensions.
+    We need to send this list as environment variables when calling extension commands to inform Extensions of all the
+    features the agent supports.
+    :return: Dict containing all Extension supported features with the key as their names and the AgentFeature object as
+             the value
+        Eg: {
+                CRPSupportedFeatureNames.ExtensionTelemetryPipeline: _ETPFeature()
+            }
+    """
+    return __EXTENSION_SUPPORTED_FEATURES
