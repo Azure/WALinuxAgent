@@ -722,7 +722,10 @@ sys.stderr.write("STDERR")
         self.create_script(os.path.join(self.ext_handler_instance.get_base_dir(), test_file), command)
 
         with patch("subprocess.Popen", wraps=subprocess.Popen) as patch_popen:
-            output = ext_handler_instance.launch_command(test_file)
+            # Returning empty list for get_agent_supported_features_list_for_extensions as we have a separate test for it
+            with patch("azurelinuxagent.ga.exthandlers.get_agent_supported_features_list_for_extensions",
+                       return_value={}):
+                output = ext_handler_instance.launch_command(test_file)
 
             args, kwagrs = patch_popen.call_args  # pylint: disable=unused-variable
             without_os_env = dict((k, v) for (k, v) in kwagrs['env'].items() if k not in os.environ)

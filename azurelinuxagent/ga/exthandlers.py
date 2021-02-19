@@ -109,7 +109,7 @@ class ExtCommandEnvVariable(object):
     ExtensionSeqNumber = "ConfigSequenceNumber"  # At par with Windows Guest Agent
     UpdatingFromVersion = "{0}_UPDATING_FROM_VERSION".format(Prefix)
     WireProtocolAddress = "{0}_WIRE_PROTOCOL_ADDRESS".format(Prefix)
-    ExtensionSupportedFeatures = "{0}_EXTENSION_SUPPORTED_FEATURE".format(Prefix)
+    ExtensionSupportedFeatures = "{0}_EXTENSION_SUPPORTED_FEATURES".format(Prefix)
 
 
 def get_traceback(e):  # pylint: disable=R1710
