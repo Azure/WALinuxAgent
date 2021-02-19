@@ -1423,7 +1423,7 @@ class ExtHandlerInstance(object):
                         )
                 if supported_features:
                     env.update({
-                        ExtCommandEnvVariable.ExtensionSupportedFeatures: supported_features
+                        ExtCommandEnvVariable.ExtensionSupportedFeatures: json.dumps(supported_features)
                     })
 
                 try:

@@ -15,7 +15,8 @@
 # Requires Python 2.6+ and Openssl 1.0+
 #
 from azurelinuxagent.common.agent_supported_feature import CRPSupportedFeatureNames, \
-    get_agent_supported_features_list_for_crp, get_supported_feature_by_name
+    get_agent_supported_features_list_for_crp, get_supported_feature_by_name, \
+    get_agent_supported_features_list_for_extensions
 from tests.tools import AgentTestCase
 
 
@@ -31,3 +32,11 @@ class TestAgentSupportedFeature(AgentTestCase):
         # Raise error if feature name not found
         with self.assertRaises(NotImplementedError):
             get_supported_feature_by_name("ABC")
+
+    def test_it_should_return_extension_supported_features_properly(self):
+        self.assertIn(CRPSupportedFeatureNames.ExtensionTelemetryPipeline,
+                      get_agent_supported_features_list_for_extensions(), "ETP should be in supported features list")
+
+        self.assertEqual(CRPSupportedFeatureNames.ExtensionTelemetryPipeline,
+                         get_supported_feature_by_name(CRPSupportedFeatureNames.ExtensionTelemetryPipeline).name,
+                         "Invalid/Wrong feature returned")
