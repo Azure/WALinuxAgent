@@ -74,7 +74,7 @@ class EnvHandler(ThreadHandlerInterface):
         self.server_thread = None
         self.dhcp_warning_enabled = True
         self.archiver = StateArchiver(conf.get_lib_dir())
-        self._reset_firewall_rules = False
+        self._try_remove_legacy_firewall_rule = False
 
         self._periodic_operations = [
             PeriodicOperation("_remove_persistent_net_rules", self._remove_persistent_net_rules_period, conf.get_remove_persistent_net_rules_period()),
@@ -135,10 +135,12 @@ class EnvHandler(ThreadHandlerInterface):
         #
         # There was a rule change at 2.2.26, which started dropping non-root traffic
         # to WireServer.  The previous rules allowed traffic.  Having both rules in
-        # place negated the fix in 2.2.26.
-        if not self._reset_firewall_rules:
-            self.osutil.remove_firewall(dst_ip=self._protocol.get_endpoint(), uid=os.getuid(), legacy_only=True)
-            self._reset_firewall_rules = True
+        # place negated the fix in 2.2.26. Removing only the legacy rule and keeping other rules intact.
+        #
+        # We only try to remove the legacy firewall rule once on service start (irrespective of its exit code).
+        if not self._try_remove_legacy_firewall_rule:
+            self.osutil.remove_legacy_firewall_rule(dst_ip=self._protocol.get_endpoint())
+            self._try_remove_legacy_firewall_rule = True
 
         success = self.osutil.enable_firewall(dst_ip=self._protocol.get_endpoint(), uid=os.getuid())
 
