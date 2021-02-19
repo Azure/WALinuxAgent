@@ -137,7 +137,7 @@ class EnvHandler(ThreadHandlerInterface):
         # to WireServer.  The previous rules allowed traffic.  Having both rules in
         # place negated the fix in 2.2.26.
         if not self._reset_firewall_rules:
-            self.osutil.remove_firewall(dst_ip=self._protocol.get_endpoint(), uid=os.getuid())
+            self.osutil.remove_firewall(dst_ip=self._protocol.get_endpoint(), uid=os.getuid(), legacy_only=True)
             self._reset_firewall_rules = True
 
         success = self.osutil.enable_firewall(dst_ip=self._protocol.get_endpoint(), uid=os.getuid())

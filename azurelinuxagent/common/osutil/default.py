@@ -219,7 +219,7 @@ class DefaultOSUtil(object):
                 if e.returncode == 2:
                     raise Exception("invalid firewall deletion rule '{0}'".format(rule))
 
-    def remove_firewall(self, dst_ip, uid):
+    def remove_firewall(self, dst_ip, uid, legacy_only=False):
         # If a previous attempt failed, do not retry
         global _enable_firewall  # pylint: disable=W0603
         if not _enable_firewall:
@@ -231,6 +231,10 @@ class DefaultOSUtil(object):
             # This rule was <= 2.2.25 only, and may still exist on some VMs.  Until 2.2.25
             # has aged out, keep this cleanup in place.
             self._delete_rule(_get_firewall_delete_conntrack_accept_command(wait, dst_ip))
+
+            if legacy_only:
+                return
+
             self._delete_rule(_get_firewall_delete_owner_accept_command(wait, dst_ip, uid))
             self._delete_rule(_get_firewall_delete_conntrack_drop_command(wait, dst_ip))
 
