@@ -16,9 +16,9 @@
 #
 
 
-class CRPSupportedFeatureNames(object):
+class SupportedFeatureNames(object):
     """
-    Enum for defining the Feature Names for all features that we report back to CRP
+    Enum for defining the Feature Names for all features that we the agent supports
     """
     MultiConfig = "MultipleExtensionsPerHandler"
     ExtensionTelemetryPipeline = "ExtensionTelemetryPipeline"
@@ -49,7 +49,7 @@ class AgentSupportedFeature(object):
 
 class _MultiConfigFeature(AgentSupportedFeature):
 
-    __NAME = CRPSupportedFeatureNames.MultiConfig
+    __NAME = SupportedFeatureNames.MultiConfig
     __VERSION = "1.0"
     __SUPPORTED = False
 
@@ -61,7 +61,7 @@ class _MultiConfigFeature(AgentSupportedFeature):
 
 class _ETPFeature(AgentSupportedFeature):
 
-    __NAME = CRPSupportedFeatureNames.ExtensionTelemetryPipeline
+    __NAME = SupportedFeatureNames.ExtensionTelemetryPipeline
     __VERSION = "1.0"
     __SUPPORTED = True
 
@@ -72,12 +72,12 @@ class _ETPFeature(AgentSupportedFeature):
 
 
 __CRP_SUPPORTED_FEATURES = {
-    CRPSupportedFeatureNames.MultiConfig: _MultiConfigFeature()
+    SupportedFeatureNames.MultiConfig: _MultiConfigFeature()
 }
 
 
 __EXTENSION_SUPPORTED_FEATURES = {
-    CRPSupportedFeatureNames.ExtensionTelemetryPipeline: _ETPFeature()
+    SupportedFeatureNames.ExtensionTelemetryPipeline: _ETPFeature()
 }
 
 
