@@ -21,9 +21,7 @@ from azurelinuxagent.common.osutil.default import DefaultOSUtil, shellutil
 from azurelinuxagent.ga.env import MonitorDhcpClientRestart
 from tests.tools import AgentTestCase, patch
 
-# Access to a protected member _get_dhcp_client_pid of a client class (protected-access): Disabled; OK
-# to access private/protected members from this unit test
-# pylint: disable=protected-access
+
 class MonitorDhcpClientRestartTestCase(AgentTestCase):
     def setUp(self):
         AgentTestCase.setUp(self)

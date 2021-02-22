@@ -18,12 +18,12 @@ class TestFlexibleVersion(unittest.TestCase):
         for t in tests:
             t_escaped = re.escape(t)
             t_re = re.compile(t_escaped)
-            self.assertEqual((t_escaped, t_re), self.v._compile_separator(t))  # pylint: disable=protected-access
-        self.assertEqual(('', re.compile('')),  self.v._compile_separator(None))  # pylint: disable=protected-access
+            self.assertEqual((t_escaped, t_re), self.v._compile_separator(t))
+        self.assertEqual(('', re.compile('')),  self.v._compile_separator(None))
         return
 
     def test_compile_pattern(self):
-        self.v._compile_pattern()  # pylint: disable=protected-access
+        self.v._compile_pattern()
         tests = {
             '1': True,
             '1.2': True,
@@ -87,7 +87,7 @@ class TestFlexibleVersion(unittest.TestCase):
 
     def test_compile_pattern_sep(self):
         self.v.sep = '-'
-        self.v._compile_pattern()  # pylint: disable=protected-access
+        self.v._compile_pattern()
         tests = { 
             '1': True,
             '1-2': True,
@@ -145,7 +145,7 @@ class TestFlexibleVersion(unittest.TestCase):
 
     def test_compile_pattern_prerel(self):
         self.v.prerel_tags = ('a', 'b', 'c')
-        self.v._compile_pattern()  # pylint: disable=protected-access
+        self.v._compile_pattern()
         tests = {
             '1': True,
             '1.2': True,
@@ -323,7 +323,7 @@ class TestFlexibleVersion(unittest.TestCase):
         }
         for test in iter(tests):
             expectation = tests[test]
-            self.v._parse(test)  # pylint: disable=protected-access
+            self.v._parse(test)
             self.assertEqual(expectation, (self.v.version, self.v.prerelease))
         return
 
