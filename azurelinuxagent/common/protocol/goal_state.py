@@ -431,7 +431,7 @@ class ExtensionsConfig(object):
             return [attr] if attr else []
 
         location = getattrib_wrapped_in_list(plugin, "location")
-        failover_location = getattrib_wrapped_in_list(plugin, "failoverLocation")
+        failover_location = getattrib_wrapped_in_list(plugin, "failoverlocation")
 
         additional_location_node = find(plugin, "additionalLocations")
         nodes_list = findall(additional_location_node, "additionalLocation") or []

@@ -50,7 +50,7 @@ from azurelinuxagent.ga.exthandlers import ExtHandlersHandler, ExtHandlerInstanc
 
 from tests.protocol import mockwiredata
 from tests.protocol.mocks import mock_wire_protocol, HttpRequestPredicates
-from tests.protocol.mockwiredata import DATA_FILE
+from tests.protocol.mockwiredata import DATA_FILE, DATA_FILE_EXT_ADDITIONAL_LOCATIONS
 from tests.tools import AgentTestCase, data_dir, MagicMock, Mock, patch, mock_sleep
 from tests.ga.extension_emulator import Actions, ExtensionCommandNames, extension_emulator, \
     enable_invocations, generate_put_handler
@@ -3048,6 +3048,58 @@ class TestCollectExtensionStatus(ExtensionTestCase):
         self.assertEqual(ext_status.status, ValidHandlerStatus.error)
         self.assertEqual(len(ext_status.substatusList), 0)
 
+class TestAdditionalLocationsExtensions(ExtensionTestCase):
+
+    def setUp(self):
+        ExtensionTestCase.setUp(self)
+        self.mock_sleep = patch("time.sleep", lambda *_: mock_sleep(0.0001))
+        self.mock_sleep.start()
+        self.test_data = DATA_FILE_EXT_ADDITIONAL_LOCATIONS.copy()
+
+    def tearDown(self):
+        self.mock_sleep.stop()
+        ExtensionTestCase.tearDown(self)
+
+    def test_additional_locations_node_is_consumed(self):
+
+        location_uri_pattern = r'https?://mock-goal-state/(?P<location_type>{0})/(?P<manifest_num>\d)/manifest.xml'\
+            .format(r'(location)|(failoverlocation)|(additionalLocation)')
+        location_uri_regex = re.compile(location_uri_pattern)
+
+        manifests_used = [ ('location', '1'), ('failoverlocation', '2'), 
+            ('additionalLocation', '3'), ('additionalLocation', '4') ]
+
+        def manifest_location_handler(url, **kwargs):
+            url_match = location_uri_regex.match(url)
+
+            if not url_match:
+                if "extensionArtifact" in url:
+                    wrapped_url = kwargs.get("headers", {}).get("x-ms-artifact-location")
+
+                    if wrapped_url and location_uri_regex.match(wrapped_url):
+                        return Exception("Ignoring host plugin requests for testing purposes.")
+                
+                return None
+
+            location_type, manifest_num = url_match.group("location_type", "manifest_num")
+
+            try:
+                manifests_used.remove((location_type, manifest_num))
+            except ValueError:
+                raise AssertionError("URI '{0}' used multiple times".format(url))
+
+            if manifests_used:
+                # Still locations to try in the list; throw a fake
+                # error to make sure all of the locations get called.
+                return Exception("Failing manifest fetch from uri '{0}' for testing purposes."\
+                    .format(url))
+
+            return None
+
+        
+        with mock_wire_protocol(self.test_data, http_get_handler=manifest_location_handler) as protocol:
+            exthandlers_handler = get_exthandlers_handler(protocol)
+            exthandlers_handler.run()
 
 class TestMultiConfigExtensions(ExtensionTestCase):
 
