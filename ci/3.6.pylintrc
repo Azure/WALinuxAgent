@@ -29,6 +29,7 @@ disable=C, # (C) convention, for programming standard violation
     too-many-statements, # (R0915): *Too many statements (%s/%s)*
     useless-object-inheritance, # (R0205): *Class %r inherits from object, can be safely removed from bases in python3*
     useless-return, # (R1711): *Useless return at end of function or method*
+    use-a-generator, # (R1729): *Use a generator instead '%s(%s)'*
     broad-except, # (W0703): *Catching too general exception %s*
     raise-missing-from, # (W0707): *Consider explicitly re-raising using the 'from' keyword*
     fixme, # Used when a warning note as FIXME or TODO is detected

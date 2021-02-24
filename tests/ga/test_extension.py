@@ -1172,7 +1172,7 @@ class TestExtension(AgentTestCase):
             event_occurrences = [kw for _, kw in mock_add_event.call_args_list if
                           "Failed to download artifacts: [ExtensionDownloadError] {0}".format(err_msg_guid) in kw['message']]
             self.assertEqual(expected_download_failed_event_count, len(event_occurrences), "Call count do not match")
-            self.assertFalse(any([kw['is_success'] for kw in event_occurrences]), "The events should have failed")
+            self.assertFalse(any(kw['is_success'] for kw in event_occurrences), "The events should have failed")
             self.assertEqual(expected_download_failed_event_count, len([kw['op'] for kw in event_occurrences]),
                              "Incorrect Operation, all events should be a download errors")
 
