@@ -128,7 +128,7 @@ class EnableFirewall(PeriodicOperation):
         #
         # We only try to remove the legacy firewall rule once on service start (irrespective of its exit code).
         if not self._try_remove_legacy_firewall_rule:
-            self.osutil.remove_legacy_firewall_rule(dst_ip=self._protocol.get_endpoint())
+            self._osutil.remove_legacy_firewall_rule(dst_ip=self._protocol.get_endpoint())
             self._try_remove_legacy_firewall_rule = True
 
         success = self._osutil.enable_firewall(dst_ip=self._protocol.get_endpoint(), uid=os.getuid())

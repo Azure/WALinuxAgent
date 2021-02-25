@@ -558,7 +558,7 @@ class CollectTelemetryEventsHandler(ThreadHandlerInterface):
         is_etp_enabled = get_supported_feature_by_name(SupportedFeatureNames.ExtensionTelemetryPipeline).is_supported
         logger.info("Extension Telemetry pipeline enabled: {0}".format(is_etp_enabled))
         if is_etp_enabled:
-            periodic_operations.append(_ProcessExtensionEventsPeriodicOperation(self._send_telemetry_events_handler))
+            periodic_operations.append(_ProcessExtensionEvents(self._send_telemetry_events_handler))
             
         logger.info("Successfully started the {0} thread".format(self.get_thread_name()))
         while not self.stopped():
