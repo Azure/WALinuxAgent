@@ -38,6 +38,7 @@ import azurelinuxagent.common.logger as logger
 import azurelinuxagent.common.utils.fileutil as fileutil
 import azurelinuxagent.common.utils.restutil as restutil
 import azurelinuxagent.common.utils.textutil as textutil
+from azurelinuxagent.common.agent_supported_feature import get_supported_feature_by_name, SupportedFeatureNames
 from azurelinuxagent.common.persist_firewall_rules import PersistFirewallRulesHandler
 from azurelinuxagent.common.cgroupconfigurator import CGroupConfigurator
 
@@ -56,8 +57,7 @@ from azurelinuxagent.ga.collect_logs import get_collect_logs_handler, is_log_col
 from azurelinuxagent.ga.env import get_env_handler
 from azurelinuxagent.ga.collect_telemetry_events import get_collect_telemetry_events_handler
 
-from azurelinuxagent.ga.exthandlers import HandlerManifest, get_traceback, ExtHandlersHandler, list_agent_lib_directory, \
-    is_extension_telemetry_pipeline_enabled
+from azurelinuxagent.ga.exthandlers import HandlerManifest, get_traceback, ExtHandlersHandler, list_agent_lib_directory
 from azurelinuxagent.ga.monitor import get_monitor_handler
 
 from azurelinuxagent.ga.send_telemetry_events import get_send_telemetry_events_handler
@@ -820,7 +820,7 @@ class UpdateHandler(object):
                 continue
 
         try:
-            if not is_extension_telemetry_pipeline_enabled():
+            if not get_supported_feature_by_name(SupportedFeatureNames.ExtensionTelemetryPipeline).is_supported:
                 # If extension telemetry pipeline is disabled, ensure we delete all existing extension events directory
                 # because the agent will not be listening on those events.
                 extension_event_dirs = glob.glob(os.path.join(conf.get_ext_log_dir(), "*", EVENTS_DIRECTORY))
@@ -831,6 +831,11 @@ class UpdateHandler(object):
 
     @staticmethod
     def _ensure_firewall_rules_persisted(dst_ip):
+
+        if not conf.enable_firewall():
+            logger.info("Not setting up persistent firewall rules as OS.EnableFirewall=False")
+            return
+
         is_success = False
         logger.info("Starting setup for Persistent firewall rules")
         try:
