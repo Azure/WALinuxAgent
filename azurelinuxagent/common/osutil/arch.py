@@ -16,7 +16,6 @@
 # Requires Python 2.6+ and Openssl 1.0+
 #
 
-import os  # pylint: disable=W0611
 import azurelinuxagent.common.utils.shellutil as shellutil
 from azurelinuxagent.common.osutil.default import DefaultOSUtil
 
@@ -25,6 +24,14 @@ class ArchUtil(DefaultOSUtil):
     def __init__(self):
         super(ArchUtil, self).__init__()
         self.jit_enabled = True
+
+    @staticmethod
+    def get_systemd_unit_file_install_path():
+        return "/usr/lib/systemd/system"
+
+    @staticmethod
+    def get_agent_bin_path():
+        return "/usr/bin"
     
     def is_dhcp_enabled(self):
         return True
