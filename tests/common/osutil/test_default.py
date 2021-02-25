@@ -34,9 +34,7 @@ from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.osutil import get_osutil
 from azurelinuxagent.common.utils import fileutil
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
-from tests.tools import AgentTestCase, patch, open_patch, load_data, \
-    running_under_travis, skip_if_predicate_true
-
+from tests.tools import AgentTestCase, patch, open_patch, load_data
 
 actual_get_proc_net_route = 'azurelinuxagent.common.osutil.default.DefaultOSUtil._get_proc_net_route'
 
@@ -210,7 +208,7 @@ class TestOSUtil(AgentTestCase):
         loopback_count = 0
         non_loopback_count = 0
 
-        for iface in osutil.DefaultOSUtil()._get_all_interfaces():  # pylint: disable=protected-access
+        for iface in osutil.DefaultOSUtil()._get_all_interfaces():
             if iface == 'lo':
                 loopback_count += 1
             else:
@@ -220,7 +218,7 @@ class TestOSUtil(AgentTestCase):
         self.assertGreater(loopback_count, 0, 'At least 1 non-loopback network interface should exist')
 
     def test_isloopback(self):
-        for iface in osutil.DefaultOSUtil()._get_all_interfaces():  # pylint: disable=protected-access
+        for iface in osutil.DefaultOSUtil()._get_all_interfaces():
             if iface == 'lo':
                 self.assertTrue(osutil.DefaultOSUtil().is_loopback(iface))
             else:
@@ -519,13 +517,13 @@ Match host 192.168.1.2\n\
         util = osutil.DefaultOSUtil()
         self.assertEqual(
             "12345678-1234-1234-1234-123456789012",
-            util._correct_instance_id("78563412-3412-3412-1234-123456789012"))  # pylint: disable=protected-access
+            util._correct_instance_id("78563412-3412-3412-1234-123456789012"))
         self.assertEqual(
             "D0DF4C54-4ECB-4A4B-9954-5BDF3ED5C3B8",
-            util._correct_instance_id("544CDFD0-CB4E-4B4A-9954-5BDF3ED5C3B8"))  # pylint: disable=protected-access
+            util._correct_instance_id("544CDFD0-CB4E-4B4A-9954-5BDF3ED5C3B8"))
         self.assertEqual(
             "d0df4c54-4ecb-4a4b-9954-5bdf3ed5c3b8",
-            util._correct_instance_id("544cdfd0-cb4e-4b4a-9954-5bdf3ed5c3b8"))  # pylint: disable=protected-access
+            util._correct_instance_id("544cdfd0-cb4e-4b4a-9954-5bdf3ed5c3b8"))
 
     @patch('os.path.isfile', return_value=True)
     @patch('azurelinuxagent.common.utils.fileutil.read_file',
@@ -647,7 +645,7 @@ Match host 192.168.1.2\n\
 
     @staticmethod
     @contextlib.contextmanager
-    def _mock_iptables(version=osutil._IPTABLES_LOCKING_VERSION, destination='168.63.129.16'):  # pylint: disable=protected-access
+    def _mock_iptables(version=osutil._IPTABLES_LOCKING_VERSION, destination='168.63.129.16'):
         """
         Mock for the iptable commands used to set up the firewall.
 
@@ -667,19 +665,19 @@ Match host 192.168.1.2\n\
             mocked_commands[command_string] = (output.replace("'", "'\"'\"'"), exit_code)
             return command_string
 
-        wait = FlexibleVersion(version) >= osutil._IPTABLES_LOCKING_VERSION  # pylint: disable=protected-access
+        wait = FlexibleVersion(version) >= osutil._IPTABLES_LOCKING_VERSION
         uid = 42
 
-        version_command = set_command(osutil._get_iptables_version_command(), output=str(version))  # pylint: disable=protected-access
-        list_command = set_command(osutil._get_firewall_list_command(wait), output="Mock Output")  # pylint: disable=protected-access
-        set_command(osutil._get_firewall_packets_command(wait))  # pylint: disable=protected-access
-        set_command(osutil._get_firewall_drop_command(wait, "-C", destination))  # pylint: disable=protected-access
-        set_command(osutil._get_firewall_drop_command(wait, "-A", destination))  # pylint: disable=protected-access
-        set_command(osutil._get_firewall_accept_command(wait, "-A", destination, uid))  # pylint: disable=protected-access
+        version_command = set_command(osutil._get_iptables_version_command(), output=str(version))
+        list_command = set_command(osutil._get_firewall_list_command(wait), output="Mock Output")
+        set_command(osutil._get_firewall_packets_command(wait))
+        set_command(osutil._get_firewall_drop_command(wait, "-C", destination))
+        set_command(osutil._get_firewall_drop_command(wait, "-A", destination))
+        set_command(osutil._get_firewall_accept_command(wait, "-A", destination, uid))
         # the agent assumes the rules have been deleted when these commands return 1
-        set_command(osutil._get_firewall_delete_conntrack_accept_command(wait, destination), exit_code=1)  # pylint: disable=protected-access
-        set_command(osutil._get_firewall_delete_owner_accept_command(wait, destination, uid), exit_code=1)  # pylint: disable=protected-access
-        set_command(osutil._get_firewall_delete_conntrack_drop_command(wait, destination), exit_code=1)  # pylint: disable=protected-access
+        set_command(osutil._get_firewall_delete_conntrack_accept_command(wait, destination), exit_code=1)
+        set_command(osutil._get_firewall_delete_owner_accept_command(wait, destination, uid), exit_code=1)
+        set_command(osutil._get_firewall_delete_conntrack_drop_command(wait, destination), exit_code=1)
 
         command_calls = []
 
@@ -705,34 +703,34 @@ Match host 192.168.1.2\n\
                 yield popen_patcher
 
     def test_get_firewall_dropped_packets_returns_zero_if_firewall_disabled(self):
-        osutil._enable_firewall = False  # pylint: disable=protected-access
+        osutil._enable_firewall = False
         util = osutil.DefaultOSUtil()
 
         self.assertEqual(0, util.get_firewall_dropped_packets("not used"))
 
     def test_get_firewall_dropped_packets_returns_negative_if_error(self):
-        osutil._enable_firewall = True  # pylint: disable=protected-access
+        osutil._enable_firewall = True
 
         with TestOSUtil._mock_iptables() as mock_iptables:
-            mock_iptables.set_command(osutil._get_firewall_packets_command(mock_iptables.wait), exit_code=1)  # pylint: disable=protected-access
+            mock_iptables.set_command(osutil._get_firewall_packets_command(mock_iptables.wait), exit_code=1)
 
             self.assertEqual(-1, osutil.DefaultOSUtil().get_firewall_dropped_packets())
 
     def test_get_firewall_dropped_packets_should_ignore_transient_errors(self):
-        osutil._enable_firewall = True  # pylint: disable=protected-access
+        osutil._enable_firewall = True
 
         with TestOSUtil._mock_iptables() as mock_iptables:
-            mock_iptables.set_command(osutil._get_firewall_packets_command(mock_iptables.wait), exit_code=3, output="can't initialize iptables table `security': iptables who? (do you need to insmod?)")  # pylint: disable=protected-access
+            mock_iptables.set_command(osutil._get_firewall_packets_command(mock_iptables.wait), exit_code=3, output="can't initialize iptables table `security': iptables who? (do you need to insmod?)")
 
             self.assertEqual(0, osutil.DefaultOSUtil().get_firewall_dropped_packets())
 
     def test_get_firewall_dropped_packets(self):
-        osutil._enable_firewall = True  # pylint: disable=protected-access
+        osutil._enable_firewall = True
 
         destination = '168.63.129.16'
 
         with TestOSUtil._mock_iptables() as mock_iptables:
-            # pylint: disable=protected-access
+
             mock_iptables.set_command(osutil._get_firewall_packets_command(mock_iptables.wait), output='''
 
 Chain OUTPUT (policy ACCEPT 104 packets, 43628 bytes)
@@ -741,22 +739,21 @@ Chain OUTPUT (policy ACCEPT 104 packets, 43628 bytes)
       32     1920 DROP       tcp  --  any    any     anywhere             168.63.129.16
 
 ''')
-            # pylint: enable=protected-access
             self.assertEqual(32, osutil.DefaultOSUtil().get_firewall_dropped_packets(destination))
 
 
     def test_enable_firewall_should_set_up_the_firewall(self):
-        osutil._enable_firewall = True  # pylint: disable=protected-access
+        osutil._enable_firewall = True
 
         with TestOSUtil._mock_iptables() as mock_iptables:
             # fail the rule check to force enable of the firewall
-            mock_iptables.set_command(osutil._get_firewall_drop_command(mock_iptables.wait, "-C", mock_iptables.destination), exit_code=1)  # pylint: disable=protected-access
+            mock_iptables.set_command(osutil._get_firewall_drop_command(mock_iptables.wait, "-C", mock_iptables.destination), exit_code=1)
 
             success = osutil.DefaultOSUtil().enable_firewall(dst_ip=mock_iptables.destination, uid=mock_iptables.uid)
 
-            drop_check_command = TestOSUtil._command_to_string(osutil._get_firewall_drop_command(mock_iptables.wait, "-C", mock_iptables.destination))  # pylint: disable=protected-access
-            accept_command = TestOSUtil._command_to_string(osutil._get_firewall_accept_command(mock_iptables.wait, "-A", mock_iptables.destination, mock_iptables.uid))  # pylint: disable=protected-access
-            drop_add_command = TestOSUtil._command_to_string(osutil._get_firewall_drop_command(mock_iptables.wait, "-A", mock_iptables.destination))  # pylint: disable=protected-access
+            drop_check_command = TestOSUtil._command_to_string(osutil._get_firewall_drop_command(mock_iptables.wait, "-C", mock_iptables.destination))
+            accept_command = TestOSUtil._command_to_string(osutil._get_firewall_accept_command(mock_iptables.wait, "-A", mock_iptables.destination, mock_iptables.uid))
+            drop_add_command = TestOSUtil._command_to_string(osutil._get_firewall_drop_command(mock_iptables.wait, "-A", mock_iptables.destination))
 
             self.assertTrue(success, "Enabling the firewall was not successful")
             self.assertEqual(len(mock_iptables.command_calls), 3, "Incorrect number of calls to iptables: [{0}]". format(mock_iptables.command_calls))
@@ -764,14 +761,14 @@ Chain OUTPUT (policy ACCEPT 104 packets, 43628 bytes)
             self.assertEqual(mock_iptables.command_calls[1], accept_command, "The second command should add the accept rule")
             self.assertEqual(mock_iptables.command_calls[2], drop_add_command, "The third command should add the drop rule")
 
-            self.assertTrue(osutil._enable_firewall, "The firewall should not have been disabled")  # pylint: disable=protected-access
+            self.assertTrue(osutil._enable_firewall, "The firewall should not have been disabled")
 
     def test_enable_firewall_should_not_use_wait_when_iptables_does_not_support_it(self):
-        osutil._enable_firewall = True  # pylint: disable=protected-access
+        osutil._enable_firewall = True
 
-        with TestOSUtil._mock_iptables(version=osutil._IPTABLES_LOCKING_VERSION - 1) as mock_iptables:  # pylint: disable=protected-access
+        with TestOSUtil._mock_iptables(version=osutil._IPTABLES_LOCKING_VERSION - 1) as mock_iptables:
             # fail the rule check to force enable of the firewall
-            mock_iptables.set_command(osutil._get_firewall_drop_command(mock_iptables.wait, "-C", mock_iptables.destination), exit_code=1)  # pylint: disable=protected-access
+            mock_iptables.set_command(osutil._get_firewall_drop_command(mock_iptables.wait, "-C", mock_iptables.destination), exit_code=1)
 
             success = osutil.DefaultOSUtil().enable_firewall(dst_ip=mock_iptables.destination, uid=mock_iptables.uid)
 
@@ -780,13 +777,13 @@ Chain OUTPUT (policy ACCEPT 104 packets, 43628 bytes)
             for command in mock_iptables.command_calls:
                 self.assertNotIn("-w", command, "The -w option should have been used in {0}".format(command))
 
-            self.assertTrue(osutil._enable_firewall, "The firewall should not have been disabled")  # pylint: disable=protected-access
+            self.assertTrue(osutil._enable_firewall, "The firewall should not have been disabled")
 
     def test_enable_firewall_should_not_set_firewall_if_the_drop_rule_exists(self):
-        osutil._enable_firewall = True  # pylint: disable=protected-access
+        osutil._enable_firewall = True
 
         with TestOSUtil._mock_iptables() as mock_iptables:
-            drop_check_command = mock_iptables.set_command(osutil._get_firewall_drop_command(mock_iptables.wait, "-C", mock_iptables.destination), exit_code=0)  # pylint: disable=protected-access
+            drop_check_command = mock_iptables.set_command(osutil._get_firewall_drop_command(mock_iptables.wait, "-C", mock_iptables.destination), exit_code=0)
 
             success = osutil.DefaultOSUtil().enable_firewall(dst_ip=mock_iptables.destination, uid=mock_iptables.uid)
 
@@ -794,10 +791,10 @@ Chain OUTPUT (policy ACCEPT 104 packets, 43628 bytes)
             self.assertEqual(len(mock_iptables.command_calls), 1, "Incorrect number of calls to iptables: [{0}]". format(mock_iptables.command_calls))
             self.assertEqual(mock_iptables.command_calls[0], drop_check_command, "Unexpected command: {0}".format(mock_iptables.command_calls[0]))
 
-            self.assertTrue(osutil._enable_firewall)  # pylint: disable=protected-access
+            self.assertTrue(osutil._enable_firewall)
 
     def test_enable_firewall_should_check_for_invalid_iptables_options(self):
-        osutil._enable_firewall = True  # pylint: disable=protected-access
+        osutil._enable_firewall = True
 
         with TestOSUtil._mock_iptables() as mock_iptables:
             # iptables uses the following exit codes
@@ -805,13 +802,13 @@ Chain OUTPUT (policy ACCEPT 104 packets, 43628 bytes)
             #  1 - other errors
             #  2 - errors which appear to be caused by invalid or abused command
             #      line parameters
-            drop_check_command = mock_iptables.set_command(osutil._get_firewall_drop_command(mock_iptables.wait, "-C", mock_iptables.destination), exit_code=2)  # pylint: disable=protected-access
+            drop_check_command = mock_iptables.set_command(osutil._get_firewall_drop_command(mock_iptables.wait, "-C", mock_iptables.destination), exit_code=2)
 
             success = osutil.DefaultOSUtil().enable_firewall(dst_ip=mock_iptables.destination, uid=mock_iptables.uid)
 
-            delete_conntrack_accept_command = TestOSUtil._command_to_string(osutil._get_firewall_delete_conntrack_accept_command(mock_iptables.wait, mock_iptables.destination))  # pylint: disable=protected-access
-            delete_owner_accept_command = TestOSUtil._command_to_string(osutil._get_firewall_delete_owner_accept_command(mock_iptables.wait, mock_iptables.destination, mock_iptables.uid))  # pylint: disable=protected-access
-            delete_conntrack_drop_command = TestOSUtil._command_to_string(osutil._get_firewall_delete_conntrack_drop_command(mock_iptables.wait, mock_iptables.destination))  # pylint: disable=protected-access
+            delete_conntrack_accept_command = TestOSUtil._command_to_string(osutil._get_firewall_delete_conntrack_accept_command(mock_iptables.wait, mock_iptables.destination))
+            delete_owner_accept_command = TestOSUtil._command_to_string(osutil._get_firewall_delete_owner_accept_command(mock_iptables.wait, mock_iptables.destination, mock_iptables.uid))
+            delete_conntrack_drop_command = TestOSUtil._command_to_string(osutil._get_firewall_delete_conntrack_drop_command(mock_iptables.wait, mock_iptables.destination))
 
             self.assertFalse(success, "Enable firewall should have failed")
             self.assertEqual(len(mock_iptables.command_calls), 4, "Incorrect number of calls to iptables: [{0}]". format(mock_iptables.command_calls))
@@ -820,10 +817,10 @@ Chain OUTPUT (policy ACCEPT 104 packets, 43628 bytes)
             self.assertEqual(mock_iptables.command_calls[2], delete_owner_accept_command, "The third command should delete the owner accept rule: {0}".format(mock_iptables.command_calls[2]))
             self.assertEqual(mock_iptables.command_calls[3], delete_conntrack_drop_command, "The fourth command should delete the conntrack accept rule : {0}".format(mock_iptables.command_calls[3]))
 
-            self.assertFalse(osutil._enable_firewall)  # pylint: disable=protected-access
+            self.assertFalse(osutil._enable_firewall)
 
     def test_enable_firewall_skips_if_disabled(self):
-        osutil._enable_firewall = False  # pylint: disable=protected-access
+        osutil._enable_firewall = False
 
         with TestOSUtil._mock_iptables() as mock_iptables:
             success = osutil.DefaultOSUtil().enable_firewall(dst_ip=mock_iptables.destination, uid=mock_iptables.uid)
@@ -831,10 +828,10 @@ Chain OUTPUT (policy ACCEPT 104 packets, 43628 bytes)
             self.assertFalse(success, "The firewall should not have been disabled")
             self.assertEqual(len(mock_iptables.command_calls), 0, "iptables should not have been invoked: [{0}]". format(mock_iptables.command_calls))
 
-            self.assertFalse(osutil._enable_firewall)  # pylint: disable=protected-access
+            self.assertFalse(osutil._enable_firewall)
 
     def test_remove_firewall(self):
-        osutil._enable_firewall = True  # pylint: disable=protected-access
+        osutil._enable_firewall = True
 
         with TestOSUtil._mock_iptables() as mock_iptables:
             delete_commands = {}
@@ -859,9 +856,9 @@ Chain OUTPUT (policy ACCEPT 104 packets, 43628 bytes)
             with patch("azurelinuxagent.common.cgroupapi.subprocess.Popen", side_effect=mock_popen):
                 success = osutil.DefaultOSUtil().remove_firewall(mock_iptables.destination, mock_iptables.uid)
 
-                delete_conntrack_accept_command = TestOSUtil._command_to_string(osutil._get_firewall_delete_conntrack_accept_command(mock_iptables.wait, mock_iptables.destination))  # pylint: disable=protected-access
-                delete_owner_accept_command = TestOSUtil._command_to_string(osutil._get_firewall_delete_owner_accept_command(mock_iptables.wait, mock_iptables.destination, mock_iptables.uid))  # pylint: disable=protected-access
-                delete_conntrack_drop_command = TestOSUtil._command_to_string(osutil._get_firewall_delete_conntrack_drop_command(mock_iptables.wait, mock_iptables.destination))  # pylint: disable=protected-access
+                delete_conntrack_accept_command = TestOSUtil._command_to_string(osutil._get_firewall_delete_conntrack_accept_command(mock_iptables.wait, mock_iptables.destination))
+                delete_owner_accept_command = TestOSUtil._command_to_string(osutil._get_firewall_delete_owner_accept_command(mock_iptables.wait, mock_iptables.destination, mock_iptables.uid))
+                delete_conntrack_drop_command = TestOSUtil._command_to_string(osutil._get_firewall_delete_conntrack_drop_command(mock_iptables.wait, mock_iptables.destination))
 
                 self.assertTrue(success, "Removing the firewall should have succeeded")
                 self.assertEqual(len(delete_commands), 3, "Expected 3 delete commands: [{0}]".format(delete_commands))
@@ -874,13 +871,13 @@ Chain OUTPUT (policy ACCEPT 104 packets, 43628 bytes)
                 self.assertIn(delete_conntrack_drop_command, delete_commands, "The delete conntrack drop command was not executed")
                 self.assertEqual(delete_commands[delete_conntrack_drop_command], 2, "The delete conntrack drop command should have been executed twice")
 
-                self.assertTrue(osutil._enable_firewall)  # pylint: disable=protected-access
+                self.assertTrue(osutil._enable_firewall)
 
     def test_remove_firewall_should_not_retry_invalid_rule(self):
-        osutil._enable_firewall = True  # pylint: disable=protected-access
+        osutil._enable_firewall = True
 
         with TestOSUtil._mock_iptables() as mock_iptables:
-            command = osutil._get_firewall_delete_conntrack_accept_command(mock_iptables.wait, mock_iptables.destination)  # pylint: disable=protected-access
+            command = osutil._get_firewall_delete_conntrack_accept_command(mock_iptables.wait, mock_iptables.destination)
             # Note that the command is actually a valid rule, but we use the mock to report it as invalid (exit code 2)
             delete_conntrack_accept_command = mock_iptables.set_command(command, exit_code=2)
 
@@ -890,9 +887,8 @@ Chain OUTPUT (policy ACCEPT 104 packets, 43628 bytes)
             self.assertEqual(len(mock_iptables.command_calls), 1, "Expected a single call to iptables: [{0}]". format(mock_iptables.command_calls))
             self.assertEqual(mock_iptables.command_calls[0], delete_conntrack_accept_command, "Expected call to delete conntrack accept command: {0}".format(mock_iptables.command_calls[0]))
 
-            self.assertFalse(osutil._enable_firewall)  # pylint: disable=protected-access
+            self.assertFalse(osutil._enable_firewall)
 
-    @skip_if_predicate_true(running_under_travis, "The ip command isn't available in Travis")
     def test_get_nic_state(self):
         state = osutil.DefaultOSUtil().get_nic_state()
         self.assertNotEqual(state, {})

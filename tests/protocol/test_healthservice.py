@@ -208,7 +208,7 @@ class TestHealthService(AgentTestCase):
 
         # make 100 observations
         for i in range(0, 100):
-            health_service._observe(is_healthy=True, name='{0}'.format(i))  # pylint: disable=protected-access
+            health_service._observe(is_healthy=True, name='{0}'.format(i))
 
         # ensure we keep only 10
         self.assertEqual(10, len(health_service.observations))

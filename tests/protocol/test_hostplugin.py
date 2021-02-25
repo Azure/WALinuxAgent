@@ -153,7 +153,7 @@ class TestHostPlugin(HttpRequestPredicates, AgentTestCase):
         with mock_wire_protocol(DATA_FILE_NO_EXT) as protocol:
             # These tests use mock wire data that don't have any extensions (extension config will be empty).
             # Populate the upload blob and set an initial empty status before returning the protocol.
-            ext_conf = protocol.client._goal_state.ext_conf  # pylint: disable=protected-access
+            ext_conf = protocol.client._goal_state.ext_conf
             ext_conf.status_upload_blob = sas_url
             ext_conf.status_upload_blob_type = page_blob_type
 
@@ -397,7 +397,7 @@ class TestHostPlugin(HttpRequestPredicates, AgentTestCase):
         """Validate correct set of data is sent to HostGAPlugin when reporting VM status"""
 
         with mock_wire_protocol(DATA_FILE) as protocol:
-            test_goal_state = protocol.client._goal_state  # pylint: disable=protected-access
+            test_goal_state = protocol.client._goal_state
             plugin = protocol.client.get_host_plugin()
 
             status_blob = protocol.client.status_blob
@@ -431,7 +431,7 @@ class TestHostPlugin(HttpRequestPredicates, AgentTestCase):
 
     def test_validate_block_blob(self):
         with mock_wire_protocol(DATA_FILE) as protocol:
-            test_goal_state = protocol.client._goal_state  # pylint: disable=protected-access
+            test_goal_state = protocol.client._goal_state
 
             host_client = wire.HostPluginProtocol(wireserver_url,
                                                   test_goal_state.container_id,
@@ -474,7 +474,7 @@ class TestHostPlugin(HttpRequestPredicates, AgentTestCase):
     def test_validate_page_blobs(self):
         """Validate correct set of data is sent for page blobs"""
         with mock_wire_protocol(DATA_FILE) as protocol:
-            test_goal_state = protocol.client._goal_state  # pylint: disable=protected-access
+            test_goal_state = protocol.client._goal_state
 
             host_client = wire.HostPluginProtocol(wireserver_url,
                                                   test_goal_state.container_id,
@@ -600,7 +600,7 @@ class TestHostPlugin(HttpRequestPredicates, AgentTestCase):
 
     def test_validate_get_extension_artifacts(self):
         with mock_wire_protocol(DATA_FILE) as protocol:
-            test_goal_state = protocol.client._goal_state  # pylint: disable=protected-access
+            test_goal_state = protocol.client._goal_state
 
             expected_url = hostplugin.URI_FORMAT_GET_EXTENSION_ARTIFACT.format(wireserver_url, hostplugin.HOST_PLUGIN_PORT)
             expected_headers = {'x-ms-version': '2015-09-01',
