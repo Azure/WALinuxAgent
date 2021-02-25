@@ -22,7 +22,6 @@ import time
 import uuid
 
 from azurelinuxagent.common.agent_supported_feature import AgentSupportedFeature
-from azurelinuxagent.common.cgroupconfigurator import CGroupConfigurator
 from azurelinuxagent.common.event import AGENT_EVENT_FILE_EXTENSION, WALAEventOperation
 from azurelinuxagent.common.exception import ExtensionError, ExtensionErrorCodes
 from azurelinuxagent.common.protocol.restapi import ExtensionStatus, Extension, ExtHandler, ExtHandlerProperties
