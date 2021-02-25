@@ -38,14 +38,14 @@ import azurelinuxagent.common.logger as logger
 import azurelinuxagent.common.utils.fileutil as fileutil
 import azurelinuxagent.common.utils.restutil as restutil
 import azurelinuxagent.common.utils.textutil as textutil
-from azurelinuxagent.common.cgroupapi import CGroupsApi
+from azurelinuxagent.common.persist_firewall_rules import PersistFirewallRulesHandler
 from azurelinuxagent.common.cgroupconfigurator import CGroupConfigurator
 
 from azurelinuxagent.common.event import add_event, initialize_event_logger_vminfo_common_parameters, \
     elapsed_milliseconds, WALAEventOperation, EVENTS_DIRECTORY
 from azurelinuxagent.common.exception import ResourceGoneError, UpdateError
 from azurelinuxagent.common.future import ustr
-from azurelinuxagent.common.osutil import get_osutil
+from azurelinuxagent.common.osutil import get_osutil, systemd
 from azurelinuxagent.common.protocol.util import get_protocol_util
 from azurelinuxagent.common.protocol.hostplugin import HostPluginProtocol
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
@@ -273,7 +273,7 @@ class UpdateHandler(object):
                     util_name=type(self.osutil).__name__,
                     service_name=self.osutil.service_name,
                     py_major=PY_VERSION_MAJOR, py_minor=PY_VERSION_MINOR,
-                    py_micro=PY_VERSION_MICRO, systemd=CGroupsApi.is_systemd(),
+                    py_micro=PY_VERSION_MICRO, systemd=systemd.is_systemd(),
                     lis_ver=get_lis_version(), has_logrotate=has_logrotate()
             )
 
@@ -297,6 +297,7 @@ class UpdateHandler(object):
             self._ensure_readonly_files()
             self._ensure_cgroups_initialized()
             self._ensure_extension_telemetry_state_configured_properly(protocol)
+            self._ensure_firewall_rules_persisted(dst_ip=protocol.get_endpoint())
 
             # Get all thread handlers
             telemetry_handler = get_send_telemetry_events_handler(self.protocol_util)
@@ -524,7 +525,6 @@ class UpdateHandler(object):
     def _ensure_cgroups_initialized(self):
         configurator = CGroupConfigurator.get_instance()
         configurator.initialize()
-        configurator.create_slices()
 
     def _evaluate_agent_health(self, latest_agent):
         """
@@ -828,6 +828,25 @@ class UpdateHandler(object):
                     shutil.rmtree(ext_dir, ignore_errors=True)
         except Exception as e:
             logger.warn("Error when trying to delete existing Extension events directory. Error: {0}".format(ustr(e)))
+
+    @staticmethod
+    def _ensure_firewall_rules_persisted(dst_ip):
+        is_success = False
+        logger.info("Starting setup for Persistent firewall rules")
+        try:
+            PersistFirewallRulesHandler(dst_ip=dst_ip, uid=os.getuid()).setup()
+            msg = "Persistent firewall rules setup successfully"
+            is_success = True
+            logger.info(msg)
+        except Exception as error:
+            msg = "Unable to setup the persistent firewall rules: {0}".format(ustr(error))
+            logger.error(msg)
+
+        add_event(
+            op=WALAEventOperation.PersistFirewallRules,
+            is_success=is_success,
+            message=msg,
+            log_event=False)
 
 
 class GuestAgent(object):
