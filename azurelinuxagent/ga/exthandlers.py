@@ -36,6 +36,8 @@ import azurelinuxagent.common.conf as conf
 import azurelinuxagent.common.logger as logger
 import azurelinuxagent.common.utils.fileutil as fileutil
 import azurelinuxagent.common.version as version
+from azurelinuxagent.common.agent_supported_feature import get_agent_supported_features_list_for_extensions, \
+    SupportedFeatureNames, get_supported_feature_by_name
 from azurelinuxagent.common.cgroupconfigurator import CGroupConfigurator
 from azurelinuxagent.common.datacontract import get_properties, set_properties
 from azurelinuxagent.common.errorstate import ErrorState
@@ -81,12 +83,6 @@ _TRUNCATED_SUFFIX = u" ... [TRUNCATED]"
 _NUM_OF_STATUS_FILE_RETRIES = 5
 _STATUS_FILE_RETRY_DELAY = 2  # seconds
 
-_ENABLE_EXTENSION_TELEMETRY_PIPELINE = True
-
-
-def is_extension_telemetry_pipeline_enabled():
-    return _ENABLE_EXTENSION_TELEMETRY_PIPELINE
-
 
 class ValidHandlerStatus(object):
     transitioning = "transitioning"
@@ -108,6 +104,7 @@ class ExtCommandEnvVariable(object):
     ExtensionSeqNumber = "ConfigSequenceNumber"  # At par with Windows Guest Agent
     UpdatingFromVersion = "{0}_UPDATING_FROM_VERSION".format(Prefix)
     WireProtocolAddress = "{0}_WIRE_PROTOCOL_ADDRESS".format(Prefix)
+    ExtensionSupportedFeatures = "{0}_EXTENSION_SUPPORTED_FEATURES".format(Prefix)
 
 
 def get_traceback(e):  # pylint: disable=R1710
@@ -1049,7 +1046,7 @@ class ExtHandlerInstance(object):
             conf_dir = self.get_conf_dir()
             fileutil.mkdir(conf_dir, mode=0o700)
 
-            if is_extension_telemetry_pipeline_enabled():
+            if get_supported_feature_by_name(SupportedFeatureNames.ExtensionTelemetryPipeline).is_supported:
                 fileutil.mkdir(self.get_extension_events_dir(), mode=0o700)
 
             seq_no, status_path = self.get_status_file_path()  # pylint: disable=W0612
@@ -1410,6 +1407,20 @@ class ExtHandlerInstance(object):
                     ExtCommandEnvVariable.WireProtocolAddress: self.protocol.get_endpoint()
                 })
 
+                supported_features = []
+                for _, feature in get_agent_supported_features_list_for_extensions().items():
+                    if feature.is_supported:
+                        supported_features.append(
+                            {
+                                "Key": feature.name,
+                                "Value": feature.version
+                            }
+                        )
+                if supported_features:
+                    env.update({
+                        ExtCommandEnvVariable.ExtensionSupportedFeatures: json.dumps(supported_features)
+                    })
+
                 try:
                     # Some extensions erroneously begin cmd with a slash; don't interpret those
                     # as root-relative. (Issue #1170)
@@ -1492,7 +1503,7 @@ class ExtHandlerInstance(object):
                 HandlerEnvironment.heartbeatFile: self.get_heartbeat_file() 
             }
 
-        if is_extension_telemetry_pipeline_enabled():
+        if get_supported_feature_by_name(SupportedFeatureNames.ExtensionTelemetryPipeline).is_supported:
             handler_env[HandlerEnvironment.eventsFolder] = self.get_extension_events_dir()
 
         env = [{

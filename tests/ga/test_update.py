@@ -1572,7 +1572,7 @@ class TestUpdate(UpdateTestCase):
 
             # Rerun the update handler and ensure that the HandlerEnvironment file is recreated with eventsFolder
             # flag in HandlerEnvironment.json file
-            with patch('azurelinuxagent.ga.exthandlers.is_extension_telemetry_pipeline_enabled', return_value=True):
+            with patch("azurelinuxagent.common.agent_supported_feature._ETPFeature.is_supported", True):
                 update_handler.set_iterations(1)
                 update_handler.run(debug=True)
 
@@ -1584,7 +1584,28 @@ class TestUpdate(UpdateTestCase):
             self.assertIn(HandlerEnvironment.eventsFolder, content[0][HandlerEnvironment.handlerEnvironment],
                           "{0} not found in HandlerEnv file".format(HandlerEnvironment.eventsFolder))
 
-    def test_it_should_setup_firewall_rules_on_startup(self):
+    def test_it_should_not_setup_persistent_firewall_rules_if_EnableFirewall_is_disabled(self):
+        original_popen = subprocess.Popen
+        executed_firewall_commands = []
+
+        def _mock_popen(cmd, *args, **kwargs):
+            if 'firewall-cmd' in cmd:
+                executed_firewall_commands.append(cmd)
+                cmd = ["echo", "running"]
+            return original_popen(cmd, *args, **kwargs)
+
+        with patch("azurelinuxagent.common.logger.info") as patch_info:
+            with self._get_update_handler(iterations=1) as (update_handler, _):
+                with patch("azurelinuxagent.common.utils.shellutil.subprocess.Popen", side_effect=_mock_popen):
+                    with patch('azurelinuxagent.common.conf.enable_firewall', return_value=False):
+                        update_handler.run(debug=True)
+
+        self.assertEqual(0, len(executed_firewall_commands), "firewall-cmd should not be called at all")
+        self.assertTrue(any(
+            "Not setting up persistent firewall rules as OS.EnableFirewall=False" == args[0] for (args, _) in
+            patch_info.call_args_list), "Info not logged properly")
+
+    def test_it_should_setup_persistent_firewall_rules_on_startup(self):
         iterations = 1
         original_popen = subprocess.Popen
         executed_commands = []
@@ -1597,7 +1618,8 @@ class TestUpdate(UpdateTestCase):
 
         with self._get_update_handler(iterations) as (update_handler, _):
             with patch("azurelinuxagent.common.utils.shellutil.subprocess.Popen", side_effect=_mock_popen):
-                update_handler.run(debug=True)
+                with patch('azurelinuxagent.common.conf.enable_firewall', return_value=True):
+                    update_handler.run(debug=True)
 
         # Firewall-cmd should only be called 3 times - 1st to check if running, 2nd & 3rd for the QueryPassThrough cmd
         self.assertEqual(3, len(executed_commands), "The number of times firwall-cmd should be called is only 3")
@@ -1611,7 +1633,7 @@ class TestUpdate(UpdateTestCase):
     def _setup_test_for_ext_event_dirs_retention(self):
         try:
             with self._get_update_handler(test_data=DATA_FILE_MULTIPLE_EXT) as (update_handler, protocol):
-                with patch('azurelinuxagent.ga.exthandlers._ENABLE_EXTENSION_TELEMETRY_PIPELINE', True):
+                with patch("azurelinuxagent.common.agent_supported_feature._ETPFeature.is_supported", True):
                     update_handler.run(debug=True)
                     expected_events_dirs = glob.glob(os.path.join(conf.get_ext_log_dir(), "*", EVENTS_DIRECTORY))
                     no_of_extensions = protocol.mock_wire_data.get_no_of_plugins_in_extension_config()
@@ -1631,7 +1653,7 @@ class TestUpdate(UpdateTestCase):
     def test_it_should_delete_extension_events_directory_if_extension_telemetry_pipeline_disabled(self):
         # Disable extension telemetry pipeline and ensure events directory got deleted
         with self._setup_test_for_ext_event_dirs_retention() as (update_handler, expected_events_dirs):
-            with patch('azurelinuxagent.ga.exthandlers._ENABLE_EXTENSION_TELEMETRY_PIPELINE', False):
+            with patch("azurelinuxagent.common.agent_supported_feature._ETPFeature.is_supported", False):
                 update_handler.run(debug=True)
                 for ext_dir in expected_events_dirs:
                     self.assertFalse(os.path.exists(ext_dir), "Extension directory {0} still exists!".format(ext_dir))

@@ -27,7 +27,7 @@ import uuid
 from datetime import datetime, timedelta
 
 from azurelinuxagent.common import conf
-from azurelinuxagent.common.agent_supported_feature import CRPSupportedFeatureNames, get_supported_feature_by_name, \
+from azurelinuxagent.common.agent_supported_feature import SupportedFeatureNames, get_supported_feature_by_name, \
     get_agent_supported_features_list_for_crp
 from azurelinuxagent.common.exception import ResourceGoneError, ProtocolError, \
     ExtensionDownloadError, HttpError
@@ -384,7 +384,7 @@ class TestWireProtocol(AgentTestCase):
                 exthandlers_handler.run()
                 self.assertIsNotNone(protocol.aggregate_status, "Aggregate status should not be None")
                 self.assertIn("supportedFeatures", protocol.aggregate_status, "supported features not reported")
-                multi_config_feature = get_supported_feature_by_name(CRPSupportedFeatureNames.MultiConfig)
+                multi_config_feature = get_supported_feature_by_name(SupportedFeatureNames.MultiConfig)
                 found = False
                 for feature in protocol.aggregate_status['supportedFeatures']:
                     if feature['Key'] == multi_config_feature.name and feature['Value'] == multi_config_feature.version:
@@ -405,7 +405,7 @@ class TestWireProtocol(AgentTestCase):
                     return
 
                 # If there are other features available, confirm MultiConfig was not reported
-                multi_config_feature = get_supported_feature_by_name(CRPSupportedFeatureNames.MultiConfig)
+                multi_config_feature = get_supported_feature_by_name(SupportedFeatureNames.MultiConfig)
                 found = False
                 for feature in protocol.aggregate_status['supportedFeatures']:
                     if feature['Key'] == multi_config_feature.name and feature['Value'] == multi_config_feature.version:
