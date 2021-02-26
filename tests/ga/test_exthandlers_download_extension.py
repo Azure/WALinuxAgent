@@ -13,7 +13,7 @@ from azurelinuxagent.ga.exthandlers import ExtHandlerInstance, NUMBER_OF_DOWNLOA
 from tests.tools import AgentTestCase, patch, mock_sleep
 
 
-class DownloadExtensionTestCase(AgentTestCase):  # pylint: disable=too-many-instance-attributes
+class DownloadExtensionTestCase(AgentTestCase):
     """
     Test cases for launch_command
     """

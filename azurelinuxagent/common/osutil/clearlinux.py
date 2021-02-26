@@ -42,6 +42,14 @@ class ClearLinuxUtil(DefaultOSUtil):
         self.agent_conf_file_path = '/usr/share/defaults/waagent/waagent.conf'
         self.jit_enabled = True
 
+    @staticmethod
+    def get_systemd_unit_file_install_path():
+        return "/usr/lib/systemd/system"
+
+    @staticmethod
+    def get_agent_bin_path():
+        return "/usr/bin"
+
     def is_dhcp_enabled(self):
         return True
 
@@ -91,6 +99,6 @@ class ClearLinuxUtil(DefaultOSUtil):
                 new_passwd = [x for x in passwd if not x.startswith("root:")]
                 new_passwd.insert(0, "root:*LOCK*:14600::::::")
             fileutil.write_file(passwd_file_path, "\n".join(new_passwd))
-        except IOError as e:  # pylint: disable=C0103
+        except IOError as e:
             raise OSUtilError("Failed to delete root password:{0}".format(e))
         pass  # pylint: disable=W0107

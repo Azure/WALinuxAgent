@@ -19,6 +19,7 @@
 import json
 import os
 import re
+import time
 from collections import defaultdict
 
 import azurelinuxagent.common.conf as conf
@@ -26,11 +27,12 @@ import azurelinuxagent.common.logger as logger
 from azurelinuxagent.common.AgentGlobals import AgentGlobals
 from azurelinuxagent.common.datacontract import set_properties
 from azurelinuxagent.common.event import add_event, WALAEventOperation
+from azurelinuxagent.common.exception import IncompleteGoalStateError
 from azurelinuxagent.common.exception import ProtocolError, ExtensionConfigError
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.protocol.restapi import Cert, CertList, Extension, ExtHandler, ExtHandlerList, \
-    ExtHandlerVersionUri, RemoteAccessUser, RemoteAccessUsersList, \
-    VMAgentManifest, VMAgentManifestList, VMAgentManifestUri, InVMGoalStateMetaData, RequiredFeature
+    ExtHandlerVersionUri, RemoteAccessUser, RemoteAccessUsersList, VMAgentManifest, VMAgentManifestList, \
+    VMAgentManifestUri, InVMGoalStateMetaData, RequiredFeature
 from azurelinuxagent.common.utils import fileutil
 from azurelinuxagent.common.utils.cryptutil import CryptUtil
 from azurelinuxagent.common.utils.textutil import parse_doc, findall, find, findtext, getattrib, gettext
@@ -43,11 +45,11 @@ PEM_FILE_NAME = "Certificates.pem"
 TRANSPORT_CERT_FILE_NAME = "TransportCert.pem"
 TRANSPORT_PRV_FILE_NAME = "TransportPrivate.pem"
 
+_NUM_GS_FETCH_RETRIES = 6
 
-# too-many-instance-attributes<R0902> Disabled: The goal state consists of a good number of properties
-class GoalState(object):  # pylint: disable=R0902
-    # too-many-branches<R0912> Disable: Branches are sequential, not nested
-    def __init__(self, wire_client, full_goal_state=False, base_incarnation=None):  # pylint: disable=R0912
+
+class GoalState(object):
+    def __init__(self, wire_client, full_goal_state=False, base_incarnation=None):
         """
         Fetches the goal state using the given wire client.
 
@@ -61,14 +63,22 @@ class GoalState(object):  # pylint: disable=R0902
         directly.
 
         """
-        try:
-            uri = GOAL_STATE_URI.format(wire_client.get_endpoint())
+        uri = GOAL_STATE_URI.format(wire_client.get_endpoint())
+
+        for _ in range(0, _NUM_GS_FETCH_RETRIES):
             self.xml_text = wire_client.fetch_config(uri, wire_client.get_header())
             xml_doc = parse_doc(self.xml_text)
-
             self.incarnation = findtext(xml_doc, "Incarnation")
-            self.expected_state = findtext(xml_doc, "ExpectedState")
+
             role_instance = find(xml_doc, "RoleInstance")
+            if role_instance:
+                break
+            time.sleep(0.5)
+        else:
+            raise IncompleteGoalStateError("Fetched goal state without a RoleInstance [incarnation {inc}]".format(inc=self.incarnation))
+
+        try:
+            self.expected_state = findtext(xml_doc, "ExpectedState")
             self.role_instance_id = findtext(role_instance, "InstanceId")
             role_config = find(role_instance, "Configuration")
             self.role_config_name = findtext(role_config, "ConfigName")
@@ -79,15 +89,11 @@ class GoalState(object):  # pylint: disable=R0902
 
             AgentGlobals.update_container_id(self.container_id)
 
-            fetch_full_goal_state = False
             if full_goal_state:
-                fetch_full_goal_state = True
                 reason = 'force update'
-            elif base_incarnation is not None and self.incarnation != base_incarnation:
-                fetch_full_goal_state = True
+            elif base_incarnation not in (None, self.incarnation):
                 reason = 'new incarnation'
-
-            if not fetch_full_goal_state:
+            else:
                 self.hosting_env = None
                 self.shared_conf = None
                 self.certs = None
@@ -176,7 +182,7 @@ class SharedConfig(object):
 
 
 class Certificates(object):
-    def __init__(self, xml_text):  # pylint: disable=R0912
+    def __init__(self, xml_text):
         self.cert_list = CertList()
 
         # Save the certificates
@@ -190,7 +196,7 @@ class Certificates(object):
             return
 
         # if the certificates format is not Pkcs7BlobWithPfxContents do not parse it
-        certificateFormat = findtext(xml_doc, "Format")  # pylint: disable=C0103
+        certificateFormat = findtext(xml_doc, "Format")
         if certificateFormat and certificateFormat != "Pkcs7BlobWithPfxContents":
             logger.warn("The Format is not Pkcs7BlobWithPfxContents. Format is " + certificateFormat)
             return
@@ -332,6 +338,16 @@ class ExtensionsConfig(object):
             feature_name = find(required_feature, "Name")
             feature_value = find(required_feature, "Value")
             self.required_features.append(RequiredFeature(name=feature_name, value=feature_value))
+
+    def get_redacted_xml_text(self):
+        if self.xml_text is None:
+            return "<None/>"
+        xml_text = self.xml_text
+        for ext_handler in self.ext_handlers.extHandlers:
+            for extension in ext_handler.properties.extensions:
+                if extension.protectedSettings is not None:
+                    xml_text = xml_text.replace(extension.protectedSettings, "*** REDACTED ***")
+        return xml_text
 
     def __parse_plugins_and_settings_and_populate_ext_handlers(self, xml_doc):
         """
@@ -674,7 +690,7 @@ class RemoteAccess(object):
         self.incarnation = None
         self.user_list = RemoteAccessUsersList()
 
-        if self.xml_text is None or len(self.xml_text) == 0:  # pylint: disable=len-as-condition
+        if self.xml_text is None or len(self.xml_text) == 0:
             return
 
         xml_doc = parse_doc(self.xml_text)

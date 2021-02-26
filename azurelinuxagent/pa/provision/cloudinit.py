@@ -62,7 +62,7 @@ class CloudInitProvisionHandler(ProvisionHandler):
                 is_success=True,
                 duration=elapsed_milliseconds(utc_start))
 
-        except ProvisionError as e:  # pylint: disable=C0103
+        except ProvisionError as e:
             msg = "Provisioning with cloud-init failed: {0} ({1}s)".format(ustr(e), self._get_uptime_seconds())
             logger.error(msg)
             self.report_not_ready("ProvisioningFailed", ustr(e))
@@ -82,7 +82,7 @@ class CloudInitProvisionHandler(ProvisionHandler):
                     ovf_env = OvfEnv(fileutil.read_file(ovf_file_path))
                     self.handle_provision_guest_agent(ovf_env.provision_guest_agent)
                     return
-                except ProtocolError as pe:  # pylint: disable=C0103
+                except ProtocolError as pe:
                     raise ProvisionError("OVF xml could not be parsed "
                                          "[{0}]: {1}".format(ovf_file_path,
                                                              ustr(pe)))

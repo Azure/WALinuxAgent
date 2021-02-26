@@ -22,8 +22,8 @@ from azurelinuxagent.common.datacontract import get_properties, set_properties, 
 
 class SampleDataContract(DataContract):
     def __init__(self):
-        self.foo = None  # pylint: disable=blacklisted-name
-        self.bar = DataContractList(int)  # pylint: disable=blacklisted-name
+        self.foo = None
+        self.bar = DataContractList(int)
 
 
 class TestDataContract(unittest.TestCase):

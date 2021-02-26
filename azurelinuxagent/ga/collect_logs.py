@@ -25,16 +25,15 @@ import time
 
 import azurelinuxagent.common.conf as conf
 from azurelinuxagent.common import logger
-from azurelinuxagent.common.cgroupapi import CGroupsApi
 from azurelinuxagent.common.event import elapsed_milliseconds, add_event, WALAEventOperation
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.interfaces import ThreadHandlerInterface
 from azurelinuxagent.common.logcollector import COMPRESSED_ARCHIVE_PATH
+from azurelinuxagent.common.osutil import systemd
 from azurelinuxagent.common.protocol.util import get_protocol_util
 from azurelinuxagent.common.utils import shellutil
 from azurelinuxagent.common.utils.shellutil import CommandError
 from azurelinuxagent.common.version import PY_VERSION_MAJOR, PY_VERSION_MINOR, AGENT_NAME, CURRENT_VERSION
-from azurelinuxagent.ga.periodic_operation import PeriodicOperation
 
 
 def get_collect_logs_handler():
@@ -47,7 +46,7 @@ def is_log_collection_allowed():
     # 2) The system must be using systemd to manage services. Needed for resource limiting of the log collection.
     # 3) The python version must be greater than 2.6 in order to support the ZipFile library used when collecting.
     conf_enabled = conf.get_collect_logs()
-    systemd_present = CGroupsApi.is_systemd()
+    systemd_present = systemd.is_systemd()
     supported_python = PY_VERSION_MINOR >= 7 if PY_VERSION_MAJOR == 2 else PY_VERSION_MAJOR == 3
     is_allowed = conf_enabled and systemd_present and supported_python
 
@@ -85,10 +84,7 @@ class CollectLogsHandler(ThreadHandlerInterface):
         self.event_thread = None
         self.should_run = True
         self.last_state = None
-
-        self._periodic_operations = [
-            PeriodicOperation("collect_and_send_logs", self.collect_and_send_logs, conf.get_collect_logs_period())
-        ]
+        self.period = conf.get_collect_logs_period()
 
     def run(self):
         self.start()
@@ -127,14 +123,13 @@ class CollectLogsHandler(ThreadHandlerInterface):
 
             while not self.stopped():
                 try:
-                    for op in self._periodic_operations:  # pylint: disable=C0103
-                        op.run()
-                except Exception as e:  # pylint: disable=C0103
+                    self.collect_and_send_logs()
+                except Exception as e:
                     logger.error("An error occurred in the log collection thread main loop; "
                                  "will skip the current iteration.\n{0}", ustr(e))
                 finally:
-                    PeriodicOperation.sleep_until_next_operation(self._periodic_operations)
-        except Exception as e:  # pylint: disable=C0103
+                    time.sleep(self.period)
+        except Exception as e:
             logger.error("An error occurred in the log collection thread; will exit the thread.\n{0}", ustr(e))
 
     def collect_and_send_logs(self):
@@ -181,7 +176,7 @@ class CollectLogsHandler(ThreadHandlerInterface):
             success = True
 
             return True
-        except Exception as e:  # pylint: disable=C0103
+        except Exception as e:
             duration = elapsed_milliseconds(start_time)
 
             if isinstance(e, CommandError):
@@ -206,14 +201,14 @@ class CollectLogsHandler(ThreadHandlerInterface):
         msg = None
         success = False
         try:
-            with open(COMPRESSED_ARCHIVE_PATH, "rb") as fh:  # pylint: disable=C0103
+            with open(COMPRESSED_ARCHIVE_PATH, "rb") as fh:
                 archive_content = fh.read()
                 self.protocol.upload_logs(archive_content)
                 msg = "Successfully uploaded logs."
                 logger.info(msg)
 
             success = True
-        except Exception as e:  # pylint: disable=C0103
+        except Exception as e:
             msg = "Failed to upload logs. Error: {0}".format(ustr(e))
             logger.warn(msg)
         finally:

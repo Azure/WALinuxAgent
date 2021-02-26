@@ -33,7 +33,7 @@ class TestDeprovision(AgentTestCase):
     @patch('azurelinuxagent.pa.deprovision.default.read_input')
     def test_confirmation(self,
             mock_read, mock_protocol, mock_util, mock_signal):  # pylint: disable=unused-argument
-        dh = DeprovisionHandler()  # pylint: disable=invalid-name
+        dh = DeprovisionHandler()
 
         dh.setup = Mock()
         dh.setup.return_value = ([], [])
@@ -88,9 +88,9 @@ class TestDeprovision(AgentTestCase):
 
         tmp = tempfile.mkdtemp()
         mock_conf.return_value = tmp
-        for d in dirs:  # pylint: disable=invalid-name
+        for d in dirs:
             fileutil.mkdir(os.path.join(tmp, d))
-        for f in files:  # pylint: disable=invalid-name
+        for f in files:
             fileutil.write_file(os.path.join(tmp, f), "Value")
 
         deprovision_handler = get_deprovision_handler(distro_name,
@@ -107,9 +107,9 @@ class TestDeprovision(AgentTestCase):
         self.assertEqual(fileutil.rm_files, actions[1].func)
         self.assertEqual(11, len(actions[0].args))
         self.assertEqual(3, len(actions[1].args))
-        for f in actions[0].args:  # pylint: disable=invalid-name
+        for f in actions[0].args:
             self.assertTrue(os.path.basename(f) in files)
-        for f in actions[1].args:  # pylint: disable=invalid-name
+        for f in actions[1].args:
             self.assertTrue(f[len(tmp)+1:] in files)
 
     @distros("redhat")

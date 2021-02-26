@@ -51,7 +51,7 @@ class CryptUtil(object):
             logger.error(msg)
 
     def get_pubkey_from_prv(self, file_name):
-        if not os.path.exists(file_name):  # pylint: disable=R1720
+        if not os.path.exists(file_name):
             raise IOError(errno.ENOENT, "File not found", file_name)
         else:
             cmd = [self.openssl_cmd, "rsa", "-in", file_name, "-pubout"]
@@ -59,7 +59,7 @@ class CryptUtil(object):
             return pub
 
     def get_pubkey_from_crt(self, file_name):
-        if not os.path.exists(file_name):  # pylint: disable=R1720
+        if not os.path.exists(file_name):
             raise IOError(errno.ENOENT, "File not found", file_name)
         else:
             cmd = [self.openssl_cmd, "x509", "-in", file_name, "-pubkey", "-noout"]
@@ -67,7 +67,7 @@ class CryptUtil(object):
             return pub
 
     def get_thumbprint_from_crt(self, file_name):
-        if not os.path.exists(file_name):  # pylint: disable=R1720
+        if not os.path.exists(file_name):
             raise IOError(errno.ENOENT, "File not found", file_name)
         else:
             cmd = [self.openssl_cmd, "x509", "-in", file_name, "-fingerprint", "-noout"]
@@ -76,7 +76,7 @@ class CryptUtil(object):
             return thumbprint
 
     def decrypt_p7m(self, p7m_file, trans_prv_file, trans_cert_file, pem_file):
-        if not os.path.exists(p7m_file):  # pylint: disable=R1720
+        if not os.path.exists(p7m_file):
             raise IOError(errno.ENOENT, "File not found", p7m_file)
         elif not os.path.exists(trans_prv_file):
             raise IOError(errno.ENOENT, "File not found", trans_prv_file)
@@ -108,8 +108,8 @@ class CryptUtil(object):
             der_encoded = base64.b64decode(base64_encoded)
             der_encoded = der_decoder.decode(der_encoded)[0][1]  # pylint: disable=unsubscriptable-object
             key = der_decoder.decode(self.bits_to_bytes(der_encoded))[0]
-            n=key[0]  # pylint: disable=C0103,unsubscriptable-object
-            e=key[1]  # pylint: disable=C0103,unsubscriptable-object
+            n=key[0]  # pylint: disable=unsubscriptable-object
+            e=key[1]  # pylint: disable=unsubscriptable-object
             keydata = bytearray()
             keydata.extend(struct.pack('>I', len("ssh-rsa")))
             keydata.extend(b"ssh-rsa")
@@ -121,7 +121,7 @@ class CryptUtil(object):
             keydata_base64 = base64.b64encode(bytebuffer(keydata))
             return ustr(b"ssh-rsa " +  keydata_base64 + b"\n",
                         encoding='utf-8')
-        except ImportError as e:  # pylint: disable=C0103
+        except ImportError as e:
             raise CryptError("Failed to load pyasn1.codec.der")
 
     def num_to_bytes(self, num):
@@ -159,5 +159,5 @@ class CryptUtil(object):
             return output.decode('utf-16')
         except shellutil.CommandError as command_error:
             raise subprocess.CalledProcessError(command_error.returncode, "openssl cms -decrypt", output=command_error.stdout)
-        except Exception as e:  # pylint: disable=C0103
+        except Exception as e:
             raise CryptError("Error decoding secret", e)

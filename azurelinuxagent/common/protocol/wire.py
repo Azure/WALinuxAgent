@@ -1,4 +1,4 @@
-# Microsoft Azure Linux Agent  # pylint: disable=C0302
+# Microsoft Azure Linux Agent
 #
 # Copyright 2018 Microsoft Corporation
 #
@@ -221,7 +221,7 @@ def _build_role_properties(container_id, role_instance_id, thumbprint):
     return xml
 
 
-def _build_health_report(incarnation, container_id, role_instance_id,  # pylint: disable=R0913
+def _build_health_report(incarnation, container_id, role_instance_id,
                          status, substatus, description):
     # The max description that can be sent to WireServer is 4096 bytes.
     # Exceeding this max can result in a failure to report health.
@@ -339,7 +339,7 @@ def ext_status_to_v1(ext_name, ext_status):
         "version": 1.0,
         "timestampUTC": timestamp
     }
-    if len(v1_sub_status) != 0:  # pylint: disable=len-as-condition
+    if len(v1_sub_status) != 0:
         v1_ext_status['status']['substatus'] = v1_sub_status
     return v1_ext_status
 
@@ -355,7 +355,7 @@ def ext_handler_status_to_v1(handler_status, ext_statuses):
     if handler_status.message is not None:
         v1_handler_status["formattedMessage"] = __get_formatted_msg_for_status_reporting(handler_status.message)
 
-    if len(handler_status.extensions) > 0:  # pylint: disable=len-as-condition
+    if len(handler_status.extensions) > 0:
         # Currently, no more than one extension per handler
         ext_name = handler_status.extensions[0]
         ext_status = ext_statuses.get(ext_name)
@@ -463,7 +463,7 @@ class StatusBlob(object):
                 self.put_page_blob(url, self.data)
             return True
 
-        except Exception as e:  # pylint: disable=C0103
+        except Exception as e:
             logger.verbose("Initial status upload failed: {0}", e)
 
         return False
@@ -571,7 +571,7 @@ def event_to_v1(event):
     return event_str
 
 
-class WireClient(object):  # pylint: disable=R0904
+class WireClient(object):
 
     def __init__(self, endpoint):
         logger.info("Wire server endpoint:{0}", endpoint)
@@ -601,7 +601,7 @@ class WireClient(object):  # pylint: disable=R0904
         except ResourceGoneError:
             raise
 
-        except Exception as e:  # pylint: disable=C0103
+        except Exception as e:
             raise ProtocolError("[Wireserver Exception] {0}".format(
                 ustr(e)))
 
@@ -625,20 +625,22 @@ class WireClient(object):  # pylint: disable=R0904
             raise ProtocolError("{0} is missing.".format(local_file))
         try:
             return fileutil.read_file(local_file)
-        except IOError as e:  # pylint: disable=C0103
+        except IOError as e:
             raise ProtocolError("Failed to read cache: {0}".format(e))
 
-    def save_cache(self, local_file, data):
+    @staticmethod
+    def _save_cache(data, file_name):
         try:
-            fileutil.write_file(local_file, data)
-        except IOError as e:  # pylint: disable=C0103
-            fileutil.clean_ioerror(e, paths=[local_file])
+            file_path = os.path.join(conf.get_lib_dir(), file_name)
+            fileutil.write_file(file_path, data)
+        except IOError as e:
+            fileutil.clean_ioerror(e, paths=[file_name])
             raise ProtocolError("Failed to write cache: {0}".format(e))
 
     @staticmethod
     def call_storage_service(http_req, *args, **kwargs):
         # Default to use the configured HTTP proxy
-        if not 'use_proxy' in kwargs or kwargs['use_proxy'] is None:  # pylint: disable=C0113
+        if not 'use_proxy' in kwargs or kwargs['use_proxy'] is None:
             kwargs['use_proxy'] = True
 
         return http_req(*args, **kwargs)
@@ -717,7 +719,7 @@ class WireClient(object):  # pylint: disable=R0904
 
             host_plugin = self.get_host_plugin()
 
-            if restutil.request_failed(resp):  # pylint: disable=R1720
+            if restutil.request_failed(resp):
                 error_response = restutil.read_response_error(resp)
                 msg = "Fetch failed from [{0}]: {1}".format(uri, error_response)
                 logger.warn(msg)
@@ -777,7 +779,7 @@ class WireClient(object):  # pylint: disable=R0904
                 message = u"Retrieving the goal state recovered from previous errors"
                 add_event(AGENT_NAME, op=WALAEventOperation.FetchGoalState, version=CURRENT_VERSION, is_success=True, message=message, log_event=False)
                 logger.info(message)
-        except Exception as e:  # pylint: disable=C0103
+        except Exception as e:
             if not self._last_try_update_goal_state_failed:
                 self._last_try_update_goal_state_failed = True
                 message = u"An error occurred while retrieving the goal state: {0}".format(ustr(e))
@@ -797,27 +799,24 @@ class WireClient(object):  # pylint: disable=R0904
     def _save_goal_state(self):
         try:
             self.goal_state_flusher.flush()
-        except Exception as e:  # pylint: disable=C0103
+        except Exception as e:
             logger.warn("Failed to save the previous goal state to the history folder: {0}", ustr(e))
 
         try:
-            local_file = os.path.join(conf.get_lib_dir(), INCARNATION_FILE_NAME)
-            self.save_cache(local_file, self._goal_state.incarnation)
-
             def save_if_not_none(goal_state_property, file_name):
-                file_path = os.path.join(conf.get_lib_dir(), file_name)
-
                 if goal_state_property is not None and goal_state_property.xml_text is not None:
-                    self.save_cache(file_path, goal_state_property.xml_text)
+                    self._save_cache(goal_state_property.xml_text, file_name)
 
             # NOTE: Certificates are saved in Certificate.__init__
+            self._save_cache(self._goal_state.incarnation, INCARNATION_FILE_NAME)
             save_if_not_none(self._goal_state, GOAL_STATE_FILE_NAME.format(self._goal_state.incarnation))
             save_if_not_none(self._goal_state.hosting_env, HOSTING_ENV_FILE_NAME)
             save_if_not_none(self._goal_state.shared_conf, SHARED_CONF_FILE_NAME)
-            save_if_not_none(self._goal_state.ext_conf, EXT_CONF_FILE_NAME.format(self._goal_state.incarnation))
             save_if_not_none(self._goal_state.remote_access, REMOTE_ACCESS_FILE_NAME.format(self._goal_state.incarnation))
+            if self._goal_state.ext_conf is not None and self._goal_state.ext_conf.xml_text is not None:
+                self._save_cache(self._goal_state.ext_conf.get_redacted_xml_text(), EXT_CONF_FILE_NAME.format(self._goal_state.incarnation))
 
-        except Exception as e:  # pylint: disable=C0103
+        except Exception as e:
             logger.warn("Failed to save the goal state to disk: {0}", ustr(e))
 
     def _set_host_plugin(self, new_host_plugin):
@@ -854,14 +853,11 @@ class WireClient(object):  # pylint: disable=R0904
         if self._goal_state is None:
             raise ProtocolError("Trying to fetch Extension Manifest before initialization!")
 
-        local_file = MANIFEST_FILE_NAME.format(ext_handler.name, self.get_goal_state().incarnation)
-        local_file = os.path.join(conf.get_lib_dir(), local_file)
-
         try:
             xml_text = self.fetch_manifest(ext_handler.versionUris)
-            self.save_cache(local_file, xml_text)
+            self._save_cache(xml_text, MANIFEST_FILE_NAME.format(ext_handler.name, self.get_goal_state().incarnation))
             return ExtensionManifest(xml_text)
-        except Exception as e:  # pylint: disable=C0103
+        except Exception as e:
             raise ExtensionDownloadError("Failed to retrieve extension manifest. Error: {0}".format(ustr(e)))
 
     def get_remote_access(self):
@@ -877,7 +873,7 @@ class WireClient(object):  # pylint: disable=R0904
             xml_text = self.fetch_manifest(vmagent_manifest.versionsManifestUris)
             fileutil.write_file(local_file, xml_text)
             return ExtensionManifest(xml_text)
-        except Exception as e:  # pylint: disable=C0103
+        except Exception as e:
             raise ProtocolError("Failed to retrieve GAFamily manifest. Error: {0}".format(ustr(e)))
 
     def check_wire_protocol_version(self):
@@ -1039,7 +1035,7 @@ class WireClient(object):  # pylint: disable=R0904
 
         try:
             self.status_blob.prepare(blob_type)
-        except Exception as e:  # pylint: disable=C0103
+        except Exception as e:
             raise ProtocolError("Exception creating status blob: {0}", ustr(e))  # pylint: disable=W0715
 
         # Swap the order of use for the HostPlugin vs. the "direct" route.
@@ -1059,7 +1055,7 @@ class WireClient(object):  # pylint: disable=R0904
             # refresh the host plugin client and try again on the next iteration of the main loop
             self.update_host_plugin_from_goal_state()
             return
-        except Exception as e:  # pylint: disable=C0103
+        except Exception as e:
             # for all other errors, fall back to direct
             msg = "Falling back to direct upload: {0}".format(ustr(e))
             self.report_status_event(msg, is_success=True)
@@ -1067,7 +1063,7 @@ class WireClient(object):  # pylint: disable=R0904
         try:
             if self.status_blob.upload(ext_conf.status_upload_blob):
                 return
-        except Exception as e:  # pylint: disable=C0103
+        except Exception as e:
             msg = "Exception uploading status blob: {0}".format(ustr(e))
             self.report_status_event(msg, is_success=False)
 
@@ -1086,7 +1082,7 @@ class WireClient(object):  # pylint: disable=R0904
                                         role_prop_uri,
                                         role_prop,
                                         headers=headers)
-        except HttpError as e:  # pylint: disable=C0103
+        except HttpError as e:
             raise ProtocolError((u"Failed to send role properties: "
                                  u"{0}").format(e))
         if resp.status != httpclient.ACCEPTED:
@@ -1115,7 +1111,7 @@ class WireClient(object):  # pylint: disable=R0904
                                         headers=headers,
                                         max_retry=30,
                                         retry_delay=15)
-        except HttpError as e:  # pylint: disable=C0103
+        except HttpError as e:
             raise ProtocolError((u"Failed to send provision status: "
                                  u"{0}").format(e))
         if restutil.request_failed(resp):
@@ -1136,7 +1132,7 @@ class WireClient(object):  # pylint: disable=R0904
             # NOTE: The call to wireserver requests utf-8 encoding in the headers, but the body should not
             #       be encoded: some nodes in the telemetry pipeline do not support utf-8 encoding.
             resp = self.call_wireserver(restutil.http_post, uri, data, header)
-        except HttpError as e:  # pylint: disable=C0103
+        except HttpError as e:
             raise ProtocolError("Failed to send events:{0}".format(e))
 
         if restutil.request_failed(resp):

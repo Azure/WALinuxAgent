@@ -66,7 +66,7 @@ class Redhat6xOSUtil(DefaultOSUtil):
         try:
             cryptutil = CryptUtil(conf.get_openssl_cmd())
             ssh_rsa_pubkey = cryptutil.asn1_to_ssh(pubkey)
-        except CryptError as e:  # pylint: disable=C0103
+        except CryptError as e:
             raise OSUtilError(ustr(e))
         fileutil.append_file(output_file, ssh_rsa_pubkey)
 
@@ -98,6 +98,10 @@ class RedhatOSUtil(Redhat6xOSUtil):
     def __init__(self):
         super(RedhatOSUtil, self).__init__()
         self.service_name = self.get_service_name()
+
+    @staticmethod
+    def get_systemd_unit_file_install_path():
+        return "/usr/lib/systemd/system"
 
     def set_hostname(self, hostname):
         """

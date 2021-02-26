@@ -25,27 +25,27 @@
     <PluginSettings>
         <Plugin name="OSTCExtensions.ExampleHandlerLinux" version="1.0.0">
             <RuntimeSettings seqNo="0">
-                {"runtimeSettings":[{"handlerSettings":{"protectedSettingsCertThumbprint":"4037FBF5F1F3014F99B5D6C7799E9B20E6871CB3","protectedSettings":"MIICWgYJK","publicSettings":{"foo":"bar"}}}]}
+                {"runtimeSettings":[{"handlerSettings":{"protectedSettingsCertThumbprint":"4037FBF5F1F3014F99B5D6C7799E9B20E6871CB3","protectedSettings":"MIIB4AYJKoZIhvcNAQcDoIIB0TCCAc0CAQAxggFpMIIBZQIBADBNMDkxNzA1BgoJkiaJk/IsZAEZFidXaW5kb3dzIEF6dXJlIENSUCBDZXJ0aWZpY2F0ZSBHZW5lcmF0b3ICEH3vWjYIrceWQigVQwoS8z0wDQYJKoZIhvcNAQEBBQAEggEANYey5W0qDqC6RHZlVnpLp2dWrMr1Rt5TCFkOjq1jU4y2y1FPtsTTKq9Z5pdGb/IHQo9VcT+OFglO3bChMbqc1vgmk4wkTQkgJVD3C8Rq4nv3uvQIux+g8zsa1MPKT5fTwG/dcrBp9xqySJLexUiuJljmNJgorGc0KtLwjnad4HTSKudDSo5DGskSDLxxLZYx0VVtQvgekOOwT/0C0pN4+JS/766jdUAnHR3oOuD5Dx7/c6EhFSoiYXMA0bUzH7VZeF8j/rkP1xscLQRrCScCNV2Ox424Y4RBbcbP/p69lDxGURcIKLKrIUhQdC8CfUMkQUEmFDLcOtxutCTFBZYMJzBbBgkqhkiG9w0BBwEwFAYIKoZIhvcNAwcECCuc0a4Gl8PAgDgcHekee/CivSTCXntJiCrltUDob8cX4YtIS6lq3H08Ar+2tKkpg5e3bOkdAo3q2GfIrGDm4MtVWw==","publicSettings":{"foo":"bar"}}}]}
             </RuntimeSettings>
         </Plugin>
         <Plugin name="Microsoft.Powershell.ExampleExtension" version="1.0.0">
             <RuntimeSettings seqNo="0">
-                {"runtimeSettings":[{"handlerSettings":{"protectedSettingsCertThumbprint":"4037FBF5F1F3014F99B5D6C7799E9B20E6871CB3","protectedSettings":"MIICWgYJK","publicSettings":{"foo":"bar"}}}]}
+                {"runtimeSettings":[{"handlerSettings":{"protectedSettingsCertThumbprint":"4037FBF5F1F3014F99B5D6C7799E9B20E6871CB3","protectedSettings":"MIIBwAYJKoZIhvcNAQcDoIIBsTCCAa0CAQAxggFpMIIBZQIBADBNMDkxNzA1BgoJkiaJk/IsZAEZFidXaW5kb3dzIEF6dXJlIENSUCBDZXJ0aWZpY2F0ZSBHZW5lcmF0b3ICEH3vWjYIrceWQigVQwoS8z0wDQYJKoZIhvcNAQEBBQAEggEABILhQPoMx3NEbd/sS0xAAE4rJXwzJSE0bWr4OaKpcGS4ePtaNW8XWm+psYR9CBlXuGCuDVlFEdPmO2Ai8NX8TvT7RVYYc6yVQKpNQqO6Q9g9O52XXX4tBSFSCfoTzd1kbGC1c2wbXDyeROGCjraWuGHd4C9s9gytpgAlYicZjOqV3deo30F4vXZ+ZhCNpMkOvSXcsNpzTzQ/mskwNubN8MPkg/jEAzTHRpiJl3tjGtTqm00GHMqFF8/31jnoLQeQnWSmY+FBpiTUhPzyjufIcoZ+ueGXZiJ77xyH2Rghh5wvQM8oTVy2dwFQGeqjHOVgdgRNi/HgfZhcdltaQ8kjYDA7BgkqhkiG9w0BBwEwFAYIKoZIhvcNAwcECHPM0ZKBn+aWgBiVPT7zlkJA8eGuH7bNMTQCtGoJezToa24=","publicSettings":{"foo":"bar"}}}]}
             </RuntimeSettings>
         </Plugin>
         <Plugin name="Microsoft.EnterpriseCloud.Monitoring.ExampleHandlerLinux" version="1.0.0">
             <RuntimeSettings seqNo="0">
-                {"runtimeSettings":[{"handlerSettings":{"protectedSettingsCertThumbprint":"4037FBF5F1F3014F99B5D6C7799E9B20E6871CB3","protectedSettings":"MIICWgYJK","publicSettings":{"foo":"bar"}}}]}
+                {"runtimeSettings":[{"handlerSettings":{"protectedSettingsCertThumbprint":"4037FBF5F1F3014F99B5D6C7799E9B20E6871CB3","protectedSettings":"MIIB4AYJKoZIhvcNAQcDoIIB0TCCAc0CAQAxggFpMIIBZQIBADBNMDkxNzA1BgoJkiaJk/IsZAEZFidXaW5kb3dzIEF6dXJlIENSUCBDZXJ0aWZpY2F0ZSBHZW5lcmF0b3ICEH3vWjYIrceWQigVQwoS8z0wDQYJKoZIhvcNAQEBBQAEggEAGSKUDRN64DIB7FS7yKXa07OXaFPhmdNnNDOAOD3/WVFb9fQ2bztV46waq7iRO+lpz7LSerRzIe6Kod9zCfK7ryukRomVHIfTIBwPjQ+Otn8ZD2aVcrxR0EI95x/SGyiESJRQnOMbpoVSWSu2KJUCPfycQ4ODbaazDc61k0JCmmRy12rQ4ttyWKhYwpwI2OYFHGr39N/YYq6H8skHj5ve1605i4P9XpfEyIwF5BbX59tDOAFFQtX7jzQcz//LtaHHjwLmysmD9OG5XyvfbBICwSYJfMX9Jh1aahLwcjL8Bd0vYyGL1ItMQF5KfDwog4+HLcRGx+S02Yngm3/YKS9DmzBbBgkqhkiG9w0BBwEwFAYIKoZIhvcNAwcECFGLNfK0bO5OgDgH90bRzqfgKK6EEh52XJfHz9G/ZL1mqP/ueWqo95PtEFo1gvI7z25V/pT0tBGibXgRhQXLFmwVTA==","publicSettings":{"foo":"bar"}}}]}
             </RuntimeSettings>
         </Plugin>
         <Plugin name="Microsoft.CPlat.Core.ExampleExtensionLinux" version="1.0.0">
             <RuntimeSettings seqNo="0">
-                {"runtimeSettings":[{"handlerSettings":{"protectedSettingsCertThumbprint":"4037FBF5F1F3014F99B5D6C7799E9B20E6871CB3","protectedSettings":"MIICWgYJK","publicSettings":{"foo":"bar"}}}]}
+                {"runtimeSettings":[{"handlerSettings":{"protectedSettingsCertThumbprint":"4037FBF5F1F3014F99B5D6C7799E9B20E6871CB3","protectedSettings":"MIIEzAYJKoZIhvcNAQcDoIIEvTCCBLkCAQAxggFpMIIBZQIBADBNMDkxNzA1BgoJkiaJk/IsZAEZFidXaW5kb3dzIEF6dXJlIENSUCBDZXJ0aWZpY2F0ZSBHZW5lcmF0b3ICEH3vWjYIrceWQigVQwoS8z0wDQYJKoZIhvcNAQEBBQAEggEAFqLDBFGeuglluYmZb0Zw+ZlMiMIws9/LgmurVSRUTU/nSleIc9vOLcukfMeCpMativzHe23iDFy6p3XDkViNcuzqbhlPq5LQsXXg+xaUrrg8Xy+q7KUQdxzPdNBdpgkUh6yE2EFbqVLQ/7x+TkkSsw35uPT0nEqSj3yYFGH7X/NJ49fKU+ZvFDp/N+o54UbE6ZdxlHFtz6NJFxx5w4z5adQ8DgnUyS0bJ2denolknODfSW2D2alm00SXlI88CAjeHgEDkoLCduwkrDkSFAODcAiEHHX8oYCnfanatpjm7ZgSutS9y7+XUnGWxDYoujHDI9bbV0WpyDcx/DIrlZ+WcTCCA0UGCSqGSIb3DQEHATAUBggqhkiG9w0DBwQIrL18Lbp1qU6AggMgGklvozqr8HqYP+DwkvxdwHSpo+23QFxh70os+NJRtVgBv5NjPEziXo3FpXHMPvt0kp0IwXbwyy5vwnjCTA2sQOYgj77X6RmwF6+1gt2DIHDN1Q6jWzdcXZVHykSiF3gshbebRKO0hydfCaCyYL36HOZ8ugyCctOon5EflrnoOYDDHRbsr30DAxZCAwGOGZEeoU2+U+YdhuMvplnMryD1f6b8FQ7jXihe/zczAibX5/22NxhsVgALdsV5h6hwuTbspDt3V15/VU8ak7a4xxdBfXOX0HcQI86oqsFr7S7zIveoQHsW+wzlyMjwi6DRPFpz2wFkv5ivgFEvtCzDQP4aCqGI8VdqzR7aUDnuqiSCe/cbmv5mSmTYlDPTR03WS0IvgyeoNAzqCbYQe44AUBEZb/yT8Z3XxwW0GzcPMZQ0XjpcZiaKAueN9V8nJgNCEDPTJqpSjy+tEHmSgxn70+E57F0vzPvdQ3vOEeRj8zlBblHd4uVrhxdBMUuQ73JEQEha5rz0qcUy04Wmjld1rBuX6pdOqrArAYzTLJbIuLqDjlnYFsHLs9QBGvIEb9VFOlAm5JW8npBbIRHXqPfwZWs60+uNksTtsN3MxBxUWJPOByb4xRNx+nRpTOvfKKFlgq1ReK5bGSTCB7x0Ft3+T42LOQDrBPyxxtGzWs+aq05qFgI4n0h8X82wxJflK+kUdwvvG/ZY5MM+/le2zOrUeyzvxXsHoRetgg+DOk7v+v7VsuT1KuvTXvgzxoOFF3/T2pNPpE3h6bbP2BUqZ2yzPNziGFslywDLZ8W3OUZoQejGqobRePdgUoBi5q2um/sPnq81kOJ/qhIOVq581ZD4IQWLot8eK8vX0G/y7y71YelRR51cUfgR5WvZZf6LvYw+GpwOtSViugl9QxGCviSLgHTJSSEm0ijtbzKhwP4vEyydNDrz8+WYB8DNIV7K2Pc8JyxAM03FYX30CaaJ40pbEUuVQVEnkAD2E//29/ZzgNTf/LBMzMEP5j7wlL+QQpmPAtL/FlBrOJ4nDEqsOOhWzI1MN51xRZuv3e2RqzVPiSmrKtk=","publicSettings":{"foo":"bar"}}}]}
             </RuntimeSettings>
         </Plugin>
         <Plugin name="Microsoft.OSTCExtensions.Edp.ExampleExtensionLinuxInTest" version="1.0.0">
             <RuntimeSettings seqNo="0">
-                {"runtimeSettings":[{"handlerSettings":{"protectedSettingsCertThumbprint":"4037FBF5F1F3014F99B5D6C7799E9B20E6871CB3","protectedSettings":"MIICWgYJK","publicSettings":{"foo":"bar"}}}]}
+                {"runtimeSettings":[{"handlerSettings":{"publicSettings":{"foo":"bar"}}}]}
             </RuntimeSettings>
         </Plugin>
     </PluginSettings>

@@ -1,8 +1,8 @@
+
 # Microsoft Azure Linux Agent
 
 ## Develop branch status
 
-[![Travis CI](https://travis-ci.org/Azure/WALinuxAgent.svg?branch=develop)](https://travis-ci.org/Azure/WALinuxAgent/branches)
 [![CodeCov](https://codecov.io/gh/Azure/WALinuxAgent/branch/develop/graph/badge.svg)](https://codecov.io/gh/Azure/WALinuxAgent/branch/develop)
 
 Each badge below represents our basic validation tests for an image, which are executed several times each day. These include provisioning, user account, disk, extension and networking scenarios.
@@ -219,8 +219,7 @@ OS.SshClientAliveInterval=180
 OS.SshDir=/etc/ssh
 HttpProxy.Host=None
 HttpProxy.Port=None
-CGroups.EnforceLimits=y
-CGroups.Excluded=customscript,runcommand
+CGroups.Enabled=y
 ```
 
 The various configuration options are described in detail below. Configuration

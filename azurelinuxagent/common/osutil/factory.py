@@ -51,7 +51,7 @@ def get_osutil(distro_name=DISTRO_NAME,
     return _get_osutil(distro_name, distro_code_name, distro_version, distro_full_name)
 
 
-def _get_osutil(distro_name, distro_code_name, distro_version, distro_full_name):  # pylint: disable=R0912,R0911
+def _get_osutil(distro_name, distro_code_name, distro_version, distro_full_name):
 
     if distro_name == "arch":
         return ArchUtil()
@@ -84,8 +84,9 @@ def _get_osutil(distro_name, distro_code_name, distro_version, distro_full_name)
     if distro_name == "coreos" or distro_code_name == "coreos":
         return CoreOSUtil()
 
-    if distro_name in ("suse", "sles", "opensuse"):
-        if distro_full_name == 'SUSE Linux Enterprise Server' and Version(distro_version) < Version('12') \
+    if distro_name in ("suse", "sle_hpc", "sles", "opensuse"):
+        if distro_full_name == 'SUSE Linux Enterprise Server' \
+                and Version(distro_version) < Version('12') \
                 or distro_full_name == 'openSUSE' and Version(distro_version) < Version('13.2'):
             return SUSE11OSUtil()
 

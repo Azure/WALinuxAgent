@@ -17,6 +17,7 @@
 
 from __future__ import print_function
 
+import contextlib
 import os
 import random
 import re
@@ -25,79 +26,85 @@ import tempfile
 import time
 import threading
 
-from azurelinuxagent.common.cgroup import CGroup
-from azurelinuxagent.common.cgroupconfigurator import CGroupConfigurator, UnexpectedProcessesInCGroupException
+from nose.plugins.attrib import attr
+
+from azurelinuxagent.common.cgroup import AGENT_NAME_TELEMETRY, MetricsCounter, MetricValue, MetricsCategory
+from azurelinuxagent.common.cgroupconfigurator import CGroupConfigurator, _AGENT_THROTTLED_TIME_THRESHOLD, _AGENT_CPU_QUOTA
 from azurelinuxagent.common.cgroupstelemetry import CGroupsTelemetry
-from azurelinuxagent.common.exception import CGroupsException
-from azurelinuxagent.common.utils import shellutil
-from tests.common.mock_cgroup_commands import mock_cgroup_commands
-from tests.tools import AgentTestCase, patch, mock_sleep
+from azurelinuxagent.common.event import WALAEventOperation
+from azurelinuxagent.common.exception import CGroupsException, ExtensionError, ExtensionErrorCodes
+from azurelinuxagent.common.future import ustr
+from azurelinuxagent.common.utils import shellutil, fileutil
+from tests.common.mock_environment import MockCommand
+from tests.common.mock_cgroup_environment import mock_cgroup_environment, UnitFilePaths
+from tests.tools import AgentTestCase, patch, mock_sleep, i_am_root, data_dir
 from tests.utils.miscellaneous_tools import format_processes, wait_for
+
 
 class CGroupConfiguratorSystemdTestCase(AgentTestCase):
     @classmethod
     def tearDownClass(cls):
-        # protected-access<W0212> Disabled: OK to access CGroupConfigurator._instance from unit test for CGroupConfigurator
-        CGroupConfigurator._instance = None  # pylint: disable=protected-access
+        CGroupConfigurator._instance = None
         AgentTestCase.tearDownClass()
 
-    @staticmethod
-    def _get_new_cgroup_configurator_instance(initialize=True, mock_commands=None, mock_files=None):
-        # protected-access<W0212> Disabled: OK to access CGroupConfigurator._instance from unit test for CGroupConfigurator
-        CGroupConfigurator._instance = None  # pylint: disable=protected-access
+    @contextlib.contextmanager
+    def _get_cgroup_configurator(self, initialize=True, enable=True, mock_commands=None):
+        CGroupConfigurator._instance = None
         configurator = CGroupConfigurator.get_instance()
         CGroupsTelemetry.reset()
-        if initialize:
-            with mock_cgroup_commands() as mocks:
-                if mock_files is not None:
-                    for item in mock_files:
-                        mocks.add_file(item[0], item[1])
-                if mock_commands is not None:
-                    for command in mock_commands:
-                        mocks.add_command(command[0], command[1])
-                configurator.initialize()
-        return configurator
+        with mock_cgroup_environment(self.tmp_dir) as mock_environment:
+            if mock_commands is not None:
+                for command in mock_commands:
+                    mock_environment.add_command(command)
+            configurator.mocks = mock_environment
+            if initialize:
+                if not enable:
+                    with patch.object(configurator, "enable"):
+                        configurator.initialize()
+                else:
+                    configurator.initialize()
+            yield configurator
+
+    def test_initialize_should_enable_cgroups(self):
+        with self._get_cgroup_configurator() as configurator:
+            self.assertTrue(configurator.enabled(), "cgroups were not enabled")
+
+    def test_initialize_should_not_enable_cgroups_when_they_are_disabled_in_the_agent_configuration(self):
+        with patch('azurelinuxagent.common.conf.get_cgroups_enabled', return_value=False):
+            with self._get_cgroup_configurator() as configurator:
+                self.assertFalse(configurator.enabled(), "cgroups should not be enabled")
 
     def test_initialize_should_start_tracking_the_agent_cgroups(self):
-        configurator = CGroupConfiguratorSystemdTestCase._get_new_cgroup_configurator_instance()
+        with self._get_cgroup_configurator() as configurator:
+            tracked = CGroupsTelemetry._tracked
 
-        # protected-access<W0212> Disabled: OK to access CGroupConfigurator._tracked from unit test for CGroupConfigurator
-        tracked = CGroupsTelemetry._tracked  # pylint: disable=protected-access
-
-        self.assertTrue(configurator.enabled(), "Cgroups should be enabled")
-        self.assertTrue(any(cg for cg in tracked if cg.name == 'walinuxagent.service' and 'cpu' in cg.path),
-            "The Agent's CPU is not being tracked. Tracked: {0}".format(tracked))
-        self.assertTrue(any(cg for cg in tracked if cg.name == 'walinuxagent.service' and 'memory' in cg.path),
-            "The Agent's memory is not being tracked. Tracked: {0}".format(tracked))
+            self.assertTrue(configurator.enabled(), "Cgroups should be enabled")
+            self.assertTrue(any(cg for cg in tracked if cg.name == AGENT_NAME_TELEMETRY and 'cpu' in cg.path),
+                "The Agent's CPU is not being tracked. Tracked: {0}".format(tracked))
 
     def test_initialize_should_start_tracking_other_controllers_when_one_is_not_present(self):
-        configurator = CGroupConfiguratorSystemdTestCase._get_new_cgroup_configurator_instance(
-            mock_commands=[(r"^mount -t cgroup$",
- '''cgroup on /sys/fs/cgroup/systemd type cgroup (rw,nosuid,nodev,noexec,relatime,xattr,name=systemd)
- cgroup on /sys/fs/cgroup/rdma type cgroup (rw,nosuid,nodev,noexec,relatime,rdma)
- cgroup on /sys/fs/cgroup/cpuset type cgroup (rw,nosuid,nodev,noexec,relatime,cpuset)
- cgroup on /sys/fs/cgroup/net_cls,net_prio type cgroup (rw,nosuid,nodev,noexec,relatime,net_cls,net_prio)
- cgroup on /sys/fs/cgroup/perf_event type cgroup (rw,nosuid,nodev,noexec,relatime,perf_event)
- cgroup on /sys/fs/cgroup/hugetlb type cgroup (rw,nosuid,nodev,noexec,relatime,hugetlb)
- cgroup on /sys/fs/cgroup/freezer type cgroup (rw,nosuid,nodev,noexec,relatime,freezer)
- cgroup on /sys/fs/cgroup/memory type cgroup (rw,nosuid,nodev,noexec,relatime,memory)
- cgroup on /sys/fs/cgroup/pids type cgroup (rw,nosuid,nodev,noexec,relatime,pids)
- cgroup on /sys/fs/cgroup/devices type cgroup (rw,nosuid,nodev,noexec,relatime,devices)
- cgroup on /sys/fs/cgroup/blkio type cgroup (rw,nosuid,nodev,noexec,relatime,blkio)
- ''')])
+        command_mocks = [MockCommand(r"^mount -t cgroup$",
+'''cgroup on /sys/fs/cgroup/systemd type cgroup (rw,nosuid,nodev,noexec,relatime,xattr,name=systemd)
+cgroup on /sys/fs/cgroup/rdma type cgroup (rw,nosuid,nodev,noexec,relatime,rdma)
+cgroup on /sys/fs/cgroup/cpuset type cgroup (rw,nosuid,nodev,noexec,relatime,cpuset)
+cgroup on /sys/fs/cgroup/net_cls,net_prio type cgroup (rw,nosuid,nodev,noexec,relatime,net_cls,net_prio)
+cgroup on /sys/fs/cgroup/perf_event type cgroup (rw,nosuid,nodev,noexec,relatime,perf_event)
+cgroup on /sys/fs/cgroup/hugetlb type cgroup (rw,nosuid,nodev,noexec,relatime,hugetlb)
+cgroup on /sys/fs/cgroup/freezer type cgroup (rw,nosuid,nodev,noexec,relatime,freezer)
+cgroup on /sys/fs/cgroup/pids type cgroup (rw,nosuid,nodev,noexec,relatime,pids)
+cgroup on /sys/fs/cgroup/devices type cgroup (rw,nosuid,nodev,noexec,relatime,devices)
+cgroup on /sys/fs/cgroup/cpu,cpuacct type cgroup (rw,nosuid,nodev,noexec,relatime,cpu,cpuacct)
+cgroup on /sys/fs/cgroup/blkio type cgroup (rw,nosuid,nodev,noexec,relatime,blkio)
+''')]
+        with self._get_cgroup_configurator(mock_commands=command_mocks) as configurator:
+            tracked = CGroupsTelemetry._tracked
 
-        # protected-access<W0212> Disabled: OK to access CGroupConfigurator._tracked from unit test for CGroupConfigurator
-        tracked = CGroupsTelemetry._tracked  # pylint: disable=protected-access
+            self.assertTrue(configurator.enabled(), "Cgroups should be enabled")
+            self.assertFalse(any(cg for cg in tracked if cg.name == 'walinuxagent.service' and 'memory' in cg.path),
+                "The Agent's memory should not be tracked. Tracked: {0}".format(tracked))
 
-        self.assertTrue(configurator.enabled(), "Cgroups should be enabled")
-        self.assertFalse(any(cg for cg in tracked if cg.name == 'walinuxagent.service' and 'cpu' in cg.path),
-            "The Agent's CPU should not be tracked. Tracked: {0}".format(tracked))
-        self.assertTrue(any(cg for cg in tracked if cg.name == 'walinuxagent.service' and 'memory' in cg.path),
-            "The Agent's memory is not being tracked. Tracked: {0}".format(tracked))
-
-    def test_initialize_should_not_enable_cgroups_is_the_cpu_and_memory_controllers_are_not_present(self):
-        configurator = CGroupConfiguratorSystemdTestCase._get_new_cgroup_configurator_instance(
-            mock_commands=[(r"^mount -t cgroup$",
+    def test_initialize_should_not_enable_cgroups_when_the_cpu_and_memory_controllers_are_not_present(self):
+        command_mocks = [MockCommand(r"^mount -t cgroup$",
 '''cgroup on /sys/fs/cgroup/systemd type cgroup (rw,nosuid,nodev,noexec,relatime,xattr,name=systemd)
 cgroup on /sys/fs/cgroup/rdma type cgroup (rw,nosuid,nodev,noexec,relatime,rdma)
 cgroup on /sys/fs/cgroup/cpuset type cgroup (rw,nosuid,nodev,noexec,relatime,cpuset)
@@ -108,130 +115,152 @@ cgroup on /sys/fs/cgroup/freezer type cgroup (rw,nosuid,nodev,noexec,relatime,fr
 cgroup on /sys/fs/cgroup/pids type cgroup (rw,nosuid,nodev,noexec,relatime,pids)
 cgroup on /sys/fs/cgroup/devices type cgroup (rw,nosuid,nodev,noexec,relatime,devices)
 cgroup on /sys/fs/cgroup/blkio type cgroup (rw,nosuid,nodev,noexec,relatime,blkio)
-                            ''')])
+''')]
+        with self._get_cgroup_configurator(mock_commands=command_mocks) as configurator:
+            tracked = CGroupsTelemetry._tracked
 
-        # protected-access<W0212> Disabled: OK to access CGroupConfigurator._tracked from unit test for CGroupConfigurator
-        tracked = CGroupsTelemetry._tracked  # pylint: disable=protected-access
-
-        self.assertFalse(configurator.enabled(), "Cgroups should not be enabled")
-        self.assertEqual(len(tracked), 0, "No cgroups should be tracked. Tracked: {0}".format(tracked))
+            self.assertFalse(configurator.enabled(), "Cgroups should not be enabled")
+            self.assertEqual(len(tracked), 0, "No cgroups should be tracked. Tracked: {0}".format(tracked))
 
     def test_initialize_should_not_enable_cgroups_when_the_agent_is_not_in_the_system_slice(self):
-        configurator = CGroupConfiguratorSystemdTestCase._get_new_cgroup_configurator_instance(
-            mock_commands=[(r"^mount -t cgroup$",
-                            '''cgroup on /sys/fs/cgroup/systemd type cgroup (rw,nosuid,nodev,noexec,relatime,xattr,name=systemd)
-                            cgroup on /sys/fs/cgroup/rdma type cgroup (rw,nosuid,nodev,noexec,relatime,rdma)
-                            cgroup on /sys/fs/cgroup/cpuset type cgroup (rw,nosuid,nodev,noexec,relatime,cpuset)
-                            cgroup on /sys/fs/cgroup/net_cls,net_prio type cgroup (rw,nosuid,nodev,noexec,relatime,net_cls,net_prio)
-                            cgroup on /sys/fs/cgroup/perf_event type cgroup (rw,nosuid,nodev,noexec,relatime,perf_event)
-                            cgroup on /sys/fs/cgroup/hugetlb type cgroup (rw,nosuid,nodev,noexec,relatime,hugetlb)
-                            cgroup on /sys/fs/cgroup/freezer type cgroup (rw,nosuid,nodev,noexec,relatime,freezer)
-                            cgroup on /sys/fs/cgroup/pids type cgroup (rw,nosuid,nodev,noexec,relatime,pids)
-                            cgroup on /sys/fs/cgroup/devices type cgroup (rw,nosuid,nodev,noexec,relatime,devices)
-                            cgroup on /sys/fs/cgroup/blkio type cgroup (rw,nosuid,nodev,noexec,relatime,blkio)
-                                                        ''')])
+        command_mocks = [MockCommand(r"^mount -t cgroup$",
+'''cgroup on /sys/fs/cgroup/systemd type cgroup (rw,nosuid,nodev,noexec,relatime,xattr,name=systemd)
+cgroup on /sys/fs/cgroup/rdma type cgroup (rw,nosuid,nodev,noexec,relatime,rdma)
+cgroup on /sys/fs/cgroup/cpuset type cgroup (rw,nosuid,nodev,noexec,relatime,cpuset)
+cgroup on /sys/fs/cgroup/net_cls,net_prio type cgroup (rw,nosuid,nodev,noexec,relatime,net_cls,net_prio)
+cgroup on /sys/fs/cgroup/perf_event type cgroup (rw,nosuid,nodev,noexec,relatime,perf_event)
+cgroup on /sys/fs/cgroup/hugetlb type cgroup (rw,nosuid,nodev,noexec,relatime,hugetlb)
+cgroup on /sys/fs/cgroup/freezer type cgroup (rw,nosuid,nodev,noexec,relatime,freezer)
+cgroup on /sys/fs/cgroup/pids type cgroup (rw,nosuid,nodev,noexec,relatime,pids)
+cgroup on /sys/fs/cgroup/devices type cgroup (rw,nosuid,nodev,noexec,relatime,devices)
+cgroup on /sys/fs/cgroup/blkio type cgroup (rw,nosuid,nodev,noexec,relatime,blkio)
+''')]
 
-        # protected-access<W0212> Disabled: OK to access CGroupConfigurator._tracked from unit test for CGroupConfigurator
-        tracked = CGroupsTelemetry._tracked  # pylint: disable=protected-access
+        with self._get_cgroup_configurator(mock_commands=command_mocks) as configurator:
+            tracked = CGroupsTelemetry._tracked
+            agent_drop_in_file_cpu_quota = configurator.mocks.get_mapped_path(UnitFilePaths.cpu_quota)
 
-        self.assertFalse(configurator.enabled(), "Cgroups should not be enabled")
-        self.assertEqual(len(tracked), 0, "No cgroups should be tracked. Tracked: {0}".format(tracked))
+            self.assertFalse(configurator.enabled(), "Cgroups should not be enabled")
+            self.assertEqual(len(tracked), 0, "No cgroups should be tracked. Tracked: {0}".format(tracked))
+            self.assertFalse(os.path.exists(agent_drop_in_file_cpu_quota), "{0} should not have been created".format(agent_drop_in_file_cpu_quota))
 
-    def test_enable_and_disable_should_change_the_enabled_state_of_cgroups(self):
-        configurator = CGroupConfiguratorSystemdTestCase._get_new_cgroup_configurator_instance()
+    def test_initialize_should_not_create_unit_files(self):
+        with self._get_cgroup_configurator() as configurator:
+            # get the paths to the mocked files
+            azure_slice_unit_file = configurator.mocks.get_mapped_path(UnitFilePaths.azure)
+            extensions_slice_unit_file = configurator.mocks.get_mapped_path(UnitFilePaths.vmextensions)
+            agent_drop_in_file_slice = configurator.mocks.get_mapped_path(UnitFilePaths.slice)
+            agent_drop_in_file_cpu_accounting = configurator.mocks.get_mapped_path(UnitFilePaths.cpu_accounting)
 
-        self.assertTrue(configurator.enabled(), "CGroupConfigurator should be enabled by default")
+            # The mock creates the slice unit files; delete them
+            os.remove(azure_slice_unit_file)
+            os.remove(extensions_slice_unit_file)
 
-        configurator.disable()
-        self.assertFalse(configurator.enabled(), "disable() should disable the CGroupConfigurator")
+            # The service file for the agent includes settings for the slice and cpu accounting, but not for cpu quota; initialize()
+            # should not create drop in files for the first 2, but it should create one the cpu quota
+            self.assertFalse(os.path.exists(azure_slice_unit_file), "{0} should not have been created".format(azure_slice_unit_file))
+            self.assertFalse(os.path.exists(extensions_slice_unit_file), "{0} should not have been created".format(extensions_slice_unit_file))
+            self.assertFalse(os.path.exists(agent_drop_in_file_slice), "{0} should not have been created".format(agent_drop_in_file_slice))
+            self.assertFalse(os.path.exists(agent_drop_in_file_cpu_accounting), "{0} should not have been created".format(agent_drop_in_file_cpu_accounting))
 
-        configurator.enable()
-        self.assertTrue(configurator.enabled(), "enable() should enable the CGroupConfigurator")
+    def test_initialize_should_create_unit_files_when_the_agent_service_file_is_not_updated(self):
+        with self._get_cgroup_configurator(initialize=False) as configurator:
+            # get the paths to the mocked files
+            azure_slice_unit_file = configurator.mocks.get_mapped_path(UnitFilePaths.azure)
+            extensions_slice_unit_file = configurator.mocks.get_mapped_path(UnitFilePaths.vmextensions)
+            agent_drop_in_file_slice = configurator.mocks.get_mapped_path(UnitFilePaths.slice)
+            agent_drop_in_file_cpu_accounting = configurator.mocks.get_mapped_path(UnitFilePaths.cpu_accounting)
 
-    def test_enable_should_raise_cgroups_exception_when_cgroups_are_not_supported(self):
-        with patch("azurelinuxagent.common.cgroupapi.CGroupsApi.cgroups_supported", return_value=False):
-            configurator = CGroupConfiguratorSystemdTestCase._get_new_cgroup_configurator_instance(initialize=False)
+            # The mock creates the service and slice unit files; replace the former and delete the latter
+            configurator.mocks.add_data_file(os.path.join(data_dir, 'init', "walinuxagent.service.previous"), UnitFilePaths.walinuxagent)
+            os.remove(azure_slice_unit_file)
+            os.remove(extensions_slice_unit_file)
+
             configurator.initialize()
 
-            with self.assertRaises(CGroupsException) as context_manager:
-                configurator.enable()
-            self.assertIn("Attempted to enable cgroups, but they are not supported on the current platform", str(context_manager.exception))
+            # The older service file for the agent did not include settings for the slice and cpu parameters; in that case, initialize() should
+            # create drop in files to set those properties
+            self.assertTrue(os.path.exists(azure_slice_unit_file), "{0} was not created".format(azure_slice_unit_file))
+            self.assertTrue(os.path.exists(extensions_slice_unit_file), "{0} was not created".format(extensions_slice_unit_file))
+            self.assertTrue(os.path.exists(agent_drop_in_file_slice), "{0} was not created".format(agent_drop_in_file_slice))
+            self.assertTrue(os.path.exists(agent_drop_in_file_cpu_accounting), "{0} was not created".format(agent_drop_in_file_cpu_accounting))
 
-    def test_disable_should_reset_tracked_cgroups(self):
-        # Start tracking a couple of dummy cgroups
-        CGroupsTelemetry.track_cgroup(CGroup("dummy", "/sys/fs/cgroup/memory/system.slice/dummy.service", "cpu"))
-        CGroupsTelemetry.track_cgroup(CGroup("dummy", "/sys/fs/cgroup/memory/system.slice/dummy.service", "memory"))
+    def test_enable_should_raise_cgroups_exception_when_cgroups_are_not_supported(self):
+        with self._get_cgroup_configurator(enable=False) as configurator:
+            with patch.object(configurator, "supported", return_value=False):
+                with self.assertRaises(CGroupsException) as context_manager:
+                    configurator.enable()
+                self.assertIn("Attempted to enable cgroups, but they are not supported on the current platform", str(context_manager.exception))
 
-        CGroupConfiguratorSystemdTestCase._get_new_cgroup_configurator_instance().disable()
+    def test_enable_should_set_agent_cpu_quota_and_track_throttled_time(self):
+        with self._get_cgroup_configurator(enable=False) as configurator:
+            agent_drop_in_file_cpu_quota = configurator.mocks.get_mapped_path(UnitFilePaths.cpu_quota)
+            if os.path.exists(agent_drop_in_file_cpu_quota):
+                raise Exception("{0} should not have been created during test setup".format(agent_drop_in_file_cpu_quota))
 
-        # protected-access<W0212> Disabled: OK to access CGroupConfigurator._tracked from unit test for CGroupConfigurator
-        self.assertEqual(len(CGroupsTelemetry._tracked), 0)  # pylint: disable=protected-access
+            configurator.enable()
 
-    def test_cgroup_operations_should_not_invoke_the_cgroup_api_when_cgroups_are_not_enabled(self):
-        configurator = CGroupConfiguratorSystemdTestCase._get_new_cgroup_configurator_instance()
-        configurator.disable()
+            expected_quota = "CPUQuota={0}%".format(_AGENT_CPU_QUOTA)
+            self.assertTrue(os.path.exists(agent_drop_in_file_cpu_quota), "{0} was not created".format(agent_drop_in_file_cpu_quota))
+            self.assertTrue(
+                fileutil.findre_in_file(agent_drop_in_file_cpu_quota, expected_quota),
+                "CPUQuota was not set correctly. Expected: {0}. Got:\n{1}".format(expected_quota, fileutil.read_file(agent_drop_in_file_cpu_quota)))
+            self.assertTrue(CGroupsTelemetry.get_track_throttled_time(), "Throttle time should be tracked")
 
-        # List of operations to test, and the functions to mock used in order to do verifications
-        operations = [
-            [configurator.create_extensions_slice, "azurelinuxagent.common.cgroupapi.SystemdCgroupsApi.create_extensions_slice"],
-        ]
+    def test_enable_should_not_track_throttled_time_when_setting_the_cpu_quota_fails(self):
+        with self._get_cgroup_configurator(enable=False) as configurator:
+            if CGroupsTelemetry.get_track_throttled_time():
+                raise Exception("Test setup should not start tracking Throttle Time")
 
-        for operation in operations:
-            with patch(operation[1]) as mock_cgroup_api_operation:
-                operation[0]()
+            configurator.mocks.add_file(UnitFilePaths.cpu_quota, Exception("A TEST EXCEPTION"))
 
-            self.assertEqual(mock_cgroup_api_operation.call_count, 0)
+            configurator.enable()
 
-    def test_cgroup_operations_should_log_a_warning_when_the_cgroup_api_raises_an_exception(self):
-        configurator = CGroupConfiguratorSystemdTestCase._get_new_cgroup_configurator_instance()
+            self.assertFalse(CGroupsTelemetry.get_track_throttled_time(), "Throttle time should not be tracked")
 
-        # cleanup_legacy_cgroups disables cgroups on error, so make disable() a no-op
-        with patch.object(configurator, "disable"):
-            # List of operations to test, and the functions to mock in order to raise exceptions
-            operations = [
-                [configurator.create_extensions_slice, "azurelinuxagent.common.cgroupapi.SystemdCgroupsApi.create_extensions_slice"],
-            ]
+    def test_disable_should_reset_cpu_quota_and_tracked_cgroups(self):
+        with self._get_cgroup_configurator() as configurator:
+            if len(CGroupsTelemetry._tracked) == 0:
+                raise Exception("Test setup should have started tracking at least 1 cgroup (the agent's)")
+            if not CGroupsTelemetry._track_throttled_time:
+                raise Exception("Test setup should have started tracking Throttle Time")
 
-            def raise_exception(*_):
-                raise Exception("A TEST EXCEPTION")
+            configurator.disable("UNIT TEST")
 
-            for operation in operations:
-                with patch("azurelinuxagent.common.cgroupconfigurator.logger.warn") as mock_logger_warn:
-                    with patch(operation[1], raise_exception):
-                        operation[0]()
-
-                    self.assertEqual(mock_logger_warn.call_count, 1)
-
-                    args, _ = mock_logger_warn.call_args
-                    message = args[0]
-                    self.assertIn("A TEST EXCEPTION", message)
+            agent_drop_in_file_cpu_quota = configurator.mocks.get_mapped_path(UnitFilePaths.cpu_quota)
+            self.assertTrue(os.path.exists(agent_drop_in_file_cpu_quota), "{0} was not created".format(agent_drop_in_file_cpu_quota))
+            self.assertTrue(
+                fileutil.findre_in_file(agent_drop_in_file_cpu_quota, "^CPUQuota=$"),
+                "CPUQuota was not set correctly. Expected an empty value. Got:\n{0}".format(fileutil.read_file(agent_drop_in_file_cpu_quota)))
+            self.assertEqual(len(CGroupsTelemetry._tracked), 0, "No cgroups should be tracked after disable. Tracking: {0}".format(CGroupsTelemetry._tracked))
+            self.assertFalse(CGroupsTelemetry._track_throttled_time, "Throttle Time should not be tracked after disable")
 
     @patch('time.sleep', side_effect=lambda _: mock_sleep())
     def test_start_extension_command_should_not_use_systemd_when_cgroups_are_not_enabled(self, _):
-        configurator = CGroupConfiguratorSystemdTestCase._get_new_cgroup_configurator_instance()
-        configurator.disable()
+        with self._get_cgroup_configurator() as configurator:
+            configurator.disable("UNIT TEST")
 
-        with patch("azurelinuxagent.common.cgroupapi.subprocess.Popen", wraps=subprocess.Popen) as patcher:
-            configurator.start_extension_command(
-                extension_name="Microsoft.Compute.TestExtension-1.2.3",
-                command="date",
-                timeout=300,
-                shell=False,
-                cwd=self.tmp_dir,
-                env={},
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE)
+            with patch("azurelinuxagent.common.cgroupapi.subprocess.Popen", wraps=subprocess.Popen) as patcher:
+                configurator.start_extension_command(
+                    extension_name="Microsoft.Compute.TestExtension-1.2.3",
+                    command="date",
+                    timeout=300,
+                    shell=False,
+                    cwd=self.tmp_dir,
+                    env={},
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE)
 
-            command_calls = [args[0] for args, _ in patcher.call_args_list if len(args) > 0 and "date" in args[0]]
-            self.assertEqual(len(command_calls), 1, "The test command should have been called exactly once [{0}]".format(command_calls))
-            self.assertNotIn("systemd-run", command_calls[0], "The command should not have been invoked using systemd")
-            self.assertEqual(command_calls[0], "date", "The command line should not have been modified")
+                command_calls = [args[0] for args, _ in patcher.call_args_list if len(args) > 0 and "date" in args[0]]
+                self.assertEqual(len(command_calls), 1, "The test command should have been called exactly once [{0}]".format(command_calls))
+                self.assertNotIn("systemd-run", command_calls[0], "The command should not have been invoked using systemd")
+                self.assertEqual(command_calls[0], "date", "The command line should not have been modified")
 
     @patch('time.sleep', side_effect=lambda _: mock_sleep())
     def test_start_extension_command_should_use_systemd_run_when_cgroups_are_enabled(self, _):
-        with mock_cgroup_commands():
+        with self._get_cgroup_configurator() as configurator:
             with patch("azurelinuxagent.common.cgroupapi.subprocess.Popen", wraps=subprocess.Popen) as popen_patch:
-                CGroupConfiguratorSystemdTestCase._get_new_cgroup_configurator_instance().start_extension_command(
+                configurator.start_extension_command(
                     extension_name="Microsoft.Compute.TestExtension-1.2.3",
                     command="the-test-extension-command",
                     timeout=300,
@@ -250,8 +279,8 @@ cgroup on /sys/fs/cgroup/blkio type cgroup (rw,nosuid,nodev,noexec,relatime,blki
     def test_start_extension_command_should_start_tracking_the_extension_cgroups(self, _):
         # CPU usage is initialized when we begin tracking a CPU cgroup; since this test does not retrieve the
         # CPU usage, there is no need for initialization
-        with mock_cgroup_commands():
-            CGroupConfiguratorSystemdTestCase._get_new_cgroup_configurator_instance().start_extension_command(
+        with self._get_cgroup_configurator() as configurator:
+            configurator.start_extension_command(
                 extension_name="Microsoft.Compute.TestExtension-1.2.3",
                 command="test command",
                 timeout=300,
@@ -261,42 +290,251 @@ cgroup on /sys/fs/cgroup/blkio type cgroup (rw,nosuid,nodev,noexec,relatime,blki
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE)
 
-        # protected-access<W0212> Disabled: OK to access CGroupConfigurator._tracked from unit test for CGroupConfigurator
-        tracked = CGroupsTelemetry._tracked  # pylint: disable=protected-access
+        tracked = CGroupsTelemetry._tracked
 
         self.assertTrue(
             any(cg for cg in tracked if cg.name == 'Microsoft.Compute.TestExtension-1.2.3' and 'cpu' in cg.path),
             "The extension's CPU is not being tracked")
-        self.assertTrue(
-            any(cg for cg in tracked if cg.name == 'Microsoft.Compute.TestExtension-1.2.3' and 'memory' in cg.path),
-            "The extension's memory is not being tracked")
 
     def test_start_extension_command_should_raise_an_exception_when_the_command_cannot_be_started(self):
-        configurator = CGroupConfiguratorSystemdTestCase._get_new_cgroup_configurator_instance()
+        with self._get_cgroup_configurator() as configurator:
+            original_popen = subprocess.Popen
+
+            def mock_popen(command_arg, *args, **kwargs):
+                if "test command" in command_arg:
+                    raise Exception("A TEST EXCEPTION")
+                return original_popen(command_arg, *args, **kwargs)
+
+            with patch("azurelinuxagent.common.cgroupapi.subprocess.Popen", side_effect=mock_popen):
+                with self.assertRaises(Exception) as context_manager:
+                    configurator.start_extension_command(
+                        extension_name="Microsoft.Compute.TestExtension-1.2.3",
+                        command="test command",
+                        timeout=300,
+                        shell=False,
+                        cwd=self.tmp_dir,
+                        env={},
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.PIPE)
+
+                    self.assertIn("A TEST EXCEPTION", str(context_manager.exception))
+
+    @patch('time.sleep', side_effect=lambda _: mock_sleep())
+    def test_start_extension_command_should_disable_cgroups_and_invoke_the_command_directly_if_systemd_fails(self, _):
+        with self._get_cgroup_configurator() as configurator:
+            original_popen = subprocess.Popen
+
+            def mock_popen(command, *args, **kwargs):
+                if 'systemd-run' in command:
+                    # Inject a syntax error to the call
+                    command = command.replace('systemd-run', 'systemd-run syntax_error')
+                return original_popen(command, *args, **kwargs)
+
+            with tempfile.TemporaryFile(dir=self.tmp_dir, mode="w+b") as output_file:
+                with patch("azurelinuxagent.common.cgroupconfigurator.add_event") as mock_add_event:
+                    with patch("azurelinuxagent.common.cgroupapi.subprocess.Popen", side_effect=mock_popen) as popen_patch:
+                        CGroupsTelemetry.reset()
+
+                        command = "echo TEST_OUTPUT"
+
+                        command_output = configurator.start_extension_command(
+                            extension_name="Microsoft.Compute.TestExtension-1.2.3",
+                            command=command,
+                            timeout=300,
+                            shell=True,
+                            cwd=self.tmp_dir,
+                            env={},
+                            stdout=output_file,
+                            stderr=output_file)
+
+                        self.assertFalse(configurator.enabled(), "Cgroups should have been disabled")
+
+                        disabled_events = [kwargs for _, kwargs in mock_add_event.call_args_list if kwargs['op'] == WALAEventOperation.CGroupsDisabled]
+
+                        self.assertTrue(len(disabled_events) == 1, "Exactly one CGroupsDisabled telemetry event should have been issued. Found: {0}".format(disabled_events))
+                        self.assertIn("Failed to start Microsoft.Compute.TestExtension-1.2.3 using systemd-run",
+                                      disabled_events[0]['message'],
+                                      "The systemd-run failure was not included in the telemetry message")
+                        self.assertEqual(False, disabled_events[0]['is_success'], "The telemetry event should indicate a failure")
+
+                        extension_calls = [args[0] for (args, _) in popen_patch.call_args_list if command in args[0]]
+
+                        self.assertEqual(2, len(extension_calls), "The extension should have been invoked exactly twice")
+                        self.assertIn("systemd-run --unit=Microsoft.Compute.TestExtension_1.2.3", extension_calls[0],
+                                      "The first call to the extension should have used systemd")
+                        self.assertEqual(command, extension_calls[1],
+                                          "The second call to the extension should not have used systemd")
+
+                        self.assertEqual(len(CGroupsTelemetry._tracked), 0, "No cgroups should have been created")
+
+                        self.assertIn("TEST_OUTPUT\n", command_output, "The test output was not captured")
+
+    @patch('time.sleep', side_effect=lambda _: mock_sleep())
+    def test_start_extension_command_should_disable_cgroups_and_invoke_the_command_directly_if_systemd_times_out(self, _):
+        with self._get_cgroup_configurator() as configurator:
+            # Systemd has its own internal timeout which is shorter than what we define for extension operation timeout.
+            # When systemd times out, it will write a message to stderr and exit with exit code 1.
+            # In that case, we will internally recognize the failure due to the non-zero exit code, not as a timeout.
+            configurator.mocks.add_command(MockCommand("systemd-run", return_value=1, stdout='', stderr='Failed to start transient scope unit: Connection timed out'))
+
+            with tempfile.TemporaryFile(dir=self.tmp_dir, mode="w+b") as stdout:
+                with tempfile.TemporaryFile(dir=self.tmp_dir, mode="w+b") as stderr:
+                    with patch("subprocess.Popen", wraps=subprocess.Popen) as popen_patch:
+                        CGroupsTelemetry.reset()
+
+                        configurator.start_extension_command(
+                            extension_name="Microsoft.Compute.TestExtension-1.2.3",
+                            command="echo 'success'",
+                            timeout=300,
+                            shell=True,
+                            cwd=self.tmp_dir,
+                            env={},
+                            stdout=stdout,
+                            stderr=stderr)
+
+                        self.assertFalse(configurator.enabled(), "Cgroups should have been disabled")
+
+                        extension_calls = [args[0] for (args, _) in popen_patch.call_args_list if "echo 'success'" in args[0]]
+                        self.assertEqual(2, len(extension_calls), "The extension should have been called twice. Got: {0}".format(extension_calls))
+                        self.assertIn("systemd-run --unit=Microsoft.Compute.TestExtension_1.2.3", extension_calls[0], "The first call to the extension should have used systemd")
+                        self.assertNotIn("systemd-run", extension_calls[1], "The second call to the extension should not have used systemd")
+
+                        self.assertEqual(len(CGroupsTelemetry._tracked), 0, "No cgroups should have been created")
+
+    @attr('requires_sudo')
+    @patch('time.sleep', side_effect=lambda _: mock_sleep())
+    def test_start_extension_command_should_not_use_fallback_option_if_extension_fails(self, *args):
+        self.assertTrue(i_am_root(), "Test does not run when non-root")
+
+        with self._get_cgroup_configurator() as configurator:
+            pass  # release the mocks used to create the test CGroupConfigurator so that they do not conflict the mock Popen below
+
+        command = "ls folder_does_not_exist"
+
+        with tempfile.TemporaryFile(dir=self.tmp_dir, mode="w+b") as stdout:
+            with tempfile.TemporaryFile(dir=self.tmp_dir, mode="w+b") as stderr:
+                with patch("azurelinuxagent.common.cgroupapi.subprocess.Popen", wraps=subprocess.Popen) as popen_patch:
+                    with self.assertRaises(ExtensionError) as context_manager:
+                        configurator.start_extension_command(
+                            extension_name="Microsoft.Compute.TestExtension-1.2.3",
+                            command=command,
+                            timeout=300,
+                            shell=True,
+                            cwd=self.tmp_dir,
+                            env={},
+                            stdout=stdout,
+                            stderr=stderr)
+
+                    extension_calls = [args[0] for (args, _) in popen_patch.call_args_list if command in args[0]]
+
+                    self.assertEqual(1, len(extension_calls), "The extension should have been invoked exactly once")
+                    self.assertIn("systemd-run --unit=Microsoft.Compute.TestExtension_1.2.3", extension_calls[0],
+                                  "The first call to the extension should have used systemd")
+
+                    self.assertEqual(context_manager.exception.code, ExtensionErrorCodes.PluginUnknownFailure)
+                    self.assertIn("Non-zero exit code", ustr(context_manager.exception))
+                    # The scope name should appear in the process output since systemd-run was invoked and stderr
+                    # wasn't truncated.
+                    self.assertIn("Microsoft.Compute.TestExtension_1.2.3", ustr(context_manager.exception))
+
+    @attr('requires_sudo')
+    @patch('time.sleep', side_effect=lambda _: mock_sleep())
+    @patch("azurelinuxagent.common.utils.extensionprocessutil.TELEMETRY_MESSAGE_MAX_LEN", 5)
+    def test_start_extension_command_should_not_use_fallback_option_if_extension_fails_with_long_output(self, *args):
+        self.assertTrue(i_am_root(), "Test does not run when non-root")
+
+        with self._get_cgroup_configurator() as configurator:
+            pass  # release the mocks used to create the test CGroupConfigurator so that they do not conflict the mock Popen below
+
+        long_output = "a"*20  # large enough to ensure both stdout and stderr are truncated
+        long_stdout_stderr_command = "echo {0} && echo {0} >&2 && ls folder_does_not_exist".format(long_output)
+
+        with tempfile.TemporaryFile(dir=self.tmp_dir, mode="w+b") as stdout:
+            with tempfile.TemporaryFile(dir=self.tmp_dir, mode="w+b") as stderr:
+                with patch("azurelinuxagent.common.cgroupapi.subprocess.Popen", wraps=subprocess.Popen) as popen_patch:
+                    with self.assertRaises(ExtensionError) as context_manager:
+                        configurator.start_extension_command(
+                            extension_name="Microsoft.Compute.TestExtension-1.2.3",
+                            command=long_stdout_stderr_command,
+                            timeout=300,
+                            shell=True,
+                            cwd=self.tmp_dir,
+                            env={},
+                            stdout=stdout,
+                            stderr=stderr)
+
+                    extension_calls = [args[0] for (args, _) in popen_patch.call_args_list if long_stdout_stderr_command in args[0]]
+
+                    self.assertEqual(1, len(extension_calls), "The extension should have been invoked exactly once")
+                    self.assertIn("systemd-run --unit=Microsoft.Compute.TestExtension_1.2.3", extension_calls[0],
+                                  "The first call to the extension should have used systemd")
+
+                    self.assertEqual(context_manager.exception.code, ExtensionErrorCodes.PluginUnknownFailure)
+                    self.assertIn("Non-zero exit code", ustr(context_manager.exception))
+                    # stdout and stderr should have been truncated, so the scope name doesn't appear in stderr
+                    # even though systemd-run ran
+                    self.assertNotIn("Microsoft.Compute.TestExtension_1.2.3", ustr(context_manager.exception))
+
+    @attr('requires_sudo')
+    def test_start_extension_command_should_not_use_fallback_option_if_extension_times_out(self, *args):  # pylint: disable=unused-argument
+        self.assertTrue(i_am_root(), "Test does not run when non-root")
+
+        with self._get_cgroup_configurator() as configurator:
+            pass  # release the mocks used to create the test CGroupConfigurator so that they do not conflict the mock Popen below
+
+        with tempfile.TemporaryFile(dir=self.tmp_dir, mode="w+b") as stdout:
+            with tempfile.TemporaryFile(dir=self.tmp_dir, mode="w+b") as stderr:
+                with patch("azurelinuxagent.common.utils.extensionprocessutil.wait_for_process_completion_or_timeout",
+                           return_value=[True, None]):
+                    with patch("azurelinuxagent.common.cgroupapi.SystemdCgroupsApi._is_systemd_failure",
+                               return_value=False):
+                        with self.assertRaises(ExtensionError) as context_manager:
+                            configurator.start_extension_command(
+                                extension_name="Microsoft.Compute.TestExtension-1.2.3",
+                                command="date",
+                                timeout=300,
+                                shell=True,
+                                cwd=self.tmp_dir,
+                                env={},
+                                stdout=stdout,
+                                stderr=stderr)
+
+                        self.assertEqual(context_manager.exception.code, ExtensionErrorCodes.PluginHandlerScriptTimedout)
+                        self.assertIn("Timeout", ustr(context_manager.exception))
+
+    @patch('time.sleep', side_effect=lambda _: mock_sleep())
+    def test_start_extension_command_should_capture_only_the_last_subprocess_output(self, _):
+        with self._get_cgroup_configurator() as configurator:
+            pass  # release the mocks used to create the test CGroupConfigurator so that they do not conflict the mock Popen below
 
         original_popen = subprocess.Popen
 
-        def mock_popen(command_arg, *args, **kwargs):
-            if "test command" in command_arg:
-                raise Exception("A TEST EXCEPTION")
-            return original_popen(command_arg, *args, **kwargs)
+        def mock_popen(command, *args, **kwargs):
+            # Inject a syntax error to the call
+            systemd_command = command.replace('systemd-run', 'systemd-run syntax_error')
+            return original_popen(systemd_command, *args, **kwargs)
 
-        with patch("azurelinuxagent.common.cgroupapi.subprocess.Popen", side_effect=mock_popen):
-            with self.assertRaises(Exception) as context_manager:
-                configurator.start_extension_command(
-                    extension_name="Microsoft.Compute.TestExtension-1.2.3",
-                    command="test command",
-                    timeout=300,
-                    shell=False,
-                    cwd=self.tmp_dir,
-                    env={},
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.PIPE)
+        expected_output = "[stdout]\n{0}\n\n\n[stderr]\n"
 
-                self.assertIn("A TEST EXCEPTION", str(context_manager.exception))
+        with tempfile.TemporaryFile(dir=self.tmp_dir, mode="w+b") as stdout:
+            with tempfile.TemporaryFile(dir=self.tmp_dir, mode="w+b") as stderr:
+                with patch("azurelinuxagent.common.cgroupapi.subprocess.Popen", side_effect=mock_popen):
+                    # We expect this call to fail because of the syntax error
+                    process_output = configurator.start_extension_command(
+                        extension_name="Microsoft.Compute.TestExtension-1.2.3",
+                        command="echo 'very specific test message'",
+                        timeout=300,
+                        shell=True,
+                        cwd=self.tmp_dir,
+                        env={},
+                        stdout=stdout,
+                        stderr=stderr)
 
-    def test_check_processes_in_agent_cgroup_should_raise_when_there_are_unexpected_processes_in_the_agent_cgroup(self):
-        configurator = CGroupConfiguratorSystemdTestCase._get_new_cgroup_configurator_instance()
+                    self.assertEqual(expected_output.format("very specific test message"), process_output)
+
+    def test_check_processes_in_agent_cgroup_should_raise_a_cgroups_exception_when_there_are_unexpected_processes_in_the_agent_cgroup(self):
+        with self._get_cgroup_configurator() as configurator:
+            pass  # release the mocks used to create the test CGroupConfigurator so that they do not conflict the mock Popen below
 
         # The test script recursively creates a given number of descendant processes, then it blocks until the
         # 'stop_file' exists. It produces an output file containing the PID of each descendant process.
@@ -357,10 +595,10 @@ exit 0
                 original_sleep = time.sleep
                 original_popen = subprocess.Popen
 
-                # Extensions are stated using systemd-run; mock Popen to remove the call to systemd-run; the test script creates a couple of
+                # Extensions are started using systemd-run; mock Popen to remove the call to systemd-run; the test script creates a couple of
                 # child processes, which would simulate the extension's processes.
                 def mock_popen(command, *args, **kwargs):
-                    match = re.match(r"^systemd-run --unit=[^\s]+ --scope (.+)", command)
+                    match = re.match(r"^systemd-run --unit=[^\s]+ --scope --slice=[^\s]+ (.+)", command)
                     is_systemd_run = match is not None
                     if is_systemd_run:
                         command = match.group(1)
@@ -393,9 +631,7 @@ exit 0
             # check_processes_in_agent_cgroup uses shellutil and the cgroups api to get the commands that are currently running;
             # wait for all the processes to show up
             #
-            # len-as-condition: Do not use `len(SEQUENCE)` to determine if a sequence is empty - Disabled: explicit check improves readability
-            # protected-access: Access to a protected member _cgroups_api of a client class - Disabled: OK to access protected member in this unit test
-            if not wait_for(lambda: len(shellutil.get_running_commands()) > 0 and len(configurator._cgroups_api.get_systemd_run_commands()) > 0):  # pylint:disable=len-as-condition,protected-access
+            if not wait_for(lambda: len(shellutil.get_running_commands()) > 0 and len(configurator._cgroups_api.get_systemd_run_commands()) > 0):
                 raise Exception("Timeout while attempting to track the child commands")
 
             #
@@ -419,36 +655,64 @@ exit 0
             other_processes = [1, get_completed_process()] + extension_processes
 
             with patch("azurelinuxagent.common.cgroupconfigurator.CGroupsApi.get_processes_in_cgroup", return_value=agent_processes + other_processes):
-                with self.assertRaises(UnexpectedProcessesInCGroupException) as context_manager:
-                    CGroupConfigurator.get_instance().check_processes_in_agent_cgroup()
+                with self.assertRaises(CGroupsException) as context_manager:
+                    configurator._check_processes_in_agent_cgroup()
 
-                reported = context_manager.exception.unexpected
+                # The list of processes in the message is an array of strings: "['foo', ..., 'bar']"
+                message = ustr(context_manager.exception)
+                search = re.search(r'unexpected processes: \[(?P<processes>.+)\]', message)
+                self.assertIsNotNone(search, "The event message is not in the expected format: {0}".format(message))
+                reported = search.group('processes').split(',')
 
                 self.assertEqual(
                     len(other_processes), len(reported),
                     "An incorrect number of processes was reported. Expected: {0} Got: {1}".format(format_processes(other_processes), reported))
                 for pid in other_processes:
                     self.assertTrue(
-                        any(reported_process.startswith("[PID: {0}]".format(pid)) for reported_process in reported),
+                        any("[PID: {0}]".format(pid) in reported_process for reported_process in reported),
                         "Process {0} was not reported. Got: {1}".format(format_processes([pid]), reported))
-
-            #
-            # And now verify that it does not raise when only the expected processes are in the cgroup
-            #
-            error = None
-            try:
-                with patch("azurelinuxagent.common.cgroupconfigurator.CGroupsApi.get_processes_in_cgroup", return_value=agent_processes):
-                    CGroupConfigurator.get_instance().check_processes_in_agent_cgroup()
-            except UnexpectedProcessesInCGroupException as exception:
-                error = exception
-            # we fail outside the except clause, otherwise the failure is reported as "During handling of the above exception, another exception occurred:..."
-            if error is not None:
-                self.fail("The check of the agent's cgroup should not have reported errors. Reported processes: {0}".format(error.unexpected))
-
         finally:
-            # create the file that stops the test process and wait for them to complete
+            # create the file that stops the test processes and wait for them to complete
             open(stop_file, "w").close()
             for thread in threads:
                 thread.join(timeout=5)
 
+    def test_check_agent_throttled_time_should_raise_a_cgroups_exception_when_the_threshold_is_exceeded(self):
+        metrics = [MetricValue(MetricsCategory.CPU_CATEGORY, MetricsCounter.THROTTLED_TIME, AGENT_NAME_TELEMETRY, _AGENT_THROTTLED_TIME_THRESHOLD + 1)]
 
+        with self.assertRaises(CGroupsException) as context_manager:
+            CGroupConfigurator._Impl._check_agent_throttled_time(metrics)
+
+        self.assertIn("The agent has been throttled", ustr(context_manager.exception), "An incorrect exception was raised")
+
+    def test_check_cgroups_should_disable_cgroups_when_a_check_fails(self):
+        with self._get_cgroup_configurator() as configurator:
+            checks = ["_check_processes_in_agent_cgroup", "_check_agent_throttled_time"]
+            for method_to_fail in checks:
+                patchers = []
+                try:
+                    # mock 'method_to_fail' to raise an exception and the rest to do nothing
+                    for method_to_mock in checks:
+                        side_effect = CGroupsException(method_to_fail) if method_to_mock == method_to_fail else lambda *_: None
+                        p = patch.object(configurator, method_to_mock, side_effect=side_effect)
+                        patchers.append(p)
+                        p.start()
+
+                    with patch("azurelinuxagent.common.cgroupconfigurator.add_event") as add_event:
+                        configurator.enable()
+
+                        configurator.check_cgroups([])
+
+                        self.assertFalse(configurator.enabled(), "An error in {0} should have disabled cgroups".format(method_to_fail))
+
+                        disable_events = [kwargs for _, kwargs in add_event.call_args_list if kwargs["op"] == WALAEventOperation.CGroupsDisabled]
+                        self.assertTrue(
+                            len(disable_events) == 1,
+                            "Exactly 1 event should have been emitted when {0} fails. Got: {1}".format(method_to_fail, disable_events))
+                        self.assertIn(
+                            "[CGroupsException] {0}".format(method_to_fail),
+                            disable_events[0]["message"],
+                            "The error message is not correct when {0} failed".format(method_to_fail))
+                finally:
+                    for p in patchers:
+                        p.stop()

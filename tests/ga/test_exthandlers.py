@@ -21,12 +21,13 @@ import subprocess
 import time
 import uuid
 
-from azurelinuxagent.common.cgroupconfigurator import CGroupConfigurator
+from azurelinuxagent.common.agent_supported_feature import AgentSupportedFeature
 from azurelinuxagent.common.event import AGENT_EVENT_FILE_EXTENSION, WALAEventOperation
 from azurelinuxagent.common.exception import ExtensionError, ExtensionErrorCodes
 from azurelinuxagent.common.protocol.restapi import ExtensionStatus, Extension, ExtHandler, ExtHandlerProperties
 from azurelinuxagent.common.protocol.util import ProtocolUtil
 from azurelinuxagent.common.protocol.wire import WireProtocol
+from azurelinuxagent.common.utils import fileutil
 from azurelinuxagent.common.utils.extensionprocessutil import TELEMETRY_MESSAGE_MAX_LEN, format_stdout_stderr, \
     read_output
 from azurelinuxagent.ga.exthandlers import parse_ext_status, ExtHandlerInstance, ExtCommandEnvVariable, \
@@ -68,8 +69,6 @@ class TestExtHandlers(AgentTestCase):
         """
         Parse a status report for a successful execution of an extension.
         """
-
-        # pylint: disable=invalid-name
         s = '''[{
     "status": {
       "status": "success",
@@ -85,7 +84,6 @@ class TestExtHandlers(AgentTestCase):
     "timestampUTC": "2018-04-20T21:20:24Z"
   }
 ]'''
-        # pylint: enable=invalid-name
         ext_status = ExtensionStatus(seq_no=0)
         parse_ext_status(ext_status, json.loads(s))
 
@@ -105,7 +103,6 @@ class TestExtHandlers(AgentTestCase):
         The agent should handle this gracefully, and convert all unknown
         status/status values into an error.
         """
-        # pylint: disable=invalid-name
         s = '''[{ 
     "status": {
       "status": "failed",
@@ -120,7 +117,6 @@ class TestExtHandlers(AgentTestCase):
     "version": "1.0",
     "timestampUTC": "2018-04-20T20:50:22Z"
 }]'''
-        # pylint: enable=invalid-name
         ext_status = ExtensionStatus(seq_no=0)
         parse_ext_status(ext_status, json.loads(s))
 
@@ -189,7 +185,7 @@ class TestExtHandlers(AgentTestCase):
         """
 
         # Validating empty status case
-        s = '''[]'''  # pylint: disable=invalid-name
+        s = '''[]'''
         ext_status = ExtensionStatus(seq_no=0)
         parse_ext_status(ext_status, json.loads(s))
 
@@ -215,7 +211,7 @@ class TestExtHandlers(AgentTestCase):
 
     @patch('azurelinuxagent.common.event.EventLogger.add_event')
     @patch('azurelinuxagent.ga.exthandlers.ExtHandlerInstance._get_last_modified_seq_no_from_config_files')
-    def assert_extension_sequence_number(self,  # pylint: disable=too-many-arguments
+    def assert_extension_sequence_number(self,
                                          patch_get_largest_seq,
                                          patch_add_event,
                                          goal_state_sequence_number,
@@ -290,6 +286,32 @@ class TestExtHandlers(AgentTestCase):
                               "Error message should contain the incorrect versions")
                 self.assertFalse(plugin_setting_mismatch_calls[0]['is_success'], "The event should be false")
 
+    @patch("azurelinuxagent.common.conf.get_ext_log_dir")
+    def test_command_extension_log_truncates_correctly(self, mock_log_dir):
+        log_dir_path = os.path.join(self.tmp_dir, "log_directory")
+        mock_log_dir.return_value = log_dir_path
+
+        ext_handler_props = ExtHandlerProperties()
+        ext_handler_props.version = "1.2.3"
+        ext_handler = ExtHandler(name='foo')
+        ext_handler.properties = ext_handler_props
+
+        first_line = "This is the first line!"
+        second_line = "This is the second line."
+        old_logfile_contents = "{first_line}\n{second_line}\n".format(first_line=first_line, second_line=second_line)
+
+        log_file_path = os.path.join(log_dir_path, "foo", "CommandExecution.log")
+
+        fileutil.mkdir(os.path.join(log_dir_path, "foo"), mode=0o755)
+        with open(log_file_path, "a") as log_file:
+            log_file.write(old_logfile_contents)
+
+        _ = ExtHandlerInstance(ext_handler=ext_handler, protocol=None,
+            execution_log_max_size=(len(first_line)+len(second_line)//2))
+
+        with open(log_file_path) as truncated_log_file:
+            self.assertEqual(truncated_log_file.read(), "{second_line}\n".format(second_line=second_line))
+
 class LaunchCommandTestCase(AgentTestCase):
     """
     Test cases for launch_command
@@ -314,15 +336,7 @@ class LaunchCommandTestCase(AgentTestCase):
         self.mock_sleep = patch("time.sleep", lambda *_: mock_sleep(0.01))
         self.mock_sleep.start()
 
-        self.cgroups_enabled = CGroupConfigurator.get_instance().enabled()
-        CGroupConfigurator.get_instance().disable()
-
     def tearDown(self):
-        if self.cgroups_enabled:
-            CGroupConfigurator.get_instance().enable()
-        else:
-            CGroupConfigurator.get_instance().disable()
-
         self.mock_get_log_dir.stop()
         self.mock_get_base_dir.stop()
         self.mock_sleep.stop()
@@ -699,7 +713,10 @@ sys.stderr.write("STDERR")
         self.create_script(os.path.join(self.ext_handler_instance.get_base_dir(), test_file), command)
 
         with patch("subprocess.Popen", wraps=subprocess.Popen) as patch_popen:
-            output = ext_handler_instance.launch_command(test_file)
+            # Returning empty list for get_agent_supported_features_list_for_extensions as we have a separate test for it
+            with patch("azurelinuxagent.ga.exthandlers.get_agent_supported_features_list_for_extensions",
+                       return_value={}):
+                output = ext_handler_instance.launch_command(test_file)
 
             args, kwagrs = patch_popen.call_args  # pylint: disable=unused-variable
             without_os_env = dict((k, v) for (k, v) in kwagrs['env'].items() if k not in os.environ)
@@ -710,3 +727,64 @@ sys.stderr.write("STDERR")
             # This check is checking if the expected values are set for the extension commands
             for helper_var in helper_env_vars:
                 self.assertIn("%s=%s" % (helper_var, helper_env_vars[helper_var]), output)
+
+    def test_it_should_pass_supported_features_list_as_environment_variables(self):
+
+        class TestFeature(AgentSupportedFeature):
+
+            def __init__(self, name, version, supported):
+                super(TestFeature, self).__init__(name=name,
+                                                  version=version,
+                                                  supported=supported)
+
+        test_name = str(uuid.uuid4())
+        test_version = str(uuid.uuid4())
+
+        command = "check_env.py"
+        self.create_script(os.path.join(self.ext_handler_instance.get_base_dir(), command), '''
+import os
+import json
+import sys
+
+features = os.getenv("{0}")
+if not features:
+    print("{0} not found in environment")
+    sys.exit(0)
+l = json.loads(features)
+found = False
+for feature in l:
+    if feature['Key'] == "{1}" and feature['Value'] == "{2}":
+        found = True
+        break
+    
+print("Found Feature %s: %s" % ("{1}", found))
+'''.format(ExtCommandEnvVariable.ExtensionSupportedFeatures, test_name, test_version))
+
+        # It should include all supported features and pass it as Environment Variable to extensions
+        test_supported_features = {test_name: TestFeature(name=test_name, version=test_version, supported=True)}
+        with patch("azurelinuxagent.ga.exthandlers.get_agent_supported_features_list_for_extensions",
+                   return_value=test_supported_features):
+            output = self.ext_handler_instance.launch_command(command)
+
+            self.assertIn("[stdout]\nFound Feature {0}: True".format(test_name), output, "Feature not found")
+
+        # It should not include the feature if feature not supported
+        test_supported_features = {
+            test_name: TestFeature(name=test_name, version=test_version, supported=False),
+            "testFeature": TestFeature(name="testFeature", version="1.2.1", supported=True)
+        }
+        with patch("azurelinuxagent.ga.exthandlers.get_agent_supported_features_list_for_extensions",
+                   return_value=test_supported_features):
+            output = self.ext_handler_instance.launch_command(command)
+
+            self.assertIn("[stdout]\nFound Feature {0}: False".format(test_name), output, "Feature wrongfully found")
+
+        # It should not include the SupportedFeatures Key in Environment variables if no features supported
+        test_supported_features = {test_name: TestFeature(name=test_name, version=test_version, supported=False)}
+        with patch("azurelinuxagent.ga.exthandlers.get_agent_supported_features_list_for_extensions",
+                   return_value=test_supported_features):
+            output = self.ext_handler_instance.launch_command(command)
+
+            self.assertIn(
+                "[stdout]\n{0} not found in environment".format(ExtCommandEnvVariable.ExtensionSupportedFeatures),
+                output, "Environment variable should not be found")

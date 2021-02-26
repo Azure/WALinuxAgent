@@ -18,11 +18,9 @@ import contextlib
 import os
 
 from azurelinuxagent.common import logger
-from azurelinuxagent.common.cgroupapi import SYSTEMD_RUN_PATH
 from azurelinuxagent.common.logger import Logger
 from azurelinuxagent.common.protocol.util import ProtocolUtil
-from azurelinuxagent.ga.collect_logs import get_collect_logs_handler, CollectLogsHandler, is_log_collection_allowed
-from azurelinuxagent.ga.periodic_operation import PeriodicOperation
+from azurelinuxagent.ga.collect_logs import get_collect_logs_handler, is_log_collection_allowed
 from tests.protocol.mocks import mock_wire_protocol, HttpRequestPredicates, MockHttpResponse
 from tests.protocol.mockwiredata import DATA_FILE
 from tests.tools import Mock, MagicMock, patch, AgentTestCase, clear_singleton_instances, skip_if_predicate_true, \
@@ -42,21 +40,13 @@ def _create_collect_logs_handler(iterations=1, systemd_present=True):
         * run_and_wait() - invokes run() and wait() on the CollectLogsHandler
 
     """
-
-    original_file_exists = os.path.exists
-
-    def mock_file_exists(filepath):
-        if filepath == SYSTEMD_RUN_PATH:
-            return systemd_present
-        return original_file_exists(filepath)
-
     with mock_wire_protocol(DATA_FILE) as protocol:
         protocol_util = MagicMock()
         protocol_util.get_protocol = Mock(return_value=protocol)
         with patch("azurelinuxagent.ga.collect_logs.get_protocol_util", return_value=protocol_util):
             with patch("azurelinuxagent.ga.collect_logs.CollectLogsHandler.stopped", side_effect=[False] * iterations + [True]):
                 with patch("time.sleep"):
-                    with patch("azurelinuxagent.ga.collect_logs.os.path.exists", side_effect=mock_file_exists):
+                    with patch("azurelinuxagent.common.osutil.systemd.is_systemd", return_value=systemd_present):
                         with patch("azurelinuxagent.ga.collect_logs.conf.get_collect_logs", return_value=True):
                             def run_and_wait():
                                 collect_logs_handler.run()
@@ -90,23 +80,8 @@ class TestCollectLogs(AgentTestCase, HttpRequestPredicates):
         AgentTestCase.tearDown(self)
 
     def _create_dummy_archive(self, size=1024):
-        with open(self.archive_path, "wb") as f:  # pylint: disable=C0103
+        with open(self.archive_path, "wb") as f:
             f.truncate(size)
-
-    def test_it_should_invoke_all_periodic_operations(self):
-        invoked_operations = []
-
-        with _create_collect_logs_handler() as collect_logs_handler:
-            def mock_run(self):
-                invoked_operations.append(self._name)
-
-            with patch.object(PeriodicOperation, "run", side_effect=mock_run, spec=CollectLogsHandler.run):
-                collect_logs_handler.run_and_wait()
-
-                expected_operations = ["collect_and_send_logs"]
-
-                self.assertEqual(invoked_operations.sort(), expected_operations.sort(),
-                                 "The collect logs thread did not invoke the expected operations")
 
     def test_it_should_only_collect_logs_if_conditions_are_met(self):
         # In order to collect logs, three conditions have to be met:

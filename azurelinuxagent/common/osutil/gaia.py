@@ -46,10 +46,10 @@ class GaiaOSUtil(DefaultOSUtil):
                 out = shellutil.run_command(final_command, log_error=True)
                 ret = 0
                 break
-            except shellutil.CommandError as e:  # pylint: disable=C0103
+            except shellutil.CommandError as e:
                 ret = e.returncode
                 out = e.stdout
-            except Exception as e:  # pylint: disable=C0103
+            except Exception as e:
                 ret = -1
                 out = ustr(e)
 
@@ -123,8 +123,8 @@ class GaiaOSUtil(DefaultOSUtil):
                 return int(buf[0].split()[1])
             return int(''.join(buf[1:]), 16)
 
-        n = text_to_num(modulus)  # pylint: disable=C0103
-        e = text_to_num(exponent)  # pylint: disable=C0103
+        n = text_to_num(modulus)
+        e = text_to_num(exponent)
 
         keydata = bytearray()
         keydata.extend(struct.pack('>I', len('ssh-rsa')))

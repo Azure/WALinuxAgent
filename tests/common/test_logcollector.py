@@ -133,7 +133,7 @@ class TestLogCollector(AgentTestCase):
         binary_descriptor = "b" if binary else ""
         data = b'0' if binary else '0'
 
-        with open(file_path, "w{0}".format(binary_descriptor)) as fh:  # pylint: disable=bad-open-mode,invalid-name
+        with open(file_path, "w{0}".format(binary_descriptor)) as fh:  # pylint: disable=bad-open-mode
             fh.seek(file_size - 1)
             fh.write(data)
 
@@ -195,15 +195,15 @@ diskinfo,""".format(folder_to_list, file_to_collect)
             log_collector = LogCollector()
             archive = log_collector.collect_logs_and_get_archive()
 
-        with open(self.output_results_file_path, "r") as fh:  # pylint: disable=invalid-name
+        with open(self.output_results_file_path, "r") as fh:
             results = fh.readlines()
 
         # Assert echo was parsed
-        self.assertTrue(any([line.endswith("### Test header ###\n") for line in results]))
+        self.assertTrue(any(line.endswith("### Test header ###\n") for line in results))
         # Assert unknown command was reported
-        self.assertTrue(any([line.endswith("ERROR Couldn\'t parse \"unknown command\"\n") for line in results]))
+        self.assertTrue(any(line.endswith("ERROR Couldn\'t parse \"unknown command\"\n") for line in results))
         # Assert ll was parsed
-        self.assertTrue(any(["ls -alF {0}".format(folder_to_list) in line for line in results]))
+        self.assertTrue(any("ls -alF {0}".format(folder_to_list) in line for line in results))
         # Assert copy was parsed
         self._assert_archive_created(archive)
         self._assert_files_are_in_archive(expected_files=[file_to_collect])

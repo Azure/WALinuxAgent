@@ -42,6 +42,10 @@ class CoreOSUtil(DefaultOSUtil):
             py_path = self.waagent_path
         os.environ['PYTHONPATH'] = py_path
 
+    @staticmethod
+    def get_agent_bin_path():
+        return "/usr/share/oem/bin"
+
     def is_sys_user(self, username):
         # User 'core' is not a sysuser.
         if username == 'core':

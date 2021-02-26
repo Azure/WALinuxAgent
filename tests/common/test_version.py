@@ -23,6 +23,7 @@ import textwrap
 import mock
 
 import azurelinuxagent.common.conf as conf
+from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.event import EVENTS_DIRECTORY
 from azurelinuxagent.common.version import set_current_agent, \
     AGENT_LONG_VERSION, AGENT_VERSION, AGENT_NAME, AGENT_NAME_PATTERN, \
@@ -36,7 +37,7 @@ def freebsd_system():
     return ["FreeBSD"]
 
 
-def freebsd_system_release(x, y, z):  # pylint: disable=unused-argument,invalid-name
+def freebsd_system_release(x, y, z):  # pylint: disable=unused-argument
     return "10.0"
 
 
@@ -44,7 +45,7 @@ def openbsd_system():
     return ["OpenBSD"]
 
 
-def openbsd_system_release(x, y, z):  # pylint: disable=unused-argument,invalid-name
+def openbsd_system_release(x, y, z):  # pylint: disable=unused-argument
     return "20.0"
 
 
@@ -122,7 +123,7 @@ class TestAgentVersion(AgentTestCase):
         it returns a string'.
         """
         lis_version = get_lis_version()
-        self.assertIsInstance(lis_version, str)
+        self.assertIsInstance(lis_version, ustr)
 
     def test_get_daemon_version_should_return_the_version_that_was_previously_set(self):
         set_daemon_version("1.2.3.4")
