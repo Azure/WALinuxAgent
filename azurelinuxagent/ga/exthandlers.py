@@ -44,7 +44,7 @@ from azurelinuxagent.common.errorstate import ErrorState
 from azurelinuxagent.common.event import add_event, elapsed_milliseconds, report_event, WALAEventOperation, \
     add_periodic, EVENTS_DIRECTORY
 from azurelinuxagent.common.exception import ExtensionDownloadError, ExtensionError, ExtensionErrorCodes, \
-    ExtensionOperationError, ExtensionUpdateError, ProtocolError, ProtocolNotFoundError, ExtensionConfigError, GoalStateStatusCodes
+    ExtensionOperationError, ExtensionUpdateError, ProtocolError, ProtocolNotFoundError, ExtensionConfigError, GoalStateAggregateStatusCodes
 from azurelinuxagent.common.future import ustr, is_file_not_found_error
 from azurelinuxagent.common.protocol.restapi import ExtensionStatus, ExtensionSubStatus, ExtHandler, ExtHandlerStatus, \
     VMStatus, GoalStateAggregateStatus
@@ -246,10 +246,10 @@ class ExtensionRequestedState(object):
 class GoalStateState(object):
     Success = "Success"
     Failed = "Failed"
-
-    # The following fields are not used now but would be needed once Status reporting is moved to a separate thread
-    Transitioning = "Transitioning"
     Initialize = "Initialize"
+
+    # The following field is not used now but would be needed once Status reporting is moved to a separate thread
+    Transitioning = "Transitioning"
 
 
 def get_exthandlers_handler(protocol):
@@ -274,7 +274,12 @@ class ExtHandlersHandler(object):
         self.last_etag = None
         self.log_report = False
         self.log_process = False
-        self.__gs_aggregate_status = None
+        # The GoalState Aggregate status needs to report the last status of the GoalState. Since we only process
+        # extensions on incarnation change, we need to maintain its these.
+        # Setting the status as Initialize here because this would be overridden atleast once for processing the first GoalState.
+        self.__gs_aggregate_status = GoalStateAggregateStatus(status=GoalStateState.Initialize, seq_no="-1",
+                                                              code=GoalStateAggregateStatusCodes.Success,
+                                                              message="Initializing new GoalState")
 
         self.report_status_error_state = ErrorState()
 
@@ -333,25 +338,24 @@ class ExtHandlersHandler(object):
     def __all_required_features_supported(self):
         required_features = self.protocol.get_required_features()
         supported_features = get_agent_supported_features_list_for_crp()
-        return all(feature in supported_features for feature in required_features)
+        return all(feature.name in supported_features for feature in required_features)
 
     def __process_and_handle_extensions(self, etag):
         try:
             # Verify we satisfy all required features, if any. If not, report failure here itself, no need to process anything further.
             if not self.__all_required_features_supported():
-                # ToDo: What happens in windows if there are no status to report? Empty status or transitioning? Verify!!
                 self.__gs_aggregate_status = GoalStateAggregateStatus(status=GoalStateState.Failed, seq_no=etag,
-                                                                    code=GoalStateStatusCodes.GoalStateUnsupportedRequiredFeatures,
-                                                                    message="Unsupported required features")
+                                                                      code=GoalStateAggregateStatusCodes.GoalStateUnsupportedRequiredFeatures,
+                                                                      message="Unsupported required features")
             else:
                 self.handle_ext_handlers(etag)
                 self.__gs_aggregate_status = GoalStateAggregateStatus(status=GoalStateState.Success, seq_no=etag,
-                                                                      code=GoalStateStatusCodes.Success,
+                                                                      code=GoalStateAggregateStatusCodes.Success,
                                                                       message="GoalState executed successfully")
         except Exception as error:
             msg = "Unexpected error when processing goal state: {0}; {1}".format(ustr(error), traceback.format_exc())
             self.__gs_aggregate_status = GoalStateAggregateStatus(status=GoalStateState.Failed, seq_no=etag,
-                                                                  code=GoalStateStatusCodes.GoalStateUnknownFailure,
+                                                                  code=GoalStateAggregateStatusCodes.GoalStateUnknownFailure,
                                                                   message=msg)
             logger.warn(msg)
             add_event(AGENT_NAME,
@@ -703,8 +707,8 @@ class ExtHandlersHandler(object):
         """
         Go through handler_state dir, collect and report status
         """
-        vm_status = VMStatus(status="Ready", message="Guest Agent is running")
-        self.__set_vm_artifact_aggregate_status(vm_status)
+        vm_status = VMStatus(status="Ready", message="Guest Agent is running",
+                             gs_aggregate_status=self.__gs_aggregate_status)
         if self.ext_handlers is not None:
             for ext_handler in self.ext_handlers.extHandlers:
                 try:
@@ -805,9 +809,6 @@ class ExtHandlersHandler(object):
                 ext_handler_i.set_handler_status(message=ustr(e), code=e.code)
 
         vm_status.vmAgent.extensionHandlers.append(handler_status)
-
-    def __set_vm_artifact_aggregate_status(self, vm_status):
-        vm_status.vmAgent.vm_artifacts_aggregate_status.goal_state_aggregate_status = self.__gs_aggregate_status
 
 
 class ExtHandlerInstance(object):

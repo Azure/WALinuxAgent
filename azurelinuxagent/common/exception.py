@@ -284,7 +284,7 @@ class ExtensionErrorCodes(object):
         pass
 
 
-class GoalStateStatusCodes(object):
+class GoalStateAggregateStatusCodes(object):
 
     # Success
     Success = 0

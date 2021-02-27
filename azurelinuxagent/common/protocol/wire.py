@@ -372,7 +372,7 @@ def vm_artifacts_aggregate_status_to_v1(vm_artifacts_aggregate_status):
     gs_aggregate_status = vm_artifacts_aggregate_status.goal_state_aggregate_status
     v1_goal_state_aggregate_status = {
         "formattedMessage": __get_formatted_msg_for_status_reporting(gs_aggregate_status.message),
-        "timestampUTC": _get_utc_timestamp_for_status_reporting(timestamp=gs_aggregate_status.utc_timestamp),
+        "timestampUTC": _get_utc_timestamp_for_status_reporting(timestamp=gs_aggregate_status.processed_time),
         "inSvdSeqNo": gs_aggregate_status.in_svd_seq_no,
         "status": gs_aggregate_status.status,
         "code": gs_aggregate_status.code

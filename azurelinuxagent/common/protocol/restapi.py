@@ -274,7 +274,7 @@ class ExtHandlerStatus(DataContract):
 
 
 class VMAgentStatus(DataContract):
-    def __init__(self, status=None, message=None):
+    def __init__(self, status=None, message=None, gs_aggregate_status=None):
         self.status = status
         self.message = message
         self.hostname = socket.gethostname()
@@ -282,12 +282,12 @@ class VMAgentStatus(DataContract):
         self.osname = DISTRO_NAME
         self.osversion = DISTRO_VERSION
         self.extensionHandlers = DataContractList(ExtHandlerStatus)
-        self.vm_artifacts_aggregate_status = VMArtifactsAggregateStatus()
+        self.vm_artifacts_aggregate_status = VMArtifactsAggregateStatus(gs_aggregate_status)
 
 
 class VMStatus(DataContract):
-    def __init__(self, status, message):
-        self.vmAgent = VMAgentStatus(status=status, message=message)
+    def __init__(self, status, message, gs_aggregate_status=None):
+        self.vmAgent = VMAgentStatus(status=status, message=message, gs_aggregate_status=gs_aggregate_status)
 
 
 class GoalStateAggregateStatus(DataContract):
@@ -296,12 +296,16 @@ class GoalStateAggregateStatus(DataContract):
         self.in_svd_seq_no = seq_no
         self.status = status
         self.code = code
-        self.utc_timestamp = time.gmtime()
+        self.__utc_timestamp = time.gmtime()
+
+    @property
+    def processed_time(self):
+        return self.__utc_timestamp
 
 
 class VMArtifactsAggregateStatus(DataContract):
-    def __init__(self):
-        self.goal_state_aggregate_status = GoalStateAggregateStatus()
+    def __init__(self, gs_aggregate_status=None):
+        self.goal_state_aggregate_status = gs_aggregate_status
 
 
 class RemoteAccessUser(DataContract):
