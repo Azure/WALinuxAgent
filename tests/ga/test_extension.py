@@ -3033,17 +3033,17 @@ class TestCollectExtensionStatus(AgentTestCase):
         self.assertEqual(ext_status.status, ValidHandlerStatus.error)
         self.assertEqual(len(ext_status.substatusList), 0)
 
-class TestAdditionalLocationsExtensions(ExtensionTestCase):
+class TestAdditionalLocationsExtensions(AgentTestCase):
 
     def setUp(self):
-        ExtensionTestCase.setUp(self)
+        AgentTestCase.setUp(self)
         self.mock_sleep = patch("time.sleep", lambda *_: mock_sleep(0.0001))
         self.mock_sleep.start()
         self.test_data = DATA_FILE_EXT_ADDITIONAL_LOCATIONS.copy()
 
     def tearDown(self):
         self.mock_sleep.stop()
-        ExtensionTestCase.tearDown(self)
+        AgentTestCase.tearDown(self)
 
     def test_additional_locations_node_is_consumed(self):
 
