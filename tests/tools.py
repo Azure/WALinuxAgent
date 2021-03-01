@@ -35,7 +35,6 @@ import azurelinuxagent.common.conf as conf
 import azurelinuxagent.common.event as event
 import azurelinuxagent.common.logger as logger
 from azurelinuxagent.common.future import range  # pylint: disable=redefined-builtin
-from azurelinuxagent.common.cgroupapi import SYSTEMD_RUN_PATH
 from azurelinuxagent.common.utils import fileutil
 from azurelinuxagent.common.version import PY_VERSION_MAJOR
 
@@ -112,14 +111,6 @@ def _safe_repr(obj, short=False):
     if not short or len(result) < _MAX_LENGTH:
         return result
     return result[:_MAX_LENGTH] + ' [truncated]...'
-
-
-def running_under_travis():
-    return 'TRAVIS' in os.environ and os.environ['TRAVIS'] == 'true'
-
-
-def is_systemd_present():
-    return os.path.exists(SYSTEMD_RUN_PATH)
 
 
 def i_am_root():

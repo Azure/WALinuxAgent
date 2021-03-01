@@ -346,24 +346,10 @@ class TestHandlerStateMigration(AgentTestCase):
         return
 
 
-class ExtensionTestCase(AgentTestCase):
-    @classmethod
-    def setUpClass(cls):
-        cls.cgroups_enabled = CGroupConfigurator.get_instance().enabled()
-        CGroupConfigurator.get_instance().disable()
-
-    @classmethod
-    def tearDownClass(cls):
-        if cls.cgroups_enabled:
-            CGroupConfigurator.get_instance().enable()
-        else:
-            CGroupConfigurator.get_instance().disable()
-
-
 @patch('time.sleep', side_effect=lambda _: mock_sleep(0.001))
 @patch("azurelinuxagent.common.protocol.wire.CryptUtil")
 @patch("azurelinuxagent.common.utils.restutil.http_get")
-class TestExtension(ExtensionTestCase):
+class TestExtension(AgentTestCase):
     def setUp(self):
         AgentTestCase.setUp(self)
 
@@ -1063,8 +1049,7 @@ class TestExtension(ExtensionTestCase):
         for enable_extensions in [False, True]:
             tmp_lib_dir = tempfile.mkdtemp(prefix="ExtensionEnabled{0}".format(enable_extensions))
             with patch("azurelinuxagent.common.conf.get_lib_dir", return_value=tmp_lib_dir):
-                with patch('azurelinuxagent.ga.exthandlers.is_extension_telemetry_pipeline_enabled',
-                           return_value=enable_extensions):
+                with patch("azurelinuxagent.common.agent_supported_feature._ETPFeature.is_supported", enable_extensions):
                     # Create new object for each run to force re-installation of extensions as we
                     # only create handler_environment on installation
                     test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE_MULTIPLE_EXT)
@@ -1099,7 +1084,7 @@ class TestExtension(ExtensionTestCase):
         test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE)
         exthandlers_handler, protocol = self._create_mock(test_data, *args)  # pylint: disable=no-value-for-parameter
 
-        with patch('azurelinuxagent.ga.exthandlers.is_extension_telemetry_pipeline_enabled', return_value=True):
+        with patch("azurelinuxagent.common.agent_supported_feature._ETPFeature.is_supported", True):
             exthandlers_handler.run()
             self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.0.0")
             self._assert_ext_status(protocol.report_ext_status, "success", 0)
@@ -1186,7 +1171,7 @@ class TestExtension(ExtensionTestCase):
             event_occurrences = [kw for _, kw in mock_add_event.call_args_list if
                           "Failed to download artifacts: [ExtensionDownloadError] {0}".format(err_msg_guid) in kw['message']]
             self.assertEqual(expected_download_failed_event_count, len(event_occurrences), "Call count do not match")
-            self.assertFalse(any([kw['is_success'] for kw in event_occurrences]), "The events should have failed")
+            self.assertFalse(any(kw['is_success'] for kw in event_occurrences), "The events should have failed")
             self.assertEqual(expected_download_failed_event_count, len([kw['op'] for kw in event_occurrences]),
                              "Incorrect Operation, all events should be a download errors")
 
@@ -2533,7 +2518,7 @@ class TestInVMArtifactsProfile(AgentTestCase):
         self.assertTrue(profile.is_on_hold(), "Failed to parse '{0}'".format(profile_json))
 
 
-class TestExtensionUpdateOnFailure(ExtensionTestCase):
+class TestExtensionUpdateOnFailure(AgentTestCase):
 
     def setUp(self):
         AgentTestCase.setUp(self)
@@ -2857,9 +2842,9 @@ class TestExtensionUpdateOnFailure(ExtensionTestCase):
 
 
 @patch('time.sleep', side_effect=lambda _: mock_sleep(0.001))
-class TestCollectExtensionStatus(ExtensionTestCase):
+class TestCollectExtensionStatus(AgentTestCase):
     def setUp(self):
-        ExtensionTestCase.setUp(self)
+        AgentTestCase.setUp(self)
         self.lib_dir = tempfile.mkdtemp()
 
     def _setup_extension_for_validating_collect_ext_status(self, mock_lib_dir, status_file, *args):  # pylint: disable=unused-argument
@@ -3101,19 +3086,19 @@ class TestAdditionalLocationsExtensions(ExtensionTestCase):
             exthandlers_handler = get_exthandlers_handler(protocol)
             exthandlers_handler.run()
 
-class TestMultiConfigExtensions(ExtensionTestCase):
+class TestMultiConfigExtensions(AgentTestCase):
 
     _MULTI_CONFIG_TEST_DATA = os.path.join("wire", "multi-config")
 
     def setUp(self):
-        ExtensionTestCase.setUp(self)
+        AgentTestCase.setUp(self)
         self.mock_sleep = patch("time.sleep", lambda *_: mock_sleep(0.0001))
         self.mock_sleep.start()
         self.test_data = DATA_FILE.copy()
 
     def tearDown(self):
         self.mock_sleep.stop()
-        ExtensionTestCase.tearDown(self)
+        AgentTestCase.tearDown(self)
 
     class _TestExtHandlerObject:
         def __init__(self, name, version, state="enabled"):

@@ -20,8 +20,20 @@ import re
 import shutil
 import subprocess
 
+from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.utils import fileutil
 from tests.tools import patch, patch_builtin
+
+
+class MockCommand:
+    def __init__(self, command, stdout='', return_value=0, stderr=''):
+        self.command = command
+        self.stdout = stdout
+        self.return_value = return_value
+        self.stderr = stderr
+
+    def __str__(self):
+        return ' '.join(self.command) if isinstance(self.command, list) else self.command
 
 
 class MockEnvironment:
@@ -35,14 +47,14 @@ class MockEnvironment:
     (it mocks fileutil.mkdir() instead od os.mkdir() because the agent's code users the former since it provides
     backwards compatibility with Python 2).
 
-    The mock for Popen looks for a match in the given 'commands' and, if found, forwards the call to the the echo command
-    to produce the output for the matching item. Otherwise it forwards the call to the original Popen function.
+    The mock for Popen looks for a match in the given 'commands' and, if found, forwards the call to the mock_command.py,
+    which produces the output specified by the matching item. Otherwise it forwards the call to the original Popen function.
 
     The mocks for the other functions first look for a match in the given 'files' array and, if found, map the file to the
-    corresponding path in the matching item. If there is no match, then it checks if the file is included in the given 'paths'
-    array and maps the path to the given 'tmp_dir' (e.g. "/lib/systemd/system" becomes "<tmp_dir>/lib/systemd/system".) If
-    there no matches, the path is not changed. Once this mapping has completed the mocks invoke the corresponding original
-    function.
+    corresponding path in the matching item (if the mapping points to an Exception, the Exception is raised). If there is no
+    match, then it checks if the file is included in the given 'paths' array and maps the path to the given 'tmp_dir'
+    (e.g. "/lib/systemd/system" becomes "<tmp_dir>/lib/systemd/system".) If there no matches, the path is not changed.
+    Once this mapping has completed the mocks invoke the corresponding original function.
 
     Matches are done using regular expressions; the regular expressions in 'paths' must create group 0 to indicate
     the section of the path that needs to be mapped (i.e. use parenthesis around the section that needs to be mapped.)
@@ -97,8 +109,8 @@ class MockEnvironment:
             except Exception:
                 pass
 
-    def add_command(self, pattern, output):
-        self.commands.insert(0, (pattern, output))
+    def add_command(self, command):
+        self.commands.insert(0, command)
 
     def add_path(self, mock):
         self.paths.insert(0, mock)
@@ -131,9 +143,13 @@ class MockEnvironment:
             command_string = command
 
         for cmd in self.commands:
-            match = re.match(cmd[0], command_string)
+            match = re.match(cmd.command, command_string)
             if match is not None:
-                command = ["echo", cmd[1]]
+                mock_script = os.path.join(os.path.split(__file__)[0], "mock_command.py")
+                if 'shell' in kwargs and kwargs['shell']:
+                    command = "{0} '{1}' {2} '{3}'".format(mock_script, cmd.stdout, cmd.return_value, cmd.stderr)
+                else:
+                    command = [mock_script, cmd.stdout, ustr(cmd.return_value), cmd.stderr]
                 break
 
         return self._original_popen(command, *args, **kwargs)
@@ -142,7 +158,10 @@ class MockEnvironment:
         return self._original_mkdir(self.get_mapped_path(path), *args, **kwargs)
 
     def _mock_open(self, path, *args, **kwargs):
-        return self._original_open(self.get_mapped_path(path), *args, **kwargs)
+        mapped_path = self.get_mapped_path(path)
+        if isinstance(mapped_path, Exception):
+            raise mapped_path
+        return self._original_open(mapped_path, *args, **kwargs)
 
     def _mock_path_exists(self, path):
         return self._original_path_exists(self.get_mapped_path(path))

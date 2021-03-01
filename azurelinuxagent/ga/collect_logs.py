@@ -25,11 +25,11 @@ import time
 
 import azurelinuxagent.common.conf as conf
 from azurelinuxagent.common import logger
-from azurelinuxagent.common.cgroupapi import CGroupsApi
 from azurelinuxagent.common.event import elapsed_milliseconds, add_event, WALAEventOperation
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.interfaces import ThreadHandlerInterface
 from azurelinuxagent.common.logcollector import COMPRESSED_ARCHIVE_PATH
+from azurelinuxagent.common.osutil import systemd
 from azurelinuxagent.common.protocol.util import get_protocol_util
 from azurelinuxagent.common.utils import shellutil
 from azurelinuxagent.common.utils.shellutil import CommandError
@@ -46,7 +46,7 @@ def is_log_collection_allowed():
     # 2) The system must be using systemd to manage services. Needed for resource limiting of the log collection.
     # 3) The python version must be greater than 2.6 in order to support the ZipFile library used when collecting.
     conf_enabled = conf.get_collect_logs()
-    systemd_present = CGroupsApi.is_systemd()
+    systemd_present = systemd.is_systemd()
     supported_python = PY_VERSION_MINOR >= 7 if PY_VERSION_MAJOR == 2 else PY_VERSION_MAJOR == 3
     is_allowed = conf_enabled and systemd_present and supported_python
 
