@@ -370,6 +370,9 @@ def ext_handler_status_to_v1(handler_status, ext_statuses):
 
 def vm_artifacts_aggregate_status_to_v1(vm_artifacts_aggregate_status):
     gs_aggregate_status = vm_artifacts_aggregate_status.goal_state_aggregate_status
+    if gs_aggregate_status is None:
+        return None
+
     v1_goal_state_aggregate_status = {
         "formattedMessage": __get_formatted_msg_for_status_reporting(gs_aggregate_status.message),
         "timestampUTC": _get_utc_timestamp_for_status_reporting(timestamp=gs_aggregate_status.processed_time),
@@ -400,9 +403,12 @@ def vm_status_to_v1(vm_status, ext_statuses):
 
     v1_agg_status = {
         'guestAgentStatus': v1_ga_status,
-        'handlerAggregateStatus': v1_handler_status_list,
-        'vmArtifactsAggregateStatus': v1_vm_artifact_aggregate_status
+        'handlerAggregateStatus': v1_handler_status_list
     }
+
+    if v1_vm_artifact_aggregate_status is not None:
+        v1_agg_status['vmArtifactsAggregateStatus'] = v1_vm_artifact_aggregate_status
+
     v1_vm_status = {
         'version': '1.1',
         'timestampUTC': timestamp,

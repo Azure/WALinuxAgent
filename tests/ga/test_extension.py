@@ -3148,6 +3148,12 @@ class TestMultiConfigExtensions(AgentTestCase):
     def test_it_should_persist_goal_state_aggregate_status_until_new_incarnation(self):
         raise NotImplementedError
 
+    def test_it_should_parse_required_features_properly(self):
+        raise NotImplementedError
+
+    def test_it_should_not_send_goal_state_aggregate_status_if_none(self):
+        raise NotImplementedError
+
 
 if __name__ == '__main__':
     unittest.main()
