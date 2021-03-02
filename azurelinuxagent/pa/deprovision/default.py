@@ -28,6 +28,7 @@ import azurelinuxagent.common.utils.fileutil as fileutil
 from azurelinuxagent.common import version
 from azurelinuxagent.common.exception import ProtocolError
 from azurelinuxagent.common.osutil import get_osutil
+from azurelinuxagent.common.persist_firewall_rules import PersistFirewallRulesHandler
 from azurelinuxagent.common.protocol.util import get_protocol_util
 from azurelinuxagent.ga.exthandlers import HANDLER_COMPLETE_NAME_PATTERN
 
@@ -94,11 +95,12 @@ class DeprovisionHandler(object):
         actions.append(DeprovisionAction(self.osutil.stop_agent_service))
 
     def del_dirs(self, warnings, actions):  # pylint: disable=W0613
-        dirs = [conf.get_lib_dir(), conf.get_ext_log_dir()]
+        dirs = [conf.get_lib_dir(), conf.get_ext_log_dir(),
+                "{0}.d".format(PersistFirewallRulesHandler.get_service_file_path())]
         actions.append(DeprovisionAction(fileutil.rm_dirs, dirs))
 
     def del_files(self, warnings, actions):  # pylint: disable=W0613
-        files = ['/root/.bash_history', conf.get_agent_log_file()]
+        files = ['/root/.bash_history', conf.get_agent_log_file(), PersistFirewallRulesHandler.get_service_file_path()]
         actions.append(DeprovisionAction(fileutil.rm_files, files))
 
         # For OpenBSD
@@ -223,7 +225,7 @@ class DeprovisionHandler(object):
 
         While users *should* manually deprovision a VM, the files removed by
         this routine will help keep the agent from getting confused
-        (since incarnation and extension settings, among other items, will 
+        (since incarnation and extension settings, among other items, will
         no longer be monotonically increasing).
         '''
         warnings, actions = self.setup_changed_unique_id()
