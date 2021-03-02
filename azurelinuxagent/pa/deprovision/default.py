@@ -95,12 +95,11 @@ class DeprovisionHandler(object):
         actions.append(DeprovisionAction(self.osutil.stop_agent_service))
 
     def del_dirs(self, warnings, actions):  # pylint: disable=W0613
-        dirs = [conf.get_lib_dir(), conf.get_ext_log_dir(),
-                "{0}.d".format(PersistFirewallRulesHandler.get_service_file_path())]
+        dirs = [conf.get_lib_dir(), conf.get_ext_log_dir()]
         actions.append(DeprovisionAction(fileutil.rm_dirs, dirs))
 
     def del_files(self, warnings, actions):  # pylint: disable=W0613
-        files = ['/root/.bash_history', conf.get_agent_log_file(), PersistFirewallRulesHandler.get_service_file_path()]
+        files = ['/root/.bash_history', conf.get_agent_log_file()]
         actions.append(DeprovisionAction(fileutil.rm_files, files))
 
         # For OpenBSD
@@ -199,6 +198,8 @@ class DeprovisionHandler(object):
         if deluser:
             self.del_user(warnings, actions)
 
+        self.del_persist_firewall_rules(actions)
+
         return warnings, actions
 
     def setup_changed_unique_id(self):
@@ -208,6 +209,7 @@ class DeprovisionHandler(object):
         self.del_dhcp_lease(warnings, actions)
         self.del_lib_dir_files(warnings, actions)
         self.del_ext_handler_files(warnings, actions)
+        self.del_persist_firewall_rules(actions)
 
         return warnings, actions
 
@@ -257,3 +259,9 @@ class DeprovisionHandler(object):
 
         print ('Deprovisioning may not be interrupted.')
         return
+
+    @staticmethod
+    def del_persist_firewall_rules(actions):
+        agent_network_service_path = PersistFirewallRulesHandler.get_service_file_path()
+        actions.append(DeprovisionAction(fileutil.rm_files, [agent_network_service_path]))
+        actions.append(DeprovisionAction(fileutil.rm_dirs, ["{0}.d".format(agent_network_service_path)]))
