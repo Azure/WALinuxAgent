@@ -2343,16 +2343,16 @@ class TestExtension(AgentTestCase):
 
     def test_it_should_parse_required_features_properly(self, mock_get, mock_crypt_util, *args):
         test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE_REQUIRED_FEATURES)
-        exthandlers_handler, protocol = self._create_mock(test_data, mock_get, mock_crypt_util, *args)
+        _, protocol = self._create_mock(test_data, mock_get, mock_crypt_util, *args)
 
         required_features = protocol.get_required_features()
         self.assertEqual(3, len(required_features), "Incorrect features parsed")
         for i, feature in enumerate(required_features):
-            self.assertEqual(required_features[i].name, "TestRequiredFeature{0}".format(i+1), "Name mismatch")
+            self.assertEqual(feature.name, "TestRequiredFeature{0}".format(i+1), "Name mismatch")
             if i < 2:
-                self.assertIsNone(required_features[i].value, "Value not present")
+                self.assertIsNone(feature.value, "Value not present")
             else:
-                self.assertEqual(required_features[i].value, "3.0", "Value mismatch")
+                self.assertEqual(feature.value, "3.0", "Value mismatch")
 
     def test_it_should_fail_goal_state_if_required_features_not_supported(self, mock_get, mock_crypt_util, *args):
         test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE_REQUIRED_FEATURES)
