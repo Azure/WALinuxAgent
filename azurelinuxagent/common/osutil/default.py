@@ -647,8 +647,7 @@ class DefaultOSUtil(object):
             mount_point = conf.get_dvd_mount_point()
         return_code = self.umount(mount_point, chk_err=chk_err)
         if chk_err and return_code != 0:
-            raise OSUtilError("Failed to unmount dvd device at {0}",  # pylint: disable=W0715
-                              mount_point)
+            raise OSUtilError("Failed to unmount dvd device at {0}".format(mount_point))
 
     def eject_dvd(self, chk_err=True):
         dvd = self.get_dvd_device()
