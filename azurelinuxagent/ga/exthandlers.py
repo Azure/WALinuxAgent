@@ -81,7 +81,7 @@ _TRUNCATED_SUFFIX = u" ... [TRUNCATED]"
 _NUM_OF_STATUS_FILE_RETRIES = 5
 _STATUS_FILE_RETRY_DELAY = 2  # seconds
 
-_ENABLE_EXTENSION_TELEMETRY_PIPELINE = False
+_ENABLE_EXTENSION_TELEMETRY_PIPELINE = True
 
 def is_extension_telemetry_pipeline_enabled():
     return _ENABLE_EXTENSION_TELEMETRY_PIPELINE
@@ -1565,7 +1565,7 @@ class HandlerEnvironment(object): # pylint: disable=R0903
     configFolder = "configFolder"
     statusFolder = "statusFolder"
     heartbeatFile = "heartbeatFile"
-    eventsFolder = "eventsFolder"
+    eventsFolder = "eventsFolder_preview"
     name = "name"
     version = "version"
 
