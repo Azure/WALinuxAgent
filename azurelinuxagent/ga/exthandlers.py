@@ -244,6 +244,11 @@ class ExtensionRequestedState(object):
 
 
 class GoalStateState(object):
+    """
+    This is an Enum to define the State of the GoalState as a whole. This is reported as part of the
+    'vmArtifactsAggregateStatus.goalStateAggregateStatus' in the status blob.
+    Note: not to be confused with the State of the ExtHandler which reported as part of 'handlerAggregateStatus'
+    """
     Success = "Success"
     Failed = "Failed"
     Initialize = "Initialize"
@@ -275,8 +280,9 @@ class ExtHandlersHandler(object):
         self.log_report = False
         self.log_process = False
         # The GoalState Aggregate status needs to report the last status of the GoalState. Since we only process
-        # extensions on incarnation change, we need to maintain its these.
-        # Setting the status as Initialize here because this would be overridden atleast once for processing the first GoalState.
+        # extensions on incarnation change, we need to maintain its state.
+        # Setting the status as Initialize here. This would be overridden as soon as the first GoalState is processed
+        # (once self._extension_processing_allowed() is True).
         self.__gs_aggregate_status = GoalStateAggregateStatus(status=GoalStateState.Initialize, seq_no="-1",
                                                               code=GoalStateAggregateStatusCodes.Success,
                                                               message="Initializing new GoalState")
@@ -1456,13 +1462,12 @@ class ExtHandlerInstance(object):
 
                 supported_features = []
                 for _, feature in get_agent_supported_features_list_for_extensions().items():
-                    if feature.is_supported:
-                        supported_features.append(
-                            {
-                                "Key": feature.name,
-                                "Value": feature.version
-                            }
-                        )
+                    supported_features.append(
+                        {
+                            "Key": feature.name,
+                            "Value": feature.version
+                        }
+                    )
                 if supported_features:
                     env.update({
                         ExtCommandEnvVariable.ExtensionSupportedFeatures: json.dumps(supported_features)

@@ -335,8 +335,8 @@ class ExtensionsConfig(object):
 
     def _parse_required_features(self, required_features_list):
         for required_feature in findall(required_features_list, "RequiredFeature"):
-            feature_name = find(required_feature, "Name")
-            feature_value = find(required_feature, "Value")
+            feature_name = gettext(find(required_feature, "Name"))
+            feature_value = gettext(find(required_feature, "Value"))
             self.required_features.append(RequiredFeature(name=feature_name, value=feature_value))
 
     def get_redacted_xml_text(self):

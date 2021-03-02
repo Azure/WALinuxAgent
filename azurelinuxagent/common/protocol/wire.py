@@ -418,13 +418,12 @@ def vm_status_to_v1(vm_status, ext_statuses):
 
     supported_features = []
     for _, feature in get_agent_supported_features_list_for_crp().items():
-        if feature.is_supported:
-            supported_features.append(
-                {
-                    "Key": feature.name,
-                    "Value": feature.version
-                }
-            )
+        supported_features.append(
+            {
+                "Key": feature.name,
+                "Value": feature.version
+            }
+        )
     if supported_features:
         v1_vm_status["supportedFeatures"] = supported_features
 
