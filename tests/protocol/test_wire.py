@@ -78,7 +78,7 @@ def create_mock_protocol(artifacts_profile_blob=None, status_upload_blob=None, s
         ext_conf.artifacts_profile_blob = artifacts_profile_blob
         ext_conf.status_upload_blob = status_upload_blob
         ext_conf.status_upload_blob_type = status_upload_blob_type
-        protocol.client._goal_state.ext_conf = ext_conf  # pylint: disable=protected-access
+        protocol.client._goal_state.ext_conf = ext_conf
 
         yield protocol
 
@@ -277,7 +277,7 @@ class TestWireProtocol(AgentTestCase):
     def test_get_in_vm_artifacts_profile_blob_not_available(self, *_):
         # Test when artifacts_profile_blob is null/None
         with mock_wire_protocol(DATA_FILE_NO_EXT) as protocol:
-            protocol.client._goal_state.ext_conf = ExtensionsConfig(None)  # pylint: disable=protected-access
+            protocol.client._goal_state.ext_conf = ExtensionsConfig(None)
 
             self.assertEqual(None, protocol.client.get_artifacts_profile())
 

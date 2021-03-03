@@ -23,13 +23,11 @@ import threading
 import uuid
 
 from azurelinuxagent.common import logger
-from azurelinuxagent.common.cgroup import CpuCgroup, MemoryCgroup
+from azurelinuxagent.common.cgroup import CpuCgroup
 from azurelinuxagent.common.cgroupstelemetry import CGroupsTelemetry
 from azurelinuxagent.common.conf import get_agent_pid_file_path
-from azurelinuxagent.common.event import add_event, WALAEventOperation
 from azurelinuxagent.common.exception import CGroupsException, ExtensionErrorCodes, ExtensionError, ExtensionOperationError
 from azurelinuxagent.common.future import ustr
-from azurelinuxagent.common.osutil import get_osutil
 from azurelinuxagent.common.utils import fileutil, shellutil
 from azurelinuxagent.common.utils.extensionprocessutil import handle_process_completion, read_output, \
     TELEMETRY_MESSAGE_MAX_LEN
@@ -38,11 +36,6 @@ from azurelinuxagent.common.version import get_distro
 
 CGROUPS_FILE_SYSTEM_ROOT = '/sys/fs/cgroup'
 CGROUP_CONTROLLERS = ["cpu", "memory"]
-VM_AGENT_CGROUP_NAME = "walinuxagent.service"
-AZURE_CGROUP_NAME = "azure"
-EXTENSIONS_CGROUP_NAME = "vmextensions"
-UNIT_FILES_FILE_SYSTEM_PATH = "/etc/systemd/system"
-SYSTEMD_RUN_PATH = "/run/systemd/system/"
 
 
 class SystemdRunError(CGroupsException):
@@ -77,14 +70,6 @@ class CGroupsApi(object):
     def _get_extension_cgroup_name(extension_name):
         # Since '-' is used as a separator in systemd unit names, we replace it with '_' to prevent side-effects.
         return extension_name.replace('-', '_')
-
-    @staticmethod
-    def is_systemd():
-        """
-        Determine if systemd is managing system services; the implementation follows the same strategy as, for example,
-        sd_booted() in libsystemd, or /usr/sbin/service
-        """
-        return os.path.exists(SYSTEMD_RUN_PATH)
 
     @staticmethod
     def get_processes_in_cgroup(cgroup_path):
@@ -142,23 +127,6 @@ class SystemdCgroupsApi(CGroupsApi):
         self._agent_unit_name = None
         self._systemd_run_commands = []
         self._systemd_run_commands_lock = threading.RLock()
-
-    @staticmethod
-    def get_systemd_version():
-        # the output is similar to
-        #    $ systemctl --version
-        #    systemd 245 (245.4-4ubuntu3)
-        #    +PAM +AUDIT +SELINUX +IMA +APPARMOR +SMACK +SYSVINIT +UTMP etc
-        #
-        return shellutil.run_command(['systemctl', '--version'])
-
-    @staticmethod
-    def get_azure_slice():
-        return os.path.join(UNIT_FILES_FILE_SYSTEM_PATH, AZURE_CGROUP_NAME, ".slice")
-
-    @staticmethod
-    def get_extensions_slice():
-        return os.path.join(UNIT_FILES_FILE_SYSTEM_PATH, EXTENSIONS_CGROUP_NAME, ".slice")
 
     def get_systemd_run_commands(self):
         """
@@ -324,7 +292,7 @@ Description=Slice for Azure VM Extensions"""
 
         with self._systemd_run_commands_lock:
             process = subprocess.Popen(  # pylint: disable=W1509
-                "systemd-run --unit={0} --scope {1}".format(scope, command),
+                "systemd-run --unit={0} --scope --slice=azure-vmextensions.slice {1}".format(scope, command),
                 shell=shell,
                 cwd=cwd,
                 stdout=stdout,
@@ -339,22 +307,15 @@ Description=Slice for Azure VM Extensions"""
 
         try:
             # systemd-run creates the scope under the system slice by default
-            cgroup_relative_path = os.path.join('system.slice', scope_name)
+            cgroup_relative_path = os.path.join('azure.slice/azure-vmextensions.slice', scope_name)
 
-            cpu_cgroup_mountpoint, memory_cgroup_mountpoint = self.get_cgroup_mount_points()
+            cpu_cgroup_mountpoint, _ = self.get_cgroup_mount_points()
 
             if cpu_cgroup_mountpoint is None:
                 logger.info("The CPU controller is not mounted; will not track resource usage")
             else:
                 cpu_cgroup_path = os.path.join(cpu_cgroup_mountpoint, cgroup_relative_path)
                 CGroupsTelemetry.track_cgroup(CpuCgroup(extension_name, cpu_cgroup_path))
-
-            if memory_cgroup_mountpoint is None:
-                logger.info("The memory controller is not mounted; will not track resource usage")
-            else:
-                memory_cgroup_path = os.path.join(memory_cgroup_mountpoint, cgroup_relative_path)
-                CGroupsTelemetry.track_cgroup(MemoryCgroup(extension_name, memory_cgroup_path))
-
         except IOError as e:
             if e.errno == 2:  # 'No such file or directory'
                 logger.info("The extension command already completed; will not track resource usage")
