@@ -99,7 +99,7 @@ Environment="EGG={egg_path}" "DST_IP={wire_ip}" "UID={user_id}" "WAIT={wait}"
         return False
 
     def setup(self):
-        if not CGroupsApi.is_systemd():
+        if not systemd.is_systemd():
             logger.warn("Did not detect Systemd, unable to set {0}".format(self._network_setup_service_name))
             return
 
