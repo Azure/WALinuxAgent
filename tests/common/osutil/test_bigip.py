@@ -35,7 +35,7 @@ class TestBigIpOSUtil_wait_until_mcpd_is_initialized(AgentTestCase):
     @patch.object(shellutil, "run", return_value=0)
     @patch.object(logger, "info", return_value=None)
     def test_success(self, *args):
-        result = osutil.BigIpOSUtil._wait_until_mcpd_is_initialized(  # pylint: disable=protected-access
+        result = osutil.BigIpOSUtil._wait_until_mcpd_is_initialized(
             osutil.BigIpOSUtil()
         )
         self.assertEqual(result, True)
@@ -50,7 +50,7 @@ class TestBigIpOSUtil_wait_until_mcpd_is_initialized(AgentTestCase):
     def test_failure(self, *args):  # pylint: disable=unused-argument
         self.assertRaises(
             OSUtilError,
-            osutil.BigIpOSUtil._wait_until_mcpd_is_initialized,  # pylint: disable=protected-access
+            osutil.BigIpOSUtil._wait_until_mcpd_is_initialized,
             osutil.BigIpOSUtil()
         )
 
@@ -60,14 +60,14 @@ class TestBigIpOSUtil_save_sys_config(AgentTestCase):
     @patch.object(shellutil, "run", return_value=0)
     @patch.object(logger, "error", return_value=None)
     def test_success(self, *args):
-        result = osutil.BigIpOSUtil._save_sys_config(osutil.BigIpOSUtil())  # pylint: disable=protected-access
+        result = osutil.BigIpOSUtil._save_sys_config(osutil.BigIpOSUtil())
         self.assertEqual(result, 0)
         self.assertEqual(args[0].call_count, 0)
 
     @patch.object(shellutil, "run", return_value=1)
     @patch.object(logger, "error", return_value=None)
     def test_failure(self, *args):
-        result = osutil.BigIpOSUtil._save_sys_config(osutil.BigIpOSUtil())  # pylint: disable=protected-access
+        result = osutil.BigIpOSUtil._save_sys_config(osutil.BigIpOSUtil())
         self.assertEqual(result, 1)
         self.assertEqual(args[0].call_count, 1)
 

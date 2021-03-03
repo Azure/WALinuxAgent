@@ -22,7 +22,6 @@ import time
 import uuid
 
 from azurelinuxagent.common.agent_supported_feature import AgentSupportedFeature
-from azurelinuxagent.common.cgroupconfigurator import CGroupConfigurator
 from azurelinuxagent.common.event import AGENT_EVENT_FILE_EXTENSION, WALAEventOperation
 from azurelinuxagent.common.exception import ExtensionError, ExtensionErrorCodes
 from azurelinuxagent.common.protocol.restapi import ExtensionStatus, Extension, ExtHandler, ExtHandlerProperties
@@ -337,15 +336,7 @@ class LaunchCommandTestCase(AgentTestCase):
         self.mock_sleep = patch("time.sleep", lambda *_: mock_sleep(0.01))
         self.mock_sleep.start()
 
-        self.cgroups_enabled = CGroupConfigurator.get_instance().enabled()
-        CGroupConfigurator.get_instance().disable()
-
     def tearDown(self):
-        if self.cgroups_enabled:
-            CGroupConfigurator.get_instance().enable()
-        else:
-            CGroupConfigurator.get_instance().disable()
-
         self.mock_get_log_dir.stop()
         self.mock_get_base_dir.stop()
         self.mock_sleep.stop()

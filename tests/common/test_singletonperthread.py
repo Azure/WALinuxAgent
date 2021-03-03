@@ -146,7 +146,7 @@ class TestSingletonPerThread(AgentTestCase):
                                             t1_name=t1_name,
                                             t2_name=t2_name)
 
-        singleton_instances = TestClassToTestSingletonPerThread._instances  # pylint: disable=protected-access,no-member
+        singleton_instances = TestClassToTestSingletonPerThread._instances  # pylint: disable=no-member
 
         # Assert instance names are consistent with the thread names
         self.assertIn(test_class_obj_name(t1_name), singleton_instances)

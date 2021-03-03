@@ -65,16 +65,14 @@ def send_logs_to_telemetry():
     return SEND_LOGS_TO_TELEMETRY
 
 
-class WALAEventOperation:  # pylint: disable=no-init
+class WALAEventOperation:
     ActivateResourceDisk = "ActivateResourceDisk"
     AgentBlacklisted = "AgentBlacklisted"
     AgentEnabled = "AgentEnabled"
     ArtifactsProfileBlob = "ArtifactsProfileBlob"
     CGroupsCleanUp = "CGroupsCleanUp"
-    CGroupsDebug = "CGroupsDebug"
     CGroupsDisabled = "CGroupsDisabled"
     CGroupsInfo = "CGroupsInfo"
-    CGroupsInitialize = "CGroupsInitialize"
     CGroupsLimitsCrossed = "CGroupsLimitsCrossed"
     CollectEventErrors = "CollectEventErrors"
     CollectEventUnicodeErrors = "CollectEventUnicodeErrors"
@@ -277,7 +275,6 @@ def _encode_message(op, message):
 def _log_event(name, op, message, duration, is_success=True):
     global _EVENT_MSG  # pylint: disable=W0603
 
-    message = _encode_message(op, message)
     if not is_success:
         logger.error(_EVENT_MSG, name, op, message, duration)
     else:

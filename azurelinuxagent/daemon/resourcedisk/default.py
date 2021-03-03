@@ -78,6 +78,7 @@ class ResourceDiskHandler(object):
             logger.error("Failed to mount resource disk {0}", e)
             add_event(name=AGENT_NAME, is_success=False, message=ustr(e),
                       op=WALAEventOperation.ActivateResourceDisk)
+        return None
 
     def enable_swap(self, mount_point):
         logger.info("Enable swap")

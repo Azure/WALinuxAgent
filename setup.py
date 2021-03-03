@@ -147,7 +147,11 @@ def get_data_files(name, version, fullname):  # pylint: disable=R0912
         else:
             # Ubuntu15.04+ uses systemd
             set_systemd_files(data_files, dest=systemd_dir_path,
-                              src=["init/ubuntu/walinuxagent.service"])
+                              src=[
+                                  "init/ubuntu/walinuxagent.service",
+                                  "init/ubuntu/azure.slice",
+                                  "init/ubuntu/azure-vmextensions.slice"
+                              ])
     elif name == 'suse' or name == 'opensuse':  # pylint: disable=R1714
         set_conf_files(data_files, src=["config/suse/waagent.conf"])
         set_logrotate_files(data_files)
