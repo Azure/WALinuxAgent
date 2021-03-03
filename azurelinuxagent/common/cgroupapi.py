@@ -264,7 +264,7 @@ class SystemdCgroupsApi(CGroupsApi):
         output = shellutil.run_command(["systemctl", "show", unit_name, "--property", property_name])
         match = re.match("[^=]+=(?P<value>.+)", output)
         if match is None:
-            raise ValueError("Can't find property {0} of {1}", property_name, unit_name)  # pylint: disable=W0715
+            raise ValueError("Can't find property {0} of {1}".format(property_name, unit_name))
         return match.group('value')
 
     @staticmethod
