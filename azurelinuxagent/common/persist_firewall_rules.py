@@ -63,6 +63,12 @@ Environment="EGG={egg_path}" "DST_IP={wire_ip}" "UID={user_id}" "WAIT={wait}"
 
     _FIREWALLD_RUNNING_CMD = ["firewall-cmd", "--state"]
 
+    @staticmethod
+    def get_service_file_path():
+        osutil = get_osutil()
+        service_name = PersistFirewallRulesHandler._AGENT_NETWORK_SETUP_NAME_FORMAT.format(osutil.get_service_name())
+        return os.path.join(osutil.get_systemd_unit_file_install_path(), service_name)
+
     def __init__(self, dst_ip, uid):
         """
         This class deals with ensuring that Firewall rules are persisted over system reboots.
@@ -94,6 +100,10 @@ Environment="EGG={egg_path}" "DST_IP={wire_ip}" "UID={user_id}" "WAIT={wait}"
         return False
 
     def setup(self):
+        if not CGroupsApi.is_systemd():
+            logger.warn("Did not detect Systemd, unable to set {0}".format(self._network_setup_service_name))
+            return
+
         if self._is_firewall_service_running():
             logger.info("Firewalld.service present on the VM, setting up permanent rules on the VM")
             # In case of a failure, this would throw. In such a case, we don't need to try to setup our custom service
@@ -103,9 +113,6 @@ Environment="EGG={egg_path}" "DST_IP={wire_ip}" "UID={user_id}" "WAIT={wait}"
 
         logger.info(
             "Firewalld service not running/unavailable, trying to set up {0}".format(self._network_setup_service_name))
-
-        if not CGroupsApi.is_systemd():
-            raise Exception("Did not detect Systemd, unable to set {0}".format(self._network_setup_service_name))
 
         self._setup_network_setup_service()
 
@@ -180,7 +187,7 @@ Environment="EGG={egg_path}" "DST_IP={wire_ip}" "UID={user_id}" "WAIT={wait}"
             raise
 
     def __set_service_unit_file(self):
-        service_unit_file = os.path.join(self._systemd_file_path, self._network_setup_service_name)
+        service_unit_file = self.get_service_file_path()
         try:
             fileutil.write_file(service_unit_file,
                                 self.__SERVICE_FILE_CONTENT.format(egg_path=self._current_agent_executable_path,
