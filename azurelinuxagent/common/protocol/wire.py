@@ -1015,7 +1015,7 @@ class WireClient(object):
         try:
             self.status_blob.prepare(blob_type)
         except Exception as e:
-            raise ProtocolError("Exception creating status blob: {0}", ustr(e))  # pylint: disable=W0715
+            raise ProtocolError("Exception creating status blob: {0}".format(ustr(e)))
 
         # Swap the order of use for the HostPlugin vs. the "direct" route.
         # Prefer the use of HostPlugin. If HostPlugin fails fall back to the
