@@ -92,6 +92,7 @@ class UpdateTestCase(AgentTestCase):
     @classmethod
     def setUpClass(cls):
         AgentTestCase.setUpClass()
+        # copy data_dir/ga/WALinuxAgent-0.0.0.0.zip to _test_suite_tmp_dir/waagent-zip/WALinuxAgent-<AGENT_VERSION>.zip
         sample_agent_zip = "WALinuxAgent-0.0.0.0.zip"
         test_agent_zip = sample_agent_zip.replace("0.0.0.0", AGENT_VERSION)
         UpdateTestCase._test_suite_tmp_dir = tempfile.mkdtemp()
@@ -104,7 +105,7 @@ class UpdateTestCase(AgentTestCase):
     @classmethod
     def tearDownClass(cls):
         AgentTestCase.tearDownClass()
-        shutil.rmtree(UpdateTestCase._agent_zip_dir)
+        shutil.rmtree(UpdateTestCase._test_suite_tmp_dir)
 
     @staticmethod
     def _get_agent_pkgs(in_dir=None):
