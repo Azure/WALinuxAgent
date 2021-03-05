@@ -46,7 +46,7 @@ from azurelinuxagent.common.utils.restutil import KNOWN_WIRESERVER_IP
 
 from azurelinuxagent.ga.exthandlers import ExtHandlersHandler, ExtHandlerInstance, migrate_handler_state, \
     get_exthandlers_handler, AGENT_STATUS_FILE, ExtCommandEnvVariable, HandlerManifest, NOT_RUN, \
-    ValidHandlerStatus, HANDLER_COMPLETE_NAME_PATTERN, HandlerEnvironment, ExtensionRequestedState, GoalStateState
+    ValidHandlerStatus, HANDLER_COMPLETE_NAME_PATTERN, HandlerEnvironment, ExtensionRequestedState, GoalStateStatus
 
 from tests.protocol import mockwiredata
 from tests.protocol.mocks import mock_wire_protocol, HttpRequestPredicates
@@ -2318,7 +2318,7 @@ class TestExtension(AgentTestCase):
         args, _ = protocol.report_vm_status.call_args
         gs_aggregate_status = args[0].vmAgent.vm_artifacts_aggregate_status.goal_state_aggregate_status
         self.assertIsNotNone(gs_aggregate_status, "Goal State Aggregate status not reported")
-        self.assertEqual(gs_aggregate_status.status, GoalStateState.Success, "Wrong status reported")
+        self.assertEqual(gs_aggregate_status.status, GoalStateStatus.Success, "Wrong status reported")
         self.assertEqual(gs_aggregate_status.in_svd_seq_no, "1", "Incorrect seq no")
 
         # Running handler again without incarnation change should report the same gs_aggregate_status
@@ -2338,7 +2338,7 @@ class TestExtension(AgentTestCase):
         new_gs_aggregate_status = args[0].vmAgent.vm_artifacts_aggregate_status.goal_state_aggregate_status
         self.assertIsNotNone(new_gs_aggregate_status, "New Goal State Aggregate status not reported")
         self.assertNotEqual(gs_aggregate_status, new_gs_aggregate_status, "The gs_aggregate_status should be different")
-        self.assertEqual(new_gs_aggregate_status.status, GoalStateState.Success, "Wrong status reported")
+        self.assertEqual(new_gs_aggregate_status.status, GoalStateStatus.Success, "Wrong status reported")
         self.assertEqual(new_gs_aggregate_status.in_svd_seq_no, "2", "Incorrect seq no")
 
     def test_it_should_parse_required_features_properly(self, mock_get, mock_crypt_util, *args):
@@ -2363,7 +2363,7 @@ class TestExtension(AgentTestCase):
         gs_aggregate_status = args[0].vmAgent.vm_artifacts_aggregate_status.goal_state_aggregate_status
         self.assertEqual(0, len(args[0].vmAgent.extensionHandlers), "No extensions should be reported")
         self.assertIsNotNone(gs_aggregate_status, "GS Aggregagte status should be reported")
-        self.assertEqual(gs_aggregate_status.status, GoalStateState.Failed, "GS should be failed")
+        self.assertEqual(gs_aggregate_status.status, GoalStateStatus.Failed, "GS should be failed")
         self.assertEqual(gs_aggregate_status.code, GoalStateAggregateStatusCodes.GoalStateUnsupportedRequiredFeatures,
                          "Incorrect error code set properly for GS failure")
         self.assertEqual(gs_aggregate_status.in_svd_seq_no, "1", "Sequence Number is wrong")

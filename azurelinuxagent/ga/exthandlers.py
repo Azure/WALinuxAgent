@@ -243,7 +243,7 @@ class ExtensionRequestedState(object):
     Uninstall = u"uninstall"
 
 
-class GoalStateState(object):
+class GoalStateStatus(object):
     """
     This is an Enum to define the State of the GoalState as a whole. This is reported as part of the
     'vmArtifactsAggregateStatus.goalStateAggregateStatus' in the status blob.
@@ -251,9 +251,12 @@ class GoalStateState(object):
     """
     Success = "Success"
     Failed = "Failed"
+
+    # This is used when we initialize a new Goal State, before we start processing it.
+    # It doesn't hold much value for us until we move status reporting to a separate thread.
     Initialize = "Initialize"
 
-    # The following field is not used now but would be needed once Status reporting is moved to a separate thread
+    # The following field is not used now but would be needed once Status reporting is moved to a separate thread.
     Transitioning = "Transitioning"
 
 
@@ -283,7 +286,7 @@ class ExtHandlersHandler(object):
         # extensions on incarnation change, we need to maintain its state.
         # Setting the status as Initialize here. This would be overridden as soon as the first GoalState is processed
         # (once self._extension_processing_allowed() is True).
-        self.__gs_aggregate_status = GoalStateAggregateStatus(status=GoalStateState.Initialize, seq_no="-1",
+        self.__gs_aggregate_status = GoalStateAggregateStatus(status=GoalStateStatus.Initialize, seq_no="-1",
                                                               code=GoalStateAggregateStatusCodes.Success,
                                                               message="Initializing new GoalState")
 
@@ -341,26 +344,36 @@ class ExtHandlersHandler(object):
                       message=detailed_msg)
             return
 
-    def __all_required_features_supported(self):
+    def __get_unsupported_features(self):
         required_features = self.protocol.get_required_features()
         supported_features = get_agent_supported_features_list_for_crp()
-        return all(feature.name in supported_features for feature in required_features)
+        return [feature.name not in supported_features for feature in required_features]
 
     def __process_and_handle_extensions(self, etag):
         try:
             # Verify we satisfy all required features, if any. If not, report failure here itself, no need to process anything further.
-            if not self.__all_required_features_supported():
-                self.__gs_aggregate_status = GoalStateAggregateStatus(status=GoalStateState.Failed, seq_no=etag,
+            unsupported_features = self.__get_unsupported_features()
+            if any(unsupported_features):
+                msg = "Failing GS incarnation: {0} as Unsupported features found: {1}".format(etag, ', '.join(
+                    unsupported_features))
+                logger.warn(msg)
+                self.__gs_aggregate_status = GoalStateAggregateStatus(status=GoalStateStatus.Failed, seq_no=etag,
                                                                       code=GoalStateAggregateStatusCodes.GoalStateUnsupportedRequiredFeatures,
-                                                                      message="Unsupported required features")
+                                                                      message=msg)
+                add_event(AGENT_NAME,
+                          version=CURRENT_VERSION,
+                          op=WALAEventOperation.GoalStateUnsupportedFeatures,
+                          is_success=False,
+                          message=msg,
+                          log_event=False)
             else:
                 self.handle_ext_handlers(etag)
-                self.__gs_aggregate_status = GoalStateAggregateStatus(status=GoalStateState.Success, seq_no=etag,
+                self.__gs_aggregate_status = GoalStateAggregateStatus(status=GoalStateStatus.Success, seq_no=etag,
                                                                       code=GoalStateAggregateStatusCodes.Success,
                                                                       message="GoalState executed successfully")
         except Exception as error:
             msg = "Unexpected error when processing goal state: {0}; {1}".format(ustr(error), traceback.format_exc())
-            self.__gs_aggregate_status = GoalStateAggregateStatus(status=GoalStateState.Failed, seq_no=etag,
+            self.__gs_aggregate_status = GoalStateAggregateStatus(status=GoalStateStatus.Failed, seq_no=etag,
                                                                   code=GoalStateAggregateStatusCodes.GoalStateUnknownFailure,
                                                                   message=msg)
             logger.warn(msg)
