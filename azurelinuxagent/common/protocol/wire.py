@@ -127,6 +127,9 @@ class WireProtocol(DataContract):
     def get_in_vm_gs_metadata(self):
         return self.client.get_ext_conf().in_vm_gs_metadata
 
+    def get_required_features(self):
+        return self.client.get_ext_conf().required_features
+
     def get_vmagent_manifests(self):
         goal_state = self.client.get_goal_state()
         ext_conf = self.client.get_ext_conf()
@@ -286,15 +289,23 @@ def ga_status_to_guest_info(ga_status):
     return v1_ga_guest_info
 
 
-def ga_status_to_v1(ga_status):
-    formatted_msg = {
-        'lang': 'en-US',
-        'message': ga_status.message
+def __get_formatted_msg_for_status_reporting(msg, lang="en-US"):
+    return {
+        'lang': lang,
+        'message': msg
     }
+
+
+def _get_utc_timestamp_for_status_reporting(time_format="%Y-%m-%dT%H:%M:%SZ", timestamp=None):
+    timestamp = time.gmtime() if timestamp is None else timestamp
+    return time.strftime(time_format, timestamp)
+
+
+def ga_status_to_v1(ga_status):
     v1_ga_status = {
         "version": ga_status.version,
         "status": ga_status.status,
-        "formattedMessage": formatted_msg
+        "formattedMessage": __get_formatted_msg_for_status_reporting(ga_status.message)
     }
     return v1_ga_status
 
@@ -306,10 +317,7 @@ def ext_substatus_to_v1(sub_status_list):
             "name": substatus.name,
             "status": substatus.status,
             "code": substatus.code,
-            "formattedMessage": {
-                "lang": "en-US",
-                "message": substatus.message
-            }
+            "formattedMessage": __get_formatted_msg_for_status_reporting(substatus.message)
         }
         status_list.append(status)
     return status_list
@@ -318,7 +326,7 @@ def ext_substatus_to_v1(sub_status_list):
 def ext_status_to_v1(ext_name, ext_status):
     if ext_status is None:
         return None
-    timestamp = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+    timestamp = _get_utc_timestamp_for_status_reporting()
     v1_sub_status = ext_substatus_to_v1(ext_status.substatusList)
     v1_ext_status = {
         "status": {
@@ -327,10 +335,7 @@ def ext_status_to_v1(ext_name, ext_status):
             "operation": ext_status.operation,
             "status": ext_status.status,
             "code": ext_status.code,
-            "formattedMessage": {
-                "lang": "en-US",
-                "message": ext_status.message
-            }
+            "formattedMessage": __get_formatted_msg_for_status_reporting(ext_status.message)
         },
         "version": 1.0,
         "timestampUTC": timestamp
@@ -340,7 +345,7 @@ def ext_status_to_v1(ext_name, ext_status):
     return v1_ext_status
 
 
-def ext_handler_status_to_v1(handler_status, ext_statuses, timestamp):  # pylint: disable=W0613
+def ext_handler_status_to_v1(handler_status, ext_statuses):
     v1_handler_status = {
         'handlerVersion': handler_status.version,
         'handlerName': handler_status.name,
@@ -349,10 +354,7 @@ def ext_handler_status_to_v1(handler_status, ext_statuses, timestamp):  # pylint
         'useExactVersion': True
     }
     if handler_status.message is not None:
-        v1_handler_status["formattedMessage"] = {
-            "lang": "en-US",
-            "message": handler_status.message
-        }
+        v1_handler_status["formattedMessage"] = __get_formatted_msg_for_status_reporting(handler_status.message)
 
     if len(handler_status.extensions) > 0:
         # Currently, no more than one extension per handler
@@ -367,15 +369,36 @@ def ext_handler_status_to_v1(handler_status, ext_statuses, timestamp):  # pylint
     return v1_handler_status
 
 
+def vm_artifacts_aggregate_status_to_v1(vm_artifacts_aggregate_status):
+    gs_aggregate_status = vm_artifacts_aggregate_status.goal_state_aggregate_status
+    if gs_aggregate_status is None:
+        return None
+
+    v1_goal_state_aggregate_status = {
+        "formattedMessage": __get_formatted_msg_for_status_reporting(gs_aggregate_status.message),
+        "timestampUTC": _get_utc_timestamp_for_status_reporting(timestamp=gs_aggregate_status.processed_time),
+        "inSvdSeqNo": gs_aggregate_status.in_svd_seq_no,
+        "status": gs_aggregate_status.status,
+        "code": gs_aggregate_status.code
+    }
+
+    v1_artifact_aggregate_status = {
+        "goalStateAggregateStatus": v1_goal_state_aggregate_status
+    }
+    return v1_artifact_aggregate_status
+
+
 def vm_status_to_v1(vm_status, ext_statuses):
-    timestamp = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+    timestamp = _get_utc_timestamp_for_status_reporting()
 
     v1_ga_guest_info = ga_status_to_guest_info(vm_status.vmAgent)
     v1_ga_status = ga_status_to_v1(vm_status.vmAgent)
+    v1_vm_artifact_aggregate_status = vm_artifacts_aggregate_status_to_v1(
+        vm_status.vmAgent.vm_artifacts_aggregate_status)
     v1_handler_status_list = []
     for handler_status in vm_status.vmAgent.extensionHandlers:
         v1_handler_status = ext_handler_status_to_v1(handler_status,
-                                                     ext_statuses, timestamp)
+                                                     ext_statuses)
         if v1_handler_status is not None:
             v1_handler_status_list.append(v1_handler_status)
 
@@ -383,6 +406,10 @@ def vm_status_to_v1(vm_status, ext_statuses):
         'guestAgentStatus': v1_ga_status,
         'handlerAggregateStatus': v1_handler_status_list
     }
+
+    if v1_vm_artifact_aggregate_status is not None:
+        v1_agg_status['vmArtifactsAggregateStatus'] = v1_vm_artifact_aggregate_status
+
     v1_vm_status = {
         'version': '1.1',
         'timestampUTC': timestamp,
@@ -392,13 +419,12 @@ def vm_status_to_v1(vm_status, ext_statuses):
 
     supported_features = []
     for _, feature in get_agent_supported_features_list_for_crp().items():
-        if feature.is_supported:
-            supported_features.append(
-                {
-                    "Key": feature.name,
-                    "Value": feature.version
-                }
-            )
+        supported_features.append(
+            {
+                "Key": feature.name,
+                "Value": feature.version
+            }
+        )
     if supported_features:
         v1_vm_status["supportedFeatures"] = supported_features
 
@@ -452,7 +478,7 @@ class StatusBlob(object):
         return {
             "Content-Length": ustr(blob_size),
             "x-ms-blob-type": "BlockBlob",
-            "x-ms-date": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+            "x-ms-date": _get_utc_timestamp_for_status_reporting(),
             "x-ms-version": self.__class__.__storage_version__
         }
 
@@ -469,14 +495,14 @@ class StatusBlob(object):
             "Content-Length": "0",
             "x-ms-blob-content-length": ustr(blob_size),
             "x-ms-blob-type": "PageBlob",
-            "x-ms-date": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+            "x-ms-date": _get_utc_timestamp_for_status_reporting(),
             "x-ms-version": self.__class__.__storage_version__
         }
 
     def get_page_blob_page_headers(self, start, end):
         return {
             "Content-Length": ustr(end - start),
-            "x-ms-date": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+            "x-ms-date": _get_utc_timestamp_for_status_reporting(),
             "x-ms-range": "bytes={0}-{1}".format(start, end - 1),
             "x-ms-page-write": "update",
             "x-ms-version": self.__class__.__storage_version__
@@ -1022,7 +1048,7 @@ class WireClient(object):
         try:
             self.status_blob.prepare(blob_type)
         except Exception as e:
-            raise ProtocolError("Exception creating status blob: {0}", ustr(e))  # pylint: disable=W0715
+            raise ProtocolError("Exception creating status blob: {0}".format(ustr(e)))
 
         # Swap the order of use for the HostPlugin vs. the "direct" route.
         # Prefer the use of HostPlugin. If HostPlugin fails fall back to the

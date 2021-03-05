@@ -88,6 +88,7 @@ class WALAEventOperation:
     ExtensionTelemetryEventProcessing = "ExtensionTelemetryEventProcessing"
     FetchGoalState = "FetchGoalState"
     Firewall = "Firewall"
+    GoalStateUnsupportedFeatures = "GoalStateUnsupportedFeatures"
     HealthCheck = "HealthCheck"
     HealthObservation = "HealthObservation"
     HeartBeat = "HeartBeat"

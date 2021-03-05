@@ -103,6 +103,9 @@ DATA_FILE_REMOTE_ACCESS["remote_access"] = "wire/remote_access_single_account.xm
 DATA_FILE_PLUGIN_SETTINGS_MISMATCH = DATA_FILE.copy()
 DATA_FILE_PLUGIN_SETTINGS_MISMATCH["ext_conf"] = "wire/invalid_config/ext_conf_plugin_settings_version_mismatch.xml"
 
+DATA_FILE_REQUIRED_FEATURES = DATA_FILE.copy()
+DATA_FILE_REQUIRED_FEATURES["ext_conf"] = "wire/ext_conf_required_features.xml"
+
 
 class WireProtocolData(object):
     def __init__(self, data_files=None):
