@@ -98,12 +98,13 @@ def get_agent_supported_features_list_for_crp():
     List of features that the GuestAgent currently supports (like FastTrack, MultiConfig, etc).
     We need to send this list as part of Status reporting to inform CRP of all the features the agent supports.
     :return: Dict containing all CRP supported features with the key as their names and the AgentFeature object as
-             the value
+             the value if they are supported by the Agent
         Eg: {
                 MultipleExtensionsPerHandler: _MultiConfigFeature()
             }
     """
-    return __CRP_ADVERTISED_FEATURES
+
+    return dict((name, feature) for name, feature in __CRP_ADVERTISED_FEATURES.items() if feature.is_supported)
 
 
 def get_agent_supported_features_list_for_extensions():
@@ -112,9 +113,9 @@ def get_agent_supported_features_list_for_extensions():
     We need to send this list as environment variables when calling extension commands to inform Extensions of all the
     features the agent supports.
     :return: Dict containing all Extension supported features with the key as their names and the AgentFeature object as
-             the value
+             the value if the feature is supported by the Agent.
         Eg: {
                 CRPSupportedFeatureNames.ExtensionTelemetryPipeline: _ETPFeature()
             }
     """
-    return __EXTENSION_ADVERTISED_FEATURES
+    return dict((name, feature) for name, feature in __EXTENSION_ADVERTISED_FEATURES.items() if feature.is_supported)
