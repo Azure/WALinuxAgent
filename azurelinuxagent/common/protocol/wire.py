@@ -23,6 +23,7 @@ import time
 import traceback
 import xml.sax.saxutils as saxutils
 from collections import defaultdict
+from datetime import datetime, timedelta
 
 import azurelinuxagent.common.conf as conf
 import azurelinuxagent.common.logger as logger
@@ -635,7 +636,13 @@ class WireClient(object):
         version_uris_shuffled = version_uris
         random.shuffle(version_uris_shuffled)
 
+        start_time = datetime.now()
         for version in version_uris_shuffled:
+            
+            if datetime.now() - start_time > timedelta(minutes=5):
+                logger.warn("Agent timed-out while fetching extension manifests.")
+                break
+
             # GA expects a location and failoverLocation in ExtensionsConfig, but
             # this is not always the case. See #1147.
             if version.uri is None:
