@@ -470,9 +470,16 @@ def get_monitor_network_configuration_changes(conf=__conf__):
 
 
 def get_cgroup_check_period(conf=__conf__):
+    """
+    How often to perform checks on cgroups (are the processes in the cgroups as expected,
+    has the agent exceeded its quota, etc)
+    """
     return conf.get_int("Debug.CgroupCheckPeriod", 300)
 
 
 def get_cgroup_log_metrics(conf=__conf__):
+    """
+    If True, resource usage metrics are written to the local log
+    """
     return conf.get_switch("Debug.CgroupLogMetrics", False)
 
