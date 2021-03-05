@@ -435,9 +435,11 @@ def load_data(name):
         return data_file.read()
 
 
-def load_bin_data(name):
+def load_bin_data(name, directory=None):
     """Load test bin data"""
-    path = os.path.join(data_dir, name)
+    if directory is None:
+        directory = data_dir
+    path = os.path.join(directory, name)
     with open(path, "rb") as data_file:
         return data_file.read()
 

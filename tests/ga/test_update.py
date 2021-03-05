@@ -79,36 +79,6 @@ EMPTY_MANIFEST = {
 }
 
 
-def get_agent_pkgs(in_dir=os.path.join(data_dir, "ga")):
-    path = os.path.join(in_dir, AGENT_PKG_GLOB)
-    return glob.glob(path)
-
-
-def get_agents(in_dir=os.path.join(data_dir, "ga")):
-    path = os.path.join(in_dir, AGENT_DIR_GLOB)
-    return [a for a in glob.glob(path) if os.path.isdir(a)]
-
-
-def get_agent_file_path():
-    return get_agent_pkgs()[0]
-
-
-def get_agent_file_name():
-    return os.path.basename(get_agent_file_path())
-
-
-def get_agent_path():
-    return fileutil.trim_ext(get_agent_file_path(), "zip")
-
-
-def get_agent_name():
-    return os.path.basename(get_agent_path())
-
-
-def get_agent_version():
-    return FlexibleVersion(get_agent_name().split("-")[1])
-
-
 def faux_logger():
     print("STDOUT message")
     print("STDERR message", file=sys.stderr)
@@ -116,6 +86,59 @@ def faux_logger():
 
 
 class UpdateTestCase(AgentTestCase):
+    _test_suite_tmp_dir = None
+    _agent_zip_dir = None
+
+    @classmethod
+    def setUpClass(cls):
+        AgentTestCase.setUpClass()
+        sample_agent_zip = "WALinuxAgent-0.0.0.0.zip"
+        test_agent_zip = sample_agent_zip.replace("0.0.0.0", AGENT_VERSION)
+        UpdateTestCase._test_suite_tmp_dir = tempfile.mkdtemp()
+        UpdateTestCase._agent_zip_dir = os.path.join(UpdateTestCase._test_suite_tmp_dir, "waagent-zip")
+        os.mkdir(UpdateTestCase._agent_zip_dir)
+        source = os.path.join(data_dir, "ga", sample_agent_zip)
+        target = os.path.join(UpdateTestCase._agent_zip_dir, test_agent_zip)
+        shutil.copyfile(source, target)
+
+    @classmethod
+    def tearDownClass(cls):
+        AgentTestCase.tearDownClass()
+        shutil.rmtree(UpdateTestCase._agent_zip_dir)
+
+    @staticmethod
+    def _get_agent_pkgs(in_dir=None):
+        if in_dir is None:
+            in_dir = UpdateTestCase._agent_zip_dir
+        path = os.path.join(in_dir, AGENT_PKG_GLOB)
+        return glob.glob(path)
+
+    @staticmethod
+    def _get_agents(in_dir=None):
+        if in_dir is None:
+            in_dir = UpdateTestCase._agent_zip_dir
+        path = os.path.join(in_dir, AGENT_DIR_GLOB)
+        return [a for a in glob.glob(path) if os.path.isdir(a)]
+
+    @staticmethod
+    def _get_agent_file_path():
+        return UpdateTestCase._get_agent_pkgs()[0]
+
+    @staticmethod
+    def _get_agent_file_name():
+        return os.path.basename(UpdateTestCase._get_agent_file_path())
+
+    @staticmethod
+    def _get_agent_path():
+        return fileutil.trim_ext(UpdateTestCase._get_agent_file_path(), "zip")
+
+    @staticmethod
+    def _get_agent_name():
+        return os.path.basename(UpdateTestCase._get_agent_path())
+
+    @staticmethod
+    def _get_agent_version():
+        return FlexibleVersion(UpdateTestCase._get_agent_name().split("-")[1])
 
     def agent_bin(self, version, suffix):
         return "bin/{0}-{1}{2}.egg".format(AGENT_NAME, version, suffix)
@@ -132,7 +155,7 @@ class UpdateTestCase(AgentTestCase):
         return len(self.agent_dirs())
 
     def agent_dirs(self):
-        return get_agents(in_dir=self.tmp_dir)
+        return self._get_agents(in_dir=self.tmp_dir)
 
     def agent_dir(self, version):
         return os.path.join(self.tmp_dir, "{0}-{1}".format(AGENT_NAME, version))
@@ -143,7 +166,7 @@ class UpdateTestCase(AgentTestCase):
         return paths
 
     def agent_pkgs(self):
-        return get_agent_pkgs(in_dir=self.tmp_dir)
+        return self._get_agent_pkgs(in_dir=self.tmp_dir)
 
     def agent_versions(self):
         v = [FlexibleVersion(AGENT_DIR_PATTERN.match(a).group(1)) for a in self.agent_dirs()]
@@ -168,7 +191,7 @@ class UpdateTestCase(AgentTestCase):
 
     def copy_agents(self, *agents):
         if len(agents) <= 0:
-            agents = get_agent_pkgs()
+            agents = self._get_agent_pkgs()
         for agent in agents:
             shutil.copy(agent, self.tmp_dir)
         return
@@ -182,7 +205,7 @@ class UpdateTestCase(AgentTestCase):
         """
         Create a download for the current agent version, copied from test data
         """
-        self.copy_agents(get_agent_pkgs()[0])
+        self.copy_agents(self._get_agent_pkgs()[0])
         self.expand_agents()
 
         versions = self.agent_versions()
@@ -205,7 +228,7 @@ class UpdateTestCase(AgentTestCase):
         # Ensure the test data is copied over
         agent_count = self.agent_count()
         if agent_count <= 0:
-            self.copy_agents(get_agent_pkgs()[0])
+            self.copy_agents(self._get_agent_pkgs()[0])
             self.expand_agents()
             count -= 1
 
@@ -330,8 +353,8 @@ class TestGuestAgentError(UpdateTestCase):
 class TestGuestAgent(UpdateTestCase):
     def setUp(self):
         UpdateTestCase.setUp(self)
-        self.copy_agents(get_agent_file_path())
-        self.agent_path = os.path.join(self.tmp_dir, get_agent_name())
+        self.copy_agents(self._get_agent_file_path())
+        self.agent_path = os.path.join(self.tmp_dir, self._get_agent_name())
 
     def test_creation(self):
         self.assertRaises(UpdateError, GuestAgent, "A very bad file name")
@@ -342,8 +365,8 @@ class TestGuestAgent(UpdateTestCase):
 
         agent = GuestAgent(path=self.agent_path)
         self.assertNotEqual(None, agent)
-        self.assertEqual(get_agent_name(), agent.name)
-        self.assertEqual(get_agent_version(), agent.version)
+        self.assertEqual(self._get_agent_name(), agent.name)
+        self.assertEqual(self._get_agent_version(), agent.version)
 
         self.assertEqual(self.agent_path, agent.get_agent_dir())
 
@@ -354,7 +377,7 @@ class TestGuestAgent(UpdateTestCase):
             os.path.join(self.agent_path, AGENT_ERROR_FILE),
             agent.get_agent_error_file())
 
-        path = ".".join((os.path.join(conf.get_lib_dir(), get_agent_name()), "zip"))
+        path = ".".join((os.path.join(conf.get_lib_dir(), self._get_agent_name()), "zip"))
         self.assertEqual(path, agent.get_agent_pkg_path())
 
         self.assertTrue(agent.is_downloaded)
@@ -522,10 +545,10 @@ class TestGuestAgent(UpdateTestCase):
         self.remove_agents()
         self.assertFalse(os.path.isdir(self.agent_path))
 
-        agent_pkg = load_bin_data(os.path.join("ga", get_agent_file_name()))
+        agent_pkg = load_bin_data(self._get_agent_file_name(), self._agent_zip_dir)
         mock_http_get.return_value = ResponseMock(response=agent_pkg)
 
-        pkg = ExtHandlerPackage(version=str(get_agent_version()))
+        pkg = ExtHandlerPackage(version=str(self._get_agent_version()))
         pkg.uris.append(ExtHandlerPackageUri())
         agent = GuestAgent(pkg=pkg)
         agent._download()
@@ -541,7 +564,7 @@ class TestGuestAgent(UpdateTestCase):
 
         mock_http_get.return_value = ResponseMock(status=restutil.httpclient.SERVICE_UNAVAILABLE)
 
-        pkg = ExtHandlerPackage(version=str(get_agent_version()))
+        pkg = ExtHandlerPackage(version=str(self._get_agent_version()))
         pkg.uris.append(ExtHandlerPackageUri())
         agent = GuestAgent(pkg=pkg)
 
@@ -569,7 +592,7 @@ class TestGuestAgent(UpdateTestCase):
                                        'container_id',
                                        'role_config')
 
-        pkg = ExtHandlerPackage(version=str(get_agent_version()))
+        pkg = ExtHandlerPackage(version=str(self._get_agent_version()))
         pkg.uris.append(ExtHandlerPackageUri(uri=ext_uri))
         agent = GuestAgent(pkg=pkg)
         agent.host = mock_host
@@ -615,10 +638,10 @@ class TestGuestAgent(UpdateTestCase):
         self.remove_agents()
         self.assertFalse(os.path.isdir(self.agent_path))
 
-        agent_pkg = load_bin_data(os.path.join("ga", get_agent_file_name()))
+        agent_pkg = load_bin_data(self._get_agent_file_name(), self._agent_zip_dir)
         mock_http_get.return_value = ResponseMock(response=agent_pkg)
 
-        pkg = ExtHandlerPackage(version=str(get_agent_version()))
+        pkg = ExtHandlerPackage(version=str(self._get_agent_version()))
         pkg.uris.append(ExtHandlerPackageUri())
         agent = GuestAgent(pkg=pkg)
 
@@ -630,7 +653,7 @@ class TestGuestAgent(UpdateTestCase):
         self.remove_agents()
         self.assertFalse(os.path.isdir(self.agent_path))
 
-        pkg = ExtHandlerPackage(version=str(get_agent_version()))
+        pkg = ExtHandlerPackage(version=str(self._get_agent_version()))
         pkg.uris.append(ExtHandlerPackageUri())
         agent = GuestAgent(pkg=pkg)
 
@@ -643,7 +666,7 @@ class TestGuestAgent(UpdateTestCase):
     def test_ensure_downloaded_unpack_fails(self, mock_unpack, mock_download):  # pylint: disable=unused-argument
         self.assertFalse(os.path.isdir(self.agent_path))
 
-        pkg = ExtHandlerPackage(version=str(get_agent_version()))
+        pkg = ExtHandlerPackage(version=str(self._get_agent_version()))
         pkg.uris.append(ExtHandlerPackageUri())
         agent = GuestAgent(pkg=pkg)
 
@@ -657,7 +680,7 @@ class TestGuestAgent(UpdateTestCase):
     def test_ensure_downloaded_load_manifest_fails(self, mock_manifest, mock_unpack, mock_download):  # pylint: disable=unused-argument
         self.assertFalse(os.path.isdir(self.agent_path))
 
-        pkg = ExtHandlerPackage(version=str(get_agent_version()))
+        pkg = ExtHandlerPackage(version=str(self._get_agent_version()))
         pkg.uris.append(ExtHandlerPackageUri())
         agent = GuestAgent(pkg=pkg)
 
@@ -676,7 +699,7 @@ class TestGuestAgent(UpdateTestCase):
         agent.mark_failure(is_fatal=True)
         self.assertTrue(agent.is_blacklisted)
 
-        pkg = ExtHandlerPackage(version=str(get_agent_version()))
+        pkg = ExtHandlerPackage(version=str(self._get_agent_version()))
         pkg.uris.append(ExtHandlerPackageUri())
         agent = GuestAgent(pkg=pkg)
 
@@ -897,7 +920,7 @@ class TestUpdate(UpdateTestCase):
 
         self.assertTrue(0 <= len(self.update_handler.agents))
         self.update_handler._find_agents()
-        self.assertEqual(len(get_agents(self.tmp_dir)), len(self.update_handler.agents))
+        self.assertEqual(len(self._get_agents(self.tmp_dir)), len(self.update_handler.agents))
 
     def test_find_agents_does_reload(self):
         self.prepare_agents()
@@ -930,7 +953,7 @@ class TestUpdate(UpdateTestCase):
         latest_version = self.prepare_agents()
 
         latest_agent = self.update_handler.get_latest_agent()
-        self.assertEqual(len(get_agents(self.tmp_dir)), len(self.update_handler.agents))
+        self.assertEqual(len(self._get_agents(self.tmp_dir)), len(self.update_handler.agents))
         self.assertEqual(latest_version, latest_agent.version)
 
     def test_get_latest_agent_excluded(self):
