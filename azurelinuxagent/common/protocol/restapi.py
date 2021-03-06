@@ -18,12 +18,13 @@
 #
 
 import socket
+import time
 from datetime import datetime, timedelta
 
+from azurelinuxagent.common.datacontract import DataContract, DataContractList
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.utils.textutil import getattrib
 from azurelinuxagent.common.version import DISTRO_VERSION, DISTRO_NAME, CURRENT_VERSION
-from azurelinuxagent.common.datacontract import DataContract, DataContractList
 
 
 class VMInfo(DataContract):
@@ -81,6 +82,13 @@ class VMAgentManifestList(DataContract):
         self.vmAgentManifests = DataContractList(VMAgentManifest)
 
 
+class RequiredFeature(DataContract):
+    def __init__(self, name, value=None):
+        self.name = name
+        # As per the docs, this is a reserved field and not currently in use.
+        self.value = value
+
+
 class Extension(DataContract):
     """
     The runtime settings associated with a Handler
@@ -90,7 +98,6 @@ class Extension(DataContract):
         ExtensionConfig.xml
         Eg: <extensionName>.1.settings, <extensionName>.2.settings
     """
-
     def __init__(self,
                  name=None,
                  sequenceNumber=None,
@@ -267,7 +274,7 @@ class ExtHandlerStatus(DataContract):
 
 
 class VMAgentStatus(DataContract):
-    def __init__(self, status=None, message=None):
+    def __init__(self, status=None, message=None, gs_aggregate_status=None):
         self.status = status
         self.message = message
         self.hostname = socket.gethostname()
@@ -275,11 +282,30 @@ class VMAgentStatus(DataContract):
         self.osname = DISTRO_NAME
         self.osversion = DISTRO_VERSION
         self.extensionHandlers = DataContractList(ExtHandlerStatus)
+        self.vm_artifacts_aggregate_status = VMArtifactsAggregateStatus(gs_aggregate_status)
 
 
 class VMStatus(DataContract):
-    def __init__(self, status, message):
-        self.vmAgent = VMAgentStatus(status=status, message=message)
+    def __init__(self, status, message, gs_aggregate_status=None):
+        self.vmAgent = VMAgentStatus(status=status, message=message, gs_aggregate_status=gs_aggregate_status)
+
+
+class GoalStateAggregateStatus(DataContract):
+    def __init__(self, status=None, seq_no=-1, message="", code=None):
+        self.message = message
+        self.in_svd_seq_no = seq_no
+        self.status = status
+        self.code = code
+        self.__utc_timestamp = time.gmtime()
+
+    @property
+    def processed_time(self):
+        return self.__utc_timestamp
+
+
+class VMArtifactsAggregateStatus(DataContract):
+    def __init__(self, gs_aggregate_status=None):
+        self.goal_state_aggregate_status = gs_aggregate_status
 
 
 class RemoteAccessUser(DataContract):

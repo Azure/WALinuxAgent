@@ -28,6 +28,7 @@ import azurelinuxagent.common.utils.fileutil as fileutil
 from azurelinuxagent.common import version
 from azurelinuxagent.common.exception import ProtocolError
 from azurelinuxagent.common.osutil import get_osutil
+from azurelinuxagent.common.persist_firewall_rules import PersistFirewallRulesHandler
 from azurelinuxagent.common.protocol.util import get_protocol_util
 from azurelinuxagent.ga.exthandlers import HANDLER_COMPLETE_NAME_PATTERN
 
@@ -197,6 +198,8 @@ class DeprovisionHandler(object):
         if deluser:
             self.del_user(warnings, actions)
 
+        self.del_persist_firewall_rules(actions)
+
         return warnings, actions
 
     def setup_changed_unique_id(self):
@@ -206,6 +209,7 @@ class DeprovisionHandler(object):
         self.del_dhcp_lease(warnings, actions)
         self.del_lib_dir_files(warnings, actions)
         self.del_ext_handler_files(warnings, actions)
+        self.del_persist_firewall_rules(actions)
 
         return warnings, actions
 
@@ -223,7 +227,7 @@ class DeprovisionHandler(object):
 
         While users *should* manually deprovision a VM, the files removed by
         this routine will help keep the agent from getting confused
-        (since incarnation and extension settings, among other items, will 
+        (since incarnation and extension settings, among other items, will
         no longer be monotonically increasing).
         '''
         warnings, actions = self.setup_changed_unique_id()
@@ -255,3 +259,9 @@ class DeprovisionHandler(object):
 
         print ('Deprovisioning may not be interrupted.')
         return
+
+    @staticmethod
+    def del_persist_firewall_rules(actions):
+        agent_network_service_path = PersistFirewallRulesHandler.get_service_file_path()
+        actions.append(DeprovisionAction(fileutil.rm_files, [agent_network_service_path]))
+        actions.append(DeprovisionAction(fileutil.rm_dirs, ["{0}.d".format(agent_network_service_path)]))

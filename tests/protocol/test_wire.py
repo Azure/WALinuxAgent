@@ -400,7 +400,7 @@ class TestWireProtocol(AgentTestCase):
                     # In the case Multi-config was the only feature available, 'supportedFeatures' should not be
                     # reported in the status blob as its not supported as of now.
                     # Asserting no other feature was available to report back to crp
-                    self.assertEqual(1, len(get_agent_supported_features_list_for_crp()),
+                    self.assertEqual(0, len(get_agent_supported_features_list_for_crp()),
                                      "supportedFeatures should be available if there are more features")
                     return
 

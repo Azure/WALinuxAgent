@@ -38,7 +38,7 @@ from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
 from azurelinuxagent.common.version import PY_VERSION_MAJOR, PY_VERSION_MINOR, PY_VERSION_MICRO, AGENT_NAME, \
     GOAL_STATE_AGENT_VERSION, CURRENT_VERSION, DISTRO_NAME, DISTRO_VERSION
 from azurelinuxagent.common.exception import ResourceGoneError, ExtensionDownloadError, ProtocolError, \
-    ExtensionErrorCodes, ExtensionError, ExtensionDownloadError
+    ExtensionErrorCodes, ExtensionError, GoalStateAggregateStatusCodes
 from azurelinuxagent.common.protocol.restapi import Extension, ExtHandler, ExtHandlerStatus, \
     ExtensionStatus
 from azurelinuxagent.common.protocol.wire import WireProtocol, InVMArtifactsProfile
@@ -46,7 +46,7 @@ from azurelinuxagent.common.utils.restutil import KNOWN_WIRESERVER_IP
 
 from azurelinuxagent.ga.exthandlers import ExtHandlersHandler, ExtHandlerInstance, migrate_handler_state, \
     get_exthandlers_handler, AGENT_STATUS_FILE, ExtCommandEnvVariable, HandlerManifest, NOT_RUN, \
-    ValidHandlerStatus, HANDLER_COMPLETE_NAME_PATTERN, HandlerEnvironment, ExtensionRequestedState
+    ValidHandlerStatus, HANDLER_COMPLETE_NAME_PATTERN, HandlerEnvironment, ExtensionRequestedState, GoalStateStatus
 
 from tests.protocol import mockwiredata
 from tests.protocol.mocks import mock_wire_protocol, HttpRequestPredicates
@@ -2308,6 +2308,66 @@ class TestExtension(AgentTestCase):
                 self.assertIn("%s=%s" % (ExtCommandEnvVariable.DisableReturnCode, exit_code), update_kwargs['message'])
                 self.assertIn("%s=%s" % (ExtCommandEnvVariable.UninstallReturnCode, exit_code), install_kwargs['message'])
                 self.assertIn("%s=%s" % (ExtCommandEnvVariable.UninstallReturnCode, exit_code), enable_kwargs['message'])
+
+    def test_it_should_persist_goal_state_aggregate_status_until_new_incarnation(self, mock_get, mock_crypt_util, *args):
+        test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE)
+        exthandlers_handler, protocol = self._create_mock(test_data, mock_get, mock_crypt_util, *args)
+
+        exthandlers_handler.run()
+        self._assert_handler_status(protocol.report_vm_status, "Ready", expected_ext_count=1, version="1.0.0")
+        args, _ = protocol.report_vm_status.call_args
+        gs_aggregate_status = args[0].vmAgent.vm_artifacts_aggregate_status.goal_state_aggregate_status
+        self.assertIsNotNone(gs_aggregate_status, "Goal State Aggregate status not reported")
+        self.assertEqual(gs_aggregate_status.status, GoalStateStatus.Success, "Wrong status reported")
+        self.assertEqual(gs_aggregate_status.in_svd_seq_no, "1", "Incorrect seq no")
+
+        # Running handler again without incarnation change should report the same gs_aggregate_status
+        for _ in range(5):
+            exthandlers_handler.run()
+            args, _ = protocol.report_vm_status.call_args
+            self.assertEqual(gs_aggregate_status,
+                             args[0].vmAgent.vm_artifacts_aggregate_status.goal_state_aggregate_status,
+                             "Aggregate status different")
+
+        # Update incarnation and ensure the gs_aggregate_status is modified too
+        test_data.set_incarnation(2)
+        protocol.client.update_goal_state()
+        exthandlers_handler.run()
+        self._assert_handler_status(protocol.report_vm_status, "Ready", expected_ext_count=1, version="1.0.0")
+        args, _ = protocol.report_vm_status.call_args
+        new_gs_aggregate_status = args[0].vmAgent.vm_artifacts_aggregate_status.goal_state_aggregate_status
+        self.assertIsNotNone(new_gs_aggregate_status, "New Goal State Aggregate status not reported")
+        self.assertNotEqual(gs_aggregate_status, new_gs_aggregate_status, "The gs_aggregate_status should be different")
+        self.assertEqual(new_gs_aggregate_status.status, GoalStateStatus.Success, "Wrong status reported")
+        self.assertEqual(new_gs_aggregate_status.in_svd_seq_no, "2", "Incorrect seq no")
+
+    def test_it_should_parse_required_features_properly(self, mock_get, mock_crypt_util, *args):
+        test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE_REQUIRED_FEATURES)
+        _, protocol = self._create_mock(test_data, mock_get, mock_crypt_util, *args)
+
+        required_features = protocol.get_required_features()
+        self.assertEqual(3, len(required_features), "Incorrect features parsed")
+        for i, feature in enumerate(required_features):
+            self.assertEqual(feature.name, "TestRequiredFeature{0}".format(i+1), "Name mismatch")
+            if i < 2:
+                self.assertIsNone(feature.value, "Value not present")
+            else:
+                self.assertEqual(feature.value, "3.0", "Value mismatch")
+
+    def test_it_should_fail_goal_state_if_required_features_not_supported(self, mock_get, mock_crypt_util, *args):
+        test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE_REQUIRED_FEATURES)
+        exthandlers_handler, protocol = self._create_mock(test_data, mock_get, mock_crypt_util, *args)
+
+        exthandlers_handler.run()
+        args, _ = protocol.report_vm_status.call_args
+        gs_aggregate_status = args[0].vmAgent.vm_artifacts_aggregate_status.goal_state_aggregate_status
+        self.assertEqual(0, len(args[0].vmAgent.extensionHandlers), "No extensions should be reported")
+        self.assertIsNotNone(gs_aggregate_status, "GS Aggregagte status should be reported")
+        self.assertEqual(gs_aggregate_status.status, GoalStateStatus.Failed, "GS should be failed")
+        self.assertEqual(gs_aggregate_status.code, GoalStateAggregateStatusCodes.GoalStateUnsupportedRequiredFeatures,
+                         "Incorrect error code set properly for GS failure")
+        self.assertEqual(gs_aggregate_status.in_svd_seq_no, "1", "Sequence Number is wrong")
+
 
 @patch("azurelinuxagent.common.protocol.wire.CryptUtil")
 @patch("azurelinuxagent.common.utils.restutil.http_get")
