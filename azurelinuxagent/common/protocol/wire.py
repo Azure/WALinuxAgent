@@ -631,16 +631,18 @@ class WireClient(object):
         response = self.fetch(uri, headers, use_proxy=False)
         return response
 
-    def fetch_manifest(self, version_uris):
+    def fetch_manifest(self, version_uris, timeout_in_minutes=5, timeout_in_seconds=0):
         logger.verbose("Fetch manifest")
         version_uris_shuffled = version_uris
         random.shuffle(version_uris_shuffled)
 
+        uris_tried = 0
         start_time = datetime.now()
         for version in version_uris_shuffled:
             
-            if datetime.now() - start_time > timedelta(minutes=5):
-                logger.warn("Agent timed-out while fetching extension manifests.")
+            if datetime.now() - start_time > timedelta(minutes=timeout_in_minutes, seconds=timeout_in_seconds):
+                logger.warn("Agent timed-out after {0} minutes while fetching extension manifests. {1}/{2} uris tried.",
+                    timeout_in_minutes, uris_tried, len(version_uris))
                 break
 
             # GA expects a location and failoverLocation in ExtensionsConfig, but
@@ -662,6 +664,8 @@ class WireClient(object):
                     return manifest
             except Exception as error:
                 logger.warn("Failed to fetch manifest from {0}. Error: {1}", version.uri, ustr(error))
+
+            uris_tried += 1
 
         raise ExtensionDownloadError("Failed to fetch manifest from all sources")
 

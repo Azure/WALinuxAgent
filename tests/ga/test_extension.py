@@ -38,7 +38,7 @@ from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
 from azurelinuxagent.common.version import PY_VERSION_MAJOR, PY_VERSION_MINOR, PY_VERSION_MICRO, AGENT_NAME, \
     GOAL_STATE_AGENT_VERSION, CURRENT_VERSION, DISTRO_NAME, DISTRO_VERSION
 from azurelinuxagent.common.exception import ResourceGoneError, ExtensionDownloadError, ProtocolError, \
-    ExtensionErrorCodes, ExtensionError
+    ExtensionErrorCodes, ExtensionError, ExtensionDownloadError
 from azurelinuxagent.common.protocol.restapi import Extension, ExtHandler, ExtHandlerStatus, \
     ExtensionStatus
 from azurelinuxagent.common.protocol.wire import WireProtocol, InVMArtifactsProfile
@@ -3037,12 +3037,9 @@ class TestAdditionalLocationsExtensions(AgentTestCase):
 
     def setUp(self):
         AgentTestCase.setUp(self)
-        self.mock_sleep = patch("time.sleep", lambda *_: mock_sleep(0.0001))
-        self.mock_sleep.start()
         self.test_data = DATA_FILE_EXT_ADDITIONAL_LOCATIONS.copy()
 
     def tearDown(self):
-        self.mock_sleep.stop()
         AgentTestCase.tearDown(self)
 
     def test_additional_locations_node_is_consumed(self):
@@ -3085,6 +3082,45 @@ class TestAdditionalLocationsExtensions(AgentTestCase):
         with mock_wire_protocol(self.test_data, http_get_handler=manifest_location_handler) as protocol:
             exthandlers_handler = get_exthandlers_handler(protocol)
             exthandlers_handler.run()
+
+    def test_fetch_manifest_timeout_is_respected(self):
+        
+        location_uri_pattern = r'https?://mock-goal-state/(?P<location_type>{0})/(?P<manifest_num>\d)/manifest.xml'\
+            .format(r'(location)|(failoverlocation)|(additionalLocation)')
+        location_uri_regex = re.compile(location_uri_pattern)
+
+        def manifest_location_handler(url, **kwargs):
+            url_match = location_uri_regex.match(url)
+
+            if not url_match:
+                if "extensionArtifact" in url:
+                    wrapped_url = kwargs.get("headers", {}).get("x-ms-artifact-location")
+
+                    if wrapped_url and location_uri_regex.match(wrapped_url):
+                        return Exception("Ignoring host plugin requests for testing purposes.")
+                
+                return None
+
+            if manifest_location_handler.num_times_called == 0:
+                time.sleep(2)
+                manifest_location_handler.num_times_called += 1
+                return Exception("Failing manifest fetch from uri '{0}' for testing purposes."\
+                    .format(url))
+        
+            return None
+        
+        manifest_location_handler.num_times_called = 0
+
+
+        with mock_wire_protocol(self.test_data, http_get_handler=manifest_location_handler) as protocol:
+            ext_handlers, _ = protocol.get_ext_handlers()
+
+            self.assertRaises(ExtensionDownloadError, protocol.client.fetch_manifest,
+                ext_handlers.extHandlers[0].versionUris, timeout_in_minutes=0, timeout_in_seconds=1)
+
+            # with self.assertRaises(ExtensionDownloadError):
+            #     protocol.client.fetch_manifest(ext_handlers.extHandlers[0].versionUris,
+            #         timeout_in_minutes=0, timeout_in_seconds=1)
 
 class TestMultiConfigExtensions(AgentTestCase):
 
