@@ -65,8 +65,7 @@ class TestConf(AgentTestCase):
         "AutoUpdate.GAFamily": "Prod",
         "EnableOverProvisioning": True,
         "OS.AllowHTTP": False,
-        "OS.EnableFirewall": False,
-        "CGroups.Enabled": True,
+        "OS.EnableFirewall": False
     }
 
     def setUp(self):
@@ -133,6 +132,3 @@ class TestConf(AgentTestCase):
 
     def test_get_extensions_enabled(self):
         self.assertTrue(conf.get_extensions_enabled(self.conf))
-
-    def test_get_cgroups_enabled(self):
-        self.assertTrue(conf.get_cgroups_enabled(self.conf))

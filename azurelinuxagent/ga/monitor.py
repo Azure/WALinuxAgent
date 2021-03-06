@@ -49,13 +49,14 @@ class PollResourceUsage(PeriodicOperation):
     It also checks whether there are processes in the agent's cgroup that should not be there.
     """
     def __init__(self):
-        super(PollResourceUsage, self).__init__(datetime.timedelta(minutes=5))
+        super(PollResourceUsage, self).__init__(conf.get_cgroup_check_period())
+        self.__log_metrics = conf.get_cgroup_log_metrics()
 
     def _operation(self):
         tracked_metrics = CGroupsTelemetry.poll_all_tracked()
 
         for metric in tracked_metrics:
-            report_metric(metric.category, metric.counter, metric.instance, metric.value)
+            report_metric(metric.category, metric.counter, metric.instance, metric.value, log_event=self.__log_metrics)
 
         CGroupConfigurator.get_instance().check_cgroups(tracked_metrics)
 

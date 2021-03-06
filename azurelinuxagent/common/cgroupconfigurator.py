@@ -19,7 +19,6 @@ import os
 import re
 import subprocess
 
-from azurelinuxagent.common import conf
 from azurelinuxagent.common import logger
 from azurelinuxagent.common.cgroup import CpuCgroup, AGENT_NAME_TELEMETRY, MetricsCounter
 from azurelinuxagent.common.cgroupapi import CGroupsApi, SystemdCgroupsApi, SystemdRunError
@@ -75,13 +74,13 @@ _AGENT_THROTTLED_TIME_THRESHOLD = 120  # 2 minutes
 
 def _log_cgroup_info(format_string, *args):
     message = format_string.format(*args)
-    logger.info(message)
+    logger.info("[CGI]" + message)
     add_event(op=WALAEventOperation.CGroupsInfo, message=message)
 
 
 def _log_cgroup_warning(format_string, *args):
     message = format_string.format(*args)
-    logger.info(message)  # log as INFO for now, in the future it should be logged as WARNING
+    logger.info("[CGW]" + message)  # log as INFO for now, in the future it should be logged as WARNING
     add_event(op=WALAEventOperation.CGroupsInfo, message=message, is_success=False, log_event=False)
 
 
@@ -104,9 +103,6 @@ class CGroupConfigurator(object):
         def initialize(self):
             try:
                 if self._initialized:
-                    return
-
-                if not conf.get_cgroups_enabled():
                     return
 
                 # check whether cgroup monitoring is supported on the current distro
