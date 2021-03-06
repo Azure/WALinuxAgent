@@ -3160,9 +3160,9 @@ class TestAdditionalLocationsExtensions(AgentTestCase):
                         return Exception("Ignoring host plugin requests for testing purposes.")
                 
                 return None
-
+            
             if manifest_location_handler.num_times_called == 0:
-                time.sleep(2)
+                time.sleep(.3)
                 manifest_location_handler.num_times_called += 1
                 return Exception("Failing manifest fetch from uri '{0}' for testing purposes."\
                     .format(url))
@@ -3175,12 +3175,9 @@ class TestAdditionalLocationsExtensions(AgentTestCase):
         with mock_wire_protocol(self.test_data, http_get_handler=manifest_location_handler) as protocol:
             ext_handlers, _ = protocol.get_ext_handlers()
 
-            self.assertRaises(ExtensionDownloadError, protocol.client.fetch_manifest,
-                ext_handlers.extHandlers[0].versionUris, timeout_in_minutes=0, timeout_in_seconds=1)
-
-            # with self.assertRaises(ExtensionDownloadError):
-            #     protocol.client.fetch_manifest(ext_handlers.extHandlers[0].versionUris,
-            #         timeout_in_minutes=0, timeout_in_seconds=1)
+            with self.assertRaises(ExtensionDownloadError):
+                protocol.client.fetch_manifest(ext_handlers.extHandlers[0].versionUris,
+                    timeout_in_minutes=0, timeout_in_ms=200)
 
 class TestMultiConfigExtensions(AgentTestCase):
 

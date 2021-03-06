@@ -657,7 +657,7 @@ class WireClient(object):
         response = self.fetch(uri, headers, use_proxy=False)
         return response
 
-    def fetch_manifest(self, version_uris, timeout_in_minutes=5, timeout_in_seconds=0):
+    def fetch_manifest(self, version_uris, timeout_in_minutes=5, timeout_in_ms=0):
         logger.verbose("Fetch manifest")
         version_uris_shuffled = version_uris
         random.shuffle(version_uris_shuffled)
@@ -665,8 +665,8 @@ class WireClient(object):
         uris_tried = 0
         start_time = datetime.now()
         for version in version_uris_shuffled:
-            
-            if datetime.now() - start_time > timedelta(minutes=timeout_in_minutes, seconds=timeout_in_seconds):
+
+            if datetime.now() - start_time > timedelta(minutes=timeout_in_minutes, milliseconds=timeout_in_ms):
                 logger.warn("Agent timed-out after {0} minutes while fetching extension manifests. {1}/{2} uris tried.",
                     timeout_in_minutes, uris_tried, len(version_uris))
                 break

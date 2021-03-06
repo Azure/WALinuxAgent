@@ -15,7 +15,7 @@
   </GAFamilies>
 </GuestAgentExtension>
 <Plugins>
-  <Plugin name="OSTCExtensions.ExampleHandlerLinux" version="1.0.0" location="http://mock-goal-state/location/1/manifest.xml" config="" state="enabled" autoUpgrade="false" failoverlocation="http://mock-goal-state/failoverLocation/2/manifest.xml" runAsStartupTask="false" isJson="true">
+  <Plugin name="OSTCExtensions.ExampleHandlerLinux" version="1.0.0" location="http://mock-goal-state/location/1/manifest.xml" config="" state="enabled" autoUpgrade="false" failoverlocation="http://mock-goal-state/failoverlocation/2/manifest.xml" runAsStartupTask="false" isJson="true">
     <additionalLocations>
       <additionalLocation>http://mock-goal-state/additionalLocation/3/manifest.xml</additionalLocation>
       <additionalLocation>http://mock-goal-state/additionalLocation/4/manifest.xml</additionalLocation>
