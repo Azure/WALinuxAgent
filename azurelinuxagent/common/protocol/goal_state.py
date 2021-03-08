@@ -450,11 +450,13 @@ class ExtensionsConfig(object):
         location = getattrib_wrapped_in_list(plugin, "location")
         failover_location = getattrib_wrapped_in_list(plugin, "failoverlocation")
 
-        additional_location_node = find(plugin, "additionalLocations")
-        nodes_list = findall(additional_location_node, "additionalLocation")
-        additional_locations = [gettext(node) for node in nodes_list]
+        locations = location + failover_location
 
-        locations = location + additional_locations + failover_location
+        additional_location_node = find(plugin, "additionalLocations")
+        if additional_location_node is not None:
+            nodes_list = findall(additional_location_node, "additionalLocation")
+            locations += [gettext(node) for node in nodes_list]
+        
         for uri in locations:
             version_uri = ExtHandlerVersionUri()
             version_uri.uri = uri
