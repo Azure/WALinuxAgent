@@ -19,6 +19,7 @@ import os
 import re
 import subprocess
 
+from azurelinuxagent.common import conf
 from azurelinuxagent.common import logger
 from azurelinuxagent.common.cgroup import CpuCgroup, AGENT_NAME_TELEMETRY, MetricsCounter
 from azurelinuxagent.common.cgroupapi import CGroupsApi, SystemdCgroupsApi, SystemdRunError
@@ -449,18 +450,29 @@ class CGroupConfigurator(object):
 
             errors = []
 
+            processCheckSuccess = False
             try:
                 self._check_processes_in_agent_cgroup()
+                processCheckSuccess = True
             except CGroupsException as exception:
                 errors.append(exception)
 
+            quotaCheckSuccess = False
             try:
                 self._check_agent_throttled_time(cgroup_metrics)
+                quotaCheckSuccess = True
             except CGroupsException as exception:
                 errors.append(exception)
 
-            if len(errors) > 0:
+            disable = not processCheckSuccess and conf.get_cgroup_disable_on_process_check_failure() \
+                      or \
+                      not quotaCheckSuccess and conf.get_cgroup_disable_on_quota_check_failure()
+
+            if disable:
                 self.disable("Check on cgroups failed:\n{0}".format("\n".join([ustr(e) for e in errors])))
+            else:
+                for item in errors:
+                    logger.error(ustr(item))
 
         def _check_processes_in_agent_cgroup(self):
             """
@@ -514,7 +526,7 @@ class CGroupConfigurator(object):
                     cmdline = '/proc/{0}/cmdline'.format(pid)
                     if os.path.exists(cmdline):
                         with open(cmdline, "r") as cmdline_file:
-                            return "[PID: {0}] {1:40.40}".format(pid, cmdline_file.read())
+                            return "[PID: {0}] {1:64.64}".format(pid, cmdline_file.read())
                 except Exception:
                     pass
                 return "[PID: {0}] UNKNOWN".format(pid)
