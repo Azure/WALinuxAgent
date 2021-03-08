@@ -23,6 +23,7 @@ import time
 import traceback
 import xml.sax.saxutils as saxutils
 from collections import defaultdict
+from datetime import datetime, timedelta
 
 import azurelinuxagent.common.conf as conf
 import azurelinuxagent.common.logger as logger
@@ -656,12 +657,20 @@ class WireClient(object):
         response = self.fetch(uri, headers, use_proxy=False)
         return response
 
-    def fetch_manifest(self, version_uris):
+    def fetch_manifest(self, version_uris, timeout_in_minutes=5, timeout_in_ms=0):
         logger.verbose("Fetch manifest")
         version_uris_shuffled = version_uris
         random.shuffle(version_uris_shuffled)
 
+        uris_tried = 0
+        start_time = datetime.now()
         for version in version_uris_shuffled:
+
+            if datetime.now() - start_time > timedelta(minutes=timeout_in_minutes, milliseconds=timeout_in_ms):
+                logger.warn("Agent timed-out after {0} minutes while fetching extension manifests. {1}/{2} uris tried.",
+                    timeout_in_minutes, uris_tried, len(version_uris))
+                break
+
             # GA expects a location and failoverLocation in ExtensionsConfig, but
             # this is not always the case. See #1147.
             if version.uri is None:
@@ -681,6 +690,8 @@ class WireClient(object):
                     return manifest
             except Exception as error:
                 logger.warn("Failed to fetch manifest from {0}. Error: {1}", version.uri, ustr(error))
+
+            uris_tried += 1
 
         raise ExtensionDownloadError("Failed to fetch manifest from all sources")
 
