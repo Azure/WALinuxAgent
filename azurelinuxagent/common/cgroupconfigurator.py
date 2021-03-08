@@ -364,7 +364,7 @@ class CGroupConfigurator(object):
                     _log_cgroup_info('MemoryAccounting: {0}', memory_accounting)
                 else:
                     memory_cgroup_relative_path = None  # Set the path to None to prevent monitoring
-                    _log_cgroup_warning(
+                    _log_cgroup_info(
                         "The Agent is not in the expected memory cgroup; will not enable monitoring. CGroup:[{0}] Expected:[{1}]",
                         memory_cgroup_relative_path,
                         expected_relative_path)
