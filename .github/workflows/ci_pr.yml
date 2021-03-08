@@ -29,7 +29,7 @@ jobs:
         echo $PATH
         echo "Installed python2.6"
         python -V
-        curl https://bootstrap.pypa.io/2.6/get-pip.py -o get-pip.py
+        curl "https://bootstrap.pypa.io/pip/2.6/get-pip.py" -o get-pip.py
         sudo env "PATH=$PATH" python get-pip.py
 
     - uses: actions/checkout@v2
