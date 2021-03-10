@@ -470,9 +470,6 @@ class CGroupConfigurator(object):
 
             if disable:
                 self.disable("Check on cgroups failed:\n{0}".format("\n".join([ustr(e) for e in errors])))
-            else:
-                for item in errors:
-                    logger.error(ustr(item))
 
         def _check_processes_in_agent_cgroup(self):
             """
