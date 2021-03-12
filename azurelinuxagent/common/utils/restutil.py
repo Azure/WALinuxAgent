@@ -17,6 +17,7 @@
 # Requires Python 2.6+ and Openssl 1.0+
 #
 
+import math
 import os
 import re
 import threading
@@ -136,10 +137,11 @@ class IOErrorCounter(object):
 
 
 def _compute_delay(retry_attempt=1, delay=DELAY_IN_SECONDS):
-    fib = (1, 1)
-    for _ in range(retry_attempt):
-        fib = (fib[1], fib[0]+fib[1])
-    return delay*fib[1]
+    # Binet's Formula for Nth Fibonacci Term:
+    # https://artofproblemsolving.com/wiki/index.php/Binet%27s_Formula
+    sqrt5 = math.sqrt(5)
+    fib_n = int((( (1 + sqrt5) ** retry_attempt - (1 - sqrt5) ** retry_attempt ) / ( 2 ** retry_attempt * sqrt5 )))
+    return delay*fib_n
 
 
 def _is_retry_status(status, retry_codes=None):
