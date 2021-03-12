@@ -714,7 +714,7 @@ class WireClient(object):
                     host_plugin.report_fetch_health(uri, source='WireClient')
 
         except (HttpError, ProtocolError, IOError) as error:
-            logger.verbose("Fetch failed from [{0}]: {1}", uri, error)
+            logger.warn("Fetch failed from [{0}]: {1}", uri, error)
             if isinstance(error, (InvalidContainerError, ResourceGoneError)):
                 # These are retryable errors that should force a goal state refresh in the host plugin
                 raise
