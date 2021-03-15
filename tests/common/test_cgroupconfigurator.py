@@ -69,11 +69,6 @@ class CGroupConfiguratorSystemdTestCase(AgentTestCase):
         with self._get_cgroup_configurator() as configurator:
             self.assertTrue(configurator.enabled(), "cgroups were not enabled")
 
-    def test_initialize_should_not_enable_cgroups_when_they_are_disabled_in_the_agent_configuration(self):
-        with patch('azurelinuxagent.common.conf.get_cgroups_enabled', return_value=False):
-            with self._get_cgroup_configurator() as configurator:
-                self.assertFalse(configurator.enabled(), "cgroups should not be enabled")
-
     def test_initialize_should_start_tracking_the_agent_cgroups(self):
         with self._get_cgroup_configurator() as configurator:
             tracked = CGroupsTelemetry._tracked

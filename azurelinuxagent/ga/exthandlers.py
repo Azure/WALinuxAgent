@@ -36,16 +36,18 @@ import azurelinuxagent.common.conf as conf
 import azurelinuxagent.common.logger as logger
 import azurelinuxagent.common.utils.fileutil as fileutil
 import azurelinuxagent.common.version as version
+from azurelinuxagent.common.agent_supported_feature import get_agent_supported_features_list_for_extensions, \
+    SupportedFeatureNames, get_supported_feature_by_name, get_agent_supported_features_list_for_crp
 from azurelinuxagent.common.cgroupconfigurator import CGroupConfigurator
 from azurelinuxagent.common.datacontract import get_properties, set_properties
 from azurelinuxagent.common.errorstate import ErrorState
 from azurelinuxagent.common.event import add_event, elapsed_milliseconds, report_event, WALAEventOperation, \
     add_periodic, EVENTS_DIRECTORY
 from azurelinuxagent.common.exception import ExtensionDownloadError, ExtensionError, ExtensionErrorCodes, \
-    ExtensionOperationError, ExtensionUpdateError, ProtocolError, ProtocolNotFoundError, ExtensionConfigError
+    ExtensionOperationError, ExtensionUpdateError, ProtocolError, ProtocolNotFoundError, ExtensionConfigError, GoalStateAggregateStatusCodes
 from azurelinuxagent.common.future import ustr, is_file_not_found_error
 from azurelinuxagent.common.protocol.restapi import ExtensionStatus, ExtensionSubStatus, ExtHandler, ExtHandlerStatus, \
-    VMStatus
+    VMStatus, GoalStateAggregateStatus
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
 from azurelinuxagent.common.version import AGENT_NAME, CURRENT_VERSION, DISTRO_NAME, DISTRO_VERSION, \
     GOAL_STATE_AGENT_VERSION, PY_VERSION_MAJOR, PY_VERSION_MICRO, PY_VERSION_MINOR
@@ -81,12 +83,6 @@ _TRUNCATED_SUFFIX = u" ... [TRUNCATED]"
 _NUM_OF_STATUS_FILE_RETRIES = 5
 _STATUS_FILE_RETRY_DELAY = 2  # seconds
 
-_ENABLE_EXTENSION_TELEMETRY_PIPELINE = True
-
-
-def is_extension_telemetry_pipeline_enabled():
-    return _ENABLE_EXTENSION_TELEMETRY_PIPELINE
-
 
 class ValidHandlerStatus(object):
     transitioning = "transitioning"
@@ -108,6 +104,7 @@ class ExtCommandEnvVariable(object):
     ExtensionSeqNumber = "ConfigSequenceNumber"  # At par with Windows Guest Agent
     UpdatingFromVersion = "{0}_UPDATING_FROM_VERSION".format(Prefix)
     WireProtocolAddress = "{0}_WIRE_PROTOCOL_ADDRESS".format(Prefix)
+    ExtensionSupportedFeatures = "{0}_EXTENSION_SUPPORTED_FEATURES".format(Prefix)
 
 
 def get_traceback(e):  # pylint: disable=R1710
@@ -246,6 +243,23 @@ class ExtensionRequestedState(object):
     Uninstall = u"uninstall"
 
 
+class GoalStateStatus(object):
+    """
+    This is an Enum to define the State of the GoalState as a whole. This is reported as part of the
+    'vmArtifactsAggregateStatus.goalStateAggregateStatus' in the status blob.
+    Note: not to be confused with the State of the ExtHandler which reported as part of 'handlerAggregateStatus'
+    """
+    Success = "Success"
+    Failed = "Failed"
+
+    # This is used when we initialize a new Goal State, before we start processing it.
+    # It doesn't hold much value for us until we move status reporting to a separate thread.
+    Initialize = "Initialize"
+
+    # The following field is not used now but would be needed once Status reporting is moved to a separate thread.
+    Transitioning = "Transitioning"
+
+
 def get_exthandlers_handler(protocol):
     return ExtHandlersHandler(protocol)
 
@@ -268,6 +282,13 @@ class ExtHandlersHandler(object):
         self.last_etag = None
         self.log_report = False
         self.log_process = False
+        # The GoalState Aggregate status needs to report the last status of the GoalState. Since we only process
+        # extensions on incarnation change, we need to maintain its state.
+        # Setting the status as Initialize here. This would be overridden as soon as the first GoalState is processed
+        # (once self._extension_processing_allowed() is True).
+        self.__gs_aggregate_status = GoalStateAggregateStatus(status=GoalStateStatus.Initialize, seq_no="-1",
+                                                              code=GoalStateAggregateStatusCodes.Success,
+                                                              message="Initializing new GoalState")
 
         self.report_status_error_state = ErrorState()
 
@@ -306,7 +327,8 @@ class ExtHandlersHandler(object):
                 logger.info(
                     "ProcessGoalState started [Incarnation: {0}; Activity Id: {1}; Correlation Id: {2}; GS Creation Time: {3}]".format(
                         etag, activity_id, correlation_id, gs_creation_time))
-                self.handle_ext_handlers(etag)
+
+                self.__process_and_handle_extensions(etag)
                 self.last_etag = etag
 
             self.report_ext_handlers_status()
@@ -321,6 +343,46 @@ class ExtHandlersHandler(object):
                       is_success=False,
                       message=detailed_msg)
             return
+
+    def __get_unsupported_features(self):
+        required_features = self.protocol.get_required_features()
+        supported_features = get_agent_supported_features_list_for_crp()
+        return [feature.name for feature in required_features if feature.name not in supported_features]
+
+    def __process_and_handle_extensions(self, etag):
+        try:
+            # Verify we satisfy all required features, if any. If not, report failure here itself, no need to process anything further.
+            unsupported_features = self.__get_unsupported_features()
+            if any(unsupported_features):
+                msg = "Failing GS incarnation: {0} as Unsupported features found: {1}".format(etag, ', '.join(
+                    unsupported_features))
+                logger.warn(msg)
+                self.__gs_aggregate_status = GoalStateAggregateStatus(status=GoalStateStatus.Failed, seq_no=etag,
+                                                                      code=GoalStateAggregateStatusCodes.GoalStateUnsupportedRequiredFeatures,
+                                                                      message=msg)
+                add_event(AGENT_NAME,
+                          version=CURRENT_VERSION,
+                          op=WALAEventOperation.GoalStateUnsupportedFeatures,
+                          is_success=False,
+                          message=msg,
+                          log_event=False)
+            else:
+                self.handle_ext_handlers(etag)
+                self.__gs_aggregate_status = GoalStateAggregateStatus(status=GoalStateStatus.Success, seq_no=etag,
+                                                                      code=GoalStateAggregateStatusCodes.Success,
+                                                                      message="GoalState executed successfully")
+        except Exception as error:
+            msg = "Unexpected error when processing goal state: {0}; {1}".format(ustr(error), traceback.format_exc())
+            self.__gs_aggregate_status = GoalStateAggregateStatus(status=GoalStateStatus.Failed, seq_no=etag,
+                                                                  code=GoalStateAggregateStatusCodes.GoalStateUnknownFailure,
+                                                                  message=msg)
+            logger.warn(msg)
+            add_event(AGENT_NAME,
+                      version=CURRENT_VERSION,
+                      op=WALAEventOperation.ExtensionProcessing,
+                      is_success=False,
+                      message=msg,
+                      log_event=False)
 
     @staticmethod
     def get_ext_handler_instance_from_path(name, path, protocol, skip_handlers=None):
@@ -664,18 +726,19 @@ class ExtHandlersHandler(object):
         """
         Go through handler_state dir, collect and report status
         """
-        vm_status = VMStatus(status="Ready", message="Guest Agent is running")
+        vm_status = VMStatus(status="Ready", message="Guest Agent is running",
+                             gs_aggregate_status=self.__gs_aggregate_status)
         if self.ext_handlers is not None:
             for ext_handler in self.ext_handlers.extHandlers:
                 try:
                     self.report_ext_handler_status(vm_status, ext_handler)
-                except ExtensionError as e:
+                except ExtensionError as error:
                     add_event(
                         AGENT_NAME,
                         version=CURRENT_VERSION,
                         op=WALAEventOperation.ExtensionProcessing,
                         is_success=False,
-                        message=ustr(e))
+                        message=ustr(error))
 
         logger.verbose("Report vm agent status")
         try:
@@ -683,13 +746,13 @@ class ExtHandlersHandler(object):
             if self.log_report:
                 logger.verbose("Completed vm agent status report")
             self.report_status_error_state.reset()
-        except ProtocolNotFoundError as e:
+        except ProtocolNotFoundError as error:
             self.report_status_error_state.incr()
-            message = "Failed to report vm agent status: {0}".format(e)
+            message = "Failed to report vm agent status: {0}".format(error)
             logger.verbose(message)
-        except ProtocolError as e:
+        except ProtocolError as error:
             self.report_status_error_state.incr()
-            message = "Failed to report vm agent status: {0}".format(e)
+            message = "Failed to report vm agent status: {0}".format(error)
             add_event(AGENT_NAME,
                       version=CURRENT_VERSION,
                       op=WALAEventOperation.ExtensionProcessing,
@@ -773,7 +836,7 @@ class ExtHandlerInstance(object):
         try:
             if os.stat(filename).st_size <= max_size:
                 return
-            
+
             with open(filename, "rb") as existing_file:
                 existing_file.seek(-1 * max_size, 2)
                 _ = existing_file.readline()
@@ -789,7 +852,7 @@ class ExtHandlerInstance(object):
                 # this just means that no extension with self.ext_handler.name is
                 # installed.
                 return
-            
+
             logger.error("Exception occurred while attempting to truncate CommandExecution.log "
                 "for extension {0}. Exception is: {1}", self.ext_handler.name, e)
 
@@ -1049,7 +1112,7 @@ class ExtHandlerInstance(object):
             conf_dir = self.get_conf_dir()
             fileutil.mkdir(conf_dir, mode=0o700)
 
-            if is_extension_telemetry_pipeline_enabled():
+            if get_supported_feature_by_name(SupportedFeatureNames.ExtensionTelemetryPipeline).is_supported:
                 fileutil.mkdir(self.get_extension_events_dir(), mode=0o700)
 
             seq_no, status_path = self.get_status_file_path()  # pylint: disable=W0612
@@ -1410,6 +1473,19 @@ class ExtHandlerInstance(object):
                     ExtCommandEnvVariable.WireProtocolAddress: self.protocol.get_endpoint()
                 })
 
+                supported_features = []
+                for _, feature in get_agent_supported_features_list_for_extensions().items():
+                    supported_features.append(
+                        {
+                            "Key": feature.name,
+                            "Value": feature.version
+                        }
+                    )
+                if supported_features:
+                    env.update({
+                        ExtCommandEnvVariable.ExtensionSupportedFeatures: json.dumps(supported_features)
+                    })
+
                 try:
                     # Some extensions erroneously begin cmd with a slash; don't interpret those
                     # as root-relative. (Issue #1170)
@@ -1492,7 +1568,7 @@ class ExtHandlerInstance(object):
                 HandlerEnvironment.heartbeatFile: self.get_heartbeat_file() 
             }
 
-        if is_extension_telemetry_pipeline_enabled():
+        if get_supported_feature_by_name(SupportedFeatureNames.ExtensionTelemetryPipeline).is_supported:
             handler_env[HandlerEnvironment.eventsFolder] = self.get_extension_events_dir()
 
         env = [{

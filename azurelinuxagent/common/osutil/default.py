@@ -231,6 +231,7 @@ class DefaultOSUtil(object):
             # This rule was <= 2.2.25 only, and may still exist on some VMs.  Until 2.2.25
             # has aged out, keep this cleanup in place.
             self._delete_rule(_get_firewall_delete_conntrack_accept_command(wait, dst_ip))
+
             self._delete_rule(_get_firewall_delete_owner_accept_command(wait, dst_ip, uid))
             self._delete_rule(_get_firewall_delete_conntrack_drop_command(wait, dst_ip))
 
@@ -242,6 +243,20 @@ class DefaultOSUtil(object):
                         "no further attempts will be made: "
                         "{0}".format(ustr(e)))
             return False
+
+    def remove_legacy_firewall_rule(self, dst_ip):
+        # This function removes the legacy firewall rule that was added <= 2.2.25.
+        # Not adding the global _enable_firewall check here as this will only be called once per service start and
+        # we dont want the state of this call to affect other iptable calls.
+        try:
+            wait = self.get_firewall_will_wait()
+
+            # This rule was <= 2.2.25 only, and may still exist on some VMs.  Until 2.2.25
+            # has aged out, keep this cleanup in place.
+            self._delete_rule(_get_firewall_delete_conntrack_accept_command(wait, dst_ip))
+        except Exception as error:
+            logger.info(
+                "Unable to remove legacy firewall rule, won't try removing it again. Error: {0}".format(ustr(error)))
 
     def enable_firewall(self, dst_ip, uid):
         # If a previous attempt failed, do not retry
@@ -632,8 +647,7 @@ class DefaultOSUtil(object):
             mount_point = conf.get_dvd_mount_point()
         return_code = self.umount(mount_point, chk_err=chk_err)
         if chk_err and return_code != 0:
-            raise OSUtilError("Failed to unmount dvd device at {0}",  # pylint: disable=W0715
-                              mount_point)
+            raise OSUtilError("Failed to unmount dvd device at {0}".format(mount_point))
 
     def eject_dvd(self, chk_err=True):
         dvd = self.get_dvd_device()

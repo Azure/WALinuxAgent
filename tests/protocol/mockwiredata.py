@@ -75,6 +75,9 @@ DATA_FILE_EXT_ROLLINGUPGRADE["ext_conf"] = "wire/ext_conf_upgradeguid.xml"
 DATA_FILE_EXT_SEQUENCING = DATA_FILE.copy()
 DATA_FILE_EXT_SEQUENCING["ext_conf"] = "wire/ext_conf_sequencing.xml"
 
+DATA_FILE_EXT_ADDITIONAL_LOCATIONS = DATA_FILE.copy()
+DATA_FILE_EXT_ADDITIONAL_LOCATIONS["ext_conf"] = "wire/ext_conf_additional_locations.xml"
+
 DATA_FILE_EXT_DELETION = DATA_FILE.copy()
 DATA_FILE_EXT_DELETION["manifest"] = "wire/manifest_deletion.xml"
 
@@ -99,6 +102,9 @@ DATA_FILE_REMOTE_ACCESS["remote_access"] = "wire/remote_access_single_account.xm
 
 DATA_FILE_PLUGIN_SETTINGS_MISMATCH = DATA_FILE.copy()
 DATA_FILE_PLUGIN_SETTINGS_MISMATCH["ext_conf"] = "wire/invalid_config/ext_conf_plugin_settings_version_mismatch.xml"
+
+DATA_FILE_REQUIRED_FEATURES = DATA_FILE.copy()
+DATA_FILE_REQUIRED_FEATURES["ext_conf"] = "wire/ext_conf_required_features.xml"
 
 
 class WireProtocolData(object):

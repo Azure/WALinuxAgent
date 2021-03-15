@@ -117,17 +117,19 @@ class EnableFirewall(PeriodicOperation):
         super(EnableFirewall, self).__init__(conf.get_enable_firewall_period())
         self._osutil = osutil
         self._protocol = protocol
-        self._reset_firewall_rules = False
+        self._try_remove_legacy_firewall_rule = False
 
     def _operation(self):
         # If the rules ever change we must reset all rules and start over again.
         #
         # There was a rule change at 2.2.26, which started dropping non-root traffic
         # to WireServer.  The previous rules allowed traffic.  Having both rules in
-        # place negated the fix in 2.2.26.
-        if not self._reset_firewall_rules:
-            self._osutil.remove_firewall(dst_ip=self._protocol.get_endpoint(), uid=os.getuid())
-            self._reset_firewall_rules = True
+        # place negated the fix in 2.2.26. Removing only the legacy rule and keeping other rules intact.
+        #
+        # We only try to remove the legacy firewall rule once on service start (irrespective of its exit code).
+        if not self._try_remove_legacy_firewall_rule:
+            self._osutil.remove_legacy_firewall_rule(dst_ip=self._protocol.get_endpoint())
+            self._try_remove_legacy_firewall_rule = True
 
         success = self._osutil.enable_firewall(dst_ip=self._protocol.get_endpoint(), uid=os.getuid())
 

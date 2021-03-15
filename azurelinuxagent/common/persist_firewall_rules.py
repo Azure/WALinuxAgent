@@ -62,6 +62,12 @@ Environment="EGG={egg_path}" "DST_IP={wire_ip}" "UID={user_id}" "WAIT={wait}"
 
     _FIREWALLD_RUNNING_CMD = ["firewall-cmd", "--state"]
 
+    @staticmethod
+    def get_service_file_path():
+        osutil = get_osutil()
+        service_name = PersistFirewallRulesHandler._AGENT_NETWORK_SETUP_NAME_FORMAT.format(osutil.get_service_name())
+        return os.path.join(osutil.get_systemd_unit_file_install_path(), service_name)
+
     def __init__(self, dst_ip, uid):
         """
         This class deals with ensuring that Firewall rules are persisted over system reboots.
@@ -93,6 +99,10 @@ Environment="EGG={egg_path}" "DST_IP={wire_ip}" "UID={user_id}" "WAIT={wait}"
         return False
 
     def setup(self):
+        if not systemd.is_systemd():
+            logger.warn("Did not detect Systemd, unable to set {0}".format(self._network_setup_service_name))
+            return
+
         if self._is_firewall_service_running():
             logger.info("Firewalld.service present on the VM, setting up permanent rules on the VM")
             # In case of a failure, this would throw. In such a case, we don't need to try to setup our custom service
@@ -179,7 +189,7 @@ Environment="EGG={egg_path}" "DST_IP={wire_ip}" "UID={user_id}" "WAIT={wait}"
             raise
 
     def __set_service_unit_file(self):
-        service_unit_file = os.path.join(self._systemd_file_path, self._network_setup_service_name)
+        service_unit_file = self.get_service_file_path()
         try:
             fileutil.write_file(service_unit_file,
                                 self.__SERVICE_FILE_CONTENT.format(egg_path=self._current_agent_executable_path,
@@ -211,27 +221,45 @@ Environment="EGG={egg_path}" "DST_IP={wire_ip}" "UID={user_id}" "WAIT={wait}"
             except Exception as error:
                 logger.warn("Unable to delete file: {0}; Error: {1}".format(file_path, ustr(error)))
 
+    def __verify_network_setup_service_failed(self):
+        # Check if the agent-network-setup.service failed in its last run
+        # Note:
+        # The `systemctl is-failed <service>` command would return "failed" and ExitCode: 0 if the service was actually
+        # in a failed state.
+        # For the rest of the cases (eg: active, in-active, dead, etc) it would return the state and a non-0 ExitCode.
+        cmd = ["systemctl", "is-failed", self._network_setup_service_name]
+        try:
+            return shellutil.run_command(cmd).rstrip() == "failed"
+        except CommandError as error:
+            msg = "{0} not in a failed state. Command: {1}, ExitCode: {2}\nStdout: {3}\nStderr: {4}".format(
+                self._network_setup_service_name, ' '.join(cmd), error.returncode, error.stdout, error.stderr)
+        except Exception as error:
+            msg = "Ran into error, {0} not failed. Error: {1}".format(self._network_setup_service_name, ustr(error))
+
+        logger.verbose(msg)
+        return False
+
     def __log_network_setup_service_logs(self):
         # Get logs from journalctl - https://www.freedesktop.org/software/systemd/man/journalctl.html
         cmd = ["journalctl", "-u", self._network_setup_service_name, "-b"]
-        cmd_success = False
+        service_failed = self.__verify_network_setup_service_failed()
         try:
             stdout = shellutil.run_command(cmd)
             msg = "Logs from the {0} since system boot:\n {1}".format(self._network_setup_service_name, stdout)
-            cmd_success = True
             logger.info(msg)
         except CommandError as error:
-            msg = "Command: {0} failed with ExitCode: {1}\nStdout: {2}\nStderr: {3}".format(' '.join(cmd),
-                                                                                            error.returncode,
-                                                                                            error.stdout, error.stderr)
+            msg = "Unable to fetch service logs, Command: {0} failed with ExitCode: {1}\nStdout: {2}\nStderr: {3}".format(
+                ' '.join(cmd), error.returncode, error.stdout, error.stderr)
             logger.warn(msg)
         except Exception as error:
             msg = "Ran into unexpected error when getting logs for {0} service. Error: {1}".format(
                 self._network_setup_service_name, ustr(error))
             logger.warn(msg)
 
+        # Log service status and logs if we can fetch them from journalctl and send it to Kusto,
+        # else just log the error of the failure of fetching logs
         add_event(
             op=WALAEventOperation.PersistFirewallRules,
-            is_success=cmd_success,
+            is_success=(not service_failed),
             message=msg,
             log_event=False)

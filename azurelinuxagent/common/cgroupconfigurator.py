@@ -75,13 +75,13 @@ _AGENT_THROTTLED_TIME_THRESHOLD = 120  # 2 minutes
 
 def _log_cgroup_info(format_string, *args):
     message = format_string.format(*args)
-    logger.info(message)
+    logger.info("[CGI]" + message)
     add_event(op=WALAEventOperation.CGroupsInfo, message=message)
 
 
 def _log_cgroup_warning(format_string, *args):
     message = format_string.format(*args)
-    logger.info(message)  # log as INFO for now, in the future it should be logged as WARNING
+    logger.info("[CGW]" + message)  # log as INFO for now, in the future it should be logged as WARNING
     add_event(op=WALAEventOperation.CGroupsInfo, message=message, is_success=False, log_event=False)
 
 
@@ -104,9 +104,6 @@ class CGroupConfigurator(object):
         def initialize(self):
             try:
                 if self._initialized:
-                    return
-
-                if not conf.get_cgroups_enabled():
                     return
 
                 # check whether cgroup monitoring is supported on the current distro
@@ -368,7 +365,7 @@ class CGroupConfigurator(object):
                     _log_cgroup_info('MemoryAccounting: {0}', memory_accounting)
                 else:
                     memory_cgroup_relative_path = None  # Set the path to None to prevent monitoring
-                    _log_cgroup_warning(
+                    _log_cgroup_info(
                         "The Agent is not in the expected memory cgroup; will not enable monitoring. CGroup:[{0}] Expected:[{1}]",
                         memory_cgroup_relative_path,
                         expected_relative_path)
@@ -453,17 +450,25 @@ class CGroupConfigurator(object):
 
             errors = []
 
+            processCheckSuccess = False
             try:
                 self._check_processes_in_agent_cgroup()
+                processCheckSuccess = True
             except CGroupsException as exception:
                 errors.append(exception)
 
+            quotaCheckSuccess = False
             try:
                 self._check_agent_throttled_time(cgroup_metrics)
+                quotaCheckSuccess = True
             except CGroupsException as exception:
                 errors.append(exception)
 
-            if len(errors) > 0:
+            disable = not processCheckSuccess and conf.get_cgroup_disable_on_process_check_failure() \
+                      or \
+                      not quotaCheckSuccess and conf.get_cgroup_disable_on_quota_check_failure()
+
+            if disable:
                 self.disable("Check on cgroups failed:\n{0}".format("\n".join([ustr(e) for e in errors])))
 
         def _check_processes_in_agent_cgroup(self):
@@ -518,7 +523,7 @@ class CGroupConfigurator(object):
                     cmdline = '/proc/{0}/cmdline'.format(pid)
                     if os.path.exists(cmdline):
                         with open(cmdline, "r") as cmdline_file:
-                            return "[PID: {0}] {1:40.40}".format(pid, cmdline_file.read())
+                            return "[PID: {0}] {1:64.64}".format(pid, cmdline_file.read())
                 except Exception:
                     pass
                 return "[PID: {0}] UNKNOWN".format(pid)
