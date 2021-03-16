@@ -296,6 +296,11 @@ class ExtHandlersHandler(object):
         # Skip processing if GoalState incarnation did not change
         return self.last_etag != etag
 
+    def __last_gs_unsupported(self):
+        # Return if the last GoalState was unsupported
+        return self.__gs_aggregate_status.status == GoalStateStatus.Failed and \
+               self.__gs_aggregate_status.code == GoalStateAggregateStatusCodes.GoalStateUnsupportedRequiredFeatures
+
     def get_goal_state_debug_metadata(self):
         """
         This function fetches metadata fetched from the GoalState for better debuggability
@@ -397,7 +402,7 @@ class ExtHandlersHandler(object):
 
     def _cleanup_outdated_handlers(self):
         # Skip cleanup if the previous GS was Unsupported
-        if self.__gs_aggregate_status.is_unsupported:
+        if self.__last_gs_unsupported():
             return
 
         handlers = []
@@ -731,8 +736,8 @@ class ExtHandlersHandler(object):
 
         handlers_to_report = []
 
-        # Incase of Unsupported error, report the status of the previous GoalState
-        if self.__gs_aggregate_status.is_unsupported:
+        # Incase of Unsupported error, report the status of the handlers in the VM
+        if self.__last_gs_unsupported():
             for item, path in list_agent_lib_directory(skip_agent_package=True):
                 try:
                     handler_instance = ExtHandlersHandler.get_ext_handler_instance_from_path(name=item,
@@ -744,7 +749,7 @@ class ExtHandlersHandler(object):
                     continue
 
         # If GoalState supported, report the status of extension handlers that were requested by the GoalState
-        elif not self.__gs_aggregate_status.is_unsupported and self.ext_handlers is not None:
+        elif not self.__last_gs_unsupported() and self.ext_handlers is not None:
             handlers_to_report = self.ext_handlers.extHandlers
 
         for ext_handler in handlers_to_report:

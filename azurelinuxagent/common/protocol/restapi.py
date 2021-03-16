@@ -22,11 +22,9 @@ import time
 from datetime import datetime, timedelta
 
 from azurelinuxagent.common.datacontract import DataContract, DataContractList
-from azurelinuxagent.common.exception import GoalStateAggregateStatusCodes
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.utils.textutil import getattrib
 from azurelinuxagent.common.version import DISTRO_VERSION, DISTRO_NAME, CURRENT_VERSION
-from azurelinuxagent.ga.exthandlers import GoalStateStatus
 
 
 class VMInfo(DataContract):
@@ -303,10 +301,6 @@ class GoalStateAggregateStatus(DataContract):
     @property
     def processed_time(self):
         return self.__utc_timestamp
-
-    @property
-    def is_unsupported(self):
-        return self.status == GoalStateStatus.Failed and self.code == GoalStateAggregateStatusCodes.GoalStateUnsupportedRequiredFeatures
 
 
 class VMArtifactsAggregateStatus(DataContract):
