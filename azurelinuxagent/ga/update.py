@@ -447,26 +447,29 @@ class UpdateHandler(object):
     @staticmethod
     def _emit_changes_in_default_configuration():
         try:
+            def log_event(msg):
+                logger.info(msg)
+                add_event(AGENT_NAME, op=WALAEventOperation.ConfigurationChange, message=msg)
+
             def log_if_int_changed_from_default(name, current):
                 default = conf.get_int_default_value(name)
                 if default != current:
-                    msg = "{0} changed from its default; new value: {1}".format(name, current)
-                    logger.info(msg)
-                    add_event(AGENT_NAME, op=WALAEventOperation.ConfigurationChange, message=msg)
+                    log_event("{0} changed from its default: {1}. New value: {2}".format(name, default, current))
+
+            def log_if_bool_changed_from_default(name, current):
+                default = conf.get_switch_default_value(name)
+                if default != current:
+                    log_event("{0} changed from its default: {1}. New value: {2}".format(name, default, current))
 
             log_if_int_changed_from_default("Extensions.GoalStatePeriod", conf.get_goal_state_period())
+            log_if_bool_changed_from_default("OS.EnableFirewall", conf.enable_firewall())
+            log_if_bool_changed_from_default("Extensions.Enabled", conf.get_extensions_enabled())
 
-            if not conf.enable_firewall():
-                message = "OS.EnableFirewall is False"
-                logger.info(message)
-                add_event(AGENT_NAME, op=WALAEventOperation.ConfigurationChange, message=message)
-            else:
+            if conf.enable_firewall():
                 log_if_int_changed_from_default("OS.EnableFirewallPeriod", conf.get_enable_firewall_period())
 
             if conf.get_lib_dir() != "/var/lib/waagent":
-                message = "lib dir is in an unexpected location: {0}".format(conf.get_lib_dir())
-                logger.info(message)
-                add_event(AGENT_NAME, op=WALAEventOperation.ConfigurationChange, message=message)
+                log_event("lib dir is in an unexpected location: {0}".format(conf.get_lib_dir()))
 
         except Exception as e:
             logger.warn("Failed to log changes in configuration: {0}", ustr(e))
