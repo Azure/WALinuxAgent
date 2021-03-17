@@ -325,8 +325,8 @@ class ExtHandlersHandler(object):
             logger.verbose(msg)
             # Log status report success on new config
             self.log_report = True
-
-            if self._extension_processing_allowed() and self._incarnation_changed(etag):
+            incarnation_changed = self._incarnation_changed(etag)
+            if self._extension_processing_allowed() and incarnation_changed:
                 activity_id, correlation_id, gs_creation_time = self.get_goal_state_debug_metadata()
 
                 logger.info(
@@ -336,7 +336,7 @@ class ExtHandlersHandler(object):
                 self.__process_and_handle_extensions(etag)
                 self.last_etag = etag
 
-            self.report_ext_handlers_status()
+            self.report_ext_handlers_status(incarnation_changed=incarnation_changed)
             self._cleanup_outdated_handlers()
         except Exception as error:
             msg = u"Exception processing extension handlers: {0}".format(ustr(error))
@@ -727,7 +727,7 @@ class ExtHandlersHandler(object):
 
         ext_handler_i.remove_ext_handler()
 
-    def report_ext_handlers_status(self):
+    def report_ext_handlers_status(self, incarnation_changed=False):
         """
         Go through handler_state dir, collect and report status
         """
@@ -745,8 +745,10 @@ class ExtHandlersHandler(object):
                                                                                              protocol=self.protocol)
                     if handler_instance is not None:
                         handlers_to_report.append(handler_instance.ext_handler)
-                except Exception:
-                    continue
+                except Exception as error:
+                    # Log error once per incarnation
+                    if incarnation_changed:
+                        logger.warn("Can't fetch ExtHandler from path: {0}; Error: {1}".format(path, ustr(error)))
 
         # If GoalState supported, report the status of extension handlers that were requested by the GoalState
         elif not self.__last_gs_unsupported() and self.ext_handlers is not None:
