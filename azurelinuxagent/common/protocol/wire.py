@@ -714,7 +714,7 @@ class WireClient(object):
                     host_plugin.report_fetch_health(uri, source='WireClient')
 
         except (HttpError, ProtocolError, IOError) as error:
-            msg = "Fetch failed from [{0}]: {1}".format(uri, error)
+            msg = "Fetch failed: {0}".format(error)
             logger.warn(msg)
             report_event(op=WALAEventOperation.Download,
                             is_success=False,
