@@ -111,7 +111,13 @@ __SWITCH_OPTIONS__ = {
     "ResourceDisk.EnableSwapEncryption": False,
     "AutoUpdate.Enabled": True,
     "EnableOverProvisioning": True,
-    "CGroups.Enabled": True,
+    #
+    # "Debug" options are experimental and may be removed in later
+    # versions of the Agent.
+    #
+    "Debug.CgroupLogMetrics": False,
+    "Debug.CgroupDisableOnProcessCheckFailure": True,
+    "Debug.CgroupDisableOnQuotaCheckFailure": True,
 }
 
 
@@ -150,7 +156,12 @@ __INTEGER_OPTIONS__ = {
     "HttpProxy.Port": None,
     "ResourceDisk.SwapSizeMB": 0,
     "Autoupdate.Frequency": 3600,
-    "Logs.CollectPeriod": 3600
+    "Logs.CollectPeriod": 3600,
+    #
+    # "Debug" options are experimental and may be removed in later
+    # versions of the Agent.
+    #
+    "Debug.CgroupCheckPeriod": 300,
 }
 
 
@@ -458,3 +469,40 @@ def get_cgroups_enabled(conf=__conf__):
 
 def get_monitor_network_configuration_changes(conf=__conf__):
     return conf.get_switch("Monitor.NetworkConfigurationChanges", False)
+
+
+def get_cgroup_check_period(conf=__conf__):
+    """
+    How often to perform checks on cgroups (are the processes in the cgroups as expected,
+    has the agent exceeded its quota, etc)
+
+    NOTE: This option is experimental and may be removed in later versions of the Agent.
+    """
+    return conf.get_int("Debug.CgroupCheckPeriod", 300)
+
+
+def get_cgroup_log_metrics(conf=__conf__):
+    """
+    If True, resource usage metrics are written to the local log
+
+    NOTE: This option is experimental and may be removed in later versions of the Agent.
+    """
+    return conf.get_switch("Debug.CgroupLogMetrics", False)
+
+
+def get_cgroup_disable_on_process_check_failure(conf=__conf__):
+    """
+    If True, cgroups will be disabled if the process check fails
+
+    NOTE: This option is experimental and may be removed in later versions of the Agent.
+    """
+    return conf.get_switch("Debug.CgroupDisableOnProcessCheckFailure", True)
+
+
+def get_cgroup_disable_on_quota_check_failure(conf=__conf__):
+    """
+    If True, cgroups will be disabled if the CPU quota check fails
+
+    NOTE: This option is experimental and may be removed in later versions of the Agent.
+    """
+    return conf.get_switch("Debug.CgroupDisableOnQuotaCheckFailure", True)

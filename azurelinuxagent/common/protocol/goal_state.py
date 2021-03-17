@@ -32,7 +32,7 @@ from azurelinuxagent.common.exception import ProtocolError, ExtensionConfigError
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.protocol.restapi import Cert, CertList, Extension, ExtHandler, ExtHandlerList, \
     ExtHandlerVersionUri, RemoteAccessUser, RemoteAccessUsersList, VMAgentManifest, VMAgentManifestList, \
-    VMAgentManifestUri, InVMGoalStateMetaData
+    VMAgentManifestUri, InVMGoalStateMetaData, RequiredFeature
 from azurelinuxagent.common.utils import fileutil
 from azurelinuxagent.common.utils.cryptutil import CryptUtil
 from azurelinuxagent.common.utils.textutil import parse_doc, findall, find, findtext, getattrib, gettext
@@ -297,6 +297,7 @@ class ExtensionsConfig(object):
         self.status_upload_blob = None
         self.status_upload_blob_type = None
         self.artifacts_profile_blob = None
+        self.required_features = []
 
         if xml_text is None:
             return
@@ -319,6 +320,10 @@ class ExtensionsConfig(object):
 
         self.__parse_plugins_and_settings_and_populate_ext_handlers(xml_doc)
 
+        required_features_list = find(xml_doc, "RequiredFeatures")
+        if required_features_list is not None:
+            self._parse_required_features(required_features_list)
+
         self.status_upload_blob = findtext(xml_doc, "StatusUploadBlob")
         self.artifacts_profile_blob = findtext(xml_doc, "InVMArtifactsProfileBlob")
 
@@ -327,6 +332,12 @@ class ExtensionsConfig(object):
         logger.verbose("Extension config shows status blob type as [{0}]", self.status_upload_blob_type)
 
         self.in_vm_gs_metadata.parse_node(find(xml_doc, "InVMGoalStateMetaData"))
+
+    def _parse_required_features(self, required_features_list):
+        for required_feature in findall(required_features_list, "RequiredFeature"):
+            feature_name = findtext(required_feature, "Name")
+            feature_value = findtext(required_feature, "Value")
+            self.required_features.append(RequiredFeature(name=feature_name, value=feature_value))
 
     def get_redacted_xml_text(self):
         if self.xml_text is None:
@@ -398,9 +409,20 @@ class ExtensionsConfig(object):
         Sample config:
 
         <Plugins>
-              <Plugin name="Microsoft.CPlat.Core.NullSeqB" version="2.0.1" location="https://zrdfepirv2cbn04prdstr01a.blob.core.windows.net/f72653efd9e349ed9842c8b99e4c1712/Microsoft.CPlat.Core_NullSeqB_useast2euap_manifest.xml" state="enabled" autoUpgrade="false" failoverlocation="https://zrdfepirv2cbz06prdstr01a.blob.core.windows.net/f72653efd9e349ed9842c8b99e4c1712/Microsoft.CPlat.Core_NullSeqB_useast2euap_manifest.xml" runAsStartupTask="false" isJson="true" useExactVersion="true" />
-              <Plugin name="Microsoft.CPlat.Core.NullSeqA" version="2.0.1" location="https://zrdfepirv2cbn04prdstr01a.blob.core.windows.net/f72653efd9e349ed9842c8b99e4c1712/Microsoft.CPlat.Core_NullSeqA_useast2euap_manifest.xml" state="enabled" autoUpgrade="false" failoverlocation="https://zrdfepirv2cbn06prdstr01a.blob.core.windows.net/f72653efd9e349ed9842c8b99e4c1712/Microsoft.CPlat.Core_NullSeqA_useast2euap_manifest.xml" runAsStartupTask="false" isJson="true" useExactVersion="true" />
+          <Plugin name="Microsoft.CPlat.Core.NullSeqB" version="2.0.1" location="https://zrdfepirv2cbn04prdstr01a.blob.core.windows.net/f72653efd9e349ed9842c8b99e4c1712/Microsoft.CPlat.Core_NullSeqB_useast2euap_manifest.xml" state="enabled" autoUpgrade="false" failoverlocation="https://zrdfepirv2cbz06prdstr01a.blob.core.windows.net/f72653efd9e349ed9842c8b99e4c1712/Microsoft.CPlat.Core_NullSeqB_useast2euap_manifest.xml" runAsStartupTask="false" isJson="true" useExactVersion="true"><Plugin name="Microsoft.Azure.Extensions.CustomScript" version="1.0" location="https://rdfecurrentuswestcache.blob.core.test-cint.azure-test.net/0e53c53ef0be4178bacb0a1fecf12a74/Microsoft.Azure.Extensions_CustomScript_usstagesc_manifest.xml" state="enabled" autoUpgrade="false" failoverlocation="https://rdfecurrentuswestcache2.blob.core.test-cint.azure-test.net/0e53c53ef0be4178bacb0a1fecf12a74/Microsoft.Azure.Extensions_CustomScript_usstagesc_manifest.xml" runAsStartupTask="false" isJson="true" useExactVersion="true">
+            <additionalLocations>
+              <additionalLocation>https://rdfecurrentuswestcache3.blob.core.test-cint.azure-test.net/0e53c53ef0be4178bacb0a1fecf12a74/Microsoft.Azure.Extensions_CustomScript_usstagesc_manifest.xml</additionalLocation>
+              <additionalLocation>https://rdfecurrentuswestcache4.blob.core.test-cint.azure-test.net/0e53c53ef0be4178bacb0a1fecf12a74/Microsoft.Azure.Extensions_CustomScript_usstagesc_manifest.xml</additionalLocation>
+            </additionalLocations>
+          </Plugin>
+          <Plugin name="Microsoft.CPlat.Core.NullSeqA" version="2.0.1" location="https://zrdfepirv2cbn04prdstr01a.blob.core.windows.net/f72653efd9e349ed9842c8b99e4c1712/Microsoft.CPlat.Core_NullSeqA_useast2euap_manifest.xml" state="enabled" autoUpgrade="false" failoverlocation="https://zrdfepirv2cbn06prdstr01a.blob.core.windows.net/f72653efd9e349ed9842c8b99e4c1712/Microsoft.CPlat.Core_NullSeqA_useast2euap_manifest.xml" runAsStartupTask="false" isJson="true" useExactVersion="true" />
         </Plugins>
+
+        
+        Note that the `additionalLocations` subnode is populated with links
+        generated by PIR for resiliency. In regions with this feature enabled,
+        CRP will provide any extra links in the format above. If no extra links
+        are provided, the subnode will not exist.
         """
 
         def _log_error_if_none(attr_name, value):
@@ -421,9 +443,21 @@ class ExtensionsConfig(object):
         if ext_handler.properties.state in (None, ""):
             raise ExtensionConfigError("Received empty Extensions.Plugins.Plugin.state, failing Handler")
 
-        location = getattrib(plugin, "location")
-        failover_location = getattrib(plugin, "failoverlocation")
-        for uri in [location, failover_location]:
+        def getattrib_wrapped_in_list(node, attr_name):
+            attr = getattrib(node, attr_name)
+            return [attr] if attr not in (None, "") else []
+
+        location = getattrib_wrapped_in_list(plugin, "location")
+        failover_location = getattrib_wrapped_in_list(plugin, "failoverlocation")
+
+        locations = location + failover_location
+
+        additional_location_node = find(plugin, "additionalLocations")
+        if additional_location_node is not None:
+            nodes_list = findall(additional_location_node, "additionalLocation")
+            locations += [gettext(node) for node in nodes_list]
+        
+        for uri in locations:
             version_uri = ExtHandlerVersionUri()
             version_uri.uri = uri
             ext_handler.versionUris.append(version_uri)
