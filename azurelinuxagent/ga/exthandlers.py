@@ -474,6 +474,10 @@ class ExtHandlersHandler(object):
         wait_until = datetime.datetime.utcnow() + datetime.timedelta(minutes=_DEFAULT_EXT_TIMEOUT_MINUTES)
         max_dep_level = max([handler.sort_key() for handler in self.ext_handlers.extHandlers])
 
+        # This sorts based on the min([dependencyLevel of each extension])
+        # What if extHandlerA = [2,4] and extHandlerB = [1,3], extHandlerC = [0]
+        # Expected order should be - extHandlerC, extHandlerB.1, extHandlerA.2, extHandlerB.3, extHandlerB.4
+        # Need to handle this
         self.ext_handlers.extHandlers.sort(key=operator.methodcaller('sort_key'))
         for ext_handler in self.ext_handlers.extHandlers:
             handler_success = self.handle_ext_handler(ext_handler, etag)
@@ -1486,6 +1490,7 @@ class ExtHandlerInstance(object):
                     env = {}
                 env.update(os.environ)
                 # Always add Extension Path and version to the current launch_command (Ask from publishers)
+                # Add the extension name here for MC only
                 env.update({
                     ExtCommandEnvVariable.ExtensionPath: base_dir,
                     ExtCommandEnvVariable.ExtensionVersion: str(self.ext_handler.properties.version),
@@ -1576,6 +1581,7 @@ class ExtHandlerInstance(object):
                     "handlerSettings": settings
                 }]
             }
+            # This would need to be changed, change the name to <seqNo>.extName.settings for MC and <seqNo>.settings for SC
             settings_file = "{0}.settings".format(ext.sequenceNumber)
             self.logger.info("Update settings file: {0}", settings_file)
             self.update_settings_file(settings_file, json.dumps(ext_settings))
