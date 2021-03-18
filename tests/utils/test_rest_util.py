@@ -115,6 +115,25 @@ class TestHttpOperations(AgentTestCase):
         self.assertEqual(None, host) 
         self.assertEqual(rel_uri, "None") 
 
+    def test_trim_url_parameters(self):
+        test_uri = "http://abc.def/ghi#hash?jkl=mn"
+        rel_uri = restutil._trim_url_parameters(test_uri)
+        self.assertEqual("http://abc.def/ghi", rel_uri)
+
+        test_uri = "https://abc.def/ghi?jkl=mn"
+        rel_uri = restutil._trim_url_parameters(test_uri)
+        self.assertEqual("https://abc.def/ghi", rel_uri)
+
+        test_uri = "https://abc.def:8443/ghi?jkl=mn"
+        rel_uri = restutil._trim_url_parameters(test_uri)
+        self.assertEqual("https://abc.def:8443/ghi", rel_uri) 
+
+        rel_uri = restutil._trim_url_parameters("")
+        self.assertEqual(rel_uri, "")
+
+        rel_uri = restutil._trim_url_parameters("None")
+        self.assertEqual(rel_uri, "None")
+
     def test_cleanup_sas_tokens_from_urls_for_normal_cases(self):
         test_url = "http://abc.def/ghi#hash?jkl=mn"
         filtered_url = restutil.redact_sas_tokens_in_urls(test_url)
