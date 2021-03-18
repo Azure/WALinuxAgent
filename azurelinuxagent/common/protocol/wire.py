@@ -751,7 +751,13 @@ class WireClient(object):
                     host_plugin.report_fetch_health(uri, source='WireClient')
 
         except (HttpError, ProtocolError, IOError) as error:
-            logger.verbose("Fetch failed from [{0}]: {1}", uri, error)
+            msg = "Fetch failed: {0}".format(error)
+            logger.warn(msg)
+            report_event(op=WALAEventOperation.Download,
+                            is_success=False,
+                            message=msg,
+                            log_event=False)
+
             if isinstance(error, (InvalidContainerError, ResourceGoneError)):
                 # These are retryable errors that should force a goal state refresh in the host plugin
                 raise
