@@ -456,14 +456,13 @@ class UpdateHandler(object):
                 if default != current:
                     log_event("{0} changed from its default: {1}. New value: {2}".format(name, default, current))
 
-            def log_if_bool_changed_from_default(name, current):
-                default = conf.get_switch_default_value(name)
-                if default != current:
-                    log_event("{0} changed from its default: {1}. New value: {2}".format(name, default, current))
+            def log_if_op_disabled(name, value):
+                if not value:
+                    log_event("{0} is set to False, not processing the operation".format(name))
 
             log_if_int_changed_from_default("Extensions.GoalStatePeriod", conf.get_goal_state_period())
-            log_if_bool_changed_from_default("OS.EnableFirewall", conf.enable_firewall())
-            log_if_bool_changed_from_default("Extensions.Enabled", conf.get_extensions_enabled())
+            log_if_op_disabled("OS.EnableFirewall", conf.enable_firewall())
+            log_if_op_disabled("Extensions.Enabled", conf.get_extensions_enabled())
 
             if conf.enable_firewall():
                 log_if_int_changed_from_default("OS.EnableFirewallPeriod", conf.get_enable_firewall_period())
