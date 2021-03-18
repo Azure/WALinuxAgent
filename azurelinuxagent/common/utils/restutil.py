@@ -172,6 +172,19 @@ def _parse_url(url):
         secure = True
     return o.hostname, o.port, secure, rel_uri
 
+def _trim_url_parameters(url):
+    """
+    Parse URL and return scheme://hostname:port/path
+    """
+    o = urlparse(url)
+
+    if o.hostname:
+        if o.port:
+            return "{0}://{1}:{2}{3}".format(o.scheme, o.hostname, o.port, o.path)
+        else:
+            return "{0}://{1}{2}".format(o.scheme, o.hostname, o.path)
+
+    return url
 
 def is_valid_cidr(string_network):
     """
@@ -450,7 +463,7 @@ def http_request(method,
             return resp
 
         except httpclient.HTTPException as e:
-            clean_url = redact_sas_tokens_in_urls(url)
+            clean_url = _trim_url_parameters(url)
             msg = '[HTTP Failed] {0} {1} -- HttpException {2}'.format(method, clean_url, e)
             if _is_retry_exception(e):
                 continue
@@ -458,7 +471,7 @@ def http_request(method,
 
         except IOError as e:
             IOErrorCounter.increment(host=host, port=port)
-            clean_url = redact_sas_tokens_in_urls(url)
+            clean_url = _trim_url_parameters(url)
             msg = '[HTTP Failed] {0} {1} -- IOError {2}'.format(method, clean_url, e)
             continue
 
