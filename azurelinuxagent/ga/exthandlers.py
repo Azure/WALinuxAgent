@@ -252,11 +252,8 @@ class GoalStateStatus(object):
     Success = "Success"
     Failed = "Failed"
 
-    # This is used when we initialize a new Goal State, before we start processing it.
-    # It doesn't hold much value for us until we move status reporting to a separate thread.
-    Initialize = "Initialize"
-
     # The following field is not used now but would be needed once Status reporting is moved to a separate thread.
+    Initialize = "Initialize"
     Transitioning = "Transitioning"
 
 
@@ -286,9 +283,7 @@ class ExtHandlersHandler(object):
         # extensions on incarnation change, we need to maintain its state.
         # Setting the status as Initialize here. This would be overridden as soon as the first GoalState is processed
         # (once self._extension_processing_allowed() is True).
-        self.__gs_aggregate_status = GoalStateAggregateStatus(status=GoalStateStatus.Initialize, seq_no="-1",
-                                                              code=GoalStateAggregateStatusCodes.Success,
-                                                              message="Initializing new GoalState")
+        self.__gs_aggregate_status = None
 
         self.report_status_error_state = ErrorState()
 
@@ -297,8 +292,10 @@ class ExtHandlersHandler(object):
         return self.last_etag != etag
 
     def __last_gs_unsupported(self):
+
         # Return if the last GoalState was unsupported
-        return self.__gs_aggregate_status.status == GoalStateStatus.Failed and \
+        return self.__gs_aggregate_status is not None and \
+               self.__gs_aggregate_status.status == GoalStateStatus.Failed and \
                self.__gs_aggregate_status.code == GoalStateAggregateStatusCodes.GoalStateUnsupportedRequiredFeatures
 
     def get_goal_state_debug_metadata(self):
