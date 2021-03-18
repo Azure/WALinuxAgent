@@ -291,7 +291,7 @@ class VMStatus(DataContract):
 
 
 class GoalStateAggregateStatus(DataContract):
-    def __init__(self, status=None, seq_no=-1, message="", code=None):
+    def __init__(self, seq_no, status=None, message="", code=None):
         self.message = message
         self.in_svd_seq_no = seq_no
         self.status = status
