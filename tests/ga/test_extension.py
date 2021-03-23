@@ -1337,7 +1337,7 @@ class TestExtension(ExtensionTestCase):
             self.assertEqual(etag, exthandlers_handler.last_etag,
                              "Last etag and etag should be same if extension processing is enabled")
 
-    def test_it_should_parse_in_vm_metadata_properly(self, mock_get, mock_crypt, *args):
+    def test_it_should_parse_valid_in_vm_metadata_properly(self, mock_get, mock_crypt, *args):
 
         test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE_IN_VM_META_DATA)
         exthandlers_handler, protocol = self._create_mock(test_data, mock_get, mock_crypt, *args)
@@ -1349,6 +1349,8 @@ class TestExtension(ExtensionTestCase):
         self.assertEqual(correlation_id, "400de90b-522e-491f-9d89-ec944661f531", "Incorrect correlation Id")
         self.assertEqual(gs_creation_time, '2020-11-09T17:48:50.412125Z', "Incorrect GS Creation time")
 
+    def test_it_should_parse_missing_in_vm_metadata_properly(self, mock_get, mock_crypt, *args):
+
         # If the data is not provided in ExtensionConfig, it should just be None
         test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE)
         exthandlers_handler, protocol = self._create_mock(test_data, mock_get, mock_crypt, *args)
@@ -1359,6 +1361,14 @@ class TestExtension(ExtensionTestCase):
         self.assertEqual(activity_id, "NA", "Activity Id should be NA")
         self.assertEqual(correlation_id, "NA", "Correlation Id should be NA")
         self.assertEqual(gs_creation_time, "NA", "GS Creation time should be NA")
+    
+    def test_it_should_parse_invalid_in_vm_metadata_properly(self, mock_get, mock_crypt, *args):
+
+        test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE_INVALID_VM_META_DATA)
+        exthandlers_handler, protocol = self._create_mock(test_data, mock_get, mock_crypt, *args)
+
+        exthandlers_handler.run()
+        self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.0.0")
 
     def _assert_ext_status(self, report_ext_status, expected_status,
                            expected_seq_no):
