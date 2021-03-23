@@ -18,12 +18,13 @@
 import os
 import re
 import platform
+import subprocess
 import sys
 
 import azurelinuxagent.common.conf as conf
 import azurelinuxagent.common.utils.shellutil as shellutil
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
-from azurelinuxagent.common.future import ustr, get_linux_distribution
+from azurelinuxagent.common.future import ustr, get_linux_distribution, is_file_not_found_error
 
 __DAEMON_VERSION_ENV_VARIABLE = '_AZURE_GUEST_AGENT_DAEMON_VERSION_'
 """
@@ -183,15 +184,22 @@ def get_lis_version():
         return COMMAND_FAILED
 
 def has_logrotate():
+    basic_version_regex = r"\d(?:\.\d+)*"
+    regex = r"logrotate (?P<version>{ver})".format(ver=basic_version_regex)
+
     try:
-        logrotate_version = shellutil.run_command(["logrotate", "--version"]).split("\n")[0]
-        return logrotate_version
-    except shellutil.CommandError:
-        # A non-zero return code means that logrotate isn't present on 
-        # the system; --version shouldn't fail otherwise.
-        return COMMAND_ABSENT
-    except Exception:
-        return COMMAND_FAILED
+        cmd_output = shellutil.run_command(["logrotate", "--version"], stderr=subprocess.STDOUT)
+        match = re.search(regex, cmd_output)
+        if match:
+            return match.group("version")
+
+    except Exception as e:
+        if is_file_not_found_error(e):
+            # run_command actually throws a FileNotFound if there
+            # is no executable corresponding to the command given.
+            return COMMAND_ABSENT
+
+    return COMMAND_FAILED
 
 
 AGENT_NAME = "WALinuxAgent"
