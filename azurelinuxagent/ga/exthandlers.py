@@ -278,7 +278,7 @@ class ExtHandlersHandler(object):
         :return: Tuple (activity_id, correlation_id, gs_created_timestamp) or "NA" for any property that's not available
         """
 
-        def parse_value(parse_fn, value):
+        def format_value(parse_fn, value):
 
             try:
                 if value not in (None, ""):
@@ -291,14 +291,14 @@ class ExtHandlersHandler(object):
             
             return "NA"
         
-        fmt_time = lambda time: time.strftime(logger.Logger.LogTimeFormatInUTC)
+        to_utc = lambda time: time.strftime(logger.Logger.LogTimeFormatInUTC)
         identity = lambda value: value
 
         in_vm_gs_metadata = self.protocol.get_in_vm_gs_metadata()
 
-        gs_creation_time = parse_value(fmt_time, in_vm_gs_metadata.created_on_ticks)
-        activity_id = parse_value(identity, in_vm_gs_metadata.activity_id)
-        correlation_id = parse_value(identity, in_vm_gs_metadata.correlation_id)
+        gs_creation_time = format_value(to_utc, in_vm_gs_metadata.created_on_ticks)
+        activity_id = format_value(identity, in_vm_gs_metadata.activity_id)
+        correlation_id = format_value(identity, in_vm_gs_metadata.correlation_id)
 
         return activity_id, correlation_id, gs_creation_time
 
