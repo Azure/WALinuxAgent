@@ -392,7 +392,6 @@ class ExtHandlersHandler(object):
 
     def _cleanup_outdated_handlers(self):
         # Skip cleanup if the previous GS was Unsupported
-        # MultiConfig: Delete extension settings of all disabled extensions
         if self.__last_gs_unsupported():
             return
 
@@ -479,17 +478,15 @@ class ExtHandlersHandler(object):
         # Expected: D, B.5, C, B.1, A.2, B.3
 
         # Tup == (extension, handler)
-        def sort_comparator(tup):
+        def get_dependency_level(tup):
             (ext, handler) = tup
             return ext.sort_key(handler.properties.state)
 
-        max_dep_level = max(all_extensions, key=lambda tup: sort_comparator(tup))
-        all_extensions.sort(key=lambda tup: sort_comparator(tup))
+        all_extensions.sort(key=lambda tup: get_dependency_level(tup))
+        # Since all_extensions are sorted based on sort_key, the last element would be the maximum based on the sort_key
+        max_dep_level = get_dependency_level(all_extensions[-1])
         for extension, ext_handler in all_extensions:
             extension_success = self.handle_ext_handler(ext_handler, extension, etag)
-
-        # for ext_handler in self.ext_handlers.extHandlers:
-            # handler_success = self.handle_ext_handler(ext_handler, etag)
 
             # Wait for the extension installation until it is handled.
             # This is done for the install and enable. Not for the uninstallation.
@@ -942,7 +939,14 @@ class ExtHandlerInstance(object):
 
     @property
     def enabled_extensions(self):
-        return [ext for ext in self.extensions if self.get_extension_state(ext) == ExtensionState.Enabled]
+        """
+        In case of Single config, just return all the extensions of the handler
+        (the expectation here is that there would only be 1 single extension for Single Config).
+        We will not be maintaining extension level state for Single config Handlers
+        """
+        if self.supports_multi_config:
+            return [ext for ext in self.extensions if self.__get_extension_state(ext) == ExtensionState.Enabled]
+        return self.extensions
 
     def get_extension_full_name(self, extension=None):
         if not self.supports_multi_config or extension is None:
@@ -1267,7 +1271,10 @@ class ExtHandlerInstance(object):
         self.launch_command(enable_cmd, timeout=300,
                             extension_error_code=ExtensionErrorCodes.PluginEnableProcessingFailed, env=env,
                             extension=extension)
-        self.set_extension_state(extension, ExtensionState.Enabled)
+
+        if self.supports_multi_config:
+            # Only save extension state if MC supported
+            self.__set_extension_state(extension, ExtensionState.Enabled)
 
     def _disable_extension(self, extension):
         env = {
@@ -1286,15 +1293,18 @@ class ExtHandlerInstance(object):
                             extension_error_code=ExtensionErrorCodes.PluginDisableProcessingFailed, env=env,
                             extension=extension)
 
-        self.set_extension_state(extension, ExtensionState.Disabled)
         if self.supports_multi_config:
+            # Only save extension state if MC supported
+            self.__set_extension_state(extension, ExtensionState.Disabled)
+            # MultiConfig: If disable fails, then this wont be cleaned up. Should we forcefully clean it up or let it be?
             self.__remove_extension_state_files(extension)
 
     def disable(self, extension):
         self._disable_extension(extension)
 
-        # Set the handler state to Installed only when all extensions have been disabled
-        if not any(self.enabled_extensions):
+        # For Single config, dont check enabled_extensions because no extension state is maintained.
+        # For MultiConfig, Set the handler state to Installed only when all extensions have been disabled
+        if not self.supports_multi_config or not any(self.enabled_extensions):
             self.set_handler_state(ExtHandlerState.Installed)
             self.set_handler_status(status="NotReady", message="Plugin disabled")
 
@@ -1731,11 +1741,24 @@ class ExtHandlerInstance(object):
                                    paths=[self.get_base_dir(), self.pkg_file])
             raise ExtensionDownloadError(u"Failed to save handler environment", e)
 
+    @staticmethod
+    def __get_handler_state_name(extension=None):
+        if extension is not None:
+            return "{0}.HandlerState".format(extension.name)
+        return "HandlerState"
+
     def set_handler_state(self, handler_state):
         self.__set_state(name=self.__get_handler_state_name(), value=handler_state)
 
-    def set_extension_state(self, extension, extension_state):
+    def get_handler_state(self):
+        return self.__get_state(name=self.__get_handler_state_name(), default=ExtHandlerState.NotInstalled)
+
+    def __set_extension_state(self, extension, extension_state):
+        # Dont save extension state if MultiConfig not supported, HandlerState is good enough for SingleConfig
         self.__set_state(name=self.__get_handler_state_name(extension), value=extension_state)
+
+    def __get_extension_state(self, extension=None):
+        return self.__get_state(name=self.__get_handler_state_name(extension), default=ExtensionState.Disabled)
 
     def __set_state(self, name, value):
         state_dir = self.get_conf_dir()
@@ -1763,30 +1786,19 @@ class ExtHandlerInstance(object):
     def __remove_extension_state_files(self, extension):
         try:
             # MultiConfig: Remove all config/<extName>.*.settings and status/<extName>.*.status files
-            files_to_delete = glob.glob(os.path.join(self.get_conf_dir(), "{0}.*.settings".format(extension.name)))
-            files_to_delete.extend(glob.glob(os.path.join(self.get_status_dir(), "{0}.*.status".format(extension.name))))
-            files_to_delete.append(os.path.join(self.get_conf_dir(), self.__get_handler_state_name(extension)))
+            files_to_delete = [
+                os.path.join(self.get_conf_dir(), "{0}.*.settings".format(extension.name)),
+                os.path.join(self.get_status_dir(), "{0}.*.status".format(extension.name)),
+                os.path.join(self.get_conf_dir(), self.__get_handler_state_name(extension))
+            ]
 
-            for file_to_delete in files_to_delete:
-                os.remove(file_to_delete)
+            fileutil.rm_files(files_to_delete)
 
         except Exception as error:
             extension_name = self.get_extension_full_name(extension)
             message = "Failed to remove extension state files for {0}: {1}".format(extension_name, ustr(error))
             self.report_event(name=extension_name, message=message, is_success=False, log_event=False)
             self.logger.warn(message)
-
-    @staticmethod
-    def __get_handler_state_name(extension=None):
-        if extension is not None:
-            return "{0}.HandlerState".format(extension.name)
-        return "HandlerState"
-
-    def get_handler_state(self):
-        return self.__get_state(name=self.__get_handler_state_name(), default=ExtHandlerState.NotInstalled)
-
-    def get_extension_state(self, extension=None):
-        return self.__get_state(name=self.__get_handler_state_name(extension), default=ExtensionState.Disabled)
 
     def set_handler_status(self, status="NotReady", message="", code=0):
         state_dir = self.get_conf_dir()
@@ -1848,8 +1860,6 @@ class ExtHandlerInstance(object):
                                     HANDLER_PKG_EXT)
 
     def get_full_name(self, extension=None):
-        # The extension name == Handler Name for Single config. If different then it means its MultiConfig
-        # if self.extension is not None and self.extension.name != self.ext_handler.name:
         return "{0}-{1}".format(self.get_extension_full_name(extension), self.ext_handler.properties.version)
 
     def get_base_dir(self):
