@@ -40,13 +40,13 @@ from azurelinuxagent.common.version import PY_VERSION_MAJOR, PY_VERSION_MINOR, P
 from azurelinuxagent.common.exception import ResourceGoneError, ExtensionDownloadError, ProtocolError, \
     ExtensionErrorCodes, ExtensionError, GoalStateAggregateStatusCodes
 from azurelinuxagent.common.protocol.restapi import Extension, ExtHandler, ExtHandlerStatus, \
-    ExtensionStatus
+    ExtensionStatus, ExtHandlerRequestedState
 from azurelinuxagent.common.protocol.wire import WireProtocol, InVMArtifactsProfile
 from azurelinuxagent.common.utils.restutil import KNOWN_WIRESERVER_IP
 
 from azurelinuxagent.ga.exthandlers import ExtHandlersHandler, ExtHandlerInstance, migrate_handler_state, \
     get_exthandlers_handler, AGENT_STATUS_FILE, ExtCommandEnvVariable, HandlerManifest, NOT_RUN, \
-    ValidHandlerStatus, HANDLER_COMPLETE_NAME_PATTERN, HandlerEnvironment, ExtensionRequestedState, GoalStateStatus
+    ValidHandlerStatus, HANDLER_COMPLETE_NAME_PATTERN, HandlerEnvironment, GoalStateStatus
 
 from tests.protocol import mockwiredata
 from tests.protocol.mocks import mock_wire_protocol, HttpRequestPredicates
@@ -148,7 +148,7 @@ class TestExtensionCleanup(AgentTestCase):
 
             # Update incarnation and extension config
             protocol.mock_wire_data.set_incarnation(2)
-            protocol.mock_wire_data.set_extensions_config_state(ExtensionRequestedState.Uninstall)
+            protocol.mock_wire_data.set_extensions_config_state(ExtHandlerRequestedState.Uninstall)
 
             protocol.client.update_goal_state()
             exthandlers_handler.run()
@@ -195,7 +195,7 @@ class TestExtensionCleanup(AgentTestCase):
 
             # Update incarnation and extension config to uninstall the extension, this should delete the extension
             protocol.mock_wire_data.set_incarnation(2)
-            protocol.mock_wire_data.set_extensions_config_state(ExtensionRequestedState.Uninstall)
+            protocol.mock_wire_data.set_extensions_config_state(ExtHandlerRequestedState.Uninstall)
 
             protocol.client.update_goal_state()
             exthandlers_handler.run()
@@ -540,7 +540,7 @@ class TestExtension(AgentTestCase):
 
         # Test disable
         test_data.set_incarnation(5)
-        test_data.set_extensions_config_state(ExtensionRequestedState.Disabled)
+        test_data.set_extensions_config_state(ExtHandlerRequestedState.Disabled)
         protocol.update_goal_state()
 
         exthandlers_handler.run()
@@ -549,7 +549,7 @@ class TestExtension(AgentTestCase):
 
         # Test uninstall
         test_data.set_incarnation(6)
-        test_data.set_extensions_config_state(ExtensionRequestedState.Uninstall)
+        test_data.set_extensions_config_state(ExtHandlerRequestedState.Uninstall)
         protocol.update_goal_state()
 
         exthandlers_handler.run()
@@ -686,7 +686,7 @@ class TestExtension(AgentTestCase):
 
         # Test uninstall
         test_data.set_incarnation(2)
-        test_data.set_extensions_config_state(ExtensionRequestedState.Uninstall)
+        test_data.set_extensions_config_state(ExtHandlerRequestedState.Uninstall)
         protocol.update_goal_state()
 
         exthandlers_handler.run()
@@ -733,7 +733,7 @@ class TestExtension(AgentTestCase):
 
         # Test uninstall
         test_data.set_incarnation(4)
-        test_data.set_extensions_config_state(ExtensionRequestedState.Uninstall)
+        test_data.set_extensions_config_state(ExtHandlerRequestedState.Uninstall)
         protocol.update_goal_state()
 
         exthandlers_handler.run()
@@ -834,7 +834,7 @@ class TestExtension(AgentTestCase):
         # the first extension disabled. The first extension enabled should be
         # the last one disabled.
         test_data.set_incarnation(3)
-        test_data.set_extensions_config_state(ExtensionRequestedState.Disabled)
+        test_data.set_extensions_config_state(ExtHandlerRequestedState.Disabled)
         protocol.update_goal_state()
 
         exthandlers_handler.run()
@@ -850,7 +850,7 @@ class TestExtension(AgentTestCase):
         # the first extension uninstalled. The first extension installed
         # should be the last one uninstalled.
         test_data.set_incarnation(4)
-        test_data.set_extensions_config_state(ExtensionRequestedState.Uninstall)
+        test_data.set_extensions_config_state(ExtHandlerRequestedState.Uninstall)
 
         # Swap the dependency ordering AGAIN
         test_data.ext_conf = test_data.ext_conf.replace("dependencyLevel=\"3\"", "dependencyLevel=\"6\"")
@@ -1038,7 +1038,7 @@ class TestExtension(AgentTestCase):
 
         # Test disable
         test_data.set_incarnation(5)
-        test_data.set_extensions_config_state(ExtensionRequestedState.Disabled)
+        test_data.set_extensions_config_state(ExtHandlerRequestedState.Disabled)
         protocol.update_goal_state()
 
         exthandlers_handler.run()
@@ -1047,7 +1047,7 @@ class TestExtension(AgentTestCase):
 
         # Test uninstall
         test_data.set_incarnation(6)
-        test_data.set_extensions_config_state(ExtensionRequestedState.Uninstall)
+        test_data.set_extensions_config_state(ExtHandlerRequestedState.Uninstall)
         protocol.update_goal_state()
 
         exthandlers_handler.run()
@@ -1064,7 +1064,7 @@ class TestExtension(AgentTestCase):
 
         # Test re-install
         test_data.set_incarnation(8)
-        test_data.set_extensions_config_state(ExtensionRequestedState.Enabled)
+        test_data.set_extensions_config_state(ExtHandlerRequestedState.Enabled)
         protocol.update_goal_state()
 
         exthandlers_handler.run()
@@ -1153,7 +1153,7 @@ class TestExtension(AgentTestCase):
             self.assertTrue(os.path.exists(ehi.get_extension_events_dir()), "Events directory should exist")
 
             # Uninstall extensions now
-            test_data.set_extensions_config_state(ExtensionRequestedState.Uninstall)
+            test_data.set_extensions_config_state(ExtHandlerRequestedState.Uninstall)
             test_data.set_incarnation(2)
             protocol.update_goal_state()
             exthandlers_handler.run()
@@ -1167,7 +1167,7 @@ class TestExtension(AgentTestCase):
 
         # Update version and set it to uninstall. That is how it would be propagated by CRP if a version 1.0.0 is
         # unregistered in PIR and a new version 1.0.1 is published.
-        test_data.set_extensions_config_state(ExtensionRequestedState.Uninstall)
+        test_data.set_extensions_config_state(ExtHandlerRequestedState.Uninstall)
         test_data.set_extensions_config_version("1.0.1")
         # Since the installed version is not in PIR anymore, we need to also remove it from manifest file
         test_data.manifest = test_data.manifest.replace("1.0.0", "9.9.9")
@@ -1795,7 +1795,7 @@ class TestExtension(AgentTestCase):
 
         # Next incarnation, disable extension
         test_data.set_incarnation(2)
-        test_data.set_extensions_config_state(ExtensionRequestedState.Disabled)
+        test_data.set_extensions_config_state(ExtHandlerRequestedState.Disabled)
         protocol.update_goal_state()
 
         exthandlers_handler.run()
@@ -1833,7 +1833,7 @@ class TestExtension(AgentTestCase):
 
         # Next incarnation, disable extension
         test_data.set_incarnation(2)
-        test_data.set_extensions_config_state(ExtensionRequestedState.Disabled)
+        test_data.set_extensions_config_state(ExtHandlerRequestedState.Disabled)
         protocol.update_goal_state()
 
         exthandlers_handler.run()
@@ -1862,7 +1862,7 @@ class TestExtension(AgentTestCase):
 
         # Next incarnation, disable extension
         test_data.set_incarnation(2)
-        test_data.set_extensions_config_state(ExtensionRequestedState.Uninstall)
+        test_data.set_extensions_config_state(ExtHandlerRequestedState.Uninstall)
         protocol.update_goal_state()
 
         exthandlers_handler.run()
@@ -2473,7 +2473,7 @@ class TestExtensionSequencing(AgentTestCase):
             if handler_map.get(handler_name) is None:
                 handler = ExtHandler(name=handler_name)
                 extension = Extension(name=handler_name)
-                handler.properties.state = ExtensionRequestedState.Enabled
+                handler.properties.state = ExtHandlerRequestedState.Enabled
                 handler.properties.extensions.append(extension)
                 handler_map[handler_name] = handler
                 all_handlers.append(handler)
