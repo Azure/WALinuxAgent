@@ -5,7 +5,7 @@ on:
     branches: [ "*" ]
   pull_request:
     branches: [ "*" ]
-#  workflow_dispatch
+  workflow_dispatch:
 
 jobs:
   test-legacy-python-versions:
