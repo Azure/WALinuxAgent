@@ -34,7 +34,8 @@ from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.osutil import get_osutil
 from azurelinuxagent.common.utils import fileutil
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
-from tests.tools import AgentTestCase, patch, open_patch, load_data
+from tests.common.mock_environment import MockEnvironment
+from tests.tools import AgentTestCase, patch, open_patch, load_data, data_dir
 
 actual_get_proc_net_route = 'azurelinuxagent.common.osutil.default.DefaultOSUtil._get_proc_net_route'
 
@@ -44,12 +45,6 @@ def fake_is_loopback(_, iface):
 
 
 class TestOSUtil(AgentTestCase):
-    def setUp(self):
-        AgentTestCase.setUp(self)
-
-    def tearDown(self):
-        AgentTestCase.tearDown(self)
-
     def test_restart(self):
         # setup
         retries = 3
@@ -951,6 +946,7 @@ Chain OUTPUT (policy ACCEPT 104 packets, 43628 bytes)
         dev = osutil.DefaultOSUtil().device_for_ide_port(1)
         self.assertIsNone(dev, 'None should be returned if no resource disk found')
 
+
 def osutil_get_dhcp_pid_should_return_a_list_of_pids(test_instance, osutil_instance):
     """
     This is a very basic test for osutil.get_dhcp_pid. It is simply meant to exercise the implementation of that method
@@ -969,6 +965,48 @@ def osutil_get_dhcp_pid_should_return_a_list_of_pids(test_instance, osutil_insta
         pid = osutil_instance.get_dhcp_pid()
 
     test_instance.assertTrue(len(pid) != 0, "get_dhcp_pid did not return a PID")
+
+
+class TestGetPublishedHostname(AgentTestCase):
+    def setUp(self):
+        AgentTestCase.setUp(self)
+        self.__published_hostname = os.path.join(self.tmp_dir, "published_hostname")
+        self.__patcher = patch('azurelinuxagent.common.osutil.default.conf.get_published_hostname', return_value=self.__published_hostname)
+        self.__patcher.start()
+
+    def tearDown(self):
+        self.__patcher.stop()
+        AgentTestCase.tearDown(self)
+
+    def __get_published_hostname_contents(self):
+        with open(self.__published_hostname, "r") as file_:
+            return file_.read()
+
+    def test_get_hostname_record_should_create_published_hostname(self):
+        actual = osutil.DefaultOSUtil().get_hostname_record()
+
+        expected = socket.gethostname()
+        self.assertEqual(expected, actual, "get_hostname_record returned an incorrect hostname")
+        self.assertTrue(os.path.exists(self.__published_hostname), "The published_hostname file was not created")
+        self.assertEqual(expected, self.__get_published_hostname_contents(), "get_hostname_record returned an incorrect hostname")
+
+    def test_get_hostname_record_should_use_existing_published_hostname(self):
+        expected = "a-sample-hostname-used-for-testing"
+        with open(self.__published_hostname, "w") as file_:
+            file_.write(expected)
+
+        actual = osutil.DefaultOSUtil().get_hostname_record()
+
+        self.assertEqual(expected, actual, "get_hostname_record returned an incorrect hostname")
+        self.assertEqual(expected, self.__get_published_hostname_contents(), "get_hostname_record returned an incorrect hostname")
+
+    def test_get_hostname_record_should_initialize_the_host_name_using_cloud_init_info(self):
+        with MockEnvironment(self.tmp_dir, files=[('/var/lib/cloud/data/set-hostname', os.path.join(data_dir, "cloud-init", "set-hostname"))]):
+            actual = osutil.DefaultOSUtil().get_hostname_record()
+
+        expected = "a-sample-set-hostname"
+        self.assertEqual(expected, actual, "get_hostname_record returned an incorrect hostname")
+        self.assertEqual(expected, self.__get_published_hostname_contents(), "get_hostname_record returned an incorrect hostname")
 
 
 if __name__ == '__main__':
