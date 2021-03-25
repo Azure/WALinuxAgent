@@ -47,7 +47,7 @@ from azurelinuxagent.common.exception import ExtensionDownloadError, ExtensionEr
     ExtensionOperationError, ExtensionUpdateError, ProtocolError, ProtocolNotFoundError, ExtensionConfigError, GoalStateAggregateStatusCodes
 from azurelinuxagent.common.future import ustr, is_file_not_found_error
 from azurelinuxagent.common.protocol.restapi import ExtensionStatus, ExtensionSubStatus, ExtHandler, ExtHandlerStatus, \
-    VMStatus, GoalStateAggregateStatus
+    VMStatus, GoalStateAggregateStatus, Extension
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
 from azurelinuxagent.common.version import AGENT_NAME, CURRENT_VERSION, DISTRO_NAME, DISTRO_VERSION, \
     GOAL_STATE_AGENT_VERSION, PY_VERSION_MAJOR, PY_VERSION_MICRO, PY_VERSION_MINOR
@@ -741,6 +741,10 @@ class ExtHandlersHandler(object):
                                                                                              path=path,
                                                                                              protocol=self.protocol)
                     if handler_instance is not None:
+                        # ext_handler = handler_instance.ext_handler
+                        # # We need to add atleast one extension for the agent to report its status.
+                        # # Without this nothing would be reported for this Handler
+                        # ext_handler.properties.extensions.append(Extension(name=ext_handler.name))
                         handlers_to_report.append(handler_instance.ext_handler)
                 except Exception as error:
                     # Log error once per incarnation
