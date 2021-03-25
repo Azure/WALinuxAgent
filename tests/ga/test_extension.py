@@ -49,7 +49,7 @@ from azurelinuxagent.ga.exthandlers import ExtHandlersHandler, ExtHandlerInstanc
     ValidHandlerStatus, HANDLER_COMPLETE_NAME_PATTERN, HandlerEnvironment, ExtensionRequestedState, GoalStateStatus
 
 from tests.protocol import mockwiredata
-from tests.protocol.mocks import mock_wire_protocol, HttpRequestPredicates
+from tests.protocol.mocks import mock_wire_protocol, HttpRequestPredicates, MockHttpResponse
 from tests.protocol.mockwiredata import DATA_FILE, DATA_FILE_EXT_ADDITIONAL_LOCATIONS
 from tests.tools import AgentTestCase, data_dir, MagicMock, Mock, patch, mock_sleep
 from tests.ga.extension_emulator import Actions, ExtensionCommandNames, extension_emulator, \
@@ -116,11 +116,12 @@ class TestExtensionCleanup(AgentTestCase):
     def _setup_test_env(self, test_data):
         with mock_wire_protocol(test_data) as protocol:
 
-            def mock_http_put(url, *args, **kwargs):  # pylint: disable=unused-argument,inconsistent-return-statements
+            def mock_http_put(url, *args, **_):
                 if HttpRequestPredicates.is_host_plugin_status_request(url):
                     # Skip reading the HostGA request data as its encoded
-                    return None
+                    return MockHttpResponse(status=500)
                 protocol.aggregate_status = json.loads(args[0])
+                return MockHttpResponse(status=201)
 
             protocol.aggregate_status = None
             protocol.set_http_handlers(http_put_handler=mock_http_put)
