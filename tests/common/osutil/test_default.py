@@ -967,7 +967,7 @@ def osutil_get_dhcp_pid_should_return_a_list_of_pids(test_instance, osutil_insta
     test_instance.assertTrue(len(pid) != 0, "get_dhcp_pid did not return a PID")
 
 
-class TestOSUtil(AgentTestCase):
+class TestGetPublishedHostname(AgentTestCase):
     def setUp(self):
         AgentTestCase.setUp(self)
         self.__published_hostname = os.path.join(self.tmp_dir, "published_hostname")
