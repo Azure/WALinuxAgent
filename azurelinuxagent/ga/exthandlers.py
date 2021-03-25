@@ -796,6 +796,7 @@ class ExtHandlersHandler(object):
         if self.__last_gs_unsupported():
             for item, path in list_agent_lib_directory(skip_agent_package=True):
                 try:
+                    # Todo: Fix this logic, right now this does not include any extensions in the Handler due to which nothing would be reported for these handlers. Fix that
                     handler_instance = ExtHandlersHandler.get_ext_handler_instance_from_path(name=item,
                                                                                              path=path,
                                                                                              protocol=self.protocol)
@@ -891,8 +892,9 @@ class ExtHandlersHandler(object):
         handler_state = ext_handler_i.get_handler_state()
         if handler_state != ExtHandlerState.NotInstalled:
             try:
-                active_exts = ext_handler_i.report_ext_status()
-                handler_status.extensions.extend(active_exts)
+                ext_statuses = ext_handler_i.get_extension_statuses()
+                # handler_status.extensions.extend(active_exts)
+                handler_status.extension_statuses.extend(ext_statuses)
             except ExtensionError as e:
                 ext_handler_i.set_handler_status(message=ustr(e), code=e.code)
 
@@ -1449,25 +1451,26 @@ class ExtHandlerInstance(object):
 
                 seq_no = gs_seq_no
             except ValueError:
-                logger.error('Sequence number [{0}] does not appear to be valid'.format(self.extension.sequenceNumber))
+                logger.error('Sequence number [{0}] does not appear to be valid'.format(extension.sequenceNumber))
 
         if seq_no > -1:
             if self.supports_multi_config:
-                path = os.path.join(self.get_status_dir(), "{0}.{1}.status".format(self.extension.name, seq_no))
+                path = os.path.join(self.get_status_dir(), "{0}.{1}.status".format(extension.name, seq_no))
             else:
                 path = os.path.join(self.get_status_dir(), "{0}.status").format(seq_no)
 
         return seq_no, path
 
     def collect_ext_status(self, ext):
-        self.logger.verbose("Collect extension status for {0}".format(ext.name))
+        self.logger.verbose("Collect extension status for {0}".format(self.get_extension_full_name(ext)))
         seq_no, ext_status_file = self.get_status_file_path(ext)
         if seq_no == -1:
             return None
 
         data = None
         data_str = None
-        ext_status = ExtensionStatus(seq_no=seq_no)
+        # Extension.name contains the extension name in case of MC and Handler name in case of Single Config.
+        ext_status = ExtensionStatus(name=ext.name, seq_no=seq_no)
 
         try:
             data_str, data = self._read_and_parse_json_status_file(ext_status_file)
@@ -1475,20 +1478,21 @@ class ExtHandlerInstance(object):
             msg = ""
             if e.code == ExtensionStatusError.CouldNotReadStatusFile:
                 ext_status.code = ExtensionErrorCodes.PluginUnknownFailure
-                msg = u"We couldn't read any status for {0}-{1} extension, for the sequence number {2}. It failed due" \
-                      u" to {3}".format(ext.name, self.ext_handler.properties.version, seq_no, e)
+                msg = u"We couldn't read any status for {0} extension, for the sequence number {1}. It failed due" \
+                      u" to {2}".format(self.get_full_name(ext), seq_no, ustr(e))
             elif ExtensionStatusError.InvalidJsonFile:
                 ext_status.code = ExtensionErrorCodes.PluginSettingsStatusInvalid
-                msg = u"The status reported by the extension {0}-{1}(Sequence number {2}), was in an " \
-                      u"incorrect format and the agent could not parse it correctly. Failed due to {3}" \
-                      .format(ext.name, self.ext_handler.properties.version, seq_no, e)
+                msg = u"The status reported by the extension {0}(Sequence number {1}), was in an " \
+                      u"incorrect format and the agent could not parse it correctly. Failed due to {2}" \
+                      .format(self.get_full_name(ext), seq_no, ustr(e))
 
             # This log is periodic due to the verbose nature of the status check. Please make sure that the message
             # constructed above does not change very frequently and includes important info such as sequence number,
             # extension name to make sure that the log reflects changes in the extension sequence for which the
             # status is being sent.
             logger.periodic_warn(logger.EVERY_HALF_HOUR, u"[PERIODIC] " + msg)
-            add_periodic(delta=logger.EVERY_HALF_HOUR, name=ext.name, version=self.ext_handler.properties.version,
+            add_periodic(delta=logger.EVERY_HALF_HOUR, name=self.get_extension_full_name(ext),
+                         version=self.ext_handler.properties.version,
                          op=WALAEventOperation.StatusProcessing, is_success=False, message=msg,
                          log_event=False)
 
@@ -1502,17 +1506,18 @@ class ExtHandlerInstance(object):
         try:
             parse_ext_status(ext_status, data)
             if len(data_str) > _MAX_STATUS_FILE_SIZE_IN_BYTES:
-                raise ExtensionStatusError(msg="For Extension Handler {0}-{1} for the sequence number {2}, the status "
-                                               "file {3} of size {4} bytes is too big. Max Limit allowed is {5} bytes"
-                                           .format(ext.name, self.ext_handler.properties.version, seq_no,
+                raise ExtensionStatusError(msg="For Extension Handler {0} for the sequence number {1}, the status "
+                                               "file {2} of size {3} bytes is too big. Max Limit allowed is {4} bytes"
+                                           .format(self.get_full_name(ext), seq_no,
                                                    ext_status_file, len(data_str), _MAX_STATUS_FILE_SIZE_IN_BYTES),
                                            code=ExtensionStatusError.MaxSizeExceeded)
         except ExtensionStatusError as e:
-            msg = u"For Extension Handler {0}-{1} for the sequence number {2}, the status file {3}. " \
-                  u"Encountered the following error: {4}".format(ext.name, self.ext_handler.properties.version, seq_no,
+            msg = u"For Extension Handler {0} for the sequence number {1}, the status file {2}. " \
+                  u"Encountered the following error: {3}".format(self.get_full_name(ext), seq_no,
                                                                  ext_status_file, ustr(e))
             logger.periodic_warn(logger.EVERY_DAY, u"[PERIODIC] " + msg)
-            add_periodic(delta=logger.EVERY_HALF_HOUR, name=ext.name, version=self.ext_handler.properties.version,
+            add_periodic(delta=logger.EVERY_HALF_HOUR, name=self.get_extension_full_name(ext),
+                         version=self.ext_handler.properties.version,
                          op=WALAEventOperation.StatusProcessing, is_success=False, message=msg, log_event=False)
 
             if e.code == ExtensionStatusError.MaxSizeExceeded:
@@ -1520,9 +1525,8 @@ class ExtHandlerInstance(object):
                 ext_status.substatusList = self._process_substatus_list(ext_status.substatusList, field_size)
 
             elif e.code == ExtensionStatusError.StatusFileMalformed:
-                ext_status.message = "Could not get a valid status from the extension {0}-{1}. Encountered the " \
-                                     "following error: {2}".format(ext.name, self.ext_handler.properties.version,
-                                                                   ustr(e))
+                ext_status.message = "Could not get a valid status from the extension {0}. Encountered the " \
+                                     "following error: {1}".format(self.get_full_name(ext), ustr(e))
                 ext_status.code = ExtensionErrorCodes.PluginSettingsStatusInvalid
                 ext_status.status = ValidHandlerStatus.error
 
@@ -1559,20 +1563,29 @@ class ExtHandlerInstance(object):
         # Extension completed, return its status
         return True, status
 
-    def report_ext_status(self):
-        active_exts = []
+    def get_extension_statuses(self):
+        """
+        Get the list of status of each extension in the Handler
+        :return: List of ExtensionStatus objects for each extension in the Handler
+        """
+        # active_exts = []
+        ext_statuses = []
         # TODO Refactor or remove this common code pattern (for each extension subordinate to an ext_handler, do X).
         for ext in self.extensions:
             ext_status = self.collect_ext_status(ext)
             if ext_status is None:
                 continue
             try:
-                self.protocol.report_ext_status(self.ext_handler.name, ext.name,
-                                                ext_status)
-                active_exts.append(ext.name)
+                # Todo: This is where the real extension status gets written to the status blob, but only 1 extension is added per handler
+                # We use it this way (maintaining state) to ensure we atleast report some extensions if reading status of other extensions fails - But it wont work coz active_exts wont be updated
+                # self.protocol.report_ext_status(self.ext_handler.name, ext.name, ext_status)
+                # This is the key for all extensions that are added in the object in wire.py.
+                # Not sure why they didnt just add the whole object here, why go through so many hoops and states?
+                # active_exts.append(ext.name)
+                ext_statuses.append(ext_status)
             except ProtocolError as e:
                 self.logger.error(u"Failed to report extension status: {0}", e)
-        return active_exts
+        return ext_statuses
 
     def collect_heartbeat(self):  # pylint: disable=R1710
         man = self.load_manifest()
@@ -1809,6 +1822,7 @@ class ExtHandlerInstance(object):
         handler_status.message = message
         handler_status.code = code
         handler_status.status = status
+        handler_status.supports_multi_config = self.ext_handler.supports_multi_config
         status_file = os.path.join(state_dir, "HandlerStatus")
 
         try:

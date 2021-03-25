@@ -270,12 +270,14 @@ class ExtensionSubStatus(DataContract):
 
 class ExtensionStatus(DataContract):
     def __init__(self,
+                 name=None,
                  configurationAppliedTime=None,
                  operation=None,
                  status=None,
                  seq_no=None,
                  code=None,
                  message=None):
+        self.name = name
         self.configurationAppliedTime = configurationAppliedTime
         self.operation = operation
         self.status = status
@@ -297,7 +299,9 @@ class ExtHandlerStatus(DataContract):
         self.status = status
         self.code = code
         self.message = message
-        self.extensions = DataContractList(ustr)
+        self.supports_multi_config = False
+        # self.extensions = DataContractList(ustr)
+        self.extension_statuses = DataContractList(ExtensionStatus)
 
 
 class VMAgentStatus(DataContract):
