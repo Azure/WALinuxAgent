@@ -49,7 +49,7 @@ from azurelinuxagent.common.exception import ExtensionDownloadError, ExtensionEr
     GoalStateAggregateStatusCodes
 from azurelinuxagent.common.future import ustr, is_file_not_found_error
 from azurelinuxagent.common.protocol.restapi import ExtensionStatus, ExtensionSubStatus, ExtHandler, ExtHandlerStatus, \
-    VMStatus, GoalStateAggregateStatus, ExtensionState, ExtHandlerRequestedState
+    VMStatus, GoalStateAggregateStatus, ExtensionState, ExtHandlerRequestedState, Extension
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
 from azurelinuxagent.common.version import AGENT_NAME, CURRENT_VERSION, DISTRO_NAME, DISTRO_VERSION, \
     GOAL_STATE_AGENT_VERSION, PY_VERSION_MAJOR, PY_VERSION_MICRO, PY_VERSION_MINOR
@@ -783,6 +783,41 @@ class ExtHandlersHandler(object):
 
         ext_handler_i.remove_ext_handler()
 
+    def __get_handlers_on_file_system(self, incarnation_changed):
+        handlers_to_report = []
+        for item, path in list_agent_lib_directory(skip_agent_package=True):
+            try:
+                handler_instance = ExtHandlersHandler.get_ext_handler_instance_from_path(name=item,
+                                                                                         path=path,
+                                                                                         protocol=self.protocol)
+                if handler_instance is not None:
+                    ext_handler = handler_instance.ext_handler
+                    # For each handler we need to add extensions to report their status.
+                    # For Single Config, we just need to add one extension with name as Handler Name
+                    # For Multi Config, walk the config directory and find all unique extension names
+                    # and add them as extensions to the handler.
+                    extensions = set()
+                    # Settings for Multi Config are saved as <extName>.<seqNo>.settings.
+                    # Use this pattern to determine if Handler supports Multi Config or not and add extensions
+                    for settings_path in glob.iglob(os.path.join(handler_instance.get_conf_dir(), "*.*.settings")):
+                        match = re.search("(?P<extname>\\w+)\\.\\d+\\.settings", settings_path)
+                        if match is not None:
+                            extensions.add(match.group("extname"))
+                            ext_handler.supports_multi_config = True
+
+                    # If nothing found with that pattern then its a Single Config, add an extension with Handler Name
+                    if not any(extensions):
+                        extensions.add(ext_handler.name)
+
+                    ext_handler.properties.extensions.extend([Extension(name=ext_name) for ext_name in extensions])
+                    handlers_to_report.append(ext_handler)
+            except Exception as error:
+                # Log error once per incarnation
+                if incarnation_changed:
+                    logger.warn("Can't fetch ExtHandler from path: {0}; Error: {1}".format(path, ustr(error)))
+
+        return handlers_to_report
+
     def report_ext_handlers_status(self, incarnation_changed=False):
         """
         Go through handler_state dir, collect and report status
@@ -794,18 +829,7 @@ class ExtHandlersHandler(object):
 
         # Incase of Unsupported error, report the status of the handlers in the VM
         if self.__last_gs_unsupported():
-            for item, path in list_agent_lib_directory(skip_agent_package=True):
-                try:
-                    # Todo: Fix this logic, right now this does not include any extensions in the Handler due to which nothing would be reported for these handlers. Fix that
-                    handler_instance = ExtHandlersHandler.get_ext_handler_instance_from_path(name=item,
-                                                                                             path=path,
-                                                                                             protocol=self.protocol)
-                    if handler_instance is not None:
-                        handlers_to_report.append(handler_instance.ext_handler)
-                except Exception as error:
-                    # Log error once per incarnation
-                    if incarnation_changed:
-                        logger.warn("Can't fetch ExtHandler from path: {0}; Error: {1}".format(path, ustr(error)))
+            handlers_to_report = self.__get_handlers_on_file_system(incarnation_changed)
 
         # If GoalState supported, report the status of extension handlers that were requested by the GoalState
         elif not self.__last_gs_unsupported() and self.ext_handlers is not None:
@@ -892,9 +916,7 @@ class ExtHandlersHandler(object):
         handler_state = ext_handler_i.get_handler_state()
         if handler_state != ExtHandlerState.NotInstalled:
             try:
-                ext_statuses = ext_handler_i.get_extension_statuses()
-                # handler_status.extensions.extend(active_exts)
-                handler_status.extension_statuses.extend(ext_statuses)
+                handler_status.extension_statuses.extend(ext_handler_i.get_extension_statuses())
             except ExtensionError as e:
                 ext_handler_i.set_handler_status(message=ustr(e), code=e.code)
 
@@ -1396,15 +1418,17 @@ class ExtHandlerInstance(object):
                              "Skip install during upgrade.")
         self.set_handler_state(ExtHandlerState.Installed)
 
-    def _get_last_modified_seq_no_from_config_files(self):
+    def _get_last_modified_seq_no_from_config_files(self, extension):
         """
         The sequence number is not guaranteed to always be strictly increasing. To ensure we always get the latest one,
         fetching the sequence number from config file that was last modified (and not necessarily the largest).
         :return: Last modified Sequence number or -1 on errors
-
-        Note: This function is going to be deprecated soon. We should only rely on seqNo from GoalState rather than file system.
         """
         seq_no = -1
+
+        if self.supports_multi_config and extension is None or extension.name is None:
+            # If no extension name is provided for Multi Config, don't try to parse any sequence number from filesystem
+            return seq_no
 
         try:
             largest_modified_time = 0
@@ -1414,9 +1438,14 @@ class ExtHandlerInstance(object):
                 if not os.path.isfile(item_path):
                     continue
                 try:
-                    separator = item.rfind(".")
-                    if separator > 0 and item[separator + 1:] == 'settings':
-                        curr_seq_no = int(item.split('.')[0])
+                    # Settings file for Multi Config look like - <extName>.<seqNo>.settings
+                    # Settings file for Single Config look like - <seqNo>.settings
+                    match = re.search("((?P<ext_name>\\w+)\\.)*(?P<seq_no>\\d+)\\.settings", item_path)
+                    if match is not None:
+                        ext_name = match.group('ext_name')
+                        if self.supports_multi_config and extension.name != ext_name:
+                            continue
+                        curr_seq_no = int(match.group("seq_no"))
                         curr_modified_time = os.path.getmtime(item_path)
                         if curr_modified_time > largest_modified_time:
                             seq_no = curr_seq_no
@@ -1431,32 +1460,31 @@ class ExtHandlerInstance(object):
         return seq_no
 
     def get_status_file_path(self, extension=None):
+        """
+        We should technically only fetch the sequence number from GoalState and not rely on the filesystem at all,
+        But there are certain scenarios where we need to fetch the latest sequence number from the filesystem
+        (For example when we need to report the status for extensions of previous GS if the current GS is Unsupported).
+        Always prioritizing sequence number from extensions but falling back to filesystem
+        :param extension: Extension for which the sequence number is required
+        :return: Sequence number for the extension, Status file path or -1, None
+        """
         path = None
-        # Todo: Remove check on filesystem for fetching sequence number (legacy behaviour).
-        # We should technically only fetch the sequence number from GoalState and not rely on the filesystem at all,
-        # But since we still have Kusto data from the operation below (~0.000065% VMs are still reporting
-        # WALAEventOperation.SequenceNumberMismatch), keeping this as is with modified logic for fetching
-        # sequence number from filesystem. Based on the new data we will eventually phase this out.
-        seq_no = self._get_last_modified_seq_no_from_config_files()
-
-        # Issue 1116: use the sequence number from goal state where possible
+        seq_no = -1
         if extension is not None and extension.sequenceNumber is not None:
             try:
-                gs_seq_no = int(extension.sequenceNumber)
-
-                if gs_seq_no != seq_no:
-                    add_event(AGENT_NAME, version=CURRENT_VERSION, op=WALAEventOperation.SequenceNumberMismatch,
-                              is_success=False, message="Goal state: {0}, disk: {1}".format(gs_seq_no, seq_no),
-                              log_event=False)
-
-                seq_no = gs_seq_no
+                seq_no = int(extension.sequenceNumber)
             except ValueError:
                 logger.error('Sequence number [{0}] does not appear to be valid'.format(extension.sequenceNumber))
 
+        if seq_no == -1:
+            # If we're unable to fetch Sequence number from Extension for any reason,
+            # try fetching it from the last modified Settings file.
+            seq_no = self._get_last_modified_seq_no_from_config_files(extension)
+
         if seq_no > -1:
-            if self.supports_multi_config:
+            if self.supports_multi_config and extension.name is not None:
                 path = os.path.join(self.get_status_dir(), "{0}.{1}.status".format(extension.name, seq_no))
-            else:
+            elif not self.supports_multi_config:
                 path = os.path.join(self.get_status_dir(), "{0}.status").format(seq_no)
 
         return seq_no, path
@@ -1568,23 +1596,14 @@ class ExtHandlerInstance(object):
         Get the list of status of each extension in the Handler
         :return: List of ExtensionStatus objects for each extension in the Handler
         """
-        # active_exts = []
         ext_statuses = []
         # TODO Refactor or remove this common code pattern (for each extension subordinate to an ext_handler, do X).
         for ext in self.extensions:
             ext_status = self.collect_ext_status(ext)
             if ext_status is None:
                 continue
-            try:
-                # Todo: This is where the real extension status gets written to the status blob, but only 1 extension is added per handler
-                # We use it this way (maintaining state) to ensure we atleast report some extensions if reading status of other extensions fails - But it wont work coz active_exts wont be updated
-                # self.protocol.report_ext_status(self.ext_handler.name, ext.name, ext_status)
-                # This is the key for all extensions that are added in the object in wire.py.
-                # Not sure why they didnt just add the whole object here, why go through so many hoops and states?
-                # active_exts.append(ext.name)
-                ext_statuses.append(ext_status)
-            except ProtocolError as e:
-                self.logger.error(u"Failed to report extension status: {0}", e)
+            ext_statuses.append(ext_status)
+
         return ext_statuses
 
     def collect_heartbeat(self):  # pylint: disable=R1710

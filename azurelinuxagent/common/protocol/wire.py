@@ -373,7 +373,7 @@ def ext_handler_status_to_v1(handler_status):
             if handler_status.supports_multi_config:
                 ext_handler_status["runtimeSettingsStatus"]["extensionName"] = ext_status.name
 
-            status_list.append(handler_status)
+            status_list.append(ext_handler_status)
 
     # If nothing added to the status list, report the status of the handler
     if not any(status_list):
