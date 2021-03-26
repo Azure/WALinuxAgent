@@ -18,6 +18,7 @@ import contextlib
 import glob
 import json
 import os.path
+import random
 import re
 import shutil
 import subprocess
@@ -101,7 +102,8 @@ class TestExtensionCleanup(AgentTestCase):
     def _is_extension_dir(path):
         return re.match(HANDLER_COMPLETE_NAME_PATTERN, os.path.basename(path)) is not None
 
-    def _assert_ext_handler_status(self, aggregate_status, expected_status, version, expected_ext_handler_count=0):
+    def _assert_ext_handler_status(self, aggregate_status, expected_status, version, expected_ext_handler_count=0,
+                                   verify_ext_reported=True):
         self.assertIsNotNone(aggregate_status, "Aggregate status should not be None")
         handler_statuses = aggregate_status['aggregateStatus']['handlerAggregateStatus']
         self.assertEqual(expected_ext_handler_count, len(handler_statuses),
@@ -110,6 +112,8 @@ class TestExtensionCleanup(AgentTestCase):
             debug_info = "ExtensionHandler: {0}".format(ext_handler_status)
             self.assertEqual(expected_status, ext_handler_status['status'], debug_info)
             self.assertEqual(version, ext_handler_status['handlerVersion'], debug_info)
+            if verify_ext_reported:
+                self.assertIn("runtimeSettingsStatus", ext_handler_status, debug_info)
         return
 
     @contextlib.contextmanager
@@ -190,7 +194,7 @@ class TestExtensionCleanup(AgentTestCase):
                 exthandlers_handler.run()
                 self._assert_ext_handler_status(protocol.aggregate_status, "NotReady",
                                                 expected_ext_handler_count=no_of_exts,
-                                                version="1.0.0")
+                                                version="1.0.0", verify_ext_reported=False)
                 self.assertEqual(no_of_exts, TestExtensionCleanup._count_extension_directories(),
                                  "There should still be 1 extension directory in FS")
 
@@ -215,6 +219,11 @@ class TestExtensionCleanup(AgentTestCase):
             self.assertEqual(gs_status['code'], code, "The error code not matching")
             self.assertEqual(gs_status['status'], status, "The status not matching")
 
+        def assert_extension_seq_no(expected_seq_no):
+            for handler_status in protocol.aggregate_status['aggregateStatus']['handlerAggregateStatus']:
+                self.assertEqual(expected_seq_no, handler_status['runtimeSettingsStatus']['sequenceNumber'],
+                                 "Sequence number mismatch")
+
         with self._setup_test_env(mockwiredata.DATA_FILE_MULTIPLE_EXT) as (exthandlers_handler, protocol, orig_no_of_exts):
             # Run 1 - GS has no required features and contains 5 extensions
             exthandlers_handler.run()
@@ -226,11 +235,13 @@ class TestExtensionCleanup(AgentTestCase):
                                             version="1.0.0")
             assert_gs_aggregate_status(seq_no='1', status=GoalStateStatus.Success,
                                        code=GoalStateAggregateStatusCodes.Success)
+            assert_extension_seq_no(expected_seq_no=0)
 
             # Run 2 - Change the GS to one with Required features not supported by the agent
             # This ExtensionConfig has 1 extension - ExampleHandlerLinuxWithRequiredFeatures
             protocol.mock_wire_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE_REQUIRED_FEATURES)
             protocol.mock_wire_data.set_incarnation(2)
+            protocol.mock_wire_data.set_extensions_config_sequence_number(random.randint(10, 100))
             protocol.client.update_goal_state()
             exthandlers_handler.run()
             self.assertGreater(orig_no_of_exts, 1, "No of extensions to check should be > 1")
@@ -242,6 +253,8 @@ class TestExtensionCleanup(AgentTestCase):
                                             version="1.0.0")
             assert_gs_aggregate_status(seq_no='2', status=GoalStateStatus.Failed,
                                        code=GoalStateAggregateStatusCodes.GoalStateUnsupportedRequiredFeatures)
+            # Since its an unsupported GS, we should report the last state of extensions
+            assert_extension_seq_no(0)
             # assert the extension in the new Config was not reported as that GS was not executed
             self.assertTrue(any('ExampleHandlerLinuxWithRequiredFeatures' not in ext_handler_status['handlerName'] for
                                 ext_handler_status in
@@ -252,6 +265,8 @@ class TestExtensionCleanup(AgentTestCase):
             # This ExtensionConfig has 1 extension - OSTCExtensions.ExampleHandlerLinux
             protocol.mock_wire_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE)
             protocol.mock_wire_data.set_incarnation(3)
+            extension_seq_no = random.randint(10, 100)
+            protocol.mock_wire_data.set_extensions_config_sequence_number(extension_seq_no)
             protocol.client.update_goal_state()
             exthandlers_handler.run()
             self.assertEqual(1, TestExtensionCleanup._count_packages(),
@@ -262,6 +277,7 @@ class TestExtensionCleanup(AgentTestCase):
                                             version="1.0.0")
             assert_gs_aggregate_status(seq_no='3', status=GoalStateStatus.Success,
                                        code=GoalStateAggregateStatusCodes.Success)
+            assert_extension_seq_no(expected_seq_no=extension_seq_no)
             # Only OSTCExtensions.ExampleHandlerLinux extension should be reported
             self.assertEqual('OSTCExtensions.ExampleHandlerLinux',
                              protocol.aggregate_status['aggregateStatus']['handlerAggregateStatus'][0]['handlerName'],

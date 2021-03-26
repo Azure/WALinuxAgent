@@ -741,11 +741,11 @@ class ExtHandlersHandler(object):
                                                                                              path=path,
                                                                                              protocol=self.protocol)
                     if handler_instance is not None:
-                        # ext_handler = handler_instance.ext_handler
-                        # # We need to add atleast one extension for the agent to report its status.
-                        # # Without this nothing would be reported for this Handler
-                        # ext_handler.properties.extensions.append(Extension(name=ext_handler.name))
-                        handlers_to_report.append(handler_instance.ext_handler)
+                        ext_handler = handler_instance.ext_handler
+                        # We need to add one extension for the agent to report its status (Single config only expects
+                        # a single extension per Handler). Without this no extensions would be reported for this Handler
+                        ext_handler.properties.extensions.append(Extension(name=ext_handler.name))
+                        handlers_to_report.append(ext_handler)
                 except Exception as error:
                     # Log error once per incarnation
                     if incarnation_changed:
