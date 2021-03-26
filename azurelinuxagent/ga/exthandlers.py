@@ -570,7 +570,7 @@ class ExtHandlersHandler(object):
         :param etag: Current incarnation of the GoalState
         :return: True if the operation was successful, False if not
         """
-        ext_handler_i = ExtHandlerInstance(ext_handler, self.protocol)
+        ext_handler_i = ExtHandlerInstance(ext_handler, self.protocol, extension=extension)
         try:
             # Ensure the extension config was valid
             if ext_handler.is_invalid_setting:
@@ -932,7 +932,7 @@ class ExtHandlersHandler(object):
 
 class ExtHandlerInstance(object):
 
-    def __init__(self, ext_handler, protocol, execution_log_max_size=(10 * 1024 * 1024)):
+    def __init__(self, ext_handler, protocol, execution_log_max_size=(10 * 1024 * 1024), extension=None):
         self.ext_handler = ext_handler
         self.protocol = protocol
         self.operation = None
@@ -940,18 +940,7 @@ class ExtHandlerInstance(object):
         self.pkg_file = None
         self.logger = None
         self.set_logger()
-
-        try:
-            fileutil.mkdir(self.get_log_dir(), mode=0o755)
-        except IOError as e:
-            self.logger.error(u"Failed to create extension log dir: {0}", e)
-        else:
-            # MultiConfig: Change the log file name for MC
-            log_file = os.path.join(self.get_log_dir(), "CommandExecution.log")
-
-            self.__truncate_file_head(log_file, execution_log_max_size)
-
-            self.logger.add_appender(logger.AppenderType.FILE, logger.LogLevel.INFO, log_file)
+        self.__set_command_execution_log(extension, execution_log_max_size)
 
     @property
     def supports_multi_config(self):
@@ -977,6 +966,19 @@ class ExtHandlerInstance(object):
             return self.ext_handler.name
 
         return "{0}.{1}".format(self.ext_handler.name, extension.name)
+
+    def __set_command_execution_log(self, extension, execution_log_max_size):
+        try:
+            fileutil.mkdir(self.get_log_dir(), mode=0o755)
+        except IOError as e:
+            self.logger.error(u"Failed to create extension log dir: {0}", e)
+        else:
+            log_file_name = "CommandExecution.log" if (extension is None or not self.supports_multi_config) \
+                else "CommandExecution_{0}.log".format(extension.name)
+
+            log_file = os.path.join(self.get_log_dir(), log_file_name)
+            self.__truncate_file_head(log_file, execution_log_max_size)
+            self.logger.add_appender(logger.AppenderType.FILE, logger.LogLevel.INFO, log_file)
 
     def __truncate_file_head(self, filename, max_size):
         try:
@@ -1652,7 +1654,7 @@ class ExtHandlerInstance(object):
             with tempfile.TemporaryFile(dir=base_dir, mode="w+b") as stderr:
                 if env is None:
                     env = {}
-                env.update(os.environ)
+
                 # Always add Extension Path and version to the current launch_command (Ask from publishers)
                 # MultiConfig: Another breaking change, sequence number would only be available for Enable/Disable commands
                 env.update({
@@ -1677,10 +1679,15 @@ class ExtHandlerInstance(object):
                 try:
                     # Some extensions erroneously begin cmd with a slash; don't interpret those
                     # as root-relative. (Issue #1170)
-                    full_path = os.path.join(base_dir, cmd.lstrip(os.path.sep))
+                    command_full_path = os.path.join(base_dir, cmd.lstrip(os.path.sep))
+                    self.logger.info("Executing command: {0} with environment variables: {1}".format(command_full_path,
+                                                                                                     json.dumps(env)))
+
+                    # Add the os environment variables before executing command
+                    env.update(os.environ)
                     process_output = CGroupConfigurator.get_instance().start_extension_command(
                         extension_name=self.get_full_name(extension),
-                        command=full_path,
+                        command=command_full_path,
                         timeout=timeout,
                         shell=True,
                         cwd=base_dir,
@@ -1690,7 +1697,7 @@ class ExtHandlerInstance(object):
                         error_code=extension_error_code)
 
                 except OSError as e:
-                    raise ExtensionError("Failed to launch '{0}': {1}".format(full_path, e.strerror),
+                    raise ExtensionError("Failed to launch '{0}': {1}".format(command_full_path, e.strerror),
                                          code=extension_error_code)
 
                 duration = elapsed_milliseconds(begin_utc)
@@ -1893,6 +1900,10 @@ class ExtHandlerInstance(object):
                                     HANDLER_PKG_EXT)
 
     def get_full_name(self, extension=None):
+        """
+        :return: <HandlerName>-<HandlerVersion> if extension is None or Handler does not support Multi Config,
+        else then return -  <HandlerName>.<ExtensionName>-<HandlerVersion>
+        """
         return "{0}-{1}".format(self.get_extension_full_name(extension), self.ext_handler.properties.version)
 
     def get_base_dir(self):
