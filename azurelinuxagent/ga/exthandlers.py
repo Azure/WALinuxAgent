@@ -463,7 +463,8 @@ class ExtHandlersHandler(object):
 
         wait_until = datetime.datetime.utcnow() + datetime.timedelta(minutes=_DEFAULT_EXT_TIMEOUT_MINUTES)
 
-        all_extensions = [(ext, handler) for handler in self.ext_handlers.extHandlers for ext in handler]
+        all_extensions = [(ext, handler) for handler in self.ext_handlers.extHandlers for ext in
+                          handler.properties.extensions]
 
         # max_dep_level = max([handler.sort_key() for handler in self.ext_handlers.extHandlers])
 
@@ -482,7 +483,7 @@ class ExtHandlersHandler(object):
             (ext, handler) = tup
             return ext.sort_key(handler.properties.state)
 
-        all_extensions.sort(key=lambda tup: get_dependency_level(tup))
+        all_extensions.sort(key=get_dependency_level)
         # Since all_extensions are sorted based on sort_key, the last element would be the maximum based on the sort_key
         max_dep_level = get_dependency_level(all_extensions[-1])
         for extension, ext_handler in all_extensions:
@@ -493,7 +494,7 @@ class ExtHandlersHandler(object):
             # If handled successfully, proceed with the current handler.
             # Otherwise, skip the rest of the extension installation.
             # dep_level = ext_handler.sort_key()
-            dep_level = extension.sort_key(ext_handler.state)
+            dep_level = extension.sort_key(ext_handler.properties.state)
             if 0 <= dep_level < max_dep_level:
 
                 # Do no wait for extension status if the handler failed
@@ -897,7 +898,7 @@ class ExtHandlersHandler(object):
             try:
                 handler_status.pop('code', None)
                 handler_status.pop('message', None)
-                handler_status.pop('extensions', None)
+                handler_status.pop('extension_statuses', None)
             except KeyError:
                 pass
 

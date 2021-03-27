@@ -37,7 +37,7 @@ from azurelinuxagent.common.exception import ProtocolNotFoundError, \
 from azurelinuxagent.common.future import httpclient, bytebuffer, ustr
 from azurelinuxagent.common.protocol.goal_state import GoalState, TRANSPORT_CERT_FILE_NAME, TRANSPORT_PRV_FILE_NAME
 from azurelinuxagent.common.protocol.hostplugin import HostPluginProtocol
-from azurelinuxagent.common.protocol.restapi import DataContract, ExtensionStatus, ExtHandlerPackage, \
+from azurelinuxagent.common.protocol.restapi import DataContract, ExtHandlerPackage, \
     ExtHandlerPackageList, ExtHandlerVersionUri, ProvisionStatus, VMInfo, VMStatus
 from azurelinuxagent.common.telemetryevent import GuestAgentExtensionEventsSchema
 from azurelinuxagent.common.utils import fileutil, restutil

@@ -44,7 +44,7 @@ from azurelinuxagent.common.protocol.restapi import Extension, ExtHandler, ExtHa
 from azurelinuxagent.common.protocol.wire import WireProtocol, InVMArtifactsProfile
 from azurelinuxagent.common.utils.restutil import KNOWN_WIRESERVER_IP
 
-from azurelinuxagent.ga.exthandlers import ExtHandlersHandler, ExtHandlerInstance, migrate_handler_state, \
+from azurelinuxagent.ga.exthandlers import ExtHandlerInstance, migrate_handler_state, \
     get_exthandlers_handler, AGENT_STATUS_FILE, ExtCommandEnvVariable, HandlerManifest, NOT_RUN, \
     ValidHandlerStatus, HANDLER_COMPLETE_NAME_PATTERN, HandlerEnvironment, GoalStateStatus
 
@@ -425,7 +425,7 @@ class TestExtension(AgentTestCase):
         self.assertEqual(expected_handler_name,
                           handler_status.name)
         self.assertEqual(version, handler_status.version)
-        self.assertEqual(expected_ext_count, len(handler_status.extensions))
+        self.assertEqual(expected_ext_count, len(handler_status.extension_statuses))
         return
 
     def _assert_ext_pkg_file_status(self, expected_to_be_present=True, extension_version="1.0.0",
@@ -956,27 +956,32 @@ class TestExtension(AgentTestCase):
         {{
             "name": "OSTCExtensions.ExampleHandlerLinux",
             "version": "1.0.0",
-            "status": "Ready"
+            "status": "Ready",
+            "supports_multi_config": false
         }},
         {{
             "name": "Microsoft.Powershell.ExampleExtension",
             "version": "1.0.0",
-            "status": "Ready"
+            "status": "Ready",
+            "supports_multi_config": false
         }},
         {{
             "name": "Microsoft.EnterpriseCloud.Monitoring.ExampleHandlerLinux",
             "version": "1.0.0",
-            "status": "Ready"
+            "status": "Ready",
+            "supports_multi_config": false
         }},
         {{
             "name": "Microsoft.CPlat.Core.ExampleExtensionLinux",
             "version": "1.0.0",
-            "status": "Ready"
+            "status": "Ready",
+            "supports_multi_config": false
         }},
         {{
             "name": "Microsoft.OSTCExtensions.Edp.ExampleExtensionLinuxInTest",
             "version": "1.0.0",
-            "status": "Ready"
+            "status": "Ready",
+            "supports_multi_config": false
         }}
     ]
 }}'''.format(agent_name=AGENT_NAME,
@@ -1324,45 +1329,42 @@ class TestExtension(AgentTestCase):
                     # 1 expected call count for Enable command
                     assert_extensions_called(exthandlers_handler, expected_call_count=1)
 
-    def test_handle_ext_handlers_on_hold_true(self, *args):
+    def test_it_should_process_extensions_appropriately_on_artifact_hold(self, mock_get, mock_crypt, *args):
         test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE)
-        exthandlers_handler, protocol = self._create_mock(test_data, *args)  # pylint: disable=no-value-for-parameter
-        protocol.get_artifacts_profile = MagicMock()
-
-        # Disable extension handling blocking
-        exthandlers_handler._extension_processing_allowed = Mock(return_value=False)
-        with patch.object(ExtHandlersHandler, 'handle_ext_handlers') as patch_handle_ext_handlers:
-            exthandlers_handler.run()
-            self.assertEqual(0, patch_handle_ext_handlers.call_count)
-
-        # enable extension handling blocking
-        exthandlers_handler._extension_processing_allowed = Mock(return_value=True)
-        with patch.object(ExtHandlersHandler, 'handle_ext_handlers') as patch_handle_ext_handlers:
-            exthandlers_handler.run()
-            self.assertEqual(1, patch_handle_ext_handlers.call_count)
-
-    def test_handle_ext_handlers_on_hold_false(self, *args):
-        test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE)
-        exthandlers_handler, protocol = self._create_mock(test_data, *args)  # pylint: disable=no-value-for-parameter
-        exthandlers_handler.ext_handlers, exthandlers_handler.last_etag = protocol.get_ext_handlers()
-        exthandlers_handler.protocol = protocol
+        exthandlers_handler, protocol = self._create_mock(test_data, mock_get, mock_crypt, *args)
 
         # enable extension handling blocking
         conf.get_enable_overprovisioning = Mock(return_value=True)
-
-        # Test when is_on_hold returns False
         mock_in_vm_artifacts_profile = InVMArtifactsProfile(MagicMock())
+
+        # Test when is_on_hold returns True - should not work too
+        mock_in_vm_artifacts_profile.is_on_hold = Mock(return_value=True)
+        protocol.get_artifacts_profile = Mock(return_value=mock_in_vm_artifacts_profile)
+        exthandlers_handler.run()
+        vm_agent_status = protocol.report_vm_status.call_args[0][0].vmAgent
+        self.assertEqual(vm_agent_status.status, "Ready", "Agent should report ready")
+        self.assertEqual(0, len(vm_agent_status.extensionHandlers),
+                         "No extensions should be reported as on_hold is True")
+        self.assertIsNone(vm_agent_status.vm_artifacts_aggregate_status.goal_state_aggregate_status,
+                          "No GS Aggregate status should be reported")
+
+        # Test when is_on_hold returns False - should work too
         mock_in_vm_artifacts_profile.is_on_hold = Mock(return_value=False)
         protocol.get_artifacts_profile = Mock(return_value=mock_in_vm_artifacts_profile)
-        with patch.object(ExtHandlersHandler, 'handle_ext_handler') as patch_handle_ext_handler:
-            exthandlers_handler.handle_ext_handlers()
-            self.assertEqual(1, patch_handle_ext_handler.call_count)
+        exthandlers_handler.run()
+        self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.0.0")
+        self.assertEqual("1", protocol.report_vm_status.call_args[0][
+            0].vmAgent.vm_artifacts_aggregate_status.goal_state_aggregate_status.in_svd_seq_no, "Incarnation mismatch")
 
-        # Test when in_vm_artifacts_profile is not available
+        # Test when in_vm_artifacts_profile is not available - Should work
         protocol.get_artifacts_profile = Mock(return_value=None)
-        with patch.object(ExtHandlersHandler, 'handle_ext_handler') as patch_handle_ext_handler:
-            exthandlers_handler.handle_ext_handlers()
-            self.assertEqual(1, patch_handle_ext_handler.call_count)
+        # Update GoalState
+        test_data.set_incarnation(2)
+        protocol.update_goal_state()
+        exthandlers_handler.run()
+        self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.0.0")
+        self.assertEqual("2", protocol.report_vm_status.call_args[0][
+            0].vmAgent.vm_artifacts_aggregate_status.goal_state_aggregate_status.in_svd_seq_no, "Incarnation mismatch")
 
     def test_last_etag_on_extension_processing(self, *args):
         test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE)
