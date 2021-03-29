@@ -192,10 +192,6 @@ class WireProtocol(DataContract):
         self.client.status_blob.set_vm_status(vm_status)
         self.client.upload_status_blob()
 
-    # def report_ext_status(self, ext_handler_name, ext_name, ext_status):  # pylint: disable=W0613
-    #     validate_param("ext_status", ext_status, ExtensionStatus)
-    #     self.client.status_blob.set_ext_status(ext_handler_name, ext_name, ext_status)
-
     def report_event(self, events_iterator):
         self.client.report_event(events_iterator)
 
@@ -359,8 +355,6 @@ def ext_handler_status_to_v1(handler_status):
     status_list = []
 
     for ext_status in handler_status.extension_statuses:
-        # handler_name = ext
-        # ext_status = ext_statuses.get(handler_name)
         v1_ext_status = ext_status_to_v1(ext_status)
         if ext_status is not None and v1_ext_status is not None:
             ext_handler_status = v1_handler_status.copy()
@@ -446,7 +440,6 @@ def vm_status_to_v1(vm_status):
 class StatusBlob(object):
     def __init__(self, client):
         self.vm_status = None
-        # self.ext_statuses = {}
         self.client = client
         self.type = None
         self.data = None
@@ -454,13 +447,6 @@ class StatusBlob(object):
     def set_vm_status(self, vm_status):
         validate_param("vmAgent", vm_status, VMStatus)
         self.vm_status = vm_status
-
-    # def set_ext_status(self, ext_handler_name, ext_name, ext_status):
-    #     validate_param("extensionStatus", ext_status, ExtensionStatus)
-    #     # MultiConfig, Todo: This is where the extension status gets saved. Right now only 1 ext per handler, change it for MC
-    #     if ext_handler_name not in self.ext_statuses:
-    #         self.ext_statuses[ext_handler_name] = {}
-    #     self.ext_statuses[ext_handler_name][ext_name] = ext_status
 
     def to_json(self):
         report = vm_status_to_v1(self.vm_status)

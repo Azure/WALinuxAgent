@@ -300,7 +300,6 @@ class ExtHandlerStatus(DataContract):
         self.code = code
         self.message = message
         self.supports_multi_config = False
-        # self.extensions = DataContractList(ustr)
         self.extension_statuses = DataContractList(ExtensionStatus)
 
 

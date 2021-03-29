@@ -762,7 +762,7 @@ class TestExtension(AgentTestCase):
             self.assertEqual("Ready", handler_status.status, "Handler is not Ready")
             self.assertIn(handler_status.name, expected_ext_handlers, "Handler not reported")
             self.assertEqual("1.0.0", handler_status.version, "Handler version not matching")
-            self.assertEqual(1, len(handler_status.extensions), "No settings were found for this extension")
+            self.assertEqual(1, len(handler_status.extension_statuses), "No settings were found for this extension")
             expected_ext_handlers.remove(handler_status.name)
 
         self.assertEqual(0, len(expected_ext_handlers), "All handlers not reported")
