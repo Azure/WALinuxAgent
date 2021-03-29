@@ -351,11 +351,13 @@ def _http_request(method, host, rel_uri, port=None, data=None, secure=False,
 def http_request(method,
                  url, data, headers=None,
                  use_proxy=False,
-                 max_retry=DEFAULT_RETRIES,
+                 max_retry=None,
                  retry_codes=None,
                  retry_delay=DELAY_IN_SECONDS,
                  redact_data=False):
 
+    if max_retry is None:
+        max_retry = DEFAULT_RETRIES
     if retry_codes is None:
         retry_codes = RETRY_CODES
     global SECURE_WARNING_EMITTED  # pylint: disable=W0603
@@ -481,10 +483,12 @@ def http_request(method,
 def http_get(url,
              headers=None,
              use_proxy=False,
-             max_retry=DEFAULT_RETRIES,
+             max_retry=None,
              retry_codes=None,
              retry_delay=DELAY_IN_SECONDS):
 
+    if max_retry is None:
+        max_retry = DEFAULT_RETRIES
     if retry_codes is None:
         retry_codes = RETRY_CODES
     return http_request("GET",
@@ -498,10 +502,12 @@ def http_get(url,
 def http_head(url,
               headers=None,
               use_proxy=False,
-              max_retry=DEFAULT_RETRIES,
+              max_retry=None,
               retry_codes=None,
               retry_delay=DELAY_IN_SECONDS):
 
+    if max_retry is None:
+        max_retry = DEFAULT_RETRIES
     if retry_codes is None:
         retry_codes = RETRY_CODES
     return http_request("HEAD",
@@ -516,10 +522,12 @@ def http_post(url,
               data,
               headers=None,
               use_proxy=False,
-              max_retry=DEFAULT_RETRIES,
+              max_retry=None,
               retry_codes=None,
               retry_delay=DELAY_IN_SECONDS):
 
+    if max_retry is None:
+        max_retry = DEFAULT_RETRIES
     if retry_codes is None:
         retry_codes = RETRY_CODES
     return http_request("POST",
@@ -534,11 +542,13 @@ def http_put(url,
              data,
              headers=None,
              use_proxy=False,
-             max_retry=DEFAULT_RETRIES,
+             max_retry=None,
              retry_codes=None,
              retry_delay=DELAY_IN_SECONDS,
              redact_data=False):
 
+    if max_retry is None:
+        max_retry = DEFAULT_RETRIES
     if retry_codes is None:
         retry_codes = RETRY_CODES
     return http_request("PUT",
@@ -553,10 +563,12 @@ def http_put(url,
 def http_delete(url,
                 headers=None,
                 use_proxy=False,
-                max_retry=DEFAULT_RETRIES,
+                max_retry=None,
                 retry_codes=None,
                 retry_delay=DELAY_IN_SECONDS):
 
+    if max_retry is None:
+        max_retry = DEFAULT_RETRIES
     if retry_codes is None:
         retry_codes = RETRY_CODES
     return http_request("DELETE",
