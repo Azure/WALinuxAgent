@@ -466,6 +466,10 @@ class ExtHandlersHandler(object):
         all_extensions = [(ext, handler) for handler in self.ext_handlers.extHandlers for ext in
                           handler.properties.extensions]
 
+        if not any(all_extensions):
+            logger.info("No extension settings found, not processing anything.")
+            return
+
         # MultiConfig: This sorts based on the min([dependencyLevel of each extension])
         # Scenario #1: extHandlerA = [2,4] and extHandlerB = [1,3], extHandlerC = [0]
         # Expected order should be - extHandlerC, extHandlerB.1, extHandlerA.2, extHandlerB.3, extHandlerA.4
