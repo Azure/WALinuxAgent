@@ -248,6 +248,7 @@ def get_lib_dir(conf=__conf__):
 
 
 def get_published_hostname(conf=__conf__):
+    # Some applications rely on this file; do not remove this setting
     return os.path.join(get_lib_dir(conf), 'published_hostname')
 
 

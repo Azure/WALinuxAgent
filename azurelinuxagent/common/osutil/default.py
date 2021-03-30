@@ -21,6 +21,7 @@ import datetime
 import errno
 import fcntl
 import glob
+import json
 import multiprocessing
 import os
 import platform
@@ -1309,15 +1310,43 @@ class DefaultOSUtil(object):
     def get_hostname_record(self):
         hostname_record = conf.get_published_hostname()
         if not os.path.exists(hostname_record):
-            # this file is created at provisioning time with agents >= 2.2.3
-            hostname = socket.gethostname()
-            logger.info('Hostname record does not exist, '
-                        'creating [{0}] with hostname [{1}]',
-                        hostname_record,
-                        hostname)
+            # older agents (but newer or equal to 2.2.3) create published_hostname during provisioning; when provisioning is done
+            # by cloud-init the hostname is written to set-hostname
+            hostname = self._get_cloud_init_hostname()
+            if hostname is None:
+                logger.info("Retrieving hostname using socket.gethostname()")
+                hostname = socket.gethostname()
+            logger.info('Published hostname record does not exist, creating [{0}] with hostname [{1}]', hostname_record, hostname)
             self.set_hostname_record(hostname)
         record = fileutil.read_file(hostname_record)
         return record
+
+    @staticmethod
+    def _get_cloud_init_hostname():
+        """
+        Retrieves the hostname set by cloud-init; returns None if cloud-init did not set the hostname or if there is an
+        error retrieving it.
+        """
+        hostname_file = '/var/lib/cloud/data/set-hostname'
+        try:
+            if os.path.exists(hostname_file):
+                #
+                # The format is similar to
+                #
+                #     $ cat /var/lib/cloud/data/set-hostname
+                #     {
+                #      "fqdn": "nam-u18",
+                #      "hostname": "nam-u18"
+                #     }
+                #
+                logger.info("Retrieving hostname from {0}", hostname_file)
+                with open(hostname_file, 'r') as file_:
+                    hostname_info = json.load(file_)
+                if "hostname" in hostname_info:
+                    return hostname_info["hostname"]
+        except Exception as exception:
+            logger.warn("Error retrieving hostname: {0}", ustr(exception))
+        return None
 
     def del_account(self, username):
         if self.is_sys_user(username):
