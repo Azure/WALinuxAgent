@@ -422,11 +422,9 @@ class TestExtension(AgentTestCase):
         self.assertNotEqual(0, len(vm_status.vmAgent.extensionHandlers))
         handler_status = vm_status.vmAgent.extensionHandlers[0]
         self.assertEqual(expected_status, handler_status.status)
-        self.assertEqual(expected_handler_name,
-                          handler_status.name)
+        self.assertEqual(expected_handler_name, handler_status.name)
         self.assertEqual(version, handler_status.version)
         self.assertEqual(expected_ext_count, len(handler_status.extension_statuses))
-        return
 
     def _assert_ext_pkg_file_status(self, expected_to_be_present=True, extension_version="1.0.0",
                                     extension_handler_name="OSTCExtensions.ExampleHandlerLinux"):

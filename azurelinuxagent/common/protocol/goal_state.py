@@ -526,7 +526,7 @@ class ExtensionsConfig(object):
         runtime_settings_nodes = findall(plugin_settings_node, "RuntimeSettings")
         extension_runtime_settings_nodes = findall(plugin_settings_node, "ExtensionRuntimeSettings")
 
-        if (runtime_settings_nodes != []) and (extension_runtime_settings_nodes != []):
+        if any(runtime_settings_nodes) and any(extension_runtime_settings_nodes):
             # There can only be a single RuntimeSettings node or multiple ExtensionRuntimeSettings nodes per Plugin
             msg = "Both RuntimeSettings and ExtensionRuntimeSettings found for the same handler: {0} and version: {1}".format(
                 handler_name, version)
@@ -670,10 +670,14 @@ class ExtensionsConfig(object):
         seq_no = getattrib(settings_node, "seqNo")
         if seq_no in (None, ""):
             raise ExtensionConfigError("SeqNo not specified for the Extension: {0}".format(name))
+
         try:
             runtime_settings = json.loads(gettext(settings_node))
         except ValueError as error:
             logger.error("Invalid extension settings: {0}", ustr(error))
+            # Todo: Incase of invalid/no settings, should we add the name/seqNo?
+            ext_handler.properties.extensions.append(
+                Extension(name=name, sequenceNumber=seq_no, state=state, dependencyLevel=depends_on_level))
             return
 
         for plugin_settings_list in runtime_settings["runtimeSettings"]:

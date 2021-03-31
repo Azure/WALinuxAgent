@@ -130,7 +130,7 @@ class Extension(DataContract):
         self.dependencyLevel = dependencyLevel
         self.state = state
 
-    def sort_key(self, handler_state):
+    def dependency_level_sort_key(self, handler_state):
         level = self.dependencyLevel
         # Process uninstall or disabled before enabled, in reverse order
         # Prioritize Handler state and Extension state both when sorting extensions
@@ -179,7 +179,7 @@ class ExtHandler(DataContract):
     def invalid_setting_reason(self, value):
         self.__invalid_handler_setting_reason = value
 
-    def sort_key(self):
+    def dependency_level_sort_key(self):
         levels = [e.dependencyLevel for e in self.properties.extensions]
         if len(levels) == 0:
             level = 0

@@ -85,6 +85,9 @@ _TRUNCATED_SUFFIX = u" ... [TRUNCATED]"
 _NUM_OF_STATUS_FILE_RETRIES = 5
 _STATUS_FILE_RETRY_DELAY = 2  # seconds
 
+# This is the default sequence number we use when there are no settings available for Handlers
+_DEFAULT_SEQ_NO = "0"
+
 
 class ValidHandlerStatus(object):
     transitioning = "transitioning"
@@ -467,8 +470,8 @@ class ExtHandlersHandler(object):
                           handler.properties.extensions]
 
         if not any(all_extensions):
-            logger.info("No extension settings found, not processing anything.")
-            return
+            logger.info("No extension settings found, only processing Handler level operations")
+            all_extensions = [(None, handler) for handler in self.ext_handlers.extHandlers]
 
         # MultiConfig: This sorts based on the min([dependencyLevel of each extension])
         # Scenario #1: extHandlerA = [2,4] and extHandlerB = [1,3], extHandlerC = [0]
@@ -483,11 +486,13 @@ class ExtHandlersHandler(object):
         # Tup == (extension, handler)
         def get_dependency_level(tup):
             (ext, handler) = tup
-            return ext.sort_key(handler.properties.state)
+            if ext is not None:
+                return ext.dependency_level_sort_key(handler.properties.state)
+            return handler.dependency_level_sort_key()
 
         all_extensions.sort(key=get_dependency_level)
         # Since all_extensions are sorted based on sort_key, the last element would be the maximum based on the sort_key
-        max_dep_level = get_dependency_level(all_extensions[-1])
+        max_dep_level = get_dependency_level(all_extensions[-1]) if any(all_extensions) else 0
 
         for extension, ext_handler in all_extensions:
             extension_success = self.handle_ext_handler(ext_handler, extension, etag)
@@ -496,7 +501,7 @@ class ExtHandlersHandler(object):
             # This is done for the install and enable. Not for the uninstallation.
             # If handled successfully, proceed with the current handler.
             # Otherwise, skip the rest of the extension installation.
-            dep_level = extension.sort_key(ext_handler.properties.state)
+            dep_level = get_dependency_level((extension, ext_handler))
             if 0 <= dep_level < max_dep_level:
 
                 # Do no wait for extension status if the handler failed
@@ -677,8 +682,13 @@ class ExtHandlersHandler(object):
 
         ext_handler_i.update_settings(extension)
 
-        # MultiConfig: Handle extension level ops here
-        self.__handle_extension(ext_handler_i, extension, uninstall_exit_code)
+        # Check if extension level settings provided for the handler, if not, call enable for the handler.
+        # This is legacy behavior, we can have handlers with no settings.
+        if extension is not None:
+            # MultiConfig: Handle extension level ops here
+            self.__handle_extension(ext_handler_i, extension, uninstall_exit_code)
+        else:
+            ext_handler_i.enable()
 
     @staticmethod
     def __setup_new_handler(ext_handler_i, extension):
@@ -770,9 +780,13 @@ class ExtHandlersHandler(object):
                                   handler_state.lower())
         if handler_state != ExtHandlerState.NotInstalled:
             if handler_state == ExtHandlerState.Enabled:
-                # MultiConfig: Disable all extensions of the handler before uninstalling it
-                for extension in ext_handler_i.enabled_extensions:
-                    ext_handler_i.disable(extension)
+                if any(ext_handler_i.enabled_extensions):
+                    # MultiConfig: Disable all extensions of the handler before uninstalling it
+                    for extension in ext_handler_i.enabled_extensions:
+                        ext_handler_i.disable(extension)
+                else:
+                    # If no extension settings for Handler, disable just the handler
+                    ext_handler_i.disable()
 
             # Try uninstalling the extension and swallow any exceptions in case of failures after logging them
             try:
@@ -1283,21 +1297,28 @@ class ExtHandlerInstance(object):
             ]
             fileutil.write_file(status_path, json.dumps(status))
 
-    def enable(self, extension, uninstall_exit_code=None):
+    def enable(self, extension=None, uninstall_exit_code=None):
         self._enable_extension(extension, uninstall_exit_code)
 
         # Even if a single extension is enabled for this handler, set the Handler state as Enabled
         self.set_handler_state(ExtHandlerState.Enabled)
         self.set_handler_status(status="Ready", message="Plugin enabled")
 
+    def __should_perform_multi_config_op(self, extension):
+        return self.supports_multi_config and extension is not None
+
     def _enable_extension(self, extension, uninstall_exit_code):
         uninstall_exit_code = str(uninstall_exit_code) if uninstall_exit_code is not None else NOT_RUN
+
+        # Setting sequence number to 0 incase no settings provided to keep in accordance with the empty
+        # 0.settings file that we create for such extensions.
         env = {
             ExtCommandEnvVariable.UninstallReturnCode: uninstall_exit_code,
-            ExtCommandEnvVariable.ExtensionSeqNumber: str(extension.sequenceNumber)
+            ExtCommandEnvVariable.ExtensionSeqNumber: str(
+                extension.sequenceNumber) if extension is not None else _DEFAULT_SEQ_NO
         }
 
-        if self.supports_multi_config:
+        if self.__should_perform_multi_config_op(extension):
             # MultiConfig: Pass extension name if MC supported
             env[ExtCommandEnvVariable.ExtensionName] = extension.name
 
@@ -1309,16 +1330,17 @@ class ExtHandlerInstance(object):
                             extension_error_code=ExtensionErrorCodes.PluginEnableProcessingFailed, env=env,
                             extension=extension)
 
-        if self.supports_multi_config:
+        if self.__should_perform_multi_config_op(extension):
             # Only save extension state if MC supported
             self.__set_extension_state(extension, ExtensionState.Enabled)
 
     def _disable_extension(self, extension):
         env = {
-            ExtCommandEnvVariable.ExtensionSeqNumber: str(extension.sequenceNumber)
+            ExtCommandEnvVariable.ExtensionSeqNumber: str(
+                extension.sequenceNumber) if extension is not None else _DEFAULT_SEQ_NO
         }
 
-        if self.supports_multi_config:
+        if self.__should_perform_multi_config_op(extension):
             # MultiConfig: Pass extension name if MC supported
             env[ExtCommandEnvVariable.ExtensionName] = extension.name
 
@@ -1330,7 +1352,7 @@ class ExtHandlerInstance(object):
                             extension_error_code=ExtensionErrorCodes.PluginDisableProcessingFailed, env=env,
                             extension=extension)
 
-        if self.supports_multi_config:
+        if self.__should_perform_multi_config_op(extension):
             # Only save extension state if MC supported
             self.__set_extension_state(extension, ExtensionState.Disabled)
             # MultiConfig: If disable fails, then this wont be cleaned up. Should we forcefully clean it up or let it be?
@@ -1439,7 +1461,7 @@ class ExtHandlerInstance(object):
         """
         seq_no = -1
 
-        if self.supports_multi_config and extension is None or extension.name is None:
+        if self.supports_multi_config and (extension is None or extension.name is None):
             # If no extension name is provided for Multi Config, don't try to parse any sequence number from filesystem
             return seq_no
 
@@ -1688,7 +1710,7 @@ class ExtHandlerInstance(object):
 
                 # MultiConfig: Another breaking change, sequence number would only be available for Enable/Disable commands
                 # Passing the sequenceNo to each command only for legacy behavior of Single Config extensions
-                if not self.supports_multi_config:
+                if not self.supports_multi_config and extension is not None:
                     env[ExtCommandEnvVariable.ExtensionSeqNumber] = str(extension.sequenceNumber)
 
                 try:
@@ -1751,7 +1773,7 @@ class ExtHandlerInstance(object):
             # This is the behavior of waagent 2.0.x
             # The new agent has to be consistent with the old one.
             self.logger.info("Extension has no settings, write empty 0.settings")
-            self.update_settings_file("0.settings", "")
+            self.update_settings_file("{0}.settings".format(_DEFAULT_SEQ_NO), "")
             return
 
         # for ext in self.ext_handler.properties.extensions:
