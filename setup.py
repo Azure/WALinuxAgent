@@ -97,7 +97,7 @@ def get_data_files(name, version, fullname):  # pylint: disable=R0912
     agent_bin_path = osutil.get_agent_bin_path()
 
     set_bin_files(data_files, dest=agent_bin_path)
-    if name == 'redhat' or name == 'centos':  # pylint: disable=R1714
+    if name == 'redhat' or name == 'centos' or name == 'almalinux':  # pylint: disable=R1714
         set_conf_files(data_files)
         set_logrotate_files(data_files)
         set_udev_files(data_files)
