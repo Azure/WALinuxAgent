@@ -341,39 +341,29 @@ def ext_status_to_v1(ext_status):
     return v1_ext_status
 
 
-def ext_handler_status_to_v1(handler_status):
+def ext_handler_status_to_v1(ext_handler_status):
     v1_handler_status = {
-        'handlerVersion': handler_status.version,
-        'handlerName': handler_status.name,
-        'status': handler_status.status,
-        'code': handler_status.code,
+        'handlerVersion': ext_handler_status.version,
+        'handlerName': ext_handler_status.name,
+        'status': ext_handler_status.status,
+        'code': ext_handler_status.code,
         'useExactVersion': True
     }
-    if handler_status.message is not None:
-        v1_handler_status["formattedMessage"] = __get_formatted_msg_for_status_reporting(handler_status.message)
+    if ext_handler_status.message is not None:
+        v1_handler_status["formattedMessage"] = __get_formatted_msg_for_status_reporting(ext_handler_status.message)
 
-    status_list = []
+    v1_ext_status = ext_status_to_v1(ext_handler_status.extension_status)
+    if ext_handler_status.extension_status is not None and v1_ext_status is not None:
+        v1_handler_status["runtimeSettingsStatus"] = {
+            'settingsStatus': v1_ext_status,
+            'sequenceNumber': ext_handler_status.extension_status.sequenceNumber
+        }
 
-    for ext_status in handler_status.extension_statuses:
-        v1_ext_status = ext_status_to_v1(ext_status)
-        if ext_status is not None and v1_ext_status is not None:
-            ext_handler_status = v1_handler_status.copy()
-            ext_handler_status["runtimeSettingsStatus"] = {
-                'settingsStatus': v1_ext_status,
-                'sequenceNumber': ext_status.sequenceNumber
-            }
+        # Add extension name if Handler supports MultiConfig
+        if ext_handler_status.supports_multi_config:
+            v1_handler_status["runtimeSettingsStatus"]["extensionName"] = ext_handler_status.extension_status.name
 
-            # Add extension name if Handler supports MultiConfig
-            if handler_status.supports_multi_config:
-                ext_handler_status["runtimeSettingsStatus"]["extensionName"] = ext_status.name
-
-            status_list.append(ext_handler_status)
-
-    # If nothing added to the status list, report the status of the handler
-    if not any(status_list):
-        status_list.append(v1_handler_status)
-
-    return status_list
+    return v1_handler_status
 
 
 def vm_artifacts_aggregate_status_to_v1(vm_artifacts_aggregate_status):
@@ -404,9 +394,7 @@ def vm_status_to_v1(vm_status):
         vm_status.vmAgent.vm_artifacts_aggregate_status)
     v1_handler_status_list = []
     for handler_status in vm_status.vmAgent.extensionHandlers:
-        v1_handler_status = ext_handler_status_to_v1(handler_status)
-        if any(v1_handler_status):
-            v1_handler_status_list.extend(v1_handler_status)
+        v1_handler_status_list.append(ext_handler_status_to_v1(handler_status))
 
     v1_agg_status = {
         'guestAgentStatus': v1_ga_status,

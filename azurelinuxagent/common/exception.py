@@ -100,6 +100,13 @@ class ExtensionConfigError(ExtensionError):
     """
 
 
+class MultiConfigExtensionError(ExtensionError):
+    """
+    Error raised when a Multi-Config extension is failing. We capture these separately because we maintain extension
+    level status for Multi-Config extensions.
+    """
+
+
 class ProvisionError(AgentError):
     """
     When provision failed
