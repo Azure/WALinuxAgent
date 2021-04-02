@@ -396,7 +396,7 @@ class CGroupConfigurator(object):
 
         def disable(self, reason):
             self._cgroups_enabled = False
-            message = "Disabling resource usage monitoring. Reason: {0}".format(reason)
+            message = "[CGW] Disabling resource usage monitoring. Reason: {0}".format(reason)
             logger.info(message)  # log as INFO for now, in the future it should be logged as WARNING
             add_event(op=WALAEventOperation.CGroupsDisabled, message=message, is_success=False, log_event=False)
             self.__reset_cpu_quota()
