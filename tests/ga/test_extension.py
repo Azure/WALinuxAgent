@@ -441,7 +441,8 @@ class TestExtension(AgentTestCase):
         self.assertEqual(expected_status, handler_status.status)
         self.assertEqual(expected_handler_name, handler_status.name)
         self.assertEqual(version, handler_status.version)
-        self.assertEqual(expected_ext_count, len(handler_status.extension_statuses))
+        self.assertEqual(expected_ext_count, len([ext_handler for ext_handler in vm_status.vmAgent.extensionHandlers if
+                                                  ext_handler.name == expected_handler_name]))
 
     def _assert_ext_pkg_file_status(self, expected_to_be_present=True, extension_version="1.0.0",
                                     extension_handler_name="OSTCExtensions.ExampleHandlerLinux"):
@@ -1828,10 +1829,10 @@ class TestExtension(AgentTestCase):
         self.assertEqual(3, protocol.report_vm_status.call_count)
         self._assert_handler_status(protocol.report_vm_status, "NotReady", expected_ext_count=1, version="1.0.0")
 
-    @patch('azurelinuxagent.ga.exthandlers.ExtHandlersHandler.handle_ext_handler_error')
+    # @patch('azurelinuxagent.ga.exthandlers.ExtHandlersHandler.handle_ext_handler_error')
     @patch('azurelinuxagent.ga.exthandlers.HandlerManifest.get_disable_command')
     def test_disable_failure_with_exception_handling(self, patch_get_disable_command,
-                                                     patch_handle_ext_handler_error, *args):
+                                                     *args):
         """
         When extension disable fails, the operation should be reported.
         """

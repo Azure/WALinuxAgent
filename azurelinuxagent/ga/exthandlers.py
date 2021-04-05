@@ -1670,7 +1670,8 @@ class ExtHandlerInstance(object):
                     ext_handler_status = self.get_extension_status(ext)
                 # If SingleConfig or if no ext_handler status available for this extension, use the Handler status
                 if ext_handler_status is None:
-                    ext_handler_status = handler_status.copy()
+                    ext_handler_status = ExtHandlerStatus()
+                    set_properties("ExtHandlerStatus", ext_handler_status, get_properties(handler_status))
 
                 if heartbeat_status is not None:
                     # Always prioritize the status being reported by heartbeat in the Handler Status (legacy behavior)
