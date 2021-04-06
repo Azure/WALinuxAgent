@@ -437,12 +437,12 @@ class TestExtension(AgentTestCase):
         args, kw = report_vm_status.call_args  # pylint: disable=unused-variable
         vm_status = args[0]
         self.assertNotEqual(0, len(vm_status.vmAgent.extensionHandlers))
-        handler_status = vm_status.vmAgent.extensionHandlers[0]
+        handler_status = next(status for status in vm_status.vmAgent.extensionHandlers if status.name == expected_handler_name)
         self.assertEqual(expected_status, handler_status.status)
         self.assertEqual(expected_handler_name, handler_status.name)
         self.assertEqual(version, handler_status.version)
         self.assertEqual(expected_ext_count, len([ext_handler for ext_handler in vm_status.vmAgent.extensionHandlers if
-                                                  ext_handler.name == expected_handler_name]))
+                                                  ext_handler.name == expected_handler_name and ext_handler.extension_status is not None]))
 
     def _assert_ext_pkg_file_status(self, expected_to_be_present=True, extension_version="1.0.0",
                                     extension_handler_name="OSTCExtensions.ExampleHandlerLinux"):
@@ -466,7 +466,6 @@ class TestExtension(AgentTestCase):
 
         protocol = WireProtocol(KNOWN_WIRESERVER_IP)
         protocol.detect()
-        protocol.report_ext_status = MagicMock()
         protocol.report_vm_status = MagicMock()
 
         handler = get_exthandlers_handler(protocol)
@@ -489,7 +488,7 @@ class TestExtension(AgentTestCase):
 
         self.assertEqual(0, patch_command.call_count)
         self._assert_handler_status(protocol.report_vm_status, "Ready", expected_ext_count=1, version="1.0.0")
-        self._assert_ext_status(protocol.report_ext_status, "success", 0)
+        self._assert_ext_status(protocol.report_vm_status, "success", 0)
 
         # Next incarnation, update version
         test_data.set_incarnation(2)
@@ -515,7 +514,7 @@ class TestExtension(AgentTestCase):
         exthandlers_handler.run()
 
         self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.0.0")
-        self._assert_ext_status(protocol.report_ext_status, "success", 0)
+        self._assert_ext_status(protocol.report_vm_status, "success", 0)
 
         # Test goal state not changed
         exthandlers_handler.run()
@@ -530,7 +529,7 @@ class TestExtension(AgentTestCase):
         exthandlers_handler.run()
 
         self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.0.0")
-        self._assert_ext_status(protocol.report_ext_status, "success", 1)
+        self._assert_ext_status(protocol.report_vm_status, "success", 1)
 
         # Test hotfix
         test_data.set_incarnation(3)
@@ -541,7 +540,7 @@ class TestExtension(AgentTestCase):
         exthandlers_handler.run()
 
         self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.1.1")
-        self._assert_ext_status(protocol.report_ext_status, "success", 2)
+        self._assert_ext_status(protocol.report_vm_status, "success", 2)
 
         # Test upgrade
         test_data.set_incarnation(4)
@@ -552,7 +551,7 @@ class TestExtension(AgentTestCase):
         exthandlers_handler.run()
 
         self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.2.0")
-        self._assert_ext_status(protocol.report_ext_status, "success", 3)
+        self._assert_ext_status(protocol.report_vm_status, "success", 3)
 
         # Test disable
         test_data.set_incarnation(5)
@@ -583,7 +582,7 @@ class TestExtension(AgentTestCase):
 
         def _assert_handler_status_and_manifest_download_count(protocol, test_data, manifest_count):
             self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.0.0")
-            self._assert_ext_status(protocol.report_ext_status, "success", 0)
+            self._assert_ext_status(protocol.report_vm_status, "success", 0)
             self.assertEqual(test_data.call_counts['manifest.xml'], manifest_count,
                              "We should have downloaded extension manifest {0} times".format(manifest_count))
 
@@ -620,13 +619,14 @@ class TestExtension(AgentTestCase):
             test_data = mockwiredata.WireProtocolData(bad_conf)
             exthandlers_handler, protocol = self._create_mock(test_data, mock_get, mock_crypt_util, *args)
 
-            with patch('azurelinuxagent.common.event.add_event') as patch_add_event:
+            with patch('azurelinuxagent.ga.exthandlers.add_event') as patch_add_event:
                 exthandlers_handler.run()
                 self._assert_handler_status(protocol.report_vm_status, "NotReady", 0, "1.0.0")
 
                 invalid_config_errors = [kw for _, kw in patch_add_event.call_args_list if
                                          kw['op'] == WALAEventOperation.InvalidExtensionConfig]
-                self.assertEqual(1, len(invalid_config_errors), "Error not logged and reported to Kusto")
+                self.assertEqual(1, len(invalid_config_errors),
+                                 "Error not logged and reported to Kusto for {0}".format(bad_config_file_path))
 
     def test_it_should_process_valid_extensions_if_present(self, mock_get, mock_crypt_util, *args):
 
@@ -647,7 +647,9 @@ class TestExtension(AgentTestCase):
             self.assertEqual(expected_status, handler.status, "Invalid status")
             self.assertIn(handler.name, expected_handlers, "Handler not found")
             self.assertEqual("1.0.0", handler.version, "Incorrect handler version")
-            self.assertEqual(expected_ext_count, len(handler.extensions), "Incorrect extensions enabled")
+            self.assertEqual(expected_ext_count, len([ext for ext in vm_status.vmAgent.extensionHandlers if
+                                                      ext.name == handler.name and ext.extension_status is not None]),
+                             "Incorrect extensions enabled")
             expected_handlers.remove(handler.name)
         self.assertEqual(0, len(expected_handlers), "All handlers not reported status")
 
@@ -659,7 +661,7 @@ class TestExtension(AgentTestCase):
         exthandlers_handler.run()
 
         self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.0.0")
-        self._assert_ext_status(protocol.report_ext_status, "success", 0)
+        self._assert_ext_status(protocol.report_vm_status, "success", 0)
         self._assert_ext_pkg_file_status(expected_to_be_present=True, extension_version="1.0.0")
 
         # Update the package
@@ -671,7 +673,7 @@ class TestExtension(AgentTestCase):
         exthandlers_handler.run()
 
         self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.1.0")
-        self._assert_ext_status(protocol.report_ext_status, "success", 1)
+        self._assert_ext_status(protocol.report_vm_status, "success", 1)
         self._assert_ext_pkg_file_status(expected_to_be_present=False, extension_version="1.0.0")
         self._assert_ext_pkg_file_status(expected_to_be_present=True, extension_version="1.1.0")
 
@@ -684,7 +686,7 @@ class TestExtension(AgentTestCase):
         exthandlers_handler.run()
 
         self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.2.0")
-        self._assert_ext_status(protocol.report_ext_status, "success", 2)
+        self._assert_ext_status(protocol.report_vm_status, "success", 2)
         self._assert_ext_pkg_file_status(expected_to_be_present=False, extension_version="1.1.0")
         self._assert_ext_pkg_file_status(expected_to_be_present=True, extension_version="1.2.0")
 
@@ -697,7 +699,7 @@ class TestExtension(AgentTestCase):
         exthandlers_handler.run()
 
         self._assert_handler_status(protocol.report_vm_status, "Ready", 1, extension_version)
-        self._assert_ext_status(protocol.report_ext_status, "success", 0)
+        self._assert_ext_status(protocol.report_vm_status, "success", 0)
         self._assert_ext_pkg_file_status(expected_to_be_present=True, extension_version=extension_version)
 
         # Test uninstall
@@ -718,7 +720,7 @@ class TestExtension(AgentTestCase):
         exthandlers_handler.run()
 
         self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.0.0")
-        self._assert_ext_status(protocol.report_ext_status, "success", 0)
+        self._assert_ext_status(protocol.report_vm_status, "success", 0)
         self._assert_ext_pkg_file_status(expected_to_be_present=True, extension_version="1.0.0")
 
         # Update the package
@@ -730,7 +732,7 @@ class TestExtension(AgentTestCase):
         exthandlers_handler.run()
 
         self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.1.0")
-        self._assert_ext_status(protocol.report_ext_status, "success", 1)
+        self._assert_ext_status(protocol.report_vm_status, "success", 1)
         self._assert_ext_pkg_file_status(expected_to_be_present=False, extension_version="1.0.0")
         self._assert_ext_pkg_file_status(expected_to_be_present=True, extension_version="1.1.0")
 
@@ -743,7 +745,7 @@ class TestExtension(AgentTestCase):
         exthandlers_handler.run()
 
         self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.2.0")
-        self._assert_ext_status(protocol.report_ext_status, "success", 2)
+        self._assert_ext_status(protocol.report_vm_status, "success", 2)
         self._assert_ext_pkg_file_status(expected_to_be_present=False, extension_version="1.1.0")
         self._assert_ext_pkg_file_status(expected_to_be_present=True, extension_version="1.2.0")
 
@@ -778,7 +780,9 @@ class TestExtension(AgentTestCase):
             self.assertEqual("Ready", handler_status.status, "Handler is not Ready")
             self.assertIn(handler_status.name, expected_ext_handlers, "Handler not reported")
             self.assertEqual("1.0.0", handler_status.version, "Handler version not matching")
-            self.assertEqual(1, len(handler_status.extension_statuses), "No settings were found for this extension")
+            self.assertEqual(1, len(
+                [status for status in vm_status.vmAgent.extensionHandlers if status.name == handler_status.name]),
+                             "No settings were found for this extension")
             expected_ext_handlers.remove(handler_status.name)
 
         self.assertEqual(0, len(expected_ext_handlers), "All handlers not reported")
@@ -814,7 +818,8 @@ class TestExtension(AgentTestCase):
 
         self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.0.0",
                                     expected_handler_name="OSTCExtensions.OtherExampleHandlerLinux")
-        self._assert_ext_status(protocol.report_ext_status, "success", 0)
+        self._assert_ext_status(protocol.report_vm_status, "success", 0,
+                                expected_handler_name="OSTCExtensions.OtherExampleHandlerLinux")
 
         # check handler list
         self.assertTrue(exthandlers_handler.ext_handlers is not None)
@@ -839,7 +844,7 @@ class TestExtension(AgentTestCase):
         exthandlers_handler.run()
 
         self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.0.0")
-        self._assert_ext_status(protocol.report_ext_status, "success", 1)
+        self._assert_ext_status(protocol.report_vm_status, "success", 1)
 
         self.assertEqual(len(exthandlers_handler.ext_handlers.extHandlers), 2)
         self.assertEqual(exthandlers_handler.ext_handlers.extHandlers[0].properties.extensions[0].dependencyLevel, 3)
@@ -927,7 +932,8 @@ class TestExtension(AgentTestCase):
         exthandlers_handler.run()
         self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.0.0",
                                     expected_handler_name="OSTCExtensions.OtherExampleHandlerLinux")
-        self._assert_ext_status(protocol.report_ext_status, "success", 1)
+        self._assert_ext_status(protocol.report_vm_status, "success", 1,
+                                expected_handler_name="OSTCExtensions.OtherExampleHandlerLinux")
 
         # check handler list and dependency levels
         self.assertTrue(exthandlers_handler.ext_handlers is not None)
@@ -1026,7 +1032,7 @@ class TestExtension(AgentTestCase):
         exthandlers_handler.run()
 
         self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.0.0")
-        self._assert_ext_status(protocol.report_ext_status, "success", 0)
+        self._assert_ext_status(protocol.report_vm_status, "success", 0)
 
         # Test goal state changed
         test_data.set_incarnation(2)
@@ -1035,7 +1041,7 @@ class TestExtension(AgentTestCase):
         exthandlers_handler.run()
 
         self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.0.0")
-        self._assert_ext_status(protocol.report_ext_status, "success", 0)
+        self._assert_ext_status(protocol.report_vm_status, "success", 0)
 
         # Test minor version bump
         test_data.set_incarnation(3)
@@ -1045,7 +1051,7 @@ class TestExtension(AgentTestCase):
         exthandlers_handler.run()
 
         self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.1.0")
-        self._assert_ext_status(protocol.report_ext_status, "success", 0)
+        self._assert_ext_status(protocol.report_vm_status, "success", 0)
 
         # Test hotfix version bump
         test_data.set_incarnation(4)
@@ -1055,7 +1061,7 @@ class TestExtension(AgentTestCase):
         exthandlers_handler.run()
 
         self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.1.1")
-        self._assert_ext_status(protocol.report_ext_status, "success", 0)
+        self._assert_ext_status(protocol.report_vm_status, "success", 0)
 
         # Test disable
         test_data.set_incarnation(5)
@@ -1091,7 +1097,7 @@ class TestExtension(AgentTestCase):
         exthandlers_handler.run()
 
         self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.1.1")
-        self._assert_ext_status(protocol.report_ext_status, "success", 0)
+        self._assert_ext_status(protocol.report_vm_status, "success", 0)
 
         # Test version bump post-re-install
         test_data.set_incarnation(9)
@@ -1101,7 +1107,7 @@ class TestExtension(AgentTestCase):
         exthandlers_handler.run()
 
         self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.2.0")
-        self._assert_ext_status(protocol.report_ext_status, "success", 0)
+        self._assert_ext_status(protocol.report_vm_status, "success", 0)
 
         # Test rollback
         test_data.set_incarnation(10)
@@ -1111,19 +1117,7 @@ class TestExtension(AgentTestCase):
         exthandlers_handler.run()
 
         self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.1.0")
-        self._assert_ext_status(protocol.report_ext_status, "success", 0)
-
-    @patch('azurelinuxagent.ga.exthandlers.add_event')
-    def test_ext_handler_download_failure_transient(self, mock_add_event, *args):
-        original_sleep = time.sleep  # pylint: disable=unused-variable
-
-        test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE)
-        exthandlers_handler, protocol = self._create_mock(test_data, *args)  # pylint: disable=no-value-for-parameter
-        protocol.download_ext_handler_pkg = Mock(side_effect=ProtocolError)
-
-        exthandlers_handler.run()
-
-        self.assertEqual(0, mock_add_event.call_count)
+        self._assert_ext_status(protocol.report_vm_status, "success", 0)
 
     def test_it_should_create_extension_events_dir_and_set_handler_environment_only_if_extension_telemetry_enabled(self, *args):
 
@@ -1138,7 +1132,7 @@ class TestExtension(AgentTestCase):
 
                     exthandlers_handler.run()
                     self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.0.0")
-                    self._assert_ext_status(protocol.report_ext_status, "success", 0)
+                    self._assert_ext_status(protocol.report_vm_status, "success", 0)
 
                     for ext_handler in exthandlers_handler.ext_handlers.extHandlers:
                         ehi = ExtHandlerInstance(ext_handler, protocol)
@@ -1168,7 +1162,7 @@ class TestExtension(AgentTestCase):
         with patch("azurelinuxagent.common.agent_supported_feature._ETPFeature.is_supported", True):
             exthandlers_handler.run()
             self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.0.0")
-            self._assert_ext_status(protocol.report_ext_status, "success", 0)
+            self._assert_ext_status(protocol.report_vm_status, "success", 0)
 
             ehi = ExtHandlerInstance(exthandlers_handler.ext_handlers.extHandlers[0], protocol)
             self.assertTrue(os.path.exists(ehi.get_extension_events_dir()), "Events directory should exist")
@@ -1229,7 +1223,7 @@ class TestExtension(AgentTestCase):
         self.assertEqual("ExtensionProcessing", kw['op'])
 
     @patch('azurelinuxagent.common.errorstate.ErrorState.is_triggered')
-    @patch('azurelinuxagent.ga.exthandlers.ExtHandlerInstance.report_event')
+    @patch('azurelinuxagent.ga.exthandlers.add_event')
     def test_ext_handler_download_failure_permanent_ProtocolError(self, mock_add_event, mock_error_state, *args):
         test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE)
         exthandlers_handler, protocol = self._create_mock(test_data, *args)  # pylint: disable=no-value-for-parameter
@@ -1238,14 +1232,14 @@ class TestExtension(AgentTestCase):
         mock_error_state.return_value = True
 
         exthandlers_handler.run()
+        event_occurrences = [kw for _, kw in mock_add_event.call_args_list if
+                             "[ExtensionError] Failed to get ext handler pkgs" in kw['message']]
+        self.assertEqual(1, len(event_occurrences))
+        self.assertEqual(False, event_occurrences[0]['is_success'])
+        self.assertTrue("Failed to get ext handler pkgs" in event_occurrences[0]['message'])
+        self.assertTrue("ProtocolError" in event_occurrences[0]['message'])
 
-        self.assertEqual(1, mock_add_event.call_count)
-        args, kw = mock_add_event.call_args_list[0]
-        self.assertEqual(False, kw['is_success'])
-        self.assertTrue("Failed to get ext handler pkgs" in kw['message'])
-        self.assertTrue("ProtocolError" in kw['message'])
-
-    @patch('azurelinuxagent.common.event.add_event')
+    @patch('azurelinuxagent.ga.exthandlers.add_event')
     def test_ext_handler_download_errors_should_be_reported_only_on_new_goal_state(self, mock_add_event, *args):
 
         def _assert_mock_add_event_call(expected_download_failed_event_count, err_msg_guid):
@@ -1424,11 +1418,13 @@ class TestExtension(AgentTestCase):
         self.assertEqual(correlation_id, "NA", "Correlation Id should be NA")
         self.assertEqual(gs_creation_time, "NA", "GS Creation time should be NA")
 
-    def _assert_ext_status(self, report_ext_status, expected_status,
-                           expected_seq_no):
-        self.assertTrue(report_ext_status.called)
-        args, kw = report_ext_status.call_args  # pylint: disable=unused-variable
-        ext_status = args[-1]
+    def _assert_ext_status(self, vm_agent_status, expected_status,
+                           expected_seq_no, expected_handler_name="OSTCExtensions.ExampleHandlerLinux"):
+        self.assertTrue(vm_agent_status.called)
+        args, kw = vm_agent_status.call_args  # pylint: disable=unused-variable
+        vm_status = args[0]
+        ext_status = next(handler_status.extension_status for handler_status in vm_status.vmAgent.extensionHandlers if
+                          handler_status.name == expected_handler_name)
         self.assertEqual(expected_status, ext_status.status)
         self.assertEqual(expected_seq_no, ext_status.sequenceNumber)
 
@@ -1447,7 +1443,7 @@ class TestExtension(AgentTestCase):
 
         exthandlers_handler.run()
         self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.0.0")
-        self._assert_ext_status(protocol.report_ext_status, ValidHandlerStatus.error, 0)
+        self._assert_ext_status(protocol.report_vm_status, ValidHandlerStatus.error, 0)
 
     def test_wait_for_handler_completion_empty_exts(self, *args):
         """
@@ -1699,7 +1695,7 @@ class TestExtension(AgentTestCase):
         exthandlers_handler.run()
 
         self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.0.0")
-        self._assert_ext_status(protocol.report_ext_status, "success", 0)
+        self._assert_ext_status(protocol.report_vm_status, "success", 0)
 
         # Update incarnation, simulate new extension version and old one deleted
         test_data.set_incarnation(2)
@@ -1711,7 +1707,7 @@ class TestExtension(AgentTestCase):
         exthandlers_handler.run()
 
         self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.0.1")
-        self._assert_ext_status(protocol.report_ext_status, "success", 0)
+        self._assert_ext_status(protocol.report_vm_status, "success", 0)
 
     @patch('azurelinuxagent.ga.exthandlers.ExtHandlerInstance.install', side_effect=ExtHandlerInstance.install,
            autospec=True)
@@ -1736,10 +1732,8 @@ class TestExtension(AgentTestCase):
         self.assertEqual(1, patch_install.call_count)
         self.assertEqual(2, protocol.report_vm_status.call_count)
 
-    @patch('azurelinuxagent.ga.exthandlers.ExtHandlersHandler.handle_ext_handler_error')
     @patch('azurelinuxagent.ga.exthandlers.HandlerManifest.get_install_command')
-    def test_install_failure_check_exception_handling(self, patch_get_install_command, patch_handle_ext_handler_error,
-                                                      *args):
+    def test_install_failure_check_exception_handling(self, patch_get_install_command, *args):
         """
         When extension install fails, the operation should be reported to our telemetry service.
         """
@@ -1751,7 +1745,8 @@ class TestExtension(AgentTestCase):
         exthandlers_handler.run()
 
         self.assertEqual(1, protocol.report_vm_status.call_count)
-        self.assertEqual(1, patch_handle_ext_handler_error.call_count)
+        self._assert_handler_status(protocol.report_vm_status, expected_status="NotReady", expected_ext_count=0,
+                                    version="1.0.0")
 
     @patch('azurelinuxagent.ga.exthandlers.HandlerManifest.get_enable_command')
     def test_enable_failure(self, patch_get_enable_command, *args):
@@ -1774,10 +1769,8 @@ class TestExtension(AgentTestCase):
         self.assertEqual(1, patch_get_enable_command.call_count)
         self.assertEqual(2, protocol.report_vm_status.call_count)
 
-    @patch('azurelinuxagent.ga.exthandlers.ExtHandlersHandler.handle_ext_handler_error')
     @patch('azurelinuxagent.ga.exthandlers.HandlerManifest.get_enable_command')
-    def test_enable_failure_check_exception_handling(self, patch_get_enable_command,
-                                                     patch_handle_ext_handler_error, *args):
+    def test_enable_failure_check_exception_handling(self, patch_get_enable_command, *args):
         """
         When extension enable fails, the operation should be reported.
         """
@@ -1791,7 +1784,7 @@ class TestExtension(AgentTestCase):
 
         self.assertEqual(1, patch_get_enable_command.call_count)
         self.assertEqual(1, protocol.report_vm_status.call_count)
-        self.assertEqual(1, patch_handle_ext_handler_error.call_count)
+        self._assert_handler_status(protocol.report_vm_status, "NotReady", expected_ext_count=1, version="1.0.0")
 
     @patch('azurelinuxagent.ga.exthandlers.HandlerManifest.get_disable_command')
     def test_disable_failure(self, patch_get_disable_command, *args):
@@ -1809,7 +1802,7 @@ class TestExtension(AgentTestCase):
         self.assertEqual(0, patch_get_disable_command.call_count)
         self.assertEqual(1, protocol.report_vm_status.call_count)
         self._assert_handler_status(protocol.report_vm_status, "Ready", expected_ext_count=1, version="1.0.0")
-        self._assert_ext_status(protocol.report_ext_status, "success", 0)
+        self._assert_ext_status(protocol.report_vm_status, "success", 0)
 
         # Next incarnation, disable extension
         test_data.set_incarnation(2)
@@ -1829,7 +1822,6 @@ class TestExtension(AgentTestCase):
         self.assertEqual(3, protocol.report_vm_status.call_count)
         self._assert_handler_status(protocol.report_vm_status, "NotReady", expected_ext_count=1, version="1.0.0")
 
-    # @patch('azurelinuxagent.ga.exthandlers.ExtHandlersHandler.handle_ext_handler_error')
     @patch('azurelinuxagent.ga.exthandlers.HandlerManifest.get_disable_command')
     def test_disable_failure_with_exception_handling(self, patch_get_disable_command,
                                                      *args):
@@ -1847,7 +1839,7 @@ class TestExtension(AgentTestCase):
         self.assertEqual(0, patch_get_disable_command.call_count)
         self.assertEqual(1, protocol.report_vm_status.call_count)
         self._assert_handler_status(protocol.report_vm_status, "Ready", expected_ext_count=1, version="1.0.0")
-        self._assert_ext_status(protocol.report_ext_status, "success", 0)
+        self._assert_ext_status(protocol.report_vm_status, "success", 0)
 
         # Next incarnation, disable extension
         test_data.set_incarnation(2)
@@ -1858,7 +1850,7 @@ class TestExtension(AgentTestCase):
 
         self.assertEqual(1, patch_get_disable_command.call_count)
         self.assertEqual(2, protocol.report_vm_status.call_count)
-        self.assertEqual(1, patch_handle_ext_handler_error.call_count)
+        self._assert_handler_status(protocol.report_vm_status, "NotReady", expected_ext_count=1, version="1.0.0")
 
     @patch('azurelinuxagent.ga.exthandlers.HandlerManifest.get_uninstall_command')
     def test_uninstall_failure(self, patch_get_uninstall_command, *args):
@@ -1876,7 +1868,7 @@ class TestExtension(AgentTestCase):
         self.assertEqual(0, patch_get_uninstall_command.call_count)
         self.assertEqual(1, protocol.report_vm_status.call_count)
         self._assert_handler_status(protocol.report_vm_status, "Ready", expected_ext_count=1, version="1.0.0")
-        self._assert_ext_status(protocol.report_ext_status, "success", 0)
+        self._assert_ext_status(protocol.report_vm_status, "success", 0)
 
         # Next incarnation, disable extension
         test_data.set_incarnation(2)
@@ -2074,10 +2066,8 @@ class TestExtension(AgentTestCase):
             # This is ensuring that the error status is being written to the new version
         self._assert_handler_status(protocol.report_vm_status, "NotReady", expected_ext_count=0, version=new_version)
 
-    @patch('azurelinuxagent.ga.exthandlers.ExtHandlersHandler.handle_ext_handler_error')
     @patch('azurelinuxagent.ga.exthandlers.HandlerManifest.get_update_command')
-    def test_upgrade_failure_with_exception_handling(self, patch_get_update_command,
-                                                     patch_handle_ext_handler_error, *args):
+    def test_upgrade_failure_with_exception_handling(self, patch_get_update_command, *args):
         """
         Extension upgrade failure should not be retried
         """
@@ -2086,7 +2076,7 @@ class TestExtension(AgentTestCase):
 
         exthandlers_handler.run()
         self.assertEqual(1, patch_get_update_command.call_count)
-        self.assertEqual(1, patch_handle_ext_handler_error.call_count)
+        self._assert_handler_status(protocol.report_vm_status, "NotReady", expected_ext_count=1, version="1.0.1")
 
     @patch('azurelinuxagent.ga.exthandlers.HandlerManifest.get_disable_command')
     def test_extension_upgrade_should_pass_when_continue_on_update_failure_is_true_and_prev_version_disable_fails(
@@ -2104,7 +2094,7 @@ class TestExtension(AgentTestCase):
 
         # Ensure the handler status and ext_status is successful
         self._assert_handler_status(protocol.report_vm_status, "Ready", expected_ext_count=1, version="1.0.1")
-        self._assert_ext_status(protocol.report_ext_status, "success", 0)
+        self._assert_ext_status(protocol.report_vm_status, "success", 0)
 
     @patch('azurelinuxagent.ga.exthandlers.HandlerManifest.get_uninstall_command')
     def test_extension_upgrade_should_pass_when_continue_on_update_failue_is_true_and_prev_version_uninstall_fails(
@@ -2122,7 +2112,7 @@ class TestExtension(AgentTestCase):
 
         # Ensure the handler status and ext_status is successful
         self._assert_handler_status(protocol.report_vm_status, "Ready", expected_ext_count=1, version="1.0.1")
-        self._assert_ext_status(protocol.report_ext_status, "success", 0)
+        self._assert_ext_status(protocol.report_vm_status, "success", 0)
 
     @patch('azurelinuxagent.ga.exthandlers.HandlerManifest.get_disable_command')
     def test_extension_upgrade_should_fail_when_continue_on_update_failure_is_false_and_prev_version_disable_fails(
@@ -2226,7 +2216,7 @@ class TestExtension(AgentTestCase):
 
         # Ensure the handler status and ext_status is successful
         self._assert_handler_status(protocol.report_vm_status, "Ready", expected_ext_count=1, version="1.0.1")
-        self._assert_ext_status(protocol.report_ext_status, "success", 0)
+        self._assert_ext_status(protocol.report_vm_status, "success", 0)
 
     def test_ext_path_and_version_env_variables_set_for_ever_operation(self, *args):
         test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE_EXT_SINGLE)
@@ -2460,7 +2450,6 @@ class TestExtensionSequencing(AgentTestCase):
 
         protocol = WireProtocol(KNOWN_WIRESERVER_IP)
         protocol.detect()
-        protocol.report_ext_status = MagicMock()
         protocol.report_vm_status = MagicMock()
         protocol.get_artifacts_profile = MagicMock()
 

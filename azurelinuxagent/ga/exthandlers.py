@@ -471,12 +471,14 @@ class ExtHandlersHandler(object):
 
         wait_until = datetime.datetime.utcnow() + datetime.timedelta(minutes=_DEFAULT_EXT_TIMEOUT_MINUTES)
 
-        all_extensions = [(ext, handler) for handler in self.ext_handlers.extHandlers for ext in
-                          handler.properties.extensions]
-
-        if not any(all_extensions):
-            logger.info("No extension settings found, only processing Handler level operations")
-            all_extensions = [(None, handler) for handler in self.ext_handlers.extHandlers]
+        all_extensions = []
+        for handler in self.ext_handlers.extHandlers:
+            if any(handler.properties.extensions):
+                all_extensions.extend([(ext, handler) for ext in handler.properties.extensions])
+            else:
+                # We need to process the Handler even if no settings specified from CRP (legacy behavior)
+                logger.info("No extension/run-time settings settings found for {0}".format(handler.name))
+                all_extensions.append((None, handler))
 
         # MultiConfig: This sorts based on the min([dependencyLevel of each extension])
         # Scenario #1: extHandlerA = [2,4] and extHandlerB = [1,3], extHandlerC = [0]
@@ -1295,7 +1297,7 @@ class ExtHandlerInstance(object):
         # Save HandlerEnvironment.json
         self.create_handler_env()
 
-    def create_placeholder_status_file(self, extension):
+    def create_placeholder_status_file(self, extension=None):
         _, status_path = self.get_status_file_path(extension)
         if status_path is not None and not os.path.exists(status_path):
             now = datetime.datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
@@ -1449,13 +1451,13 @@ class ExtHandlerInstance(object):
 
         if not self.supports_multi_config:
             # For single config, extension.name == ext_handler.name
-            env[ExtCommandEnvVariable.DisableReturnCode] = disable_exit_codes.get(self.ext_handler.name)
+            env[ExtCommandEnvVariable.DisableReturnCode] = ustr(disable_exit_codes.get(self.ext_handler.name))
         else:
             disable_codes = []
             for extension in self.extensions:
                 disable_codes.append({
                     "extensionName": extension.name,
-                    "exitCode": disable_exit_codes.get(extension.name)
+                    "exitCode": ustr(disable_exit_codes.get(extension.name))
                 })
             env[ExtCommandEnvVariable.DisableReturnCodeMultipleExtensions] = json.dumps(disable_codes)
 
@@ -1761,8 +1763,9 @@ class ExtHandlerInstance(object):
 
                 # MultiConfig: Another breaking change, sequence number would only be available for Enable/Disable commands
                 # Passing the sequenceNo to each command only for legacy behavior of Single Config extensions
-                if not self.supports_multi_config and extension is not None:
-                    env[ExtCommandEnvVariable.ExtensionSeqNumber] = str(extension.sequenceNumber)
+                # Add sequence number here if not already added
+                if not self.supports_multi_config and ExtCommandEnvVariable.ExtensionSeqNumber not in env:
+                    env[ExtCommandEnvVariable.ExtensionSeqNumber] = str(self.get_seq_no())
 
                 try:
                     # Some extensions erroneously begin cmd with a slash; don't interpret those
@@ -1930,7 +1933,7 @@ class ExtHandlerInstance(object):
 
     def set_extension_status(self, extension, status="NotReady", message="", code=0):
         self.__set_status(self.__get_state_file_name(extension, state_type=StateFileNames.HandlerStatus),
-                          extension.name, status, message, code)
+                          self.get_extension_full_name(extension), status, message, code)
 
     def set_handler_status(self, status="NotReady", message="", code=0):
         self.__set_status(StateFileNames.HandlerStatus, self.ext_handler.name, status, message, code)
@@ -2030,6 +2033,16 @@ class ExtHandlerInstance(object):
 
     def get_log_dir(self):
         return os.path.join(conf.get_ext_log_dir(), self.ext_handler.name)
+
+    def get_seq_no(self):
+        runtime_settings = self.ext_handler.properties.extensions
+        # If no runtime_settings available for this ext_handler, then return 0 (this is the behavior we follow
+        # for update_settings)
+        if not runtime_settings or len(runtime_settings) == 0:
+            return _DEFAULT_SEQ_NO
+        # Currently for single config we're supposed to have just have settings, so taking the sequence number for
+        # the first one.
+        return self.ext_handler.properties.extensions[0].sequenceNumber
 
     @staticmethod
     def _read_and_parse_json_status_file(ext_status_file):
