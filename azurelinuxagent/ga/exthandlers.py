@@ -1535,14 +1535,14 @@ class ExtHandlerInstance(object):
         :return: Sequence number for the extension, Status file path or -1, None
         """
         path = None
-        seq_no = -1
+        seq_no = None
         if extension is not None and extension.sequenceNumber is not None:
             try:
                 seq_no = int(extension.sequenceNumber)
             except ValueError:
                 logger.error('Sequence number [{0}] does not appear to be valid'.format(extension.sequenceNumber))
 
-        if seq_no == -1:
+        if seq_no is None:
             # If we're unable to fetch Sequence number from Extension for any reason,
             # try fetching it from the last modified Settings file.
             seq_no = self._get_last_modified_seq_no_from_config_files(extension)
@@ -1553,7 +1553,7 @@ class ExtHandlerInstance(object):
             elif not self.supports_multi_config:
                 path = os.path.join(self.get_status_dir(), "{0}.status").format(seq_no)
 
-        return seq_no, path
+        return seq_no if seq_no is not None else -1, path
 
     def collect_ext_status(self, ext):
         self.logger.verbose("Collect extension status for {0}".format(self.get_extension_full_name(ext)))

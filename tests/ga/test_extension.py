@@ -814,19 +814,33 @@ class TestExtension(AgentTestCase):
         test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE_EXT_SEQUENCING)
         exthandlers_handler, protocol = self._create_mock(test_data, *args)  # pylint: disable=no-value-for-parameter
 
-        exthandlers_handler.run()
+        dep_ext_level_2 = extension_emulator(name="OSTCExtensions.ExampleHandlerLinux")
+        dep_ext_level_1 = extension_emulator(name="OSTCExtensions.OtherExampleHandlerLinux")
 
-        self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.0.0",
+        with enable_invocations(dep_ext_level_2, dep_ext_level_1) as invocation_record:
+            exthandlers_handler.run()
+
+            self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.0.0",
+                                        expected_handler_name="OSTCExtensions.OtherExampleHandlerLinux")
+            self._assert_ext_status(protocol.report_vm_status, "success", 0,
                                     expected_handler_name="OSTCExtensions.OtherExampleHandlerLinux")
-        self._assert_ext_status(protocol.report_vm_status, "success", 0,
-                                expected_handler_name="OSTCExtensions.OtherExampleHandlerLinux")
 
-        # check handler list
-        self.assertTrue(exthandlers_handler.ext_handlers is not None)
-        self.assertTrue(exthandlers_handler.ext_handlers.extHandlers is not None)
-        self.assertEqual(len(exthandlers_handler.ext_handlers.extHandlers), 2)
-        self.assertEqual(exthandlers_handler.ext_handlers.extHandlers[0].properties.extensions[0].dependencyLevel, 1)
-        self.assertEqual(exthandlers_handler.ext_handlers.extHandlers[1].properties.extensions[0].dependencyLevel, 2)
+            # check handler list and dependency levels
+            self.assertTrue(exthandlers_handler.ext_handlers is not None)
+            self.assertTrue(exthandlers_handler.ext_handlers.extHandlers is not None)
+            self.assertEqual(len(exthandlers_handler.ext_handlers.extHandlers), 2)
+            self.assertEqual(1, next(handler for handler in exthandlers_handler.ext_handlers.extHandlers if
+                                     handler.name == dep_ext_level_1.name).properties.extensions[0].dependencyLevel)
+            self.assertEqual(2, next(handler for handler in exthandlers_handler.ext_handlers.extHandlers if
+                                     handler.name == dep_ext_level_2.name).properties.extensions[0].dependencyLevel)
+
+            # Ensure the invocation order follows the dependency levels
+            invocation_record.compare(
+                (dep_ext_level_1, ExtensionCommandNames.INSTALL),
+                (dep_ext_level_1, ExtensionCommandNames.ENABLE),
+                (dep_ext_level_2, ExtensionCommandNames.INSTALL),
+                (dep_ext_level_2, ExtensionCommandNames.ENABLE)
+            )
 
         # Test goal state not changed
         exthandlers_handler.run()
@@ -837,18 +851,29 @@ class TestExtension(AgentTestCase):
         test_data.set_incarnation(2)
         test_data.set_extensions_config_sequence_number(1)
         # Swap the dependency ordering
+        dep_ext_level_3 = extension_emulator(name="OSTCExtensions.ExampleHandlerLinux")
+        dep_ext_level_4 = extension_emulator(name="OSTCExtensions.OtherExampleHandlerLinux")
         test_data.ext_conf = test_data.ext_conf.replace("dependencyLevel=\"2\"", "dependencyLevel=\"3\"")
         test_data.ext_conf = test_data.ext_conf.replace("dependencyLevel=\"1\"", "dependencyLevel=\"4\"")
         protocol.update_goal_state()
 
-        exthandlers_handler.run()
+        with enable_invocations(dep_ext_level_2, dep_ext_level_1) as invocation_record:
+            exthandlers_handler.run()
 
-        self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.0.0")
-        self._assert_ext_status(protocol.report_vm_status, "success", 1)
+            self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.0.0")
+            self._assert_ext_status(protocol.report_vm_status, "success", 1)
 
-        self.assertEqual(len(exthandlers_handler.ext_handlers.extHandlers), 2)
-        self.assertEqual(exthandlers_handler.ext_handlers.extHandlers[0].properties.extensions[0].dependencyLevel, 3)
-        self.assertEqual(exthandlers_handler.ext_handlers.extHandlers[1].properties.extensions[0].dependencyLevel, 4)
+            self.assertEqual(len(exthandlers_handler.ext_handlers.extHandlers), 2)
+            self.assertEqual(3, next(handler for handler in exthandlers_handler.ext_handlers.extHandlers if
+                                     handler.name == dep_ext_level_3.name).properties.extensions[0].dependencyLevel)
+            self.assertEqual(4, next(handler for handler in exthandlers_handler.ext_handlers.extHandlers if
+                                     handler.name == dep_ext_level_4.name).properties.extensions[0].dependencyLevel)
+
+            # Ensure the invocation order follows the dependency levels
+            invocation_record.compare(
+                (dep_ext_level_3, ExtensionCommandNames.ENABLE),
+                (dep_ext_level_4, ExtensionCommandNames.ENABLE)
+            )
 
         # Test disable
         # In the case of disable, the last extension to be enabled should be
@@ -858,13 +883,22 @@ class TestExtension(AgentTestCase):
         test_data.set_extensions_config_state(ExtHandlerRequestedState.Disabled)
         protocol.update_goal_state()
 
-        exthandlers_handler.run()
+        with enable_invocations(dep_ext_level_2, dep_ext_level_1) as invocation_record:
+            exthandlers_handler.run()
 
         self._assert_handler_status(protocol.report_vm_status, "NotReady", 1, "1.0.0",
                                     expected_handler_name="OSTCExtensions.OtherExampleHandlerLinux")
-        self.assertEqual(len(exthandlers_handler.ext_handlers.extHandlers), 2)
-        self.assertEqual(exthandlers_handler.ext_handlers.extHandlers[0].properties.extensions[0].dependencyLevel, 4)
-        self.assertEqual(exthandlers_handler.ext_handlers.extHandlers[1].properties.extensions[0].dependencyLevel, 3)
+
+        self.assertEqual(3, next(handler for handler in exthandlers_handler.ext_handlers.extHandlers if
+                                 handler.name == dep_ext_level_3.name).properties.extensions[0].dependencyLevel)
+        self.assertEqual(4, next(handler for handler in exthandlers_handler.ext_handlers.extHandlers if
+                                 handler.name == dep_ext_level_4.name).properties.extensions[0].dependencyLevel)
+
+        # Ensure the invocation order follows the dependency levels
+        invocation_record.compare(
+            (dep_ext_level_4, ExtensionCommandNames.DISABLE),
+            (dep_ext_level_3, ExtensionCommandNames.DISABLE)
+        )
 
         # Test uninstall
         # In the case of uninstall, the last extension to be installed should be
@@ -874,16 +908,27 @@ class TestExtension(AgentTestCase):
         test_data.set_extensions_config_state(ExtHandlerRequestedState.Uninstall)
 
         # Swap the dependency ordering AGAIN
+        dep_ext_level_5 = extension_emulator(name="OSTCExtensions.OtherExampleHandlerLinux")
+        dep_ext_level_6 = extension_emulator(name="OSTCExtensions.ExampleHandlerLinux")
         test_data.ext_conf = test_data.ext_conf.replace("dependencyLevel=\"3\"", "dependencyLevel=\"6\"")
         test_data.ext_conf = test_data.ext_conf.replace("dependencyLevel=\"4\"", "dependencyLevel=\"5\"")
         protocol.update_goal_state()
 
-        exthandlers_handler.run()
+        with enable_invocations(dep_ext_level_2, dep_ext_level_1) as invocation_record:
+            exthandlers_handler.run()
 
-        self._assert_no_handler_status(protocol.report_vm_status)
-        self.assertEqual(len(exthandlers_handler.ext_handlers.extHandlers), 2)
-        self.assertEqual(exthandlers_handler.ext_handlers.extHandlers[0].properties.extensions[0].dependencyLevel, 6)
-        self.assertEqual(exthandlers_handler.ext_handlers.extHandlers[1].properties.extensions[0].dependencyLevel, 5)
+            self._assert_no_handler_status(protocol.report_vm_status)
+            self.assertEqual(len(exthandlers_handler.ext_handlers.extHandlers), 2)
+            self.assertEqual(5, next(handler for handler in exthandlers_handler.ext_handlers.extHandlers if
+                                     handler.name == dep_ext_level_5.name).properties.extensions[0].dependencyLevel)
+            self.assertEqual(6, next(handler for handler in exthandlers_handler.ext_handlers.extHandlers if
+                                     handler.name == dep_ext_level_6.name).properties.extensions[0].dependencyLevel)
+
+            # Ensure the invocation order follows the dependency levels
+            invocation_record.compare(
+                (dep_ext_level_6, ExtensionCommandNames.UNINSTALL),
+                (dep_ext_level_5, ExtensionCommandNames.UNINSTALL)
+            )
 
     def test_ext_handler_sequencing_should_fail_if_handler_failed(self, mock_get, mock_crypt, *args):
         test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE_EXT_SEQUENCING)
@@ -935,12 +980,30 @@ class TestExtension(AgentTestCase):
         self._assert_ext_status(protocol.report_vm_status, "success", 1,
                                 expected_handler_name="OSTCExtensions.OtherExampleHandlerLinux")
 
-        # check handler list and dependency levels
-        self.assertTrue(exthandlers_handler.ext_handlers is not None)
-        self.assertTrue(exthandlers_handler.ext_handlers.extHandlers is not None)
-        self.assertEqual(len(exthandlers_handler.ext_handlers.extHandlers), 2)
-        self.assertEqual(exthandlers_handler.ext_handlers.extHandlers[0].properties.extensions[0].dependencyLevel, 1)
-        self.assertEqual(exthandlers_handler.ext_handlers.extHandlers[1].properties.extensions[0].dependencyLevel, 2)
+        # Update incarnation to confirm extension invocation order
+        test_data.set_incarnation(4)
+        protocol.update_goal_state()
+
+        dep_ext_level_2 = extension_emulator(name="OSTCExtensions.ExampleHandlerLinux")
+        dep_ext_level_1 = extension_emulator(name="OSTCExtensions.OtherExampleHandlerLinux")
+
+        with enable_invocations(dep_ext_level_2, dep_ext_level_1) as invocation_record:
+            exthandlers_handler.run()
+
+            # check handler list and dependency levels
+            self.assertTrue(exthandlers_handler.ext_handlers is not None)
+            self.assertTrue(exthandlers_handler.ext_handlers.extHandlers is not None)
+            self.assertEqual(len(exthandlers_handler.ext_handlers.extHandlers), 2)
+            self.assertEqual(1, next(handler for handler in exthandlers_handler.ext_handlers.extHandlers if
+                                     handler.name == dep_ext_level_1.name).properties.extensions[0].dependencyLevel)
+            self.assertEqual(2, next(handler for handler in exthandlers_handler.ext_handlers.extHandlers if
+                                     handler.name == dep_ext_level_2.name).properties.extensions[0].dependencyLevel)
+
+            # Ensure the invocation order follows the dependency levels
+            invocation_record.compare(
+                (dep_ext_level_1, ExtensionCommandNames.ENABLE),
+                (dep_ext_level_2, ExtensionCommandNames.ENABLE)
+            )
 
     def test_ext_handler_sequencing_default_dependency_level(self, *args):
         test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE)
