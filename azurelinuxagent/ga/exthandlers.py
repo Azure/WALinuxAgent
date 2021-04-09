@@ -602,9 +602,7 @@ class ExtHandlersHandler(object):
                 name = ext_handler_i.ext_handler.name
                 err_msg = "Unable to find version {0} in manifest for extension {1}".format(handler_version, name)
                 ext_handler_i.set_operation(WALAEventOperation.Download)
-                ext_handler_i.set_handler_status(message=ustr(err_msg), code=-1)
-                ext_handler_i.report_event(message=ustr(err_msg), is_success=False)
-                return False
+                raise ExtensionError(msg=err_msg)
 
             # Handle everything on an extension level rather than Handler level
             ext_handler_i.logger.info("Target handler state: {0} [incarnation {1}]", handler_state, etag)
@@ -632,39 +630,55 @@ class ExtHandlersHandler(object):
         # In case of MultiConfig extensions, save the state on extension level and not handler level.
         #  For everything else, save Handler level
         except MultiConfigExtensionError as error:
-            err_msg = "Error processing MultiConfig extension {0}: {1}".format(
-                ext_handler_i.get_extension_full_name(extension), ustr(error))
-            self.__handle_and_report_ext_handler_errors(ext_handler_i, error, ext_handler_i.operation, err_msg,
-                                                        extension=extension)
+            ext_name = ext_handler_i.get_extension_full_name(extension)
+            err_msg = "Error processing MultiConfig extension {0}: {1}".format(ext_name, ustr(error))
+            # This error is only thrown for MultiConfig extension operations (enable, disable).
+            # Since these are maintained by the extensions, the expectation here is that they would update their status files appropriately with their errors.
+            # Given the fact that we create a placeholder status file for extensions for enable/disable commands,
+            # we should always have a status file to report, but putting a check in here just in case they're missing.
+            ext_handler_i.create_placeholder_status_file(extension, status=ValidHandlerStatus.error, code=error.code,
+                                                         operation=ext_handler_i.operation, message=err_msg)
+            add_event(name=ext_name, version=ext_handler.properties.version, op=ext_handler_i.operation,
+                      is_success=False, log_event=True, message=err_msg)
         except ExtensionConfigError as error:
             # Catch and report Invalid ExtensionConfig errors here to fail fast rather than timing out after 90 min
             err_msg = "Ran into config errors: {0}. \nPlease retry again as another operation with updated settings".format(
                 ustr(error))
             self.__handle_and_report_ext_handler_errors(ext_handler_i, error,
                                                         report_op=WALAEventOperation.InvalidExtensionConfig,
-                                                        message=err_msg)
+                                                        message=err_msg, extension=extension)
         except ExtensionUpdateError as error:
             # Not reporting the error as it has already been reported from the old version
             self.__handle_and_report_ext_handler_errors(ext_handler_i, error, ext_handler_i.operation, ustr(error),
-                                                        report=False)
+                                                        report=False, extension=extension)
         except ExtensionDownloadError as error:
             msg = "Failed to download artifacts: {0}".format(ustr(error))
             self.__handle_and_report_ext_handler_errors(ext_handler_i, error, report_op=WALAEventOperation.Download,
-                                                        message=msg)
+                                                        message=msg, extension=extension)
         except ExtensionError as error:
-            self.__handle_and_report_ext_handler_errors(ext_handler_i, error, ext_handler_i.operation, ustr(error))
+            self.__handle_and_report_ext_handler_errors(ext_handler_i, error, ext_handler_i.operation, ustr(error),
+                                                        extension=extension)
         except Exception as error:
             error.code = -1
-            self.__handle_and_report_ext_handler_errors(ext_handler_i, error, ext_handler_i.operation, ustr(error))
+            self.__handle_and_report_ext_handler_errors(ext_handler_i, error, ext_handler_i.operation, ustr(error),
+                                                        extension=extension)
 
         return False
 
     @staticmethod
     def __handle_and_report_ext_handler_errors(ext_handler_i, error, report_op, message, report=True, extension=None):
+        # This function is only called for Handler level errors, we capture MultiConfig errors separately,
+        #  so report only HandlerStatus here.
+        ext_handler_i.set_handler_status(message=message, code=error.code)
+
+        # If the handler supports multi-config, create a status file with failed status if no status file.
+        # This is for correctly reporting errors back to CRP for failed Handler level operations for MultiConfig extensions.
+        # In case of Handler failures, we will retry each time for each extension, so we need to create a status
+        # file with failure since the extensions wont be called where they can create their status files.
+        # This way we guarantee reporting back to CRP
         if ext_handler_i.should_perform_multi_config_op(extension):
-            ext_handler_i.set_extension_status(extension, message=message, code=error.code)
-        else:
-            ext_handler_i.set_handler_status(message=message, code=error.code)
+            ext_handler_i.create_placeholder_status_file(extension, status=ValidHandlerStatus.error, code=error.code,
+                                                         operation=report_op, message=message)
 
         if report:
             name = ext_handler_i.get_extension_full_name(extension)
@@ -872,7 +886,7 @@ class ExtHandlersHandler(object):
 
         for ext_handler in handlers_to_report:
             try:
-                self.report_ext_handler_status(vm_status, ext_handler)
+                self.report_ext_handler_status(vm_status, ext_handler, incarnation_changed)
             except ExtensionError as error:
                 add_event(op=WALAEventOperation.ExtensionProcessing, is_success=False, message=ustr(error))
 
@@ -941,39 +955,34 @@ class ExtHandlersHandler(object):
 
         fileutil.write_file(status_path, agent_details_json)
 
-    def report_ext_handler_status(self, vm_status, ext_handler):
+    def report_ext_handler_status(self, vm_status, ext_handler, incarnation_changed):
         ext_handler_i = ExtHandlerInstance(ext_handler, self.protocol)
 
         handler_status = ext_handler_i.get_handler_status()
-        # If the handler supports multi-config, there's a chance that all the extensions of that handler failed to enable.
-        # In that case, we would not have any handler status but only extension status.
-        # If supports MultiConfig and no HandlerStatus available, also check for extension status
-        if handler_status is None and not ext_handler_i.supports_multi_config:
+
+        # We should always have some handler status, irrespective of single or multi-config. If nothing available, skip
+        if handler_status is None:
+            msg = "No handler status found for {0}. Not reporting anything for it.".format(ext_handler.name)
+            ext_handler_i.report_handler_status_reporting_error_on_incarnation_change(incarnation_changed, log_msg=msg,
+                                                                                      event_msg=msg)
             return
 
         handler_state = ext_handler_i.get_handler_state()
         ext_handler_statuses = []
-        heartbeat_status = None
         if handler_state != ExtHandlerState.NotInstalled:
 
             # Heartbeat is a handler level thing only, so we dont need to modify this
             try:
                 heartbeat = ext_handler_i.collect_heartbeat()
                 if heartbeat is not None:
-                    heartbeat_status = heartbeat.get('status')
+                    handler_status.status = heartbeat.get('status')
             except ExtensionError as e:
                 ext_handler_i.set_handler_status(message=ustr(e), code=e.code)
 
-            ext_handler_statuses = ext_handler_i.get_extension_handler_statuses(handler_status, heartbeat_status)
+            ext_handler_statuses = ext_handler_i.get_extension_handler_statuses(handler_status, incarnation_changed)
 
         if not any(ext_handler_statuses):
-
-            if handler_status is None:
-                # Nothing to report
-                return
-
             # If not any extension status reported, report the Handler status
-            handler_status.status = heartbeat_status
             ext_handler_statuses.append(handler_status)
 
         vm_status.vmAgent.extensionHandlers.extend(ext_handler_statuses)
@@ -1003,7 +1012,6 @@ class ExtHandlerInstance(object):
     def enabled_extensions(self):
         """
         In case of Single config, just return all the extensions of the handler (expectation being that there'll only be a single extension per handler).
-        (the expectation here is that there would only be 1 single extension for Single Config).
         We will not be maintaining extension level state for Single config Handlers
         """
         if self.supports_multi_config:
@@ -1027,14 +1035,15 @@ class ExtHandlerInstance(object):
         except IOError as e:
             self.logger.error(u"Failed to create extension log dir: {0}", e)
         else:
-            log_file_name = "CommandExecution.log" if (extension is None or not self.supports_multi_config) \
-                else "CommandExecution_{0}.log".format(extension.name)
+            log_file_name = "CommandExecution.log" if not self.should_perform_multi_config_op(
+                extension) else "CommandExecution_{0}.log".format(extension.name)
 
             log_file = os.path.join(self.get_log_dir(), log_file_name)
             self.__truncate_file_head(log_file, execution_log_max_size, self.get_extension_full_name(extension))
             self.logger.add_appender(logger.AppenderType.FILE, logger.LogLevel.INFO, log_file)
 
-    def __truncate_file_head(self, filename, max_size, extension_name):
+    @staticmethod
+    def __truncate_file_head(filename, max_size, extension_name):
         try:
             if os.stat(filename).st_size <= max_size:
                 return
@@ -1304,7 +1313,8 @@ class ExtHandlerInstance(object):
         # Save HandlerEnvironment.json
         self.create_handler_env()
 
-    def create_placeholder_status_file(self, extension=None):
+    def create_placeholder_status_file(self, extension=None, status=ValidHandlerStatus.transitioning, code=0,
+                                       operation="Enabling Extension", message="Install/Enable is in progress."):
         _, status_path = self.get_status_file_path(extension)
         if status_path is not None and not os.path.exists(status_path):
             now = datetime.datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
@@ -1314,12 +1324,12 @@ class ExtHandlerInstance(object):
                     "timestampUTC": now,
                     "status": {
                         "name": self.get_extension_full_name(extension),
-                        "operation": "Enabling Extension",
-                        "status": "transitioning",
-                        "code": 0,
+                        "operation": operation,
+                        "status": status,
+                        "code": code,
                         "formattedMessage": {
                             "lang": "en-US",
-                            "message": "Install/Enable is in progress."
+                            "message": message
                         }
                     }
                 }
@@ -1367,7 +1377,6 @@ class ExtHandlerInstance(object):
         if self.should_perform_multi_config_op(extension):
             # Only save extension state if MC supported
             self.__set_extension_state(extension, ExtensionState.Enabled)
-            self.set_extension_status(extension, status="Ready", message="Plugin enabled")
 
     def _disable_extension(self, extension):
         env = {
@@ -1416,6 +1425,7 @@ class ExtHandlerInstance(object):
         self.launch_command(install_cmd, timeout=900,
                             extension_error_code=ExtensionErrorCodes.PluginInstallProcessingFailed, env=env)
         self.set_handler_state(ExtHandlerState.Installed)
+        self.set_handler_status(status="NotReady", message="Plugin installed but not enabled")
 
     def uninstall(self):
         self.set_operation(WALAEventOperation.UnInstall)
@@ -1555,7 +1565,7 @@ class ExtHandlerInstance(object):
             seq_no = self._get_last_modified_seq_no_from_config_files(extension)
 
         if seq_no is not None and seq_no > -1:
-            if self.supports_multi_config and extension.name is not None:
+            if self.should_perform_multi_config_op(extension) and extension.name is not None:
                 path = os.path.join(self.get_status_dir(), "{0}.{1}.status".format(extension.name, seq_no))
             elif not self.supports_multi_config:
                 path = os.path.join(self.get_status_dir(), "{0}.status").format(seq_no)
@@ -1664,7 +1674,18 @@ class ExtHandlerInstance(object):
         # Extension completed, return its status
         return True, status
 
-    def get_extension_handler_statuses(self, handler_status=None, heartbeat_status=None):
+    def report_handler_status_reporting_error_on_incarnation_change(self, incarnation_changed, log_msg, event_msg,
+                                                                    extension=None):
+        # Since this code is called on a loop, logging as a warning only on incarnation change, else logging it
+        # as verbose
+        if incarnation_changed:
+            logger.warn(log_msg)
+            add_event(name=self.get_extension_full_name(extension), version=self.ext_handler.properties.version,
+                      op=WALAEventOperation.ReportStatus, message=event_msg, is_success=False, log_event=False)
+        else:
+            logger.verbose(log_msg)
+
+    def get_extension_handler_statuses(self, handler_status, incarnation_changed):
         """
         Get the list of ExtHandlerStatus objects corresponding to each extension in the Handler. Each object might have
         its own status for the Handler part to correspond the Handler lever reporting for that extension (eg failures, etc)
@@ -1673,35 +1694,48 @@ class ExtHandlerInstance(object):
         ext_handler_statuses = []
         # TODO Refactor or remove this common code pattern (for each extension subordinate to an ext_handler, do X).
         for ext in self.extensions:
+
+            # Breaking off extension reporting in 2 parts, one which is Handler dependent and the other that is Extension dependent
             try:
-                ext_handler_status = None
-                if self.should_perform_multi_config_op(ext):
-                    ext_handler_status = self.get_extension_status(ext)
-                # If SingleConfig or if no ext_handler status available for this extension, use the Handler status
-                if ext_handler_status is None and handler_status is not None:
-                    ext_handler_status = ExtHandlerStatus()
-                    set_properties("ExtHandlerStatus", ext_handler_status, get_properties(handler_status))
+                ext_handler_status = ExtHandlerStatus()
+                set_properties("ExtHandlerStatus", ext_handler_status, get_properties(handler_status))
+            except Exception as error:
+                msg = "Something went wrong when trying to get a copy of the Handler status for {0}: {1}".format(
+                    self.get_extension_full_name(), ustr(error))
+                self.report_handler_status_reporting_error_on_incarnation_change(incarnation_changed, event_msg=msg,
+                                                                                 log_msg="{0}.\nStack Trace: {1}".format(
+                                                                                     msg, traceback.format_exc()))
+                # Since this is a Handler level error and we need to do it per extension, breaking here and logging
+                # error since we wont be able to report error anyways and saving it as a handler status (legacy behavior)
+                self.set_handler_status(message=msg, code=-1)
+                break
 
-                if ext_handler_status is None:
-                    # If we dont have any status on either Handler or Extension level, skip that extension
-                    continue
-
-                if heartbeat_status is not None:
-                    # Always prioritize the status being reported by heartbeat in the Handler Status (legacy behavior)
-                    ext_handler_status.status = heartbeat_status
-
+            # For the extension dependent stuff, if there's some unhandled error, we will report it back to CRP as an extension error.
+            try:
                 ext_status = self.collect_ext_status(ext)
                 if ext_status is not None:
                     ext_handler_status.extension_status = ext_status
                 ext_handler_statuses.append(ext_handler_status)
             except ExtensionError as error:
-                # For MultiConfig errors, report extension status
-                if self.should_perform_multi_config_op(ext):
-                    self.set_extension_status(ext, message=ustr(error), code=error.code)
-                # Else report at handler level and stop processing here (keeping up with legacy behavior)
-                else:
+
+                msg = "Unknown error when trying to fetch status from extension {0}: {1}".format(
+                    self.get_extension_full_name(ext), ustr(error))
+                self.report_handler_status_reporting_error_on_incarnation_change(incarnation_changed, event_msg=msg,
+                                                                                 log_msg="{0}.\nStack Trace: {1}".format(
+                                                                                     msg, traceback.format_exc(), ext))
+
+                # Unexpected error, for single config, keep the behavior as is
+                if not self.should_perform_multi_config_op(ext):
                     self.set_handler_status(message=ustr(error), code=error.code)
                     break
+
+                # For MultiConfig, create a custom ExtensionStatus object with the error details and attach it to the Handler.
+                # This way the error would be reported back to CRP and the failure would be propagated instantly as compared to CRP eventually timing it out.
+                ext_status = ExtensionStatus(name=ext.name, seq_no=ext.sequenceNumber,
+                                             code=ExtensionErrorCodes.PluginUnknownFailure,
+                                             status=ValidHandlerStatus.error, message=msg)
+                ext_handler_status.extension_status = ext_status
+                ext_handler_statuses.append(ext_handler_status)
 
         return ext_handler_statuses
 
