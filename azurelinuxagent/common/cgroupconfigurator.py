@@ -75,13 +75,13 @@ _AGENT_THROTTLED_TIME_THRESHOLD = 120  # 2 minutes
 
 def _log_cgroup_info(format_string, *args):
     message = format_string.format(*args)
-    logger.info("[CGI]" + message)
+    logger.info("[CGI] " + message)
     add_event(op=WALAEventOperation.CGroupsInfo, message=message)
 
 
 def _log_cgroup_warning(format_string, *args):
     message = format_string.format(*args)
-    logger.info("[CGW]" + message)  # log as INFO for now, in the future it should be logged as WARNING
+    logger.info("[CGW] " + message)  # log as INFO for now, in the future it should be logged as WARNING
     add_event(op=WALAEventOperation.CGroupsInfo, message=message, is_success=False, log_event=False)
 
 
@@ -411,7 +411,7 @@ class CGroupConfigurator(object):
             over this setting.
             """
             quota_percentage = "{0}%".format(quota)
-            _log_cgroup_info("Setting agent's CPUQuota to {0}", quota_percentage)
+            _log_cgroup_info("Ensuring the agent's CPUQuota is {0}", quota_percentage)
             if CGroupConfigurator._Impl.__try_set_cpu_quota(quota_percentage):
                 CGroupsTelemetry.set_track_throttled_time(True)
 
@@ -432,6 +432,10 @@ class CGroupConfigurator(object):
             try:
                 drop_in_file = os.path.join(systemd.get_agent_drop_in_path(), _AGENT_DROP_IN_FILE_CPU_QUOTA)
                 contents = _AGENT_DROP_IN_FILE_CPU_QUOTA_CONTENTS_FORMAT.format(quota)
+                if os.path.exists(drop_in_file):
+                    with open(drop_in_file, "r") as file_:
+                        if file_.read() == contents:
+                            return True  # no need to update the file; return here to avoid doing a daemon-reload
                 CGroupConfigurator._Impl.__create_unit_file(drop_in_file, contents)
             except Exception as exception:
                 _log_cgroup_warning('Failed to set CPUQuota: {0}', ustr(exception))
@@ -450,23 +454,23 @@ class CGroupConfigurator(object):
 
             errors = []
 
-            processCheckSuccess = False
+            process_check_success = False
             try:
                 self._check_processes_in_agent_cgroup()
-                processCheckSuccess = True
+                process_check_success = True
             except CGroupsException as exception:
                 errors.append(exception)
 
-            quotaCheckSuccess = False
+            quota_check_success = False
             try:
                 self._check_agent_throttled_time(cgroup_metrics)
-                quotaCheckSuccess = True
+                quota_check_success = True
             except CGroupsException as exception:
                 errors.append(exception)
 
-            disable = not processCheckSuccess and conf.get_cgroup_disable_on_process_check_failure() \
+            disable = not process_check_success and conf.get_cgroup_disable_on_process_check_failure() \
                       or \
-                      not quotaCheckSuccess and conf.get_cgroup_disable_on_quota_check_failure()
+                      not quota_check_success and conf.get_cgroup_disable_on_quota_check_failure()
 
             if disable:
                 self.disable("Check on cgroups failed:\n{0}".format("\n".join([ustr(e) for e in errors])))
