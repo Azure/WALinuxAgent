@@ -29,25 +29,25 @@
 </Plugins>
 <PluginSettings>
   <Plugin name="OSTCExtensions.ExampleHandlerLinux" version="1.0.0" >
-    <ExtensionRuntimeSettings seqNo="1" name="firstExtension" state="enabled">{
+    <ExtensionRuntimeSettings seqNo="1" name="firstExtension" state="disabled">{
   "runtimeSettings": [
     {
       "handlerSettings": {
-        "publicSettings": {"message": "Enabling firstExtension"}
+        "publicSettings": {"source":{"script":"Write-Host First: Hello World 1234!"},"parameters":[{"name":"extensionName","value":"firstRunCommand"}],"timeoutInSeconds":120}
       }
     }
   ]
 }</ExtensionRuntimeSettings>
-    <ExtensionRuntimeSettings seqNo="2" name="secondExtension" state="enabled">{
+    <ExtensionRuntimeSettings seqNo="2" name="secondExtension" state="disabled">{
   "runtimeSettings": [
     {
       "handlerSettings": {
-        "publicSettings": {"message": "Enabling secondExtension"}
+        "publicSettings": {"message": "Disabling secondExtension"}
       }
     }
   ]
 }</ExtensionRuntimeSettings>
-    <ExtensionRuntimeSettings seqNo="3" name="thirdExtension" state="enabled">{
+    <ExtensionRuntimeSettings seqNo="99" name="thirdExtension" state="enabled">{
   "runtimeSettings": [
     {
       "handlerSettings": {
@@ -56,13 +56,22 @@
     }
   ]
 }</ExtensionRuntimeSettings>
-  </Plugin>
-  <Plugin name="Microsoft.Powershell.ExampleExtension" version="1.0.0">
-    <RuntimeSettings seqNo="9">{
+      <ExtensionRuntimeSettings seqNo="101" name="fourthExtension" state="enabled">{
   "runtimeSettings": [
     {
       "handlerSettings": {
-        "publicSettings": {"message": "Enabling SingleConfig extension"}
+        "publicSettings": {"message": "Enabling fourthExtension"}
+      }
+    }
+  ]
+}</ExtensionRuntimeSettings>
+  </Plugin>
+  <Plugin name="Microsoft.Powershell.ExampleExtension" version="1.0.0">
+    <RuntimeSettings seqNo="10">{
+  "runtimeSettings": [
+    {
+      "handlerSettings": {
+        "publicSettings": {"fileUris":["https://test.blob.core.windows.net/windowsagent/VerifyAgentRunning.ps1"],"commandToExecute":"echo Hello 1234"}
       }
     }
   ]

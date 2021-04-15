@@ -31,7 +31,7 @@ from azurelinuxagent.common.utils import fileutil
 from azurelinuxagent.common.utils.extensionprocessutil import TELEMETRY_MESSAGE_MAX_LEN, format_stdout_stderr, \
     read_output
 from azurelinuxagent.ga.exthandlers import parse_ext_status, ExtHandlerInstance, ExtCommandEnvVariable, \
-    ExtensionStatusError
+    ExtensionStatusError, _DEFAULT_SEQ_NO
 from tests.protocol import mockwiredata
 from tests.protocol.mocks import mock_wire_protocol
 from tests.tools import AgentTestCase, patch, mock_sleep, clear_singleton_instances
@@ -680,7 +680,7 @@ sys.stderr.write("STDERR")
         wire_ip = str(uuid.uuid4())
         ext_handler_instance = ExtHandlerInstance(ext_handler=self.ext_handler, protocol=WireProtocol(wire_ip))
 
-        helper_env_vars = {ExtCommandEnvVariable.ExtensionSeqNumber: ext_handler_instance.get_seq_no(),
+        helper_env_vars = {ExtCommandEnvVariable.ExtensionSeqNumber: _DEFAULT_SEQ_NO,
                            ExtCommandEnvVariable.ExtensionPath: self.tmp_dir,
                            ExtCommandEnvVariable.ExtensionVersion: ext_handler_instance.ext_handler.properties.version,
                            ExtCommandEnvVariable.WireProtocolAddress: wire_ip}

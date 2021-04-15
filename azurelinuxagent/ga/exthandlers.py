@@ -621,7 +621,7 @@ class ExtHandlersHandler(object):
                 #       ahead and remove all of them at once if HandlerState==Uninstall.
                 #       CRP will only set the HandlerState to Uninstall if all its extensions are set to be disabled)
                 # 2- Finally uninstall the handler
-                self.handle_uninstall(ext_handler_i)
+                self.handle_uninstall(ext_handler_i, extension=extension)
             else:
                 message = u"Unknown ext handler state:{0}".format(handler_state)
                 raise ExtensionError(message)
@@ -699,40 +699,37 @@ class ExtHandlersHandler(object):
             self.__setup_new_handler(ext_handler_i, extension)
 
             if old_ext_handler_i is None:
-                ext_handler_i.install()
+                ext_handler_i.install(extension=extension)
             elif ext_handler_i.version_ne(old_ext_handler_i):
                 # This is a special case, we need to update the handler version here but to do that we need to also
                 # disable each extension of this handler.
                 # For other cases, we follow the dependency level as specified by CRP, but for this we will disable
                 # each extension of this handler before updating it.
                 uninstall_exit_code = ExtHandlersHandler._update_extension_handler_and_return_if_failed(
-                    old_ext_handler_i, ext_handler_i)
-
-        ext_handler_i.create_placeholder_status_file(extension)
-        ext_handler_i.update_settings(extension)
-
-        # Check if extension level settings provided for the handler, if not, call enable for the handler.
-        # This is legacy behavior, we can have handlers with no settings.
-        if extension is not None:
-            # MultiConfig: Handle extension level ops here
-            self.__handle_extension(ext_handler_i, extension, uninstall_exit_code)
+                    old_ext_handler_i, ext_handler_i, extension)
         else:
-            ext_handler_i.enable()
+            ext_handler_i.create_placeholder_status_file(extension)
+            ext_handler_i.update_settings(extension)
+
+        self.__handle_extension(ext_handler_i, extension, uninstall_exit_code)
 
     @staticmethod
     def __setup_new_handler(ext_handler_i, extension):
         ext_handler_i.set_handler_state(ExtHandlerState.NotInstalled)
         ext_handler_i.download()
         ext_handler_i.initialize()
-        # MultiConfig: Major change, we wont provide settings on install anymore for MC
-        # For single config, the expectation is we'd only have one extension per handler so making those settings
-        # available for install too to keep up with legacy behavior
-        if not ext_handler_i.supports_multi_config:
-            ext_handler_i.create_placeholder_status_file(extension)
-            ext_handler_i.update_settings(extension)
+        ext_handler_i.create_placeholder_status_file(extension)
+        ext_handler_i.update_settings(extension)
 
     @staticmethod
     def __handle_extension(ext_handler_i, extension, uninstall_exit_code):
+        # Check if extension level settings provided for the handler, if not, call enable for the handler.
+        # This is legacy behavior, we can have handlers with no settings.
+        if extension is None:
+            ext_handler_i.enable()
+            return
+
+        # MultiConfig: Handle extension level ops here
         ext_handler_i.logger.info("{0} requested state: {1}", ext_handler_i.get_extension_full_name(extension),
                                   extension.state)
         if extension.state == ExtensionState.Enabled:
@@ -743,7 +740,7 @@ class ExtHandlersHandler(object):
             raise ExtensionConfigError("Unknown requested state for Extension {0}: {1}".format(extension.name, extension.state))
 
     @staticmethod
-    def _update_extension_handler_and_return_if_failed(old_ext_handler_i, ext_handler_i):
+    def _update_extension_handler_and_return_if_failed(old_ext_handler_i, ext_handler_i, extension=None):
 
         def execute_old_handler_command_and_return_if_succeeds(func):
             """
@@ -776,21 +773,24 @@ class ExtHandlersHandler(object):
         # We only want to disable the old handler if it is currently enabled; no other state makes sense.
         if old_ext_handler_i.get_handler_state() == ExtHandlerState.Enabled:
             # MultiConfig: Need to disable all enabled extensions of this handler if MC is supported
-            for extension in old_ext_handler_i.enabled_extensions:
-                disable_exit_codes[extension.name] = execute_old_handler_command_and_return_if_succeeds(
-                    func=partial(old_ext_handler_i.disable, extension=extension))
+            for old_ext in old_ext_handler_i.enabled_extensions:
+                disable_exit_codes[old_ext.name] = execute_old_handler_command_and_return_if_succeeds(
+                    func=partial(old_ext_handler_i.disable, extension=old_ext))
 
         ext_handler_i.copy_status_files(old_ext_handler_i)
         if ext_handler_i.version_gt(old_ext_handler_i):
             ext_handler_i.update(disable_exit_codes=disable_exit_codes,
-                                 updating_from_version=old_ext_handler_i.ext_handler.properties.version)
+                                 updating_from_version=old_ext_handler_i.ext_handler.properties.version,
+                                 extension=extension)
         else:
             updating_from_version = ext_handler_i.ext_handler.properties.version
             old_ext_handler_i.update(handler_version=updating_from_version,
-                                     disable_exit_codes=disable_exit_codes, updating_from_version=updating_from_version)
-        uninstall_exit_code = execute_old_handler_command_and_return_if_succeeds(func=old_ext_handler_i.uninstall)
+                                     disable_exit_codes=disable_exit_codes, updating_from_version=updating_from_version,
+                                     extension=extension)
+        uninstall_exit_code = execute_old_handler_command_and_return_if_succeeds(
+            func=partial(old_ext_handler_i.uninstall, extension=extension))
         old_ext_handler_i.remove_ext_handler()
-        ext_handler_i.update_with_install(uninstall_exit_code=uninstall_exit_code)
+        ext_handler_i.update_with_install(uninstall_exit_code=uninstall_exit_code, extension=extension)
         return uninstall_exit_code
 
     def handle_disable(self, ext_handler_i, extension):
@@ -802,24 +802,27 @@ class ExtHandlersHandler(object):
             # Since this is a legacy behavior, keeping it fixed to just this extension than all extensions in the handler
             ext_handler_i.disable(extension)
 
-    def handle_uninstall(self, ext_handler_i):
+    def handle_uninstall(self, ext_handler_i, extension):
         self.log_process = True
         handler_state = ext_handler_i.get_handler_state()
         ext_handler_i.logger.info("[Uninstall] current handler state is: {0}",
                                   handler_state.lower())
         if handler_state != ExtHandlerState.NotInstalled:
             if handler_state == ExtHandlerState.Enabled:
+
+                # If Handler is Enabled, there should be atleast 1 enabled extension for the handler
+                # MultiConfig: Disable all extensions of the handler before uninstalling it
                 if any(ext_handler_i.enabled_extensions):
-                    # MultiConfig: Disable all extensions of the handler before uninstalling it
-                    for extension in ext_handler_i.enabled_extensions:
-                        ext_handler_i.disable(extension)
+                    for enabled_ext in ext_handler_i.enabled_extensions:
+                        ext_handler_i.disable(enabled_ext)
+
+                # If there are no extension settings for Handler, we should just disable just the handler
                 else:
-                    # If no extension settings for Handler, disable just the handler
                     ext_handler_i.disable()
 
             # Try uninstalling the extension and swallow any exceptions in case of failures after logging them
             try:
-                ext_handler_i.uninstall()
+                ext_handler_i.uninstall(extension=extension)
             except ExtensionError as e:
                 ext_handler_i.report_event(message=ustr(e), is_success=False)
 
@@ -963,26 +966,32 @@ class ExtHandlersHandler(object):
         # We should always have some handler status, irrespective of single or multi-config. If nothing available, skip
         if handler_status is None:
             msg = "No handler status found for {0}. Not reporting anything for it.".format(ext_handler.name)
-            ext_handler_i.report_handler_status_reporting_error_on_incarnation_change(incarnation_changed, log_msg=msg,
-                                                                                      event_msg=msg)
+            ext_handler_i.report_error_on_incarnation_change(incarnation_changed, log_msg=msg,
+                                                             event_msg=msg)
             return
 
         handler_state = ext_handler_i.get_handler_state()
         ext_handler_statuses = []
-        if handler_state != ExtHandlerState.NotInstalled:
+        # For MultiConfig, we need to report status per extension even for Handler level failures.
+        # If we have HandlerStatus for a MultiConfig handler and GS is requesting for it, we would report status per
+        #  extension even if HandlerState == NotInstalled (Sample scenario: ExtensionConfigError, DecideVersionError, etc)
+        if handler_state != ExtHandlerState.NotInstalled or ext_handler.supports_multi_config:
 
-            # Heartbeat is a handler level thing only, so we dont need to modify this
-            try:
-                heartbeat = ext_handler_i.collect_heartbeat()
-                if heartbeat is not None:
-                    handler_status.status = heartbeat.get('status')
-            except ExtensionError as e:
-                ext_handler_i.set_handler_status(message=ustr(e), code=e.code)
+            # Since we require reading the Manifest for reading the heartbeat, this would fail if HandlerManifest not found.
+            # Only try to read heartbeat if HandlerState != NotInstalled.
+            if handler_state != ExtHandlerState.NotInstalled:
+                # Heartbeat is a handler level thing only, so we dont need to modify this
+                try:
+                    heartbeat = ext_handler_i.collect_heartbeat()
+                    if heartbeat is not None:
+                        handler_status.status = heartbeat.get('status')
+                except ExtensionError as e:
+                    ext_handler_i.set_handler_status(message=ustr(e), code=e.code)
 
             ext_handler_statuses = ext_handler_i.get_extension_handler_statuses(handler_status, incarnation_changed)
 
+        # If not any extension status reported, report the Handler status
         if not any(ext_handler_statuses):
-            # If not any extension status reported, report the Handler status
             ext_handler_statuses.append(handler_status)
 
         vm_status.vmAgent.extensionHandlers.extend(ext_handler_statuses)
@@ -1011,7 +1020,8 @@ class ExtHandlerInstance(object):
     @property
     def enabled_extensions(self):
         """
-        In case of Single config, just return all the extensions of the handler (expectation being that there'll only be a single extension per handler).
+        In case of Single config, just return all the extensions of the handler
+        (expectation being that there'll only be a single extension per handler).
         We will not be maintaining extension level state for Single config Handlers
         """
         if self.supports_multi_config:
@@ -1334,6 +1344,10 @@ class ExtHandlerInstance(object):
                     }
                 }
             ]
+            # Create status directory if not exists. This is needed in the case where the Handler fails before even
+            # initializing the directories (ExtensionConfigError, Version deleted from PIR error, etc)
+            if not os.path.exists(os.path.dirname(status_path)):
+                fileutil.mkdir(os.path.dirname(status_path), mode=0o700)
             fileutil.write_file(status_path, json.dumps(status))
 
     def enable(self, extension=None, uninstall_exit_code=None):
@@ -1357,14 +1371,8 @@ class ExtHandlerInstance(object):
         # Setting sequence number to 0 incase no settings provided to keep in accordance with the empty
         # 0.settings file that we create for such extensions.
         env = {
-            ExtCommandEnvVariable.UninstallReturnCode: uninstall_exit_code,
-            ExtCommandEnvVariable.ExtensionSeqNumber: str(
-                extension.sequenceNumber) if extension is not None else _DEFAULT_SEQ_NO
+            ExtCommandEnvVariable.UninstallReturnCode: uninstall_exit_code
         }
-
-        if self.should_perform_multi_config_op(extension):
-            # MultiConfig: Pass extension name if MC supported
-            env[ExtCommandEnvVariable.ExtensionName] = extension.name
 
         self.set_operation(WALAEventOperation.Enable)
         man = self.load_manifest()
@@ -1379,21 +1387,12 @@ class ExtHandlerInstance(object):
             self.__set_extension_state(extension, ExtensionState.Enabled)
 
     def _disable_extension(self, extension):
-        env = {
-            ExtCommandEnvVariable.ExtensionSeqNumber: str(
-                extension.sequenceNumber) if extension is not None else _DEFAULT_SEQ_NO
-        }
-
-        if self.should_perform_multi_config_op(extension):
-            # MultiConfig: Pass extension name if MC supported
-            env[ExtCommandEnvVariable.ExtensionName] = extension.name
-
         self.set_operation(WALAEventOperation.Disable)
         man = self.load_manifest()
         disable_cmd = man.get_disable_command()
         self.logger.info("Disable extension {0}: [{1}]".format(self.get_extension_full_name(extension), disable_cmd))
         self.launch_command(disable_cmd, timeout=900,
-                            extension_error_code=ExtensionErrorCodes.PluginDisableProcessingFailed, env=env,
+                            extension_error_code=ExtensionErrorCodes.PluginDisableProcessingFailed,
                             extension=extension)
 
         if self.should_perform_multi_config_op(extension):
@@ -1414,7 +1413,7 @@ class ExtHandlerInstance(object):
             self.set_handler_state(ExtHandlerState.Installed)
             self.set_handler_status(status="NotReady", message="Plugin disabled")
 
-    def install(self, uninstall_exit_code=None):
+    def install(self, uninstall_exit_code=None, extension=None):
         uninstall_exit_code = str(uninstall_exit_code) if uninstall_exit_code is not None else NOT_RUN
         env = {ExtCommandEnvVariable.UninstallReturnCode: uninstall_exit_code}
 
@@ -1422,17 +1421,17 @@ class ExtHandlerInstance(object):
         install_cmd = man.get_install_command()
         self.logger.info("Install extension [{0}]".format(install_cmd))
         self.set_operation(WALAEventOperation.Install)
-        self.launch_command(install_cmd, timeout=900,
+        self.launch_command(install_cmd, timeout=900, extension=extension,
                             extension_error_code=ExtensionErrorCodes.PluginInstallProcessingFailed, env=env)
         self.set_handler_state(ExtHandlerState.Installed)
         self.set_handler_status(status="NotReady", message="Plugin installed but not enabled")
 
-    def uninstall(self):
+    def uninstall(self, extension=None):
         self.set_operation(WALAEventOperation.UnInstall)
         man = self.load_manifest()
         uninstall_cmd = man.get_uninstall_command()
         self.logger.info("Uninstall extension [{0}]".format(uninstall_cmd))
-        self.launch_command(uninstall_cmd)
+        self.launch_command(uninstall_cmd, extension=extension)
 
     def remove_ext_handler(self):
         try:
@@ -1457,7 +1456,7 @@ class ExtHandlerInstance(object):
             self.report_event(message=message, is_success=False)
             self.logger.warn(message)
 
-    def update(self, handler_version=None, disable_exit_codes=None, updating_from_version=None):
+    def update(self, handler_version=None, disable_exit_codes=None, updating_from_version=None, extension=None):
         if handler_version is None:
             handler_version = self.ext_handler.properties.version
 
@@ -1486,16 +1485,16 @@ class ExtHandlerInstance(object):
             self.launch_command(update_cmd,
                                 timeout=900,
                                 extension_error_code=ExtensionErrorCodes.PluginUpdateProcessingFailed,
-                                env=env)
+                                env=env, extension=extension)
         except ExtensionError:
             # Mark the handler as Failed so we don't clean it up and can keep reporting its status
             self.set_handler_state(ExtHandlerState.FailedUpgrade)
             raise
 
-    def update_with_install(self, uninstall_exit_code=None):
+    def update_with_install(self, uninstall_exit_code=None, extension=None):
         man = self.load_manifest()
         if man.is_update_with_install():
-            self.install(uninstall_exit_code=uninstall_exit_code)
+            self.install(uninstall_exit_code=uninstall_exit_code, extension=extension)
         else:
             self.logger.info("UpdateWithInstall not set. "
                              "Skip install during upgrade.")
@@ -1674,8 +1673,8 @@ class ExtHandlerInstance(object):
         # Extension completed, return its status
         return True, status
 
-    def report_handler_status_reporting_error_on_incarnation_change(self, incarnation_changed, log_msg, event_msg,
-                                                                    extension=None):
+    def report_error_on_incarnation_change(self, incarnation_changed, log_msg, event_msg,
+                                           extension=None):
         # Since this code is called on a loop, logging as a warning only on incarnation change, else logging it
         # as verbose
         if incarnation_changed:
@@ -1694,6 +1693,12 @@ class ExtHandlerInstance(object):
         ext_handler_statuses = []
         # TODO Refactor or remove this common code pattern (for each extension subordinate to an ext_handler, do X).
         for ext in self.extensions:
+            # In MC, for disabled extensions we dont need to report status. Skip reporting if disabled and state == disabled
+            # Extension.state corresponds to the state requested by CRP, self.__get_extension_state() corresponds to the
+            # state of the extension on the VM. Skip reporting only if both are Disabled
+            if self.should_perform_multi_config_op(ext) and \
+                    ext.state == ExtensionState.Disabled and self.__get_extension_state(ext) == ExtensionState.Disabled:
+                continue
 
             # Breaking off extension reporting in 2 parts, one which is Handler dependent and the other that is Extension dependent
             try:
@@ -1702,8 +1707,8 @@ class ExtHandlerInstance(object):
             except Exception as error:
                 msg = "Something went wrong when trying to get a copy of the Handler status for {0}: {1}".format(
                     self.get_extension_full_name(), ustr(error))
-                self.report_handler_status_reporting_error_on_incarnation_change(incarnation_changed, event_msg=msg,
-                                                                                 log_msg="{0}.\nStack Trace: {1}".format(
+                self.report_error_on_incarnation_change(incarnation_changed, event_msg=msg,
+                                                        log_msg="{0}.\nStack Trace: {1}".format(
                                                                                      msg, traceback.format_exc()))
                 # Since this is a Handler level error and we need to do it per extension, breaking here and logging
                 # error since we wont be able to report error anyways and saving it as a handler status (legacy behavior)
@@ -1720,9 +1725,10 @@ class ExtHandlerInstance(object):
 
                 msg = "Unknown error when trying to fetch status from extension {0}: {1}".format(
                     self.get_extension_full_name(ext), ustr(error))
-                self.report_handler_status_reporting_error_on_incarnation_change(incarnation_changed, event_msg=msg,
-                                                                                 log_msg="{0}.\nStack Trace: {1}".format(
-                                                                                     msg, traceback.format_exc(), ext))
+                self.report_error_on_incarnation_change(incarnation_changed, event_msg=msg,
+                                                        log_msg="{0}.\nStack Trace: {1}".format(
+                                                                                     msg, traceback.format_exc()),
+                                                        extension=ext)
 
                 # Unexpected error, for single config, keep the behavior as is
                 if not self.should_perform_multi_config_op(ext):
@@ -1790,8 +1796,13 @@ class ExtHandlerInstance(object):
                 env.update({
                     ExtCommandEnvVariable.ExtensionPath: base_dir,
                     ExtCommandEnvVariable.ExtensionVersion: str(self.ext_handler.properties.version),
-                    ExtCommandEnvVariable.WireProtocolAddress: self.protocol.get_endpoint()
+                    ExtCommandEnvVariable.WireProtocolAddress: self.protocol.get_endpoint(),
+                    ExtCommandEnvVariable.ExtensionSeqNumber: str(
+                        extension.sequenceNumber) if extension is not None else _DEFAULT_SEQ_NO
                 })
+
+                if self.should_perform_multi_config_op(extension):
+                    env[ExtCommandEnvVariable.ExtensionName] = extension.name
 
                 supported_features = []
                 for _, feature in get_agent_supported_features_list_for_extensions().items():
@@ -1802,15 +1813,7 @@ class ExtHandlerInstance(object):
                         }
                     )
                 if supported_features:
-                    env.update({
-                        ExtCommandEnvVariable.ExtensionSupportedFeatures: json.dumps(supported_features)
-                    })
-
-                # MultiConfig: Another breaking change, sequence number would only be available for Enable/Disable commands
-                # Passing the sequenceNo to each command only for legacy behavior of Single Config extensions
-                # Add sequence number here if not already added
-                if not self.supports_multi_config and ExtCommandEnvVariable.ExtensionSeqNumber not in env:
-                    env[ExtCommandEnvVariable.ExtensionSeqNumber] = str(self.get_seq_no())
+                    env[ExtCommandEnvVariable.ExtensionSupportedFeatures] = json.dumps(supported_features)
 
                 try:
                     # Some extensions erroneously begin cmd with a slash; don't interpret those
@@ -1963,12 +1966,10 @@ class ExtHandlerInstance(object):
                 os.path.join(self.get_conf_dir(), "{0}.*.settings".format(extension.name)),
                 os.path.join(self.get_status_dir(), "{0}.*.status".format(extension.name)),
                 os.path.join(self.get_conf_dir(),
-                             self.__get_state_file_name(extension, state_type=StateFileNames.HandlerState)),
-                os.path.join(self.get_conf_dir(),
-                             self.__get_state_file_name(extension, state_type=StateFileNames.HandlerStatus)),
+                             self.__get_state_file_name(extension, state_type=StateFileNames.HandlerState))
             ]
 
-            fileutil.rm_files(files_to_delete)
+            fileutil.rm_files(*files_to_delete)
 
         except Exception as error:
             extension_name = self.get_extension_full_name(extension)
@@ -2081,16 +2082,6 @@ class ExtHandlerInstance(object):
 
     def get_log_dir(self):
         return os.path.join(conf.get_ext_log_dir(), self.ext_handler.name)
-
-    def get_seq_no(self):
-        runtime_settings = self.ext_handler.properties.extensions
-        # If no runtime_settings available for this ext_handler, then return 0 (this is the behavior we follow
-        # for update_settings)
-        if not runtime_settings or len(runtime_settings) == 0:
-            return _DEFAULT_SEQ_NO
-        # Currently for single config we're supposed to have just have settings, so taking the sequence number for
-        # the first one.
-        return self.ext_handler.properties.extensions[0].sequenceNumber
 
     @staticmethod
     def _read_and_parse_json_status_file(ext_status_file):
