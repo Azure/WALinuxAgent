@@ -708,9 +708,10 @@ class ExtHandlersHandler(object):
                 uninstall_exit_code = ExtHandlersHandler._update_extension_handler_and_return_if_failed(
                     old_ext_handler_i, ext_handler_i, extension)
         else:
-            ext_handler_i.create_placeholder_status_file(extension)
             ext_handler_i.update_settings(extension)
 
+        # Always create a placeholder file for enable command if not exists
+        ext_handler_i.create_placeholder_status_file(extension)
         self.__handle_extension(ext_handler_i, extension, uninstall_exit_code)
 
     @staticmethod
@@ -718,7 +719,6 @@ class ExtHandlersHandler(object):
         ext_handler_i.set_handler_state(ExtHandlerState.NotInstalled)
         ext_handler_i.download()
         ext_handler_i.initialize()
-        ext_handler_i.create_placeholder_status_file(extension)
         ext_handler_i.update_settings(extension)
 
     @staticmethod

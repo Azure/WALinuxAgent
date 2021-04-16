@@ -1182,6 +1182,9 @@ class TestExtension(AgentTestCase):
         self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.1.0")
         self._assert_ext_status(protocol.report_vm_status, "success", 0)
 
+    def test_it_should_always_create_placeholder_status_file_for_new_commands(self):
+        raise NotImplementedError
+
     def test_it_should_create_extension_events_dir_and_set_handler_environment_only_if_extension_telemetry_enabled(self, *args):
 
         for enable_extensions in [False, True]:

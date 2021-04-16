@@ -25,7 +25,7 @@ import subprocess
 import azurelinuxagent.common.conf as conf
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.utils import fileutil
-from azurelinuxagent.ga.exthandlers import ExtHandlerInstance
+from azurelinuxagent.ga.exthandlers import ExtHandlerInstance, ExtCommandEnvVariable
 
 from tests.tools import Mock, patch
 from tests.protocol.mocks import HttpRequestPredicates
@@ -80,6 +80,7 @@ def extension_emulator(name="OSTCExtensions.ExampleHandlerLinux", version="1.0.0
     return ExtensionEmulator(name, version, update_mode, report_heartbeat, continue_on_update_failure,
         install_action, uninstall_action, enable_action, disable_action, update_action)
 
+
 @contextlib.contextmanager
 def enable_invocations(*emulators):
     """
@@ -97,6 +98,7 @@ def enable_invocations(*emulators):
     with patch.object(ExtHandlerInstance, "load_manifest", patched_load_manifest):
         with patch("subprocess.Popen", patched_popen):
             yield invocation_record
+
 
 def generate_put_handler(*emulators):
     """
@@ -124,6 +126,7 @@ def generate_put_handler(*emulators):
                 raise Exception("Extension running, but not present in emulators: {0}, {1}".format(supplied_name, supplied_version))
 
     return mock_put_handler
+
 
 class InvocationRecord:
 
@@ -159,12 +162,14 @@ class InvocationRecord:
                 *self._queue[0]
             ))
 
+
 def _first_matching_emulator(emulators, name, version):
     for ext in emulators:
         if ext.matches(name, version):
             return ext
     
     raise StopIteration
+
 
 class ExtensionEmulator:
     """
@@ -225,30 +230,23 @@ class ExtensionEmulator:
         def wrapped_func(cmd, *args, **kwargs):
             return_value = func(cmd, *args, **kwargs)
 
-            config_dir = os.path.join(os.path.dirname(cmd), "config")
+            prefix = kwargs['env'][ExtCommandEnvVariable.ExtensionSeqNumber]
+            if ExtCommandEnvVariable.ExtensionName in kwargs['env']:
+                prefix = "{0}.{1}".format(kwargs['env'][ExtCommandEnvVariable.ExtensionName], prefix)
             
-            regex = r'{directory}{sep}(?P<seq>{sequence})\.settings'.format(
-                directory=config_dir, sep=os.path.sep, sequence=r'[0-9]+'
-            )
-
-            seq = 0
-            for config_file in map(lambda filename: os.path.join(config_dir, filename), os.listdir(config_dir)):
-                if not os.path.isfile(config_file):
-                    continue
-
-                match = re.match(regex, config_file)
-                if not match:
-                    continue
-
-                if seq < int(match.group("seq")):
-                    seq = int(match.group("seq"))
-            
-            status_file = os.path.join(os.path.dirname(cmd), "status", "{seq}.status".format(seq=seq))
+            status_file = os.path.join(os.path.dirname(cmd), "status", "{seq}.status".format(seq=prefix))
 
             if return_value == 0:
                 status_contents = [{ "status": {"status": "success"} }]
             else:
-                status_contents = [{ "status": {"status": "error", "substatus": {"exit_code": return_value}} }]
+                try:
+                    ec = int(return_value)
+                except Exception:
+                    # Error when trying to parse return_value, probably not an integer.
+                    # Failing with -1 and passing the return_value as message
+                    ec = -1
+                status_contents = [{"status": {"status": "error", "code": ec,
+                                               "formattedMessage": {"message": return_value, "lang": "en-US"}}}]
 
             fileutil.write_file(status_file, json.dumps(status_contents))
 
@@ -259,10 +257,10 @@ class ExtensionEmulator:
 
         # Wrap the function in a mock to allow invocation reflection a la .assert_not_called(), etc.
         return Mock(wraps=wrapped_func)
-        
-    
+
     def matches(self, name, version):
         return self.name == name and self.version == version
+
 
 def generate_patched_popen(invocation_record, *emulators):
     """
@@ -274,35 +272,52 @@ def generate_patched_popen(invocation_record, *emulators):
     def patched_popen(cmd, *args, **kwargs):
 
         try:
-            ext_name, ext_version, command_name = _extract_extension_info_from_command(cmd)
-            invocation_record.add(ext_name, ext_version, command_name)
+            handler_name, handler_version, command_name = _extract_extension_info_from_command(cmd)
         except ValueError:
             return original_popen(cmd, *args, **kwargs)
         
         try:
-            matching_ext = _first_matching_emulator(emulators, ext_name, ext_version)
+            name = handler_name
+            # MultiConfig scenario, search for full name - <HandlerName>.<ExtensionName>
+            if ExtCommandEnvVariable.ExtensionName in kwargs['env']:
+                name = "{0}.{1}".format(handler_name, kwargs['env'][ExtCommandEnvVariable.ExtensionName])
+
+            invocation_record.add(name, handler_version, command_name)
+            matching_ext = _first_matching_emulator(emulators, name, handler_version)
 
             return matching_ext.actions[command_name](cmd, *args, **kwargs)
 
         except StopIteration:
             raise Exception("Extension('{name}', '{version}') not listed as a parameter. Is it being emulated?".format(
-                name=ext_name, version=ext_version
+                name=handler_name, version=handler_version
             ))
 
     return patched_popen
+
 
 def generate_mock_load_manifest(*emulators):
 
     original_load_manifest = ExtHandlerInstance.load_manifest
 
     def mock_load_manifest(self):
+        matching_emulator = None
+        names = [self.ext_handler.name]
+        # Incase of MC, search for full names - <HandlerName>.<ExtensionName>
+        if self.supports_multi_config:
+            names = [self.get_extension_full_name(ext) for ext in self.extensions]
 
-        try:
-            matching_emulator = _first_matching_emulator(emulators, self.ext_handler.name, self.ext_handler.properties.version)
-        except StopIteration:
-            raise Exception("Extension('{name}', '{version}') not listed as a parameter. Is it being emulated?".format(
-                name=self.ext_handler.name, version=self.ext_handler.properties.version
-            ))
+        for name in names:
+            try:
+                matching_emulator = _first_matching_emulator(emulators, name, self.ext_handler.properties.version)
+            except StopIteration:
+                continue
+            else:
+                break
+
+        if matching_emulator is None:
+            raise Exception(
+                "Extension('{name}', '{version}') not listed as a parameter. Is it being emulated?".format(
+                    name=self.ext_handler.name, version=self.ext_handler.properties.version))
                     
         base_manifest = original_load_manifest(self)
 
@@ -315,6 +330,7 @@ def generate_mock_load_manifest(*emulators):
         return base_manifest
     
     return mock_load_manifest
+
 
 def _extract_extension_info_from_command(command):
     """
@@ -329,8 +345,8 @@ def _extract_extension_info_from_command(command):
     base_dir_regex = conf.get_lib_dir()
     script_file_regex = r'[^\s]+'
     ext_cmd_regex = r'[a-zA-Z]+'
-    ext_name_regex = r'[a-zA-Z]+(?:\.[a-zA-Z]+)?'
-    ext_ver_regex = r'[0-9]+(?:\.[0-9]+)*'
+    ext_name_regex = r'[a-zA-Z]+(?:[.a-zA-Z]+)?'
+    ext_ver_regex = r'[0-9]+(?:[.0-9]+)*'
 
     full_regex = template.format(
         ext_name=ext_name_regex,
