@@ -20,6 +20,8 @@ import shutil
 import subprocess
 import sys
 
+import uuid
+
 import azurelinuxagent.common.conf as conf
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.osutil.default import DefaultOSUtil
@@ -299,14 +301,23 @@ class TestPersistFirewallRulesHandler(AgentTestCase):
 
     def test_it_should_execute_binary_file_successfully(self):
         # A bare-bone test to ensure no simple syntactical errors in the binary file as its generated dynamically
+        self.__replace_popen_cmd = TestPersistFirewallRulesHandler.__mock_network_setup_service_disabled
         with self._get_persist_firewall_rules_handler() as handler:
             self.assertFalse(os.path.exists(self._binary_file), "Binary file should not be there")
             handler.setup()
 
             self.assertTrue(os.path.exists(self._binary_file), "Binary file not set properly")
 
-            output = shellutil.run_command([sys.executable, self._binary_file])
-            self.assertTrue(output)
+            shellutil.run_command([sys.executable, self._binary_file])
 
-    def it_should_not_fail_if_egg_not_found(self):
-        raise NotImplementedError
+    def test_it_should_not_fail_if_egg_not_found(self):
+        self.__replace_popen_cmd = TestPersistFirewallRulesHandler.__mock_network_setup_service_disabled
+        test_str = str(uuid.uuid4())
+        with patch("sys.argv", [test_str]):
+            with self._get_persist_firewall_rules_handler() as handler:
+                self.assertFalse(os.path.exists(self._binary_file), "Binary file should not be there")
+                handler.setup()
+                output = shellutil.run_command([sys.executable, self._binary_file], stderr=subprocess.STDOUT)
+                expected_str = "{0} file not found, skipping execution of firewall execution setup for this boot".format(
+                    os.path.join(os.getcwd(), test_str))
+                self.assertIn(expected_str, output, "Unexpected output")
