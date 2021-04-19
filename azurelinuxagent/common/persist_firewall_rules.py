@@ -41,8 +41,6 @@ DefaultDependencies=no
 
 [Service]
 Type=oneshot
-# Environment="EGG={egg_path}" "DST_IP={wire_ip}" "UID={user_id}" "WAIT={wait}"
-# ExecStart={py_path} ${{EGG}} --setup-firewall --dst_ip=${{DST_IP}} --uid=${{UID}} ${{WAIT}}
 ExecStart={py_path} {binary_path}
 RemainAfterExit=false
 

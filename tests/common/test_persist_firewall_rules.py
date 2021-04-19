@@ -20,7 +20,7 @@ import shutil
 import subprocess
 import sys
 
-
+import azurelinuxagent.common.conf as conf
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.osutil.default import DefaultOSUtil
 from azurelinuxagent.common.persist_firewall_rules import PersistFirewallRulesHandler
@@ -54,9 +54,14 @@ class TestPersistFirewallRulesHandler(AgentTestCase):
         self.__agent_bin_dir = os.path.join(self.tmp_dir, "bin")
         fileutil.mkdir(self.__agent_bin_dir)
 
+        self.__tmp_conf_lib = os.path.join(self.tmp_dir, "waagent")
+        fileutil.mkdir(self.__tmp_conf_lib)
+        conf.get_lib_dir = MagicMock(return_value=self.__tmp_conf_lib)
+
     def tearDown(self):
         shutil.rmtree(self.__systemd_dir, ignore_errors=True)
         shutil.rmtree(self.__agent_bin_dir, ignore_errors=True)
+        shutil.rmtree(self.__tmp_conf_lib, ignore_errors=True)
         AgentTestCase.tearDown(self)
 
     def __mock_popen(self, cmd, *args, **kwargs):
