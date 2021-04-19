@@ -24,7 +24,7 @@ import azurelinuxagent.common.conf as conf
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.osutil.default import DefaultOSUtil
 from azurelinuxagent.common.persist_firewall_rules import PersistFirewallRulesHandler
-from azurelinuxagent.common.utils import fileutil
+from azurelinuxagent.common.utils import fileutil, shellutil
 from azurelinuxagent.common.utils.networkutil import AddFirewallRules, FirewallCmdDirectCommands
 from tests.tools import AgentTestCase, MagicMock, patch
 
@@ -296,3 +296,17 @@ class TestPersistFirewallRulesHandler(AgentTestCase):
                         os.remove(test_file)
                     except Exception:
                         pass
+
+    def test_it_should_execute_binary_file_successfully(self):
+        # A bare-bone test to ensure no simple syntactical errors in the binary file as its generated dynamically
+        with self._get_persist_firewall_rules_handler() as handler:
+            self.assertFalse(os.path.exists(self._binary_file), "Binary file should not be there")
+            handler.setup()
+
+            self.assertTrue(os.path.exists(self._binary_file), "Binary file not set properly")
+
+            output = shellutil.run_command([sys.executable, self._binary_file])
+            self.assertTrue(output)
+
+    def it_should_not_fail_if_egg_not_found(self):
+        raise NotImplementedError

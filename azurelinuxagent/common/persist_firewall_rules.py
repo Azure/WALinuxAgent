@@ -48,15 +48,6 @@ RemainAfterExit=false
 WantedBy=network.target
 """
 
-    __OVERRIDE_CONTENT = """
-# This drop-in unit file was created by the Azure VM Agent.
-# Do not edit.
-[Service]
-# The first line clears the old data, and the 2nd line overwrites it.
-Environment=
-Environment="EGG={egg_path}" "DST_IP={wire_ip}" "UID={user_id}" "WAIT={wait}"
-"""
-
     __BINARY_CONTENTS = """
 # This python file was created by the Azure VM Agent. Please do not edit.
 
@@ -71,7 +62,6 @@ if __name__ == '__main__':
 """
 
     _AGENT_NETWORK_SETUP_NAME_FORMAT = "{0}-network-setup.service"
-    _DROP_IN_ENV_FILE_NAME = "10-environment.conf"
     _BINARY_FILE_NAME = "waagent-network-setup.py"
 
     _FIREWALLD_RUNNING_CMD = ["firewall-cmd", "--state"]
@@ -166,11 +156,10 @@ if __name__ == '__main__':
         return False
 
     def _setup_network_setup_service(self):
-        # Even if service is enabled, we need to overwrite the drop-in file with the current IP in case it changed.
+        # Even if service is enabled, we need to overwrite the binary file with the current IP in case it changed.
         # This is to handle the case where WireIP can change midway on service restarts.
         # Additionally, incase of auto-update this would also update the location of the new EGG file ensuring that
         # the service is always run from the most latest agent.
-        # self.__set_drop_in_file()
         self.__setup_binary_file()
 
         if self.__verify_network_setup_service_enabled():
@@ -195,29 +184,12 @@ if __name__ == '__main__':
                                                               wait=self._wait,
                                                               py_path=sys.executable))
             logger.info("Successfully updated the Binary file {0} for firewall setup".format(binary_file_path))
-        except Exception as error:
+        except Exception:
             logger.warn(
                 "Unable to setup binary file, removing the service unit file {0} to ensure its not run on system reboot".format(
                     self.get_service_file_path()))
             self.__remove_file_without_raising(binary_file_path)
             self.__remove_file_without_raising(self.get_service_file_path())
-            raise
-
-    def __set_drop_in_file(self):
-        drop_in_file = os.path.join(self._systemd_file_path, "{0}.d".format(self._network_setup_service_name),
-                                    self._DROP_IN_ENV_FILE_NAME)
-        parent, _ = os.path.split(drop_in_file)
-        try:
-            if not os.path.exists(parent):
-                fileutil.mkdir(parent, mode=0o755)
-            fileutil.write_file(drop_in_file,
-                                self.__OVERRIDE_CONTENT.format(egg_path=self._current_agent_executable_path,
-                                                               wire_ip=self._dst_ip,
-                                                               user_id=self._uid,
-                                                               wait=self._wait))
-            logger.info("Drop-in file {0} successfully updated".format(drop_in_file))
-        except Exception:
-            self.__remove_file_without_raising(drop_in_file)
             raise
 
     def __set_service_unit_file(self):
