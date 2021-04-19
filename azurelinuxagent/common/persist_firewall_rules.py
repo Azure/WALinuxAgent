@@ -64,7 +64,7 @@ import os
 
 
 if __name__ == '__main__':
-    if os.path.exists({egg_path}):
+    if os.path.exists("{egg_path}"):
         os.system("{py_path} {egg_path} --setup-firewall --dst_ip={wire_ip} --uid={user_id} {wait}")
     else:
         print("{egg_path} file not found, skipping execution of firewall execution setup for this boot")
@@ -166,6 +166,13 @@ if __name__ == '__main__':
         return False
 
     def _setup_network_setup_service(self):
+        # Even if service is enabled, we need to overwrite the drop-in file with the current IP in case it changed.
+        # This is to handle the case where WireIP can change midway on service restarts.
+        # Additionally, incase of auto-update this would also update the location of the new EGG file ensuring that
+        # the service is always run from the most latest agent.
+        # self.__set_drop_in_file()
+        self.__setup_binary_file()
+
         if self.__verify_network_setup_service_enabled():
             logger.info("Service: {0} already enabled. No change needed.".format(self._network_setup_service_name))
             self.__log_network_setup_service_logs()
@@ -177,13 +184,6 @@ if __name__ == '__main__':
             # Reload systemd configurations when we setup the service for the first time to avoid systemctl warnings
             self.__reload_systemd_conf()
             logger.info("Successfully added and enabled the {0}".format(self._network_setup_service_name))
-
-        # Even if service is enabled, we need to overwrite the drop-in file with the current IP in case it changed.
-        # This is to handle the case where WireIP can change midway on service restarts.
-        # Additionally, incase of auto-update this would also update the location of the new EGG file ensuring that
-        # the service is always run from the most latest agent.
-        # self.__set_drop_in_file()
-        self.__setup_binary_file()
 
     def __setup_binary_file(self):
         binary_file_path = os.path.join(conf.get_lib_dir(), self._BINARY_FILE_NAME)
@@ -294,10 +294,9 @@ if __name__ == '__main__':
             message=msg,
             log_event=False)
 
-    @staticmethod
-    def __reload_systemd_conf():
+    def __reload_systemd_conf(self):
         try:
-            logger.info("Executing systemctl daemon-reload...")
+            logger.info("Executing systemctl daemon-reload for setting up {0}".format(self._network_setup_service_name))
             shellutil.run_command(["systemctl", "daemon-reload"])
         except Exception as exception:
             logger.warn("Unable to reload systemctl configurations: {0}".format(ustr(exception)))
