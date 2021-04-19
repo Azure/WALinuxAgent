@@ -62,7 +62,7 @@ if __name__ == '__main__':
 """
 
     _AGENT_NETWORK_SETUP_NAME_FORMAT = "{0}-network-setup.service"
-    _BINARY_FILE_NAME = "waagent-network-setup.py"
+    BINARY_FILE_NAME = "waagent-network-setup.py"
 
     _FIREWALLD_RUNNING_CMD = ["firewall-cmd", "--state"]
 
@@ -175,7 +175,7 @@ if __name__ == '__main__':
             logger.info("Successfully added and enabled the {0}".format(self._network_setup_service_name))
 
     def __setup_binary_file(self):
-        binary_file_path = os.path.join(conf.get_lib_dir(), self._BINARY_FILE_NAME)
+        binary_file_path = os.path.join(conf.get_lib_dir(), self.BINARY_FILE_NAME)
         try:
             fileutil.write_file(binary_file_path,
                                 self.__BINARY_CONTENTS.format(egg_path=self._current_agent_executable_path,
@@ -194,7 +194,7 @@ if __name__ == '__main__':
 
     def __set_service_unit_file(self):
         service_unit_file = self.get_service_file_path()
-        binary_path = os.path.join(conf.get_lib_dir(), self._BINARY_FILE_NAME)
+        binary_path = os.path.join(conf.get_lib_dir(), self.BINARY_FILE_NAME)
         try:
             fileutil.write_file(service_unit_file,
                                 self.__SERVICE_FILE_CONTENT.format(binary_path=binary_path,

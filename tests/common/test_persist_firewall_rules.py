@@ -86,7 +86,7 @@ class TestPersistFirewallRulesHandler(AgentTestCase):
             osutil.get_service_name())
 
         self._network_service_unit_file = os.path.join(self.__systemd_dir, self._expected_service_name)
-        self._binary_file = os.path.join(conf.get_lib_dir(), PersistFirewallRulesHandler._BINARY_FILE_NAME)
+        self._binary_file = os.path.join(conf.get_lib_dir(), PersistFirewallRulesHandler.BINARY_FILE_NAME)
 
         # Just for these tests, ignoring the mode of mkdir to allow non-sudo tests
         orig_mkdir = fileutil.mkdir
