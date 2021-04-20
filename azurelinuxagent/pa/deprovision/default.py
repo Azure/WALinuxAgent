@@ -263,5 +263,6 @@ class DeprovisionHandler(object):
     @staticmethod
     def del_persist_firewall_rules(actions):
         agent_network_service_path = PersistFirewallRulesHandler.get_service_file_path()
-        actions.append(DeprovisionAction(fileutil.rm_files, [agent_network_service_path]))
-        actions.append(DeprovisionAction(fileutil.rm_dirs, ["{0}.d".format(agent_network_service_path)]))
+        actions.append(DeprovisionAction(fileutil.rm_files,
+                                         [agent_network_service_path, os.path.join(conf.get_lib_dir(),
+                                          PersistFirewallRulesHandler.BINARY_FILE_NAME)]))
