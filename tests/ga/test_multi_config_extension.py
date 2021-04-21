@@ -201,6 +201,51 @@ class TestMultiConfigExtensions(AgentTestCase):
                 and handler['runtimeSettingsStatus']['extensionName'] == ext_name for
                 handler in handlers), "Extension status found")
 
+    @contextlib.contextmanager
+    def __setup_generic_test_env(self):
+        self.test_data['ext_conf'] = os.path.join(self._MULTI_CONFIG_TEST_DATA,
+                                                  "ext_conf_multi_config_no_dependencies.xml")
+
+        first_ext = extension_emulator(name="OSTCExtensions.ExampleHandlerLinux.firstExtension")
+        second_ext = extension_emulator(name="OSTCExtensions.ExampleHandlerLinux.secondExtension")
+        third_ext = extension_emulator(name="OSTCExtensions.ExampleHandlerLinux.thirdExtension")
+        fourth_ext = extension_emulator(name="Microsoft.Powershell.ExampleExtension")
+
+        with self._setup_test_env() as (exthandlers_handler, protocol, no_of_extensions):
+            with enable_invocations(first_ext, second_ext, third_ext, fourth_ext) as invocation_record:
+                exthandlers_handler.run()
+                self.assertEqual(no_of_extensions,
+                                 len(protocol.aggregate_status['aggregateStatus']['handlerAggregateStatus']),
+                                 "incorrect extensions reported")
+                invocation_record.compare(
+                    (first_ext, ExtensionCommandNames.INSTALL),
+                    (first_ext, ExtensionCommandNames.ENABLE),
+                    (second_ext, ExtensionCommandNames.ENABLE),
+                    (third_ext, ExtensionCommandNames.ENABLE),
+                    (fourth_ext, ExtensionCommandNames.INSTALL),
+                    (fourth_ext, ExtensionCommandNames.ENABLE)
+                )
+
+            mc_handlers = self.__assert_and_get_handler_status(aggregate_status=protocol.aggregate_status,
+                                                               handler_name="OSTCExtensions.ExampleHandlerLinux",
+                                                               expected_count=3, status="Ready")
+            expected_extensions = {
+                "firstExtension": {"status": ValidHandlerStatus.success, "seq_no": 1, "message": None},
+                "secondExtension": {"status": ValidHandlerStatus.success, "seq_no": 2, "message": None},
+                "thirdExtension": {"status": ValidHandlerStatus.success, "seq_no": 3, "message": None},
+            }
+            self.__assert_extension_status(mc_handlers, expected_extensions, multi_config=True)
+
+            sc_handler = self.__assert_and_get_handler_status(aggregate_status=protocol.aggregate_status,
+                                                              handler_name="Microsoft.Powershell.ExampleExtension")
+            expected_extensions = {
+                "Microsoft.Powershell.ExampleExtension": {"status": ValidHandlerStatus.success, "seq_no": 9,
+                                                          "message": None}
+            }
+            self.__assert_extension_status(sc_handler, expected_extensions)
+
+            yield exthandlers_handler, protocol, [first_ext, second_ext, third_ext, fourth_ext]
+
     def test_it_should_execute_and_report_multi_config_extensions_properly(self):
         self.test_data['ext_conf'] = os.path.join(self._MULTI_CONFIG_TEST_DATA,
                                                   "ext_conf_multi_config_no_dependencies.xml")
@@ -294,32 +339,10 @@ class TestMultiConfigExtensions(AgentTestCase):
             self.assertFalse(all("runtimeSettingsStatus" in handler for handler in sc_handlers), "Incorrect status")
 
     def test_it_should_not_install_handler_again_if_installed(self):
-        self.test_data['ext_conf'] = os.path.join(self._MULTI_CONFIG_TEST_DATA,
-                                                  "ext_conf_multi_config_no_dependencies.xml")
-        with self._setup_test_env() as (exthandlers_handler, protocol, no_of_extensions):
-            first_ext = extension_emulator(name="OSTCExtensions.ExampleHandlerLinux.firstExtension")
-            second_ext = extension_emulator(name="OSTCExtensions.ExampleHandlerLinux.secondExtension")
-            third_ext = extension_emulator(name="OSTCExtensions.ExampleHandlerLinux.thirdExtension")
-            fourth_ext = extension_emulator(name="Microsoft.Powershell.ExampleExtension")
-            with enable_invocations(first_ext, second_ext, third_ext, fourth_ext) as invocation_record:
-                exthandlers_handler.run()
-                self.assertEqual(no_of_extensions,
-                                 len(protocol.aggregate_status['aggregateStatus']['handlerAggregateStatus']),
-                                 "incorrect extensions reported")
-                invocation_record.compare(
-                    # Should only install once
-                    (first_ext, ExtensionCommandNames.INSTALL),
-                    (first_ext, ExtensionCommandNames.ENABLE),
-                    (second_ext, ExtensionCommandNames.ENABLE),
-                    (third_ext, ExtensionCommandNames.ENABLE),
-                    (fourth_ext, ExtensionCommandNames.INSTALL),
-                    (fourth_ext, ExtensionCommandNames.ENABLE)
-                )
-                self.__assert_and_get_handler_status(aggregate_status=protocol.aggregate_status,
-                                                     handler_name="OSTCExtensions.ExampleHandlerLinux",
-                                                     expected_count=3)
-                self.__assert_and_get_handler_status(aggregate_status=protocol.aggregate_status,
-                                                     handler_name="Microsoft.Powershell.ExampleExtension")
+
+        with self.__setup_generic_test_env() as (_, _, _):
+            # Everything is already asserted in the context manager
+            pass
 
     def test_it_should_retry_handler_installation_per_extension_if_failed(self):
         self.test_data['ext_conf'] = os.path.join(self._MULTI_CONFIG_TEST_DATA,
@@ -360,13 +383,199 @@ class TestMultiConfigExtensions(AgentTestCase):
                 self.assertFalse(all("runtimeSettingsStatus" in handler for handler in sc_handlers), "Incorrect status")
 
     def test_it_should_only_disable_enabled_extensions_on_update(self):
-        raise NotImplementedError
+        with self.__setup_generic_test_env() as (exthandlers_handler, protocol, old_exts):
+
+            # Update extensions
+            self.test_data['ext_conf'] = os.path.join(self._MULTI_CONFIG_TEST_DATA, 'ext_conf_mc_update_extensions.xml')
+            protocol.mock_wire_data = WireProtocolData(self.test_data)
+            protocol.mock_wire_data.set_incarnation(2)
+            protocol.update_goal_state()
+
+            new_version = "1.1.0"
+            new_first_ext = extension_emulator(name="OSTCExtensions.ExampleHandlerLinux.firstExtension", version=new_version)
+            new_second_ext = extension_emulator(name="OSTCExtensions.ExampleHandlerLinux.secondExtension", version=new_version)
+            new_third_ext = extension_emulator(name="OSTCExtensions.ExampleHandlerLinux.thirdExtension", version=new_version)
+            new_fourth_ext = extension_emulator(name="Microsoft.Powershell.ExampleExtension", version=new_version)
+            with enable_invocations(new_first_ext, new_second_ext, new_third_ext, new_fourth_ext, *old_exts) as invocation_record:
+                exthandlers_handler.run()
+                old_first, old_second, old_third, old_fourth = old_exts
+                invocation_record.compare(
+                    # Disable all enabled commands for MC before updating the Handler
+                    (old_first, ExtensionCommandNames.DISABLE),
+                    (old_second, ExtensionCommandNames.DISABLE),
+                    (old_third, ExtensionCommandNames.DISABLE),
+                    (new_first_ext, ExtensionCommandNames.UPDATE),
+                    (old_first, ExtensionCommandNames.UNINSTALL),
+                    (new_first_ext, ExtensionCommandNames.INSTALL),
+                    # No enable for First and Second extension as their state is Disabled in GoalState,
+                    # only enabled the ThirdExtension
+                    (new_third_ext, ExtensionCommandNames.ENABLE),
+                    # Follow the normal update pattern for Single config handlers
+                    (old_fourth, ExtensionCommandNames.DISABLE),
+                    (new_fourth_ext, ExtensionCommandNames.UPDATE),
+                    (old_fourth, ExtensionCommandNames.UNINSTALL),
+                    (new_fourth_ext, ExtensionCommandNames.INSTALL),
+                    (new_fourth_ext, ExtensionCommandNames.ENABLE)
+                )
+
+            mc_handlers = self.__assert_and_get_handler_status(aggregate_status=protocol.aggregate_status,
+                                                 handler_name="OSTCExtensions.ExampleHandlerLinux",
+                                                 expected_count=1, handler_version=new_version)
+            expected_extensions = {
+                "thirdExtension": {"status": ValidHandlerStatus.success, "seq_no": 99, "message": None}
+            }
+            self.__assert_extension_status(mc_handlers, expected_extensions, multi_config=True)
+            self.__assert_and_get_handler_status(aggregate_status=protocol.aggregate_status, handler_version=new_version,
+                                                 handler_name="Microsoft.Powershell.ExampleExtension")
+
+    def test_it_should_retry_update_sequence_per_extension_if_previous_failed(self):
+        with self.__setup_generic_test_env() as (exthandlers_handler, protocol, old_exts):
+            # Update extensions
+            self.test_data['ext_conf'] = os.path.join(self._MULTI_CONFIG_TEST_DATA, 'ext_conf_mc_update_extensions.xml')
+            protocol.mock_wire_data = WireProtocolData(self.test_data)
+            protocol.mock_wire_data.set_incarnation(2)
+            protocol.update_goal_state()
+
+            new_version = "1.1.0"
+            _, fail_action = Actions.generate_unique_fail()
+            # Fail Uninstall of the secondExtension
+            old_exts[1] = extension_emulator(name="OSTCExtensions.ExampleHandlerLinux.secondExtension",
+                                             uninstall_action=fail_action)
+            # Fail update of the first extension
+            new_first_ext = extension_emulator(name="OSTCExtensions.ExampleHandlerLinux.firstExtension",
+                                               version=new_version, update_action=fail_action)
+            new_second_ext = extension_emulator(name="OSTCExtensions.ExampleHandlerLinux.secondExtension",
+                                                version=new_version)
+            new_third_ext = extension_emulator(name="OSTCExtensions.ExampleHandlerLinux.thirdExtension",
+                                               version=new_version)
+            new_fourth_ext = extension_emulator(name="Microsoft.Powershell.ExampleExtension", version=new_version)
+
+            with enable_invocations(new_first_ext, new_second_ext, new_third_ext, new_fourth_ext,
+                                    *old_exts) as invocation_record:
+                exthandlers_handler.run()
+                old_first, old_second, old_third, old_fourth = old_exts
+                invocation_record.compare(
+                    # Disable all enabled commands for MC before updating the Handler
+                    (old_first, ExtensionCommandNames.DISABLE),
+                    (old_second, ExtensionCommandNames.DISABLE),
+                    (old_third, ExtensionCommandNames.DISABLE),
+                    (new_first_ext, ExtensionCommandNames.UPDATE),
+                    # Since the extensions have been disabled before, we won't disable them again for Update scenario
+                    (new_second_ext, ExtensionCommandNames.UPDATE),
+                    (old_second, ExtensionCommandNames.UNINSTALL),
+                    (new_third_ext, ExtensionCommandNames.UPDATE),
+                    (old_third, ExtensionCommandNames.UNINSTALL),
+                    (new_third_ext, ExtensionCommandNames.INSTALL),
+                    # No enable for First and Second extension as their state is Disabled in GoalState,
+                    # only enabled the ThirdExtension
+                    (new_third_ext, ExtensionCommandNames.ENABLE),
+                    # Follow the normal update pattern for Single config handlers
+                    (old_fourth, ExtensionCommandNames.DISABLE),
+                    (new_fourth_ext, ExtensionCommandNames.UPDATE),
+                    (old_fourth, ExtensionCommandNames.UNINSTALL),
+                    (new_fourth_ext, ExtensionCommandNames.INSTALL),
+                    (new_fourth_ext, ExtensionCommandNames.ENABLE)
+                )
+
+            # Since firstExtension and secondExtension are Disabled, we won't report their status
+            mc_handlers = self.__assert_and_get_handler_status(aggregate_status=protocol.aggregate_status,
+                                                               handler_name="OSTCExtensions.ExampleHandlerLinux",
+                                                               expected_count=1, handler_version=new_version)
+            expected_extensions = {
+                "thirdExtension": {"status": ValidHandlerStatus.success, "seq_no": 99, "message": None}
+            }
+            self.__assert_extension_status(mc_handlers, expected_extensions, multi_config=True)
+            sc_handler = self.__assert_and_get_handler_status(aggregate_status=protocol.aggregate_status,
+                                                              handler_version=new_version,
+                                                              handler_name="Microsoft.Powershell.ExampleExtension")
+            expected_extensions = {
+                "Microsoft.Powershell.ExampleExtension": {"status": ValidHandlerStatus.success, "seq_no": 10,
+                                                          "message": None}
+            }
+            self.__assert_extension_status(sc_handler, expected_extensions)
 
     def test_it_should_report_disabled_extension_errors_if_failed(self):
-        raise NotImplementedError
+        with self.__setup_generic_test_env() as (exthandlers_handler, protocol, old_exts):
+            # Update extensions
+            self.test_data['ext_conf'] = os.path.join(self._MULTI_CONFIG_TEST_DATA, 'ext_conf_mc_update_extensions.xml')
+            protocol.mock_wire_data = WireProtocolData(self.test_data)
+            protocol.mock_wire_data.set_incarnation(2)
+            protocol.update_goal_state()
+
+            new_version = "1.1.0"
+            fail_code, fail_action = Actions.generate_unique_fail()
+            # Fail Uninstall of the secondExtension
+            old_exts[0] = extension_emulator(name="OSTCExtensions.ExampleHandlerLinux.firstExtension",
+                                             disable_action=fail_action)
+            # Fail update of the first extension
+            new_first_ext = extension_emulator(name="OSTCExtensions.ExampleHandlerLinux.firstExtension",
+                                               version=new_version)
+            new_second_ext = extension_emulator(name="OSTCExtensions.ExampleHandlerLinux.secondExtension",
+                                                version=new_version)
+            new_third_ext = extension_emulator(name="OSTCExtensions.ExampleHandlerLinux.thirdExtension",
+                                               version=new_version)
+            new_fourth_ext = extension_emulator(name="Microsoft.Powershell.ExampleExtension", version=new_version)
+
+            with enable_invocations(new_first_ext, new_second_ext, new_third_ext, new_fourth_ext,
+                                    *old_exts) as invocation_record:
+                exthandlers_handler.run()
+                old_first, old_second, old_third, old_fourth = old_exts
+                invocation_record.compare(
+                    # Disable for firstExtension should fail 3 times, i.e., once per extension which tries to update the Handler
+                    (old_first, ExtensionCommandNames.DISABLE),
+                    (old_first, ExtensionCommandNames.DISABLE),
+                    (old_first, ExtensionCommandNames.DISABLE),
+                    # Since Disable fails for the firstExtension and continueOnUpdate = False, Update should not go through
+                    # Follow the normal update pattern for Single config handlers
+                    (old_fourth, ExtensionCommandNames.DISABLE),
+                    (new_fourth_ext, ExtensionCommandNames.UPDATE),
+                    (old_fourth, ExtensionCommandNames.UNINSTALL),
+                    (new_fourth_ext, ExtensionCommandNames.INSTALL),
+                    (new_fourth_ext, ExtensionCommandNames.ENABLE)
+                )
+
+            # Since firstExtension and secondExtension are Disabled, we won't report their status
+            mc_handlers = self.__assert_and_get_handler_status(aggregate_status=protocol.aggregate_status,
+                                                               handler_name="OSTCExtensions.ExampleHandlerLinux",
+                                                               expected_count=1, handler_version=new_version,
+                                                               status="NotReady", message=fail_code)
+            expected_extensions = {
+                "thirdExtension": {"status": ValidHandlerStatus.error, "seq_no": 99, "message": fail_code}
+            }
+            self.__assert_extension_status(mc_handlers, expected_extensions, multi_config=True)
+            sc_handler = self.__assert_and_get_handler_status(aggregate_status=protocol.aggregate_status,
+                                                              handler_version=new_version,
+                                                              handler_name="Microsoft.Powershell.ExampleExtension")
+            expected_extensions = {
+                "Microsoft.Powershell.ExampleExtension": {"status": ValidHandlerStatus.success, "seq_no": 10,
+                                                          "message": None}
+            }
+            self.__assert_extension_status(sc_handler, expected_extensions)
 
     def test_it_should_report_extension_status_properly(self):
-        raise NotImplementedError
+        self.test_data['ext_conf'] = os.path.join(self._MULTI_CONFIG_TEST_DATA,
+                                                  "ext_conf_multi_config_no_dependencies.xml")
+        with self._setup_test_env() as (exthandlers_handler, protocol, no_of_extensions):
+            exthandlers_handler.run()
+            self.assertEqual(no_of_extensions,
+                             len(protocol.aggregate_status['aggregateStatus']['handlerAggregateStatus']),
+                             "incorrect extensions reported")
+            mc_handlers = self.__assert_and_get_handler_status(aggregate_status=protocol.aggregate_status,
+                                                               handler_name="OSTCExtensions.ExampleHandlerLinux",
+                                                               expected_count=3)
+            expected_extensions = {
+                "firstExtension": {"status": ValidHandlerStatus.success, "seq_no": 1, "message": "Enabling firstExtension"},
+                "secondExtension": {"status": ValidHandlerStatus.success, "seq_no": 2, "message": "Enabling secondExtension"},
+                "thirdExtension": {"status": ValidHandlerStatus.success, "seq_no": 3, "message": "Enabling thirdExtension"},
+            }
+            self.__assert_extension_status(mc_handlers, expected_extensions, multi_config=True)
+            sc_handler = self.__assert_and_get_handler_status(aggregate_status=protocol.aggregate_status,
+                                                              handler_name="Microsoft.Powershell.ExampleExtension")
+            expected_extensions = {
+                "Microsoft.Powershell.ExampleExtension": {"status": ValidHandlerStatus.success, "seq_no": 9,
+                                                          "message": "Enabling SingleConfig extension"}
+            }
+            self.__assert_extension_status(sc_handler, expected_extensions)
 
     def test_it_should_handle_install_failures_properly(self):
         raise NotImplementedError

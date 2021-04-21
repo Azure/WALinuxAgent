@@ -155,7 +155,7 @@ class InvocationRecord:
 
             except IndexError:
                 raise Exception("No more invocations recorded. Expected ({0}, {1}, {2}).".format(expected_ext_emulator.name,
-                    expected_ext_emulator.version, command_name))
+                                expected_ext_emulator.version, command_name))
         
         if self._queue:
             raise Exception("Invocation recorded, but not expected: ({0}, {1}, {2})".format(
