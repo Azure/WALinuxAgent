@@ -100,9 +100,9 @@ class ExtHandlerRequestedState(object):
     CRP only supports 2 states as of now - Enabled and Uninstall
     Disabled was used for older XML extensions and we keep it to support backward compatibility.
     """
-    Enabled = u"enabled"
-    Disabled = u"disabled"
-    Uninstall = u"uninstall"
+    Enabled = ustr("enabled")
+    Disabled = ustr("disabled")
+    Uninstall = ustr("uninstall")
 
 
 class Extension(DataContract):

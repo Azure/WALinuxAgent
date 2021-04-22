@@ -675,7 +675,9 @@ class ExtensionsConfig(object):
             runtime_settings = json.loads(gettext(settings_node))
         except ValueError as error:
             logger.error("Invalid extension settings: {0}", ustr(error))
-            # Todo: Incase of invalid/no settings, should we add the name/seqNo?
+            # Incase of invalid/no settings, add the name and seqNo of the Extension and treat it as an extension with
+            # no settings since we were able to successfully parse those data properly. Without this, we wont report
+            # anything for that sequence number and CRP would eventually have to timeout rather than fail fast.
             ext_handler.properties.extensions.append(
                 Extension(name=name, sequenceNumber=seq_no, state=state, dependencyLevel=depends_on_level))
             return

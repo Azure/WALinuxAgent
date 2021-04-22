@@ -776,7 +776,7 @@ class TestMultiConfigExtensions(AgentTestCase):
                     "secondExtension": {"status": ValidHandlerStatus.success, "seq_no": 2, "message": "Enabling secondExtension"},
                     "thirdExtension": {"status": ValidHandlerStatus.success, "seq_no": 3, "message": "Enabling thirdExtension"},
                 }
-                self.__assert_extension_status(mc_handlers.copy(), expected_extensions, multi_config=True)
+                self.__assert_extension_status(mc_handlers[:], expected_extensions, multi_config=True)
 
                 sc_handler = self.__assert_and_get_handler_status(aggregate_status=protocol.aggregate_status,
                                                                   handler_name="Microsoft.Powershell.ExampleExtension")
@@ -784,7 +784,7 @@ class TestMultiConfigExtensions(AgentTestCase):
                     "Microsoft.Powershell.ExampleExtension": {"status": ValidHandlerStatus.success, "seq_no": 9,
                                                               "message": "Enabling SingleConfig extension"}
                 }
-                self.__assert_extension_status(sc_handler.copy(), expected_extensions)
+                self.__assert_extension_status(sc_handler[:], expected_extensions)
 
                 # Ensure we dont create a placeholder for Install command
                 self.assertTrue(
