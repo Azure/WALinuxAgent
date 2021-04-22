@@ -524,7 +524,7 @@ class TestMultiConfigExtensions(AgentTestCase):
             with enable_invocations(new_first_ext, new_second_ext, new_third_ext, new_fourth_ext,
                                     *old_exts) as invocation_record:
                 exthandlers_handler.run()
-                old_first, old_second, old_third, old_fourth = old_exts
+                old_first, _, _, old_fourth = old_exts
                 invocation_record.compare(
                     # Disable for firstExtension should fail 3 times, i.e., once per extension which tries to update the Handler
                     (old_first, ExtensionCommandNames.DISABLE),
@@ -640,7 +640,7 @@ class TestMultiConfigExtensions(AgentTestCase):
                 for ext_name in not_present:
                     self.assertNotIn("{0}.HandlerState".format(ext_name), config_files, "Wrongful state found")
 
-        with self.__setup_generic_test_env() as (ext_handler, protocol, exts):
+        with self.__setup_generic_test_env() as (ext_handler, protocol, _):
             __assert_state_file("OSTCExtensions.ExampleHandlerLinux", "1.0.0",
                                 ["firstExtension.1", "secondExtension.2", "thirdExtension.3"], ExtensionState.Enabled)
 
@@ -691,7 +691,7 @@ class TestMultiConfigExtensions(AgentTestCase):
 
         def mock_popen(cmd, *_, **kwargs):
             if 'env' in kwargs:
-                handler_name, handler_version, command_name = extract_extension_info_from_command(cmd)
+                handler_name, _, _ = extract_extension_info_from_command(cmd)
                 name = handler_name
                 if ExtCommandEnvVariable.ExtensionName in kwargs['env']:
                     name = "{0}.{1}".format(handler_name, kwargs['env'][ExtCommandEnvVariable.ExtensionName])
