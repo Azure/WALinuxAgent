@@ -72,7 +72,7 @@ class TestMultiConfigExtensionsConfigParsing(AgentTestCase):
 
     def _get_mock_expected_handler_data(self, rc_extensions, vmaccess_extensions, geneva_extensions):
         # Set expected handler data
-        run_command_test_handler = self._TestExtHandlerObject("Microsoft.CPlat.Core.RunCommandHandlerWindows", "2.0.2")
+        run_command_test_handler = self._TestExtHandlerObject("Microsoft.CPlat.Core.RunCommandHandlerWindows", "2.3.0")
         run_command_test_handler.extensions.update(rc_extensions)
 
         vm_access_test_handler = self._TestExtHandlerObject("Microsoft.Compute.VMAccessAgent", "2.4.7")
