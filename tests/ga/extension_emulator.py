@@ -272,7 +272,7 @@ def generate_patched_popen(invocation_record, *emulators):
     def patched_popen(cmd, *args, **kwargs):
 
         try:
-            handler_name, handler_version, command_name = _extract_extension_info_from_command(cmd)
+            handler_name, handler_version, command_name = extract_extension_info_from_command(cmd)
         except ValueError:
             return original_popen(cmd, *args, **kwargs)
         
@@ -332,7 +332,7 @@ def generate_mock_load_manifest(*emulators):
     return mock_load_manifest
 
 
-def _extract_extension_info_from_command(command):
+def extract_extension_info_from_command(command):
     """
     Parse a command into a tuple of extension info.
     """

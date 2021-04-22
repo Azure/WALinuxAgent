@@ -71,7 +71,7 @@
   "runtimeSettings": [
     {
       "handlerSettings": {
-        "publicSettings": {"fileUris":["https://test.blob.core.windows.net/windowsagent/VerifyAgentRunning.ps1"],"commandToExecute":"echo Hello 1234"}
+        "publicSettings": {"message": "Enabling SingleConfig Extension"}
       }
     }
   ]
