@@ -691,7 +691,7 @@ class TestMultiConfigExtensions(AgentTestCase):
 
         def mock_popen(cmd, *_, **kwargs):
             if 'env' in kwargs:
-                handler_name, _, _ = extract_extension_info_from_command(cmd)
+                handler_name, __, __ = extract_extension_info_from_command(cmd)
                 name = handler_name
                 if ExtCommandEnvVariable.ExtensionName in kwargs['env']:
                     name = "{0}.{1}".format(handler_name, kwargs['env'][ExtCommandEnvVariable.ExtensionName])
