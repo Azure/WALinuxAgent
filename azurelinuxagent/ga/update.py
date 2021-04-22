@@ -1029,7 +1029,7 @@ class GuestAgent(object):
         try:
             is_healthy = True
             error_response = ''
-            resp = restutil.http_get(uri, use_proxy=use_proxy, headers=headers)
+            resp = restutil.http_get(uri, use_proxy=use_proxy, headers=headers, max_retry=1)
             if restutil.request_succeeded(resp):
                 package = resp.read()
                 fileutil.write_file(self.get_agent_pkg_path(),

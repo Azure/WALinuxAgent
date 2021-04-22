@@ -160,11 +160,11 @@ class WireProtocol(DataContract):
     def _download_ext_handler_pkg_through_host(self, uri, destination):
         host = self.client.get_host_plugin()
         uri, headers = host.get_artifact_request(uri, host.manifest_uri)
-        success = self.client.stream(uri, destination, headers=headers, use_proxy=False)
+        success = self.client.stream(uri, destination, headers=headers, use_proxy=False, max_retry=1)
         return success
 
     def download_ext_handler_pkg(self, uri, destination, headers=None, use_proxy=True):  # pylint: disable=W0613
-        direct_func = lambda: self.client.stream(uri, destination, headers=None, use_proxy=True)
+        direct_func = lambda: self.client.stream(uri, destination, headers=None, use_proxy=True, max_retry=1)
         # NOTE: the host_func may be called after refreshing the goal state, be careful about any goal state data
         # in the lambda.
         host_func = lambda: self._download_ext_handler_pkg_through_host(uri, destination)
@@ -643,7 +643,7 @@ class WireClient(object):
     def fetch_manifest_through_host(self, uri):
         host = self.get_host_plugin()
         uri, headers = host.get_artifact_request(uri)
-        response = self.fetch(uri, headers, use_proxy=False)
+        response = self.fetch(uri, headers, use_proxy=False, max_retry=1)
         return response
 
     def fetch_manifest(self, version_uris, timeout_in_minutes=5, timeout_in_ms=0):
@@ -666,7 +666,7 @@ class WireClient(object):
                 logger.verbose('The specified manifest URL is empty, ignored.')
                 continue
 
-            direct_func = lambda: self.fetch(version.uri)  # pylint: disable=W0640
+            direct_func = lambda: self.fetch(version.uri, max_retry=1)  # pylint: disable=W0640
             # NOTE: the host_func may be called after refreshing the goal state, be careful about any goal state data
             # in the lambda.
             host_func = lambda: self.fetch_manifest_through_host(version.uri)  # pylint: disable=W0640
@@ -684,11 +684,14 @@ class WireClient(object):
 
         raise ExtensionDownloadError("Failed to fetch manifest from all sources")
 
-    def stream(self, uri, destination, headers=None, use_proxy=None):
+    def stream(self, uri, destination, headers=None, use_proxy=None, max_retry=None):
+        """
+        max_retry indicates the maximum number of retries for the HTTP request; None indicates that the default value should be used
+        """
         success = False
         logger.verbose("Fetch [{0}] with headers [{1}] to file [{2}]", uri, headers, destination)
 
-        response = self._fetch_response(uri, headers, use_proxy)
+        response = self._fetch_response(uri, headers, use_proxy,  max_retry=max_retry)
         if response is not None and not restutil.request_failed(response):
             chunk_size = 1024 * 1024  # 1MB buffer
             try:
@@ -704,23 +707,30 @@ class WireClient(object):
 
         return success
 
-    def fetch(self, uri, headers=None, use_proxy=None, decode=True):
+    def fetch(self, uri, headers=None, use_proxy=None, decode=True, max_retry=None):
+        """
+        max_retry indicates the maximum number of retries for the HTTP request; None indicates that the default value should be used
+        """
         logger.verbose("Fetch [{0}] with headers [{1}]", uri, headers)
         content = None
-        response = self._fetch_response(uri, headers, use_proxy)
+        response = self._fetch_response(uri, headers, use_proxy, max_retry=max_retry)
         if response is not None and not restutil.request_failed(response):
             response_content = response.read()
             content = self.decode_config(response_content) if decode else response_content
         return content
 
-    def _fetch_response(self, uri, headers=None, use_proxy=None):
+    def _fetch_response(self, uri, headers=None, use_proxy=None, max_retry=None):
+        """
+        max_retry indicates the maximum number of retries for the HTTP request; None indicates that the default value should be used
+        """
         resp = None
         try:
             resp = self.call_storage_service(
                 restutil.http_get,
                 uri,
                 headers=headers,
-                use_proxy=use_proxy)
+                use_proxy=use_proxy,
+                max_retry=max_retry)
 
             host_plugin = self.get_host_plugin()
 

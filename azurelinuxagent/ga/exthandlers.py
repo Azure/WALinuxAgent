@@ -67,7 +67,7 @@ HANDLER_COMPLETE_NAME_PATTERN = re.compile(_HANDLER_PATTERN + r'$', re.IGNORECAS
 HANDLER_PKG_EXT = ".zip"
 
 AGENT_STATUS_FILE = "waagent_status.json"
-NUMBER_OF_DOWNLOAD_RETRIES = 5
+NUMBER_OF_DOWNLOAD_RETRIES = 2
 
 # This is the default value for the env variables, whenever we call a command which is not an update scenario, we
 # set the env variable value to NOT_RUN to reduce ambiguity for the extension publishers
