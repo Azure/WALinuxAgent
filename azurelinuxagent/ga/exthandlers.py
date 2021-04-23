@@ -820,20 +820,19 @@ class ExtHandlersHandler(object):
     def handle_uninstall(self, ext_handler_i, extension):
         self.log_process = True
         handler_state = ext_handler_i.get_handler_state()
-        ext_handler_i.logger.info("[Uninstall] current handler state is: {0}",
-                                  handler_state.lower())
+        ext_handler_i.logger.info("[Uninstall] current handler state is: {0}", handler_state.lower())
         if handler_state != ExtHandlerState.NotInstalled:
             if handler_state == ExtHandlerState.Enabled:
+                # Corner case - Single config Handler with no extensions at all
+                # If there are no extension settings for Handler, we should just disable the handler
+                if not ext_handler_i.supports_multi_config and not any(ext_handler_i.extensions):
+                    ext_handler_i.disable()
 
                 # If Handler is Enabled, there should be atleast 1 enabled extension for the handler
-                # MultiConfig: Disable all extensions of the handler before uninstalling it
-                if any(ext_handler_i.enabled_extensions):
+                # MultiConfig: Disable all enabled extensions of the handler before uninstalling it
+                elif any(ext_handler_i.enabled_extensions):
                     for enabled_ext in ext_handler_i.enabled_extensions:
                         ext_handler_i.disable(enabled_ext)
-
-                # If there are no extension settings for Handler, we should just disable just the handler
-                else:
-                    ext_handler_i.disable()
 
             # Try uninstalling the extension and swallow any exceptions in case of failures after logging them
             try:
@@ -1395,7 +1394,7 @@ class ExtHandlerInstance(object):
             # Only save extension state if MC supported
             self.__set_extension_state(extension, ExtensionState.Enabled)
 
-    def _disable_extension(self, extension):
+    def _disable_extension(self, extension=None):
         self.set_operation(WALAEventOperation.Disable)
         man = self.load_manifest()
         disable_cmd = man.get_disable_command()
@@ -1408,7 +1407,7 @@ class ExtHandlerInstance(object):
             # MultiConfig: If disable fails, then this wont be cleaned up. Should we forcefully clean it up or let it be?
             self.__remove_extension_state_files(extension)
 
-    def disable(self, extension):
+    def disable(self, extension=None):
         self._disable_extension(extension)
         # For Single config, dont check enabled_extensions because no extension state is maintained.
         # For MultiConfig, Set the handler state to Installed only when all extensions have been disabled

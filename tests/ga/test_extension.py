@@ -791,8 +791,29 @@ class TestExtension(AgentTestCase):
         test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE_EXT_NO_SETTINGS)
         exthandlers_handler, protocol = self._create_mock(test_data, *args)  # pylint: disable=no-value-for-parameter
 
-        exthandlers_handler.run()
-        self._assert_handler_status(protocol.report_vm_status, "Ready", 0, "1.0.0")
+        test_ext = extension_emulator(name="OSTCExtensions.ExampleHandlerLinux")
+        with enable_invocations(test_ext) as invocation_record:
+            exthandlers_handler.run()
+            self._assert_handler_status(protocol.report_vm_status, "Ready", 0, "1.0.0")
+            invocation_record.compare(
+                (test_ext, ExtensionCommandNames.INSTALL),
+                (test_ext, ExtensionCommandNames.ENABLE)
+            )
+
+        # Uninstall the Plugin and make sure
+        test_data.set_incarnation(2)
+        test_data.set_extensions_config_state(ExtHandlerRequestedState.Uninstall)
+        protocol.update_goal_state()
+
+        with enable_invocations(test_ext) as invocation_record:
+            exthandlers_handler.run()
+            self.assertTrue(protocol.report_vm_status.called)
+            args, _ = protocol.report_vm_status.call_args
+            self.assertEqual(0, len(args[0].vmAgent.extensionHandlers))
+            invocation_record.compare(
+                (test_ext, ExtensionCommandNames.DISABLE),
+                (test_ext, ExtensionCommandNames.UNINSTALL)
+            )
 
     def test_ext_handler_no_public_settings(self, *args):
         test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE_EXT_NO_PUBLIC)
