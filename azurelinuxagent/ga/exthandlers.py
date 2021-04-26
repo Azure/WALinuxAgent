@@ -733,10 +733,6 @@ class ExtHandlersHandler(object):
         ext_handler_i.logger.info("{0} requested state: {1}", ext_handler_i.get_extension_full_name(extension),
                                   extension.state)
 
-        if extension.state not in (ExtensionState.Enabled, ExtensionState.Disabled):
-            raise ExtensionConfigError(
-                "Unknown requested state for Extension {0}: {1}".format(extension.name, extension.state))
-
         if extension.state == ExtensionState.Enabled:
             ext_handler_i.enable(extension, uninstall_exit_code=uninstall_exit_code)
         elif extension.state == ExtensionState.Disabled:
@@ -748,6 +744,9 @@ class ExtHandlersHandler(object):
             else:
                 ext_handler_i.logger.info(
                     "{0} already disabled, not doing anything".format(ext_handler_i.get_extension_full_name(extension)))
+        else:
+            raise ExtensionConfigError(
+                "Unknown requested state for Extension {0}: {1}".format(extension.name, extension.state))
 
     @staticmethod
     def _update_extension_handler_and_return_if_failed(old_ext_handler_i, ext_handler_i, extension=None):
