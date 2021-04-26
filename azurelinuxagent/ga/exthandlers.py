@@ -632,10 +632,10 @@ class ExtHandlersHandler(object):
         except MultiConfigExtensionError as error:
             ext_name = ext_handler_i.get_extension_full_name(extension)
             err_msg = "Error processing MultiConfig extension {0}: {1}".format(ext_name, ustr(error))
-            # This error is only thrown for MultiConfig extension operations (enable, disable).
+            # This error is only thrown for enable operation on MultiConfig extension.
             # Since these are maintained by the extensions, the expectation here is that they would update their status files appropriately with their errors.
             # Given the fact that we create a placeholder status file for extensions for enable/disable commands,
-            # we should always have a status file to report, but putting a check in here just in case they're missing.
+            # we should always have a status file to report, but putting a check in here just in case they're missing to fail fast.
             ext_handler_i.create_placeholder_status_file(extension, status=ValidHandlerStatus.error, code=error.code,
                                                          operation=ext_handler_i.operation, message=err_msg)
             add_event(name=ext_name, version=ext_handler.properties.version, op=ext_handler_i.operation,
@@ -737,22 +737,17 @@ class ExtHandlersHandler(object):
             raise ExtensionConfigError(
                 "Unknown requested state for Extension {0}: {1}".format(extension.name, extension.state))
 
-        try:
-            if extension.state == ExtensionState.Enabled:
-                ext_handler_i.enable(extension, uninstall_exit_code=uninstall_exit_code)
-            elif extension.state == ExtensionState.Disabled:
-                # Only disable extension if the requested state == Disabled and current state is != Disabled
-                if ext_handler_i.get_extension_state(extension) != ExtensionState.Disabled:
-                    ext_handler_i.disable(extension)
-                else:
-                    ext_handler_i.logger.info(
-                        "{0} already disabled, not doing anything".format(ext_handler_i.get_extension_full_name(extension)))
-        except ExtensionError as error:
-            if ext_handler_i.should_perform_multi_config_op(extension):
-                msg = "Ran into error when executing [{0}]: {1}".format(ext_handler_i.get_extension_full_name(extension),
-                                                                        ustr(error))
-                raise MultiConfigExtensionError(msg)
-            raise
+        if extension.state == ExtensionState.Enabled:
+            ext_handler_i.enable(extension, uninstall_exit_code=uninstall_exit_code)
+        elif extension.state == ExtensionState.Disabled:
+            # Only disable extension if the requested state == Disabled and current state is != Disabled
+            if ext_handler_i.get_extension_state(extension) != ExtensionState.Disabled:
+                # Extensions can only be disabled for Multi Config extensions. Disable operation for extension is
+                # tantamount to uninstalling Handler so ignoring errors incase of Disable failure and deleting state.
+                ext_handler_i.disable(extension, ignore_error=True)
+            else:
+                ext_handler_i.logger.info(
+                    "{0} already disabled, not doing anything".format(ext_handler_i.get_extension_full_name(extension)))
 
     @staticmethod
     def _update_extension_handler_and_return_if_failed(old_ext_handler_i, ext_handler_i, extension=None):
@@ -1365,7 +1360,14 @@ class ExtHandlerInstance(object):
             fileutil.write_file(status_path, json.dumps(status))
 
     def enable(self, extension=None, uninstall_exit_code=None):
-        self._enable_extension(extension, uninstall_exit_code)
+        try:
+            self._enable_extension(extension, uninstall_exit_code)
+        except ExtensionError as error:
+            if self.should_perform_multi_config_op(extension):
+                msg = "Ran into error when executing [{0}]: {1}".format(self.get_extension_full_name(extension),
+                                                                        ustr(error))
+                raise MultiConfigExtensionError(msg)
+            raise
         # Even if a single extension is enabled for this handler, set the Handler state as Enabled
         self.set_handler_state(ExtHandlerState.Enabled)
         self.set_handler_status(status="Ready", message="Plugin enabled")
@@ -1403,12 +1405,22 @@ class ExtHandlerInstance(object):
                             extension_error_code=ExtensionErrorCodes.PluginDisableProcessingFailed,
                             extension=extension)
 
+    def disable(self, extension=None, ignore_error=False):
+        try:
+            self._disable_extension(extension)
+        except ExtensionError as error:
+            if not ignore_error:
+                raise
+
+            self.logger.info("[Ignored Error] Ran into error disabling extension {0}:{1}".format(
+                    self.get_extension_full_name(extension), ustr(error)))
+            self.report_event(name=self.get_extension_full_name(extension), message=ustr(error), is_success=False,
+                              log_event=False)
+
+        # Clean extension state For Multi Config extensions on Disable
         if self.should_perform_multi_config_op(extension):
-            # MultiConfig: If disable fails, then this wont be cleaned up. Should we forcefully clean it up or let it be?
             self.__remove_extension_state_files(extension)
 
-    def disable(self, extension=None):
-        self._disable_extension(extension)
         # For Single config, dont check enabled_extensions because no extension state is maintained.
         # For MultiConfig, Set the handler state to Installed only when all extensions have been disabled
         if not self.supports_multi_config or not any(self.enabled_extensions):
@@ -1980,13 +1992,6 @@ class ExtHandlerInstance(object):
             message = "Failed to remove extension state files for {0}: {1}".format(extension_name, ustr(error))
             self.report_event(name=extension_name, message=message, is_success=False, log_event=False)
             self.logger.warn(message)
-
-    # def set_extension_status(self, extension, status="NotReady", message="", code=0):
-    #     # Todo: I'm currently unsure on how CRP parses the status, does it parse by HandlerName and version? Or can
-    #     #  I set the full extension name when reporting the status for that extension?
-    #     #  Windows only sets the Handler name always, copying that until I know more.
-    #     self.__set_status(self.__get_state_file_name(extension, state_type=StateFileNames.HandlerStatus), status,
-    #                       message, code)
 
     def set_handler_status(self, status="NotReady", message="", code=0):
         self.__set_status(StateFileNames.HandlerStatus, status, message, code)

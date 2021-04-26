@@ -337,7 +337,7 @@ def extract_extension_info_from_command(command):
     Parse a command into a tuple of extension info.
     """
     if not isinstance(command, (str, ustr)):
-        raise Exception("Cannot extract extension info from non-string commands")
+        raise ValueError("Cannot extract extension info from non-string commands")
 
     # Group layout of the expected command; this lets us grab what we want after a match
     template = r'(?<={base_dir}/)(?P<name>{ext_name})-(?P<ver>{ext_ver})(?:/{script_file} -)(?P<cmd>{ext_cmd})'

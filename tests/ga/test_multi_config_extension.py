@@ -10,7 +10,7 @@ from azurelinuxagent.common.exception import GoalStateAggregateStatusCodes
 from azurelinuxagent.common.protocol.restapi import ExtHandlerRequestedState, ExtensionState, ExtensionStatus
 from azurelinuxagent.common.utils import fileutil
 from azurelinuxagent.ga.exthandlers import get_exthandlers_handler, ValidHandlerStatus, ExtCommandEnvVariable, \
-    parse_ext_status, GoalStateStatus
+    parse_ext_status, GoalStateStatus, ExtHandlerInstance
 from tests.ga.extension_emulator import enable_invocations, extension_emulator, ExtensionCommandNames, Actions, \
     extract_extension_info_from_command
 from tests.protocol.mocks import mock_wire_protocol, HttpRequestPredicates, MockHttpResponse
@@ -206,6 +206,63 @@ class TestMultiConfigExtensions(AgentTestCase):
                 and handler['runtimeSettingsStatus']['extensionName'] == ext_name for
                 handler in handlers), "Extension status found")
 
+    def __run_and_assert_generic_case(self, exthandlers_handler, protocol, no_of_extensions, with_message=True):
+
+        def get_message(msg):
+            return msg if with_message else None
+
+        exthandlers_handler.run()
+        self.assertEqual(no_of_extensions,
+                         len(protocol.aggregate_status['aggregateStatus']['handlerAggregateStatus']),
+                         "incorrect extensions reported")
+        mc_handlers = self.__assert_and_get_handler_status(aggregate_status=protocol.aggregate_status,
+                                                           handler_name="OSTCExtensions.ExampleHandlerLinux",
+                                                           expected_count=3)
+        expected_extensions = {
+            "firstExtension": {"status": ValidHandlerStatus.success, "seq_no": 1,
+                               "message": get_message("Enabling firstExtension")},
+            "secondExtension": {"status": ValidHandlerStatus.success, "seq_no": 2,
+                                "message": get_message("Enabling secondExtension")},
+            "thirdExtension": {"status": ValidHandlerStatus.success, "seq_no": 3,
+                               "message": get_message("Enabling thirdExtension")},
+        }
+        self.__assert_extension_status(mc_handlers[:], expected_extensions, multi_config=True)
+
+        sc_handler = self.__assert_and_get_handler_status(aggregate_status=protocol.aggregate_status,
+                                                          handler_name="Microsoft.Powershell.ExampleExtension")
+        expected_extensions = {
+            "Microsoft.Powershell.ExampleExtension": {"status": ValidHandlerStatus.success, "seq_no": 9,
+                                                      "message": get_message("Enabling SingleConfig extension")}
+        }
+        self.__assert_extension_status(sc_handler[:], expected_extensions)
+        return mc_handlers, sc_handler
+
+    def __setup_and_assert_disable_scenario(self, exthandlers_handler, protocol):
+        self.test_data['ext_conf'] = os.path.join(self._MULTI_CONFIG_TEST_DATA, 'ext_conf_mc_disabled_extensions.xml')
+        protocol.mock_wire_data = WireProtocolData(self.test_data)
+        protocol.mock_wire_data.set_incarnation(2)
+        protocol.update_goal_state()
+        exthandlers_handler.run()
+
+        mc_handlers = self.__assert_and_get_handler_status(aggregate_status=protocol.aggregate_status,
+                                                           handler_name="OSTCExtensions.ExampleHandlerLinux",
+                                                           status="Ready", expected_count=2)
+        expected_extensions = {
+            "thirdExtension": {"status": ValidHandlerStatus.success, "seq_no": 99, "message": None},
+            "fourthExtension": {"status": ValidHandlerStatus.success, "seq_no": 101, "message": None},
+        }
+        self.__assert_extension_not_present(mc_handlers[:], ["firstExtension", "secondExtension"])
+        self.__assert_extension_status(mc_handlers[:], expected_extensions, multi_config=True)
+        sc_handler = self.__assert_and_get_handler_status(aggregate_status=protocol.aggregate_status,
+                                                          handler_name="Microsoft.Powershell.ExampleExtension",
+                                                          status="Ready")
+        expected_extensions = {
+            "Microsoft.Powershell.ExampleExtension": {"status": ValidHandlerStatus.success, "seq_no": 10,
+                                                      "message": None}
+        }
+        self.__assert_extension_status(sc_handler[:], expected_extensions)
+        return mc_handlers, sc_handler
+
     @contextlib.contextmanager
     def __setup_generic_test_env(self):
         self.test_data['ext_conf'] = os.path.join(self._MULTI_CONFIG_TEST_DATA,
@@ -231,24 +288,7 @@ class TestMultiConfigExtensions(AgentTestCase):
                     (fourth_ext, ExtensionCommandNames.ENABLE)
                 )
 
-            mc_handlers = self.__assert_and_get_handler_status(aggregate_status=protocol.aggregate_status,
-                                                               handler_name="OSTCExtensions.ExampleHandlerLinux",
-                                                               expected_count=3, status="Ready")
-            expected_extensions = {
-                "firstExtension": {"status": ValidHandlerStatus.success, "seq_no": 1, "message": None},
-                "secondExtension": {"status": ValidHandlerStatus.success, "seq_no": 2, "message": None},
-                "thirdExtension": {"status": ValidHandlerStatus.success, "seq_no": 3, "message": None},
-            }
-            self.__assert_extension_status(mc_handlers, expected_extensions, multi_config=True)
-
-            sc_handler = self.__assert_and_get_handler_status(aggregate_status=protocol.aggregate_status,
-                                                              handler_name="Microsoft.Powershell.ExampleExtension")
-            expected_extensions = {
-                "Microsoft.Powershell.ExampleExtension": {"status": ValidHandlerStatus.success, "seq_no": 9,
-                                                          "message": None}
-            }
-            self.__assert_extension_status(sc_handler, expected_extensions)
-
+            self.__run_and_assert_generic_case(exthandlers_handler, protocol, no_of_extensions, with_message=False)
             yield exthandlers_handler, protocol, [first_ext, second_ext, third_ext, fourth_ext]
 
     def test_it_should_execute_and_report_multi_config_extensions_properly(self):
@@ -257,52 +297,10 @@ class TestMultiConfigExtensions(AgentTestCase):
         with self._setup_test_env() as (exthandlers_handler, protocol, no_of_extensions):
 
             # Case 1: Install and enable Single and MultiConfig extensions
-            exthandlers_handler.run()
-            self.assertEqual(no_of_extensions,
-                             len(protocol.aggregate_status['aggregateStatus']['handlerAggregateStatus']),
-                             "incorrect extensions reported")
-            mc_handlers = self.__assert_and_get_handler_status(aggregate_status=protocol.aggregate_status,
-                                                               handler_name="OSTCExtensions.ExampleHandlerLinux",
-                                                               status="Ready", expected_count=3)
-            expected_extensions = {
-                "firstExtension": {"status": ValidHandlerStatus.success, "seq_no": 1, "message": None},
-                "secondExtension": {"status": ValidHandlerStatus.success, "seq_no": 2, "message": None},
-                "thirdExtension": {"status": ValidHandlerStatus.success, "seq_no": 3, "message": None},
-            }
-            self.__assert_extension_status(mc_handlers, expected_extensions, multi_config=True)
-            sc_handler = self.__assert_and_get_handler_status(aggregate_status=protocol.aggregate_status,
-                                                              handler_name="Microsoft.Powershell.ExampleExtension",
-                                                              status="Ready")
-            expected_extensions = {
-                "Microsoft.Powershell.ExampleExtension": {"status": ValidHandlerStatus.success, "seq_no": 9,
-                                                          "message": None}
-            }
-            self.__assert_extension_status(sc_handler, expected_extensions)
+            self.__run_and_assert_generic_case(exthandlers_handler, protocol, no_of_extensions)
 
             # Case 2: Disable 2 multi-config extensions and add another for enable
-            self.test_data['ext_conf'] = os.path.join(self._MULTI_CONFIG_TEST_DATA, 'ext_conf_mc_disabled_extensions.xml')
-            protocol.mock_wire_data = WireProtocolData(self.test_data)
-            protocol.mock_wire_data.set_incarnation(2)
-            protocol.update_goal_state()
-            exthandlers_handler.run()
-
-            mc_handlers = self.__assert_and_get_handler_status(aggregate_status=protocol.aggregate_status,
-                                                               handler_name="OSTCExtensions.ExampleHandlerLinux",
-                                                               status="Ready", expected_count=2)
-            expected_extensions = {
-                "thirdExtension": {"status": ValidHandlerStatus.success, "seq_no": 99, "message": None},
-                "fourthExtension": {"status": ValidHandlerStatus.success, "seq_no": 101, "message": None},
-            }
-            self.__assert_extension_not_present(mc_handlers, ["firstExtension", "secondExtension"])
-            self.__assert_extension_status(mc_handlers, expected_extensions, multi_config=True)
-            sc_handler = self.__assert_and_get_handler_status(aggregate_status=protocol.aggregate_status,
-                                                              handler_name="Microsoft.Powershell.ExampleExtension",
-                                                              status="Ready")
-            expected_extensions = {
-                "Microsoft.Powershell.ExampleExtension": {"status": ValidHandlerStatus.success, "seq_no": 10,
-                                                          "message": None}
-            }
-            self.__assert_extension_status(sc_handler, expected_extensions)
+            self.__setup_and_assert_disable_scenario(exthandlers_handler, protocol)
 
             # Case 3: Uninstall Multi-config handler (with enabled extensions) and single config extension
             protocol.mock_wire_data.set_incarnation(3)
@@ -561,26 +559,7 @@ class TestMultiConfigExtensions(AgentTestCase):
         self.test_data['ext_conf'] = os.path.join(self._MULTI_CONFIG_TEST_DATA,
                                                   "ext_conf_multi_config_no_dependencies.xml")
         with self._setup_test_env() as (exthandlers_handler, protocol, no_of_extensions):
-            exthandlers_handler.run()
-            self.assertEqual(no_of_extensions,
-                             len(protocol.aggregate_status['aggregateStatus']['handlerAggregateStatus']),
-                             "incorrect extensions reported")
-            mc_handlers = self.__assert_and_get_handler_status(aggregate_status=protocol.aggregate_status,
-                                                               handler_name="OSTCExtensions.ExampleHandlerLinux",
-                                                               expected_count=3)
-            expected_extensions = {
-                "firstExtension": {"status": ValidHandlerStatus.success, "seq_no": 1, "message": "Enabling firstExtension"},
-                "secondExtension": {"status": ValidHandlerStatus.success, "seq_no": 2, "message": "Enabling secondExtension"},
-                "thirdExtension": {"status": ValidHandlerStatus.success, "seq_no": 3, "message": "Enabling thirdExtension"},
-            }
-            self.__assert_extension_status(mc_handlers, expected_extensions, multi_config=True)
-            sc_handler = self.__assert_and_get_handler_status(aggregate_status=protocol.aggregate_status,
-                                                              handler_name="Microsoft.Powershell.ExampleExtension")
-            expected_extensions = {
-                "Microsoft.Powershell.ExampleExtension": {"status": ValidHandlerStatus.success, "seq_no": 9,
-                                                          "message": "Enabling SingleConfig extension"}
-            }
-            self.__assert_extension_status(sc_handler, expected_extensions)
+            self.__run_and_assert_generic_case(exthandlers_handler, protocol, no_of_extensions)
 
     def test_it_should_handle_and_report_enable_errors_properly(self):
         self.test_data['ext_conf'] = os.path.join(self._MULTI_CONFIG_TEST_DATA,
@@ -702,36 +681,64 @@ class TestMultiConfigExtensions(AgentTestCase):
                                                   "ext_conf_multi_config_no_dependencies.xml")
         with self._setup_test_env() as (exthandlers_handler, protocol, no_of_extensions):
             with patch('azurelinuxagent.common.cgroupapi.subprocess.Popen', side_effect=mock_popen):
-                exthandlers_handler.run()
-                self.assertEqual(no_of_extensions,
-                                 len(protocol.aggregate_status['aggregateStatus']['handlerAggregateStatus']),
-                                 "incorrect extensions reported")
-                mc_handlers = self.__assert_and_get_handler_status(aggregate_status=protocol.aggregate_status,
-                                                                   handler_name="OSTCExtensions.ExampleHandlerLinux",
-                                                                   expected_count=3)
-                expected_extensions = {
-                    "firstExtension": {"status": ValidHandlerStatus.success, "seq_no": 1, "message": "Enabling firstExtension"},
-                    "secondExtension": {"status": ValidHandlerStatus.success, "seq_no": 2, "message": "Enabling secondExtension"},
-                    "thirdExtension": {"status": ValidHandlerStatus.success, "seq_no": 3, "message": "Enabling thirdExtension"},
-                }
-                self.__assert_extension_status(mc_handlers[:], expected_extensions, multi_config=True)
-
-                sc_handler = self.__assert_and_get_handler_status(aggregate_status=protocol.aggregate_status,
-                                                                  handler_name="Microsoft.Powershell.ExampleExtension")
-                expected_extensions = {
-                    "Microsoft.Powershell.ExampleExtension": {"status": ValidHandlerStatus.success, "seq_no": 9,
-                                                              "message": "Enabling SingleConfig extension"}
-                }
-                self.__assert_extension_status(sc_handler[:], expected_extensions)
+                mc_handlers, sc_handler = self.__run_and_assert_generic_case(exthandlers_handler, protocol,
+                                                                             no_of_extensions)
 
                 for handler in mc_handlers:
                     __assert_env_variables(handler['handlerName'], ext_name=handler['runtimeSettingsStatus']['extensionName'])
                 for handler in sc_handler:
                     __assert_env_variables(handler['handlerName'])
 
+    def test_it_should_ignore_disable_errors_for_multi_config_extensions(self):
+        fail_code, fail_action = Actions.generate_unique_fail()
+
+        with self.__setup_generic_test_env() as (exthandlers_handler, protocol, exts):
+
+            # Fail disable of 1st and 2nd extension
+            exts[0] = extension_emulator(name="OSTCExtensions.ExampleHandlerLinux.firstExtension",
+                                         disable_action=fail_action)
+            exts[1] = extension_emulator(name="OSTCExtensions.ExampleHandlerLinux.secondExtension",
+                                         disable_action=fail_action)
+            fourth_ext = extension_emulator(name="OSTCExtensions.ExampleHandlerLinux.fourthExtension")
+
+            with patch.object(ExtHandlerInstance, "report_event", autospec=True) as patch_report_event:
+                with enable_invocations(fourth_ext, *exts) as invocation_record:
+                    # Assert even though 2 extensions are failing, we clean their state up properly and enable the
+                    # remaining extensions
+                    self.__setup_and_assert_disable_scenario(exthandlers_handler, protocol)
+                    first_ext, second_ext, third_ext, sc_ext = exts
+                    invocation_record.compare(
+                        (first_ext, ExtensionCommandNames.DISABLE),
+                        (second_ext, ExtensionCommandNames.DISABLE),
+                        (third_ext, ExtensionCommandNames.ENABLE),
+                        (fourth_ext, ExtensionCommandNames.ENABLE),
+                        (sc_ext, ExtensionCommandNames.ENABLE)
+                    )
+
+                    # Ensure we report the error properly
+                    self.assertTrue(all(
+                        fail_code in call.kwargs['message'] for call in patch_report_event.call_args_list if
+                        call.kwargs['name'] == first_ext.name), "Error not reported")
+                    self.assertTrue(all(
+                        fail_code in call.kwargs['message'] for call in patch_report_event.call_args_list if
+                        call.kwargs['name'] == second_ext.name), "Error not reported")
+                    # Make sure fail code is not reported for any other extension
+                    self.assertFalse(all(
+                        fail_code in call.kwargs['message'] for call in patch_report_event.call_args_list if
+                        call.kwargs['name'] == third_ext.name), "Error not reported")
+
     def test_it_should_always_create_placeholder_for_all_extensions(self):
         original_popen = subprocess.Popen
         handler_statuses = {}
+
+        def __assert_status_file_in_handlers():
+            for handler in mc_handlers:
+                file_name = "{0}.{1}.status".format(handler['runtimeSettingsStatus']['extensionName'],
+                                                    handler['runtimeSettingsStatus']['sequenceNumber'])
+                __assert_status_file(handler['handlerName'], status_file=file_name)
+            for handler in sc_handler:
+                file_name = "{0}.status".format(handler['runtimeSettingsStatus']['sequenceNumber'])
+                __assert_status_file(handler['handlerName'], status_file=file_name)
 
         def __assert_status_file(handler_name, status_file):
             status = handler_statuses["{0}.{1}.enable".format(handler_name, status_file)]
@@ -764,27 +771,8 @@ class TestMultiConfigExtensions(AgentTestCase):
                                                   "ext_conf_multi_config_no_dependencies.xml")
         with self._setup_test_env() as (exthandlers_handler, protocol, no_of_extensions):
             with patch('azurelinuxagent.common.cgroupapi.subprocess.Popen', side_effect=mock_popen):
-                exthandlers_handler.run()
-                self.assertEqual(no_of_extensions,
-                                 len(protocol.aggregate_status['aggregateStatus']['handlerAggregateStatus']),
-                                 "incorrect extensions reported")
-                mc_handlers = self.__assert_and_get_handler_status(aggregate_status=protocol.aggregate_status,
-                                                                   handler_name="OSTCExtensions.ExampleHandlerLinux",
-                                                                   expected_count=3)
-                expected_extensions = {
-                    "firstExtension": {"status": ValidHandlerStatus.success, "seq_no": 1, "message": "Enabling firstExtension"},
-                    "secondExtension": {"status": ValidHandlerStatus.success, "seq_no": 2, "message": "Enabling secondExtension"},
-                    "thirdExtension": {"status": ValidHandlerStatus.success, "seq_no": 3, "message": "Enabling thirdExtension"},
-                }
-                self.__assert_extension_status(mc_handlers[:], expected_extensions, multi_config=True)
-
-                sc_handler = self.__assert_and_get_handler_status(aggregate_status=protocol.aggregate_status,
-                                                                  handler_name="Microsoft.Powershell.ExampleExtension")
-                expected_extensions = {
-                    "Microsoft.Powershell.ExampleExtension": {"status": ValidHandlerStatus.success, "seq_no": 9,
-                                                              "message": "Enabling SingleConfig extension"}
-                }
-                self.__assert_extension_status(sc_handler[:], expected_extensions)
+                mc_handlers, sc_handler = self.__run_and_assert_generic_case(exthandlers_handler, protocol,
+                                                                             no_of_extensions)
 
                 # Ensure we dont create a placeholder for Install command
                 self.assertTrue(
@@ -795,47 +783,11 @@ class TestMultiConfigExtensions(AgentTestCase):
                 # Note: As part of our test, the sample-ext creates a status file after install due to which a placeholder
                 # is not created. We will verify a valid status file exists for all extensions instead since that's the
                 # main scenario.
-                for handler in mc_handlers:
-                    file_name = "{0}.{1}.status".format(handler['runtimeSettingsStatus']['extensionName'],
-                                                               handler['runtimeSettingsStatus']['sequenceNumber'])
-                    __assert_status_file(handler['handlerName'], status_file=file_name)
-                for handler in sc_handler:
-                    file_name = "{0}.status".format(handler['runtimeSettingsStatus']['sequenceNumber'])
-                    __assert_status_file(handler['handlerName'], status_file=file_name)
+                __assert_status_file_in_handlers()
 
                 # Update GS, remove 2 extensions and add 3
-                self.test_data['ext_conf'] = os.path.join(self._MULTI_CONFIG_TEST_DATA,
-                                                          'ext_conf_mc_disabled_extensions.xml')
-                protocol.mock_wire_data = WireProtocolData(self.test_data)
-                protocol.mock_wire_data.set_incarnation(2)
-                protocol.update_goal_state()
-                exthandlers_handler.run()
-
-                mc_handlers = self.__assert_and_get_handler_status(aggregate_status=protocol.aggregate_status,
-                                                                   handler_name="OSTCExtensions.ExampleHandlerLinux",
-                                                                   status="Ready", expected_count=2)
-                expected_extensions = {
-                    "thirdExtension": {"status": ValidHandlerStatus.success, "seq_no": 99, "message": None},
-                    "fourthExtension": {"status": ValidHandlerStatus.success, "seq_no": 101, "message": None},
-                }
-                self.__assert_extension_not_present(mc_handlers, ["firstExtension", "secondExtension"])
-                self.__assert_extension_status(mc_handlers, expected_extensions, multi_config=True)
-                sc_handler = self.__assert_and_get_handler_status(aggregate_status=protocol.aggregate_status,
-                                                                  handler_name="Microsoft.Powershell.ExampleExtension",
-                                                                  status="Ready")
-                expected_extensions = {
-                    "Microsoft.Powershell.ExampleExtension": {"status": ValidHandlerStatus.success, "seq_no": 10,
-                                                              "message": None}
-                }
-                self.__assert_extension_status(sc_handler, expected_extensions)
-
-                for handler in mc_handlers:
-                    file_name = "{0}.{1}.status".format(handler['runtimeSettingsStatus']['extensionName'],
-                                                        handler['runtimeSettingsStatus']['sequenceNumber'])
-                    __assert_status_file(handler['handlerName'], status_file=file_name)
-                for handler in sc_handler:
-                    file_name = "{0}.status".format(handler['runtimeSettingsStatus']['sequenceNumber'])
-                    __assert_status_file(handler['handlerName'], status_file=file_name)
+                mc_handlers, sc_handler = self.__setup_and_assert_disable_scenario(exthandlers_handler, protocol)
+                __assert_status_file_in_handlers()
 
     def test_it_should_report_status_correctly_for_unsupported_goal_state(self):
         with self.__setup_generic_test_env() as (exthandlers_handler, protocol, _):
