@@ -649,7 +649,12 @@ class TestMultiConfigExtensions(AgentTestCase):
             }
             self.__assert_extension_status(sc_handler, expected_extensions)
 
+    def test_it_should_create_command_execution_log_per_extension(self):
+        raise NotImplementedError
+
     def test_it_should_set_relevant_environment_variables_for_mc(self):
+
+        raise NotImplementedError("Add check for DisableReturnCodeMultipleExtensions")
 
         original_popen = subprocess.Popen
         handler_envs = {}
