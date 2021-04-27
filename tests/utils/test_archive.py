@@ -237,9 +237,8 @@ class TestArchive(AgentTestCase):
             self.fail("the timestamps are outside of the tolerance of by {0} seconds".format(secs))
 
     def assert_zip_contains(self, zip_filename, files):
-        ziph = zipfile.ZipFile(zip_filename, 'r')
-        zip_files = [x.filename for x in ziph.filelist]
-        for current_file in files:
-            self.assertTrue(current_file in zip_files, "'{0}' was not found in {1}".format(current_file, zip_filename))
+        with zipfile.ZipFile(zip_filename, 'r') as ziph:
+            zip_files = [x.filename for x in ziph.filelist]
+            for current_file in files:
+                self.assertTrue(current_file in zip_files, "'{0}' was not found in {1}".format(current_file, zip_filename))
 
-        ziph.close()

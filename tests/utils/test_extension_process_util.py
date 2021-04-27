@@ -37,6 +37,8 @@ class TestProcessUtils(AgentTestCase):
         self.stderr.write("The five boxing wizards jump quickly.".encode("utf-8"))
 
     def tearDown(self):
+        self.stderr.close()
+        self.stdout.close()
         if self.tmp_dir is not None:
             shutil.rmtree(self.tmp_dir)
 
