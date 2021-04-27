@@ -237,8 +237,13 @@ class TestArchive(AgentTestCase):
             self.fail("the timestamps are outside of the tolerance of by {0} seconds".format(secs))
 
     def assert_zip_contains(self, zip_filename, files):
-        with zipfile.ZipFile(zip_filename, 'r') as ziph:
+        ziph = None
+        try:
+            # contextmanager for zipfile.ZipFile doesn't exist for py2.6, manually closing it
+            ziph = zipfile.ZipFile(zip_filename, 'r')
             zip_files = [x.filename for x in ziph.filelist]
             for current_file in files:
                 self.assertTrue(current_file in zip_files, "'{0}' was not found in {1}".format(current_file, zip_filename))
-
+        finally:
+            if ziph is not None:
+                ziph.close()
