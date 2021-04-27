@@ -33,7 +33,7 @@
   "runtimeSettings": [
     {
       "handlerSettings": {
-        "publicSettings": {"source":{"script":"Write-Host First: Hello World 1234!"},"parameters":[{"name":"extensionName","value":"firstRunCommand"}],"timeoutInSeconds":120}
+        "publicSettings": {"message": "Disabling firstExtension"}
       }
     }
   ]
@@ -62,7 +62,7 @@
   "runtimeSettings": [
     {
       "handlerSettings": {
-        "publicSettings": {"fileUris":["https://test.blob.core.windows.net/windowsagent/VerifyAgentRunning.ps1"],"commandToExecute":"echo Hello 1234"}
+        "publicSettings": {"message": "Enabling SingleConfig extension"}
       }
     }
   ]

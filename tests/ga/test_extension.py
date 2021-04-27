@@ -800,7 +800,7 @@ class TestExtension(AgentTestCase):
                 (test_ext, ExtensionCommandNames.ENABLE)
             )
 
-        # Uninstall the Plugin and make sure
+        # Uninstall the Plugin and make sure Disable called
         test_data.set_incarnation(2)
         test_data.set_extensions_config_state(ExtHandlerRequestedState.Uninstall)
         protocol.update_goal_state()
@@ -878,7 +878,7 @@ class TestExtension(AgentTestCase):
         test_data.ext_conf = test_data.ext_conf.replace("dependencyLevel=\"1\"", "dependencyLevel=\"4\"")
         protocol.update_goal_state()
 
-        with enable_invocations(dep_ext_level_2, dep_ext_level_1) as invocation_record:
+        with enable_invocations(dep_ext_level_3, dep_ext_level_4) as invocation_record:
             exthandlers_handler.run()
 
             self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.0.0")
@@ -904,7 +904,7 @@ class TestExtension(AgentTestCase):
         test_data.set_extensions_config_state(ExtHandlerRequestedState.Disabled)
         protocol.update_goal_state()
 
-        with enable_invocations(dep_ext_level_2, dep_ext_level_1) as invocation_record:
+        with enable_invocations(dep_ext_level_3, dep_ext_level_4) as invocation_record:
             exthandlers_handler.run()
 
         self._assert_handler_status(protocol.report_vm_status, "NotReady", 1, "1.0.0",
@@ -935,7 +935,7 @@ class TestExtension(AgentTestCase):
         test_data.ext_conf = test_data.ext_conf.replace("dependencyLevel=\"4\"", "dependencyLevel=\"5\"")
         protocol.update_goal_state()
 
-        with enable_invocations(dep_ext_level_2, dep_ext_level_1) as invocation_record:
+        with enable_invocations(dep_ext_level_5, dep_ext_level_6) as invocation_record:
             exthandlers_handler.run()
 
             self._assert_no_handler_status(protocol.report_vm_status)
@@ -1319,7 +1319,7 @@ class TestExtension(AgentTestCase):
         event_occurrences = [kw for _, kw in mock_add_event.call_args_list if
                              "[ExtensionError] Failed to get ext handler pkgs" in kw['message']]
         self.assertEqual(1, len(event_occurrences))
-        self.assertEqual(False, event_occurrences[0]['is_success'])
+        self.assertFalse(event_occurrences[0]['is_success'])
         self.assertTrue("Failed to get ext handler pkgs" in event_occurrences[0]['message'])
         self.assertTrue("ProtocolError" in event_occurrences[0]['message'])
 
@@ -1431,7 +1431,7 @@ class TestExtension(AgentTestCase):
         conf.get_enable_overprovisioning = Mock(return_value=True)
         mock_in_vm_artifacts_profile = InVMArtifactsProfile(MagicMock())
 
-        # Test when is_on_hold returns True - should not work too
+        # Test when is_on_hold returns True - should not work
         mock_in_vm_artifacts_profile.is_on_hold = Mock(return_value=True)
         protocol.get_artifacts_profile = Mock(return_value=mock_in_vm_artifacts_profile)
         exthandlers_handler.run()
@@ -1442,7 +1442,7 @@ class TestExtension(AgentTestCase):
         self.assertIsNone(vm_agent_status.vm_artifacts_aggregate_status.goal_state_aggregate_status,
                           "No GS Aggregate status should be reported")
 
-        # Test when is_on_hold returns False - should work too
+        # Test when is_on_hold returns False - should work
         mock_in_vm_artifacts_profile.is_on_hold = Mock(return_value=False)
         protocol.get_artifacts_profile = Mock(return_value=mock_in_vm_artifacts_profile)
         exthandlers_handler.run()
@@ -1505,12 +1505,23 @@ class TestExtension(AgentTestCase):
     def _assert_ext_status(self, vm_agent_status, expected_status,
                            expected_seq_no, expected_handler_name="OSTCExtensions.ExampleHandlerLinux"):
         self.assertTrue(vm_agent_status.called)
-        args, kw = vm_agent_status.call_args  # pylint: disable=unused-variable
+        args, _ = vm_agent_status.call_args
         vm_status = args[0]
         ext_status = next(handler_status.extension_status for handler_status in vm_status.vmAgent.extensionHandlers if
                           handler_status.name == expected_handler_name)
         self.assertEqual(expected_status, ext_status.status)
         self.assertEqual(expected_seq_no, ext_status.sequenceNumber)
+
+    def test_it_should_initialise_and_use_command_execution_log_for_extensions(self, mock_get, mock_crypt_util, *args):
+        test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE)
+        exthandlers_handler, protocol = self._create_mock(test_data, mock_get, mock_crypt_util, *args)
+        exthandlers_handler.run()
+        self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.0.0")
+
+        command_execution_log = os.path.join(conf.get_ext_log_dir(), "OSTCExtensions.ExampleHandlerLinux",
+                                             "CommandExecution.log")
+        self.assertTrue(os.path.exists(command_execution_log), "CommandExecution.log file not found")
+        self.assertGreater(os.path.getsize(command_execution_log), 0, "The file should not be empty")
 
     def test_ext_handler_no_reporting_status(self, *args):
         test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE)

@@ -581,7 +581,8 @@ class ExtHandlersHandler(object):
             # If the extension version is unregistered and the customers wants to uninstall the extension,
             # we should let it go through even if the installed version doesnt exist in Handler manifest (PIR) anymore.
             # If target state is enabled and version not found in manifest, do not process the extension.
-            if ext_handler_i.decide_version(target_state=handler_state) is None and handler_state == ExtHandlerRequestedState.Enabled:
+            if ext_handler_i.decide_version(target_state=handler_state,
+                                            extension=extension) is None and handler_state == ExtHandlerRequestedState.Enabled:
                 handler_version = ext_handler_i.ext_handler.properties.version
                 name = ext_handler_i.ext_handler.name
                 err_msg = "Unable to find version {0} in manifest for extension {1}".format(handler_version, name)
@@ -1008,8 +1009,7 @@ class ExtHandlerInstance(object):
         self.pkg = None
         self.pkg_file = None
         self.logger = None
-        self.set_logger()
-        self.__set_command_execution_log(extension, execution_log_max_size)
+        self.set_logger(extension=extension, execution_log_max_size=execution_log_max_size)
 
     @property
     def supports_multi_config(self):
@@ -1090,7 +1090,7 @@ class ExtHandlerInstance(object):
                         logger.warn("Exception occurred while attempting to remove file '{0}': {1}", f,
                                     cleanup_exception)
 
-    def decide_version(self, target_state=None):
+    def decide_version(self, target_state=None, extension=None):
         self.logger.verbose("Decide which version to use")
         try:
             pkg_list = self.protocol.get_ext_handler_pkgs(self.ext_handler)
@@ -1103,9 +1103,7 @@ class ExtHandlerInstance(object):
         # Determine the desired and installed versions
         requested_version = FlexibleVersion(str(self.ext_handler.properties.version))
         installed_version_string = self.get_installed_version()
-        installed_version = requested_version \
-            if installed_version_string is None \
-            else FlexibleVersion(installed_version_string)
+        installed_version = requested_version if installed_version_string is None else FlexibleVersion(installed_version_string)
 
         # Divide packages
         # - Find the installed package (its version must exactly match)
@@ -1140,12 +1138,17 @@ class ExtHandlerInstance(object):
 
         if self.pkg is not None:
             self.logger.verbose("Use version: {0}", self.pkg.version)
-        self.set_logger()
+
+        # We reset the logger here incase the handler version changes
+        if not requested_version.matches(FlexibleVersion(self.ext_handler.properties.version)):
+            self.set_logger(extension=extension)
+
         return self.pkg
 
-    def set_logger(self):
+    def set_logger(self, execution_log_max_size=(10 * 1024 * 1024), extension=None):
         prefix = "[{0}]".format(self.get_full_name())
         self.logger = logger.Logger(logger.DEFAULT_LOGGER, prefix)
+        self.__set_command_execution_log(extension, execution_log_max_size)
 
     def version_gt(self, other):
         self_version = self.ext_handler.properties.version

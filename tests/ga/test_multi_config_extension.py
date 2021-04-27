@@ -5,8 +5,10 @@ import contextlib
 import json
 import subprocess
 
+from azurelinuxagent.common import conf
 from azurelinuxagent.common.event import WALAEventOperation
 from azurelinuxagent.common.exception import GoalStateAggregateStatusCodes
+from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.protocol.restapi import ExtHandlerRequestedState, ExtensionState, ExtensionStatus
 from azurelinuxagent.common.utils import fileutil
 from azurelinuxagent.ga.exthandlers import get_exthandlers_handler, ValidHandlerStatus, ExtCommandEnvVariable, \
@@ -356,19 +358,19 @@ class TestMultiConfigExtensions(AgentTestCase):
                                            install_action=fail_action)
             second_ext = extension_emulator(name="OSTCExtensions.ExampleHandlerLinux.secondExtension")
             third_ext = extension_emulator(name="OSTCExtensions.ExampleHandlerLinux.thirdExtension")
-            fourth_ext = extension_emulator(name="Microsoft.Powershell.ExampleExtension", install_action=fail_action)
-            with enable_invocations(first_ext, second_ext, third_ext, fourth_ext) as invocation_record:
+            sc_ext = extension_emulator(name="Microsoft.Powershell.ExampleExtension", install_action=fail_action)
+            with enable_invocations(first_ext, second_ext, third_ext, sc_ext) as invocation_record:
                 exthandlers_handler.run()
                 self.assertEqual(no_of_extensions,
                                  len(protocol.aggregate_status['aggregateStatus']['handlerAggregateStatus']),
                                  "incorrect extensions reported")
                 invocation_record.compare(
-                    # Should try installation again if first time failed
                     (first_ext, ExtensionCommandNames.INSTALL),
+                    # Should try installation again if first time failed
                     (second_ext, ExtensionCommandNames.INSTALL),
                     (second_ext, ExtensionCommandNames.ENABLE),
                     (third_ext, ExtensionCommandNames.ENABLE),
-                    (fourth_ext, ExtensionCommandNames.INSTALL)
+                    (sc_ext, ExtensionCommandNames.INSTALL)
                 )
                 mc_handlers = self.__assert_and_get_handler_status(aggregate_status=protocol.aggregate_status,
                                                                    handler_name="OSTCExtensions.ExampleHandlerLinux",
@@ -398,8 +400,8 @@ class TestMultiConfigExtensions(AgentTestCase):
             new_first_ext = extension_emulator(name="OSTCExtensions.ExampleHandlerLinux.firstExtension", version=new_version)
             new_second_ext = extension_emulator(name="OSTCExtensions.ExampleHandlerLinux.secondExtension", version=new_version)
             new_third_ext = extension_emulator(name="OSTCExtensions.ExampleHandlerLinux.thirdExtension", version=new_version)
-            new_fourth_ext = extension_emulator(name="Microsoft.Powershell.ExampleExtension", version=new_version)
-            with enable_invocations(new_first_ext, new_second_ext, new_third_ext, new_fourth_ext, *old_exts) as invocation_record:
+            new_sc_ext = extension_emulator(name="Microsoft.Powershell.ExampleExtension", version=new_version)
+            with enable_invocations(new_first_ext, new_second_ext, new_third_ext, new_sc_ext, *old_exts) as invocation_record:
                 exthandlers_handler.run()
                 old_first, old_second, old_third, old_fourth = old_exts
                 invocation_record.compare(
@@ -415,15 +417,15 @@ class TestMultiConfigExtensions(AgentTestCase):
                     (new_third_ext, ExtensionCommandNames.ENABLE),
                     # Follow the normal update pattern for Single config handlers
                     (old_fourth, ExtensionCommandNames.DISABLE),
-                    (new_fourth_ext, ExtensionCommandNames.UPDATE),
+                    (new_sc_ext, ExtensionCommandNames.UPDATE),
                     (old_fourth, ExtensionCommandNames.UNINSTALL),
-                    (new_fourth_ext, ExtensionCommandNames.INSTALL),
-                    (new_fourth_ext, ExtensionCommandNames.ENABLE)
+                    (new_sc_ext, ExtensionCommandNames.INSTALL),
+                    (new_sc_ext, ExtensionCommandNames.ENABLE)
                 )
 
             mc_handlers = self.__assert_and_get_handler_status(aggregate_status=protocol.aggregate_status,
-                                                 handler_name="OSTCExtensions.ExampleHandlerLinux",
-                                                 expected_count=1, handler_version=new_version)
+                                                               handler_name="OSTCExtensions.ExampleHandlerLinux",
+                                                               expected_count=1, handler_version=new_version)
             expected_extensions = {
                 "thirdExtension": {"status": ValidHandlerStatus.success, "seq_no": 99, "message": None}
             }
@@ -451,9 +453,9 @@ class TestMultiConfigExtensions(AgentTestCase):
                                                 version=new_version)
             new_third_ext = extension_emulator(name="OSTCExtensions.ExampleHandlerLinux.thirdExtension",
                                                version=new_version)
-            new_fourth_ext = extension_emulator(name="Microsoft.Powershell.ExampleExtension", version=new_version)
+            new_sc_ext = extension_emulator(name="Microsoft.Powershell.ExampleExtension", version=new_version)
 
-            with enable_invocations(new_first_ext, new_second_ext, new_third_ext, new_fourth_ext,
+            with enable_invocations(new_first_ext, new_second_ext, new_third_ext, new_sc_ext,
                                     *old_exts) as invocation_record:
                 exthandlers_handler.run()
                 old_first, old_second, old_third, old_fourth = old_exts
@@ -465,6 +467,7 @@ class TestMultiConfigExtensions(AgentTestCase):
                     (new_first_ext, ExtensionCommandNames.UPDATE),
                     # Since the extensions have been disabled before, we won't disable them again for Update scenario
                     (new_second_ext, ExtensionCommandNames.UPDATE),
+                    # This will fail too as per the mock above
                     (old_second, ExtensionCommandNames.UNINSTALL),
                     (new_third_ext, ExtensionCommandNames.UPDATE),
                     (old_third, ExtensionCommandNames.UNINSTALL),
@@ -474,10 +477,10 @@ class TestMultiConfigExtensions(AgentTestCase):
                     (new_third_ext, ExtensionCommandNames.ENABLE),
                     # Follow the normal update pattern for Single config handlers
                     (old_fourth, ExtensionCommandNames.DISABLE),
-                    (new_fourth_ext, ExtensionCommandNames.UPDATE),
+                    (new_sc_ext, ExtensionCommandNames.UPDATE),
                     (old_fourth, ExtensionCommandNames.UNINSTALL),
-                    (new_fourth_ext, ExtensionCommandNames.INSTALL),
-                    (new_fourth_ext, ExtensionCommandNames.ENABLE)
+                    (new_sc_ext, ExtensionCommandNames.INSTALL),
+                    (new_sc_ext, ExtensionCommandNames.ENABLE)
                 )
 
             # Since firstExtension and secondExtension are Disabled, we won't report their status
@@ -497,7 +500,7 @@ class TestMultiConfigExtensions(AgentTestCase):
             }
             self.__assert_extension_status(sc_handler, expected_extensions)
 
-    def test_it_should_report_disabled_extension_errors_if_failed(self):
+    def test_it_should_report_disabled_extension_errors_if_update_failed(self):
         with self.__setup_generic_test_env() as (exthandlers_handler, protocol, old_exts):
             # Update extensions
             self.test_data['ext_conf'] = os.path.join(self._MULTI_CONFIG_TEST_DATA, 'ext_conf_mc_update_extensions.xml')
@@ -507,10 +510,9 @@ class TestMultiConfigExtensions(AgentTestCase):
 
             new_version = "1.1.0"
             fail_code, fail_action = Actions.generate_unique_fail()
-            # Fail Uninstall of the secondExtension
+            # Fail Disable of the firstExtension
             old_exts[0] = extension_emulator(name="OSTCExtensions.ExampleHandlerLinux.firstExtension",
                                              disable_action=fail_action)
-            # Fail update of the first extension
             new_first_ext = extension_emulator(name="OSTCExtensions.ExampleHandlerLinux.firstExtension",
                                                version=new_version)
             new_second_ext = extension_emulator(name="OSTCExtensions.ExampleHandlerLinux.secondExtension",
@@ -650,49 +652,178 @@ class TestMultiConfigExtensions(AgentTestCase):
             self.__assert_extension_status(sc_handler, expected_extensions)
 
     def test_it_should_create_command_execution_log_per_extension(self):
-        raise NotImplementedError
+        with self.__setup_generic_test_env() as (_, _, _):
+            sc_handler_path = os.path.join(conf.get_ext_log_dir(), "Microsoft.Powershell.ExampleExtension")
+            mc_handler_path = os.path.join(conf.get_ext_log_dir(), "OSTCExtensions.ExampleHandlerLinux")
+            self.assertIn("CommandExecution_firstExtension.log", os.listdir(mc_handler_path),
+                          "Command Execution file not found")
+            self.assertGreater(os.path.getsize(os.path.join(mc_handler_path, "CommandExecution_firstExtension.log")), 0,
+                               "Log file not being used")
+            self.assertIn("CommandExecution_secondExtension.log", os.listdir(mc_handler_path),
+                          "Command Execution file not found")
+            self.assertGreater(os.path.getsize(os.path.join(mc_handler_path, "CommandExecution_secondExtension.log")), 0,
+                               "Log file not being used")
+            self.assertIn("CommandExecution_thirdExtension.log", os.listdir(mc_handler_path),
+                          "Command Execution file not found")
+            self.assertGreater(os.path.getsize(os.path.join(mc_handler_path, "CommandExecution_thirdExtension.log")), 0,
+                               "Log file not being used")
+            self.assertIn("CommandExecution.log", os.listdir(sc_handler_path), "Command Execution file not found")
+            self.assertGreater(os.path.getsize(os.path.join(sc_handler_path, "CommandExecution.log")), 0,
+                               "Log file not being used")
 
     def test_it_should_set_relevant_environment_variables_for_mc(self):
-
-        raise NotImplementedError("Add check for DisableReturnCodeMultipleExtensions")
-
         original_popen = subprocess.Popen
         handler_envs = {}
 
-        def __assert_env_variables(handler_name, ext_name=None):
-            expected_environment_variables = [ExtCommandEnvVariable.ExtensionPath,
-                                              ExtCommandEnvVariable.ExtensionVersion,
-                                              ExtCommandEnvVariable.ExtensionSeqNumber,
-                                              ExtCommandEnvVariable.WireProtocolAddress,
-                                              ExtCommandEnvVariable.ExtensionSupportedFeatures]
-            if ext_name is not None:
-                expected_environment_variables.append(ExtCommandEnvVariable.ExtensionName)
-                handler_name = "{0}.{1}".format(handler_name, ext_name)
+        def __assert_env_variables(handler_name, handler_version="1.0.0", seq_no="1", ext_name=None, expected_vars=None,
+                                   not_expected=None):
+            original_env_vars = {
+                ExtCommandEnvVariable.ExtensionPath: os.path.join(self.tmp_dir, "{0}-{1}".format(handler_name, handler_version)),
+                ExtCommandEnvVariable.ExtensionVersion: handler_version,
+                ExtCommandEnvVariable.ExtensionSeqNumber: ustr(seq_no),
+                ExtCommandEnvVariable.WireProtocolAddress: '168.63.129.16',
+                ExtCommandEnvVariable.ExtensionSupportedFeatures: '[{"Key": "ExtensionTelemetryPipeline", "Value": "1.0"}]'
+            }
 
-            self.assertIn(handler_name, handler_envs, "Handler/ext combo not called")
-            self.assertTrue(all(env_var in handler_envs[handler_name] for env_var in expected_environment_variables),
-                            "All expected environment variables not found")
+            full_name = handler_name
+            if ext_name is not None:
+                original_env_vars[ExtCommandEnvVariable.ExtensionName] = ext_name
+                full_name = "{0}.{1}".format(handler_name, ext_name)
+
+            self.assertIn(full_name, handler_envs, "Handler/ext combo not called")
+            for commands in handler_envs[full_name]:
+                expected_environment_variables = original_env_vars.copy()
+                if expected_vars is not None and commands['command'] in expected_vars:
+                    for name, val in expected_vars[commands['command']].items():
+                        expected_environment_variables[name] = val
+
+                self.assertTrue(all(
+                    env_var in commands['data'] and env_val == commands['data'][env_var] for env_var, env_val in
+                    expected_environment_variables.items()),
+                    "Incorrect data for environment variable for {0}-{1}, incorrect: {2}".format(full_name, commands['command'],
+                        [(env_var, env_val) for env_var, env_val in expected_environment_variables.items() if
+                         env_var not in commands['data'] or env_val != commands['data'][env_var]]))
+
+                if not_expected is not None and commands['command'] in not_expected:
+                    self.assertFalse(any(env_var in commands['data'] for env_var in not_expected), "Unwanted env variable found")
 
         def mock_popen(cmd, *_, **kwargs):
             if 'env' in kwargs:
-                handler_name, __, __ = extract_extension_info_from_command(cmd)
+                handler_name, __, command = extract_extension_info_from_command(cmd)
                 name = handler_name
                 if ExtCommandEnvVariable.ExtensionName in kwargs['env']:
                     name = "{0}.{1}".format(handler_name, kwargs['env'][ExtCommandEnvVariable.ExtensionName])
-                handler_envs[name] = kwargs['env']
+
+                data = {
+                    "command": command,
+                    "data": kwargs['env']
+                }
+                if name in handler_envs:
+                    handler_envs[name].append(data)
+                else:
+                    handler_envs[name] = [data]
             return original_popen(cmd, *_, **kwargs)
 
         self.test_data['ext_conf'] = os.path.join(self._MULTI_CONFIG_TEST_DATA,
                                                   "ext_conf_multi_config_no_dependencies.xml")
         with self._setup_test_env() as (exthandlers_handler, protocol, no_of_extensions):
             with patch('azurelinuxagent.common.cgroupapi.subprocess.Popen', side_effect=mock_popen):
+                # Case 1: Check normal scenario - Install/Enable
                 mc_handlers, sc_handler = self.__run_and_assert_generic_case(exthandlers_handler, protocol,
                                                                              no_of_extensions)
 
                 for handler in mc_handlers:
-                    __assert_env_variables(handler['handlerName'], ext_name=handler['runtimeSettingsStatus']['extensionName'])
+                    __assert_env_variables(handler['handlerName'],
+                                           ext_name=handler['runtimeSettingsStatus']['extensionName'],
+                                           seq_no=handler['runtimeSettingsStatus']['sequenceNumber'])
                 for handler in sc_handler:
-                    __assert_env_variables(handler['handlerName'])
+                    __assert_env_variables(handler['handlerName'],
+                                           seq_no=handler['runtimeSettingsStatus']['sequenceNumber'])
+
+                # Case 2: Check Update Scenario
+                # Clear old test case state
+                handler_envs = {}
+                self.test_data['ext_conf'] = os.path.join(self._MULTI_CONFIG_TEST_DATA,
+                                                          'ext_conf_mc_update_extensions.xml')
+                protocol.mock_wire_data = WireProtocolData(self.test_data)
+                protocol.mock_wire_data.set_incarnation(2)
+                protocol.update_goal_state()
+                exthandlers_handler.run()
+
+                mc_handlers = self.__assert_and_get_handler_status(aggregate_status=protocol.aggregate_status,
+                                                                   handler_name="OSTCExtensions.ExampleHandlerLinux",
+                                                                   expected_count=1, handler_version="1.1.0")
+                expected_extensions = {
+                    "thirdExtension": {"status": ValidHandlerStatus.success, "seq_no": 99,
+                                       "message": "Enabling thirdExtension"},
+                }
+                self.__assert_extension_status(mc_handlers[:], expected_extensions, multi_config=True)
+
+                sc_handler = self.__assert_and_get_handler_status(aggregate_status=protocol.aggregate_status,
+                                                                  handler_name="Microsoft.Powershell.ExampleExtension",
+                                                                  handler_version="1.1.0")
+                expected_extensions = {
+                    "Microsoft.Powershell.ExampleExtension": {"status": ValidHandlerStatus.success, "seq_no": 10,
+                                                              "message": "Enabling SingleConfig extension"}
+                }
+                self.__assert_extension_status(sc_handler[:], expected_extensions)
+
+                for handler in mc_handlers:
+                    __assert_env_variables(handler['handlerName'],
+                                           handler_version="1.1.0",
+                                           ext_name=handler['runtimeSettingsStatus']['extensionName'],
+                                           seq_no=handler['runtimeSettingsStatus']['sequenceNumber'],
+                                           expected_vars={
+                                                "disable": {
+                                                    ExtCommandEnvVariable.ExtensionPath: os.path.join(self.tmp_dir, "{0}-{1}".format(handler['handlerName'], "1.0.0")),
+                                                    ExtCommandEnvVariable.ExtensionVersion: '1.0.0'
+                                                }})
+
+                # Assert the environment variables were present even for disabled/uninstalled commands
+                first_ext_expected_vars = {
+                    "disable": {
+                        ExtCommandEnvVariable.ExtensionPath: os.path.join(self.tmp_dir, "{0}-{1}".format(handler['handlerName'], "1.0.0")),
+                        ExtCommandEnvVariable.ExtensionVersion: '1.0.0'
+                    },
+                    "uninstall": {
+                        ExtCommandEnvVariable.ExtensionPath: os.path.join(self.tmp_dir, "{0}-{1}".format(handler['handlerName'], "1.0.0")),
+                        ExtCommandEnvVariable.ExtensionVersion: '1.0.0'
+                    },
+                    "update": {
+                        ExtCommandEnvVariable.UpdatingFromVersion: "1.0.0",
+                        ExtCommandEnvVariable.DisableReturnCodeMultipleExtensions:
+                            '[{"extensionName": "firstExtension", "exitCode": "0"}, '
+                            '{"extensionName": "secondExtension", "exitCode": "0"}, '
+                            '{"extensionName": "thirdExtension", "exitCode": "0"}]'
+                    }
+                }
+                __assert_env_variables(handler['handlerName'], ext_name="firstExtension",
+                                       expected_vars=first_ext_expected_vars, handler_version="1.1.0", seq_no="1",
+                                       not_expected={
+                                           "update": [ExtCommandEnvVariable.DisableReturnCode]
+                                       })
+                __assert_env_variables(handler['handlerName'], ext_name="secondExtension", seq_no="2")
+
+                for handler in sc_handler:
+                    sc_expected_vars = {
+                        "disable": {
+                            ExtCommandEnvVariable.ExtensionPath: os.path.join(self.tmp_dir, "{0}-{1}".format(handler['handlerName'], "1.0.0")),
+                            ExtCommandEnvVariable.ExtensionVersion: '1.0.0'
+                        },
+                        "uninstall": {
+                            ExtCommandEnvVariable.ExtensionPath: os.path.join(self.tmp_dir, "{0}-{1}".format(handler['handlerName'], "1.0.0")),
+                            ExtCommandEnvVariable.ExtensionVersion: '1.0.0'
+                        },
+                        "update": {
+                            ExtCommandEnvVariable.UpdatingFromVersion: "1.0.0",
+                            ExtCommandEnvVariable.DisableReturnCode: "0"
+                        }
+                    }
+                    __assert_env_variables(handler['handlerName'], handler_version="1.1.0",
+                                           seq_no=handler['runtimeSettingsStatus']['sequenceNumber'],
+                                           expected_vars=sc_expected_vars, not_expected={
+                                           "update": [ExtCommandEnvVariable.DisableReturnCodeMultipleExtensions]
+                                       })
 
     def test_it_should_ignore_disable_errors_for_multi_config_extensions(self):
         fail_code, fail_action = Actions.generate_unique_fail()
@@ -802,7 +933,8 @@ class TestMultiConfigExtensions(AgentTestCase):
             protocol.mock_wire_data = WireProtocolData(self.test_data)
             protocol.mock_wire_data.set_incarnation(2)
             protocol.update_goal_state()
-            exthandlers_handler.run()
+            # Assert the extension status is the same as we reported for Incarnation 1.
+            self.__run_and_assert_generic_case(exthandlers_handler, protocol, no_of_extensions=4, with_message=False)
 
             # Assert the GS was reported as unsupported
             gs_aggregate_status = protocol.aggregate_status['aggregateStatus']['vmArtifactsAggregateStatus'][
@@ -814,23 +946,3 @@ class TestMultiConfigExtensions(AgentTestCase):
             self.assertEqual(gs_aggregate_status['formattedMessage']['message'],
                              'Failing GS incarnation: 2 as Unsupported features found: TestRequiredFeature1, TestRequiredFeature2, TestRequiredFeature3',
                              "Incorrect error message reported")
-
-            # Assert the extension status is the same as we reported for Incarnation 1.
-            mc_handlers = self.__assert_and_get_handler_status(aggregate_status=protocol.aggregate_status,
-                                                               handler_name="OSTCExtensions.ExampleHandlerLinux",
-                                                               expected_count=3, status="Ready")
-            expected_extensions = {
-                "firstExtension": {"status": ValidHandlerStatus.success, "seq_no": 1, "message": None},
-                "secondExtension": {"status": ValidHandlerStatus.success, "seq_no": 2, "message": None},
-                "thirdExtension": {"status": ValidHandlerStatus.success, "seq_no": 3, "message": None},
-            }
-            self.__assert_extension_status(mc_handlers, expected_extensions, multi_config=True)
-
-            sc_handler = self.__assert_and_get_handler_status(aggregate_status=protocol.aggregate_status,
-                                                              handler_name="Microsoft.Powershell.ExampleExtension")
-            expected_extensions = {
-                "Microsoft.Powershell.ExampleExtension": {"status": ValidHandlerStatus.success, "seq_no": 9,
-                                                          "message": None}
-            }
-            self.__assert_extension_status(sc_handler, expected_extensions)
-            self.assertTrue(protocol.aggregate_status)
