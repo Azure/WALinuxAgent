@@ -247,7 +247,7 @@ if __name__ == '__main__':
         cmd = ["journalctl", "-u", self._network_setup_service_name, "-b"]
         service_failed = self.__verify_network_setup_service_failed()
         try:
-            stdout = shellutil.run_command(cmd, encode_output=False)
+            stdout = shellutil.run_command(cmd)
             msg = "Logs from the {0} since system boot:\n {1}".format(self._network_setup_service_name,
                                                                       stdout.encode('utf-8'))
             logger.info(msg)
