@@ -248,8 +248,7 @@ if __name__ == '__main__':
         service_failed = self.__verify_network_setup_service_failed()
         try:
             stdout = shellutil.run_command(cmd)
-            msg = "Logs from the {0} since system boot:\n {1}".format(self._network_setup_service_name,
-                                                                      stdout.encode('utf-8'))
+            msg = ustr("Logs from the {0} since system boot:\n {1}").format(self._network_setup_service_name, stdout)
             logger.info(msg)
         except CommandError as error:
             msg = "Unable to fetch service logs, Command: {0} failed with ExitCode: {1}\nStdout: {2}\nStderr: {3}".format(
