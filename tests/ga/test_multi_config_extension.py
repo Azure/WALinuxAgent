@@ -682,7 +682,9 @@ class TestMultiConfigExtensions(AgentTestCase):
                 ExtCommandEnvVariable.ExtensionVersion: handler_version,
                 ExtCommandEnvVariable.ExtensionSeqNumber: ustr(seq_no),
                 ExtCommandEnvVariable.WireProtocolAddress: '168.63.129.16',
-                ExtCommandEnvVariable.ExtensionSupportedFeatures: '[{"Key": "ExtensionTelemetryPipeline", "Value": "1.0"}]'
+                ExtCommandEnvVariable.ExtensionSupportedFeatures: json.dumps([{"Key": "ExtensionTelemetryPipeline",
+                                                                               "Value": "1.0"}])
+
             }
 
             full_name = handler_name
@@ -700,7 +702,8 @@ class TestMultiConfigExtensions(AgentTestCase):
                 self.assertTrue(all(
                     env_var in commands['data'] and env_val == commands['data'][env_var] for env_var, env_val in
                     expected_environment_variables.items()),
-                    "Incorrect data for environment variable for {0}-{1}, incorrect: {2}".format(full_name, commands['command'],
+                    "Incorrect data for environment variable for {0}-{1}, incorrect: {2}".format(
+                        full_name, commands['command'],
                         [(env_var, env_val) for env_var, env_val in expected_environment_variables.items() if
                          env_var not in commands['data'] or env_val != commands['data'][env_var]]))
 
@@ -792,9 +795,11 @@ class TestMultiConfigExtensions(AgentTestCase):
                     "update": {
                         ExtCommandEnvVariable.UpdatingFromVersion: "1.0.0",
                         ExtCommandEnvVariable.DisableReturnCodeMultipleExtensions:
-                            '[{"extensionName": "firstExtension", "exitCode": "0"}, '
-                            '{"extensionName": "secondExtension", "exitCode": "0"}, '
-                            '{"extensionName": "thirdExtension", "exitCode": "0"}]'
+                            json.dumps([
+                                {"extensionName": "firstExtension", "exitCode": "0"},
+                                {"extensionName": "secondExtension", "exitCode": "0"},
+                                {"extensionName": "thirdExtension", "exitCode": "0"}
+                            ])
                     }
                 }
                 __assert_env_variables(handler['handlerName'], ext_name="firstExtension",
