@@ -967,10 +967,13 @@ class ExtHandlersHandler(object):
 
         handler_status = ext_handler_i.get_handler_status()
 
-        # We should always have some handler status, irrespective of single or multi-config. If nothing available, skip
+        # If nothing available, skip reporting
         if handler_status is None:
-            msg = "No handler status found for {0}. Not reporting anything for it.".format(ext_handler.name)
-            ext_handler_i.report_error_on_incarnation_change(incarnation_changed, log_msg=msg, event_msg=msg)
+            # We should always have some handler status if requested state != Uninstall irrespective of single or
+            # multi-config. If state is != Uninstall, report error
+            if ext_handler.properties.state != ExtHandlerRequestedState.Uninstall:
+                msg = "No handler status found for {0}. Not reporting anything for it.".format(ext_handler.name)
+                ext_handler_i.report_error_on_incarnation_change(incarnation_changed, log_msg=msg, event_msg=msg)
             return
 
         handler_state = ext_handler_i.get_handler_state()
