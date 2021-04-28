@@ -100,10 +100,9 @@ class ExtensionConfigError(ExtensionError):
     """
 
 
-class MultiConfigExtensionError(ExtensionError):
+class MultiConfigExtensionEnableError(ExtensionError):
     """
-    Error raised when a Multi-Config extension is failing. We capture these separately because we maintain extension
-    level status for Multi-Config extensions.
+    Error raised when enable for a Multi-Config extension is failing.
     """
 
 

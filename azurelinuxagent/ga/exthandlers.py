@@ -46,7 +46,7 @@ from azurelinuxagent.common.event import add_event, elapsed_milliseconds, WALAEv
     add_periodic, EVENTS_DIRECTORY
 from azurelinuxagent.common.exception import ExtensionDownloadError, ExtensionError, ExtensionErrorCodes, \
     ExtensionOperationError, ExtensionUpdateError, ProtocolError, ProtocolNotFoundError, ExtensionConfigError, \
-    GoalStateAggregateStatusCodes, MultiConfigExtensionError
+    GoalStateAggregateStatusCodes, MultiConfigExtensionEnableError
 from azurelinuxagent.common.future import ustr, is_file_not_found_error
 from azurelinuxagent.common.protocol.restapi import ExtensionStatus, ExtensionSubStatus, ExtHandler, ExtHandlerStatus, \
     VMStatus, GoalStateAggregateStatus, ExtensionState, ExtHandlerRequestedState, Extension
@@ -602,7 +602,7 @@ class ExtHandlersHandler(object):
                 raise ExtensionError(message)
 
             return True
-        except MultiConfigExtensionError as error:
+        except MultiConfigExtensionEnableError as error:
             ext_name = ext_handler_i.get_extension_full_name(extension)
             err_msg = "Error processing MultiConfig extension {0}: {1}".format(ext_name, ustr(error))
             # This error is only thrown for enable operation on MultiConfig extension.
@@ -1363,7 +1363,7 @@ class ExtHandlerInstance(object):
             self._enable_extension(extension, uninstall_exit_code)
         except ExtensionError as error:
             if self.should_perform_multi_config_op(extension):
-                raise MultiConfigExtensionError(error)
+                raise MultiConfigExtensionEnableError(error)
             raise
         # Even if a single extension is enabled for this handler, set the Handler state as Enabled
         self.set_handler_state(ExtHandlerState.Enabled)
