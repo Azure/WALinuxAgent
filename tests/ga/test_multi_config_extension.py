@@ -856,17 +856,16 @@ class TestMultiConfigExtensions(AgentTestCase):
                         (sc_ext, ExtensionCommandNames.ENABLE)
                     )
 
-                    # Ensure we report the error properly
                     self.assertTrue(all(
-                        fail_code in call.kwargs['message'] for call in patch_report_event.call_args_list if
-                        call.kwargs['name'] == first_ext.name), "Error not reported")
+                        fail_code in kwargs['message'] for args, kwargs in patch_report_event.call_args_list if
+                        kwargs['name'] == first_ext.name), "Error not reported")
                     self.assertTrue(all(
-                        fail_code in call.kwargs['message'] for call in patch_report_event.call_args_list if
-                        call.kwargs['name'] == second_ext.name), "Error not reported")
+                        fail_code in kwargs['message'] for args, kwargs in patch_report_event.call_args_list if
+                        kwargs['name'] == second_ext.name), "Error not reported")
                     # Make sure fail code is not reported for any other extension
                     self.assertFalse(all(
-                        fail_code in call.kwargs['message'] for call in patch_report_event.call_args_list if
-                        call.kwargs['name'] == third_ext.name), "Error not reported")
+                        fail_code in kwargs['message'] for args, kwargs in patch_report_event.call_args_list if
+                        kwargs['name'] == third_ext.name), "Error not reported")
 
     def test_it_should_always_create_placeholder_for_all_extensions(self):
         original_popen = subprocess.Popen
