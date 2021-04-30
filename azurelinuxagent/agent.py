@@ -371,11 +371,12 @@ def start(conf_file_path=None):
     Start agent daemon in a background process and set stdout/stderr to
     /dev/null
     """
-    devnull = open(os.devnull, 'w')
     args = [sys.argv[0], '-daemon']
     if conf_file_path is not None:
         args.append('-configuration-path:{0}'.format(conf_file_path))
-    subprocess.Popen(args, stdout=devnull, stderr=devnull)
+
+    with open(os.devnull, 'w') as devnull:
+        subprocess.Popen(args, stdout=devnull, stderr=devnull)
 
 
 if __name__ == '__main__' :
