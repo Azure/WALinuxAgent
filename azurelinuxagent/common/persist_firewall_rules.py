@@ -69,7 +69,7 @@ if __name__ == '__main__':
 
     # The current version of the unit file; Update it whenever the unit file is modified to ensure Agent can dynamically
     # modify the unit file on VM too
-    __UNIT_VERSION = "1.1"
+    _UNIT_VERSION = "1.1"
 
     @staticmethod
     def get_service_file_path():
@@ -174,18 +174,19 @@ if __name__ == '__main__':
         # the service is always run from the most latest agent.
         self.__setup_binary_file()
 
-        unit_file_version_modified = self.__unit_file_version_modified()
-        if not unit_file_version_modified and self.__verify_network_setup_service_enabled():
+        network_service_enabled = self.__verify_network_setup_service_enabled()
+        if network_service_enabled and not self.__unit_file_version_modified():
             logger.info("Service: {0} already enabled. No change needed.".format(self._network_setup_service_name))
             self.__log_network_setup_service_logs()
 
         else:
-            if unit_file_version_modified:
+            if not network_service_enabled:
+                logger.info("Service: {0} not enabled. Adding it now".format(self._network_setup_service_name))
+            else:
                 logger.info(
                     "Unit file {0} version modified to {1}, setting it up again".format(self.get_service_file_path(),
-                                                                                        self.__UNIT_VERSION))
-            else:
-                logger.info("Service: {0} not enabled. Adding it now".format(self._network_setup_service_name))
+                                                                                        self._UNIT_VERSION))
+
             # Create unit file with default values
             self.__set_service_unit_file()
             # Reload systemd configurations when we setup the service for the first time to avoid systemctl warnings
@@ -217,7 +218,7 @@ if __name__ == '__main__':
             fileutil.write_file(service_unit_file,
                                 self.__SERVICE_FILE_CONTENT.format(binary_path=binary_path,
                                                                    py_path=sys.executable,
-                                                                   version=self.__UNIT_VERSION))
+                                                                   version=self._UNIT_VERSION))
             fileutil.chmod(service_unit_file, 0o644)
 
             # Finally enable the service. This is needed to ensure the service is started on system boot
@@ -316,10 +317,10 @@ if __name__ == '__main__':
             # Since we can't determine the version, marking the file as modified to overwrite the unit file
             return True
 
-        if unit_file_version != self.__UNIT_VERSION:
+        if unit_file_version != self._UNIT_VERSION:
             logger.info(
                 "Unit file version: {0} does not match with expected version: {1}, overwriting unit file".format(
-                    unit_file_version, self.__UNIT_VERSION))
+                    unit_file_version, self._UNIT_VERSION))
             return True
 
         logger.info(
