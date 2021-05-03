@@ -259,7 +259,7 @@ class TestPersistFirewallRulesHandler(AgentTestCase):
         # The service should say its enabled now
         self.__replace_popen_cmd = TestPersistFirewallRulesHandler.__mock_network_setup_service_enabled
         with self._get_persist_firewall_rules_handler() as handler:
-            # The Drop-in file should be available on the 2nd run
+            # The Binary file should be available on the 2nd run
             self.assertTrue(os.path.exists(self._binary_file), "Binary file should be there")
             handler.setup()
 
