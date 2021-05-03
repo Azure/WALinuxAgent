@@ -7,6 +7,7 @@ disable=C, # (C) convention, for programming standard violation
     consider-using-dict-comprehension, # (R1717): *Consider using a dictionary comprehension*
     consider-using-in, # (R1714): *Consider merging these comparisons with "in" to %r*
     consider-using-set-comprehension, # (R1718): *Consider using a set comprehension*
+    consider-using-with, # (R1732): *Emitted if a resource-allocating assignment or call may be replaced by a 'with' block*
     duplicate-code, # (R0801): *Similar lines in %s files*
     no-init, # (W0232): Class has no __init__ method
     no-else-break, # (R1723): *Unnecessary "%s" after "break"*

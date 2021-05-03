@@ -63,9 +63,9 @@ class ScvmmHandler(object):
         if mount_point is None:
             mount_point = conf.get_dvd_mount_point()
         startup_script = os.path.join(mount_point, VMM_STARTUP_SCRIPT_NAME)
-        devnull = open(os.devnull, 'w')
-        subprocess.Popen(["/bin/bash", startup_script, "-p " + mount_point],
-                         stdout=devnull, stderr=devnull)
+        with open(os.devnull, 'w') as devnull:
+            subprocess.Popen(["/bin/bash", startup_script, "-p " + mount_point],
+                             stdout=devnull, stderr=devnull)
     
     def run(self):
         if self.detect_scvmm_env():
