@@ -17,6 +17,7 @@
 #
 import os
 import sys
+import traceback
 
 import azurelinuxagent.common.conf as conf
 from azurelinuxagent.common import logger
@@ -247,15 +248,15 @@ if __name__ == '__main__':
         service_failed = self.__verify_network_setup_service_failed()
         try:
             stdout = shellutil.run_command(cmd)
-            msg = "Logs from the {0} since system boot:\n {1}".format(self._network_setup_service_name, stdout)
+            msg = ustr("Logs from the {0} since system boot:\n {1}").format(self._network_setup_service_name, stdout)
             logger.info(msg)
         except CommandError as error:
             msg = "Unable to fetch service logs, Command: {0} failed with ExitCode: {1}\nStdout: {2}\nStderr: {3}".format(
                 ' '.join(cmd), error.returncode, error.stdout, error.stderr)
             logger.warn(msg)
-        except Exception as error:
+        except Exception:
             msg = "Ran into unexpected error when getting logs for {0} service. Error: {1}".format(
-                self._network_setup_service_name, ustr(error))
+                self._network_setup_service_name, traceback.format_exc())
             logger.warn(msg)
 
         # Log service status and logs if we can fetch them from journalctl and send it to Kusto,
