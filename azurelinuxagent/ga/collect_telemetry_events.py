@@ -234,17 +234,17 @@ class _ProcessExtensionEvents(PeriodicOperation):
             if not os.path.exists(event_dir_path):
                 return
 
-            err = None
+            log_err = True
             # Delete any residue files in the events directory
             for residue_file in os.listdir(event_dir_path):
                 try:
                     os.remove(os.path.join(event_dir_path, residue_file))
                 except Exception as error:
-                    # Only log the first error once per handler per run if unable to clean off residue files
-                    err = ustr(error) if err is None else err
-
-                if err is not None:
-                    logger.error("Failed to completely clear the {0} directory. Exception: {1}", event_dir_path, err)
+                    # Only log the first error once per handler per run to keep the logfile clean
+                    if log_err:
+                        logger.error("Failed to completely clear the {0} directory. Exception: {1}", event_dir_path,
+                                     ustr(error))
+                        log_err = False
 
     def _enqueue_events_and_get_count(self, handler_name, event_file_path, captured_events_count,
                                       dropped_events_with_error_count):
