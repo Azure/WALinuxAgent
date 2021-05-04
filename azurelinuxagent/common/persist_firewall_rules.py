@@ -31,9 +31,8 @@ from azurelinuxagent.common.utils.shellutil import CommandError
 class PersistFirewallRulesHandler(object):
 
     __SERVICE_FILE_CONTENT = """
-# This unit file was created by the Azure VM Agent.
+# This unit file (Version={version}) was created by the Azure VM Agent.
 # Do not edit.
-# Version={version}
 [Unit]
 Description=Setup network rules for WALinuxAgent 
 Before=network-pre.target
@@ -298,7 +297,8 @@ if __name__ == '__main__':
         if not os.path.exists(self.get_service_file_path()):
             raise OSError("{0} not found".format(self.get_service_file_path()))
 
-        match = fileutil.findre_in_file(self.get_service_file_path(), line_re="Version=([\\d.]+)")
+        match = fileutil.findre_in_file(self.get_service_file_path(),
+                                        line_re="This unit file \\(Version=([\\d.]+)\\) was created by the Azure VM Agent.")
         if match is None:
             raise ValueError("Version tag not found in the unit file")
 
