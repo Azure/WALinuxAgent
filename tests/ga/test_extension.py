@@ -2564,16 +2564,9 @@ class TestExtensionSequencing(AgentTestCase):
         handler.ext_handlers, handler.last_etag = protocol.get_ext_handlers()
         conf.get_enable_overprovisioning = Mock(return_value=False)
 
-        def wait_for_handler_completion(prev_handler, _):
-            return orig_wait_for_handler_completion(prev_handler,
-                                                               datetime.datetime.utcnow() + datetime.timedelta(
-                                                                   seconds=5))
-
         def reset_etag():
             handler.last_etag = 0
 
-        orig_wait_for_handler_completion = handler.wait_for_handler_completion
-        handler.wait_for_handler_completion = wait_for_handler_completion
         handler.reset_etag = reset_etag
         return handler
 
@@ -2601,7 +2594,7 @@ class TestExtensionSequencing(AgentTestCase):
             exthandlers_handler.ext_handlers.extHandlers.append(handler)
 
     def _validate_extension_sequence(self, expected_sequence, exthandlers_handler):
-        installed_extensions = [a[0].name for a, k in exthandlers_handler.handle_ext_handler.call_args_list]  # pylint: disable=unused-variable
+        installed_extensions = [a[0].ext_handler.name for a, _ in exthandlers_handler.handle_ext_handler.call_args_list]
         self.assertListEqual(expected_sequence, installed_extensions,
                              "Expected and actual list of extensions are not equal")
 
@@ -2622,8 +2615,9 @@ class TestExtensionSequencing(AgentTestCase):
 
         with patch.object(ExtHandlerInstance, "get_ext_handling_status", side_effect=get_ext_handling_status):
             with patch.object(ExtHandlerInstance, "get_handler_status", ExtHandlerStatus):
-                exthandlers_handler.run()
-                self._validate_extension_sequence(expected_sequence, exthandlers_handler)
+                with patch('azurelinuxagent.ga.exthandlers._DEFAULT_EXT_TIMEOUT_MINUTES', 0.01):
+                    exthandlers_handler.run()
+                    self._validate_extension_sequence(expected_sequence, exthandlers_handler)
 
     def test_handle_ext_handlers(self, *args):
         """

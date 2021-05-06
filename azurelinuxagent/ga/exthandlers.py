@@ -533,7 +533,7 @@ class ExtHandlersHandler(object):
                     # This is done for the install and enable. Not for the uninstallation.
                     # If handled successfully, proceed with the current handler.
                     # Otherwise, skip the rest of the extension installation.
-                    self.wait_for_handler_completion(handler_i, wait_until, extension)
+                    self.wait_for_handler_completion(handler_i, wait_until, extension=extension)
 
                 except Exception as error:
                     logger.warn(
