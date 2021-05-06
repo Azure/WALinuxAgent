@@ -73,7 +73,6 @@ class WALAEventOperation:
     CGroupsCleanUp = "CGroupsCleanUp"
     CGroupsDisabled = "CGroupsDisabled"
     CGroupsInfo = "CGroupsInfo"
-    CGroupsLimitsCrossed = "CGroupsLimitsCrossed"
     CollectEventErrors = "CollectEventErrors"
     CollectEventUnicodeErrors = "CollectEventUnicodeErrors"
     ConfigurationChange = "ConfigurationChange"
