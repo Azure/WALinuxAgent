@@ -27,8 +27,6 @@ import time
 import unittest
 import uuid
 
-import datetime
-
 from azurelinuxagent.common import conf
 from azurelinuxagent.common.cgroupconfigurator import CGroupConfigurator
 from azurelinuxagent.common.datacontract import get_properties
