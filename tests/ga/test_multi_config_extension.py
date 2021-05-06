@@ -1104,6 +1104,10 @@ class TestMultiConfigExtensionSequencing(TestMultiConfigExtensions):
             with patch('azurelinuxagent.common.cgroupapi.subprocess.Popen', side_effect=mock_popen):
                 exthandlers_handler.run()
 
+                self.assertEqual(no_of_extensions,
+                                 len(protocol.aggregate_status['aggregateStatus']['handlerAggregateStatus']),
+                                 "incorrect extensions reported")
+
                 # Since we're writing error status for firstExtension, only the firstExtension should be invoked and
                 # everything else should be skipped
                 expected_invocations = [
