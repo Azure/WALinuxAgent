@@ -1505,6 +1505,7 @@ class TestExtension(AgentTestCase):
 
     def _assert_ext_status(self, vm_agent_status, expected_status,
                            expected_seq_no, expected_handler_name="OSTCExtensions.ExampleHandlerLinux", expected_msg=None):
+
         self.assertTrue(vm_agent_status.called)
         args, _ = vm_agent_status.call_args
         vm_status = args[0]

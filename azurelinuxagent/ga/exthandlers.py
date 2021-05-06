@@ -589,6 +589,7 @@ class ExtHandlersHandler(object):
         :param etag: Current incarnation of the GoalState
         :return: True if the operation was successful, False if not
         """
+
         try:
             # Ensure the extension config was valid
             if ext_handler_i.ext_handler.is_invalid_setting:
