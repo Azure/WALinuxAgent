@@ -432,7 +432,7 @@ class TestExtension(AgentTestCase):
 
     def _assert_handler_status(self, report_vm_status, expected_status,
                                expected_ext_count, version,
-                               expected_handler_name="OSTCExtensions.ExampleHandlerLinux"):
+                               expected_handler_name="OSTCExtensions.ExampleHandlerLinux", expected_msg=None):
         self.assertTrue(report_vm_status.called)
         args, kw = report_vm_status.call_args  # pylint: disable=unused-variable
         vm_status = args[0]
@@ -443,6 +443,9 @@ class TestExtension(AgentTestCase):
         self.assertEqual(version, handler_status.version)
         self.assertEqual(expected_ext_count, len([ext_handler for ext_handler in vm_status.vmAgent.extensionHandlers if
                                                   ext_handler.name == expected_handler_name and ext_handler.extension_status is not None]))
+
+        if expected_msg is not None:
+            self.assertIn(expected_msg, handler_status.message)
 
     def _assert_ext_pkg_file_status(self, expected_to_be_present=True, extension_version="1.0.0",
                                     extension_handler_name="OSTCExtensions.ExampleHandlerLinux"):
@@ -459,10 +462,11 @@ class TestExtension(AgentTestCase):
         self.assertEqual(0, len(vm_status.vmAgent.extensionHandlers))
         return
 
-    def _create_mock(self, test_data, mock_http_get, MockCryptUtil, *args):  # pylint: disable=unused-argument
+    @staticmethod
+    def _create_mock(test_data, mock_http_get, mock_crypt_util, *_):
         # Mock protocol to return test data
         mock_http_get.side_effect = test_data.mock_http_get
-        MockCryptUtil.side_effect = test_data.mock_crypt_util
+        mock_crypt_util.side_effect = test_data.mock_crypt_util
 
         protocol = WireProtocol(KNOWN_WIRESERVER_IP)
         protocol.detect()
@@ -957,9 +961,9 @@ class TestExtension(AgentTestCase):
 
         original_popen = subprocess.Popen
 
-        def _assert_event_reported_only_on_incarnation_change(patch_add_event, expected_count=1):
+        def _assert_event_reported_only_on_incarnation_change(expected_count=1):
             handler_seq_reporting = [kwargs for _, kwargs in patch_add_event.call_args_list if kwargs[
-                'op'] == WALAEventOperation.ExtensionProcessing and "will skip processing the rest of the extensions" in
+                'op'] == WALAEventOperation.ExtensionProcessing and "Skipping processing of extensions since execution of dependent extension" in
                                      kwargs['message']]
             self.assertEqual(len(handler_seq_reporting), expected_count,
                              "Error should be reported only on incarnation change")
@@ -969,7 +973,6 @@ class TestExtension(AgentTestCase):
                 return original_popen("fail_this_command", **kwargs)
             return original_popen(args, **kwargs)
 
-
         with patch("subprocess.Popen", mock_fail_extension_commands):
             with patch('azurelinuxagent.ga.exthandlers.add_event') as patch_add_event:
                 exthandlers_handler.run()
@@ -977,18 +980,18 @@ class TestExtension(AgentTestCase):
                 self._assert_handler_status(protocol.report_vm_status, "NotReady", 0, "1.0.0",
                                             expected_handler_name="OSTCExtensions.OtherExampleHandlerLinux")
 
-                _assert_event_reported_only_on_incarnation_change(patch_add_event, expected_count=1)
+                _assert_event_reported_only_on_incarnation_change(expected_count=1)
 
                 # Assert that on rerun it should not report errors unless incarnation changes
                 for _ in range(5):
                     exthandlers_handler.run()
-                    _assert_event_reported_only_on_incarnation_change(patch_add_event, expected_count=1)
+                    _assert_event_reported_only_on_incarnation_change(expected_count=1)
 
                 test_data.set_incarnation(2)
                 protocol.update_goal_state()
                 exthandlers_handler.run()
                 # We should report error again on incarnation change
-                _assert_event_reported_only_on_incarnation_change(patch_add_event, expected_count=2)
+                _assert_event_reported_only_on_incarnation_change(expected_count=2)
 
         # Test it recovers on a new goal state if Handler succeeds
         test_data.set_incarnation(3)
@@ -1503,7 +1506,7 @@ class TestExtension(AgentTestCase):
         self.assertEqual(gs_creation_time, "NA", "GS Creation time should be NA")
 
     def _assert_ext_status(self, vm_agent_status, expected_status,
-                           expected_seq_no, expected_handler_name="OSTCExtensions.ExampleHandlerLinux"):
+                           expected_seq_no, expected_handler_name="OSTCExtensions.ExampleHandlerLinux", expected_msg=None):
         self.assertTrue(vm_agent_status.called)
         args, _ = vm_agent_status.call_args
         vm_status = args[0]
@@ -1511,6 +1514,9 @@ class TestExtension(AgentTestCase):
                           handler_status.name == expected_handler_name)
         self.assertEqual(expected_status, ext_status.status)
         self.assertEqual(expected_seq_no, ext_status.sequenceNumber)
+
+        if expected_msg is not None:
+            self.assertIn(expected_msg, ext_status.message)
 
     def test_it_should_initialise_and_use_command_execution_log_for_extensions(self, mock_get, mock_crypt_util, *args):
         test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE)
@@ -1540,86 +1546,92 @@ class TestExtension(AgentTestCase):
         self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.0.0")
         self._assert_ext_status(protocol.report_vm_status, ValidHandlerStatus.error, 0)
 
-    def test_wait_for_handler_completion_empty_exts(self, *args):
+    def test_wait_for_handler_completion_no_status(self, mock_http_get, mock_crypt_util, *args):
         """
-        Testing wait_for_handler_completion() when there is no extension in a handler.
-        Expected to return True.
+        Testing depends-on scenario when there is no status file reported by the extension.
+        Expected to retry and eventually report failure for all dependent extensions.
         """
-        test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE)
-        exthandlers_handler, protocol = self._create_mock(test_data, *args)  # pylint: disable=unused-variable,no-value-for-parameter
+        exthandlers_handler, protocol = self._create_mock(
+            mockwiredata.WireProtocolData(mockwiredata.DATA_FILE_EXT_SEQUENCING), mock_http_get, mock_crypt_util, *args)
 
-        handler = ExtHandler(name="handler")
-        ExtHandlerInstance(handler, protocol).set_handler_status("Ready")
+        original_popen = subprocess.Popen
 
-        ExtHandlerInstance.get_ext_handling_status = MagicMock(return_value=None)
-        self.assertTrue(exthandlers_handler.wait_for_handler_completion(handler, datetime.datetime.utcnow()))
+        def mock_popen(cmd, *args, **kwargs):
+            # For the purpose of this test, deleting the placeholder status file created by the agent
+            if "sample.py" in cmd:
+                status_path = os.path.join(kwargs['env'][ExtCommandEnvVariable.ExtensionPath], "status",
+                                           "{0}.status".format(kwargs['env'][ExtCommandEnvVariable.ExtensionSeqNumber]))
+                if os.path.exists(status_path):
+                    os.remove(status_path)
+                    mock_popen.deleted_status_file = status_path
+            return original_popen(["echo", "Yes"], *args, **kwargs)
 
-    def _helper_wait_for_handler_completion(self, exthandlers_handler):
+        with patch('azurelinuxagent.common.cgroupapi.subprocess.Popen', side_effect=mock_popen):
+            with patch('azurelinuxagent.ga.exthandlers._DEFAULT_EXT_TIMEOUT_MINUTES', 0.001):
+                exthandlers_handler.run()
+
+                # The Handler Status for the base extension should be ready as it was executed successfully by the agent
+                self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.0.0",
+                                            expected_handler_name="OSTCExtensions.OtherExampleHandlerLinux")
+                # The extension status reported by the Handler should be an error since no status file was found
+                self._assert_ext_status(protocol.report_vm_status, ValidHandlerStatus.error, 0,
+                                        expected_handler_name="OSTCExtensions.OtherExampleHandlerLinux",
+                                        expected_msg="No such file or directory: '{0}'".format(mock_popen.deleted_status_file))
+
+                # The Handler Status for the dependent extension should be NotReady as it was not executed at all
+                # And since it was not executed, it should not report any extension status either
+                self._assert_handler_status(protocol.report_vm_status, "NotReady", 0, "1.0.0",
+                                            expected_msg="Dependent Extension OSTCExtensions.OtherExampleHandlerLinux did not reach a terminal state within the allowed timeout. Last status was {0}".format(
+                                                ValidHandlerStatus.warning))
+
+    def test_wait_for_handler_completion_success_status(self, mock_http_get, mock_crypt_util, *args):
         """
-        Call wait_for_handler_completion() passing a handler with an extension.
-        Override the wait time to be 5 seconds to minimize the timout duration.
-        Return the value returned by wait_for_handler_completion().
+        Testing depends-on scenario on a successful case. Expected to report the status for both extensions properly.
         """
-        handler_name = "Handler"
-        exthandler = ExtHandler(name=handler_name)
-        extension = Extension(name=handler_name)
-        exthandler.properties.extensions.append(extension)
+        exthandlers_handler, protocol = self._create_mock(
+            mockwiredata.WireProtocolData(mockwiredata.DATA_FILE_EXT_SEQUENCING), mock_http_get, mock_crypt_util, *args)
 
-        # Override the timeout value to minimize the test duration
-        wait_until = datetime.datetime.utcnow() + datetime.timedelta(seconds=0.1)
-        ExtHandlerInstance(exthandler, Mock()).set_handler_status("Ready")
-        return exthandlers_handler.wait_for_handler_completion(exthandler, wait_until)
+        exthandlers_handler.run()
 
-    def test_wait_for_handler_completion_no_status(self, *args):
-        """
-        Testing wait_for_handler_completion() when there is no status file or seq_no is negative.
-        Expected to return False.
-        """
-        test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE)
-        exthandlers_handler, protocol = self._create_mock(test_data, *args)  # pylint: disable=unused-variable,no-value-for-parameter
+        self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.0.0",
+                                    expected_handler_name="OSTCExtensions.OtherExampleHandlerLinux",
+                                    expected_msg='Plugin enabled')
+        # The extension status reported by the Handler should be an error since no status file was found
+        self._assert_ext_status(protocol.report_vm_status, ValidHandlerStatus.success, 0,
+                                expected_handler_name="OSTCExtensions.OtherExampleHandlerLinux")
 
-        ExtHandlerInstance.get_ext_handling_status = MagicMock(return_value=None)
-        self.assertFalse(self._helper_wait_for_handler_completion(exthandlers_handler))
+        # The Handler Status for the dependent extension should be NotReady as it was not executed at all
+        # And since it was not executed, it should not report any extension status either
+        self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.0.0", expected_msg='Plugin enabled')
+        self._assert_ext_status(protocol.report_vm_status, ValidHandlerStatus.success, 0)
 
-    def test_wait_for_handler_completion_success_status(self, *args):
-        """
-        Testing wait_for_handler_successful_completion() when there is successful status.
-        Expected to return True.
-        """
-        test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE)
-        exthandlers_handler, protocol = self._create_mock(test_data, *args)  # pylint: disable=unused-variable,no-value-for-parameter
-
-        status = "success"
-
-        ExtHandlerInstance.get_ext_handling_status = MagicMock(return_value=status)
-        self.assertTrue(self._helper_wait_for_handler_completion(exthandlers_handler))
-
-    def test_wait_for_handler_completion_error_status(self, *args):
+    def test_wait_for_handler_completion_error_status(self, mock_http_get, mock_crypt_util, *args):
         """
         Testing wait_for_handler_completion() when there is error status.
         Expected to return False.
         """
-        test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE)
-        exthandlers_handler, protocol = self._create_mock(test_data, *args)  # pylint: disable=unused-variable,no-value-for-parameter
+        exthandlers_handler, protocol = self._create_mock(
+            mockwiredata.WireProtocolData(mockwiredata.DATA_FILE_EXT_SEQUENCING), mock_http_get, mock_crypt_util, *args)
 
-        status = "error"
+        original_popen = subprocess.Popen
 
-        ExtHandlerInstance.get_ext_handling_status = MagicMock(return_value=status)
-        self.assertFalse(self._helper_wait_for_handler_completion(exthandlers_handler))
+        def mock_popen(cmd, *args, **kwargs):
+            # For the purpose of this test, deleting the placeholder status file created by the agent
+            if "sample.py" in cmd:
+                return original_popen(["/fail/this/command"], *args, **kwargs)
+            return original_popen(cmd, *args, **kwargs)
 
-    def test_wait_for_handler_completion_timeout(self, *args):
-        """
-        Testing wait_for_handler_successful_completion() when there is non terminal status.
-        Expected to return False.
-        """
-        test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE)
-        exthandlers_handler, protocol = self._create_mock(test_data, *args)  # pylint: disable=unused-variable,no-value-for-parameter
+        with patch('azurelinuxagent.common.cgroupapi.subprocess.Popen', side_effect=mock_popen):
+            exthandlers_handler.run()
 
-        # Choose a non-terminal status
-        status = "warning"
+            # The Handler Status for the base extension should be NotReady as it failed
+            self._assert_handler_status(protocol.report_vm_status, "NotReady", 0, "1.0.0",
+                                        expected_handler_name="OSTCExtensions.OtherExampleHandlerLinux")
 
-        ExtHandlerInstance.get_ext_handling_status = MagicMock(return_value=status)
-        self.assertFalse(self._helper_wait_for_handler_completion(exthandlers_handler))
+            # The Handler Status for the dependent extension should be NotReady as it was not executed at all
+            # And since it was not executed, it should not report any extension status either
+            self._assert_handler_status(protocol.report_vm_status, "NotReady", 0, "1.0.0",
+                                        expected_msg='Skipping processing of extensions since execution of dependent extension OSTCExtensions.OtherExampleHandlerLinux failed')
 
     def test_get_ext_handling_status(self, *args):
         """

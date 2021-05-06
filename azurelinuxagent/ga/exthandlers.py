@@ -526,8 +526,7 @@ class ExtHandlersHandler(object):
                 try:
                     # Do no wait for extension status if the handler failed
                     if not extension_success:
-                        raise Exception(
-                            "Skipping processing of extensions since execution of dependent extension {0} failed".format(
+                        raise Exception("Skipping processing of extensions since execution of dependent extension {0} failed".format(
                                 extension_full_name))
 
                     # Wait for the extension installation until it is handled.
@@ -548,7 +547,7 @@ class ExtHandlersHandler(object):
                               message=depends_on_err_msg)
 
     @staticmethod
-    def wait_for_handler_completion(handler_i, wait_until, extension):
+    def wait_for_handler_completion(handler_i, wait_until, extension=None):
         """
         Check the status of the extension being handled. Wait until it has a terminal state or times out.
         :raises: Exception if it is not handled successfully.
