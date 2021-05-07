@@ -663,7 +663,7 @@ class ExtHandlersHandler(object):
         #  so report only HandlerStatus here.
         ext_handler_i.set_handler_status(message=message, code=error.code)
 
-        # If the handler supports multi-config, create a status file with failed status if no status file.
+        # If the handler supports multi-config, create a status file with failed status if no status file exists.
         # This is for correctly reporting errors back to CRP for failed Handler level operations for MultiConfig extensions.
         # In case of Handler failures, we will retry each time for each extension, so we need to create a status
         # file with failure since the extensions wont be called where they can create their status files.
@@ -1332,6 +1332,14 @@ class ExtHandlerInstance(object):
         except IOError as e:
             fileutil.clean_ioerror(e, paths=[self.get_base_dir(), self.pkg_file])
             raise ExtensionDownloadError(u"Failed to save HandlerManifest.json", e)
+
+        # If CRP expects Handler to support MC, ensure the HandlerManifest also reflects that.
+        if self.supports_multi_config and not self.load_manifest().supports_multiple_extensions():
+            # Since the HandlerManifest.json is not expected to change once the extension is installed, only checking
+            # for inconsistency once during initialization of the extension
+            raise ExtensionConfigError(
+                "Handler {0} does not support MultiConfig but CRP expects it, failing due to inconsistent data".format(
+                    self.ext_handler.name))
 
         # Create status and config dir
         try:
@@ -2216,6 +2224,9 @@ class HandlerManifest(object):
 
     def is_continue_on_update_failure(self):
         return self.data['handlerManifest'].get('continueOnUpdateFailure', False)
+
+    def supports_multiple_extensions(self):
+        return self.data['handlerManifest'].get('supportsMultipleExtensions', False)
 
 
 class ExtensionStatusError(ExtensionError):

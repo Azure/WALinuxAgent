@@ -67,18 +67,20 @@ class Actions(object):
 
 
 def extension_emulator(name="OSTCExtensions.ExampleHandlerLinux", version="1.0.0",
-    update_mode="UpdateWithInstall", report_heartbeat=False, continue_on_update_failure=False,
-    install_action=Actions.succeed_action, uninstall_action=Actions.succeed_action, 
-    enable_action=Actions.succeed_action, disable_action=Actions.succeed_action,
-    update_action=Actions.succeed_action):
+                       update_mode="UpdateWithInstall", report_heartbeat=False, continue_on_update_failure=False,
+                       supports_multiple_extensions=False, install_action=Actions.succeed_action,
+                       uninstall_action=Actions.succeed_action,
+                       enable_action=Actions.succeed_action, disable_action=Actions.succeed_action,
+                       update_action=Actions.succeed_action):
     """
     Factory method for ExtensionEmulator objects with sensible defaults.
     """
     # Linter reports too many arguments, but this isn't an issue because all are defaulted;
     # no caller will have to actually provide all of the arguments listed.
-    
+
     return ExtensionEmulator(name, version, update_mode, report_heartbeat, continue_on_update_failure,
-        install_action, uninstall_action, enable_action, disable_action, update_action)
+                             supports_multiple_extensions, install_action, uninstall_action, enable_action,
+                             disable_action, update_action)
 
 
 @contextlib.contextmanager
@@ -177,11 +179,12 @@ class ExtensionEmulator:
     """
 
     def __init__(self, name, version,
-        update_mode, report_heartbeat,
-        continue_on_update_failure,
-        install_action, uninstall_action,
-        enable_action, disable_action,
-        update_action):
+                 update_mode, report_heartbeat,
+                 continue_on_update_failure,
+                 supports_multiple_extensions,
+                 install_action, uninstall_action,
+                 enable_action, disable_action,
+                 update_action):
         # Linter reports too many arguments, but this constructor has its access mediated by
         # a factory method; the calls affected by the number of arguments here is very
         # limited in scope. 
@@ -192,6 +195,7 @@ class ExtensionEmulator:
         self.update_mode = update_mode
         self.report_heartbeat = report_heartbeat
         self.continue_on_update_failure = continue_on_update_failure
+        self.supports_multiple_extensions = supports_multiple_extensions
 
         self._actions = {
             ExtensionCommandNames.INSTALL: ExtensionEmulator._extend_func(install_action),
@@ -324,7 +328,8 @@ def generate_mock_load_manifest(*emulators):
         base_manifest.data["handlerManifest"].update({
             "continueOnUpdateFailure": matching_emulator.continue_on_update_failure,
             "reportHeartbeat": matching_emulator.report_heartbeat,
-            "updateMode": matching_emulator.update_mode
+            "updateMode": matching_emulator.update_mode,
+            "supportsMultipleExtensions": matching_emulator.supports_multiple_extensions
         })
 
         return base_manifest
