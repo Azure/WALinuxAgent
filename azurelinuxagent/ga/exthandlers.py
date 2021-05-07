@@ -702,6 +702,7 @@ class ExtHandlersHandler(object):
                 uninstall_exit_code = ExtHandlersHandler._update_extension_handler_and_return_if_failed(
                     old_ext_handler_i, ext_handler_i, extension)
         else:
+            ext_handler_i.ensure_consistent_data_for_mc()
             ext_handler_i.update_settings(extension)
 
         # Always create a placeholder file for enable/disable command if not exists
@@ -1313,6 +1314,16 @@ class ExtHandlerInstance(object):
 
         self.pkg_file = destination
 
+    def ensure_consistent_data_for_mc(self):
+        # If CRP expects Handler to support MC, ensure the HandlerManifest also reflects that.
+        # Even though the HandlerManifest.json is not expected to change once the extension is installed,
+        # CRP can wrongfully request send a Multi-Config GoalState even if the Handler supports only Single Config.
+        # Checking this only if HandlerState == Enable. In case of Uninstall, we dont care.
+        if self.supports_multi_config and not self.load_manifest().supports_multiple_extensions():
+            raise ExtensionConfigError(
+                "Handler {0} does not support MultiConfig but CRP expects it, failing due to inconsistent data".format(
+                    self.ext_handler.name))
+
     def initialize(self):
         self.logger.info("Initializing extension {0}".format(self.get_full_name()))
 
@@ -1333,13 +1344,7 @@ class ExtHandlerInstance(object):
             fileutil.clean_ioerror(e, paths=[self.get_base_dir(), self.pkg_file])
             raise ExtensionDownloadError(u"Failed to save HandlerManifest.json", e)
 
-        # If CRP expects Handler to support MC, ensure the HandlerManifest also reflects that.
-        if self.supports_multi_config and not self.load_manifest().supports_multiple_extensions():
-            # Since the HandlerManifest.json is not expected to change once the extension is installed, only checking
-            # for inconsistency once during initialization of the extension
-            raise ExtensionConfigError(
-                "Handler {0} does not support MultiConfig but CRP expects it, failing due to inconsistent data".format(
-                    self.ext_handler.name))
+        self.ensure_consistent_data_for_mc()
 
         # Create status and config dir
         try:

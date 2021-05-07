@@ -277,15 +277,12 @@ class TestMultiConfigExtensions(_MultiConfigBaseTestClass):
         self.test_data['ext_conf'] = os.path.join(self._MULTI_CONFIG_TEST_DATA,
                                                   "ext_conf_multi_config_no_dependencies.xml")
 
-        first_ext = extension_emulator(name="OSTCExtensions.ExampleHandlerLinux.firstExtension",
-                                       supports_multiple_extensions=True)
-        second_ext = extension_emulator(name="OSTCExtensions.ExampleHandlerLinux.secondExtension",
-                                        supports_multiple_extensions=True)
-        third_ext = extension_emulator(name="OSTCExtensions.ExampleHandlerLinux.thirdExtension",
-                                       supports_multiple_extensions=True)
+        first_ext = extension_emulator(name="OSTCExtensions.ExampleHandlerLinux.firstExtension")
+        second_ext = extension_emulator(name="OSTCExtensions.ExampleHandlerLinux.secondExtension")
+        third_ext = extension_emulator(name="OSTCExtensions.ExampleHandlerLinux.thirdExtension")
         fourth_ext = extension_emulator(name="Microsoft.Powershell.ExampleExtension")
 
-        with self._setup_test_env() as (exthandlers_handler, protocol, no_of_extensions):
+        with self._setup_test_env(mock_manifest=True) as (exthandlers_handler, protocol, no_of_extensions):
             with enable_invocations(first_ext, second_ext, third_ext, fourth_ext) as invocation_record:
                 exthandlers_handler.run()
                 self.assertEqual(no_of_extensions,
@@ -1008,6 +1005,46 @@ class TestMultiConfigExtensions(_MultiConfigBaseTestClass):
                     "Microsoft.Powershell.ExampleExtension": {"status": ValidHandlerStatus.success, "seq_no": 9}
                 }
                 self._assert_extension_status(sc_handler[:], expected_extensions)
+
+    def test_it_should_check_every_time_if_handler_supports_mc(self):
+        with self.__setup_generic_test_env() as (exthandlers_handler, protocol, old_exts):
+
+            protocol.mock_wire_data.set_incarnation(2)
+            protocol.update_goal_state()
+
+            # Mock manifest to not support multiple extensions
+            with patch('azurelinuxagent.ga.exthandlers.HandlerManifest.supports_multiple_extensions', return_value=False):
+                with enable_invocations(*old_exts) as invocation_record:
+                    (_, _, _, fourth_ext) = old_exts
+                    exthandlers_handler.run()
+                    self.assertEqual(4, len(protocol.aggregate_status['aggregateStatus']['handlerAggregateStatus']),
+                                     "incorrect extensions reported")
+
+                    invocation_record.compare(
+                        # Since we raise a ConfigError, we shouldn't process any of the MC extensions at all
+                        (fourth_ext, ExtensionCommandNames.ENABLE)
+                    )
+
+                    err_msg = 'Handler OSTCExtensions.ExampleHandlerLinux does not support MultiConfig but CRP expects it, failing due to inconsistent data'
+                    mc_handlers = self._assert_and_get_handler_status(aggregate_status=protocol.aggregate_status,
+                                                                      handler_name="OSTCExtensions.ExampleHandlerLinux",
+                                                                      expected_count=3, status="NotReady", message=err_msg)
+
+                    # Since the extensions were not even executed, their status file should reflect the last status
+                    # (Handler status above should always report the error though)
+                    expected_extensions = {
+                        "firstExtension": {"status": ValidHandlerStatus.success, "seq_no": 1},
+                        "secondExtension": {"status": ValidHandlerStatus.success, "seq_no": 2},
+                        "thirdExtension": {"status": ValidHandlerStatus.success, "seq_no": 3},
+                    }
+                    self._assert_extension_status(mc_handlers[:], expected_extensions, multi_config=True)
+
+                    sc_handler = self._assert_and_get_handler_status(aggregate_status=protocol.aggregate_status,
+                                                                     handler_name="Microsoft.Powershell.ExampleExtension")
+                    expected_extensions = {
+                        "Microsoft.Powershell.ExampleExtension": {"status": ValidHandlerStatus.success, "seq_no": 9}
+                    }
+                    self._assert_extension_status(sc_handler[:], expected_extensions)
 
 
 class TestMultiConfigExtensionSequencing(_MultiConfigBaseTestClass):
