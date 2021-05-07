@@ -459,13 +459,14 @@ class ExtHandlersHandler(object):
 
         return True
 
-    def handle_ext_handlers(self, etag=None):
-        if not self.ext_handlers.extHandlers:
-            logger.info("No extension handlers found, not processing anything.")
-            return
+    @staticmethod
+    def __get_dependency_level(tup):
+        (extension, handler) = tup
+        if extension is not None:
+            return extension.dependency_level_sort_key(handler.properties.state)
+        return handler.dependency_level_sort_key()
 
-        wait_until = datetime.datetime.utcnow() + datetime.timedelta(minutes=_DEFAULT_EXT_TIMEOUT_MINUTES)
-
+    def __get_sorted_extensions_for_processing(self):
         all_extensions = []
         for handler in self.ext_handlers.extHandlers:
             if any(handler.properties.extensions):
@@ -475,107 +476,126 @@ class ExtHandlersHandler(object):
                 logger.info("No extension/run-time settings settings found for {0}".format(handler.name))
                 all_extensions.append((None, handler))
 
-        def get_dependency_level(tup):
-            (ext, handler_) = tup
-            if ext is not None:
-                return ext.dependency_level_sort_key(handler_.properties.state)
-            return handler_.dependency_level_sort_key()
+        all_extensions.sort(key=self.__get_dependency_level)
 
-        all_extensions.sort(key=get_dependency_level)
+        return all_extensions
+
+    def handle_ext_handlers(self, etag=None):
+        if not self.ext_handlers.extHandlers:
+            logger.info("No extension handlers found, not processing anything.")
+            return
+
+        wait_until = datetime.datetime.utcnow() + datetime.timedelta(minutes=_DEFAULT_EXT_TIMEOUT_MINUTES)
+
+        all_extensions = self.__get_sorted_extensions_for_processing()
         # Since all_extensions are sorted based on sort_key, the last element would be the maximum based on the sort_key
-        max_dep_level = get_dependency_level(all_extensions[-1]) if any(all_extensions) else 0
+        max_dep_level = self.__get_dependency_level(all_extensions[-1]) if any(all_extensions) else 0
 
+        depends_on_err_msg = None
         for extension, ext_handler in all_extensions:
-            extension_success = self.handle_ext_handler(ext_handler, extension, etag)
 
-            # Wait for the extension installation until it is handled.
-            # This is done for the install and enable. Not for the uninstallation.
-            # If handled successfully, proceed with the current handler.
-            # Otherwise, skip the rest of the extension installation.
-            dep_level = get_dependency_level((extension, ext_handler))
+            handler_i = ExtHandlerInstance(ext_handler, self.protocol, extension=extension)
+
+            # In case of depends-on errors, we skip processing extensions if there was an error processing dependent extensions.
+            # But CRP is still waiting for some status back for the skipped extensions. In order to propagate the status back to CRP,
+            # we will report status back here with the relevant error message for each of the dependent extension.
+            if depends_on_err_msg is not None:
+
+                # For MC extensions, report the HandlerStatus as is and create a new placeholder per extension if doesnt exist
+                if handler_i.should_perform_multi_config_op(extension):
+                    # Ensure some handler status exists for the Handler, if not, set it here
+                    if handler_i.get_handler_status() is None:
+                        handler_i.set_handler_status(message=depends_on_err_msg, code=-1)
+
+                    handler_i.create_placeholder_status_file(extension, status=ValidHandlerStatus.error, code=-1,
+                                                             operation=WALAEventOperation.ExtensionProcessing,
+                                                             message=depends_on_err_msg)
+
+                # For SC extensions, overwrite the HandlerStatus with the relevant message
+                else:
+                    handler_i.set_handler_status(message=depends_on_err_msg, code=-1)
+
+                continue
+
+            # Process extensions and get if it was successfully executed or not
+            extension_success = self.handle_ext_handler(handler_i, extension, etag)
+
+            dep_level = self.__get_dependency_level((extension, ext_handler))
             if 0 <= dep_level < max_dep_level:
+                extension_full_name = handler_i.get_extension_full_name(extension)
+                try:
+                    # Do no wait for extension status if the handler failed
+                    if not extension_success:
+                        raise Exception("Skipping processing of extensions since execution of dependent extension {0} failed".format(
+                                extension_full_name))
 
-                # Do no wait for extension status if the handler failed
-                if not extension_success:
-                    prefix = "Handler: {0}".format(ext_handler.name)
-                    if ext_handler.supports_multi_config and extension is not None:
-                        prefix = "{0}, Extension: {1}".format(prefix, extension.name)
-                    msg = "{0} processing failed, will skip processing the rest of the extensions".format(prefix)
-                    add_event(op=WALAEventOperation.ExtensionProcessing,
+                    # Wait for the extension installation until it is handled.
+                    # This is done for the install and enable. Not for the uninstallation.
+                    # If handled successfully, proceed with the current handler.
+                    # Otherwise, skip the rest of the extension installation.
+                    self.wait_for_handler_completion(handler_i, wait_until, extension=extension)
+
+                except Exception as error:
+                    logger.warn(
+                        "Dependent extension {0} failed or timed out, will skip processing the rest of the extensions".format(
+                            extension_full_name))
+                    depends_on_err_msg = ustr(error)
+                    add_event(name=extension_full_name,
+                              version=handler_i.ext_handler.properties.version,
+                              op=WALAEventOperation.ExtensionProcessing,
                               is_success=False,
-                              message=msg)
-                    break
+                              message=depends_on_err_msg)
 
-                # MultiConfig: Need to triage and modify the logic for dependsOn cases
-                if not self.wait_for_handler_completion(ext_handler, wait_until):
-                    logger.warn("An extension failed or timed out, will skip processing the rest of the extensions")
-                    break
-
-    def wait_for_handler_completion(self, ext_handler, wait_until):
+    @staticmethod
+    def wait_for_handler_completion(handler_i, wait_until, extension=None):
         """
-        Check the status of the extension being handled.
-        Wait until it has a terminal state or times out.
-        Return True if it is handled successfully. False if not.
+        Check the status of the extension being handled. Wait until it has a terminal state or times out.
+        :raises: Exception if it is not handled successfully.
         """
 
-        def _report_error_event_and_return_false(error_message):
-            # In case of error, return False so that the processing of dependent extensions can be skipped (fail fast)
-            add_event(AGENT_NAME,
-                      version=CURRENT_VERSION,
-                      op=WALAEventOperation.ExtensionProcessing,
-                      is_success=False,
-                      message=error_message,
-                      log_event=True)
-            return False
+        extension_name = handler_i.get_extension_full_name(extension)
 
         try:
-            handler_i = ExtHandlerInstance(ext_handler, self.protocol)
-
-            # Loop through all settings of the Handler and verify all extensions reported success status in status file
-            # Currently, we only support 1 extension (runtime-settings) per handler
             ext_completed, status = False, None
-            for ext in ext_handler.properties.extensions:
 
-                # Keep polling for the extension status until it succeeds or times out
-                while datetime.datetime.utcnow() <= wait_until:
-                    ext_completed, status = handler_i.is_ext_handling_complete(ext)
-                    if ext_completed:
-                        break
-                    time.sleep(5)
+            # Keep polling for the extension status until it succeeds or times out
+            while datetime.datetime.utcnow() <= wait_until:
+                ext_completed, status = handler_i.is_ext_handling_complete(extension)
+                if ext_completed:
+                    break
+                time.sleep(5)
 
-                # In case of timeout or terminal error state, we log it and return false
-                # Incase extension reported status at the last sec, we should prioritize reporting status over timeout
-                if not ext_completed and datetime.datetime.utcnow() > wait_until:
-                    msg = "Extension {0} did not reach a terminal state within the allowed timeout. Last status was {1}".format(
-                        ext.name, status)
-                    return _report_error_event_and_return_false(msg)
+        except Exception:
+            msg = "Failed to wait for Handler completion due to unknown error. Marking the dependent extension as failed: {0}, {1}".format(
+                extension_name, traceback.format_exc())
+            raise Exception(msg)
 
-                if status != ValidHandlerStatus.success:
-                    msg = "Extension {0} did not succeed. Status was {1}".format(ext.name, status)
-                    return _report_error_event_and_return_false(msg)
+        # In case of timeout or terminal error state, we log it and raise
+        # Incase extension reported status at the last sec, we should prioritize reporting status over timeout
+        if not ext_completed and datetime.datetime.utcnow() > wait_until:
+            msg = "Dependent Extension {0} did not reach a terminal state within the allowed timeout. Last status was {1}".format(
+                extension_name, status)
+            raise Exception(msg)
 
-        except Exception as error:
-            msg = "Failed to wait for Handler completion due to unknown error. Marking the extension as failed: {0}, {1}".format(
-                ustr(error), traceback.format_exc())
-            return _report_error_event_and_return_false(msg)
+        if status != ValidHandlerStatus.success:
+            msg = "Dependent Extension {0} did not succeed. Status was {1}".format(extension_name, status)
+            raise Exception(msg)
 
-        return True
-
-    def handle_ext_handler(self, ext_handler, extension, etag):
+    def handle_ext_handler(self, ext_handler_i, extension, etag):
         """
         Execute the requested command for the handler and return if success
-        :param ext_handler: The ExtHandler to execute the command on
+        :param ext_handler_i: The ExtHandlerInstance object to execute the command on
         :param extension: The extension settings on which to run the command on
         :param etag: Current incarnation of the GoalState
         :return: True if the operation was successful, False if not
         """
-        ext_handler_i = ExtHandlerInstance(ext_handler, self.protocol, extension=extension)
+
         try:
             # Ensure the extension config was valid
-            if ext_handler.is_invalid_setting:
-                raise ExtensionConfigError(ext_handler.invalid_setting_reason)
+            if ext_handler_i.ext_handler.is_invalid_setting:
+                raise ExtensionConfigError(ext_handler_i.ext_handler.invalid_setting_reason)
 
-            handler_state = ext_handler.properties.state
+            handler_state = ext_handler_i.ext_handler.properties.state
 
             # The Guest Agent currently only supports 1 installed version per extension on the VM.
             # If the extension version is unregistered and the customers wants to uninstall the extension,
@@ -610,7 +630,7 @@ class ExtHandlersHandler(object):
             # The extensions should already have a placeholder status file, but incase they dont, setting one here to fail fast.
             ext_handler_i.create_placeholder_status_file(extension, status=ValidHandlerStatus.error, code=error.code,
                                                          operation=ext_handler_i.operation, message=err_msg)
-            add_event(name=ext_name, version=ext_handler.properties.version, op=ext_handler_i.operation,
+            add_event(name=ext_name, version=ext_handler_i.ext_handler.properties.version, op=ext_handler_i.operation,
                       is_success=False, log_event=True, message=err_msg)
         except ExtensionConfigError as error:
             # Catch and report Invalid ExtensionConfig errors here to fail fast rather than timing out after 90 min
