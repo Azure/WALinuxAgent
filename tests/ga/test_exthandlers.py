@@ -31,7 +31,7 @@ from azurelinuxagent.common.utils import fileutil
 from azurelinuxagent.common.utils.extensionprocessutil import TELEMETRY_MESSAGE_MAX_LEN, format_stdout_stderr, \
     read_output
 from azurelinuxagent.ga.exthandlers import parse_ext_status, ExtHandlerInstance, ExtCommandEnvVariable, \
-    ExtensionStatusError
+    ExtensionStatusError, _DEFAULT_SEQ_NO
 from tests.protocol import mockwiredata
 from tests.protocol.mocks import mock_wire_protocol
 from tests.tools import AgentTestCase, patch, mock_sleep, clear_singleton_instances
@@ -209,14 +209,11 @@ class TestExtHandlers(AgentTestCase):
         self.assertEqual(0, ext_status.sequenceNumber)
         self.assertEqual(0, len(ext_status.substatusList))
 
-    @patch('azurelinuxagent.common.event.EventLogger.add_event')
     @patch('azurelinuxagent.ga.exthandlers.ExtHandlerInstance._get_last_modified_seq_no_from_config_files')
-    def assert_extension_sequence_number(self,
-                                         patch_get_largest_seq,
-                                         patch_add_event,
-                                         goal_state_sequence_number,
-                                         disk_sequence_number,
-                                         expected_sequence_number):
+    def assert_extension_sequence_number(self, patch_get_largest_seq=None,
+                                         goal_state_sequence_number=None,
+                                         disk_sequence_number=None,
+                                         expected_sequence_number=None):
         ext = Extension()
         ext.sequenceNumber = goal_state_sequence_number
         patch_get_largest_seq.return_value = disk_sequence_number
@@ -229,23 +226,6 @@ class TestExtHandlers(AgentTestCase):
         instance = ExtHandlerInstance(ext_handler=ext_handler, protocol=None)
         seq, path = instance.get_status_file_path(ext)
 
-        try:
-            gs_seq_int = int(goal_state_sequence_number)
-            gs_int = True
-        except ValueError:
-            gs_int = False
-
-        if gs_int and gs_seq_int != disk_sequence_number:
-            self.assertEqual(1, patch_add_event.call_count)
-            args, kw_args = patch_add_event.call_args  # pylint: disable=unused-variable
-            self.assertEqual('SequenceNumberMismatch', kw_args['op'])
-            self.assertEqual(False, kw_args['is_success'])
-            self.assertEqual('Goal state: {0}, disk: {1}'
-                             .format(gs_seq_int, disk_sequence_number),
-                             kw_args['message'])
-        else:
-            self.assertEqual(0, patch_add_event.call_count)
-
         self.assertEqual(expected_sequence_number, seq)
         if seq > -1:
             self.assertTrue(path.endswith('/foo-1.2.3/status/{0}.status'.format(expected_sequence_number)))
@@ -253,19 +233,19 @@ class TestExtHandlers(AgentTestCase):
             self.assertIsNone(path)
 
     def test_extension_sequence_number(self):
-        self.assert_extension_sequence_number(goal_state_sequence_number="12",  # pylint: disable=no-value-for-parameter
+        self.assert_extension_sequence_number(goal_state_sequence_number="12",
                                               disk_sequence_number=366,
                                               expected_sequence_number=12)
 
-        self.assert_extension_sequence_number(goal_state_sequence_number=" 12 ",  # pylint: disable=no-value-for-parameter
+        self.assert_extension_sequence_number(goal_state_sequence_number=" 12 ",
                                               disk_sequence_number=366,
                                               expected_sequence_number=12)
 
-        self.assert_extension_sequence_number(goal_state_sequence_number=" foo",  # pylint: disable=no-value-for-parameter
+        self.assert_extension_sequence_number(goal_state_sequence_number=" foo",
                                               disk_sequence_number=3,
                                               expected_sequence_number=3)
 
-        self.assert_extension_sequence_number(goal_state_sequence_number="-1",  # pylint: disable=no-value-for-parameter
+        self.assert_extension_sequence_number(goal_state_sequence_number="-1",
                                               disk_sequence_number=3,
                                               expected_sequence_number=-1)
 
@@ -700,7 +680,7 @@ sys.stderr.write("STDERR")
         wire_ip = str(uuid.uuid4())
         ext_handler_instance = ExtHandlerInstance(ext_handler=self.ext_handler, protocol=WireProtocol(wire_ip))
 
-        helper_env_vars = {ExtCommandEnvVariable.ExtensionSeqNumber: ext_handler_instance.get_seq_no(),
+        helper_env_vars = {ExtCommandEnvVariable.ExtensionSeqNumber: _DEFAULT_SEQ_NO,
                            ExtCommandEnvVariable.ExtensionPath: self.tmp_dir,
                            ExtCommandEnvVariable.ExtensionVersion: ext_handler_instance.ext_handler.properties.version,
                            ExtCommandEnvVariable.WireProtocolAddress: wire_ip}

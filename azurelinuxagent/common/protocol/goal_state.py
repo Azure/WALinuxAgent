@@ -32,7 +32,7 @@ from azurelinuxagent.common.exception import ProtocolError, ExtensionConfigError
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.protocol.restapi import Cert, CertList, Extension, ExtHandler, ExtHandlerList, \
     ExtHandlerVersionUri, RemoteAccessUser, RemoteAccessUsersList, VMAgentManifest, VMAgentManifestList, \
-    VMAgentManifestUri, InVMGoalStateMetaData, RequiredFeature
+    VMAgentManifestUri, InVMGoalStateMetaData, RequiredFeature, ExtensionState
 from azurelinuxagent.common.utils import fileutil
 from azurelinuxagent.common.utils.cryptutil import CryptUtil
 from azurelinuxagent.common.utils.textutil import parse_doc, findall, find, findtext, getattrib, gettext
@@ -526,7 +526,7 @@ class ExtensionsConfig(object):
         runtime_settings_nodes = findall(plugin_settings_node, "RuntimeSettings")
         extension_runtime_settings_nodes = findall(plugin_settings_node, "ExtensionRuntimeSettings")
 
-        if (runtime_settings_nodes != []) and (extension_runtime_settings_nodes != []):
+        if any(runtime_settings_nodes) and any(extension_runtime_settings_nodes):
             # There can only be a single RuntimeSettings node or multiple ExtensionRuntimeSettings nodes per Plugin
             msg = "Both RuntimeSettings and ExtensionRuntimeSettings found for the same handler: {0} and version: {1}".format(
                 handler_name, version)
@@ -652,27 +652,34 @@ class ExtensionsConfig(object):
             dependency_level = ExtensionsConfig.__get_dependency_level_from_node(depends_on_node, extension_name)
             dependency_levels[extension_name] = dependency_level
 
+        ext_handler.supports_multi_config = True
         for extension_runtime_setting_node in extension_runtime_settings_nodes:
             # Name and State will only be set for ExtensionRuntimeSettings for Multi-Config
             extension_name = getattrib(extension_runtime_setting_node, "name")
             if extension_name in (None, ""):
                 raise ExtensionConfigError("Extension Name not specified for ExtensionRuntimeSettings for MultiConfig!")
-            # State can either be `enabled` (default) or `disabled`
+            # State can either be `ExtensionState.Enabled` (default) or `ExtensionState.Disabled`
             state = getattrib(extension_runtime_setting_node, "state")
-            state = state if state not in (None, "") else "enabled"
+            state = ustr(state.lower()) if state not in (None, "") else ExtensionState.Enabled
             ExtensionsConfig.__parse_and_add_extension_settings(extension_runtime_setting_node, extension_name,
                                                                 ext_handler, dependency_levels[extension_name],
                                                                 state=state)
 
     @staticmethod
-    def __parse_and_add_extension_settings(settings_node, name, ext_handler, depends_on_level, state="enabled"):
+    def __parse_and_add_extension_settings(settings_node, name, ext_handler, depends_on_level, state=ExtensionState.Enabled):
         seq_no = getattrib(settings_node, "seqNo")
         if seq_no in (None, ""):
             raise ExtensionConfigError("SeqNo not specified for the Extension: {0}".format(name))
+
         try:
             runtime_settings = json.loads(gettext(settings_node))
         except ValueError as error:
             logger.error("Invalid extension settings: {0}", ustr(error))
+            # Incase of invalid/no settings, add the name and seqNo of the Extension and treat it as an extension with
+            # no settings since we were able to successfully parse those data properly. Without this, we wont report
+            # anything for that sequence number and CRP would eventually have to timeout rather than fail fast.
+            ext_handler.properties.extensions.append(
+                Extension(name=name, sequenceNumber=seq_no, state=state, dependencyLevel=depends_on_level))
             return
 
         for plugin_settings_list in runtime_settings["runtimeSettings"]:
