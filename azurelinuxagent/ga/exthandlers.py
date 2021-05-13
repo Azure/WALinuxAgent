@@ -729,8 +729,7 @@ class ExtHandlersHandler(object):
             return
 
         # MultiConfig: Handle extension level ops here
-        ext_handler_i.logger.info("{0} requested state: {1}", ext_handler_i.get_extension_full_name(extension),
-                                  extension.state)
+        ext_handler_i.logger.info("Requested extension state: {0}", extension.state)
 
         if extension.state == ExtensionState.Enabled:
             ext_handler_i.enable(extension, uninstall_exit_code=uninstall_exit_code)
@@ -741,8 +740,7 @@ class ExtHandlersHandler(object):
                 # tantamount to uninstalling Handler so ignoring errors incase of Disable failure and deleting state.
                 ext_handler_i.disable(extension, ignore_error=True)
             else:
-                ext_handler_i.logger.info(
-                    "{0} already disabled, not doing anything".format(ext_handler_i.get_extension_full_name(extension)))
+                ext_handler_i.logger.info("Extension already disabled, not doing anything")
         else:
             raise ExtensionConfigError(
                 "Unknown requested state for Extension {0}: {1}".format(extension.name, extension.state))
@@ -1170,7 +1168,7 @@ class ExtHandlerInstance(object):
         return self.pkg
 
     def set_logger(self, execution_log_max_size=(10 * 1024 * 1024), extension=None):
-        prefix = "[{0}]".format(self.get_full_name())
+        prefix = "[{0}]".format(self.get_full_name(extension))
         self.logger = logger.Logger(logger.DEFAULT_LOGGER, prefix)
         self.__set_command_execution_log(extension, execution_log_max_size)
 
@@ -1369,7 +1367,7 @@ class ExtHandlerInstance(object):
         _, status_path = self.get_status_file_path(extension)
         if status_path is not None and not os.path.exists(status_path):
             now = datetime.datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
-            status = [
+            status_contents = [
                 {
                     "version": 1.0,
                     "timestampUTC": now,
@@ -1389,7 +1387,8 @@ class ExtHandlerInstance(object):
             # initializing the directories (ExtensionConfigError, Version deleted from PIR error, etc)
             if not os.path.exists(os.path.dirname(status_path)):
                 fileutil.mkdir(os.path.dirname(status_path), mode=0o700)
-            fileutil.write_file(status_path, json.dumps(status))
+            self.logger.info("Creating a placeholder status file {0} with status: {1}".format(status_path, status))
+            fileutil.write_file(status_path, json.dumps(status_contents))
 
     def enable(self, extension=None, uninstall_exit_code=None):
         try:
@@ -1415,7 +1414,7 @@ class ExtHandlerInstance(object):
         self.set_operation(WALAEventOperation.Enable)
         man = self.load_manifest()
         enable_cmd = man.get_enable_command()
-        self.logger.info("Enable extension {0}: [{1}]".format(self.get_extension_full_name(extension), enable_cmd))
+        self.logger.info("Enable extension: [{0}]".format(enable_cmd))
         self.launch_command(enable_cmd, timeout=300,
                             extension_error_code=ExtensionErrorCodes.PluginEnableProcessingFailed, env=env,
                             extension=extension)
@@ -1428,7 +1427,7 @@ class ExtHandlerInstance(object):
         self.set_operation(WALAEventOperation.Disable)
         man = self.load_manifest()
         disable_cmd = man.get_disable_command()
-        self.logger.info("Disable extension {0}: [{1}]".format(self.get_extension_full_name(extension), disable_cmd))
+        self.logger.info("Disable extension: [{0}]".format(disable_cmd))
         self.launch_command(disable_cmd, timeout=900,
                             extension_error_code=ExtensionErrorCodes.PluginDisableProcessingFailed,
                             extension=extension)
@@ -1440,8 +1439,7 @@ class ExtHandlerInstance(object):
             if not ignore_error:
                 raise
 
-            msg = "[Ignored Error] Ran into error disabling extension {0}:{1}".format(
-                    self.get_extension_full_name(extension), ustr(error))
+            msg = "[Ignored Error] Ran into error disabling extension:{0}".format(ustr(error))
             self.logger.info(msg)
             self.report_event(name=self.get_extension_full_name(extension), message=msg, is_success=False,
                               log_event=False)
@@ -1896,7 +1894,7 @@ class ExtHandlerInstance(object):
 
                 duration = elapsed_milliseconds(begin_utc)
                 ext_name = self.get_extension_full_name(extension)
-                log_msg = "Extension: {0}; Command: {1}\n{2}".format(ext_name, cmd, "\n".join(
+                log_msg = "Command: {0}\n{1}".format(cmd, "\n".join(
                     [line for line in process_output.split('\n') if line != ""]))
                 self.logger.info(log_msg)
                 self.report_event(name=ext_name, message=log_msg, duration=duration, log_event=False)
@@ -2014,6 +2012,7 @@ class ExtHandlerInstance(object):
             return default
 
     def __remove_extension_state_files(self, extension):
+        self.logger.info("Removing states files for disabled extension: {0}".format(extension.name))
         try:
             # MultiConfig: Remove all config/<extName>.*.settings, status/<extName>.*.status and config/<extName>.HandlerState files
             files_to_delete = [
