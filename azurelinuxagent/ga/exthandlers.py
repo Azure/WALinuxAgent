@@ -729,7 +729,7 @@ class ExtHandlersHandler(object):
             return
 
         # MultiConfig: Handle extension level ops here
-        ext_handler_i.logger.info("Requested state: {0}", extension.state)
+        ext_handler_i.logger.info("Requested extension state: {0}", extension.state)
 
         if extension.state == ExtensionState.Enabled:
             ext_handler_i.enable(extension, uninstall_exit_code=uninstall_exit_code)
