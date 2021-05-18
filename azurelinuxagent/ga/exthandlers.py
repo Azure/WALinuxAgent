@@ -300,15 +300,29 @@ class ExtHandlersHandler(object):
         :return: Tuple (activity_id, correlation_id, gs_created_timestamp) or "NA" for any property that's not available
         """
 
-        def check_empty(value): return value if value not in (None, "") else "NA"
+        def format_value(parse_fn, value):
+
+            try:
+                if value not in (None, ""):
+                    return parse_fn(value)
+            except Exception as e:
+                # A failure here isn't a fatal error, because the info we're
+                # trying to retrieve is debug only on linux.
+                error_msg = u"Couldn't parse debug metadata value: {0}".format(e)
+                logger.verbose(error_msg)
+            
+            return "NA"
+        
+        to_utc = lambda time: time.strftime(logger.Logger.LogTimeFormatInUTC)
+        identity = lambda value: value
 
         in_vm_gs_metadata = self.protocol.get_in_vm_gs_metadata()
-        gs_creation_time = check_empty(in_vm_gs_metadata.created_on_ticks)
-        gs_creation_time = gs_creation_time.strftime(
-            logger.Logger.LogTimeFormatInUTC) if gs_creation_time != "NA" else gs_creation_time
 
-        return check_empty(in_vm_gs_metadata.activity_id), check_empty(
-            in_vm_gs_metadata.correlation_id), gs_creation_time
+        gs_creation_time = format_value(to_utc, in_vm_gs_metadata.created_on_ticks)
+        activity_id = format_value(identity, in_vm_gs_metadata.activity_id)
+        correlation_id = format_value(identity, in_vm_gs_metadata.correlation_id)
+
+        return activity_id, correlation_id, gs_creation_time
 
     def run(self):
 
