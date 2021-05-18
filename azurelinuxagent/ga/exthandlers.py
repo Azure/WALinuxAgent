@@ -87,6 +87,7 @@ _STATUS_FILE_RETRY_DELAY = 2  # seconds
 
 # This is the default sequence number we use when there are no settings available for Handlers
 _DEFAULT_SEQ_NO = "0"
+_ENABLE_EXTENSION_TELEMETRY_PIPELINE = True
 
 
 class ValidHandlerStatus(object):
