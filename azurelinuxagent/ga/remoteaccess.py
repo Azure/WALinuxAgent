@@ -42,11 +42,11 @@ def get_remote_access_handler(protocol):
     return RemoteAccessHandler(protocol)
 
 
-class RemoteAccessHandler(object): # pylint: disable=R0903
+class RemoteAccessHandler(object): 
     def __init__(self, protocol):
         self._os_util = get_osutil()
         self._protocol = protocol
-        self._cryptUtil = CryptUtil(conf.get_openssl_cmd()) # pylint: disable=C0103
+        self._cryptUtil = CryptUtil(conf.get_openssl_cmd())
         self._remote_access = None
         self._incarnation = 0
         self._check_existing_jit_users = True
@@ -60,7 +60,7 @@ class RemoteAccessHandler(object): # pylint: disable=R0903
                     self._incarnation = current_incarnation
                     self._remote_access = self._protocol.client.get_remote_access()
                     self._handle_remote_access()
-        except Exception as e: # pylint: disable=C0103
+        except Exception as e:
             msg = u"Exception processing goal state for remote access users: {0} {1}".format(ustr(e), traceback.format_exc())
             add_event(AGENT_NAME,
                       version=CURRENT_VERSION,
@@ -92,7 +92,7 @@ class RemoteAccessHandler(object): # pylint: disable=R0903
                         # user account expired, delete it.
                         logger.info("Remote access user '{0}' expired.", acc.name)
                         self._remove_user(acc.name)
-                except Exception as e: # pylint: disable=C0103
+                except Exception as e:
                     logger.error("Error processing remote access user '{0}' - {1}", acc.name, ustr(e))
 
             for user in existing_jit_users:
@@ -100,7 +100,7 @@ class RemoteAccessHandler(object): # pylint: disable=R0903
                     if user not in goal_state_users:
                         # user explicitly removed
                         self._remove_user(user)
-                except Exception as e: # pylint: disable=C0103
+                except Exception as e:
                     logger.error("Error removing remote access user '{0}' - {1}", user, ustr(e))
         else:
             # There are no JIT users in the goal state; that may mean that they were removed or that they
@@ -117,7 +117,7 @@ class RemoteAccessHandler(object): # pylint: disable=R0903
                 for user in existing_jit_users:
                     try:
                         self._remove_user(user)
-                    except Exception as e: # pylint: disable=C0103
+                    except Exception as e:
                         logger.error("Error removing remote access user '{0}' - {1}", user, ustr(e))
                         remove_user_errors = True
 

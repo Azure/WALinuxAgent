@@ -16,9 +16,10 @@
 #
 
 import datetime
+import os
 import threading
-import uuid
 
+import azurelinuxagent.common.conf as conf
 import azurelinuxagent.common.logger as logger
 import azurelinuxagent.common.utils.networkutil as networkutil
 from azurelinuxagent.common.cgroupconfigurator import CGroupConfigurator
@@ -41,82 +42,42 @@ def get_monitor_handler():
     return MonitorHandler()
 
 
-class PollResourceUsageOperation(PeriodicOperation):
+class PollResourceUsage(PeriodicOperation):
     """
     Periodic operation to poll the tracked cgroups for resource usage data.
 
     It also checks whether there are processes in the agent's cgroup that should not be there.
     """
     def __init__(self):
-        super(PollResourceUsageOperation, self).__init__(
-            name="poll resource usage",
-            operation=self._operation_impl,
-            period=datetime.timedelta(minutes=5))
-        self._last_error = None
-        self._error_count = 0
+        super(PollResourceUsage, self).__init__(conf.get_cgroup_check_period())
+        self.__log_metrics = conf.get_cgroup_log_metrics()
 
-    def _operation_impl(self):
-        #
-        # Check the processes in the agent cgroup
-        #
-        processes_check_error = None
-        try:
-            processes = CGroupConfigurator.get_instance().get_processes_in_agent_cgroup()
+    def _operation(self):
+        tracked_metrics = CGroupsTelemetry.poll_all_tracked()
 
-            if processes is not None:
-                unexpected_processes = []
+        for metric in tracked_metrics:
+            report_metric(metric.category, metric.counter, metric.instance, metric.value, log_event=self.__log_metrics)
 
-                for (_, command_line) in processes:
-                    if not CGroupConfigurator.is_agent_process(command_line):
-                        unexpected_processes.append(command_line)
-
-                if unexpected_processes:
-                    unexpected_processes.sort()
-                    processes_check_error = "The agent's cgroup includes unexpected processes: {0}".format(ustr(unexpected_processes))
-        except Exception as exception:
-            processes_check_error = "Failed to check the processes in the agent's cgroup: {0}".format(ustr(exception))
-
-        # Report a small sample of errors
-        if processes_check_error != self._last_error and self._error_count < 5:
-            self._error_count += 1
-            self._last_error = processes_check_error
-            logger.info(processes_check_error)
-            add_event(op=WALAEventOperation.CGroupsDebug, message=processes_check_error)
-
-        #
-        # Report metrics
-        #
-        metrics = CGroupsTelemetry.poll_all_tracked()
-
-        for metric in metrics:
-            report_metric(metric.category, metric.counter, metric.instance, metric.value)
+        CGroupConfigurator.get_instance().check_cgroups(tracked_metrics)
 
 
-class ResetPeriodicLogMessagesOperation(PeriodicOperation):
+class ResetPeriodicLogMessages(PeriodicOperation):
     """
     Periodic operation to clean up the hash-tables maintained by the loggers. For reference, please check
     azurelinuxagent.common.logger.Logger and azurelinuxagent.common.event.EventLogger classes
     """
     def __init__(self):
-        super(ResetPeriodicLogMessagesOperation, self).__init__(
-            name="reset periodic log messages",
-            operation=ResetPeriodicLogMessagesOperation._operation_impl,
-            period=datetime.timedelta(hours=12))
+        super(ResetPeriodicLogMessages, self).__init__(datetime.timedelta(hours=12))
 
-    @staticmethod
-    def _operation_impl():
+    def _operation(self):
         logger.reset_periodic()
 
 
-class ReportNetworkErrorsOperation(PeriodicOperation):
+class ReportNetworkErrors(PeriodicOperation):
     def __init__(self):
-        super(ReportNetworkErrorsOperation, self).__init__(
-            name="report network errors",
-            operation=ReportNetworkErrorsOperation._operation_impl,
-            period=datetime.timedelta(minutes=30))
+        super(ReportNetworkErrors, self).__init__(datetime.timedelta(minutes=30))
 
-    @staticmethod
-    def _operation_impl():
+    def _operation(self):
         io_errors = IOErrorCounter.get_and_reset()
         hostplugin_errors = io_errors.get("hostplugin")
         protocol_errors = io_errors.get("protocol")
@@ -127,21 +88,35 @@ class ReportNetworkErrorsOperation(PeriodicOperation):
             add_event(op=WALAEventOperation.HttpErrors, message=msg)
 
 
-class ReportNetworkConfigurationChangesOperation(PeriodicOperation):
+class ReportNetworkConfigurationChanges(PeriodicOperation):
     """
     Periodic operation to check and log changes in network configuration.
     """
-
     def __init__(self):
-        super(ReportNetworkConfigurationChangesOperation, self).__init__(
-            name="report network configuration changes",
-            operation=self._operation_impl,
-            period=datetime.timedelta(minutes=1))
+        super(ReportNetworkConfigurationChanges, self).__init__(datetime.timedelta(minutes=1))
         self.osutil = get_osutil()
         self.last_route_table_hash = b''
         self.last_nic_state = {}
 
-    def _operation_impl(self):
+    def log_network_configuration(self):
+        try:
+            route_file = '/proc/net/route'
+            if os.path.exists(route_file):
+                lines = []
+                with open(route_file) as file_object:
+                    for line in file_object:
+                        lines.append(line)
+                        if len(lines) >= 100:
+                            lines.append("<TRUNCATED TO {0} LINES".format(len(lines)))
+                            break
+                logger.info("Routing table from {0}:\n{1}", route_file, ''.join(lines))
+            network_interfaces = self.osutil.get_nic_state(as_string=True)
+            if network_interfaces != '':
+                logger.info("Network interfaces:\n{0}", network_interfaces)
+        except Exception as exception:
+            logger.warn("Error fetching the network configuration: {0}", ustr(exception))
+
+    def _operation(self):
         raw_route_list = self.osutil.read_route_table()
         digest = hash_strings(raw_route_list)
         if digest != self.last_route_table_hash:
@@ -156,147 +131,34 @@ class ReportNetworkConfigurationChangesOperation(PeriodicOperation):
             self.last_nic_state = nic_state
 
 
-class MonitorHandler(ThreadHandlerInterface): # pylint: disable=R0902
-    # telemetry
-    EVENT_COLLECTION_PERIOD = datetime.timedelta(minutes=1)
-    # host plugin
-    HOST_PLUGIN_HEARTBEAT_PERIOD = datetime.timedelta(minutes=1)
-    HOST_PLUGIN_HEALTH_PERIOD = datetime.timedelta(minutes=5)
-    # imds
-    IMDS_HEARTBEAT_PERIOD = datetime.timedelta(minutes=1)
-    IMDS_HEALTH_PERIOD = datetime.timedelta(minutes=3)
+class SendHostPluginHeartbeat(PeriodicOperation):
+    """
+    Periodic operation for reporting the HostGAPlugin's health. The signal is 'Healthy' when we have been able to communicate with
+    plugin at least once in the last _HOST_PLUGIN_HEALTH_PERIOD.
+    """
+    def __init__(self, protocol, health_service):
+        super(SendHostPluginHeartbeat, self).__init__(SendHostPluginHeartbeat._HOST_PLUGIN_HEARTBEAT_PERIOD)
+        self.protocol = protocol
+        self.health_service = health_service
+        self.host_plugin_error_state = ErrorState(min_timedelta=SendHostPluginHeartbeat._HOST_PLUGIN_HEALTH_PERIOD)
 
-    _THREAD_NAME = "MonitorHandler"
+    _HOST_PLUGIN_HEARTBEAT_PERIOD = datetime.timedelta(minutes=1)
+    _HOST_PLUGIN_HEALTH_PERIOD = datetime.timedelta(minutes=5)
 
-    @staticmethod
-    def get_thread_name():
-        return MonitorHandler._THREAD_NAME
-
-    def __init__(self):
-        self.osutil = get_osutil()
-        self.imds_client = None
-
-        self.event_thread = None
-        self._periodic_operations = [
-            ResetPeriodicLogMessagesOperation(),
-            ReportNetworkErrorsOperation(),
-            PeriodicOperation("send_host_plugin_heartbeat", self.send_host_plugin_heartbeat, self.HOST_PLUGIN_HEARTBEAT_PERIOD),
-            PeriodicOperation("send_imds_heartbeat", self.send_imds_heartbeat, self.IMDS_HEARTBEAT_PERIOD),
-            ReportNetworkConfigurationChangesOperation(),
-        ]
-        if CGroupConfigurator.get_instance().enabled():
-            self._periodic_operations.append(PollResourceUsageOperation())
-
-        self.protocol = None
-        self.protocol_util = None
-        self.health_service = None
-
-        self.should_run = True
-        self.heartbeat_id = str(uuid.uuid4()).upper()
-        self.host_plugin_errorstate = ErrorState(min_timedelta=MonitorHandler.HOST_PLUGIN_HEALTH_PERIOD)
-        self.imds_errorstate = ErrorState(min_timedelta=MonitorHandler.IMDS_HEALTH_PERIOD)
-
-    def run(self):
-        self.start()
-
-    def stop(self):
-        self.should_run = False
-        if self.is_alive():
-            self.join()
-
-    def join(self):
-        self.event_thread.join()
-
-    def stopped(self):
-        return not self.should_run
-
-    def init_protocols(self):
-        # The initialization of ProtocolUtil for the Monitor thread should be done within the thread itself rather
-        # than initializing it in the ExtHandler thread. This is done to avoid any concurrency issues as each
-        # thread would now have its own ProtocolUtil object as per the SingletonPerThread model.
-        self.protocol_util = get_protocol_util()
-        self.protocol = self.protocol_util.get_protocol()
-        self.health_service = HealthService(self.protocol.get_endpoint())
-
-    def init_imds_client(self):
-        wireserver_endpoint = self.protocol_util.get_wireserver_endpoint()
-        self.imds_client = get_imds_client(wireserver_endpoint)
-
-    def is_alive(self):
-        return self.event_thread is not None and self.event_thread.is_alive()
-
-    def start(self):
-        self.event_thread = threading.Thread(target=self.daemon)
-        self.event_thread.setDaemon(True)
-        self.event_thread.setName(self.get_thread_name())
-        self.event_thread.start()
-
-    def daemon(self):
-        try:
-            if self.protocol_util is None or self.protocol is None:
-                self.init_protocols()
-
-            if self.imds_client is None:
-                self.init_imds_client()
-
-            while not self.stopped():
-                try:
-                    self.protocol.update_host_plugin_from_goal_state()
-
-                    for op in self._periodic_operations: # pylint: disable=C0103
-                        op.run()
-
-                except Exception as e: # pylint: disable=C0103
-                    logger.error("An error occurred in the monitor thread main loop; will skip the current iteration.\n{0}", ustr(e))
-                finally:
-                    PeriodicOperation.sleep_until_next_operation(self._periodic_operations)
-        except Exception as e: # pylint: disable=C0103
-            logger.error("An error occurred in the monitor thread; will exit the thread.\n{0}", ustr(e))
-
-    def send_imds_heartbeat(self):
-        """
-        Send a health signal every IMDS_HEARTBEAT_PERIOD. The signal is 'Healthy' when we have
-        successfully called and validated a response in the last IMDS_HEALTH_PERIOD.
-        """
-        try:
-            is_currently_healthy, response = self.imds_client.validate()
-
-            if is_currently_healthy:
-                self.imds_errorstate.reset()
-            else:
-                self.imds_errorstate.incr()
-
-            is_healthy = self.imds_errorstate.is_triggered() is False
-            logger.verbose("IMDS health: {0} [{1}]", is_healthy, response)
-
-            self.health_service.report_imds_status(is_healthy, response)
-
-        except Exception as e: # pylint: disable=C0103
-            msg = "Exception sending imds heartbeat: {0}".format(ustr(e))
-            add_event(
-                name=AGENT_NAME,
-                version=CURRENT_VERSION,
-                op=WALAEventOperation.ImdsHeartbeat,
-                is_success=False,
-                message=msg,
-                log_event=False)
-
-    def send_host_plugin_heartbeat(self):
-        """
-        Send a health signal every HOST_PLUGIN_HEARTBEAT_PERIOD. The signal is 'Healthy' when we have been able to
-        communicate with HostGAPlugin at least once in the last HOST_PLUGIN_HEALTH_PERIOD.
-        """
+    def _operation(self):
         try:
             host_plugin = self.protocol.client.get_host_plugin()
             host_plugin.ensure_initialized()
+            self.protocol.update_host_plugin_from_goal_state()
+
             is_currently_healthy = host_plugin.get_health()
 
             if is_currently_healthy:
-                self.host_plugin_errorstate.reset()
+                self.host_plugin_error_state.reset()
             else:
-                self.host_plugin_errorstate.incr()
+                self.host_plugin_error_state.incr()
 
-            is_healthy = self.host_plugin_errorstate.is_triggered() is False
+            is_healthy = self.host_plugin_error_state.is_triggered() is False
             logger.verbose("HostGAPlugin health: {0}", is_healthy)
 
             self.health_service.report_host_plugin_heartbeat(is_healthy)
@@ -307,10 +169,10 @@ class MonitorHandler(ThreadHandlerInterface): # pylint: disable=R0902
                     version=CURRENT_VERSION,
                     op=WALAEventOperation.HostPluginHeartbeatExtended,
                     is_success=False,
-                    message='{0} since successful heartbeat'.format(self.host_plugin_errorstate.fail_time),
+                    message='{0} since successful heartbeat'.format(self.host_plugin_error_state.fail_time),
                     log_event=False)
 
-        except Exception as e: # pylint: disable=C0103
+        except Exception as e:
             msg = "Exception sending host plugin heartbeat: {0}".format(ustr(e))
             add_event(
                 name=AGENT_NAME,
@@ -319,4 +181,113 @@ class MonitorHandler(ThreadHandlerInterface): # pylint: disable=R0902
                 is_success=False,
                 message=msg,
                 log_event=False)
+
+
+class SendImdsHeartbeat(PeriodicOperation):
+    """
+    Periodic operation to report the IDMS's health. The signal is 'Healthy' when we have successfully called and validated
+    a response in the last _IMDS_HEALTH_PERIOD.
+    """
+    def __init__(self, protocol_util, health_service):
+        super(SendImdsHeartbeat, self).__init__(SendImdsHeartbeat._IMDS_HEARTBEAT_PERIOD)
+        self.health_service = health_service
+        self.imds_client = get_imds_client(protocol_util.get_wireserver_endpoint())
+        self.imds_error_state = ErrorState(min_timedelta=SendImdsHeartbeat._IMDS_HEALTH_PERIOD)
+
+    _IMDS_HEARTBEAT_PERIOD = datetime.timedelta(minutes=1)
+    _IMDS_HEALTH_PERIOD = datetime.timedelta(minutes=3)
+
+    def _operation(self):
+        try:
+            is_currently_healthy, response = self.imds_client.validate()
+
+            if is_currently_healthy:
+                self.imds_error_state.reset()
+            else:
+                self.imds_error_state.incr()
+
+            is_healthy = self.imds_error_state.is_triggered() is False
+            logger.verbose("IMDS health: {0} [{1}]", is_healthy, response)
+
+            self.health_service.report_imds_status(is_healthy, response)
+
+        except Exception as e:
+            msg = "Exception sending imds heartbeat: {0}".format(ustr(e))
+            add_event(
+                name=AGENT_NAME,
+                version=CURRENT_VERSION,
+                op=WALAEventOperation.ImdsHeartbeat,
+                is_success=False,
+                message=msg,
+                log_event=False)
+
+
+class MonitorHandler(ThreadHandlerInterface):
+    _THREAD_NAME = "MonitorHandler"
+
+    @staticmethod
+    def get_thread_name():
+        return MonitorHandler._THREAD_NAME
+
+    def __init__(self):
+        self.monitor_thread = None
+        self.should_run = True
+
+    def run(self):
+        self.start()
+
+    def stop(self):
+        self.should_run = False
+        if self.is_alive():
+            self.join()
+
+    def join(self):
+        self.monitor_thread.join()
+
+    def stopped(self):
+        return not self.should_run
+
+    def is_alive(self):
+        return self.monitor_thread is not None and self.monitor_thread.is_alive()
+
+    def start(self):
+        self.monitor_thread = threading.Thread(target=self.daemon)
+        self.monitor_thread.setDaemon(True)
+        self.monitor_thread.setName(self.get_thread_name())
+        self.monitor_thread.start()
+
+    def daemon(self):
+        try:
+            # The protocol needs to be instantiated in the monitor thread itself (to avoid concurrency issues with the protocol object each
+            # thread uses a different instance as per the SingletonPerThread model.
+            protocol_util = get_protocol_util()
+            protocol = protocol_util.get_protocol()
+            health_service = HealthService(protocol.get_endpoint())
+            periodic_operations = [
+                ResetPeriodicLogMessages(),
+                ReportNetworkErrors(),
+                PollResourceUsage(),
+                SendHostPluginHeartbeat(protocol, health_service),
+                SendImdsHeartbeat(protocol_util, health_service)
+            ]
+
+            report_network_configuration_changes = ReportNetworkConfigurationChanges()
+            if conf.get_monitor_network_configuration_changes():
+                periodic_operations.append(report_network_configuration_changes)
+            else:
+                logger.info("Monitor.NetworkConfigurationChanges is disabled.")
+                report_network_configuration_changes.log_network_configuration()
+
+            while not self.stopped():
+                try:
+                    for op in periodic_operations:
+                        op.run()
+
+                except Exception as e:
+                    logger.error("An error occurred in the monitor thread main loop; will skip the current iteration.\n{0}", ustr(e))
+                finally:
+                    PeriodicOperation.sleep_until_next_operation(periodic_operations)
+        except Exception as e:
+            logger.error("An error occurred in the monitor thread; will exit the thread.\n{0}", ustr(e))
+
 

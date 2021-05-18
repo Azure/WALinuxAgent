@@ -27,12 +27,12 @@ Base class for data contracts between guest and host and utilities to manipulate
 # pylint: enable=W0105
 
 
-class DataContract(object): # pylint: disable=R0903
+class DataContract(object):
     pass
 
 
 class DataContractList(list):
-    def __init__(self, item_cls): # pylint: disable=W0231
+    def __init__(self, item_cls):  # pylint: disable=W0231
         self.item_cls = item_cls
 
 
@@ -45,7 +45,7 @@ def validate_param(name, val, expected_type):
 
 
 def set_properties(name, obj, data):
-    if isinstance(obj, DataContract): # pylint: disable=R1705
+    if isinstance(obj, DataContract):
         validate_param("Property '{0}'".format(name), data, dict)
         for prob_name, prob_val in data.items():
             prob_full_name = "{0}.{1}".format(name, prob_name)
@@ -69,7 +69,7 @@ def set_properties(name, obj, data):
 
 
 def get_properties(obj):
-    if isinstance(obj, DataContract): # pylint: disable=R1705
+    if isinstance(obj, DataContract):
         data = {}
         props = vars(obj)
         for prob_name, prob in list(props.items()):

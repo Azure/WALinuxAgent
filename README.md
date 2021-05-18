@@ -1,29 +1,15 @@
+
 # Microsoft Azure Linux Agent
 
-## Develop branch status
+## Linux distributions support
 
-[![Travis CI](https://travis-ci.org/Azure/WALinuxAgent.svg?branch=develop)](https://travis-ci.org/Azure/WALinuxAgent/branches)
+Our daily automation tests most of the [Linux distributions supported by Azure](https://docs.microsoft.com/en-us/azure/virtual-machines/linux/endorsed-distros); the Agent can be
+used on other distributions as well, but development, testing and support for those are done by the open source community.
+
+Testing is done using the develop branch, which can be unstable. For a stable build please use the master branch instead.
+
 [![CodeCov](https://codecov.io/gh/Azure/WALinuxAgent/branch/develop/graph/badge.svg)](https://codecov.io/gh/Azure/WALinuxAgent/branch/develop)
 
-Each badge below represents our basic validation tests for an image, which are executed several times each day. These include provisioning, user account, disk, extension and networking scenarios.
-
-Note: These badges represent testing to our develop branch which might not be stable. For a stable build please use master branch instead. 
-
-Image | Status |
-------|--------|
-Canonical UbuntuServer 14.04.5-LTS|![badge](https://dcrbadges.blob.core.windows.net/scenarios/Canonical_UbuntuServer_14.04.5-LTS__agent--bvt.svg)
-Canonical UbuntuServer 14.04.5-DAILY-LTS|![badge](https://dcrbadges.blob.core.windows.net/scenarios/Canonical_UbuntuServer_14.04.5-DAILY-LTS__agent--bvt.svg)
-Canonical UbuntuServer 16.04-LTS|![badge](https://dcrbadges.blob.core.windows.net/scenarios/Canonical_UbuntuServer_16.04-LTS__agent--bvt.svg)
-Canonical UbuntuServer 16.04-DAILY-LTS|![badge](https://dcrbadges.blob.core.windows.net/scenarios/Canonical_UbuntuServer_16.04-DAILY-LTS__agent--bvt.svg)
-Canonical UbuntuServer 18.04-LTS|![badge](https://dcrbadges.blob.core.windows.net/scenarios/Canonical_UbuntuServer_18.04-LTS__agent--bvt.svg)
-Canonical UbuntuServer 18.04-DAILY-LTS|![badge](https://dcrbadges.blob.core.windows.net/scenarios/Canonical_UbuntuServer_18.04-DAILY-LTS__agent--bvt.svg)
-Credativ Debian 8|![badge](https://dcrbadges.blob.core.windows.net/scenarios/Credativ_Debian_8__agent--bvt.svg)
-Credativ Debian 9|![badge](https://dcrbadges.blob.core.windows.net/scenarios/Credativ_Debian_9__agent--bvt.svg)
-OpenLogic CentOS 6.9|![badge](https://dcrbadges.blob.core.windows.net/scenarios/OpenLogic_CentOS_6.9__agent--bvt.svg)
-OpenLogic CentOS 7.4|![badge](https://dcrbadges.blob.core.windows.net/scenarios/OpenLogic_CentOS_7.4__agent--bvt.svg)
-RedHat RHEL 6.9|![badge](https://dcrbadges.blob.core.windows.net/scenarios/RedHat_RHEL_6.9__agent--bvt.svg)
-RedHat RHEL 7-RAW|![badge](https://dcrbadges.blob.core.windows.net/scenarios/RedHat_RHEL_7-RAW__agent--bvt.svg)
-SUSE SLES 12-SP5|![badge](https://dcrbadges.blob.core.windows.net/scenarios/SUSE_SLES_12-SP5__agent--bvt.svg)
 
 ## Introduction
 
@@ -219,8 +205,6 @@ OS.SshClientAliveInterval=180
 OS.SshDir=/etc/ssh
 HttpProxy.Host=None
 HttpProxy.Port=None
-CGroups.EnforceLimits=y
-CGroups.Excluded=customscript,runcommand
 ```
 
 The various configuration options are described in detail below. Configuration

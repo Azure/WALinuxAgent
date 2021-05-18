@@ -67,7 +67,7 @@ class DhcpHandler(object):
         Wait for network stack to be initialized.
         """
         ipv4 = self.osutil.get_ip4_addr()
-        while ipv4 == '' or ipv4 == '0.0.0.0': # pylint: disable=R1714
+        while ipv4 == '' or ipv4 == '0.0.0.0':
             logger.info("Waiting for network.")
             time.sleep(10)
             logger.info("Try to start network interface.")
@@ -86,7 +86,7 @@ class DhcpHandler(object):
         logger.info("Test for route to {0}".format(KNOWN_WIRESERVER_IP))
         try:
             route_table = self.osutil.read_route_table()
-            if any([(KNOWN_WIRESERVER_IP_ENTRY in route) for route in route_table]):
+            if any((KNOWN_WIRESERVER_IP_ENTRY in route) for route in route_table):
                 # reset self.gateway and self.routes
                 # we do not need to alter the routing table
                 self.endpoint = KNOWN_WIRESERVER_IP
@@ -96,7 +96,7 @@ class DhcpHandler(object):
                 logger.info("Route to {0} exists".format(KNOWN_WIRESERVER_IP))
             else:
                 logger.warn("No route exists to {0}".format(KNOWN_WIRESERVER_IP))
-        except Exception as e: # pylint: disable=C0103
+        except Exception as e:
             logger.error(
                 "Could not determine whether route exists to {0}: {1}".format(
                     KNOWN_WIRESERVER_IP, e))
@@ -116,7 +116,7 @@ class DhcpHandler(object):
         exists = False
 
         logger.info("Checking for dhcp lease cache")
-        cached_endpoint = self.osutil.get_dhcp_lease_endpoint() # pylint: disable=E1128
+        cached_endpoint = self.osutil.get_dhcp_lease_endpoint()  # pylint: disable=E1128
         if cached_endpoint is not None:
             self.endpoint = cached_endpoint
             exists = True
@@ -142,7 +142,7 @@ class DhcpHandler(object):
                 response = socket_send(request)
                 validate_dhcp_resp(request, response)
                 return response
-            except DhcpError as e: # pylint: disable=C0103
+            except DhcpError as e:
                 logger.warn("Failed to send DHCP request: {0}", e)
             time.sleep(duration)
         return None
@@ -197,7 +197,7 @@ class DhcpHandler(object):
         self.endpoint, self.gateway, self.routes = parse_dhcp_resp(resp)
 
 
-def validate_dhcp_resp(request, response): # pylint: disable=R1710
+def validate_dhcp_resp(request, response):  # pylint: disable=R1710
     bytes_recv = len(response)
     if bytes_recv < 0xF6:
         logger.error("HandleDhcpResponse: Too few bytes received:{0}",
@@ -231,7 +231,7 @@ def validate_dhcp_resp(request, response): # pylint: disable=R1710
                         "doesn't match the request")
 
 
-def parse_route(response, option, i, length, bytes_recv): # pylint: disable=W0613
+def parse_route(response, option, i, length, bytes_recv):  # pylint: disable=W0613
     # http://msdn.microsoft.com/en-us/library/cc227282%28PROT.10%29.aspx
     logger.verbose("Routes at offset: {0} with length:{1}", hex(i),
                    hex(length))
@@ -257,7 +257,7 @@ def parse_route(response, option, i, length, bytes_recv): # pylint: disable=W061
 
 
 def parse_ip_addr(response, option, i, length, bytes_recv):
-    if i + 5 < bytes_recv: # pylint: disable=R1705
+    if i + 5 < bytes_recv:
         if length != 4:
             logger.error("Endpoint or Default Gateway not 4 bytes")
             return None
@@ -293,7 +293,7 @@ def parse_dhcp_resp(response):
             length = str_to_ord(response[i + 1])
         logger.verbose("DHCP option {0} at offset:{1} with length:{2}",
                        hex(option), hex(i), hex(length))
-        if option == 255: # pylint: disable=R1723
+        if option == 255:
             logger.verbose("DHCP packet ended at offset:{0}", hex(i))
             break
         elif option == 249:
@@ -327,7 +327,7 @@ def socket_send(request):
                        "entering recv")
         response = sock.recv(1024)
         return response
-    except IOError as e: # pylint: disable=C0103
+    except IOError as e:
         raise DhcpError("{0}".format(e))
     finally:
         if sock is not None:
@@ -374,11 +374,11 @@ def build_dhcp_request(mac_addr, request_broadcast):
     # Opcode = 1
     # HardwareAddressType = 1 (ethernet/MAC)
     # HardwareAddressLength = 6 (ethernet/MAC/48 bits)
-    for a in range(0, 3): # pylint: disable=C0103
+    for a in range(0, 3):
         request[a] = [1, 1, 6][a]
 
     # fill in transaction id (random number to ensure response matches request)
-    for a in range(0, 4): # pylint: disable=C0103
+    for a in range(0, 4):
         request[4 + a] = str_to_ord(trans_id[a])
 
     logger.verbose("BuildDhcpRequest: transactionId:%s,%04X" % (
@@ -392,7 +392,7 @@ def build_dhcp_request(mac_addr, request_broadcast):
         request[0x0A] = 0x80
 
     # fill in ClientHardwareAddress
-    for a in range(0, 6): # pylint: disable=C0103
+    for a in range(0, 6):
         request[0x1C + a] = str_to_ord(mac_addr[a])
 
     # DHCP Magic Cookie: 99, 130, 83, 99
@@ -400,7 +400,7 @@ def build_dhcp_request(mac_addr, request_broadcast):
     # MessageTypeLength = 1
     # MessageType = DHCPDISCOVER
     # End = 255 DHCP_END
-    for a in range(0, 8): # pylint: disable=C0103
+    for a in range(0, 8):
         request[0xEC + a] = [99, 130, 83, 99, 53, 1, 1, 255][a]
     return array.array("B", request)
 

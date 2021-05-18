@@ -19,7 +19,7 @@
 
 """
 Module conf loads and parses configuration file
-""" # pylint: disable=W0105
+"""  # pylint: disable=W0105
 import os
 import os.path
 
@@ -55,7 +55,7 @@ class ConfigurationProvider(object):
 
     def get_switch(self, key, default_val):
         val = self.values.get(key)
-        if val is not None and val.lower() == 'y': # pylint: disable=R1705
+        if val is not None and val.lower() == 'y':
             return True
         elif val is not None and val.lower() == 'n':
             return False
@@ -77,7 +77,7 @@ def load_conf_from_file(conf_file_path, conf=__conf__):
     """
     Load conf file from: conf_file_path
     """
-    if os.path.isfile(conf_file_path) == False: # pylint: disable=C0121
+    if os.path.isfile(conf_file_path) == False:
         raise AgentConfigError(("Missing configuration in {0}"
                                 "").format(conf_file_path))
     try:
@@ -111,7 +111,13 @@ __SWITCH_OPTIONS__ = {
     "ResourceDisk.EnableSwapEncryption": False,
     "AutoUpdate.Enabled": True,
     "EnableOverProvisioning": True,
-    "CGroups.EnforceLimits": False,
+    #
+    # "Debug" options are experimental and may be removed in later
+    # versions of the Agent.
+    #
+    "Debug.CgroupLogMetrics": False,
+    "Debug.CgroupDisableOnProcessCheckFailure": True,
+    "Debug.CgroupDisableOnQuotaCheckFailure": True,
 }
 
 
@@ -134,7 +140,6 @@ __STRING_OPTIONS__ = {
     "ResourceDisk.MountOptions": None,
     "ResourceDisk.Filesystem": "ext3",
     "AutoUpdate.GAFamily": "Prod",
-    "CGroups.Excluded": "customscript,runcommand",
 }
 
 
@@ -151,7 +156,12 @@ __INTEGER_OPTIONS__ = {
     "HttpProxy.Port": None,
     "ResourceDisk.SwapSizeMB": 0,
     "Autoupdate.Frequency": 3600,
-    "Logs.CollectPeriod": 3600
+    "Logs.CollectPeriod": 3600,
+    #
+    # "Debug" options are experimental and may be removed in later
+    # versions of the Agent.
+    #
+    "Debug.CgroupCheckPeriod": 300,
 }
 
 
@@ -238,6 +248,7 @@ def get_lib_dir(conf=__conf__):
 
 
 def get_published_hostname(conf=__conf__):
+    # Some applications rely on this file; do not remove this setting
     return os.path.join(get_lib_dir(conf), 'published_hostname')
 
 
@@ -453,10 +464,46 @@ def get_disable_agent_file_path(conf=__conf__):
     return os.path.join(get_lib_dir(conf), DISABLE_AGENT_FILE)
 
 
-def get_cgroups_enforce_limits(conf=__conf__):
-    return conf.get_switch("CGroups.EnforceLimits", False)
+def get_cgroups_enabled(conf=__conf__):
+    return conf.get_switch("CGroups.Enabled", True)
 
 
-def get_cgroups_excluded(conf=__conf__):
-    excluded_value = conf.get("CGroups.Excluded", "customscript, runcommand")
-    return [s for s in [i.strip().lower() for i in excluded_value.split(',')] if len(s) > 0] if excluded_value else [] # pylint: disable=len-as-condition
+def get_monitor_network_configuration_changes(conf=__conf__):
+    return conf.get_switch("Monitor.NetworkConfigurationChanges", False)
+
+
+def get_cgroup_check_period(conf=__conf__):
+    """
+    How often to perform checks on cgroups (are the processes in the cgroups as expected,
+    has the agent exceeded its quota, etc)
+
+    NOTE: This option is experimental and may be removed in later versions of the Agent.
+    """
+    return conf.get_int("Debug.CgroupCheckPeriod", 300)
+
+
+def get_cgroup_log_metrics(conf=__conf__):
+    """
+    If True, resource usage metrics are written to the local log
+
+    NOTE: This option is experimental and may be removed in later versions of the Agent.
+    """
+    return conf.get_switch("Debug.CgroupLogMetrics", False)
+
+
+def get_cgroup_disable_on_process_check_failure(conf=__conf__):
+    """
+    If True, cgroups will be disabled if the process check fails
+
+    NOTE: This option is experimental and may be removed in later versions of the Agent.
+    """
+    return conf.get_switch("Debug.CgroupDisableOnProcessCheckFailure", True)
+
+
+def get_cgroup_disable_on_quota_check_failure(conf=__conf__):
+    """
+    If True, cgroups will be disabled if the CPU quota check fails
+
+    NOTE: This option is experimental and may be removed in later versions of the Agent.
+    """
+    return conf.get_switch("Debug.CgroupDisableOnQuotaCheckFailure", True)

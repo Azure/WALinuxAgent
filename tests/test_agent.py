@@ -17,7 +17,7 @@
 
 import os.path
 
-from azurelinuxagent.agent import parse_args, Agent, usage
+from azurelinuxagent.agent import parse_args, Agent, usage, AgentCommands
 from azurelinuxagent.common import conf
 from azurelinuxagent.common.utils import fileutil
 from tests.tools import AgentTestCase, data_dir, Mock, patch
@@ -26,9 +26,11 @@ EXPECTED_CONFIGURATION = \
 """AutoUpdate.Enabled = True
 AutoUpdate.GAFamily = Prod
 Autoupdate.Frequency = 3600
-CGroups.EnforceLimits = False
-CGroups.Excluded = customscript,runcommand
 DVD.MountPoint = /mnt/cdrom/secure
+Debug.CgroupCheckPeriod = 300
+Debug.CgroupDisableOnProcessCheckFailure = True
+Debug.CgroupDisableOnQuotaCheckFailure = True
+Debug.CgroupLogMetrics = False
 DetectScvmmEnv = False
 EnableOverProvisioning = True
 Extension.LogDir = /var/log/azure
@@ -84,27 +86,27 @@ class TestAgent(AgentTestCase):
 
     def test_accepts_configuration_path(self):
         conf_path = os.path.join(data_dir, "test_waagent.conf")
-        c, f, v, d, cfp, lcm = parse_args(["-configuration-path:" + conf_path]) # pylint: disable=unused-variable,invalid-name
+        c, f, v, d, cfp, lcm, _ = parse_args(["-configuration-path:" + conf_path])  # pylint: disable=unused-variable
         self.assertEqual(cfp, conf_path)
 
     @patch("os.path.exists", return_value=True)
     def test_checks_configuration_path(self, mock_exists):
         conf_path = "/foo/bar-baz/something.conf"
-        c, f, v, d, cfp, lcm = parse_args(["-configuration-path:"+conf_path]) # pylint: disable=unused-variable,invalid-name
+        c, f, v, d, cfp, lcm, _ = parse_args(["-configuration-path:"+conf_path])  # pylint: disable=unused-variable
         self.assertEqual(cfp, conf_path)
         self.assertEqual(mock_exists.call_count, 1)
 
     @patch("sys.stderr")
     @patch("os.path.exists", return_value=False)
     @patch("sys.exit", side_effect=Exception)
-    def test_rejects_missing_configuration_path(self, mock_exit, mock_exists, mock_stderr): # pylint: disable=unused-argument
+    def test_rejects_missing_configuration_path(self, mock_exit, mock_exists, mock_stderr):  # pylint: disable=unused-argument
         try:
-            c, f, v, d, cfp, lcm = parse_args(["-configuration-path:/foo/bar.conf"]) # pylint: disable=unused-variable,invalid-name
+            c, f, v, d, cfp, lcm, _ = parse_args(["-configuration-path:/foo/bar.conf"])  # pylint: disable=unused-variable
         except Exception:
             self.assertEqual(mock_exit.call_count, 1)
 
     def test_configuration_path_defaults_to_none(self):
-        c, f, v, d, cfp, lcm = parse_args([]) # pylint: disable=unused-variable,invalid-name
+        c, f, v, d, cfp, lcm, _ = parse_args([])  # pylint: disable=unused-variable
         self.assertEqual(cfp, None)
 
     def test_agent_accepts_configuration_path(self):
@@ -151,7 +153,7 @@ class TestAgent(AgentTestCase):
         mock_dir.return_value = ext_log_dir
 
         self.assertFalse(os.path.isdir(ext_log_dir))
-        agent = Agent(False, # pylint: disable=unused-variable
+        agent = Agent(False,  # pylint: disable=unused-variable
                     conf_file_path=os.path.join(data_dir, "test_waagent.conf"))
         self.assertTrue(os.path.isdir(ext_log_dir))
 
@@ -164,7 +166,7 @@ class TestAgent(AgentTestCase):
 
         self.assertTrue(os.path.isfile(ext_log_dir))
         self.assertFalse(os.path.isdir(ext_log_dir))
-        agent = Agent(False, # pylint: disable=unused-variable
+        agent = Agent(False,  # pylint: disable=unused-variable
                       conf_file_path=os.path.join(data_dir, "test_waagent.conf"))
         self.assertTrue(os.path.isfile(ext_log_dir))
         self.assertFalse(os.path.isdir(ext_log_dir))
@@ -181,26 +183,26 @@ class TestAgent(AgentTestCase):
 
     def test_checks_log_collector_mode(self):
         # Specify full mode
-        c, f, v, d, cfp, lcm = parse_args(["-collect-logs", "-full"]) # pylint: disable=unused-variable,invalid-name
+        c, f, v, d, cfp, lcm, _ = parse_args(["-collect-logs", "-full"])  # pylint: disable=unused-variable
         self.assertEqual(c, "collect-logs")
         self.assertEqual(lcm, True)
 
         # Defaults to None if mode not specified
-        c, f, v, d, cfp, lcm = parse_args(["-collect-logs"]) # pylint: disable=unused-variable,invalid-name
+        c, f, v, d, cfp, lcm, _ = parse_args(["-collect-logs"])  # pylint: disable=unused-variable
         self.assertEqual(c, "collect-logs")
         self.assertEqual(lcm, False)
 
     @patch("sys.stderr")
     @patch("sys.exit", side_effect=Exception)
-    def test_rejects_invalid_log_collector_mode(self, mock_exit, mock_stderr): # pylint: disable=unused-argument
+    def test_rejects_invalid_log_collector_mode(self, mock_exit, mock_stderr):  # pylint: disable=unused-argument
         try:
-            c, f, v, d, cfp, lcm = parse_args(["-collect-logs", "-notvalid"]) # pylint: disable=unused-variable,invalid-name
+            c, f, v, d, cfp, lcm, _ = parse_args(["-collect-logs", "-notvalid"])  # pylint: disable=unused-variable
         except Exception:
             self.assertEqual(mock_exit.call_count, 1)
 
     @patch("os.path.exists", return_value=True)
     @patch("azurelinuxagent.agent.LogCollector")
-    def test_calls_collect_logs_with_proper_mode(self, mock_log_collector, *args): # pylint: disable=unused-argument
+    def test_calls_collect_logs_with_proper_mode(self, mock_log_collector, *args):  # pylint: disable=unused-argument
         agent = Agent(False, conf_file_path=os.path.join(data_dir, "test_waagent.conf"))
 
         agent.collect_logs(is_full_mode=True)
@@ -210,6 +212,42 @@ class TestAgent(AgentTestCase):
         agent.collect_logs(is_full_mode=False)
         full_mode = mock_log_collector.call_args_list[1][0][0]
         self.assertFalse(full_mode)
+
+    def test_it_should_parse_setup_firewall_properly(self):
+
+        test_firewall_meta = {
+            "dst_ip": "1.2.3.4",
+            "uid": "9999",
+            "wait": "-w"
+        }
+        cmd, _, _, _, _, _, firewall_metadata = parse_args(
+            ["-{0}".format(AgentCommands.SetupFirewall), "-dst_ip=1.2.3.4", "-uid=9999", "-w"])
+
+        self.assertEqual(cmd, AgentCommands.SetupFirewall)
+        self.assertEqual(firewall_metadata, test_firewall_meta)
+
+        # Defaults to None if command is different
+        test_firewall_meta = {
+            "dst_ip": None,
+            "uid": None,
+            "wait": ""
+        }
+        cmd, _, _, _, _, _, firewall_metadata = parse_args(["-{0}".format(AgentCommands.Help)])
+        self.assertEqual(cmd, AgentCommands.Help)
+        self.assertEqual(test_firewall_meta, firewall_metadata)
+
+    def test_it_should_ignore_empty_arguments(self):
+
+        test_firewall_meta = {
+            "dst_ip": "1.2.3.4",
+            "uid": "9999",
+            "wait": ""
+        }
+        cmd, _, _, _, _, _, firewall_metadata = parse_args(
+            ["-{0}".format(AgentCommands.SetupFirewall), "-dst_ip=1.2.3.4", "-uid=9999", ""])
+
+        self.assertEqual(cmd, AgentCommands.SetupFirewall)
+        self.assertEqual(firewall_metadata, test_firewall_meta)
 
     def test_agent_usage_message(self):
         message = usage()

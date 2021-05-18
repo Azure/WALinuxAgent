@@ -37,8 +37,8 @@ class AlpineOSUtil(DefaultOSUtil):
     def restart_if(self, ifname, retries=None, wait=None):
         logger.info('restarting {} (sort of, actually SIGHUPing dhcpcd)'.format(ifname))
         pid = self.get_dhcp_pid()
-        if pid != None: # pylint: disable=C0121
-            ret = shellutil.run_get_output('kill -HUP {}'.format(pid)) # pylint: disable=W0612
+        if pid != None:
+            ret = shellutil.run_get_output('kill -HUP {}'.format(pid))  # pylint: disable=W0612
 
     def set_ssh_client_alive_interval(self):
         # Alpine will handle this.

@@ -19,15 +19,19 @@ import json
 import os
 import subprocess
 import time
+import uuid
 
-from azurelinuxagent.common.cgroupconfigurator import CGroupConfigurator
+from azurelinuxagent.common.agent_supported_feature import AgentSupportedFeature
 from azurelinuxagent.common.event import AGENT_EVENT_FILE_EXTENSION, WALAEventOperation
 from azurelinuxagent.common.exception import ExtensionError, ExtensionErrorCodes
 from azurelinuxagent.common.protocol.restapi import ExtensionStatus, Extension, ExtHandler, ExtHandlerProperties
 from azurelinuxagent.common.protocol.util import ProtocolUtil
+from azurelinuxagent.common.protocol.wire import WireProtocol
+from azurelinuxagent.common.utils import fileutil
 from azurelinuxagent.common.utils.extensionprocessutil import TELEMETRY_MESSAGE_MAX_LEN, format_stdout_stderr, \
     read_output
-from azurelinuxagent.ga.exthandlers import parse_ext_status, ExtHandlerInstance, ExtCommandEnvVariable, ExtensionStatusError
+from azurelinuxagent.ga.exthandlers import parse_ext_status, ExtHandlerInstance, ExtCommandEnvVariable, \
+    ExtensionStatusError, _DEFAULT_SEQ_NO
 from tests.protocol import mockwiredata
 from tests.protocol.mocks import mock_wire_protocol
 from tests.tools import AgentTestCase, patch, mock_sleep, clear_singleton_instances
@@ -65,8 +69,6 @@ class TestExtHandlers(AgentTestCase):
         """
         Parse a status report for a successful execution of an extension.
         """
-
-        # pylint: disable=invalid-name
         s = '''[{
     "status": {
       "status": "success",
@@ -82,7 +84,6 @@ class TestExtHandlers(AgentTestCase):
     "timestampUTC": "2018-04-20T21:20:24Z"
   }
 ]'''
-        # pylint: enable=invalid-name
         ext_status = ExtensionStatus(seq_no=0)
         parse_ext_status(ext_status, json.loads(s))
 
@@ -102,7 +103,6 @@ class TestExtHandlers(AgentTestCase):
         The agent should handle this gracefully, and convert all unknown
         status/status values into an error.
         """
-        # pylint: disable=invalid-name
         s = '''[{ 
     "status": {
       "status": "failed",
@@ -117,7 +117,6 @@ class TestExtHandlers(AgentTestCase):
     "version": "1.0",
     "timestampUTC": "2018-04-20T20:50:22Z"
 }]'''
-        # pylint: enable=invalid-name
         ext_status = ExtensionStatus(seq_no=0)
         parse_ext_status(ext_status, json.loads(s))
 
@@ -186,7 +185,7 @@ class TestExtHandlers(AgentTestCase):
         """
 
         # Validating empty status case
-        s = '''[]''' # pylint: disable=invalid-name
+        s = '''[]'''
         ext_status = ExtensionStatus(seq_no=0)
         parse_ext_status(ext_status, json.loads(s))
 
@@ -210,14 +209,11 @@ class TestExtHandlers(AgentTestCase):
         self.assertEqual(0, ext_status.sequenceNumber)
         self.assertEqual(0, len(ext_status.substatusList))
 
-    @patch('azurelinuxagent.common.event.EventLogger.add_event')
-    @patch('azurelinuxagent.ga.exthandlers.ExtHandlerInstance._get_largest_seq_no')
-    def assert_extension_sequence_number(self, # pylint: disable=too-many-arguments
-                                         patch_get_largest_seq,
-                                         patch_add_event,
-                                         goal_state_sequence_number,
-                                         disk_sequence_number,
-                                         expected_sequence_number):
+    @patch('azurelinuxagent.ga.exthandlers.ExtHandlerInstance._get_last_modified_seq_no_from_config_files')
+    def assert_extension_sequence_number(self, patch_get_largest_seq=None,
+                                         goal_state_sequence_number=None,
+                                         disk_sequence_number=None,
+                                         expected_sequence_number=None):
         ext = Extension()
         ext.sequenceNumber = goal_state_sequence_number
         patch_get_largest_seq.return_value = disk_sequence_number
@@ -230,23 +226,6 @@ class TestExtHandlers(AgentTestCase):
         instance = ExtHandlerInstance(ext_handler=ext_handler, protocol=None)
         seq, path = instance.get_status_file_path(ext)
 
-        try:
-            gs_seq_int = int(goal_state_sequence_number)
-            gs_int = True
-        except ValueError:
-            gs_int = False
-
-        if gs_int and gs_seq_int != disk_sequence_number:
-            self.assertEqual(1, patch_add_event.call_count)
-            args, kw_args = patch_add_event.call_args # pylint: disable=unused-variable
-            self.assertEqual('SequenceNumberMismatch', kw_args['op'])
-            self.assertEqual(False, kw_args['is_success'])
-            self.assertEqual('Goal state: {0}, disk: {1}'
-                             .format(gs_seq_int, disk_sequence_number),
-                             kw_args['message'])
-        else:
-            self.assertEqual(0, patch_add_event.call_count)
-
         self.assertEqual(expected_sequence_number, seq)
         if seq > -1:
             self.assertTrue(path.endswith('/foo-1.2.3/status/{0}.status'.format(expected_sequence_number)))
@@ -254,19 +233,19 @@ class TestExtHandlers(AgentTestCase):
             self.assertIsNone(path)
 
     def test_extension_sequence_number(self):
-        self.assert_extension_sequence_number(goal_state_sequence_number="12", # pylint: disable=no-value-for-parameter
+        self.assert_extension_sequence_number(goal_state_sequence_number="12",
                                               disk_sequence_number=366,
                                               expected_sequence_number=12)
 
-        self.assert_extension_sequence_number(goal_state_sequence_number=" 12 ", # pylint: disable=no-value-for-parameter
+        self.assert_extension_sequence_number(goal_state_sequence_number=" 12 ",
                                               disk_sequence_number=366,
                                               expected_sequence_number=12)
 
-        self.assert_extension_sequence_number(goal_state_sequence_number=" foo", # pylint: disable=no-value-for-parameter
+        self.assert_extension_sequence_number(goal_state_sequence_number=" foo",
                                               disk_sequence_number=3,
                                               expected_sequence_number=3)
 
-        self.assert_extension_sequence_number(goal_state_sequence_number="-1", # pylint: disable=no-value-for-parameter
+        self.assert_extension_sequence_number(goal_state_sequence_number="-1",
                                               disk_sequence_number=3,
                                               expected_sequence_number=-1)
 
@@ -287,6 +266,32 @@ class TestExtHandlers(AgentTestCase):
                               "Error message should contain the incorrect versions")
                 self.assertFalse(plugin_setting_mismatch_calls[0]['is_success'], "The event should be false")
 
+    @patch("azurelinuxagent.common.conf.get_ext_log_dir")
+    def test_command_extension_log_truncates_correctly(self, mock_log_dir):
+        log_dir_path = os.path.join(self.tmp_dir, "log_directory")
+        mock_log_dir.return_value = log_dir_path
+
+        ext_handler_props = ExtHandlerProperties()
+        ext_handler_props.version = "1.2.3"
+        ext_handler = ExtHandler(name='foo')
+        ext_handler.properties = ext_handler_props
+
+        first_line = "This is the first line!"
+        second_line = "This is the second line."
+        old_logfile_contents = "{first_line}\n{second_line}\n".format(first_line=first_line, second_line=second_line)
+
+        log_file_path = os.path.join(log_dir_path, "foo", "CommandExecution.log")
+
+        fileutil.mkdir(os.path.join(log_dir_path, "foo"), mode=0o755)
+        with open(log_file_path, "a") as log_file:
+            log_file.write(old_logfile_contents)
+
+        _ = ExtHandlerInstance(ext_handler=ext_handler, protocol=None,
+            execution_log_max_size=(len(first_line)+len(second_line)//2))
+
+        with open(log_file_path) as truncated_log_file:
+            self.assertEqual(truncated_log_file.read(), "{second_line}\n".format(second_line=second_line))
+
 class LaunchCommandTestCase(AgentTestCase):
     """
     Test cases for launch_command
@@ -299,7 +304,7 @@ class LaunchCommandTestCase(AgentTestCase):
         ext_handler_properties.version = "1.2.3"
         self.ext_handler = ExtHandler(name='foo')
         self.ext_handler.properties = ext_handler_properties
-        self.ext_handler_instance = ExtHandlerInstance(ext_handler=self.ext_handler, protocol=None)
+        self.ext_handler_instance = ExtHandlerInstance(ext_handler=self.ext_handler, protocol=WireProtocol("1.2.3.4"))
 
         self.mock_get_base_dir = patch("azurelinuxagent.ga.exthandlers.ExtHandlerInstance.get_base_dir", lambda *_: self.tmp_dir)
         self.mock_get_base_dir.start()
@@ -311,15 +316,7 @@ class LaunchCommandTestCase(AgentTestCase):
         self.mock_sleep = patch("time.sleep", lambda *_: mock_sleep(0.01))
         self.mock_sleep.start()
 
-        self.cgroups_enabled = CGroupConfigurator.get_instance().enabled()
-        CGroupConfigurator.get_instance().disable()
-
     def tearDown(self):
-        if self.cgroups_enabled:
-            CGroupConfigurator.get_instance().enable()
-        else:
-            CGroupConfigurator.get_instance().disable()
-
         self.mock_get_log_dir.stop()
         self.mock_get_base_dir.stop()
         self.mock_sleep.stop()
@@ -346,7 +343,8 @@ class LaunchCommandTestCase(AgentTestCase):
         stdout = "stdout" * 5
         stderr = "stderr" * 5
 
-        command = self.create_script("produce_output.py", '''
+        command = "produce_output.py"
+        self.create_script(os.path.join(self.ext_handler_instance.get_base_dir(), command), '''
 import sys
 
 sys.stdout.write("{0}")
@@ -377,7 +375,8 @@ sys.stderr.write("{1}")
         signal_file = os.path.join(self.tmp_dir, "signal_file.txt")
 
         # the test command produces some output then goes into an infinite loop
-        command = self.create_script("produce_output_then_hang.py", '''
+        command = "produce_output_then_hang.py"
+        self.create_script(os.path.join(self.ext_handler_instance.get_base_dir(), command), '''
 import sys
 import time
 
@@ -404,7 +403,7 @@ with open("{2}", "w") as file:
 
         start_time = time.time()
 
-        with patch("time.sleep", side_effect=sleep, autospec=True) as mock_sleep: # pylint: disable=redefined-outer-name
+        with patch("time.sleep", side_effect=sleep, autospec=True) as mock_sleep:  # pylint: disable=redefined-outer-name
 
             with self.assertRaises(ExtensionError) as context_manager:
                 self.ext_handler_instance.launch_command(command, timeout=timeout, extension_error_code=extension_error_code)
@@ -443,7 +442,8 @@ with open("{2}", "w") as file:
         stderr = "stderr" * 3
         exit_code = 99
 
-        command = self.create_script("fail.py", '''
+        command = "fail.py"
+        self.create_script(os.path.join(self.ext_handler_instance.get_base_dir(), command), '''
 import sys
 
 sys.stdout.write("{0}")
@@ -465,7 +465,8 @@ exit({2})
         stdout = "stdout"
         stderr = "stderr"
 
-        command = self.create_script("start_child_process.py", '''
+        command = "start_child_process.py"
+        self.create_script(os.path.join(self.ext_handler_instance.get_base_dir(), command), '''
 import os
 import sys
 import time
@@ -500,7 +501,8 @@ else:
         # the child process uses the signal file to indicate it has produced output
         signal_file = os.path.join(self.tmp_dir, "signal_file.txt")
 
-        command = self.create_script("start_child_with_output.py", '''
+        command = "start_child_with_output.py"
+        self.create_script(os.path.join(self.ext_handler_instance.get_base_dir(), command), '''
 import os
 import sys
 import time
@@ -541,7 +543,8 @@ else:
         child_stdout = "CHILD STDOUT"
         child_stderr = "CHILD STDERR"
 
-        command = self.create_script("start_child_that_fails.py", '''
+        command = "start_child_that_fails.py"
+        self.create_script(os.path.join(self.ext_handler_instance.get_base_dir(), command), '''
 import os
 import sys
 import time
@@ -570,7 +573,8 @@ else:
         # file used to verify the command completed successfully
         signal_file = os.path.join(self.tmp_dir, "signal_file.txt")
 
-        command = self.create_script("create_file.py", '''
+        command = "create_file.py"
+        self.create_script(os.path.join(self.ext_handler_instance.get_base_dir(), command), '''
 open("{0}", "w").close()
 
 '''.format(signal_file))
@@ -587,7 +591,8 @@ open("{0}", "w").close()
         stderr = "STDERR"
 
         # the test script mimics the redirection done by the Custom Script extension
-        command = self.create_script("produce_output", '''
+        command = "produce_output"
+        self.create_script(os.path.join(self.ext_handler_instance.get_base_dir(), command), '''
 exec &> {0}
 echo {1}
 >&2 echo {2}
@@ -606,7 +611,8 @@ echo {1}
         stdout = "STDOUT"
         stderr = "STDERR"
 
-        command = self.create_script("produce_long_output.py", '''
+        command = "produce_long_output.py"
+        self.create_script(os.path.join(self.ext_handler_instance.get_base_dir(), command), '''
 import sys
 
 sys.stdout.write( "{0}" * {1})
@@ -620,7 +626,8 @@ sys.stderr.write( "{2}" * {3})
         self.assertIn(stderr, output)
 
     def test_it_should_read_only_the_head_of_large_outputs(self):
-        command = self.create_script("produce_long_output.py", '''
+        command = "produce_long_output.py"
+        self.create_script(os.path.join(self.ext_handler_instance.get_base_dir(), command), '''
 import sys
 
 sys.stdout.write("O" * 5 * 1024 * 1024)
@@ -638,7 +645,7 @@ sys.stderr.write("E" * 5 * 1024 * 1024)
 
         mock_format.assert_called_once()
 
-        args, kwargs = mock_format.call_args # pylint: disable=unused-variable
+        args, kwargs = mock_format.call_args  # pylint: disable=unused-variable
         stdout, stderr = args
 
         self.assertGreaterEqual(len(stdout), 1024)
@@ -648,7 +655,8 @@ sys.stderr.write("E" * 5 * 1024 * 1024)
         self.assertLessEqual(len(stderr), TELEMETRY_MESSAGE_MAX_LEN)
 
     def test_it_should_handle_errors_while_reading_the_command_output(self):
-        command = self.create_script("produce_output.py", '''
+        command = "produce_output.py"
+        self.create_script(os.path.join(self.ext_handler_instance.get_base_dir(), command), '''
 import sys
 
 sys.stdout.write("STDOUT")
@@ -659,7 +667,7 @@ sys.stderr.write("STDERR")
         # trying to use these files.
         original_capture_process_output = read_output
 
-        def capture_process_output(stdout_file, stderr_file): # pylint: disable=unused-argument
+        def capture_process_output(stdout_file, stderr_file):  # pylint: disable=unused-argument
             return original_capture_process_output(None, None)
 
         with patch('azurelinuxagent.common.utils.extensionprocessutil.read_output', side_effect=capture_process_output):
@@ -669,20 +677,28 @@ sys.stderr.write("STDERR")
 
     def test_it_should_contain_all_helper_environment_variables(self):
 
-        helper_env_vars = {ExtCommandEnvVariable.ExtensionSeqNumber: self.ext_handler_instance.get_seq_no(),
+        wire_ip = str(uuid.uuid4())
+        ext_handler_instance = ExtHandlerInstance(ext_handler=self.ext_handler, protocol=WireProtocol(wire_ip))
+
+        helper_env_vars = {ExtCommandEnvVariable.ExtensionSeqNumber: _DEFAULT_SEQ_NO,
                            ExtCommandEnvVariable.ExtensionPath: self.tmp_dir,
-                           ExtCommandEnvVariable.ExtensionVersion: self.ext_handler_instance.ext_handler.properties.version}
+                           ExtCommandEnvVariable.ExtensionVersion: ext_handler_instance.ext_handler.properties.version,
+                           ExtCommandEnvVariable.WireProtocolAddress: wire_ip}
 
         command = """
             printenv | grep -E '(%s)'
         """ % '|'.join(helper_env_vars.keys())
 
-        test_file = self.create_script('printHelperEnvironments.sh', command)
+        test_file = 'printHelperEnvironments.sh'
+        self.create_script(os.path.join(self.ext_handler_instance.get_base_dir(), test_file), command)
 
         with patch("subprocess.Popen", wraps=subprocess.Popen) as patch_popen:
-            output = self.ext_handler_instance.launch_command(test_file)
+            # Returning empty list for get_agent_supported_features_list_for_extensions as we have a separate test for it
+            with patch("azurelinuxagent.ga.exthandlers.get_agent_supported_features_list_for_extensions",
+                       return_value={}):
+                output = ext_handler_instance.launch_command(test_file)
 
-            args, kwagrs = patch_popen.call_args # pylint: disable=unused-variable
+            args, kwagrs = patch_popen.call_args  # pylint: disable=unused-variable
             without_os_env = dict((k, v) for (k, v) in kwagrs['env'].items() if k not in os.environ)
 
             # This check will fail if any helper environment variables are added/removed later on
@@ -691,3 +707,64 @@ sys.stderr.write("STDERR")
             # This check is checking if the expected values are set for the extension commands
             for helper_var in helper_env_vars:
                 self.assertIn("%s=%s" % (helper_var, helper_env_vars[helper_var]), output)
+
+    def test_it_should_pass_supported_features_list_as_environment_variables(self):
+
+        class TestFeature(AgentSupportedFeature):
+
+            def __init__(self, name, version, supported):
+                super(TestFeature, self).__init__(name=name,
+                                                  version=version,
+                                                  supported=supported)
+
+        test_name = str(uuid.uuid4())
+        test_version = str(uuid.uuid4())
+
+        command = "check_env.py"
+        self.create_script(os.path.join(self.ext_handler_instance.get_base_dir(), command), '''
+import os
+import json
+import sys
+
+features = os.getenv("{0}")
+if not features:
+    print("{0} not found in environment")
+    sys.exit(0)
+l = json.loads(features)
+found = False
+for feature in l:
+    if feature['Key'] == "{1}" and feature['Value'] == "{2}":
+        found = True
+        break
+    
+print("Found Feature %s: %s" % ("{1}", found))
+'''.format(ExtCommandEnvVariable.ExtensionSupportedFeatures, test_name, test_version))
+
+        # It should include all supported features and pass it as Environment Variable to extensions
+        test_supported_features = {test_name: TestFeature(name=test_name, version=test_version, supported=True)}
+        with patch("azurelinuxagent.common.agent_supported_feature.__EXTENSION_ADVERTISED_FEATURES",
+                   test_supported_features):
+            output = self.ext_handler_instance.launch_command(command)
+
+            self.assertIn("[stdout]\nFound Feature {0}: True".format(test_name), output, "Feature not found")
+
+        # It should not include the feature if feature not supported
+        test_supported_features = {
+            test_name: TestFeature(name=test_name, version=test_version, supported=False),
+            "testFeature": TestFeature(name="testFeature", version="1.2.1", supported=True)
+        }
+        with patch("azurelinuxagent.common.agent_supported_feature.__EXTENSION_ADVERTISED_FEATURES",
+                   test_supported_features):
+            output = self.ext_handler_instance.launch_command(command)
+
+            self.assertIn("[stdout]\nFound Feature {0}: False".format(test_name), output, "Feature wrongfully found")
+
+        # It should not include the SupportedFeatures Key in Environment variables if no features supported
+        test_supported_features = {test_name: TestFeature(name=test_name, version=test_version, supported=False)}
+        with patch("azurelinuxagent.common.agent_supported_feature.__EXTENSION_ADVERTISED_FEATURES",
+                   test_supported_features):
+            output = self.ext_handler_instance.launch_command(command)
+
+            self.assertIn(
+                "[stdout]\n{0} not found in environment".format(ExtCommandEnvVariable.ExtensionSupportedFeatures),
+                output, "Environment variable should not be found")

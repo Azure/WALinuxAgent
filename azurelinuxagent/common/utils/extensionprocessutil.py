@@ -51,7 +51,7 @@ def wait_for_process_completion_or_timeout(process, timeout):
     return timeout == 0, return_code
 
 
-def handle_process_completion(process, command, timeout, stdout, stderr, error_code): # pylint: disable=R0913
+def handle_process_completion(process, command, timeout, stdout, stderr, error_code):
     """
     Utility function that waits for process completion and retrieves its output (stdout and stderr) if it completed
     before the timeout period. Otherwise, the process will get killed and an ExtensionError will be raised.
@@ -96,7 +96,7 @@ def read_output(stdout, stderr):
                       errors='backslashreplace')
 
         return format_stdout_stderr(stdout, stderr)
-    except Exception as e: # pylint: disable=C0103
+    except Exception as e:
         return format_stdout_stderr("", "Cannot read stdout/stderr: {0}".format(ustr(e)))
 
 
@@ -126,10 +126,10 @@ def format_stdout_stderr(stdout, stderr):
         return ''
 
     def to_s(captured_stdout, stdout_offset, captured_stderr, stderr_offset):
-        s = template.format(captured_stdout[stdout_offset:], captured_stderr[stderr_offset:]) # pylint: disable=C0103
+        s = template.format(captured_stdout[stdout_offset:], captured_stderr[stderr_offset:])
         return s
 
-    if len(stdout) + len(stderr) < max_len: # pylint: disable=R1705
+    if len(stdout) + len(stderr) < max_len:
         return to_s(stdout, 0, stderr, 0)
     elif len(stdout) < max_len_each:
         bonus = max_len_each - len(stdout)

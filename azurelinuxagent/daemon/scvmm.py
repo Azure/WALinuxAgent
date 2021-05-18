@@ -49,7 +49,7 @@ class ScvmmHandler(object):
             dvd_device = os.path.join(dev_dir, devices.group(0))
             self.osutil.mount_dvd(max_retry=1, chk_err=False, dvd_device=dvd_device, mount_point=mount_point)
             found = os.path.isfile(os.path.join(mount_point, VMM_CONF_FILE_NAME))
-            if found: # pylint: disable=R1723
+            if found:
                 self.start_scvmm_agent(mount_point=mount_point)
                 break
             else:
@@ -63,9 +63,9 @@ class ScvmmHandler(object):
         if mount_point is None:
             mount_point = conf.get_dvd_mount_point()
         startup_script = os.path.join(mount_point, VMM_STARTUP_SCRIPT_NAME)
-        devnull = open(os.devnull, 'w')
-        subprocess.Popen(["/bin/bash", startup_script, "-p " + mount_point],
-                         stdout=devnull, stderr=devnull)
+        with open(os.devnull, 'w') as devnull:
+            subprocess.Popen(["/bin/bash", startup_script, "-p " + mount_point],
+                             stdout=devnull, stderr=devnull)
     
     def run(self):
         if self.detect_scvmm_env():

@@ -63,7 +63,7 @@ _UNCOMPRESSED_ARCHIVE_SIZE_LIMIT = 150 * 1024 * 1024  # 150 MB
 _LOGGER = logging.getLogger(__name__)
 
 
-class LogCollector(object): # pylint: disable=R0903
+class LogCollector(object):
 
     _TRUNCATED_FILE_PREFIX = "truncated_"
 
@@ -115,10 +115,10 @@ class LogCollector(object): # pylint: disable=R0903
             return ustr(output, encoding="utf-8", errors="backslashreplace")
 
         try:
-            process = subprocess.Popen(command, stdin=subprocess.PIPE, stdout=stdout, stderr=subprocess.PIPE, shell=False)
+            process = subprocess.Popen(command, stdout=stdout, stderr=subprocess.PIPE, shell=False)
             stdout, stderr = process.communicate()
             return_code = process.returncode
-        except Exception as e: # pylint: disable=C0103
+        except Exception as e:
             error_msg = u"Command [{0}] raised unexpected exception: [{1}]".format(format_command(command), ustr(e))
             _LOGGER.error(error_msg)
             return
@@ -171,7 +171,7 @@ class LogCollector(object): # pylint: disable=R0903
         # (leading separator is removed by the archive).
         # For truncated files: /var/lib/waagent/logcollector/truncated/var/log/syslog.1 on disk becomes
         # truncated_var_log_syslog.1 in the archive.
-        if file_name.startswith(_TRUNCATED_FILES_DIR): # pylint: disable=R1705
+        if file_name.startswith(_TRUNCATED_FILES_DIR):
             original_file_path = file_name[len(_TRUNCATED_FILES_DIR):].lstrip(os.path.sep)
             archive_file_name = LogCollector._TRUNCATED_FILE_PREFIX + original_file_path.replace(os.path.sep, "_")
             return archive_file_name
@@ -221,7 +221,7 @@ class LogCollector(object): # pylint: disable=R0903
             contents = entry.split(",")
             if len(contents) != 2:
                 # If it's not a comment or an empty line, it's a malformed entry
-                if not entry.startswith("#") and len(entry.strip()) > 0: # pylint: disable=len-as-condition
+                if not entry.startswith("#") and len(entry.strip()) > 0:
                     _LOGGER.error("Couldn't parse \"%s\"", entry)
                 continue
 
@@ -258,11 +258,11 @@ class LogCollector(object): # pylint: disable=R0903
                     return truncated_file_path
 
             # Get the last N bytes of the file
-            with open(truncated_file_path, "w+") as fh: # pylint: disable=C0103
+            with open(truncated_file_path, "w+") as fh:
                 LogCollector._run_shell_command(["tail", "-c", str(_FILE_SIZE_LIMIT), file_path], stdout=fh)
 
             return truncated_file_path
-        except OSError as e: # pylint: disable=C0103
+        except OSError as e:
             _LOGGER.error("Failed to truncate large file: %s", ustr(e))
             return None
 
@@ -361,7 +361,7 @@ class LogCollector(object): # pylint: disable=R0903
                 compressed_archive.write(OUTPUT_RESULTS_FILE_PATH.encode("utf-8"), arcname="results.txt")
 
             return COMPRESSED_ARCHIVE_PATH
-        except Exception as e: # pylint: disable=C0103
+        except Exception as e:
             msg = "Failed to collect logs: {0}".format(ustr(e))
             _LOGGER.error(msg)
 

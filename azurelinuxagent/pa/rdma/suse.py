@@ -20,14 +20,23 @@
 import glob
 import azurelinuxagent.common.logger as logger
 import azurelinuxagent.common.utils.shellutil as shellutil
-from azurelinuxagent.common.rdma import RDMAHandler
 
+from azurelinuxagent.common.rdma import RDMAHandler
+from azurelinuxagent.common.version import DISTRO_VERSION
+
+from distutils.version import LooseVersion as Version
 
 class SUSERDMAHandler(RDMAHandler):
 
-    def install_driver(self): # pylint: disable=R0912,R1710
+    def install_driver(self):  # pylint: disable=R1710
         """Install the appropriate driver package for the RDMA firmware"""
 
+        if Version(DISTRO_VERSION) >= Version('15'):
+            msg = 'SLE 15 and later only supports PCI pass through, no '
+            msg += 'special driver needed for IB interface'
+            logger.info(msg)
+            return True
+        
         fw_version = self.get_rdma_version()
         if not fw_version:
             error_msg = 'RDMA: Could not determine firmware version. '
@@ -43,7 +52,7 @@ class SUSERDMAHandler(RDMAHandler):
         package_name = 'dummy'
         # Figure out the kernel that is running to find the proper kmp
         cmd = 'uname -r'
-        status, kernel_release = shellutil.run_get_output(cmd) # pylint: disable=W0612
+        status, kernel_release = shellutil.run_get_output(cmd)  # pylint: disable=W0612
         if 'default' in kernel_release:
             package_name = 'msft-rdma-kmp-default'
             info_msg = 'RDMA: Detected kernel-default'
@@ -125,7 +134,7 @@ class SUSERDMAHandler(RDMAHandler):
                 if not self.load_driver_module() or requires_reboot:
                     self.reboot_system()
                 return True
-        else: # pylint: disable=W0120
+        else:  # pylint: disable=W0120
             logger.info("RDMA: No suitable match in repos. Trying local.")
             local_packages = glob.glob('/opt/microsoft/rdma/*.rpm')
             for local_package in local_packages:
