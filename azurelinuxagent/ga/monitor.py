@@ -42,51 +42,42 @@ def get_monitor_handler():
     return MonitorHandler()
 
 
-class PollResourceUsageOperation(PeriodicOperation):
+class PollResourceUsage(PeriodicOperation):
     """
     Periodic operation to poll the tracked cgroups for resource usage data.
 
     It also checks whether there are processes in the agent's cgroup that should not be there.
     """
     def __init__(self):
-        super(PollResourceUsageOperation, self).__init__(
-            name="poll resource usage",
-            operation=self._operation_impl,
-            period=datetime.timedelta(minutes=5))
+        super(PollResourceUsage, self).__init__(conf.get_cgroup_check_period())
+        self.__log_metrics = conf.get_cgroup_log_metrics()
 
-    @staticmethod
-    def _operation_impl():
-        CGroupConfigurator.get_instance().check_processes_in_agent_cgroup()
+    def _operation(self):
+        tracked_metrics = CGroupsTelemetry.poll_all_tracked()
 
-        for metric in CGroupsTelemetry.poll_all_tracked():
-            report_metric(metric.category, metric.counter, metric.instance, metric.value)
+        for metric in tracked_metrics:
+            report_metric(metric.category, metric.counter, metric.instance, metric.value, log_event=self.__log_metrics)
+
+        CGroupConfigurator.get_instance().check_cgroups(tracked_metrics)
 
 
-class ResetPeriodicLogMessagesOperation(PeriodicOperation):
+class ResetPeriodicLogMessages(PeriodicOperation):
     """
     Periodic operation to clean up the hash-tables maintained by the loggers. For reference, please check
     azurelinuxagent.common.logger.Logger and azurelinuxagent.common.event.EventLogger classes
     """
     def __init__(self):
-        super(ResetPeriodicLogMessagesOperation, self).__init__(
-            name="reset periodic log messages",
-            operation=ResetPeriodicLogMessagesOperation._operation_impl,
-            period=datetime.timedelta(hours=12))
+        super(ResetPeriodicLogMessages, self).__init__(datetime.timedelta(hours=12))
 
-    @staticmethod
-    def _operation_impl():
+    def _operation(self):
         logger.reset_periodic()
 
 
-class ReportNetworkErrorsOperation(PeriodicOperation):
+class ReportNetworkErrors(PeriodicOperation):
     def __init__(self):
-        super(ReportNetworkErrorsOperation, self).__init__(
-            name="report network errors",
-            operation=ReportNetworkErrorsOperation._operation_impl,
-            period=datetime.timedelta(minutes=30))
+        super(ReportNetworkErrors, self).__init__(datetime.timedelta(minutes=30))
 
-    @staticmethod
-    def _operation_impl():
+    def _operation(self):
         io_errors = IOErrorCounter.get_and_reset()
         hostplugin_errors = io_errors.get("hostplugin")
         protocol_errors = io_errors.get("protocol")
@@ -97,15 +88,12 @@ class ReportNetworkErrorsOperation(PeriodicOperation):
             add_event(op=WALAEventOperation.HttpErrors, message=msg)
 
 
-class ReportNetworkConfigurationChangesOperation(PeriodicOperation):
+class ReportNetworkConfigurationChanges(PeriodicOperation):
     """
     Periodic operation to check and log changes in network configuration.
     """
     def __init__(self):
-        super(ReportNetworkConfigurationChangesOperation, self).__init__(
-            name="report network configuration changes",
-            operation=self._operation_impl,
-            period=datetime.timedelta(minutes=1))
+        super(ReportNetworkConfigurationChanges, self).__init__(datetime.timedelta(minutes=1))
         self.osutil = get_osutil()
         self.last_route_table_hash = b''
         self.last_nic_state = {}
@@ -128,7 +116,7 @@ class ReportNetworkConfigurationChangesOperation(PeriodicOperation):
         except Exception as exception:
             logger.warn("Error fetching the network configuration: {0}", ustr(exception))
 
-    def _operation_impl(self):
+    def _operation(self):
         raw_route_list = self.osutil.read_route_table()
         digest = hash_strings(raw_route_list)
         if digest != self.last_route_table_hash:
@@ -143,24 +131,21 @@ class ReportNetworkConfigurationChangesOperation(PeriodicOperation):
             self.last_nic_state = nic_state
 
 
-class SendHostPluginHeartbeatOperation(PeriodicOperation):
+class SendHostPluginHeartbeat(PeriodicOperation):
     """
     Periodic operation for reporting the HostGAPlugin's health. The signal is 'Healthy' when we have been able to communicate with
     plugin at least once in the last _HOST_PLUGIN_HEALTH_PERIOD.
     """
     def __init__(self, protocol, health_service):
-        super(SendHostPluginHeartbeatOperation, self).__init__(
-            name="send_host_plugin_heartbeat",
-            operation=self._operation_impl,
-            period=SendHostPluginHeartbeatOperation._HOST_PLUGIN_HEARTBEAT_PERIOD)
+        super(SendHostPluginHeartbeat, self).__init__(SendHostPluginHeartbeat._HOST_PLUGIN_HEARTBEAT_PERIOD)
         self.protocol = protocol
         self.health_service = health_service
-        self.host_plugin_error_state = ErrorState(min_timedelta=SendHostPluginHeartbeatOperation._HOST_PLUGIN_HEALTH_PERIOD)
+        self.host_plugin_error_state = ErrorState(min_timedelta=SendHostPluginHeartbeat._HOST_PLUGIN_HEALTH_PERIOD)
 
     _HOST_PLUGIN_HEARTBEAT_PERIOD = datetime.timedelta(minutes=1)
     _HOST_PLUGIN_HEALTH_PERIOD = datetime.timedelta(minutes=5)
 
-    def _operation_impl(self):
+    def _operation(self):
         try:
             host_plugin = self.protocol.client.get_host_plugin()
             host_plugin.ensure_initialized()
@@ -198,24 +183,21 @@ class SendHostPluginHeartbeatOperation(PeriodicOperation):
                 log_event=False)
 
 
-class SendImdsHeartbeatOperation(PeriodicOperation):
+class SendImdsHeartbeat(PeriodicOperation):
     """
     Periodic operation to report the IDMS's health. The signal is 'Healthy' when we have successfully called and validated
     a response in the last _IMDS_HEALTH_PERIOD.
     """
     def __init__(self, protocol_util, health_service):
-        super(SendImdsHeartbeatOperation, self).__init__(
-            name="send_imds_heartbeat",
-            operation=self._operation_impl,
-            period=SendImdsHeartbeatOperation._IMDS_HEARTBEAT_PERIOD)
+        super(SendImdsHeartbeat, self).__init__(SendImdsHeartbeat._IMDS_HEARTBEAT_PERIOD)
         self.health_service = health_service
         self.imds_client = get_imds_client(protocol_util.get_wireserver_endpoint())
-        self.imds_error_state = ErrorState(min_timedelta=SendImdsHeartbeatOperation._IMDS_HEALTH_PERIOD)
+        self.imds_error_state = ErrorState(min_timedelta=SendImdsHeartbeat._IMDS_HEALTH_PERIOD)
 
     _IMDS_HEARTBEAT_PERIOD = datetime.timedelta(minutes=1)
     _IMDS_HEALTH_PERIOD = datetime.timedelta(minutes=3)
 
-    def _operation_impl(self):
+    def _operation(self):
         try:
             is_currently_healthy, response = self.imds_client.validate()
 
@@ -282,14 +264,14 @@ class MonitorHandler(ThreadHandlerInterface):
             protocol = protocol_util.get_protocol()
             health_service = HealthService(protocol.get_endpoint())
             periodic_operations = [
-                ResetPeriodicLogMessagesOperation(),
-                ReportNetworkErrorsOperation(),
-                PollResourceUsageOperation(),
-                SendHostPluginHeartbeatOperation(protocol, health_service),
-                SendImdsHeartbeatOperation(protocol_util, health_service)
+                ResetPeriodicLogMessages(),
+                ReportNetworkErrors(),
+                PollResourceUsage(),
+                SendHostPluginHeartbeat(protocol, health_service),
+                SendImdsHeartbeat(protocol_util, health_service)
             ]
 
-            report_network_configuration_changes = ReportNetworkConfigurationChangesOperation()
+            report_network_configuration_changes = ReportNetworkConfigurationChanges()
             if conf.get_monitor_network_configuration_changes():
                 periodic_operations.append(report_network_configuration_changes)
             else:

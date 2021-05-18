@@ -23,6 +23,7 @@ import time
 import traceback
 import xml.sax.saxutils as saxutils
 from collections import defaultdict
+from datetime import datetime, timedelta
 
 import azurelinuxagent.common.conf as conf
 import azurelinuxagent.common.logger as logger
@@ -36,7 +37,7 @@ from azurelinuxagent.common.exception import ProtocolNotFoundError, \
 from azurelinuxagent.common.future import httpclient, bytebuffer, ustr
 from azurelinuxagent.common.protocol.goal_state import GoalState, TRANSPORT_CERT_FILE_NAME, TRANSPORT_PRV_FILE_NAME
 from azurelinuxagent.common.protocol.hostplugin import HostPluginProtocol
-from azurelinuxagent.common.protocol.restapi import DataContract, ExtensionStatus, ExtHandlerPackage, \
+from azurelinuxagent.common.protocol.restapi import DataContract, ExtHandlerPackage, \
     ExtHandlerPackageList, ExtHandlerVersionUri, ProvisionStatus, VMInfo, VMStatus
 from azurelinuxagent.common.telemetryevent import GuestAgentExtensionEventsSchema
 from azurelinuxagent.common.utils import fileutil, restutil
@@ -126,6 +127,9 @@ class WireProtocol(DataContract):
     def get_in_vm_gs_metadata(self):
         return self.client.get_ext_conf().in_vm_gs_metadata
 
+    def get_required_features(self):
+        return self.client.get_ext_conf().required_features
+
     def get_vmagent_manifests(self):
         goal_state = self.client.get_goal_state()
         ext_conf = self.client.get_ext_conf()
@@ -156,11 +160,11 @@ class WireProtocol(DataContract):
     def _download_ext_handler_pkg_through_host(self, uri, destination):
         host = self.client.get_host_plugin()
         uri, headers = host.get_artifact_request(uri, host.manifest_uri)
-        success = self.client.stream(uri, destination, headers=headers, use_proxy=False)
+        success = self.client.stream(uri, destination, headers=headers, use_proxy=False, max_retry=1)
         return success
 
     def download_ext_handler_pkg(self, uri, destination, headers=None, use_proxy=True):  # pylint: disable=W0613
-        direct_func = lambda: self.client.stream(uri, destination, headers=None, use_proxy=True)
+        direct_func = lambda: self.client.stream(uri, destination, headers=None, use_proxy=True, max_retry=1)
         # NOTE: the host_func may be called after refreshing the goal state, be careful about any goal state data
         # in the lambda.
         host_func = lambda: self._download_ext_handler_pkg_through_host(uri, destination)
@@ -187,10 +191,6 @@ class WireProtocol(DataContract):
         validate_param("vm_status", vm_status, VMStatus)
         self.client.status_blob.set_vm_status(vm_status)
         self.client.upload_status_blob()
-
-    def report_ext_status(self, ext_handler_name, ext_name, ext_status):  # pylint: disable=W0613
-        validate_param("ext_status", ext_status, ExtensionStatus)
-        self.client.status_blob.set_ext_status(ext_handler_name, ext_status)
 
     def report_event(self, events_iterator):
         self.client.report_event(events_iterator)
@@ -285,15 +285,23 @@ def ga_status_to_guest_info(ga_status):
     return v1_ga_guest_info
 
 
-def ga_status_to_v1(ga_status):
-    formatted_msg = {
-        'lang': 'en-US',
-        'message': ga_status.message
+def __get_formatted_msg_for_status_reporting(msg, lang="en-US"):
+    return {
+        'lang': lang,
+        'message': msg
     }
+
+
+def _get_utc_timestamp_for_status_reporting(time_format="%Y-%m-%dT%H:%M:%SZ", timestamp=None):
+    timestamp = time.gmtime() if timestamp is None else timestamp
+    return time.strftime(time_format, timestamp)
+
+
+def ga_status_to_v1(ga_status):
     v1_ga_status = {
         "version": ga_status.version,
         "status": ga_status.status,
-        "formattedMessage": formatted_msg
+        "formattedMessage": __get_formatted_msg_for_status_reporting(ga_status.message)
     }
     return v1_ga_status
 
@@ -305,31 +313,25 @@ def ext_substatus_to_v1(sub_status_list):
             "name": substatus.name,
             "status": substatus.status,
             "code": substatus.code,
-            "formattedMessage": {
-                "lang": "en-US",
-                "message": substatus.message
-            }
+            "formattedMessage": __get_formatted_msg_for_status_reporting(substatus.message)
         }
         status_list.append(status)
     return status_list
 
 
-def ext_status_to_v1(ext_name, ext_status):
+def ext_status_to_v1(ext_status):
     if ext_status is None:
         return None
-    timestamp = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+    timestamp = _get_utc_timestamp_for_status_reporting()
     v1_sub_status = ext_substatus_to_v1(ext_status.substatusList)
     v1_ext_status = {
         "status": {
-            "name": ext_name,
+            "name": ext_status.name,
             "configurationAppliedTime": ext_status.configurationAppliedTime,
             "operation": ext_status.operation,
             "status": ext_status.status,
             "code": ext_status.code,
-            "formattedMessage": {
-                "lang": "en-US",
-                "message": ext_status.message
-            }
+            "formattedMessage": __get_formatted_msg_for_status_reporting(ext_status.message)
         },
         "version": 1.0,
         "timestampUTC": timestamp
@@ -339,49 +341,69 @@ def ext_status_to_v1(ext_name, ext_status):
     return v1_ext_status
 
 
-def ext_handler_status_to_v1(handler_status, ext_statuses, timestamp):  # pylint: disable=W0613
+def ext_handler_status_to_v1(ext_handler_status):
     v1_handler_status = {
-        'handlerVersion': handler_status.version,
-        'handlerName': handler_status.name,
-        'status': handler_status.status,
-        'code': handler_status.code,
+        'handlerVersion': ext_handler_status.version,
+        'handlerName': ext_handler_status.name,
+        'status': ext_handler_status.status,
+        'code': ext_handler_status.code,
         'useExactVersion': True
     }
-    if handler_status.message is not None:
-        v1_handler_status["formattedMessage"] = {
-            "lang": "en-US",
-            "message": handler_status.message
+    if ext_handler_status.message is not None:
+        v1_handler_status["formattedMessage"] = __get_formatted_msg_for_status_reporting(ext_handler_status.message)
+
+    v1_ext_status = ext_status_to_v1(ext_handler_status.extension_status)
+    if ext_handler_status.extension_status is not None and v1_ext_status is not None:
+        v1_handler_status["runtimeSettingsStatus"] = {
+            'settingsStatus': v1_ext_status,
+            'sequenceNumber': ext_handler_status.extension_status.sequenceNumber
         }
 
-    if len(handler_status.extensions) > 0:
-        # Currently, no more than one extension per handler
-        ext_name = handler_status.extensions[0]
-        ext_status = ext_statuses.get(ext_name)
-        v1_ext_status = ext_status_to_v1(ext_name, ext_status)
-        if ext_status is not None and v1_ext_status is not None:
-            v1_handler_status["runtimeSettingsStatus"] = {
-                'settingsStatus': v1_ext_status,
-                'sequenceNumber': ext_status.sequenceNumber
-            }
+        # Add extension name if Handler supports MultiConfig
+        if ext_handler_status.supports_multi_config:
+            v1_handler_status["runtimeSettingsStatus"]["extensionName"] = ext_handler_status.extension_status.name
+
     return v1_handler_status
 
 
-def vm_status_to_v1(vm_status, ext_statuses):
-    timestamp = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+def vm_artifacts_aggregate_status_to_v1(vm_artifacts_aggregate_status):
+    gs_aggregate_status = vm_artifacts_aggregate_status.goal_state_aggregate_status
+    if gs_aggregate_status is None:
+        return None
+
+    v1_goal_state_aggregate_status = {
+        "formattedMessage": __get_formatted_msg_for_status_reporting(gs_aggregate_status.message),
+        "timestampUTC": _get_utc_timestamp_for_status_reporting(timestamp=gs_aggregate_status.processed_time),
+        "inSvdSeqNo": gs_aggregate_status.in_svd_seq_no,
+        "status": gs_aggregate_status.status,
+        "code": gs_aggregate_status.code
+    }
+
+    v1_artifact_aggregate_status = {
+        "goalStateAggregateStatus": v1_goal_state_aggregate_status
+    }
+    return v1_artifact_aggregate_status
+
+
+def vm_status_to_v1(vm_status):
+    timestamp = _get_utc_timestamp_for_status_reporting()
 
     v1_ga_guest_info = ga_status_to_guest_info(vm_status.vmAgent)
     v1_ga_status = ga_status_to_v1(vm_status.vmAgent)
+    v1_vm_artifact_aggregate_status = vm_artifacts_aggregate_status_to_v1(
+        vm_status.vmAgent.vm_artifacts_aggregate_status)
     v1_handler_status_list = []
     for handler_status in vm_status.vmAgent.extensionHandlers:
-        v1_handler_status = ext_handler_status_to_v1(handler_status,
-                                                     ext_statuses, timestamp)
-        if v1_handler_status is not None:
-            v1_handler_status_list.append(v1_handler_status)
+        v1_handler_status_list.append(ext_handler_status_to_v1(handler_status))
 
     v1_agg_status = {
         'guestAgentStatus': v1_ga_status,
         'handlerAggregateStatus': v1_handler_status_list
     }
+
+    if v1_vm_artifact_aggregate_status is not None:
+        v1_agg_status['vmArtifactsAggregateStatus'] = v1_vm_artifact_aggregate_status
+
     v1_vm_status = {
         'version': '1.1',
         'timestampUTC': timestamp,
@@ -391,13 +413,12 @@ def vm_status_to_v1(vm_status, ext_statuses):
 
     supported_features = []
     for _, feature in get_agent_supported_features_list_for_crp().items():
-        if feature.is_supported:
-            supported_features.append(
-                {
-                    "Key": feature.name,
-                    "Value": feature.version
-                }
-            )
+        supported_features.append(
+            {
+                "Key": feature.name,
+                "Value": feature.version
+            }
+        )
     if supported_features:
         v1_vm_status["supportedFeatures"] = supported_features
 
@@ -407,7 +428,6 @@ def vm_status_to_v1(vm_status, ext_statuses):
 class StatusBlob(object):
     def __init__(self, client):
         self.vm_status = None
-        self.ext_statuses = {}
         self.client = client
         self.type = None
         self.data = None
@@ -416,12 +436,8 @@ class StatusBlob(object):
         validate_param("vmAgent", vm_status, VMStatus)
         self.vm_status = vm_status
 
-    def set_ext_status(self, ext_handler_name, ext_status):
-        validate_param("extensionStatus", ext_status, ExtensionStatus)
-        self.ext_statuses[ext_handler_name] = ext_status
-
     def to_json(self):
-        report = vm_status_to_v1(self.vm_status, self.ext_statuses)
+        report = vm_status_to_v1(self.vm_status)
         return json.dumps(report)
 
     __storage_version__ = "2014-02-14"
@@ -451,7 +467,7 @@ class StatusBlob(object):
         return {
             "Content-Length": ustr(blob_size),
             "x-ms-blob-type": "BlockBlob",
-            "x-ms-date": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+            "x-ms-date": _get_utc_timestamp_for_status_reporting(),
             "x-ms-version": self.__class__.__storage_version__
         }
 
@@ -468,14 +484,14 @@ class StatusBlob(object):
             "Content-Length": "0",
             "x-ms-blob-content-length": ustr(blob_size),
             "x-ms-blob-type": "PageBlob",
-            "x-ms-date": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+            "x-ms-date": _get_utc_timestamp_for_status_reporting(),
             "x-ms-version": self.__class__.__storage_version__
         }
 
     def get_page_blob_page_headers(self, start, end):
         return {
             "Content-Length": ustr(end - start),
-            "x-ms-date": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+            "x-ms-date": _get_utc_timestamp_for_status_reporting(),
             "x-ms-range": "bytes={0}-{1}".format(start, end - 1),
             "x-ms-page-write": "update",
             "x-ms-version": self.__class__.__storage_version__
@@ -627,22 +643,30 @@ class WireClient(object):
     def fetch_manifest_through_host(self, uri):
         host = self.get_host_plugin()
         uri, headers = host.get_artifact_request(uri)
-        response = self.fetch(uri, headers, use_proxy=False)
+        response = self.fetch(uri, headers, use_proxy=False, max_retry=1)
         return response
 
-    def fetch_manifest(self, version_uris):
+    def fetch_manifest(self, version_uris, timeout_in_minutes=5, timeout_in_ms=0):
         logger.verbose("Fetch manifest")
         version_uris_shuffled = version_uris
         random.shuffle(version_uris_shuffled)
 
+        uris_tried = 0
+        start_time = datetime.now()
         for version in version_uris_shuffled:
+
+            if datetime.now() - start_time > timedelta(minutes=timeout_in_minutes, milliseconds=timeout_in_ms):
+                logger.warn("Agent timed-out after {0} minutes while fetching extension manifests. {1}/{2} uris tried.",
+                    timeout_in_minutes, uris_tried, len(version_uris))
+                break
+
             # GA expects a location and failoverLocation in ExtensionsConfig, but
             # this is not always the case. See #1147.
             if version.uri is None:
                 logger.verbose('The specified manifest URL is empty, ignored.')
                 continue
 
-            direct_func = lambda: self.fetch(version.uri)  # pylint: disable=W0640
+            direct_func = lambda: self.fetch(version.uri, max_retry=1)  # pylint: disable=W0640
             # NOTE: the host_func may be called after refreshing the goal state, be careful about any goal state data
             # in the lambda.
             host_func = lambda: self.fetch_manifest_through_host(version.uri)  # pylint: disable=W0640
@@ -656,13 +680,18 @@ class WireClient(object):
             except Exception as error:
                 logger.warn("Failed to fetch manifest from {0}. Error: {1}", version.uri, ustr(error))
 
+            uris_tried += 1
+
         raise ExtensionDownloadError("Failed to fetch manifest from all sources")
 
-    def stream(self, uri, destination, headers=None, use_proxy=None):
+    def stream(self, uri, destination, headers=None, use_proxy=None, max_retry=None):
+        """
+        max_retry indicates the maximum number of retries for the HTTP request; None indicates that the default value should be used
+        """
         success = False
         logger.verbose("Fetch [{0}] with headers [{1}] to file [{2}]", uri, headers, destination)
 
-        response = self._fetch_response(uri, headers, use_proxy)
+        response = self._fetch_response(uri, headers, use_proxy,  max_retry=max_retry)
         if response is not None and not restutil.request_failed(response):
             chunk_size = 1024 * 1024  # 1MB buffer
             try:
@@ -678,23 +707,30 @@ class WireClient(object):
 
         return success
 
-    def fetch(self, uri, headers=None, use_proxy=None, decode=True):
+    def fetch(self, uri, headers=None, use_proxy=None, decode=True, max_retry=None):
+        """
+        max_retry indicates the maximum number of retries for the HTTP request; None indicates that the default value should be used
+        """
         logger.verbose("Fetch [{0}] with headers [{1}]", uri, headers)
         content = None
-        response = self._fetch_response(uri, headers, use_proxy)
+        response = self._fetch_response(uri, headers, use_proxy, max_retry=max_retry)
         if response is not None and not restutil.request_failed(response):
             response_content = response.read()
             content = self.decode_config(response_content) if decode else response_content
         return content
 
-    def _fetch_response(self, uri, headers=None, use_proxy=None):
+    def _fetch_response(self, uri, headers=None, use_proxy=None, max_retry=None):
+        """
+        max_retry indicates the maximum number of retries for the HTTP request; None indicates that the default value should be used
+        """
         resp = None
         try:
             resp = self.call_storage_service(
                 restutil.http_get,
                 uri,
                 headers=headers,
-                use_proxy=use_proxy)
+                use_proxy=use_proxy,
+                max_retry=max_retry)
 
             host_plugin = self.get_host_plugin()
 
@@ -714,7 +750,13 @@ class WireClient(object):
                     host_plugin.report_fetch_health(uri, source='WireClient')
 
         except (HttpError, ProtocolError, IOError) as error:
-            logger.verbose("Fetch failed from [{0}]: {1}", uri, error)
+            msg = "Fetch failed: {0}".format(error)
+            logger.warn(msg)
+            report_event(op=WALAEventOperation.Download,
+                            is_success=False,
+                            message=msg,
+                            log_event=False)
+
             if isinstance(error, (InvalidContainerError, ResourceGoneError)):
                 # These are retryable errors that should force a goal state refresh in the host plugin
                 raise

@@ -19,39 +19,22 @@ import threading
 from azurelinuxagent.common import logger
 from azurelinuxagent.common.cgroup import CpuCgroup
 from azurelinuxagent.common.future import ustr
-from azurelinuxagent.common.logger import EVERY_SIX_HOURS
-from azurelinuxagent.common.resourceusage import ProcessInfo
-
-DELIM = " | "
-DEFAULT_PROCESS_NAME = "NO_PROCESS_FOUND"
-DEFAULT_PROCESS_COMMANDLINE = "NO_CMDLINE_FOUND"
 
 
 class CGroupsTelemetry(object):
     """
     """
     _tracked = []
+    _track_throttled_time = False
     _rlock = threading.RLock()
 
     @staticmethod
-    def get_process_info_summary(process_id):
-        process_cmdline = DEFAULT_PROCESS_COMMANDLINE
-        process_name = DEFAULT_PROCESS_NAME
+    def set_track_throttled_time(value):
+        CGroupsTelemetry._track_throttled_time = value
 
-        # The ProcessName and ProcessCommandLine can generate Exception if the file /proc/<pid>/{comm,cmdline} cease to
-        # exist; eg: the process can die, or finish. Which is why we need Default Names, in case we fail to fetch the
-        # details from those files.
-        try:
-            process_cmdline = ProcessInfo.get_proc_cmdline(process_id) if not None else DEFAULT_PROCESS_COMMANDLINE
-        except Exception as e:
-            logger.periodic_info(EVERY_SIX_HOURS, "[PERIODIC] {0}", ustr(e))
-
-        try:
-            process_name = ProcessInfo.get_proc_name(process_id) if not None else DEFAULT_PROCESS_NAME
-        except Exception as e:
-            logger.periodic_info(EVERY_SIX_HOURS, "[PERIODIC] {0}", ustr(e))
-
-        return process_id + DELIM + process_name + DELIM + process_cmdline
+    @staticmethod
+    def get_track_throttled_time():
+        return CGroupsTelemetry._track_throttled_time
 
     @staticmethod
     def track_cgroup(cgroup):
@@ -65,7 +48,7 @@ class CGroupsTelemetry(object):
         with CGroupsTelemetry._rlock:
             if not CGroupsTelemetry.is_tracked(cgroup.path):
                 CGroupsTelemetry._tracked.append(cgroup)
-                logger.info("Started tracking cgroup: {0}, path: {1}".format(cgroup.name, cgroup.path))
+                logger.info("Started tracking cgroup {0}", cgroup)
 
     @staticmethod
     def is_tracked(path):
@@ -87,7 +70,7 @@ class CGroupsTelemetry(object):
         """
         with CGroupsTelemetry._rlock:
             CGroupsTelemetry._tracked.remove(cgroup)
-            logger.info("Stopped tracking cgroup: {0}, path: {1}".format(cgroup.name, cgroup.path))
+            logger.info("Stopped tracking cgroup {0}", cgroup)
 
     @staticmethod
     def poll_all_tracked():
@@ -96,7 +79,7 @@ class CGroupsTelemetry(object):
         with CGroupsTelemetry._rlock:
             for cgroup in CGroupsTelemetry._tracked[:]:
                 try:
-                    metrics.extend(cgroup.get_tracked_metrics())
+                    metrics.extend(cgroup.get_tracked_metrics(track_throttled_time=CGroupsTelemetry._track_throttled_time))
                 except Exception as e:
                     # There can be scenarios when the CGroup has been deleted by the time we are fetching the values
                     # from it. This would raise IOError with file entry not found (ERRNO: 2). We do not want to log
@@ -114,3 +97,4 @@ class CGroupsTelemetry(object):
     def reset():
         with CGroupsTelemetry._rlock:
             CGroupsTelemetry._tracked *= 0  # emptying the list
+            CGroupsTelemetry._track_throttled_time = False

@@ -21,7 +21,6 @@ from threading import currentThread
 from mock import PropertyMock
 
 from azurelinuxagent.common import conf
-from azurelinuxagent.common.cgroupconfigurator import CGroupConfigurator
 from azurelinuxagent.common.event import EVENTS_DIRECTORY
 from azurelinuxagent.common.exception import ProtocolError, UpdateError, ResourceGoneError
 from azurelinuxagent.common.future import ustr
@@ -42,7 +41,6 @@ from azurelinuxagent.ga.exthandlers import ExtHandlerInstance, HandlerEnvironmen
 from azurelinuxagent.ga.update import GuestAgent, GuestAgentError, MAX_FAILURE, AGENT_MANIFEST_FILE, \
     get_update_handler, ORPHAN_POLL_INTERVAL, AGENT_PARTITION_FILE, AGENT_ERROR_FILE, ORPHAN_WAIT_INTERVAL, \
     CHILD_LAUNCH_RESTART_MAX, CHILD_HEALTH_INTERVAL, UpdateHandler
-from tests.common.mock_cgroup_commands import mock_cgroup_commands
 from tests.protocol.mocks import mock_wire_protocol
 from tests.protocol.mockwiredata import DATA_FILE, DATA_FILE_MULTIPLE_EXT
 from tests.tools import AgentTestCase, call, data_dir, DEFAULT, patch, load_bin_data, load_data, Mock, MagicMock, \
@@ -81,36 +79,6 @@ EMPTY_MANIFEST = {
 }
 
 
-def get_agent_pkgs(in_dir=os.path.join(data_dir, "ga")):
-    path = os.path.join(in_dir, AGENT_PKG_GLOB)
-    return glob.glob(path)
-
-
-def get_agents(in_dir=os.path.join(data_dir, "ga")):
-    path = os.path.join(in_dir, AGENT_DIR_GLOB)
-    return [a for a in glob.glob(path) if os.path.isdir(a)]
-
-
-def get_agent_file_path():
-    return get_agent_pkgs()[0]
-
-
-def get_agent_file_name():
-    return os.path.basename(get_agent_file_path())
-
-
-def get_agent_path():
-    return fileutil.trim_ext(get_agent_file_path(), "zip")
-
-
-def get_agent_name():
-    return os.path.basename(get_agent_path())
-
-
-def get_agent_version():
-    return FlexibleVersion(get_agent_name().split("-")[1])
-
-
 def faux_logger():
     print("STDOUT message")
     print("STDERR message", file=sys.stderr)
@@ -118,6 +86,60 @@ def faux_logger():
 
 
 class UpdateTestCase(AgentTestCase):
+    _test_suite_tmp_dir = None
+    _agent_zip_dir = None
+
+    @classmethod
+    def setUpClass(cls):
+        AgentTestCase.setUpClass()
+        # copy data_dir/ga/WALinuxAgent-0.0.0.0.zip to _test_suite_tmp_dir/waagent-zip/WALinuxAgent-<AGENT_VERSION>.zip
+        sample_agent_zip = "WALinuxAgent-0.0.0.0.zip"
+        test_agent_zip = sample_agent_zip.replace("0.0.0.0", AGENT_VERSION)
+        UpdateTestCase._test_suite_tmp_dir = tempfile.mkdtemp()
+        UpdateTestCase._agent_zip_dir = os.path.join(UpdateTestCase._test_suite_tmp_dir, "waagent-zip")
+        os.mkdir(UpdateTestCase._agent_zip_dir)
+        source = os.path.join(data_dir, "ga", sample_agent_zip)
+        target = os.path.join(UpdateTestCase._agent_zip_dir, test_agent_zip)
+        shutil.copyfile(source, target)
+
+    @classmethod
+    def tearDownClass(cls):
+        AgentTestCase.tearDownClass()
+        shutil.rmtree(UpdateTestCase._test_suite_tmp_dir)
+
+    @staticmethod
+    def _get_agent_pkgs(in_dir=None):
+        if in_dir is None:
+            in_dir = UpdateTestCase._agent_zip_dir
+        path = os.path.join(in_dir, AGENT_PKG_GLOB)
+        return glob.glob(path)
+
+    @staticmethod
+    def _get_agents(in_dir=None):
+        if in_dir is None:
+            in_dir = UpdateTestCase._agent_zip_dir
+        path = os.path.join(in_dir, AGENT_DIR_GLOB)
+        return [a for a in glob.glob(path) if os.path.isdir(a)]
+
+    @staticmethod
+    def _get_agent_file_path():
+        return UpdateTestCase._get_agent_pkgs()[0]
+
+    @staticmethod
+    def _get_agent_file_name():
+        return os.path.basename(UpdateTestCase._get_agent_file_path())
+
+    @staticmethod
+    def _get_agent_path():
+        return fileutil.trim_ext(UpdateTestCase._get_agent_file_path(), "zip")
+
+    @staticmethod
+    def _get_agent_name():
+        return os.path.basename(UpdateTestCase._get_agent_path())
+
+    @staticmethod
+    def _get_agent_version():
+        return FlexibleVersion(UpdateTestCase._get_agent_name().split("-")[1])
 
     def agent_bin(self, version, suffix):
         return "bin/{0}-{1}{2}.egg".format(AGENT_NAME, version, suffix)
@@ -134,7 +156,7 @@ class UpdateTestCase(AgentTestCase):
         return len(self.agent_dirs())
 
     def agent_dirs(self):
-        return get_agents(in_dir=self.tmp_dir)
+        return self._get_agents(in_dir=self.tmp_dir)
 
     def agent_dir(self, version):
         return os.path.join(self.tmp_dir, "{0}-{1}".format(AGENT_NAME, version))
@@ -145,20 +167,21 @@ class UpdateTestCase(AgentTestCase):
         return paths
 
     def agent_pkgs(self):
-        return get_agent_pkgs(in_dir=self.tmp_dir)
+        return self._get_agent_pkgs(in_dir=self.tmp_dir)
 
     def agent_versions(self):
         v = [FlexibleVersion(AGENT_DIR_PATTERN.match(a).group(1)) for a in self.agent_dirs()]
         v.sort(reverse=True)
         return v
 
+    @contextlib.contextmanager
     def get_error_file(self, error_data=None):
         if error_data is None:
             error_data = NO_ERROR
-        fp = tempfile.NamedTemporaryFile(mode="w")
-        json.dump(error_data if error_data is not None else NO_ERROR, fp)
-        fp.seek(0)
-        return fp
+        with tempfile.NamedTemporaryFile(mode="w") as fp:
+            json.dump(error_data if error_data is not None else NO_ERROR, fp)
+            fp.seek(0)
+            yield fp
 
     def create_error(self, error_data=None):
         if error_data is None:
@@ -170,7 +193,7 @@ class UpdateTestCase(AgentTestCase):
 
     def copy_agents(self, *agents):
         if len(agents) <= 0:
-            agents = get_agent_pkgs()
+            agents = self._get_agent_pkgs()
         for agent in agents:
             shutil.copy(agent, self.tmp_dir)
         return
@@ -184,7 +207,7 @@ class UpdateTestCase(AgentTestCase):
         """
         Create a download for the current agent version, copied from test data
         """
-        self.copy_agents(get_agent_pkgs()[0])
+        self.copy_agents(self._get_agent_pkgs()[0])
         self.expand_agents()
 
         versions = self.agent_versions()
@@ -207,7 +230,7 @@ class UpdateTestCase(AgentTestCase):
         # Ensure the test data is copied over
         agent_count = self.agent_count()
         if agent_count <= 0:
-            self.copy_agents(get_agent_pkgs()[0])
+            self.copy_agents(self._get_agent_pkgs()[0])
             self.expand_agents()
             count -= 1
 
@@ -332,8 +355,8 @@ class TestGuestAgentError(UpdateTestCase):
 class TestGuestAgent(UpdateTestCase):
     def setUp(self):
         UpdateTestCase.setUp(self)
-        self.copy_agents(get_agent_file_path())
-        self.agent_path = os.path.join(self.tmp_dir, get_agent_name())
+        self.copy_agents(self._get_agent_file_path())
+        self.agent_path = os.path.join(self.tmp_dir, self._get_agent_name())
 
     def test_creation(self):
         self.assertRaises(UpdateError, GuestAgent, "A very bad file name")
@@ -344,8 +367,8 @@ class TestGuestAgent(UpdateTestCase):
 
         agent = GuestAgent(path=self.agent_path)
         self.assertNotEqual(None, agent)
-        self.assertEqual(get_agent_name(), agent.name)
-        self.assertEqual(get_agent_version(), agent.version)
+        self.assertEqual(self._get_agent_name(), agent.name)
+        self.assertEqual(self._get_agent_version(), agent.version)
 
         self.assertEqual(self.agent_path, agent.get_agent_dir())
 
@@ -356,7 +379,7 @@ class TestGuestAgent(UpdateTestCase):
             os.path.join(self.agent_path, AGENT_ERROR_FILE),
             agent.get_agent_error_file())
 
-        path = ".".join((os.path.join(conf.get_lib_dir(), get_agent_name()), "zip"))
+        path = ".".join((os.path.join(conf.get_lib_dir(), self._get_agent_name()), "zip"))
         self.assertEqual(path, agent.get_agent_pkg_path())
 
         self.assertTrue(agent.is_downloaded)
@@ -387,7 +410,7 @@ class TestGuestAgent(UpdateTestCase):
         agent = GuestAgent(path=self.agent_path)
 
         self.assertFalse(agent.is_available)
-        agent._unpack()  # pylint: disable=protected-access
+        agent._unpack()
         self.assertTrue(agent.is_available)
 
         agent.mark_failure(is_fatal=True)
@@ -399,7 +422,7 @@ class TestGuestAgent(UpdateTestCase):
         agent = GuestAgent(path=self.agent_path)
         self.assertFalse(agent.is_blacklisted)
 
-        agent._unpack()  # pylint: disable=protected-access
+        agent._unpack()
         self.assertFalse(agent.is_blacklisted)
         self.assertEqual(agent.is_blacklisted, agent.error.is_blacklisted)
 
@@ -436,7 +459,7 @@ class TestGuestAgent(UpdateTestCase):
     def test_is_downloaded(self, mock_loaded, mock_downloaded):  # pylint: disable=unused-argument
         agent = GuestAgent(path=self.agent_path)
         self.assertFalse(agent.is_downloaded)
-        agent._unpack()  # pylint: disable=protected-access
+        agent._unpack()
         self.assertTrue(agent.is_downloaded)
 
     @patch("azurelinuxagent.ga.update.GuestAgent._ensure_downloaded")
@@ -456,7 +479,7 @@ class TestGuestAgent(UpdateTestCase):
     def test_unpack(self, mock_loaded, mock_downloaded):  # pylint: disable=unused-argument
         agent = GuestAgent(path=self.agent_path)
         self.assertFalse(os.path.isdir(agent.get_agent_dir()))
-        agent._unpack()  # pylint: disable=protected-access
+        agent._unpack()
         self.assertTrue(os.path.isdir(agent.get_agent_dir()))
         self.assertTrue(os.path.isfile(agent.get_agent_manifest_path()))
 
@@ -466,14 +489,14 @@ class TestGuestAgent(UpdateTestCase):
         agent = GuestAgent(path=self.agent_path)
         self.assertFalse(os.path.isdir(agent.get_agent_dir()))
         os.remove(agent.get_agent_pkg_path())
-        self.assertRaises(UpdateError, agent._unpack)  # pylint: disable=protected-access
+        self.assertRaises(UpdateError, agent._unpack)
 
     @patch("azurelinuxagent.ga.update.GuestAgent._ensure_downloaded")
     @patch("azurelinuxagent.ga.update.GuestAgent._ensure_loaded")
     def test_load_manifest(self, mock_loaded, mock_downloaded):  # pylint: disable=unused-argument
         agent = GuestAgent(path=self.agent_path)
-        agent._unpack()  # pylint: disable=protected-access
-        agent._load_manifest()  # pylint: disable=protected-access
+        agent._unpack()
+        agent._load_manifest()
         self.assertEqual(agent.manifest.get_enable_command(),
                          agent.get_agent_cmd())
 
@@ -482,39 +505,39 @@ class TestGuestAgent(UpdateTestCase):
     def test_load_manifest_missing(self, mock_loaded, mock_downloaded):  # pylint: disable=unused-argument
         agent = GuestAgent(path=self.agent_path)
         self.assertFalse(os.path.isdir(agent.get_agent_dir()))
-        agent._unpack()  # pylint: disable=protected-access
+        agent._unpack()
         os.remove(agent.get_agent_manifest_path())
-        self.assertRaises(UpdateError, agent._load_manifest)  # pylint: disable=protected-access
+        self.assertRaises(UpdateError, agent._load_manifest)
 
     @patch("azurelinuxagent.ga.update.GuestAgent._ensure_downloaded")
     @patch("azurelinuxagent.ga.update.GuestAgent._ensure_loaded")
     def test_load_manifest_is_empty(self, mock_loaded, mock_downloaded):  # pylint: disable=unused-argument
         agent = GuestAgent(path=self.agent_path)
         self.assertFalse(os.path.isdir(agent.get_agent_dir()))
-        agent._unpack()  # pylint: disable=protected-access
+        agent._unpack()
         self.assertTrue(os.path.isfile(agent.get_agent_manifest_path()))
 
         with open(agent.get_agent_manifest_path(), "w") as file:  # pylint: disable=redefined-builtin
             json.dump(EMPTY_MANIFEST, file)
-        self.assertRaises(UpdateError, agent._load_manifest)  # pylint: disable=protected-access
+        self.assertRaises(UpdateError, agent._load_manifest)
 
     @patch("azurelinuxagent.ga.update.GuestAgent._ensure_downloaded")
     @patch("azurelinuxagent.ga.update.GuestAgent._ensure_loaded")
     def test_load_manifest_is_malformed(self, mock_loaded, mock_downloaded):  # pylint: disable=unused-argument
         agent = GuestAgent(path=self.agent_path)
         self.assertFalse(os.path.isdir(agent.get_agent_dir()))
-        agent._unpack()  # pylint: disable=protected-access
+        agent._unpack()
         self.assertTrue(os.path.isfile(agent.get_agent_manifest_path()))
 
         with open(agent.get_agent_manifest_path(), "w") as file:  # pylint: disable=redefined-builtin
             file.write("This is not JSON data")
-        self.assertRaises(UpdateError, agent._load_manifest)  # pylint: disable=protected-access
+        self.assertRaises(UpdateError, agent._load_manifest)
 
     def test_load_error(self):
         agent = GuestAgent(path=self.agent_path)
         agent.error = None
 
-        agent._load_error()  # pylint: disable=protected-access
+        agent._load_error()
         self.assertTrue(agent.error is not None)
 
     @patch("azurelinuxagent.ga.update.GuestAgent._ensure_downloaded")
@@ -524,13 +547,13 @@ class TestGuestAgent(UpdateTestCase):
         self.remove_agents()
         self.assertFalse(os.path.isdir(self.agent_path))
 
-        agent_pkg = load_bin_data(os.path.join("ga", get_agent_file_name()))
+        agent_pkg = load_bin_data(self._get_agent_file_name(), self._agent_zip_dir)
         mock_http_get.return_value = ResponseMock(response=agent_pkg)
 
-        pkg = ExtHandlerPackage(version=str(get_agent_version()))
+        pkg = ExtHandlerPackage(version=str(self._get_agent_version()))
         pkg.uris.append(ExtHandlerPackageUri())
         agent = GuestAgent(pkg=pkg)
-        agent._download()  # pylint: disable=protected-access
+        agent._download()
 
         self.assertTrue(os.path.isfile(agent.get_agent_pkg_path()))
 
@@ -543,11 +566,11 @@ class TestGuestAgent(UpdateTestCase):
 
         mock_http_get.return_value = ResponseMock(status=restutil.httpclient.SERVICE_UNAVAILABLE)
 
-        pkg = ExtHandlerPackage(version=str(get_agent_version()))
+        pkg = ExtHandlerPackage(version=str(self._get_agent_version()))
         pkg.uris.append(ExtHandlerPackageUri())
         agent = GuestAgent(pkg=pkg)
 
-        self.assertRaises(UpdateError, agent._download)  # pylint: disable=protected-access
+        self.assertRaises(UpdateError, agent._download)
         self.assertFalse(os.path.isfile(agent.get_agent_pkg_path()))
         self.assertFalse(agent.is_downloaded)
 
@@ -571,13 +594,13 @@ class TestGuestAgent(UpdateTestCase):
                                        'container_id',
                                        'role_config')
 
-        pkg = ExtHandlerPackage(version=str(get_agent_version()))
+        pkg = ExtHandlerPackage(version=str(self._get_agent_version()))
         pkg.uris.append(ExtHandlerPackageUri(uri=ext_uri))
         agent = GuestAgent(pkg=pkg)
         agent.host = mock_host
 
         # ensure fallback fails gracefully, no http
-        self.assertRaises(UpdateError, agent._download)  # pylint: disable=protected-access
+        self.assertRaises(UpdateError, agent._download)
         self.assertEqual(mock_http_get.call_count, 2)
         self.assertEqual(mock_http_get.call_args_list[0][0][0], ext_uri)
         self.assertEqual(mock_http_get.call_args_list[1][0][0], api_uri)
@@ -586,7 +609,7 @@ class TestGuestAgent(UpdateTestCase):
         with patch.object(HostPluginProtocol,
                           "ensure_initialized",
                           return_value=True):
-            self.assertRaises(UpdateError, agent._download)  # pylint: disable=protected-access
+            self.assertRaises(UpdateError, agent._download)
             self.assertEqual(mock_http_get.call_count, 4)
 
             self.assertEqual(mock_http_get.call_args_list[2][0][0], ext_uri)
@@ -599,7 +622,7 @@ class TestGuestAgent(UpdateTestCase):
             with patch.object(HostPluginProtocol,
                               "get_artifact_request",
                               return_value=[art_uri, {}]):
-                self.assertRaises(UpdateError, agent._download)  # pylint: disable=protected-access
+                self.assertRaises(UpdateError, agent._download)
                 self.assertEqual(mock_http_get.call_count, 6)
 
                 a, k = mock_http_get.call_args_list[3]
@@ -617,10 +640,10 @@ class TestGuestAgent(UpdateTestCase):
         self.remove_agents()
         self.assertFalse(os.path.isdir(self.agent_path))
 
-        agent_pkg = load_bin_data(os.path.join("ga", get_agent_file_name()))
+        agent_pkg = load_bin_data(self._get_agent_file_name(), self._agent_zip_dir)
         mock_http_get.return_value = ResponseMock(response=agent_pkg)
 
-        pkg = ExtHandlerPackage(version=str(get_agent_version()))
+        pkg = ExtHandlerPackage(version=str(self._get_agent_version()))
         pkg.uris.append(ExtHandlerPackageUri())
         agent = GuestAgent(pkg=pkg)
 
@@ -632,7 +655,7 @@ class TestGuestAgent(UpdateTestCase):
         self.remove_agents()
         self.assertFalse(os.path.isdir(self.agent_path))
 
-        pkg = ExtHandlerPackage(version=str(get_agent_version()))
+        pkg = ExtHandlerPackage(version=str(self._get_agent_version()))
         pkg.uris.append(ExtHandlerPackageUri())
         agent = GuestAgent(pkg=pkg)
 
@@ -645,7 +668,7 @@ class TestGuestAgent(UpdateTestCase):
     def test_ensure_downloaded_unpack_fails(self, mock_unpack, mock_download):  # pylint: disable=unused-argument
         self.assertFalse(os.path.isdir(self.agent_path))
 
-        pkg = ExtHandlerPackage(version=str(get_agent_version()))
+        pkg = ExtHandlerPackage(version=str(self._get_agent_version()))
         pkg.uris.append(ExtHandlerPackageUri())
         agent = GuestAgent(pkg=pkg)
 
@@ -659,7 +682,7 @@ class TestGuestAgent(UpdateTestCase):
     def test_ensure_downloaded_load_manifest_fails(self, mock_manifest, mock_unpack, mock_download):  # pylint: disable=unused-argument
         self.assertFalse(os.path.isdir(self.agent_path))
 
-        pkg = ExtHandlerPackage(version=str(get_agent_version()))
+        pkg = ExtHandlerPackage(version=str(self._get_agent_version()))
         pkg.uris.append(ExtHandlerPackageUri())
         agent = GuestAgent(pkg=pkg)
 
@@ -678,7 +701,7 @@ class TestGuestAgent(UpdateTestCase):
         agent.mark_failure(is_fatal=True)
         self.assertTrue(agent.is_blacklisted)
 
-        pkg = ExtHandlerPackage(version=str(get_agent_version()))
+        pkg = ExtHandlerPackage(version=str(self._get_agent_version()))
         pkg.uris.append(ExtHandlerPackageUri())
         agent = GuestAgent(pkg=pkg)
 
@@ -717,8 +740,8 @@ class TestUpdate(UpdateTestCase):
     def test_emit_restart_event_emits_event_if_not_clean_start(self):
         try:
             mock_event = self.event_patch.start()
-            self.update_handler._set_sentinel()  # pylint: disable=protected-access
-            self.update_handler._emit_restart_event()  # pylint: disable=protected-access
+            self.update_handler._set_sentinel()
+            self.update_handler._emit_restart_event()
             self.assertEqual(1, mock_event.call_count)
         except Exception as e:  # pylint: disable=unused-variable
             pass
@@ -746,12 +769,12 @@ class TestUpdate(UpdateTestCase):
 
             mock_util.check_pid_alive = Mock(side_effect=iterator)
 
-            pid_files = self.update_handler._get_pid_files()  # pylint: disable=protected-access
+            pid_files = self.update_handler._get_pid_files()
             self.assertEqual(pid_count, len(pid_files))
 
             with patch('os.getpid', return_value=42):
                 with patch('time.sleep', return_value=None) as mock_sleep:  # pylint: disable=redefined-outer-name
-                    self.update_handler._ensure_no_orphans(orphan_wait_interval=interval)  # pylint: disable=protected-access
+                    self.update_handler._ensure_no_orphans(orphan_wait_interval=interval)
                     for pid_file in pid_files:
                         self.assertFalse(os.path.exists(pid_file))
                     return mock_util.check_pid_alive.call_count, mock_sleep.call_count
@@ -794,7 +817,7 @@ class TestUpdate(UpdateTestCase):
         for n in range(0, 99):
             mock_time.utcnow.return_value = Mock(microsecond=n * 10000)
 
-            self.update_handler._ensure_partition_assigned()  # pylint: disable=protected-access
+            self.update_handler._ensure_partition_assigned()
 
             self.assertTrue(os.path.exists(path))
             s = fileutil.read_file(path)
@@ -814,7 +837,7 @@ class TestUpdate(UpdateTestCase):
             os.chmod(path,
                      stat.S_IRUSR | stat.S_IWUSR | stat.S_IRGRP | stat.S_IROTH)
 
-        self.update_handler._ensure_readonly_files()  # pylint: disable=protected-access
+        self.update_handler._ensure_readonly_files()
 
         for path in test_files:
             mode = os.stat(path).st_mode
@@ -833,7 +856,7 @@ class TestUpdate(UpdateTestCase):
             os.chmod(path,
                      stat.S_IRUSR | stat.S_IWUSR | stat.S_IRGRP | stat.S_IROTH)
 
-        self.update_handler._ensure_readonly_files()  # pylint: disable=protected-access
+        self.update_handler._ensure_readonly_files()
 
         for path in test_files:
             mode = os.stat(path).st_mode
@@ -841,44 +864,6 @@ class TestUpdate(UpdateTestCase):
             self.assertEqual(
                 stat.S_IRUSR | stat.S_IWUSR | stat.S_IRGRP | stat.S_IROTH,
                 mode)
-
-    def test_ensure_cgroups_initialized_creates_slices(self):
-        try:
-            azure_slice_path = os.path.join(self.tmp_dir, "azure.slice")
-            extensions_slice_path = os.path.join(self.tmp_dir, "azure-vmextensions.slice")
-
-            self.assertFalse(os.path.exists(azure_slice_path))
-            self.assertFalse(os.path.exists(extensions_slice_path))
-
-            CGroupConfigurator._instance = None  # pylint: disable=protected-access
-            with mock_cgroup_commands() as mocks:
-                # Mock out all the actual calls to systemd
-                mocks.add_file(r"^/etc/systemd/system/azure.slice$", azure_slice_path)
-                mocks.add_file(r"^/etc/systemd/system/azure-vmextensions.slice$", extensions_slice_path)
-
-                with patch.object(CGroupConfigurator.get_instance(), "enabled", return_value=True):
-                    self.update_handler._ensure_cgroups_initialized()  # pylint: disable=protected-access
-
-                    # Ensure we created the slice files with proper content if cgroups are enabled
-                    self.assertTrue(os.path.exists(azure_slice_path))
-                    self.assertTrue(os.path.exists(extensions_slice_path))
-                    self.assertEqual(fileutil.read_file(azure_slice_path), """[Unit]
-Description=Slice for Azure VM Agent and Extensions""")
-                    self.assertEqual(fileutil.read_file(extensions_slice_path), """[Unit]
-Description=Slice for Azure VM Extensions""")
-
-                # Clean files up for next assertion
-                os.remove(azure_slice_path)
-                os.remove(extensions_slice_path)
-
-                with patch.object(CGroupConfigurator.get_instance(), "enabled", return_value=False):
-                    self.update_handler._ensure_cgroups_initialized()  # pylint: disable=protected-access
-
-                    # Ensure we don't create the slice files if cgroups are disabled
-                    self.assertFalse(os.path.exists(azure_slice_path))
-                    self.assertFalse(os.path.exists(extensions_slice_path))
-        finally:
-            CGroupConfigurator._instance = None  # pylint: disable=protected-access
 
     def _test_evaluate_agent_health(self, child_agent_index=0):
         self.prepare_agents()
@@ -893,10 +878,10 @@ Description=Slice for Azure VM Extensions""")
         self.assertFalse(child_agent.is_blacklisted)
         self.update_handler.child_agent = child_agent
 
-        self.update_handler._evaluate_agent_health(latest_agent)  # pylint: disable=protected-access
+        self.update_handler._evaluate_agent_health(latest_agent)
 
     def test_evaluate_agent_health_ignores_installed_agent(self):
-        self.update_handler._evaluate_agent_health(None)  # pylint: disable=protected-access
+        self.update_handler._evaluate_agent_health(None)
 
     def test_evaluate_agent_health_raises_exception_for_restarting_agent(self):
         self.update_handler.child_launch_time = time.time() - (4 * 60)
@@ -922,35 +907,35 @@ Description=Slice for Azure VM Extensions""")
     def test_filter_blacklisted_agents(self):
         self.prepare_agents()
 
-        self.update_handler._set_agents([GuestAgent(path=path) for path in self.agent_dirs()])  # pylint: disable=protected-access
+        self.update_handler._set_agents([GuestAgent(path=path) for path in self.agent_dirs()])
         self.assertEqual(len(self.agent_dirs()), len(self.update_handler.agents))
 
         kept_agents = self.update_handler.agents[::2]
         blacklisted_agents = self.update_handler.agents[1::2]
         for agent in blacklisted_agents:
             agent.mark_failure(is_fatal=True)
-        self.update_handler._filter_blacklisted_agents()  # pylint: disable=protected-access
+        self.update_handler._filter_blacklisted_agents()
         self.assertEqual(kept_agents, self.update_handler.agents)
 
     def test_find_agents(self):
         self.prepare_agents()
 
         self.assertTrue(0 <= len(self.update_handler.agents))
-        self.update_handler._find_agents()  # pylint: disable=protected-access
-        self.assertEqual(len(get_agents(self.tmp_dir)), len(self.update_handler.agents))
+        self.update_handler._find_agents()
+        self.assertEqual(len(self._get_agents(self.tmp_dir)), len(self.update_handler.agents))
 
     def test_find_agents_does_reload(self):
         self.prepare_agents()
 
-        self.update_handler._find_agents()  # pylint: disable=protected-access
+        self.update_handler._find_agents()
         agents = self.update_handler.agents
 
-        self.update_handler._find_agents()  # pylint: disable=protected-access
+        self.update_handler._find_agents()
         self.assertNotEqual(agents, self.update_handler.agents)
 
     def test_find_agents_sorts(self):
         self.prepare_agents()
-        self.update_handler._find_agents()  # pylint: disable=protected-access
+        self.update_handler._find_agents()
 
         v = FlexibleVersion("100000")
         for a in self.update_handler.agents:
@@ -961,7 +946,7 @@ Description=Slice for Azure VM Extensions""")
     def test_get_host_plugin_returns_host_for_wireserver(self, mock_get_host):
         protocol = WireProtocol('12.34.56.78')
         mock_get_host.return_value = "faux host"
-        host = self.update_handler._get_host_plugin(protocol=protocol)  # pylint: disable=protected-access
+        host = self.update_handler._get_host_plugin(protocol=protocol)
         print("mock_get_host call cound={0}".format(mock_get_host.call_count))
         self.assertEqual(1, mock_get_host.call_count)
         self.assertEqual("faux host", host)
@@ -970,7 +955,7 @@ Description=Slice for Azure VM Extensions""")
         latest_version = self.prepare_agents()
 
         latest_agent = self.update_handler.get_latest_agent()
-        self.assertEqual(len(get_agents(self.tmp_dir)), len(self.update_handler.agents))
+        self.assertEqual(len(self._get_agents(self.tmp_dir)), len(self.update_handler.agents))
         self.assertEqual(latest_version, latest_agent.version)
 
     def test_get_latest_agent_excluded(self):
@@ -1000,52 +985,52 @@ Description=Slice for Azure VM Extensions""")
         self.assertEqual(latest_agent.version, prior_agent.version)
 
     def test_get_pid_files(self):
-        pid_files = self.update_handler._get_pid_files()  # pylint: disable=protected-access
+        pid_files = self.update_handler._get_pid_files()
         self.assertEqual(0, len(pid_files))
 
     def test_get_pid_files_returns_previous(self):
         for n in range(1250):
             fileutil.write_file(os.path.join(self.tmp_dir, str(n) + "_waagent.pid"), ustr(n + 1))
-        pid_files = self.update_handler._get_pid_files()  # pylint: disable=protected-access
+        pid_files = self.update_handler._get_pid_files()
         self.assertEqual(1250, len(pid_files))
 
-        pid_dir, pid_name, pid_re = self.update_handler._get_pid_parts()  # pylint: disable=unused-variable,protected-access
+        pid_dir, pid_name, pid_re = self.update_handler._get_pid_parts()  # pylint: disable=unused-variable
         for p in pid_files:
             self.assertTrue(pid_re.match(os.path.basename(p)))
 
     def test_is_clean_start_returns_true_when_no_sentinel(self):
-        self.assertFalse(os.path.isfile(self.update_handler._sentinel_file_path()))  # pylint: disable=protected-access
-        self.assertTrue(self.update_handler._is_clean_start)  # pylint: disable=protected-access
+        self.assertFalse(os.path.isfile(self.update_handler._sentinel_file_path()))
+        self.assertTrue(self.update_handler._is_clean_start)
 
     def test_is_clean_start_returns_false_when_sentinel_exists(self):
-        self.update_handler._set_sentinel(agent=CURRENT_AGENT)  # pylint: disable=protected-access
-        self.assertFalse(self.update_handler._is_clean_start)  # pylint: disable=protected-access
+        self.update_handler._set_sentinel(agent=CURRENT_AGENT)
+        self.assertFalse(self.update_handler._is_clean_start)
 
     def test_is_clean_start_returns_false_for_exceptions(self):
-        self.update_handler._set_sentinel()  # pylint: disable=protected-access
+        self.update_handler._set_sentinel()
         with patch("azurelinuxagent.common.utils.fileutil.read_file", side_effect=Exception):
-            self.assertFalse(self.update_handler._is_clean_start)  # pylint: disable=protected-access
+            self.assertFalse(self.update_handler._is_clean_start)
 
     def test_is_orphaned_returns_false_if_parent_exists(self):
         fileutil.write_file(conf.get_agent_pid_file_path(), ustr(42))
         with patch('os.getppid', return_value=42):
-            self.assertFalse(self.update_handler._is_orphaned)  # pylint: disable=protected-access
+            self.assertFalse(self.update_handler._is_orphaned)
 
     def test_is_orphaned_returns_true_if_parent_is_init(self):
         with patch('os.getppid', return_value=1):
-            self.assertTrue(self.update_handler._is_orphaned)  # pylint: disable=protected-access
+            self.assertTrue(self.update_handler._is_orphaned)
 
     def test_is_orphaned_returns_true_if_parent_does_not_exist(self):
         fileutil.write_file(conf.get_agent_pid_file_path(), ustr(24))
         with patch('os.getppid', return_value=42):
-            self.assertTrue(self.update_handler._is_orphaned)  # pylint: disable=protected-access
+            self.assertTrue(self.update_handler._is_orphaned)
 
     def test_is_version_available(self):
         self.prepare_agents(is_available=True)
         self.update_handler.agents = self.agents()
 
         for agent in self.agents():
-            self.assertTrue(self.update_handler._is_version_eligible(agent.version))  # pylint: disable=protected-access
+            self.assertTrue(self.update_handler._is_version_eligible(agent.version))
 
     @patch("azurelinuxagent.ga.update.is_current_agent_installed", return_value=False)
     def test_is_version_available_rejects(self, mock_current):  # pylint: disable=unused-argument
@@ -1053,12 +1038,12 @@ Description=Slice for Azure VM Extensions""")
         self.update_handler.agents = self.agents()
 
         self.update_handler.agents[0].mark_failure(is_fatal=True)
-        self.assertFalse(self.update_handler._is_version_eligible(self.agents()[0].version))  # pylint: disable=protected-access
+        self.assertFalse(self.update_handler._is_version_eligible(self.agents()[0].version))
 
     @patch("azurelinuxagent.ga.update.is_current_agent_installed", return_value=True)
     def test_is_version_available_accepts_current(self, mock_current):  # pylint: disable=unused-argument
         self.update_handler.agents = []
-        self.assertTrue(self.update_handler._is_version_eligible(CURRENT_VERSION))  # pylint: disable=protected-access
+        self.assertTrue(self.update_handler._is_version_eligible(CURRENT_VERSION))
 
     @patch("azurelinuxagent.ga.update.is_current_agent_installed", return_value=False)
     def test_is_version_available_rejects_by_default(self, mock_current):  # pylint: disable=unused-argument
@@ -1066,11 +1051,11 @@ Description=Slice for Azure VM Extensions""")
         self.update_handler.agents = []
 
         v = self.agents()[0].version
-        self.assertFalse(self.update_handler._is_version_eligible(v))  # pylint: disable=protected-access
+        self.assertFalse(self.update_handler._is_version_eligible(v))
 
     def test_purge_agents(self):
         self.prepare_agents()
-        self.update_handler._find_agents()  # pylint: disable=protected-access
+        self.update_handler._find_agents()
 
         # Ensure at least three agents initially exist
         self.assertTrue(2 < len(self.update_handler.agents))
@@ -1092,8 +1077,8 @@ Description=Slice for Azure VM Extensions""")
 
         # Reload and assert only the kept agents remain on disk
         self.update_handler.agents = agents_to_keep
-        self.update_handler._purge_agents()  # pylint: disable=protected-access
-        self.update_handler._find_agents()  # pylint: disable=protected-access
+        self.update_handler._purge_agents()
+        self.update_handler._find_agents()
         self.assertEqual(
             [agent.version for agent in kept_agents],
             [agent.version for agent in self.update_handler.agents])
@@ -1339,7 +1324,7 @@ Description=Slice for Azure VM Extensions""")
         self._test_run(invocations=15, calls=[call.run()] * 15)
 
     def test_run_stops_if_update_available(self):
-        self.update_handler._upgrade_available = Mock(return_value=True)  # pylint: disable=protected-access
+        self.update_handler._upgrade_available = Mock(return_value=True)
         self._test_run(invocations=0, calls=[], enable_updates=True)
 
     def test_run_stops_if_orphaned(self):
@@ -1348,29 +1333,29 @@ Description=Slice for Azure VM Extensions""")
 
     def test_run_clears_sentinel_on_successful_exit(self):
         self._test_run()
-        self.assertFalse(os.path.isfile(self.update_handler._sentinel_file_path()))  # pylint: disable=protected-access
+        self.assertFalse(os.path.isfile(self.update_handler._sentinel_file_path()))
 
     def test_run_leaves_sentinel_on_unsuccessful_exit(self):
-        self.update_handler._upgrade_available = Mock(side_effect=Exception)  # pylint: disable=protected-access
+        self.update_handler._upgrade_available = Mock(side_effect=Exception)
         self._test_run(invocations=0, calls=[], enable_updates=True)
-        self.assertTrue(os.path.isfile(self.update_handler._sentinel_file_path()))  # pylint: disable=protected-access
+        self.assertTrue(os.path.isfile(self.update_handler._sentinel_file_path()))
 
     def test_run_emits_restart_event(self):
-        self.update_handler._emit_restart_event = Mock()  # pylint: disable=protected-access
+        self.update_handler._emit_restart_event = Mock()
         self._test_run()
-        self.assertEqual(1, self.update_handler._emit_restart_event.call_count)  # pylint: disable=protected-access
+        self.assertEqual(1, self.update_handler._emit_restart_event.call_count)
 
     def test_set_agents_sets_agents(self):
         self.prepare_agents()
 
-        self.update_handler._set_agents([GuestAgent(path=path) for path in self.agent_dirs()])  # pylint: disable=protected-access
+        self.update_handler._set_agents([GuestAgent(path=path) for path in self.agent_dirs()])
         self.assertTrue(len(self.update_handler.agents) > 0)
         self.assertEqual(len(self.agent_dirs()), len(self.update_handler.agents))
 
     def test_set_agents_sorts_agents(self):
         self.prepare_agents()
 
-        self.update_handler._set_agents([GuestAgent(path=path) for path in self.agent_dirs()])  # pylint: disable=protected-access
+        self.update_handler._set_agents([GuestAgent(path=path) for path in self.agent_dirs()])
 
         v = FlexibleVersion("100000")
         for a in self.update_handler.agents:
@@ -1378,34 +1363,34 @@ Description=Slice for Azure VM Extensions""")
             v = a.version
 
     def test_set_sentinel(self):
-        self.assertFalse(os.path.isfile(self.update_handler._sentinel_file_path()))  # pylint: disable=protected-access
-        self.update_handler._set_sentinel()  # pylint: disable=protected-access
-        self.assertTrue(os.path.isfile(self.update_handler._sentinel_file_path()))  # pylint: disable=protected-access
+        self.assertFalse(os.path.isfile(self.update_handler._sentinel_file_path()))
+        self.update_handler._set_sentinel()
+        self.assertTrue(os.path.isfile(self.update_handler._sentinel_file_path()))
 
     def test_set_sentinel_writes_current_agent(self):
-        self.update_handler._set_sentinel()  # pylint: disable=protected-access
+        self.update_handler._set_sentinel()
         self.assertTrue(
-            fileutil.read_file(self.update_handler._sentinel_file_path()),  # pylint: disable=protected-access
+            fileutil.read_file(self.update_handler._sentinel_file_path()),
             CURRENT_AGENT)
 
     def test_shutdown(self):
-        self.update_handler._set_sentinel()  # pylint: disable=protected-access
-        self.update_handler._shutdown()  # pylint: disable=protected-access
+        self.update_handler._set_sentinel()
+        self.update_handler._shutdown()
         self.assertFalse(self.update_handler.running)
-        self.assertFalse(os.path.isfile(self.update_handler._sentinel_file_path()))  # pylint: disable=protected-access
+        self.assertFalse(os.path.isfile(self.update_handler._sentinel_file_path()))
 
     def test_shutdown_ignores_missing_sentinel_file(self):
-        self.assertFalse(os.path.isfile(self.update_handler._sentinel_file_path()))  # pylint: disable=protected-access
-        self.update_handler._shutdown()  # pylint: disable=protected-access
+        self.assertFalse(os.path.isfile(self.update_handler._sentinel_file_path()))
+        self.update_handler._shutdown()
         self.assertFalse(self.update_handler.running)
-        self.assertFalse(os.path.isfile(self.update_handler._sentinel_file_path()))  # pylint: disable=protected-access
+        self.assertFalse(os.path.isfile(self.update_handler._sentinel_file_path()))
 
     def test_shutdown_ignores_exceptions(self):
-        self.update_handler._set_sentinel()  # pylint: disable=protected-access
+        self.update_handler._set_sentinel()
 
         try:
             with patch("os.remove", side_effect=Exception):
-                self.update_handler._shutdown()  # pylint: disable=protected-access
+                self.update_handler._shutdown()
         except Exception as e:  # pylint: disable=unused-variable
             self.assertTrue(False, "Unexpected exception")  # pylint: disable=redundant-unittest-assert
 
@@ -1422,7 +1407,7 @@ Description=Slice for Azure VM Extensions""")
         self.update_handler.protocol_util = protocol
         conf.get_autoupdate_gafamily = Mock(return_value=protocol.family)
 
-        return self.update_handler._upgrade_available(protocol, base_version=base_version)  # pylint: disable=protected-access
+        return self.update_handler._upgrade_available(protocol, base_version=base_version)
 
     def test_upgrade_available_returns_true_on_first_use(self):
         self.assertTrue(self._test_upgrade_available())
@@ -1435,7 +1420,7 @@ Description=Slice for Azure VM Extensions""")
         self.update_handler.protocol_util = protocol
         with patch('azurelinuxagent.common.logger.warn') as mock_logger:
             with patch('tests.ga.test_update.ProtocolMock.get_vmagent_pkgs', side_effect=ProtocolError):
-                self.assertFalse(self.update_handler._upgrade_available(protocol, base_version=CURRENT_VERSION))  # pylint: disable=protected-access
+                self.assertFalse(self.update_handler._upgrade_available(protocol, base_version=CURRENT_VERSION))
                 self.assertEqual(0, mock_logger.call_count)
 
     def test_upgrade_available_includes_old_agents(self):
@@ -1465,7 +1450,7 @@ Description=Slice for Azure VM Extensions""")
         self.assertEqual(agent_versions, self.agent_versions())
 
     def test_update_available_returns_true_if_current_gets_blacklisted(self):
-        self.update_handler._is_version_eligible = Mock(return_value=False)  # pylint: disable=protected-access
+        self.update_handler._is_version_eligible = Mock(return_value=False)
         self.assertTrue(self._test_upgrade_available())
 
     def test_upgrade_available_skips_if_too_frequent(self):
@@ -1476,7 +1461,7 @@ Description=Slice for Azure VM Extensions""")
     def test_upgrade_available_skips_if_when_no_new_versions(self):
         self.prepare_agents()
         base_version = self.agent_versions()[0] + 1
-        self.update_handler._is_version_eligible = lambda x: x == base_version  # pylint: disable=protected-access
+        self.update_handler._is_version_eligible = lambda x: x == base_version
         self.assertFalse(self._test_upgrade_available(base_version=base_version))
 
     def test_upgrade_available_skips_when_no_versions(self):
@@ -1499,7 +1484,7 @@ Description=Slice for Azure VM Extensions""")
         for n in range(1112):
             fileutil.write_file(os.path.join(self.tmp_dir, str(n) + "_waagent.pid"), ustr(n + 1))
         with patch('os.getpid', return_value=1112):
-            pid_files, pid_file = self.update_handler._write_pid_file()  # pylint: disable=protected-access
+            pid_files, pid_file = self.update_handler._write_pid_file()
             self.assertEqual(1112, len(pid_files))
             self.assertEqual("1111_waagent.pid", os.path.basename(pid_files[-1]))
             self.assertEqual("1112_waagent.pid", os.path.basename(pid_file))
@@ -1508,7 +1493,7 @@ Description=Slice for Azure VM Extensions""")
     def test_write_pid_file_ignores_exceptions(self):
         with patch('azurelinuxagent.common.utils.fileutil.write_file', side_effect=Exception):
             with patch('os.getpid', return_value=42):
-                pid_files, pid_file = self.update_handler._write_pid_file()  # pylint: disable=protected-access
+                pid_files, pid_file = self.update_handler._write_pid_file()
                 self.assertEqual(0, len(pid_files))
                 self.assertEqual(None, pid_file)
 
@@ -1519,7 +1504,7 @@ Description=Slice for Azure VM Extensions""")
         before an update is found, this test attempts to ensure that
         behavior never changes.
         """
-        self.update_handler._upgrade_available = Mock(return_value=True)  # pylint: disable=protected-access
+        self.update_handler._upgrade_available = Mock(return_value=True)
         self._test_run(invocations=0, calls=[], enable_updates=True, sleep_interval=(300,))
 
     @patch('azurelinuxagent.common.conf.get_extensions_enabled', return_value=False)
@@ -1527,7 +1512,7 @@ Description=Slice for Azure VM Extensions""")
         """
         When extension processing is disabled, the goal state interval should be larger.
         """
-        self.update_handler._upgrade_available = Mock(return_value=False)  # pylint: disable=protected-access
+        self.update_handler._upgrade_available = Mock(return_value=False)
         self._test_run(invocations=15, calls=[call.run()] * 15, sleep_interval=(300,))
 
     @patch("azurelinuxagent.common.logger.info")
@@ -1537,7 +1522,7 @@ Description=Slice for Azure VM Extensions""")
         mock_protocol = WireProtocol("foo.bar")
 
         update_handler.last_telemetry_heartbeat = datetime.utcnow() - timedelta(hours=1)
-        update_handler._send_heartbeat_telemetry(mock_protocol)  # pylint: disable=protected-access
+        update_handler._send_heartbeat_telemetry(mock_protocol)
         self.assertEqual(1, patch_add_event.call_count)
         self.assertTrue(any(call_args[0] == "[HEARTBEAT] Agent {0} is running as the goal state agent {1}"
                             for call_args in patch_info.call_args), "The heartbeat was not written to the agent's log")
@@ -1556,12 +1541,12 @@ Description=Slice for Azure VM Extensions""")
 
         def _set_iterations(iterations):
             # This will reset the current iteration and the max iterations to run for this test object.
-            update_handler._cur_iteration = 0  # pylint: disable=protected-access
-            update_handler._iterations = iterations  # pylint: disable=protected-access
+            update_handler._cur_iteration = 0
+            update_handler._iterations = iterations
 
         def check_running(*args, **kwargs):  # pylint: disable=unused-argument
             # This method will determine if the current UpdateHandler object is supposed to run or not.
-            if update_handler._cur_iteration < update_handler._iterations:  # pylint: disable=protected-access
+            if update_handler._cur_iteration < update_handler._iterations:
                 update_handler._cur_iteration += 1
                 return True
             return False
@@ -1573,8 +1558,8 @@ Description=Slice for Azure VM Extensions""")
                 with patch("azurelinuxagent.common.conf.get_autoupdate_enabled", return_value=False):
                     update_handler = get_update_handler()
                     # Setup internal state for the object required for testing
-                    update_handler._cur_iteration = 0  # pylint: disable=protected-access
-                    update_handler._iterations = 0  # pylint: disable=protected-access
+                    update_handler._cur_iteration = 0
+                    update_handler._iterations = 0
                     update_handler.set_iterations = lambda i: _set_iterations(i)  # pylint: disable=unnecessary-lambda
                     type(update_handler).running = PropertyMock(side_effect=check_running)
                     with patch("time.sleep", side_effect=lambda _: mock_sleep(0.001)):
@@ -1663,8 +1648,7 @@ Description=Slice for Azure VM Extensions""")
 
         # Firewall-cmd should only be called 3 times - 1st to check if running, 2nd & 3rd for the QueryPassThrough cmd
         self.assertEqual(3, len(executed_commands), "The number of times firwall-cmd should be called is only 3")
-        # protected-access<W0212> Disabled: OK to access PersistFirewallRulesHandler._* from unit test for PersistFirewallRuleHandler
-        self.assertEqual(PersistFirewallRulesHandler._FIREWALLD_RUNNING_CMD, executed_commands.pop(0),  # pylint: disable=protected-access
+        self.assertEqual(PersistFirewallRulesHandler._FIREWALLD_RUNNING_CMD, executed_commands.pop(0),
                          "First command should be to check if firewalld is running")
         self.assertTrue([FirewallCmdDirectCommands.QueryPassThrough in cmd for cmd in executed_commands],
                         "The remaining commands should only be for querying the firewall commands")

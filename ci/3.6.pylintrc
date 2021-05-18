@@ -6,12 +6,15 @@ disable=C, # (C) convention, for programming standard violation
     consider-using-dict-comprehension, # (R1717): *Consider using a dictionary comprehension*
     consider-using-in, # (R1714): *Consider merging these comparisons with "in" to %r*
     consider-using-set-comprehension, # (R1718): *Consider using a set comprehension*
+    consider-using-with, # (R1732): *Emitted if a resource-allocating assignment or call may be replaced by a 'with' block*
     duplicate-code, # (R0801): *Similar lines in %s files*
+    no-init, # (W0232): Class has no __init__ method
     no-else-break, # (R1723): *Unnecessary "%s" after "break"*
     no-else-continue, # (R1724): *Unnecessary "%s" after "continue"*
     no-else-raise, # (R1720): *Unnecessary "%s" after "raise"*
     no-else-return, # (R1705): *Unnecessary "%s" after "return"*
     no-self-use, # (R0201): *Method could be a function*
+    protected-access, # (W0212): Access to a protected member of a client class
     simplifiable-if-expression, # (R1719): *The if expression can be replaced with %s*
     simplifiable-if-statement, # (R1703): *The if statement can be replaced with %s*
     super-with-arguments, # (R1725): *Consider using Python 3 style super() without arguments*
@@ -27,6 +30,7 @@ disable=C, # (C) convention, for programming standard violation
     too-many-statements, # (R0915): *Too many statements (%s/%s)*
     useless-object-inheritance, # (R0205): *Class %r inherits from object, can be safely removed from bases in python3*
     useless-return, # (R1711): *Useless return at end of function or method*
+    use-a-generator, # (R1729): *Use a generator instead '%s(%s)'*
     broad-except, # (W0703): *Catching too general exception %s*
     raise-missing-from, # (W0707): *Consider explicitly re-raising using the 'from' keyword*
     fixme, # Used when a warning note as FIXME or TODO is detected

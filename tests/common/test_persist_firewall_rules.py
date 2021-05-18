@@ -20,11 +20,13 @@ import shutil
 import subprocess
 import sys
 
+import uuid
 
+import azurelinuxagent.common.conf as conf
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.osutil.default import DefaultOSUtil
 from azurelinuxagent.common.persist_firewall_rules import PersistFirewallRulesHandler
-from azurelinuxagent.common.utils import fileutil
+from azurelinuxagent.common.utils import fileutil, shellutil
 from azurelinuxagent.common.utils.networkutil import AddFirewallRules, FirewallCmdDirectCommands
 from tests.tools import AgentTestCase, MagicMock, patch
 
@@ -37,7 +39,7 @@ class TestPersistFirewallRulesHandler(AgentTestCase):
         super(TestPersistFirewallRulesHandler, self).__init__(*args, **kwargs)
         self._expected_service_name = ""
         self._expected_service_name = ""
-        self._drop_in_file = ""
+        self._binary_file = ""
         self._network_service_unit_file = ""
 
     def setUp(self):
@@ -54,9 +56,14 @@ class TestPersistFirewallRulesHandler(AgentTestCase):
         self.__agent_bin_dir = os.path.join(self.tmp_dir, "bin")
         fileutil.mkdir(self.__agent_bin_dir)
 
+        self.__tmp_conf_lib = os.path.join(self.tmp_dir, "waagent")
+        fileutil.mkdir(self.__tmp_conf_lib)
+        conf.get_lib_dir = MagicMock(return_value=self.__tmp_conf_lib)
+
     def tearDown(self):
         shutil.rmtree(self.__systemd_dir, ignore_errors=True)
         shutil.rmtree(self.__agent_bin_dir, ignore_errors=True)
+        shutil.rmtree(self.__tmp_conf_lib, ignore_errors=True)
         AgentTestCase.tearDown(self)
 
     def __mock_popen(self, cmd, *args, **kwargs):
@@ -75,20 +82,18 @@ class TestPersistFirewallRulesHandler(AgentTestCase):
         osutil.get_agent_bin_path = MagicMock(return_value=self.__agent_bin_dir)
         osutil.get_systemd_unit_file_install_path = MagicMock(return_value=self.__systemd_dir)
 
-        # protected-access<W0212> Disabled: OK to access PersistFirewallRulesHandler._* from unit test for PersistFirewallRuleHandler
-        self._expected_service_name = PersistFirewallRulesHandler._AGENT_NETWORK_SETUP_NAME_FORMAT.format(  # pylint: disable=protected-access
+        self._expected_service_name = PersistFirewallRulesHandler._AGENT_NETWORK_SETUP_NAME_FORMAT.format(
             osutil.get_service_name())
 
         self._network_service_unit_file = os.path.join(self.__systemd_dir, self._expected_service_name)
-        self._drop_in_file = os.path.join(self.__systemd_dir, "{0}.d".format(self._expected_service_name),
-                                          PersistFirewallRulesHandler._DROP_IN_ENV_FILE_NAME)  # pylint: disable=protected-access
+        self._binary_file = os.path.join(conf.get_lib_dir(), PersistFirewallRulesHandler.BINARY_FILE_NAME)
 
         # Just for these tests, ignoring the mode of mkdir to allow non-sudo tests
         orig_mkdir = fileutil.mkdir
         with patch("azurelinuxagent.common.persist_firewall_rules.fileutil.mkdir",
                    side_effect=lambda path, **mode: orig_mkdir(path)):
             with patch("azurelinuxagent.common.persist_firewall_rules.get_osutil", return_value=osutil):
-                with patch('azurelinuxagent.common.cgroupapi.CGroupsApi.is_systemd', return_value=systemd):
+                with patch('azurelinuxagent.common.osutil.systemd.is_systemd', return_value=systemd):
                     with patch("azurelinuxagent.common.utils.shellutil.subprocess.Popen", side_effect=self.__mock_popen):
                         yield PersistFirewallRulesHandler(self.__test_dst_ip, self.__test_uid)
 
@@ -118,9 +123,15 @@ class TestPersistFirewallRulesHandler(AgentTestCase):
         else:
             self.assertNotIn(systemctl_command, self.__executed_commands, "Systemctl command {0} found".format(cmd))
 
+    def __assert_systemctl_reloaded(self, validate_command_called=True):
+        systemctl_reload = ["systemctl", "daemon-reload"]
+        if validate_command_called:
+            self.assertIn(systemctl_reload, self.__executed_commands, "Systemctl config not reloaded")
+        else:
+            self.assertNotIn(systemctl_reload, self.__executed_commands, "Systemctl config reloaded")
+
     def __assert_firewall_cmd_running_called(self, validate_command_called=True):
-        # protected-access<W0212> Disabled: OK to access PersistFirewallRulesHandler._* from unit test for PersistFirewallRuleHandler
-        cmd = PersistFirewallRulesHandler._FIREWALLD_RUNNING_CMD    # pylint: disable=protected-access
+        cmd = PersistFirewallRulesHandler._FIREWALLD_RUNNING_CMD
         if validate_command_called:
             self.assertIn(cmd, self.__executed_commands, "Firewall state not checked")
         else:
@@ -129,9 +140,10 @@ class TestPersistFirewallRulesHandler(AgentTestCase):
     def __assert_network_service_setup_properly(self):
         self.__assert_systemctl_called(cmd="is-enabled", validate_command_called=True)
         self.__assert_systemctl_called(cmd="enable", validate_command_called=True)
+        self.__assert_systemctl_reloaded()
         self.__assert_firewall_called(cmd=FirewallCmdDirectCommands.PassThrough, validate_command_called=False)
         self.assertTrue(os.path.exists(self._network_service_unit_file), "Service unit file should be there")
-        self.assertTrue(os.path.exists(self._drop_in_file), "Drop in file should be there")
+        self.assertTrue(os.path.exists(self._binary_file), "Binary file should be there")
 
     @staticmethod
     def __mock_network_setup_service_enabled(cmd):
@@ -159,7 +171,7 @@ class TestPersistFirewallRulesHandler(AgentTestCase):
         # Assert no commands for adding rules using firewall-cmd were called
         self.__assert_firewall_called(cmd=FirewallCmdDirectCommands.PassThrough, validate_command_called=False)
         # Assert no commands for systemctl were called
-        self.assertFalse(any(["systemctl" in cmd for cmd in self.__executed_commands]), "Systemctl shouldn't be called")
+        self.assertFalse(any("systemctl" in cmd for cmd in self.__executed_commands), "Systemctl shouldn't be called")
 
     def test_it_should_skip_setup_if_agent_network_setup_service_already_enabled(self):
         self.__replace_popen_cmd = TestPersistFirewallRulesHandler.__mock_network_setup_service_enabled
@@ -168,29 +180,43 @@ class TestPersistFirewallRulesHandler(AgentTestCase):
 
         self.__assert_systemctl_called(cmd="is-enabled", validate_command_called=True)
         self.__assert_systemctl_called(cmd="enabled", validate_command_called=False)
+        self.__assert_systemctl_reloaded(validate_command_called=False)
         self.__assert_firewall_cmd_running_called(validate_command_called=True)
         self.__assert_firewall_called(cmd=FirewallCmdDirectCommands.QueryPassThrough, validate_command_called=False)
         self.__assert_firewall_called(cmd=FirewallCmdDirectCommands.PassThrough, validate_command_called=False)
 
     def test_it_should_always_replace_only_drop_in_file_if_using_custom_network_service(self):
-        test_str = 'Environment="EGG={0}" "DST_IP={1}" "UID={2}" "WAIT={3}"'
+
+        def _find_in_file(file_name, line_str):
+            try:
+                with open(file_name, 'r') as fh:
+                    content = fh.read()
+                    return line_str in content
+            except Exception:
+                # swallow exception
+                pass
+            return False
+
+        test_str = 'os.system("{py_path} {egg_path} --setup-firewall --dst_ip={wire_ip} --uid={user_id} {wait}")'
         current_exe_path = os.path.join(os.getcwd(), sys.argv[0])
 
         self.__replace_popen_cmd = TestPersistFirewallRulesHandler.__mock_network_setup_service_disabled
         with self._get_persist_firewall_rules_handler() as handler:
-            self.assertFalse(os.path.exists(self._drop_in_file), "Drop in file should not be there")
+            self.assertFalse(os.path.exists(self._binary_file), "Binary file should not be there")
             self.assertFalse(os.path.exists(self._network_service_unit_file), "Unit file should not be present")
             handler.setup()
 
+        orig_service_file_contents = "ExecStart={py_path} {binary_path}".format(py_path=sys.executable,
+                                                                                 binary_path=self._binary_file)
         self.__assert_systemctl_called(cmd="is-enabled", validate_command_called=True)
         self.__assert_firewall_called(cmd=FirewallCmdDirectCommands.PassThrough, validate_command_called=False)
-        self.assertTrue(os.path.exists(self._drop_in_file), "Drop in file should be there")
-        self.assertTrue(fileutil.findstr_in_file(self._drop_in_file,
-                                                 test_str.format(current_exe_path, self.__test_dst_ip, self.__test_uid,
-                                                                 self.__test_wait)), "DropIn file not set correctly")
-        self.assertTrue(fileutil.findstr_in_file(self._network_service_unit_file,
-                                                 test_str.format(current_exe_path, self.__test_dst_ip, self.__test_uid,
-                                                                 self.__test_wait)),
+        self.assertTrue(os.path.exists(self._binary_file), "Binary file should be there")
+        self.assertTrue(_find_in_file(self._binary_file,
+                                      test_str.format(py_path=sys.executable, egg_path=current_exe_path,
+                                                      wire_ip=self.__test_dst_ip, user_id=self.__test_uid,
+                                                      wait=self.__test_wait)),
+                        "Binary file not set correctly")
+        self.assertTrue(_find_in_file(self._network_service_unit_file, orig_service_file_contents),
                         "Service Unit file file not set correctly")
 
         # Change test params
@@ -201,27 +227,26 @@ class TestPersistFirewallRulesHandler(AgentTestCase):
         self.__replace_popen_cmd = TestPersistFirewallRulesHandler.__mock_network_setup_service_enabled
         with self._get_persist_firewall_rules_handler() as handler:
             # The Drop-in file should be available on the 2nd run
-            self.assertTrue(os.path.exists(self._drop_in_file), "Drop in file should be there")
+            self.assertTrue(os.path.exists(self._binary_file), "Binary file should be there")
             handler.setup()
 
-        self.assertTrue(fileutil.findstr_in_file(self._drop_in_file,
-                                                 test_str.format(current_exe_path, self.__test_dst_ip, self.__test_uid,
-                                                                 self.__test_wait)), "DropIn file not set correctly")
+        self.assertTrue(_find_in_file(self._binary_file,
+                                      test_str.format(py_path=sys.executable, egg_path=current_exe_path,
+                                                      wire_ip=self.__test_dst_ip, user_id=self.__test_uid,
+                                                      wait=self.__test_wait)),
+                        "Binary file not updated correctly")
         # Unit file should NOT be updated
-        self.assertFalse(fileutil.findstr_in_file(self._network_service_unit_file,
-                                                  test_str.format(current_exe_path, self.__test_dst_ip, self.__test_uid,
-                                                                  self.__test_wait)),
-                         "Service Unit file file should not be updated")
+        self.assertTrue(_find_in_file(self._network_service_unit_file, orig_service_file_contents),
+                        "Service Unit file file should not be updated")
 
     def test_it_should_use_firewalld_if_available(self):
 
         def __mock_firewalld_running_and_not_applied(cmd):
-            # protected-access<W0212> Disabled: OK to access PersistFirewallRulesHandler._* from unit test for PersistFirewallRuleHandler
-            if cmd == PersistFirewallRulesHandler._FIREWALLD_RUNNING_CMD:   # pylint: disable=protected-access
+            if cmd == PersistFirewallRulesHandler._FIREWALLD_RUNNING_CMD:
                 return True, ["echo", "running"]
             # This is to fail the check if firewalld-rules are already applied
             cmds_to_fail = ["firewall-cmd", FirewallCmdDirectCommands.QueryPassThrough, "conntrack"]
-            if all([cmd_to_fail in cmd for cmd_to_fail in cmds_to_fail]):
+            if all(cmd_to_fail in cmd for cmd_to_fail in cmds_to_fail):
                 return True, ["exit", "1"]
             if "firewall-cmd" in cmd:
                 return True, ["echo", "enabled"]
@@ -234,13 +259,13 @@ class TestPersistFirewallRulesHandler(AgentTestCase):
         self.__assert_firewall_cmd_running_called(validate_command_called=True)
         self.__assert_firewall_called(cmd=FirewallCmdDirectCommands.QueryPassThrough, validate_command_called=True)
         self.__assert_firewall_called(cmd=FirewallCmdDirectCommands.PassThrough, validate_command_called=True)
-        self.assertFalse(any(["systemctl" in cmd for cmd in self.__executed_commands]), "Systemctl shouldn't be called")
+        self.assertFalse(any("systemctl" in cmd for cmd in self.__executed_commands), "Systemctl shouldn't be called")
 
     def test_it_should_set_up_custom_service_if_no_firewalld(self):
         self.__replace_popen_cmd = TestPersistFirewallRulesHandler.__mock_network_setup_service_disabled
         with self._get_persist_firewall_rules_handler() as handler:
             self.assertFalse(os.path.exists(self._network_service_unit_file), "Service unit file should not be there")
-            self.assertFalse(os.path.exists(self._drop_in_file), "Drop in file should not be there")
+            self.assertFalse(os.path.exists(self._binary_file), "Binary file should not be there")
             handler.setup()
 
         self.__assert_network_service_setup_properly()
@@ -257,7 +282,7 @@ class TestPersistFirewallRulesHandler(AgentTestCase):
 
         self.__replace_popen_cmd = TestPersistFirewallRulesHandler.__mock_network_setup_service_disabled
         with self._get_persist_firewall_rules_handler() as handler:
-            test_files = [self._drop_in_file, self._network_service_unit_file]
+            test_files = [self._binary_file, self._network_service_unit_file]
             for file_to_fail in test_files:
                 files_to_fail = [file_to_fail]
                 with patch("azurelinuxagent.common.persist_firewall_rules.fileutil.write_file",
@@ -273,3 +298,26 @@ class TestPersistFirewallRulesHandler(AgentTestCase):
                         os.remove(test_file)
                     except Exception:
                         pass
+
+    def test_it_should_execute_binary_file_successfully(self):
+        # A bare-bone test to ensure no simple syntactical errors in the binary file as its generated dynamically
+        self.__replace_popen_cmd = TestPersistFirewallRulesHandler.__mock_network_setup_service_disabled
+        with self._get_persist_firewall_rules_handler() as handler:
+            self.assertFalse(os.path.exists(self._binary_file), "Binary file should not be there")
+            handler.setup()
+
+            self.assertTrue(os.path.exists(self._binary_file), "Binary file not set properly")
+
+            shellutil.run_command([sys.executable, self._binary_file])
+
+    def test_it_should_not_fail_if_egg_not_found(self):
+        self.__replace_popen_cmd = TestPersistFirewallRulesHandler.__mock_network_setup_service_disabled
+        test_str = str(uuid.uuid4())
+        with patch("sys.argv", [test_str]):
+            with self._get_persist_firewall_rules_handler() as handler:
+                self.assertFalse(os.path.exists(self._binary_file), "Binary file should not be there")
+                handler.setup()
+                output = shellutil.run_command([sys.executable, self._binary_file], stderr=subprocess.STDOUT)
+                expected_str = "{0} file not found, skipping execution of firewall execution setup for this boot".format(
+                    os.path.join(os.getcwd(), test_str))
+                self.assertIn(expected_str, output, "Unexpected output")

@@ -86,7 +86,7 @@ class DhcpHandler(object):
         logger.info("Test for route to {0}".format(KNOWN_WIRESERVER_IP))
         try:
             route_table = self.osutil.read_route_table()
-            if any([(KNOWN_WIRESERVER_IP_ENTRY in route) for route in route_table]):
+            if any((KNOWN_WIRESERVER_IP_ENTRY in route) for route in route_table):
                 # reset self.gateway and self.routes
                 # we do not need to alter the routing table
                 self.endpoint = KNOWN_WIRESERVER_IP

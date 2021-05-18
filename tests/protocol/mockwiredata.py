@@ -78,6 +78,9 @@ DATA_FILE_EXT_ROLLINGUPGRADE["ext_conf"] = "wire/ext_conf_upgradeguid.xml"
 DATA_FILE_EXT_SEQUENCING = DATA_FILE.copy()
 DATA_FILE_EXT_SEQUENCING["ext_conf"] = "wire/ext_conf_sequencing.xml"
 
+DATA_FILE_EXT_ADDITIONAL_LOCATIONS = DATA_FILE.copy()
+DATA_FILE_EXT_ADDITIONAL_LOCATIONS["ext_conf"] = "wire/ext_conf_additional_locations.xml"
+
 DATA_FILE_EXT_DELETION = DATA_FILE.copy()
 DATA_FILE_EXT_DELETION["manifest"] = "wire/manifest_deletion.xml"
 
@@ -102,6 +105,9 @@ DATA_FILE_REMOTE_ACCESS["remote_access"] = "wire/remote_access_single_account.xm
 
 DATA_FILE_PLUGIN_SETTINGS_MISMATCH = DATA_FILE.copy()
 DATA_FILE_PLUGIN_SETTINGS_MISMATCH["ext_conf"] = "wire/invalid_config/ext_conf_plugin_settings_version_mismatch.xml"
+
+DATA_FILE_REQUIRED_FEATURES = DATA_FILE.copy()
+DATA_FILE_REQUIRED_FEATURES["ext_conf"] = "wire/ext_conf_required_features.xml"
 
 
 class WireProtocolData(object):
@@ -294,6 +300,14 @@ class WireProtocolData(object):
         ext_config_doc = parse_doc(self.ext_conf)
         plugins_list = find(ext_config_doc, "Plugins")
         return len(findall(plugins_list, "Plugin"))
+
+    def get_no_of_extensions_in_config(self):
+        if self.ext_conf is None:
+            return 0
+        ext_config_doc = parse_doc(self.ext_conf)
+        plugin_settings = find(ext_config_doc, "PluginSettings")
+        return len(findall(plugin_settings, "ExtensionRuntimeSettings")) + len(
+            findall(plugin_settings, "RuntimeSettings"))
 
     #
     # Having trouble reading the regular expressions below? you are not alone!

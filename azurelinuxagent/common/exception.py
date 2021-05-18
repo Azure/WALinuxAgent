@@ -100,6 +100,12 @@ class ExtensionConfigError(ExtensionError):
     """
 
 
+class MultiConfigExtensionEnableError(ExtensionError):
+    """
+    Error raised when enable for a Multi-Config extension is failing.
+    """
+
+
 class ProvisionError(AgentError):
     """
     When provision failed
@@ -227,6 +233,7 @@ class ServiceStoppedError(AgentError):
     """
     Error thrown when trying to access a Service which is stopped
     """
+
     def __init__(self, msg=None, inner=None):
         super(ServiceStoppedError, self).__init__(msg, inner)
 
@@ -281,3 +288,15 @@ class ExtensionErrorCodes(object):
 
     def __init__(self):
         pass
+
+
+class GoalStateAggregateStatusCodes(object):
+
+    # Success
+    Success = 0
+
+    # Unknown failure
+    GoalStateUnknownFailure = -1
+
+    # The goal state requires features that are not supported by this version of the VM agent
+    GoalStateUnsupportedRequiredFeatures = 2001

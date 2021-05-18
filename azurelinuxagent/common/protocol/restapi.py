@@ -18,12 +18,13 @@
 #
 
 import socket
+import time
 from datetime import datetime, timedelta
 
+from azurelinuxagent.common.datacontract import DataContract, DataContractList
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.utils.textutil import getattrib
 from azurelinuxagent.common.version import DISTRO_VERSION, DISTRO_NAME, CURRENT_VERSION
-from azurelinuxagent.common.datacontract import DataContract, DataContractList
 
 
 class VMInfo(DataContract):
@@ -81,6 +82,29 @@ class VMAgentManifestList(DataContract):
         self.vmAgentManifests = DataContractList(VMAgentManifest)
 
 
+class RequiredFeature(DataContract):
+    def __init__(self, name, value=None):
+        self.name = name
+        # As per the docs, this is a reserved field and not currently in use.
+        self.value = value
+
+
+class ExtensionState(object):
+    Enabled = ustr("enabled")
+    Disabled = ustr("disabled")
+
+
+class ExtHandlerRequestedState(object):
+    """
+    This is the state of the Handler as requested by the Goal State.
+    CRP only supports 2 states as of now - Enabled and Uninstall
+    Disabled was used for older XML extensions and we keep it to support backward compatibility.
+    """
+    Enabled = ustr("enabled")
+    Disabled = ustr("disabled")
+    Uninstall = ustr("uninstall")
+
+
 class Extension(DataContract):
     """
     The runtime settings associated with a Handler
@@ -90,7 +114,6 @@ class Extension(DataContract):
         ExtensionConfig.xml
         Eg: <extensionName>.1.settings, <extensionName>.2.settings
     """
-
     def __init__(self,
                  name=None,
                  sequenceNumber=None,
@@ -98,7 +121,7 @@ class Extension(DataContract):
                  protectedSettings=None,
                  certificateThumbprint=None,
                  dependencyLevel=0,
-                 state="enabled"):
+                 state=ExtensionState.Enabled):
         self.name = name
         self.sequenceNumber = sequenceNumber
         self.publicSettings = publicSettings
@@ -106,6 +129,16 @@ class Extension(DataContract):
         self.certificateThumbprint = certificateThumbprint
         self.dependencyLevel = dependencyLevel
         self.state = state
+
+    def dependency_level_sort_key(self, handler_state):
+        level = self.dependencyLevel
+        # Process uninstall or disabled before enabled, in reverse order
+        # Prioritize Handler state and Extension state both when sorting extensions
+        # remap 0 to -1, 1 to -2, 2 to -3, etc
+        if handler_state != ExtHandlerRequestedState.Enabled or self.state != ExtensionState.Enabled:
+            level = (0 - level) - 1
+
+        return level
 
 
 class ExtHandlerProperties(DataContract):
@@ -132,6 +165,7 @@ class ExtHandler(DataContract):
         self.properties = ExtHandlerProperties()
         self.versionUris = DataContractList(ExtHandlerVersionUri)
         self.__invalid_handler_setting_reason = None
+        self.supports_multi_config = False
 
     @property
     def is_invalid_setting(self):
@@ -145,7 +179,7 @@ class ExtHandler(DataContract):
     def invalid_setting_reason(self, value):
         self.__invalid_handler_setting_reason = value
 
-    def sort_key(self):
+    def dependency_level_sort_key(self):
         levels = [e.dependencyLevel for e in self.properties.extensions]
         if len(levels) == 0:
             level = 0
@@ -236,12 +270,14 @@ class ExtensionSubStatus(DataContract):
 
 class ExtensionStatus(DataContract):
     def __init__(self,
+                 name=None,
                  configurationAppliedTime=None,
                  operation=None,
                  status=None,
                  seq_no=None,
                  code=None,
                  message=None):
+        self.name = name
         self.configurationAppliedTime = configurationAppliedTime
         self.operation = operation
         self.status = status
@@ -263,11 +299,12 @@ class ExtHandlerStatus(DataContract):
         self.status = status
         self.code = code
         self.message = message
-        self.extensions = DataContractList(ustr)
+        self.supports_multi_config = False
+        self.extension_status = None
 
 
 class VMAgentStatus(DataContract):
-    def __init__(self, status=None, message=None):
+    def __init__(self, status=None, message=None, gs_aggregate_status=None):
         self.status = status
         self.message = message
         self.hostname = socket.gethostname()
@@ -275,11 +312,30 @@ class VMAgentStatus(DataContract):
         self.osname = DISTRO_NAME
         self.osversion = DISTRO_VERSION
         self.extensionHandlers = DataContractList(ExtHandlerStatus)
+        self.vm_artifacts_aggregate_status = VMArtifactsAggregateStatus(gs_aggregate_status)
 
 
 class VMStatus(DataContract):
-    def __init__(self, status, message):
-        self.vmAgent = VMAgentStatus(status=status, message=message)
+    def __init__(self, status, message, gs_aggregate_status=None):
+        self.vmAgent = VMAgentStatus(status=status, message=message, gs_aggregate_status=gs_aggregate_status)
+
+
+class GoalStateAggregateStatus(DataContract):
+    def __init__(self, seq_no, status=None, message="", code=None):
+        self.message = message
+        self.in_svd_seq_no = seq_no
+        self.status = status
+        self.code = code
+        self.__utc_timestamp = time.gmtime()
+
+    @property
+    def processed_time(self):
+        return self.__utc_timestamp
+
+
+class VMArtifactsAggregateStatus(DataContract):
+    def __init__(self, gs_aggregate_status=None):
+        self.goal_state_aggregate_status = gs_aggregate_status
 
 
 class RemoteAccessUser(DataContract):
@@ -292,4 +348,3 @@ class RemoteAccessUser(DataContract):
 class RemoteAccessUsersList(DataContract):
     def __init__(self):
         self.users = DataContractList(RemoteAccessUser)
-
