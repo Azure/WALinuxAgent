@@ -39,6 +39,7 @@ Description=Setup network rules for WALinuxAgent
 Before=network-pre.target
 Wants=network-pre.target
 DefaultDependencies=no
+ConditionPathExists={binary_path}
 
 [Service]
 Type=oneshot
@@ -69,7 +70,7 @@ if __name__ == '__main__':
 
     # The current version of the unit file; Update it whenever the unit file is modified to ensure Agent can dynamically
     # modify the unit file on VM too
-    _UNIT_VERSION = "1.1"
+    _UNIT_VERSION = "1.2"
 
     @staticmethod
     def get_service_file_path():
@@ -264,7 +265,7 @@ if __name__ == '__main__':
 
     def __log_network_setup_service_logs(self):
         # Get logs from journalctl - https://www.freedesktop.org/software/systemd/man/journalctl.html
-        cmd = ["journalctl", "-u", self._network_setup_service_name, "-b"]
+        cmd = ["journalctl", "-u", self._network_setup_service_name, "-b", "--utc"]
         service_failed = self.__verify_network_setup_service_failed()
         try:
             stdout = shellutil.run_command(cmd)
