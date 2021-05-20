@@ -1635,7 +1635,7 @@ class ExtHandlerInstance(object):
         ext_status = ExtensionStatus(name=ext.name, seq_no=seq_no)
 
         try:
-            data_str, data = self._read_and_parse_json_status_file(ext_status_file)
+            data_str, data = self._read_status_file(ext_status_file)
         except ExtensionStatusError as e:
             msg = ""
             if e.code == ExtensionStatusError.CouldNotReadStatusFile:
