@@ -2121,34 +2121,34 @@ class ExtHandlerInstance(object):
         return os.path.join(conf.get_ext_log_dir(), self.ext_handler.name)
 
     @staticmethod
+    def _read_status_file(ext_status_file):
+        err_count = 0
+        while True:
+            try:
+                return ExtHandlerInstance._read_and_parse_json_status_file(ext_status_file)
+            except Exception as e:
+                err_count += 1
+                if err_count >= _NUM_OF_STATUS_FILE_RETRIES:
+                    raise e
+            time.sleep(_STATUS_FILE_RETRY_DELAY)
+
+    @staticmethod
     def _read_and_parse_json_status_file(ext_status_file):
-        failed_to_read = False
-        failed_to_parse_json = False
-        raised_exception = None
         data_str = None
         data = None
 
-        for attempt in range(_NUM_OF_STATUS_FILE_RETRIES):  # pylint: disable=W0612
-            try:
-                data_str = fileutil.read_file(ext_status_file)
-                data = json.loads(data_str)
-                break
-            except IOError as e:
-                failed_to_read = True
-                raised_exception = e
-            except (ValueError, TypeError) as e:
-                failed_to_parse_json = True
-                raised_exception = e
-            time.sleep(_STATUS_FILE_RETRY_DELAY)
-
-        if failed_to_read:
-            raise ExtensionStatusError(msg=ustr(raised_exception), inner=raised_exception,
+        try:
+            data_str = fileutil.read_file(ext_status_file)
+        except IOError as e:
+            raise ExtensionStatusError(msg=ustr(e), inner=e,
                                        code=ExtensionStatusError.CouldNotReadStatusFile)
-        elif failed_to_parse_json:
-            raise ExtensionStatusError(msg=ustr(raised_exception), inner=raised_exception,
+        try:
+            data = json.loads(data_str)
+        except (ValueError, TypeError) as e:
+            raise ExtensionStatusError(msg="{0} \n First 2000 Bytes of status file:\n {1}".format(ustr(e), ustr(data_str)[:2000]),
+                                       inner=e,
                                        code=ExtensionStatusError.InvalidJsonFile)
-        else:
-            return data_str, data
+        return data_str, data
 
     def _process_substatus_list(self, substatus_list, current_status_size=0):
         processed_substatus = []
