@@ -46,6 +46,9 @@ DATA_FILE_IN_VM_ARTIFACTS_PROFILE["in_vm_artifacts_profile"] = "wire/in_vm_artif
 DATA_FILE_IN_VM_META_DATA = DATA_FILE.copy()
 DATA_FILE_IN_VM_META_DATA["ext_conf"] = "wire/ext_conf_in_vm_metadata.xml"
 
+DATA_FILE_INVALID_VM_META_DATA = DATA_FILE.copy()
+DATA_FILE_INVALID_VM_META_DATA["ext_conf"] = "wire/ext_conf_invalid_vm_metadata.xml"
+
 DATA_FILE_NO_EXT = DATA_FILE.copy()
 DATA_FILE_NO_EXT["goal_state"] = "wire/goal_state_no_ext.xml"
 DATA_FILE_NO_EXT["ext_conf"] = None
@@ -297,6 +300,14 @@ class WireProtocolData(object):
         ext_config_doc = parse_doc(self.ext_conf)
         plugins_list = find(ext_config_doc, "Plugins")
         return len(findall(plugins_list, "Plugin"))
+
+    def get_no_of_extensions_in_config(self):
+        if self.ext_conf is None:
+            return 0
+        ext_config_doc = parse_doc(self.ext_conf)
+        plugin_settings = find(ext_config_doc, "PluginSettings")
+        return len(findall(plugin_settings, "ExtensionRuntimeSettings")) + len(
+            findall(plugin_settings, "RuntimeSettings"))
 
     #
     # Having trouble reading the regular expressions below? you are not alone!

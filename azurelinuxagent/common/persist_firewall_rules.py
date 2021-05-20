@@ -17,7 +17,9 @@
 #
 import os
 import sys
+import traceback
 
+import azurelinuxagent.common.conf as conf
 from azurelinuxagent.common import logger
 from azurelinuxagent.common.event import add_event, WALAEventOperation
 from azurelinuxagent.common.future import ustr
@@ -40,25 +42,28 @@ DefaultDependencies=no
 
 [Service]
 Type=oneshot
-Environment="EGG={egg_path}" "DST_IP={wire_ip}" "UID={user_id}" "WAIT={wait}"
-ExecStart={py_path} ${{EGG}} --setup-firewall --dst_ip=${{DST_IP}} --uid=${{UID}} ${{WAIT}}
+ExecStart={py_path} {binary_path}
 RemainAfterExit=false
 
 [Install]
 WantedBy=network.target
 """
 
-    __OVERRIDE_CONTENT = """
-# This drop-in unit file was created by the Azure VM Agent.
-# Do not edit.
-[Service]
-# The first line clears the old data, and the 2nd line overwrites it.
-Environment=
-Environment="EGG={egg_path}" "DST_IP={wire_ip}" "UID={user_id}" "WAIT={wait}"
+    __BINARY_CONTENTS = """
+# This python file was created by the Azure VM Agent. Please do not edit.
+
+import os 
+
+
+if __name__ == '__main__':
+    if os.path.exists("{egg_path}"):
+        os.system("{py_path} {egg_path} --setup-firewall --dst_ip={wire_ip} --uid={user_id} {wait}")
+    else:
+        print("{egg_path} file not found, skipping execution of firewall execution setup for this boot")
 """
 
     _AGENT_NETWORK_SETUP_NAME_FORMAT = "{0}-network-setup.service"
-    _DROP_IN_ENV_FILE_NAME = "10-environment.conf"
+    BINARY_FILE_NAME = "waagent-network-setup.py"
 
     _FIREWALLD_RUNNING_CMD = ["firewall-cmd", "--state"]
 
@@ -113,9 +118,6 @@ Environment="EGG={egg_path}" "DST_IP={wire_ip}" "UID={user_id}" "WAIT={wait}"
         logger.info(
             "Firewalld service not running/unavailable, trying to set up {0}".format(self._network_setup_service_name))
 
-        if not systemd.is_systemd():
-            raise Exception("Did not detect Systemd, unable to set {0}".format(self._network_setup_service_name))
-
         self._setup_network_setup_service()
 
     def __verify_firewall_rules_enabled(self):
@@ -155,6 +157,12 @@ Environment="EGG={egg_path}" "DST_IP={wire_ip}" "UID={user_id}" "WAIT={wait}"
         return False
 
     def _setup_network_setup_service(self):
+        # Even if service is enabled, we need to overwrite the binary file with the current IP in case it changed.
+        # This is to handle the case where WireIP can change midway on service restarts.
+        # Additionally, incase of auto-update this would also update the location of the new EGG file ensuring that
+        # the service is always run from the most latest agent.
+        self.__setup_binary_file()
+
         if self.__verify_network_setup_service_enabled():
             logger.info("Service: {0} already enabled. No change needed.".format(self._network_setup_service_name))
             self.__log_network_setup_service_logs()
@@ -163,39 +171,34 @@ Environment="EGG={egg_path}" "DST_IP={wire_ip}" "UID={user_id}" "WAIT={wait}"
             logger.info("Service: {0} not enabled. Adding it now".format(self._network_setup_service_name))
             # Create unit file with default values
             self.__set_service_unit_file()
+            # Reload systemd configurations when we setup the service for the first time to avoid systemctl warnings
+            self.__reload_systemd_conf()
             logger.info("Successfully added and enabled the {0}".format(self._network_setup_service_name))
 
-        # Even if service is enabled, we need to overwrite the drop-in file with the current IP in case it changed.
-        # This is to handle the case where WireIP can change midway on service restarts.
-        # Additionally, incase of auto-update this would also update the location of the new EGG file ensuring that
-        # the service is always run from the most latest agent.
-        self.__set_drop_in_file()
-
-    def __set_drop_in_file(self):
-        drop_in_file = os.path.join(self._systemd_file_path, "{0}.d".format(self._network_setup_service_name),
-                                    self._DROP_IN_ENV_FILE_NAME)
-        parent, _ = os.path.split(drop_in_file)
+    def __setup_binary_file(self):
+        binary_file_path = os.path.join(conf.get_lib_dir(), self.BINARY_FILE_NAME)
         try:
-            if not os.path.exists(parent):
-                fileutil.mkdir(parent, mode=0o755)
-            fileutil.write_file(drop_in_file,
-                                self.__OVERRIDE_CONTENT.format(egg_path=self._current_agent_executable_path,
-                                                               wire_ip=self._dst_ip,
-                                                               user_id=self._uid,
-                                                               wait=self._wait))
-            logger.info("Drop-in file {0} successfully updated".format(drop_in_file))
+            fileutil.write_file(binary_file_path,
+                                self.__BINARY_CONTENTS.format(egg_path=self._current_agent_executable_path,
+                                                              wire_ip=self._dst_ip,
+                                                              user_id=self._uid,
+                                                              wait=self._wait,
+                                                              py_path=sys.executable))
+            logger.info("Successfully updated the Binary file {0} for firewall setup".format(binary_file_path))
         except Exception:
-            self.__remove_file_without_raising(drop_in_file)
+            logger.warn(
+                "Unable to setup binary file, removing the service unit file {0} to ensure its not run on system reboot".format(
+                    self.get_service_file_path()))
+            self.__remove_file_without_raising(binary_file_path)
+            self.__remove_file_without_raising(self.get_service_file_path())
             raise
 
     def __set_service_unit_file(self):
         service_unit_file = self.get_service_file_path()
+        binary_path = os.path.join(conf.get_lib_dir(), self.BINARY_FILE_NAME)
         try:
             fileutil.write_file(service_unit_file,
-                                self.__SERVICE_FILE_CONTENT.format(egg_path=self._current_agent_executable_path,
-                                                                   wire_ip=self._dst_ip,
-                                                                   user_id=self._uid,
-                                                                   wait=self._wait,
+                                self.__SERVICE_FILE_CONTENT.format(binary_path=binary_path,
                                                                    py_path=sys.executable))
             fileutil.chmod(service_unit_file, 0o644)
 
@@ -245,15 +248,15 @@ Environment="EGG={egg_path}" "DST_IP={wire_ip}" "UID={user_id}" "WAIT={wait}"
         service_failed = self.__verify_network_setup_service_failed()
         try:
             stdout = shellutil.run_command(cmd)
-            msg = "Logs from the {0} since system boot:\n {1}".format(self._network_setup_service_name, stdout)
+            msg = ustr("Logs from the {0} since system boot:\n {1}").format(self._network_setup_service_name, stdout)
             logger.info(msg)
         except CommandError as error:
             msg = "Unable to fetch service logs, Command: {0} failed with ExitCode: {1}\nStdout: {2}\nStderr: {3}".format(
                 ' '.join(cmd), error.returncode, error.stdout, error.stderr)
             logger.warn(msg)
-        except Exception as error:
+        except Exception:
             msg = "Ran into unexpected error when getting logs for {0} service. Error: {1}".format(
-                self._network_setup_service_name, ustr(error))
+                self._network_setup_service_name, traceback.format_exc())
             logger.warn(msg)
 
         # Log service status and logs if we can fetch them from journalctl and send it to Kusto,
@@ -263,3 +266,10 @@ Environment="EGG={egg_path}" "DST_IP={wire_ip}" "UID={user_id}" "WAIT={wait}"
             is_success=(not service_failed),
             message=msg,
             log_event=False)
+
+    def __reload_systemd_conf(self):
+        try:
+            logger.info("Executing systemctl daemon-reload for setting up {0}".format(self._network_setup_service_name))
+            shellutil.run_command(["systemctl", "daemon-reload"])
+        except Exception as exception:
+            logger.warn("Unable to reload systemctl configurations: {0}".format(ustr(exception)))

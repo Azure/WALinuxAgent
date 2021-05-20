@@ -174,13 +174,14 @@ class UpdateTestCase(AgentTestCase):
         v.sort(reverse=True)
         return v
 
+    @contextlib.contextmanager
     def get_error_file(self, error_data=None):
         if error_data is None:
             error_data = NO_ERROR
-        fp = tempfile.NamedTemporaryFile(mode="w")
-        json.dump(error_data if error_data is not None else NO_ERROR, fp)
-        fp.seek(0)
-        return fp
+        with tempfile.NamedTemporaryFile(mode="w") as fp:
+            json.dump(error_data if error_data is not None else NO_ERROR, fp)
+            fp.seek(0)
+            yield fp
 
     def create_error(self, error_data=None):
         if error_data is None:

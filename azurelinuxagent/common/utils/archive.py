@@ -192,12 +192,16 @@ class StateDirectory(State):
         fn_tmp = "{0}.zip.tmp".format(self._path)
         filename = "{0}.zip".format(self._path)
 
-        ziph = zipfile.ZipFile(fn_tmp, 'w')
-        for current_file in os.listdir(self._path):
-            full_path = os.path.join(self._path, current_file)
-            ziph.write(full_path, current_file, zipfile.ZIP_DEFLATED)
-
-        ziph.close()
+        ziph = None
+        try:
+            # contextmanager for zipfile.ZipFile doesn't exist for py2.6, manually closing it
+            ziph = zipfile.ZipFile(fn_tmp, 'w')
+            for current_file in os.listdir(self._path):
+                full_path = os.path.join(self._path, current_file)
+                ziph.write(full_path, current_file, zipfile.ZIP_DEFLATED)
+        finally:
+            if ziph is not None:
+                ziph.close()
 
         os.rename(fn_tmp, filename)
         shutil.rmtree(self._path)
