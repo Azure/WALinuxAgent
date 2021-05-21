@@ -979,7 +979,9 @@ class ExtHandlersHandler(object):
             "goal_state_version": str(GOAL_STATE_AGENT_VERSION),
             "distro_details": "{0}:{1}".format(DISTRO_NAME, DISTRO_VERSION),
             "last_successful_status_upload_time": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-            "python_version": "Python: {0}.{1}.{2}".format(PY_VERSION_MAJOR, PY_VERSION_MINOR, PY_VERSION_MICRO)
+            "python_version": "Python: {0}.{1}.{2}".format(PY_VERSION_MAJOR, PY_VERSION_MINOR, PY_VERSION_MICRO),
+            "crp_supported_features": [name for name, _ in get_agent_supported_features_list_for_crp().items()],
+            "extension_supported_features": [name for name, _ in get_agent_supported_features_list_for_extensions().items()]
         }
 
         # Convert VMStatus class to Dict.
