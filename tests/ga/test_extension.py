@@ -28,6 +28,8 @@ import unittest
 import uuid
 
 from azurelinuxagent.common import conf
+from azurelinuxagent.common.agent_supported_feature import get_agent_supported_features_list_for_crp, \
+    get_agent_supported_features_list_for_extensions
 from azurelinuxagent.common.cgroupconfigurator import CGroupConfigurator
 from azurelinuxagent.common.datacontract import get_properties
 from azurelinuxagent.common.event import WALAEventOperation
@@ -1051,54 +1053,49 @@ class TestExtension(AgentTestCase):
 
     @patch('time.gmtime', MagicMock(return_value=time.gmtime(0)))
     def test_ext_handler_reporting_status_file(self, *args):
-        expected_status = '''
-{{
-    "agent_name": "{agent_name}",
-    "current_version": "{current_version}",
-    "goal_state_version": "{goal_state_version}",
-    "distro_details": "{distro_details}",
-    "last_successful_status_upload_time": "{last_successful_status_upload_time}",
-    "python_version": "{python_version}",
-    "extensions_status": [
-        {{
-            "name": "OSTCExtensions.ExampleHandlerLinux",
-            "version": "1.0.0",
-            "status": "Ready",
-            "supports_multi_config": false
-        }},
-        {{
-            "name": "Microsoft.Powershell.ExampleExtension",
-            "version": "1.0.0",
-            "status": "Ready",
-            "supports_multi_config": false
-        }},
-        {{
-            "name": "Microsoft.EnterpriseCloud.Monitoring.ExampleHandlerLinux",
-            "version": "1.0.0",
-            "status": "Ready",
-            "supports_multi_config": false
-        }},
-        {{
-            "name": "Microsoft.CPlat.Core.ExampleExtensionLinux",
-            "version": "1.0.0",
-            "status": "Ready",
-            "supports_multi_config": false
-        }},
-        {{
-            "name": "Microsoft.OSTCExtensions.Edp.ExampleExtensionLinuxInTest",
-            "version": "1.0.0",
-            "status": "Ready",
-            "supports_multi_config": false
-        }}
-    ]
-}}'''.format(agent_name=AGENT_NAME,
-             current_version=str(CURRENT_VERSION),
-             goal_state_version=str(GOAL_STATE_AGENT_VERSION),
-             distro_details="{0}:{1}".format(DISTRO_NAME, DISTRO_VERSION),
-             last_successful_status_upload_time=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-             python_version="Python: {0}.{1}.{2}".format(PY_VERSION_MAJOR, PY_VERSION_MINOR, PY_VERSION_MICRO))
 
-        expected_status_json = json.loads(expected_status)
+        expected_status = {
+            "agent_name": AGENT_NAME,
+            "current_version": str(CURRENT_VERSION),
+            "goal_state_version": str(GOAL_STATE_AGENT_VERSION),
+            "distro_details": "{0}:{1}".format(DISTRO_NAME, DISTRO_VERSION),
+            "last_successful_status_upload_time": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+            "python_version": "Python: {0}.{1}.{2}".format(PY_VERSION_MAJOR, PY_VERSION_MINOR, PY_VERSION_MICRO),
+            "crp_supported_features": [name for name, _ in get_agent_supported_features_list_for_crp().items()],
+            "extension_supported_features": [name for name, _ in get_agent_supported_features_list_for_extensions().items()],
+            "extensions_status": [
+                {
+                    "name": "OSTCExtensions.ExampleHandlerLinux",
+                    "version": "1.0.0",
+                    "status": "Ready",
+                    "supports_multi_config": False
+                },
+                {
+                    "name": "Microsoft.Powershell.ExampleExtension",
+                    "version": "1.0.0",
+                    "status": "Ready",
+                    "supports_multi_config": False
+                },
+                {
+                    "name": "Microsoft.EnterpriseCloud.Monitoring.ExampleHandlerLinux",
+                    "version": "1.0.0",
+                    "status": "Ready",
+                    "supports_multi_config": False
+                },
+                {
+                    "name": "Microsoft.CPlat.Core.ExampleExtensionLinux",
+                    "version": "1.0.0",
+                    "status": "Ready",
+                    "supports_multi_config": False
+                },
+                {
+                    "name": "Microsoft.OSTCExtensions.Edp.ExampleExtensionLinuxInTest",
+                    "version": "1.0.0",
+                    "status": "Ready",
+                    "supports_multi_config": False
+                }
+            ]
+        }
 
         test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE_MULTIPLE_EXT)
         exthandlers_handler, protocol = self._create_mock(test_data, *args)  # pylint: disable=unused-variable,no-value-for-parameter
@@ -1107,7 +1104,7 @@ class TestExtension(AgentTestCase):
         status_path = os.path.join(conf.get_lib_dir(), AGENT_STATUS_FILE)
         actual_status_json = json.loads(fileutil.read_file(status_path))
 
-        self.assertEqual(expected_status_json, actual_status_json)
+        self.assertEqual(expected_status, actual_status_json)
 
     def test_ext_handler_rollingupgrade(self, *args):
         # Test enable scenario.
