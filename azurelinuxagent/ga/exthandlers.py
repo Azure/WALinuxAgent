@@ -50,6 +50,7 @@ from azurelinuxagent.common.exception import ExtensionDownloadError, ExtensionEr
 from azurelinuxagent.common.future import ustr, is_file_not_found_error
 from azurelinuxagent.common.protocol.restapi import ExtensionStatus, ExtensionSubStatus, ExtHandler, ExtHandlerStatus, \
     VMStatus, GoalStateAggregateStatus, ExtensionState, ExtHandlerRequestedState, Extension
+from azurelinuxagent.common.utils.archive import ARCHIVE_DIRECTORY_NAME
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
 from azurelinuxagent.common.version import AGENT_NAME, CURRENT_VERSION, DISTRO_NAME, DISTRO_VERSION, \
     GOAL_STATE_AGENT_VERSION, PY_VERSION_MAJOR, PY_VERSION_MICRO, PY_VERSION_MINOR
@@ -257,10 +258,13 @@ def get_exthandlers_handler(protocol):
     return ExtHandlersHandler(protocol)
 
 
-def list_agent_lib_directory(skip_agent_package=True):
+def list_agent_lib_directory(skip_agent_package=True, ignore_names=None):
     lib_dir = conf.get_lib_dir()
     for name in os.listdir(lib_dir):
         path = os.path.join(lib_dir, name)
+
+        if ignore_names is not None and any(ignore_names) and name in ignore_names:
+            continue
 
         if skip_agent_package and (version.is_agent_package(path) or version.is_agent_path(path)):
             continue
@@ -867,7 +871,9 @@ class ExtHandlersHandler(object):
 
     def __get_handlers_on_file_system(self, incarnation_changed):
         handlers_to_report = []
-        for item, path in list_agent_lib_directory(skip_agent_package=True):
+        # Ignoring the `history` and `events` directories as they're not handlers and are agent-generated
+        for item, path in list_agent_lib_directory(skip_agent_package=True,
+                                                   ignore_names=[EVENTS_DIRECTORY, ARCHIVE_DIRECTORY_NAME]):
             try:
                 handler_instance = ExtHandlersHandler.get_ext_handler_instance_from_path(name=item,
                                                                                          path=path,
