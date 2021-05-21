@@ -369,7 +369,7 @@ class RDMADeviceHandler(object):
 
         for nic in nics:
             # look for IBoIP interface of format ibXXX
-            if not re.match(r"ib\d+", nic):
+            if not re.match(r"ib\w+", nic):
                 continue
 
             mac_addr = None
