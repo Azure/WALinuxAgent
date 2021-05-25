@@ -177,7 +177,7 @@ A sample configuration file is shown below:
 ```yml
 Extensions.Enabled=y
 Extensions.GoalStatePeriod=6
-Extensions.GoalStateHistoryCleanupPeriod=86400
+Extensions.GoalStateHistoryCleanupPeriod=1800
 Provisioning.Agent=auto
 Provisioning.DeleteRootPassword=n
 Provisioning.RegenerateSshHostKeyPair=y
