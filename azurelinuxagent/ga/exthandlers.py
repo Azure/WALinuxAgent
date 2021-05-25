@@ -2139,10 +2139,10 @@ class ExtHandlerInstance(object):
         while True:
             try:
                 return ExtHandlerInstance._read_and_parse_json_status_file(ext_status_file)
-            except Exception as e:
+            except Exception:
                 err_count += 1
                 if err_count >= _NUM_OF_STATUS_FILE_RETRIES:
-                    raise e
+                    raise
             time.sleep(_STATUS_FILE_RETRY_DELAY)
 
     @staticmethod
