@@ -57,6 +57,7 @@ from tests.ga.extension_emulator import Actions, ExtensionCommandNames, extensio
 # Mocking the original sleep to reduce test execution time
 SLEEP = time.sleep
 
+
 SUCCESS_CODE_FROM_STATUS_FILE = 1
 
 
@@ -73,7 +74,6 @@ def raise_ioerror(*args):  # pylint: disable=unused-argument
     from errno import EIO
     e.errno = EIO
     raise e
-
 
 class TestExtensionCleanup(AgentTestCase):
 
@@ -159,8 +159,7 @@ class TestExtensionCleanup(AgentTestCase):
             self.assertEqual(0, TestExtensionCleanup._count_packages(), "All packages must be deleted")
             self._assert_ext_handler_status(protocol.aggregate_status, "Ready", expected_ext_handler_count=0,
                                             version="1.0.0")
-            self.assertEqual(0, TestExtensionCleanup._count_extension_directories(),
-                             "All extension directories should be removed")
+            self.assertEqual(0, TestExtensionCleanup._count_extension_directories(), "All extension directories should be removed")
 
     def test_cleanup_removes_orphaned_packages(self):
         no_of_orphaned_packages = 5
@@ -213,8 +212,7 @@ class TestExtensionCleanup(AgentTestCase):
     def test_it_should_report_and_cleanup_only_if_gs_supported(self):
 
         def assert_gs_aggregate_status(seq_no, status, code):
-            gs_status = protocol.aggregate_status['aggregateStatus']['vmArtifactsAggregateStatus'][
-                'goalStateAggregateStatus']
+            gs_status = protocol.aggregate_status['aggregateStatus']['vmArtifactsAggregateStatus']['goalStateAggregateStatus']
             self.assertEqual(gs_status['inSvdSeqNo'], seq_no, "Seq number not matching")
             self.assertEqual(gs_status['code'], code, "The error code not matching")
             self.assertEqual(gs_status['status'], status, "The status not matching")
@@ -224,16 +222,14 @@ class TestExtensionCleanup(AgentTestCase):
                 self.assertEqual(expected_seq_no, handler_status['runtimeSettingsStatus']['sequenceNumber'],
                                  "Sequence number mismatch")
 
-        with self._setup_test_env(mockwiredata.DATA_FILE_MULTIPLE_EXT) as (
-        exthandlers_handler, protocol, orig_no_of_exts):
+        with self._setup_test_env(mockwiredata.DATA_FILE_MULTIPLE_EXT) as (exthandlers_handler, protocol, orig_no_of_exts):
             # Run 1 - GS has no required features and contains 5 extensions
             exthandlers_handler.run()
             self.assertEqual(orig_no_of_exts, TestExtensionCleanup._count_packages(),
                              "No of extensions in config doesn't match the packages")
             self.assertEqual(orig_no_of_exts, TestExtensionCleanup._count_extension_directories(),
                              "No of extension directories doesnt match the no of extensions in GS")
-            self._assert_ext_handler_status(protocol.aggregate_status, "Ready",
-                                            expected_ext_handler_count=orig_no_of_exts,
+            self._assert_ext_handler_status(protocol.aggregate_status, "Ready", expected_ext_handler_count=orig_no_of_exts,
                                             version="1.0.0")
             assert_gs_aggregate_status(seq_no='1', status=GoalStateStatus.Success,
                                        code=GoalStateAggregateStatusCodes.Success)
@@ -251,8 +247,7 @@ class TestExtensionCleanup(AgentTestCase):
                              "No of extensions should not be changed")
             self.assertEqual(orig_no_of_exts, TestExtensionCleanup._count_extension_directories(),
                              "No of extension directories should not be changed")
-            self._assert_ext_handler_status(protocol.aggregate_status, "Ready",
-                                            expected_ext_handler_count=orig_no_of_exts,
+            self._assert_ext_handler_status(protocol.aggregate_status, "Ready", expected_ext_handler_count=orig_no_of_exts,
                                             version="1.0.0")
             assert_gs_aggregate_status(seq_no='2', status=GoalStateStatus.Failed,
                                        code=GoalStateAggregateStatusCodes.GoalStateUnsupportedRequiredFeatures)
@@ -455,11 +450,9 @@ class TestExtension(AgentTestCase):
                                     extension_handler_name="OSTCExtensions.ExampleHandlerLinux"):
         zip_file_format = "{0}__{1}.zip"
         if expected_to_be_present:
-            self.assertIn(zip_file_format.format(extension_handler_name, extension_version),
-                          os.listdir(conf.get_lib_dir()))
+            self.assertIn(zip_file_format.format(extension_handler_name, extension_version), os.listdir(conf.get_lib_dir()))
         else:
-            self.assertNotIn(zip_file_format.format(extension_handler_name, extension_version),
-                             os.listdir(conf.get_lib_dir()))
+            self.assertNotIn(zip_file_format.format(extension_handler_name, extension_version), os.listdir(conf.get_lib_dir()))
 
     def _assert_no_handler_status(self, report_vm_status):
         self.assertTrue(report_vm_status.called)
@@ -1212,14 +1205,12 @@ class TestExtension(AgentTestCase):
         self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.1.0")
         self._assert_ext_status(protocol.report_vm_status, "success", 0)
 
-    def test_it_should_create_extension_events_dir_and_set_handler_environment_only_if_extension_telemetry_enabled(self,
-                                                                                                                   *args):
+    def test_it_should_create_extension_events_dir_and_set_handler_environment_only_if_extension_telemetry_enabled(self, *args):
 
         for enable_extensions in [False, True]:
             tmp_lib_dir = tempfile.mkdtemp(prefix="ExtensionEnabled{0}".format(enable_extensions))
             with patch("azurelinuxagent.common.conf.get_lib_dir", return_value=tmp_lib_dir):
-                with patch("azurelinuxagent.common.agent_supported_feature._ETPFeature.is_supported",
-                           enable_extensions):
+                with patch("azurelinuxagent.common.agent_supported_feature._ETPFeature.is_supported", enable_extensions):
                     # Create new object for each run to force re-installation of extensions as we
                     # only create handler_environment on installation
                     test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE_MULTIPLE_EXT)
@@ -1339,9 +1330,10 @@ class TestExtension(AgentTestCase):
 
         def _assert_mock_add_event_call(expected_download_failed_event_count, err_msg_guid):
             event_occurrences = [kw for _, kw in mock_add_event.call_args_list if
-                                 "Failed to download artifacts: [ExtensionDownloadError] {0}".format(err_msg_guid) in
-                                 kw['message']]
+                          "Failed to download artifacts: [ExtensionDownloadError] {0}".format(err_msg_guid) in kw['message']]
             self.assertEqual(expected_download_failed_event_count, len(event_occurrences), "Call count do not match")
+
+
             self.assertFalse(any(kw['is_success'] for kw in event_occurrences), "The events should have failed")
             self.assertEqual(expected_download_failed_event_count, len([kw['op'] for kw in event_occurrences]),
                              "Incorrect Operation, all events should be a download errors")
@@ -1525,8 +1517,7 @@ class TestExtension(AgentTestCase):
         self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.0.0")
 
     def _assert_ext_status(self, vm_agent_status, expected_status,
-                           expected_seq_no, expected_handler_name="OSTCExtensions.ExampleHandlerLinux",
-                           expected_msg=None):
+                           expected_seq_no, expected_handler_name="OSTCExtensions.ExampleHandlerLinux", expected_msg=None):
 
         self.assertTrue(vm_agent_status.called)
         args, _ = vm_agent_status.call_args
@@ -1597,8 +1588,7 @@ class TestExtension(AgentTestCase):
                 # The extension status reported by the Handler should be an error since no status file was found
                 self._assert_ext_status(protocol.report_vm_status, ValidHandlerStatus.error, 0,
                                         expected_handler_name="OSTCExtensions.OtherExampleHandlerLinux",
-                                        expected_msg="No such file or directory: '{0}'".format(
-                                            mock_popen.deleted_status_file))
+                                        expected_msg="No such file or directory: '{0}'".format(mock_popen.deleted_status_file))
 
                 # The Handler Status for the dependent extension should be NotReady as it was not executed at all
                 # And since it was not executed, it should not report any extension status either
@@ -2065,8 +2055,7 @@ class TestExtension(AgentTestCase):
         Note: we don't re-download the zip since it wasn't cleaned up in the previous goal state (we only clean up
         NotInstalled handlers), so we just re-use the existing zip of the new extension.
         """
-        test_data, exthandlers_handler, protocol = self._set_up_update_test_and_update_gs(patch_get_update_command,
-                                                                                          *args)
+        test_data, exthandlers_handler, protocol = self._set_up_update_test_and_update_gs(patch_get_update_command, *args)
         extension_name = exthandlers_handler.ext_handlers.extHandlers[0].name
         extension_calls = []
         original_popen = subprocess.Popen
@@ -2141,9 +2130,8 @@ class TestExtension(AgentTestCase):
             self.assertEqual(0, patch_get_enable_command.call_count)
 
     @patch('azurelinuxagent.ga.exthandlers.HandlerManifest.get_disable_command')
-    def test_extension_upgrade_failure_when_prev_version_disable_fails_and_recovers_on_next_incarnation(self,
-                                                                                                        patch_get_disable_command,
-                                                                                                        *args):
+    def test_extension_upgrade_failure_when_prev_version_disable_fails_and_recovers_on_next_incarnation(self, patch_get_disable_command,
+                                                                                                         *args):
         test_data, exthandlers_handler, protocol = self._set_up_update_test_and_update_gs(patch_get_disable_command,
                                                                                           *args)
 
@@ -2169,8 +2157,7 @@ class TestExtension(AgentTestCase):
             protocol.update_goal_state()
 
             # Ensure disable won't fail by making launch_command a no-op
-            with patch(
-                    'azurelinuxagent.ga.exthandlers.ExtHandlerInstance.launch_command') as patch_launch_command:  # pylint: disable=unused-variable
+            with patch('azurelinuxagent.ga.exthandlers.ExtHandlerInstance.launch_command') as patch_launch_command:  # pylint: disable=unused-variable
                 exthandlers_handler.run()
                 self.assertEqual(2, patch_get_disable_command.call_count)
                 self.assertEqual(1, patch_get_enable_command.call_count)
@@ -2325,7 +2312,7 @@ class TestExtension(AgentTestCase):
 
         with patch('azurelinuxagent.ga.exthandlers.HandlerManifest.is_continue_on_update_failure', return_value=True) \
                 as mock_continue_on_update_failure:
-            with patch('azurelinuxagent.ga.exthandlers.HandlerManifest.get_enable_command', return_value="exit 1") \
+            with patch('azurelinuxagent.ga.exthandlers.HandlerManifest.get_enable_command', return_value="exit 1")\
                     as patch_get_enable:
                 # These are just testing the mocks have been called and asserting the test conditions have been met
                 exthandlers_handler.run()
@@ -2352,12 +2339,10 @@ class TestExtension(AgentTestCase):
             # Ensure that the env variables were present in the first run when failures were thrown for update
             self.assertEqual(2, patch_continue_on_update.call_count)
             self.assertTrue(
-                '-update' in update_kwargs['command'] and ExtCommandEnvVariable.DisableReturnCode in update_kwargs[
-                    'env'],
+                '-update' in update_kwargs['command'] and ExtCommandEnvVariable.DisableReturnCode in update_kwargs['env'],
                 "The update command call should have Disable Failed in env variable")
             self.assertTrue(
-                '-install' in install_kwargs['command'] and ExtCommandEnvVariable.DisableReturnCode not in
-                install_kwargs[
+                '-install' in install_kwargs['command'] and ExtCommandEnvVariable.DisableReturnCode not in install_kwargs[
                     'env'],
                 "The Disable Failed env variable should be removed from install command")
             self.assertTrue(
@@ -2365,8 +2350,7 @@ class TestExtension(AgentTestCase):
                     'env'],
                 "The install command call should have Uninstall Failed in env variable")
             self.assertTrue(
-                '-enable' in enable_kwargs['command'] and ExtCommandEnvVariable.UninstallReturnCode in enable_kwargs[
-                    'env'],
+                '-enable' in enable_kwargs['command'] and ExtCommandEnvVariable.UninstallReturnCode in enable_kwargs['env'],
                 "The enable command call should have Uninstall Failed in env variable")
 
             # Initiating another run which shouldn't have any failed env variables in it if no failures
@@ -2545,13 +2529,10 @@ class TestExtension(AgentTestCase):
                 _, enable_kwargs = mock_report_event.call_args_list[5]
 
                 self.assertIn("%s=%s" % (ExtCommandEnvVariable.DisableReturnCode, exit_code), update_kwargs['message'])
-                self.assertIn("%s=%s" % (ExtCommandEnvVariable.UninstallReturnCode, exit_code),
-                              install_kwargs['message'])
-                self.assertIn("%s=%s" % (ExtCommandEnvVariable.UninstallReturnCode, exit_code),
-                              enable_kwargs['message'])
+                self.assertIn("%s=%s" % (ExtCommandEnvVariable.UninstallReturnCode, exit_code), install_kwargs['message'])
+                self.assertIn("%s=%s" % (ExtCommandEnvVariable.UninstallReturnCode, exit_code), enable_kwargs['message'])
 
-    def test_it_should_persist_goal_state_aggregate_status_until_new_incarnation(self, mock_get, mock_crypt_util,
-                                                                                 *args):
+    def test_it_should_persist_goal_state_aggregate_status_until_new_incarnation(self, mock_get, mock_crypt_util, *args):
         test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE)
         exthandlers_handler, protocol = self._create_mock(test_data, mock_get, mock_crypt_util, *args)
 
@@ -2590,7 +2571,7 @@ class TestExtension(AgentTestCase):
         required_features = protocol.get_required_features()
         self.assertEqual(3, len(required_features), "Incorrect features parsed")
         for i, feature in enumerate(required_features):
-            self.assertEqual(feature.name, "TestRequiredFeature{0}".format(i + 1), "Name mismatch")
+            self.assertEqual(feature.name, "TestRequiredFeature{0}".format(i+1), "Name mismatch")
             if i < 2:
                 self.assertIsNone(feature.value, "Value not present")
             else:
@@ -2894,7 +2875,7 @@ class TestExtensionUpdateOnFailure(AgentTestCase):
         _, kwargs = second_ext.actions[ExtensionCommandNames.UPDATE].call_args
 
         self.assertEqual(kwargs["env"][ExtCommandEnvVariable.DisableReturnCode], exit_code,
-                         "DisableAction's return code should be in updateAction's env.")
+            "DisableAction's return code should be in updateAction's env.")
 
     def test_uninstall_failed_env_variable_should_set_for_install_when_continue_on_update_failure_is_true(self):
         exit_code, uninstall_action = Actions.generate_unique_fail()
@@ -2915,7 +2896,8 @@ class TestExtensionUpdateOnFailure(AgentTestCase):
         _, kwargs = second_ext.actions[ExtensionCommandNames.INSTALL].call_args
 
         self.assertEqual(kwargs["env"][ExtCommandEnvVariable.UninstallReturnCode], exit_code,
-                         "UninstallAction's return code should be in updateAction's env.")
+            "UninstallAction's return code should be in updateAction's env.")
+
 
     def test_extension_error_should_be_raised_when_continue_on_update_failure_is_false_on_disable_failure(self):
         exit_code, disable_action = Actions.generate_unique_fail()
@@ -2929,11 +2911,11 @@ class TestExtensionUpdateOnFailure(AgentTestCase):
             (first_ext, ExtensionCommandNames.DISABLE)
         )
 
-        self.assertEqual(len(first_ext.status_blobs), 1,
-                         "The first extension should not have submitted a second status.")
+        self.assertEqual(len(first_ext.status_blobs), 1, "The first extension should not have submitted a second status.")
         self.assertEqual(len(second_ext.status_blobs), 1, "The second extension should have a single submitted status.")
         self.assertTrue(exit_code in second_ext.status_blobs[0]["formattedMessage"]["message"],
-                        "DisableAction's error code should be propagated to the status blob.")
+            "DisableAction's error code should be propagated to the status blob.")
+
 
     def test_extension_error_should_be_raised_when_continue_on_update_failure_is_false_on_uninstall_failure(self):
         exit_code, uninstall_action = Actions.generate_unique_fail()
@@ -2949,22 +2931,20 @@ class TestExtensionUpdateOnFailure(AgentTestCase):
             (first_ext, ExtensionCommandNames.UNINSTALL)
         )
 
-        self.assertEqual(len(first_ext.status_blobs), 1,
-                         "The first extension should not have submitted a second status.")
+        self.assertEqual(len(first_ext.status_blobs), 1, "The first extension should not have submitted a second status.")
         self.assertEqual(len(second_ext.status_blobs), 1, "The second extension should have a single submitted status.")
         self.assertTrue(exit_code in second_ext.status_blobs[0]["formattedMessage"]["message"],
-                        "UninstallAction's error code should be propagated to the status blob.")
+            "UninstallAction's error code should be propagated to the status blob.")
 
-    def test_extension_error_should_be_raised_when_continue_on_update_failure_is_true_on_disable_and_update_failure(
-            self):
-        exit_codes = {}
+    def test_extension_error_should_be_raised_when_continue_on_update_failure_is_true_on_disable_and_update_failure(self):
+        exit_codes = { }
 
         exit_codes["disable"], disable_action = Actions.generate_unique_fail()
         exit_codes["update"], update_action = Actions.generate_unique_fail()
 
         first_ext = extension_emulator(disable_action=disable_action)
         second_ext = extension_emulator(version="1.1.0", update_action=update_action,
-                                        continue_on_update_failure=True)
+            continue_on_update_failure=True)
 
         invocation_record = TestExtensionUpdateOnFailure._do_upgrade_scenario_and_get_order(first_ext, second_ext)
 
@@ -2973,22 +2953,21 @@ class TestExtensionUpdateOnFailure(AgentTestCase):
             (second_ext, ExtensionCommandNames.UPDATE)
         )
 
-        self.assertEqual(len(first_ext.status_blobs), 1,
-                         "The first extension should not have submitted a second status.")
+        self.assertEqual(len(first_ext.status_blobs), 1, "The first extension should not have submitted a second status.")
         self.assertEqual(len(second_ext.status_blobs), 1, "The second extension should have a single submitted status.")
         self.assertTrue(exit_codes["update"] in second_ext.status_blobs[0]["formattedMessage"]["message"],
-                        "UpdateAction's error code should be propagated to the status blob.")
+            "UpdateAction's error code should be propagated to the status blob.")
 
-    def test_extension_error_should_be_raised_when_continue_on_update_failure_is_true_on_uninstall_and_install_failure(
-            self):
-        exit_codes = {}
+
+    def test_extension_error_should_be_raised_when_continue_on_update_failure_is_true_on_uninstall_and_install_failure(self):
+        exit_codes = { }
 
         exit_codes["install"], install_action = Actions.generate_unique_fail()
         exit_codes["uninstall"], uninstall_action = Actions.generate_unique_fail()
 
         first_ext = extension_emulator(uninstall_action=uninstall_action)
         second_ext = extension_emulator(version="1.1.0", install_action=install_action,
-                                        continue_on_update_failure=True)
+            continue_on_update_failure=True)
 
         invocation_record = TestExtensionUpdateOnFailure._do_upgrade_scenario_and_get_order(first_ext, second_ext)
 
@@ -2999,18 +2978,18 @@ class TestExtensionUpdateOnFailure(AgentTestCase):
             (second_ext, ExtensionCommandNames.INSTALL)
         )
 
-        self.assertEqual(len(first_ext.status_blobs), 1,
-                         "The first extension should not have submitted a second status.")
+        self.assertEqual(len(first_ext.status_blobs), 1, "The first extension should not have submitted a second status.")
         self.assertEqual(len(second_ext.status_blobs), 1, "The second extension should have a single submitted status.")
         self.assertTrue(exit_codes["install"] in second_ext.status_blobs[0]["formattedMessage"]["message"],
-                        "InstallAction's error code should be propagated to the status blob.")
+            "InstallAction's error code should be propagated to the status blob.")
+
 
     def test_failed_env_variables_should_be_set_from_within_extension_commands(self):
         """
         This test will test from the perspective of the extensions command weather the env variables are
         being set for those processes
         """
-        exit_codes = {}
+        exit_codes = { }
 
         exit_codes["disable"], disable_action = Actions.generate_unique_fail()
         exit_codes["uninstall"], uninstall_action = Actions.generate_unique_fail()
@@ -3037,30 +3016,31 @@ class TestExtensionUpdateOnFailure(AgentTestCase):
 
         # Ensure we're checking variables for update scenario
         self.assertEqual(update_kwargs["env"][ExtCommandEnvVariable.DisableReturnCode], exit_codes["disable"],
-                         "DisableAction's return code should be present in updateAction's env.")
+            "DisableAction's return code should be present in updateAction's env.")
         self.assertTrue(ExtCommandEnvVariable.UninstallReturnCode not in update_kwargs["env"],
-                        "UninstallAction's return code should not be in updateAction's env.")
+            "UninstallAction's return code should not be in updateAction's env.")
         self.assertEqual(update_kwargs["env"][ExtCommandEnvVariable.ExtensionPath], second_extension_dir,
-                         "The second extension's directory should be present in updateAction's env.")
+            "The second extension's directory should be present in updateAction's env.")
         self.assertEqual(update_kwargs["env"][ExtCommandEnvVariable.ExtensionVersion], "1.1.0",
-                         "The second extension's version should be present in updateAction's env.")
+            "The second extension's version should be present in updateAction's env.")
 
         # Ensure we're checking variables for install scenario
         self.assertEqual(install_kwargs["env"][ExtCommandEnvVariable.UninstallReturnCode], exit_codes["uninstall"],
-                         "UninstallAction's return code should be present in installAction's env.")
+            "UninstallAction's return code should be present in installAction's env.")
         self.assertTrue(ExtCommandEnvVariable.DisableReturnCode not in install_kwargs["env"],
-                        "DisableAction's return code should not be in installAction's env.")
+            "DisableAction's return code should not be in installAction's env.")
         self.assertEqual(install_kwargs["env"][ExtCommandEnvVariable.ExtensionPath], second_extension_dir,
-                         "The second extension's directory should be present in installAction's env.")
+            "The second extension's directory should be present in installAction's env.")
         self.assertEqual(install_kwargs["env"][ExtCommandEnvVariable.ExtensionVersion], "1.1.0",
-                         "The second extension's version should be present in installAction's env.")
+            "The second extension's version should be present in installAction's env.")
+
 
     def test_correct_exit_code_should_set_on_disable_cmd_failure(self):
         exit_code, disable_action = Actions.generate_unique_fail()
 
         first_ext = extension_emulator(disable_action=disable_action)
         second_ext = extension_emulator(version="1.1.0", continue_on_update_failure=True,
-                                        update_mode="UpdateWithoutInstall")
+            update_mode="UpdateWithoutInstall")
 
         invocation_record = TestExtensionUpdateOnFailure._do_upgrade_scenario_and_get_order(first_ext, second_ext)
 
@@ -3074,7 +3054,7 @@ class TestExtensionUpdateOnFailure(AgentTestCase):
         _, update_kwargs = second_ext.actions[ExtensionCommandNames.UPDATE].call_args
 
         self.assertEqual(update_kwargs["env"][ExtCommandEnvVariable.DisableReturnCode], exit_code,
-                         "DisableAction's return code should be present in UpdateAction's env.")
+            "DisableAction's return code should be present in UpdateAction's env.")
 
     def test_timeout_code_should_set_on_cmd_timeout(self):
         # Return None to every poll, forcing a timeout after 900 seconds (actually very quick because sleep(*) is mocked)
@@ -3085,8 +3065,7 @@ class TestExtensionUpdateOnFailure(AgentTestCase):
 
         with patch("os.killpg"):
             with patch("os.getpgid"):
-                invocation_record = TestExtensionUpdateOnFailure._do_upgrade_scenario_and_get_order(first_ext,
-                                                                                                    second_ext)
+                invocation_record = TestExtensionUpdateOnFailure._do_upgrade_scenario_and_get_order(first_ext, second_ext)
 
         invocation_record.compare(
             (first_ext, ExtensionCommandNames.DISABLE),
@@ -3096,18 +3075,19 @@ class TestExtensionUpdateOnFailure(AgentTestCase):
             (second_ext, ExtensionCommandNames.ENABLE)
         )
 
+
         _, update_kwargs = second_ext.actions[ExtensionCommandNames.UPDATE].call_args
         _, install_kwargs = second_ext.actions[ExtensionCommandNames.INSTALL].call_args
 
         # Verify both commands are reported as timeouts.
-        self.assertEqual(update_kwargs["env"][ExtCommandEnvVariable.DisableReturnCode],
-                         str(ExtensionErrorCodes.PluginHandlerScriptTimedout),
-                         "DisableAction's return code should be marked as a timeout in UpdateAction's env.")
-        self.assertEqual(install_kwargs["env"][ExtCommandEnvVariable.UninstallReturnCode],
-                         str(ExtensionErrorCodes.PluginHandlerScriptTimedout),
-                         "UninstallAction's return code should be marked as a timeout in installAction's env.")
+        self.assertEqual(update_kwargs["env"][ExtCommandEnvVariable.DisableReturnCode], str(ExtensionErrorCodes.PluginHandlerScriptTimedout),
+            "DisableAction's return code should be marked as a timeout in UpdateAction's env.")
+        self.assertEqual(install_kwargs["env"][ExtCommandEnvVariable.UninstallReturnCode], str(ExtensionErrorCodes.PluginHandlerScriptTimedout),
+            "UninstallAction's return code should be marked as a timeout in installAction's env.")
+
 
     def test_success_code_should_set_in_env_variables_on_cmd_success(self):
+
         first_ext = extension_emulator()
         second_ext = extension_emulator(version="1.1.0")
 
@@ -3125,9 +3105,9 @@ class TestExtensionUpdateOnFailure(AgentTestCase):
         _, install_kwargs = second_ext.actions[ExtensionCommandNames.INSTALL].call_args
 
         self.assertEqual(update_kwargs["env"][ExtCommandEnvVariable.DisableReturnCode], "0",
-                         "DisableAction's return code in updateAction's env should be 0.")
+            "DisableAction's return code in updateAction's env should be 0.")
         self.assertEqual(install_kwargs["env"][ExtCommandEnvVariable.UninstallReturnCode], "0",
-                         "UninstallAction's return code in installAction's env should be 0.")
+            "UninstallAction's return code in installAction's env should be 0.")
 
 
 @patch('time.sleep', side_effect=lambda _: mock_sleep(0.001))
@@ -3136,8 +3116,7 @@ class TestCollectExtensionStatus(AgentTestCase):
         AgentTestCase.setUp(self)
         self.lib_dir = tempfile.mkdtemp()
 
-    def _setup_extension_for_validating_collect_ext_status(self, mock_lib_dir, status_file,
-                                                           *args):  # pylint: disable=unused-argument
+    def _setup_extension_for_validating_collect_ext_status(self, mock_lib_dir, status_file, *args):  # pylint: disable=unused-argument
         handler_name = "TestHandler"
         handler_version = "1.0.0"
         mock_lib_dir.return_value = self.lib_dir
@@ -3240,7 +3219,7 @@ class TestCollectExtensionStatus(AgentTestCase):
                                              r"lacinia urna, sit .*\[TRUNCATED\]")
         self.maxDiff = None
         self.assertEqual(ext_status.status, ValidHandlerStatus.success)
-        self.assertEqual(len(ext_status.substatusList), 1)  # NUM OF SUBSTATUS PARSED
+        self.assertEqual(len(ext_status.substatusList), 1) # NUM OF SUBSTATUS PARSED
         for sub_status in ext_status.substatusList:
             self.assertRegex(sub_status.name, r'\[\{"status"\: \{"status": "success", "code": "1", "snapshotInfo": '
                                               r'\[\{"snapshotUri":.*')
@@ -3288,15 +3267,14 @@ class TestCollectExtensionStatus(AgentTestCase):
         def mock_read_file(file, *args, **kwargs):  # pylint: disable=redefined-builtin
             expected_status_file_path = os.path.join(self.lib_dir,
                                                      ext_handler_i.ext_handler.name + "-" +
-                                                     ext_handler_i.ext_handler.properties.version,
+                                                     ext_handler_i.ext_handler. properties.version,
                                                      "status", "0.status")
             if file == expected_status_file_path:
                 raise IOError("No such file or directory: {0}".format(expected_status_file_path))
             else:
                 original_read_file(file, *args, **kwargs)
 
-        with patch('azurelinuxagent.common.utils.fileutil.read_file',
-                   mock_read_file) as patch_read_file:  # pylint: disable=unused-variable
+        with patch('azurelinuxagent.common.utils.fileutil.read_file', mock_read_file) as patch_read_file:  # pylint: disable=unused-variable
             ext_status = ext_handler_i.collect_ext_status(extension)
 
             self.assertEqual(ext_status.code, ExtensionErrorCodes.PluginUnknownFailure)
@@ -3315,8 +3293,7 @@ class TestCollectExtensionStatus(AgentTestCase):
         Testing collect_ext_status() with a malformed json status file.
         """
         ext_handler_i, extension = self._setup_extension_for_validating_collect_ext_status(mock_lib_dir,
-                                                                                           "sample-status-invalid-format-emptykey-line7.json",
-                                                                                           *args)
+                                        "sample-status-invalid-format-emptykey-line7.json", *args)
         ext_status = ext_handler_i.collect_ext_status(extension)
 
         self.assertEqual(ext_status.code, ExtensionErrorCodes.PluginSettingsStatusInvalid)
@@ -3336,8 +3313,7 @@ class TestCollectExtensionStatus(AgentTestCase):
         Testing collect_ext_status() with a malformed json status file.
         """
         ext_handler_i, extension = self._setup_extension_for_validating_collect_ext_status(mock_lib_dir,
-                                                                                           "sample-status-invalid-status-no-status-status-key.json",
-                                                                                           *args)
+                                        "sample-status-invalid-status-no-status-status-key.json", *args)
         ext_status = ext_handler_i.collect_ext_status(extension)
 
         self.assertEqual(ext_status.code, ExtensionErrorCodes.PluginSettingsStatusInvalid)
@@ -3348,7 +3324,6 @@ class TestCollectExtensionStatus(AgentTestCase):
                                              "Encountered the following error".format("TestHandler", "1.0.0"))
         self.assertEqual(ext_status.status, ValidHandlerStatus.error)
         self.assertEqual(len(ext_status.substatusList), 0)
-
 
 class TestAdditionalLocationsExtensions(AgentTestCase):
 
@@ -3361,12 +3336,12 @@ class TestAdditionalLocationsExtensions(AgentTestCase):
 
     def test_additional_locations_node_is_consumed(self):
 
-        location_uri_pattern = r'https?://mock-goal-state/(?P<location_type>{0})/(?P<manifest_num>\d)/manifest.xml' \
+        location_uri_pattern = r'https?://mock-goal-state/(?P<location_type>{0})/(?P<manifest_num>\d)/manifest.xml'\
             .format(r'(location)|(failoverlocation)|(additionalLocation)')
         location_uri_regex = re.compile(location_uri_pattern)
 
-        manifests_used = [('location', '1'), ('failoverlocation', '2'),
-                          ('additionalLocation', '3'), ('additionalLocation', '4')]
+        manifests_used = [ ('location', '1'), ('failoverlocation', '2'),
+            ('additionalLocation', '3'), ('additionalLocation', '4') ]
 
         def manifest_location_handler(url, **kwargs):
             url_match = location_uri_regex.match(url)
@@ -3390,10 +3365,11 @@ class TestAdditionalLocationsExtensions(AgentTestCase):
             if manifests_used:
                 # Still locations to try in the list; throw a fake
                 # error to make sure all of the locations get called.
-                return Exception("Failing manifest fetch from uri '{0}' for testing purposes." \
-                                 .format(url))
+                return Exception("Failing manifest fetch from uri '{0}' for testing purposes."\
+                    .format(url))
 
             return None
+
 
         with mock_wire_protocol(self.test_data, http_get_handler=manifest_location_handler) as protocol:
             exthandlers_handler = get_exthandlers_handler(protocol)
@@ -3401,7 +3377,7 @@ class TestAdditionalLocationsExtensions(AgentTestCase):
 
     def test_fetch_manifest_timeout_is_respected(self):
 
-        location_uri_pattern = r'https?://mock-goal-state/(?P<location_type>{0})/(?P<manifest_num>\d)/manifest.xml' \
+        location_uri_pattern = r'https?://mock-goal-state/(?P<location_type>{0})/(?P<manifest_num>\d)/manifest.xml'\
             .format(r'(location)|(failoverlocation)|(additionalLocation)')
         location_uri_regex = re.compile(location_uri_pattern)
 
@@ -3420,19 +3396,20 @@ class TestAdditionalLocationsExtensions(AgentTestCase):
             if manifest_location_handler.num_times_called == 0:
                 time.sleep(.3)
                 manifest_location_handler.num_times_called += 1
-                return Exception("Failing manifest fetch from uri '{0}' for testing purposes." \
-                                 .format(url))
+                return Exception("Failing manifest fetch from uri '{0}' for testing purposes."\
+                    .format(url))
 
             return None
 
         manifest_location_handler.num_times_called = 0
+
 
         with mock_wire_protocol(self.test_data, http_get_handler=manifest_location_handler) as protocol:
             ext_handlers, _ = protocol.get_ext_handlers()
 
             with self.assertRaises(ExtensionDownloadError):
                 protocol.client.fetch_manifest(ext_handlers.extHandlers[0].versionUris,
-                                               timeout_in_minutes=0, timeout_in_ms=200)
+                    timeout_in_minutes=0, timeout_in_ms=200)
 
 
 if __name__ == '__main__':
