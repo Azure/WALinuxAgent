@@ -1621,15 +1621,14 @@ class TestExtension(AgentTestCase):
             return original_popen(["echo", "Yes"], *args, **kwargs)
 
         with patch('azurelinuxagent.common.cgroupapi.subprocess.Popen', side_effect=mock_popen):
+            exthandlers_handler.run()
 
-                exthandlers_handler.run()
-
-                # The Handler Status for the base extension should be ready as it was executed successfully by the agent
-                self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.0.0",
+            # The Handler Status for the base extension should be ready as it was executed successfully by the agent
+            self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.0.0",
                                             expected_handler_name="OSTCExtensions.ExampleHandlerLinux")
-                # The extension status reported by the Handler should contain a fragment of status file for
-                # debugging. The uniqueMachineId tag comes from status file
-                self._assert_ext_status(protocol.report_vm_status, ValidHandlerStatus.error, 0,
+            # The extension status reported by the Handler should contain a fragment of status file for
+            # debugging. The uniqueMachineId tag comes from status file
+            self._assert_ext_status(protocol.report_vm_status, ValidHandlerStatus.error, 0,
                                         expected_handler_name="OSTCExtensions.ExampleHandlerLinux",
                                         expected_msg="\"uniqueMachineId\": \"e5e5602b-48a6-4c35-9f96-752043777af1\"")
 
