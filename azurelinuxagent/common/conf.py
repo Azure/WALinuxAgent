@@ -145,7 +145,7 @@ __STRING_OPTIONS__ = {
 
 __INTEGER_OPTIONS__ = {
     "Extensions.GoalStatePeriod": 6,
-    "Extensions.GoalStateHistoryCleanupPeriod": 86400,
+    "Extensions.GoalStateHistoryCleanupPeriod": 1800,
     "OS.EnableFirewallPeriod": 30,
     "OS.RemovePersistentNetRulesPeriod": 30,
     "OS.RootDeviceScsiTimeoutPeriod": 30,
@@ -346,7 +346,7 @@ def get_goal_state_period(conf=__conf__):
 
 
 def get_goal_state_history_cleanup_period(conf=__conf__):
-    return conf.get_int("Extensions.GoalStateHistoryCleanupPeriod", 86400)
+    return conf.get_int("Extensions.GoalStateHistoryCleanupPeriod", 1800)
 
 
 def get_allow_reset_sys_user(conf=__conf__):

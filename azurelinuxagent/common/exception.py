@@ -100,6 +100,12 @@ class ExtensionConfigError(ExtensionError):
     """
 
 
+class MultiConfigExtensionEnableError(ExtensionError):
+    """
+    Error raised when enable for a Multi-Config extension is failing.
+    """
+
+
 class ProvisionError(AgentError):
     """
     When provision failed

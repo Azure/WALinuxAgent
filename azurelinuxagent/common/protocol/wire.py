@@ -37,7 +37,7 @@ from azurelinuxagent.common.exception import ProtocolNotFoundError, \
 from azurelinuxagent.common.future import httpclient, bytebuffer, ustr
 from azurelinuxagent.common.protocol.goal_state import GoalState, TRANSPORT_CERT_FILE_NAME, TRANSPORT_PRV_FILE_NAME
 from azurelinuxagent.common.protocol.hostplugin import HostPluginProtocol
-from azurelinuxagent.common.protocol.restapi import DataContract, ExtensionStatus, ExtHandlerPackage, \
+from azurelinuxagent.common.protocol.restapi import DataContract, ExtHandlerPackage, \
     ExtHandlerPackageList, ExtHandlerVersionUri, ProvisionStatus, VMInfo, VMStatus
 from azurelinuxagent.common.telemetryevent import GuestAgentExtensionEventsSchema
 from azurelinuxagent.common.utils import fileutil, restutil
@@ -192,10 +192,6 @@ class WireProtocol(DataContract):
         self.client.status_blob.set_vm_status(vm_status)
         self.client.upload_status_blob()
 
-    def report_ext_status(self, ext_handler_name, ext_name, ext_status):  # pylint: disable=W0613
-        validate_param("ext_status", ext_status, ExtensionStatus)
-        self.client.status_blob.set_ext_status(ext_handler_name, ext_status)
-
     def report_event(self, events_iterator):
         self.client.report_event(events_iterator)
 
@@ -323,14 +319,14 @@ def ext_substatus_to_v1(sub_status_list):
     return status_list
 
 
-def ext_status_to_v1(ext_name, ext_status):
+def ext_status_to_v1(ext_status):
     if ext_status is None:
         return None
     timestamp = _get_utc_timestamp_for_status_reporting()
     v1_sub_status = ext_substatus_to_v1(ext_status.substatusList)
     v1_ext_status = {
         "status": {
-            "name": ext_name,
+            "name": ext_status.name,
             "configurationAppliedTime": ext_status.configurationAppliedTime,
             "operation": ext_status.operation,
             "status": ext_status.status,
@@ -345,27 +341,28 @@ def ext_status_to_v1(ext_name, ext_status):
     return v1_ext_status
 
 
-def ext_handler_status_to_v1(handler_status, ext_statuses):
+def ext_handler_status_to_v1(ext_handler_status):
     v1_handler_status = {
-        'handlerVersion': handler_status.version,
-        'handlerName': handler_status.name,
-        'status': handler_status.status,
-        'code': handler_status.code,
+        'handlerVersion': ext_handler_status.version,
+        'handlerName': ext_handler_status.name,
+        'status': ext_handler_status.status,
+        'code': ext_handler_status.code,
         'useExactVersion': True
     }
-    if handler_status.message is not None:
-        v1_handler_status["formattedMessage"] = __get_formatted_msg_for_status_reporting(handler_status.message)
+    if ext_handler_status.message is not None:
+        v1_handler_status["formattedMessage"] = __get_formatted_msg_for_status_reporting(ext_handler_status.message)
 
-    if len(handler_status.extensions) > 0:
-        # Currently, no more than one extension per handler
-        ext_name = handler_status.extensions[0]
-        ext_status = ext_statuses.get(ext_name)
-        v1_ext_status = ext_status_to_v1(ext_name, ext_status)
-        if ext_status is not None and v1_ext_status is not None:
-            v1_handler_status["runtimeSettingsStatus"] = {
-                'settingsStatus': v1_ext_status,
-                'sequenceNumber': ext_status.sequenceNumber
-            }
+    v1_ext_status = ext_status_to_v1(ext_handler_status.extension_status)
+    if ext_handler_status.extension_status is not None and v1_ext_status is not None:
+        v1_handler_status["runtimeSettingsStatus"] = {
+            'settingsStatus': v1_ext_status,
+            'sequenceNumber': ext_handler_status.extension_status.sequenceNumber
+        }
+
+        # Add extension name if Handler supports MultiConfig
+        if ext_handler_status.supports_multi_config:
+            v1_handler_status["runtimeSettingsStatus"]["extensionName"] = ext_handler_status.extension_status.name
+
     return v1_handler_status
 
 
@@ -388,7 +385,7 @@ def vm_artifacts_aggregate_status_to_v1(vm_artifacts_aggregate_status):
     return v1_artifact_aggregate_status
 
 
-def vm_status_to_v1(vm_status, ext_statuses):
+def vm_status_to_v1(vm_status):
     timestamp = _get_utc_timestamp_for_status_reporting()
 
     v1_ga_guest_info = ga_status_to_guest_info(vm_status.vmAgent)
@@ -397,10 +394,7 @@ def vm_status_to_v1(vm_status, ext_statuses):
         vm_status.vmAgent.vm_artifacts_aggregate_status)
     v1_handler_status_list = []
     for handler_status in vm_status.vmAgent.extensionHandlers:
-        v1_handler_status = ext_handler_status_to_v1(handler_status,
-                                                     ext_statuses)
-        if v1_handler_status is not None:
-            v1_handler_status_list.append(v1_handler_status)
+        v1_handler_status_list.append(ext_handler_status_to_v1(handler_status))
 
     v1_agg_status = {
         'guestAgentStatus': v1_ga_status,
@@ -434,7 +428,6 @@ def vm_status_to_v1(vm_status, ext_statuses):
 class StatusBlob(object):
     def __init__(self, client):
         self.vm_status = None
-        self.ext_statuses = {}
         self.client = client
         self.type = None
         self.data = None
@@ -443,12 +436,8 @@ class StatusBlob(object):
         validate_param("vmAgent", vm_status, VMStatus)
         self.vm_status = vm_status
 
-    def set_ext_status(self, ext_handler_name, ext_status):
-        validate_param("extensionStatus", ext_status, ExtensionStatus)
-        self.ext_statuses[ext_handler_name] = ext_status
-
     def to_json(self):
-        report = vm_status_to_v1(self.vm_status, self.ext_statuses)
+        report = vm_status_to_v1(self.vm_status)
         return json.dumps(report)
 
     __storage_version__ = "2014-02-14"

@@ -36,7 +36,7 @@ The timestamp is an ISO8601 formatted value.
 """
 # pylint: enable=W0105
 
-_ARCHIVE_DIRECTORY_NAME = 'history'
+ARCHIVE_DIRECTORY_NAME = 'history'
 
 _MAX_ARCHIVED_STATES = 50
 
@@ -59,7 +59,7 @@ class StateFlusher(object):
     def __init__(self, lib_dir):
         self._source = lib_dir
 
-        directory = os.path.join(self._source, _ARCHIVE_DIRECTORY_NAME)
+        directory = os.path.join(self._source, ARCHIVE_DIRECTORY_NAME)
         if not os.path.exists(directory):
             try:
                 fileutil.mkdir(directory)
@@ -82,7 +82,7 @@ class StateFlusher(object):
             self._purge(files)
 
     def history_dir(self, name):
-        return os.path.join(self._source, _ARCHIVE_DIRECTORY_NAME, name)
+        return os.path.join(self._source, ARCHIVE_DIRECTORY_NAME, name)
 
     @staticmethod
     def _get_archive_name(files):
@@ -209,7 +209,7 @@ class StateDirectory(State):
 
 class StateArchiver(object):
     def __init__(self, lib_dir):
-        self._source = os.path.join(lib_dir, _ARCHIVE_DIRECTORY_NAME)
+        self._source = os.path.join(lib_dir, ARCHIVE_DIRECTORY_NAME)
 
         if not os.path.isdir(self._source):
             try:
