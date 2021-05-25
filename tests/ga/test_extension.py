@@ -1504,7 +1504,7 @@ class TestExtension(AgentTestCase):
         self.assertEqual(activity_id, "NA", "Activity Id should be NA")
         self.assertEqual(correlation_id, "NA", "Correlation Id should be NA")
         self.assertEqual(gs_creation_time, "NA", "GS Creation time should be NA")
-    
+
     def test_it_should_process_goal_state_even_if_metadata_invalid(self, mock_get, mock_crypt, *args):
 
         test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE_INVALID_VM_META_DATA)

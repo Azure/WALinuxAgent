@@ -144,8 +144,8 @@ class UpdateTestCase(AgentTestCase):
     def agent_bin(self, version, suffix):
         return "bin/{0}-{1}{2}.egg".format(AGENT_NAME, version, suffix)
 
-    def rename_agent_bin(self, path, src_v, dst_v):
-        src_bin = glob.glob(os.path.join(path, self.agent_bin(src_v, '*')))[0]
+    def rename_agent_bin(self, path, dst_v):
+        src_bin = glob.glob(os.path.join(path, self.agent_bin("*.*.*.*", '*')))[0]
         dst_bin = os.path.join(path, self.agent_bin(dst_v, ''))
         shutil.move(src_bin, dst_bin)
 
@@ -220,7 +220,7 @@ class UpdateTestCase(AgentTestCase):
         if from_path != to_path:
             shutil.move(from_path + ".zip", to_path + ".zip")
             shutil.move(from_path, to_path)
-            self.rename_agent_bin(to_path, src_v, dst_v)
+            self.rename_agent_bin(to_path, dst_v)
         return
 
     def prepare_agents(self,
@@ -267,7 +267,7 @@ class UpdateTestCase(AgentTestCase):
             to_path = self.agent_dir(dst_v)
             shutil.copyfile(from_path + ".zip", to_path + ".zip")
             shutil.copytree(from_path, to_path)
-            self.rename_agent_bin(to_path, src_v, dst_v)
+            self.rename_agent_bin(to_path, dst_v)
             if not is_available:
                 GuestAgent(to_path).mark_failure(is_fatal=True)
         return dst_v
