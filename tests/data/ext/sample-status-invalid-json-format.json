@@ -1,5 +1,6 @@
 [
     {
+        "_comment": "This is an invalid status file, it's missing a brace at line 37",
         "status": {
             "status": "success",
             "code": 1,

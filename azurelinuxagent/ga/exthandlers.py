@@ -2147,8 +2147,6 @@ class ExtHandlerInstance(object):
 
     @staticmethod
     def _read_and_parse_json_status_file(ext_status_file):
-        data_str = None
-        data = None
 
         try:
             data_str = fileutil.read_file(ext_status_file)

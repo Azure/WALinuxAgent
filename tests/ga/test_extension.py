@@ -3163,7 +3163,7 @@ class TestCollectExtensionStatus(AgentTestCase):
         """
         This test validates that collect_ext_status correctly picks up the status file (sample-status-invalid-json-format.json)
         and then since the Json cannot be parsed correctly it extension status message should include 2000 bytes of status file
-        and the line number in which it failed to parse
+        and the line number in which it failed to parse. The uniqueMachineId tag comes from status file.
         """
         ext_handler_i, extension = self._setup_extension_for_validating_collect_ext_status(mock_lib_dir,
                                                                                            "sample-status-invalid-json-format.json", *args)
@@ -3173,10 +3173,9 @@ class TestCollectExtensionStatus(AgentTestCase):
         self.assertEqual(ext_status.configurationAppliedTime, None)
         self.assertEqual(ext_status.operation, None)
         self.assertEqual(ext_status.sequenceNumber, 0)
-        self.assertRegex(ext_status.message, r".*The status reported by the extension {0}-{1}\(Sequence number {2}\), "
+        self.assertRegex(ext_status.message, r".*The status reported by the extension TestHandler-1.0.0\(Sequence number 0\), "
                                              r"was in an incorrect format and the agent could not parse it correctly."
-                                             r" Failed due to.*".
-                         format("TestHandler", "1.0.0", 0))
+                                             r" Failed due to.*")
         self.assertIn("\"uniqueMachineId\": \"e5e5602b-48a6-4c35-9f96-752043777af1\"",ext_status.message)
         self.assertEqual(ext_status.status, ValidHandlerStatus.error)
         self.assertEqual(len(ext_status.substatusList), 0)
