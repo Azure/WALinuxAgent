@@ -50,6 +50,7 @@ from azurelinuxagent.common.exception import ExtensionDownloadError, ExtensionEr
 from azurelinuxagent.common.future import ustr, is_file_not_found_error
 from azurelinuxagent.common.protocol.restapi import ExtensionStatus, ExtensionSubStatus, ExtHandler, ExtHandlerStatus, \
     VMStatus, GoalStateAggregateStatus, ExtensionState, ExtHandlerRequestedState, Extension
+from azurelinuxagent.common.utils.archive import ARCHIVE_DIRECTORY_NAME
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
 from azurelinuxagent.common.version import AGENT_NAME, CURRENT_VERSION, DISTRO_NAME, DISTRO_VERSION, \
     GOAL_STATE_AGENT_VERSION, PY_VERSION_MAJOR, PY_VERSION_MICRO, PY_VERSION_MINOR
@@ -257,10 +258,13 @@ def get_exthandlers_handler(protocol):
     return ExtHandlersHandler(protocol)
 
 
-def list_agent_lib_directory(skip_agent_package=True):
+def list_agent_lib_directory(skip_agent_package=True, ignore_names=None):
     lib_dir = conf.get_lib_dir()
     for name in os.listdir(lib_dir):
         path = os.path.join(lib_dir, name)
+
+        if ignore_names is not None and any(ignore_names) and name in ignore_names:
+            continue
 
         if skip_agent_package and (version.is_agent_package(path) or version.is_agent_path(path)):
             continue
@@ -867,7 +871,9 @@ class ExtHandlersHandler(object):
 
     def __get_handlers_on_file_system(self, incarnation_changed):
         handlers_to_report = []
-        for item, path in list_agent_lib_directory(skip_agent_package=True):
+        # Ignoring the `history` and `events` directories as they're not handlers and are agent-generated
+        for item, path in list_agent_lib_directory(skip_agent_package=True,
+                                                   ignore_names=[EVENTS_DIRECTORY, ARCHIVE_DIRECTORY_NAME]):
             try:
                 handler_instance = ExtHandlersHandler.get_ext_handler_instance_from_path(name=item,
                                                                                          path=path,
@@ -973,7 +979,9 @@ class ExtHandlersHandler(object):
             "goal_state_version": str(GOAL_STATE_AGENT_VERSION),
             "distro_details": "{0}:{1}".format(DISTRO_NAME, DISTRO_VERSION),
             "last_successful_status_upload_time": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-            "python_version": "Python: {0}.{1}.{2}".format(PY_VERSION_MAJOR, PY_VERSION_MINOR, PY_VERSION_MICRO)
+            "python_version": "Python: {0}.{1}.{2}".format(PY_VERSION_MAJOR, PY_VERSION_MINOR, PY_VERSION_MICRO),
+            "crp_supported_features": [name for name, _ in get_agent_supported_features_list_for_crp().items()],
+            "extension_supported_features": [name for name, _ in get_agent_supported_features_list_for_extensions().items()]
         }
 
         # Convert VMStatus class to Dict.
@@ -1647,7 +1655,7 @@ class ExtHandlerInstance(object):
         ext_status = ExtensionStatus(name=ext.name, seq_no=seq_no)
 
         try:
-            data_str, data = self._read_and_parse_json_status_file(ext_status_file)
+            data_str, data = self._read_status_file(ext_status_file)
         except ExtensionStatusError as e:
             msg = ""
             if e.code == ExtensionStatusError.CouldNotReadStatusFile:
@@ -2134,34 +2142,32 @@ class ExtHandlerInstance(object):
         return os.path.join(conf.get_ext_log_dir(), self.ext_handler.name)
 
     @staticmethod
-    def _read_and_parse_json_status_file(ext_status_file):
-        failed_to_read = False
-        failed_to_parse_json = False
-        raised_exception = None
-        data_str = None
-        data = None
-
-        for attempt in range(_NUM_OF_STATUS_FILE_RETRIES):  # pylint: disable=W0612
+    def _read_status_file(ext_status_file):
+        err_count = 0
+        while True:
             try:
-                data_str = fileutil.read_file(ext_status_file)
-                data = json.loads(data_str)
-                break
-            except IOError as e:
-                failed_to_read = True
-                raised_exception = e
-            except (ValueError, TypeError) as e:
-                failed_to_parse_json = True
-                raised_exception = e
+                return ExtHandlerInstance._read_and_parse_json_status_file(ext_status_file)
+            except Exception:
+                err_count += 1
+                if err_count >= _NUM_OF_STATUS_FILE_RETRIES:
+                    raise
             time.sleep(_STATUS_FILE_RETRY_DELAY)
 
-        if failed_to_read:
-            raise ExtensionStatusError(msg=ustr(raised_exception), inner=raised_exception,
+    @staticmethod
+    def _read_and_parse_json_status_file(ext_status_file):
+
+        try:
+            data_str = fileutil.read_file(ext_status_file)
+        except IOError as e:
+            raise ExtensionStatusError(msg=ustr(e), inner=e,
                                        code=ExtensionStatusError.CouldNotReadStatusFile)
-        elif failed_to_parse_json:
-            raise ExtensionStatusError(msg=ustr(raised_exception), inner=raised_exception,
+        try:
+            data = json.loads(data_str)
+        except (ValueError, TypeError) as e:
+            raise ExtensionStatusError(msg="{0} \n First 2000 Bytes of status file:\n {1}".format(ustr(e), ustr(data_str)[:2000]),
+                                       inner=e,
                                        code=ExtensionStatusError.InvalidJsonFile)
-        else:
-            return data_str, data
+        return data_str, data
 
     def _process_substatus_list(self, substatus_list, current_status_size=0):
         processed_substatus = []

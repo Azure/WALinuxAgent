@@ -28,6 +28,8 @@ import unittest
 import uuid
 
 from azurelinuxagent.common import conf
+from azurelinuxagent.common.agent_supported_feature import get_agent_supported_features_list_for_crp, \
+    get_agent_supported_features_list_for_extensions
 from azurelinuxagent.common.cgroupconfigurator import CGroupConfigurator
 from azurelinuxagent.common.datacontract import get_properties
 from azurelinuxagent.common.event import WALAEventOperation
@@ -435,7 +437,8 @@ class TestExtension(AgentTestCase):
         args, kw = report_vm_status.call_args  # pylint: disable=unused-variable
         vm_status = args[0]
         self.assertNotEqual(0, len(vm_status.vmAgent.extensionHandlers))
-        handler_status = next(status for status in vm_status.vmAgent.extensionHandlers if status.name == expected_handler_name)
+        handler_status = next(
+            status for status in vm_status.vmAgent.extensionHandlers if status.name == expected_handler_name)
         self.assertEqual(expected_status, handler_status.status)
         self.assertEqual(expected_handler_name, handler_status.name)
         self.assertEqual(version, handler_status.version)
@@ -1051,54 +1054,49 @@ class TestExtension(AgentTestCase):
 
     @patch('time.gmtime', MagicMock(return_value=time.gmtime(0)))
     def test_ext_handler_reporting_status_file(self, *args):
-        expected_status = '''
-{{
-    "agent_name": "{agent_name}",
-    "current_version": "{current_version}",
-    "goal_state_version": "{goal_state_version}",
-    "distro_details": "{distro_details}",
-    "last_successful_status_upload_time": "{last_successful_status_upload_time}",
-    "python_version": "{python_version}",
-    "extensions_status": [
-        {{
-            "name": "OSTCExtensions.ExampleHandlerLinux",
-            "version": "1.0.0",
-            "status": "Ready",
-            "supports_multi_config": false
-        }},
-        {{
-            "name": "Microsoft.Powershell.ExampleExtension",
-            "version": "1.0.0",
-            "status": "Ready",
-            "supports_multi_config": false
-        }},
-        {{
-            "name": "Microsoft.EnterpriseCloud.Monitoring.ExampleHandlerLinux",
-            "version": "1.0.0",
-            "status": "Ready",
-            "supports_multi_config": false
-        }},
-        {{
-            "name": "Microsoft.CPlat.Core.ExampleExtensionLinux",
-            "version": "1.0.0",
-            "status": "Ready",
-            "supports_multi_config": false
-        }},
-        {{
-            "name": "Microsoft.OSTCExtensions.Edp.ExampleExtensionLinuxInTest",
-            "version": "1.0.0",
-            "status": "Ready",
-            "supports_multi_config": false
-        }}
-    ]
-}}'''.format(agent_name=AGENT_NAME,
-             current_version=str(CURRENT_VERSION),
-             goal_state_version=str(GOAL_STATE_AGENT_VERSION),
-             distro_details="{0}:{1}".format(DISTRO_NAME, DISTRO_VERSION),
-             last_successful_status_upload_time=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-             python_version="Python: {0}.{1}.{2}".format(PY_VERSION_MAJOR, PY_VERSION_MINOR, PY_VERSION_MICRO))
 
-        expected_status_json = json.loads(expected_status)
+        expected_status = {
+            "agent_name": AGENT_NAME,
+            "current_version": str(CURRENT_VERSION),
+            "goal_state_version": str(GOAL_STATE_AGENT_VERSION),
+            "distro_details": "{0}:{1}".format(DISTRO_NAME, DISTRO_VERSION),
+            "last_successful_status_upload_time": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+            "python_version": "Python: {0}.{1}.{2}".format(PY_VERSION_MAJOR, PY_VERSION_MINOR, PY_VERSION_MICRO),
+            "crp_supported_features": [name for name, _ in get_agent_supported_features_list_for_crp().items()],
+            "extension_supported_features": [name for name, _ in get_agent_supported_features_list_for_extensions().items()],
+            "extensions_status": [
+                {
+                    "name": "OSTCExtensions.ExampleHandlerLinux",
+                    "version": "1.0.0",
+                    "status": "Ready",
+                    "supports_multi_config": False
+                },
+                {
+                    "name": "Microsoft.Powershell.ExampleExtension",
+                    "version": "1.0.0",
+                    "status": "Ready",
+                    "supports_multi_config": False
+                },
+                {
+                    "name": "Microsoft.EnterpriseCloud.Monitoring.ExampleHandlerLinux",
+                    "version": "1.0.0",
+                    "status": "Ready",
+                    "supports_multi_config": False
+                },
+                {
+                    "name": "Microsoft.CPlat.Core.ExampleExtensionLinux",
+                    "version": "1.0.0",
+                    "status": "Ready",
+                    "supports_multi_config": False
+                },
+                {
+                    "name": "Microsoft.OSTCExtensions.Edp.ExampleExtensionLinuxInTest",
+                    "version": "1.0.0",
+                    "status": "Ready",
+                    "supports_multi_config": False
+                }
+            ]
+        }
 
         test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE_MULTIPLE_EXT)
         exthandlers_handler, protocol = self._create_mock(test_data, *args)  # pylint: disable=unused-variable,no-value-for-parameter
@@ -1107,7 +1105,7 @@ class TestExtension(AgentTestCase):
         status_path = os.path.join(conf.get_lib_dir(), AGENT_STATUS_FILE)
         actual_status_json = json.loads(fileutil.read_file(status_path))
 
-        self.assertEqual(expected_status_json, actual_status_json)
+        self.assertEqual(expected_status, actual_status_json)
 
     def test_ext_handler_rollingupgrade(self, *args):
         # Test enable scenario.
@@ -1331,6 +1329,8 @@ class TestExtension(AgentTestCase):
             event_occurrences = [kw for _, kw in mock_add_event.call_args_list if
                           "Failed to download artifacts: [ExtensionDownloadError] {0}".format(err_msg_guid) in kw['message']]
             self.assertEqual(expected_download_failed_event_count, len(event_occurrences), "Call count do not match")
+
+
             self.assertFalse(any(kw['is_success'] for kw in event_occurrences), "The events should have failed")
             self.assertEqual(expected_download_failed_event_count, len([kw['op'] for kw in event_occurrences]),
                              "Incorrect Operation, all events should be a download errors")
@@ -1504,7 +1504,7 @@ class TestExtension(AgentTestCase):
         self.assertEqual(activity_id, "NA", "Activity Id should be NA")
         self.assertEqual(correlation_id, "NA", "Correlation Id should be NA")
         self.assertEqual(gs_creation_time, "NA", "GS Creation time should be NA")
-    
+
     def test_it_should_process_goal_state_even_if_metadata_invalid(self, mock_get, mock_crypt, *args):
 
         test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE_INVALID_VM_META_DATA)
@@ -1592,6 +1592,42 @@ class TestExtension(AgentTestCase):
                 self._assert_handler_status(protocol.report_vm_status, "NotReady", 0, "1.0.0",
                                             expected_msg="Dependent Extension OSTCExtensions.OtherExampleHandlerLinux did not reach a terminal state within the allowed timeout. Last status was {0}".format(
                                                 ValidHandlerStatus.warning))
+
+    def test_it_should_include_part_of_status_in_ext_handler_message(self, mock_http_get, mock_crypt_util, *args):
+        """
+        Testing scenario when the status file is invalid,
+        The extension status reported by the Handler should contain a fragment of status file for
+        debugging.
+        """
+        exthandlers_handler, protocol = self._create_mock(
+            mockwiredata.WireProtocolData(mockwiredata.DATA_FILE), mock_http_get, mock_crypt_util, *args)
+
+        original_popen = subprocess.Popen
+
+        def mock_popen(cmd, *args, **kwargs):
+            # For the purpose of this test, replacing the status file with file that could not be parsed
+            if "sample.py" in cmd:
+                status_path = os.path.join(kwargs['env'][ExtCommandEnvVariable.ExtensionPath], "status",
+                                           "{0}.status".format(kwargs['env'][ExtCommandEnvVariable.ExtensionSeqNumber]))
+                invalid_json_path = os.path.join(data_dir, "ext", "sample-status-invalid-json-format.json")
+
+                if os.path.exists(status_path):
+                    invalid_json = fileutil.read_file(invalid_json_path)
+                    fileutil.write_file(status_path,invalid_json)
+
+            return original_popen(["echo", "Yes"], *args, **kwargs)
+
+        with patch('azurelinuxagent.common.cgroupapi.subprocess.Popen', side_effect=mock_popen):
+            exthandlers_handler.run()
+
+            # The Handler Status for the base extension should be ready as it was executed successfully by the agent
+            self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.0.0",
+                                            expected_handler_name="OSTCExtensions.ExampleHandlerLinux")
+            # The extension status reported by the Handler should contain a fragment of status file for
+            # debugging. The uniqueMachineId tag comes from status file
+            self._assert_ext_status(protocol.report_vm_status, ValidHandlerStatus.error, 0,
+                                        expected_handler_name="OSTCExtensions.ExampleHandlerLinux",
+                                        expected_msg="\"uniqueMachineId\": \"e5e5602b-48a6-4c35-9f96-752043777af1\"")
 
     def test_wait_for_handler_completion_success_status(self, mock_http_get, mock_crypt_util, *args):
         """
@@ -2274,7 +2310,6 @@ class TestExtension(AgentTestCase):
                 as mock_continue_on_update_failure:
             with patch('azurelinuxagent.ga.exthandlers.HandlerManifest.get_enable_command', return_value="exit 1")\
                     as patch_get_enable:
-
                 # These are just testing the mocks have been called and asserting the test conditions have been met
                 exthandlers_handler.run()
                 self.assertEqual(1, patch_get_disable_command.call_count)
@@ -2781,7 +2816,6 @@ class TestExtensionUpdateOnFailure(AgentTestCase):
         """
 
         with mock_wire_protocol(DATA_FILE, http_put_handler=generate_put_handler(first_ext, upgraded_ext)) as protocol:
-
             exthandlers_handler = get_exthandlers_handler(protocol)
 
             with enable_invocations(first_ext, upgraded_ext) as invocation_record:
@@ -2803,9 +2837,7 @@ class TestExtensionUpdateOnFailure(AgentTestCase):
 
                 return invocation_record
 
-
     def test_non_enabled_ext_should_not_be_disabled_at_ver_update(self):
-
         _, enable_action = Actions.generate_unique_fail()
 
         first_ext = extension_emulator(enable_action=enable_action)
@@ -2840,7 +2872,6 @@ class TestExtensionUpdateOnFailure(AgentTestCase):
 
         self.assertEqual(kwargs["env"][ExtCommandEnvVariable.DisableReturnCode], exit_code,
             "DisableAction's return code should be in updateAction's env.")
-
 
     def test_uninstall_failed_env_variable_should_set_for_install_when_continue_on_update_failure_is_true(self):
         exit_code, uninstall_action = Actions.generate_unique_fail()
@@ -3021,15 +3052,12 @@ class TestExtensionUpdateOnFailure(AgentTestCase):
         self.assertEqual(update_kwargs["env"][ExtCommandEnvVariable.DisableReturnCode], exit_code,
             "DisableAction's return code should be present in UpdateAction's env.")
 
-
     def test_timeout_code_should_set_on_cmd_timeout(self):
-
         # Return None to every poll, forcing a timeout after 900 seconds (actually very quick because sleep(*) is mocked)
         force_timeout = lambda *args, **kwargs: None
 
         first_ext = extension_emulator(disable_action=force_timeout, uninstall_action=force_timeout)
         second_ext = extension_emulator(version="1.1.0", continue_on_update_failure=True)
-
 
         with patch("os.killpg"):
             with patch("os.getpgid"):
@@ -3126,6 +3154,28 @@ class TestCollectExtensionStatus(AgentTestCase):
         self.assertEqual(sub_status.code, "0")
         self.assertEqual(sub_status.message, None)
         self.assertEqual(sub_status.status, ValidHandlerStatus.success)
+
+    @patch("azurelinuxagent.common.conf.get_lib_dir")
+    def test_collect_ext_status_for_invalid_json(self, mock_lib_dir, *args):
+        """
+        This test validates that collect_ext_status correctly picks up the status file (sample-status-invalid-json-format.json)
+        and then since the Json cannot be parsed correctly it extension status message should include 2000 bytes of status file
+        and the line number in which it failed to parse. The uniqueMachineId tag comes from status file.
+        """
+        ext_handler_i, extension = self._setup_extension_for_validating_collect_ext_status(mock_lib_dir,
+                                                                                           "sample-status-invalid-json-format.json", *args)
+        ext_status = ext_handler_i.collect_ext_status(extension)
+
+        self.assertEqual(ext_status.code, ExtensionErrorCodes.PluginSettingsStatusInvalid)
+        self.assertEqual(ext_status.configurationAppliedTime, None)
+        self.assertEqual(ext_status.operation, None)
+        self.assertEqual(ext_status.sequenceNumber, 0)
+        self.assertRegex(ext_status.message, r".*The status reported by the extension TestHandler-1.0.0\(Sequence number 0\), "
+                                             r"was in an incorrect format and the agent could not parse it correctly."
+                                             r" Failed due to.*")
+        self.assertIn("\"uniqueMachineId\": \"e5e5602b-48a6-4c35-9f96-752043777af1\"",ext_status.message)
+        self.assertEqual(ext_status.status, ValidHandlerStatus.error)
+        self.assertEqual(len(ext_status.substatusList), 0)
 
     @patch("azurelinuxagent.common.conf.get_lib_dir")
     def test_it_should_collect_ext_status_even_when_config_dir_deleted(self, mock_lib_dir, *args):
@@ -3285,7 +3335,7 @@ class TestAdditionalLocationsExtensions(AgentTestCase):
             .format(r'(location)|(failoverlocation)|(additionalLocation)')
         location_uri_regex = re.compile(location_uri_pattern)
 
-        manifests_used = [ ('location', '1'), ('failoverlocation', '2'), 
+        manifests_used = [ ('location', '1'), ('failoverlocation', '2'),
             ('additionalLocation', '3'), ('additionalLocation', '4') ]
 
         def manifest_location_handler(url, **kwargs):
@@ -3297,7 +3347,7 @@ class TestAdditionalLocationsExtensions(AgentTestCase):
 
                     if wrapped_url and location_uri_regex.match(wrapped_url):
                         return Exception("Ignoring host plugin requests for testing purposes.")
-                
+
                 return None
 
             location_type, manifest_num = url_match.group("location_type", "manifest_num")
@@ -3321,7 +3371,7 @@ class TestAdditionalLocationsExtensions(AgentTestCase):
             exthandlers_handler.run()
 
     def test_fetch_manifest_timeout_is_respected(self):
-        
+
         location_uri_pattern = r'https?://mock-goal-state/(?P<location_type>{0})/(?P<manifest_num>\d)/manifest.xml'\
             .format(r'(location)|(failoverlocation)|(additionalLocation)')
         location_uri_regex = re.compile(location_uri_pattern)
@@ -3335,17 +3385,17 @@ class TestAdditionalLocationsExtensions(AgentTestCase):
 
                     if wrapped_url and location_uri_regex.match(wrapped_url):
                         return Exception("Ignoring host plugin requests for testing purposes.")
-                
+
                 return None
-            
+
             if manifest_location_handler.num_times_called == 0:
                 time.sleep(.3)
                 manifest_location_handler.num_times_called += 1
                 return Exception("Failing manifest fetch from uri '{0}' for testing purposes."\
                     .format(url))
-        
+
             return None
-        
+
         manifest_location_handler.num_times_called = 0
 
 

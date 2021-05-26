@@ -161,6 +161,31 @@ class TestPersistFirewallRulesHandler(AgentTestCase):
             return True, ["echo", "not enabled"]
         return False, []
 
+    @staticmethod
+    def __mock_firewalld_running_and_not_applied(cmd):
+        if cmd == PersistFirewallRulesHandler._FIREWALLD_RUNNING_CMD:
+            return True, ["echo", "running"]
+        # This is to fail the check if firewalld-rules are already applied
+        cmds_to_fail = ["firewall-cmd", FirewallCmdDirectCommands.QueryPassThrough, "conntrack"]
+        if all(cmd_to_fail in cmd for cmd_to_fail in cmds_to_fail):
+            return True, ["exit", "1"]
+        if "firewall-cmd" in cmd:
+            return True, ["echo", "enabled"]
+        return False, []
+
+    def __setup_and_assert_network_service_setup_scenario(self, handler, mock_popen=None):
+        mock_popen = TestPersistFirewallRulesHandler.__mock_network_setup_service_disabled if mock_popen is None else mock_popen
+        self.__replace_popen_cmd = mock_popen
+        handler.setup()
+
+        self.__assert_systemctl_called(cmd="is-enabled", validate_command_called=True)
+        self.__assert_systemctl_called(cmd="enable", validate_command_called=True)
+        self.__assert_systemctl_reloaded(validate_command_called=True)
+        self.__assert_firewall_cmd_running_called(validate_command_called=True)
+        self.__assert_firewall_called(cmd=FirewallCmdDirectCommands.QueryPassThrough, validate_command_called=False)
+        self.__assert_firewall_called(cmd=FirewallCmdDirectCommands.PassThrough, validate_command_called=False)
+        self.assertTrue(os.path.exists(handler.get_service_file_path()), "Service unit file not found")
+
     def test_it_should_skip_setup_if_firewalld_already_enabled(self):
         self.__replace_popen_cmd = lambda cmd: ("firewall-cmd" in cmd, ["echo", "running"])
         with self._get_persist_firewall_rules_handler() as handler:
@@ -173,19 +198,27 @@ class TestPersistFirewallRulesHandler(AgentTestCase):
         # Assert no commands for systemctl were called
         self.assertFalse(any("systemctl" in cmd for cmd in self.__executed_commands), "Systemctl shouldn't be called")
 
-    def test_it_should_skip_setup_if_agent_network_setup_service_already_enabled(self):
-        self.__replace_popen_cmd = TestPersistFirewallRulesHandler.__mock_network_setup_service_enabled
+    def test_it_should_skip_setup_if_agent_network_setup_service_already_enabled_and_version_same(self):
+
         with self._get_persist_firewall_rules_handler() as handler:
+            # 1st time should setup the service
+            self.__setup_and_assert_network_service_setup_scenario(handler)
+
+            # 2nd time setup should do nothing as service is enabled and no version updated
+            self.__replace_popen_cmd = TestPersistFirewallRulesHandler.__mock_network_setup_service_enabled
+            # Reset state
+            self.__executed_commands = []
             handler.setup()
 
-        self.__assert_systemctl_called(cmd="is-enabled", validate_command_called=True)
-        self.__assert_systemctl_called(cmd="enabled", validate_command_called=False)
-        self.__assert_systemctl_reloaded(validate_command_called=False)
-        self.__assert_firewall_cmd_running_called(validate_command_called=True)
-        self.__assert_firewall_called(cmd=FirewallCmdDirectCommands.QueryPassThrough, validate_command_called=False)
-        self.__assert_firewall_called(cmd=FirewallCmdDirectCommands.PassThrough, validate_command_called=False)
+            self.__assert_systemctl_called(cmd="is-enabled", validate_command_called=True)
+            self.__assert_systemctl_called(cmd="enable", validate_command_called=False)
+            self.__assert_systemctl_reloaded(validate_command_called=False)
+            self.__assert_firewall_cmd_running_called(validate_command_called=True)
+            self.__assert_firewall_called(cmd=FirewallCmdDirectCommands.QueryPassThrough, validate_command_called=False)
+            self.__assert_firewall_called(cmd=FirewallCmdDirectCommands.PassThrough, validate_command_called=False)
+            self.assertTrue(os.path.exists(handler.get_service_file_path()), "Service unit file not found")
 
-    def test_it_should_always_replace_only_drop_in_file_if_using_custom_network_service(self):
+    def test_it_should_always_replace_binary_file_only_if_using_custom_network_service(self):
 
         def _find_in_file(file_name, line_str):
             try:
@@ -207,7 +240,7 @@ class TestPersistFirewallRulesHandler(AgentTestCase):
             handler.setup()
 
         orig_service_file_contents = "ExecStart={py_path} {binary_path}".format(py_path=sys.executable,
-                                                                                 binary_path=self._binary_file)
+                                                                                binary_path=self._binary_file)
         self.__assert_systemctl_called(cmd="is-enabled", validate_command_called=True)
         self.__assert_firewall_called(cmd=FirewallCmdDirectCommands.PassThrough, validate_command_called=False)
         self.assertTrue(os.path.exists(self._binary_file), "Binary file should be there")
@@ -226,7 +259,7 @@ class TestPersistFirewallRulesHandler(AgentTestCase):
         # The service should say its enabled now
         self.__replace_popen_cmd = TestPersistFirewallRulesHandler.__mock_network_setup_service_enabled
         with self._get_persist_firewall_rules_handler() as handler:
-            # The Drop-in file should be available on the 2nd run
+            # The Binary file should be available on the 2nd run
             self.assertTrue(os.path.exists(self._binary_file), "Binary file should be there")
             handler.setup()
 
@@ -241,18 +274,7 @@ class TestPersistFirewallRulesHandler(AgentTestCase):
 
     def test_it_should_use_firewalld_if_available(self):
 
-        def __mock_firewalld_running_and_not_applied(cmd):
-            if cmd == PersistFirewallRulesHandler._FIREWALLD_RUNNING_CMD:
-                return True, ["echo", "running"]
-            # This is to fail the check if firewalld-rules are already applied
-            cmds_to_fail = ["firewall-cmd", FirewallCmdDirectCommands.QueryPassThrough, "conntrack"]
-            if all(cmd_to_fail in cmd for cmd_to_fail in cmds_to_fail):
-                return True, ["exit", "1"]
-            if "firewall-cmd" in cmd:
-                return True, ["echo", "enabled"]
-            return False, []
-
-        self.__replace_popen_cmd = __mock_firewalld_running_and_not_applied
+        self.__replace_popen_cmd = self.__mock_firewalld_running_and_not_applied
         with self._get_persist_firewall_rules_handler() as handler:
             handler.setup()
 
@@ -321,3 +343,37 @@ class TestPersistFirewallRulesHandler(AgentTestCase):
                 expected_str = "{0} file not found, skipping execution of firewall execution setup for this boot".format(
                     os.path.join(os.getcwd(), test_str))
                 self.assertIn(expected_str, output, "Unexpected output")
+
+    def test_it_should_delete_custom_service_files_if_firewalld_enabled(self):
+        with self._get_persist_firewall_rules_handler() as handler:
+            # 1st run - Setup the Custom Service
+            self.__setup_and_assert_network_service_setup_scenario(handler)
+
+            # 2nd run - Enable Firewalld and ensure the agent sets firewall rules using firewalld and deletes custom service
+            self.__executed_commands = []
+            self.__replace_popen_cmd = self.__mock_firewalld_running_and_not_applied
+            handler.setup()
+
+            self.__assert_firewall_cmd_running_called(validate_command_called=True)
+            self.__assert_firewall_called(cmd=FirewallCmdDirectCommands.QueryPassThrough, validate_command_called=True)
+            self.__assert_firewall_called(cmd=FirewallCmdDirectCommands.PassThrough, validate_command_called=True)
+            self.__assert_systemctl_called(cmd="is-enabled", validate_command_called=False)
+            self.__assert_systemctl_called(cmd="enable", validate_command_called=False)
+            self.__assert_systemctl_reloaded(validate_command_called=False)
+            self.assertFalse(os.path.exists(handler.get_service_file_path()), "Service unit file found")
+            self.assertFalse(os.path.exists(os.path.join(conf.get_lib_dir(), handler.BINARY_FILE_NAME)), "Binary file found")
+
+    def test_it_should_reset_service_unit_files_if_version_changed(self):
+        with self._get_persist_firewall_rules_handler() as handler:
+            # 1st step - Setup the service with old Version
+            test_ver = str(uuid.uuid4())
+            with patch.object(handler, "_UNIT_VERSION", test_ver):
+                self.__setup_and_assert_network_service_setup_scenario(handler)
+                self.assertIn(test_ver, fileutil.read_file(handler.get_service_file_path()), "Test version not found")
+
+            # 2nd step - Re-run the setup and ensure the service file set up again even if service enabled
+            self.__executed_commands = []
+            self.__setup_and_assert_network_service_setup_scenario(handler,
+                                                                   mock_popen=self.__mock_network_setup_service_enabled)
+            self.assertNotIn(test_ver, fileutil.read_file(handler.get_service_file_path()),
+                             "Test version found incorrectly")
