@@ -98,6 +98,7 @@ class TestArchive(AgentTestCase):
         """
         temp_files = [
             'GoalState.0.xml',
+            'waagent_detailed_status.json',
             'Prod.0.manifest.xml',
             'Prod.0.agentsManifest',
             'Microsoft.Azure.Extensions.CustomScript.0.xml'

@@ -16,7 +16,7 @@
 #
 # Requires Python 2.6+ and Openssl 1.0+
 #
-
+import copy
 import datetime
 import glob
 import json
@@ -68,6 +68,7 @@ HANDLER_COMPLETE_NAME_PATTERN = re.compile(_HANDLER_PATTERN + r'$', re.IGNORECAS
 HANDLER_PKG_EXT = ".zip"
 
 AGENT_STATUS_FILE = "waagent_status.json"
+AGENT_DETAILED_STATUS_FILE = "waagent_detailed_status.json"
 NUMBER_OF_DOWNLOAD_RETRIES = 2
 
 # This is the default value for the env variables, whenever we call a command which is not an update scenario, we
@@ -972,6 +973,7 @@ class ExtHandlersHandler(object):
     @staticmethod
     def write_ext_handlers_status_to_info_file(vm_status):
         status_path = os.path.join(conf.get_lib_dir(), AGENT_STATUS_FILE)
+        detailed_status_path = os.path.join(conf.get_lib_dir(), AGENT_DETAILED_STATUS_FILE)
 
         agent_details = {
             "agent_name": AGENT_NAME,
@@ -984,8 +986,10 @@ class ExtHandlersHandler(object):
             "extension_supported_features": [name for name, _ in get_agent_supported_features_list_for_extensions().items()]
         }
 
+        copy_agent_details = copy.copy(agent_details)
         # Convert VMStatus class to Dict.
         data = get_properties(vm_status)
+        detailed_data = copy.deepcopy(data)
 
         # The above class contains vmAgent.extensionHandlers
         # (more info: azurelinuxagent.common.protocol.restapi.VMAgentStatus)
@@ -999,9 +1003,13 @@ class ExtHandlersHandler(object):
                 pass
 
         agent_details['extensions_status'] = handler_statuses
+        copy_agent_details['extension_status'] = detailed_data['vmAgent']['extensionHandlers']
+
         agent_details_json = json.dumps(agent_details)
+        detailed_agent_details_json = json.dumps(copy_agent_details)
 
         fileutil.write_file(status_path, agent_details_json)
+        fileutil.write_file(detailed_status_path, detailed_agent_details_json)
 
     def report_ext_handler_status(self, vm_status, ext_handler, incarnation_changed):
         ext_handler_i = ExtHandlerInstance(ext_handler, self.protocol)

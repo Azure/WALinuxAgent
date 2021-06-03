@@ -423,7 +423,7 @@ class TestHandlerStateMigration(AgentTestCase):
         return
 
 
-@patch('time.sleep', side_effect=lambda _: mock_sleep(0.001))
+@patch('time.sleep', side_effect=lambda _: mock_sleep(0.005))
 @patch("azurelinuxagent.common.protocol.wire.CryptUtil")
 @patch("azurelinuxagent.common.utils.restutil.http_get")
 class TestExtension(AgentTestCase):
