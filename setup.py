@@ -165,6 +165,13 @@ def get_data_files(name, version, fullname):  # pylint: disable=R0912
         else:
             # sles 12+ and openSUSE 13.2+ use systemd
             set_systemd_files(data_files, dest=systemd_dir_path)
+    elif name == 'sles': # sles 15+ distro named as sles
+        set_conf_files(data_files, src=["config/suse/waagent.conf"])
+        set_logrotate_files(data_files)
+        set_udev_files(data_files)
+        # sles 15+ uses systemd and python3
+        set_systemd_files(data_files, dest=systemd_dir_path,
+                          src=["init/sles/waagent.service"])
     elif name == 'freebsd':
         set_conf_files(data_files, src=["config/freebsd/waagent.conf"])
         set_freebsd_rc_files(data_files)
