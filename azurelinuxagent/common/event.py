@@ -483,11 +483,11 @@ class EventLogger(object):
             _log_event(name, op, message, duration, is_success=is_success)
 
         event = TelemetryEvent(TELEMETRY_EVENT_EVENT_ID, TELEMETRY_EVENT_PROVIDER_ID)
-        event.parameters.append(TelemetryEventParam(GuestAgentExtensionEventsSchema.Name, str(name)))
-        event.parameters.append(TelemetryEventParam(GuestAgentExtensionEventsSchema.Version, str(version)))
-        event.parameters.append(TelemetryEventParam(GuestAgentExtensionEventsSchema.Operation, str(op)))
+        event.parameters.append(TelemetryEventParam(GuestAgentExtensionEventsSchema.Name, ustr(name)))
+        event.parameters.append(TelemetryEventParam(GuestAgentExtensionEventsSchema.Version, ustr(version)))
+        event.parameters.append(TelemetryEventParam(GuestAgentExtensionEventsSchema.Operation, ustr(op)))
         event.parameters.append(TelemetryEventParam(GuestAgentExtensionEventsSchema.OperationSuccess, bool(is_success)))
-        event.parameters.append(TelemetryEventParam(GuestAgentExtensionEventsSchema.Message, str(message)))
+        event.parameters.append(TelemetryEventParam(GuestAgentExtensionEventsSchema.Message, ustr(message)))
         event.parameters.append(TelemetryEventParam(GuestAgentExtensionEventsSchema.Duration, int(duration)))
         self.add_common_event_parameters(event, datetime.utcnow())
 
