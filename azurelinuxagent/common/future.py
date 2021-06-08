@@ -1,4 +1,6 @@
+import contextlib
 import platform
+import subprocess
 import sys
 import os
 import re
@@ -142,6 +144,20 @@ def is_file_not_found_error(exception):
         return isinstance(exception, FileNotFoundError)
     
     return isinstance(exception, FileNotFoundError)
+
+@contextlib.contextmanager
+def subprocess_dev_null():
+
+    if sys.version_info[0] == 3:
+        yield subprocess.DEVNULL
+    else:
+        try:
+            devnull = open(os.devnull, "a+")
+            yield devnull
+        except Exception:
+            yield None
+        finally:
+            devnull.close()
 
 def array_to_bytes(buff):
     # Python 3.9 removed the tostring() method on arrays, the new alias is tobytes()
