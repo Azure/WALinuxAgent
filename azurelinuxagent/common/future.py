@@ -149,7 +149,8 @@ def is_file_not_found_error(exception):
 def subprocess_dev_null():
 
     if sys.version_info[0] == 3:
-        yield subprocess.DEVNULL
+        # Suppress no-member errors on python2.7
+        yield subprocess.DEVNULL # pylint: disable=no-member
     else:
         try:
             devnull = open(os.devnull, "a+")
