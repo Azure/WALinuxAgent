@@ -17,6 +17,8 @@
 import contextlib
 import os
 
+from nose.plugins.attrib import attr
+
 from azurelinuxagent.common import logger
 from azurelinuxagent.common.logger import Logger
 from azurelinuxagent.common.protocol.util import ProtocolUtil
@@ -120,6 +122,7 @@ class TestCollectLogs(AgentTestCase, HttpRequestPredicates):
         self.assertIn("--property=CPUQuota=5%", args[0], "The log collector should have been invoked with a CPU limit")
         self.assertIn("--property=MemoryLimit=30M", args[0], "The log collector should have been invoked with a memory limit")
 
+    @attr('requires_sudo')
     def test_it_uploads_logs_when_collection_is_successful(self):
         archive_size = 42
 
