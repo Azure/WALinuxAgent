@@ -1007,7 +1007,6 @@ class ExtHandlersHandler(object):
             handler_statuses = data['vmAgent']['extensionHandlers']
             for handler_status in handler_statuses:
                 try:
-                    # handler_status.pop('extension_status', None)
                     handler_status['extension_status'].pop('message', None)
                     handler_status['extension_status'].pop('substatusList', None)
                 except KeyError:
