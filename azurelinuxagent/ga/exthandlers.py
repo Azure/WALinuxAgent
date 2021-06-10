@@ -16,7 +16,6 @@
 #
 # Requires Python 2.6+ and Openssl 1.0+
 #
-import copy
 import datetime
 import glob
 import json
@@ -52,7 +51,7 @@ from azurelinuxagent.common.protocol.restapi import ExtensionStatus, ExtensionSu
     VMStatus, GoalStateAggregateStatus, ExtensionState, ExtHandlerRequestedState, Extension
 from azurelinuxagent.common.utils.archive import ARCHIVE_DIRECTORY_NAME
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
-from azurelinuxagent.common.version import AGENT_NAME, CURRENT_VERSION, DISTRO_NAME, DISTRO_VERSION, \
+from azurelinuxagent.common.version import AGENT_NAME, CURRENT_VERSION, \
     GOAL_STATE_AGENT_VERSION, PY_VERSION_MAJOR, PY_VERSION_MICRO, PY_VERSION_MINOR
 
 _HANDLER_NAME_PATTERN = r'^([^-]+)'

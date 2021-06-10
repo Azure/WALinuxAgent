@@ -9,7 +9,6 @@ from datetime import datetime, timedelta
 import azurelinuxagent.common.logger as logger
 from azurelinuxagent.common.utils import fileutil
 from azurelinuxagent.common.utils.archive import StateFlusher, StateArchiver, _MAX_ARCHIVED_STATES
-from tests.protocol import mockwiredata
 from tests.tools import AgentTestCase, patch
 
 debug = False
@@ -238,6 +237,7 @@ class TestArchive(AgentTestCase):
             self.fail("the timestamps are outside of the tolerance of by {0} seconds".format(secs))
 
 def assert_zip_contains(zip_filename, files):
+
     ziph = None
     try:
         # contextmanager for zipfile.ZipFile doesn't exist for py2.6, manually closing it
@@ -246,7 +246,7 @@ def assert_zip_contains(zip_filename, files):
         for current_file in files:
             if current_file not in zip_files:
                 return "'{0}' was not found in {1}".format(current_file, zip_filename)
-
+        return None
     finally:
         if ziph is not None:
             ziph.close()
