@@ -17,8 +17,6 @@
 import contextlib
 import os
 
-from nose.plugins.attrib import attr
-
 from azurelinuxagent.common import logger, conf
 from azurelinuxagent.common.logger import Logger
 from azurelinuxagent.common.protocol.util import ProtocolUtil
