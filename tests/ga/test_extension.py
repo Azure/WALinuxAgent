@@ -425,7 +425,7 @@ class TestHandlerStateMigration(AgentTestCase):
         return
 
 
-@patch('time.sleep', side_effect=lambda _: mock_sleep(0.005))
+@patch('time.sleep', side_effect=lambda _: mock_sleep(0.001))
 @patch("azurelinuxagent.common.protocol.wire.CryptUtil")
 @patch("azurelinuxagent.common.utils.restutil.http_get")
 class TestExtension(AgentTestCase):
@@ -1206,6 +1206,8 @@ class TestExtension(AgentTestCase):
 
         status_path = os.path.join(conf.get_lib_dir(), AGENT_STATUS_FILE.format(1))
         actual_status_json = json.loads(fileutil.read_file(status_path))
+
+        # popping few attributes since it is based on run time
         actual_status_json.pop('agent_hostname', None)
         actual_status_json.pop('distro_details', None)
         self.assertEqual(expected_status, actual_status_json)
