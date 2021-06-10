@@ -56,10 +56,9 @@ from tests.protocol.mockwiredata import DATA_FILE, DATA_FILE_EXT_ADDITIONAL_LOCA
 from tests.tools import AgentTestCase, data_dir, MagicMock, Mock, patch, mock_sleep
 from tests.ga.extension_emulator import Actions, ExtensionCommandNames, extension_emulator, \
     enable_invocations, generate_put_handler
+from tests.utils.test_archive import TestArchive
 
 # Mocking the original sleep to reduce test execution time
-from tests.utils import test_archive
-
 SLEEP = time.sleep
 
 
@@ -616,7 +615,7 @@ class TestExtension(AgentTestCase):
 
         zip_fn = timestamp_zips[0]
         zip_fullname = os.path.join(self.tmp_dir, "history", zip_fn)
-        self.assertEqual(test_archive.assert_zip_contains(zip_fullname, temp_files), None)
+        self.assertEqual(TestArchive.assert_zip_contains(zip_fullname, temp_files), None)
         exthandlers_handler.run()
 
         # Updating incarnation to 3 , hence the history folder should have 2 zips files corresponding to incarnation

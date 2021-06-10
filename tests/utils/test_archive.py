@@ -124,7 +124,7 @@ class TestArchive(AgentTestCase):
         self.assertEqual("0", incarnation)
 
         zip_full = os.path.join(self.history_dir, zip_fn)
-        self.assertEqual(assert_zip_contains(zip_full, temp_files), None)
+        self.assertEqual(self.assert_zip_contains(zip_full, temp_files), None)
 
     def test_archive02(self):
         """
@@ -236,17 +236,18 @@ class TestArchive(AgentTestCase):
         if secs < 0:
             self.fail("the timestamps are outside of the tolerance of by {0} seconds".format(secs))
 
-def assert_zip_contains(zip_filename, files):
+    @staticmethod
+    def assert_zip_contains(zip_filename, files):
 
-    ziph = None
-    try:
-        # contextmanager for zipfile.ZipFile doesn't exist for py2.6, manually closing it
-        ziph = zipfile.ZipFile(zip_filename, 'r')
-        zip_files = [x.filename for x in ziph.filelist]
-        for current_file in files:
-            if current_file not in zip_files:
-                return "'{0}' was not found in {1}".format(current_file, zip_filename)
-        return None
-    finally:
-        if ziph is not None:
-            ziph.close()
+        ziph = None
+        try:
+            # contextmanager for zipfile.ZipFile doesn't exist for py2.6, manually closing it
+            ziph = zipfile.ZipFile(zip_filename, 'r')
+            zip_files = [x.filename for x in ziph.filelist]
+            for current_file in files:
+                if current_file not in zip_files:
+                    return "'{0}' was not found in {1}".format(current_file, zip_filename)
+            return None
+        finally:
+            if ziph is not None:
+                ziph.close()
