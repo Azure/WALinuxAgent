@@ -167,7 +167,7 @@ class CollectLogsHandler(ThreadHandlerInterface):
             msg = None
             try:
                 # TODO: Remove track_process (and its implementation) when the log collector is moved to the agent's cgroup
-                shellutil.run_command(final_command, log_error=True, track_process=False,
+                shellutil.run_command(final_command, log_error=False, track_process=False,
                     stdout=output_file, stderr=output_file)
                 duration = elapsed_milliseconds(start_time)
                 archive_size = os.path.getsize(COMPRESSED_ARCHIVE_PATH)
