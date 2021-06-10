@@ -207,7 +207,8 @@ class CollectLogsHandler(ThreadHandlerInterface):
         else:
             return exec_command(logfile)
         finally:
-            logfile.close()
+            if logfile is not None:
+                logfile.close()
 
     def _send_logs(self):
         msg = None

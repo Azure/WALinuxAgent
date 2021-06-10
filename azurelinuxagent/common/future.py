@@ -158,7 +158,8 @@ def subprocess_dev_null():
         except Exception:
             yield None
         finally:
-            devnull.close()
+            if devnull is not None:
+                devnull.close()
 
 def array_to_bytes(buff):
     # Python 3.9 removed the tostring() method on arrays, the new alias is tobytes()
