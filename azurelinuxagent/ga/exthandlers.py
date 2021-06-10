@@ -986,7 +986,7 @@ class ExtHandlersHandler(object):
             data = get_properties(vm_status)
             goal_state_status = data['vmAgent']['vm_artifacts_aggregate_status']['goal_state_aggregate_status']
 
-            agent_details["current_version"] = data['vmAgent']['version']
+            agent_details["daemon_version"] = data['vmAgent']['version']
             agent_details["distro_details"] = "{0}:{1}".format(data['vmAgent']['osname'], data['vmAgent']['osversion'])
             agent_details["agent_status"] = data['vmAgent']['status']
             agent_details["agent_message"] = data['vmAgent']['message']
