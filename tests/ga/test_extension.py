@@ -26,6 +26,7 @@ import tempfile
 import time
 import unittest
 import uuid
+import zipfile
 
 from azurelinuxagent.common import conf
 from azurelinuxagent.common.agent_supported_feature import get_agent_supported_features_list_for_crp, \
@@ -34,6 +35,7 @@ from azurelinuxagent.common.cgroupconfigurator import CGroupConfigurator
 from azurelinuxagent.common.datacontract import get_properties
 from azurelinuxagent.common.event import WALAEventOperation
 from azurelinuxagent.common.utils import fileutil
+from azurelinuxagent.common.utils.archive import StateArchiver
 from azurelinuxagent.common.utils.fileutil import read_file
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
 from azurelinuxagent.common.version import PY_VERSION_MAJOR, PY_VERSION_MINOR, PY_VERSION_MICRO, AGENT_NAME, \
@@ -57,6 +59,8 @@ from tests.ga.extension_emulator import Actions, ExtensionCommandNames, extensio
     enable_invocations, generate_put_handler
 
 # Mocking the original sleep to reduce test execution time
+from tests.utils import test_archive
+
 SLEEP = time.sleep
 
 
@@ -583,6 +587,48 @@ class TestExtension(AgentTestCase):
         exthandlers_handler.run()
         self._assert_no_handler_status(protocol.report_vm_status)
 
+    def test_it_should_zip_waagent_status_when_incarnation_changes(self, *args):
+        """
+        This test checks when the incarnation changes the waagnet_status file for the previous incarnation
+        is added into the history folder for the previous incarnation and gets zipped
+        """
+        temp_files = [
+            'ExtensionsConfig.1.xml',
+            'GoalState.1.xml',
+            'OSTCExtensions.ExampleHandlerLinux.1.manifest.xml',
+            'waagent_status.1.json'
+        ]
+
+        test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE)
+        exthandlers_handler, protocol = self._create_mock(test_data, *args)  # pylint: disable=no-value-for-parameter
+
+        exthandlers_handler.run()
+
+        # Updating incarnation to 2 , hence the history folder should have waaagent_status.1.json added under
+        # incarnation 1
+        test_data.set_incarnation(2)
+        protocol.update_goal_state()
+
+        test_subject = StateArchiver(self.tmp_dir)
+        test_subject.archive()
+
+        timestamp_zips = os.listdir(os.path.join(self.tmp_dir, "history"))
+        self.assertEqual(1, len(os.listdir(os.path.join(self.tmp_dir, "history"))))
+
+        zip_fn = timestamp_zips[0]
+        zip_fullname = os.path.join(self.tmp_dir, "history", zip_fn)
+        self.assertEqual(test_archive.assert_zip_contains(zip_fullname, temp_files), None)
+        exthandlers_handler.run()
+
+        # Updating incarnation to 3 , hence the history folder should have 2 zips files corresponding to incarnation
+        # 1 and 2
+        test_data.set_incarnation(3)
+        protocol.update_goal_state()
+        test_subject.archive()
+        self.assertEqual(2, len(os.listdir(os.path.join(self.tmp_dir, "history"))))
+
+        exthandlers_handler.run()
+
     def test_it_should_only_download_extension_manifest_once_per_goal_state(self, *args):
 
         def _assert_handler_status_and_manifest_download_count(protocol, test_data, manifest_count):
@@ -1057,43 +1103,101 @@ class TestExtension(AgentTestCase):
 
         expected_status = {
             "agent_name": AGENT_NAME,
-            "current_version": str(CURRENT_VERSION),
             "goal_state_version": str(GOAL_STATE_AGENT_VERSION),
-            "distro_details": "{0}:{1}".format(DISTRO_NAME, DISTRO_VERSION),
-            "last_successful_status_upload_time": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
             "python_version": "Python: {0}.{1}.{2}".format(PY_VERSION_MAJOR, PY_VERSION_MINOR, PY_VERSION_MICRO),
             "crp_supported_features": [name for name, _ in get_agent_supported_features_list_for_crp().items()],
-            "extension_supported_features": [name for name, _ in get_agent_supported_features_list_for_extensions().items()],
+            "extension_supported_features": [name for name, _ in
+                                             get_agent_supported_features_list_for_extensions().items()],
+            "current_version": "9.9.9.9",
+            "agent_status": "Ready",
+            "agent_message": "Guest Agent is running",
+            "goal_state_aggregate_status": {
+                "processed_time": "1970-01-01T00:00:00Z",
+                "message": "GoalState executed successfully",
+                "in_svd_seq_no": "1",
+                "status": "Success",
+                "code": "0"
+            },
             "extensions_status": [
                 {
                     "name": "OSTCExtensions.ExampleHandlerLinux",
                     "version": "1.0.0",
                     "status": "Ready",
-                    "supports_multi_config": False
+                    "code": 0,
+                    "message": "Plugin enabled",
+                    "supports_multi_config": False,
+                    "extension_status": {
+                        "name": "OSTCExtensions.ExampleHandlerLinux",
+                        "configurationAppliedTime": None,
+                        "operation": None,
+                        "status": "success",
+                        "sequenceNumber": 0,
+                        "code": 0
+                    }
                 },
                 {
                     "name": "Microsoft.Powershell.ExampleExtension",
                     "version": "1.0.0",
                     "status": "Ready",
-                    "supports_multi_config": False
+                    "code": 0,
+                    "message": "Plugin enabled",
+                    "supports_multi_config": False,
+                    "extension_status": {
+                        "name": "Microsoft.Powershell.ExampleExtension",
+                        "configurationAppliedTime": None,
+                        "operation": None,
+                        "status": "success",
+                        "sequenceNumber": 0,
+                        "code": 0
+                    }
                 },
                 {
                     "name": "Microsoft.EnterpriseCloud.Monitoring.ExampleHandlerLinux",
                     "version": "1.0.0",
                     "status": "Ready",
-                    "supports_multi_config": False
+                    "code": 0,
+                    "message": "Plugin enabled",
+                    "supports_multi_config": False,
+                    "extension_status": {
+                        "name": "Microsoft.EnterpriseCloud.Monitoring.ExampleHandlerLinux",
+                        "configurationAppliedTime": None,
+                        "operation": None,
+                        "status": "success",
+                        "sequenceNumber": 0,
+                        "code": 0
+                    }
                 },
                 {
                     "name": "Microsoft.CPlat.Core.ExampleExtensionLinux",
                     "version": "1.0.0",
                     "status": "Ready",
-                    "supports_multi_config": False
+                    "code": 0,
+                    "message": "Plugin enabled",
+                    "supports_multi_config": False,
+                    "extension_status": {
+                        "name": "Microsoft.CPlat.Core.ExampleExtensionLinux",
+                        "configurationAppliedTime": None,
+                        "operation": None,
+                        "status": "success",
+                        "sequenceNumber": 0,
+                        "code": 0
+                    }
                 },
                 {
                     "name": "Microsoft.OSTCExtensions.Edp.ExampleExtensionLinuxInTest",
                     "version": "1.0.0",
                     "status": "Ready",
-                    "supports_multi_config": False
+                    "code": 0,
+                    "message": "Plugin enabled",
+                    "supports_multi_config": False,
+                    "extension_status": {
+                        "name": "Microsoft.OSTCExtensions.Edp.ExampleExtensionLinuxInTest",
+                        "configurationAppliedTime": None,
+                        "operation": None,
+                        "status": "success",
+                        "sequenceNumber": 0,
+                        "code": 0
+                    }
                 }
             ]
         }
@@ -1102,9 +1206,10 @@ class TestExtension(AgentTestCase):
         exthandlers_handler, protocol = self._create_mock(test_data, *args)  # pylint: disable=unused-variable,no-value-for-parameter
         exthandlers_handler.run()
 
-        status_path = os.path.join(conf.get_lib_dir(), AGENT_STATUS_FILE)
+        status_path = os.path.join(conf.get_lib_dir(), AGENT_STATUS_FILE.format(1))
         actual_status_json = json.loads(fileutil.read_file(status_path))
-
+        actual_status_json.pop('agent_hostname', None)
+        actual_status_json.pop('distro_details', None)
         self.assertEqual(expected_status, actual_status_json)
 
     def test_ext_handler_rollingupgrade(self, *args):

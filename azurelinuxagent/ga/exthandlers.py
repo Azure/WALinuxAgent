@@ -67,8 +67,7 @@ HANDLER_NAME_PATTERN = re.compile(_HANDLER_NAME_PATTERN, re.IGNORECASE)
 HANDLER_COMPLETE_NAME_PATTERN = re.compile(_HANDLER_PATTERN + r'$', re.IGNORECASE)
 HANDLER_PKG_EXT = ".zip"
 
-AGENT_STATUS_FILE = "waagent_status.json"
-AGENT_DETAILED_STATUS_FILE = "waagent_detailed_status.json"
+AGENT_STATUS_FILE = "waagent_status.{0}.json"
 NUMBER_OF_DOWNLOAD_RETRIES = 2
 
 # This is the default value for the env variables, whenever we call a command which is not an update scenario, we
@@ -970,46 +969,66 @@ class ExtHandlersHandler(object):
 
         self.write_ext_handlers_status_to_info_file(vm_status)
 
-    @staticmethod
-    def write_ext_handlers_status_to_info_file(vm_status):
-        status_path = os.path.join(conf.get_lib_dir(), AGENT_STATUS_FILE)
-        detailed_status_path = os.path.join(conf.get_lib_dir(), AGENT_DETAILED_STATUS_FILE)
+    def write_ext_handlers_status_to_info_file(self, vm_status):
+
+        status_path = os.path.join(conf.get_lib_dir(), AGENT_STATUS_FILE.format(self.last_etag))
 
         agent_details = {
             "agent_name": AGENT_NAME,
-            "current_version": str(CURRENT_VERSION),
             "goal_state_version": str(GOAL_STATE_AGENT_VERSION),
-            "distro_details": "{0}:{1}".format(DISTRO_NAME, DISTRO_VERSION),
-            "last_successful_status_upload_time": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
             "python_version": "Python: {0}.{1}.{2}".format(PY_VERSION_MAJOR, PY_VERSION_MINOR, PY_VERSION_MICRO),
             "crp_supported_features": [name for name, _ in get_agent_supported_features_list_for_crp().items()],
-            "extension_supported_features": [name for name, _ in get_agent_supported_features_list_for_extensions().items()]
+            "extension_supported_features": [name for name, _ in
+                                             get_agent_supported_features_list_for_extensions().items()]
         }
+        # agent_details = {
+        #     "agent_name": AGENT_NAME,
+        #     "current_version": str(CURRENT_VERSION),
+        #     "goal_state_version": str(GOAL_STATE_AGENT_VERSION),
+        #     "distro_details": "{0}:{1}".format(DISTRO_NAME, DISTRO_VERSION),
+        #     "last_successful_status_upload_time": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        #     "python_version": "Python: {0}.{1}.{2}".format(PY_VERSION_MAJOR, PY_VERSION_MINOR, PY_VERSION_MICRO),
+        #     "crp_supported_features": [name for name, _ in get_agent_supported_features_list_for_crp().items()],
+        #     "extension_supported_features": [name for name, _ in get_agent_supported_features_list_for_extensions().items()]
+        # }
 
-        copy_agent_details = copy.copy(agent_details)
-        # Convert VMStatus class to Dict.
-        data = get_properties(vm_status)
-        detailed_data = copy.deepcopy(data)
+        if vm_status is not None:
+            # Convert VMStatus class to Dict.
+            data = get_properties(vm_status)
+            goal_state_status = data['vmAgent']['vm_artifacts_aggregate_status']['goal_state_aggregate_status']
 
-        # The above class contains vmAgent.extensionHandlers
-        # (more info: azurelinuxagent.common.protocol.restapi.VMAgentStatus)
-        handler_statuses = data['vmAgent']['extensionHandlers']
-        for handler_status in handler_statuses:
-            try:
-                handler_status.pop('code', None)
-                handler_status.pop('message', None)
-                handler_status.pop('extension_status', None)
-            except KeyError:
-                pass
+            agent_details["current_version"] = data['vmAgent']['version']
+            agent_details["distro_details"] = "{0}:{1}".format(data['vmAgent']['osname'], data['vmAgent']['osversion'])
+            agent_details["agent_status"] = data['vmAgent']['status']
+            agent_details["agent_message"] = data['vmAgent']['message']
+            agent_details["agent_hostname"] = data['vmAgent']['hostname']
 
-        agent_details['extensions_status'] = handler_statuses
-        copy_agent_details['extension_status'] = detailed_data['vmAgent']['extensionHandlers']
+            goal_state_aggregate_status = {
+                "processed_time": time.strftime("%Y-%m-%dT%H:%M:%SZ", goal_state_status['_GoalStateAggregateStatus__utc_timestamp']),  # the timestamp is slightly different
+                "message": goal_state_status['message'],
+                "in_svd_seq_no": goal_state_status['in_svd_seq_no'],
+                "status": goal_state_status['status'],
+                "code": str(goal_state_status['code'])
+            }
+
+            agent_details["goal_state_aggregate_status"] = goal_state_aggregate_status
+
+            # The above class contains vmAgent.extensionHandlers
+            # (more info: azurelinuxagent.common.protocol.restapi.VMAgentStatus)
+            handler_statuses = data['vmAgent']['extensionHandlers']
+            for handler_status in handler_statuses:
+                try:
+                    # handler_status.pop('extension_status', None)
+                    handler_status['extension_status'].pop('message', None)
+                    handler_status['extension_status'].pop('substatusList', None)
+                except KeyError:
+                    pass
+
+            agent_details['extensions_status'] = handler_statuses
 
         agent_details_json = json.dumps(agent_details)
-        detailed_agent_details_json = json.dumps(copy_agent_details)
-
         fileutil.write_file(status_path, agent_details_json)
-        fileutil.write_file(detailed_status_path, detailed_agent_details_json)
+        logger.info("Done")
 
     def report_ext_handler_status(self, vm_status, ext_handler, incarnation_changed):
         ext_handler_i = ExtHandlerInstance(ext_handler, self.protocol)
