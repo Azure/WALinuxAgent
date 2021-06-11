@@ -32,13 +32,14 @@ from azurelinuxagent.common.utils.shellutil import CommandError
 class PersistFirewallRulesHandler(object):
 
     __SERVICE_FILE_CONTENT = """
-# This unit file was created by the Azure VM Agent.
+# This unit file (Version={version}) was created by the Azure VM Agent.
 # Do not edit.
 [Unit]
 Description=Setup network rules for WALinuxAgent 
 Before=network-pre.target
 Wants=network-pre.target
 DefaultDependencies=no
+ConditionPathExists={binary_path}
 
 [Service]
 Type=oneshot
@@ -66,6 +67,10 @@ if __name__ == '__main__':
     BINARY_FILE_NAME = "waagent-network-setup.py"
 
     _FIREWALLD_RUNNING_CMD = ["firewall-cmd", "--state"]
+
+    # The current version of the unit file; Update it whenever the unit file is modified to ensure Agent can dynamically
+    # modify the unit file on VM too
+    _UNIT_VERSION = "1.2"
 
     @staticmethod
     def get_service_file_path():
@@ -113,6 +118,13 @@ if __name__ == '__main__':
             # In case of a failure, this would throw. In such a case, we don't need to try to setup our custom service
             # because on system reboot, all iptable rules are reset by firewalld.service so it would be a no-op.
             self._setup_permanent_firewalld_rules()
+
+            # Remove custom service if exists to avoid problems with firewalld
+            try:
+                fileutil.rm_files(*[self.get_service_file_path(), os.path.join(conf.get_lib_dir(), self.BINARY_FILE_NAME)])
+            except Exception as error:
+                logger.info(
+                    "Unable to delete existing service {0}: {1}".format(self._network_setup_service_name, ustr(error)))
             return
 
         logger.info(
@@ -163,12 +175,19 @@ if __name__ == '__main__':
         # the service is always run from the most latest agent.
         self.__setup_binary_file()
 
-        if self.__verify_network_setup_service_enabled():
+        network_service_enabled = self.__verify_network_setup_service_enabled()
+        if network_service_enabled and not self.__unit_file_version_modified():
             logger.info("Service: {0} already enabled. No change needed.".format(self._network_setup_service_name))
             self.__log_network_setup_service_logs()
 
         else:
-            logger.info("Service: {0} not enabled. Adding it now".format(self._network_setup_service_name))
+            if not network_service_enabled:
+                logger.info("Service: {0} not enabled. Adding it now".format(self._network_setup_service_name))
+            else:
+                logger.info(
+                    "Unit file {0} version modified to {1}, setting it up again".format(self.get_service_file_path(),
+                                                                                        self._UNIT_VERSION))
+
             # Create unit file with default values
             self.__set_service_unit_file()
             # Reload systemd configurations when we setup the service for the first time to avoid systemctl warnings
@@ -199,7 +218,8 @@ if __name__ == '__main__':
         try:
             fileutil.write_file(service_unit_file,
                                 self.__SERVICE_FILE_CONTENT.format(binary_path=binary_path,
-                                                                   py_path=sys.executable))
+                                                                   py_path=sys.executable,
+                                                                   version=self._UNIT_VERSION))
             fileutil.chmod(service_unit_file, 0o644)
 
             # Finally enable the service. This is needed to ensure the service is started on system boot
@@ -207,7 +227,8 @@ if __name__ == '__main__':
             try:
                 shellutil.run_command(cmd)
             except CommandError as error:
-                msg = "Unable to enable service: {0}; deleting service file: {1}. Command: {2}, Exit-code: {3}.\nstdout: {4}\nstderr: {5}".format(
+                msg = ustr(
+                    "Unable to enable service: {0}; deleting service file: {1}. Command: {2}, Exit-code: {3}.\nstdout: {4}\nstderr: {5}").format(
                     self._network_setup_service_name, service_unit_file, ' '.join(cmd), error.returncode, error.stdout,
                     error.stderr)
                 raise Exception(msg)
@@ -244,7 +265,7 @@ if __name__ == '__main__':
 
     def __log_network_setup_service_logs(self):
         # Get logs from journalctl - https://www.freedesktop.org/software/systemd/man/journalctl.html
-        cmd = ["journalctl", "-u", self._network_setup_service_name, "-b"]
+        cmd = ["journalctl", "-u", self._network_setup_service_name, "-b", "--utc"]
         service_failed = self.__verify_network_setup_service_failed()
         try:
             stdout = shellutil.run_command(cmd)
@@ -273,3 +294,38 @@ if __name__ == '__main__':
             shellutil.run_command(["systemctl", "daemon-reload"])
         except Exception as exception:
             logger.warn("Unable to reload systemctl configurations: {0}".format(ustr(exception)))
+
+    def __get_unit_file_version(self):
+        if not os.path.exists(self.get_service_file_path()):
+            raise OSError("{0} not found".format(self.get_service_file_path()))
+
+        match = fileutil.findre_in_file(self.get_service_file_path(),
+                                        line_re="This unit file \\(Version=([\\d.]+)\\) was created by the Azure VM Agent.")
+        if match is None:
+            raise ValueError("Version tag not found in the unit file")
+
+        return match.group(1).strip()
+
+    def __unit_file_version_modified(self):
+        """
+        Check if the unit file version changed from the expected version
+        :return: True if unit file version changed else False
+        """
+
+        try:
+            unit_file_version = self.__get_unit_file_version()
+        except Exception as error:
+            logger.info("Unable to determine version of unit file: {0}, overwriting unit file".format(ustr(error)))
+            # Since we can't determine the version, marking the file as modified to overwrite the unit file
+            return True
+
+        if unit_file_version != self._UNIT_VERSION:
+            logger.info(
+                "Unit file version: {0} does not match with expected version: {1}, overwriting unit file".format(
+                    unit_file_version, self._UNIT_VERSION))
+            return True
+
+        logger.info(
+            "Unit file version matches with expected version: {0}, not overwriting unit file".format(unit_file_version))
+        return False
+
