@@ -181,6 +181,7 @@ class SendHostPluginHeartbeat(PeriodicOperation):
                 is_success=False,
                 message=msg,
                 log_event=False)
+            raise
 
 
 class SendImdsHeartbeat(PeriodicOperation):
@@ -220,6 +221,7 @@ class SendImdsHeartbeat(PeriodicOperation):
                 is_success=False,
                 message=msg,
                 log_event=False)
+            raise
 
 
 class MonitorHandler(ThreadHandlerInterface):
@@ -282,9 +284,6 @@ class MonitorHandler(ThreadHandlerInterface):
                 try:
                     for op in periodic_operations:
                         op.run()
-
-                except Exception as e:
-                    logger.error("An error occurred in the monitor thread main loop; will skip the current iteration.\n{0}", ustr(e))
                 finally:
                     PeriodicOperation.sleep_until_next_operation(periodic_operations)
         except Exception as e:
