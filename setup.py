@@ -43,6 +43,10 @@ def set_bin_files(data_files, dest, src=None):
         src = ["bin/waagent", "bin/waagent2.0"]
     data_files.append((dest, src))
 
+def set_bin_version2_files(data_files, dest, src=None):
+    if src is None:
+        src = ["bin/version2/waagent"]
+    data_files.append((dest, src))
 
 def set_conf_files(data_files, dest="/etc", src=None):
     if src is None:
@@ -166,6 +170,7 @@ def get_data_files(name, version, fullname):  # pylint: disable=R0912
             # sles 12+ and openSUSE 13.2+ use systemd
             set_systemd_files(data_files, dest=systemd_dir_path)
     elif name == 'sles': # sles 15+ distro named as sles
+        set_bin_version2_files(data_files, dest=agent_bin_path)
         set_conf_files(data_files, src=["config/suse/waagent.conf"])
         set_logrotate_files(data_files)
         set_udev_files(data_files)
