@@ -43,11 +43,6 @@ def set_bin_files(data_files, dest, src=None):
         src = ["bin/waagent", "bin/waagent2.0"]
     data_files.append((dest, src))
 
-def set_bin_version2_files(data_files, dest, src=None):
-    if src is None:
-        src = ["bin/version2/waagent"]
-    data_files.append((dest, src))
-
 def set_conf_files(data_files, dest="/etc", src=None):
     if src is None:
         src = ["config/waagent.conf"]
@@ -100,8 +95,8 @@ def get_data_files(name, version, fullname):  # pylint: disable=R0912
     systemd_dir_path = osutil.get_systemd_unit_file_install_path()
     agent_bin_path = osutil.get_agent_bin_path()
 
-    set_bin_files(data_files, dest=agent_bin_path)
     if name == 'redhat' or name == 'centos':  # pylint: disable=R1714
+        set_bin_files(data_files, dest=agent_bin_path)
         set_conf_files(data_files)
         set_logrotate_files(data_files)
         set_udev_files(data_files)
@@ -114,11 +109,13 @@ def get_data_files(name, version, fullname):  # pylint: disable=R0912
                 # TODO this is a mitigation to systemctl bug on 7.1
                 set_sysv_files(data_files)
     elif name == 'arch':
+        set_bin_files(data_files, dest=agent_bin_path)
         set_conf_files(data_files, src=["config/arch/waagent.conf"])
         set_udev_files(data_files)
         set_systemd_files(data_files, dest=systemd_dir_path,
                           src=["init/arch/waagent.service"])
     elif name == 'coreos':
+        set_bin_files(data_files, dest=agent_bin_path)
         set_conf_files(data_files, dest="/usr/share/oem",
                        src=["config/coreos/waagent.conf"])
         set_logrotate_files(data_files)
@@ -126,16 +123,19 @@ def get_data_files(name, version, fullname):  # pylint: disable=R0912
         set_files(data_files, dest="/usr/share/oem",
                   src=["init/coreos/cloud-config.yml"])
     elif "Clear Linux" in fullname:
+        set_bin_files(data_files, dest=agent_bin_path)
         set_conf_files(data_files, dest="/usr/share/defaults/waagent",
                        src=["config/clearlinux/waagent.conf"])
         set_systemd_files(data_files, dest=systemd_dir_path,
                           src=["init/clearlinux/waagent.service"])
     elif name == 'mariner':
+        set_bin_files(data_files, dest=agent_bin_path)
         set_conf_files(data_files, dest="/etc",
                        src=["config/mariner/waagent.conf"])
         set_systemd_files(data_files, dest=systemd_dir_path,
                           src=["init/mariner/waagent.service"])
     elif name == 'ubuntu':
+        set_bin_files(data_files, dest=agent_bin_path)
         set_conf_files(data_files, src=["config/ubuntu/waagent.conf"])
         set_logrotate_files(data_files)
         set_udev_files(data_files)
@@ -157,6 +157,7 @@ def get_data_files(name, version, fullname):  # pylint: disable=R0912
                                   "init/ubuntu/azure-vmextensions.slice"
                               ])
     elif name == 'suse' or name == 'opensuse':  # pylint: disable=R1714
+        set_bin_files(data_files, dest=agent_bin_path)
         set_conf_files(data_files, src=["config/suse/waagent.conf"])
         set_logrotate_files(data_files)
         set_udev_files(data_files)
@@ -170,7 +171,8 @@ def get_data_files(name, version, fullname):  # pylint: disable=R0912
             # sles 12+ and openSUSE 13.2+ use systemd
             set_systemd_files(data_files, dest=systemd_dir_path)
     elif name == 'sles': # sles 15+ distro named as sles
-        set_bin_version2_files(data_files, dest=agent_bin_path)
+        set_bin_files(data_files, dest=agent_bin_path,
+                      src = ["bin/py3/waagent", "bin/waagent2.0"])
         set_conf_files(data_files, src=["config/suse/waagent.conf"])
         set_logrotate_files(data_files)
         set_udev_files(data_files)
@@ -178,18 +180,22 @@ def get_data_files(name, version, fullname):  # pylint: disable=R0912
         set_systemd_files(data_files, dest=systemd_dir_path,
                           src=["init/sles/waagent.service"])
     elif name == 'freebsd':
+        set_bin_files(data_files, dest=agent_bin_path)
         set_conf_files(data_files, src=["config/freebsd/waagent.conf"])
         set_freebsd_rc_files(data_files)
     elif name == 'openbsd':
+        set_bin_files(data_files, dest=agent_bin_path)
         set_conf_files(data_files, src=["config/openbsd/waagent.conf"])
         set_openbsd_rc_files(data_files)
     elif name == 'debian':
+        set_bin_files(data_files, dest=agent_bin_path)
         set_conf_files(data_files, src=["config/debian/waagent.conf"])
         set_logrotate_files(data_files)
         set_udev_files(data_files, dest="/lib/udev/rules.d")
         if debian_has_systemd():
             set_systemd_files(data_files, dest=systemd_dir_path)
     elif name == 'iosxe':
+        set_bin_files(data_files, dest=agent_bin_path)
         set_conf_files(data_files, src=["config/iosxe/waagent.conf"])
         set_logrotate_files(data_files)
         set_udev_files(data_files)
@@ -198,11 +204,13 @@ def get_data_files(name, version, fullname):  # pylint: disable=R0912
             # TODO this is a mitigation to systemctl bug on 7.1
             set_sysv_files(data_files)
     elif name == 'openwrt':
+        set_bin_files(data_files, dest=agent_bin_path)
         set_conf_files(data_files)
         set_logrotate_files(data_files)
         set_sysv_files(data_files, dest='/etc/init.d', src=["init/openwrt/waagent"])
     else:
         # Use default setting
+        set_bin_files(data_files, dest=agent_bin_path)
         set_conf_files(data_files)
         set_logrotate_files(data_files)
         set_udev_files(data_files)
