@@ -986,12 +986,12 @@ class ExtHandlersHandler(object):
             # Convert VMStatus class to Dict.
             data = get_properties(vm_status)
 
-            '''
-                .get handles the keyError and accepts a default value as 2nd parameter. 
-                If no second parameter is provided it uses None. 
-                Using {'default': None} in the case of 'vmAgent','vm_artifacts_aggregate_status' 
-                or 'goal_state_aggregate_status' is not available
-            '''
+            """
+            .get handles the keyError and accepts a default value as 2nd parameter. 
+            If no second parameter is provided it uses None. 
+            Using {'default': None} in the case of 'vmAgent','vm_artifacts_aggregate_status' 
+            or 'goal_state_aggregate_status' is not available
+            """
             agent_details["daemon_version"] = data.get('vmAgent', {'default': None}).get('version')
             agent_details["distro_details"] = "{0}:{1}".format(data.get('vmAgent', {'default': None}).get('osname'),
                                                                data.get('vmAgent', {'default': None}).get('osversion'))
