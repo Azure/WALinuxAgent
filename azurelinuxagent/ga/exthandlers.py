@@ -313,9 +313,9 @@ class ExtHandlersHandler(object):
                 # trying to retrieve is debug only on linux.
                 error_msg = u"Couldn't parse debug metadata value: {0}".format(e)
                 logger.verbose(error_msg)
-            
+
             return "NA"
-        
+
         to_utc = lambda time: time.strftime(logger.Logger.LogTimeFormatInUTC)
         identity = lambda value: value
 
@@ -986,12 +986,9 @@ class ExtHandlersHandler(object):
             # Convert VMStatus class to Dict.
             data = get_properties(vm_status)
 
-            """
-            .get handles the keyError and accepts a default value as 2nd parameter. 
-            If no second parameter is provided it uses None. 
-            Using {'default': None} in the case of 'vmAgent','vm_artifacts_aggregate_status' 
-            or 'goal_state_aggregate_status' is not available
-            """
+            # .get handles the keyError and accepts a default value as 2nd parameter. If no second parameter is
+            # provided it uses None. Using {'default': None} in the case of 'vmAgent' or any other key is not available
+
             agent_details["daemon_version"] = data.get('vmAgent', {'default': None}).get('version')
             agent_details["distro_details"] = "{0}:{1}".format(data.get('vmAgent', {'default': None}).get('osname'),
                                                                data.get('vmAgent', {'default': None}).get('osversion'))
@@ -1996,10 +1993,10 @@ class ExtHandlerInstance(object):
 
     def create_handler_env(self):
         handler_env = {
-                HandlerEnvironment.logFolder: self.get_log_dir(), 
-                HandlerEnvironment.configFolder: self.get_conf_dir(), 
-                HandlerEnvironment.statusFolder: self.get_status_dir(), 
-                HandlerEnvironment.heartbeatFile: self.get_heartbeat_file() 
+                HandlerEnvironment.logFolder: self.get_log_dir(),
+                HandlerEnvironment.configFolder: self.get_conf_dir(),
+                HandlerEnvironment.statusFolder: self.get_status_dir(),
+                HandlerEnvironment.heartbeatFile: self.get_heartbeat_file()
             }
 
         if get_supported_feature_by_name(SupportedFeatureNames.ExtensionTelemetryPipeline).is_supported:
