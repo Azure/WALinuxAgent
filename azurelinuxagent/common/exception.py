@@ -22,6 +22,11 @@ Defines all exceptions
 """
 
 
+class ExitException(Exception):
+    """
+    Used to exit the agent's process
+    """
+
 class AgentError(Exception):
     """
     Base class of agent error.

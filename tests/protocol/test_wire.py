@@ -393,6 +393,8 @@ class TestWireProtocol(AgentTestCase):
 
             with patch("azurelinuxagent.common.agent_supported_feature._MultiConfigFeature.is_supported", True):
                 exthandlers_handler.run()
+                exthandlers_handler.report_ext_handlers_status()
+
                 self.assertIsNotNone(protocol.aggregate_status, "Aggregate status should not be None")
                 self.assertIn("supportedFeatures", protocol.aggregate_status, "supported features not reported")
                 multi_config_feature = get_supported_feature_by_name(SupportedFeatureNames.MultiConfig)
@@ -406,6 +408,8 @@ class TestWireProtocol(AgentTestCase):
             # Feature should not be reported if not present
             with patch("azurelinuxagent.common.agent_supported_feature._MultiConfigFeature.is_supported", False):
                 exthandlers_handler.run()
+                exthandlers_handler.report_ext_handlers_status()
+
                 self.assertIsNotNone(protocol.aggregate_status, "Aggregate status should not be None")
                 if "supportedFeatures" not in protocol.aggregate_status:
                     # In the case Multi-config was the only feature available, 'supportedFeatures' should not be

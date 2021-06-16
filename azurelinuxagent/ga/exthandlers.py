@@ -276,9 +276,6 @@ class ExtHandlersHandler(object):
     def __init__(self, protocol):
         self.protocol = protocol
         self.ext_handlers = None
-        self.last_etag = None
-        self.log_report = False
-        self.log_process = False
         # The GoalState Aggregate status needs to report the last status of the GoalState. Since we only process
         # extensions on incarnation change, we need to maintain its state.
         # Setting the status to None here. This would be overridden as soon as the first GoalState is processed
@@ -286,10 +283,6 @@ class ExtHandlersHandler(object):
         self.__gs_aggregate_status = None
 
         self.report_status_error_state = ErrorState()
-
-    def _incarnation_changed(self, etag):
-        # Skip processing if GoalState incarnation did not change
-        return self.last_etag != etag
 
     def __last_gs_unsupported(self):
 
@@ -329,36 +322,40 @@ class ExtHandlersHandler(object):
         return activity_id, correlation_id, gs_creation_time
 
     def run(self):
-
         try:
             self.ext_handlers, etag = self.protocol.get_ext_handlers()
-            msg = u"Handle extensions updates for incarnation {0}".format(etag)
-            logger.verbose(msg)
-            # Log status report success on new config
-            self.log_report = True
-            incarnation_changed = self._incarnation_changed(etag)
-            if self._extension_processing_allowed() and incarnation_changed:
-                activity_id, correlation_id, gs_creation_time = self.get_goal_state_debug_metadata()
 
-                logger.info(
-                    "ProcessGoalState started [Incarnation: {0}; Activity Id: {1}; Correlation Id: {2}; GS Creation Time: {3}]".format(
-                        etag, activity_id, correlation_id, gs_creation_time))
+            if not (self._extension_processing_allowed()):
+                return
 
+            activity_id, correlation_id, gs_creation_time = self.get_goal_state_debug_metadata()
+
+            logger.info(
+                "ProcessExtensionsInGoalState started [Incarnation: {0}; Activity Id: {1}; Correlation Id: {2}; GS Creation Time: {3}]".format(
+                etag, activity_id, correlation_id, gs_creation_time))
+
+            utc_start = datetime.datetime.utcnow()
+            try:
                 self.__process_and_handle_extensions(etag)
-                self.last_etag = etag
-
-            self.report_ext_handlers_status(incarnation_changed=incarnation_changed)
-            self._cleanup_outdated_handlers()
+                self._cleanup_outdated_handlers()
+            finally:
+                duration = elapsed_milliseconds(utc_start)
+                msg = 'ProcessExtensionsInGoalState completed [Incarnation: {0}; {1} ms; Activity Id: {2}; Correlation Id: {3}; GS Creation Time: {4}]'.format(
+                    etag, duration, activity_id, correlation_id, gs_creation_time)
+                logger.info(msg)
+                add_event(
+                    AGENT_NAME,
+                    op=WALAEventOperation.ProcessGoalState,
+                    duration=duration,
+                    message=msg)
         except Exception as error:
-            msg = u"Exception processing extension handlers: {0}".format(ustr(error))
-            detailed_msg = '{0} {1}'.format(msg, traceback.extract_tb(get_traceback(error)))
+            msg = u"ProcessExtensionsInGoalState - Exception processing extension handlers: {0}\n{1}".format(ustr(error), traceback.extract_tb(get_traceback(error)))
             logger.warn(msg)
             add_event(AGENT_NAME,
                       version=CURRENT_VERSION,
                       op=WALAEventOperation.ExtensionProcessing,
                       is_success=False,
-                      message=detailed_msg)
-            return
+                      message=msg)
 
     def __get_unsupported_features(self):
         required_features = self.protocol.get_required_features()
@@ -701,7 +698,6 @@ class ExtHandlersHandler(object):
              1- Ensure the handler is installed
              2- Check if extension is enabled or disabled and then process accordingly
         """
-        self.log_process = True
         uninstall_exit_code = None
         old_ext_handler_i = ext_handler_i.get_installed_ext_handler()
 
@@ -831,7 +827,6 @@ class ExtHandlersHandler(object):
             Disable is a legacy behavior, CRP doesn't support it, its only for XML based extensions.
             In case we get a disable request, just disable that extension.
         """
-        self.log_process = True
         handler_state = ext_handler_i.get_handler_state()
         ext_handler_i.logger.info("[Disable] current handler state is: {0}", handler_state.lower())
         if handler_state == ExtHandlerState.Enabled:
@@ -846,7 +841,6 @@ class ExtHandlersHandler(object):
                 CRP will only set the HandlerState to Uninstall if all its extensions are set to be disabled)
             2- Finally uninstall the handler
         """
-        self.log_process = True
         handler_state = ext_handler_i.get_handler_state()
         ext_handler_i.logger.info("[Uninstall] current handler state is: {0}", handler_state.lower())
         if handler_state != ExtHandlerState.NotInstalled:
@@ -917,57 +911,66 @@ class ExtHandlersHandler(object):
         """
         Go through handler_state dir, collect and report status
         """
-        vm_status = VMStatus(status="Ready", message="Guest Agent is running",
-                             gs_aggregate_status=self.__gs_aggregate_status)
-
-        handlers_to_report = []
-
-        # Incase of Unsupported error, report the status of the handlers in the VM
-        if self.__last_gs_unsupported():
-            handlers_to_report = self.__get_handlers_on_file_system(incarnation_changed)
-
-        # If GoalState supported, report the status of extension handlers that were requested by the GoalState
-        elif not self.__last_gs_unsupported() and self.ext_handlers is not None:
-            handlers_to_report = self.ext_handlers.extHandlers
-
-        for ext_handler in handlers_to_report:
-            try:
-                self.report_ext_handler_status(vm_status, ext_handler, incarnation_changed)
-            except ExtensionError as error:
-                add_event(op=WALAEventOperation.ExtensionProcessing, is_success=False, message=ustr(error))
-
-        logger.verbose("Report vm agent status")
         try:
-            self.protocol.report_vm_status(vm_status)
-            if self.log_report:
-                logger.verbose("Completed vm agent status report")
-            self.report_status_error_state.reset()
-        except ProtocolNotFoundError as error:
-            self.report_status_error_state.incr()
-            message = "Failed to report vm agent status: {0}".format(error)
-            logger.verbose(message)
-        except ProtocolError as error:
-            self.report_status_error_state.incr()
-            message = "Failed to report vm agent status: {0}".format(error)
+            vm_status = VMStatus(status="Ready", message="Guest Agent is running",
+                                 gs_aggregate_status=self.__gs_aggregate_status)
+
+            handlers_to_report = []
+
+            # In case of Unsupported error, report the status of the handlers in the VM
+            if self.__last_gs_unsupported():
+                handlers_to_report = self.__get_handlers_on_file_system(incarnation_changed)
+
+            # If GoalState supported, report the status of extension handlers that were requested by the GoalState
+            elif not self.__last_gs_unsupported() and self.ext_handlers is not None:
+                handlers_to_report = self.ext_handlers.extHandlers
+
+            for ext_handler in handlers_to_report:
+                try:
+                    self.report_ext_handler_status(vm_status, ext_handler, incarnation_changed)
+                except ExtensionError as error:
+                    add_event(op=WALAEventOperation.ExtensionProcessing, is_success=False, message=ustr(error))
+
+            logger.verbose("Report vm agent status")
+            try:
+                self.protocol.report_vm_status(vm_status)
+                logger.verbose("Completed vm agent status report successfully")
+                self.report_status_error_state.reset()
+            except ProtocolNotFoundError as error:
+                self.report_status_error_state.incr()
+                message = "Failed to report vm agent status: {0}".format(error)
+                logger.verbose(message)
+            except ProtocolError as error:
+                self.report_status_error_state.incr()
+                message = "Failed to report vm agent status: {0}".format(error)
+                add_event(AGENT_NAME,
+                          version=CURRENT_VERSION,
+                          op=WALAEventOperation.ExtensionProcessing,
+                          is_success=False,
+                          message=message)
+
+            if self.report_status_error_state.is_triggered():
+                message = "Failed to report vm agent status for more than {0}" \
+                    .format(self.report_status_error_state.min_timedelta)
+
+                add_event(AGENT_NAME,
+                          version=CURRENT_VERSION,
+                          op=WALAEventOperation.ReportStatusExtended,
+                          is_success=False,
+                          message=message)
+
+                self.report_status_error_state.reset()
+
+            self.write_ext_handlers_status_to_info_file(vm_status)
+
+        except Exception as error:
+            msg = u"Failed to report status: {0}\n{1}".format(ustr(error), traceback.extract_tb(get_traceback(error)))
+            logger.warn(msg)
             add_event(AGENT_NAME,
                       version=CURRENT_VERSION,
-                      op=WALAEventOperation.ExtensionProcessing,
+                      op=WALAEventOperation.ReportStatus,
                       is_success=False,
-                      message=message)
-
-        if self.report_status_error_state.is_triggered():
-            message = "Failed to report vm agent status for more than {0}" \
-                .format(self.report_status_error_state.min_timedelta)
-
-            add_event(AGENT_NAME,
-                      version=CURRENT_VERSION,
-                      op=WALAEventOperation.ReportStatusExtended,
-                      is_success=False,
-                      message=message)
-
-            self.report_status_error_state.reset()
-
-        self.write_ext_handlers_status_to_info_file(vm_status)
+                      message=msg)
 
     @staticmethod
     def write_ext_handlers_status_to_info_file(vm_status):
