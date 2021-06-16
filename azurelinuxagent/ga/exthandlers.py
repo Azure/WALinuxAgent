@@ -978,33 +978,43 @@ class ExtHandlersHandler(object):
             "python_version": "Python: {0}.{1}.{2}".format(PY_VERSION_MAJOR, PY_VERSION_MINOR, PY_VERSION_MICRO),
             "crp_supported_features": [name for name, _ in get_agent_supported_features_list_for_crp().items()],
             "extension_supported_features": [name for name, _ in
-                                             get_agent_supported_features_list_for_extensions().items()]
+                                             get_agent_supported_features_list_for_extensions().items()],
+            "last_successful_status_upload_time": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
         }
 
         if vm_status is not None:
             # Convert VMStatus class to Dict.
             data = get_properties(vm_status)
-            goal_state_status = data['vmAgent']['vm_artifacts_aggregate_status']['goal_state_aggregate_status']
 
-            agent_details["daemon_version"] = data['vmAgent']['version']
-            agent_details["distro_details"] = "{0}:{1}".format(data['vmAgent']['osname'], data['vmAgent']['osversion'])
-            agent_details["agent_status"] = data['vmAgent']['status']
-            agent_details["agent_message"] = data['vmAgent']['message']
-            agent_details["agent_hostname"] = data['vmAgent']['hostname']
+            '''
+                .get handles the keyError and accepts a default value as 2nd parameter. 
+                If no second parameter is provided it uses None. 
+                Using {'default': None} in the case of 'vmAgent','vm_artifacts_aggregate_status' 
+                or 'goal_state_aggregate_status' is not available
+            '''
+            agent_details["daemon_version"] = data.get('vmAgent', {'default': None}).get('version')
+            agent_details["distro_details"] = "{0}:{1}".format(data.get('vmAgent', {'default': None}).get('osname'),
+                                                               data.get('vmAgent', {'default': None}).get('osversion'))
+            agent_details["agent_status"] = data.get('vmAgent', {'default': None}).get('status')
+            agent_details["agent_message"] = data.get('vmAgent', {'default': None}).get('message')
+            agent_details["agent_hostname"] = data.get('vmAgent', {'default': None}).get('hostname')
 
+            goal_state_status = data.get('vmAgent', {'default': None}).get('vm_artifacts_aggregate_status',
+                                                {'default': None}).get('goal_state_aggregate_status', {'default': None})
             goal_state_aggregate_status = {
-                "processed_time": time.strftime("%Y-%m-%dT%H:%M:%SZ", goal_state_status['_GoalStateAggregateStatus__utc_timestamp']),  # the timestamp is slightly different
-                "message": goal_state_status['message'],
-                "in_svd_seq_no": goal_state_status['in_svd_seq_no'],
-                "status": goal_state_status['status'],
-                "code": str(goal_state_status['code'])
+                "processed_time": time.strftime("%Y-%m-%dT%H:%M:%SZ",
+                                                goal_state_status.get('_GoalStateAggregateStatus__utc_timestamp')),
+                "message": goal_state_status.get('message'),
+                "in_svd_seq_no": goal_state_status.get('in_svd_seq_no'),
+                "status": goal_state_status.get('status'),
+                "code": str(goal_state_status.get('code'))
             }
 
             agent_details["goal_state_aggregate_status"] = goal_state_aggregate_status
 
             # The above class contains vmAgent.extensionHandlers
             # (more info: azurelinuxagent.common.protocol.restapi.VMAgentStatus)
-            handler_statuses = data['vmAgent']['extensionHandlers']
+            handler_statuses = data.get('vmAgent', {'default': None}).get('extensionHandlers')
             for handler_status in handler_statuses:
                 try:
                     handler_status['extension_status'].pop('message', None)

@@ -1106,6 +1106,7 @@ class TestExtension(AgentTestCase):
             "crp_supported_features": [name for name, _ in get_agent_supported_features_list_for_crp().items()],
             "extension_supported_features": [name for name, _ in
                                              get_agent_supported_features_list_for_extensions().items()],
+            "last_successful_status_upload_time": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
             "daemon_version": "9.9.9.9",
             "agent_status": "Ready",
             "agent_message": "Guest Agent is running",
