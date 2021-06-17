@@ -142,19 +142,17 @@ class UbuntuOSUtil(Ubuntu16OSUtil):
         Restart an interface by bouncing the link. systemd-networkd observes
         this event, and forces a renew of DHCP.
         """
-        retry_limit=retries+1
+        retry_limit = retries+1
         for attempt in range(1, retry_limit):
-            try:
-                shellutil.run_command(["ip", "link", "set", ifname, "down"])
-                shellutil.run_command(["ip", "link", "set", ifname, "up"])
-
-            except shellutil.CommandError as cmd_err:
-                logger.warn("failed to restart {0}: return code {1}".format(ifname, cmd_err.returncode))
-                if attempt < retry_limit:
-                    logger.info("retrying in {0} seconds".format(wait))
-                    time.sleep(wait)
-                else:
-                    logger.warn("exceeded restart retries")
+            return_code = shellutil.run("ip link set {0} down && ip link set {0} up".format(ifname))
+            if return_code == 0:
+                return
+            logger.warn("failed to restart {0}: return code {1}".format(ifname, return_code))
+            if attempt < retry_limit:
+                logger.info("retrying in {0} seconds".format(wait))
+                time.sleep(wait)
+            else:
+                logger.warn("exceeded restart retries")
 
 
 class UbuntuSnappyOSUtil(Ubuntu14OSUtil):
