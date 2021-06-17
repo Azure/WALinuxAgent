@@ -974,7 +974,7 @@ class ExtHandlersHandler(object):
 
         agent_details = {
             "agent_name": AGENT_NAME,
-            "goal_state_version": str(GOAL_STATE_AGENT_VERSION),
+            "daemon_version": str(version.get_daemon_version()),
             "python_version": "Python: {0}.{1}.{2}".format(PY_VERSION_MAJOR, PY_VERSION_MINOR, PY_VERSION_MICRO),
             "crp_supported_features": [name for name, _ in get_agent_supported_features_list_for_crp().items()],
             "extension_supported_features": [name for name, _ in
@@ -987,31 +987,38 @@ class ExtHandlersHandler(object):
             data = get_properties(vm_status)
 
             # .get handles the keyError and accepts a default value as 2nd parameter. If no second parameter is
-            # provided it uses None. Using {'default': None} in the case of 'vmAgent' or any other key is not available
+            # provided it uses None. Using dict() in the case of 'vmAgent' or any other key is not available
 
-            agent_details["daemon_version"] = data.get('vmAgent', {'default': None}).get('version')
-            agent_details["distro_details"] = "{0}:{1}".format(data.get('vmAgent', {'default': None}).get('osname'),
-                                                               data.get('vmAgent', {'default': None}).get('osversion'))
-            agent_details["agent_status"] = data.get('vmAgent', {'default': None}).get('status')
-            agent_details["agent_message"] = data.get('vmAgent', {'default': None}).get('message')
-            agent_details["agent_hostname"] = data.get('vmAgent', {'default': None}).get('hostname')
+            agent_details["goal_state_version"] = data.get('vmAgent', dict()).get('version')
+            agent_details["distro_details"] = "{0}:{1}".format(data.get('vmAgent', dict()).get('osname'),
+                                                               data.get('vmAgent', dict()).get('osversion'))
+            agent_details["agent_status"] = data.get('vmAgent', dict()).get('status')
+            agent_details["agent_message"] = data.get('vmAgent', dict()).get('message')
+            agent_details["agent_hostname"] = data.get('vmAgent', dict()).get('hostname')
 
-            goal_state_status = data.get('vmAgent', {'default': None}).get('vm_artifacts_aggregate_status',
-                                                {'default': None}).get('goal_state_aggregate_status', {'default': None})
+            goal_state_status = data.get('vmAgent', dict()).get('vm_artifacts_aggregate_status',
+                                                                dict()).get('goal_state_aggregate_status', dict())
             goal_state_aggregate_status = {
-                "processed_time": time.strftime("%Y-%m-%dT%H:%M:%SZ",
-                                                goal_state_status.get('_GoalStateAggregateStatus__utc_timestamp')),
                 "message": goal_state_status.get('message'),
                 "in_svd_seq_no": goal_state_status.get('in_svd_seq_no'),
                 "status": goal_state_status.get('status'),
                 "code": str(goal_state_status.get('code'))
             }
 
+            processed_time = time.gmtime(0) # '1970-01-01T00:00:00Z' is set as default
+
+            try:
+                processed_time = vm_status.vmAgent.vm_artifacts_aggregate_status.goal_state_aggregate_status.processed_time
+            except AttributeError:
+                pass
+
+            goal_state_aggregate_status["processed_time"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", processed_time)
+
             agent_details["goal_state_aggregate_status"] = goal_state_aggregate_status
 
             # The above class contains vmAgent.extensionHandlers
             # (more info: azurelinuxagent.common.protocol.restapi.VMAgentStatus)
-            handler_statuses = data.get('vmAgent', {'default': None}).get('extensionHandlers')
+            handler_statuses = data.get('vmAgent', dict()).get('extensionHandlers')
             for handler_status in handler_statuses:
                 try:
                     handler_status['extension_status'].pop('message', None)
