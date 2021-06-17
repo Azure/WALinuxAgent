@@ -1892,5 +1892,40 @@ class TimeMock(Mock):
         return current_time
 
 
+class TestProcessGoalState(AgentTestCase):
+    """
+    Tests for UpdateHandler._process_goal_state
+    """
+    def test_it_should_process_goal_state_only_on_new_goal_state(self):
+        with mock_wire_protocol(DATA_FILE) as protocol:
+            update_handler = get_update_handler()
+            with patch.object(update_handler, "_upgrade_available", return_value=False):  # skip the upgrade logic
+                exthandlers_handler = Mock()
+                remote_access_handler = Mock()
+
+                def get_method_calls(mock, method):
+                    return [call[0] for call in mock.method_calls if call[0] == method]
+
+                # process a goal state
+                update_handler._process_goal_state(protocol, exthandlers_handler, remote_access_handler)
+                self.assertEqual(1, len(get_method_calls(exthandlers_handler, 'run')), "exthandlers_handler.run() should have been called on the first goal state")
+                self.assertEqual(1, len(get_method_calls(exthandlers_handler, 'report_ext_handlers_status')), "exthandlers_handler.report_ext_handlers_status() should have been called on the first goal state")
+                self.assertEqual(1, len(get_method_calls(remote_access_handler, 'run')), "remote_access_handler.run() should have been called on the first goal state")
+
+                # process the same goal state
+                update_handler._process_goal_state(protocol, exthandlers_handler, remote_access_handler)
+                self.assertEqual(1, len(get_method_calls(exthandlers_handler, 'run')), "exthandlers_handler.run() should have not been called on the same goal state")
+                self.assertEqual(2, len(get_method_calls(exthandlers_handler, 'report_ext_handlers_status')), "exthandlers_handler.report_ext_handlers_status() should have been called on the same goal state")
+                self.assertEqual(1, len(get_method_calls(remote_access_handler, 'run')), "remote_access_handler.run() should not have been called on the same goal state")
+
+                # process a new goal state
+                protocol.mock_wire_data.set_incarnation(999)
+                protocol.client.update_goal_state()
+                update_handler._process_goal_state(protocol, exthandlers_handler, remote_access_handler)
+                self.assertEqual(2, len(get_method_calls(exthandlers_handler, 'run')), "exthandlers_handler.run() should have been called on a new goal state")
+                self.assertEqual(3, len(get_method_calls(exthandlers_handler, 'report_ext_handlers_status')), "exthandlers_handler.report_ext_handlers_status() should have been called on a new goal state")
+                self.assertEqual(2, len(get_method_calls(remote_access_handler, 'run')), "remote_access_handler.run() should have been called on a new goal state")
+
+
 if __name__ == '__main__':
     unittest.main()
