@@ -52,7 +52,7 @@ from azurelinuxagent.common.protocol.restapi import ExtensionStatus, ExtensionSu
 from azurelinuxagent.common.utils.archive import ARCHIVE_DIRECTORY_NAME
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
 from azurelinuxagent.common.version import AGENT_NAME, CURRENT_VERSION, \
-    GOAL_STATE_AGENT_VERSION, PY_VERSION_MAJOR, PY_VERSION_MICRO, PY_VERSION_MINOR
+    PY_VERSION_MAJOR, PY_VERSION_MICRO, PY_VERSION_MINOR
 
 _HANDLER_NAME_PATTERN = r'^([^-]+)'
 _HANDLER_VERSION_PATTERN = r'(\d+(?:\.\d+)*)'
@@ -1021,8 +1021,8 @@ class ExtHandlersHandler(object):
             handler_statuses = data.get('vmAgent', dict()).get('extensionHandlers')
             for handler_status in handler_statuses:
                 try:
-                    handler_status['extension_status'].pop('message', None)
-                    handler_status['extension_status'].pop('substatusList', None)
+                    handler_status.get('extension_status', dict()).pop('message', None)
+                    handler_status.get('extension_status', dict()).pop('substatusList', None)
                 except KeyError:
                     pass
 

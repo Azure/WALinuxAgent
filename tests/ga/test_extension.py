@@ -27,7 +27,6 @@ import time
 import unittest
 import uuid
 
-import azurelinuxagent.common.version as version
 from azurelinuxagent.common import conf
 from azurelinuxagent.common.agent_supported_feature import get_agent_supported_features_list_for_crp, \
     get_agent_supported_features_list_for_extensions
@@ -1102,13 +1101,13 @@ class TestExtension(AgentTestCase):
 
         expected_status = {
             "agent_name": AGENT_NAME,
-            "goal_state_version": str(GOAL_STATE_AGENT_VERSION),
+            "daemon_version": "0.0.0.0",
             "python_version": "Python: {0}.{1}.{2}".format(PY_VERSION_MAJOR, PY_VERSION_MINOR, PY_VERSION_MICRO),
             "crp_supported_features": [name for name, _ in get_agent_supported_features_list_for_crp().items()],
             "extension_supported_features": [name for name, _ in
                                              get_agent_supported_features_list_for_extensions().items()],
             "last_successful_status_upload_time": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-            "daemon_version": str(version.get_daemon_version()),
+            "goal_state_version": "9.9.9.9",
             "agent_status": "Ready",
             "agent_message": "Guest Agent is running",
             "goal_state_aggregate_status": {
