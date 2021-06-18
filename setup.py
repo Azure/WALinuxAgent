@@ -135,20 +135,23 @@ def get_data_files(name, version, fullname):  # pylint: disable=R0912
         set_systemd_files(data_files, dest=systemd_dir_path,
                           src=["init/mariner/waagent.service"])
     elif name == 'ubuntu':
-        set_bin_files(data_files, dest=agent_bin_path)
         set_conf_files(data_files, src=["config/ubuntu/waagent.conf"])
         set_logrotate_files(data_files)
         set_udev_files(data_files)
         if version.startswith("12") or version.startswith("14"):
             # Ubuntu12.04/14.04 - uses upstart
+            if version.startswith("12"):
+                set_bin_files(data_files, dest=agent_bin_path)
+            else:
+                set_bin_files(data_files, dest=agent_bin_path,
+                              src=["bin/py3/waagent", "bin/waagent2.0"])
             set_files(data_files, dest="/etc/init",
                       src=["init/ubuntu/walinuxagent.conf"])
             set_files(data_files, dest='/etc/default',
                       src=['init/ubuntu/walinuxagent'])
-        elif fullname == 'Snappy Ubuntu Core':
-            set_files(data_files, dest="<TODO>",
-                      src=["init/ubuntu/snappy/walinuxagent.yml"])
         else:
+            set_bin_files(data_files, dest=agent_bin_path,
+                          src=["bin/py3/waagent", "bin/waagent2.0"])
             # Ubuntu15.04+ uses systemd
             set_systemd_files(data_files, dest=systemd_dir_path,
                               src=[
@@ -188,7 +191,8 @@ def get_data_files(name, version, fullname):  # pylint: disable=R0912
         set_conf_files(data_files, src=["config/openbsd/waagent.conf"])
         set_openbsd_rc_files(data_files)
     elif name == 'debian':
-        set_bin_files(data_files, dest=agent_bin_path)
+        set_bin_files(data_files, dest=agent_bin_path,
+                      src=["bin/py3/waagent", "bin/waagent2.0"])
         set_conf_files(data_files, src=["config/debian/waagent.conf"])
         set_logrotate_files(data_files)
         set_udev_files(data_files, dest="/lib/udev/rules.d")
