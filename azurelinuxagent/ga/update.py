@@ -326,8 +326,8 @@ class UpdateHandler(object):
                 self._send_heartbeat_telemetry(protocol)
                 time.sleep(goal_state_interval)
 
-        except ExitException:
-            pass  # exit the process
+        except ExitException as exitException:
+            logger.info(exitException.reason)
         except Exception as error:
             msg = u"Agent {0} failed with exception: {1}".format(CURRENT_AGENT, ustr(error))
             self._set_sentinel(msg=msg)
@@ -343,8 +343,7 @@ class UpdateHandler(object):
     def _check_daemon_running(self, debug):
         # Check that the parent process (the agent's daemon) is still running
         if not debug and self._is_orphaned:
-            logger.info("Agent {0} is an orphan -- exiting", CURRENT_AGENT)
-            raise ExitException()
+            raise ExitException("Agent {0} is an orphan -- exiting".format(CURRENT_AGENT))
 
     def _check_threads_running(self, all_thread_handlers):
         # Check that all the threads are still running
@@ -361,10 +360,10 @@ class UpdateHandler(object):
         if self._upgrade_available(protocol):
             available_agent = self.get_latest_agent()
             if available_agent is None:
-                logger.info("Agent {0} is reverting to the installed agent -- exiting", CURRENT_AGENT)
+                reason = "Agent {0} is reverting to the installed agent -- exiting".format(CURRENT_AGENT)
             else:
-                logger.info(u"Agent {0} discovered update {1} -- exiting", CURRENT_AGENT, available_agent.name)
-            raise ExitException()
+                reason = "Agent {0} discovered update {1} -- exiting".format(CURRENT_AGENT, available_agent.name)
+            raise ExitException(reason)
 
         incarnation = protocol.get_incarnation()
 
@@ -372,6 +371,8 @@ class UpdateHandler(object):
             if incarnation != self.last_incarnation:
                 exthandlers_handler.run()
 
+            # report status always, even if the goal state did not change
+            # do it before processing the remote access, since that operation can take a long time
             exthandlers_handler.report_ext_handlers_status(incarnation_changed=incarnation != self.last_incarnation)
 
             if incarnation != self.last_incarnation:

@@ -22,10 +22,14 @@ Defines all exceptions
 """
 
 
-class ExitException(Exception):
+class ExitException(BaseException):
     """
     Used to exit the agent's process
     """
+    def __init__(self, reason):
+        super(ExitException, self).__init__()
+        self.reason = reason
+
 
 class AgentError(Exception):
     """

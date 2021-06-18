@@ -322,40 +322,44 @@ class ExtHandlersHandler(object):
         return activity_id, correlation_id, gs_creation_time
 
     def run(self):
+        etag, activity_id, correlation_id, gs_creation_time = None, None, None, None
+
         try:
+            # self.ext_handlers needs to be initialized first, since status reporting depends on it
             self.ext_handlers, etag = self.protocol.get_ext_handlers()
 
-            if not (self._extension_processing_allowed()):
+            if not self._extension_processing_allowed():
                 return
 
             activity_id, correlation_id, gs_creation_time = self.get_goal_state_debug_metadata()
-
-            logger.info(
-                "ProcessExtensionsInGoalState started [Incarnation: {0}; Activity Id: {1}; Correlation Id: {2}; GS Creation Time: {3}]".format(
-                etag, activity_id, correlation_id, gs_creation_time))
-
-            utc_start = datetime.datetime.utcnow()
-            try:
-                self.__process_and_handle_extensions(etag)
-                self._cleanup_outdated_handlers()
-            finally:
-                duration = elapsed_milliseconds(utc_start)
-                msg = 'ProcessExtensionsInGoalState completed [Incarnation: {0}; {1} ms; Activity Id: {2}; Correlation Id: {3}; GS Creation Time: {4}]'.format(
-                    etag, duration, activity_id, correlation_id, gs_creation_time)
-                logger.info(msg)
-                add_event(
-                    AGENT_NAME,
-                    op=WALAEventOperation.ProcessGoalState,
-                    duration=duration,
-                    message=msg)
         except Exception as error:
             msg = u"ProcessExtensionsInGoalState - Exception processing extension handlers: {0}\n{1}".format(ustr(error), traceback.extract_tb(get_traceback(error)))
             logger.warn(msg)
-            add_event(AGENT_NAME,
-                      version=CURRENT_VERSION,
-                      op=WALAEventOperation.ExtensionProcessing,
-                      is_success=False,
-                      message=msg)
+            add_event(op=WALAEventOperation.ExtensionProcessing, is_success=False, message=msg, log_event=False)
+            return
+
+        def goal_state_debug_info():
+            return "[Incarnation: {0}; Activity Id: {1}; Correlation Id: {2}; GS Creation Time: {3}]".format(etag, activity_id, correlation_id, gs_creation_time)
+
+        utc_start = datetime.datetime.utcnow()
+        error = None
+        message = "ProcessExtensionsInGoalState started {0}".format(goal_state_debug_info())
+        logger.info(message)
+        add_event(op=WALAEventOperation.ExtensionProcessing, message=message)
+        try:
+            self.__process_and_handle_extensions(etag)
+            self._cleanup_outdated_handlers()
+        except Exception as error:
+            error = u"ProcessExtensionsInGoalState - Exception processing extension handlers: {0}\n{1}".format(ustr(error), traceback.extract_tb(get_traceback(error)))
+        finally:
+            duration = elapsed_milliseconds(utc_start)
+            if error is None:
+                message = 'ProcessExtensionsInGoalState completed {0}'.format(goal_state_debug_info())
+                logger.info(message)
+            else:
+                message = 'ProcessExtensionsInGoalState failed {0}\nError:{1}'.format(goal_state_debug_info(), error)
+                logger.warn(message)
+            add_event(op=WALAEventOperation.ExtensionProcessing, is_success=(error is None), message=message, log_event=False, duration=duration)
 
     def __get_unsupported_features(self):
         required_features = self.protocol.get_required_features()
