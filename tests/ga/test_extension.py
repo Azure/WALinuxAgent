@@ -1020,13 +1020,6 @@ class TestExtension(AgentTestCase):
 
                 _assert_event_reported_only_on_incarnation_change(expected_count=1)
 
-                # # Assert that on rerun it should not report errors unless incarnation changes
-                # for _ in range(5):
-                #     exthandlers_handler.run()
-                #     exthandlers_handler.report_ext_handlers_status()
-                #
-                #     _assert_event_reported_only_on_incarnation_change(expected_count=1)  # REMOVE TEST
-
                 test_data.set_incarnation(2)
                 protocol.update_goal_state()
 
@@ -1597,7 +1590,7 @@ class TestExtension(AgentTestCase):
         exthandlers_handler.report_ext_handlers_status()
 
         self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.0.0")
-        self._assert_ext_status(protocol.report_vm_status, ValidHandlerStatus.error, 0)  # REMOVE TEST
+        self._assert_ext_status(protocol.report_vm_status, ValidHandlerStatus.error, 0)
 
     def test_wait_for_handler_completion_no_status(self, mock_http_get, mock_crypt_util, *args):
         """
