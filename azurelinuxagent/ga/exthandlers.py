@@ -338,8 +338,11 @@ class ExtHandlersHandler(object):
             add_event(op=WALAEventOperation.ExtensionProcessing, is_success=False, message=msg, log_event=False)
             return
 
-        def goal_state_debug_info():
-            return "[Incarnation: {0}; Activity Id: {1}; Correlation Id: {2}; GS Creation Time: {3}]".format(etag, activity_id, correlation_id, gs_creation_time)
+        def goal_state_debug_info(duration=None):
+            if duration is None:
+                return "[Incarnation: {0}; Activity Id: {1}; Correlation Id: {2}; GS Creation Time: {3}]".format(etag, activity_id, correlation_id, gs_creation_time)
+            else:
+                return "[Incarnation: {0}; {1} ms; Activity Id: {2}; Correlation Id: {3}; GS Creation Time: {4}]".format(etag, duration, activity_id, correlation_id, gs_creation_time)
 
         utc_start = datetime.datetime.utcnow()
         error = None
@@ -354,10 +357,10 @@ class ExtHandlersHandler(object):
         finally:
             duration = elapsed_milliseconds(utc_start)
             if error is None:
-                message = 'ProcessExtensionsInGoalState completed {0}'.format(goal_state_debug_info())
+                message = 'ProcessExtensionsInGoalState completed {0}'.format(goal_state_debug_info(duration=duration))
                 logger.info(message)
             else:
-                message = 'ProcessExtensionsInGoalState failed {0}\nError:{1}'.format(goal_state_debug_info(), error)
+                message = 'ProcessExtensionsInGoalState failed {0}\nError:{1}'.format(goal_state_debug_info(duration=duration), error)
                 logger.warn(message)
             add_event(op=WALAEventOperation.ExtensionProcessing, is_success=(error is None), message=message, log_event=False, duration=duration)
 
