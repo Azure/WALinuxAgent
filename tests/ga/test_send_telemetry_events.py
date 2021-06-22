@@ -33,7 +33,7 @@ from azurelinuxagent.common.exception import HttpError, ServiceStoppedError
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.osutil.factory import get_osutil
 from azurelinuxagent.common.protocol.util import ProtocolUtil
-from azurelinuxagent.common.protocol.wire import event_to_v1
+from azurelinuxagent.common.protocol.wire import event_to_v1_encoded
 from azurelinuxagent.common.telemetryevent import TelemetryEvent, TelemetryEventParam, \
     GuestAgentExtensionEventsSchema
 from azurelinuxagent.common.utils import restutil, fileutil
@@ -97,7 +97,7 @@ class TestSendTelemetryEventsHandler(AgentTestCase, HttpRequestPredicates):
         TestSendTelemetryEventsHandler._stop_handler(telemetry_handler)
 
         for telemetry_event in test_events:
-            event_str = event_to_v1(telemetry_event)
+            event_str = event_to_v1_encoded(telemetry_event)
             found = False
             for _, event_body in telemetry_handler.event_calls:
                 if event_str in event_body:
