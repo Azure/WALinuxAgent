@@ -221,6 +221,7 @@ class TestMultiConfigExtensions(_MultiConfigBaseTestClass):
             return msg if with_message else None
 
         exthandlers_handler.run()
+        exthandlers_handler.report_ext_handlers_status()
         self.assertEqual(no_of_extensions,
                          len(protocol.aggregate_status['aggregateStatus']['handlerAggregateStatus']),
                          "incorrect extensions reported")
@@ -252,6 +253,7 @@ class TestMultiConfigExtensions(_MultiConfigBaseTestClass):
         protocol.mock_wire_data.set_incarnation(2)
         protocol.update_goal_state()
         exthandlers_handler.run()
+        exthandlers_handler.report_ext_handlers_status()
 
         mc_handlers = self._assert_and_get_handler_status(aggregate_status=protocol.aggregate_status,
                                                           handler_name="OSTCExtensions.ExampleHandlerLinux",
@@ -285,6 +287,7 @@ class TestMultiConfigExtensions(_MultiConfigBaseTestClass):
         with self._setup_test_env(mock_manifest=True) as (exthandlers_handler, protocol, no_of_extensions):
             with enable_invocations(first_ext, second_ext, third_ext, fourth_ext) as invocation_record:
                 exthandlers_handler.run()
+                exthandlers_handler.report_ext_handlers_status()
                 self.assertEqual(no_of_extensions,
                                  len(protocol.aggregate_status['aggregateStatus']['handlerAggregateStatus']),
                                  "incorrect extensions reported")
@@ -316,6 +319,7 @@ class TestMultiConfigExtensions(_MultiConfigBaseTestClass):
             protocol.mock_wire_data.set_extensions_config_state(ExtHandlerRequestedState.Uninstall)
             protocol.update_goal_state()
             exthandlers_handler.run()
+            exthandlers_handler.report_ext_handlers_status()
             self.assertEqual(0, len(protocol.aggregate_status['aggregateStatus']['handlerAggregateStatus']),
                              "No handler/extension status should be reported")
 
@@ -329,6 +333,7 @@ class TestMultiConfigExtensions(_MultiConfigBaseTestClass):
             protocol.mock_wire_data.set_incarnation(2)
             protocol.update_goal_state()
             exthandlers_handler.run()
+            exthandlers_handler.report_ext_handlers_status()
             self.assertEqual(no_of_extensions,
                              len(protocol.aggregate_status['aggregateStatus']['handlerAggregateStatus']),
                              "incorrect extensions reported")
@@ -370,6 +375,7 @@ class TestMultiConfigExtensions(_MultiConfigBaseTestClass):
             sc_ext = extension_emulator(name="Microsoft.Powershell.ExampleExtension", install_action=fail_action)
             with enable_invocations(first_ext, second_ext, third_ext, sc_ext) as invocation_record:
                 exthandlers_handler.run()
+                exthandlers_handler.report_ext_handlers_status()
                 self.assertEqual(no_of_extensions,
                                  len(protocol.aggregate_status['aggregateStatus']['handlerAggregateStatus']),
                                  "incorrect extensions reported")
@@ -415,6 +421,7 @@ class TestMultiConfigExtensions(_MultiConfigBaseTestClass):
             new_sc_ext = extension_emulator(name="Microsoft.Powershell.ExampleExtension", version=new_version)
             with enable_invocations(new_first_ext, new_second_ext, new_third_ext, new_sc_ext, *old_exts) as invocation_record:
                 exthandlers_handler.run()
+                exthandlers_handler.report_ext_handlers_status()
                 old_first, old_second, old_third, old_fourth = old_exts
                 invocation_record.compare(
                     # Disable all enabled commands for MC before updating the Handler
@@ -471,6 +478,7 @@ class TestMultiConfigExtensions(_MultiConfigBaseTestClass):
             with enable_invocations(new_first_ext, new_second_ext, new_third_ext, new_sc_ext,
                                     *old_exts) as invocation_record:
                 exthandlers_handler.run()
+                exthandlers_handler.report_ext_handlers_status()
                 old_first, old_second, old_third, old_fourth = old_exts
                 invocation_record.compare(
                     # Disable all enabled commands for MC before updating the Handler
@@ -537,6 +545,7 @@ class TestMultiConfigExtensions(_MultiConfigBaseTestClass):
             with enable_invocations(new_first_ext, new_second_ext, new_third_ext, new_fourth_ext,
                                     *old_exts) as invocation_record:
                 exthandlers_handler.run()
+                exthandlers_handler.report_ext_handlers_status()
                 old_first, _, _, old_fourth = old_exts
                 invocation_record.compare(
                     # Disable for firstExtension should fail 3 times, i.e., once per extension which tries to update the Handler
@@ -590,6 +599,7 @@ class TestMultiConfigExtensions(_MultiConfigBaseTestClass):
             fourth_ext = extension_emulator(name="Microsoft.Powershell.ExampleExtension", enable_action=fail_action)
             with enable_invocations(first_ext, second_ext, third_ext, fourth_ext) as invocation_record:
                 exthandlers_handler.run()
+                exthandlers_handler.report_ext_handlers_status()
                 self.assertEqual(no_of_extensions,
                                  len(protocol.aggregate_status['aggregateStatus']['handlerAggregateStatus']),
                                  "incorrect extensions reported")
@@ -646,6 +656,7 @@ class TestMultiConfigExtensions(_MultiConfigBaseTestClass):
             protocol.update_goal_state()
 
             ext_handler.run()
+            ext_handler.report_ext_handlers_status()
             mc_handlers = self._assert_and_get_handler_status(aggregate_status=protocol.aggregate_status,
                                                               handler_name="OSTCExtensions.ExampleHandlerLinux",
                                                               expected_count=2, status="Ready")
@@ -767,6 +778,7 @@ class TestMultiConfigExtensions(_MultiConfigBaseTestClass):
                 protocol.mock_wire_data.set_incarnation(2)
                 protocol.update_goal_state()
                 exthandlers_handler.run()
+                exthandlers_handler.report_ext_handlers_status()
 
                 mc_handlers = self._assert_and_get_handler_status(aggregate_status=protocol.aggregate_status,
                                                                   handler_name="OSTCExtensions.ExampleHandlerLinux",
@@ -978,6 +990,7 @@ class TestMultiConfigExtensions(_MultiConfigBaseTestClass):
         with self._setup_test_env() as (exthandlers_handler, protocol, no_of_extensions):
             with enable_invocations(first_ext, second_ext, third_ext, fourth_ext) as invocation_record:
                 exthandlers_handler.run()
+                exthandlers_handler.report_ext_handlers_status()
                 self.assertEqual(no_of_extensions,
                                  len(protocol.aggregate_status['aggregateStatus']['handlerAggregateStatus']),
                                  "incorrect extensions reported")
@@ -1017,6 +1030,7 @@ class TestMultiConfigExtensions(_MultiConfigBaseTestClass):
                 with enable_invocations(*old_exts) as invocation_record:
                     (_, _, _, fourth_ext) = old_exts
                     exthandlers_handler.run()
+                    exthandlers_handler.report_ext_handlers_status()
                     self.assertEqual(4, len(protocol.aggregate_status['aggregateStatus']['handlerAggregateStatus']),
                                      "incorrect extensions reported")
 
@@ -1069,6 +1083,7 @@ class TestMultiConfigExtensionSequencing(_MultiConfigBaseTestClass):
                 independent_sc_ext):
             with enable_invocations(first_ext, second_ext, third_ext, dependent_sc_ext, independent_sc_ext) as invocation_record:
                 exthandlers_handler.run()
+                exthandlers_handler.report_ext_handlers_status()
                 self.assertEqual(no_of_extensions,
                                  len(protocol.aggregate_status['aggregateStatus']['handlerAggregateStatus']),
                                  "incorrect extensions reported")
@@ -1144,6 +1159,7 @@ class TestMultiConfigExtensionSequencing(_MultiConfigBaseTestClass):
             with enable_invocations(first_ext, second_ext, third_ext, dependent_sc_ext,
                                     independent_sc_ext) as invocation_record:
                 exthandlers_handler.run()
+                exthandlers_handler.report_ext_handlers_status()
                 self.assertEqual(no_of_extensions,
                                  len(protocol.aggregate_status['aggregateStatus']['handlerAggregateStatus']),
                                  "incorrect extensions reported")
@@ -1197,6 +1213,7 @@ class TestMultiConfigExtensionSequencing(_MultiConfigBaseTestClass):
         with self._setup_test_env(mock_manifest=True) as (exthandlers_handler, protocol, no_of_extensions):
             with patch('azurelinuxagent.common.cgroupapi.subprocess.Popen', side_effect=mock_popen):
                 exthandlers_handler.run()
+                exthandlers_handler.report_ext_handlers_status()
 
                 self.assertEqual(no_of_extensions,
                                  len(protocol.aggregate_status['aggregateStatus']['handlerAggregateStatus']),
