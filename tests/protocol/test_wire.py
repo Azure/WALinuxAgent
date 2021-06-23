@@ -429,12 +429,12 @@ class TestWireProtocol(AgentTestCase):
                 self.assertFalse(found, "Multi-config name should be present in supportedFeatures")
 
     @patch("azurelinuxagent.common.utils.restutil.http_request")
-    def test_send_event(self, mock_http_request, *args):
+    def test_send_encoded_event(self, mock_http_request, *args):
         mock_http_request.return_value = MockResponse("", 200)
 
         event_str = u'a test string'
         client = WireProtocol(WIRESERVER_URL).client
-        client.send_event("foo", event_str.encode('utf-8'))
+        client.send_encoded_event("foo", event_str.encode('utf-8'))
 
         first_call = mock_http_request.call_args_list[0]
         args, kwargs = first_call
@@ -443,10 +443,10 @@ class TestWireProtocol(AgentTestCase):
 
         # the headers should include utf-8 encoding...
         self.assertTrue("utf-8" in headers['Content-Type'])
-        # the body is not encoded, just check for equality
-        self.assertIn(event_str, body_received)
+        # the body is encoded, decode and check for equality
+        self.assertIn(event_str, body_received.decode('utf-8'))
 
-    @patch("azurelinuxagent.common.protocol.wire.WireClient.send_event")
+    @patch("azurelinuxagent.common.protocol.wire.WireClient.send_encoded_event")
     def test_report_event_small_event(self, patch_send_event, *args):  # pylint: disable=unused-argument
         event_list = []
         client = WireProtocol(WIRESERVER_URL).client
@@ -468,7 +468,7 @@ class TestWireProtocol(AgentTestCase):
         # It merges the messages into one message
         self.assertEqual(patch_send_event.call_count, 1)
 
-    @patch("azurelinuxagent.common.protocol.wire.WireClient.send_event")
+    @patch("azurelinuxagent.common.protocol.wire.WireClient.send_encoded_event")
     def test_report_event_multiple_events_to_fill_buffer(self, patch_send_event, *args):  # pylint: disable=unused-argument
         event_list = []
         client = WireProtocol(WIRESERVER_URL).client
@@ -482,7 +482,7 @@ class TestWireProtocol(AgentTestCase):
         # It merges the messages into one message
         self.assertEqual(patch_send_event.call_count, 2)
 
-    @patch("azurelinuxagent.common.protocol.wire.WireClient.send_event")
+    @patch("azurelinuxagent.common.protocol.wire.WireClient.send_encoded_event")
     def test_report_event_large_event(self, patch_send_event, *args):  # pylint: disable=unused-argument
         event_list = []
         event_str = random_generator(2 ** 18)

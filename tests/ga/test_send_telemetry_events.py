@@ -33,7 +33,7 @@ from azurelinuxagent.common.exception import HttpError, ServiceStoppedError
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.osutil.factory import get_osutil
 from azurelinuxagent.common.protocol.util import ProtocolUtil
-from azurelinuxagent.common.protocol.wire import event_to_v1
+from azurelinuxagent.common.protocol.wire import event_to_v1_encoded
 from azurelinuxagent.common.telemetryevent import TelemetryEvent, TelemetryEventParam, \
     GuestAgentExtensionEventsSchema
 from azurelinuxagent.common.utils import restutil, fileutil
@@ -97,7 +97,7 @@ class TestSendTelemetryEventsHandler(AgentTestCase, HttpRequestPredicates):
         TestSendTelemetryEventsHandler._stop_handler(telemetry_handler)
 
         for telemetry_event in test_events:
-            event_str = event_to_v1(telemetry_event)
+            event_str = event_to_v1_encoded(telemetry_event)
             found = False
             for _, event_body in telemetry_handler.event_calls:
                 if event_str in event_body:
@@ -257,7 +257,7 @@ class TestSendTelemetryEventsHandler(AgentTestCase, HttpRequestPredicates):
             self.assertTrue(telemetry_handler.is_alive(), "Thread not alive")
             TestSendTelemetryEventsHandler._stop_handler(telemetry_handler)
             _, event_body = telemetry_handler.event_calls[0]
-            event_orders = re.findall(r'<Event id=\"(\d+)\"><!\[CDATA\[]]></Event>', event_body)
+            event_orders = re.findall(r'<Event id=\"(\d+)\"><!\[CDATA\[]]></Event>', event_body.decode('utf-8'))
             self.assertEqual(sorted(event_orders), event_orders, "Events not ordered correctly")
 
     def test_send_telemetry_events_should_report_event_if_wireserver_returns_http_error(self):
@@ -382,7 +382,7 @@ class TestSendTelemetryEventsHandler(AgentTestCase, HttpRequestPredicates):
                              '<Param Name="ImageOrigin" Value="2468" T="mt:uint64" />' \
                              ']]></Event>'.format(AGENT_VERSION, CURRENT_AGENT, test_opcodename, test_eventtid,
                                                   test_eventpid, test_taskname, osversion, int(osutil.get_total_mem()),
-                                                  osutil.get_processor_cores())
+                                                  osutil.get_processor_cores()).encode('utf-8')
 
             self.assertIn(sample_message, collected_event)
 
