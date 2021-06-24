@@ -36,7 +36,7 @@ from azurelinuxagent.common.osutil import get_osutil
 from azurelinuxagent.common.telemetryevent import TelemetryEventParam, TelemetryEvent, CommonTelemetryEventSchema, \
     GuestAgentGenericLogsSchema, GuestAgentExtensionEventsSchema, GuestAgentPerfCounterEventsSchema
 from azurelinuxagent.common.utils import fileutil, textutil
-from azurelinuxagent.common.utils.textutil import parse_doc, findall, find, getattrib
+from azurelinuxagent.common.utils.textutil import parse_doc, findall, find, getattrib, str_to_encoded_ustr
 from azurelinuxagent.common.version import CURRENT_VERSION, CURRENT_AGENT, AGENT_NAME, DISTRO_NAME, DISTRO_VERSION, DISTRO_CODE_NAME, AGENT_EXECUTION_MODE
 from azurelinuxagent.common.protocol.imds import get_imds_client
 
@@ -105,7 +105,6 @@ class WALAEventOperation:
     PersistFirewallRules = "PersistFirewallRules"
     PluginSettingsVersionMismatch = "PluginSettingsVersionMismatch"
     InvalidExtensionConfig = "InvalidExtensionConfig"
-    ProcessGoalState = "ProcessGoalState"
     Provision = "Provision"
     ProvisionGuestAgent = "ProvisionGuestAgent"
     RemoteAccessHandling = "RemoteAccessHandling"
@@ -483,11 +482,11 @@ class EventLogger(object):
             _log_event(name, op, message, duration, is_success=is_success)
 
         event = TelemetryEvent(TELEMETRY_EVENT_EVENT_ID, TELEMETRY_EVENT_PROVIDER_ID)
-        event.parameters.append(TelemetryEventParam(GuestAgentExtensionEventsSchema.Name, ustr(name)))
-        event.parameters.append(TelemetryEventParam(GuestAgentExtensionEventsSchema.Version, ustr(version)))
-        event.parameters.append(TelemetryEventParam(GuestAgentExtensionEventsSchema.Operation, ustr(op)))
+        event.parameters.append(TelemetryEventParam(GuestAgentExtensionEventsSchema.Name, str_to_encoded_ustr(name)))
+        event.parameters.append(TelemetryEventParam(GuestAgentExtensionEventsSchema.Version, str_to_encoded_ustr(version)))
+        event.parameters.append(TelemetryEventParam(GuestAgentExtensionEventsSchema.Operation, str_to_encoded_ustr(op)))
         event.parameters.append(TelemetryEventParam(GuestAgentExtensionEventsSchema.OperationSuccess, bool(is_success)))
-        event.parameters.append(TelemetryEventParam(GuestAgentExtensionEventsSchema.Message, ustr(message)))
+        event.parameters.append(TelemetryEventParam(GuestAgentExtensionEventsSchema.Message, str_to_encoded_ustr(message)))
         event.parameters.append(TelemetryEventParam(GuestAgentExtensionEventsSchema.Duration, int(duration)))
         self.add_common_event_parameters(event, datetime.utcnow())
 
@@ -501,7 +500,7 @@ class EventLogger(object):
         event = TelemetryEvent(TELEMETRY_LOG_EVENT_ID, TELEMETRY_LOG_PROVIDER_ID)
         event.parameters.append(TelemetryEventParam(GuestAgentGenericLogsSchema.EventName, WALAEventOperation.Log))
         event.parameters.append(TelemetryEventParam(GuestAgentGenericLogsSchema.CapabilityUsed, logger.LogLevel.STRINGS[level]))
-        event.parameters.append(TelemetryEventParam(GuestAgentGenericLogsSchema.Context1, self._clean_up_message(message)))
+        event.parameters.append(TelemetryEventParam(GuestAgentGenericLogsSchema.Context1, str_to_encoded_ustr(self._clean_up_message(message))))
         event.parameters.append(TelemetryEventParam(GuestAgentGenericLogsSchema.Context2, datetime.utcnow().strftime(logger.Logger.LogTimeFormatInUTC)))
         event.parameters.append(TelemetryEventParam(GuestAgentGenericLogsSchema.Context3, ''))
         self.add_common_event_parameters(event, datetime.utcnow())
@@ -527,9 +526,9 @@ class EventLogger(object):
             _log_event(AGENT_NAME, "METRIC", message, 0)
 
         event = TelemetryEvent(TELEMETRY_METRICS_EVENT_ID, TELEMETRY_EVENT_PROVIDER_ID)
-        event.parameters.append(TelemetryEventParam(GuestAgentPerfCounterEventsSchema.Category, str(category)))
-        event.parameters.append(TelemetryEventParam(GuestAgentPerfCounterEventsSchema.Counter, str(counter)))
-        event.parameters.append(TelemetryEventParam(GuestAgentPerfCounterEventsSchema.Instance, str(instance)))
+        event.parameters.append(TelemetryEventParam(GuestAgentPerfCounterEventsSchema.Category, str_to_encoded_ustr(category)))
+        event.parameters.append(TelemetryEventParam(GuestAgentPerfCounterEventsSchema.Counter, str_to_encoded_ustr(counter)))
+        event.parameters.append(TelemetryEventParam(GuestAgentPerfCounterEventsSchema.Instance, str_to_encoded_ustr(instance)))
         event.parameters.append(TelemetryEventParam(GuestAgentPerfCounterEventsSchema.Value, float(value)))
         self.add_common_event_parameters(event, datetime.utcnow())
 
