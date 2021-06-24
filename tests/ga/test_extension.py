@@ -622,6 +622,7 @@ class TestExtension(AgentTestCase):
         exthandlers_handler, protocol = self._create_mock(test_data, *args)  # pylint: disable=no-value-for-parameter
 
         exthandlers_handler.run()
+        exthandlers_handler.report_ext_handlers_status()
 
         # Updating incarnation to 2 , hence the history folder should have waaagent_status.1.json added under
         # incarnation 1
@@ -638,6 +639,7 @@ class TestExtension(AgentTestCase):
         zip_fullname = os.path.join(self.tmp_dir, "history", zip_fn)
         self.assertEqual(TestArchive.assert_zip_contains(zip_fullname, temp_files), None)
         exthandlers_handler.run()
+        exthandlers_handler.report_ext_handlers_status()
 
         # Updating incarnation to 3 , hence the history folder should have 2 zips files corresponding to incarnation
         # 1 and 2

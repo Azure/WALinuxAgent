@@ -980,7 +980,7 @@ class ExtHandlersHandler(object):
 
     def write_ext_handlers_status_to_info_file(self, vm_status):
 
-        status_path = os.path.join(conf.get_lib_dir(), AGENT_STATUS_FILE.format(self.last_etag))
+        status_path = os.path.join(conf.get_lib_dir(), AGENT_STATUS_FILE.format(self.protocol.get_incarnation()))
 
         agent_details = {
             "agent_name": AGENT_NAME,
